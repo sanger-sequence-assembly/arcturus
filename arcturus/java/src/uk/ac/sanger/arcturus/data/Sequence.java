@@ -12,6 +12,10 @@ public class Sequence extends Core {
     protected byte[] dna;
     protected byte[] quality;
     protected int version;
+    protected Clipping qualityClip;
+    protected Clipping cvectorClip;
+    protected Clipping svectorClipLeft;
+    protected Clipping svectorClipRight;
 
     /**
      * Construct a Sequence object for the specified read.
@@ -98,4 +102,111 @@ public class Sequence extends Core {
      */
 
     public void setVersion(int version) { this.version = version; }
+
+    /**
+     * Sets the quality clipping.
+     *
+     * @param qualityClip the quality clipping.
+     */
+
+    public void setQualityClipping(Clipping qualityClip) {
+	this.qualityClip = qualityClip;
+    }
+
+    /**
+     * Returns the quality clipping.
+     *
+     * @return the quality clipping.
+     */
+
+    public Clipping getQualityClipping() { return qualityClip; }
+
+    /**
+     * Sets the cloning vector clipping.
+     *
+     * @param cvectorClip the cloning vector clipping.
+     */
+
+    public void setCloneVectorClipping(Clipping cvectorClip) {
+	this.cvectorClip = cvectorClip;
+    }
+
+    /**
+     * Returns the cloning vector clipping.
+     *
+     * @return the cloning vector clipping.
+     */
+
+    public Clipping getCloneVectorClipping() { return cvectorClip; }
+
+    /**
+     * Sets the left sequence vector clipping.
+     *
+     * @param svectorClipLeft the left sequence vector clipping.
+     */
+
+    public void setSequenceVectorClippingLeft(Clipping svectorClipLeft) {
+	this.svectorClipLeft = svectorClipLeft;
+    }
+
+    /**
+     * Returns the left sequence vector clipping.
+     *
+     * @return the left sequence vector clipping.
+     */
+
+    public Clipping getSequenceVectorClippingLeft() {
+	return svectorClipLeft;
+    }
+
+    /**
+     * Sets the right sequence vector clipping.
+     *
+     * @param svectorClipRight the right sequence vector clipping.
+     */
+
+    public void setSequenceVectorClippingRight(Clipping svectorClipRight) {
+	this.svectorClipRight = svectorClipRight;
+    }
+
+    /**
+     * Returns the right sequence vector clipping.
+     *
+     * @return the right sequence vector clipping.
+     */
+
+    public Clipping getSequenceVectorClippingRight() {
+	return svectorClipRight;
+    }
+
+    /**
+     * Sets all of the clippings.
+     *
+     * @param qualityClip the quality clipping.
+     * @param svectorClipLeft the left sequence vector clipping.
+     * @param svectorClipRight the right sequence vector clipping.
+     * @param cvectorClip the cloning vector clipping.
+     */
+
+    public void setClipping(Clipping qualityClip, Clipping svectorClipLeft,
+			    Clipping svectorClipRight, Clipping cvectorClip) {
+	this.qualityClip = qualityClip;
+	this.svectorClipLeft = svectorClipLeft;
+	this.svectorClipRight = svectorClipRight;
+	this.cvectorClip = cvectorClip;
+    }
+
+    /**
+     * Sets the quality and sequencing vector clippings. The cloning vector clipping
+     * is set to null.
+     *
+     * @param qualityClip the quality clipping.
+     * @param svectorClipLeft the left sequence vector clipping.
+     * @param svectorClipRight the right sequence vector clipping.
+     */
+
+    public void setClipping(Clipping qualityClip, Clipping svectorClipLeft,
+			    Clipping svectorClipRight) {
+	setClipping(qualityClip, svectorClipLeft, svectorClipRight, null);
+    }
 }
