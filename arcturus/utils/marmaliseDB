@@ -32,7 +32,7 @@ $sth->finish();
 @dblist = ();
 
 foreach $dbname (@databases) {
-    $query = "SELECT * FROM $dbname.READS WHERE 1=0";
+    $query = "SELECT COUNT(*) FROM $dbname.READS";
 
     $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed on $dsn");
@@ -43,6 +43,10 @@ foreach $dbname (@databases) {
     } elsif ($DBJ::err == 0) {
 	#print "Database $dbname: OK\n";
 	push @dblist, $dbname;
+	while(@ary = $sth->fetchrow_array()) {
+	    ($n) = @ary;
+	}
+	print STDERR "Database $dbname has $n reads.\n";
     } else {
 	&db_die("execute($query) failed on $dsn");
     }
