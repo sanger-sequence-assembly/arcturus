@@ -6,6 +6,8 @@ use ReadFactory;
 
 use Read;
 
+use FileHandle;
+
 our (@ISA);
 
 @ISA = qw(ReadFactory);
@@ -26,9 +28,8 @@ sub new {
 
     my ($root, $subdir, $includes, $excludes, $limit, $filter);
 
-print "reading hash \n";
     while (my $nextword = shift) {
-print "next word : $nextword\n";
+
         $root = shift if ($nextword eq 'root');
 
         $subdir   = shift if ($nextword eq 'subdir');
@@ -125,15 +126,18 @@ sub expFileFinder {
                 next if ($exclude && $exclude->{$file});
                 next if ($filter && $file !~ /\w*$filter\w*/);
 # accept the file if it is in the include list; else do standard test
-                if ($include && defined($exclude->{$file})) {          
-print "accepted: $file \n";
+                if ($include && defined($include->{$file})) {          
+# print "accepted: $file \n";
                    $this->addReadToList($file,"$dir/$file");
+                }
+                elsif ($include) {
+                    next;
                 }
                 elsif ($file !~ /SCF$/) {
 		    my $accept = 1;
 		    $accept = 0 unless ($file =~ /[\w\-]+\.[a-z]\d[a-z]\w*/);
                     if ($accept) {
-print "accepted: $file \n";
+#print "accepted: $file \n";
                         $this->addReadToList($file,"$dir/$file");
                         last if (++$counted >= $limit);
                     }
@@ -213,7 +217,8 @@ sub expFileParser {
 
 # decode data in data file and test
 
-        chomp $record; $line++;
+        $line++;
+        chomp $record; 
         if ($record =~ /^SQ\s*$/) {
             $sequence = 1;
         } 
@@ -240,22 +245,22 @@ sub expFileParser {
         elsif ($record =~ /^DT\s+(\S+)\s?$/) {
             my $asped = $1;
             $asped =~ s/(\b\d\b)/0$1/g;
-	    $read->setAsped($asped);
+	    $read->setAspedDate($asped);
 	}
 # trace file
         elsif ($record =~ /^LN\s+(\S+)\s?$/) {
             my $traceref = $1;
             my @fparts = split '/',$filename;
-            $read->setTraceFileReference("$fparts[$#fparts]/$traceref");
+            pop @fparts; # remove filename
+            my $subdir = pop @fparts;
+            $read->setTraceArchiveIdentifier("$subdir/$traceref");
         }
 # insert size
-        elsif ($record =~ /^SI\s+(\S+)\s?$/) {
-            my $insertsize = $1;
-            my @items = split /\D+/,$insertsize;
-            $read->setInsertSize([$items[1],$items[2]]);
+        elsif ($record =~ /^SI\s+(\d+)\D*(\d+)\s*$/) {
+            $read->setInsertSize([$1,$2]);
         }
 # ligation
-        elsif ($record =~ /^LI\s+(\S+)\s?$/) {
+        elsif ($record =~ /^LG\s+(\S+)\s?$/) {
             $read->setLigation($1);
         }
 # clone
@@ -293,9 +298,17 @@ sub expFileParser {
         elsif ($record =~ /^QR\s+(\S+)\s?$/) {
             $read->setLowQualityRight($1);
         }
-# concatenate comments (including tags)
-        elsif ($record =~ /^[CC|TG]\s+(\S.*?)\s?$/) {
-            $read->setComment($1);
+# process status
+        elsif ($record =~ /^PS\s+(\S.*)$/) {
+            $read->setProcessStatus($1);
+        }
+# concatenate comments
+        elsif ($record =~ /^CC\s+(\S.*)$/) { 
+            $read->addComment($1);
+        }
+# treat tag info as a comment too
+        elsif ($record =~ /^TG\s+(\S.*)$/) {
+            $read->addComment($1);
         }
 
 # everything else is put in the temporary items hash; this includes 
@@ -324,10 +337,10 @@ sub expFileParser {
         $read->setSequence($item{SQ});
     }
 
-    if (defined($item{QV})) {
+    if (defined($item{AV})) {
 # quality data, split into an array and pass its reference
-        $item{QV} =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
-        my @quality = split /\s+/,$item{QV};
+        $item{AV} =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
+        my @quality = split /\s+/,$item{AV};
         $read->setQuality([@quality]);
     }
 
@@ -337,19 +350,25 @@ sub expFileParser {
             $read->addSequencingVector([$item{SV},1,$item{SL}]);
         }
         if (defined($item{SR})) {
-            my $length = $read->getLength();
+            my $length = $read->getSequenceLength();
             $read->addSequencingVector([$item{SV},$item{SR},$length]);
+        }
+        if (!defined($item{SL}) && !defined($item{SR})) {
+            $read->addComment("Absent sequencing vector $item{SV}");
         }
     }
 
     if (defined($item{CV}) || defined($item{CL}) || defined($item{CR})) {
 # cloning vector
         if (defined($item{CL})) {
-            $read->addSequencingVector([$item{CV},1,$item{CL}]);
+            $read->addCloningVector([$item{CV},1,$item{CL}]);
         }
         if (defined($item{CR})) {
-            my $length = $read->getLength();
-            $read->addSequencingVector([$item{CV},$item{CR},$length]);
+            my $length = $read->getSequenceLength();
+            $read->addCloningVector([$item{CV},$item{CR},$length]);
+        }
+        if (!defined($item{CL}) && !defined($item{CR})) {
+            $read->addComment("Absent cloning vector $item{CV}");
         }
     }
 
@@ -358,22 +377,22 @@ sub expFileParser {
     if ($readname =~ /\S+\.\w\d(\w)\w*$/) {
 # looks like a standard Sanger name
         my $code = $1;
-        my $chtype;
+        my $filechtype;
         if ($code =~ /\b(c|d|f|k|n|t)\b/) {
-            $chtype = "Dye_primer";
+            $filechtype = "Dye_terminator";
         }
         elsif ($code =~ /\b(b|e|m|p)\b/) {
-            $chtype = "Dye_terminator";
+            $filechtype = "Dye_primer";
         }
 # test against possible earlier definition
-        if (defined($chemistry) && defined($chtype)) {
-            if ($chemistry ne $chtype) {
-                $this->logerror("Incompatible chemistry information in file $filename");
-                $chemistry = $chtype; # adopt extension
+        if (defined($chemistry) && defined($filechtype)) {
+            if ($chemistry ne $filechtype) {
+                $this->logerror("Incompatible chemistry information in file $filename: $filechtype against $chemistry");
+                $chemistry = $filechtype; # adopt extension value
             }            
         }
-        elsif (defined($chtype)) {
-            $chemistry = $chtype;
+        elsif (defined($filechtype)) {
+            $chemistry = $filechtype;
         }
     }
 # here chemistry should be defined
@@ -383,18 +402,12 @@ sub expFileParser {
 
     if (keys (%item) == 0) {
         $this->logerror("! File $filename contains no intelligible data");
+        undef $read;
     }
 
     return $read;
 }
 
 #------------------------------------------------------------
-                                                                              
+
 1; 
-
-
-
-
-
-
-

@@ -15,8 +15,6 @@ sub new {
     bless $this, $class;
 
     $this->{data} = {}; # metadata hash
-
-    $this->{Tags} = []; # array of read tags
  
     $this->setReadName($readname) if defined($readname);
 
@@ -46,6 +44,7 @@ sub addTag {
     my $Tag  = shift;
 
     if (ref($Tag) eq 'Tag') {
+        $this->{Tags} = [] unless defined $this->{Tags};
         push @{$this->{Tags}}, $Tag;
     }
     else {
@@ -84,13 +83,10 @@ sub importComment {
 
     my $ADB = $this->{ADB} || return; # the parent database
 
-    my $comment = $ADB->getCommentForRead(id => $this->getReadID);
+    my $comments = $ADB->getCommentForRead(id => $this->getReadID);
 
-    if (ref($comment) eq 'ARRAY') {
-        $this->{comment} = join "\n",@$comment;
-    }
-    elsif ($comment) {
-        $this->{comment} = $comment;
+    foreach my $comment (@$comments) {
+        $this->addComment($comment);
     }
 }
 
@@ -160,21 +156,25 @@ sub addCloningVector {
 
 sub getCloningVector {
     my $this = shift;
+# returns an array of arrays
     return $this->{data}->{cvector};
 }
 
 
 #-----------------
 
-sub setComment {
+sub addComment {
     my $this = shift;
-    $this->{comment} = shift;
+# add comment as next array element 
+    $this->{comment} = [] if !defined($this->{comment});
+    push @{$this->{comment}}, shift; 
 }
 
 sub getComment {
     my $this = shift;
+# returns an array of comments (or undef)
     $this->importComment unless defined($this->{comment});
-    return $this->{comment};
+    return $this->{comment}; 
 }
 
 #-----------------
@@ -417,59 +417,6 @@ sub getTraceArchiveIdentifier {
 }
 
 #----------------------------------------------------------------------
-# check for completeness
-#----------------------------------------------------------------------
-
-sub checkReadForCompleteness {
-    my $this = shift;
-    my $options = shift;
-
-    my $skipAspedCheck = 0;
-
-    if (defined($options) && ref($options) && ref($options) eq 'HASH') {
-	$skipAspedCheck = $options->{skipaspedcheck} || 0;
-    }
-
-    return (0, "undefined asped-date")
-	unless (defined($this->getAspedDate()) || $skipAspedCheck);
-
-    return (0, "undefined base-quality")
-	unless defined($this->getQuality());
-
-    return (0, "undefined chemistry")
-	unless defined($this->getChemistry());
-
-    return (0, "undefined insert-size")
-	unless defined($this->getInsertSize());
-
-    return (0, "undefined ligation")
-	unless defined($this->getLigation());
-
-    return (0, "undefined low-quality-left")
-	unless defined($this->getLowQualityLeft());
-
-    return (0, "undefined low-quality-right")
-	unless defined($this->getLowQualityRight());
-
-    return (0, "undefined primer")
-	unless defined($this->getPrimer());
-
-    return (0, "undefined readname")
-	unless defined($this->getReadName());
-
-    return (0, "undefined sequence")
-	unless defined($this->getSequence());
-
-    return (0, "undefined strand")
-	unless defined($this->getStrand());
-
-    return (0, "undefined template")
-	unless defined($this->getTemplate());
-
-    return (1, "OK");
-}
-
-#----------------------------------------------------------------------
 # dumping data
 #----------------------------------------------------------------------
 
@@ -512,10 +459,12 @@ sub writeToCaf {
 # write out the mapping and possible Tag info
         else {
             $Mapping->writeMapToCaf($FILE);
-# process read tags 
-            foreach my $Tag (@{$this->{Tags}}) {
-#?                $Tag->writeTagToCaf($FILE);
-            }
+# process read tags
+            if (my $tags = $this->{Tags}) {
+                foreach my $tag (@$tags) {
+#?                    $tag->writeTagToCaf($FILE);
+                }
+	    }
         }
     }
 
@@ -592,14 +541,32 @@ sub dump {
 
     foreach my $key (sort keys %{$this}) {
         my $item = $this->{$key};
-        print STDERR "self key $key -> $item\n";
+        print STDERR "key $key -> $item\n";
         if (ref($item) eq 'HASH') {
             foreach my $key (sort keys %$item) {
-                print STDERR "    $key -> $item->{$key}\n";
+                my $itemkey = $item->{$key};
+                if (ref($itemkey) eq 'ARRAY' && @$itemkey) {
+                    if (ref($itemkey->[0]) eq 'ARRAY') {
+                        foreach my $item (@$itemkey) {
+                            print STDERR "    $key -> @$item\n";
+                        }
+                    }
+                    else {
+                        print STDERR "    $key -> @{$itemkey}\n";
+                    }
+                }
+                else {
+                    print STDERR "    $key -> $itemkey\n";
+                }
             }
         }
         elsif (ref($item) eq 'ARRAY') {
-            print STDERR "    @$item\n";
+            if (@$item > 8) {
+                print STDERR "    @$item\n";
+            }
+            elsif (@$item) {
+                print STDERR "    ".join("\n    ",@$item)."\n";
+            }
         }
     }
 }

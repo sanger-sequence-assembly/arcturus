@@ -188,7 +188,7 @@ sub populateLoadingDictionaries {
 
     my %attributeQueries =
 	('ligation',   ["select ligation_id from LIGATIONS where name=?",
-			"insert ignore into LIGATIONS(name,silow,sihigh) VALUES(?,?,?)"],
+			"insert ignore into LIGATIONS(name,silow,sihigh,clone_id) VALUES(?,?,?,?)"],
 	 'template',   ["select template_id from TEMPLATE where name=?",
 			"insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)"],
 	 'basecaller', ["select basecaller_id from BASECALLER where name=?",
@@ -254,7 +254,7 @@ sub createDictionary {
 sub dictionaryLookup {
     my ($dict, $pkey, $junk) = @_;
 
-    if (defined($dict)) {
+    if (defined($dict) && defined($pkey)) {
 	my $value = $dict->{$pkey};
 	return $value;
     }
@@ -671,8 +671,6 @@ sub getSequenceForRead {
     my $this = shift;
     my ($key, $value, $junk) = @_;
 
-    my $dbh = $this->getConnection();
-
     my $query = "select sequence,quality from ";
 
     if ($key eq 'id' || $key eq 'read_id') {
@@ -681,6 +679,8 @@ sub getSequenceForRead {
     elsif ($key eq 'name' || $key eq 'readname') {
 	$query .= "READS left join SEQUENCE using (read_id) where readname=?";
     }
+
+    my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -734,7 +734,7 @@ sub getCommentForRead {
 
     $sth->finish();
 
-    return \@comment;
+    return [@comment];
 }
 
 sub getTraceArchiveIdentifier {
@@ -770,24 +770,39 @@ sub getTraceArchiveIdentifier {
     return $traceref;
 }
 
-sub setTraceArchiveIdentifier {
-# enters the trace archive reference for the specifed read
-    my $this = shift;
-    my ($read_id,$tracearchiveref,$junk) = @_;
-
-
-# TO BE COMPLETED
-}
-
 #-----------------------------------------------------------------------------
 
 sub getListOfReadNames {
 # returns an array of (all) readnames occurring in the database 
     my $this = shift;
 
+# decode extra  input
+
+    my $onlySanger = 0;
+    my $noTraceRef = 0;
+
+    my $nextword;
+    while ($nextword = shift) {
+        $onlySanger = shift if ($nextword eq "onlySanger");
+        $noTraceRef = shift if ($nextword eq "noTraceRef");
+    }
+
+# compose the query
+
+    my $query = "select readname from READS ";
+
+    if ($noTraceRef) {
+        $query .= "left join TRACEARCHIVE as TA using (read_id) 
+                   where TA.read_id IS NULL ";
+    }
+    if ($onlySanger) {
+        $query .= "and readname like \"%.%\"";
+        $query =~ s/\band\b/where/ if ($query !~ /\bwhere\b/);
+    }
+
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare("select readname from READS");
+    my $sth = $dbh->prepare_cached($query);
     $sth->execute();
 
     my @reads;
@@ -915,29 +930,41 @@ sub putRead {
 # a) test consistency and completeness
 
     my ($rc, $errmsg) = $this->checkReadForCompleteness($read, $options);
-    return (0, "failed completeness check: $errmsg") unless $rc;
+    return (0, "failed completeness check ($errmsg)") unless $rc;
 
     ($rc, $errmsg) = $this->checkReadForConsistency($read);
-    return (0, "failed consistency check: $errmsg") unless $rc;
+    return (0, "failed consistency check ($errmsg)") unless $rc;
 
 # b) encode dictionary item; special case: template & ligation
 
     my $dbh = $this->getConnection();
 
+    # CLONE
+
+#    my $clone_id = $this->getReadAttributeID('clone',$read->getClone());
+    my $clone_id = &getReadAttributeID($read->getClone(),
+				       $this->{LoadingDictionary}->{'clone'},
+				       $this->{SelectStatement}->{'clone'},
+				       $this->{InsertStatement}->{'clone'});
+
     # LIGATION
 
     my ($sil,$sih) = @{$read->getInsertSize()}; 
 
+#    my $ligation_id = $this->getReadAttributeID('ligation',$read->getLigation(),
+#					   [$sil, $sih, $clone_id]);
     my $ligation_id = &getReadAttributeID($read->getLigation(),
 					  $this->{LoadingDictionary}->{'ligation'},
 					  $this->{SelectStatement}->{'ligation'},
 					  $this->{InsertStatement}->{'ligation'},
-					  [$sil, $sih]);
+					  [$sil, $sih, $clone_id]);
 
     return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
 
     # TEMPLATE
 
+#    my $template_id = $this->getReadAttributeID('template',$read->getTemplate(),
+#					   [$ligation_id]);
     my $template_id = &getReadAttributeID($read->getTemplate(),
 					  $this->{LoadingDictionary}->{'template'},
 					  $this->{SelectStatement}->{'template'},
@@ -950,6 +977,7 @@ sub putRead {
 
     # BASECALLER
 
+#    my $basecaller = $this->getReadAttributeID('basecaller',$read->getBaseCaller());
     my $basecaller = &getReadAttributeID($read->getBaseCaller(),
 					 $this->{LoadingDictionary}->{'basecaller'},
 					 $this->{SelectStatement}->{'basecaller'},
@@ -957,17 +985,11 @@ sub putRead {
 
     # STATUS
 
+#    my $status = $this->getReadAttributeID('status',$read->getProcessStatus());
     my $status = &getReadAttributeID($read->getProcessStatus(),
 				     $this->{LoadingDictionary}->{'status'},
 				     $this->{SelectStatement}->{'status'},
 				     $this->{InsertStatement}->{'status'});
-
-    # CLONE
-
-    my $clone = &getReadAttributeID($read->getClone(),
-				    $this->{LoadingDictionary}->{'clone'},
-				    $this->{SelectStatement}->{'clone'},
-				    $this->{InsertStatement}->{'clone'});
 
 # d) insert Read meta data
 
@@ -976,8 +998,8 @@ sub putRead {
     my $readname = $read->getReadName();
 
     my $query = "insert into" .
-	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright,basecaller)" .
-	    " VALUES(?,?,?,?,?,?,?,?,?,?)";
+	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright,basecaller,status)" .
+	    " VALUES(?,?,?,?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -990,7 +1012,8 @@ sub putRead {
                         $read->getSequenceLength(),
 			$read->getLowQualityLeft(),
 			$read->getLowQualityRight(),
-			$basecaller);
+			$basecaller,
+                        $status);
 
     return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
@@ -998,6 +1021,8 @@ sub putRead {
     my $readid = $dbh->{'mysql_insertid'};
 
     $sth->finish();
+
+    $read->setReadID($readid);
 
 # insert sequence and base quality
 
@@ -1031,6 +1056,7 @@ sub putRead {
 
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
+#	    my $seqvecid = $this->getReadAttributeID('svector',$seqvec) || 0;
 	    my $seqvecid = &getReadAttributeID($seqvec,
 				               $this->{LoadingDictionary}->{'svector'},
 				               $this->{SelectStatement}->{'svector'},
@@ -1038,7 +1064,7 @@ sub putRead {
 
 	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
 
-	    return (0, "failed to insert read_id,svector_id,cvleft,cvright into SEQVEC for $readname ($readid);" .
+	    return (0, "failed to insert read_id,svector_id,svleft,svright into SEQVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
@@ -1057,6 +1083,7 @@ sub putRead {
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
 
+#	    my $clonevecid = $this->getReadAttributeID('cvector',$clonevec) || 0;
 	    my $clonevecid = &getReadAttributeID($clonevec,
 				                 $this->{LoadingDictionary}->{'cvector'},
 				                 $this->{SelectStatement}->{'cvector'},
@@ -1071,9 +1098,43 @@ sub putRead {
 	$sth->finish();
     }
 
-# insert READCOMMENT, TRACEARCHIVE, TAGS
+# insert READCOMMENT, if any
+
+#    if (my $comments = $read->getComment()) {
+#        foreach my $comment (@$comments) {
+#            $rc = $this->putCommentForReadID($readid,$comment);
+#	    return (0, "failed to insert comment for $readname ($readid);" .
+#		    "DBI::errstr=$DBI::errstr") unless $rc;
+#        }
+#    }
+    if (my $comments = $read->getComment()) {
+        my $query = "insert into READCOMMENT (read_id,comment) VALUES (?,?)";
+        my $sth = $dbh->prepare_cached($query);
+        foreach my $comment (@$comments) {
+            next unless ($comment =~ /\S/);
+            $rc = $sth->execute($readid,$comment);
+	    return (0, "failed to insert comment for $readname ($readid);" .
+		    "DBI::errstr=$DBI::errstr") unless $rc;
+        }
+    }
 
     return (1, "OK");
+}
+
+sub putCommentForReadID {
+# add a comment for a given read_id or readname (finishers entry of comment?)
+    my $this = shift;
+    my $read_id = shift;
+    my $comment = shift;
+
+    return 0 unless ($read_id && $comment =~ /\S/);
+
+    my $dbh = $this->getConnection();
+
+    my $query = "insert into READCOMMENT (read_id,comment) VALUES (?,?)";
+    my $sth = $dbh->prepare_cached($query);
+    my $success = $sth->execute($read_id,$comment) ? 1 : 0;
+    return $success;
 }
 
 sub checkReadForCompleteness {
@@ -1131,12 +1192,22 @@ sub checkReadForCompleteness {
 
 sub checkReadForConsistency {
     my $this = shift;
-    my $read = shift;
+    my $read = shift || return (0,"Missing Read instance");
+
+# check process status 
+
+    if (my $status = $read->getProcessStatus()) {
+        return (0,$status) if ($status =~ /Completely\ssequencing\svector/i);
+        return (0,"Low $status") if ($status =~ /Trace\squality/i);
+        return (0,$status) if ($status =~ /Matches\sYeast/i);
+    }
 
     # This method should check the template, ligation and insert size to ensure
     # that they are mutually consistent.
+
     #
     # For now, assume everything is okay and return 1.
+
     return (1, "OK");
 }
 
@@ -1175,6 +1246,17 @@ sub getReadAttributeID {
     my $select_sth = shift;
     my $insert_sth = shift;
     my $extra_data = shift;
+
+# ALTERNATIVE?
+# sub getReadAttributeID {
+#     my $this = shift;
+#     my $section = shift; # ('cvector','ligation' etc)
+#     my $identifier = shift;
+#     my $extra_data = shift;
+
+#     my $dict = $this->{LoadingDictionary}->{$section} || return undef;
+#     my $select_sth = $this->{SelectStatement}->{$section};
+#     my $insert_sth = $this->{InserttStatement}->{$section};
 
     return undef unless (defined($identifier) && defined($dict));
 
@@ -1228,6 +1310,29 @@ sub getReadAttributeID {
     return $id;
 }
 
+sub putTraceArchiveIdentifierForRead {
+# put a trace archive reference in the database
+    my $this = shift;
+    my $read = shift; # a Read instance
+
+    my $TAI = $read->getTraceArchiveIdentifier() || return;
+
+    my $readid = $read->getReadID() || return; # must have readid defined
+
+    my $dbh = $this->getConnection();
+
+    my $query = "insert into TRACEARCHIVE (read_id,traceref) VALUES (?,?)";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($readid,$TAI);
+
+    return (0,"failed to insert trace archive identifier for readID $readid;" .
+	      "DBI::errstr=$DBI::errstr") unless $rc;
+
+    return (1,"OK");
+}
+
 sub updateRead {
 # update items for an existing read
     my $this = shift;
@@ -1237,6 +1342,43 @@ sub updateRead {
 sub addTagsForRead {
     my $this = shift;
 
+}
+
+sub deleteRead {
+# delete a read for the given read_id
+    my $this = shift;
+    my ($key, $value, $junk) = @_;
+
+    my $readid;
+    if ($key eq 'id' || $key eq 'read_id') {
+	$readid = $value;
+    }
+    elsif ($key eq 'name' || $key eq 'readname') {
+	$readid = $this->hasRead($value); # get read_id for readname
+    }
+    return (0,"Read does not exist") unless $readid;
+
+    my $dbh = $this->getConnection();
+
+# test if read is unassembled
+
+    my $query = "select * from MAPPING where read_id=?";
+    my $sth = $dbh->prepare_cached($query);
+    my $rn = $sth->execute($readid);
+    return (0,"Cannot delete an assembled read") if (!defined($rn) || $rn);
+
+# remove for readid from all tables it could be in
+
+    my @tables = ('READCOMMENT','SEQVEC','CLONEVEC','TRACEARCHIVE',
+                  'READTAGS','READS','SEQUENCE');
+
+    my $delete = 0;
+    foreach my $table (@tables) {
+        $query = "delete from $table where read_id=?";
+        $sth = $dbh->prepare_cached($query);
+        $delete++ if $sth->execute($readid);
+    }
+    return (1,"Records for read $readid removed from $delete tables");
 }
 
 #----------------------------------------------------------------------------------------
