@@ -27,32 +27,17 @@ sub new {
 # mapping metadata (mappingname, sequence ID, mapping ID and alignment)
 #-------------------------------------------------------------------
 
-sub setContigRange {
-    my $this = shift;
-    my $range = shift || return;
-
-    my @range = @$range; # copy
-    $this->{contigrange} = [@range];
-}
-
 sub getContigRange {
     my $this = shift;
 
-    my $range;
+    my $range = $this->{contigrange};
 
-    if ($this->{cacheContigRange}) {
-	$range = $this->{contigrange};
-
-	unless ($range && @$range) {
+    unless ($range && @$range) {
 # no contig range defined, use (all) segments to find it
-	    my $segments = $this->getSegments();
-	    $range = &findContigRange($segments); # arrayref
-	    return undef unless defined($range);
-	    $this->{contigrange} = $range;
-	}
-    } else {
 	my $segments = $this->getSegments();
-	$range = &findContigRange($segments);
+	$range = &findContigRange($segments); # returns arrayref
+	return undef unless defined($range);
+	$this->{contigrange} = $range; # cache
     }
 
     return @$range;
@@ -137,29 +122,22 @@ sub getAlignment {
     return $this->{direction};
 }
 
-sub setCacheContigRange {
-    my $this = shift;
-    my $value = shift || 1;
-
-    $this->{cacheContigRange} = $value;
-}
-
 #-------------------------------------------------------------------
 # compare mappings
 #-------------------------------------------------------------------
 
-sub compare {
+sub compareStrong {
 # compare this Mapping instance with input Mapping
+# return 0 if mappings are in any respect different
     my $this = shift;
     my $compare = shift;
-    my $relaxed = shift || 0; # optional
 
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
-    my $tmaps = $this->analyseSegments();
-    my $cmaps = $compare->analyseSegments();
+    my $tmaps = $this->analyseSegments();    # also sorts segments
+    my $cmaps = $compare->analyseSegments(); # also sorts segments
 
 # test presence of mappings
 
@@ -168,80 +146,135 @@ sub compare {
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
 # return values of alignment and offset will be identical.
-# if relaxed mode active, ignore differences of segment size (and number)
-# but only consider the alignment direction and offset.
 
-    return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps) || $relaxed);
-print "\n\nMapping ".$this->getMappingName." tm ".scalar(@$tmaps)." cm ".
-      scalar(@$cmaps)."\n" if ($relaxed > 1); 
+    return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
 
 # return 0 on first encountered mismatch of direction, offset (or 
 # segment size); otherwise return true and alignment direction & offset 
 
-    my %segment;
-    my %scounts;
     my ($align,$shift);
     for (my $i = 0 ; $i < scalar(@$tmaps) ; $i++) {
-# note: in relaxed mode there can be extra segments at begin; ignored for the moment
+
 	my $tsegment = $tmaps->[$i];
-	my $csegment = $cmaps->[$i] || next; # can occur when relaxed
+	my $csegment = $cmaps->[$i];
+
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
 
-# in relaxed mode we allow !$identical and test only alignment and offset
+# we require all mapped read segments to be identical
 
-        if ($relaxed) {
-print "segment: id=$identical al=$aligned off=$offset \n" if ($relaxed > 1);
-# on first one register alignment direction
-	    $align = $aligned unless defined($align);
-# break on alignment inconsistency; should never occur
-            return 0 unless ($align == $aligned);  
-# accumulate the segments for a given shift
-            $segment{$offset} = [] unless $segment{$offset};
-            push @{$segment{$offset}}, $tsegment;
-            $scounts{$offset}++;
+        return 0 unless $identical;
+
+# on first segment register shift and alignment direction
+
+        if (!defined($align) && !defined($shift)) {
+            $align = $aligned; # either +1 or -1
+            $shift = $offset;
         }
-# in non-relaxed mode we require all mapped segments to be identical
-        elsif ($identical) {
-# on first one register shift and alignment direction
-            if (!defined($align) && !defined($shift)) {
-                $align = $aligned; # either +1 or -1
-                $shift = $offset;
-            }
 # the alignment and offsets between the mappings must all be identical 
-            elsif ($align != $aligned || $shift != $offset) {
-                return 0;
-            }
-        }
-# inconsistent segment alignments detected in non-relaxed mode
-        else {
+        elsif ($align != $aligned || $shift != $offset) {
             return 0;
         }
     }
 
-# in relaxed mode we now have to analyse the segment counts
-
-    if ($relaxed) {
-# find shift with largest number of segments
-my $list = $relaxed - 1;
-print "Processing shift statistics for ".$this->getMappingName."\n" if $list;
-        undef $shift;
-        my $totalcount = 0;
-        foreach my $offset (keys %scounts) {
-print "shift $offset  counts $scounts{$offset} \n" if $list;
-            $shift = $offset unless defined ($shift);
-            $shift = $offset if ($scounts{$offset} > $scounts{$shift});
-            $totalcount += $scounts{$offset};
-        }
-# is this a sufficiently large number? require (nearly) majority
-        return 0 unless ($scounts{$shift} >= ($totalcount-1)/2);
-# build the contig range on this mapping for this shift
-print "building contig range of this mapping offset $shift \n" if $list;
-        my $range = &findContigRange($segment{$shift});
-print "range $range @$range\n" if $list;
-        #$this->setContigRange($range);
-    }
+# the mappings are identical under the linear transform with $align and $shift
 
     return (1,$align,$shift);
+}
+
+sub compare {
+# compare this Mapping instance with input Mapping at the segment level
+    my $this = shift;
+    my $compare = shift;
+my $debug = shift;
+
+    if (ref($compare) ne 'Mapping') {
+        die "Mapping->compare expects an instance of the Mapping class";
+    }
+
+    my $tmaps = $this->analyseSegments();    # also sorts segments
+    my $cmaps = $compare->analyseSegments(); # also sorts segments
+
+# test presence of mappings
+
+    return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps)&& scalar(@$cmaps));
+
+# go through the segments of both mappings and collate consecutive overlapping
+# contig segments (on $cmapping) of the same offset into a list of output segments
+
+print "\n\nMapping ".$this->getMappingName." tm ".scalar(@$tmaps)." cm ".
+scalar(@$cmaps)."\n" if $debug; 
+
+    my @osegments; # list of output segments
+
+    my $it = 0;
+    my $ic = 0;
+
+    my ($align,$shift);
+    while ($it < @$tmaps && $ic < @$cmaps) {
+
+        my $tsegment = $tmaps->[$it];
+        my $csegment = $cmaps->[$ic];
+# get the interval on both $this and the $compare segment 
+        my $ts = $tsegment->getYstart(); # read positions
+        my $tf = $tsegment->getYfinis();
+        my $cs = $csegment->getYstart();
+        my $cf = $csegment->getYfinis();
+
+# determine if the intervals overlap by finding the overlapping region
+
+        my $os = ($cs > $ts) ? $cs : $ts;
+        my $of = ($cf < $tf) ? $cf : $tf;
+
+print "it=$it: $ts - $tf  ic=$ic $cs - $cf    overlap: $os - $of " if $debug;  
+
+        if ($of >= $os) {
+# test at the segment level to obtain offset and alignment direction
+            my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
+print " al=$aligned  off=$offset" if $debug;
+# on first interval tested register alignment direction
+	    $align = $aligned unless defined($align);
+# break on alignment inconsistency; fatal error, but should never occur
+            return 0,undef unless ($align == $aligned);
+
+# initialise or update the contig alignment segment information on $csegment
+# we have to ensure that the contig range increases in the output segments
+
+            $os = $csegment->getXforY($os); # contig position
+            $of = $csegment->getXforY($of);
+# ensure that the contig range increases
+           ($os, $of) = ($of, $os) if ($csegment->getAlignment < 0);
+
+            if (!defined($shift) || $shift != $offset) {
+# it's the first time we see this offset value: open a new output segment
+                $shift = $offset;
+                my @osegment = ($offset, $os, $of);
+                push @osegments, [@osegment];
+            }
+            else {
+# we're still in the same output segment: adjust its end position
+                my $n = scalar(@osegments);
+                my $osegment = $osegments[$n-1];
+                $osegment->[2] = $of if ($of > $osegment->[2]);
+                $osegment->[1] = $os if ($os < $osegment->[1]);
+            }
+
+# get the next segments to investigate
+            $it++ if ($tf <= $cf);
+            $ic++ if ($cf <= $tf);
+        }
+
+        elsif ($tf < $cs) {
+# no overlap, this segment to the left of compare
+            $it++;
+        }
+        elsif ($ts > $cf) {
+# no overlap, this segment to the right of compare
+            $ic++;
+        }
+print "\n" if $debug;
+    }
+
+    return $align,[@osegments];
 }
 
 sub analyseSegments {
@@ -313,8 +346,7 @@ sub applyShiftToContigPosition {
         $segment->applyShiftToX($shift);
     }
 
-    # Force re-calculation of range when getContigRange is next called
-    undef $this->{contigrange};
+    undef $this->{contigrange}; # force re-initialisation of cache
 
     return 1;
 }
@@ -399,7 +431,7 @@ sub assembledFromToString {
         $string .= $assembledFrom." $xstart $xfinis $ystart $yfinis\n";
     }
 
-    $string = "$assembledFrom"."is undefined\n" if (!$string && shift); 
+    $string = $assembledFrom." is undefined\n" if (!$string && shift); 
 
     return $string;
 }

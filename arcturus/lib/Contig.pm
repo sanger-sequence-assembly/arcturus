@@ -520,7 +520,7 @@ sub isSameAs {
     my $this = shift;
     my $compare = shift;
 
-    die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
+    die "Contig->isSameAs takes a Contig instance" unless (ref($compare) eq 'Contig');
 
 # ensure that the metadata are defined; do not allow zeropoint adjustments here
 
@@ -578,7 +578,7 @@ sub isSameAs {
 print STDERR "cannot find mapping for key $key \n" unless $match;
             return 0 unless defined($match); # there is no counterpart in $this
 # compare the two maps
-            my ($identical,$aligned,$offset) = $match->compare($mapping);
+            my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
             return 0 unless $identical;
 # on first one register shift
             $shift = $offset unless defined($shift);
@@ -603,7 +603,8 @@ sub linkToContig {
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
-    my $relaxed = shift || 0; # set True for relaxed comparison of mappings
+    my $strong = shift || 0; # set True for comparison at read mapping level  
+my $DEBUG = shift;
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
 
@@ -636,35 +637,57 @@ sub linkToContig {
             $deallocated++;
             next;
         }
+
 # this mapping/sequence in $compare also figures in the current Contig
-        my ($identical,$aligned,$offset) = $match->compare($mapping,$relaxed);
-# printing mode
-        if ($relaxed > 1) {
-            print "mapping: id=$identical  align=".($aligned||' ')."  ";
-            print "offset=".($offset||' ')."  ".$mapping->getMappingName."\n";
-        } 
+
+        if ($strong) {
+# test alignment of complete mapping
+            my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
+
+print "\nmapping: id=$identical  align=".($aligned||' ').
+    "  offset=".($offset||' ')."  ".$mapping->getMappingName if $DEBUG;
+ 
 # keep the first encountered (contig-to-contig) alignment value != 0 
-        $alignment = $aligned unless $alignment;
-        next unless ($identical && $aligned == $alignment);
-# the mappings are identical (alignment and, if !relaxed, segment size)
-        my @segment = $mapping->getContigRange();
-# in relaxed mode we have (possibly) to prune the boundaries of the interval
-        if ($relaxed) {
-            my @match = $match->getContigRange();
-# transform the range to this contig
-            $match[0] = $alignment * $match[0] - $offset;
-            $match[1] = $alignment * $match[1] - $offset;
-            @match = sort { $a <=> $b} @match;
-# and determine the minimum overlapping range 
-            $segment[0] = $match[0] if ($match[0] > $segment[0]);
-            $segment[1] = $match[1] if ($match[1] < $segment[1]);
-            next unless ($match[0] < $match[1]);
-        }
+            $alignment = $aligned unless $alignment;
+            next unless ($identical && $aligned == $alignment);
+# the mappings are identical (alignment and segment sizes)
+            my @segment = $mapping->getContigRange();
 # build a hash key based on offset and alignment direction and add segment
-        my $hashkey = sprintf("%08d",$offset);
-        $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
-        push @{$inventory->{$hashkey}},[@segment];
+            my $hashkey = sprintf("%08d",$offset);
+            $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+print " contig segment @segment " if $DEBUG;
+            push @{$inventory->{$hashkey}},[@segment];
+        }
+
+# otherwise do a segment-by-segment comparison and find ranges of identical mapping
+
+        else {
+            my $debug = $DEBUG;
+            if ($DEBUG) {
+                my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
+                $debug = 0 if $identical;
+            }
+
+            my ($aligned,$osegments) = $match->compare($mapping,$debug);
+# keep the first encountered (contig-to-contig) alignment value != 0 
+            $alignment = $aligned unless $alignment;
+
+print "Fine comparison of segments for mapping: align=".($aligned||' ').
+      "  ".$mapping->getMappingName."\n" if $DEBUG;
+
+            next unless ($alignment && $aligned == $alignment);
+# add the mapping range(s) returned in the list to the inventory 
+            foreach my $osegment (@$osegments) {
+                my $offset = shift @$osegment;
+                my $hashkey = sprintf("%08d",$offset);
+                $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+                my @segment = @$osegment; # copy
+print " contig segment @segment \n" if $DEBUG;
+                push @{$inventory->{$hashkey}},[@segment];
+	    }
+	}
     }
+print "\n" if $DEBUG;
 
 # OK, here we have an inventory: the number of keys equals the number of 
 # different alignments between $this and $compare. On each key we have an
@@ -682,7 +705,7 @@ sub linkToContig {
     $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
     $guillotine = 2  if ($guillotine < 2); # minimum required
 
-print "g: $guillotine \n" if ($relaxed > 1);
+print "g: $guillotine \n" if $DEBUG;
 
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
@@ -723,18 +746,19 @@ print "g: $guillotine \n" if ($relaxed > 1);
 
 # if mapping has segments, or if a finescan has been done, return 
 
-    if ($mapping->hasSegments() || $relaxed) {
+    if ($mapping->hasSegments()) {
 # store the Mapping as a contig-to-contig mapping
         $this->addContigToContigMapping($mapping);
-# and return the number of segments, which could be 0
-        return $mapping->hasSegments(),$deallocated;
     }
 
-# the mapping has no segments: no mapping range(s) could be determined
-# by the algorithm above. A more refined analysis is required based
-# on analysis of the individual segments: try again with 'relaxed' on
+# and return the number of segments, which could be 0
+        
+    return $mapping->hasSegments(),$deallocated;
 
-    return $this->linkToContig($compare,1);
+# if the mapping has no segments, no mapping range could be determined
+# by the algorithm above. If the 'strong' mode was used, perhaps the
+# method should be re-run in standard (strong=0) mode
+
 }
 
 #-------------------------------------------------------------------    
