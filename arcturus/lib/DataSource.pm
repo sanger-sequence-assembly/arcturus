@@ -8,9 +8,6 @@ use DBI;
 sub new {
     my $type = shift;
 
-    my $this = {};
-    bless $this, $type;
-
     my ($url, $base, $instance, $organism);
 
     while (my $nextword = shift) {
@@ -33,9 +30,12 @@ sub new {
 
     $base = "cn=$instance," . $base if defined($instance);
 
-    my $filter = "&(objectClass=javaNamingReference)";
+    return undef unless defined($organism);
 
-    $filter .= "(cn=$organism)" if defined($organism);
+    my $this = {};
+    bless $this, $type;
+
+    my $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
 
     my $ldap = Net::LDAP->new($url) or die "$@";
 
