@@ -20,7 +20,7 @@ sub new {
 }
 
 #-------------------------------------------------------------------
-# import/export of handles to related objects
+# database handle (export from Arcturus) and delayed loading
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
@@ -34,6 +34,35 @@ sub setArcturusDatabase {
         die "Invalid object passed: $ADB";
     }
 }
+  
+sub getLockedStatus {
+# return the momentary status
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return undef;
+
+    my ($lock,$user) = $ADB->getLockedStatusForProjectID($this->getProjectID());
+
+    $this->setOwner($user);
+
+    return $lock;
+}
+ 
+sub getProjectData {
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return undef;
+
+    my $pid = $this->getProjectID();
+
+    my @data = $ADB->getProjectStatisticsForProjectID($pid);
+
+    $this->setNumberOfContigs(shift @data);
+    $this->setNumberOfReads(shift @data);
+    $this->setContigStatistics(@data);
+}
+
+#-------------------------------------------------------------------
   
 sub setAssemblyID {
     my $this = shift;
@@ -58,25 +87,34 @@ sub addContigID {
 sub getContigIDs {
 # export reference to the contig IDs array
     my $this = shift;
-    my $force = shift; # override retrieval block if checked out status set 
+    my $nolockcheck = shift || 0; 
 
-# use delayed instantiation to get the contig IDs for this project
+# get the contig IDs for this project always by reference to the database
 
-    unless (defined($this->{contigIDs})) {
-        my $ADB = $this->{ADB} || return undef;
-        my ($contigids, $checkoutstatus) = $ADB->getContigIDsForProjectID($this->getProjectID());
-        if (!$checkoutstatus || $force) {
-            foreach my $contigid (@$contigids) {
-                $this->addContigID($contigid);
-            }
-        }
-        else {
-            print STDERR "Project ".$this->getProjectName().
-                         " has checked 'out' status set";
+    my $ADB = $this->{ADB} || return undef;
+
+    my $pid = $this->getProjectID();
+
+    my ($cids, $status);
+
+    if ($nolockcheck) {
+# get all contig IDs belonging to this project
+       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
+    }
+    else {
+# get contigs only if not locked or owned by user
+       ($cids, $status) = $ADB->checkOutContigIDsForProjectID($pid);
+        $status = "No accessible contigs: $status" unless ($cids && @$cids);
+    }
+
+    if ($cids) {
+        $this->{contigIDs} = undef;
+        foreach my $contigid (@$cids) {
+            $this->addContigID($contigid);
         }
     }
 
-    return $this->{contigIDs};
+    return ($cids,$status);
 }
 
 #-------------------------------------------------------------------    
@@ -91,6 +129,18 @@ sub setComment {
 sub getComment {
     my $this = shift;
     return $this->{data}->{comment};
+}
+
+sub setContigStatistics {
+    my $this = shift;
+    my @data = @_;
+    $this->{data}->{contigstats} = [@data];
+}
+
+sub getContigStatistics {
+    my $this = shift;
+    $this->getProjectData() unless ($this->{data}->{contigstats});
+    return $this->{data}->{contigstats};
 }
   
 sub setCreated {
@@ -112,7 +162,7 @@ sub getCreator {
     my $this = shift;
     return $this->{data}->{creator};
 }
-  
+    
 sub setNumberOfContigs {
     my $this = shift;
     $this->{data}->{numberofcontigs} = shift;
@@ -120,6 +170,7 @@ sub setNumberOfContigs {
 
 sub getNumberOfContigs {
     my $this = shift;
+    $this->getProjectData() unless ($this->{data}->{numberofcontigs});
     return $this->{data}->{numberofcontigs};
 }
   
@@ -130,6 +181,7 @@ sub setNumberOfReads {
   
 sub getNumberOfReads {
     my $this = shift;
+    $this->getProjectData() unless ($this->{data}->{numberofreads});
     return $this->{data}->{numberofreads};
 }
   
@@ -150,18 +202,8 @@ sub setProjectID {
   
 sub getProjectID {
     my $this = shift;
-    return $this->{data}->{project_id};
+    return $this->{data}->{project_id} || 0;
 }
-  
-#sub setProjectName {
-#    my $this = shift;
-#    $this->{data}->{projectname} = shift;
-#}
-  
-#sub getProjectName {
-#    my $this = shift;
-#    return $this->{data}->{projectname};
-#}  
   
 sub setUpdated {
     my $this = shift;
@@ -173,34 +215,36 @@ sub getUpdated {
     return $this->{data}->{updated};
 }
   
-sub setUserName {
-    my $this = shift;
-    $this->{data}->{user} = shift;
-}
-  
-sub getUserName {
-    my $this = shift;
-    return $this->{data}->{user};
-}
-
 #-------------------------------------------------------------------    
 # exporting of this project's contig as CAF or fasta file
 #-------------------------------------------------------------------    
   
-sub writeContigsToCAF {
+sub writeContigsToCaf {
 # write contigs to CAF
     my $this = shift;
     my $FILE = shift; # obligatory file handle
+    my $options = shift; # hash ref
 
-    my $contigids = $this->getContigIDs(@_) || print STDERR "Project ".
-	$this->getProjectName()." has no contigs\n" && return;
+    my ($contigids,$status) = $this->getContigIDs($options->{nolock});
 
-    my $ADB = $this->{ADB} || return;
+    return (0,$status) unless ($contigids && @$contigids);
+
+    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+
+    my $export = 0;
+    my $report = '';
     foreach my $contig_id (@$contigids) {
+print STDOUT "processing contig $contig_id \n";
         my $contig = $ADB->getContig(contig_id=>$contig_id);
-        print STDERR "FAILED to retrieve contig $contig_id\n";
-        $contig->writeToCaf($FILE) if $contig;
+        unless ($contig) {
+            $report .= "FAILED to retrieve contig $contig_id";
+            next;
+        }
+#       $contig->toPadded() if ($options && $options->{padded});
+        $contig->writeToCaf($FILE);
+        $export++;
     }
+    return $export,$report;
 }
 
 sub writeContigsToFasta {
@@ -208,37 +252,89 @@ sub writeContigsToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+    my $options = shift; # hash ref
 
-    my $contigids = $this->getContigIDs(@_) || print STDERR "Project ".
-	$this->getProjectName()." has no contigs\n" && return;
+    my ($contigids,$status) = $this->getContigIDs($options->{nolock}); 
 
-    my $ADB = $this->{ADB} || return;
+    return (0,$status) unless ($contigids && @$contigids);
+
+    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+
+    my $export = 0;
+    my $report = '';
     foreach my $contig_id (@$contigids) {
         my $contig = $ADB->getContig(contig_id=>$contig_id);
-        print STDERR "FAILED to retrieve contig $contig_id\n";
-        $contig->writeToFasta($DFILE,$QFILE) if $contig;
+        unless ($contig) {
+            $report .= "FAILED to retrieve contig $contig_id";
+            next;
+        }
+        $contig->writeToFasta($DFILE,$QFILE);
+        $export++;
     }
+    return $export,$report;
 }
 
 #-------------------------------------------------------------------    
 # exporting meta data as formatted string
 #-------------------------------------------------------------------    
+
+sub toStringShort {
+# short writeup (one line)
+    my $this = shift;
+
+    my @line;
+    push @line, $this->getProjectID();
+    push @line,($this->getComment() || '');
+    push @line,($this->getNumberOfContigs() || 0);
+    push @line,($this->getNumberOfReads() || 0);
+    my $stats = $this->getContigStatistics();
+    push @line,($stats->[0] || 0); # total sequence length 
+    push @line,($stats->[2] || 0); # largest contig
+    my $locked = $this->getLockedStatus();
+    push @line,($this->getOwner() || 'undef');
+    push @line,($locked || '');
   
-sub toString {
+    return sprintf ("%4d %-24s %7d %7d %9d %8d %8s %16s\n",@line);
+}
+  
+sub toStringLong {
+# long writeup
     my $this = shift;
 
     my $string = "\n";
 
-    $string .= "Project name       ".$this->getProjectName()."\n";
     $string .= "Project ID         ".$this->getProjectID()."\n";
-    $string .= "Allocated contigs  ".$this->getNumberOfContigs()."\n";
-    $string .= "Allocated reads    ".$this->getNumberOfReads()."\n";
-    $string .= "Assembly           ".$this->getAssemblyID()."\n";
-    $string .= "Last update        ".$this->getUpdated().
-                           "  by   ".($this->getUserName() || '')."\n";
-    $string .= "Created on         ".$this->getUpdated().
-                           "  by   ".$this->getCreator()."\n";
+
+    $string .= "Lock status        ";
+    if (my $lock = $this->getLockedStatus()) {
+        $string .= "locked by user ".$this->getOwner()." on $lock\n";     
+    }
+    else {
+        $string .= "not locked\n";
+    }
+    $string .= "Allocated contigs  ".($this->getNumberOfContigs() || 0)."\n";
+    $string .= "Allocated reads    ".($this->getNumberOfReads() || 0)."\n";
+    $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
+    if ($this->getOwner()) {
+        $string .= "Last update on     ".$this->getUpdated().
+                               "  by   ".$this->getOwner()."\n";
+    }
+    if ($this->getCreator()) {
+        $string .= "Created on         ".$this->getUpdated().
+                               "  by   ".$this->getCreator()."\n";
+    }
     $string .= "Comment            ".($this->getComment() || '')."\n";
+
+    my $stats = $this->getContigStatistics();
+
+    if ($this->getNumberOfContigs()) {
+        $string .= "Contig statistics:\n";
+        $string .= " Total sequence    ".($stats->[0] || 0)."\n";
+        $string .= " Minimum length    ".($stats->[1] || 0)."\n";
+        $string .= " Maximum length    ".($stats->[2] || 0)."\n";
+        $string .= " Average length    ".($stats->[3] || 0)."\n";
+        $string .= " Variance          ".($stats->[4] || 0)."\n";
+    }
 
     return $string;
 }
