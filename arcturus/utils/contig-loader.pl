@@ -35,7 +35,7 @@ my $projectID;             # alternatively the project ID
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded;             # allow a padded assembly
 my $consensus;             # load consensus sequence
-my $noload = 1;
+my $noload = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
