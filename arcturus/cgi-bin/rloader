@@ -191,6 +191,7 @@ if ($cgi) {
         else {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
+print "testing project $database <br>";
                 $config{RDD} = `$BADGERDIR/pfind -q $database`;
 #              my $repository = new PathogenRepository;
 #              $config{RDD} = $repository->getAssemblyDirectory($database); 
