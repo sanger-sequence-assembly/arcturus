@@ -25,7 +25,9 @@
 # can be useful for creating a module that consists of many directories
 # spread out over the entire source repository.
 uk powmap/uk
+diana powmap/diana
 collections powmap/collections
 powmap_etc powmap/etc
 powmap_corba powmap/corba
 flatserve flatimpl &powmap_corba &powmap_etc &uk &collections
+agct agctimpl &uk &diana &powmap_etc &collections
