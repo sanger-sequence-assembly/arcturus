@@ -68,7 +68,11 @@ sub importSequence {
 
     my $ADB = $this->{ADB} || return; # the parent database
 
-    my ($sequence, $quality) = $ADB->getSequenceForRead(id => $this->getReadID());
+    my ($sequence, $quality) = $ADB->getSequenceForRead(
+                                     seq_id => $this->getSequenceID(),
+#                                     read_id => $this->getReadID(),
+#                                     name => $this->getReadName(),
+                                     $this->getVersion());
 
     $this->setSequence($sequence); # a string
     $this->setQuality($quality);   # reference to an array of integers
@@ -93,6 +97,24 @@ sub importComment {
 #-------------------------------------------------------------------    
 # importing & exporting data and meta data
 #-------------------------------------------------------------------    
+
+sub addAlignToTrace {
+    my $this = shift;
+    my $value = shift; # array ref
+
+    return unless defined($value);
+
+    $this->{alignToTrace} = [] unless defined($this->{alignToTrace});
+
+    push @{$this->{alignToTrace}}, $value;
+}
+
+sub getAlignToTrace {
+    my $this = shift;
+    return $this->{alignToTrace}; # array of arrays
+}
+
+#-----------------
 
 sub setAspedDate {
     my $this = shift;
@@ -159,7 +181,6 @@ sub getCloningVector {
 # returns an array of arrays
     return $this->{data}->{cvector};
 }
-
 
 #-----------------
 
@@ -325,6 +346,19 @@ sub getSequence {
     return $this->{Sequence};
 }
 
+
+#-----------------
+
+sub setSequenceID {
+    my $this = shift;
+    $this->{data}->{sequence_id} = shift;
+}
+
+sub getSequenceID {
+    my $this = shift;
+    return $this->{data}->{sequence_id};
+}
+
 #-----------------
 
 sub getSequenceLength {
@@ -414,6 +448,18 @@ sub getTraceArchiveIdentifier {
         $this->{TAI} = $ADB->getTraceArchiveIdentifier(id=>$this->getReadID);
     }
     return $this->{TAI};
+}
+
+#-----------------
+
+sub setVersion {
+    my $this = shift;
+    $this->{data}->{version} = shift;
+}
+
+sub getVersion {
+    my $this = shift;
+    return $this->{data}->{version} || 0;
 }
 
 #----------------------------------------------------------------------
