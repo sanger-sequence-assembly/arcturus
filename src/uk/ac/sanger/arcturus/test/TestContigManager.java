@@ -3,6 +3,8 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 
 import java.util.*;
+import java.io.*;
+
 import javax.naming.Context;
 
 public class TestContigManager {
@@ -14,6 +16,7 @@ public class TestContigManager {
 	boolean verbose = Boolean.getBoolean("verbose");
 	boolean fullSequence = Boolean.getBoolean("fullSequence");
 	boolean fullContig = Boolean.getBoolean("fullContig");
+	String logfile = System.getProperty("logfile");
 
 	System.out.println("TestContigManager");
 	System.out.println("=================");
@@ -52,6 +55,14 @@ public class TestContigManager {
 	    System.out.println();
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+	    PrintStream logger = null;
+
+	    if (logfile != null) {
+		logger = new PrintStream(new FileOutputStream(logfile));
+		if (logger != null)
+		    adb.setLogger(logger);
+	    }
 
 	    report();
 
