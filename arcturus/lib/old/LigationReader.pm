@@ -83,7 +83,7 @@ sub build {
    my $count = 0;
 
    print "Polling the ORACLE database ... be patient, please ....\n";
-#   $ENV{PATH} .= ':/usr/local/badger/bin' if ($ENV{PATH} !~ /badger\/bin/);
+   $ENV{PATH} .= ':/usr/local/badger/bin' if ($ENV{PATH} !~ /badger\/bin/);
    my @fields = `$PEEKDIR/peek ligation $ligation`; # execute Oracle query
    print "<br>" if $ENV{'PATH_INFO'}; # CGI mode
    if (!@fields) {
