@@ -66,7 +66,6 @@ sub connect {
     unless ($inited) {
 	my $inifile = $ENV{'WRAPMYSQL_INI'};
 	initFromFile('WrapMySQL', $inifile) if (defined($inifile) && -f $inifile);
-	$inited = 1;
     }
 
     $errorstring = 'No error';
@@ -149,6 +148,8 @@ sub initFromFile {
 
 	close(INI);
     }
+
+    $inited = 1;
 }
 
 sub listInstances {
@@ -165,6 +166,109 @@ sub listRolesForInstance {
     } else {
 	return undef;
     }
+}
+
+sub addInstance {
+    my ($type, $instance, $keyvals, $junk) = @_;
+
+    return 0 unless defined($instance);
+
+    return 0 if defined($users->{$instance});
+
+    $users->{$instance} = defined($keyvals)? $keyvals : {};
+
+    return $users->{$instance};
+}
+
+sub setDatabase {
+    my ($type, $instance, $value, $junk) = @_;
+
+    return &setKeyValue($type, $instance, 'database', $value);
+}
+
+sub setHostname {
+    my ($type, $instance, $value, $junk) = @_;
+
+    return &setKeyValue($type, $instance, 'host', $value);
+}
+
+sub setPort {
+    my ($type, $instance, $value, $junk) = @_;
+
+    return &setKeyValue($type, $instance, 'port', $value);
+}
+
+sub setKeyValue {
+    my ($type, $instance, $keyword, $value, $junk) = @_;
+
+    return 0 unless (defined($instance) && defined($keyword) && defined($value));
+
+    my $info = $users->{$instance};
+
+    return 0 unless defined($info);
+
+    $info->{$keyword} = $value;
+
+    return $info->{$keyword};
+}
+
+sub addRoleToInstance {
+    my ($type, $instance, $rolename, $username, $password, $junk) = @_;
+
+    return 0 unless (defined($instance) && defined($rolename) &&
+		     defined($username) && defined($password));
+
+    my $info = $users->{$instance};
+
+    return 0 unless defined($info);
+
+    my $roles = $users->{$instance}->{'ROLE'};
+
+    unless (defined($roles)) {
+	$roles = {};
+	$users->{$instance}->{'ROLE'} = $roles;
+    }
+
+    $roles->{$rolename} = [$username, $password];
+
+    return $roles->{$rolename};
+}
+
+sub saveToFile {
+    my ($type, $filename, $junk) = @_;
+
+    return 0 unless open(INIFILE, "> $filename");
+
+    my $instance;
+
+    my $written = 0;
+
+    foreach $instance (keys(%{$users})) {
+	print INIFILE "\n" if ($written > 0);
+
+	print INIFILE "[$instance]\n";
+
+	my $name;
+
+	foreach $name (keys(%{$users->{$instance}})) {
+	    if ($name eq 'ROLE') {
+		my $roles = $users->{$instance}->{'ROLE'};
+		my $mode;
+		foreach $mode (keys(%{$roles})) {
+		    my ($username, $password) = @{$roles->{$mode}};
+		    print INIFILE "role.$mode=$username,$password\n";
+		}
+	    } else {
+		print INIFILE "$name=",$users->{$instance}->{$name},"\n";
+	    }
+	}
+
+	$written++;
+    }
+
+    close(INIFILE);
+
+    return $written;
 }
 
 1;
