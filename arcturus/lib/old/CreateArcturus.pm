@@ -215,6 +215,12 @@ sub create_organism {
         &record ($historyTable,$userid,'CONTIGS2SCAFFOLD');
     }
 
+    if (!$target || $target eq 'SCAFFOLD2PROJECT') {    
+        push @tables, 'SCAFFOLD2PROJECT';
+        &create_SCAFFOLD2PROJECT ($dbh, $list);
+        &record ($historyTable,$userid,'SCAFFOLD2PROJECT');
+    }
+
     if (!$target || $target eq 'CHEMISTRY') {    
         push @tables, 'CHEMISTRY';
         &create_CHEMISTRY ($dbh, $list);
@@ -1185,27 +1191,66 @@ sub create_CONTIGS2CONTIG {
 
 #*********************************************************************************************************
 
+sub create_SCAFFOLD2PROJECT {
+    my ($dbh, $list) = @_;
+
+# assign scaffolds (groups of one or more contigs) to projects and assemblies
+
+# scaffold  : (unique) scaffold number
+# project   : reference to PROJECT.project number
+# history info? see READS2CONTIG structure
+# generation
+# deprecated
+
+    &dropTable ($dbh,"SCAFFOLD2PROJECT", $list);
+    print STDOUT "Creating table SCAFFOLD2PROJECT ..." if ($list);
+    $dbh->do(qq[CREATE TABLE SCAFFOLD2PROJECT(
+             scaffold         SMALLINT           UNSIGNED NOT NULL PRIMARY KEY,
+             project          SMALLINT           UNSIGNED NOT NULL
+         )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
+#*********************************************************************************************************
+
 sub create_CONTIGS2SCAFFOLD {
     my ($dbh, $list) = @_;
 
-# assign contigs to projects and assemblies
-# contig_id 
-# project   : reference to PROJECT.project number
-# assembly  : reference to ASSEMBLY.assembly number
-# astatus   : assembly status: 
-#             N not allocated (should not occur except as transitory status)
-#             C current generation (origin in CONTIGS.origin)
-#             S contig is superseded by later one (i.e previous generation)
-#             X locked status (includes transport status); locked by last
-#               user to access in CONTIGS.userid
+# assign contigs to scaffolds
+# contig_id   : (unique) contig identifier
+# scaffold    : scaffold id  number
+# orientation : Forward, Reverse or Unknown
+# ordering    : ordering sequence of contig in scaffold
+# assembly    : reference to ASSEMBLY.assembly number (replicates info in project)
+# astatus     : assembly status: 
+#               N not allocated (should not occur except as transitory status)
+#               C current generation (origin in CONTIGS.origin)
+#               S contig is superseded by later one (i.e previous generation)
+#               X locked status (includes transport status); locked by last
+#                 user to access in CONTIGS.userid
 
     &dropTable ($dbh,"CONTIGS2SCAFFOLD", $list);
     print STDOUT "Creating table CONTIGS2SCAFFOLD ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2SCAFFOLD(
              contig_id        MEDIUMINT          UNSIGNED NOT NULL PRIMARY KEY,
-             project          SMALLINT           UNSIGNED NOT NULL,
+             scaffold         SMALLINT           UNSIGNED NOT NULL,
+             orientation      ENUM ('F','R','U')       DEFAULT 'U',
+             ordering         SMALLINT           UNSIGNED NOT NULL,
              assembly         SMALLINT           UNSIGNED NOT NULL,
-             astatus          ENUM ('N','C','S','X')    DEFAULT 'N'
+             astatus          ENUM ('N','C','S','X')   DEFAULT 'N'
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1949,55 +1994,58 @@ sub create_DATAMODEL {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
-    my @input = ('READEDITS          read_id            READS     read_id',
-                 'READTAGS           read_id            READS     read_id',
-                 'READS2CONTIG       read_id            READS     read_id',
-                 'READS2CONTIG     contig_id          CONTIGS   contig_id', # ? /contigname/aliasname',
-                 'READS2CONTIG     contig_id CONTIGS2SCAFFOLD   contig_id',
-                 'READS2CONTIG         clone           CLONES       clone',
-                 'READS2ASSEMBLY     read_id            READS     read_id',
-                 'READS2ASSEMBLY    assembly         ASSEMBLY    assembly',
-                 'USERS               userid   USERS2PROJECTS      userid',
-                 'USERS2PROJECTS      userid            USERS      userid',
-                 'USERS2PROJECTS     project         PROJECTS     project',
-                 'CONTIGS          contig_id     READS2CONTIG   contig_id',
-                 'CONTIGS             userid            USERS      userid',
-                 'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
-                 'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
-                 'CONTIGS          contig_id        CONSENSUS   contig_id',
-                 'TAGS2CONTIG      contig_id          CONTIGS   contig_id',
-                 'GENE2CONTIG      contig_id          CONTIGS   contig_id',
-                 'TAGS2CONTIG         tag_id          STSTAGS      tag_id',
-                 'STSTAGS             tag_id      TAGS2CONTIG      tag_id',
-                 'TAGS2CONTIG         tag_id        HAPPYTAGS      tag_id',
-                 'HAPPYTAGS           tag_id      TAGS2CONTIG      tag_id',
-                 'HAPPYMAP            tag_id        HAPPYTAGS      tag_id',
-                 'TAGS2CONTIG         tag_id         GAP4TAGS      tag_id',
-                 'GAP4TAGS            tag_id      TAGS2CONTIG      tag_id',
-                 'ASSEMBLY          assembly         CLONEMAP    assembly',
-                 'CLONEMAP          assembly         ASSEMBLY    assembly',
-                 'CONTIGS          oldcontig   CONTIGS2CONTIG   contig_id',
-                 'CONTIGS2CONTIG   oldcontig          CONTIGS   contig_id',
-                 'CONTIGS2CONTIG   newcontig          CONTIGS   contig_id',
-                 'CONTIGS2CONTIG   oldcontig CONTIGS2SCAFFOLD   contig_id',
-                 'CONTIGS2SCAFFOLD contig_id   CONTIGS2CONTIG   oldcontig',
-                 'CONTIGS2SCAFFOLD contig_id          CONTIGS   contig_id',
-                 'CONTIGS          contig_id CONTIGS2SCAFFOLD   contig_id',
-                 'CONTIGS2SCAFFOLD   project         PROJECTS     project',
-                 'LIGATIONS          svector  SEQUENCEVECTORS     svector',
-                 'CHEMISTRY         chemtype        CHEMTYPES    chemtype/description',
-                 'SEQUENCEVECTORS     vector          VECTORS      vector',
-                 'CLONINGVECTORS      vector          VECTORS      vector',
-                 'CLONES2PROJECT       clone           CLONES       clone',
-                 'CLONES2PROJECT     project         PROJECTS     project',
-                 'PROJECTS           project   CLONES2PROJECT     project',
-                 'PROJECTS           project   USERS2PROJECTS     project',
-                 'PROJECTS          assembly         ASSEMBLY    assembly',
-                 'PROJECTS            userid            USERS      userid',
-                 'PROJECTS           creator            USERS      userid',
-                 'ASSEMBLY          organism        ORGANISMS    organism',
-                 'ASSEMBLY            userid            USERS      userid',
-                 'ASSEMBLY           creator            USERS      userid',
+    my @input = ('READEDITS          read_id             READS     read_id',
+                 'READTAGS           read_id             READS     read_id',
+                 'READS2CONTIG       read_id             READS     read_id',
+                 'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
+                 'READS2CONTIG     contig_id  CONTIGS2SCAFFOLD   contig_id',
+                 'READS2CONTIG         clone            CLONES       clone',
+                 'READS2ASSEMBLY     read_id             READS     read_id',
+                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
+                 'USERS               userid    USERS2PROJECTS      userid',
+                 'USERS2PROJECTS      userid             USERS      userid',
+                 'USERS2PROJECTS     project          PROJECTS     project',
+                 'CONTIGS          contig_id      READS2CONTIG   contig_id',
+                 'CONTIGS             userid             USERS      userid',
+#                 'CONTIGS          contig_id       TAGS2CONTIG   contig_id',
+                 'CONTIGS          contig_id       TAGS2CONTIG   contig_id',
+                 'CONTIGS          contig_id         CONSENSUS   contig_id',
+                 'TAGS2CONTIG      contig_id           CONTIGS   contig_id',
+                 'GENE2CONTIG      contig_id           CONTIGS   contig_id',
+                 'TAGS2CONTIG         tag_id           STSTAGS      tag_id',
+                 'STSTAGS             tag_id       TAGS2CONTIG      tag_id',
+                 'TAGS2CONTIG         tag_id         HAPPYTAGS      tag_id',
+                 'HAPPYTAGS           tag_id       TAGS2CONTIG      tag_id',
+                 'HAPPYMAP            tag_id         HAPPYTAGS      tag_id',
+                 'TAGS2CONTIG         tag_id          GAP4TAGS      tag_id',
+                 'GAP4TAGS            tag_id       TAGS2CONTIG      tag_id',
+                 'ASSEMBLY          assembly          CLONEMAP    assembly',
+                 'CLONEMAP          assembly          ASSEMBLY    assembly',
+                 'CONTIGS          oldcontig    CONTIGS2CONTIG   contig_id',
+                 'CONTIGS2CONTIG   oldcontig           CONTIGS   contig_id',
+                 'CONTIGS2CONTIG   newcontig           CONTIGS   contig_id',
+                 'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
+#                 'CONTIGS2SCAFFOLD contig_id    CONTIGS2CONTIG   oldcontig',
+                 'CONTIGS2SCAFFOLD contig_id           CONTIGS   contig_id',
+                 'CONTIGS          contig_id  CONTIGS2SCAFFOLD   contig_id',
+                 'CONTIGS2SCAFFOLD  scaffold  SCAFFOLD2PROJECT    scaffold',
+                 'SCAFFOLD2PROJECT  scaffold  CONTIGS2SCAFFOLD    scaffold',
+                 'SCAFFOLD2PROJECT   project          PROJECTS     project',
+                 'LIGATIONS          svector   SEQUENCEVECTORS     svector',
+                 'CHEMISTRY         chemtype         CHEMTYPES    chemtype/description',
+                 'SEQUENCEVECTORS     vector           VECTORS      vector',
+                 'CLONINGVECTORS      vector           VECTORS      vector',
+                 'CLONES2PROJECT       clone            CLONES       clone',
+                 'CLONES2PROJECT     project          PROJECTS     project',
+                 'PROJECTS           project    CLONES2PROJECT     project',
+                 'PROJECTS           project    USERS2PROJECTS     project',
+                 'PROJECTS           project  SCAFFOLD2PROJECT     project',
+                 'PROJECTS          assembly          ASSEMBLY    assembly',
+                 'PROJECTS            userid             USERS      userid',
+                 'PROJECTS           creator             USERS      userid',
+                 'ASSEMBLY          organism         ORGANISMS    organism',
+                 'ASSEMBLY            userid             USERS      userid',
+                 'ASSEMBLY           creator             USERS      userid',
 #                 'SESSIONS            userid            USERS      userid',
                  'READS              read_id     READS2CONTIG     read_id',
                  'READS              read_id   READS2ASSEMBLY     read_id',
@@ -2087,6 +2135,7 @@ sub create_INVENTORY {
                  'CONTIGS2SCAFFOLD  o  l  3  0',
                  'CONTIGS2CONTIG    o  m  0  0',
                  'CONSENSUS         o  d  1  1',
+                 'SCAFFOLD2PROJECT  o  l  3  0',
                  'CHEMISTRY         o  d  1  1',
                  'STRANDS           o  d  1  1',
                  'PRIMERTYPES       o  d  1  1',

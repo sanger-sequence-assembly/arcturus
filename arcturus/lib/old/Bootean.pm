@@ -16,7 +16,7 @@ use GateKeeper;
 #                                                                           #
 # 'Men in Black': The Alien Encyclopedia                                    #
 #############################################################################
-my $DEBUG = 1;
+my $DEBUG = 0;
 #############################################################################
 my %instances;
 #############################################################################
@@ -376,7 +376,7 @@ sub disconnect {
 
 # do a full close down if this is the only connection
 
-print "GKcount $GKcount{$GateKeeper} \n";
+print "GKcount $GKcount{$GateKeeper} \n" if $DEBUG;
     $full = 1 if ($GKcount{$GateKeeper} == 1);
 
 # put a time/user signature on modified database tables

@@ -84,6 +84,7 @@ elsif ($action eq 'overview' && $database eq 'arcturus') {
     $page->sectionheader("Common Tables",3,0);
     my $w1 = "WIDTH=120"; my $w2 = "WIDTH=60"; my $w3 = "WIDTH=40";
     my $list  = "<table border=1 cellpadding=3>"; my $bg = "BGCOLOR='yellow'";
+    my $more = "bgcolor=lightsteelblue";
     $list .= "<TR><TH $bg $w1>table</TH><TH $bg $w2>size</TH><TH $bg $w3>&nbsp</TH></TR>";
     my $session = $GateKeeper->lookup('session') || '';
     foreach my $table (keys %$instances) {
@@ -97,10 +98,15 @@ elsif ($action eq 'overview' && $database eq 'arcturus') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $detail = "$arc_cgi_dir/query/dictionary/$table";
-            $detail .= "\?session=$session" if ($session =~ /\boper|ejz\b/);
-            $entry .= "<TD ALIGN=CENTER><A href=\"$detail\"> show </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                my $detail = "$arc_cgi_dir/query/dictionary/$table";
+                $detail .= "\?session=$session" if ($session =~ /\boper|ejz\b/);
+                $entry .= "<TD ALIGN=CENTER $more $w3><A href=\"$detail\"> list </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER $w3> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -139,6 +145,7 @@ elsif ($action eq 'overview') {
 
     my $w1 = "WIDTH=140"; my $w2 = "WIDTH=65"; my $w3 = "WIDTH=40";
     my $bg = "BGCOLOR='yellow'"; my $tw = "WIDTH=100%";
+    my $more = "bgcolor=lightsteelblue";
 
     $page->partition(1);
     my $list = "<table border=1 cellpadding=3 $tw>";
@@ -157,9 +164,13 @@ elsif ($action eq 'overview') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/select/$table";
-            $anchor =~ s/select/empty/ if (!$count);
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\"> query </a></td>";
-            $list .= "$entry</tr>\n";
+            if ($count) {
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\"> query </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER $w3> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -180,10 +191,14 @@ elsif ($action eq 'overview') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
-            $anchor =~ s/dictionary/empty/ if (!$count); my $text = 'list';
-            $target = "target=\"arcturustable\""; 
-            $entry .= "<TD ALIGN=CENTER $w3><A href=\"$anchor\" $target> $text </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                $target = "target=\"arcturustable\""; 
+                $entry .= "<TD ALIGN=CENTER $more $w3><A href=\"$anchor\" $target> list </a></td></tr>";
+	    }
+            else {
+                $entry .= "<TD ALIGN=CENTER $w3> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -205,12 +220,17 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/dictionary/$table";
-            $anchor =~ s/dictionary/tagselect/ if ($table =~ /TAG/);
-            $target = "target=\"arcturustable\""; 
-            $target = ' ' if ($table =~ /TAG/);
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
-            $list .= "$entry</tr>\n";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/dictionary/$table";
+                $anchor =~ s/dictionary/tagselect/ if ($table =~ /TAG/);
+                $target = "target=\"arcturustable\""; 
+                $target = ' ' if ($table =~ /TAG/);
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\" $target> list </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -234,10 +254,15 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/dictionary/$table";
-            $target = "target=\"arcturustable\""; 
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/dictionary/$table";
+                $target = "target=\"arcturustable\""; 
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\" $target> list </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -261,10 +286,14 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/linkselect/$table";
-            $anchor =~ s/linkselect/empty/ if (!$count);
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\"> query </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/linkselect/$table";
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\"> query </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -287,10 +316,14 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/linkselect/$table";
-            $anchor =~ s/linkselect/empty/ if (!$count);
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\"> query </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/linkselect/$table";
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\"> query </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -310,10 +343,14 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/select/$table";
-            $anchor =~ s/select/empty/ if (!$count); my $text = 'query';
-            $entry .= "<TD ALIGN=CENTER $w3><A href=\"$anchor\"> $text </a></td>";
-            $list .= "$entry</tr>";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/select/$table";
+                $entry .= "<TD ALIGN=CENTER $more $w3><A href=\"$anchor\"> query </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER $w3> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -335,11 +372,16 @@ elsif ($action eq 'overview') {
             undef my $entry;
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
-            my $anchor = "$arc_cgi_dir/query/dictionary/$table";
+            if ($count) {
+                my $anchor = "$arc_cgi_dir/query/dictionary/$table";
 #            $anchor .= "\?session=$session" if ($session =~ /\boper|ejz\b/);
-            $target = "target=\"arcturustable\""; 
-            $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
-            $list .= "$entry</tr>";
+                $target = "target=\"arcturustable\""; 
+                $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\" $target> list </a></td></tr>";
+            }
+            else {
+                $entry .= "<TD ALIGN=CENTER> &nbsp </TD>";
+            }
+            $list .= $entry;
         }
     }
     $list .= "</table>";
@@ -392,13 +434,14 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 
 elsif ($action eq "empty") { 
 
-    my ($database,$name) = split /\./,$tablename;
-    $page->frameborder(100,25,'white',10);
-    $page->partition(2);
-    $page->sectionheader("ARCTURUS assembly tracking database \"$database\"",3,0);
-    my $link = "$arc_cgi_dir/query/overview\?database=$database";
-    $page->partition(1);
-    $page->messagebox("<H3>Sorry! Table $tablename is empty</h3>",$link,0,'lightcoral');
+#    my ($database,$name) = split /\./,$tablename;
+#    $page->frameborder(100,25,'white',10);
+#    $page->partition(2);
+#    $page->sectionheader("ARCTURUS assembly tracking database \"$database\"",3,0);
+#    my $link = "$arc_cgi_dir/query/overview\?database=$database";
+#    $page->partition(1);
+#    $page->messagebox("<H3>Sorry! Table $tablename is empty</h3>",$link,0,'lightcoral');
+    print "should not occur!<br>";
 }
 
 # READS, CONTIGS, READEDITS, PENDING preselection
@@ -421,7 +464,10 @@ elsif ($action eq "select") {
 
 # build a preselection form for the selected database table
 
-    if ($name =~ /READ/) {
+    if (!$dbcount) {
+        $page->messagebox("Sorry! Table $name is empty");
+    }
+    elsif ($name =~ /READ/) {
 
         $page->form("$arc_cgi_dir/query/selectread");
 
@@ -490,6 +536,14 @@ print "detail: $tablename<br>";
     }
     elsif ($name eq 'CONTIGS') {
 print "detail: $tablename<br>";
+
+        $page->form("$arc_cgi_dir/query/selectcontig");
+
+        $page->add(&CONTIGS_form);
+
+        $page->sectionheader("Specify Additional Constraints",4,0);
+
+        $page->hidden('database',$database);
     }
 
     $page->submitbuttonbar(1,0,0);
@@ -727,4 +781,37 @@ sub READS_form {
     return $queryform;
 }
 
+##############################################################################
 
+sub CONTIGS_form {
+
+    my $SM = "<small>"; my $sm = "</small>";
+
+    my $queryform = "<H4>Specify either a name or search string or a Contig number";
+    $queryform .= "or define selection constraints as in: 'select contigs where &lt constraints &gt'</H4>";
+    $queryform .= "<TABLE><TR>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='0' checked></TD>";
+    $queryform .=  "<TD>${SM}READ NAME$sm : </TD>";
+    $queryform .=  "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='cntgname' value='' width=24>$sm</TD>";
+    $queryform .= "</TR><TR>";
+    $queryform .= "<TD>&nbsp</TD><TH>type of match :</TH>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='0'></TD>";
+    $queryform .= "<TD> exact </TD>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='1' checked></TD>";
+    $queryform .= "<TD> begin </TD>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='2'></TD>";
+    $queryform .= "<TD> substring </TD>";
+    $queryform .= "</TR><TR>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='1'></TD>";
+    $queryform .= "<TD>${SM}NUMBER$sm</TD>";
+    $queryform .= "<TD COLSPAN=7>${SM}<INPUT name='cntgnmbr' value='' width=24>$sm</TD>";
+    $queryform .= "</TR><TD>&nbsp</TD><TR>";
+    $queryform .= "</TR><TR>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='2'></TD>";
+    $queryform .= "<TD>${SM}CONSTRAINTS$sm</TD>";
+    $queryform .= "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='querytxt' value='' width=24 maxlength=64>$sm</TD>";
+    $queryform .= "</TR><TR>";
+    $queryform .= "</TR></TABLE>";
+
+    return $queryform;
+}

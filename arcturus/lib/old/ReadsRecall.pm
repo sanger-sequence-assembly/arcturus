@@ -17,6 +17,7 @@ use Compress;
 my $Compress; # reference to encoding/decoding module
 my $MODEL;    # reference to READMODEL database table
 my $READS;    # table handle to the READS table
+my $RTAGS;    # table handle to the READTAGS table
 
 my %instance; # hash for all ReadsRecall instances 
 
@@ -40,7 +41,7 @@ sub init {
 # test if input table handle is of the READS table
 
     $READS = $tblhandle->spawn('READS','self');
-#    $READS->autoVivify(2); # build all connections
+    $RTAGS = $tblhandle->spawn('READTAGS','self');
 
     $Compress = Compress->new(@_); # build decoding table
 
@@ -164,6 +165,7 @@ sub spawnReads {
         push @reads,$self->new($readids);
     }
 # $readids is array reference
+# this section may need redoing to include staggered procesing of array and caching in READS
     elsif (my $hashrefs = $READS->associate($items,$readids,$keyword,{returnScalar => 0})) {
         undef my %reads;
         foreach my $read (@$readids) {
@@ -217,6 +219,8 @@ sub getNamedRead {
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
+        my $number = $readhash->{read_id};
+        $self->loadReadTags($number);
     }
     else {
         $status->{report} .= "! Read $readname NOT found in ARCTURUS READS\n";
@@ -241,6 +245,7 @@ sub getNumberedRead {
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
+        $self->loadReadTags($number);
     }
     else {
         $status->{report} .= "! Read nr. $number does not exist";
@@ -264,10 +269,12 @@ sub getLabeledRead {
 
 # retrieve the (first encountered) read name for the specified condition 
 
-    my $readhash = $READS->associate('readhash',$itsvalue,$readitem);
+    my $readhash = $READS->associate('hashref',$itsvalue,$readitem);
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
+        my $number = $readhash->{read_id};
+        $self->loadReadTags($number);
     } 
     else {
         $status->{report} .= "! No read found for $readitem = $itsvalue";
@@ -275,6 +282,15 @@ sub getLabeledRead {
     }
 
     return $self->status;
+}
+
+#############################################################################
+
+sub loadReadTags {
+    my $self   = shift;
+    my $number = shift;
+
+print "load TAGS for read_id $number\n";
 }
 
 #############################################################################
@@ -341,8 +357,7 @@ sub loadReadData {
                     $status->{errors}++;
                 }
                 else {
-                    $sstring =~ s/\s+//g;
-                    $sstring =~ s/(.{60})/$1\n/g;
+                    $sstring =~ s/\s+//g; # remove blanks
                     $qcount = $scount; # preset for absent quality data
                 }
             }
@@ -369,7 +384,7 @@ sub loadReadData {
                 }
                 else {
                     $qstring =~ s/\b(\d)\b/0$1/g;
-                    $qstring =~ s/(.{90})/$1\n/g;
+                    $qstring =~ s/^\s+//; # remove leading blanks
                 }
             }
         }
@@ -379,7 +394,7 @@ sub loadReadData {
         $status->{errors}++;
     }
 
-# cleanup the sequences and store in buffers @sequnce and @quality
+# cleanup the sequences and store in buffers @sequence and @quality
 
     if (!$status->{errors}) {
 
@@ -453,7 +468,7 @@ sub segmentToContig {
     $rtoc = $rtoc->{$mapkey}; # is now a reference to an array
     my $pcstart = $segment->{pcstart};
     my $pcfinal = $segment->{pcfinal};
-# contig window range should be positive  
+# contig window range should be positive for consensus; flip windows if required  
     my $k = 0; $k = 1 if ($pcfinal < $pcstart);
 # in case of inversion (k=1) ensure contig window is aligned by swapping indices
     $rtoc->[$k]   = $prstart; $rtoc->[1-$k] = $prfinal;
@@ -486,7 +501,7 @@ sub readToContig {
 }
 
 #############################################################################
-
+# NOT YET USED, to be tested
 sub shiftMap {
 # linear shift on reads to contig mapping
     my $self   = shift;
@@ -506,7 +521,7 @@ sub shiftMap {
 }
 
 #############################################################################
-
+# not yet USED, to be tested
 sub invertMap {
 # nowhere used ??? what is this for ???
 # invert the "toContig" mapping given length of contig
@@ -641,15 +656,15 @@ sub indexing {
     my $index    = $self->{index};
 
     for (my $i=0 ; $i<=$range->[1] ; $i++) {
-        $$index[$i] = 0;
+        $index->[$i] = 0;
         if ($i >= $range->[0]+3 && $i <= $range->[1]-3) {
             my $accept = 1;
             for (my $j=0 ; $j<7 ; $j++) {
-                if (defined($enumerate{$$sequence[$i+$j-3]}) && $accept) {
-                    $$index[$i] *= 4 if ($$index[$i]);
-                    $$index[$i] += $enumerate{$$sequence[$i+$j-3]};
+                if (defined($enumerate{$sequence->[$i+$j-3]}) && $accept) {
+                    $index->[$i] *= 4 if ($index->[$i]);
+                    $index->[$i] += $enumerate{$sequence->[$i+$j-3]};
                 } else {
-                    $$index[$i] = -1;
+                    $index->[$i] = -1;
                     $accept = 0;
                 }
             }
@@ -674,8 +689,8 @@ sub edit {
 
     undef my $miss;
     while ($edit =~ s/^(\d+)([ACTGU-])([actgu])//) {
-        if (defined($$sequence[$1]) && $$sequence[$1] eq $2) {
-                $$sequence[$1] = $3;
+        if (defined($sequence->[$1]) && $sequence->[$1] eq $2) {
+            $sequence->[$1] = $3;
         } else {
             $miss .= $1.$2.$3;
         }
@@ -747,8 +762,14 @@ sub list {
         undef my $string;
         my $wrap = 'WRAP';
         if (defined($hash->{$key})) { 
-            $string = $self->{sstring} if ($key eq 'sequence' || $key eq 'SQ');
-            $string = $self->{qstring} if ($key eq 'quality'  || $key eq 'AV');
+            if ($key eq 'sequence' || $key eq 'SQ') {
+                $string = $self->{sstring};
+                $string =~ s/(.{60})/$1\n/g; # prepare for print
+            }
+            if ($key eq 'quality'  || $key eq 'AV') {
+                $string = $self->{qstring};
+                $string =~ s/(.{90})/$1\n/g; # prepare for print
+            }
             if ($string && $html) {
                 $string = "<code>$string</code>";
                 $string = "<small>$string</small>" if ($key eq 'quality'  || $key eq 'AV');
@@ -787,7 +808,7 @@ sub list {
 #############################################################################
 
 sub writeReadToCaf {
-# write this read in caf format to $FILE
+# write this read in caf format (unpadded) to $FILE
     my $self = shift;
     my $FILE = shift;
 
@@ -808,10 +829,16 @@ sub writeReadToCaf {
 
     print $FILE "\n";
     print $FILE "DNA : $hash->{readname}\n";
-    print $FILE "$self->{sstring}\n";
+    my $sstring = $self->{sstring};
+    $sstring =~ s/(.{60})/$1\n/g;
+    print $FILE "$sstring\n";
     print $FILE "\n";
     print $FILE "BaseQuality : $hash->{readname}\n";
-    print $FILE "$self->{qstring}\n";
+    my $qstring = $self->{qstring};
+    $qstring =~ s/(.{90})/$1\n/g;
+    print $FILE "$qstring\n";
+
+# process read tags ?
 }
 
 
@@ -823,37 +850,45 @@ sub writeMapToCaf {
     my $FILE = shift;
     my $long = shift; # 0 for segments for this read; 1 for assembled from
 
+    $self->translate(0);
+
     my $hash = $self->{readhash};
     my $rtoc = $self->{toContig};
-    my $omap = $rtoc->{0}; # the overall map
+    my $omap = $rtoc->{0};
+
+# NOTE: the ordering and position for individual read elements is different 
+# from the one used for the overal mapping! see methods segmentToContig & 
+# readToContig 
+
+# get the mapped read length (the scf map) from overall mapping
+
+    undef my @scfmap;
+    if ($omap && @$omap == 4) {
+        @scfmap = @$omap; # copy to local array
+        my $scflength = abs($scfmap[1] - $scfmap[0]);
+        $scfmap[3] = $scfmap[2] + $scflength;
+    }
+    else {
+        print STDOUT "Missing reads-to-contig overall map in $hash->{readname}\n";
+        return 0; # error status: missing or invalid overall map
+    }
 
     if (!$long) {
-        print $FILE "Assembled_from $hash->{readname} @$omap\n"; # or other order?
+        print $FILE "Assembled_from $hash->{readname} @scfmap\n";
         return;
-    }
-    elsif (!@$omap) {
-        print STDOUT "Missing reads 2 contig overall map\n";
     }
 
 # to get the to SCF mapping we have to backtransform the contig window
 
-    my $sign;
-    my $shft;
-    if ($omap->[1] >= $omap->[0]) {
-        $sign = 1; # co-aligned
-        $shft = $omap->[0] - $omap->[2];
-    }
-    else {
+    my $sign = 1;
+    if ($scfmap[1] < $scfmap[0]) {
         $sign = -1; # counter aligned
-        $shft = $omap->[0] + $omap->[2];
     }
-# get the SCF alignment
-    foreach my $segment (sort keys %$rtoc) {
-        next if !$segment; # skip the overall map
-        my $map = $rtoc->{$segment};
-        $map->[4] = $sign * $map->[0] + $shft;
-        $map->[5] = $sign * $map->[1] + $shft;
-    }
+    my $shift = $scfmap[2] - $sign * $scfmap[0];
+
+# the transformation from contig to scfread is: ri = sign*ci + shift 
+
+    my @segments = sort keys %$rtoc;
     
 # first write the Sequence, then DNA, then BaseQuality
 
@@ -861,23 +896,68 @@ sub writeMapToCaf {
     print $FILE "Sequence : $hash->{readname}\n";
     print $FILE "Is_read\nPadded\nSCF_File $hash->{readname}SCF\n";
     print $FILE "Template $hash->{template}\n";
+    print $FILE "Ligation_no $hash->{ligation}\n";
     print $FILE "Insert_size $hash->{insertsize}\n";
     print $FILE "Dye $hash->{chemistry}\n";
     print $FILE "Primer $hash->{primer}\n";
     print $FILE "Strand $hash->{strand}\n";
 
-    foreach my $segment (sort keys %$rtoc) {
+# here list the SCF alignments and build the padded sequence at the same time
+
+    my $padded = '';
+    my $quality = '';
+    my $previous = 0;
+    my $length = $hash->{slength};
+    my $lastsegment = $segments[$#segments];
+    my $qualitydata = $self->{quality};
+    foreach my $segment (@segments) {
         next if !$segment; # skip the overall map
         my $map = $rtoc->{$segment};
-        print $FILE "Align_to_SCF $map->[2] $map->[3] $map->[4] $map->[5]\n";
+# get the interval with the read interval ordered
+        my $j = 0; $j = 1 if ($sign < 0);
+        my $scstart = $sign * $map->[2+$j] + $shift;
+        my $scfinal = $sign * $map->[3-$j] + $shift;
+        my $rdstart = $map->[$j];
+        my $rdfinal = $map->[1-$j];
+# adjust the start and end intervals (overriding the back-transformed data)
+        if (!$previous) {
+#print "first segment $segment    $rdstart  $scstart\n";
+            $rdstart = 1;
+            $scstart = 1;
+        }
+        if ($segment eq $lastsegment) {
+            my $remainder = $length - $rdfinal;
+#print "last  segment $segment  $rdfinal  $scfinal  $length $remainder\n";
+            $rdfinal += $remainder;
+            $scfinal += $remainder; 
+        }
+
+        my $pad = $scstart - $previous - 1; 
+#print "previous $previous  scstart $scstart  pad $pad \n";
+        $previous = $scfinal;
+        print $FILE "Align_to_SCF $scstart $scfinal $rdstart $rdfinal\n";
+        if ($pad > 0) {
+            while ($pad--) {
+                $padded .= '-';
+                $quality .= " 00";
+            }
+        }
+        elsif ($pad < 0) {
+            print "Error in mapping! @$map \n";
+        }
+        my $length = $rdfinal - $rdstart + 1;
+        $padded .= substr ($self->{sstring}, $rdstart-1, $length);
+        for my $i ($rdstart .. $rdfinal) {
+            $quality .= sprintf "%3d", $qualitydata->[$i-1];
+        }
     }
 
     print $FILE "Seq_vec SVEC ";
     if ($hash->{svleft}) {
-        print $FILE "1 $hash->{svleft} \n";
+        print $FILE "1 $hash->{svleft} ";
     }
-    elsif ($hash->{svright}) { 
-        print $FILE "$hash->{svright} $hash->{slength} \n";
+    elsif ($hash->{svright}) {
+        print $FILE "$hash->{svright} $hash->{slength} ";
     }
     print $FILE "\"$hash->{svector}\"\n";
     my $lqleft = $hash->{lqleft} + 1;
@@ -885,15 +965,23 @@ sub writeMapToCaf {
     print $FILE "Clipping QUAL $lqleft $lqright\n"; 
     print $FILE "Clone $hash->{clone}\n";
     print $FILE "Sequencing_vector \"$hash->{svector}\"\n";
+
+# finally, write out the sequence and quality data in padded form
+
+    $padded =~ s/(.{60})/$1\n/g; # split in lines of 60
+    print $FILE "\n\nDNA : $hash->{readname}\n$padded\n";
+
+    print $FILE "\n\nBaseQuality : $hash->{readname}\n$quality\n";
 }
 
 #############################################################################
 
 sub touch {
+# unused at the moment ??
 # get the reference to the data hash; possibly apply key translation 
     my $self = shift;
 
-    $MODEL = $READS->getInstanceOf('arcturus.READMODEL') if !$MODEL;
+    $MODEL = $READS->spawn('READMODEL','arcturus') if !$MODEL;
 
     my $hash = $self->{readhash};
 
@@ -920,7 +1008,7 @@ sub translate {
     my $library = \%library;
     if (!keys %$library) {
 # on first call set up the translation library from the data in the dictionary
-# print "Initialising library <br>\n";
+#print "Initialising library <br>\n";
         $READS->autoVivify(1); # one level deep
 # process chemistry
         my %options = (returnScalar => 0, useCache => 0);
@@ -940,11 +1028,11 @@ sub translate {
             $library->{chemistry}->{$chemistry} = "Licor_chemistry";
         }
 # extend with full chemistry info
-        my $hashes = $CHEMISTRY->{hashrefs};
+        $hashes = $CHEMISTRY->{hashrefs};
         foreach my $hash (@$hashes) {
             my $chemistry = $hash->{chemistry};
             $library->{chemistry}->{$chemistry} = "Unknown" if !$library->{chemistry}->{$chemistry};
-            $library->{chemistry}->{$chemistry} .= " : $hash->{identifier}  type $hash->{chemtype}" if $long;
+            $library->{chemistry}->{$chemistry} .= " :  \"$hash->{identifier}\"  ($hash->{chemtype})" if $long;
         }
 # strands   
         $library->{strand} = {};   
@@ -953,7 +1041,7 @@ sub translate {
         foreach my $hash (@$hashes) {
             my $strand = $hash->{strand};
             my $description = $hash->{description};
-# print "strand $strand $description <br>";
+#print "strand $strand $description <br>";
             $library->{strand}->{$strand} = "Unknown";
             $library->{strand}->{$strand} = "Forward" if ($description =~ /forward/i);
             $library->{strand}->{$strand} = "Reverse" if ($description =~ /reverse/i);
@@ -966,11 +1054,11 @@ sub translate {
         foreach my $hash (@$hashes) {
             my $primer = $hash->{primer};
             my $description = $hash->{description};
-#print "primer $primer $description <br>";
+#print "primer $primer $description <br>\n";
             $library->{primer}->{$primer} = "Unknown_primer";
             $library->{primer}->{$primer} = "Universal_primer" if ($description =~ /forward|reverse/i);
             $library->{primer}->{$primer} = "Custom \"Oligo\"" if ($description =~ /custom/i);
-            $library->{strand}->{$primer} .= " (nr $primer)" if $long;
+            $library->{primer}->{$primer} .= " (nr $primer)" if $long;
         }
 # clone
         $library->{clone} = {};
@@ -978,7 +1066,7 @@ sub translate {
         $hashes = $CLONES->{hashrefs};
         foreach my $hash (@$hashes) {
             my $clone = $hash->{clone};
-#print "clone $clone $hash->{clonename} <br>";
+#print "clone $clone $hash->{clonename} <br>\n";
             $library->{clone}->{$clone} = $hash->{clonename};
             $library->{clone}->{$clone} .= " (nr $clone)" if $long;
         }
@@ -1000,9 +1088,9 @@ sub translate {
             my $ligation = $hash->{ligation};
             $library->{ligation}->{$ligation} = $hash->{identifier};
             $library->{ligation}->{$ligation} .= " (nr $ligation)" if $long;
+# create a new library entry for insert size
             my $insertsize = "$hash->{silow} $hash->{sihigh}";
             $library->{insertsize}->{$ligation} = $insertsize;
-            $library->{ligation}->{$ligation} .= " insert size: $insertsize" if $long;
         }
 # sequencevector
         $library->{svector} = {};
@@ -1027,6 +1115,9 @@ sub translate {
     }
 
     my $readhash = $self->{readhash};
+    return if defined($readhash->{insertsize}); # already done earlier
+    $readhash->{insertsize} = $readhash->{ligation} || 'unknown';
+
     foreach my $column (sort keys %$readhash) {
         my $code = $readhash->{$column};
         next if !defined($code); 
@@ -1081,7 +1172,3 @@ sub colofon {
 }
 
 1;
-
-
-
-

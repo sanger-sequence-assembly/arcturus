@@ -58,7 +58,8 @@ foreach my $instance (@$instances) {
 # print "instance  $instance \n";
     $instance =~ s/\.sanger\.ac\.uk//;
     my ($host,$port) = split ':',$instance;
-    next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));
+#    next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));
+    next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bchemtypes\b/));
     $report .= "Opening $instance ... ";
     if ($GateKeeper->ping_MySQL($host,$port)) {
         my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,{dieOnError => 0});
@@ -162,8 +163,7 @@ elsif ($subject && $subject =~ /\bvectors\b/i) {
 
 # copy the data from the user table on the current server to all others
 
-    my $whereAmI = $GateKeeper->{server};
-    $whereAmI =~ s/\.sanger\.ac\.uk//;
+    my $whereAmI = "$currentHost:$currentPort";
     
     foreach my $server (keys %vectordata) {
         my $ovhandle = $vectordata{$whereAmI};
@@ -187,16 +187,15 @@ elsif ($subject && $subject =~ /\bchemtypes\b/i) {
 
 # copy the data from the user table on the current server to all others
 
-    my $whereAmI = $GateKeeper->{server};
-    $whereAmI =~ s/\.sanger\.ac\.uk//;
+    my $whereAmI = "$currentHost:$currentPort";
     
     foreach my $server (keys %chemdata) {
-        my $ovhandle = $chemdata{$whereAmI};
+        my $ochandle = $chemdata{$whereAmI};
         if ($server ne $whereAmI) {
-            my $nvhandle = $chemdata{$server};
-	    print "copy from $whereAmI to $server: $ovhandle to $nvhandle\n";
+            my $nchandle = $chemdata{$server};
+	    print "copy from $whereAmI to $server: $ochandle to $nchandle\n";
             $options{keyColumn} = 'chemtype';
-            $report .= $ovhandle->copy($nvhandle,'where',1,\%options) if ($ovhandle && $nvhandle); 
+            $report .= $ochandle->copy($nchandle,'where',1,\%options) if ($ochandle && $nchandle); 
         }
     }
 }

@@ -86,8 +86,8 @@ elsif ($action eq 'harmonize') {
          
         my $field = "size=+1 color='FFCA88'"; # 'FFCA88'
         $page->add('Select table(s) and an operation; be careful with deletes!',0,0,$field);
-        my $message = "The current contents of the ORGANISMS and USERS common tables<br>";
-        $message .= "will be ported to the other Arcturus instances of this group   <br><br>";
+        my $message = "The current contents of the ORGANISMS, USERS or VECTORS common<br>";
+        $message .= "tables will be ported to the other Arcturus instances of this group<br><br>";
         $message .= "If the 'delete' option is activated, excess contents at the REMOTE <br>";
         $message .= "instance(s) will be removed";
         $message = "<table><tr><td>$message</td></tr></table>";
@@ -104,6 +104,11 @@ elsif ($action eq 'harmonize') {
         $form .= "<td> <input type=radio name=ucd value=copy checked> </td><td> copy </td>";
         $form .= "<td> <input type=radio name=ucd value='copy:delete'> </td><td> copy & delete </td>";
         $form .= "<td> <input type=radio name=ucd value='delete'> </td> <td> delete </td>";
+
+        $form .= "<tr><td> <input type=checkbox name=target value='vec'> </td><th> VECTORS </th>";
+        $form .= "<td> <input type=radio name=vcd value=copy checked> </td><td> copy </td>";
+        $form .= "<td> <input type=radio name=vcd value='copy:delete'> </td><td> copy & delete </td>";
+        $form .= "<td> <input type=radio name=vcd value='delete'> </td> <td> delete </td>";
 
         $form .= "</table>";
 
@@ -123,6 +128,7 @@ elsif ($action eq 'harmonize') {
         elsif (my $target = $GateKeeper->lookup('target')) {
             my $ocd = $GateKeeper->lookup('ocd');
             my $ucd = $GateKeeper->lookup('ucd');
+            my $vcd = $GateKeeper->lookup('vcd');
             my $report = '';
             if ($target =~ /\borg\b/) {
                 $report .= "The ORGANISM tables will be synchronised<br>" if ($ocd =~ /c/); 
@@ -132,6 +138,10 @@ elsif ($action eq 'harmonize') {
             if ($target =~ /\buse\b/) {
                 $report .= "The USERS tables will be synchronised<br>" if ($ucd =~ /c/);
 		$report .= "Excess contents of the remote USERS tables will be removed<br>" if ($ucd =~ /d/);
+            }
+            if ($target =~ /\bvec\b/) {
+                $report .= "The VECTORS tables will be synchronised<br>" if ($vcd =~ /c/);
+		$report .= "Excess contents of the remote USERS tables will be removed<br>" if ($vcd =~ /d/);
             }
             $report = "<table><tr><td><font size=+1 color='blue'>$report</font></td></tr></table>";
 
@@ -145,7 +155,7 @@ elsif ($action eq 'harmonize') {
             $page->ingestCGI();
         }
         else {
-            $page->errorbox("Please define a target (ORGANISM or USERS)");
+            $page->errorbox("Please define a target (ORGANISM, USERS or VECTORS)");
         }
     }
 
@@ -163,6 +173,7 @@ elsif ($action eq 'harmonize') {
 
             my $ocd = $GateKeeper->lookup('ocd');
             my $ucd = $GateKeeper->lookup('ucd');
+            my $vcd = $GateKeeper->lookup('vcd');
 
             unlink "$arc_tmp_dir/harmonize.log" if (-e "$arc_tmp_dir/harmonize.log");
             my $csroot = $GateKeeper->prepareFork('harmonize');
@@ -175,6 +186,11 @@ elsif ($action eq 'harmonize') {
             if ($target =~ /\buse\b/ && $confirm eq 'CONFIRM') {
                 $report .= "Synchronising USERS tables ..";
                 system ("$csroot/harmonize users     $ucd > $arc_tmp_dir/harmonize.log");
+                $report .= ".. DONE<br>";
+            }
+            if ($target =~ /\bvec\b/ && $confirm eq 'CONFIRM') {
+                $report .= "Synchronising VECTORS tables ..";
+                system ("$csroot/harmonize vectors   $vcd > $arc_tmp_dir/harmonize.log");
                 $report .= ".. DONE<br>";
             }
             $report = "<table><tr><td><font size=+1 >$report</font></td></tr></table>";
@@ -223,11 +239,58 @@ elsif ($action eq 'editor') {
     $session = $cgi->postToGet(1,'session');
     $link = "$arc_cgi_dir/new/newupdate/arcturus/vectors".$session;
     $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
-    $form .= "</table>";
 
+# contigs?
+
+    $session = $cgi->postToGet(1,'session','database');
+    if ($GateKeeper->authorize(896)) { # require bit 7,8,9
+        $link = "$thisScript/undoassembly".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target> Delete Last Assembly </A></td></tr>";
+    }
+
+    $form .= "</table>";
     $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
     $page->add($form);
       
+}
+
+# the following sections deal with removal of assembly or reads
+
+elsif ($action eq 'undoassembly') {
+# remove generation 0 only, if any
+    $page->space(2);
+    $page->add('ARCTURUS database updates',0,0,'size=+2');
+    $page->space(2);
+    $page->add('Delete (selected contigs from) the last generation',0,0,'size=+1');
+    $page->space(2);
+
+    if (!$option || $option eq 'getform') {
+         
+        my $field = "size=+1 color='FFCA88'"; # 'FFCA88'
+    }
+
+    elsif ($option eq 'prepare') { 
+ 
+        if (!$GateKeeper->authorize(384)) {
+            $page->errorbox($GateKeeper->{error});         
+        }
+        elsif (my $target = $GateKeeper->lookup('target')) {
+        }
+    }
+
+    elsif ($option eq 'process') {
+
+        my $confirm = $GateKeeper->lookup('confirm');
+
+        if (!$confirm || $confirm ne 'CONFIRM') {
+            $page->errorbox("This function is invoked in an incorrect manner");
+        }
+        elsif (!$GateKeeper->authorize(2048)) {
+            $page->errorbox($GateKeeper->{error});
+        }
+        elsif (my $target = $GateKeeper->lookup('target')) {
+        }
+    }
 }
 
 # $organisms->historyUpdate($userid,0,0);
@@ -237,3 +300,5 @@ $page->flush();
 $GateKeeper->disconnect;
 
 exit 0;
+
+

@@ -911,7 +911,8 @@ elsif ($action eq 'editor') {
     $page->add("ARCTURUS contents manager",0,0,'size=+1');
     $page->partition(1);
     $page->space(1);
-    my $dbasename = $GateKeeper->lookup('database',0) || 'database';
+    my $dbasename = $GateKeeper->lookup('database',0);
+    $dbasename = 'database' if (!$dbasename || $dbasename eq 'arcturus');
     $page->add("Update organism $dbasename description",0,0,'size=+1');
     $page->space(2);
 
@@ -934,9 +935,10 @@ elsif ($action eq 'editor') {
         $page->add($dbases,0,0);
 
         my $list = "<TABLE><TR><TH>Select a database</TH><TD>:</TD>";
-        my $dbaselist = $organisms->htmlOptions('dbasename','dbasename',0,0,0);
+        my $dbaselist = $organisms->htmlOptions('dbasename','database',0,0,0);
         $list .= "<TD>$dbaselist</TD></TR></TABLE>";
         $page->add($list,0,0);
+        $page->ingestCGI(); # transport current cgi input
         $page->submitbuttonbar();
 
     }
@@ -958,7 +960,6 @@ elsif ($action eq 'editor') {
         }
         else {  
             $page->add($editlist,0,0);
-#            $page->hidden('dbasename',$database);
             $page->ingestCGI();
             $page->space(1);
             $page->add("Complete changes and submit",0,0,'size=+1');

@@ -20,6 +20,7 @@ my $C2C;      # database table handle to CONTIGS2CONTIG table
 # my $READS;   # database table handle to READS table
 my $C2S;      # database table handle to CONTIGS2SCAFFOLD table
 my $DNA;      # database table handle to CONSENSUS table
+#my $TAGS;     # database table handle to TAGS
 
 my $ReadsRecall; # handle to ReadsRecall module
 
@@ -29,10 +30,10 @@ my $ReadsRecall; # handle to ReadsRecall module
 
 sub init {
 # initialisation
-    my $prototype  = shift;
+    my $prototype = shift;
     my $tblhandle = shift; # handle to any table in the organism database
 
-    if (!$tblhandle || $$tblhandle{database} eq 'arturus') {
+    if (!$tblhandle || $tblhandle->{database} eq 'arturus') {
         die "You must specify a database other than 'arcturus' in ContigRecall\n";
     }
 
@@ -49,6 +50,9 @@ sub init {
 #    $READS = $tblhandle->spawn('READS');
     $C2S = $tblhandle->spawn('CONTIGS2SCAFFOLD');
     $DNA = $tblhandle->spawn('CONSENSUS');
+#    $T2C = $tblhandle->spawn('TAGS2CONTIG');
+
+#    $CONTIGS->autoVivify('<self>',1.5);
 
     $CONTIGS->setAlternates('contigname','aliasname');
 
@@ -165,8 +169,8 @@ print "query: where $query \n";
 
     my @reads = keys %reads;
 
-    my $hashes = $ReadsRecall->spawnReads(\@reads,'sequence,quality');  # array of hashes
-    my $series = $ReadsRecall->findInstanceOf;              # reference to hash of hashes
+    my $hashes = $ReadsRecall->spawnReads(\@reads,'hashrefs');  # array of hashes
+    my $series = $ReadsRecall->findInstanceOf;      # reference to hash of hashes
 
 # store the mapping information in the read instances
 
@@ -466,16 +470,21 @@ sub writeToCaf {
     my $self = shift;
     my $FILE = shift;
 
+print "writeToCaf $self->{contig}\n";
 # write the reads to contig mappings
 
     my $ReadsRecall = $self->{rhashes};
+# write the individual read mappings ("align to caf")
     foreach my $ReadObject (@$ReadsRecall) {
-        $ReadObject->writeMapToCaf;
+        $ReadObject->writeMapToCaf($FILE,1);
     }
-
+# write the overall maps for for the contig ("assembled from")
+    print $FILE "Sequence : ..\nIs_contig\nPadded\n";
+    foreach my $ReadObject (@$ReadsRecall) {
+        $ReadObject->writeMapToCaf($FILE,0);
+    }
+    print $FILE "\n\n";
     
-
-    print $FILE "Sequence : ";
 
 # write the consensus sequence / or all the reads ?
 
@@ -490,14 +499,9 @@ sub colofon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.8 ,
-        updated =>    "09 May 2003",
+        updated =>    "27 May 2003",
         date    =>    "08 Aug 2002",
     };
 }
 
 1;
-
-
-
-
-

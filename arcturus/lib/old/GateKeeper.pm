@@ -716,7 +716,7 @@ sub dbHandle {
     my $database = shift; # name of arcturus database to be probed
     my $hash     = shift; 
 
-print "GateKeeper enter dbHandle $debug" if $debug;
+print "GateKeeper enter dbHandle $database $hash $debug" if $debug;
 
     my %options = (undefinedDatabase => 0, defaultRedirect => 1, returnTableHandle => 0);
     &importOptions(\%options, $hash);
@@ -778,7 +778,7 @@ print "GateKeeper enter dbHandle $debug" if $debug;
     } 
     elsif ($database && $residence{$database} !~ /$serverstring/) {
 # to be removed later:  redirection diagnostics
-$debug = 1;
+$debug = "\n";
         if ($options{redirectTest}) {
             &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
         }
@@ -799,6 +799,7 @@ $debug = 1;
             my $residence = $self->currentResidence;
             delete $instances{$residence} if ($instances{$residence} eq $self);
 # open the new connection and repaet the setting up of the database/table handle
+&report($self,"Opening new conection on $host:$port") if $debug;
             $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1});
             delete $options{defaultRedirect};
             $dbh = $self->dbHandle($database,\%options);

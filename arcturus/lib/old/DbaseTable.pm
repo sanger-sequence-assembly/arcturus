@@ -4,7 +4,7 @@ package DbaseTable;
 
 use strict;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 #############################################################################
 # common to all instances of the DbaseTable class
@@ -140,7 +140,9 @@ sub build {
     my $query = "SHOW TABLES";
     $query .= " from  $self->{database}" if ($self->{database});
     my $sth = $dbh->prepare($query);
-    if ($sth->execute()) {
+    my $status = $sth->execute();
+    if ($status && $status > 0) {
+#print "status $status $query<br>" if ($self->{tablename} !~ /ORG/);
         while (my @description = $sth->fetchrow_array()) {
             $exists = 1 if ($description[0] eq $self->{tablename});
         }
@@ -149,6 +151,11 @@ sub build {
             die "$self->{errors}" if $dieOE;
             return 0;
         }
+    }
+    else {
+        $self->{errors} = "! Database $self->{database} is empty or does not exist";
+        die "$self->{errors}" if $dieOE;
+        return 0;
     }
 
 # get index information
@@ -528,33 +535,24 @@ print "makeFullTableName: no table handle" if !$self->{dbhandle};
 }
 
 #############################################################################
-# old, to be deprecated
-#sub findInstanceOf {
-# find the instance of the named table in the DbaseTable class %instances
-#    my $self          = shift;
-#    my $fullTableName = shift;
-#
-#    return $self->getInstanceOf($fullTableName);
-#
-#    if ($fullTableName) {
-#        $fullTableName =~ s/\<self\>/$self->{database}/i;
-#        return $instances{$fullTableName};
-#    }
-#    else {
-#        return \%instances;
-#    }  
-#}
-
-#############################################################################
 
 sub listInstances {
 # produce a list of all current instances of DbaseTable
-    my $self = shift;
-    my $line = shift || '\n';
+    my $self  = shift;
+    my $break = shift || "\n";
     
-    undef my $list;
+    my $list = "Current table instances:$break$break";
     foreach my $instance (sort keys (%instances)) {
-        $list .= "$instance  $instances{$instance} $line";  
+#        $list .= "$instance  $instances{$instance} $break";
+        $list .= sprintf "%-40s  %32s $break", $instance, $instances{$instance}; 
+    }
+
+    my $hashes = $self->query("show tables");
+    $list .= "${break}Tables in the current database:$break$break";
+
+    foreach my $hash (@$hashes) {
+        my @keys = keys %$hash;
+        $list .= "$hash->{$keys[0]}  $break";
     }
 
     $list;
@@ -815,7 +813,7 @@ sub associate {
         if ($wval =~ /\bwhere\b/i) {
     # in this case $wcol should contain the full specification
             $select .= ' DISTINCT' if ($wval =~ /distinct/i);
-print "<br>item:$item  wval:$wval  whereclause:$whereclause $useQueryTracer<br>\n" if $option{debug};
+print "item:$item  wval:$wval  whereclause:$whereclause $useQueryTracer $self->{qTracer}\n" if $option{debug};
         }
         else {
     # test and strip negation prefix
@@ -845,10 +843,11 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
         my $queryStatus = 0;
         if (defined($self->{coltype}->{$item})) {
             $query = "$select $item from $tablename WHERE $whereclause $orderby $limit";
+print "$self->{tablename}: input query = '$query'\n" if  $option{debug};
             $self->{lastQuery} = $query;
             $query = &traceQuery($self,$query) if ($useQueryTracer);
             undef my @result; 
-# if (my $array = $dbh->selectcol_arrayref ($query)) {
+# if (my $array = $dbh->traceQuery(selectcol_arrayref ($query)) {
 #     $result = $array;
             my $sth = $dbh->prepare($query); # return array of hashrefs
             if ($sth->execute()) {
@@ -1872,7 +1871,7 @@ sub query {
     my $hashrefs = \@hashrefs;
     undef $self->{qerror};
     $self->{lastQuery} .= $query;
-#print "query $query \n";
+# print "query $query \n";
     my $sth = $dbh->prepare($query); 
     my $status = $sth->execute();
     $status = 0 if !defined($status);
@@ -1916,19 +1915,21 @@ sub query {
 sub qstatus {
     my $self = shift;
 
-    $self->{qerror} =~ s/\<self\>/$self->{tablename}/g;
+    $self->{qerror} =~ s/\<self\>/$self->{tablename}/g if $self->{qerror};
 
-    undef my $report;
+    my $report = "Query on table $self->{tablename}:\n";
+    $report .= "$self->{lastQuery}\nStatus = ";
     if (!$self->{qerror}) {
-        $report = "Query $self->{lastQuery} succeeded";
+        $report .= "succeeded";
     }
     else {
-        $report = "Query $self->{lastQuery} FAILED";
+        $report .= "FAILED";
         $report .= ': '.$self->{qerror} if ($self->{qerror} =~ /\D/);
     } 
 
-    $report .= "$self->{errors} \n"   if $self->{errors};
-    $report .= "$self->{warnings} \n" if $self->{warnings};
+    $report .= "\n";
+    $report .= "errors: $self->{errors}\n"     if $self->{errors};
+    $report .= "warnings: $self->{warnings}\n" if $self->{warnings};
 
     return $report;
 }
@@ -1940,111 +1941,131 @@ sub traceQuery {
     my $self  = shift;
     my $query = shift;
 
-    $self->{lastQuery} = "original: ".$query."\n\ntraced  :";
+# print "ENTER traceQuery with '$query' \n\n" if ($self->{tablename} =~ /CONTIGS/);
 
     my $tracedQuery = $query;
 
 # consider queries of type SELECT what FROM table(s) WHERE 
 
-my $list = 0;
-#$list = 2 if ($self->{tablename} =~ /CONTIGS/);
+my $list = $DEBUG;
+#$list = 2 if ($self->{tablename} =~ /PROJECTS|SCAFFOLD/);
     if ($query =~ /^\s*select(\s+distinct)?\s+(.*)\sfrom\s(.*)\swhere\s(.*)$/i) {
-print "query \"$query\" to be traced <br>\n" if ($list>1);
+print "query \"$query\" to be traced <br>\n" if ($list);
+        my $distnct = $1;
         my $targets = $2;
         my @targets = split ',',$targets;
         my $tables  = $3;
         my @tables  = split ',',$tables;
         my $clauses = $4; $clauses =~ s/\s*\b(limit|order)\b.*//i;
-        my @clauses = split /\sand\s|\sor\s/i,$clauses;
 
+# tricky here: if input query contains an OR in the where clause, a 
+# UNION construct should be used (assume AND always before OR)
+
+        if ($clauses =~ /\bor\b/i) {
+# split where clause on 'or' and generate query for each individually
+# (at the moment no processing of targets and tables, careful with complex queries)
+            my @clauses = split /\sor\s/i,$clauses;
+            $tracedQuery = '';
+            foreach my $clause (@clauses) {
+                $tracedQuery .= " UNION " if $tracedQuery;
+                my $query = "select $distnct $targets from $tables where $clause";
+                $tracedQuery .= $self->traceQuery($query);               
+            }
+        }
+
+        else {
+# the where clause does not contain an OR: split on 'AND'
+#            my @clauses = split /\sand\s/i,$clauses;
+        my @clauses = split /\sand\s|\sor\s/i,$clauses;
 print "traceQuery targets: @{targets}<br>\n" if ($list>1);
 print "traceQuery tables : @{tables} <br>\n" if ($list>1);
 print "traceQuery whereclause: '@{clauses}'<br>\n" if ($list>1);
 # (1) if any $target does not contain a table specification, add <self>
-        undef my %AND;
-        undef my %tables;
-        undef my @wheres;
-        foreach my $clause (@clauses) {
-            $clause =~ s/[\(\)]/ /g; # remove parentheses
+            undef my %AND;
+            undef my %tables;
+            undef my @wheres;
+            foreach my $clause (@clauses) {
+                $clause =~ s/[\(\)]/ /g; # remove parentheses
 print "check clause: $clause<br>\n" if ($list>1);
-            my $PATTERN = "\<\=|\>\=|\>|\=|\!\=|\>|\<|\\bis\\b|\\blike\\b|\\bin\\b|\\bbetween\\b";
-            my ($colname,$colvalue) = split /$PATTERN/i,$clause;
-            my $relation = $clause; $relation =~ s/$colname|$colvalue//g;
-            if ($colvalue =~ /[\%\&]+/) {
-                $relation =~ s/\=/ like/; # change to character string mode
-                $relation =~ s/\!/ not/;
-            }
+                my $PATTERN = "\<\=|\>\=|\>|\=|\!\=|\>|\<|\\bis\\b|\\blike\\b|\\bin\\b|\\bbetween\\b";
+                my ($colname,$colvalue) = split /$PATTERN/i,$clause;
+                my $relation = $clause; $relation =~ s/$colname|$colvalue//g;
+                if ($colvalue =~ /[\%\&]+/) {
+                    $relation =~ s/\=/ like/; # change to character string mode
+                    $relation =~ s/\!/ not/;
+                }
 print "decomposed clause: c='$colname' v='$colvalue'  r='$relation'<br>\n" if ($list > 1);
-            $colname  =~ s/\s//g; # remove all blanks
-            $colvalue =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
-            $colvalue =~ s/([\'\"])(.+)\1/$2/; # remove any quotations to avoid double quoting
+                $colname  =~ s/\s//g; # remove all blanks
+                $colvalue =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
+                $colvalue =~ s/([\'\"])(.+)\1/$2/; # remove any quotations to avoid double quoting
 print "ENTER traceColumn from $self->{tablename}: $colname value $colvalue r=$relation<br>\n" if ($list>1);
-            my ($status, $and) = traceColumn($self,$colname,$colvalue,$relation);
+                my ($status, $and) = traceColumn($self,$colname,$colvalue,$relation);
 print "AFTER traceQuery column $colname value $colvalue status=$status<br>\n" if ($list>1);
-            if ($status) {
+                if ($status) {
 print "traceQuery exit: status=$status, and: $and<br>\n" if ($list>1);
 #                undef my $newclause;
 #                undef my $newtables; 
-                foreach my $table (keys %$and) {
+                    foreach my $table (keys %$and) {
 print "table $table   where clause section:  $and->{$table}<br>\n" if ($list>1);
-                    if ($and->{$table} && $and->{$table} ne '1') {
-                        $tables{$table}++;
+                        if ($and->{$table} && $and->{$table} ne '1') {
+                            $tables{$table}++;
 #                        $newtables .= ', ' if ($newtables);
 #                        $newtables .= $table;
+                        }
                     }
-                }
-                my $fullname = whoAmI($self,0,0);
-                push @wheres, $and->{$fullname}; # add full subquery to table
+                    my $fullname = whoAmI($self,0,0);
+                    push @wheres, $and->{$fullname}; # add full subquery to table
 print "$fullname (sub)whereclause = $and->{$fullname}<br>\n" if ($list>1);
+                }
+                else {
+                    print "column $colname could not be traced<br>\n" if ($list);
+                    print STDOUT "$self->{qerror}\n" if $self->{qerror};
+                }
             }
-            else {
-                print "column $colname could not be traced<br>\n" if ($list);
-                print STDOUT "$self->{qerror}\n" if $self->{qerror};
-            }
-        }
 # now collect all tables and rebuild the clauses from each sub-clause
-        undef my $newtables;
-        foreach my $table (keys %tables) {
-            $newtables .= ', ' if ($newtables);
-            $newtables .= $table;
-        }
+            undef my $newtables;
+            foreach my $table (keys %tables) {
+                $newtables .= ', ' if ($newtables);
+                $newtables .= $table;
+            }
 # and merge the where clauses
 #        my $newclause = $wheres[0]; # temporary (should be complete parser, also for select items)
-        my $newclause = join ' AND ',@wheres;
-$list=0;
+            my $newclause = join ' AND ',@wheres;
+#$list=0;
 print "OLD query: <h3>$query</h3><br>\n" if ($list);
-        $clauses = quotemeta($clauses);
-        $tracedQuery =~ s/$clauses/$newclause/ if $newclause;
-        $tracedQuery =~ s/$tables/$newtables/  if $newtables;
+            $clauses = quotemeta($clauses);
+            $tracedQuery =~ s/$clauses/$newclause/ if $newclause;
+            $tracedQuery =~ s/$tables/$newtables/  if $newtables;
 print "NEW query: <h3> $tracedQuery</h3><br><br>\n" if ($list);
 $list=0;
 
 # further development from here on
 
-        foreach my $target (@targets) {
+            foreach my $target (@targets) {
 print "test target $target<br>\n" if ($list>1);
-            if ($target eq '*') {
-                $tracedQuery =~ s/\*/$self->{tablename}.*/;
-            }
-            elsif ($target !~ /\./ && defined($self->{coltype}->{$target})) {
+                if ($target eq '*') {
+                    $tracedQuery =~ s/\*/$self->{tablename}.*/;
+                }
+                elsif ($target !~ /\./ && defined($self->{coltype}->{$target})) {
         # the table is not qualified and the column exists in this instance
-                my $newtarget = $self->{tablename}.'.'.$target;
-                $tracedQuery =~ s/$target/$newtarget/;
-            }
-            else {
+                    my $newtarget = $self->{tablename}.'.'.$target;
+                    $tracedQuery =~ s/$target/$newtarget/;
+                }
+                else {
         # a tablename is specified; check if it is in @tables
-                my ($table,$column) = split '.',$target;
-            }
-	}
+                    my ($table,$column) = split '.',$target;
+                }
+    	    }
 
     # get columns and values listed in whereclause
 
 #        my @comparison = ('=','!=','is','is not','like','not like','in','<','<=','=>','>');
 
 print "traced query: $tracedQuery<br>\n" if ($list>1);
+        }
     }
 
-    $self->{lastQuery} .= "\n".$tracedQuery; # add traced query to log
+    $self->{lastQuery} = "* original * : $query\n\n* traced *   : $tracedQuery\n";
 
     return $tracedQuery;
 }
@@ -2076,7 +2097,8 @@ sub traceColumn {
         my $names = @names; # length (2 or 3)
         $colname = $names[$names-1] if ($names[$names-2] eq $self->{tablename});
     }
-my $list = 0;
+my $list = $DEBUG;
+#$list = 2 if ($self->{tablename} =~ /PROJECTS|SCAFFOLD/);
 print "find column $colname in $self->{tablename}<br>\n" if ($list);
 
     if (my $coltype = $self->{coltype}->{$colname}) {
@@ -2090,7 +2112,7 @@ print "column $colname found and type to be tested ($coltype) against $cvalue<br
         }
 #        my $limit = 'limit 1';
 #        $limit = '' if ($noLimit);
-        if (isSameType($coltype,$tvalue)) {
+        if (isSameType($coltype,$tvalue,0,1)) {
             $status = 1; # signal column found (but value may not be present)
             $cvalue = quoteColValue($self,$colname,$tvalue); # also quotes an array of values
             $count = associate($self,'count','where',"$colname $relate $cvalue",-1);
@@ -2122,7 +2144,8 @@ print "status on column $colname: $status  counts:$self->{querytotalresult}<br>\
 
 # if the column/value combination does not exist, check linked tables
 
-$list = 0;
+#$list = 0;
+#$list = 2 if ($self->{tablename} =~ /PROJECTS|SCAFFOLD/);
     if (!$status) {
 # try sublinks on each column of myself
         if (my $columns = $self->{columns}) {
@@ -2219,6 +2242,7 @@ sub isSameType {
     my $ctype = shift;
     my $value = shift;
     my $input = shift; # set to 1 if testing for input (no wild cards allowed)
+    my $nolgt = shift; # set to 1 for NO length testing of character values 
 
     return 0 if (!defined($ctype) || !defined($value));
 
@@ -2228,7 +2252,7 @@ sub isSameType {
 
     if (ref($value) eq 'ARRAY') {
         foreach my $trial (@$value) {
-            $same = 0 if (!isSameType($ctype,$trial,$input));
+            $same = 0 if (!isSameType($ctype,$trial,$input,$nolgt));
 	}
     }
     else {
@@ -2250,7 +2274,7 @@ sub isSameType {
 
 # do a detailed analysis of some character strings (also for numerical types!)
 
-        if ($same && $ctype =~ /char/) {
+        if (!$nolgt && $same && $ctype =~ /char/) {
             $value =~ s/\%|\?//g if !$input; # remove wildcards
             $same = 0 if ($ctype =~ /char\((\d+)\)/i && length($value) > $1); # too long
         }
@@ -2258,7 +2282,7 @@ sub isSameType {
 # note: the combination of an enumerate type value with wildcards and NOT for input, is NOT tested
 #       In MySQL this is a legal query contruct, but perhaps not a good idea to use 
 
-        if ($same && $ctype =~ /enum/ && ($input || $value !~ /\%|\?/)) {
+        if (!$nolgt && $same && $ctype =~ /enum/ && ($input || $value !~ /\%|\?/)) {
 # note: this version uses pattern matches; alternative would be to split and test each item
             $ctype =~ s/enum\(\'|\'\,\'|\'\)/  /ig; # separate enumerate items by only blanks 
             $value =~ s/(\\|\||\(|\)|\[|\]|\{|\}|\^|\$|\*|\+|\?|\.)/\\$1/g; # backslash metacharacters
@@ -2273,10 +2297,10 @@ sub isSameType {
 sub setTracer {
 # (re)define default query tracing
     my $self  = shift;
-    my $trace = shift;
+    my $trace = shift || 0;
 
-    $trace = 0 if !$trace;
     $self->{qTracer} = $trace;
+# print "redefined qTracer $trace  for $self->{tablename}\n";
 }
 
 
@@ -2373,6 +2397,16 @@ sub flush {
         $self->lflush();
         $self->cflush();
     }
+}
+
+#############################################################################
+
+sub setDebug {
+
+    my $self  = shift;
+    my $debug = shift || 0;
+
+    $DEBUG = $debug;
 }
 
 #############################################################################

@@ -69,7 +69,11 @@ sub autoVivify {
     my $depth    = shift;
     my $reset    = shift;
 
-    $self->unlink(1) if $reset; # reset any existing linking information
+my $LIST = 0;
+print "\n\n\nAutoVivifying $self->{tablename} (depth = $depth)\n" if $LIST;
+
+#    $self->unlink(1) if $reset; # reset any existing linking information
+    $self->unlink($reset) if defined ($reset); # reset any existing linking information
 
     return 0  if keys(%{$self->{sublinks}}); # the links have already been set up
 
@@ -80,20 +84,20 @@ sub autoVivify {
 
 # specify to build links to existin table instances only with a non-integer $depth 
 
-my $LIST = 0;
+print "\nOkay, continue: autoVivify $self->{tablename} \n" if $LIST;
     my $existOnly = $depth || 0;
     $existOnly -= int($existOnly); # will be 0 for integer $depth
-print "Non integer depth detected: $depth<br>" if ($existOnly && $LIST);
-print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
+print "Non integer depth detected: $depth\n" if ($existOnly && $LIST);
+print "Integer depth detected: $depth\n"    if (!$existOnly && $LIST);
 
     my ($dbh,$fullname) = $self->whoAmI(1); # insist on database spec
 
 # test if an instance of the INVENTORY table exists; if not, build it
 
-#print "testArcturusInventory on self $self $self->{tablename}<br>\n";
+#print "testArcturusInventory on self $self $self->{tablename}\n\n";
 #my $inventory = testArcturusInventory ($self, 1);
     my $inventory = $self->spawn('INVENTORY','arcturus',0,1);
-#print "testArcturusInventory  $inventory <br>\n";
+#print "testArcturusInventory  $inventory \n\n";
 
 # now get the list of other tables linking to this table
 
@@ -126,25 +130,25 @@ print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
 # test possible existence of the linktable
                 my $doesExist = $self->getInstanceOf('arcturus.'.$linktable);
                 $doesExist  = $self->getInstanceOf($database.'.'.$linktable) if !$doesExist;
-print "table $linktable: exist status=$doesExist<br>" if $LIST;
+print "table $linktable: exist-status=$doesExist\n" if $LIST;
 # add the table to the list of tables to be vivified
                 if (!$existOnly || $doesExist) {
-print "add to link list: $hash->{linktable} $thiscolumn<br>" if $LIST; 
+print "add to link list: $hash->{linktable} $thiscolumn\n" if $LIST; 
                     push @tablenames,$hash->{linktable}.'&'.$thiscolumn;
 # test if this column already exists, if so add _ to allow multiple column references
                     while ( $self->{sublinks}->{$thiscolumn}->[0] ) {
                         $thiscolumn .= '_';
                     }
 # add link information to the sublinks hash 
-print "add link reference to sublink hash under key: $thiscolumn<br>" if $LIST; 
+print "add link reference to sublink hash under key: $thiscolumn\n" if $LIST; 
                     $self->{sublinks}->{$thiscolumn}->[0] = $hash->{linktable};
                     $self->{sublinks}->{$thiscolumn}->[1] = $hash->{lcolumn};
-print "sublinks $thiscolumn @{$self->{sublinks}->{$thiscolumn}} <br>\n" if $LIST;
+print "sublinks $thiscolumn @{$self->{sublinks}->{$thiscolumn}} \n\n" if $LIST;
                 }
             }
         }
         else {
-print $self->listInstances('<br>');
+print $self->listInstances('\n');
             die "Could not get at the DATAMODEL table\n";
         }    
     }
@@ -156,36 +160,36 @@ print $self->listInstances('<br>');
     foreach my $tableentry (@tablenames) {
         my ($linktable,$thiscolumn) = split /\&/,$tableentry;
         $thiscolumn = 'none' if !$thiscolumn; # protection
-print "linktable for $fullname: $linktable  column=$thiscolumn<br>" if $LIST;
+print "linktable for $fullname: $linktable  column=$thiscolumn\n" if $LIST;
         my $domain = $inventory->SUPER::associate('domain',$linktable);
-print "  tabledomain=$domain<br>" if $LIST;
-        if (defined($domain)) {
+print "  tabledomain=$domain\n" if $LIST;
+        if ($domain) {
             undef my $dbasename;
             $dbasename = 'arcturus' if ($domain eq 'c');
             $dbasename = $database  if ($domain eq 'o');
-            die "Undefined or invalid domain identifier\n" if (!$dbasename);
-print "inventory link database $dbasename $linktable $domain<br>" if $LIST;
+            die "Undefined or invalid domain identifier ($domain $self->{tablename} $linktable)\n" if (!$dbasename);
+print "inventory link database $dbasename $linktable $domain\n" if $LIST;
             my $newtable = $self->getInstanceOf($dbasename.'.'.$linktable);
             if (!$newtable) {
-print "AUTOVIVIFY table $linktable<br>" if $LIST;
+print "do AUTOVIVIFY table $linktable (database=$database dbasename=$dbasename)\n" if $LIST;
                 $newtable = $self->new($dbh,$linktable,$dbasename);
                 if ($newtable->{errors}) {
 #$LIST=1 if ($linktable eq 'CLONEMAP');;
-print "FAILED to create $linktable: ERROR status = $newtable->{errors}<br>" if $LIST; 
+print "FAILED to create $linktable: ERROR status = $newtable->{errors}\n" if $LIST; 
                     $self->{warnings} .= "! autoVivify FAILED: $newtable->{errors}\n";
                     delete $self->{sublinks}->{$thiscolumn}; # remove the links
                 }
                 else {
-                    $newtable->autoVivify($dbasename,$depth);
+                    $newtable->autoVivify($database,$depth);
                 }
             }
 # in case the table exists, but the links not
             elsif (!keys(%{$newtable->{sublinks}}) && ref($newtable) =~ /Arcturus/) {
-                $newtable->autoVivify($dbasename,$depth);
+                $newtable->autoVivify($database,$depth);
             }
 # the target table does already exist and has itself links defined
             else {
-print "table $linktable appears to have been visited before<br>" if $LIST;
+print "table $linktable appears to have been visited before\n" if $LIST;
 # if all links have been reset at top entry, this node was visited
 # therefore, remove the sublink to the target table 
  #                delete $self->{sublinks}->{$thiscolumn}; # ? really necessary?
@@ -193,7 +197,7 @@ print "table $linktable appears to have been visited before<br>" if $LIST;
 # add the database name to the linking information
             my $sublinks = $self->{sublinks};
             foreach my $thiscolumn (keys %$sublinks) {
-print "SUBLINKS installed for $thiscolumn<br>" if $LIST;
+print "SUBLINKS installed for $thiscolumn\n" if $LIST;
                 if ($sublinks->{$thiscolumn}->[0] eq $linktable) {
                     $sublinks->{$thiscolumn}->[0] = $dbasename.'.'.$linktable;
 # here possible alternate linked columns
@@ -206,7 +210,8 @@ print "SUBLINKS installed for $thiscolumn<br>" if $LIST;
             }
 	}
         else {
-            print "Undefined domain or unknown link table $linktable<br>";
+            print "Undefined domain or unknown link table $linktable\n";
+            print "This can be caused by inconsistencies between INVENTORY and DATAMODEL\n";
         }
     }
 
@@ -712,6 +717,7 @@ sub htmlMaskedTable {
     my $mask   = shift; # the item for which select options list is made
     my $column = shift; # the column name to be tested for (or 'where')
     my $clause = shift; # this particular value or where clause
+    my $order  = shift;
 
     undef my $list;
     if ($column ne 'where' && $column ne 'distinct where') {
@@ -722,6 +728,7 @@ sub htmlMaskedTable {
         my $currentHash = $self->{hashrefs}; # memorize current hash
         my $query = "select * from <self> where $clause";
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
+        $query .= " order by $order" if $order;
 # print "masked table query: $query<br>";
         $self->{hashrefs} = $self->query($query,0); # use query trace if needed
         $list = htmlTable($self,$mask);      
@@ -883,7 +890,6 @@ sub htmlMaskedOptions {
         my $query = "select $item from <self> where ($value)";
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
         $query .= " order by $order" if $order;
-#print "query $query<br>";
         $self->{hashrefs} = $self->query($query,0); # use query trace
     }
     my $list = htmlOptions ($self,$item,$item,@_); # select list new hash
@@ -914,7 +920,7 @@ sub htmlEditRecord {
     }
 
     undef my $table;
-    if (!$skey || defined($hash)) {
+    if (!$skey || ref($hash) eq 'HASH') {
 
 # check masking
 
@@ -946,7 +952,7 @@ sub htmlEditRecord {
         foreach my $column (@$columns) {
         # get columns value, if hash exists; else set to empty string
             my $value = '';
-            $value = $hash->{$column} if (defined($hash));
+            $value = $hash->{$column} if (ref($hash) eq 'HASH');
             $value = '' if (!defined($value) || $value !~ /\S/);
             my $isASCII = &isASCII($value); # test for non ASCII symbols
         # mask > 1: this column has item has an input field

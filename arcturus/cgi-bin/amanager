@@ -104,7 +104,7 @@ elsif ($action eq "specify") {
                 $form = &intermediateform(1);
                 my $users = $organisms->spawn('USERS','arcturus',0,1);
                 my $query = "userid != 'arcturus' and userid != 'oper'";
-                my $glist = $users->htmlMaskedOptions ('division','distinct where',$query,100,5,'any');
+                my $glist = $users->htmlMaskedOptions ('division','distinct where',$query,0,100,5,'any');
                 $form =~ s/GSELECTION/$glist/; # replace place holder by choicelist
                 my $button = "<TABLE><TR><TD>Check <INPUT name=allusers type=checkbox>";
                 $button .= " to include all users in your choice list</TD></TR></TABLE>";
@@ -191,12 +191,12 @@ elsif ($action eq "specify") {
             $clause .= " and ustatus != 'retired'";
             my $team = $GateKeeper->lookup('division'); undef $team if ($team && $team eq 'any');
             $clause = "($clause) and division = '$team'" if $team;
-	    my $userlist = $users->htmlMaskedOptions('userid','where',$clause,70,0,0);
+	    my $userlist = $users->htmlMaskedOptions('userid','where',$clause,'userid',70,0);
 # get the available users and projects in table form
             $options{mask} = '0110000100001';
             my $ptable = $projects->htmlMaskedTable(\%options,'assembly',$anmbr);
             $options{mask} = '0110011000';
-            my $utable = $users->htmlMaskedTable(\%options,'where',$clause);
+            my $utable = $users->htmlMaskedTable(\%options,'where',$clause,'userid');
             $page->sectionheader("Please specify a Project and a User",4,0);
             $form = &usersform(1);
             $form =~ s/PROJECTS/$projectlist/;
@@ -567,7 +567,7 @@ elsif ($action eq 'process') {
         $query = "assemblyname='$assemblyname'";
         $users->autoVivify($database,4,1); # prepare the links to subtables
         $options{mask} = '01110110000';
-        my $useralist = $users->htmlMaskedTable(\%options,'distinct where',$query);
+        my $useralist = $users->htmlMaskedTable(\%options,'distinct where',$query,'userid');
         $useralist =~ s/table USERS/Users of projects for assembly $assemblyname/i;
         $useralist =~ s/No.+ble/No users found/;
         my $form = &usersform(0);

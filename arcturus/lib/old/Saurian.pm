@@ -1,12 +1,13 @@
 package Saurian;
 
-# Assembler's interface to Arcturus database
+# Assembler interface to Arcturus database
 
 use strict;
 
 use Bootean;
 
-use vars qw($VERSION @ISA); #our ($VERSION, @ISA);
+#use vars qw($VERSION @ISA); 
+our ($VERSION, @ISA);
 
 @ISA = qw(Bootean);
 
@@ -52,10 +53,26 @@ sub new {
 
 =head2 Synopsis
 
+Opens a connection to a named arcturus organism database
+
+Returns a database connection object of the Bootean clas 
+
 =head2 Parameters:
 
+=over 2
+
+=item database: (required) name of Organism Database to be accessed
+
+=item options : (optional) hash with access options
+
+Options will be passed on to the => Bootean interface; in addition a
+request for write access to the database has to be specified with key;
+
+"writeAccess => 1"
+
+=back
+
 =cut
-#*******************************************************************************
 #############################################################################
 
 sub getRead {
@@ -90,16 +107,17 @@ Retrieve read(s) from the current database as hash image(s)
 
 =item name: the read name
 
-Returns a single hash with read data
+Returns a single object of the ReadsRecall class for a named read
+
+Read items can be accessed in $object->{readdata}->{}
 
 =item name: reference to array of readnames
 
-Returns a reference to an array of hashes for the retrieved reads
+Returns an array of ReadsRecall objects
 
 =back
 
 =cut
-
 
 #############################################################################
 
@@ -113,7 +131,7 @@ sub probeRead {
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 method getRead
+=head1 method probeRead
 
 =head2 Synopsis
 
@@ -246,12 +264,11 @@ Find reads in current database which are not allocated to any contig
 
 mode (optional)
 
-= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table
+= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
 
-= 1 for complete search using temporary table
+= 1 for complete search using temporary table; if this fails falls back on:
 
-= 2 for complete search without using temporary table (in case =1 fails)
-
+= 2 for complete search without using temporary table (slowest)
 
 =head2 Returns: reference to array of readnames
 
@@ -323,11 +340,11 @@ File handle of output device; can be \*STDOUT
 
 =item mode (optional)
 
-= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table
+= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
 
-= 1 for complete search using temporary table
+= 1 for complete search using temporary table; if this fails falls back on:
 
-= 2 for complete search without using temporary table (in case =1 fails)
+= 2 for complete search without using temporary table
 
 =head2 Output
 
@@ -337,15 +354,15 @@ Is written onto the file handle (about 3-5 Kbyte per read)
 #############################################################################
 
 sub getContig {
-# return reference to ContigRecall object for named contig
+# return a ContigRecall object for named contig
     my $self = shift;
     my $name = shift;
 
     my $ContigRecall = $self->{ContigRecall} || return 0;
 
-    my $contig = $ContigRecall->new($name,@_);
+    my $contigrecall = $ContigRecall->new($name,@_);
 
-    return $contig; 
+    return $contigrecall; 
 }
 
 #--------------------------- documentation --------------------------
@@ -374,14 +391,15 @@ value of attribute to identify a contig
 #############################################################################
 
 sub cafContig {
-# write contig mappings onto a filehandle in caf format
+# write mappings of named contig(s) and its reads onto a filehandle in caf format
     my $self = shift;
     my $FILE = shift;
-    my $name = shift || return 0;
+    my $name = shift || return 0; # name or list of names compulsory
 
     my $ccaf = 0;
 
     if (ref($name) ne 'ARRAY') { 
+print "get contig $name \n";
         my $contig = $self->getContig($name);
         $ccaf++ if $contig->writeToCaf($FILE);
     }
@@ -428,7 +446,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "17 Jan 2003",
+        updated =>    "28 May 2003",
     };
 }
 
