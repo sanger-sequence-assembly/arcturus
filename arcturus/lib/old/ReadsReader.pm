@@ -620,6 +620,11 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
     if ($readItem{LG}) {
         my @items = ('CN','SIL','SIH','SV');
         my ($hash, $column) = $LIGATIONS->locate($readItem{LG}); # exact match
+        if ($column eq 'clone') {
+# instead of the ligation name or number, the clone name is used
+            $hash = $LIGATIONS->associate('hashref',$readItem{LG},'identifier');
+            $column = 'identifier' if $hash;
+        }
 
         if (!defined($hash)) {
     # the ligation does not yet exist; find it in the Oracle database and add to LIGATIONS
@@ -706,13 +711,13 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
             $LIGATIONS->build(1,'ligation'); # rebuild the table
         } 
         elsif ($column ne 'identifier') {
-    # the ligation string is identified in table LIGATION but in the wrong column
+# the ligation string is identified in table LIGATION but in the wrong column
             $diagnosis .= "! Invalid column name for ligation identifier $readItem{LG}: $column\n";
             $errors++;
 
         }
         else {
-    # the ligation is identified in the table; check matchings of other reads data
+# the ligation is identified in the table; check matchings of other reads data
             &logger("Ligation $readItem{LG} found in LIGATIONS: test this against old data");
             undef my %itest;
             $itest{CN}  = $hash->{clone};
