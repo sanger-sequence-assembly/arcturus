@@ -1148,22 +1148,22 @@ sub create_CONTIGS2CONTIG {
 
 # contig to contig mapping implicitly contains the history
 
-# oldcontig : contig id
-# oranges   : starting point in old contig
-# orangef   : end point in old contig
 # newcontig : contig id
 # nranges   : starting point in new contig
 # nrangef   : implicit in the above
+# oldcontig : contig id
+# oranges   : starting point in old contig
+# orangef   : end point in old contig
 
     &dropTable ($dbh,"CONTIGS2CONTIG", $list);
     print STDOUT "Creating table CONTIGS2CONTIG ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2CONTIG(
-             oldcontig        MEDIUMINT UNSIGNED  NOT NULL,
-             oranges          INT                DEFAULT 0,
-             orangef          INT                DEFAULT 0,
              newcontig        MEDIUMINT UNSIGNED  NOT NULL,
              nranges          INT                DEFAULT 0,
-             nrangef          INT                DEFAULT 0
+             nrangef          INT                DEFAULT 0,
+             oldcontig        MEDIUMINT UNSIGNED  NOT NULL,
+             oranges          INT                DEFAULT 0,
+             orangef          INT                DEFAULT 0
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1801,7 +1801,7 @@ sub create_LIGATIONS {
     print STDOUT "Creating table LIGATIONS ..." if ($list);
     $dbh->do(qq[CREATE TABLE LIGATIONS(
              ligation         SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             identifier       VARCHAR(8)         NOT NULL,
+             identifier       VARCHAR(10)        NOT NULL,
              clone            VARCHAR(16)        NOT NULL,
              origin           CHAR(1)                NULL,
              silow            MEDIUMINT UNSIGNED     NULL,

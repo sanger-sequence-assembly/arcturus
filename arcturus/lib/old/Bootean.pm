@@ -371,11 +371,12 @@ sub disconnect {
 
     my %GKcount;
     foreach my $database (keys %instances) {
-        $GKcount{$instances{GateKeeper}}++;
+        $GKcount{$instances{$database}->{GateKeeper}}++;
     }
 
 # do a full close down if this is the only connection
 
+print "GKcount $GKcount{$GateKeeper} \n";
     $full = 1 if ($GKcount{$GateKeeper} == 1);
 
 # put a time/user signature on modified database tables

@@ -14,11 +14,14 @@ use ReadsRecall;
 # Global variables
 #############################################################################
 
-my $CCS;  # database handle to CONTIGS table
-my $R2C;  # database handle to READS2CONTIG table
-my $C2C;  # database handle to CONTIGS2CONTIG table
-my $RDS;  # database handle to READS table
-my $C2S;  # database handle to CONTIGS2SCAFFOLD table
+my $CONTIGS;  # database table handle to CONTIGS table
+my $R2C;      # database table handle to READS2CONTIG table
+my $C2C;      # database table handle to CONTIGS2CONTIG table
+# my $READS;   # database table handle to READS table
+my $C2S;      # database table handle to CONTIGS2SCAFFOLD table
+my $DNA;      # database table handle to CONSENSUS table
+
+my $ReadsRecall; # handle to ReadsRecall module
 
 #############################################################################
 # constructor init: serves only to create the database table handles
@@ -27,26 +30,30 @@ my $C2S;  # database handle to CONTIGS2SCAFFOLD table
 sub init {
 # initialisation
     my $prototype  = shift;
-    my $dbasetable = shift; # handle to any table in the organism database
+    my $tblhandle = shift; # handle to any table in the organism database
 
-    if (!$dbasetable || $$dbasetable{database} eq 'arturus') {
+    if (!$tblhandle || $$tblhandle{database} eq 'arturus') {
         die "You must specify a database other than 'arcturus' in ContigRecall\n";
     }
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
+    bless ($self, $class);
+
 # get the table handles from the input database table handle (if any)
 
-    $CCS = $dbasetable->spawn('CONTIGS'         ,'<self>',0,0);
-    $C2C = $dbasetable->spawn('CONTIGS2CONTIG  ','<self>',0,0);
-    $R2C = $dbasetable->spawn('READS2CONTIG'    ,'<self>',0,0);
-    $RDS = $dbasetable->spawn('READS'           ,'<self>',0,0);
-    $C2S = $dbasetable->spawn('CONTIGS2SCAFFOLD','<self>',0,0);
+    $CONTIGS = $tblhandle->spawn('CONTIGS');
+    $C2C = $tblhandle->spawn('CONTIGS2CONTIG');
+    $R2C = $tblhandle->spawn('READS2CONTIG');
+#    $READS = $tblhandle->spawn('READS');
+    $C2S = $tblhandle->spawn('CONTIGS2SCAFFOLD');
+    $DNA = $tblhandle->spawn('CONSENSUS');
 
-    $CCS->setAlternates('contigname','aliasname');
+    $CONTIGS->setAlternates('contigname','aliasname');
 
-    bless ($self, $class);
+    $ReadsRecall = new ReadsRecall; # get class handle
+
     return $self;
 }
 
@@ -104,19 +111,18 @@ sub getNamedContig {
     $self->{contig} = $name.' ';
 
     my $query = "contigname = '$name' or aliasname = '$name'";
-    if (my $contig_id = $CCS->associate('contig_id','where',$query)) {
-        return $self->currentContig($contig_id,@_);
+    if (my $contig_id = $CONTIGS->associate('contig_id','where',$query)) {
+        return $self->getContig($contig_id,@_);
 #        return $self->getNumberedContig($contig_id,@_);
     }
     else {
         return 0;
     }
-
 }
 
 #############################################################################
 
-sub currentContig {
+sub getContig {
 # build an image of the current contig (generation 1)
     my $self   = shift;
     my $contig = shift; # number or name
@@ -133,7 +139,8 @@ sub currentContig {
 
 # build read mappings required for this contig
 
-    my $query = "contig_id = $contig and label < 20 and generation = 0";
+    my $query = "contig_id = $contig and generation <= 1";
+#    my $query = "contig_id = $contig and label < 20 and generation = 0";
     if (defined($scpos) && defined($fcpos) && $scpos <= $fcpos) {
         $scpos *= 2; $fcpos *= 2;
         $query .= "and (pcstart+pcfinal + abs(pcfinal-pcstart) >= $scpos) "; 
@@ -156,28 +163,28 @@ print "query: where $query \n";
         return 0;
     }
 
-    undef my @reads;
-    foreach my $read (keys %reads) {
-        push @reads, $read;
-    }
+    my @reads = keys %reads;
 
-    my $recall = new ReadsRecall; # get access to methods and class data
-    my $hashes = $recall->spawnReads(\@reads,'sequence,quality');
-    my $series = $recall->findInstanceOf;
+    my $hashes = $ReadsRecall->spawnReads(\@reads,'sequence,quality');  # array of hashes
+    my $series = $ReadsRecall->findInstanceOf;              # reference to hash of hashes
 
 # store the mapping information in the read instances
 
     foreach my $hash (@$maphashes) {
-        my $recall = $series->{$hash->{read_id}}; # the instance of read read_id
-        if ($recall->readToContig($hash)) {
+        my $label = $hash->{label};
+        my $recall = $series->{$hash->{read_id}}; # the instance of ReadsRecall read_id
+# load the individual segments
+        if ($label < 20 && $recall->segmentToContig($hash)) {
             print "WARNING: invalid mapping ranges for read $hash->{read_id}!\n";
         }
+# load the (overall) read to contig alignment
+        $recall->readToContig($hash) if ($label >= 10);
     }
 
 # sort the ReadRecall objects according to increasing upper contig range
 
     @$hashes = sort { $a->{clower} <=> $b->{clower} } @$hashes;
-#    &lister($hashes);
+# &lister($hashes);
 
 # cleanup
 
@@ -191,8 +198,8 @@ print "query: where $query \n";
         $result = @$hashes+0;
     }
     else {
-        $status->{errors} = $recall->{status}->{errors};
-        $status->{result} = $recall->{status}->{result};
+        $status->{errors} = $ReadsRecall->{status}->{errors};
+        $status->{result} = $ReadsRecall->{status}->{result};
     }
     return $result;
 }
@@ -251,9 +258,9 @@ sub trace {
     $contigstart{$contig} = $spos if (defined($spos));
     $contigstart{$contig} = 1 if (!$contigstart{$contig});
     $contigfinal{$contig} = $fpos if (defined($fpos));
-    $contigfinal{$contig} = $CCS->associate('length',$contig,'contigname')
+    $contigfinal{$contig} = $CONTIGS->associate('length',$contig,'contigname')
                             if (!$contigstart{$contig});
-    $contiglevel{$contig} = $CCS->associate('parity',$contig,'contigname');
+    $contiglevel{$contig} = $CONTIGS->associate('parity',$contig,'contigname');
     
 # do a traceback until contigs with parity>0
 
@@ -295,7 +302,7 @@ sub trace {
                     $contigstart{$oc} = $cstart - $onshift; # start point in the old contig
                     $contigfinal{$oc} = $cfinal - $onshift; # end   point in the old contig
                     $contigshift{$oc} = $shift  + $onshift; # shift with respect to assembly
-                    $contiglevel{$oc} = $CCS->associate('parity',$oc,'contigname');
+                    $contiglevel{$oc} = $CONTIGS->associate('parity',$oc,'contigname');
                     $number++;
                 } # else ignore
             }
@@ -356,7 +363,7 @@ sub window {
                 my $output = $SQ->[0];            
                 my $sequence = join '',@$output;
 #                my $quality = $SQ->[1];
-                printf ("%8d:", $read->{readhash}->{read_id});
+                printf (" %8d:", $read->{readhash}->{read_id});
                 print "$sequence \n";
 #                print "@$quality \n";
             }
@@ -453,6 +460,28 @@ print "end\n" if $list;
 }
 
 #############################################################################
+
+sub writeToCaf {
+# write this contig in caf format to $FILE
+    my $self = shift;
+    my $FILE = shift;
+
+# write the reads to contig mappings
+
+    my $ReadsRecall = $self->{rhashes};
+    foreach my $ReadObject (@$ReadsRecall) {
+        $ReadObject->writeMapToCaf;
+    }
+
+    
+
+    print $FILE "Sequence : ";
+
+# write the consensus sequence / or all the reads ?
+
+}
+
+#############################################################################
 #############################################################################
 
 sub colofon {
@@ -461,11 +490,13 @@ sub colofon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.8 ,
+        updated =>    "09 May 2003",
         date    =>    "08 Aug 2002",
     };
 }
 
 1;
+
 
 
 

@@ -22,6 +22,8 @@ my %instance; # hash for all ReadsRecall instances
 
 my %reverse;  # hash for reverse substitutions of DNA
 
+my %library;  # hash for dictionary lookup data
+
 #############################################################################
 # constructor item init; serves only to create a handle the stored READS
 # database and the Compress module
@@ -89,7 +91,11 @@ sub new {
 
 # okay, now select how to find the data and build the read object
 
-    if (ref($readitem) eq 'HASH') {
+    if (!$readitem) {
+        return $self; # use e.g. to get access to class methods
+    }
+
+    elsif (ref($readitem) eq 'HASH') {
 # build the read instance directly from the input hash
 # print "1 new read for hash $readitem \n";
         &loadReadData(0,$self,$readitem);        
@@ -104,9 +110,9 @@ sub new {
 
     elsif (defined($readitem)) {
 # select read as number or as name
+        return $instance{$readitem} if $instance{$readitem}; # already stored
 #print "get read $readitem \n";
         if ($readitem =~ /[0-9]+/  && !($readitem =~ /[a-z]/i)) {
-#print "numbered read \n";
             $self->getNumberedRead($readitem);
         }
         else {
@@ -114,7 +120,11 @@ sub new {
         }
     }
 
-    $instance{$readitem} = $self if $readitem; # add to class inventory
+    $readitem = $self->{readhash}->{read_id};
+    $instance{$readitem} = $self if $readitem; # keyed on read ID
+    $readitem = $self->{readhash}->{readname};
+    $instance{$readitem} = $self if $readitem; # keyed on readname
+print "read $readitem added to inventory \n";
 
     return $self;
 }
@@ -145,11 +155,16 @@ sub spawnReads {
         $items .= ',strand'    if ($items !~ /strand/);
     }
 
+# the next block builds a single ReadsRecall object (if $readids is either a number 
+# or a name) using the 'new' method, or builds a series of ReadsRecall objects (if
+# $readids is a reference to an array of readnames or readids 
+
     undef my @reads;
     if (ref($readids) ne 'ARRAY') {
         push @reads,$self->new($readids);
     }
-    elsif (my $hashrefs = $READS->associate($items,$readids,$keyword,{returnScalar => 0,debug => 0})) {
+# $readids is array reference
+    elsif (my $hashrefs = $READS->associate($items,$readids,$keyword,{returnScalar => 0})) {
         undef my %reads;
         foreach my $read (@$readids) {
             $read =~ s/^\'|\'$//g if ($keyword eq 'readname'); # remove quoting
@@ -418,36 +433,56 @@ sub loadReadData {
 }
 
 #############################################################################
-# read-to-contig mapping
+# assembly related methods (e.g. read-to-contig mapping)
 #############################################################################
 
-sub readToContig {
+sub segmentToContig {
 # input of reads to contig mapping
     my $self     = shift;
-    my $maphash  = shift; # hash with mapping data of individual read section
+    my $segment  = shift; # hash with mapping data of individual read section
 
-    return if ($maphash->{deprecated} && $maphash->{deprecated} !~ /M|N/);  
+    return if ($segment->{deprecated} && $segment->{deprecated} !~ /M|N/);  
 
     my $rtoc = $self->{toContig};
 
-    my $prstart = $maphash->{prstart};
-    my $prfinal = $maphash->{prfinal};
+    my $prstart = $segment->{prstart};
+    my $prfinal = $segment->{prfinal};
     my $rlength = $prfinal - $prstart + 1;
     my $mapkey = sprintf("%04d",$prstart).sprintf("%04d",$prfinal);
-    undef @{$rtoc->{$mapkey}}; $rtoc = $rtoc->{$mapkey};
-    my $pcstart = $maphash->{pcstart};
-    my $pcfinal = $maphash->{pcfinal};
+    undef @{$rtoc->{$mapkey}}; 
+    $rtoc = $rtoc->{$mapkey}; # is now a reference to an array
+    my $pcstart = $segment->{pcstart};
+    my $pcfinal = $segment->{pcfinal};
+# contig window range should be positive  
     my $k = 0; $k = 1 if ($pcfinal < $pcstart);
 # in case of inversion (k=1) ensure contig window is aligned by swapping indices
     $rtoc->[$k]   = $prstart; $rtoc->[1-$k] = $prfinal;
     $rtoc->[2+$k] = $pcstart; $rtoc->[3-$k] = $pcfinal;
     my $clength = $rtoc->[3] - $rtoc->[2] + 1;
 
-    $self->{contig} = $maphash->{contig_id};
+    $self->{contig} = $segment->{contig_id};
 
     $self->contigRange;
 
     return $clength - $rlength; # should be 0
+}
+
+#############################################################################
+
+sub readToContig {
+# input of overall read to contig mapping
+    my $self     = shift;
+    my $mapping  = shift; # hash with mapping data of individual read section
+
+    my $rtoc = $self->{toContig};
+
+    undef @{$rtoc->{0}};
+    my $omap = $rtoc->{0};
+    
+    push @$omap, $mapping->{pcstart};
+    push @$omap, $mapping->{pcfinal};
+    push @$omap, $mapping->{prstart};
+    push @$omap, $mapping->{prfinal};
 }
 
 #############################################################################
@@ -473,7 +508,8 @@ sub shiftMap {
 #############################################################################
 
 sub invertMap {
-# invert the to contig mapping given length of contig
+# nowhere used ??? what is this for ???
+# invert the "toContig" mapping given length of contig
     my $self   = shift;
     my $length = shift || return; # length of contig
     my $contig = shift; # (optional) new contig reference
@@ -485,7 +521,7 @@ sub invertMap {
         my $map = $rtoc->{$key};
         $map->[2] = $length - $map->[2] + 1; 
         $map->[3] = $length - $map->[3] + 1;
-# ensure contig window is aligned by swapping boundaries
+# ensure contig window is aligned by swapping boundaries 
         if ($map->[2] > $map->[3]) {
             my $store = $map->[0]; 
             $map->[0] = $map->[1]; 
@@ -655,7 +691,7 @@ sub align {
     my $self = shift;
     my $alignment = shift;
 
-
+print "ReadsRecall->align to be implemented \n";
 }
 
 #############################################################################
@@ -689,6 +725,8 @@ sub list {
     my $html = shift;
 
     undef my $report;
+
+    $self->translate(1); # substitute the dictionary items
 
     my $hash   = $self->{readhash};
     my $status = $self->{status};
@@ -748,10 +786,12 @@ sub list {
 
 #############################################################################
 
-sub writeToCAF {
+sub writeReadToCaf {
 # write this read in caf format to $FILE
     my $self = shift;
     my $FILE = shift;
+
+    $self->translate(0); # substitute disctionary items
 
     my $hash   = $self->{readhash};
     my $status = $self->{status};
@@ -774,6 +814,79 @@ sub writeToCAF {
     print $FILE "$self->{qstring}\n";
 }
 
+
+#############################################################################
+
+sub writeMapToCaf {
+# write the read-to-contig mapping in caf format to $FILE
+    my $self = shift;
+    my $FILE = shift;
+    my $long = shift; # 0 for segments for this read; 1 for assembled from
+
+    my $hash = $self->{readhash};
+    my $rtoc = $self->{toContig};
+    my $omap = $rtoc->{0}; # the overall map
+
+    if (!$long) {
+        print $FILE "Assembled_from $hash->{readname} @$omap\n"; # or other order?
+        return;
+    }
+    elsif (!@$omap) {
+        print STDOUT "Missing reads 2 contig overall map\n";
+    }
+
+# to get the to SCF mapping we have to backtransform the contig window
+
+    my $sign;
+    my $shft;
+    if ($omap->[1] >= $omap->[0]) {
+        $sign = 1; # co-aligned
+        $shft = $omap->[0] - $omap->[2];
+    }
+    else {
+        $sign = -1; # counter aligned
+        $shft = $omap->[0] + $omap->[2];
+    }
+# get the SCF alignment
+    foreach my $segment (sort keys %$rtoc) {
+        next if !$segment; # skip the overall map
+        my $map = $rtoc->{$segment};
+        $map->[4] = $sign * $map->[0] + $shft;
+        $map->[5] = $sign * $map->[1] + $shft;
+    }
+    
+# first write the Sequence, then DNA, then BaseQuality
+
+    print $FILE "\n\n";
+    print $FILE "Sequence : $hash->{readname}\n";
+    print $FILE "Is_read\nPadded\nSCF_File $hash->{readname}SCF\n";
+    print $FILE "Template $hash->{template}\n";
+    print $FILE "Insert_size $hash->{insertsize}\n";
+    print $FILE "Dye $hash->{chemistry}\n";
+    print $FILE "Primer $hash->{primer}\n";
+    print $FILE "Strand $hash->{strand}\n";
+
+    foreach my $segment (sort keys %$rtoc) {
+        next if !$segment; # skip the overall map
+        my $map = $rtoc->{$segment};
+        print $FILE "Align_to_SCF $map->[2] $map->[3] $map->[4] $map->[5]\n";
+    }
+
+    print $FILE "Seq_vec SVEC ";
+    if ($hash->{svleft}) {
+        print $FILE "1 $hash->{svleft} \n";
+    }
+    elsif ($hash->{svright}) { 
+        print $FILE "$hash->{svright} $hash->{slength} \n";
+    }
+    print $FILE "\"$hash->{svector}\"\n";
+    my $lqleft = $hash->{lqleft} + 1;
+    my $lqright = $hash->{lqright} - 1; 
+    print $FILE "Clipping QUAL $lqleft $lqright\n"; 
+    print $FILE "Clone $hash->{clone}\n";
+    print $FILE "Sequencing_vector \"$hash->{svector}\"\n";
+}
+
 #############################################################################
 
 sub touch {
@@ -794,20 +907,141 @@ sub touch {
         }
     }
 
-    return \%{$hash}; # ?
+    return $hash;
 }
-
 
 #############################################################################
 
-sub link {
-# link a table item to a value in anotherv table
-    my $self     = shift;
-    my $dbtable  = shift; # the databse table to be linked
-    my $dbtarget = shift; # the table item to be replaced
-    my $dbalias  = shift; # by the alias value
+sub translate {
+# link a table item to a value in another table
+    my $self = shift;
+    my $long = shift; # long version or 0 for short version (for caf output)
 
+    my $library = \%library;
+    if (!keys %$library) {
+# on first call set up the translation library from the data in the dictionary
+# print "Initialising library <br>\n";
+        $READS->autoVivify(1); # one level deep
+# process chemistry
+        my %options = (returnScalar => 0, useCache => 0);
+        my $CHEMISTRY = $READS->spawn('CHEMISTRY');
+        $CHEMISTRY->autoVivify(1); # to get at CHEMTYPES
+        my $hashes = $CHEMISTRY->associate('chemistry','where',"description like '%primer%'",\%options);
+        $library->{chemistry} = {};
+        foreach my $chemistry (@$hashes) {
+            $library->{chemistry}->{$chemistry} = "Dye_primer";
+        }        
+        $hashes = $CHEMISTRY->associate('chemistry','where',"description like '%terminator%'",\%options);
+        foreach my $chemistry (@$hashes) {
+            $library->{chemistry}->{$chemistry} = "Dye_terminator";
+        }
+        $hashes = $CHEMISTRY->associate('chemistry','where',"description like '%Licor%'",\%options);
+        foreach my $chemistry (@$hashes) {
+            $library->{chemistry}->{$chemistry} = "Licor_chemistry";
+        }
+# extend with full chemistry info
+        my $hashes = $CHEMISTRY->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $chemistry = $hash->{chemistry};
+            $library->{chemistry}->{$chemistry} = "Unknown" if !$library->{chemistry}->{$chemistry};
+            $library->{chemistry}->{$chemistry} .= " : $hash->{identifier}  type $hash->{chemtype}" if $long;
+        }
+# strands   
+        $library->{strand} = {};   
+        my $STRANDS = $READS->spawn('STRANDS');
+        $hashes = $STRANDS->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $strand = $hash->{strand};
+            my $description = $hash->{description};
+# print "strand $strand $description <br>";
+            $library->{strand}->{$strand} = "Unknown";
+            $library->{strand}->{$strand} = "Forward" if ($description =~ /forward/i);
+            $library->{strand}->{$strand} = "Reverse" if ($description =~ /reverse/i);
+            $library->{strand}->{$strand} .= " ($strand)" if $long;
+	}
+# primer type
+        $library->{primer} = {};
+        my $PRIMERS = $READS->spawn('PRIMERTYPES');
+        $hashes = $PRIMERS->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $primer = $hash->{primer};
+            my $description = $hash->{description};
+#print "primer $primer $description <br>";
+            $library->{primer}->{$primer} = "Unknown_primer";
+            $library->{primer}->{$primer} = "Universal_primer" if ($description =~ /forward|reverse/i);
+            $library->{primer}->{$primer} = "Custom \"Oligo\"" if ($description =~ /custom/i);
+            $library->{strand}->{$primer} .= " (nr $primer)" if $long;
+        }
+# clone
+        $library->{clone} = {};
+        my $CLONES = $READS->spawn('CLONES');
+        $hashes = $CLONES->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $clone = $hash->{clone};
+#print "clone $clone $hash->{clonename} <br>";
+            $library->{clone}->{$clone} = $hash->{clonename};
+            $library->{clone}->{$clone} .= " (nr $clone)" if $long;
+        }
+# basecaller
+        $library->{basecaller} = {};
+        my $CALLER = $READS->spawn('BASECALLER');
+        $hashes = $CALLER->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $caller = $hash->{basecaller};
+            $library->{basecaller}->{$caller} = $hash->{name};
+        }
+# ligation
+        $library->{ligation} = {};
+        $library->{ligation}->{0} = "NONE";
+        $library->{insertsize} = {};
+        my $LIGATIONS = $READS->spawn('LIGATIONS');
+        $hashes = $LIGATIONS->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $ligation = $hash->{ligation};
+            $library->{ligation}->{$ligation} = $hash->{identifier};
+            $library->{ligation}->{$ligation} .= " (nr $ligation)" if $long;
+            my $insertsize = "$hash->{silow} $hash->{sihigh}";
+            $library->{insertsize}->{$ligation} = $insertsize;
+            $library->{ligation}->{$ligation} .= " insert size: $insertsize" if $long;
+        }
+# sequencevector
+        $library->{svector} = {};
+        $library->{svector}->{0} = "NONE";
+        my $SVECTORS = $READS->spawn('SEQUENCEVECTORS');
+        $hashes = $SVECTORS->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $svector = $hash->{svector};
+            $library->{svector}->{$svector} = $hash->{name};
+            $library->{svector}->{$svector} .= " (nr $svector)" if $long;
+        }
+# cloningvector
+        $library->{cvector} = {};
+        $library->{cvector}->{0} = "NONE";
+         my $CVECTORS = $READS->spawn('CLONINGVECTORS');
+        $hashes = $CVECTORS->{hashrefs};
+        foreach my $hash (@$hashes) {
+            my $cvector = $hash->{cvector};
+            $library->{cvector}->{$cvector} = $hash->{name};
+            $library->{cvector}->{$cvector} .= " (nr $cvector)" if $long;
+        }
+    }
 
+    my $readhash = $self->{readhash};
+    foreach my $column (sort keys %$readhash) {
+        my $code = $readhash->{$column};
+        next if !defined($code); 
+        if (my $dictionary = $library->{$column}) {
+            if (defined($dictionary->{$code})) {
+                $readhash->{$column} = $dictionary->{$code};
+            }
+            elsif ($column eq 'chemistry') {
+                $readhash->{$column} = 'unknown';
+            }
+	    else {
+                print "No translation for read item $column: $code<br>\n";
+            }
+        }
+    }
 }
 
 #############################################################################
@@ -841,6 +1075,7 @@ sub colofon {
         author  => "E J Zuiderwijk",
         id      =>  "ejz, group 81",
         version =>             0.8 ,
+        updated =>    "12 May 2003",
         date    =>    "15 Jan 2001",
     };
 }

@@ -211,7 +211,7 @@ sub readReadData {
         while (defined($record = <READ>)) {
         # read the sequence
             chomp $record; $line++;
-            if ($record =~ /^SQ\s?$/) {
+            if ($record =~ /^SQ\s*$/) {
                 $sequence = 1;
             } 
             elsif ($record =~ /^\/\/\s?$/) {
@@ -241,7 +241,8 @@ sub readReadData {
             elsif ($record =~ /^(\w+)\s+(\S.*?)\s?$/) {
                 my $item = $1; my $value = $2;
                 $value = '' if ($value =~ /HASH/);
-                $value = '' if ($value =~ /^none$/i);
+# print "item $item  value $value <br>" if ($value =~ /^none$/i);
+#                $value = '' if ($value =~ /^none$/i);
                 $readItems->{$item} = $value if ($value =~ /\S/);
 # print "item $item  value $value <br>";
             }
@@ -799,6 +800,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
         # if no errors detected, add to LIGATIONS table
             if (!$status->{errors}) {
                 $LIGATIONS->newrow('identifier' , $readItems->{LG});
+print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n";
                 $LIGATIONS->update('clone'      , $readItems->{CN});
 # new  use ref    my $clone = $CLONES->associate('clone',$readItems->{CN},'clonename' 0, 0, 1);
 # new             $LIGATIONS->update('clone'      , $clone);
@@ -842,6 +844,10 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
                     elsif ($readItems->{$item} =~ /$itest{$item}/i) {
                         $status->{warnings}++; # matching, but overcomplete
                     }
+                    elsif ($item eq 'SV' && $itest{$item} =~ /none/i && !$readItems->{$item}) {
+                        $readItems->{$item} = 'NONE'; # alternatively: allow NONE on input (=> readReadData)
+                        $status->{warnings}++;
+                    }
                     elsif ($item eq 'SIH' && ($itest{$item}>30000 || $readItems->{$item}>30000)) {
                         $readItems->{RPS} += 16; # bit 5
                         $status->{diagnosis} .= " (Overblown insert value(s) ignored)$break";
@@ -869,10 +875,14 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
             $readItems->{RPS} += 1024 if ($status->{warnings} != $oldwarnings); # bit 11
         }
     } 
-    else {
+    elsif ($readItems->{CN}) {
 # NO ligation number is defined in the read; test read for other ligation data
         $self->logger("No ligation number defined; searching ARCTURUS table for matching data");
-    # check if clone present in / or update CLONES database table
+        $status->{diagnosis} .= "! Undefined ligation number$break";
+# default test for data to recover, but signal as error if not in forced loading mode   
+        $status->{warnings}++ if (!$self->{fatal});
+        $status->{errors}++   if  ($self->{fatal});
+# check if clone present in / or update CLONES database table
         $readItems->{RPS} += 2048; # bit 12
         if (!$CLONES->counter('clonename',$readItems->{CN},0)) {
             $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})$break";
@@ -891,7 +901,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
             next if ($hash->{silow}   ne $readItems->{SIL});
             next if ($hash->{sihigh}  ne $readItems->{SIH});
             next if ($hash->{svector} != $svector);
-        # here a match is found with a previously "unidentified" ligation; adopt this one
+# here a match is found with a previously "unidentified" ligation; adopt this one
             $readItems->{LG} = $hash->{identifier};
             $self->logger("Match found with previous ligation $hash->{identifier}");
             last; # exit while loop
@@ -912,6 +922,13 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
             $LIGATIONS->update('svector'    , $svector);
             $LIGATIONS->build(1,'ligation'); # rebuild the table
         }
+    }    
+    else {
+# NO ligation number is defined in the read; test read for other ligation data
+        $self->logger("No ligation number or clone defined");
+        $status->{diagnosis} .= "! Undefined ligation number$break";
+        $status->{warnings}++ if (!$self->{fatal});
+        $status->{errors}++   if  ($self->{fatal});
     }    
     &timer('ligation',1) if $DEBUG; 
 }
@@ -1502,7 +1519,7 @@ sub readback {
         my $READS     = $self->{READS};
         my %options = (traceQuery => 0);
         $hash = $READS->associate('hashref','where','read_id=LAST_INSERT_ID()',\%options);
-   
+        print "(readback on server) .. ";   
         if ($hash->{readname} && $hash->{readname} ne $readItems->{ID}) {
             print "LAST INSERT select failed ..";
             $hash = $READS->associate('hashref',$readItems->{ID},'readname',\%options);

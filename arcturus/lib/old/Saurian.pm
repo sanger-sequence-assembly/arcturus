@@ -67,10 +67,10 @@ sub getRead {
 
     undef my $read;
     if (ref($name) eq 'ARRAY') {
-        $read = $ReadsRecall->spawnReads($name, @_); # returns array of hashes 
+        $read = $ReadsRecall->spawnReads($name, @_); # returns array of objects
     }
     else {
-        $read = $ReadsRecall->new($name); # returns (single) hash
+        $read = $ReadsRecall->new($name); # returns (single) ReadsRecall object
     }
 
     return $read;
@@ -104,7 +104,7 @@ Returns a reference to an array of hashes for the retrieved reads
 #############################################################################
 
 sub probeRead {
-# return hash or array of hashes with read items
+# return read_id for named read
     my $self = shift;
     my $name = shift;
 
@@ -128,7 +128,7 @@ Retrieve readid for named read
 sub getUnassembledReads {
 # short way using READS2ASSEMBLY; long way with a left join READS, R2CR2
     my $self = shift;
-    my $full = shift || 0;
+    my $full = shift || 0; # default "short"
 
     my $READS = $self->{READS}; # the READS table handle in the current database 
 
@@ -147,6 +147,7 @@ sub getUnassembledReads {
     else {
 
 # the long way, bypassing READS2ASSEMBLY; first find all reads not in READS2CONTIG
+
         my $report = "Find all reads not in READS2CONTIG with left join: ";
         my $ljoin = "select distinct READS.readname from READS left join READS2CONTIG ";
         $ljoin  .= "on READS.read_id=READS2CONTIG.read_id ";
@@ -183,7 +184,7 @@ sub getUnassembledReads {
                     push @$reads, @$extra if @$extra;
                 }
                 elsif ($hashes) {
-                    $report = "no deallocated reads found\n";
+                    $report .= "no deallocated reads found\n$hashes\n$READS->{lastQuery}\n";
                 }
                 else {
                     $full = 2; # failed query, try to recover
@@ -227,7 +228,7 @@ sub getUnassembledReads {
     }
 
 print $self->{report} if $DEBUG;
-my $n = @$reads; print "reads $reads  $n  $reads->[0] $reads->[$n-1]\n" if $DEBUG;
+my $n = @$reads; print "reads $reads $n from $reads->[0] to $reads->[$n-1]\n" if $DEBUG;
 
     return $reads;
 }
@@ -264,37 +265,79 @@ sub cafUnassembledReads {
     my $full = shift;
 
     my $count = 0;
+    undef my @missed;
 
+print "Finding unassembled reads ($full)\n" if $DEBUG;
     my $readnames = $self->getUnassembledReads($full);
+print "readnames $readnames \n" if $DEBUG;
     if (ref($readnames) eq 'ARRAY' && @$readnames) {
 
         my $start = 0;
         my $block = 1000;
         while (@$readnames) {
             $block = @$readnames if ($block > @$readnames);
-print "processing next block $block\n";
+print "processing block $start $block\n" if $DEBUG;
             undef my @test;
             for (my $i = 0 ; $i < $block ; $i++) {
                 push @test, (shift @$readnames);
             }
-# print "reads to be built: @test \n";
+            $start += $block;
+print "reads to be built: @test \n" if ($DEBUG > 1);
             my $readinstances = $self->getRead(\@test,'hashrefs','readname');
             foreach my $instance (@$readinstances) {
-                $count++ if $instance->writeToCAF($FILE);
-            }
-            if ($count != @$readinstances) {
-# error warning?
+                if ($instance->writeReadToCaf($FILE)) {
+                    $count++;
+                }
+                else {
+                    push @missed,$instance->{readhash}->{readname};
+                }
             }
             undef $readinstances;           
         }
         undef $readnames;
     }
+
+print "$count reads output \n" if $DEBUG;
+print "reads missed: @missed \n" if ($DEBUG && @missed);
+
     return $count; # 0 to signal NO reads found, OR query failed
 }
 
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method cafUnassembledReads
+
+=head2 Synopsis
+
+Find reads in current database which are not allocated to any contig and
+write them out on a caf-formatted output file
+
+=head2 Parameters
+
+=over 2
+
+=item file (required) 
+
+File handle of output device; can be \*STDOUT
+
+=item mode (optional)
+
+= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table
+
+= 1 for complete search using temporary table
+
+= 2 for complete search without using temporary table (in case =1 fails)
+
+=head2 Output
+
+Is written onto the file handle (about 3-5 Kbyte per read)
+
+=cut
 #############################################################################
 
 sub getContig {
+# return reference to ContigRecall object for named contig
     my $self = shift;
     my $name = shift;
 
@@ -302,7 +345,7 @@ sub getContig {
 
     my $contig = $ContigRecall->new($name,@_);
 
-    return $contig; # handle to ? 
+    return $contig; 
 }
 
 #--------------------------- documentation --------------------------
@@ -316,18 +359,63 @@ Return a reference to a ContigRecall object
 
 =head2 Parameters
 
-=over 4
+=over 2
 
 =item name
 
-name of contig OR contig id  (both if no value is given) OR name of 
-contig attribute (e.g. Tag) (and a value is defined)
+name of contig OR contig ID (both if no value is given) OR name of 
+contig attribute (e.g. Tag) (and then a value must be defined)
 
 =item value
 
 value of attribute to identify a contig
 
 =cut
+#############################################################################
+
+sub cafContig {
+# write contig mappings onto a filehandle in caf format
+    my $self = shift;
+    my $FILE = shift;
+    my $name = shift || return 0;
+
+    my $ccaf = 0;
+
+    if (ref($name) ne 'ARRAY') { 
+        my $contig = $self->getContig($name);
+        $ccaf++ if $contig->writeToCaf($FILE);
+    }
+
+    else { 
+        my $start = 0;
+        my $block = 1000;
+        while (@$name) {
+            $block = @$name if ($block > @$name);
+print "processing block $start $block\n" if $DEBUG;
+            undef my @test;
+            for (my $i = 0 ; $i < $block ; $i++) {
+                push @test, (shift @$name);
+            }
+            $start += $block;
+print "reads to be built: @test \n" if ($DEBUG > 1);
+            my $contiginstances = $self->getContig(\@test);
+            foreach my $instance (@$contiginstances) {
+                if ($instance->writeToCaf($FILE)) {
+                    $ccaf++;
+                }
+                else {
+# test for error?
+#                    push @missed,$instance->{readhash}->{readname};
+                }
+            }
+            undef $contiginstances;           
+        }
+        undef $name;
+    }
+
+    return $ccaf;
+}
+
 
 #############################################################################
 #############################################################################

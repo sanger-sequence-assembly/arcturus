@@ -8,6 +8,8 @@ package ReadMapper;
 
 use strict;
 
+use Devel::MyTimer;
+
 #############################################################################
 # Global variables
 #############################################################################
@@ -33,6 +35,9 @@ my $piecemealwise = 0; # default no tidy-up of mappings to earlier contigs
 my %ligations; # hash for ligation values to be tested in READS repair mode
 
 my $DEBUG = 0;
+my $TIMER = 1;
+my $MyTimer;
+
 
 my $break;
 
@@ -51,13 +56,15 @@ sub init {
 
 # get table handles used in this module
 
-    $READS = $tblhandle->spawn('READS'         ,'<self>');
-    $RR2CC = $tblhandle->spawn('READS2CONTIG'  ,'<self>');
-    $EDITS = $tblhandle->spawn('READEDITS'     ,'<self>');
-    $PENDS = $tblhandle->spawn('PENDING'       ,'<self>');
-    $RR2AA = $tblhandle->spawn('READS2ASSEMBLY','<self>');
+    $READS = $tblhandle->spawn('READS');
+    $RR2CC = $tblhandle->spawn('READS2CONTIG');
+    $EDITS = $tblhandle->spawn('READEDITS');
+    $PENDS = $tblhandle->spawn('PENDING');
+    $RR2AA = $tblhandle->spawn('READS2ASSEMBLY');
 
     $break = &break; # output line break
+
+    $MyTimer = new MyTimer;
 
     bless ($self, $class);
 
@@ -203,7 +210,7 @@ sub testAttributes {
         if ($svector && !$hashrefs->[0]->{svector}) {
             $report .=  "Attempt to repair missing Sequence Vector for read $read_id (set to $svector)$break"; 
             undef my $error;
-            $SVECTORS = $READS->spawn("<self>.SEQUENCEVECTORS") if !$SVECTORS;
+            $SVECTORS = $READS->spawn('SEQUENCEVECTORS') if !$SVECTORS;
             $SVECTORS->build(1) if !$SVECTORS->associate('hashrefs'); # just to be sure
             if ($repair && $SVECTORS) {
                 $SVECTORS->counter('name',$svector,1);
@@ -227,7 +234,7 @@ sub testAttributes {
         if ($cvector && !$hashrefs->[0]->{cvector}) {
             $report .=  "Attempt to repair missing Cloning Vector for read $read_id (set to $cvector)$break"; 
             undef my $error;
-            $CVECTORS = $READS->spawn("<self>.CLONINGVECTORS") if !$CVECTORS;
+            $CVECTORS = $READS->spawn('CLONINGVECTORS') if !$CVECTORS;
             $CVECTORS->build(1) if !$CVECTORS->associate('hashrefs'); # just to be sure
             if ($repair && $CVECTORS) {
                 $CVECTORS->counter('name',$cvector,1);
@@ -245,8 +252,9 @@ sub testAttributes {
         }
 
 # ligations
+# print "$break repair LIGATIONS ($report) $break";
 
-        $LIGATIONS = $READS->spawn("<self>.LIGATIONS") if !$LIGATIONS;
+        $LIGATIONS = $READS->spawn('LIGATIONS') if !$LIGATIONS;
         if (keys %ligations == 0 && $LIGATIONS) {
             $LIGATIONS->build(1) if !$LIGATIONS->associate('hashrefs'); # just to be sure
             if (my $hashrefs = $LIGATIONS->associate('hashrefs')) {
@@ -262,8 +270,8 @@ sub testAttributes {
             undef my $error;
             if ($repair && (my $hash = $ligations{$hashrefs->[0]->{ligation}})) {
 	        print "read $read_id $hashrefs->[0]->{ligation}$break";
-        # okay, this read has an undefined or incomplete ligation referenced in READS
-                $SVECTORS = $READS->spawn("<self>.SEQUENCEVECTORS") if !$SVECTORS;
+# okay, this read has an undefined or incomplete ligation referenced in READS
+                $SVECTORS = $READS->spawn('SEQUENCEVECTORS') if !$SVECTORS;
                 $SVECTORS->build(1) if !$SVECTORS->associate('hashrefs'); # just to be sure
                 $report .= "Attempt to repair ligation $hashrefs->[0]->{ligation} ($hash->{identifier}) ";
                 $report .= "with $identifier for read $read_id (read clone $hashrefs->[0]->{clone})$break"; 
@@ -274,10 +282,10 @@ sub testAttributes {
                         $LIGATIONS->update('silow',$biology->{sihigh}) if defined($biology->{sihigh});                                    $LIGATIONS->update('clone',$biology->{clone})  if defined($biology->{clone});             
                         $svector = $SVECTORS->associate('svector',$svector,'name') if $svector;
                         $LIGATIONS->update('svector',$svector) if $svector;
-#print "NEW LIGATION $ligation:"; foreach my $key (keys %$biology) { print " $key $biology->{$key}"; } print "$break";
+# print "NEW LIGATION $ligation:"; foreach my $key (keys %$biology) { print " $key $biology->{$key}"; } print "$break";
                         $LIGATIONS->update('origin' , 'C');
                     }
-                # replace ligation in read, update counter table for old ligation (check clone id)
+# replace ligation in read, update counter table for old ligation (check clone id)
                     $READS->update('ligation',$ligation,'read_id',$read_id);
                     $LIGATIONS->counter('ligation',$hashrefs->[0]->{ligation},-1);
                 }
@@ -350,7 +358,11 @@ sub alignToCaf {
             $error = "block length/orientation mismatch ($rlgt<>$clgt)";
         } 
         else {
-            my $hash = sprintf ("%06d",++$counts->[1]);
+# get the hash value (string!) for this alignment ('999999' used as terminator)
+            $counts->[1]++; # it's the next alignment
+            my $hash = sprintf ("%06d",$counts->[1]);
+# my $hash = "00000$counts->[1])";
+# $hash =~ s/.*(\d{6})$/$1/;         
             @{$read2pad->{$hash}} = @$block;
             my $next = @$quality || 0;
             my $default = $quality->[$next];
@@ -456,7 +468,7 @@ sub quality {
 
 # analyse the stored info ($type < 0 effective only if no quality range defined
 
-my $list = 0; $list = 1 if ($self->{names}->[0] eq 'J773Ca4.q2t');
+# my $list = 0; $list = 1 if ($self->{names}->[0] eq 'J773Ca4.q2t');
 
     if (($counts->[3] <= 0 || $counts->[4] <= 0) && $type < 0) {
 # use enabling window only if quality window absent
@@ -534,6 +546,8 @@ sub etest {
 # find any existing edit instructions for this read in the database
 # if there is, compare stored one with current one; deprecate if different
 
+        $MyTimer->timer('etest',0) if $TIMER; 
+
         $counts->[5] = 0;
         my $edits = $EDITS->cacheRecall($read_id); # look in cached data first
         $edits = $EDITS->associate ('hashrefs',$read_id,'read_id') if ($DBS && !$edits);
@@ -588,6 +602,7 @@ sub etest {
             }
             print "$status->{diagnosis} $break" if $DEBUG;
 	}
+        $MyTimer->timer('etest',1) if $TIMER; 
     }
 
     elsif (!$read_id) {
@@ -628,6 +643,10 @@ sub mtest {
     my $REPORT = "${break}++++ MTEST for ReadMapper $self->{names}->[0] ($read_id) @$counts ++++$break";
 
     if ($read_id && $counts->[6] < 0) {
+
+        $MyTimer->timer('mtest',0) if $TIMER;
+
+        my @read2conKeys = sort keys %$read2con;
 
         my %generations;
         my %deprecation;
@@ -785,7 +804,8 @@ sub mtest {
                 $REPORT .= "$report ($mapping) to contig $contig$break";
 	    }
 	}
-        elsif (keys %$read2con > 0) {
+        elsif (@read2conKeys > 0) {
+#        elsif (keys %$read2con > 0) {
              $isDifferent = 1; # It's the first mapping of this read: force 'N' label
         }
 
@@ -804,7 +824,8 @@ sub mtest {
                 my $first = 1;
                 $con2con->[4] = 0;
                 my $alignments = 0;
-                foreach my $alignment (keys (%$read2con)) {
+                foreach my $alignment (@read2conKeys) {
+#                foreach my $alignment (keys (%$read2con)) {
                     my @thismap = @{$read2con->{$alignment}};
                     my $segment = $thismap[3] - $thismap[2];
                     my $l = 2; $l = 3 if ($segment < 0);
@@ -823,7 +844,8 @@ sub mtest {
                 if ($alignments == $counts->[6] && $oldrange == $newrange) {
         # numbers and overall range are identical; now test each individual mapping segment
                     undef my $offset;
-                    foreach my $alignment (keys (%$read2con)) {
+                    foreach my $alignment (@read2conKeys) {
+#                    foreach my $alignment (keys (%$read2con)) {
         # get range for current (new) readmap to the new contig
                         my @thismap = @{$read2con->{$alignment}};
                         $REPORT .= "Testing alignment @thismap$break";
@@ -909,7 +931,8 @@ print "reversal detected in  read nr $dbrefs->[0] $break";
             $self->{marked} = 'N';
             $counts->[6] = 0;
         }
-        elsif (keys %$read2con) {
+        elsif (@read2conKeys) {
+#        elsif (keys %$read2con) {
     # the alignments to the previous contig are identical to those to the new
     # contig, apart from a (possible) shift;
             $report = "Alignments are identical to those to a contig in generation $gen->[0]$break";   
@@ -926,6 +949,7 @@ print "reversal detected in  read nr $dbrefs->[0] $break";
 $REPORT .= "$report$break" if $report;
 $self->{report} .= $REPORT;
 &reporter($self,0) if ($isDifferent && $previous); # TEMPORARY TEST
+        $MyTimer->timer('mtest',1) if $TIMER;
     }
     elsif (!$read_id) {
         $status->{diagnosis} .= "! Read $read_id not found in READS database$break";
@@ -1015,6 +1039,8 @@ sub dump {
 $DEBUG = 0; # $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
 print "++++ DUMP for ReadMapper $self->{names}->[0] ($self) counts: @$counts ++++$break" if $DEBUG;
 
+    $MyTimer->timer('RM dump',0) if $TIMER; 
+
 # reinitialize error status
 
     $status->{errors}    = $status->{inerrors};
@@ -1079,11 +1105,14 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
         # build and add the overall mapping to a table of several alignments
 
                 my $aligntype = 1; # default single alignment in this read
-                if (keys (%$read2con) > 1) {
-                    $aligntype = 0; # multiple alignments
+                my @read2conKeys = sort keys %$read2con;
+                if (@read2conKeys > 1) {
+#                if (keys (%$read2con) > 1) {
+                   $aligntype = 0; # multiple alignments
                     undef my @range;
                     my $l = 3 - $self->{align}; my $k = 5 - $l; # 2,3 or 3,2
-                    foreach my $alignment (sort keys (%$read2con)) {
+                    foreach my $alignment (@read2conKeys) {
+#                    foreach my $alignment (sort keys (%$read2con)) {
                         my $block = $read2con->{$alignment};
                         @range = @$block  if !@range;
                         $range[0]  = $block->[0]  if ($block->[0]  < $range[0]);
@@ -1092,12 +1121,15 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         $range[$l] = $block->[$l] if ($block->[$l] > $range[$l]);
                     }
                     $read2con->{'999999'} = \@range;
+		    push @read2conKeys, '999999';
                 }
 
                 my $clone_id = $self->{clone} || 0;
 
 #$self->list(1) if $DEBUG;
-                foreach my $alignment (sort keys (%$read2con)) {
+		$MyTimer->timer('RM newline(s)',0) if $TIMER;
+                foreach my $alignment (@read2conKeys) {
+#                foreach my $alignment (sort keys (%$read2con)) {
 # print "alignment key $alignment$break";
                     my @block = @{$read2con->{$alignment}};
                     if (@block != 4) {
@@ -1143,6 +1175,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
                         $RR2AA->update('assembly',$assembly,'read_id',$read_id);
                     }
                 } 
+		$MyTimer->timer('RM newline(s)',1) if $TIMER;
                 $status->{diagnosis} .= "$break";
     # here you could do the cleanup of marked mappings of previous generations
                 if ($piecemealwise) {
@@ -1178,6 +1211,8 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
         $status->{errors}++;           
     }
 
+    $MyTimer->timer('RM dump',1) if $TIMER; 
+
 print "$self->{report}" if $DEBUG;
 
     if (&status($self,0)) {
@@ -1188,7 +1223,7 @@ print "$self->{report}" if $DEBUG;
     }
     else {
         return 2; # this read was found to be aligned to contig $dbrefs->[3]
-    }  
+    }
 }
 
 ###############################################################################
@@ -1205,6 +1240,8 @@ sub align {
     my $read2con = $self->{read2con};
     my $status   = $self->{status};
     my $dbrefs   = $self->{dbrefs};
+
+    $MyTimer->timer('align',0) if $TIMER; 
 
     my $error = $status->{errors};
  
@@ -1306,6 +1343,8 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
         $status->{diagnosis} .= "  Missing or invalid alignment to contig$break" if ($counts->[2] != 1);
         $status->{diagnosis} .= "  Invalid or missing Quality Window$break" if ($counts->[4] == 0);
     }
+
+    $MyTimer->timer('align',1) if $TIMER; 
 
     return $status->{errors} - $error; # will be 0 if no errors
 }
@@ -1424,6 +1463,8 @@ sub lookup {
 
     return \%ReadMapper if !$read;
 
+    $MyTimer->timer('lookup',0) if $TIMER; 
+
     my $result = $ReadMapper{$read};
 
     if (!$result && !($read =~ /[a-z]/i) && $read =~ /\d+/) {
@@ -1435,6 +1476,9 @@ sub lookup {
             }
         }
     }
+
+    $MyTimer->timer('lookup',1) if $TIMER; 
+
     return $result;
 }
 
@@ -1526,9 +1570,11 @@ sub isInDataBase {
 
     my $names  = $self->{names};
     my $dbrefs = $self->{dbrefs};
-    my $status = $self->{status};
+    my $status = $self->{'status'};
 
 # if the read is not in the READS database test for it in PENDING table
+
+    $MyTimer->timer('isInDataBase',0) if $TIMER;
 
     if (!$dbrefs->[0] || !$dbrefs->[1]) {
 
@@ -1546,6 +1592,8 @@ sub isInDataBase {
             $dbrefs->[1] = -1;
         }
     }
+
+    $MyTimer->timer('isInDataBase',1) if $TIMER;
 
 # return value > 0 only if read present in database READS table
 
@@ -1578,6 +1626,8 @@ sub inDataBase {
     my $dbpref = 0;
     my $hashes = 0;
 
+    $MyTimer->timer('inDataBase',0) if $TIMER; 
+
     if (!$readname) {
         return 0, 0;
     }
@@ -1594,25 +1644,29 @@ sub inDataBase {
     }
 # if not found in either two tables: try find the read in the READS tablehandle
     elsif ($dbsearch) {
-
+        $MyTimer->timer('inDataBase db-lookup',0) if $TIMER; 
         $dbrref = $READS->associate('read_id',$readname,'readname',{useCache => 0});
         $dbpref = $PENDS->associate('record' ,$readname,'readname',{useCache => 0}) if !$dbrref;
+        $MyTimer->timer('inDataBase db-lookup',1) if $TIMER; 
     }
+
+    $MyTimer->timer('inDataBase',1) if $TIMER; 
 
 # if read not found in either READS or PENDING : add to PENDING
 
     if (!$dbrref && !$dbpref && $append) {
-
+        $MyTimer->timer('inDataBase newrow',0) if $TIMER;
         if ($assembly) {
             $dbpref = $PENDS->newrow('readname',$readname,'assembly',$assembly);
         }
         else {
             $dbpref = $PENDS->newrow('readname',$readname);
         }
+        $MyTimer->timer('inDataBase newrow',1) if $TIMER;
 # error status checking
 print "Adding to PENDING: $readname (as $dbpref)$break";
         if (!$dbpref) {
-            my $status = $self->{status};
+            my $status = $self->{'status'};
             $status->{diagnosis} .= "! Failed to add entry $readname ";
             $status->{diagnosis} .= "to PENDING list$break";
             $status->{warning}++;
@@ -1635,9 +1689,11 @@ sub preload {
     my $where = '';
     my $query = '';
 
-    print "Building caches ('$mask') $break";
+print "enter ReadMapper preload $reads $mask $break";
+
+print "Building caches ('$mask') $break";
+
     if ($reads && ref($reads) eq 'ARRAY') {
-print "enter ReadMapper preload $reads $break";
 # array mode
         my $extend = 0;
         my $nblock = 1000;
@@ -1665,7 +1721,7 @@ print "READS $break";
             if ($mask[1]) {
 print "PENDS $break";
                 $query = "select record,readname from <self> $where";
-print "$query $break";
+# print "$query $break";
                 $PENDS->cacheBuild($query,{indexKey=>'readname',extend=>$extend});
             }
 
@@ -1682,8 +1738,9 @@ print "$query $break";
                     $where = "where read_id in (".(join ',',@readids).")";
                     $query = "select *  from <self> $where";
 print "RR2CC $break";
-print "$query $break";
+# print "$query $break";
                     my %options = (indexKey=>'read_id',extend=>$extend);
+                    $options{sortBy} = 'deprecated,label';
                     $RR2CC->cacheBuild($query,\%options) if $mask[2];
                     $options{sortBy} = 'edit,base';
                     $EDITS->cacheBuild($query,\%options) if $mask[3];
@@ -1694,7 +1751,7 @@ print "$query $break";
     }
 # or load whole table
     else {
-print "enter ReadMapper preload $reads $break";
+print "enter ReadMapper preload whole table $reads $break";
 
         my $query = "select read_id,readname,clone from <self>";
 print "$query $break" if $mask[0];
@@ -1705,10 +1762,11 @@ print "$query $break" if $mask[1];
 
         $query = "select *  from <self>";
 print "$query $break" if $mask[2];
-        $RR2CC->cacheBuild($query,{indexKey=>'read_id'})  if $mask[2];
+        $RR2CC->cacheBuild($query,{indexKey=>'read_id', sortBy=>'deprecated, label'}) if $mask[2];
 print "$query $break" if $mask[3];
         $EDITS->cacheBuild($query,{indexKey=>'read_id', sortBy=>'edit,base'}) if $mask[3];
     }
+print "exit preload $break$break";
 }
 
 #############################################################################
@@ -1726,24 +1784,11 @@ sub tagList {
 
 #############################################################################
 
-sub break {
-
-# return the line break appropriate for the environment
-
-    my $break = "\n";
-
-    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
-
-    return $break;
-}
-
-#############################################################################
-
 sub fonts {
 
 # return a hash with font specifications
 
-    my %font = ( b=>'blue', o=>'orange', g=>'lightgreen', y=>'yellow', e=>'</FONT>');
+    my %font = ( b=>'blue', o=>'orange', g=>'lightgreen', 'y'=>'yellow', e=>'</FONT>');
 
     foreach my $colour (keys %font) {
         if ($ENV{REQUEST_METHOD}) {
@@ -1807,6 +1852,18 @@ my $nr = @readnames; print "$nr reads to be re-investigated $break";
 # and flush the PENDING table again
 
     $PENDS->flush;
+}
+#############################################################################
+
+sub break {
+
+# return the line break appropriate for the environment
+
+    my $break = "\n";
+
+    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
+
+    return $break;
 }
 
 #############################################################################
