@@ -83,13 +83,14 @@ sub spawn {
 # spawn a new DbaseTable object with inheritance of current
 # used on an ArcturusTable, the result is a new ArcturusTable instance 
     my $self      = shift;
-    my $tablename = shift;
-    my $database  = shift;
+    my $tablename = shift; # obligatory
+    my $database  = shift; # defaults to $self->{database} if missing or specified as 'self' 
     my $forced    = shift; # if true, force creation of a new instance
     my $build     = shift;
 
+    $database = $self->{database} if (!$database || $database =~ /\bself\b/);
+
     my $dbhandle = $self->{dbhandle};
-    $database = $self->{database} if ($database =~ /\bself\b/);
 
     my $handle = $self->getInstanceOf($database.'.'.$tablename) || '';
 
@@ -363,7 +364,7 @@ sub cacheBuild {
 #############################################################################
 
 sub cacheRecall {
-# returns a ref to array with 1 or more hashes, 0
+# returns a ref to array with 1 or more hashes or 0
     my $self = shift;
     my $ikey = shift; # the index key
 
@@ -1129,7 +1130,7 @@ sub nextrow {
     my $self = shift;
     my $line = shift;
 
-print "sub $self->{tablename}->nextrow to be deprcated \n";
+print "sub $self->{tablename}->nextrow (to be deprcated) \n";
 
     my $nrow;
 
@@ -1655,8 +1656,9 @@ sub update {
         $doStamp = 0;
     } 
     else {
-        my $error = "missing or invalid WHERE clause: cname=$cname value=$value wkey=$wkey wval=$wval";
-        $self->{qerror} = "! Failed to update table <self>: $error"; print "$self->{qerror}<br>";
+        my $error = "missing or invalid WHERE clause: cname=$cname value=$value wkey='$wkey' wval='$wval' ";
+        $error .= "or earlier failure to insert newrow";
+        $self->{qerror} = "! Failed to update table $self->{tablename}: $error"; print "$self->{qerror}<br>";
         return 0;
     }
 
@@ -1673,6 +1675,7 @@ sub update {
         $query .= " limit $limit" if ($limit && $limit > 0); # if any
         $status = &query($self,$query,$doStamp);
         $self->{qerror} = "Failed to update table <self>" if !$status;
+        buildhash(0,$self) if ($status && $self->{'build'}); # reload hash        
     }
     else {
         $self->{qerror} = "Failed to update table <self>: (probably) column $cname does not exist";
@@ -1873,10 +1876,11 @@ sub query {
     my $status = $sth->execute();
     $status = 0 if !defined($status);
 # beware: $status:0 (false) indicates an error; 0E0 indicates no data returned
-    if ($status > 0) {
+    if ($status > 0 && $query =~ /select|show/i) {
 # there is at least one returned row
         $hashrefs = $sth->fetchall_arrayref({});
         $hashrefs = \@hashrefs if !$hashrefs;
+# print "TEST $query status $status hashrefs $hashrefs VALUES: @$hashrefs <br>\n";
     }
     elsif (!$status) {
         $self->{qerror} = 1;
