@@ -38,10 +38,28 @@ my ($void, $action, $page);
 
 ($void, $action) = split ('/',$GateKeeper->origin);
 
-if (!$action || $action eq 'signon') {
+if ($action eq 'signon') {
 
     $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
+    $GateKeeper->authorize(0,{ageWindow=>180}); # bounce authorization form    
+}
 
+elsif ($action eq 'signoff') {
+
+    $page = $GateKeeper->GUI("Sign off");
+    $GateKeeper->cgiHeader(2);
+    $page->add("Your current session will be closed"); 
+    $page->flush();
+
+}
+
+else {
+# if the script is invoked by the identification prompt: get session number
+    if ($cgi->parameter('identify')) {
+        $GateKeeper->authorize(0,{ageWindow=>180}); # (no access test)  
+    }
+
+    $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
     $page->space;
     $page->sectionheader("Welcome to the ARCTURUS assembly-tracking database",4,0);
 
@@ -64,8 +82,13 @@ if (!$action || $action eq 'signon') {
         my %options = (mask=>'031000001111000001',linkItem=>'onItemName', linkTarget=>0,
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
         my $table = $organisms->htmlTable(\%options);
-        $table =~ s?ITEMLINK?/cgi-bin/herdsman/signon?g;
+
+        my $thisScript = $GateKeeper->currentScript;
+        my $session = $cgi->parameter('session');
+        $table =~ s/ITEMLINK\?/ITEMLINK?session=$session&/g if $session;
+        $table =~ s/ITEMLINK/$thisScript/g;
         $table =~ s/dbasename/database/g;
+
         $page->add($table);
         $page->space;
         $page->sectionheader("Select a database or a function",4,0);
@@ -73,18 +96,12 @@ if (!$action || $action eq 'signon') {
 
     $page->flush();
 }
-elsif ($action eq 'signoff') {
-
-    $GateKeeper->cgiHeader(2);
-
-}
-else {
-    $GateKeeper->cgiHeader(1);
-}
 
 ##############################################################################
 
 $GateKeeper->disconnect;
 
 exit 0;
+
+
 
