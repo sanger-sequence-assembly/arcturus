@@ -780,7 +780,7 @@ sub touch {
 # get the reference to the data hash; possibly apply key translation 
     my $self = shift;
 
-    $MODEL = $READS->findInstanceOf('arcturus.READMODEL') if !$MODEL;
+    $MODEL = $READS->getInstanceOf('arcturus.READMODEL') if !$MODEL;
 
     my $hash = $self->{readhash};
 

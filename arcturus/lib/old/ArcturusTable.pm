@@ -62,30 +62,6 @@ sub default {
 
 #############################################################################
 
-#sub testArcturusInventory {
-#    my $self = shift;
-#    my $init = shift;
-
-# test if an instance if the INVENTORY table exists; if not, build it
-
-#print "sub testArcturusInventory:<br>\n";
-#    my $inventory = $self->findInstanceOf('arcturus.INVENTORY') || 0;
-#print "inventory = '$inventory'<br>\n";
-
-#    if (!$BLOCK && !$inventory && $init--) {
-#        $BLOCK = 1; # prevent looping
-#        my $dbh = $self->{dbhandle};
-#        $inventory = $self->new($dbh,'INVENTORY','arcturus',1);
-#        die "Could not get at INVENTORY table" if (!$inventory);
-#    }
-#    elsif ($inventory && !$inventory->{hashrefs}) {
-#        $inventory->build(1);
-#    }
-#    return $inventory;
-#}
-
-#############################################################################
-
 sub autoVivify {
 # auto generate the connecting tables using INVENTORY and DATAMODEL
     my $self     = shift;
@@ -328,7 +304,7 @@ sub compressSeed {
 #############################################################################
 
 sub historyUpdate {
-# update the history table by going through all open ArcturusTable s
+# update the history table by going through all open ArcturusTables (on current node)
     my $self = shift;
     my $user = shift;
     my $text = shift;
@@ -346,7 +322,7 @@ sub historyUpdate {
 # print "historyUpdate: instances=$instances\n";
     return 0 if (!$instances);
 
-    print "${brtag}Time stamping modified tables${brtag}" if $list;
+print "${brtag}Time stamping modified tables${brtag}" if $list;
 #print "full table name = $fullTableName \n\n";
 
     my $logEvents = 0;

@@ -761,7 +761,7 @@ print "GateKeeper enter dbHandle $debug" if $debug;
     my $cgi = $self->{cgi};
     undef $self->{database};
     if ($database && !$residence{$database}) {
-foreach my $key (%residence) {print "$key $residence{$key}\n";}
+# foreach my $key (%residence) {print "$key $residence{$key}\n";}
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
     elsif ($database && $residence{$database} !~ /$serverstring/) {

@@ -1957,13 +1957,14 @@ print "NEXT COLUMN $self->{tablename} column $column<br>\n" if ($list);
                 my $linkcolumn = $sublink->[1];
             # find the subtable reference
                 undef my $output;
-                my $ltableref  = $instances{$linktable};
+                my $ltableref  = $self->getInstanceOf($linktable);
                 if ($ltableref) {
 print "$self->{tablename} column $column has link to  $linktable $linkcolumn<br>\n" if ($list);
 print "linktableref=$ltableref<br>\n" if $list;
                    ($output, $and) = $ltableref->traceColumn($colname,$cvalue,$relate,$and);
                 }
                 else {
+                    $self->{warnings} .= "! no DbaseTable instance for table $linktable";
                     print "DbaseTable $linktable connect FAILURE: $self->{warnings}<br>\n";
 #  print "last query $self->{lastQuery} <br>\n";
                 }
@@ -2189,7 +2190,7 @@ sub flush {
     }
     else {
 # flush all pending new lines and counter updates on this table
-print "flushing $self->{tablename} <br>";
+# print "flushing $self->{tablename} <br>";
         $self->lflush();
         $self->cflush();
     }

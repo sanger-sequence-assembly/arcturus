@@ -13,6 +13,9 @@ use LigationReader;
 use Compress;
 use OracleReader;
 
+my $DEBUG = 1;
+my %timehash;
+
 #############################################################################
 
 my $BADGERDIR  = '/usr/local/badger/bin'; 
@@ -109,6 +112,8 @@ sub newRead {
     my $file = shift;
     my $type = shift;
 
+    &timer('newRead',0) if $DEBUG; 
+
 # type 0 for standard read; else consensus file
 
     $self->erase(); # reset status and clear data
@@ -118,6 +123,8 @@ sub newRead {
         $self->newConsensusRead($file) if ($type && $type == 1);
         $self->getOracleRead($file)    if ($type && $type == 2);
     }
+
+    &timer('newRead',1) if $DEBUG; 
 
     if ($self->{status}->{errors}) {
         return 0;
@@ -611,6 +618,8 @@ sub ligation {
 # get ligation data and test against database tables VECTORS and LIGATIONS
     my $self = shift;
 
+    &timer('ligation',0) if $DEBUG; 
+
 # get the database handle to the LIGATIONS and SEQUENCEVECTOR tables
 
     my $READS = $self->{READS};
@@ -897,6 +906,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
             $LIGATIONS->build(1,'ligation'); # rebuild the table
         }
     }    
+    &timer('ligation',1) if $DEBUG; 
 }
 # error reporting coded as:
 
@@ -916,6 +926,8 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
 sub strands {
 # test Strands information implicit in file name against data table "STRANDS"
     my $self = shift;
+
+    &timer('strands',0) if $DEBUG; 
 
 # get the database handle to the STRANDS table
 
@@ -1063,6 +1075,8 @@ sub strands {
 
     $suffixes[2] = 'u' if (!defined($suffixes[2])); # ensure it's definition
     $readItems->{CHT} = $suffixes[2];
+
+    &timer('strands',1) if $DEBUG; 
 }
 # error reporting coded as:
 
@@ -1076,6 +1090,8 @@ sub strands {
 sub chemistry {
 # determine chemistry and test against database tables (CHEMISTRY & CHEMTYPES)
     my $self = shift;
+
+    &timer('chemistry',0) if $DEBUG; 
 
 # get the database handle to the CHEMISTRY and CHEMTYPES tables
 
@@ -1284,6 +1300,7 @@ $self->logger("... NOT recovered: = $readItems->{CH})\n");
         }
 print "REPORT $self->{status}->{report}<br>";
     }
+    &timer('chemistry',1) if $DEBUG; 
 }
 # error reporting coded as:
 
@@ -1298,6 +1315,8 @@ sub encode {
     my $self = shift;
     my $scm  = shift; # sequence compression method
     my $qcm  = shift; # quality  compression method
+
+    &timer('encode',0) if $DEBUG; 
 
     my $Compress  = $self->{Compress};
  
@@ -1343,6 +1362,8 @@ sub encode {
         $self->{status}->{diagnosis} .= $error;
     }
 
+    &timer('encode',1) if $DEBUG; 
+
     return $error;
 }
 
@@ -1351,6 +1372,8 @@ sub encode {
 sub insert {
 # insert a new record into the READS database table
     my $self = shift;
+
+    &timer('insert',0) if $DEBUG; 
 
     my $READS = $self->{READS};
 
@@ -1448,6 +1471,8 @@ sub insert {
         } 
     }
 
+    &timer('insert',1) if $DEBUG; 
+
     return $counted;
 }
 
@@ -1456,6 +1481,8 @@ sub insert {
 sub readback {
 # read last inserted record back and test against readItem
     my $self = shift;
+
+    &timer('readback',0) if $DEBUG; 
 
     undef my $error;
 
@@ -1525,6 +1552,8 @@ sub readback {
         $self->{status}->{errors}++;
     }
 
+    &timer('readback',1) if $DEBUG; 
+
     return $error; # undefined if none
 }
 
@@ -1557,6 +1586,34 @@ sub logger {
     else {
         $self->{status}->{report} = '';
     }
+}
+
+#############################################################################
+
+sub timer {
+# ad hoc timing routine
+    my $marker = shift;
+    my $access = shift; # 0 for start, 1 for end
+
+    my $cptime = (times)[0]; # time spent in user code
+    my $iotime = (times)[1]; # system cpu (not elapsed time, unfortunately)
+    $timehash{$marker}->[$access]->[0] += $cptime;
+    $timehash{$marker}->[$access]->[1] += $iotime;
+}
+
+#----------------------------------------------------------------------------
+
+sub DESTROY {
+
+    if ($DEBUG) {
+        print "\n\n\nbreakdown of time usage:\n";
+        foreach my $key (keys %timehash) {
+	    my $cptime = $timehash{$key}->[1]->[0] - $timehash{$key}->[0]->[0];
+	    my $iotime = $timehash{$key}->[1]->[1] - $timehash{$key}->[0]->[1];
+            printf ("%16s  CPU:%8.2f  IO:%8.2f\n",$key,$cptime,$iotime);
+        }
+    }
+
 }
 
 #############################################################################
