@@ -18,3 +18,4 @@
 # For example:
 DEFAULT		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog
 ^zoo		(echo "user: $USER"; echo %s; date; cat; echo;  (sleep 5; cd /nfs/disk222/yeastpub/zoo/; cvs -q update -d; echo) &) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
+^powmap		(echo "user: $USER"; echo %s; date; cat; echo;  (sleep 5; cd /nfs/disk222/yeastpub/kmr/people/kmr/diana.test; cvs -q update -d; echo) &) >> $CVSROOT/CVSROOT/commitlog 2>&1
