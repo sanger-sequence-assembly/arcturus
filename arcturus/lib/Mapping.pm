@@ -136,7 +136,14 @@ sub getAlignment {
 
     return $this->{direction};
 }
- 
+
+sub setCacheContigRange {
+    my $this = shift;
+    my $value = shift || 1;
+
+    $this->{cacheContigRange} = $value;
+}
+
 #-------------------------------------------------------------------
 # compare mappings
 #-------------------------------------------------------------------
