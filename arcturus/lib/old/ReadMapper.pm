@@ -1382,6 +1382,7 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         push @columns, 'generation'; push @cvalues, 0;
                         push @columns, 'deprecated'; push @cvalues, $marker;
 
+                &timer('RM newrow',0) if $TIMER;
                         if ($RR2CC->newrow(\@columns,\@cvalues)) {
                             if ($status->{diagnosis} !~ /\badded/) {
                                 $status->{diagnosis} .= "Alignments to contig $contig added: ";
@@ -1395,9 +1396,13 @@ print "Alignments @cvalues to contig $contig (@block) added$break" if $DEBUG;
 print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $break";
                             $status->{errors}++;
                         } 
+                &timer('RM newrow',1) if $TIMER;
                         $counts->[6]++;
-# and finally update assembly in READS2ASSEMBLY ??? insert 
-                        $RR2AA->update('assembly',$assembly,'read_id',$read_id);
+# and finally update assembly in READS2ASSEMBLY ??? insert afterwards?
+                &timer('RM assembly',0) if $TIMER;
+#                        $RR2AA->update('assembly',$assembly,'read_id',$read_id);
+#                        $RR2AA->newrow('read_id',$read_id,'assembly',$assembly,1);
+                &timer('RM assembly',1) if $TIMER;
                     }
                 } 
                 &timer('RM newline(s)',1) if $TIMER;
@@ -1481,6 +1486,7 @@ $DEBUG = 0; # $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
 print "++++ ALIGN for ReadMapper $self->{names}->[0] ($self) (counts = @$counts)++++$break" if $DEBUG;
 
     if ($counts->[1] > 0 && $counts->[2] == 1 && ($counts->[4] > 0 || $counts->[3] > 0)) {
+    &timer('align',0) if $TIMER;
 # get shift between padded read and contig and its direction
         my ($cntgs, $cntgf, $padds, $paddf) = @{$padtocon};
 # ensure ordering on (padded) read is increasing
@@ -1564,6 +1570,7 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
                 $status->{diagnosis} .= "$outside read segments outside contig range$break";
             }
         }
+    &timer('align',1) if $TIMER; 
     }
     else {
 # error in alignment data
@@ -1573,8 +1580,6 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
         $status->{diagnosis} .= "  Missing or invalid alignment to contig$break" if ($counts->[2] != 1);
         $status->{diagnosis} .= "  Invalid or missing Quality Window$break" if ($counts->[4] == 0);
     }
-
-    &timer('align',1) if $TIMER; 
 
     return $status->{errors} - $error; # will be 0 if no errors
 }

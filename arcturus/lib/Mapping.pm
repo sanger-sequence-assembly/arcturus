@@ -15,6 +15,7 @@ sub new {
     bless $this, $class;
 
     $this->{MappingSegments} = [];
+    $this->{assembledFrom} = [];
 
     $this->{mapping} = $mapping if defined($mapping);
 
@@ -65,6 +66,33 @@ sub setReadID {
     my $this = shift;
 
     $this->{data}->{read_id} = shift;
+}
+ 
+#-------------------------------------------------------------------
+#
+#-------------------------------------------------------------------
+
+sub addAlignToCaf {
+    my $this = shift;
+    my $map  = shift;
+
+#print "addAlignToCaf: @$map\n";    
+}
+
+sub addAssembledFrom {
+    my $this = shift;
+    my $map  = shift;
+
+#print "assembledFrom: @$map\n";
+
+    my $assembledFrom = $this->{assembledFrom};
+
+    my @Map = @$map; # copy the array to local
+
+
+    push @$assembledFrom, \@Map; # add to array of maps (to be improved)
+
+    return scalar @$assembledFrom;  
 }
 
 1;

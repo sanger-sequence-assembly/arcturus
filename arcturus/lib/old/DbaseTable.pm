@@ -1691,9 +1691,9 @@ sub newrow {
             $inputStatus = @{$self->{stack}->{$cstring}};
             if ($inputStatus >= $multiLine) {
                 my $nextrow = $self->count(0) + $multiLine;
-                $vstring = join '),(',@{$self->{stack}->{$cstring}};
-                my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-#print "NEWROW: nextrow=$nextrow\n" if $list;
+                my $query  = "INSERT INTO <self> ($cstring) VALUES (";
+                $query .= join('),(',@{$self->{stack}->{$cstring}}).")";
+#print "NEWROW: $query nextrow=$nextrow\n";
                 my $status = $self->query($query,{traceQuery=>0,timeStamp=>1});      
                 if ($status && $self->count(0) == $nextrow) {
                     $inputStatus = $nextrow;

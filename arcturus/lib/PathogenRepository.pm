@@ -22,6 +22,8 @@
 # Author:   David Harper
 # Email:    adh@sanger.ac.uk
 # WWW:      http://www.sanger.ac.uk/Users/adh/
+# Modified: Ed Zuiderwijk - added method getDefaultAssemblyCafFile
+#                         - added undefined protection in dirs hash
 #----------------------------------------------------------------------
 
 package PathogenRepository;
@@ -89,9 +91,10 @@ sub new {
     my %splitdir;
 
     foreach $name (keys %dirs) {
-	$root = $dirs{$name};
 
-	next unless length($dirs{$name}) > 0;
+	$root = $dirs{$name} || ''; # protect against undefined
+
+	next unless length($root) > 0;
 
 	if ($root =~ /assembly/) {
 	    $asmdir{$name} = $root;
@@ -135,6 +138,17 @@ sub getAssemblyDirectory {
     return $asmdir->{uc($name)};
 }
 
+sub getDefaultAssemblyCafFile {
+    my $this = shift;
+    my $name = shift;
+
+    $name = &nameMap($name);
+
+    my $AD = $this->getAssemblyDirectory($name);
+
+    return $AD."/$name.0.caf";
+}
+
 sub getSplitDirectory {
     my $this = shift;
 
@@ -158,4 +172,17 @@ sub getOrganismList {
     keys %{$this->{SplitMap}};
 }
 
+sub nameMap {
+# translate Arturus name to Oracle name
+    my $name = shift;
+
+    $name =~ s /SCH/SH/; # fix for SCHISTO
+
+    return $name;
+}
+
 1;
+
+
+
+

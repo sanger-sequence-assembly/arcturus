@@ -3,7 +3,7 @@ package Read;
 use strict;
 
 #-------------------------------------------------------------------
-# Constructor new (instantiation with readname is optional)
+# Constructor (optional instantiation with readname as identifier)
 #-------------------------------------------------------------------
 
 sub new {
@@ -14,52 +14,17 @@ sub new {
 
     bless $this, $class;
 
-    $this->{readname} = $readname;
-    $this->{data}     = {}; # metadata hash
+    $this->{data} = {}; # metadata hash
 
-    $this->addToInventory('readname') if $readname;
+    $this->{Tags} = []; # array of read tags
+ 
+    $this->setReadName($readname) if defined($readname);
 
     return $this;
 }
 
 #-------------------------------------------------------------------
-# inventory of instances of this class (methods for quick look-up)
-#-------------------------------------------------------------------
-
-my %Reads;
-
-sub addToInventory {
-# add this instance to the inventory keyed on either read_id (default) or readname
-    my $this = shift;
-    my $item = shift || 'read_id';
-
-    return undef unless ($item eq 'read_id' || $item eq 'readname');
-
-    my $key = $this->{data}->{$item} || return undef;
-
-    $Reads{$key} = $this;
-}
-
-sub fingerRead {
-# return the instance if present in the inventory
-    my $this = shift;
-    my $item = shift;
-
-    return $Reads{$item};
-}
-
-sub getInventory {
-# return reference to inventory list
-    return \%Reads;
-}
-
-sub clearInventory {
-# delete the current inventory
-    undef %Reads;
-}
-
-#-------------------------------------------------------------------
-# import of handles to related objects
+# import/export of handles to related objects
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
@@ -75,26 +40,28 @@ sub setArcturusDatabase {
     }
 }
 
-sub setMapping {
-# import the Mapping instance for this Read
-    my $this    = shift;
-    my $Mapping = shift;
+sub addTag {
+# import a Tag instance and add to the Tag list
+    my $this = shift;
+    my $Tag  = shift;
 
-    if (ref($Mapping) ne 'Mapping') {
-        die "Invalid object passed: $Mapping";
-    }
-# test consistent read_id values
-    elsif ($Mapping->getReadID == $this->getReadID) {
-        $this->{Mapping} = $Mapping;
-        return 1;
+    if (ref($Tag) eq 'Tag') {
+        push @{$this->{Tags}}, $Tag;
     }
     else {
-        return 0;
+        die "Invalid object passed: $Tag";
     }
-}    
+}
+
+sub getTags {
+# export reference to the Tags array
+    my $this = shift;
+
+    return $this->{Tags};
+}
 
 #-------------------------------------------------------------------
-# lazy instantiation of DNA and quality data
+# lazy instantiation of DNA and quality data (private)
 #-------------------------------------------------------------------
 
 sub importSequence {
@@ -102,14 +69,14 @@ sub importSequence {
 
     my $ADB = $this->{ADB} || return; # the parent database
 
-    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForRead(id => $this->getReadID());
+    my ($sequence, $quality) = $ADB->getSequenceForRead(id => $this->getReadID());
 
     $this->setSequence($sequence); # a string
     $this->setQuality($quality);   # reference to an array of integers
 }
 
 #-------------------------------------------------------------------
-# delayed loading of comment(s)
+# delayed loading of comment(s) (private)
 #-------------------------------------------------------------------
 
 sub importComment {
@@ -117,7 +84,7 @@ sub importComment {
 
     my $ADB = $this->{ADB} || return; # the parent database
 
-    my $comment = $ADB->getCommentForRead(id => $this->getReadID()) || '';
+    my $comment = $ADB->getCommentForRead(id => $this->getReadID);
 
     if (ref($comment) eq 'ARRAY') {
         $this->{comment} = join "\n",@$comment;
@@ -131,6 +98,7 @@ sub importComment {
 # importing & exporting data and meta data
 #-------------------------------------------------------------------    
 
+# OBSOLETE METHOD
 sub importData {
 # input of meta data into this instance with a hash
     my $this = shift;
@@ -155,6 +123,7 @@ sub importData {
     return $copied;
 }
 
+# OBSOLETE METHOD
 sub exportData {
 # export of meta data of this instance with a hash
     my $this = shift;
@@ -425,12 +394,12 @@ sub getStrand {
 
 #-----------------
 
-sub setSequenceVectorSite {
+sub setSequencingVectorSite {
     my $this = shift;
     $this->{data}->{svcsite} = shift;
 }
 
-sub getSequenceVectorSite {
+sub getSequencingVectorSite {
     my $this = shift;
     return $this->{data}->{svcsite};
 }
@@ -449,24 +418,24 @@ sub getSequencingVector {
 
 #-----------------
 
-sub setSequenceVectorLeft {
+sub setSequencingVectorLeft {
     my $this = shift;
     $this->{data}->{svleft} = shift;
 }
 
-sub getSequenceVectorLeft {
+sub getSequencingVectorLeft {
     my $this = shift;
     return $this->{data}->{svleft};
 }
 
 #-----------------
 
-sub setSequenceVectorRight {
+sub setSequencingVectorRight {
     my $this = shift;
     $this->{data}->{svright} = shift;
 }
 
-sub getSequenceVectorRight {
+sub getSequencingVectorRight {
     my $this = shift;
     return $this->{data}->{svright};
 }
@@ -483,21 +452,26 @@ sub getTemplate {
     return $this->{data}->{template};
 }
 
+#-----------------
+
+sub getTraceArchiveStatus {
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return; # the parent database
+
+    $this->{TAS} = $ADB->getTASForRead(id => $this->getReadID) unless defined($this->{TAS});
+    return $this->{TAS};
+}
+
 #----------------------------------------------------------------------
 # dumping data
 #----------------------------------------------------------------------
-
-sub importMapping {
-# link this Read with a Mapping object
-    my $this = shift;
-    
-    $this->{Mapping} = shift;
-}
 
 sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this    = shift;
     my $FILE    = shift; # obligatory
+    my $Mapping = shift; # optional
 
     my $data = $this->{data};
 
@@ -518,21 +492,59 @@ sub writeToCaf {
     print $FILE "Asped $data->{date}\n"                         if defined $data->{date} ;
     print $FILE "Base_caller $data->{basecaller}\n"             if defined $data->{basecaller};
 
-# add the alignment info (the padded maps)
+# if a Mapping is provided, add the alignment info (the padded maps)
 
-    my $Mapping = $this->{Mapping};
-    $Mapping->writeMapToCaf($FILE,1) if $Mapping;
+    if ($Mapping) {
+# test validity; fail most likely due to programming error, hence die
+        if (ref($Mapping) ne 'Mapping') {
+            die "Invalid object passed as Mapping in writeToCaf: $Mapping";
+        }
+# test consistent read_id values
+        elsif ($Mapping->getReadID != $this->getReadID) {
+            die "Inconsistent read IDs in writeToCaf";
+        }
+# write out the mapping and possible Tag info
+        else {
+            $Mapping->writeMapToCaf($FILE);
+# process read tags 
+            foreach my $Tag (@{$this->{Tags}}) {
+#?                $Tag->writeTagToCaf($FILE);
+            }
+        }
+    }
 
-# process read tags ?
+# to write the DNA and BaseQuality we use the two private methods
 
-    my $Tags = $this->{Tags};
+    $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
 
-# process read tags ? 
+    $this->writeBaseQuality($FILE,"BaseQuality : ");
+}
+
+sub writeToFasta {
+# write DNA of this read in FASTA format to FILE handle
+    my $this  = shift;
+    my $DFILE = shift; # obligatory, filehandle for DNA output
+    my $QFILE = shift; # optional, ibid for Quality Data
+
+    $this->writeDNA($DFILE);
+
+    $this->writeBaseQuality($QFILE) if defined $QFILE;
+}
+
+# private methods
+
+sub writeDNA {
+# write DNA of this read in FASTA format to FILE handle
+    my $this   = shift;
+    my $FILE   = shift; # obligatory
+    my $marker = shift;
+
+    $marker = '>' unless defined($marker); # default FASTA format
 
     my $dna = $this->getSequence();
 
     if (defined($dna)) {
-	print $FILE "\nDNA : $this->{readname}\n";
+	print $FILE "\n$marker$this->{readname}\n";
 # output in blocks of 60 characters
 	my $offset = 0;
 	my $length = length($dna);
@@ -541,13 +553,22 @@ sub writeToCaf {
 	    $offset += 60;
 	}
     }
+}
 
-# the quality data
+sub writeBaseQuality {
+# write Quality data of this read in FASTA format to FILE handle
+    my $this   = shift;
+    my $FILE   = shift; # obligatory
+    my $marker = shift;
+
+    $marker = '>' unless defined($marker); # default FASTA format
+
+# the quality data go into a separt
 
     my $quality = $this->getQuality();
 
     if (defined($quality)) {
-	print $FILE "\nBaseQuality : $this->{readname}\n";
+	print $FILE "\n$marker$this->{readname}\n";
 	my $line;
 	my $next = 0;
 # output in lines of 24 numbers
@@ -559,16 +580,7 @@ sub writeToCaf {
     }
 }
 
-#######################
-# more methods:
-#
-# export as flat file (experiment file format, requires translation of keys, NO should be script)
-#
-#
-# plus:
-# a section dealing with padded mappings (import / export 'writeMapToCaf')
-#
-#######################
+##############################################################
 
 sub dump {
     my $this = shift;
@@ -587,9 +599,6 @@ sub dump {
     }
 }
 
+##############################################################
 
 1;
-
-
-
-

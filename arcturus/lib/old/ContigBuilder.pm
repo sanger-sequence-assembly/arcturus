@@ -1946,9 +1946,9 @@ sub unbuild {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
-        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
-            return "Blocked entries detected in assembly $assembly";
-        }
+#        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
+#            return "Blocked entries detected in assembly $assembly";
+#        }
 
 # okay, now remove (this is not the fastest implementation!)
 
@@ -1960,7 +1960,7 @@ sub unbuild {
 
 # should be blocked
 
- return "Test abort";
+# return "Test abort";
 
         $R2C->delete('where',$where);
 

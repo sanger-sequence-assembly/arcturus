@@ -177,10 +177,16 @@ sub create_organism {
         &record ($historyTable,$userid,'READS2CONTIG');
     }
 
-    if (!$target || $target eq 'R2CMAPPINGS') {    
-        push @tables, 'R2CMAPPINGS';
-        &create_R2CMAPPINGS ($dbh, $list);
-        &record ($historyTable,$userid,'R2CMAPPINGS');
+    if (!$target || $target eq 'MAPPING') {    
+        push @tables, 'MAPPING';
+        &create_MAPPING ($dbh, $list);
+        &record ($historyTable,$userid,'MAPPING');
+    }
+
+    if (!$target || $target eq 'SEGMENT') {    
+        push @tables, 'SEGMENT';
+        &create_SEGMENT ($dbh, $list);
+        &record ($historyTable,$userid,'SEGMENT');
     }
 
     if (!$target || $target eq 'GAP4TAGS') {    
@@ -436,7 +442,7 @@ sub create_READS {
     $dbh->do(qq[CREATE TABLE READS(
              read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
              readname         VARCHAR(32) BINARY   NOT NULL, 
-	     date             DATE                 NOT NULL,
+	     asped            DATE                 NOT NULL,
              ligation         SMALLINT UNSIGNED    NOT NULL,
              clone            SMALLINT UNSIGNED        NULL,
              template         VARCHAR(24) BINARY   NOT NULL, 
@@ -681,7 +687,7 @@ any (i.p. comment found in flat files)
 
 =item READS2ASSEMBLY
 
-=item READS2CONTIG
+=item MAPPING
 
 =back
 
@@ -723,10 +729,9 @@ sub create_NEWREADS {
              read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
              readname         CHAR(32) BINARY      NOT NULL, 
 	     date             DATE                 NOT NULL,
-#             ligation         SMALLINT UNSIGNED    NOT NULL,
+             ligation         SMALLINT UNSIGNED    NOT NULL,
              clone            SMALLINT UNSIGNED        NULL,
-#             template         CHAR(24) BINARY      NOT NULL, 
-             template         MEDIUMINT UNSIGNED   NOT NULL, 
+             template_id      MEDIUMINT UNSIGNED   NOT NULL, 
              strand           CHAR(1)                  NULL, 
              primer           TINYINT  UNSIGNED   DEFAULT 0, 
              chemistry        TINYINT  UNSIGNED        NULL,
@@ -744,10 +749,6 @@ sub create_NEWREADS {
              cvleft           SMALLINT UNSIGNED        NULL,
              cvright          SMALLINT UNSIGNED        NULL,
              pstatus          TINYINT  UNSIGNED   DEFAULT 0,
-             rstatus          MEDIUMINT UNSIGNED  DEFAULT 0,
-             paired           ENUM ('N','F','R')  DEFAULT 'N',
-             tstatus          ENUM ('N','I','T')  DEFAULT 'N',
-             comment          MEDIUMINT UNSIGNED   NOT NULL, 
              CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
          )]);
 
@@ -769,9 +770,10 @@ sub create_SEQUENCE {
     &dropTable ($dbh,"SEQUENCE", $list);
     print STDOUT "Creating table SEQUENCE ..." if ($list);
     $dbh->do(qq[CREATE TABLE SEQUENCE(
-             read_id          MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY,
+             read_id          MEDIUMINT UNSIGNED   NOT NULL,
              sequence         BLOB                 NOT NULL,
-             quality          BLOB                 NOT NULL
+             quality          BLOB                 NOT NULL,
+             PRIMARY KEY (read_id)
          )]);
 			     
     print STDOUT "... DONE!\n" if ($list);
@@ -785,9 +787,12 @@ sub create_TEMPLATE {
     &dropTable ($dbh,"TEMPLATE", $list);
     print STDOUT "Creating table TEMPLATE ..." if ($list);
     $dbh->do(qq[CREATE TABLE TEMPLATE(
-             template_id     MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
-             name            CHAR(24)  BINARY         NULL 
-          )]);
+             name            CHAR(24)  BINARY         NULL, 
+             template_id     MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT,
+             forward         SMALLINT  UNSIGNED   NOT NULL,
+             reverse         SMALLINT  UNSIGNED   NOT NULL,
+             PRIMARY KEY (template_id)
+         )]);
 #             ligation        SMALLINT UNSIGNED    NOT NULL, later to be added?
 }
 
@@ -799,11 +804,26 @@ sub create_READCOMMENT {
     &dropTable ($dbh,"READCOMMENT", $list);
     print STDOUT "Creating table READCOMMENT ..." if ($list);
     $dbh->do(qq[CREATE TABLE READCOMMENT(
-             read_id         MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY, 
-             comment         VARCHAR(255)         NOT NULL
+             read_id         MEDIUMINT UNSIGNED   NOT NULL, 
+             comment         VARCHAR(255)         NOT NULL,
+             KEY read_id (read_id)
             )]);
+			     
+    print STDOUT "... DONE!\n" if ($list);
+}
 
-#    $dbh->do(qq[CREATE INDEX RCR ON READCOMMENT (read_id)]);
+#-------------------------------------------------------------------------------------------------
+# reference to trace archive
+sub create_TRACE {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"TRACE", $list);
+    print STDOUT "Creating table TRACE ..." if ($list);
+    $dbh->do(qq[CREATE TABLE TRACE(
+             read_id         MEDIUMINT UNSIGNED   NOT NULL, 
+             traceref        VARCHAR(255)         NOT NULL,
+             PRIMARY KEY (read_id)
+            )]);
 			     
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -980,9 +1000,9 @@ sub create_READTAGS {
     print STDOUT "Creating table READTAGS ..." if ($list);
     $dbh->do(qq[CREATE TABLE READTAGS(
              read_id           MEDIUMINT UNSIGNED    NOT NULL,
-             readtag           CHAR(4) BINARY        NOT NULL,
-             pstart            SMALLINT  UNSIGNED    NOT NULL,
-             pfinal            SMALLINT  UNSIGNED    NOT NULL,
+             tagname           CHAR(4) BINARY        NOT NULL,
+             rstart            SMALLINT  UNSIGNED    NOT NULL,
+             rfinal            SMALLINT  UNSIGNED    NOT NULL,
              strand            ENUM ('F','R','U') DEFAULT 'U',
              comment           VARCHAR(128)              NULL,
              deprecated        ENUM ('N','Y','X') DEFAULT 'N'
@@ -1059,8 +1079,7 @@ sub create_PENDING {
     &dropTable ($dbh,"PENDING", $list);
     print STDOUT "Creating table PENDING ..." if ($list);
     $dbh->do(qq[CREATE TABLE PENDING(
-             record           INT                 NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             readname         VARCHAR(32)         NOT NULL,
+             readname         CHAR(32) BINARY     NOT NULL PRIMARY KEY,
              assembly         TINYINT UNSIGNED    NOT NULL
          )]);
     print STDOUT "... DONE!\n" if ($list);
@@ -1297,30 +1316,33 @@ flag used in full-proof upgrade generation counters
 # NEW SETUP
 #######################################################################
 
-sub create_NREADS2CONTIG {
+sub create_MAPPING {
     my ($dbh, $list) = @_;
 
 # read_id    : number of read in READS table
 # contig_id  : number of contig in CONTIGS table
-# mapping    : auto incremented foreign key to R2CMAPPINGS
-# deprecated : flag for mapping status:  new (N),  final (X) or no longer 
+# mapping    : auto incremented foreign key to SEGMENT
+# deprecated : (Deprecated) flag for mapping status:  new (N),  final (X) or no longer
 #              current (Y), or marked for deletion (M) 
+# revision   : revision number of the mapping
 
-    &dropTable ($dbh,"NREADS2CONTIG", $list);
-    print STDOUT "Creating table NREADS2CONTIG ..." if ($list);
-    $dbh->do(qq[CREATE TABLE NREADS2CONTIG(
-             mapping          INT UNSIGNED             NOT NULL AUTO_INCREMENT,  
+    &dropTable ($dbh,"MAPPING", $list);
+    print STDOUT "Creating table MAPPING ..." if ($list);
+    $dbh->do(qq[CREATE TABLE MAPPING(
+             mapping          MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT,  
              contig_id        MEDIUMINT UNSIGNED       NOT NULL,
              read_id          MEDIUMINT UNSIGNED       NOT NULL,
-             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
-	 ) type = MYISAM]);
+             revision         MEDIUMINT UNSIGNED       NOT NULL,
+             KEY contig_id (contig_id),
+             KEY read_id (read_id)
+           ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 
 # create a joint index on contig_id and read_id and one on read_id
 
     print STDOUT "Building index R2CINDEX on contig_id, read_id ...\n" if ($list);
-    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CCR (contig_id, read_id)]);
-    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CR (read_id)]);
+#?    $dbh->do(qq[ALTER MAPPING ADD INDEX R2CCR (contig_id, read_id)]);
+#?    $dbh->do(qq[ALTER MAPPING ADD INDEX R2CR (read_id)]);
     print STDOUT "Index R2CCR and R2CR ON READS2CONTIG ... DONE\n"     if ($list);
 }
 
@@ -1361,7 +1383,7 @@ number of read in READS table
 
 =item mapping
 
-auto-incremented foreign key to R2CMAPPINGS table
+auto-incremented foreign key to SEGMENT table
 
 =item deprecated
 
@@ -1385,7 +1407,7 @@ flag to mark the status of the mapping
 
 =over 4
 
-=item R2CMAPPINGS on key mapping
+=item SEGMENT on key mapping
 
 =item CONTIGS on key contig_id
 
@@ -1397,7 +1419,7 @@ flag to mark the status of the mapping
 
 #*********************************************************************************************************
 
-sub create_R2CMAPPING {
+sub create_SEGMENT {
     my ($dbh, $list) = @_;
 
 # alignment    information in prstart, prfinal, pcstart, pcfinal
@@ -1408,25 +1430,24 @@ sub create_R2CMAPPING {
 #              A = 0 for a read aligned with the contig,
 #                = 1 for a read aligned against the contigs direction
 #              e.g: cyclops searches label >= 10; others label < 20
-# deprecated : on for mappings final (X) or no longer current (Y)
-#              or marked for deletion (M)
 
-    &dropTable ($dbh,"R2CMAPPING", $list);
-    print STDOUT "Creating table R2CMAPPING ..." if ($list);
-    $dbh->do(qq[CREATE TABLE R2CMAPPING(
-             mapping          INT UNSIGNED             NOT NULL PRIMARY KEY, 
+    &dropTable ($dbh,"SEGMENT", $list);
+    print STDOUT "Creating table SEGMENT ..." if ($list);
+    $dbh->do(qq[CREATE TABLE SEGMENT(
+             mapping_id       INT UNSIGNED             NOT NULL, 
              pcstart          INT UNSIGNED             NOT NULL,
              pcfinal          INT UNSIGNED             NOT NULL,
              prstart          SMALLINT UNSIGNED        NOT NULL,
              prfinal          SMALLINT UNSIGNED        NOT NULL,
-             label            TINYINT  UNSIGNED        NOT NULL
+             label            TINYINT  UNSIGNED        NOT NULL,
+             key  'mapping_id' (mapping_id)
 	 ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 Table R2CMAPPING
+=head1 Table SEGMENT
 
 =head2 Synopsis
 
@@ -1795,24 +1816,24 @@ sub create_CONTIGS2CONTIG {
 # contig to contig mapping implicitly contains the history
 
 # age        : of the contig (updated with new assembly)
-#       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade No, not so
-# newcontig  : contig id
+# contig_id  : contig id                    (or should this be the contig_id)
 # nranges    : starting point in new contig
 # nrangef    : implicit in the above
 # oldcontig  : contig id
-# oranges    : starting point in old contig
-# orangef    : end point in old contig
+# oranges    : starting point in old contig (replace by linear coefficients?)
+# orangef    : end point in old contig      (replace by linear coefficients?)
 
     &dropTable ($dbh,"CONTIGS2CONTIG", $list);
     print STDOUT "Creating table CONTIGS2CONTIG ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2CONTIG(
              age              SMALLINT  UNSIGNED DEFAULT 0,
-             newcontig        MEDIUMINT UNSIGNED  NOT NULL,
+             contig_id        MEDIUMINT UNSIGNED  NOT NULL,
              nranges          INT                DEFAULT 0,
              nrangef          INT                DEFAULT 0,
              oldcontig        MEDIUMINT UNSIGNED  NOT NULL,
              oranges          INT                DEFAULT 0,
-             orangef          INT                DEFAULT 0
+             orangef          INT                DEFAULT 0,
+             PRIMARY KEY (contig_id)
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -2578,6 +2599,7 @@ sub create_SEQUENCEVECTORS {
              counted          INT UNSIGNED      DEFAULT 0
          )]);
     print STDOUT "... DONE!\n" if ($list);
+# leave vector out
 }
 #--------------------------- documentation --------------------------
 =pod
@@ -2901,11 +2923,13 @@ sub create_DATAMODEL {
     my @input = ('READEDITS          read_id             READS     read_id',
                  'READTAGS           read_id             READS     read_id',
 #                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
+                 'MAPPING            read_id             READS     read_id',
+                 'MAPPING          contig_id           CONTIGS   contig_id', # ? /contigname/alia
                  'READS2CONTIG       read_id             READS     read_id',
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
                  'READS2CONTIG     contig_id   CONTIGS2PROJECT   contig_id',
                  'READS2ASSEMBLY     read_id             READS     read_id',
-                 'READS2CONTIG       mapping        R2CMAPPING     mapping',
+                 'READS2CONTIG       mapping           SEGMENT     mapping',
 #                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
 #                 'USERS               userid    USERS2PROJECTS      userid',
                  'USERS2PROJECTS      userid             USERS      userid',
@@ -2949,13 +2973,13 @@ sub create_DATAMODEL {
                  'ASSEMBLY            userid             USERS      userid',
                  'ASSEMBLY           creator             USERS      userid',
                  'ASSEMBLY          assembly    READS2CONTIG      assembly',
-#                 'SESSIONS            userid            USERS      userid',
                  'READS              read_id     READS2CONTIG      read_id',
                  'READS              read_id   READS2ASSEMBLY      read_id',
                  'READS              read_id      READCOMMENT      read_id',
                  'READS              read_id        READEDITS      read_id',
                  'READS              read_id         SEQUENCE      read_id',
-                 'READS             template         TEMPLATE  template_id',
+                 'READS              read_id            TRACE      read_id',
+                 'READS          template_id         TEMPLATE  template_id',
                  'READS             ligation        LIGATIONS    ligation/identifier ',
                  'READS                clone           CLONES       clone/clonename  ',
                  'READS               strand          STRANDS      strand/description',
@@ -2964,8 +2988,6 @@ sub create_DATAMODEL {
                  'READS           basecaller       BASECALLER  basecaller/name       ',
                  'READS              svector  SEQUENCEVECTORS     svector/name       ',
                  'READS              cvector   CLONINGVECTORS     cvector/name       ',
-#                 'READS              comment          COMMENT      comment',
-#                 'READS             template         TEMPLATE     template', # ?  template/ligation',
                  'READS              pstatus           STATUS      status/identifier');
 
     foreach my $line (@input) {
@@ -3079,8 +3101,9 @@ sub create_INVENTORY {
                  'READTAGS          o  t  0  0',
                  'READPAIRS         o  l  3  0',
                  'PENDING           o  p  0  0',
+                 'MAPPING           o  m  0  0',
                  'READS2CONTIG      o  m  0  0',
-                 'R2CMAPPING        o  m  0  0',
+                 'SEGMENT           o  m  0  0',
                  'GAP4TAGS          o  t  0  0',
                  'STSTAGS           o  t  3  1',
                  'HAPPYTAGS         o  t  3  1',
@@ -3962,7 +3985,7 @@ sub diagnose {
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
 # keep the first encountered mismatch of a column definition
                 if ($info ne $fields{$column}) {
-#print "info: '$info'<br>fields: '$fields{$column}'<br>";
+print "info: '$info'<br>fields: '$fields{$column}'<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
 #print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }

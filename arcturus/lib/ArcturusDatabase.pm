@@ -10,6 +10,7 @@ use Read;
 use Contig;
 use Mapping;
 #use Bridge;
+#use Tag;
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -21,7 +22,7 @@ sub new {
     my $this = {};
     bless $this, $class;
 
-    my $ds = @_[0];
+    my $ds = $_[0];
 
     if (defined($ds) && ref($ds) && ref($ds) eq 'DataSource') {
 	$this->{DataSource} = $ds;
@@ -75,6 +76,27 @@ sub getURL {
     }
 }
 
+sub dataBaseError {
+# local function error message on STDERR
+    my $msg = shift;
+
+    print STDERR "$msg\n" if $msg;
+
+    print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
+}
+
+sub disconnect {
+# disconnect from the database
+    my $this = shift;
+
+    my $dbh = $this->{Connection};
+
+    if (defined($dbh)) {
+        $dbh->disconnect;
+        undef $this->{Connection};
+    }
+}
+
 # ----------------------------------------------------------------------------
 # methods dealing with READs
 #-----------------------------------------------------------------------------
@@ -82,7 +104,7 @@ sub getURL {
 sub populateDictionaries {
     my $this = shift;
 
-    my $dbh = $this->{Connection};
+    my $dbh = $this->getConnection;
 
     $this->{Dictionary} = {};
 
@@ -98,6 +120,8 @@ sub populateDictionaries {
 # special case for CHEMISTRY/CHEMTYPES
     $this->{Dictionary}->{chemistry}    = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
 							    'chemistry', 'type', 'USING(chemtype)');
+# a place holder for template dictionary which will be built on the fly
+#    $this->{Dictionary}->{template} = {};
 }
 
 sub createDictionary {
@@ -160,7 +184,7 @@ sub dictionaryInsert {
 }
 
 sub processReadData {
-# dictionary lookup
+# dictionary lookup (recall)
     my $this = shift;
     my $hashref = shift;
 
@@ -170,7 +194,13 @@ sub processReadData {
 	my $dict = $this->{Dictionary}->{$key};
 	my $value = $hashref->{$key};
 
-	if (defined($dict)) {
+# template is a special case for which the dictionary is built on the fly
+        if ($key eq 'template') {
+#	    $value = &dictionaryLookup($dict, $value);                        
+        }
+
+	elsif (defined($dict)) {
+            
 	    $value = &dictionaryLookup($dict, $value);
 	    if (ref($value) && ref($value) eq 'ARRAY') {
 		$value = join(' ', @{$value});
@@ -178,8 +208,6 @@ sub processReadData {
 	    $hashref->{$key} = $value;
 	}
     }
-
-# ligation info ?
 }
 
 #-----------------------------------------------------------------------------
@@ -187,21 +215,63 @@ sub processReadData {
 sub getReadByID {
 # returns a Read instance with (meta data only) for input read IDs 
     my $this = shift;
-
     my $readid = shift;
+
+    my $dbh = $this->getConnection();
 
     my $sth = $this->{prepared}->{getReadByID};
 
     if (!defined($sth)) {
 
-        my $dbh = $this->getConnection();
-
-        $sth = $dbh->prepare("select * from READS where read_id=$readid");
+# or ?: "select READS.*,TEMPLATE.name as template from READS join TEMPLATE using (template_id) where read_id = ?"
+        $sth = $dbh->prepare("select * from READS where read_id=?");
 
         $this->{prepared}->{getReadByID} = $sth;
     }
 
-    $sth->execute();
+    $sth->execute($readid);
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish();
+
+    if (defined($hashref)) {
+	my $read = new Read();
+
+	$this->processReadData($hashref);
+
+	$read->importData($hashref);
+
+	$read->setArcturusDatabase($this);
+
+	return $read;
+    } 
+    else {
+	return undef;
+    }
+}
+
+sub getReadByName {
+# returns a Read instance with (meta data only) for input read name 
+    my $this = shift;
+    my $readname = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $this->{prepared}->{getReadByName};
+
+    if (!defined($sth)) {
+
+        my $query = "select READS.*,TEMPLATE.name as template
+                     from READS leftjoin TEMPLATE using (template_id) 
+                     where readname = ?";
+
+        $sth = $dbh->prepare($query);
+
+        $this->{prepared}->{getReadByName} = $sth;
+    }
+
+    $sth->execute($readname);
 
     my $hashref = $sth->fetchrow_hashref();
 
@@ -242,6 +312,7 @@ sub getReadsByID {
 
     my $dbh = $this->getConnection();
 
+# or ?: "select READS.*,TEMPLATE.name as template from READS join TEMPLATE using (template_id) where read_id in ($range)"
     my $sth = $dbh->prepare("select * from READS where read_id in ($range)");
 
     $sth->execute();
@@ -271,21 +342,18 @@ sub getReadsForContigID{
     my $this = shift;
     my $cid  = shift; # contig_id
 
-    my $sth = $this->{prepared}->{getReadsForContigID};
+    my $dbh = $this->getConnection();
 
-    if (!defined($sth)) {
+    my $query = "select READS.*,TEMPLATE.name as template 
+                 from  READS2CONTIG, READS, TEMPLATE 
+                 where READS2CONTIG.contig_id = ?  
+                 and READS2CONTIG.read_id = READS.read_id
+                 and READS.template_id = TEMPLATE.template_id";
+# my $query = "select READS.* from READS2CONTIG left join READS on (read_id) ";
+# $query   .= "where READS2CONTIG.contig_id = ?";
+    my $sth = $dbh->prepare_cached($query);
 
-        my $dbh = $this->getConnection();
-
-        my $query = "select READS.* from READS join READS2CONTIG on (read_id) ";
-        $query   .= "where READS2CONTIG.contig_id = $cid";
-
-        $sth = $dbh->prepare($query);
-
-        $this->{prepared}->{getReadsForContigID} = $sth;
-    }
-
-    $sth->execute();
+    $sth->execute($cid);
 
     my @Reads;
 
@@ -309,52 +377,17 @@ sub getReadsForContigID{
     return \@Reads;
 }
 
-#-----------------------------------------------------------------------------
-
-sub getSequenceAndBaseQualityForRead {
-# returns DNA sequence (string) and quality (array reference)
-# this method is called from the Read class when using lazy instantiation
-    my $this = shift;
-    my ($key, $value, $junk) = @_;
-
-    my $dbh = $this->getConnection();
-
-    my $query = "select sequence,quality from ";
-
-    if ($key eq 'id' || $key eq 'read_id') {
-	$query .= "SEQUENCE where read_id=?";
-    }
-    elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READS left join SEQUENCE using(read_id) where readname=?";
-    }
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute($value);
-
-    my ($sequence, $quality);
-
-    while(my @ary = $sth->fetchrow_array()) {
-	($sequence, $quality) = @ary;
-    }
-
-    $sth->finish();
-
-    $sequence = uncompress($sequence) if defined($sequence);
-
-    if (defined($quality)) {
-	$quality = uncompress($quality);
-	my @qualarray = unpack("c*", $quality);
-	$quality = [@qualarray];
-    }
-
-    return ($sequence, $quality);
-}
-
-sub putSequenceAndBaseQualityInReads {
+sub getSequenceForReads {
 # takes an array of Read instances and puts the DNA and quality sequence in
     my $this  = shift;
     my $Reads = shift; # array of Reads objects
+
+    if (ref($Reads) ne 'ARRAY' or ref($Reads->[0]) ne 'Read') {
+        print STDERR "getSequenceForReads expects an array of Read objects\n";
+        return undef;
+    }
+
+    my $dbh = $this->getConnection();
 
 # build a list of read IDs / or use the Read instances inventory
 
@@ -363,11 +396,10 @@ sub putSequenceAndBaseQualityInReads {
     foreach my $Read (@$Reads) {
         $rids->{$Read->getReadID} = $Read;
     }
-# my $rids = Read->getInventory; # handle to Read instances inventory
+
+# pull the data from the SEQUENCE table in bulk
 
     my $range = join ',',keys(%$rids);
-
-    my $dbh = $this->getConnection();
 
     my $query = "select read_id,sequence,quality from SEQUENCE where read_id in ($range)";
 
@@ -398,8 +430,51 @@ sub putSequenceAndBaseQualityInReads {
 # test if all objects have been completed
 }
 
+#-----------------------------------------------------------------------------
+
+sub getSequenceForRead {
+# returns DNA sequence (string) and quality (array reference)
+# this method is called from the Read class when using delayed data loading
+    my $this = shift;
+    my ($key, $value, $junk) = @_;
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select sequence,quality from ";
+
+    if ($key eq 'id' || $key eq 'read_id') {
+	$query .= "SEQUENCE where read_id=?";
+    }
+    elsif ($key eq 'name' || $key eq 'readname') {
+	$query .= "READS left join SEQUENCE using (read_id) where readname=?";
+    }
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($value);
+
+    my ($sequence, $quality);
+
+    while(my @ary = $sth->fetchrow_array()) {
+	($sequence, $quality) = @ary;
+    }
+
+    $sth->finish();
+
+    $sequence = uncompress($sequence) if defined($sequence);
+
+    if (defined($quality)) {
+	$quality = uncompress($quality);
+	my @qualarray = unpack("c*", $quality);
+	$quality = [@qualarray];
+    }
+
+    return ($sequence, $quality);
+}
+
 sub getCommentForRead {
 # returns a list of comments, if any, for the specifed read
+# this method is called from Read class when using delayed data loading
     my $this = shift;
     my ($key,$value,$junk) = @_;
 
@@ -429,12 +504,172 @@ sub getCommentForRead {
     return \@comment;
 }
 
-#----------------------------------------------------------------------------------------- 
+sub getTraceArchiveReference {
+# returns the trace archive reference, if any, for the specifed read
+# this method is called from the Read class when using delayed data loading
+    my $this = shift;
+    my ($key,$value,$junk) = @_;
+
+    my $query = "select traceref from ";
+
+    if ($key eq 'id' || $key eq 'read_id') {
+	$query .= "TRACEARCHIVE where read_id=?";
+    }
+    elsif ($key eq 'name' || $key eq 'readname') {
+	$query .= "READS left join TRACEARCHIVE using(read_id) where readname=?";
+    }
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($value);
+
+    my $traceref;
+
+    while(my @ary = $sth->fetchrow_array()) {
+	$traceref = shift @ary;
+    }
+
+    $sth->finish();
+
+    return $traceref;
+}
+
+#-----------------------------------------------------------------------------
+
+sub getListOfReadNames {
+# returns an array of readnames occurring in the database 
+    my $this = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare("select readname from READS");
+    $sth->execute();
+
+    my @reads;
+    while (my @ary = $sth->fetchrow_array()) {
+        push @reads, $ary[0];
+    }
+
+    $sth->finish();
+
+    return \@reads;
+}
+
+sub isReadInDatabase {
+# test presence of read with specified readname; return (first) read_id
+    my $this      = shift;
+    my $readname  = shift || return; # readname to be tested
+
+    my $dbh = $this->getConnection();
+   
+    my $query = "select read_id from READS where readname=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $read_id;
+
+    my $row = $sth->execute($readname);
+
+    while ($row && (my @ary = $sth->fetchrow_array())) {
+        $read_id = $ary[0];
+        last; # just in case
+    }
+
+    $sth->finish();
+
+    return $read_id;
+}
+
+sub areReadsNotInDatabase {
+# return a list of those readnames from an input list which are NOT present
+    my $this      = shift;
+    my $readnames = shift; # array reference with readnames to be tested
+
+    if (ref($readnames) ne 'ARRAY') {
+        print STDERR "areReadsNotInDatabase expects an array of readnames\n";
+        return undef;
+    }
+
+    my %namehash;
+    foreach my $name (@$readnames) {
+        $namehash{$name}++;
+    }
+
+    my $dbh = $this->getConnection();
+   
+    my $query = "select readname from READS 
+                 where  readname in ('".join ("','",@$readnames)."')";
+
+    my $sth = $dbh->prepare($query);
+    my $row = $sth->execute();
+
+    while ($row && (my @ary = $sth->fetchrow_array())) {
+        delete $namehash{$ary[0]};
+    }
+
+    $sth->finish();
+
+    my @notPresent = keys %namehash; # the left over
+
+    return \@notPresent;
+}
+  
+sub addReadsToPending {
+# OBSOLETE, but TEMPLATE for bulk loading add readnames to the PENDING table
+    my $this      = shift;
+    my $readnames = shift; # array reference
+    my $multiline = shift; # 
+
+    if (ref($readnames) ne 'ARRAY') {
+        print STDERR "addReadsToPending expects an array as input\n";
+        return undef;
+    }
+
+# this section deals with multiline inserts; active when multiline defined
+# a buffer is filled up until the buffer exceeds the limit set
+
+    if (defined($multiline)) {
+    }
+
+# okay
+
+    my $dbh = $this->getConnection();
+
+    my $query = "insert ignore into PENDING (readname) VALUES ('".join("'),('",@$readnames)."')";
+
+    my $sth = $dbh->prepare($query);
+
+    return 1 if $sth->execute();
+
+    &dataBaseError("addReadsToPending: failed");
+
+    return 0;
+}
+  
+sub flushReadsToPending {
+# flush any remaining entries in the buffer
+    my $this = shift;
+
+    my @dummy;
+    
+    $this->addReadsToPending(\@dummy, 0);
+}
+
+#-----------------------------------------------------------------------------------------
 
 sub putRead {
 # insert read into the database
     my $this = shift;
     my $Read = shift || return;
+
+    if (ref($Read) ne 'Read') {
+        print STDERR "putRead expects an instance of the Read class\n";
+        return undef;
+    }
+
+    my $errorstatus = $Read->status;
 
 # a) test consistence and completeness
 # b) encode dictionary items; specical case: TEMPLATE
@@ -454,6 +689,11 @@ sub pingRead {
     my $name = shift;
 }
 
+sub addTagsForRead {
+    my $this = shift;
+
+}
+
 #----------------------------------------------------------------------------------------- 
 # methods dealing with CONTIGs
 #----------------------------------------------------------------------------------------- 
@@ -463,18 +703,18 @@ sub getContigByID {
     my $this       = shift;
     my $contig_id  = shift;
 
+    my $dbh = $this->getConnection();
+
     my $sth = $this->{prepared}->{getContigByID};
 
     if (!defined($sth)) {
 
-        my $dbh = $this->getConnection();
-
-        $sth = $dbh->prepare("select * from CONTIGS where contig_id = ? ");
+        $sth = $dbh->prepare("select * from CONTIGS where contig_id = ?");
 
         $this->{prepared}->{getContigByID} = $sth;
     }
 
-    $sth->execute();
+    $sth->execute($contig_id);
 
     my $hashref = $sth->fetchrow_hashref();
 
@@ -501,12 +741,11 @@ sub getContigByName {
     my $this = shift;
     my $name = shift;
 
+    my $dbh = $this->getConnection();
 
     my $sth = $this->{prepared}->{getContigByName};
 
     if (!defined($sth)) {
-
-        my $dbh = $this->getConnection();
 
         $sth = $dbh->prepare("select * from CONTIGS where contigname = ? or aliasname = ? ");
 
@@ -540,14 +779,13 @@ sub getContigWithRead {
     my $this = shift;
     my $name = shift;
 
+    my $dbh = $this->getConnection();
 
     my $sth = $this->{prepared}->{getContigWithRead};
 
     if (!defined($sth)) {
 
-        my $dbh = $this->getConnection();
-
-        my $query  = "select CONTIGS.* from CONTIGS join READS2CONTIG on (contig_id) where ";
+        my $query  = "select CONTIGS.* from CONTIGS join READS2CONTIG using (contig_id) where ";
            $query .= "read_id = (select read_id from READS where readname = ?)";
 # ensure the latest contig
         $sth = $dbh->prepare($query);
@@ -584,12 +822,47 @@ sub getContigWithTag {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select CONTIGS.* from CONTIGS join TAGS2CONTIG on (contig_id) where ";
+    my $query = "select CONTIGS.* from CONTIGS join TAGS2CONTIG using (contig_id) where ";
     $query   .= "tag_id = (select tag_id from TAGS where tagname = ?)";
 
 # note: use the merge table concept for tag table, else query should be several UNIONs
 
     my $sth = $dbh->prepare($query);
+
+# ? replace by prepared query 
+
+    $sth->execute($name);
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish();
+
+    if (defined($hashref)) {
+
+	my $Contig = new Contig();
+
+	$Contig->importData($hashref);
+
+	$Contig->setArcturusDatabase($this);
+
+        return $Contig;
+    }
+    else {
+# no such contig found
+        return undef;
+    }
+}
+
+sub getContigWithChecksum {
+# returns a Contig object with the meta data only which contains the specified read
+    my $this = shift;
+    my $name = shift;
+
+    my $dbh = $this->getConnection();
+
+# note: use the merge table concept for tag table, else query should be several UNIONs
+
+    my $sth = $dbh->prepare("select * from CONTIGS where readnamehash = ? ");
 
 # ? replace by prepared query 
 
@@ -631,11 +904,14 @@ sub getContig {
     elsif ($key eq 'name' || $key eq 'contigname') {
         $Contig = $this->getContigByName($value);
     }
-    elsif ($key eq 'read') {
+    elsif ($key eq 'containsRead') {
 	$Contig = $this->getContigWithRead($value);
     }
-    elsif ($key eq 'tag') {
+    elsif ($key eq 'containsTag') {
 	$Contig = $this->getContigWithTag($value);
+    }
+    elsif ($key eq 'checksum') {
+	$Contig = $this->getContigWithChecksum($value);
     }
 
     return undef unless $Contig;
@@ -656,7 +932,7 @@ sub getContig {
 
     $Contig->importMappings($Mappings);
 
-# link the Mappings to the Reads and vice versa
+# link the Mappings to the Reads and vice versa NO! put this in Contig instance
 
     foreach my $Mapping (@$Mappings) {
 # find the Read instance for read_id taken from Mapping
@@ -688,7 +964,7 @@ sub getContig {
 
 sub getSequenceAndBaseQualityForContig {
 # returns DNA sequence (string) and quality (array reference) for the specified contig
-# this method is called from the Contig class when using lazy instantiation
+# this method is called from the Contig class when using delayed data loading
     my $this = shift;
     my ($key, $value, $junk) = @_;
 
@@ -780,7 +1056,7 @@ sub getMappingsForContigID {
 sub getMappingsOfReadsInLinkedContigs {
 # returns mappings in contigs of age=1 for an input array of read_ids
     my $this = shift;
-    my $rids = shift; # array reference
+    my $rids = shift || return; # array reference
 
     my $query = "select read_id, contig_id ";
     $query   .= "from READS2CONTIG as R2C, CONTIGS2CONTIG as C2C where ";
@@ -790,12 +1066,20 @@ sub getMappingsOfReadsInLinkedContigs {
 
 }
 
+sub addContig {
+
+}
+
 #----------------------------------------------------------------------------------------- 
 # methods dealing with PROJECTs
 #----------------------------------------------------------------------------------------- 
 
 #----------------------------------------------------------------------------------------- 
 # methods dealing with ASSEMBLYs
+#----------------------------------------------------------------------------------------- 
+
+#----------------------------------------------------------------------------------------- 
+# methods dealing with BRIDGEs
 #----------------------------------------------------------------------------------------- 
 
 1;
