@@ -14,9 +14,20 @@ public class Core {
 
     public final static short UNKNOWN = 0;
 
-    private int ID;
-    private String name;
-    private ArcturusDatabase adb;
+    protected int ID;
+    protected String name;
+    protected ArcturusDatabase adb;
+
+    /**
+     * Constructs an object which does not yet have an ID or a name.
+     * This constructor will typically be used to create an object
+     * <EM>ab initio</EM> prior to putting it into an Arcturus database.
+     */
+
+    public Core() {
+	this.name = null;
+	ID = UNKNOWN;
+    }
 
     /**
      * Constructs an object which does not yet have an ID.
