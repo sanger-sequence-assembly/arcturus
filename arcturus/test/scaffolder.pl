@@ -11,6 +11,7 @@ my $progress = 0;
 my $minbridges = 1;
 my $minlen = 0;
 my $puclimit = 8000;
+my $usesilow = 0;
 
 ###
 ### Parse arguments
@@ -22,6 +23,8 @@ while (my $nextword = shift @ARGV) {
     $minbridges = shift @ARGV if ($nextword eq '-minbridges');
     $minlen = shift @ARGV if ($nextword eq '-minlen');
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
+
+    $usesilow = 1 if ($nextword eq '-usesilow');
 
     $verbose = 1 if ($nextword eq '-verbose');
     $progress = 1 if ($nextword eq '-progress');
@@ -239,8 +242,10 @@ my $sth_mappings = $statements->{'mappings'};
 
 $sth_templates->execute($puclimit);
 
-while (my ($template_id, $template_name, $sihigh) = $sth_templates->fetchrow_array()) {
+while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetchrow_array()) {
     my $found = 0;
+
+    my $baclen = $usesilow ? $silow : $sihigh;
 
     $sth_bacreads->execute($template_id);
 
@@ -280,9 +285,9 @@ while (my ($template_id, $template_name, $sihigh) = $sth_templates->fetchrow_arr
 		my $scaflen = $scaffoldlength{$scaffold};
 
 		if ($sense eq 'Forward') {
-		    $overhang = $sihigh - ($scaflen - $ctgoffset);
+		    $overhang = $baclen - ($scaflen - $ctgoffset);
 		} else {
-		    $overhang = $sihigh - $ctgoffset;
+		    $overhang = $baclen - $ctgoffset;
 		}
 
 		$sense .= " OVERHANG $overhang" if ($overhang > 0);
@@ -348,7 +353,7 @@ sub CreateStatements {
 		   "select contig_id,cstart,cfinish,direction from MAPPING where seq_id = ?",
 
 		   "bacendtemplate",
-		   "select template_id,TEMPLATE.name,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
+		   "select template_id,TEMPLATE.name,silow,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
 		   " where sihigh > ?",
 
 		   "readsfortemplate",
@@ -564,4 +569,5 @@ sub showUsage {
     print STDERR "-puclimit\tMaximum insert size for pUC subclones (default: 8000)\n";
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
     print STDERR "-progress\tDisplay progress info on STDERR (default: false)\n";
+    print STDERR "-isesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
 }
