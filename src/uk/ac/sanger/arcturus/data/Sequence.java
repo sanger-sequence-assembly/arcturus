@@ -24,7 +24,8 @@ public class Sequence extends Core {
      * read has a distinct version number.
      */
 
-    public Sequence(Read read, byte[] dna, byte[] quality, int version) {
+    public Sequence(int id, Read read, byte[] dna, byte[] quality, int version) {
+	this.ID = id;
 	this.read = read;
 	this.dna = dna;
 	this.quality = quality;
@@ -38,8 +39,8 @@ public class Sequence extends Core {
      * @param read the Read object to which this sequence belongs.
      */
 
-    public Sequence(Read read) {
-	this(read, null, null, UNKNOWN);
+    public Sequence(int id, Read read) {
+	this(id, read, null, null, UNKNOWN);
     }
 
     /**
