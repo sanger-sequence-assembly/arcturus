@@ -1,0 +1,51 @@
+<?xml version="1.0"?>
+
+<!-- build.xml - a simple Ant buildfile -->
+<project name="Simple Buildfile" default="compile" basedir=".">
+  <property name="project.name" value="arcturus"/>
+
+  <!-- The directory containing source code -->
+  <property name="src.dir" value="src"/>
+
+  <!-- Temporary build directories -->
+  <property name="build.dir" value="build"/>
+  <property name="build.classes" value="${build.dir}/classes"/>
+  <property name="build.lib" value="${build.dir}/lib"/>
+
+  <!-- Documents directory -->
+  <property name="javadoc.dir" value="${build.dir}/docs"/>
+
+  <!-- Target to create the build directories prior to the -->
+  <!-- compile target. -->
+  <target name="prepare">
+    <mkdir dir="${build.dir}"/>
+    <mkdir dir="${build.classes}"/>
+    <mkdir dir="${build.lib}"/>
+    <mkdir dir="${javadoc.dir}"/>
+  </target>
+
+  <target name="clean" description="Remove all generated files.">
+    <delete dir="${build.dir}"/>
+  </target>
+
+  <target name="compile" depends="prepare"
+          description="Compiles all source code.">
+    <javac srcdir="${src.dir}" destdir="${build.classes}" debug="true"/>
+  </target>
+
+  <target name="jar" depends="compile"
+          description="Generates the Minerva JAR file.">
+    <jar jarfile="${build.lib}/${project.name}.jar" 
+         basedir="${build.classes}"/>
+  </target>
+
+  <target name="all" depends="clean,jar"
+          description="Cleans, compiles, then builds the JAR file."/>
+
+  <target name="docs" depends="prepare"
+          description="Generates Javadoc documentation">
+    <javadoc sourcepath="${src.dir}" destdir="${javadoc.dir}"
+             packagenames="${project.name}.*,${project.name}.*.*"/>
+  </target>
+
+</project>
