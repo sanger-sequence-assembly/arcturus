@@ -972,6 +972,7 @@ sub getParentIDsForContig {
 # its reads sequence IDs and the sequence-to-contig MAPPING data
     my $this = shift;
     my $contig = shift; # Contig Instance
+    my $debug = shift;
 
     return undef unless $contig->hasReads();
 
@@ -984,29 +985,81 @@ sub getParentIDsForContig {
         push @seqids,$read->getSequenceID();
     }
 
-# we have to select linked contigs of age 0 but we allow for possible 
-# absence of orphan contigs in the C2CMAPPING table, which would render
-# reliance on age invalid; hence we search among contig_ids which are 
-# themselves NOT parents, i.e. have no offspring
+# we find the parent contigs in two steps: first we collect all contigs
+# in which the sequenceIDs are referenced; subsequently we eliminate
+# from that list those contigs which do have a child IN THE LIST, i.e.
+# select from the list those which are NOT parent of a child in the list.
+# This strategy will deal with split parent contigs as well as "normal" 
+# parents and does only rely on the fact that all contigIDs also occur
+# as parentIDs except for those in the previous generation for $contig
 
-    my $query = "select distinct(MAPPING.contig_id)".
-                "  from MAPPING left join C2CMAPPING".
-                "    on MAPPING.contig_id = C2CMAPPING.parent_id".
-	        " where seq_id in (".join(',',@seqids).")".
-		"   and parent_id is null";
+# step 1: get all (potential) parents
+
+    my $query = "select distinct contig_id from MAPPING"
+	      . " where seq_id in (".join(',',@seqids).")";
+# add an exclusion of the contig itself if its ID is defined
+    if (my $contig_id = $contig->getContigID()) {
+        $query .= " and contig_id != $contig_id";
+    }
+
+    print STDERR "query 1 getParentIDsForContig : \n$query\n" if $debug;
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
 
-    my @contigids;
-    while (my ($contigid) = $sth->fetchrow_array()) {
-        push @contigids, $contigid;
+    my %contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        $contigids{$contig_id}++;
     }
 
     $sth->finish();
+
+    my @contigids = keys %contigids;
+
+    print STDERR "Linked contigs found : @contigids\n" if $debug;
+
+# step 2 : remove the parents of the contigs found in step 1 from the list
+
+    $query = "select age,contig_id, parent_id from C2CMAPPING"
+	   . " where contig_id in (".join(',',@contigids).")";
+
+
+    $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my %ageprofile;
+    while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
+# the parent_id is removed because it is not the last in the chain
+        delete $contigids{$parent_id};
+        $ageprofile{$contig_id} = $age; 
+    }
+
+    $sth->finish();
+
+# ok, the keys of %contigids are the IDs of the possible parents
+
+    @contigids = keys %contigids;
+
+    print STDERR "Possible parents found : @contigids\n" if $debug;
+
+# However, this list still may contain spurious parents due to 
+# misassembled reads in early contigs which are picked up in the
+# first step of the search; these are weeded out by selecting on
+# the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
+
+    foreach my $contig_id (keys %contigids) {
+        delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
+    }
+
+# those keys left are the true parent(s)
+
+    @contigids = keys %contigids;
+
+    print STDERR "Confirmed parents found : @contigids\n" if $debug;
 
     return [@contigids];
 }
