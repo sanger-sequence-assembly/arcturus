@@ -577,6 +577,46 @@ sub addSequenceMetaDataForRead {
     $sth->finish();   
 }
 
+sub getReadsByAspedDate {
+    my $this = shift;
+
+    my @conditions;
+
+    my $nextword;
+
+    while ($nextword = shift) {
+	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
+	    my $date = shift;
+	    push @conditions, "asped > '$date'";
+	}
+
+	if ($nextword eq '-aspedbefore' || $nextword eq '-before') {
+	    my $date = shift;
+	    push @conditions, "asped < '$date'";
+	}
+    }
+
+    return undef unless scalar(@conditions);
+
+    my $query = "select read_id from READS where " . join(" and ", @conditions);
+
+    my $dbh = $this->getConnection();
+ 
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my $readids = [];
+
+    while (my ($read_id) = $sth->fetchrow_array()) {
+	push @{$readids}, $read_id;
+    }
+
+    $sth->finish();
+
+    return $this->getReadsByReadID($readids);
+}
+	
 sub getReadsByReadID {
 # returns array of Read instances with (meta data only) for input array of read IDs 
     my $this    = shift;
