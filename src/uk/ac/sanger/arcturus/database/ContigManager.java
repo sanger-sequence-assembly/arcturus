@@ -95,27 +95,27 @@ public class ContigManager {
     }
 
     public Contig getFullContigByID(int id) throws SQLException {
-	return getFullContigByID(id, true);
+	return getFullContigByID(id, true, true);
     }
 
-    public Contig getFullContigByID(int id, boolean autoload) throws SQLException {
+    public Contig getFullContigByID(int id, boolean autoload, boolean loadsequence) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
 	if (obj == null)
-	    return autoload ? loadFullContigByID(id) : null;
+	    return autoload ? loadFullContigByID(id, loadsequence) : null;
 
 	Contig contig = (Contig)obj;
 
 	if (contig.getMappings() == null)
-	    loadMappingsForContig(contig);
+	    loadMappingsForContig(contig, loadsequence);
 
 	return contig;
     }
 
-    private Contig loadFullContigByID(int id) throws SQLException {
+    private Contig loadFullContigByID(int id, boolean loadsequence) throws SQLException {
 	Contig contig = loadContigByID(id);
 
-	loadMappingsForContig(contig);
+	loadMappingsForContig(contig, loadsequence);
 
 	return contig;
    }
@@ -141,22 +141,18 @@ public class ContigManager {
 	hashByID.put(new Integer(contig.getID()), contig);
     }
 
-    private void loadMappingsForContig(Contig contig) throws SQLException {
-	fastLoadMappingsForContig(contig);
-    }
-
-    private void fastLoadMappingsForContig(Contig contig) throws SQLException {
-	bulkLoadReadData(contig, false);
+    private void loadMappingsForContig(Contig contig, boolean loadsequence) throws SQLException {
+	bulkLoadReadData(contig, loadsequence);
 
 	bulkLoadMappings(contig);
     }
 
-    private void bulkLoadReadData(Contig contig, boolean getdna) throws SQLException {
+    private void bulkLoadReadData(Contig contig, boolean loadsequence) throws SQLException {
 	int id = contig.getID();
 	
 	ResultSet rs;
 
-	if (getdna) {
+	if (loadsequence) {
 	    pstmtFullReadDataByContigID.setInt(1, id);
 	    rs = pstmtFullReadDataByContigID.executeQuery();
 	} else {
@@ -171,7 +167,6 @@ public class ContigManager {
 	    int template_id = rs.getInt(7);
 	    Template template = adb.getTemplateByID(template_id, false);
 	    if (template == null) {
-		System.err.print('T');
 		String template_name = rs.getString(8);
 		template = new Template(template_name, template_id, ligation, adb);
 		adb.registerNewTemplate(template);
@@ -180,7 +175,6 @@ public class ContigManager {
 	    int read_id = rs.getInt(1);
 	    Read read = adb.getReadByID(read_id, false);
 	    if (read == null) {
-		System.err.print('R');
 		String readname = rs.getString(2);
 		java.sql.Date asped = rs.getDate(3);
 		int strand = adb.parseStrand(rs.getString(4));
@@ -195,12 +189,11 @@ public class ContigManager {
 	    int seq_id = rs.getInt(10);
 	    Sequence sequence = adb.getSequenceBySequenceID(seq_id, false);
 	    if (sequence == null) {
-		System.err.print('S');
 		int version = rs.getInt(11);
 		sequence = new Sequence(seq_id, read, null, null, version);
 		adb.registerNewSequence(sequence);
 
-		if (getdna) {
+		if (loadsequence) {
 		    int seqlen = rs.getInt(12);
 		    byte[] dna = adb.decodeCompressedData(rs.getBytes(13), seqlen);
 		    byte[] quality = adb.decodeCompressedData(rs.getBytes(14), seqlen);
@@ -209,9 +202,6 @@ public class ContigManager {
 		}
 	    }
 	}
-
-	System.err.println();
-	System.err.println();
 
 	rs.close();
      }
@@ -252,14 +242,10 @@ public class ContigManager {
 
 	    Mapping mapping = new Mapping(sequence, cstart, cfinish, direction, nsegs);
 
-	    System.err.print('M');
-
 	    mappings[kmap++] = mapping;
 
 	    hash.put(new Integer(mapping_id), mapping);
 	}
-
-	System.err.println();
 
 	rs.close();
 
@@ -279,16 +265,12 @@ public class ContigManager {
 		last_mapping : (Mapping)hash.get(new Integer(mapping_id));
 	    
 	    Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
-
-	    System.err.print('s');
 	    
 	    mapping.addSegment(segment);
 
 	    last_mapping = mapping;
 	    last_mapping_id = mapping_id;
 	}
-
-	System.err.println();
 
 	rs.close();
 
