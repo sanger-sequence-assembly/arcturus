@@ -90,7 +90,7 @@ public class SequenceManager {
 	Sequence sequence = null;
 
 	if (rs.next()) {
-	    Read read = adb.getReadManager().getReadByID(readid);
+	    Read read = adb.getReadByID(readid);
 	    int seqid = rs.getInt(1);
 	    int version = rs.getInt(2);
 	    sequence = registerNewSequence(read, seqid, version, null, null);
@@ -136,7 +136,7 @@ public class SequenceManager {
 	Sequence sequence = null;
 
 	if (rs.next()) {
-	    Read read = adb.getReadManager().getReadByID(readid);
+	    Read read = adb.getReadByID(readid);
 	    int seqid = rs.getInt(1);
 	    int version = rs.getInt(2);
 	    int seqlen = rs.getInt(3);
@@ -173,7 +173,7 @@ public class SequenceManager {
 
 	if (rs.next()) {
 	    int readid = rs.getInt(1);
-	    Read read = adb.getReadManager().getReadByID(readid);
+	    Read read = adb.getReadByID(readid);
 	    int version = rs.getInt(2);
 	    sequence = registerNewSequence(read, seqid, version, null, null);
 	}
@@ -214,7 +214,7 @@ public class SequenceManager {
 
 	if (rs.next()) {
 	    int readid = rs.getInt(1);
-	    Read read = adb.getReadManager().getReadByID(readid);
+	    Read read = adb.getReadByID(readid);
 	    int version = rs.getInt(2);
 	    int seqlen = rs.getInt(3);
 	    byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);

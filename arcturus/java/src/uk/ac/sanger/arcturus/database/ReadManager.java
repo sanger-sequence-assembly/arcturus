@@ -153,7 +153,7 @@ public class ReadManager {
 
     private Read registerNewRead(String name, int id, int template_id, java.sql.Date asped,
 					 int strand, int primer, int chemistry) throws SQLException {
-	Template template = adb.getTemplateManager().getTemplateByID(template_id);
+	Template template = adb.getTemplateByID(template_id);
 
 	Read read = new Read(name, id, template, asped, strand, primer, chemistry, adb);
 

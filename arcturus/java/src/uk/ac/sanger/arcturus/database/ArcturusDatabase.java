@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.database;
 
+import java.io.PrintStream;
 import java.sql.*;
 import javax.sql.*;
 import java.util.HashMap;
@@ -15,6 +16,7 @@ public class ArcturusDatabase {
     protected String name;
     protected Connection defaultConnection;
     protected HashMap namedConnections;
+    protected PrintStream logger;
 
     /**
      * Creates a new ArcturusDatabase object from a DataSource, a description
@@ -36,6 +38,8 @@ public class ArcturusDatabase {
 	this.name = name;
 
 	namedConnections = new HashMap();
+
+	logger = null;
 
 	createManagers();
     }
@@ -220,6 +224,24 @@ public class ArcturusDatabase {
 	}
     }
 
+    /**
+     * Sets the logger for this object.
+     *
+     * @param logger the PrintStream to which logging messages will be sent.
+     */
+
+    public void setLogger(PrintStream logger) {
+	this.logger = logger;
+    }
+
+    /**
+     * Gets the logger for this object.
+     *
+     * @return the PrintStream to which logging messages will be sent.
+     */
+
+    public PrintStream getLogger() { return logger; }
+
     /*
      * This section of code is concerned with the manager objects which
      * provide services to the ArcturusDatabase.
@@ -250,14 +272,23 @@ public class ArcturusDatabase {
     public CloneManager getCloneManager() { return cloneManager; }
 
     public Clone getCloneByName(String name) throws SQLException {
+	if (logger != null)
+	    logger.println("getCloneByName(" + name + ")");
+
 	return cloneManager.getCloneByName(name);
     }
 
     public Clone getCloneByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getCloneByID(" + id + ")");
+
 	return cloneManager.getCloneByID(id);
     }
 
     public void preloadAllClones() throws SQLException {
+	if (logger != null)
+	    logger.println("preloadAllClones()");
+
 	cloneManager.preloadAllClones();
     }
 
@@ -270,14 +301,23 @@ public class ArcturusDatabase {
     public LigationManager getLigationManager() { return ligationManager; }
 
     public Ligation getLigationByName(String name) throws SQLException {
+	if (logger != null)
+	    logger.println("getLigationByName(" + name + ")");
+
 	return ligationManager.getLigationByName(name);
     }
 
     public Ligation getLigationByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getLigationByID(" + id + ")");
+
 	return ligationManager.getLigationByID(id);
     }
 
     public void preloadAllLigations() throws SQLException {
+	if (logger != null)
+	    logger.println("preloadAllLigations()");
+
 	ligationManager.preloadAllLigations();
     }
 
@@ -290,14 +330,23 @@ public class ArcturusDatabase {
     public TemplateManager getTemplateManager() { return templateManager; }
 
     public Template getTemplateByName(String name) throws SQLException {
+	if (logger != null)
+	    logger.println("getTemplateByName(" + name + ")");
+
 	return templateManager.getTemplateByName(name);
     }
 
     public Template getTemplateByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getTemplateByID(" + id + ")");
+
 	return templateManager.getTemplateByID(id);
     }
 
     public void preloadAllTemplates() throws SQLException {
+	if (logger != null)
+	    logger.println("preloadAllTemplates()");
+
 	templateManager.preloadAllTemplates();
     }
 
@@ -310,18 +359,30 @@ public class ArcturusDatabase {
     public ReadManager getReadManager() { return readManager; }
 
     public Read getReadByName(String name) throws SQLException {
+	if (logger != null)
+	    logger.println("getReadByName(" + name + ")");
+
 	return readManager.getReadByName(name);
     }
 
     public Read getReadByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getReadByID(" + id + ")");
+
 	return readManager.getReadByID(id);
     }
 
     public int loadReadsByTemplate(int template_id) throws SQLException {
+	if (logger != null)
+	    logger.println("loadReadsByTemplate(" + template_id + ")");
+
 	return readManager.loadReadsByTemplate(template_id);
     }
 
     public void preloadAllReads() throws SQLException {
+	if (logger != null)
+	    logger.println("preloadAllReads()");
+
 	readManager.preloadAllReads();
     }
 
@@ -334,22 +395,37 @@ public class ArcturusDatabase {
     public SequenceManager getSequenceManager() { return sequenceManager; }
 
     public Sequence getSequenceByReadID(int readid) throws SQLException {
+	if (logger != null)
+	    logger.println("getSequenceByReadID(" + readid + ")");
+
 	return sequenceManager.getSequenceByReadID(readid);
     }
 
     public Sequence getFullSequenceByReadID(int readid) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullSequenceByReadID(" + readid + ")");
+
 	return sequenceManager.getFullSequenceByReadID(readid);
     }
 
     public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
+	if (logger != null)
+	    logger.println("getSequenceBySequenceID(" + seqid + ")");
+
 	return sequenceManager.getSequenceBySequenceID(seqid);
     }
 
     public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullSequenceBySequenceID(" + seqid + ")");
+
 	return sequenceManager.getFullSequenceBySequenceID(seqid);
     }
 
     public void getDNAAndQualityForSequence(Sequence sequence) throws SQLException {
+	if (logger != null)
+	    logger.println("getDNAAndQualityForSequence(seqid=" + sequence.getID() + ")");
+
 	sequenceManager.getDNAAndQualityForSequence(sequence);
     }
 
@@ -362,10 +438,16 @@ public class ArcturusDatabase {
     public ContigManager getContigManager() { return contigManager; }
 
     public Contig getContigByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getContigByID(" + id + ")");
+
 	return contigManager.getContigByID(id);
     }
 
      public Contig getFullContigByID(int id) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullContigByID(" + id + ")");
+
 	return contigManager.getFullContigByID(id);
     }
 
