@@ -947,6 +947,8 @@ sub putRead {
 				       $this->{SelectStatement}->{'clone'},
 				       $this->{InsertStatement}->{'clone'});
 
+    $clone_id = 0 unless defined($clone_id);
+
     # LIGATION
 
     my ($sil,$sih) = @{$read->getInsertSize()}; 
