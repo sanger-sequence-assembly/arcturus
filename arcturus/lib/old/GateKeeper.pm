@@ -196,7 +196,7 @@ sub origin {
 
     undef my $origin;
     if ($ENV{'GATEWAY_INTERFACE'}) {
-        $origin = $ENV{'PATH_INFO'} || ' ';
+        $origin = $ENV{'PATH_INFO'} || '';
     }
 
 # either path_info or blank (under CGI, both 'true') OR undef (not CGI, 'false')
@@ -407,7 +407,8 @@ print "http_port $http_port   cgi $cgi\n" if $debug;
                 } 
                 &dropDead($self,"Invalid port combination:\n$scriptname:$mysqlport:$http_port") if !$identify;
             }
-            else {    
+            else {
+# $self->environment;  possibly test PWD here   
                 &dropDead($self,"Missing script identifier: can't verify production or development use");
             }
         }
@@ -761,7 +762,7 @@ sub authorize {
     if ($session && $options{testSession}) {
 # a session  number is defined
         $self->{report} = "Check existing sessions number $session";
-        my $sessions = $mother->spawn('SESSIONS','self',0,0); # 0,0 later ?
+        my $sessions = $mother->spawn('SESSIONS','self',0,1); # 0,0 later ?
         if ($self->{error} = $sessions->{errors}) {
             &dropDead($self,$sessions->{errors}) if $options{dieOnError};
 	    return 0;
@@ -809,13 +810,16 @@ sub authorize {
             foreach my $instance (@$instances) {
                 if ($instance ne $this_host) {
                     if (my $dbh = &opendb_MySQL_unchecked ($self,$instance)) {
-                        $self->{report} .= " .. opened ";
+                        $self->{report} .= " .. opened $instance:";
                         if ($dbh->do("select * from SESSIONS where session = '$session'") > 0) {
 # the session is found on another server: copy to the current server
-                            $self->{report} = "session $session found .. ";
+                            $self->{report} .= "session $session found .. ";
                             if ($sessions->newrow('session',$session)) {
                                 $sessions->signature(0,'session',$session,0,'timebegin');
                                 $found = 1;
+                            }
+                            else {
+                                $self->{report} .= "copy failed: $sessions->{qerror} ..";
                             }
                         }
                         $dbh->disconnect();
@@ -1693,6 +1697,21 @@ sub environment {
     $text .= "\nARGV: @ARGV\n" if @ARGV;
 
     &report($self,$text);
+}
+
+#############################################################################
+
+sub prepareFork {
+# redefine environment variables to fork execution of another script (under CGI)  
+    my $self = shift;
+    my $name = shift; # name of script to be executed
+
+    my $csroot = $self->currentScriptRoot;
+    $ENV{SCRIPT_FILENAME} = "$csroot/$name"; # absolute
+    $ENV{SCRIPT_NAME}    = "/cgi-bin/$name"; # relative to cgi-bin
+    delete $ENV{PATH_INFO};
+
+    return $csroot;
 }
 
 #############################################################################
