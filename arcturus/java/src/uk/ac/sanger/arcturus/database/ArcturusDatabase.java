@@ -546,6 +546,10 @@ public class ArcturusDatabase {
 	return contigManager.getContigByID(id, consensusOption, mappingOption, autoload);
     }
 
+    public int[] getCurrentContigIDList() throws SQLException {
+	return contigManager.getCurrentContigIDList();
+    }
+
     /**
      * Returns a text representation of this object.
      *
