@@ -1083,10 +1083,10 @@ $polyCount = 1; # test
 
         if ($iden == 2) {
 # create a new row (with counter at 0; also this creates the "where clause" for the new row)
+print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
             &newrow ($self, $cname, $value) or $iden = 0;
 	    $whereclause = $self->{whereclause};
             &buildhash(0,$self) if ($iden && $self->{'build'}); # reload the counter table
-print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
         } 
         else {
 # the row already exists; get the "where clause" to target it
@@ -1104,6 +1104,7 @@ print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
                 $self->{warnings} .= "attempt to decrease counter $counter by $count to below 0\n"; 
             }
 
+            my $template = "UPDATE <self> SET counter WHERE $whereclause";
             if ($count != 0 && $polyCount <= 1) {
 # single count insert mode (probably very inefficient)
                 my $command = "UPDATE <self> SET $counter=$counter+$count WHERE $whereclause";
@@ -1113,7 +1114,8 @@ print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
                     $error = "failed to modify column $counter";
                 }
                 else {
-                    $command =~ s/\+1\sW/-1 W/; # decrement counter
+                    $command = "UPDATE <self> SET $counter=$counter-$count WHERE $whereclause";
+                    $command =~ s/\-\s*\-/+/; # change possible '--' to '+'
                     push @{$self->{undoclause}}, $command;
                 }
 # update the stored hash image ($counter + $count for $cname = $value) 
@@ -1123,14 +1125,30 @@ print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
             }
 # the next branch handles the polyCount mode
             elsif ($count != 0) {
+#print "$self->{tablename}: use counter stack <br>";
                 my $counts = $self->{counts};
-
-#print "internal update $self->{tablename} $counter $count for value $value<br>";
-#                my $list = $self->list(); $list =~ s/\n/<br>/g; print $list;
-# update the stored hash image ($counter + $count for $cname = $value) 
+# store count sum on combination of counter column and where clause as key
+                $counts->{$counter.':'.$whereclause} += $count;
+# update the stored hash image
+# my $list = $self->list(); $list =~ s/\n/<br>/g; print $list;
                 foreach my $hash (@{$self->{hashrefs}}) {
                     $hash->{$counter} += $count if ($hash->{$cname} eq $value);
-#print "internal update $self->{tablename} $counter  $hash->{$counter} <br><br>" if ($hash->{$cname} eq $value);
+                }
+# get total changes until now
+                my $total = 0;
+                foreach my $clause (keys %$counts) {
+                    next  if !$counts->{$clause};
+                    $total += $counts->{$clause};
+                }
+# decide on flush
+#print "   total count: $total<br>";
+                if ($total >= $polyCount) {
+                    $error = $self->cflush();
+# keep the last insert as undo clause (but store only after a flush)
+                    my $command = $template;
+                    $command =~ s/\stemplate\s/ $counter=$counter-$count /;
+                    $command =~ s/\-\s*\-/+/; # change possible '--' to '+'
+                    push @{$self->{undoclause}}, $command if !$error;
                 }
             }
         } 
@@ -1143,6 +1161,7 @@ print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
             $iden = 0;
         }
     }
+
     elsif (defined($value)) {
 
         if (defined($cname)) {
@@ -1156,6 +1175,33 @@ print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
     $self->{qerror} = "Failed to update (counter) table <self>: $error" if $error;
 
     return $iden;
+}
+
+#############################################################################
+
+sub cflush {
+# process any pending counter inserts
+    my $self = shift;
+
+    my $counts = $self->{counts};
+
+    my $status = '';
+    foreach my $key (keys %$counts) {
+        my $count = $counts->{$key} || next;
+        my ($counter, $whereclause) = split /\:/,$key,2;
+        my $command = "UPDATE <self> SET $counter=$counter+$count WHERE $whereclause";
+#print "$command <br>" if ($self->{tablename} eq 'SESSIONS');
+        $command =~ s/\+\s*\-/-/; # change possible '+-' to '-'
+#print "$command <br>" if ($self->{tablename} eq 'SESSIONS');
+print "$command <br>";
+        if ($self->query($command,1,0,0)) {
+            delete $counts->{$key};
+        }
+        else {
+            $status .= "failed to modify column $counter\n";
+        }
+    }
+    return $status;
 }
 
 #############################################################################
@@ -1335,14 +1381,14 @@ sub setMultiLineInsert {
 
     $line = 1 if (!$line || $line < 1);
 
-    $self->flush() if $self->{multiLine}; # dump any pending inserts
+    $self->lflush() if $self->{multiLine}; # dump any pending inserts
 
     $self->{multiLine} = $line; # assign new line number
 }
 
 #############################################################################
 
-sub flush {
+sub lflush {
 # flush stack data, either all or a named stack
     my $self   = shift;
     my $string = shift; # undef for all stacks
@@ -1362,10 +1408,6 @@ sub flush {
             undef $self->{stack}->{$cstring} if $status;
         } 
     }
-
-# process any pending count updates
-
-    my $counts = $self->{counts};
 
     return $status;
 }
@@ -2125,15 +2167,32 @@ sub timestamp {
 }
 
 #############################################################################
-# DESTROY with cleanup
-#############################################################################
 
-sub DESTROY {
+sub flush {
+# flush the current table, or all tables on this node
     my $self = shift;
+    my $mode = shift; # set true for all
 
-    $self->flush(); # clearout any pending database table inserts
+    if ($mode) {
+# get current node
+        my $fullTableName = $self->makeFullTableName('<self>');
+        my @thisNameSections = split '\.',$fullTableName;
 
-    return 1;
+        my $instances = $self->getInstanceOf(0);
+#        return 0 if (!$instances);
+
+        foreach my $instance (sort keys %$instances) {
+            my ($node,$dbase,$tname) = split '\.',$instance;
+            next if ($node ne $thisNameSections[0]);
+            $instances->{$instance}->flush();
+        }
+    }
+    else {
+# flush all pending new lines and counter updates on this table
+print "flushing $self->{tablename} <br>";
+        $self->lflush();
+        $self->cflush();
+    }
 }
 
 #############################################################################
@@ -2145,7 +2204,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "30 Nov 2000",
-        updated =>    "26 Nov 2002",
+        updated =>    "25 Feb 2003",
     };
 }
 
