@@ -96,10 +96,10 @@ while (($contigid) = $sth_contigs->fetchrow_array()) {
 
 	printf STDERR $format, $ncontigs, $nreads, $nmappings
 	    if (!$batchmode && ($nreads % 50) == 0);
-
-	printf STDERR "%8d  %8d  %8d\n",$contigid,$creads,$cmappings
-	    if $batchmode;
     }
+
+    printf STDERR "%8d  %8d  %8d\n",$contigid,$creads,$cmappings
+	if ($batchmode && !$quiet);
 }
 
 printf STDERR $format, $ncontigs, $nreads, $nmappings unless $batchmode;
