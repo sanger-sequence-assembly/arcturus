@@ -15,13 +15,11 @@ use PathogenRepository;
 my $organism;
 my $instance;
 my $contig_id;
-my $caf;
 my $fasta;
 my $fofn;
-my $html;
 my $verbose;
 
-my $validKeys  = "organism|instance|contig|fofn|html|caf|fasta|verbose|help";
+my $validKeys  = "organism|instance|contig|fofn|html|fasta|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -36,11 +34,7 @@ while (my $nextword = shift @ARGV) {
 
     $fofn      = shift @ARGV  if ($nextword eq '-fofn');
 
-    $html      = 1            if ($nextword eq '-html');
-
     $fasta     = 1            if ($nextword eq '-fasta');
-
-    $caf       = 1            if ($nextword eq '-caf');
 
     $verbose   = 1            if ($nextword eq '-verbose');
 
@@ -54,8 +48,6 @@ while (my $nextword = shift @ARGV) {
 my $logger = new Logging(*STDERR);
  
 $logger->setFilter(0) if $verbose; # set reporting level
-
-my $break = $html ? "<br>" : "\n";
  
 #----------------------------------------------------------------
 # get the database connection
@@ -89,24 +81,23 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 
 my @contigs;
 
+if ($contig_id) {
+    $logger->info("Contig $contig_id to be processed");
+    my $contig = $adb->getContig(id=>$contig_id);
+    $logger->info("Contig $contig constructed");
+    push @contigs, $contig if $contig;
+}
 
 if ($fofn) {
-    foreach my $name (@$fofn) {
-        my $contig = $adb->getContig(id=>$name);
+    foreach my $contig_id (@$fofn) {
+        my $contig = $adb->getContig(id=>$contig_id);
         push @contigs, $contig if $contig;
     }
 }
 
-$logger->info("Contig $contig_id to be processed");
-if ($contig_id) {
-#test mode construction to be changed
-    my $contig = $adb->getContig(id=>$contig_id);
-$logger->info("Contig $contig constructed");
-    push @contigs, $contig if $contig;
-}
-
 foreach my $contig (@contigs) {
-    $contig->writeToCaf(*STDOUT); 
+    $contig->writeToCaf(*STDOUT) unless $fasta; 
+    $contig->writeToFasta(*STDOUT,*STDOUT) if $fasta; 
 }
 
 
@@ -150,9 +141,10 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-fofn\t\tfilename with list of readnames to be included\n";
-    print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
-    print STDERR "-readnamelike\t  idem\n";
+    print STDERR "-contig\t\tContig ID\n";
+    print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
+    print STDERR "-fasta\t\tOutput in fasta format\n";
+    print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);

@@ -151,7 +151,7 @@ my @items = ('read_id','readname','seq_id','version',
 $logger->warning("No reads selected") if !@reads;
 
 foreach my $read (@reads) {
-    print STDERR "$break";
+#print STDERR "$break";
 
     $read->writeToCaf(*STDOUT) if $caf;
 
@@ -163,7 +163,7 @@ foreach my $read (@reads) {
         my $PR = new PathogenRepository();
         $rdir = $PR->getAssemblyDirectory($organism);
         $rdir =~ s?/assembly??;
-	print "rdir: $rdir \n";
+        $logger->info("Assembly directory: $rdir");
     }
 
     &list($read,$rdir);
@@ -312,19 +312,19 @@ sub SCFchemistry {
     my $command = "/usr/local/badger/distrib-1999.0/alpha-bin/get_scf_field $SCFfile";
 
     my $chemistry = `$command`;
-#print "chemistry: recovery activated$break" unless $chemistry;
-    $chemistry = `/nfs/pathsoft/arcturus/dev/cgi-bin/orecover.sh $command` unless $chemistry;
 
 #print "Chemistry $chemistry\n";
+
     if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
         $chemistry = $1;
         if ($chemistry =~ /Tag/) {
-            undef $chemistry; # triggered by "Tag not present"
+            $chemistry = "Not present"; # triggered by "Tag not present"
         }
     }
     else {
-        undef $chemistry;
+        $chemistry = "Not accessible";
     }
+    $chemistry .= "   ($SCFfile)";
 
     return $chemistry;
 }
@@ -369,9 +369,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-fofn\t\tfilename with list of readnames to be included\n";
-    print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
-    print STDERR "-readnamelike\t  idem\n";
+    print STDERR "-readname\tRead name\n";
+    print STDERR "-fofn\t\tfilename with list of readnames\n";
+    print STDERR "-read_id\t\tRead ID\n";
+    print STDERR "-seq_id\t\tSequence ID\n";
+    print STDERR "-chemistry\tExtended chemistry information (slow)";
+    print STDERR "-caf\t\tOutput in caf format\n";
+    print STDERR "-fasta\t\tOutput in fasta format\n";
+    print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
