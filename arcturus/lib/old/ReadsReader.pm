@@ -12,6 +12,7 @@ use LigationReader;
  use Ligationreader;
 use Compress;
 use OracleReader;
+use ReadsRecall;
 
 my $DEBUG = 0;
 my %timehash;
@@ -26,7 +27,11 @@ my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
 my $readbackOnServer = 1;
 
+my $USENEWREADLAYOUT = 0;
+
 my $break;
+
+my $pdate;
 
 #############################################################################
 
@@ -46,6 +51,9 @@ sub new {
     $self->{readItems} = {};
     $self->{linkItems} = {};
     $self->{linkNames} = '';
+
+    $self->{uploaded} = []; # reads uploaded (reset at polling point)
+    $self->{assembly} = 0;  # assembly for which reads are loaded
 
 # error reporting
 
@@ -72,6 +80,11 @@ sub new {
 
     $self->{READS}->spawn('READMODEL','arcturus',0,1);
     $self->{READS}->spawn('DATAMODEL','arcturus',0,1);
+
+# spawn the PENDING and ASSEMBLY tables
+
+    $self->{PENDING}  = $self->{READS}->spawn('PENDING');
+    $self->{ASSEMBLY} = $self->{READS}->spawn('ASSEMBLY','<self>',0,1);
 
 # decide what the organism is
 
@@ -496,7 +509,7 @@ sub enter {
 # enter read item into internal %readItem hash
     my $self  = shift;
     my $entry = shift; # read item key or hash
-    my $value = shift;
+    my $value = shift; # item value or data source
 
     my $linkNames = $self->{linkNames};
     $self->makeLinks() if !$linkNames;
@@ -512,7 +525,6 @@ sub enter {
             $status->{diagnosis} .= $self->enter($item,$entry->{$item});
         }
         $self->{dataSource} = $value || 0;
-print "data source: $self->{dataSource} $break";
         $status->{errors}++ if $status->{diagnosis};
         $estatus = $status->{diagnosis};
     }
@@ -527,6 +539,395 @@ print "data source: $self->{dataSource} $break";
     }
 # print "enter $entry $value status = $estatus $break" if (ref($entry) ne 'HASH');
     return $estatus;
+}
+
+#############################################################################
+
+sub insertRead {
+# load a hash with read data, perform tests and insert the data into the database
+    my $self = shift;
+    my $hash = shift; # the read hash
+    my $opts = shift; # the options hash
+
+#    my $READS = $self->{READS};
+#print "enter insertRead $break";
+
+    my %options = (sencode => 99, qencode => 99, readback => 1,
+                   dataSource => 1, addToPending => 0); # assembly?
+    $self->{READS}->importOptions(\%options, $opts);
+    my $inserted = 0;
+
+    $self->erase;
+    $self->enter($hash, $options{dataSource});
+
+# test the contents
+
+    $self->format;
+    $self->ligation;
+    $self->strands;
+    $self->chemistry;
+
+# check possible error status ...
+
+    my ($summary, $errors) = $self->status(2,0);
+
+#print "summary $summary";
+
+    if ($errors) {
+        $errors = "Contents error(s) for putRead: $summary\n";
+    }
+# encode and dump the data
+    elsif ($errors = $self->encode($options{sencode}, $options{qencode})) {
+        $errors = "Encode error status in putRead: $errors\n";
+    }
+
+    elsif (!($inserted = $self->insert($options{addToPending}))) {
+# get error information
+       ($summary, $errors) =  $self->status(2,0);
+        $errors = "Failed to insert read; $summary, $errors\n";
+    }
+
+    elsif ($options{readback} && ($errors = $self->readback)) {
+        $errors = "Readback error status in putRead: $errors\n";
+    }
+
+# note: rollback in multi mode inserts is not applicable
+    $self->rollBack($errors,'SESSIONS'); # undo any changes to dictionary tables if errors
+    
+#print "$break$break";
+
+    return $inserted; # e.g. number of read items inserted
+}
+
+#############################################################################
+
+sub cafFileReader {
+# import reads from a caf file, load them one by one and insert into the database
+    my $self       = shift;
+    my $filename   = shift; # full caf file name
+    my $opts       = shift;
+
+$DEBUG=0;
+
+    my $READS = $self->{READS};
+    my %options = (nrOfReads => 1000, maxLines => 0  , list => 1000000,
+                   ignoreLoaded => 1, ignoreMask => 0, assembly => 1,
+                   sencode => 99    , qencode => 99  , readback => 1,
+                   addToPending => 0, dataSource => 3, test => 0);
+    $READS->importOptions(\%options, $opts);
+
+    undef my %ignore;
+    if ($options{ignoreLoaded}) {
+        my $where = '1=1';
+        $where = "readname like '$options{ignoreMask}'" if $options{ignoreMask};
+        my %qoptions = (returnScalar => 0, traceQuery => 0);
+        my $loaded = $READS->associate('readname','where',$where,\%qoptions);
+        print "query status $READS->{lastQuery} $READS->{qerror} $break" if $options{test};
+        my $nr = @$loaded; 
+        if ($options{list}) {
+            print "$nr previously loaded reads ";
+            print "(mask $options{ignoreMask}) " if $options{ignoreMask};
+            print "$break";
+        }
+        foreach my $name (@$loaded) {
+            $ignore{$name}++;
+        }
+        return 0 if ($options{test} > 1);}
+    
+
+    my $list = $options{list};
+    my $maxLines = $options{maxLines};
+    my $plist = $list; $plist = 0 if ($list == 1);
+    if ($maxLines) {
+        $plist = int(log($maxLines)/log(10));
+        $plist = $plist - 1 if ($plist > 1);
+        $plist = int(exp($plist*log(10))+0.5);
+    }
+
+    undef my %reads; # hash of array index keyed on readname
+    print STDOUT "file to be opened: $filename ..." if $list;
+    open (CAF,"$filename") || die "cannot open $filename";
+    print STDOUT "... DONE $break" if $list;
+
+    my $line = 0;
+    my $type = 0;
+    undef my $date;
+
+    undef @{$self->{uploaded}};
+# if assembly is defined, test if it is a legal (name or number)
+    if (!$self->fingerAssembly($options{assembly})) {
+	return 0; # or with abort on error flag? 
+    }
+
+    print "Reading caf file$break" if $list;
+
+    my $record;
+    my $object = '';
+    my $truncated = 0;
+    while (defined($record = <CAF>)) {
+        $line++; 
+        chomp $record;
+        print STDOUT "Processing line $line$break" if ($plist && ($line == 1 || !($line%$plist)));
+        next if ($record !~ /\S/);
+# print "$record $break";
+        if ($maxLines && $line > $maxLines) {
+            print STDOUT "Scanning terminated because of line limit $maxLines$break";
+            $truncated = 1;
+            $line--;
+            last;
+        }
+
+        my $nrObjects = 0;
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+# retrieve the readname
+            my $item = $1;
+            $object = $2;
+            $type = 0;
+            print "read $object ignored $break" if ($options{test} && $ignore{$object});
+            next if ($ignore{$object});
+            $type = 1 if ($item eq 'Sequence');
+            $type = 2 if ($item eq 'DNA');
+            $type = 3 if ($item eq 'BaseQuality');
+# allocate a hash for the read if it is a newly encountered readname
+
+            if (!defined($reads{$object})) {
+# add next object to hash list
+                my $nreads = scalar(keys %reads);
+                if ($nreads < $options{nrOfReads}) {
+                    my $hash = {};
+                    $hash->{ID} = $object;
+                    $reads{$object} = $hash;
+                }
+                else {
+                    $type = 0;
+                }
+            }
+            next;
+        }
+
+        if ($record =~ /Is_contig|\bpadded\b/) {
+            $type = 0; # ignore contigs and padded data
+            delete $reads{$object};
+            next;
+        }
+
+        if ($record =~ /Is_read/) {
+            next;
+        }        
+          
+        if ($type == 1) {
+# decode the read data
+            $record =~ s/^\s+|\s+$//g;
+            my @items = split /\s/,$record;
+            if ($items[0] =~ /Temp/i) {
+                $reads{$object}->{TN} = $items[1];
+            }
+            elsif ($items[0] =~ /Ins/i) {
+                $reads{$object}->{SI} = "$items[1]..$items[2]";
+            }
+            elsif ($items[0] =~ /Liga/i) {
+                $reads{$object}->{LG} = $items[1];
+            }
+            elsif ($items[0] =~ /Seq/i) {
+#print "seq: field '$field' @items <br>";
+                $reads{$object}->{SL} = $items[3] if ($items[2] <= 1);
+                $reads{$object}->{SL}++           if ($items[2] == 0);
+                $reads{$object}->{SR} = $items[2] if ($items[2]  > 1);
+                if ($record =~ s/Seq.*\d+\s+\d+\s+(\S.*)$/$1/) {
+                    $record =~ s/[\"\']//g;
+                    $reads{$object}->{SV} = $record;
+                }
+            }
+            elsif ($items[0] =~ /Pri/i) {
+                $reads{$object}->{PR} = $items[1];
+            }
+            elsif ($items[0] =~ /Str/i) {
+                $reads{$object}->{ST} = $items[1];
+            }
+            elsif ($items[0] =~ /Dye/i) {
+                $reads{$object}->{CH} = $items[1];
+            }
+            elsif ($items[0] =~ /Clone_vec/i) {
+                $reads{$object}->{CV} = $items[1];
+            }
+            elsif ($items[0] =~ /Clo/i) {
+                $reads{$object}->{CN} = $items[1];
+            }
+            elsif ($items[0] =~ /Pro/i) {
+                $reads{$object}->{PS} = $items[1] if ($record !~ /PASS/); 
+            }
+            elsif ($items[0] =~ /Asp/i) {
+                $reads{$object}->{DT} = $items[1];
+            }
+            elsif ($items[0] =~ /Bas/i) {
+                $reads{$object}->{BC} = $items[1];
+            }
+            elsif ($items[0] =~ /Cli/i) {
+                $reads{$object}->{QL} = $items[2];
+                $reads{$object}->{QR} = $items[3];
+            }
+            elsif ($items[0] =~ /SCF_File/i) {
+                $reads{$object}->{SCF} = $items[1] if ($items[1] !~ /\.gz|zip|tar/);
+                if (!$reads{$object}->{DT}) {
+                    if ($items[1] =~ /(\d{4})\W(\d{1,2})\W(\d{1,2})\D/) {
+                        $reads{$object}->{DT} = sprintf ("%04d-%02d-%02d",$1,$2,$3);
+                        $pdate = $reads{$object}->{DT};
+                    } 
+		    elsif ($items[1] =~ /(\d{1,2})\W(\d{1,2})\W(\d{4})\D/) {
+                        $reads{$object}->{DT} = sprintf ("%04d-%02d-%02d",$1,$2,$3);
+                        $pdate = $reads{$object}->{DT};
+                    }
+                    elsif ($pdate) {
+                        $reads{$object}->{DT} = $pdate;
+                    }
+                    else {
+#			print "No date in SCF file $record $break";
+                    }
+                }
+            }
+
+        }
+        elsif ($type == 2 && $reads{$object}) {
+# store the DNA
+	    $reads{$object}->{SQ} .= $record; 
+        }
+        elsif ($type == 3 && $reads{$object}) {
+# store the Quality Data
+            $record =~ s/\b0(\d)\b/$1/g; # remove '0' from values such as '01' .. 
+	    $reads{$object}->{AV} .= $record; 
+        }
+    }
+
+# okay, here we have a hash of read hashes
+
+    print "Scanning file $filename finished ($line) $break"    if $list;
+    my $nr = keys %reads; print "$nr read hashes build $break" if $list; 
+
+
+    my $count = 0;
+    my $missed = 0;
+    foreach my $name (keys %reads) {
+
+	if ($options{test}) {
+            print "${break}New read $name "; 
+            my @keys = keys %{$reads{$name}}; 
+            print "keys: @keys $break";
+            print "quality: $reads{$name}->{AV}$break";
+        }
+        elsif ($self->insertRead($reads{$name},\%options)) {
+            push @{$self->{uploaded}}, $name;
+            $count++;
+        }
+        else {
+            $missed++;
+        }
+    }
+
+    undef %reads; # release memory
+
+    print "$count reads loaded, $missed reads skipped $break";
+
+# update ORGANISMS table
+
+    $READS->flush(1); # flush all
+
+    return $count;
+}
+
+#############################################################################
+
+sub fingerAssembly {
+# identify / test the assembly number / name; store the assembly number
+    my $self = shift;
+    my $info = shift; # the name or number
+
+    my $ASSEMBLY = $self->{ASSEMBLY};
+
+    my $success = 0;
+    if (!$info) {
+# default to BLOB (1)
+        $self->{assembly} = 1;
+    }
+# try to identify the assembly; first try assembly name
+    elsif (my $anmbr = $ASSEMBLY->associate('assembly',$info,'assemblyname')) {
+        $self->{assembly} = $anmbr;
+        $success = 1;
+    }
+# or test a number
+    elsif (my $aname = $ASSEMBLY->associate('assemblyname',$info,'assembly')) {
+        $self->{assembly} = $info;
+        $success = 1;
+    }
+    else {
+# the assembly could not be identified: default to 1, but return 0
+        $self->{status}->{diagnosis} .= "Assembly '$info' NOT identified$break";
+        $self->{assembly} = 1;
+    }
+
+    return $success;
+}
+
+#############################################################################
+
+sub housekeeper {
+# update counters in ORGANISMS and ASSEMBLY tables after a loading session
+    my $self = shift;
+    my $user = shift;
+
+print "enter housekeeper $break";
+
+    my $loaded = $self->{uploaded}; # array of readnames in previous loading actions
+    return if !@$loaded;
+
+#print "loaded @$loaded $break";
+
+    my $READS = $self->{READS};
+
+    if (my $assembly = $self->{assembly}) {
+# if assembly specified (and valid), add assembly info to R2A and ASSEMBLY table
+        my $R2A = $READS->spawn('READS2ASSEMBLY');
+        $R2A->setMultiLineInsert(500);
+# identify the read_ids for the loaded reads
+        my %roptions = (traceQuery => 0, returnScalar => 0);
+# go through the list in blocks (to accommodate query size buffer of MySQL client)
+        my $blocksize = 10000;
+        while (@$loaded) {
+            undef my @temp;
+            $blocksize = @$loaded if ($blocksize > @$loaded);
+print "next block $blocksize $break";
+            for (my $i = 0 ; $i < $blocksize ; $i++) {
+                push @temp, shift(@$loaded);
+            }
+            my $rids = $READS->associate('read_id',\@temp,'readname',\%roptions);
+#print "rids : $rids,  @$rids $break"; 
+# add the reads to this assembly
+            foreach my $read (@$rids) {
+                $R2A->newrow('read_id',$read,'assembly',$assembly);
+            }
+        }
+        $R2A->flush(1);
+# count all reads in this assembly
+        my $areads = $R2A->count("assembly=$assembly");
+print "assembly $assembly reads counted: $areads $break";
+        my $ASSEMBLY = $READS->spawn('ASSEMBLY');
+        $ASSEMBLY->update('reads',$areads,'assembly',$assembly);
+        $ASSEMBLY->update('status','loading','assembly',$assembly);
+        $ASSEMBLY->signature($user,'assembly',$assembly);
+        if ($ASSEMBLY->associate('progress',$assembly,'assembly') eq 'other') {
+            $ASSEMBLY->update('progress','in shotgun','assembly',$assembly);
+        }
+    }
+
+    my $nreads = $READS->count(0);
+    my $npends = $self->{PENDING}->count(0);
+    my $database = $READS->{database};
+print "updating organisms $break";
+    my $organisms = $READS->spawn('ORGANISMS','arcturus');
+    $organisms->update('reads_loaded' ,$nreads,'dbasename',$database);
+    $organisms->update('reads_pending',$npends,'dbasename',$database);
+    $organisms->signature($user,'dbasename',$database);
+
+    $self->{assembly} = 0;
 }
 
 #############################################################################
@@ -618,6 +1019,18 @@ sub format {
         $status->{diagnosis} .= "! Missing Quality data in $self->{fileName}$break";
         $status->{errors}++;
     }    
+
+# process comment info
+
+    return if !$USENEWREADLAYOUT;
+
+    if ($readItems->{CC} && $readItems->{CC} =~ /\S/) {
+        my $COMMENTS = $self->{READS}->getInstanceOf('<self>','COMMENTS');
+        if (!$COMMENTS->counter('comment',$readItems->{CC},0)) {
+            $status->{diagnosis} .= "! Error in update of COMMENTS (read: $readItems->{CC})$break";
+            $status->{errors}++;  
+        }
+    }
 }
 # error reporting coded as:
 
@@ -640,7 +1053,7 @@ sub ligation {
     my $CLVECTORS = $READS->getInstanceOf('<self>.CLONINGVECTORS')  or die "undefined CLONINGVECTORS";
     my $CLONES    = $READS->getInstanceOf('<self>.CLONES')          or die "undefined CLONES";
 
-    $self->logger("** Test or find Ligation Data"); 
+    $self->logger("** Test or find Ligation Data $break"); 
 
     my $readItems = $self->{readItems};
 
@@ -735,12 +1148,14 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
             $column = 'identifier' if $hash;
   print "recovery hashref $hash column $column <br>";
         }
+print "Ligation hash $hash \n" if $DEBUG;
 
         if (!$hash) {
-    # the ligation does not yet exist; find it in the Oracle database and add to LIGATIONS
+# the ligation does not yet exist; find it in the Oracle database and add to LIGATIONS
             $self->logger("Ligation $readItems->{LG} not in LIGATIONS: search in Oracle database");
             my $origin;
             my $ligation = LigationReader->new($readItems->{LG});
+print "Ligation hash $ligation \n" if $DEBUG;
             if ($ligation->build() > 0) {
                 foreach my $item (@items) {
                     my $litem = $ligation->get($item);
@@ -787,8 +1202,8 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
                 }
                 $origin = 'O'; # Oracle data base
             } 
-            else {
-        # load with non-oracle id; possibly Oracle database inaccessible
+            elsif ($self->{dataSource} <= 2) {
+# load with non-oracle id; possibly Oracle database inaccessible
                 $origin = 'R'; # Defined in the Read itself
                 $status->{diagnosis} .= "! Warning" if (!$self->{fatal});
                 $status->{diagnosis} .= "! CGI access Error" if ($self->{fatal});
@@ -798,23 +1213,31 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
                 $status->{errors}++   if  ($self->{fatal});
                 $self->logger(" ... NOT found!");
             }
-        # update CLONES database table
-            if (!$status->{errors} && !$CLONES->counter('clonename',$readItems->{CN},0)) {
-                $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})$break";
+            else {
+		$self->logger("NOT FOUND .. ligation $readItems->{LG} adopted as foreign");
+                $origin = 'F'; # foreign
+            }
+
+# update CLONES database table
+
+            if (!$status->{errors} && $readItems->{CN} && !$CLONES->counter('clonename',$readItems->{CN},0)) {
+                $status->{diagnosis} .= "!Error in update of CLONES.clonename '$readItems->{CN}'$break";
                 $status->{errors}++;
             }
-        # if no errors detected, add to LIGATIONS table
+
+# if no errors detected, add to LIGATIONS table
+
             if (!$status->{errors}) {
                 $LIGATIONS->newrow('identifier' , $readItems->{LG});
 print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerror};
-                $LIGATIONS->update('clone'      , $readItems->{CN});
+                $LIGATIONS->update('clone'      , $readItems->{CN}) if $readItems->{CN};
 # new  use ref    my $clone = $CLONES->associate('clone',$readItems->{CN},'clonename' 0, 0, 1);
 # new             $LIGATIONS->update('clone'      , $clone);
                 $LIGATIONS->update('origin'     , $origin);
                 $LIGATIONS->update('silow'      , $readItems->{SIL});
                 $LIGATIONS->update('sihigh'     , $readItems->{SIH});
-                $LIGATIONS->update('svector'    , $svector);
-                $self->logger(" ... Found and stored in LIGATIONS!");
+                $LIGATIONS->update('svector'    , $svector) if $svector;
+                $self->logger(" .. stored in LIGATIONS!$break");
             }
             else {
                 $status->{diagnosis} .= "! No new ligation added because of $status->{errors} error(s)$break";
@@ -823,25 +1246,26 @@ print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerr
         } 
         elsif ($column ne 'identifier') {
 # the ligation string is identified in table LIGATION but in the wrong column
-            $status->{diagnosis} .= "! Invalid column name for ligation identifier $readItems->{LG}: $column$break";
+            $status->{diagnosis} .= "! Invalid column name for ligation '$readItems->{LG}': $column$break";
             $status->{errors}++;
 
         }
         else {
 # the ligation is identified in the table; check matchings of other reads data
-            $self->logger("Ligation $readItems->{LG} found in LIGATIONS: test this against old data");
+            $self->logger("Ligation $readItems->{LG} found in LIGATIONS: test this against old data $break");
             undef my %itest;
             $itest{CN}  = $hash->{clone};
 # new        $itest{CN}  = $CLONES->associate('clonename',$hash->{clone},'clone', 0, 0, 1);
             $itest{SIL} = $hash->{silow};
             $itest{SIH} = $hash->{sihigh};
             $svector    = $hash->{svector};
-            $itest{SV}  = $SQVECTORS->associate('name',$svector,'svector');
+            $itest{SV}  = $SQVECTORS->associate('name',$svector,'svector') if $svector;
             my $oldwarnings = $status->{warnings};
             foreach my $item (keys %itest) {
+                $readItems->{$item} = 0 if ($item ne 'CN' && !$readItems->{$item});
                 if (defined($itest{$item}) && $itest{$item} ne $readItems->{$item}) {
-                    $status->{diagnosis} .= "! Inconsistent data for ligation $readItems->{LG} : ";
-                    $status->{diagnosis} .= "$item ARCTURUS table:$itest{$item} Read:$readItems->{$item}$break";
+                    $status->{diagnosis} .= "! Inconsistent data for ligation $readItems->{LG} : $item ";
+                    $status->{diagnosis} .= "LIGATIONS table:'$itest{$item}' Read:'$readItems->{$item}'$break";
                     if ($itest{$item} =~ /$readItems->{$item}/i) {
              #   $status->{diagnosis} .= " ($readItems->{$item} replaced by $itest{$item}$break";
              #   $readItems->{$item} = $itest{$item};
@@ -936,7 +1360,18 @@ print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerr
         $status->{warnings}++ if (!$self->{fatal});
         $status->{errors}++   if  ($self->{fatal});
     }    
-    &timer('ligation',1) if $DEBUG; 
+    &timer('ligation',1) if $DEBUG;
+
+# process template
+
+    return if !$USENEWREADLAYOUT;
+
+    my $TEMPLATES = $READS->getInstanceOf('<self>.TEMPLATES') or die "undefined TEMPLATES";
+
+    if (!$TEMPLATES->counter('template',$readItems->{TN},0)) {
+        $status->{diagnosis} .= "! Error in update of TEMPLATES (read: $readItems->{TN})$break";
+        $status->{errors}++;
+    }
 }
 # error reporting coded as:
 
@@ -984,7 +1419,6 @@ sub strands {
 
     $suffix = $fnparts[1] if (!($suffix =~ /\S/) && defined($fnparts[1]));
     my @suffixes = split //,$suffix;
-   $self->logger("Find Strands: suffix = $suffix");
 
 # test strand identifier (=suffix[0]) against number of strands
 
@@ -992,6 +1426,7 @@ sub strands {
 
     if ($self->{dataSource} == 1) {
 # experiment file (like): the ST value is the number of strands
+        $self->logger("Find Strands: suffix = $suffix $break");
         my $strands = $STRANDS->associate('strands',$suffixes[0],'strand');
         if (defined($strands) && $readItems->{ST} == $strands) {
             $readItems->{ST} = $suffixes[0]; # replace original by identifier 
@@ -1048,19 +1483,27 @@ sub strands {
         my $strands = $STRANDS->associate('description',$suffixes[0],'strand');
         if (defined($strands) && $strands =~ /$readItems->{ST}/i) {
             $readItems->{ST} = $suffixes[0]; # replace original by identifier 
-        } else {
+        } 
+        else {
             $status->{diagnosis} .= "! Mismatch of strands direction: \"$readItems->{ST}\"";
             $status->{diagnosis} .= " for suffix type \"$suffixes[0]\"$break";
             if ($suffixes[0] =~ /[a-z]/) {
                 $readItems->{ST} = $suffixes[0]; # accept file extention code
                 $readItems->{RPS} += 4096; # bit 13
                 $status->{warnings}++;
-            } else {
+            }
+            else {
                 $readItems->{RPS} += 8192; # bit 14
                 $status->{diagnosis} .= "! Invalid file extension \"$suffix\"$break";
                 $status->{errors}++; # considered fatal
             }
         }
+    }
+    elsif ($self->{dataSource} == 3) {
+# foreign data, e.g. from TIGR: either "forward or "reverse", assumed double
+        $readItems->{ST} = 'a' if ($readItems->{ST} =~ /forward/i);
+        $readItems->{ST} = 'b' if ($readItems->{ST} =~ /reverse/i);
+        $self->logger("Strand for foreign read: '$readItems->{ST}'$break"); 
     }
 
 # test primer type
@@ -1088,9 +1531,20 @@ sub strands {
             $readItems->{RPS} += 16384; # bit 15
         } 
     }
-    elsif ($self->{dataSource} == 2) {
-# for Oracle data: accept the suffix value
-        if ($primertype) {
+    if ($self->{dataSource} == 3) {
+# foreign reads e.g. TIGR: primer type depends on strand and  
+        if ($readItems->{PR} =~ /universal/i) {
+            $primertype = 1 if ($readItems->{ST} eq 'a');
+            $primertype = 2 if ($readItems->{ST} eq 'b');
+        }
+        elsif ($readItems->{PR} =~ /custom/i) {
+            $primertype = 3 if ($readItems->{ST} eq 'a');
+            $primertype = 4 if ($readItems->{ST} eq 'b');
+        }
+    }
+    if ($self->{dataSource} == 2 || $self->{dataSource} == 3) {
+# for Oracle data: accept the suffix value-based value
+        if ($primertype < 5) {
             $readItems->{PR} = $primertype;
         }
         else {
@@ -1133,9 +1587,28 @@ sub chemistry {
 
     my $status = $self->{status};
 
+# before trying to get the chemistry from the SCF file, test if it is already specified
+
+    my $chemistry = $readItems->{CH};
+    if ($chemistry && $chemistry =~ /[a-zA-Z]/) {
+# it's a name, now try to match it with a chemistry type
+        $chemistry =~ s/[\s]/_/g; # replace blanks by '_' wildcard
+        $chemistry = "%$chemistry%"; # add wildcards at beginning and end
+        if (my $chemtype = $CHEMTYPES->associate('chemtype',$chemistry,'description',{limit=>1})) {
+            $status->{diagnosis} .= "chemistry $readItems->{CH} found in ARCTURUS database ";
+            $status->{diagnosis} .= "($chemtype) $break";
+            $readItems->{CHT} = $chemtype;
+            $CHEMISTRY->counter('identifier', $readItems->{CH}, 0); # the row could exist
+            $CHEMISTRY->update('chemtype', $readItems->{CHT}, 'identifier', $readItems->{CH});
+            $CHEMISTRY->build(1); # rebuild internal table
+            return;
+        }
+        $status->{diagnosis} .= "chemistry $readItems->{CHT} NOT matched with a chemtype $break";
+    }
+
 # get description from SCF file
 
-$self->logger("Default Chemistry Type: $readItems->{CHT} ..$break");
+$self->logger("Default Chemistry Type: '$readItems->{CHT}' .. $break");
 $self->logger("Test chemistry in file $self->{fileName}SCF$break");
 
     my $scffile = $readItems->{SCF} || "$self->{fileName}SCF";
@@ -1152,7 +1625,6 @@ $self->logger("Test chemistry in file $self->{fileName}SCF$break");
 $self->logger("SCF file full name: $scffile$break");
 
     my $test = 0;
-    my $chemistry;
     my $command = "$SCFREADDIR/get_scf_field $scffile";
     if (!$self->{CGI}) {
         $chemistry = `$command`;
@@ -1174,6 +1646,9 @@ $self->logger("chemistry='$chemistry' .. ");
 $self->logger("test recover chemistry: '$chemistry' .. ");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
+            if ($chemistry =~ /Tag/) {
+                undef $chemistry; # Tag not present
+            }
         }
         else {
             undef $chemistry;
@@ -1192,7 +1667,6 @@ $self->logger("SCF chemistry: '$chemistry'$break");
 
     my %choptions = (traceQuery => 0, compareExact => 1, useCache => 1);
     if ($chemistry && $CHEMISTRY->associate('chemistry',$chemistry,'identifier',\%choptions)) {
-#    if ($chemistry && $CHEMISTRY->associate('chemistry',$chemistry,'identifier',-1,0,1)) {
 $self->logger("chemistry $chemistry found in ARCTURUS database table$break");
         $status->{diagnosis} .= "chemistry $chemistry found in ARCTURUS database table$break";
 # the chemistry is already in the table; check CHT
@@ -1349,6 +1823,9 @@ sub encode {
     my $scm  = shift; # sequence compression method
     my $qcm  = shift; # quality  compression method
 
+    $scm = 99 unless defined($scm);
+    $qcm = 99 unless defined($qcm);
+
     &timer('encode',0) if $DEBUG; 
 
     my $Compress  = $self->{Compress};
@@ -1400,11 +1877,53 @@ sub encode {
     return $error;
 }
 
+sub newencode {
+# encoding DNA and Quality data using z-compression
+    my $self = shift;
+
+    my $Compress  = $self->{Compress};
+ 
+    my $readItems = $self->{readItems};
+
+    undef my $scount;
+
+    $readItems->{sequence} = $readItems->{SQ};
+   ($scount,$readItems->{SQ}) = $Compress->sequenceEncoder($readItems->{SQ},99);
+    my $sqcstatus = $Compress->status;
+
+    undef my $qcount;
+
+    $readItems->{quality} = $readItems->{AV};
+   ($qcount,$readItems->{AV}) = $Compress->qualityEncoder($readItems->{AV},99);
+    my $qdcstatus = $Compress->status;
+
+# further status checking
+
+    undef my $error;
+    if (!$qcount || !$scount || $qcount != $scount) {
+        $error .= "Mismatch of sequence ($scount) and quality data ($qcount)$break";
+    }
+    else {
+        $error .= $self->enter('SLN',$scount); # sequence length
+    }
+
+    $error .= "Sequence encoding error $sqcstatus$break" if $sqcstatus;
+    $error .= "Quality  encoding error $qdcstatus$break" if $qdcstatus;
+
+    if ($error) {
+        $self->{status}->{errors}++;
+        $self->{status}->{diagnosis} .= $error;
+    }
+
+    return $error;
+}
+
 #############################################################################
 
 sub insert {
 # insert a new record into the READS database table
     my $self = shift;
+    my $atop = shift; # add to pending
 
     &timer('insert',0) if $DEBUG; 
 
@@ -1426,7 +1945,7 @@ sub insert {
 
     undef my %columntags;
     foreach my $key (keys %$linkhash) {
-# get the flat file item corresponding to the column name in $1
+# get the experiment file item corresponding to the column name in $1
         if ($key =~ /\.READS\.(\S+)$/) {
             $columntags{$key} = $linkItems->{$1};
         }
@@ -1445,7 +1964,7 @@ sub insert {
             my $linkhandle = $READS->getInstanceOf($linktable);
 # find the proper column name in the dictionary table
             undef my @columns;
-            my $pattern = "name|identifier";
+            my $pattern = "name|identifier|text";
             foreach my $column (@{$linkhandle->{columns}}) {
                 if ($column ne $linkcolumn && $column =~ /\b(\S*$pattern)\b/i) {
                     push @columns, $1;
@@ -1454,9 +1973,8 @@ sub insert {
 # replace the read entry by the reference
             if (@columns == 1) {
                 $linkhandle->counter($columns[0],$readItems->{$tag});
-                my %lkoptions = (compareExact => 1, useLoacte => 1);
+                my %lkoptions = (compareExact => 1, useLocate => 1); # ?? changed
                 my $reference = $linkhandle->associate($linkcolumn,$readItems->{$tag},$columns[0],\%lkoptions);
-#                my $reference = $linkhandle->associate($linkcolumn,$readItems->{$tag},$columns[0], 0, 0, 1);
 		$status->{diagnosis} .= "insert: $linkcolumn $readItems->{$tag},$reference$break";
                 $readItems->{$tag} = $reference;
             }
@@ -1494,13 +2012,31 @@ sub insert {
                 }
             }
         }
+
+#----------------------
+# what about $USENEWREADSLAYOUT?
+#----------------------
+
+# how to insert into READS and DNA? What about the template?
         if (!$READS->newrow('readname',$readItems->{ID},\@columns,\@cvalues)) {
 # here develop update of previously loaded reads
             $status->{diagnosis}  = "Failed to create new entry for read $readItems->{ID}";
             $status->{diagnosis} .= ": $READS->{qerror}" if $READS->{qerror};
             $status->{diagnosis} .= "$break";
-            $counted = 0;
             $status->{errors}++;
+            $counted = 0;
+# add the readname to the pending list
+            if ($atop) {
+                my $PENDING  = $self->{PENDING};
+                my $assembly = $self->{assembly} || 1;
+                if (!$PENDING->associate('record',$readItems->{ID},'readname',-1)) {
+                    if (!$PENDING->newrow('readname',$readItems->{ID},'assembly',$assembly)) {
+                        $status->{diagnosis}  = "Failed to add $readItems->{ID} to PENDING";
+                        $status->{diagnosis} .= ": $READS->{qerror}" if $PENDING->{qerror};
+                        $status->{diagnosis} .= "$break";
+		    }
+		}
+            }
         } 
     }
 
@@ -1528,7 +2064,7 @@ sub readback {
         my $READS     = $self->{READS};
         my %options = (traceQuery => 0);
         $hash = $READS->associate('hashref','where','read_id=LAST_INSERT_ID()',\%options);
-        print "(readback on server) .. ";   
+#        print "(readback on server) .. ";   
         if ($hash->{readname} && $hash->{readname} ne $readItems->{ID}) {
             print "LAST INSERT select failed ..";
             $hash = $READS->associate('hashref',$readItems->{ID},'readname',\%options);
@@ -1593,6 +2129,83 @@ sub readback {
 }
 
 #############################################################################
+# ad hoc repair procedure for consensus reads with spurious leading zero
+
+sub repairReads {
+
+    my $self   = shift;
+    my $commit = shift;
+    my $start  = shift;
+    my $final  = shift;
+
+    my $READS = $self->{READS};
+
+    my $ReadsRecall = ReadsRecall->init($READS,'ACGTN ');
+
+    $start = 1 unless defined($start);
+    $final = $READS->count unless defined($final);
+
+    my $count = 0;
+    my $missed = 0;
+
+    my $block = 10000;
+    print "\n";
+
+    while ($start <= $final) {
+
+        my $limit = $start + $block - 1;
+        $limit = $final if ($limit > $final);
+
+        print "Processing read $start - $limit \n";
+
+        my $where = "read_id >= $start && read_id <= $limit";
+        my $hashes = $READS->associate('hashrefs','where',$where,{returnScalar=>0});
+
+        my $qcount;
+        my $quality;
+        foreach my $hash (@$hashes) {
+# load the read hash into the ReadsRecall buffer
+            if (my $status = $ReadsRecall->newReadHash($hash)) {
+                print "missed on loading error: $hash->{readname}\n";
+                $self->status(1);
+                $missed++;
+            }
+            elsif ($ReadsRecall->{status}->{report} =~ /spurious/) {
+                print "Repairable read $hash->{readname} located\n";
+                my $qstring = $ReadsRecall->{qstring}; # the new quality string
+#                print "New quality data:\n$qstring\n";
+                next if ($qstring !~ /\S/);
+
+                if (defined($hash->{qcompress}) && $self->{Compress}) {
+
+                    my $dq = $hash->{qcompress};
+                   ($qcount, $quality) = $self->{Compress}->qualityEncoder($qstring,$dq);
+                    if (!$quality || $quality !~ /\S/) {
+                        $status->{report} .= "! Missing or empty quality data ($dq)\n";
+                        $status->{errors}++;
+                    }
+                    else {
+                        my $length = length($quality);
+                        my $oldlgt = length($hash->{quality});
+                        print "New compressed quality data for $hash->{readname}: ";
+                        print "length=$length ($oldlgt) method=$dq\n\n";
+#                        $READS->update('quality',$quality,'readname',$hash->{readname}) if $commit;
+#                        $DNA->update('quality',$quality,'read_id',$hash->{read_id}) if $commit;
+                    }
+                }
+            }
+            $count++;
+        }
+        $start = $limit + 1;
+    }
+
+#my $missed=@missed; print "$count reads written to output device; missed $missed \n" if $DEBUG;
+
+    return $count; # 0 to signal NO reads found, OR query failed
+}
+
+
+#############################################################################
 
 sub rollBack {
 # reset if level == 0, else undo updates of last changes to tables 
@@ -1602,10 +2215,10 @@ sub rollBack {
 
     my $instances = $self->{READS}->getInstanceOf(0);
 
-    $exclude = join ' ',@$exclude if (ref($exclude) eq 'ARRAY');
+    $exclude = join '|',@$exclude if (ref($exclude) eq 'ARRAY');
 
     foreach my $key (keys %$instances) {
-        $instances->{$key}->rollback($level) if (!$exclude || $exclude !~ /\b$key\b/i);
+        $instances->{$key}->rollback($level) if (!$exclude || $key !~ /$exclude/i);
     }
 }
 
@@ -1627,11 +2240,11 @@ sub logger {
 
 sub break {
 
-# return the line break appropriate for the environment
+# return the line break appropriate for the environment (cosmetics)
 
     my $break = "\n";
 
-    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
+    $break = "<br>" if $ENV{REQUEST_METHOD};
 
     return $break;
 }
