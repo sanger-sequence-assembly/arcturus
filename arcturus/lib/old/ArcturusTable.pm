@@ -630,7 +630,13 @@ sub htmlTable {
     my $self   = shift;
     my $mask   = shift; # optional masking of table columns
     my $Column = shift; # optional (list only if column $Column has value $Cvalue 
-    my $Cvalue = shift; # optional 
+    my $Cvalue = shift; # optional
+
+    my %options = (headColor=>'yellow'      , cellColor=>'lightblue',
+                   linkColor=>'lightblue'   , mask=>$mask           ,
+                   linkItem =>'onPrimaryKey', linkTarget=>'1');
+
+    &importOptions (\%options,$mask) if (ref($mask) eq 'HASH');
 
     undef my $list;
 
@@ -639,6 +645,8 @@ sub htmlTable {
     my $sublinks   = $self->{sublinks};
 
 # set-up mask
+
+    $mask = $options{mask};
 
     my $more = 0;
     undef my %mask;
@@ -678,7 +686,7 @@ sub htmlTable {
                 $field = "<A href=\"TABLELINK$linktablename\" TABLETARGET>$field</A>";
             }
             $nrcolumns++;
-            $header .= "<TH bgcolor='yellow'>$field</TH>";
+            $header .= "<TH bgcolor='$options{headColor}'>$field</TH>";
         }
     }
     $header .= "<TH bgcolor='white'>&nbsp</TH>" if ($more);
@@ -719,12 +727,23 @@ sub htmlTable {
                         my $align = "left";
                         $align = "right" if ($columntype->{$column} =~ /int/i);
                         $field =~ s/([^\n\s]{40,}?)/$1<br>/g;
+                        my $colour = $options{cellColor};
                         if (defined($mask) && $mask{$column} > 2) {
-                            my $link = "href = \"ITEMLINK\?column=$keyColumn\&";
-                            $link .= "value=$hash->{$keyColumn}\" ITEMTARGET";
-                            $field = "<A $link>$field</A>";
+                            my $link = '';
+                            if ($options{linkItem} eq 'onPrimaryKey') {
+                                $link = "href = \"ITEMLINK\?column=$keyColumn\&";
+                                $link .= "value=$hash->{$keyColumn}\"";
+                            }
+                            elsif ($hash->{$column} && $options{linkItem} eq 'onItemName') {
+                                $link = "href = \"ITEMLINK\?$column=$hash->{$column}\"";
+                            }
+                            if ($link) {
+                                $link .= " ITEMTARGET" if $options{linkTarget}; 
+                                $field = "<A $link>$field</A>";
+                                $colour = $options{linkColor};
+                            }
                         }
-                        $list .= "<TD ALIGN=$align BGCOLOR='lightblue' NOWRAP> $field </TD>";
+                        $list .= "<TD ALIGN=$align BGCOLOR='$colour' NOWRAP> $field </TD>";
                     }
                 }
      # add a link field for details
@@ -1242,13 +1261,11 @@ sub copy {
     my $target = shift; # table handle of target database table
     my $column = shift; # column name or 'where' keyword
     my $cvalue = shift; # column value or selection condition for rows in this table
-    my $cnames = shift; # optional, array with column names to be copied; else all
+    my $doCopy = shift; # False for test purposes
+#    my $cnames = shift; # optional, array with column names to be copied; else all
 
-print "self $self  target $target $column $cvalue ";
-print "cnames @$cnames" if $cnames;
-print "auto inc: $self->{autoinc}<br>\n";
     my $unique =  $self->{unique};
-# find the first unique key which is not numerical, if any, else take the first one 
+# find, if any, the first unique key which is not numerical, else take the first one 
     undef my $marker;
     foreach my $key (@$unique) {
         $marker = $key;
@@ -1270,29 +1287,53 @@ print "auto inc: $self->{autoinc}<br>\n";
 # get the rows to be copied
 
     my $hashes = $self->associate('hashrefs',$column,$cvalue,1);
-print "hashes: $hashes  unique=$unique @$unique $marker\n";
+
+
+    my $report = "copy data from $self to $target (query: $column $cvalue) using marker $marker\n";
 
     foreach my $hash (@$hashes) {
 # test if the unique key exists in target; if so update, else newrow
         my $targethash;
+        $report .= "\n\nProcessing entry for $marker = $hash->{$marker}\n";
         if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
-            print "creating new row for $hash->{$marker}\n";
-#            $target->newrow($marker,$hash->{$marker});
+            $report .= "creating new row for $hash->{$marker}\n";
+            if ($doCopy && !$target->newrow($marker,$hash->{$marker})) {
+                $report .= "Failed to create a new entry for $marker $hash->{$marker}\n";
+                next
+            }
         }
         foreach my $key (keys %$hash) {
-   print "key $key  autoinc '$target->{autoinc}' marker $marker hashkey '$hash->{$key}'\n";
+# key must be defined and not have a unique index 
             if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key} =~ /\S/) {
                 if ($hash->{$key} ne $targethash->{$key}) {
-                    print "updating $key = $hash->{$key} for $hash->{$marker}\n";
-#                    $target->update($key,$hash->{$key},$marker,$hash->{$marker});
+                    $report .= "updating $key to: $hash->{$key} for $hash->{$marker}\n";
+                    $target->update($key,$hash->{$key},$marker,$hash->{$marker}) if $doCopy;
                 }
                 else {
-		    print "key $key is identical in both tables\n";
+                    $report .= "key $key is identical in both tables\n";
                 }
 	    }
         }
-print "\n\n";       
     }
+    return $report;
+}
+
+#*******************************************************************************
+
+sub importOptions {
+# private function 
+    my $options = shift;
+    my $hash    = shift;
+
+    my $status = 0;
+    if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
+        foreach my $option (keys %$hash) {
+            $options->{$option} = $hash->{$option};
+        }
+        $status = 1;
+    }
+
+    $status;
 }
 
 #############################################################################

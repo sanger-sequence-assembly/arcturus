@@ -1076,13 +1076,15 @@ print "NEWROW return status: $inputStatus<br>" if $list;
 #############################################################################
 
 sub setMultiLineInsert {
+# (re-)define insert block size
     my $self = shift;
     my $line = shift;
 
     $line = 1 if (!$line || $line < 1);
 
-    $self->flush() if $self->{multiLine}; # dump any pending new lines
-    $self->{multiLine} = $line;
+    $self->flush() if $self->{multiLine}; # dump any pending inserts
+
+    $self->{multiLine} = $line; # assign new line number
 }
 
 #############################################################################
@@ -1090,7 +1092,7 @@ sub setMultiLineInsert {
 sub flush {
 # flush stack data, either all or a named stack
     my $self   = shift;
-    my $string = shift;
+    my $string = shift; # undef for all stacks
 
 #print "FLUSH $self->{tablename}\n";
     my $status = 0;
@@ -1807,6 +1809,19 @@ sub timestamp {
     return $stamp;
 }
 
+#############################################################################
+# DESTROY with cleanup
+#############################################################################
+
+sub DESTROY {
+    my $self = shift;
+
+    $self->flush(); # clearout any pending database table inserts
+
+    return 1;
+}
+
+#############################################################################
 #############################################################################
 
 sub colophon {

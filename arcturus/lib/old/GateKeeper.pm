@@ -924,7 +924,7 @@ sub GUI {
 
 # compose the top bar (partition 2)
 
-    my $database=$cgi->parameter('database') || $cgi->parameter('organism');
+    my $database=$cgi->parameter('database') || $cgi->parameter('organism') || 'arcturus';
 
     $page->partition(2); $page->center(1);
     $connection =~ s/\b(dev\w+)\b/<font size=+1 color=red>$1<\/font>/;
@@ -933,6 +933,10 @@ sub GUI {
     $banner =~ s/ARCTURUS/$database/ if ($database ne 'arcturus');
     $page->add($banner,0,0,"size=+1");
     
+# compose the link lists on left- and right-hand sides
+
+    my $emptyrow = "<TR><TD $cell>&nbsp</TD></TR>";
+
 # compose the left-side link table  (dev/prod database functions; partitions 3,5)
 # transfer to same script on different server; requires to omit database specification
 
@@ -948,14 +952,17 @@ sub GUI {
             my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
             my $type = uc($altertypes{$server}); $type =~ s/^(\w)\w*$/$1/;
             my $link = "$url[0]";
-            $link = "<a href=\"http://$server$script\"> $link </a>" if ($type ne 'C');
+            my $title = "title=\"GO TO THE ? SERVER ON $url[0]\"";
+            $link = "<a href=\"http://$server$script\" $title> $link </a>" if ($type ne 'C');
             $type = "&nbsp" if ($type eq 'C');
             $table .= "<tr><td $cell width=87.5%>$link</td><td $cell width=12.5%>$type</td></tr>";
         }
     }
     $table .= "<tr><td $cell colspan=2> </td></tr>";
     $table .= "</table>";
+    $page->space;
     $page->add($table);   
+    $page->space;
 
 # compose the database table for chosing a different database
 
@@ -967,15 +974,15 @@ sub GUI {
         foreach my $database (sort @databases) {
             my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
-            $target .= "&database=$database" if ($target !~ /\b$database\b/);
+            $target .= "?database=$database" if ($target !~ /\b$database\b/);
             my $link = $database;
-            $link = "<a href=\"$target\"> $link </a>" if ($current && $current ne $link);
+            $link = "<a href=\"$target\"> $link </a>" if (!$current || $current ne $link);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
     }
-    $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
     $page->add($table); 
+    $page->space(4-@databases);
 
 # the other table require the input database specification  
 
@@ -994,7 +1001,7 @@ sub GUI {
         $create = "/cgi-bin/amanager/preselect/project".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$create\"> Project </a></td></tr>";
     }
-    $create = "/cgi-bin/umanager/newform".$cgi->postToGet(1,'session');
+    $create = "/cgi-bin/umanager/getform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\"> User </a></td></tr>";
     $table .= "<tr><td $cell>&nbsp </td></tr>";
     $table .= "</table>";
@@ -1011,27 +1018,40 @@ sub GUI {
         $update = "/cgi-bin/pmanager/specify/contigs".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> Contigs </a></td></tr>";
     }
+    $table .= $emptyrow;
+    $table .= $emptyrow;
     $table .= "</table>";
     $page->add($table);   
 
 # compose the input table
 
+    my $target = &currentHost($self).&currentPort($self);
+    my $target = "target=\"${target}input\"";
+
     $page->partition(4);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Input </th></tr>";
     my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet(1,@include);
-    $table .= "<tr><td $cell><a href=\"$input\"> READS </a></td></tr>";
+    $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
+    $title = "title = \"Start READS reader\"";
+    $table .= "<tr><td $cell><a href=\"$input\" $target $title> READS </a></td></tr>";
     $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet(1,@include);
-    $table .= "<tr><td $cell><a href=\"$input\"> CONTIGS </a></td></tr>";
+    $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
+    $table .= "<tr><td $cell><a href=\"$input\" $target> CONTIGS </a></td></tr>";
     if ($database && $database ne 'arcturus') {
         $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$input\"> TAGS </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$input\" $target> TAGS </a></td></tr>";
+        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$input\" $target> MAPS </a></td></tr>";
     }
     else {
-#        $table .= "<tr><td>select<br>a<br>database></td></tr>";
+        $table .= $emptyrow;
+        $table .= $emptyrow;
     }
     $table .= "</table>";
+    $page->space;
     $page->add($table);   
+    $page->space;
 
 # compose the common 
 
@@ -1053,7 +1073,37 @@ sub GUI {
 
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
-    $page->add($table);   
+    $page->add($table); 
+
+# add the query options
+  
+    $page->partition(9);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
+    if ($database && $database ne 'arcturus') {
+        my $query = "/cgi-bin/query/overview/$database";
+        $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">$database</a></td></tr>";
+    }
+    my $query = "/cgi-bin/query/overview/arcturus";
+    $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">arcturus</a></td></tr>";
+    $table .= "</table>";
+    $page->add($table); 
+
+# add the help and exit buttons
+
+    $page->partition(10);
+    $table = "<table $tablelayout>";
+    my $query = "/cgi-bin/query/overview/arcturus";
+    $cell = "bgcolor='yellow' nowrap align=center";
+    $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">HELP</a></td></tr>";
+    if ($cgi->parameter('session')) {
+        my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet;
+        $cell = "bgcolor='green' nowrap align=center";
+        $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">SIGN OFF</a></td></tr>";
+    }
+    $table .= "</table>";
+    $page->add($table); 
+
 
 # go back to the main section
 
@@ -1083,6 +1133,16 @@ sub currentHost {
     my @hostinfo = split /\.|\:/,$self->{server};
 
     return $hostinfo[0];
+}
+
+#*******************************************************************************
+
+sub currentPort {
+    my $self = shift;
+
+    my @hostinfo = split /\.|\:/,$self->{server};
+
+    return $hostinfo[$#hostinfo];
 }
 
 #*******************************************************************************
@@ -1117,6 +1177,20 @@ sub dropDead {
 
 #*******************************************************************************
 
+sub transfer {
+# redirect command; must come before any other output of a script
+    my $self = shift;
+    my $link = shift;
+
+#print "redirect: self $self\n";
+    $self->disconnect();
+    print redirect({-location=>$link});
+#print "after redirecting:\n";
+    exit 0;
+}
+
+#*******************************************************************************
+
 sub disconnect {
 # disconnect with message
     my $self = shift;
@@ -1124,7 +1198,6 @@ sub disconnect {
 
     &report($self,$text) if $text;
 
-# ? should be more extensive on which handle to be closed! main or additional ones
     $self->{handle}->disconnect if $self->{handle};
 }
 

@@ -53,8 +53,6 @@ else {
 
 my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-$GateKeeper->cgiHeader(2); # return string HTML under CGI
-
 ##############################################################################
 # MAIN
 ##############################################################################
@@ -114,10 +112,17 @@ if ($cgi) {
 
     $option = 'process' if ($option eq 'specify' && $cgi->parameter('process',0));
 
-    $page = $cgi->openPage('ARCTURUS READS loader');
-    $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
-    $page->frameborder(100,15,'white',10);
-    $page->center(1);
+# preprocessing of input info
+
+        $GateKeeper->cgiHeader(2); # return string HTML under CGI
+    if ($option eq 'specify' && $cgi->MethodGet) {
+# test if database and option are defined
+        $database = $cgi->parameter('database'); # compulsory
+        if ($organisms->associate('reads_pending',$database,'dbasename')) {
+            $source   = $cgi->parameter('source');
+        }
+#        $option = 'getform' if $cgi->{und_error};   
+    }
 
     undef my $error;
     if ($option eq 'getform') {
@@ -142,11 +147,24 @@ if ($cgi) {
         exit 0; 
     }
     elsif ($option eq 'specify') {
-    # get source, database, and whether an assembly choice exists
-        $source = $cgi->parameter('source');   # compulsory
+# get source, database, and whether an assembly choice exists
         $database  = $cgi->parameter('database'); # compulsory
         my $asname = $cgi->parameter('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
+        if ($organisms->associate('reads_pending',$database,'dbasename')) {
+            $source = $cgi->parameter('source');   # compulsory
+            my $redirect = "/cgi-bin/$database/getform";
+            $GateKeeper->transfer($redirect) if ($cgi->MethodGet && $cgi->{und_error});
+        }
+        else {
+            $source = 0;
+        }
+
+        $GateKeeper->cgiHeader(2); # return string HTML under CGI
+        $page = $cgi->openPage('ARCTURUS READS loader');
+        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+        $page->frameborder(100,15,'white',10);
+        $page->center(1);
 
         $page->form("$arc_cgi_dir/rloader/arcturus/specify");
         $page->partition(2);
@@ -234,6 +252,12 @@ if ($cgi) {
 
     elsif ($option eq 'process') {
 # $page->sectionheader($cgi->PrintVariables());
+        $GateKeeper->cgiHeader(2); # return string HTML under CGI
+        $page = $cgi->openPage('ARCTURUS READS loader');
+        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+        $page->frameborder(100,15,'white',10);
+        $page->center(1);
+
 
         $source   = $cgi->parameter('source');
         $database = $cgi->parameter('database'); # redefine database

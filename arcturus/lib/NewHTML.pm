@@ -324,6 +324,19 @@ sub sectionheader {
 
 ###############################################################################
 
+sub space {
+# add vertical space
+    my $self  = shift;
+    my $multi = shift;
+
+    $multi = 1 if !defined($multi);
+    while ($multi--) {
+        add ($self,'<BR>');
+    }
+}
+
+###############################################################################
+
 sub hline {
 # add a horizontal line
     my $self = shift;
@@ -583,7 +596,7 @@ sub arcturusGUI {
     $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON2</TD>";
-    $layout .= "<TD ROWSPAN=4>CON0</TD>";
+    $layout .= "<TD ROWSPAN=4 VALIGN=TOP>CON0</TD>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON3</TD>";
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON4</TD>";
@@ -592,8 +605,8 @@ sub arcturusGUI {
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON6</TD>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON7</TD>";
     $layout .= "</TR><TR>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>&nbsp</TD>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>&nbsp</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON8</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON9</TD>";
     $layout .= "</TR></TABLE>";
 
     $self->{layout} = $layout;
@@ -700,7 +713,7 @@ sub flush {
 
     if (defined($layout)) {
         my $blank = "&nbsp";
-        foreach (my $i=0 ; $i < 9 ; $i++) {
+        foreach (my $i=0 ; $i <= 9 ; $i++) {
 # test if the contents element contains any text
 	    my $fill = 0;
             $fill = 1 if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
@@ -715,13 +728,9 @@ sub flush {
     $output .= $address if (defined($address));
     $output .= "</BODY></HTML>";
 
-# substitute values for standard place holders
-
-#    $output =~ s/SANGERLOGO/<IMG SRC="sanger.gif">/;
-#    $output =~ s/ARCTURUSLOGO/<IMG SRC="arcturus.jpg">/;
-
 # clear the contents
 
+    $null = 1 if !defined($null);
     undef $self->{content} if ($null);
 
 # finally, chop the output string into lines 
@@ -748,11 +757,3 @@ sub colophon {
 ###############################################################################
 
 1;
-
-
-
-
-
-
-
-

@@ -99,7 +99,7 @@ elsif ($cgi) {
         $cgi->delete('USER');
         $page->ingestCGI;
         my @buttons;
-        push @buttons, 'type=submit value="Redirect" name="redirect"' if !$redirect;
+#        push @buttons, 'type=submit value="Redirect" name="redirect"' if !$redirect;
         push @buttons, 'type=submit value="Recall" name="action"';
         push @buttons, 'type=submit value="Search" name="action"';
         push @buttons, 'type=reset  value="Reset"';
@@ -273,6 +273,14 @@ $PAIRS->flush(); # dump remaining pair entries
 # add link for the next block (using a session id!)
 
 if (!$redirect) {
+#        my $rreturn = $lreturn;
+#        $rreturn =~ s/update/rloader/;
+#        $rreturn =~ s/getmenu/specify/;
+#        $rreturn .= "\&database=$database\&source=$source\&assemblyname=$assemblyname";
+#        $page->linkbutton('LOAD MORE',$rreturn,0);
+#        $page->linkbutton('MAIN MENU',$lreturn,0);
+#        $page->flush();
+
 }
 
 # pack attributes, preload for subsequent search
