@@ -53,8 +53,6 @@ my $arc_log_dir = $config->get('ARC_LOG_DIR');
 my ($assembly, $assemblyname, $assemblynmbr);
 my ($projects, $projectname, $projectnmbr);
 
-my $return    = "$arc_cgi_dir/update/arcturus/getmenu";
-
 #my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
 my $brtag = "\n"; # , $gfont, $yfont, $ofont, $rfont, $efont);
 
@@ -111,7 +109,10 @@ foreach my $contig (@$contigs) {
 # for each clone, get the reads and determine the range
     foreach my $clone (keys %clones) {
 # determine the covering range of reads on the contig
-        undef my ($nrds, $rlgt, $ccs, $ccf);
+        undef my $ccf;
+        undef my $ccs;
+        undef my $rlgt;
+        undef my $nrds;
         foreach my $hash (@$maps) {
             if ($hash->{clone} eq $clone) {
                 my $rs = $hash->{prstart};

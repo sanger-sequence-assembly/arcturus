@@ -64,10 +64,6 @@ my ($CDD, $CFN, $CNF, $CGN, $CLF, $CPR, $SRC);
 my ($ASSEMBLY, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
 
-my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu";
-my $session = $GateKeeper->lookup('session',0);
-$lreturn .= "\?session=$session" if $session;
-
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
 
 ###############################################################################
@@ -185,7 +181,7 @@ else {
         $page->sectionheader("Select a Database : $select",4,0);
         $page->partition(5);
         $page->center(1);
-        $page->submitbuttonbar($lreturn,0,0,'MAIN MENU');
+        $page->submitbuttonbar('',0,0,'MAIN MENU');
         $page->ingestCGI();
         $page->form(0);
         $page->flush();
@@ -261,11 +257,10 @@ else {
                                'type=submit value="Continue" name="process"',
                                'type=reset  value=" Reset "');
                 $page->buttonbartemplate(3,0,\@buttons);                 
-                $page->linkbutton('RETURN',$lreturn,0);
             }
             else {
                 $page->errorbox("There are no assemblies defined for $database",0,0,'yellow');
-                $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
+                $page->messagebox("Please contact $db_manager or your project manager");
             }
         }
         $page->form(0);
@@ -324,7 +319,7 @@ else {
         $page->sectionheader("ARCTURUS CONTIGs loader specifications",3,0);
         $page->partition(1);
         $page->sectionheader("Sorry, an error status aborts this loader session",3,1);
-        $page->errorbox($error,$lreturn);
+        $page->errorbox($error);
         $page->flush();
         $GateKeeper->disconnect;
         exit 0;
@@ -553,6 +548,12 @@ $scount = 0 if !$scount;
     $GateKeeper->disconnect;
 
     if ($page) {
+
+        my $lreturn = $GateKeeper->currentScript;
+        $lreturn .= "/arcturus/getmenu";
+        my $session = $GateKeeper->lookup('session',0);
+        $lreturn .= "\?session=$session" if $session;
+
         $page->linkbutton('RETURN',$lreturn,0);
         $page->flush();
     }
