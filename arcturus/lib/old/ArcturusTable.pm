@@ -130,34 +130,35 @@ print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
         $depth = 0;
     }
     else {
-# test existence of datamodel
-        if (!$self->findInstanceOf('arcturus.DATAMODEL')) {
-            $self->new($dbh,'DATAMODEL','arcturus',0);
-        }
 # I am some other table; collect the referenced (dictionary) tables
 # at the same time, enter the linking information in $self->{sublinks}
 # (use column in this table as key for a hash array)
         my ($dbasename, $thistable) = split '\.',$fullname;
         $database = $dbasename if ($dbasename ne 'arcturus');
+# test existence of datamodel
+#        if (my $datamodel = $self->spawn('DATAMODEL','arcturus',0,0)) {
+        if (!$self->findInstanceOf('arcturus.DATAMODEL')) {
+            $self->new($dbh,'DATAMODEL','arcturus',0);
+        }
         if (my $datamodel = $self->findInstanceOf('arcturus.DATAMODEL')) {
 # DATAMODEL table is found among %instances
-            my $hashrefs = $datamodel->SUPER::associate('hashrefs',$thistable,'tablename');
+            my $hashrefs = $datamodel->associate('hashrefs',$thistable,'tablename');
             foreach my $hash (@$hashrefs) {
                 my $thiscolumn = $hash->{tcolumn};
                 my $linktable = $hash->{linktable};
-            # test possible existence of the linktable
+# test possible existence of the linktable
                 my $doesExist = $self->findInstanceOf('arcturus.'.$linktable);
                 $doesExist  = $self->findInstanceOf($database.'.'.$linktable) if !$doesExist;
 print "table $linktable: exist status=$doesExist<br>" if $LIST;
-            # add the table to the list of tables to be vivified
+# add the table to the list of tables to be vivified
                 if (!$existOnly || $doesExist) {
 print "add to link list: $hash->{linktable} $thiscolumn<br>" if $LIST; 
                     push @tablenames,$hash->{linktable}.'&'.$thiscolumn;
-            # test if this column already exists, if so add _ to allow multiple column references
+# test if this column already exists, if so add _ to allow multiple column references
                     while ( $self->{sublinks}->{$thiscolumn}->[0] ) {
                         $thiscolumn .= '_';
                     }
-                # add link information to the sublinks hash 
+# add link information to the sublinks hash 
 print "add link reference to sublink hash under key: $thiscolumn<br>" if $LIST; 
                     $self->{sublinks}->{$thiscolumn}->[0] = $hash->{linktable};
                     $self->{sublinks}->{$thiscolumn}->[1] = $hash->{lcolumn};
@@ -171,7 +172,7 @@ print "sublinks $thiscolumn @{$self->{sublinks}->{$thiscolumn}} <br>\n" if $LIST
     }
 
 # okay, here we have a list of tables to be instanciated
-# go through the list and build those table which do not yet exist
+# go through the list and build those tables which do not yet exist
 
 #$LIST=1;
     foreach my $tableentry (@tablenames) {
@@ -200,23 +201,29 @@ print "FAILED to create $linktable: ERROR status = $newtable->{errors}<br>" if $
                     $newtable->autoVivify($dbasename,$depth);
                 }
             }
-        # in case the table exists, but the links not
+# in case the table exists, but the links not
             elsif (!keys(%{$newtable->{sublinks}}) && ref($newtable) =~ /Arcturus/) {
                 $newtable->autoVivify($dbasename,$depth);
             }
-        # the target table does already exist and has itself links defined
-        # if all links have been reset at top entry, this node was visited
-        # therefore, remove the sublink to the target table 
+# the target table does already exist and has itself links defined
             else {
 print "table $linktable appears to have been visited before<br>" if $LIST;
-#                delete $self->{sublinks}->{$thiscolumn}; # ? really necessary?
+# if all links have been reset at top entry, this node was visited
+# therefore, remove the sublink to the target table 
+ #                delete $self->{sublinks}->{$thiscolumn}; # ? really necessary?
             }
-        # add the database name to the linking information
+# add the database name to the linking information
             my $sublinks = $self->{sublinks};
             foreach my $thiscolumn (keys %$sublinks) {
 print "SUBLINKS installed for $thiscolumn<br>" if $LIST;
                 if ($sublinks->{$thiscolumn}->[0] eq $linktable) {
                     $sublinks->{$thiscolumn}->[0] = $dbasename.'.'.$linktable;
+# here possible alternate linked columns
+                    if ($sublinks->{$thiscolumn}->[1] =~ /\//) {
+                        my @columns = split /\//, $sublinks->{$thiscolumn}->[1];
+                        $sublinks->{$thiscolumn}->[1] = shift @columns;
+                        $newtable->setAlternates(@columns);               
+                    }
                 }
             }
 	}
@@ -1309,8 +1316,7 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
 
         foreach my $key (keys %$hash) {
 # key must be defined and not have a unique index 
-            $hash->{$key} = ' ' if !defined($hash->{$key});
-            if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key}=~/\S/) {
+            if ($key ne $target->{autoinc} && $key ne $marker && defined($hash->{$key}) && $hash->{$key}=~/\S/) {
 
                 if ($hash->{$key} ne $targethash->{$key}) {
                     $report .= "key $key to be updated to $hash->{$key} for $hash->{$marker}";
@@ -1329,6 +1335,7 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
                 }
 	    }
             else {
+                $hash->{$key} = ' ' if !defined($hash->{$key});
                 $report .= "Not tested: $key ('$hash->{$key}')\n";
             }
         }
@@ -1392,8 +1399,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "30 Apr 2001",
-        updated =>    "08 Apr 2002",
+        updated =>    "26 Nov 2002",
     };
 }
+
+#*******************************************************************************
 
 1;
