@@ -392,7 +392,9 @@ sub loadReadData {
                     $status->{errors}++;
                 }
                 else {
+print "after seqDec <br>sstring: '$sstring' <br>" if ($dc == 2);
                     $sstring =~ s/\s+//g; # remove blanks
+print "after seqDec chop <br>sstring: '$sstring' <br>" if ($dc == 2);
                     $qcount = $scount; # preset for absent quality data
                 }
             }
@@ -443,7 +445,7 @@ sub loadReadData {
         $length = $hash->{slength} if (defined($hash->{slength}));
         $length = $scount if ($scount == $qcount && $length == 0); # temporary recovery
         if ($scount != $qcount || $scount != $length || $length == 0) {
-            $status->{report} .= "! Sequence length mismatch: $scount, $qcount, $length\n";
+            $status->{report} .= "! Sequence length mismatch: DNA=$scount, Q=$qcount ($length)\n";
             $status->{errors}++;    
         }
         else {
@@ -1146,7 +1148,10 @@ sub translate {
             $library->{ligation}->{$ligation} = $hash->{identifier};
             $library->{ligation}->{$ligation} .= " (nr $ligation)" if $long;
 # create a new library entry for insert size
-            my $insertsize = "$hash->{silow} $hash->{sihigh}";
+            my $insertsize = "unknown";
+            if (defined($hash->{silow}) && defined($hash->{sihigh})) {
+                $insertsize = "$hash->{silow} $hash->{sihigh}";
+	    }
             $library->{insertsize}->{$ligation} = $insertsize;
         }
 # sequencevector
@@ -1182,7 +1187,7 @@ sub translate {
             if (defined($dictionary->{$code})) {
                 $readhash->{$column} = $dictionary->{$code};
             }
-            elsif ($column eq 'chemistry') {
+            elsif ($column eq 'chemistry' || $column eq 'insertsize') {
                 $readhash->{$column} = 'unknown';
             }
 	    else {
