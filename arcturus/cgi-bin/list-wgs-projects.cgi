@@ -2,6 +2,8 @@
 
 use WrapDBI;
 
+print "Content-Type: text/html\n\n";
+
 # List of schemas to exclude
 %exclude = ( 'MOUSE' => 1,
 	     'ZFISH' => 1
