@@ -108,6 +108,9 @@ public class TestContigManager {
 				System.out.println("*** FAILED ***");
 			    else {
 				System.out.println(contig);
+				System.out.println("  LENGTH:  " + contig.getLength());
+				System.out.println("  READS:   " + contig.getReadCount());
+				System.out.println("  UPDATED: " + contig.getUpdated());
 			    }
 			}
 		    }
