@@ -180,7 +180,6 @@ foreach $readrange (@{$readranges}) {
 
 	    while ($n = scalar(@bq)) {
 		print join(' ',@bq[0..24]),"\n";
-		$n -= 25;
 		@bq = @bq[25..$n];
 	    }
 
