@@ -701,12 +701,10 @@ sub putRead {
 
     my $dbh = $this->getConnection();
 
-    my ($sil,$sih) = @{$read->getInsertSize()}; 
 
-    #my $ligation_id = $this->getDictionaryItemID (
-    #                  'ligation', $read->getLigation(),
-    #                  'ligation_id','LIGATIONS','identifier',
-    #	       {silow => $sil, sihigh => $sih});
+    # LIGATION
+
+    my ($sil,$sih) = @{$read->getInsertSize()}; 
 
     my $query = "select ligation_id from LIGATIONS where identifier=?";
     my $select_sth = $dbh->prepare_cached($query);
@@ -723,10 +721,7 @@ sub putRead {
 
     return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
 
-    #my $template_id = $this->getDictionaryItemID (
-    #                  'template', $read->getTemplate(),
-    #                  'template_id','TEMPLATE','name',
-    #                   {ligation_id => $ligation_id});                  
+    # TEMPLATE
 
     $query = "select template_id from TEMPLATE where name=?";
     $select_sth = $dbh->prepare_cached($query);
@@ -745,27 +740,55 @@ sub putRead {
 
 # c) encode dictionary items basecaller, clone, status
 
-    #my $basecaller  = $this->getDictionaryItemID (
-    #                  'basecaller', $read->getBaseCaller(),
-#		      'basecaller','BASECALLER','name');
+    # BASECALLER
 
-    #my $status      = $this->getDictionaryItemID (
-    #                  'status', $read->getStatus(),
-#		      'status','STATUS','identifier');
+    $query = "select basecaller from BASECALLER where name=?";
+    $select_sth = $dbh->prepare_cached($query);
+    $query = "insert ignore into BASECALLER(basecaller) VALUES(?)";
+    $insert_sth = $dbh->prepare_cached($query);
 
-    #my $clone       = $this->getDictionaryItemID (
-    #                  'clone',  $read->getClone(),
-#		      'clone','CLONES','clonename');
+    $dict = $this->{LoadingDictionary}->{'basecaller'};
+
+    my $basecaller = &getReadAttributeID($read->getBaseCaller(),
+					 $dict,
+					 $select_sth,
+					 $insert_sth);
+
+    # STATUS
+
+    $query = "select status from STATUS where identifier=?";
+    $select_sth = $dbh->prepare_cached($query);
+    $query = "insert ignore into STATUS(identifier) VALUES(?)";
+    $insert_sth = $dbh->prepare_cached($query);
+
+    $dict = $this->{LoadingDictionary}->{'status'};
+
+    my $status = &getReadAttributeID($read->getProcessStatus(),
+				     $dict,
+				     $select_sth,
+				     $insert_sth);
+
+    # CLONE
+
+    $query = "select clone from CLONES where clonename=?";
+    $select_sth = $dbh->prepare_cached($query);
+    $query = "insert ignore into CLONES(clonename) VALUES(?)";
+    $insert_sth = $dbh->prepare_cached($query);
+
+    $dict = $this->{LoadingDictionary}->{'clone'};
+
+    my $clone = &getReadAttributeID($read->getClone(),
+				    $dict,
+				    $select_sth,
+				    $insert_sth);
 
 # d) insert Read meta data
-
-    my $dbh = $this->getConnection();
 
     return (0, "no database connection") unless defined($dbh);
 
     my $readname = $read->getReadName();
 
-    my $query = "insert into" .
+    $query = "insert into" .
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
 	    " VALUES(?,?,?,?,?,?,?,?,?)";
 
