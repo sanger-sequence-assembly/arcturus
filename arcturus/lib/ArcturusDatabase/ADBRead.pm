@@ -1882,19 +1882,36 @@ sub putTraceArchiveIdentifierForRead {
     return (1,"OK");
 }
 
-sub deleteRead {
-# delete a read for the given read_id and all its data (to be TESTED)
+sub deleteRead { # TO BE TESTED
+# delete a read for the given read_id and all its data
     my $this = shift;
-    my ($key, $value, $junk) = @_;
+    my $key  = shift;  # read_id or readname
+    my $value = shift; # its value
+
+# user protection 
+
+    my $user = $this->getArcturusUser();
+    unless ($user eq 'ejz') {
+        return (0,"user $user has no privilege to delete reads");
+    }
 
     my $readid;
     if ($key eq 'id' || $key eq 'read_id') {
 	$readid = $value;
     }
     elsif ($key eq 'name' || $key eq 'readname') {
+        return $this->deleteReadsLike($value,@_) if ($value =~ /[\%\-]/);
 	$readid = $this->hasRead($value); # get read_id for readname
         return (0,"Read does not exist") unless $readid;
     }
+    else {
+        return (0,"invalid input");
+    }
+
+# here read the confirmation (or not) from input parameters
+
+    my ($confirm,$execute) = @_; # accept only confirm=>execute
+    $execute = 0 if (!$confirm || $confirm && $confirm ne 'confirm' || !$execute);
 
     my $dbh = $this->getConnection();
 
@@ -1903,10 +1920,12 @@ sub deleteRead {
     my $query = "select * from MAPPING left join SEQ2READ using (seq_id) 
                  where SEQ2READ.read_id = ?";
     my $sth = $dbh->prepare_cached($query);
-    my $rn = $sth->execute($readid) || &queryFailed($query);
+    my $row = $sth->execute($readid) || &queryFailed($query);
     $sth->finish();
 
-    return (0,"Cannot delete an assembled read") if (!defined($rn) || $rn);
+    return (0,"Assembled read $value cannot be removed") if (!$row || $row > 0);
+
+    return (0,"Read $value to be deleted") unless $execute;
 
 # remove for readid from all tables it could be in
 
@@ -1916,21 +1935,55 @@ sub deleteRead {
 # delete seq_id items
     foreach my $table (@stables) {
         $query = "delete $table from $table left join SEQ2READ using (seq_id) where read_id=?";
+print "$query\n"; next; # test this query!
         $sth = $dbh->prepare_cached($query);
-        $delete++ if $sth->execute($readid);
+#        $row = $sth->execute($readid) || &queryFailed($query);
+        $delete++ if ($row > 0);
         $sth->finish();
     }
 
-    my @rtables = ('READCOMMENT','TRACEARCHIVE','STATUS','SEQ2READ','READS');
+    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','READS');
 # delete read_id items
     foreach my $table (@stables) {
         $query = "delete from $table where read_id=?";
+print "$query\n"; next;
         $sth = $dbh->prepare_cached($query);
-        $delete++ if $sth->execute($readid);
+#        $row = $sth->execute($readid) || &queryFailed($query);
+        $delete++ if ($row > 0);
         $sth->finish();
     }
 
-    return (1,"Records for read $readid removed from $delete tables");
+    return ($delete,"Records for read $readid removed from $delete tables");
+}
+
+sub deleteReadsLike { # TO BE TESTED
+    my $this = shift;
+    my $name = shift;
+
+    my $query = "select read_id from READS where readname like ?";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($name) || $query =~ s/\?/$name/ && &queryFailed($query);
+
+    my @readids;
+    while (my ($read_id) = $sth->fetchrow_array()) {
+        push @readids,$read_id;
+    }
+
+    $sth->finish();
+
+    my $result = 0;
+    my $report = '';
+    foreach my $read_id (@readids) {
+        my ($success,$message) = $this->deleteRead(read_id=>$read_id,@_);
+        $report .= "\n".$message unless $success;
+        $result++ if $success;
+    }
+
+    return $result,$report;
 }
 
 sub getSequenceIDsForReads {

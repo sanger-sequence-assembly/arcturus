@@ -36,6 +36,7 @@ sub getContig {
 # return a Contig object  (under development)
 # options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
 # additional : metaDataOnly=>0 or 1 (default 0), noReads=>0 or 1 (default 0)
+# andblocked: include contig from blocked projects TO BE IMPLEMENTED ?
     my $this = shift;
 
 # decode input parameters and compose the query
