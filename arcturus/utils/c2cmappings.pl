@@ -93,14 +93,24 @@ while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) 
 
     my @sortedsegments = sort byOldStartThenFinish @{$segments};
 
+    print $logfh "\nOVERALL MAPPING:\n\n";
+
+    print $logfh "RAW SEGMENTS\n\n";
+
+    &displaySegments(\@sortedsegments, $logfh);
+
     $segments = &mergeSegments(\@sortedsegments, 'Forward', $sense, $loose);
 
-    print $logfh "\nOVERALL MAPPING:\n\n";
+    print $logfh "\n\nMERGED\n\n";
 
     &displaySegments($segments, $logfh);
 
+    print $logfh "\n\n";
+
     print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
     &displaySegments($segments, $outfh);
+
+    print $outfh "\n\n";
 }
 
 $dbh->disconnect();
@@ -135,7 +145,7 @@ sub getReadToContigMappings {
     $seq_stmt->execute($contigid);
     &db_die("Failed to execute query \"$query\"");
 
-    $query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? ORDER BY rstart ASC";
+    $query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? AND length > 1 ORDER BY rstart ASC";
 
     my $seg_stmt =  $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");
