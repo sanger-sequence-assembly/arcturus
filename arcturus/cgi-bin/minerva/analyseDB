@@ -89,7 +89,11 @@ sub showAllDatabases {
 	my $nTables = &countTables($dbh, $database);
 
 	if (defined($nTables)) {
-	    $nTables = "($nTables table" . ($nTables > 1 ? 's' : '') . ")";
+	    if ($nTables > 0) {
+		$nTables = "($nTables table" . ($nTables > 1 ? 's' : '') . ")";
+	    } else {
+		$nTables = "(no tables)";
+	    }
 	} else {
 	    $nTables = "(cannot query)";
 	}
