@@ -20,12 +20,13 @@ my $aspedbefore;
 my $aspedafter;
 my $blocksize = 10000;
 my $fasta;
+my $namelike;
 
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
+my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|namelike|".
                  "blocksize|info|verbose|help";
 
 
@@ -42,6 +43,8 @@ while (my $nextword = shift @ARGV) {
     $aspedbefore      = shift @ARGV  if ($nextword eq '-aspedbefore');
 
     $aspedafter       = shift @ARGV  if ($nextword eq '-aspedafter');
+
+    $namelike         = shift @ARGV  if ($nextword eq '-namelike');
 
 #    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
@@ -84,6 +87,7 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 my %options;
 $options{-aspedbefore} = $aspedbefore if $aspedbefore;
 $options{-aspedafter}  = $aspedafter  if $aspedafter;
+$options{-namelike} = $namelike if defined($namelike);
 
 $logger->info("Opening CAF file $cafFileName for output") if $cafFileName;
 
@@ -134,6 +138,7 @@ sub showUsage {
     print STDERR "-caf\t\tcaf file name for output\n";
     print STDERR "-aspedbefore\tdate\n";
     print STDERR "-aspedafter\tdate\n";
+    print STDERR "-namelike\tName pattern\n";
     print STDERR "-fasta\t\t(no value) write in fasta format (default CAF)\n".
     print STDERR "-blocksize\t(default 50000) for blocked execution\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
