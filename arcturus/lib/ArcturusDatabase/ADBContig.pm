@@ -208,7 +208,9 @@ sub getParentContigsForContig {
         my $parents = $this->getParentIDsForContigID($contigid);
         @parentids = @$parents if $parents;
     }
-# and pull them out (metadata only)
+
+# build the Contig instances (metadata only) and add to the input Contig object
+
     foreach my $parentid (@parentids) {
         my $parent = $this->getContig(ID=>$parentid, metaDataOnly=>1);
         $contig->addParentContig($parent) if $parent;
@@ -222,105 +224,6 @@ sub hasContig {
     my $contig_id = shift;
 
     return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
-}
-
-sub getCurrentContigs {
-# returns a list of contig_ids of some age (default 0, at the top of the tree)
-    my $this = shift;
-
-# parse options (default long look-up excluding singleton contigs)
-
-# option singleton : set true for including single-read contigs (default F)
-# option short     : set true for doing the search using age column of 
-#                    C2CMAPPING; F for a left join for contigs which are
-#                    not a parent (results in 'current' generation age=0)
-# option age       : if specified > 0 search will default to short method
-#                    selecting on age (or short) assumes a complete age tree 
-
-    my $age = 0;
-    my $short = 0;
-    my $singleton = 0;
-    while (my $nextword = shift) {
-        if ($nextword eq 'short') {
-            $short = shift;
-        }
-        elsif ($nextword eq 'singleton') {
-            $singleton = shift;
-        }
-        elsif ($nextword eq 'age') {
-            $age = shift;
-        }
-        else {
-            die "Invalid parameter $nextword for ->getCurrentContigs";
-        }
-    }
-
-# there are two ways of searching: the short way assumes that all
-# contigs in CONTIG occur in C2CMAPPING and that the age structure
-# is consistent; the long way checks from scratch using a left join.
-
-# if the age is specified > 0 we default to the short method.
-
-    my $query;
-    if ($short && !$singleton) {
-# use age column information and exclude singleton contigs
-        $query = "select distinct(CONTIG.contig_id)".
-                 "  from CONTIG join C2CMAPPING".
-                 "    on CONTIG.contig_id = C2CMAPPING.contig_id".
-                 " where C2CMAPPING.age = $age".
-		 "   and CONTIG.nreads > 1";
-    }
-    elsif ($short || $age) {
-# use age column information and include possible singletons
-	$query = "select distinct(contig_id) from C2CMAPPING where age = $age";
-    }
-    else {
-# generation 0 consists of all those contigs which ARE NOT a parent
-# search from scratch for those contigs which are not a parent
-        $query = "select CONTIG.contig_id".
-                 "  from CONTIG left join C2CMAPPING".
-                 "    on CONTIG.contig_id = C2CMAPPING.parent_id".
-	         " where C2CMAPPING.parent_id is null";
-        $query .= "  and CONTIG.nreads > 1" unless $singleton;
-    }
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    undef my @contigids;
-    while (my ($contig_id) = $sth->fetchrow_array()) {
-        push @contigids, $contig_id;
-    }
-
-    return [@contigids];
-}
-
-sub getInitialContigs {
-# returns contig IDs at the bottom of the age tree (variable age)
-    my $this = shift;
-
-# consists of all those contigs which HAVE NOT a parent
-
-    my $query = "select CONTIG.contig_id".
-                "  from CONTIG join C2CMAPPING".
-                "    on CONTIG.contig_id = C2CMAPPING.parent_id".
-	        " where C2CMAPPING.parent_id is null"; # ?
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    undef my @contigids;
-    while (my ($contig_id) = $sth->fetchrow_array()) {
-        push @contigids, $contig_id;
-    }
-
-    return [@contigids];
 }
 
 #------------------------------------------------------------------------------
@@ -462,8 +365,8 @@ return 0,$message if $TEST; # testing
 
 # and contig tags?
 
-#    return 0, "Failed to insert tags for $contigname"
-#    unless &putTagsForContig($dbh,$contig);
+    return 0, "Failed to insert tags for $contigname"
+    unless &putTagsForContig($dbh,$contig);
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
@@ -711,7 +614,7 @@ sub deleteContig {
 }
 
 #---------------------------------------------------------------------------------
-# methods dealing with Mappings, Segments and links between Contigs
+# methods dealing with Mappings
 #---------------------------------------------------------------------------------
 
 sub getReadMappingsForContig {
@@ -869,7 +772,6 @@ sub putMappingsForContig {
     my $squery; # for insert on the (C2C)SEGMENT table
     my $mappings; # for the array of Mapping instances
 
-my $test = 0; # to removed later
     while (my $nextword = shift) {
         my $value = shift;
         if ($nextword eq "type") {
@@ -896,11 +798,6 @@ my $test = 0; # to removed later
             }
         }
 
-# to be removed later
-elsif ($nextword eq "test") {
-     $test = $value;
-}
-
         else {
             die "Invalid parameter $nextword for ->putMappingsForContig";
         }
@@ -920,16 +817,6 @@ elsif ($nextword eq "test") {
     foreach $mapping (@$mappings) {
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
-
-#if ($test) {
-# to be removed later
-#print STDOUT "Mapping TEST: contig_id $contigid, seq_id ".
-#$mapping->getSequenceID().
-#" cstart $cstart, cfinal $cfinish, alignment ".
-#($mapping->getAlignmentDirection() || "undef")."\n";
-#$mapping->setMappingID($test++);
-#next;
-#}
 
         my $rc = $sth->execute($contigid,
                                $mapping->getSequenceID(),
@@ -976,6 +863,58 @@ elsif ($nextword eq "test") {
     }
     return $success;
 }
+
+sub cleanupSegmentTables {
+# houskeeping: remove redundent mapping references from (C2C)SEGMENT
+# (required after e.g. deleting contigs)
+    my $this = shift;
+    my $list = shift;
+
+    my $dbh = $this->getConnection();
+
+# first we deal with SEGMENT in blocks of 10000, then with C2CSEGMENT 
+
+    my $pf = '';
+    my $success = 1;
+    while ($success) {
+# find mapping IDs in (C2C)SEGMENT which do not occur in (C2C)MAPPING
+        my $query = "select distinct(${pf}SEGMENT.mapping_id)" .
+                    "  from ${pf}SEGMENT left join ${pf}MAPPING using (mapping_id)".
+                    " where ${pf}MAPPING.mapping_id is null limit 10000";
+
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        my @mappingids;
+        while (my ($mappingid) = $sth->fetchrow_array()) {
+            push @mappingids, $mappingid;
+        }
+
+        print STDERR "To be deleted from ${pf}SEGMENT : ".
+	              scalar(@mappingids)." mapping IDs\n" if $list;
+
+        if (@mappingids) {
+            $query = "delete from ${pf}SEGMENT where mapping_id in (".
+		      join(',',@mappingids).")";
+            my $deleted = $dbh->do($query) || &queryFailed($query);
+            $success = 0 unless $deleted;
+        } 
+        elsif (!$pf) {
+# MAPPING finished, now do C2CMAPPING
+            $pf = "C2C";
+        }
+        else {
+            last;
+        }
+    }
+
+    return $success;
+}
+
+#-----------------------------------------------------------------------------
+# methods dealing with generations and age tree
+#-----------------------------------------------------------------------------
 
 sub getParentsIDsForContig {
 # returns a list contig IDs of parents for input Contig based on 
@@ -1126,7 +1065,7 @@ sub rebuildHistoryTree {
 
 # step 2: get all contig_ids of age 0
 
-    my $contigids = $this->getCurrentContigs(0);
+    my $contigids = $this->getCurrentContigIDs(singleton=>1);
 
 # step 3: each contig id is the starting point for tree build from the top
 
@@ -1135,53 +1074,156 @@ sub rebuildHistoryTree {
     }
 }
 
-sub cleanupSegmentTables {
-# houskeeping: remove redundent mapping references from (C2C)SEGMENT
+#-------------------------------------------------------------------------
+
+sub getCurrentContigIDs {
+# returns a list of contig_ids of some age (default 0, at the top of the tree)
     my $this = shift;
-    my $list = shift;
 
-    my $dbh = $this->getConnection();
+# parse options (default long look-up excluding singleton contigs)
 
-    my $pf = '';
-    my $success = 1;
-    while ($success) {
-# first we deal with SEGMENT in blocks of 10000, then with C2CSEGMENT 
-        my $query = "select distinct(${pf}SEGMENT.mapping_id)" .
-                    "  from ${pf}SEGMENT left join ${pf}MAPPING using (mapping_id)".
-                    " where ${pf}MAPPING.mapping_id is null limit 10000";
+# option singleton : set true for including single-read contigs (default F)
+# option short     : set true for doing the search using age column of 
+#                    C2CMAPPING; F for a left join for contigs which are
+#                    not a parent (results in 'current' generation age=0)
+# option age       : if specified > 0 search will default to short method
+#                    selecting on age (or short) assumes a complete age tree 
 
-        my $sth = $dbh->prepare_cached($query);
-
-        $sth->execute() || &queryFailed($query);
-
-        my @mappingids;
-        while (my ($mappingid) = $sth->fetchrow_array()) {
-            push @mappingids, $mappingid;
+    my $age = 0;
+    my $short = 0;
+    my $singleton = 0;
+    while (my $nextword = shift) {
+        if ($nextword eq 'short') {
+            $short = shift;
         }
-
-        print STDERR "To be deleted from ${pf}SEGMENT : ".
-	              scalar(@mappingids)." mapping IDs\n" if $list;
-
-        if (@mappingids) {
-            $query = "delete from ${pf}SEGMENT where mapping_id in (".
-		      join(',',@mappingids).")";
-            my $deleted = $dbh->do($query) || &queryFailed($query);
-            $success = 0 unless $deleted;
-        } 
-        elsif (!$pf) {
-            $pf = "C2C";
+        elsif ($nextword eq 'singleton') {
+            $singleton = shift;
+        }
+        elsif ($nextword eq 'age') {
+            $age = shift;
         }
         else {
-            last;
+            die "Invalid parameter $nextword for ->getCurrentContigIDs";
         }
     }
 
-    return $success;
+# there are two ways of searching: the short way assumes that all
+# contigs in CONTIG occur in C2CMAPPING and that the age structure
+# is consistent; the long way checks from scratch using a left join.
+
+# if the age is specified > 0 we default to the short method.
+
+    my $query;
+    if ($short && !$singleton) {
+# use age column information and exclude singleton contigs
+        $query = "select distinct(CONTIG.contig_id)".
+                 "  from CONTIG join C2CMAPPING".
+                 "    on CONTIG.contig_id = C2CMAPPING.contig_id".
+                 " where C2CMAPPING.age = $age".
+		 "   and CONTIG.nreads > 1";
+    }
+    elsif ($short || $age) {
+# use age column information and include possible singletons
+	$query = "select distinct(contig_id) from C2CMAPPING where age = $age";
+    }
+    else {
+# generation 0 consists of all those contigs which ARE NOT a parent
+# search from scratch for those contigs which are not a parent
+        $query = "select CONTIG.contig_id".
+                 "  from CONTIG left join C2CMAPPING".
+                 "    on CONTIG.contig_id = C2CMAPPING.parent_id".
+	         " where C2CMAPPING.parent_id is null";
+        $query .= "  and CONTIG.nreads > 1" unless $singleton;
+    }
+
+    $query .= " order by contig_id";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+    return [@contigids]; # always return array, may be empty
+}
+
+sub getCurrentParentIDs {
+# returns contig IDs of the parents of the current generation, i.e. age = 1
+    my $this = shift;
+
+    my $current = $this->getCurrentContigIDs(@_,short=>0); # force 'long' method
+
+    push @$current,0 unless @$current; # protect against empty array
+
+    my $query = "select distinct(parent_id) from C2CMAPPING" . 
+	        " where contig_id in (".join(",",@$current).")" .
+		" order by parent_id";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+    return [@contigids];
+} 
+
+sub getInitialContigIDs {
+# returns contig IDs at the bottom of the age tree (variable age)
+    my $this = shift;
+
+# consists of all those contigs which HAVE NOT a parent
+
+    my $query = "select distinct(contig_id)" .
+                "  from C2CMAPPING" .
+	        " where parent_id = 0 or parent_id is null" .
+                " union " .
+                "select distinct(CONTIG.contig_id)" .
+                "  from CONTIG left join C2CMAPPING" .
+                " using (contig_id)" .
+		" where C2CMAPPING.contig_id is null" .
+                " order by contig_id";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+    return [@contigids];
 }
 
 #------------------------------------------------------------------------------
 # methods dealing with contig TAGs
 #------------------------------------------------------------------------------
+
+sub putTagsForContig {
+    my $dbh = shift;
+    my $contig = shift; # Contig instance
+
+    die "getTagsForContig expects a Contig instance" 
+    unless (ref($contig) eq 'Contig');
+
+    return 1 unless $contig->hasTags();
+
+# to be completed
+    return 1;
+}
 
 sub getTagsForContig {
     my $this = shift;

@@ -770,7 +770,7 @@ sub getUnassembledReads {
 
 # step 1: get a list of contigs of age 0 (long method)
 
-    my $contigids = $this->getCurrentContigs(singleton=>$withsingletoncontigs);
+    my $contigids = $this->getCurrentContigIDs(singleton=>$withsingletoncontigs);
 
 # step 2: find the read_id-s in the contigs
 
