@@ -86,6 +86,10 @@ public class TestContigManager {
 		    adb.setLogger(logger);
 	    }
 
+	    System.out.println("Contig mapping mode is   " + mappingOptionString);
+	    System.out.println("Contig consensus mode is " + consensusOptionString);
+	    System.out.println();
+
 	    report();
 
 	    if (Boolean.getBoolean("preloadClones")) {
@@ -196,7 +200,7 @@ public class TestContigManager {
     public static void report() {
 	long timenow = System.currentTimeMillis();
 
-	System.out.println("******************** REPORT *******************");
+	System.out.println("******************** REPORT ********************");
 	System.out.println("Time: " + (timenow - lasttime));
 
 	lasttime = timenow;
