@@ -627,7 +627,7 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
   print "recovery hashref $hash column $column <br>";
         }
 
-        if (!defined($hash)) {
+        if (!$hash) {
     # the ligation does not yet exist; find it in the Oracle database and add to LIGATIONS
             &logger("Ligation $readItem{LG} not in LIGATIONS: search in Oracle database");
             my $origin;
