@@ -146,14 +146,16 @@ CREATE TABLE MAPPING (
 
 CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
+  name varchar(8) binary NOT NULL,
   assembly_id smallint(5) unsigned default '0',
-  updated datetime default NULL,
+  updated timestamp NOT NULL,
   owner varchar(8) binary default NULL,
   locked datetime default NULL,
   created datetime default NULL,
   creator varchar(8) binary NOT NULL default 'arcturus',
   comment text default NULL,
-  PRIMARY KEY  (project_id)
+  PRIMARY KEY  (project_id),
+  UNIQUE INDEX (assembly_id,name)
 ) TYPE=MyISAM;
 
 #  projectname varchar(16) binary default NULL,
@@ -196,7 +198,7 @@ CREATE TABLE READS (
 CREATE TABLE READTAG (
   seq_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
-  tag_id mediumint(8) unsigned NOT NULL default '0',
+  tag_seq_id mediumint(8) unsigned NOT NULL default '0',
   pstart smallint(5) unsigned NOT NULL default '0',
   pfinal smallint(5) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
@@ -212,8 +214,8 @@ CREATE TABLE READTAG (
 CREATE TABLE CONTIGTAG (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
-   systematic_id VARCHAR(32) binary NULL,
-   tag_seq_id mediumint(8) unsigned NOT NULL default '0',
+    systematic_id VARCHAR(32) binary NULL,
+    tag_seq_id mediumint(8) unsigned NOT NULL default 0,
   pstart int(11) unsigned NOT NULL default '0',
   pfinal int(11) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
@@ -231,7 +233,7 @@ CREATE TABLE CONTIGTAG (
 CREATE TABLE CONTIGTAGINFO (
   tag_id mediumint(8) unsigned NOT NULL auto_increment,
   systematic_id VARCHAR(32) binary NULL,
-  tag_seq_id mediumint(8) unsigned NOT NULL,
+    tag_seq_id mediumint(8) unsigned NOT NULL,
   KEY contigtaginfo_index (tag_id)
 ) TYPE=MyISAM;
 
