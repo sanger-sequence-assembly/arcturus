@@ -1,0 +1,279 @@
+#!/usr/local/bin/perl
+#
+# readscheck
+#
+# This script extracts one or more reads and generates a CAF file
+
+use DBI;
+use Term::ReadKey;
+use Compress;
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $dbname = shift @ARGV if ($nextword eq '-database');
+
+    $readids = shift @ARGV if ($nextword eq '-readids');
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	defined($readids) &&
+	defined($dbname)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$compressor = new Compress('ACGT- ');
+
+$query = "USE $dbname";
+print STDERR "Switching to database $dbname\n";
+$dbh->do($query);
+&db_die("$query failed");
+
+print STDERR "\n" if $verbose;
+
+$dict_ligation   = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'silow, sihigh');
+$dict_clone      = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
+$dict_primer     = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
+$dict_status     = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
+$dict_strand     = &createDictionary($dbh, 'STRANDS', 'strand', 'direction');
+$dict_basecaller = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
+
+$dict_chemistry  = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
+				     'chemistry', 'type', 'USING(chemtype)');
+
+$readranges = &parseReadIDRanges($readids);
+
+$ndone = 0;
+$nfound = 0;
+
+$query = "SELECT readname,date,ligation,clone,template,strand,primer,chemistry,basecaller," .
+    "pstatus,lqleft,lqright,svector,svleft,svright,cvector,cvleft,cvright," .
+    "slength,sequence,scompress,quality,qcompress FROM READS WHERE read_id=?";
+
+$sth = $dbh->prepare($query);
+&db_die("prepare($query) failed on $dsn");
+
+printf STDERR "%8d %8d", $ndone, $nfound;
+$format = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010%8d %8d";
+
+foreach $readrange (@{$readranges}) {
+    ($idlow, $idhigh) = @{$readrange};
+
+    for ($readid = $idlow; $readid <= $idhigh; $readid++) {
+	$ndone++;
+
+	$sth->execute($readid);
+
+	while(@ary = $sth->fetchrow_array()) {
+	    ($readname, $asped, $ligation, $clone, $template, $strand, $primer, $chemistry,
+	     $basecaller, $pstatus, $qleft, $qright, $svector, $svleft, $svright,
+	     $cvector, $cvleft, $cvright,
+	     $slength, $sequence, $scompress, $quality, $qcompress) = @ary;
+    
+	    ($slen, $sequence) = $compressor->sequenceDecoder($sequence, $scompress)
+		if $scompress;
+
+	    $slen = length($sequence);
+
+	    ($qlen, $quality) = $compressor->qualityDecoder($quality, $qcompress)
+		if $qcompress;
+
+	    $quality =~ s/^\s+|\s+$//g;
+	    @bq = split(/\s+/, $quality);
+
+	    print "Sequence : $readname\n";
+	    print "Is_read\n";
+	    print "Unpadded\n";
+
+	    print "SCF_File $readname" . "SCF\n";
+
+	    print "Template $template\n";
+
+	    print "Asped $asped\n" if defined($asped);
+
+	    ($silow, $sihigh) = &dictionaryLookup($dict_ligation, $ligation);
+
+	    print "Insert_size $silow $sihigh\n" if (defined($silow) && defined($sihigh));
+
+	    ($clonename) = &dictionaryLookup($dict_clone, $clone);
+
+	    print "Clone $clonename\n" if defined($clonename);
+
+	    ($strand) = &dictionaryLookup($dict_strand, $strand);
+
+	    print "Strand ", ucfirst($strand), "\n" if defined($strand);
+
+	    ($primer) = &dictionaryLookup($dict_primer, $primer);
+
+	    print "Primer ", ucfirst($primer), "_primer\n" if defined($primer);
+
+	    ($dye) = &dictionaryLookup($dict_chemistry, $chemistry);
+
+	    print "Dye Dye_$dye\n" if defined($dye);
+
+	    ($bc) = &dictionaryLookup($dict_basecaller, $basecaller);
+
+	    print "Base_caller $bc\n"if defined($bc);
+
+	    ($ps) = &dictionaryLookup($dict_status, $pstatus);
+
+	    print "ProcessStatus $ps\n" if defined($ps);
+
+	    print "Seq_vec SVEC $svleft $svright \"$svector\"\n"
+		if (defined($svector) && defined($svleft) && defined($svright));
+
+	    print "Clone_vec CVEC $cvleft $cvright \"$cvector\"\n"
+		if (defined($cvector) && defined($cvleft) && defined($cvright));
+
+	    print "Clipping QUAL $qleft $qright\n" if (defined($qleft) && defined($qright));
+
+	    print "\n";
+
+	    print "DNA : $readname\n";
+	    while (length($sequence)) {
+		print substr($sequence, 0, 50),"\n";
+		$sequence = substr($sequence, 50);
+	    }
+
+	    print "\n";
+
+	    print "BaseQuality : $readname\n";
+
+	    while ($n = scalar(@bq)) {
+		print join(' ',@bq[0..24]),"\n";
+		$n -= 25;
+		@bq = @bq[25..$n];
+	    }
+
+	    print "\n";
+
+	    $nfound++;
+	}
+
+	printf STDERR $format, $ndone, $nfound if (($ndone % 50) == 0);
+    }
+}
+
+printf STDERR $format, $ndone, $nfound;
+print STDERR "\n";
+
+$sth->finish();
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub createDictionary {
+    my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
+
+    print STDERR "createDictionary(dbh, $table, $pkey, $vals)\n";
+
+    my $query = "SELECT $pkey,$vals FROM $table";
+
+    $query .= " $where" if defined($where);
+
+    my $sth = $dbh->prepare($query);
+    &db_die("createDictionary: prepare($query) failed");
+
+    $sth->execute();
+    &db_die("createDictionary: execute($query) failed");
+
+    my $dict = {};
+
+    while(my @ary = $sth->fetchrow_array()) {
+	$thiskey = shift @ary;
+	$dict->{$thiskey} = [@ary];
+    }
+
+    $sth->finish();
+
+    print STDERR "Found ",scalar(keys(%{$dict}))," entries\n\n";
+
+    return $dict;
+}
+
+sub dictionaryLookup {
+    my ($dict, $pkey, $junk) = @_;
+
+    my $value = $dict->{$pkey};
+
+    if (defined($value)) {
+	return @{$value};
+    } else {
+	return ();
+    }
+}
+
+sub parseReadIDRanges {
+    my $string = shift;
+
+    my @ranges = split(/,/, $string);
+
+    my $result = [];
+
+    foreach my $subrange (@ranges) {
+	if ($subrange =~ /^\d+$/) {
+	    push @{$result}, [$subrange, $subrange];
+	}
+
+	if ($subrange =~ /^(\d+)(\.\.|\-)(\d+)$/) {
+	    push @{$result}, [$1, $3];
+	}
+    }
+
+    return $result;
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
+    print STDERR "    -verbose\t\tVerbose output\n";
+    print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
+    print STDERR "    -namelike\t\tSelect readnames like this from the database\n";
+}
