@@ -3957,7 +3957,7 @@ sub diagnose {
             if (my $info = $table->getColumnInfo($column,1)) {
 # some massaging in order to align table info and script definitions
                 $fields{$column} =~ s/\bchar/varchar/ if ($info =~ /\bvarchar\b/);
-            $fields{$column} =~ s/\sbinary//    if ($info =~ /char\b/); # fix until getColumnInfo fixed
+#            $fields{$column} =~ s/\sbinary//    if ($info =~ /char\b/); # fix until getColumnInfo fixed v4.1
                 $fields{$column} =~ s/\bNOT\sNULL/default 0/i if ($info =~ /default\s0/i);
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
 # keep the first encountered mismatch of a column definition
