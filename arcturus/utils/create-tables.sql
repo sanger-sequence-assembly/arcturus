@@ -131,6 +131,7 @@ CREATE TABLE CONTIG (
   length int(10) unsigned default '0',
   ncntgs smallint(5) unsigned NOT NULL default '0',
   nreads mediumint(8) unsigned NOT NULL default '0',
+  project mediumint(8) unsigned NOT NULL default '0',
   newreads mediumint(9) NOT NULL default '0',
   cover float(8,2) default '0.00',
   origin enum('Arcturus CAF parser','Finishing Software','Other') default NULL,
@@ -139,17 +140,6 @@ CREATE TABLE CONTIG (
   readnamehash char(16) default NULL,
   PRIMARY KEY  (contig_id),
   KEY rnhash (readnamehash(8))
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'CONTIG2PROJECT'
-#
-
-CREATE TABLE CONTIG2PROJECT (
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  checked enum('in','out') default 'in',
-  project smallint(5) unsigned NOT NULL default '0',
-  PRIMARY KEY  (contig_id)
 ) TYPE=MyISAM;
 
 #
