@@ -11,7 +11,7 @@ select 'Make read_id the primary key' as COMMENT;
 alter table SEQUENCE add primary key(read_id);
 
 select 'Remove the corresponding columns from READS' as COMMENT;
-alter table READS drop column sequence, drop column quality;
+alter table READS drop column sequence, drop column quality, drop column scompress, drop column qcompress;
 
 select '[2] Move the comments to a separate table' as COMMENT;
 
@@ -52,7 +52,7 @@ select READS.template_id,READS.template,TEMPLATE.template_id,TEMPLATE.name
   where READS.template != TEMPLATE.name;
 
 select 'Remove the template column from the READS table' as COMMENT;
-alter table READS drop template;
+alter table READS drop column template;
 
 select 'Change the readname column to fixed width' as COMMENT;
 alter table READS modify readname char(32) binary;
