@@ -216,7 +216,7 @@ if ($cgi) {
                     my $repository = new PathogenRepository;
                     $config{RDD} = $repository->getAssemblyDirectory($asname);
                     $config{RDD} =~ s/\/assembly//; 
-print "RDD taken from Repository:  $config{RDD} <br>";
+# print "RDD taken from Repository:  $config{RDD} <br>";
                 }
     # open the form and replace the placeholders
                 my $form = form2($source);
@@ -299,7 +299,7 @@ print "RDD taken from Repository:  $config{RDD} <br>";
             $error = "Please define every input field $cgi->{und_error} ";
         }
     # authorisation level 100 required
-        elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process",silently => 1})) {
+        elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process",silently => 0})) {
             $error = $GateKeeper->{error}; # authorisation failed
         }
     # okay, now assign read specifications
@@ -957,6 +957,7 @@ print $reader->list($origin,1);
     my $csroot = $GateKeeper->currentScriptRoot;
     $ENV{SCRIPT_FILENAME} = "$csroot/harmonize";
     $ENV{SCRIPT_NAME} = "/cgi-bin/harmonize";
+    delete $ENV{PATH_INFO};
 # ? prime environment via GateKeeper for harmonize script
     system ("$csroot/harmonize organisms copy >> $arc_tmp_dir/harmonize.log");     
 
