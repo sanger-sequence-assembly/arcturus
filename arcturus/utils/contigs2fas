@@ -21,7 +21,9 @@ while ($nextword = shift @ARGV) {
     $verbose = 1 if ($nextword eq '-verbose');
 
     $fastafile = shift @ARGV if ($nextword eq '-fasta');
-    $qualfile = shift @ARGV if ($nextword eq '-quality');
+
+    $padton = 1 if ($nextword eq '-padton');
+    $depad = 1 if ($nextword eq '-depad');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -35,6 +37,10 @@ unless (defined($organism) &&
     &showUsage();
     exit(1);
 }
+
+$depad = 0 unless defined($depad);
+$padton = 0 unless defined($padton);
+$padton = 0 if $depad;
 
 $instance = 'dev' unless defined($instance);
 
@@ -53,15 +59,9 @@ $fastafh = new FileHandle($fastafile, "w");
 
 die "Unable to open FASTA file \"$fastafile\" for writing" unless $fastafh;
 
-$qualfile = $fastafile . '.qual' unless defined($qualfile);
-
-$qualityfh = new FileHandle($qualfile, "w");
-
-die "Unable to open quality file \"$qualfile\" for writing" unless $qualityfh;
-
 $minlen = 1000 unless defined($minlen);
 
-$query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence,CONSENSUS.quality " .
+$query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence " .
     "from CONTIG left join CONSENSUS using(contig_id) ".
     "where CONSENSUS.contig_id is not null and CONTIG.length >= $minlen";
 
@@ -72,19 +72,22 @@ $sth->execute();
 &db_die("execute($query) failed");
 
 while(@ary = $sth->fetchrow_array()) {
-    ($contigid, $contiglength, $compressedsequence, $compressedquality) = @ary;
+    ($contigid, $contiglength, $compressedsequence) = @ary;
 
     $sequence = uncompress($compressedsequence);
-    $qualitydata = uncompress($compressedquality);    
-    @quality = unpack("c*", $qualitydata);
 
     if ($contiglength != length($sequence)) {
 	print STDERR "Sequence length mismatch for contig $contigid: $contiglength vs ",
 	length($sequence),"\n";
     }
 
-    # Convert pads to N ...
-    $sequence =~ s/[^\w\-]/N/g;
+    if ($depad) {
+	# Depad
+	$sequence =~ s/[^\w\-]//g;
+    } elsif ($padton) {
+	# Convert pads to N ...
+	$sequence =~ s/[^\w\-]/N/g;
+    }
 
     printf $fastafh ">CONTIG%04d\n", $contigid;
 
@@ -92,23 +95,6 @@ while(@ary = $sth->fetchrow_array()) {
 	print $fastafh substr($sequence, 0, 50), "\n";
 	$sequence = substr($sequence, 50);
     }
-
-    if ($contiglength != scalar(@quality)) {
-	print STDERR "Quality length mismatch for contig $contigid: $contiglength vs ",
-	scalar(@quality),"\n";
-    }
-
-    printf $qualityfh ">CONTIG%04d\n", $contigid;
-
-    $nq = 0;
-
-    while ($qvalue = shift @quality) {
-	printf $qualityfh " %2d", $qvalue;
-	$nq++;
-	print $qualityfh "\n" if (($nq % 25) == 0);
-    }
-
-    print $qualityfh "\n";
 }
 
 $sth->finish();
@@ -116,7 +102,6 @@ $sth->finish();
 $dbh->disconnect();
 
 $fastafh->close();
-$qualityfh->close();
 
 exit(0);
 
