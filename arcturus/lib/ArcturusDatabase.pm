@@ -63,7 +63,6 @@ sub getConnection {
 
     if (!defined($this->{Connection})) {
 	my $ds = $this->{DataSource};
-	print STDERR "DataSource->getConnection(", join(',', @_),")\n";
 	$this->{Connection} = $ds->getConnection(@_) if defined($ds);
     }
 
