@@ -53,7 +53,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
+$instance = 'dev' unless defined($instance);
 
 &showUsage(0,"Missing organism database") unless $organism;
 
@@ -105,7 +105,7 @@ foreach my $contig (@contigs) {
 # read a list of names from a file and return an array
 #------------------------------------------------------------------------
 
-sub readNamesFromFile {
+sub getNamesFromFile {
     my $file = shift; # file name
 
     &showUsage(0,"File $file does not exist") unless (-e $file);
@@ -139,7 +139,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
+    print STDERR "-instance\teither 'prod' or 'dev' (default)\n";
 #    print STDERR "-assembly\tassembly name\n";
     print STDERR "-contig\t\tContig ID\n";
     print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
