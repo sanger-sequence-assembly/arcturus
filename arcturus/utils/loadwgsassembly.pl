@@ -11,6 +11,7 @@ my $instance;
 my $organism;
 my $cafname;
 my $caf;
+my $quiet = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -18,6 +19,8 @@ while (my $nextword = shift @ARGV) {
     $organism = shift @ARGV if ($nextword eq '-organism');
 
     $cafname  = shift @ARGV if ($nextword eq '-caf');
+
+    $quiet = 1 if ($nextword eq '-quiet');
 }
 
 $instance = 'dev' unless defined($instance);
@@ -64,14 +67,14 @@ my $bs8 = "\010\010\010\010\010\010\010\010";
 my $bs10 = "\010\010\010\010\010\010\010\010\010\010";
 my $backspace = $bs8 . $bs . $bs8 . $bs . $bs8 . $bs . $bs10;
 
-printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
+printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines unless $quiet;
 
 while (my $line = <$caf>) {
     chop($line);
 
     $nlines++;
 
-    if (($nlines % 100) == 0) {
+    if (!$quiet && ($nlines % 100) == 0) {
 	print STDERR $backspace;
 	printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
     }
@@ -93,7 +96,7 @@ while (my $line = <$caf>) {
     while ($line = <$caf>) {
 	$nlines++;
 
-	if (($nlines % 100) == 0) {
+	if (!$quiet && ($nlines % 100) == 0) {
 	    print STDERR $backspace;
 	    printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
 	}
@@ -173,7 +176,7 @@ while (my $line = <$caf>) {
 
 	    $nmappings++;
 
-	    if (($nmappings % 50) == 0) {
+	    if (!$quiet && ($nmappings % 50) == 0) {
 		print STDERR $backspace;
 		printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
 	    }
@@ -193,7 +196,7 @@ while (my $line = <$caf>) {
 		if (defined($rc) && $rc == 1) {
 		    $nsegments++;
 
-		    if (($nsegments % 50) == 0) {
+		    if (!$quiet && ($nsegments % 50) == 0) {
 			print STDERR $backspace;
 			printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
 		    }
@@ -206,13 +209,17 @@ while (my $line = <$caf>) {
 
     $ncontigs++;
 
-    print STDERR $backspace;
-    printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
+    if (!$quiet) {
+	print STDERR $backspace;
+	printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
+    }
 }
 
-print STDERR $backspace;
-printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
-print STDERR "\n";
+if (!$quiet) {
+    print STDERR $backspace;
+    printf STDERR $format, $ncontigs, $nmappings, $nsegments, $nlines;
+    print STDERR "\n";
+}
 
 exit(0);
 
@@ -226,6 +233,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-instance\teither 'dev' (default) or 'prod'\n";
     print STDERR "-maxcontigs\tmaximum number of contigs to load\n";
+    print STDERR "-quiet\t\tRun silently\n";
 }
 
 sub db_die {
