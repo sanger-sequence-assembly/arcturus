@@ -176,7 +176,7 @@ sub getSequenceAndBaseQualityForContigID {
 	$quality = [@qualarray];
     }
 
-    $sequence =~ s/\*/N/g; # temporary fix 
+    $sequence =~ s/\*/N/g if $sequence; # temporary fix 
 
     return ($sequence, $quality);
 }
@@ -271,7 +271,6 @@ sub putContig {
 # enter a contig into the database
     my $this = shift;
     my $contig = shift; # Contig instance
-    my $list = shift; # optional
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
@@ -321,6 +320,7 @@ sub putContig {
 # if not found try the readname hash
     $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
+#$previous=0;
     if ($previous) {
 # the read name hash or the sequence IDs hash does match
 # pull out previous contig mappings and compare them one by one with contig
@@ -339,38 +339,40 @@ sub putContig {
 
 # pull out mappings for those previous contigs, if any
 
+    my $message = "$contigname ";
     if ($contigids && @$contigids) {
 # compare with each previous contig and return/store mapings/segments
-print "linked contigs: @$contigids for contig ".$contig->getContigName."\n";
+        $message .= "has parent(s) : @$contigids";
+#print "$message \n";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
                                             metaDataOnly=>1);
             $this->getMappingsForContig($previous,type=>'read');
-            unless ($contig->linkToContig($previous)) {
-                print STDERR "Empty link to contig ".
-                             $previous->getContigName().
-                             " detected in contig ".
-			     $contig->getContigName()."\n" if $list;
-                
+            my ($linked,$deallocated) = $contig->linkToContig($previous);
+            $previous = $previous->getContigName();
+            $message .= "; empty link detected to $previous" unless $linked;
+            if ($deallocated) {
+                $message .= "; $deallocated reads deallocated from $previous".
+  		            "  (possibly split contig?)";
             }
         }
 # to be removed after testing
+print STDOUT "Contig ".$contig->getContigName."\n";
 foreach my $mapping (@{$contig->getContigToContigMapping}) {
-print STDOUT "Contig ".$contig->getContigName." ".
-              ($mapping->assembledFromToString || "\n");
+print STDOUT ($mapping->assembledFromToString || "empty link\n");
 }
 # until here
     }
     else {
 # the contig has no precursor, is completely new
-        print STDERR "Contig ".$contig->getContigName." has no parents\n" if $list;
+        $message = "has no parents";
 # add a dummy mapping to the contig (without segments)
 #        my $mapping = new Mapping();
 #        $mapping->setSequenceID(0); # parent 0
 #        $contig->addMapping($mapping);
     }
 
-# return 0,"NO LOADING"; # testing
+#return 0,$message; # testing
 
 # now load the contig into the database
 
@@ -400,7 +402,7 @@ print STDOUT "Contig ".$contig->getContigName." ".
 
 # $this->ageByOne($contigid);
 
-    return $contigid, "OK";
+    return $contigid, $message;
    
 # 2) lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
@@ -652,7 +654,7 @@ sub getMappingsForContig {
     while(my ($nm, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
 # intialise and add readname and sequence ID
         my $mapping = new Mapping($nm);
-#        $mapping->setMappingName($rn);
+#        $mapping->setMappingName($nm);
         $mapping->setSequenceID($sid);
         $mapping->setAlignmentDirection($dir);
 # add Mapping instance to output list and hash list keyed on mapping ID
