@@ -456,7 +456,7 @@ CREATE TABLE ALIGN2SCF (
   startinseq smallint unsigned NOT NULL,
   startinscf  smallint unsigned NOT NULL,
   length smallint unsigned NOT NULL,
-  primary key (seq_id)
+  KEY (seq_id)
 ) TYPE=MyISAM;
 
 
