@@ -12,8 +12,6 @@ use ReadsRecall;
 
 use Compress;
 
-#use Devel::MyTimer;
-
 #############################################################################
 # Global variables
 #############################################################################
@@ -33,7 +31,9 @@ my %instances; # what purpose?
 
 my $DEBUG = 0;
 my $TEST  = 0;
-my $break = '<br>';
+
+my $CGI;
+my $break;
 
 #############################################################################
 # constructor init: serves only to create the database table handles
@@ -65,8 +65,6 @@ sub init {
 # now initialise the table handles: default init is for building contig(s) and
 # read maps, e.g. for display or caf output; non default for output as hash
 
-#$MyTimer = new MyTimer;
-
 $DEBUG = 0;
     if (!$initmode ) {
 	print "standard initialisation $tblhandle\n" if $DEBUG;
@@ -92,11 +90,13 @@ $DEBUG = 0;
 
     else {
 print "NON-standard initialisation \n" if $DEBUG;
-        $C2C = $tblhandle->spawn('CONTIGS2CONTIG');
+#        $C2C = $tblhandle->spawn('CONTIGS2CONTIG');
 # initialisation for output of contig hash table
 # ??       my $DNA = $options->{DNA}; # may be empty
         $self->internalInitialisation($tblhandle,$dna);
     }
+
+    &setEnvironment;
 
     $self->prepareQueries;
 
@@ -434,7 +434,9 @@ sub traceBuilder {
     my $contig = shift;
     my $output = shift;
 
-my $DEBUG = 0;
+# get the Contigs to Contigs table
+
+    my $CC2CC = $self->{C2C} || $C2C;
 
     if (!$output || ref($output) ne 'HASH') {
         undef my %output;
@@ -443,13 +445,13 @@ my $DEBUG = 0;
         $output->{forward} = {};
     }
 
-print "ContigRecall tracing $contig \n" if $DEBUG;
+my $DEBUG = 0; print "ContigRecall tracing $contig \n" if $DEBUG;
 
     my $reverse = $output->{reverse}; print "reverse $reverse \n" if $DEBUG;
     my $forward = $output->{forward}; print "forward $forward \n" if $DEBUG;
 
     my $where    = "oldcontig = $contig or newcontig = $contig";
-    my $hashrefs = $C2C->associate('hashrefs','where',$where,{traceQuery  => 0});
+    my $hashrefs = $CC2CC->associate('hashrefs','where',$where,{traceQuery  => 0});
 
     my $report = '';
     foreach my $hash (@$hashrefs) {
@@ -525,6 +527,10 @@ sub trace {
     my $spos = shift; # start position in contig
     my $fpos = shift; # end position in contig
 
+# get the Contigs to Contigs table
+
+    my $CC2CC = $self->{C2C} || $C2C;
+
 # determine first and last position to be retrieved
 
     undef my %contigstart;
@@ -563,7 +569,7 @@ sub trace {
             foreach my $readhashes (@$thesereads) {
             }
         # collect all connecting preceding contigs
-            my $oldcontigs = $C2C->associate ('hashrefs',$contig,'newcontig');
+            my $oldcontigs = $CC2CC->associate ('hashrefs',$contig,'newcontig');
         # here oldcontigs is a pointer to an array of hashes; collect data
             foreach my $contighash (@$oldcontigs) {
             # get the mapping data
@@ -952,14 +958,14 @@ sub getContigHashByAttribute {
 
     my @mask = split //,$soptions->{mask};
 
-$TEST = 1; print "mask $soptions->{mask}:  @mask <br>\n" if $TEST;
+$TEST = 0; print "mask $soptions->{mask}:  @mask <br>\n" if $TEST;
 
 # SEARCH
 
     undef my @cids; # array for results
 
     my %qoptions = (traceQuery => 1, useCache => 0, returnScalar => 0,
-                    limit => $soptions{limit}); # query options
+                    limit => $soptions{limit}, debug => 0); # query options
 
 # first try CONTIGS contigname or aliasname
 
@@ -975,10 +981,9 @@ $TEST = 1; print "mask $soptions->{mask}:  @mask <br>\n" if $TEST;
 # $where .= " or " if ($where && $mask[3]);
 # $where .= "tagname   = '$attribute'" if $mask[3];
 # $qoptions{debug} = 1 if ($mask[2] || $mask[3]);
-print "ContigRecall : $where <br>\n" if $TEST;
         my $output  = $DBCONTIGS->associate('distinct contig_id','where',$where,\%qoptions);
         push @cids, @$output if (ref($output) eq 'ARRAY' && @$output);
-print "ContigRecall : $DBCONTIGS->{lastQuery} <br>\n" if $TEST;
+print "ContigRecall : $DBCONTIGS->{lastQuery} $DBCONTIGS->{qerror}<br>\n" if $TEST;
     }
 print "ContigRecall : @cids<br>\n\n" if $TEST;
 
@@ -1143,7 +1148,7 @@ sub dumpThisToCaf {
 
     return if ($n <= 1);
 
-#$MyTimer->timer('dumpThisToCaf',0);
+$self->timer('dumpThisToCaf',0);
  
     foreach my $ReadObject (@$ReadsRecall) {
         $ReadObject->writeToCafPadded($FILE,1)  if $padded;
@@ -1166,13 +1171,13 @@ sub dumpThisToCaf {
 
 # write the consensus sequence / or all the reads ?
 
-#$MyTimer->timer('dumpThisToCaf',1);
+$self->timer('dumpThisToCaf',1);
 
 # free memory
 
     return if $keep;
 
-#$MyTimer->timer('Destroying ReadObjects',0);
+$self->timer('Destroying ReadObjects',0);
 
 #    my $mpid = $$; my $stat = grep (/$mpid/,`ps ux`);
 
@@ -1190,7 +1195,7 @@ sub dumpThisToCaf {
 
     undef $ReadsRecall;
 
-#$MyTimer->timer('Destroying ReadObjects',1);
+$self->timer('Destroying ReadObjects',1);
 }
 
 #############################################################################
@@ -1205,6 +1210,10 @@ sub writeToCafPadded {
     my $FILE   = shift;
     my $contig = shift; # contig ID or list of contig IDs
 
+# get the READS2CONTIG table handle
+
+    my $RR2CC = $self->{R2C} || $R2C;
+
     if (ref($contig) eq 'ARRAY') {
         my $count = 0;
         foreach my $contig (@$contig) {
@@ -1215,9 +1224,9 @@ sub writeToCafPadded {
 
 # get the reads belonging to this contig
  
-#$MyTimer->timer('Getting reads from contigs cache',0);
-    my $reads = $R2C->cacheRecall($contig,{indexName=>'contigs'});
-#$MyTimer->timer('Getting reads from contigs cache',1);
+$self->timer('Getting reads from contigs cache',0);
+    my $reads = $RR2CC->cacheRecall($contig,{indexName=>'contigs'});
+$self->timer('Getting reads from contigs cache',1);
     print "recalled $reads \n";
 
     $self->{assembled} = '';
@@ -1227,12 +1236,12 @@ sub writeToCafPadded {
 # load the read into memory, replacing the existing hash
         $ReadsRecall->getNumberedRead($read_id);
 # get the map hashes
-        my $maphashes = $R2C->cacheRecall($read_id,{indexName=>'mappings'}); # cached previously on read_id
+        my $maphashes = $RR2CC->cacheRecall($read_id,{indexName=>'mappings'}); # cached previously on read_id
 
-        $maphashes = $R2C->usePreparedQuery('readMapQuery', $read_id) if !$maphashes;
+        $maphashes = $RR2CC->usePreparedQuery('readMapQuery', $read_id) if !$maphashes;
 
 print "  prepared query failed or not found, try associate\n" if !$maphashes;
-        $maphashes = $R2C->associate('hashrefs',$read_id,'read_id') if !$maphashes;
+        $maphashes = $RR2CC->associate('hashrefs',$read_id,'read_id') if !$maphashes;
 
 # put mappings into place
 
@@ -1288,10 +1297,31 @@ sub writeAssemby {
 
 #############################################################################
 
+sub getLoadedContigs {
+# return contig aliasnames in generation 0
+    my $self = shift;
+
+#    my $query = "select distinct aliasname from CONTIGS,READS2CONTIG where ";
+#    $query .= "CONTIGS.contig_id=READS2CONTIG.contig_id and generation=0 and label>=10";
+
+    my $CNTGS = $self->{CONTIGS} || $CONTIGS;
+    my $names = $CNTGS->associate('aliasname','where','generation=0 and label>=10');
+
+    print "names $names$break";
+
+    return $names;
+}
+
+#############################################################################
+
 sub prepareCaches {
 # build cached data for a given contig id or ids 
     my $self = shift;
     my $cids = shift; # contig ID or array of contig IDs
+
+# get the READS2CONTIG table handle
+
+    my $RR2CC = $self->{R2C} || $R2C;
 
 # prepare caches used in e.g. caf output methods
     
@@ -1302,8 +1332,8 @@ sub prepareCaches {
     $query .= " and contig_id $contiglist" if $contiglist;
 #    $query .= " order by contig_id";
 
-print "building R2C names caches with $query\n";
-    $R2C->cacheBuild($query,{indexKey=>'contig_id', indexName=>'contigs', list=>0});
+print "building RR2CC names caches with $query\n";
+    $RR2CC->cacheBuild($query,{indexKey=>'contig_id', indexName=>'contigs', list=>0});
 print "DONE \n";
 
     my $cache = 1;
@@ -1314,8 +1344,8 @@ print "DONE \n";
         $query .= "and contig_id $contiglist " if $contiglist;
         $query .= "and deprecated != 'X' order by read_id";
 
-print "building R2C mappings cache ($query) \n";
-        $R2C->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings',list=>0});  
+print "building RR2CC mappings cache ($query) \n";
+        $RR2CC->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings',list=>0});  
 print "DONE \n\n";
     }
 
@@ -1324,24 +1354,55 @@ print "DONE \n\n";
 #############################################################################
 
 sub prepareQueries {
+# set up queries on the R2C table handle
+    my $self = shift;
+
+# get the READS2CONTIG table handle
+
+    my $RR2CC = $self->{R2C} || $R2C;
 
 # readMapQuery: get the read-to-contig mapping for given read at generation 1
 
     my $query = "select * from <self> where read_id=? and";
     $query .= " deprecated != 'X' and generation = 1";
-    $R2C->prepareQuery($query,'readMapQuery');
+    $RR2CC->prepareQuery($query,'readMapQuery');
 
 # contigMapQuery: get the read-to-contig mapping for given contig (all reads)
 
     $query =~ s/read/contig/;
-    $R2C->prepareQuery($query,'contigMapQuery');
+    $RR2CC->prepareQuery($query,'contigMapQuery');
 
 # readsQuery: get all read_ids for given contig
 
     $query  = "select distinct read_id from <self> where ";
     $query .= "contig_id=? and label>9 and generation=1 ";
     $query .= "order by read_id";
-    $R2C->prepareQuery($query,'readsQuery');
+    $RR2CC->prepareQuery($query,'readsQuery');
+}
+
+#############################################################################
+
+sub setEnvironment {
+
+# return the line break appropriate for the environment
+
+    $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
+
+    $break = $CGI ? "<br>" : "\n";
+}
+
+#############################################################################
+
+sub timer {
+# ad hoc local timer function
+    my $name = shift;
+    my $mark = shift;
+
+#    use Devel::MyTimer;
+
+#    $MyTimer = new MyTimer if !$MyTimer;
+
+    $MyTimer->($name,$mark) if $MyTimer;
 }
 
 #############################################################################
@@ -1353,7 +1414,7 @@ sub colofon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.8 ,
-        updated =>    "31 Oct 2003",
+        updated =>    "02 Feb 2004",
         date    =>    "08 Aug 2002",
     };
 }

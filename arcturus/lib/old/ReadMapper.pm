@@ -8,8 +8,6 @@ package ReadMapper;
 
 use strict;
 
-#use Devel::MyTimer;
-
 #############################################################################
 # Global variables
 #############################################################################
@@ -35,11 +33,11 @@ my $piecemealwise = 0; # default no tidy-up of mappings to earlier contigs
 my %ligations; # hash for ligation values to be tested in READS repair mode
 
 my $DEBUG = 0;
-my $TIMER = 1;
-my $MyTimer;
 
-
+my $CGI;
 my $break;
+my $MyTimer;
+my $TIMER;
 
 
 #############################################################################
@@ -62,9 +60,7 @@ sub init {
     $PENDS = $tblhandle->spawn('PENDING');
     $RR2AA = $tblhandle->spawn('READS2ASSEMBLY');
 
-    $break = &break; # output line break
-
-#$MyTimer = new MyTimer;
+    &setEnvironment; # output line break
 
     bless ($self, $class);
 
@@ -277,7 +273,7 @@ sub testAttributes {
                 $report .= "Attempt to repair ligation $hashrefs->[0]->{ligation} ($hash->{identifier}) ";
                 $report .= "with $identifier for read $read_id (read clone $hashrefs->[0]->{clone})$break"; 
                 if (my $status = $LIGATIONS->counter('identifier',$identifier,1)) {
-                    my $ligation = $LIGATIONS->associate('ligation',$identifier,'identifier');
+                    my $ligation = $LIGATIONS->associate('ligation',$identifier,'identifier');#
                     if ($status == 2) {
                         $LIGATIONS->update('silow',$biology->{silow})  if defined($biology->{silow});
                         $LIGATIONS->update('silow',$biology->{sihigh}) if defined($biology->{sihigh});                                    $LIGATIONS->update('clone',$biology->{clone})  if defined($biology->{clone});             
@@ -306,6 +302,22 @@ sub testAttributes {
 
 ###############################################################################
 # The next 4 subs define the mapping of the current read
+#############################################################################
+
+sub setTestMode {
+# (re)define class variables;
+    my $self = shift;
+    my $item = shift || 0;
+    my $mode = shift || 0;
+
+    if ($item =~ /\b(TESTMODE|REPAIR|READSCAN|WRITEDNA)\b/i) {
+#        $self->{$item} = $mode;
+    }
+    elsif ($item =~ /\bTIMER\b/i) {
+        $TIMER = $mode;
+    }
+}
+
 ###############################################################################
 
 sub edit {
@@ -456,7 +468,7 @@ sub addAssembledFrom {
     my $error = '';
     my $success = 0;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 print "addAssembledFrom : @$from $break" if $DEBUG;
 
     if ($from && @$from == 4) {
@@ -528,7 +540,7 @@ sub alignToContig {
     my $counts   = $self->{counts};
     my $status   = $self->{status};
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 print "enter new alignToContig for $self->{names}->[0]$break" if $DEBUG;
 
     my $alignToCaf = scalar(keys %$read2pad); # number of align_to_caf maps
@@ -617,7 +629,8 @@ undef @{ $self->{padtocon}} if $DEBUG; # test option
     else {
 # incompatible mappings
         $status->{diagnosis} .= "! Incompatible mappings: cannot decide ";
-        $status->{diagnosis} .= "between padded and unpadded status$break"; 
+        $status->{diagnosis} .= "between padded and unpadded status$break";
+        $status->{diagnosis} .= "? Has the assembly caf file been completely parsed$break";
         $status->{diagnosis} .= "assembled: $assembled aligned: $alignToCaf$break";
         $status->{errors}++;
     }
@@ -737,7 +750,7 @@ sub etest {
 # find any existing edit instructions for this read in the database
 # if there is, compare stored one with current one; deprecate if different
 
-        #$MyTimer->timer('etest',0) if $TIMER; 
+        &timer('etest',0) if $TIMER; 
 
         $counts->[5] = 0;
         my $edits = $EDITS->cacheRecall($read_id,{indexName=>'read_id'}); # look in cached data first
@@ -793,7 +806,7 @@ sub etest {
             }
             print "$status->{diagnosis} $break" if $DEBUG;
 	}
-        #$MyTimer->timer('etest',1) if $TIMER; 
+        &timer('etest',1) if $TIMER; 
     }
 
     elsif (!$read_id) {
@@ -834,7 +847,7 @@ sub mtest {
     my $REPORT = "${break}++++ MTEST for ReadMapper $self->{names}->[0] ($read_id) @$counts ++++$break";
 
     if ($read_id && $counts->[6] < 0) {
-#$MyTimer->timer('mtest',0) if $TIMER;
+        &timer('mtest',0) if $TIMER;
 
         my @read2conKeys = sort keys %$read2con;
 
@@ -1162,7 +1175,7 @@ sub mtest {
         $status->{diagnosis} .= $progress if $progress;
 
         $REPORT .= $progress.$break;
-#$MyTimer->timer('mtest',1) if $TIMER;
+        &timer('mtest',1) if $TIMER;
     }
     elsif (!$read_id) {
         $status->{diagnosis} .= "! Read $read_id not found in READS database$break";
@@ -1254,7 +1267,7 @@ sub dump {
 $DEBUG = 0; # $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
 print "++++ DUMP for ReadMapper $self->{names}->[0] ($self) counts: @$counts ++++$break" if $DEBUG;
 
-    #$MyTimer->timer('RM dump',0) if $TIMER; 
+    &timer('RM dump',0) if $TIMER; 
 
 # reinitialize error status
 
@@ -1340,7 +1353,7 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                 my $clone_id = $self->{clone} || 0;
 
 #$self->list(1) if $DEBUG;
-		#$MyTimer->timer('RM newline(s)',0) if $TIMER;
+                &timer('RM newline(s)',0) if $TIMER;
                 foreach my $alignment (@read2conKeys) {
 # print "alignment key $alignment$break";
                     my @block = @{$read2con->{$alignment}};
@@ -1387,7 +1400,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
                         $RR2AA->update('assembly',$assembly,'read_id',$read_id);
                     }
                 } 
-		#$MyTimer->timer('RM newline(s)',1) if $TIMER;
+                &timer('RM newline(s)',1) if $TIMER;
                 $status->{diagnosis} .= "$break";
     # here you could do the cleanup of marked mappings of previous generations
                 if ($piecemealwise) {
@@ -1423,7 +1436,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
         $status->{errors}++;           
     }
 
-    #$MyTimer->timer('RM dump',1) if $TIMER; 
+    &timer('RM dump',1) if $TIMER; 
 
 print "$self->{report}" if $DEBUG;
 
@@ -1453,7 +1466,7 @@ sub align {
     my $status   = $self->{status};
     my $dbrefs   = $self->{dbrefs};
 
-# $MyTimer->timer('align',0) if $TIMER;
+    &timer('align',0) if $TIMER;
 
 # if the read2con hash is defined, this method has already been executed 
 
@@ -1561,7 +1574,7 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
         $status->{diagnosis} .= "  Invalid or missing Quality Window$break" if ($counts->[4] == 0);
     }
 
-    #$MyTimer->timer('align',1) if $TIMER; 
+    &timer('align',1) if $TIMER; 
 
     return $status->{errors} - $error; # will be 0 if no errors
 }
@@ -1680,7 +1693,7 @@ sub lookup {
 
     return \%ReadMapper if !$read;
 
-    #$MyTimer->timer('lookup',0) if $TIMER; 
+    &timer('lookup',0) if $TIMER; 
 
     my $result = $ReadMapper{$read};
 
@@ -1694,7 +1707,7 @@ sub lookup {
         }
     }
 
-    #$MyTimer->timer('lookup',1) if $TIMER; 
+    &timer('lookup',1) if $TIMER; 
 
     return $result;
 }
@@ -1872,7 +1885,7 @@ sub isInDataBase {
 
 # if the read is not in the READS database test for it in PENDING table
 
-    #$MyTimer->timer('isInDataBase',0) if $TIMER;
+    &timer('isInDataBase',0) if $TIMER;
 
     if (!$dbrefs->[0] || !$dbrefs->[1]) {
 
@@ -1891,7 +1904,7 @@ sub isInDataBase {
         }
     }
 
-    #$MyTimer->timer('isInDataBase',1) if $TIMER;
+    &timer('isInDataBase',1) if $TIMER;
 
 # return value > 0 only if read present in database READS table
 
@@ -1924,7 +1937,7 @@ sub inDataBase {
     my $dbpref = 0;
     my $hashes = 0;
 
-    #$MyTimer->timer('inDataBase',0) if $TIMER; 
+    &timer('inDataBase',0) if $TIMER; 
 
     if (!$readname) {
         return 0, 0;
@@ -1942,25 +1955,25 @@ sub inDataBase {
     }
 # if not found in either two tables: try find the read in the READS tablehandle
     elsif ($dbsearch) {
-        #$MyTimer->timer('inDataBase db-lookup',0) if $TIMER; 
+        &timer('inDataBase db-lookup',0) if $TIMER; 
         $dbrref = $READS->associate('read_id',$readname,'readname',{useCache => 0});
         $dbpref = $PENDS->associate('record' ,$readname,'readname',{useCache => 0}) if !$dbrref;
-        #$MyTimer->timer('inDataBase db-lookup',1) if $TIMER; 
+        &timer('inDataBase db-lookup',1) if $TIMER; 
     }
 
-    #$MyTimer->timer('inDataBase',1) if $TIMER; 
+    &timer('inDataBase',1) if $TIMER; 
 
 # if read not found in either READS or PENDING : add to PENDING
 
     if (!$dbrref && !$dbpref && $append) {
-        #$MyTimer->timer('inDataBase newrow',0) if $TIMER;
+        &timer('inDataBase newrow',0) if $TIMER;
         if ($assembly) {
             $dbpref = $PENDS->newrow('readname',$readname,'assembly',$assembly);
         }
         else {
             $dbpref = $PENDS->newrow('readname',$readname);
         }
-        #$MyTimer->timer('inDataBase newrow',1) if $TIMER;
+        &timer('inDataBase newrow',1) if $TIMER;
 # error status checking
         print "Adding to PENDING: $readname (as $dbpref)$break" if ($list && !($dbpref%($list)));
         if (!$dbpref) {
@@ -2000,7 +2013,7 @@ print "Building caches ('$mask') $break";
         while ($ns <= $nr) {
             my $nf = $ns + $nblock -1;
             $nf = $nr if ($nf > $nr);  
-print "ns=$ns  nf=$nf  nr=$nr $break";
+print "block ns=$ns  nf=$nf  nr=$nr $break";
             undef my @block;
 	    for my $i ($ns .. $nf) {
                 push @block, $reads->[$i-1];
@@ -2107,6 +2120,8 @@ sub fonts {
 # class method: testing before destroying all remaining ReadMapper object
 
 sub flush {
+    my $self = shift;
+    my $keep = shift;
 
 # flush mapping and PENDING tables
 
@@ -2121,10 +2136,10 @@ print "Flushing ReadMappers$break";
     foreach my $readname (keys %ReadMapper) {
         my $instance = $ReadMapper{$readname};
         if ($instance->isInDataBase(0,0)) {
-            $instance->delete; # found in READS
+            $instance->delete if !$keep; # found in READS
         }
         elsif ($instance->{dbrefs}->[1] > 0) {
-            $instance->delete; # found in PENDING
+            $instance->delete if !$keep; # found in PENDING
         }
         else {
 print "NOT FOUND IN CACHE: $readname $break";
@@ -2145,24 +2160,38 @@ my $nr = @readnames; print "$nr reads to be re-investigated $break";
     foreach my $readname (@readnames) {
         my $instance = $ReadMapper{$readname};
         $instance->isInDataBase(0,1);
-        $instance->delete;
+        $instance->delete if !$keep;
     }
 
 # and flush the PENDING table again
 
     $PENDS->flush;
 }
+
 #############################################################################
 
-sub break {
+sub timer {
+# ad hoc local timer function
+    my $name = shift;
+    my $mark = shift;
+
+    use MyTimer;
+
+    $MyTimer = new MyTimer if !$MyTimer;
+
+    $MyTimer->($name,$mark) if $MyTimer;
+}
+
+
+#############################################################################
+
+sub setEnvironment {
 
 # return the line break appropriate for the environment
 
-    my $break = "\n";
+    $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
 
-    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
-
-    return $break;
+    $break = $CGI ? "<br>" : "\n";
 }
 
 #############################################################################

@@ -78,9 +78,14 @@ sub init {
 
     $ReadMapper = ReadMapper->init($tblhandle);
 
-    $ReadMapper->preload(0,'1100') if !$nopreload;  # build table handle caches (READS and PENDING)
+# preload flag: nopreload = 0 for preloading of readnames and readmaps
+#                         = 1 for preloading of readnames only
+#                         = 2 for no preloading at all
 
-    $self->{preload}     = 1 if !$nopreload;
+    $self->{nopreload}   = $nopreload || 0;
+    $ReadMapper->preload(0,'1100') if ($self->{nopreload} < 2); # build table handle caches (READS and PENDING)
+
+    $self->{cleanup}     = 0; # default no clearing of memory
     $self->{minOfReads}  = 2; # accept contigs having at least this number of reads 
     $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
     $self->{nameChange}  = 0; # default name change only for generation 0
@@ -88,7 +93,7 @@ sub init {
     $self->{REPAIR}      = 0; # test/repair mode for read attributes
     $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
     $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
-$self->{nameChange}  = 1; # TEST override
+#$self->{nameChange}  = 1; # TEST override
 
     bless ($self, $class);
 
@@ -148,12 +153,13 @@ sub new {
         $self->{minOfReads}  = $prototype->{minOfReads}  || 1; 
         $self->{ignoreEmpty} = $prototype->{ignoreEmpty} || 1;     
         $self->{nameChange}  = $prototype->{nameChange}  || 0;     
+        $self->{cleanup}     = $prototype->{cleanup}     || 0;
         $self->{TESTMODE}    = $prototype->{TESTMODE}    || 0;
         $self->{REPAIR}      = $prototype->{REPAIR}      || 0;
         $self->{READSCAN}    = $prototype->{READSCAN}    || 0;
         $self->{WRITEDNA}    = $prototype->{WRITEDNA}    || 0;
 # test only for presence of assembled reads in database
-        $self->{preload}     = $prototype->{preload}     || 0;
+        $self->{nopreload}   = $prototype->{nopreload}   || 0;
 #print STDOUT "new ContigBuilder inherits from prototype $prototype  (class $class)$break";
 #print STDOUT "$self->{minOfReads},$self->{ignoreEmpty},$self->{TESTMODE},$self->{REPAIR} $break";
     }
@@ -163,11 +169,12 @@ print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
         $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
         $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
         $self->{nameChange}  = 0; # default name change only for generation 0
+        $self->{cleanup}     = 0; # default no clearing of memory
         $self->{TESTMODE}    = 0; # test mode for caf file parser
         $self->{REPAIR}      = 0; # test/repair mode for read attributes
         $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
         $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
-        $self->{preload}     = 0;
+        $self->{nopreload}   = 0;
     }
 
 #my $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
@@ -295,6 +302,7 @@ sub setTestMode {
     }
     elsif ($item =~ /\bTIMER\b/i) {
         $TIMER = $mode;
+        $ReadMapper->setTestMode($item,$mode);
     }
 }
 
@@ -505,7 +513,7 @@ sub dump {
 #############################################################################
 
     my @reads = sort keys %$readmap; # all reads specified for this contig
-    $ReadMapper->preload(\@reads,'0011'); # preload data into ReadMapper buffer (R2C + EDITS) 
+    $ReadMapper->preload(\@reads,'0011') if !$self->{nopreload}; # preload data in ReadMapper buffer (R2C + EDITS) 
 
 # NOTE: we use keys %$readmap (instead of @reads) throughout because readmap keys may be deleted
 
@@ -1142,7 +1150,8 @@ print "VII $break";
                 my $readobject = $readmapper{$readname};
                 print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
                 $readobject->status(2); # dump warnings
-                $readobject->delete();
+# delete could be an option?
+                $readobject->delete() if $self->{cleanup};
             }
             undef %readmapper;
             my $result = &status($self,2);
@@ -1152,7 +1161,8 @@ print $report;
             $CONTIGS->rollback(0); # clear rollback stack on CONTIGS table
             $CCTOCC->rollback(0); # clear rollback stack on CONTIGS2CONTIG table
             $ASSEMBLY->update('status','loading','assembly',$assembly);
-            &delete($self);
+# delete could be an option
+            $self->delete() if $self->{cleanup};
             return 0;
         }
     }
@@ -1167,7 +1177,8 @@ print $report;
             my $readobject = $readmapper{$readname};
             print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
             $readobject->status(2); # dump warnings
-            $readobject->delete();
+# delete could be an option
+            $readobject->delete() if $self->{cleanup};
         }
         undef %readmapper;
 # undo the addition to CONTIGS, if any
@@ -1205,7 +1216,8 @@ print $report;
             }
         }
         my $result = &status($self,3);
-        &delete($self);
+# delete could be an option
+        $self->delete() if $self->{cleanup};
         return 0;
     }
 
@@ -1436,7 +1448,7 @@ sub flush {
 
 # finally flush the remaining (i.e. unallocated) ReadMappers (and tables)
 
-    $ReadMapper->flush;
+    $ReadMapper->flush(@_);
 
     #$MyTimer->summary;
 
@@ -1581,7 +1593,7 @@ print "Padded set to $isPadded $break";
         elsif ($record =~ /Is_read/ && $READSCAN) {
 # test presence of required read in database
             print "testing read $object$break" if ($list > 1);
-            my $dblookup = 1; $dblookup = 0 if $self->{preload};
+            my $dblookup = 1; $dblookup = 0 if ($self->{nopreload} < 2);
             $ReadMapper->inDataBase($object,$dblookup,1,0,1000);
         }
 
@@ -2034,11 +2046,10 @@ sub setEnvironment {
 
 # return the line break appropriate for the environment
 
-    $ENV{REQUEST_METHOD} ? $CGI = 1 : $CGI = 0;
+    $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
 
-    $CGI ? $break = "<br>" : $break = "\n";
+    $break = $CGI ? "<br>" : "\n";
 }
-
 
 #############################################################################
 
@@ -2049,9 +2060,10 @@ sub fonts {
     my %font = (b=>'blue', o=>'orange', g=>'lightgreen', 'y'=>'yellow', e=>'</FONT>');
 
     foreach my $colour (keys %font) {
-        if ($ENV{REQUEST_METHOD}) {
+# replace colour by the full HTML tag
+        if ($CGI) {
             $font{$colour} = "<FONT COLOR=$font{$colour}>" if ($colour ne 'e');
-       }
+        }
         else {
             $font{$colour} = " ";
         }
@@ -2067,9 +2079,9 @@ sub timer {
     my $name = shift;
     my $mark = shift;
 
-#    use Devel::MyTimer;
+    use MyTimer;
 
-#    $MyTimer = new MyTimer if !$MyTimer;
+    $MyTimer = new MyTimer if !$MyTimer;
 
     $MyTimer->($name,$mark) if $MyTimer;
 }
@@ -2082,7 +2094,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             1.1 ,
-        updated =>    "24 Sep 2003",
+        updated =>    "03 Feb 2004",
         date    =>    "05 Mar 2001",
     };
 }
