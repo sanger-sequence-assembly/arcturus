@@ -232,16 +232,11 @@ $factory->setLogging($logger);
 my $processed = 0;
 
 while (my $readname = $factory->getNextReadName()) {
-
-    print "next read $readname\n";
-
     next if $adb->hasRead($readname);
 
-    my $Read = $factory->getNextRead(); # should return a Read object
+    my $Read = $factory->getNextRead();
 
-    #$Read->dump;
-
-    my ($success,$errmsg) = $adb->putRead($Read); # 0 for failure, 1 for success
+    my ($success,$errmsg) = $adb->putRead($Read);
 
     print STDERR "Unable to put read $readname: $errmsg\n"
 	unless $success;
