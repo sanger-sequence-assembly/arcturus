@@ -727,28 +727,17 @@ sub create_NEWREADS {
     print STDOUT "Creating table NREADS ..." if ($list);
     $dbh->do(qq[CREATE TABLE NREADS(
              read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
-             readname         CHAR(32) BINARY      NOT NULL, 
-	     date             DATE                 NOT NULL,
-             ligation         SMALLINT UNSIGNED    NOT NULL,
-             clone            SMALLINT UNSIGNED        NULL,
-             template_id      MEDIUMINT UNSIGNED   NOT NULL, 
-             strand           CHAR(1)                  NULL, 
-             primer           TINYINT  UNSIGNED   DEFAULT 0, 
-             chemistry        TINYINT  UNSIGNED        NULL,
+             readname         CHAR(32) BINARY               NOT NULL, 
+	     asped            DATE                          NOT NULL,
+             template_id      MEDIUMINT UNSIGNED            NOT NULL, 
+             strand           ENUM('Forward','Reverse') default NULL, 
+             primer           ENUM('Universal_primer','Custom','Unknown_primer') default NULL, 
+             chemistry        ENUM('Dye_terminator','Dye_primer') default NULL,
              basecaller       TINYINT  UNSIGNED        NULL,
-             direction        ENUM ('?','+','-')  DEFAULT '?', 
              slength          SMALLINT UNSIGNED    NOT NULL,
              lqleft           SMALLINT UNSIGNED    NOT NULL,
              lqright          SMALLINT UNSIGNED    NOT NULL,
-             svcsite          SMALLINT                 NULL,
-             svpsite          SMALLINT                 NULL,
-             svector          TINYINT  UNSIGNED   DEFAULT 0,               
-             svleft           SMALLINT UNSIGNED        NULL,
-             svright          SMALLINT UNSIGNED        NULL,
-             cvector          TINYINT  UNSIGNED   DEFAULT 0,          
-             cvleft           SMALLINT UNSIGNED        NULL,
-             cvright          SMALLINT UNSIGNED        NULL,
-             pstatus          TINYINT  UNSIGNED   DEFAULT 0,
+             status           TINYINT  UNSIGNED   DEFAULT 0,
              CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
          )]);
 
@@ -787,13 +776,11 @@ sub create_TEMPLATE {
     &dropTable ($dbh,"TEMPLATE", $list);
     print STDOUT "Creating table TEMPLATE ..." if ($list);
     $dbh->do(qq[CREATE TABLE TEMPLATE(
-             name            CHAR(24)  BINARY         NULL, 
              template_id     MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT,
-             forward         SMALLINT  UNSIGNED   NOT NULL,
-             reverse         SMALLINT  UNSIGNED   NOT NULL,
+             name            CHAR(24)  BINARY         NULL, 
+             ligation_id     SMALLINT  UNSIGNED   NOT NULL,
              PRIMARY KEY (template_id)
          )]);
-#             ligation        SMALLINT UNSIGNED    NOT NULL, later to be added?
 }
 
 #-------------------------------------------------------------------------------------------------
@@ -814,12 +801,12 @@ sub create_READCOMMENT {
 
 #-------------------------------------------------------------------------------------------------
 # reference to trace archive
-sub create_TRACE {
+sub create_TRACEARCHIVE {
     my ($dbh, $list) = @_;
 
-    &dropTable ($dbh,"TRACE", $list);
-    print STDOUT "Creating table TRACE ..." if ($list);
-    $dbh->do(qq[CREATE TABLE TRACE(
+    &dropTable ($dbh,"TRACEARCHIVE", $list);
+    print STDOUT "Creating table TRACEARCHIVE ..." if ($list);
+    $dbh->do(qq[CREATE TABLE TRACEARCHIVE(
              read_id         MEDIUMINT UNSIGNED   NOT NULL, 
              traceref        VARCHAR(255)         NOT NULL,
              PRIMARY KEY (read_id)
@@ -1329,21 +1316,15 @@ sub create_MAPPING {
     &dropTable ($dbh,"MAPPING", $list);
     print STDOUT "Creating table MAPPING ..." if ($list);
     $dbh->do(qq[CREATE TABLE MAPPING(
-             mapping          MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT,  
-             contig_id        MEDIUMINT UNSIGNED       NOT NULL,
-             read_id          MEDIUMINT UNSIGNED       NOT NULL,
-             revision         MEDIUMINT UNSIGNED       NOT NULL,
+             mapping_id     MEDIUMINT UNSIGNED    NOT NULL AUTO_INCREMENT,  
+             contig_id      MEDIUMINT UNSIGNED    NOT NULL,
+             read_id        MEDIUMINT UNSIGNED    NOT NULL,
+             revision       SMALLINT UNSIGNED     NOT NULL,
              KEY contig_id (contig_id),
              KEY read_id (read_id)
            ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 
-# create a joint index on contig_id and read_id and one on read_id
-
-    print STDOUT "Building index R2CINDEX on contig_id, read_id ...\n" if ($list);
-#?    $dbh->do(qq[ALTER MAPPING ADD INDEX R2CCR (contig_id, read_id)]);
-#?    $dbh->do(qq[ALTER MAPPING ADD INDEX R2CR (read_id)]);
-    print STDOUT "Index R2CCR and R2CR ON READS2CONTIG ... DONE\n"     if ($list);
 }
 
 #--------------------------- documentation --------------------------
@@ -2563,9 +2544,9 @@ sub create_BASECALLER {
     &dropTable ($dbh,"BASECALLER", $list);
     print STDOUT "Creating table BASECALLER ..." if ($list);
     $dbh->do(qq[CREATE TABLE BASECALLER(
-             basecaller       SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             basecaller_id    SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT,
              name             VARCHAR(32)        NOT NULL, 
-             counted          INT UNSIGNED       DEFAULT 0
+             PRIMARY KEY  (basecaller_id)
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -2585,7 +2566,7 @@ sub create_BASECALLER {
 =cut
 #--------------------------------------------------------------------
 
-#******************************************************************************************
+#**************************************************************************
 
 sub create_SEQUENCEVECTORS {
     my ($dbh, $list) = @_;
@@ -2593,31 +2574,32 @@ sub create_SEQUENCEVECTORS {
     &dropTable ($dbh,"SEQUENCEVECTORS", $list);
     print STDOUT "Creating table SEQUENCEVECTORS ..." if ($list);
     $dbh->do(qq[CREATE TABLE SEQUENCEVECTORS(
-             svector          TINYINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             svector_id       TINYINT UNSIGNED   NOT NULL AUTO_INCREMENT,
              name             VARCHAR(20)        NOT NULL,
-             vector           TINYINT UNSIGNED  DEFAULT 0,
-             counted          INT UNSIGNED      DEFAULT 0
-         )]);
+             PRIMARY KEY (svector_id),
+             UNIQUE KEY name (name)
+         ) TYPE=MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
-# leave vector out
 }
-#--------------------------- documentation --------------------------
-=pod
 
-=head1 Table ..
+#**************************************************************************
 
-=head2 Synopsis
+sub create_SEQVEC {
+    my ($dbh, $list) = @_;
 
-=head2 Scripts & Modules
+    &dropTable ($dbh,"SEQVEC", $list);
+    print STDOUT "Creating table SEQVEC ..." if ($list);
+    $dbh->do(qq[CREATE TABLE SEQVEC(
+                read_id     mediumint unsigned NOT NULL,
+                svector_id  tinyint   unsigned NOT NULL,
+                svleft      smallint  unsigned NOT NULL,
+                svright     smallint  unsigned NOT NULL,
+                KEY read_id (read_id)
+         ) TYPE=MyISAM]);
+    print STDOUT "... DONE!\n" if ($list);
+}
 
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#******************************************************************************************
+#**************************************************************************
 
 sub create_CLONINGVECTORS {
     my ($dbh, $list) = @_;
@@ -2625,30 +2607,32 @@ sub create_CLONINGVECTORS {
     &dropTable ($dbh,"CLONINGVECTORS", $list);
     print STDOUT "Creating table CLONINGVECTORS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CLONINGVECTORS(
-             cvector          TINYINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             cvector_id       TINYINT UNSIGNED   NOT NULL AUTO_INCREMENT,
              name             VARCHAR(16)        NOT NULL,
-             vector           TINYINT UNSIGNED  DEFAULT 0,
-             counted          INT UNSIGNED      DEFAULT 0
-         )]);
+             PRIMARY KEY  (cvector_id),
+             UNIQUE KEY name (name)
+         ) TYPE=MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
-#--------------------------- documentation --------------------------
-=pod
 
-=head1 Table ..
+#**************************************************************************
 
-=head2 Synopsis
+sub create_CLONEVEC {
+    my ($dbh, $list) = @_;
 
-=head2 Scripts & Modules
+    &dropTable ($dbh,"CLONEVEC", $list);
+    print STDOUT "Creating table CLONEVEC ..." if ($list);
+    $dbh->do(qq[CREATE TABLE CLONEVEC(
+                read_id     mediumint unsigned NOT NULL,
+                cvector_id  tinyint   unsigned NOT NULL,
+                cvleft      smallint  unsigned NOT NULL,
+                cvright     smallint  unsigned NOT NULL,
+                KEY read_id (read_id)
+         ) TYPE=MyISAM]);
+    print STDOUT "... DONE!\n" if ($list);
+}
 
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#*********************************************************************************************************
+#********************************************************************
 
 sub create_CLONES {
     my ($dbh, $list) = @_;
@@ -2656,32 +2640,15 @@ sub create_CLONES {
     &dropTable ($dbh,"CLONES", $list);
     print STDOUT "Creating table CLONES ..." if ($list);
     $dbh->do(qq[CREATE TABLE CLONES(
-             clone            SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             clonename        VARCHAR(20)        NOT NULL,
-             clonetype        ENUM ('PUC finishing','PCR product' ,'unknown') DEFAULT 'unknown',
-             library          ENUM ('transposition','small insert','unknown') DEFAULT 'unknown',
-             origin           VARCHAR(20)        DEFAULT 'The Sanger Institute',
-             counted          MEDIUMINT UNSIGNED DEFAULT 0
-	 )]);
+             clone_id    SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+             name        VARCHAR(20)        NOT NULL,
+             origin      VARCHAR(20)        DEFAULT 'The Sanger Institute',
+             PRIMARY KEY (clone_id)
+	 ) TYPE=MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
-#--------------------------- documentation --------------------------
-=pod
 
-=head1 Table ..
-
-=head2 Synopsis
-
-=head2 Scripts & Modules
-
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#*********************************************************************************************************
+#***************************
 
 sub create_CLONES2PROJECT {
     my ($dbh, $list) = @_;
@@ -2694,23 +2661,8 @@ sub create_CLONES2PROJECT {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
  }
-#--------------------------- documentation --------------------------
-=pod
 
-=head1 Table ..
-
-=head2 Synopsis
-
-=head2 Scripts & Modules
-
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#*********************************************************************************************************
+#*************************************************************************
 
 sub create_STATUS {
     my ($dbh, $list) = @_;
@@ -2718,29 +2670,14 @@ sub create_STATUS {
     &dropTable ($dbh,"STATUS", $list);
     print STDOUT "Creating table STATUS ..." if ($list);
     $dbh->do(qq[CREATE TABLE STATUS(
-             status           SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             identifier       VARCHAR(64)            NULL,
-             comment          VARCHAR(8)             NULL,
-             counted          INT UNSIGNED       DEFAULT 0
-	 )]);
+             status_id  SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT,
+             name       VARCHAR(64)            NULL,
+             PRIMARY KEY (status_id)
+	 )TYPE=MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
-#--------------------------- documentation --------------------------
-=pod
 
-=head1 Table ..
-
-=head2 Synopsis
-
-=head2 Scripts & Modules
-
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-
-#*********************************************************************************************************
+#*************************************************************************
 
 sub create_LIGATIONS {
     my ($dbh, $list) = @_;
@@ -2751,31 +2688,17 @@ sub create_LIGATIONS {
     &dropTable ($dbh,"LIGATIONS", $list);
     print STDOUT "Creating table LIGATIONS ..." if ($list);
     $dbh->do(qq[CREATE TABLE LIGATIONS(
-             ligation         SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             identifier       VARCHAR(20)        NOT NULL,
-             clone            VARCHAR(20)        NOT NULL,
-             origin           CHAR(1)                NULL,
-             silow            MEDIUMINT UNSIGNED     NULL,
-             sihigh           MEDIUMINT UNSIGNED     NULL,
-             svector          SMALLINT           NOT NULL,
-             counted          INT UNSIGNED       DEFAULT 0
+             ligation_id  SMALLINT UNSIGNED   NOT NULL AUTO_INCREMENT,
+             name         VARCHAR(20)         NOT NULL,
+             clone_id     MEDIUMINT UNSIGNED  NOT NULL,
+             silow        MEDIUMINT UNSIGNED      NULL,
+             sihigh       MEDIUMINT UNSIGNED      NULL,
+             svector_id   SMALLINT            NOT NULL,
+             PRIMARY KEY (ligation_id),
+             UNIQUE KEY name (name)
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
-#--------------------------- documentation --------------------------
-=pod
-
-=head1 Table ..
-
-=head2 Synopsis
-
-=head2 Scripts & Modules
-
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
 
 #################################################################################################
 #################################################################################################
@@ -3091,7 +3014,7 @@ sub create_INVENTORY {
                  'PROJECTS          o  o  0  1',
                  'USERS2PROJECTS    o  l  0  1',
 		 'READMODEL         c  o  2  1',
-                 'VECTORS           c  r  0  1',
+#                 'VECTORS           c  r  0  1',
                  'CHEMTYPES         c  r  2  1',
                  'READS             o  p  0  0',
                  'SEQUENCE          o  p  0  0',
@@ -3099,8 +3022,8 @@ sub create_INVENTORY {
                  'TEMPLATE          o  d  1  0',
                  'READEDITS         o  a  0  0',
                  'READTAGS          o  t  0  0',
-                 'READPAIRS         o  l  3  0',
-                 'PENDING           o  p  0  0',
+#                 'READPAIRS         o  l  3  0',
+#                 'PENDING           o  p  0  0',
                  'MAPPING           o  m  0  0',
                  'READS2CONTIG      o  m  0  0',
                  'SEGMENT           o  m  0  0',
@@ -3118,11 +3041,13 @@ sub create_INVENTORY {
                  'CONTIGS2CONTIG    o  m  0  0',
                  'CONSENSUS         o  d  1  1',
                  'CONTIGS2PROJECT   o  l  3  0',
-                 'CHEMISTRY         o  d  1  1',
-                 'STRANDS           o  d  1  1',
-                 'PRIMERTYPES       o  d  1  1',
+#                 'CHEMISTRY         o  d  1  1',
+#                 'STRANDS           o  d  1  1',
+#                 'PRIMERTYPES       o  d  1  1',
                  'BASECALLER        o  d  1  1',
+                 'SEQVEC            o  d  1  0',
                  'SEQUENCEVECTORS   o  d  1  1',
+                 'CLONEVEC          o  d  1  0',
                  'CLONINGVECTORS    o  d  1  1',
                  'CLONES            o  d  1  1',
                  'CLONES2PROJECT    o  l  0  1',
