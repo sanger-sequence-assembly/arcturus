@@ -131,7 +131,7 @@ CREATE TABLE CONTIG (
   length int(10) unsigned default '0',
   ncntgs smallint(5) unsigned NOT NULL default '0',
   nreads mediumint(8) unsigned NOT NULL default '0',
-  project mediumint(8) unsigned NOT NULL default '0',
+  project_id mediumint(8) unsigned NOT NULL default '0',
   newreads mediumint(9) NOT NULL default '0',
   cover float(8,2) default '0.00',
   origin enum('Arcturus CAF parser','Finishing Software','Other') default NULL,
@@ -190,7 +190,7 @@ CREATE TABLE MAPPING (
 #
 
 CREATE TABLE PROJECT (
-  project smallint(5) unsigned NOT NULL auto_increment,
+  project_id mediumint(8) unsigned NOT NULL auto_increment,
   projectname varchar(24) NOT NULL default '',
   projecttype enum('Finishing','Annotation','Comparative Sequencing','Bin','Other') default 'Bin',
   assembly tinyint(3) unsigned default '0',
@@ -203,7 +203,7 @@ CREATE TABLE PROJECT (
   attributes blob,
   comment varchar(255) default NULL,
   status enum('Dormant','Active','Completed','Merged') default 'Dormant',
-  PRIMARY KEY  (project),
+  PRIMARY KEY  (project_id),
   UNIQUE KEY projectname (projectname)
 ) TYPE=MyISAM;
 
