@@ -441,6 +441,19 @@ my $xmlfh;
 
 if ($xmlfile) {
     $xmlfh = new FileHandle($xmlfile, "w");
+
+    print $xmlfh "<?xml version='1.0' encoding='utf-8'?>\n";
+    print $xmlfh "\n";
+    print $xmlfh "<!DOCTYPE assembly SYSTEM \"assembly.dtd\">\n";
+    print $xmlfh "\n";
+
+    my $ticks = time;
+    my @now = localtime($ticks);
+    my $thedate = sprintf("%04d-%02d-%02d %02d:%02d:%02d",
+			  1900+$now[5], 1+$now[4], $now[3],
+			  $now[2], $now[1], $now[0]);
+
+    print $xmlfh "<assembly name=\"$organism\" date=\"$thedate\" >\n";
 }
 
 my $scaffoldtosuperscaffold = {};
@@ -548,33 +561,34 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
     }
 
     if ($xmlfh && $totbp >= $minprojectsize) {
-	print $xmlfh "<super-scaffold scaffolds=\"$totscaff\" contigs=\"$contigcount\" basepairs=\"$totbp\">\n";
+	print $xmlfh "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
 	foreach my $scaffold (@{$superscaffold}) {
 	    my ($scaffoldid, $sense) = @{$scaffold};
 
 	    $scaffold = $scaffoldfromid{$scaffoldid};
 
-	    print $xmlfh "    <scaffold id=\"$scaffoldid\" sense=\"$sense\">\n";
+	    print $xmlfh "\t\t<scaffold id=\"$scaffoldid\" sense=\"$sense\" >\n";
 
 	    my $isContig = 1;
 
 	    foreach my $entry (@{$scaffold}) {
 		if ($isContig) {
 		    my ($contigid, $sense) = @{$entry};
-		    print $xmlfh "        <contig id=\"$contigid\" sense=\"$sense\" />\n";
+		    my $ctglen = $contiglength->{$contigid};
+		    print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\" sense=\"$sense\" />\n";
 		} else {
 		    my ($gapsize, $bridges) = @{$entry};
-		    print $xmlfh "        <gap size=\"$gapsize\" bridges=\"",join(",",@{$bridges}),"\" />\n";
+		    print $xmlfh "\t\t\t<gap size=\"$gapsize\" bridges=\"",join(",",@{$bridges}),"\" />\n";
 		}
 
 		$isContig = !$isContig;
 	    }
 
-	    print $xmlfh "    </scaffold>\n";
+	    print $xmlfh "\t\t</scaffold>\n";
 	}
 
-	print $xmlfh "</super-scaffold>\n\n";
+	print $xmlfh "\t</superscaffold>\n\n";
     }
 
     if ($updateproject && $contigcount > 1 && $totbp >= $minprojectsize) {
@@ -591,6 +605,11 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 $sth_templates->finish();
 
 $dbh->disconnect();
+
+if ($xmlfh) {
+    print $xmlfh "</assembly>\n";
+    $xmlfh->close();
+}
 
 exit(0);
 
