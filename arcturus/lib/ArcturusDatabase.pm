@@ -964,6 +964,35 @@ sub checkReadForConsistency {
     return (1, "OK");
 }
 
+###
+### This method is used to return the database ID of a read attribute
+### such as a template or ligation, given its identifier.
+###
+### The lookup follows a three-stage strategy:
+###
+### 1. Search the supplied dictionary hash. If the identifier is a
+###    key of the hash, then return the value.
+###
+### 2. Search the database table using the supplied SELECT statement
+###    handle. The statement is executed with a single parameter, the
+###    identifier. It should return a single item, the attribute ID.
+###    If the query returns a non-empty result set, add the identifier
+###    and its corresponding ID to the dictionary and return the ID.
+###
+### 3. Attempt to insert a new identifier into the database table
+###    using the supplied INSERT statement handle. This can also
+###    take additional data, if the fifth parameter is defined.
+###    If the insert was successful, extract the attribute ID value
+###    that was assigned by the database server, add it to the
+###    dictionary and return it.
+###
+###    The insert may have been a MySQL "INSERT IGNORE" command, so
+###    a zero inserted row count is possible. In this case, we re-try
+###    the SELECT query.
+###
+###    If all three stages fail, return undef.
+###
+
 sub getReadAttributeID {
     my $identifier = shift;
     my $dict = shift;
@@ -971,15 +1000,13 @@ sub getReadAttributeID {
     my $insert_sth = shift;
     my $extra_data = shift;
 
-    return undef unless defined($identifier);
-
-# try to find the dictionary item in the current dictionary
+    return undef unless (defined($identifier) && defined($dict));
 
     my $id = &dictionaryLookup($dict, $identifier);
 
     return $id if defined($id);
 
-# not found, try the database table
+    return undef unless defined($select_sth);
 
     my $rc = $select_sth->execute($identifier);
 
@@ -990,7 +1017,7 @@ sub getReadAttributeID {
 
     return $id if defined($id);
 
-# not found, add new dictionary item to datbase table
+    return undef unless defined($insert_sth);
 
     if (defined($extra_data)) {
 	$rc = $insert_sth->execute($identifier, @{$extra_data});
@@ -999,12 +1026,18 @@ sub getReadAttributeID {
     }
 
     if (defined($rc)) {
-# successfully added, now do a read-back (to handle the case $rc=0)
-	$rc = $select_sth->execute($identifier);
+	my $rows = $insert_sth->rows();
 
-	if (defined($rc)) {
-	    ($id) = $select_sth->fetchrow_array();
-	    $select_sth->finish();
+	if ($rows == 0) {
+	    $rc = $select_sth->execute($identifier);
+
+	    if (defined($rc)) {
+		($id) = $select_sth->fetchrow_array();
+		$select_sth->finish();
+	    }
+	} elsif ($rows == 1) {
+	    my $dbh = $insert_sth->{'Database'};
+	    $id = $dbh->{'mysql_insertid'};
 	}
     }
 
