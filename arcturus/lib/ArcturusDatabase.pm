@@ -120,10 +120,10 @@ sub populateDictionaries {
     $this->{Dictionary} = {};
 
     $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
-    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'identifier');
-    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
-    $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
-    $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
+    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'name');
+    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone_id', 'name');
+    $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status_id', 'name');
+    $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
     $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
 # a place holder for template dictionary which will be built on the fly
@@ -138,7 +138,7 @@ sub populateLoadingDictionaries {
     $this->{LoadingDictionary} = {};
 
     $this->{LoadingDictionary}->{ligation} =
-	&createDictionary($dbh, "LIGATIONS", "identifier", "ligation_id");
+	&createDictionary($dbh, "LIGATIONS", "name", "ligation_id");
 
     $this->{LoadingDictionary}->{svector} =
 	&createDictionary($dbh, "SEQUENCEVECTORS", "name", "svector_id");
@@ -150,28 +150,28 @@ sub populateLoadingDictionaries {
 	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
 
     $this->{LoadingDictionary}->{basecaller} =
-	&createDictionary($dbh, "BASECALLER", "name", "basecaller");
+	&createDictionary($dbh, "BASECALLER", "name", "basecaller_id");
 
     $this->{LoadingDictionary}->{clone} =
-	&createDictionary($dbh, "CLONES", "clonename", "clone");
+	&createDictionary($dbh, "CLONES", "name", "clone_id");
 
     $this->{LoadingDictionary}->{status} =
-	&createDictionary($dbh, "STATUS", "identifier", "status");
+	&createDictionary($dbh, "STATUS", "name", "status_id");
 
     $this->{SelectStatement} = {};
     $this->{InsertStatement} = {};
 
     my %attributeQueries =
-	('ligation',   ["select ligation_id from LIGATIONS where identifier=?",
-			"insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)"],
+	('ligation',   ["select ligation_id from LIGATIONS where name=?",
+			"insert ignore into LIGATIONS(name,silow,sihigh) VALUES(?,?,?)"],
 	 'template',   ["select template_id from TEMPLATE where name=?",
 			"insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)"],
-	 'basecaller', ["select basecaller from BASECALLER where name=?",
+	 'basecaller', ["select basecaller_id from BASECALLER where name=?",
 			"insert ignore into BASECALLER(name) VALUES(?)"],
-	 'status',     ["select status from STATUS where identifier=?",
-			"insert ignore into STATUS(identifier) VALUES(?)"],
-	 'clone',      ["select clone from CLONES where clonename=?",
-			"insert ignore into CLONES(clonename) VALUES(?)"],
+	 'status',     ["select status_id from STATUS where name=?",
+			"insert ignore into STATUS(name) VALUES(?)"],
+	 'clone',      ["select clone_id from CLONES where name=?",
+			"insert ignore into CLONES(name) VALUES(?)"],
 	 'svector',    ["select svector_id from SEQUENCEVECTORS where name=?",
 			"insert ignore into SEQUENCEVECTORS(name) VALUES(?)"],
 	 'cvector',    ["select cvector_id from CLONINGVECTORS where name=?",
@@ -790,8 +790,8 @@ sub putRead {
     my $readname = $read->getReadName();
 
     my $query = "insert into" .
-	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
-	    " VALUES(?,?,?,?,?,?,?,?,?)";
+	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright,basecaller)" .
+	    " VALUES(?,?,?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -803,7 +803,8 @@ sub putRead {
 			$read->getPrimer(),
                         $read->getSequenceLength(),
 			$read->getLowQualityLeft(),
-			$read->getLowQualityRight());
+			$read->getLowQualityRight(),
+			$basecaller);
 
     return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
@@ -877,7 +878,7 @@ sub putRead {
 
 	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
 
-	    return (0, "failed to insert read_id,ceqvec_id,begin,end into CLONEVEC for $readname ($readid);" .
+	    return (0, "failed to insert read_id,cvector_id,begin,end into CLONEVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
@@ -951,367 +952,6 @@ sub checkReadForConsistency {
     #
     # For now, assume everything is okay and return 1.
     return (1, "OK");
-}
-
-sub getTemplateID {
-# retrieve template ID from the dictionary tables 
-    my $this = shift;
-    my $read = shift; # instance of Read class
-
-    my $template = $read->getTemplate();
-
-# try the currently loaded dictionary table
-
-    my $template_id = &dictionaryLookup($this->{LoadingDictionary}->{template},
-					$template);
-
-    return $template_id if defined($template_id);
-
-# not found, now try the database table itself
-
-    my $dbh = $this->getConnection();
-
-    return undef unless defined($dbh);
-
-    my $query = "select template_id from TEMPLATE where name=?";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $rc = $sth->execute($template);
-
-    ($template_id) = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    if (defined($template_id)) {
-# found, update the stored dictionary table and return the ID
-	&dictionaryInsert($this->{LoadingDictionary}->{template},
-			  $template, $template_id);
-	return $template_id;
-    }
-
-# not found in either the stored dictionary table or the database 
-# hence add the new entry with its ligation info to the database
-
-    my $ligation_id = $this->getLigationID($read);
-
-# WHAT IF !$ligation_id
-
-    $query = "insert ignore into TEMPLATE(name,ligation_id) VALUES(?,?)";
-
-    $sth = $dbh->prepare_cached($query);
-
-    $rc = $sth->execute($template, $ligation_id);
-
-    if ($rc == 1) {
-	$template_id = $dbh->{'mysql_insertid'};
-    } 
-    elsif (defined($rc) && !shift) {
-# occurs when the ignore clause kicks in
-        $template_id = $this->getTemplateID($read,1);
-    }
-    else {
-	undef $template_id;
-    }
-
-    $sth->finish();
-
-    &dictionaryInsert($this->{LoadingDictionary}->{template},
-		      $template, $template_id) if defined($template_id);
-
-    return $template_id;
-}
-
-sub getCloningVectorID {
-    my $this = shift;
-    my $cvec = shift;
-
-    my $cvec_id = &dictionaryLookup($this->{LoadingDictionary}->{cvectors},
-				    $cvec);
-
-    return $cvec_id if defined($cvec_id);
-
-# not found in current dictionary table, try database
-
-    my $dbh = $this->getConnection();
-
-    return undef unless defined($dbh);
-
-    my $query = "select cvector_id from CLONINGVECTORS where name=?";
-
-    my $sth = $dbh->prepare($query);
-
-    my $rc = $sth->execute($cvec);
-
-    ($cvec_id) = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    if (defined($cvec_id)) {
-	&dictionaryInsert($this->{LoadingDictionary}->{cvectors},
-			  $cvec, $cvec_id);
-	return $cvec_id;
-    }
-
-# not found in database either, insert new entry into database
-
-    $query = "insert ignore into CLONINGVECTORS(name) VALUES(?)";
-
-    $sth = $dbh->prepare($query);
-
-    $rc = $sth->execute($cvec);
-
-    if ($rc == 1) {
-	$cvec_id = $dbh->{'mysql_insertid'};
-    }
-    elsif (defined($rc) && !shift) {
-# occurs when the ignore clause kicks in
-        $cvec_id = $this->getCloningVector($cvec,1);
-    } 
-    else {
-	undef $cvec_id;
-    }
-
-    $sth->finish();
-
-    &dictionaryInsert($this->{LoadingDictionary}->{cvectors},
-		      $cvec, $cvec_id) if defined($cvec);
-
-    return $cvec_id;
-}
-
-sub getSequencingVectorID {
-    my $this = shift;
-    my $seqvec = shift;
-
-    return undef unless defined($seqvec);
-
-    my $seqvec_id = &dictionaryLookup($this->{LoadingDictionary}->{svectors},
-				      $seqvec);
-
-    return $seqvec_id if defined($seqvec_id);
-
-# not found in current dictionary table, try database
-
-    my $dbh = $this->getConnection();
-
-    return undef unless defined($dbh);
-
-    my $query = "select svector_id from SEQUENCEVECTORS where name=?";
-
-    my $sth = $dbh->prepare($query);
-
-    my $rc = $sth->execute($seqvec);
-
-    ($seqvec_id) = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    if (defined($seqvec_id)) {
-	&dictionaryInsert($this->{LoadingDictionary}->{svectors},
-			  $seqvec, $seqvec_id);
-	return $seqvec_id;
-    }
-
-# not found in database either, insert new entry into database
-
-    $query = "insert ignore into SEQUENCEVECTORS(name) VALUES(?)";
-
-    $sth = $dbh->prepare($query);
-
-    $rc = $sth->execute($seqvec);
-
-    if ($rc == 1) {
-	$seqvec_id = $dbh->{'mysql_insertid'};
-    }
-    elsif (defined($rc) && !shift) {
-# occurs when the ignore clause kicks in
-        $seqvec_id = $this->getSequencingVectorID($seqvec,1);
-    }
-    else {
-	undef $seqvec_id;
-    }
-
-    $sth->finish();
-
-    &dictionaryInsert($this->{LoadingDictionary}->{svectors},
-		      $seqvec, $seqvec_id) if defined($seqvec_id);
-
-    return $seqvec_id;
-}
-
-sub getLigationID {
-    my $this = shift;
-    my $read = shift;
-
-    my $ligation = $read->getLigation();
-
-    my $ligation_id = &dictionaryLookup($this->{LoadingDictionary}->{ligation},
-					$ligation);
-
-    return $ligation_id if defined($ligation_id);
-
-# not found in current dictionary table, try database
-
-    my $dbh = $this->getConnection();
-
-    return undef unless defined($dbh);
-
-    my $query = "select ligation_id from LIGATIONS where identifier=?";
-
-    my $sth = $dbh->prepare($query);
-
-    my $rc = $sth->execute($ligation);
-
-    ($ligation_id) = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    if (defined($ligation_id)) {
-	&dictionaryInsert($this->{LoadingDictionary}->{ligation},
-			  $ligation, $ligation_id);
-	return $ligation_id;
-    }
-
-# not found in database either, add new entry plus its insert-size
-
-    my ($silow, $sihigh) = @{$read->getInsertSize()};
-
-    $query = "insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
-
-    $sth = $dbh->prepare($query);
-
-    $rc = $sth->execute($ligation, $silow, $sihigh);
-
-    if ($rc == 1) {
-	$ligation_id = $dbh->{'mysql_insertid'};
-    }
-    elsif (defined($rc) && !shift) {
-# occurs when the ignore clause kicks in
-        $ligation_id = $this->getLigationID($read,1);
-    }
-    else {
-	undef $ligation_id;
-    }
-
-    $sth->finish();
-
-    &dictionaryInsert($this->{LoadingDictionary}->{ligation},
-		      $ligation, $ligation_id) if defined($ligation_id);
-
-    return $ligation_id;
-}
-
-sub getDictionaryItemID {
-    my $this = shift;
-# the next two items are always required
-    my $key      = shift; # e.g. 'template'
-    my $keyvalue = shift; #
-# the next three parameters are required when accessing the database table
-    my $tableID     = shift; # e.g. 'template_id'
-    my $tablename   = shift; # e.g. 'TEMPLATE'
-    my $tablecolumn = shift; # e.g. 'name'
-# the next parameter can be a reference to a hash, required for some additions
-    my $hash = shift;
-
-# 1) test validity of input key
-
-    my $validItems = "template|ligation|cvector|svector|
-                      clone|status|basecaller";
-    if ($key !~ /\b$validItems\b/) {
-        die "valid keys for 'getDictionaryItemID' are: ".
-             join(' ',split ('|',$validItems));
-    }
-
-# 2) try to identify the key's value in the current dictionary table
-
-    my $key_id = &dictionaryLookup($this->{LoadingDictionary}->{$key},
-                                   $keyvalue);
-
-    return $key_id if defined($key_id);
-
-# 3) not found in current dictionary, try the database table
-
-    my $dbh = $this->getConnection();
-
-    return undef unless defined($dbh);
-
-# test the dictionary table descriptors 
-
-    if (!defined($tableID) || !defined($tablename) || !defined($tablecolumn)) {
-        die "Missing dictionary table data for 'getDictionaryItemID'";
-    }
-
-    my $query = "select $tableID from $tablename where $tablecolumn=?";
-
-    my $ssth = $dbh->prepare_cached($query);
-
-    my $rc = $ssth->execute($keyvalue);
-
-   ($key_id) = $ssth->fetchrow_array() if $rc;
-
-    $ssth->finish();
-
-    if (defined($key_id)) {
-# the key value is found in the database table; update the dictionary hash
-	&dictionaryInsert($this->{LoadingDictionary}->{$key},
-			  $keyvalue, $key_id);
-	return $key_id;
-    }
-
-# 4) not found in database either, add new value to database table
-
-# we need to build the insert instruction
-
-    my $insertkeys = $key;
-    my $placeholders = "?";
-    my @insertvals;
-    push @insertvals,$keyvalue;
-# add additional data to the insert fields if provided with a hash
-    if ($hash && ref($hash) eq 'HASH') {
-        foreach $key (keys %$hash) {
-            $insertkeys .= ",".$key;
-            push @insertvals,$hash->{$key};
-            $placeholders .= ",?";
-        }
-    }
-
-    my $insert = "insert ignore into $tablename 
-                  ($insertkeys) VALUES ($placeholders)";
-
-    my $isth = $dbh->prepare_cached($insert);
-
-    $rc = $isth->execute(@insertvals);
-
-    if (defined($rc)) {
-	my $nrows = $isth->rows();
-	if ($nrows == 1) {
-# get the ID for the newly added item
-	    $key_id = $dbh->{'mysql_insertid'};
-	}
-        elsif ($nrows == 0) {
-	    # By an amazing coincidence, another read-loader
-	    # has inserted a record with the same identifer
-	    # between our SELECT and INSERT commands, so we
-	    # need to re-execute the SELECT.
-            my $rc = $ssth->execute($keyvalue);
-
-           ($key_id) = $ssth->fetchrow_array();
-
-            $ssth->finish();
-	}
-    } 
-    else {
-	undef $key_id;
-    }
-
-    $isth->finish();
-
-# store the newly added value in the dictionary hash
-    &dictionaryInsert($this->{LoadingDictionary}->{$key},
-	       $keyvalue, $key_id) if defined($key_id);
-
-    return $key_id;
 }
 
 sub getReadAttributeID {
