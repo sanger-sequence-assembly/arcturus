@@ -232,6 +232,8 @@ sub getNextRead {
 
     my ($quality) = $this->{sth}->{qual}->fetchrow_array();
 
+    $dna =~ s/\-/N/g;
+
     $read->setSequence($dna);
     $read->setQuality([unpack("c*", $quality)]);
 
