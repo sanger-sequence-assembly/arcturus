@@ -34,8 +34,8 @@ corba powmap/corba
 
 flatserve flatimpl &diana &corba &etc &uk &collections
 agct agctimpl &uk &diana &etc &collections
-flatserve_control flatserve_control_impl &powmap_lib &powmap_corba &powmap_diana &powmap_etc &powmap_uk &powmap_collections
-artemis_applet artemis_applet_impl &powmap_diana &powmap_etc &powmap_uk &powmap_collections &powmap_META-INF
+flatserve_control flatserve_control_impl &lib &corba &diana &etc &uk &collections
+artemis_applet artemis_applet_impl &diana &etc &uk &collections &META-INF
 
 AnT zoo/modules/AnT
 public_modules public_modules_impl &AnT
