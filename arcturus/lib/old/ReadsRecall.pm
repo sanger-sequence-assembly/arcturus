@@ -2032,11 +2032,11 @@ sub timer {
     my $name = shift;
     my $mark = shift;
 
-#    use Devel::MyTimer;
+    use MyTimer;
 
-#    $MyTimer = new MyTimer if !$MyTimer;
+    $MyTimer = new MyTimer if !$MyTimer;
 
-    $MyTimer->($name,$mark) if $MyTimer;
+    $MyTimer->timer($name,$mark) if $MyTimer;
 }
 
 #############################################################################

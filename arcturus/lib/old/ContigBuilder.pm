@@ -2088,7 +2088,7 @@ sub timer {
 
     $MyTimer = new MyTimer if !$MyTimer;
 
-    $MyTimer->($name,$mark) if $MyTimer;
+    $MyTimer->timer($name,$mark) if $MyTimer;
 }
 
 #############################################################################
