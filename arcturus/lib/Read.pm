@@ -98,50 +98,6 @@ sub importComment {
 # importing & exporting data and meta data
 #-------------------------------------------------------------------    
 
-# OBSOLETE METHOD
-sub importData {
-# input of meta data into this instance with a hash
-    my $this = shift;
-    my $hash = shift;
-
-# copy the input hash elements (disconnect from outside interference)
-
-    my $copied = 0;
-    if (ref($hash) eq 'HASH') {
-        my $data = $this->{data};
-        foreach my $key (%$hash) {
-            if ($key eq 'readname') {
-                $this->{$key} = $hash->{$key};
-            } 
-            else {
-		$data->{$key} = $hash->{$key};
-            }
-            $copied++;      
-        }
-    }
-
-    return $copied;
-}
-
-# OBSOLETE METHOD
-sub exportData {
-# export of meta data of this instance with a hash
-    my $this = shift;
-
-    my %export;
-    my $data = $this->{data};
-
-    $export{readname} = $this->{readname} if $this->{readname};
-
-    foreach my $key (%$data) {
-        $export{$key} = $data->{$key} if defined $data->{$key};
-    }
-
-    return \%export;
-}
-
-#-----------------
-
 sub setAspedDate {
     my $this = shift;
     $this->{data}->{asped} = shift;
@@ -390,14 +346,26 @@ sub getStrand {
 
 #-----------------
 
-sub setSequencingVectorSite {
+sub setSequenceVectorCloningSite {
     my $this = shift;
     $this->{data}->{svcsite} = shift;
 }
 
-sub getSequencingVectorSite {
+sub getSequenceVectorCloningSite {
     my $this = shift;
     return $this->{data}->{svcsite};
+}
+
+#-----------------
+
+sub setSequenceVectorPrimerSite {
+    my $this = shift;
+    $this->{data}->{svpsite} = shift;
+}
+
+sub getSequenceVectorPrimerSite {
+    my $this = shift;
+    return $this->{data}->{svpsite};
 }
 
 #-----------------

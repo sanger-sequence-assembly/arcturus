@@ -49,8 +49,6 @@ sub init {
 
     $this->populateDictionaries();
 
-    $this->{prepared} = {}; # placeholder for prepared queries
-
     $this->{inited} = 1;
 }
 
@@ -249,15 +247,8 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $this->{prepared}->{getReadByID};
-
-    if (!defined($sth)) {
-
+    my $sth = $dbh->prepare_cached("select * from READS where read_id=?");
 # or ?: "select READS.*,TEMPLATE.name as template from READS join TEMPLATE using (template_id) where read_id = ?"
-        $sth = $dbh->prepare("select * from READS where read_id=?");
-
-        $this->{prepared}->{getReadByID} = $sth;
-    }
 
     $sth->execute($readid);
 
@@ -266,6 +257,7 @@ sub getReadByID {
     $sth->finish();
 
     if (defined($hashref)) {
+
 	my $read = new Read();
 
 	$this->processReadData($hashref);
@@ -288,18 +280,11 @@ sub getReadByName {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $this->{prepared}->{getReadByName};
+    my $query = "select READS.*,TEMPLATE.name as template
+                 from READS leftjoin TEMPLATE using (template_id) 
+                 where readname = ?";
 
-    if (!defined($sth)) {
-
-        my $query = "select READS.*,TEMPLATE.name as template
-                     from READS leftjoin TEMPLATE using (template_id) 
-                     where readname = ?";
-
-        $sth = $dbh->prepare($query);
-
-        $this->{prepared}->{getReadByName} = $sth;
-    }
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($readname);
 
@@ -342,7 +327,9 @@ sub getReadsByID {
 
     my $dbh = $this->getConnection();
 
-# or ?: "select READS.*,TEMPLATE.name as template from READS join TEMPLATE using (template_id) where read_id in ($range)"
+    my $query = "select READS.*,TEMPLATE.name as template
+                 from READS join TEMPLATE using (template_id) 
+                 where read_id in ($range)";
     my $sth = $dbh->prepare("select * from READS where read_id in ($range)");
 
     $sth->execute();
@@ -381,6 +368,7 @@ sub getReadsForContigID{
                  and READS.template_id = TEMPLATE.template_id";
 # my $query = "select READS.* from READS2CONTIG left join READS on (read_id) ";
 # $query   .= "where READS2CONTIG.contig_id = ?";
+
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($cid);
@@ -431,7 +419,8 @@ sub getSequenceForReads {
 
     my $range = join ',',keys(%$rids);
 
-    my $query = "select read_id,sequence,quality from SEQUENCE where read_id in ($range)";
+    my $query = "select read_id,sequence,quality from SEQUENCE 
+                 where read_id in ($range)";
 
     my $sth = $dbh->prepare($query);
 
@@ -457,7 +446,7 @@ sub getSequenceForReads {
 
     $sth->finish();
 
-# test if all objects have been completed
+# test if all objects have been completed ?
 }
 
 #-----------------------------------------------------------------------------
@@ -479,7 +468,7 @@ sub getSequenceForRead {
 	$query .= "READS left join SEQUENCE using (read_id) where readname=?";
     }
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($value);
 
@@ -519,7 +508,7 @@ sub getCommentForRead {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($value);
 
@@ -546,12 +535,13 @@ sub getTraceArchiveIdentifier {
 	$query .= "TRACEARCHIVE where read_id=?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READS left join TRACEARCHIVE using(read_id) where readname=?";
+	$query .= "READS left join TRACEARCHIVE using(read_id) 
+                   where readname=?";
     }
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($value);
 
@@ -570,12 +560,15 @@ sub setTraceArchiveIdentifier {
 # enters the trace archive reference for the specifed read
     my $this = shift;
     my ($key,$value,$junk) = @_;
+
+
+# TO BE COMPLETED
 }
 
 #-----------------------------------------------------------------------------
 
 sub getListOfReadNames {
-# returns an array of readnames occurring in the database 
+# returns an array of (all) readnames occurring in the database 
     my $this = shift;
 
     my $dbh = $this->getConnection();
@@ -741,7 +734,7 @@ sub putRead {
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
 	    " VALUES(?,?,?,?,?,?,?,?,?)";
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readname,
 			$read->getAspedDate(),
@@ -762,7 +755,7 @@ sub putRead {
 
     $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
 
-    $sth = $dbh->prepare($query);
+    $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readid, $sequence, $basequality);
 
@@ -779,6 +772,7 @@ sub putRead {
 	$sth = $dbh->prepare($query);
 
 	foreach my $entry (@{$seqveclist}) {
+
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
 	    my $seqvecid = $this->getSequencingVectorID($seqvec) || 0;
@@ -881,15 +875,20 @@ sub checkReadForConsistency {
 }
 
 sub getTemplateID {
+# retrieve template ID from the dictionary tables 
     my $this = shift;
-    my $read = shift;
+    my $Read = shift; # instance of Read class
 
-    my $template = $read->getTemplate();
+    my $template = $Read->getTemplate();
+
+# try the currently loaded dictionary table
 
     my $template_id = &dictionaryLookup($this->{LoadingDictionary}->{template},
 					$template);
 
     return $template_id if defined($template_id);
+
+# not found, now try the database table itself
 
     my $dbh = $this->getConnection();
 
@@ -897,7 +896,7 @@ sub getTemplateID {
 
     my $query = "select template_id from TEMPLATE where name=?";
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($template);
 
@@ -906,29 +905,40 @@ sub getTemplateID {
     $sth->finish();
 
     if (defined($template_id)) {
+# found, update the stored dictionary table and return the ID
 	&dictionaryInsert($this->{LoadingDictionary}->{template},
 			  $template, $template_id);
 	return $template_id;
     }
 
-    my $ligation_id = $this->getLigationID($read);
+# not found in either the stored dictionary table or the database 
+# hence add the new entry with its ligation info to the database
 
-    $query = "insert into TEMPLATE(name,ligation_id) VALUES(?,?)";
+    my $ligation_id = $this->getLigationID($Read);
 
-    $sth = $dbh->prepare($query);
+# WHAT IF !$ligation_id
+
+    $query = "insert ignore into TEMPLATE(name,ligation_id) VALUES(?,?)";
+
+    $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($template, $ligation_id);
 
     if ($rc == 1) {
 	$template_id = $dbh->{'mysql_insertid'};
-    } else {
+    } 
+    elsif (defined($rc) && !shift) {
+# occurs when the ignore clause kicks in
+        $template_id = $this->getTemplateID($Read,1);
+    }
+    else {
 	undef $template_id;
     }
 
     $sth->finish();
 
     &dictionaryInsert($this->{LoadingDictionary}->{template},
-		      $template, $template_id);
+		      $template, $template_id) if defined($template_id);
 
     return $template_id;
 }
@@ -941,6 +951,8 @@ sub getCloningVectorID {
 				    $cvec);
 
     return $cvec_id if defined($cvec_id);
+
+# not found in current dictionary table, try database
 
     my $dbh = $this->getConnection();
 
@@ -962,7 +974,9 @@ sub getCloningVectorID {
 	return $cvec_id;
     }
 
-    $query = "insert into CLONINGVECTORS(name) VALUES(?)";
+# not found in database either, insert new entry into database
+
+    $query = "insert ignore into CLONINGVECTORS(name) VALUES(?)";
 
     $sth = $dbh->prepare($query);
 
@@ -970,14 +984,19 @@ sub getCloningVectorID {
 
     if ($rc == 1) {
 	$cvec_id = $dbh->{'mysql_insertid'};
-    } else {
+    }
+    elsif (defined($rc) && !shift) {
+# occurs when the ignore clause kicks in
+        $cvec_id = $this->getCloningVector($cvec,1);
+    } 
+    else {
 	undef $cvec_id;
     }
 
     $sth->finish();
 
     &dictionaryInsert($this->{LoadingDictionary}->{cvectors},
-		      $cvec, $cvec_id);
+		      $cvec, $cvec_id) if defined($cvec);
 
     return $cvec_id;
 }
@@ -992,6 +1011,8 @@ sub getSequencingVectorID {
 				      $seqvec);
 
     return $seqvec_id if defined($seqvec_id);
+
+# not found in current dictionary table, try database
 
     my $dbh = $this->getConnection();
 
@@ -1013,7 +1034,9 @@ sub getSequencingVectorID {
 	return $seqvec_id;
     }
 
-    $query = "insert into SEQUENCEVECTORS(name) VALUES(?)";
+# not found in database either, insert new entry into database
+
+    $query = "insert ignore into SEQUENCEVECTORS(name) VALUES(?)";
 
     $sth = $dbh->prepare($query);
 
@@ -1021,28 +1044,35 @@ sub getSequencingVectorID {
 
     if ($rc == 1) {
 	$seqvec_id = $dbh->{'mysql_insertid'};
-    } else {
+    }
+    elsif (defined($rc) && !shift) {
+# occurs when the ignore clause kicks in
+        $seqvec_id = $this->getSequencingVectorID($seqvec,1);
+    }
+    else {
 	undef $seqvec_id;
     }
 
     $sth->finish();
 
     &dictionaryInsert($this->{LoadingDictionary}->{svectors},
-		      $seqvec, $seqvec_id);
+		      $seqvec, $seqvec_id) if defined($seqvec_id);
 
     return $seqvec_id;
 }
 
 sub getLigationID {
     my $this = shift;
-    my $read = shift;
+    my $Read = shift;
 
-    my $ligation = $read->getLigation();
+    my $ligation = $Read->getLigation();
 
     my $ligation_id = &dictionaryLookup($this->{LoadingDictionary}->{ligation},
 					$ligation);
 
     return $ligation_id if defined($ligation_id);
+
+# not found in current dictionary table, try database
 
     my $dbh = $this->getConnection();
 
@@ -1064,9 +1094,11 @@ sub getLigationID {
 	return $ligation_id;
     }
 
-    my ($silow, $sihigh) = @{$read->getInsertSize()};
+# not found in database either, add new entry plus its insert-size
 
-    $query = "insert into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
+    my ($silow, $sihigh) = @{$Read->getInsertSize()};
+
+    $query = "insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
 
     $sth = $dbh->prepare($query);
 
@@ -1074,14 +1106,19 @@ sub getLigationID {
 
     if ($rc == 1) {
 	$ligation_id = $dbh->{'mysql_insertid'};
-    } else {
+    }
+    elsif (defined($rc) && !shift) {
+# occurs when the ignore clause kicks in
+        $ligation_id = $this->getLigationID($Read,1);
+    }
+    else {
 	undef $ligation_id;
     }
 
     $sth->finish();
 
     &dictionaryInsert($this->{LoadingDictionary}->{ligation},
-		      $ligation, $ligation_id);
+		      $ligation, $ligation_id) if defined($ligation_id);
 
     return $ligation_id;
 }
