@@ -688,7 +688,7 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
         $page->errorbox($error);
     } 
     elsif ($number == 1) {
-        $reader->touch();
+#        $reader->touch();
         $page->add($reader->list(1),0,0);
     } 
     else {
