@@ -112,7 +112,8 @@ CREATE TABLE CLONINGVECTORS (
   name varchar(16) NOT NULL default '',
   vector tinyint(3) unsigned default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (cvector_id)
+  PRIMARY KEY  (cvector_id),
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
@@ -198,7 +199,8 @@ CREATE TABLE LIGATIONS (
   sihigh mediumint(8) unsigned default NULL,
   svector smallint(6) NOT NULL default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (ligation_id)
+  PRIMARY KEY  (ligation_id),
+  UNIQUE KEY identifier (identifier)
 ) TYPE=MyISAM;
 
 #
@@ -407,7 +409,8 @@ CREATE TABLE SEQUENCEVECTORS (
   name varchar(20) NOT NULL default '',
   vector tinyint(3) unsigned default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (svector_id)
+  PRIMARY KEY  (svector_id),
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
@@ -458,7 +461,8 @@ CREATE TABLE TEMPLATE (
   template_id mediumint(8) unsigned NOT NULL auto_increment,
   name char(24) binary default NULL,
   ligation_id smallint unsigned NOT NULL,
-  PRIMARY KEY  (template_id)
+  PRIMARY KEY  (template_id),
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
