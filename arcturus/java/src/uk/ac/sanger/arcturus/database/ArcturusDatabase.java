@@ -2,6 +2,9 @@ package uk.ac.sanger.arcturus.database;
 
 import java.sql.*;
 import javax.sql.*;
+import java.util.HashMap;
+
+import uk.ac.sanger.arcturus.data.*;
 
 public class ArcturusDatabase {
     public static final int MYSQL = 1;
@@ -10,6 +13,8 @@ public class ArcturusDatabase {
     protected DataSource ds;
     protected String description;
     protected String name;
+    protected Connection defaultConnection;
+    protected HashMap namedConnections;
 
     /**
      * Creates a new ArcturusDatabase object from a DataSource, a description
@@ -29,6 +34,8 @@ public class ArcturusDatabase {
 	this.ds = ds;
 	this.description = description;
 	this.name = name;
+
+	namedConnections = new HashMap();
 
 	createManagers();
     }
@@ -68,7 +75,10 @@ public class ArcturusDatabase {
      */
 
     public Connection getConnection() throws SQLException {
-	return  (ds == null) ? null : ds.getConnection();
+	if (defaultConnection == null)
+	    defaultConnection = ds.getConnection();
+
+	return defaultConnection;
     }
 
     /**
@@ -88,7 +98,17 @@ public class ArcturusDatabase {
      */
 
     public Connection getConnection(String username, String password) throws SQLException {
-	return (ds == null) ? null : ds.getConnection(username, password);
+	Object obj = namedConnections.get(username);
+
+	if (obj != null)
+	    return (Connection)obj;
+
+	Connection conn = ds.getConnection(username, password);
+
+	if (conn != null)
+	    namedConnections.put(username, conn);
+
+	return conn;
     }
 
     /**
@@ -227,6 +247,18 @@ public class ArcturusDatabase {
 
     public CloneManager getCloneManager() { return cloneManager; }
 
+    public Clone getCloneByName(String name) throws SQLException {
+	return cloneManager.getCloneByName(name);
+    }
+
+    public Clone getCloneByID(int id) throws SQLException {
+	return cloneManager.getCloneByID(id);
+    }
+
+    public void preloadAllClones() throws SQLException {
+	cloneManager.preloadAllClones();
+    }
+
     /**
      * Returns the LigationManager belonging to this ArcturusDatabase.
      *
@@ -234,6 +266,18 @@ public class ArcturusDatabase {
      */
 
     public LigationManager getLigationManager() { return ligationManager; }
+
+    public Ligation getLigationByName(String name) throws SQLException {
+	return ligationManager.getLigationByName(name);
+    }
+
+    public Ligation getLigationByID(int id) throws SQLException {
+	return ligationManager.getLigationByID(id);
+    }
+
+    public void preloadAllLigations() throws SQLException {
+	ligationManager.preloadAllLigations();
+    }
 
     /**
      * Returns the TemplateManager belonging to this ArcturusDatabase.
@@ -243,6 +287,18 @@ public class ArcturusDatabase {
 
     public TemplateManager getTemplateManager() { return templateManager; }
 
+    public Template getTemplateByName(String name) throws SQLException {
+	return templateManager.getTemplateByName(name);
+    }
+
+    public Template getTemplateByID(int id) throws SQLException {
+	return templateManager.getTemplateByID(id);
+    }
+
+    public void preloadAllTemplates() throws SQLException {
+	templateManager.preloadAllTemplates();
+    }
+
     /**
      * Returns the ReadManager belonging to this ArcturusDatabase.
      *
@@ -251,6 +307,22 @@ public class ArcturusDatabase {
 
     public ReadManager getReadManager() { return readManager; }
 
+    public Read getReadByName(String name) throws SQLException {
+	return readManager.getReadByName(name);
+    }
+
+    public Read getReadByID(int id) throws SQLException {
+	return readManager.getReadByID(id);
+    }
+
+    public int loadReadsByTemplate(int template_id) throws SQLException {
+	return readManager.loadReadsByTemplate(template_id);
+    }
+
+    public void preloadAllReads() throws SQLException {
+	readManager.preloadAllReads();
+    }
+
     /**
      * Returns the SequenceManager belonging to this ArcturusDatabase.
      *
@@ -258,6 +330,26 @@ public class ArcturusDatabase {
      */
 
     public SequenceManager getSequenceManager() { return sequenceManager; }
+
+    public Sequence getSequenceByReadID(int readid) throws SQLException {
+	return sequenceManager.getSequenceByReadID(readid);
+    }
+
+    public Sequence getFullSequenceByReadID(int readid) throws SQLException {
+	return sequenceManager.getFullSequenceByReadID(readid);
+    }
+
+    public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
+	return sequenceManager.getSequenceBySequenceID(seqid);
+    }
+
+    public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
+	return sequenceManager.getFullSequenceBySequenceID(seqid);
+    }
+
+    public void getDNAAndQualityForSequence(Sequence sequence) throws SQLException {
+	sequenceManager.getDNAAndQualityForSequence(sequence);
+    }
 
     /**
      * Returns a text representation of this object.

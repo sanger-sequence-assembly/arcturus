@@ -14,7 +14,7 @@ public class ReadManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID, hashByName;
-    private PreparedStatement pstmtByID, pstmtByName;
+    private PreparedStatement pstmtByID, pstmtByName, pstmtByTemplate;
 
     /**
      * Creates a new ReadManager to provide read management
@@ -31,7 +31,10 @@ public class ReadManager {
 
 	query = "select read_id,template_id,asped,strand,primer,chemistry from READS where readname = ?";
 	pstmtByName = conn.prepareStatement(query);
-	    
+
+	query = "select read_id,readname,asped,strand,primer,chemistry from READS where template_id = ?";
+	pstmtByTemplate = conn.prepareStatement(query);
+
 	hashByID = new HashMap();
 	hashByName = new HashMap();
     }
@@ -64,6 +67,8 @@ public class ReadManager {
 	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
+	rs.close();
+
 	return read;
     }
 
@@ -83,7 +88,37 @@ public class ReadManager {
 	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
+	rs.close();
+
 	return read;
+    }
+
+    public int loadReadsByTemplate(int template_id) throws SQLException {
+	pstmtByTemplate.setInt(1, template_id);
+	ResultSet rs = pstmtByTemplate.executeQuery();
+
+	int newreads = 0;
+
+	while (rs.next()) {
+	    int read_id = rs.getInt(1);
+
+	    if (hashByID.containsKey(new Integer(read_id)))
+		continue;
+
+	    String name = rs.getString(2);
+	    java.sql.Date asped = rs.getDate(3);
+	    int strand = parseStrand(rs.getString(4));
+	    int primer = parsePrimer(rs.getString(5));
+	    int chemistry = parseChemistry(rs.getString(6));
+
+	    registerNewRead(name, read_id, template_id, asped, strand, primer, chemistry);
+
+	    newreads++;
+	}
+
+	rs.close();
+
+	return newreads;
     }
 
     private int parseStrand(String text) {
