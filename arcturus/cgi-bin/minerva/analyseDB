@@ -13,9 +13,11 @@ $database = $cgi->param('database');
 $dbhost = $cgi->param('dbhost') || $cgi->server_name();
 $dbport = $cgi->param('dbport') || $ENV{'MYSQL_TCP_PORT'};
 
-unless ($database) {
-    print "! NO DATABASE SPECIFIED\n";
-    exit(0);
+if (defined($database)) {
+    push @databases, $database;
+} else {
+    $alldatabases = 1;
+    $database = 'arcturus';
 }
 
 $dsn = 'DBI:mysql:' . $database . ';host=' . $dbhost . ';port=' . $dbport;
@@ -26,29 +28,8 @@ $dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***');
 
 print "# DSN $dsn\n" if $debug;
 
-$query = 'SHOW TABLES';
-
-print "# QUERY $query\n" if $debug;
-
-$sth = $dbh->prepare($query);
-&db_die("prepare($query) failed");
-
-$sth->execute();
-&db_die("execute($query) failed");
-
-@alltables = ();
-
-while (@ary = $sth->fetchrow_array()) {
-    ($tablename, $junk) = @ary;
-    push @alltables, $tablename;
-    print "# TABLE $tablename\n" if $debug;
-}
-
-$sth->finish();
-&db_die("finish($query) failed");
-
-foreach $tablename (@alltables) {
-    $query = 'SELECT COUNT(*) FROM ' . $tablename;
+if ($alldatabases) {
+    $query = 'SHOW DATABASES';
 
     $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
@@ -56,13 +37,68 @@ foreach $tablename (@alltables) {
     $sth->execute();
     &db_die("execute($query) failed");
 
+    @databases = ();
+
     while (@ary = $sth->fetchrow_array()) {
-	($rowcount, $junk) = @ary;
-	printf "%-30s  %10d\n", $tablename, $rowcount;
+	($database, $junk) = @ary;
+	push @databases, $database;
+	print "# DATABASE $database\n" if $debug;
     }
 
     $sth->finish();
     &db_die("finish($query) failed");
+}
+
+foreach $database (sort @databases) {
+    $query = "USE $database";
+    $dbh->do($query);
+    if ($DBI::err) {
+	print "*** UNABLE TO USE $database: $DBI::errstr ***\n";
+	next;
+    } else {
+	print "DATABASE: $database\n\n";
+    }
+
+    $query = 'SHOW TABLES';
+
+    print "# QUERY $query\n" if $debug;
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    @alltables = ();
+
+    while (@ary = $sth->fetchrow_array()) {
+	($tablename, $junk) = @ary;
+	push @alltables, $tablename;
+	print "# TABLE $tablename\n" if $debug;
+    }
+
+    $sth->finish();
+    &db_die("finish($query) failed");
+
+    foreach $tablename (@alltables) {
+	$query = 'SELECT COUNT(*) FROM ' . $tablename;
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	while (@ary = $sth->fetchrow_array()) {
+	    ($rowcount, $junk) = @ary;
+	    printf "%-30s  %10d\n", $tablename, $rowcount;
+	}
+
+	$sth->finish();
+	&db_die("finish($query) failed");
+    }
+
+    print "\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
 }
 
 $dbh->disconnect();
