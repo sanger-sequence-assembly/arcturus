@@ -31,7 +31,6 @@ etc powmap/etc
 lib powmap/lib
 META-INF powmap/META-INF
 corba powmap/corba
-lib powmap/lib
 
 flatserve flatimpl &diana &corba &etc &uk &collections
 agct agctimpl &diana &corba &etc &uk &lib &collections
