@@ -17,44 +17,48 @@ my $instance;
 my $verbose;
 my $project; # = 20884;
 my $batch;
-my $nolock; # default export only unlocked projects (acquirelock = 1)
+my $lock;
 my $padded;
-my $fasta;
+my $output;
+my $caforfasta; # 1 for caf, 2 for fasta
 my $fofn;
-my $FileDNA;
-my $FileQTY;
+my $FileDNA; # alternative for fasta DNA file
+my $FileQTY; # alternative for fasta Quality file
 
 my $validKeys  = "organism|instance|project|fofn|padded|fasta|"
-               . "FDNA|FQTY|nolock|batch|verbose|debug|help";
+               . "caf|FileDNA|FileQTY|out|nolock|batch|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage(1,"Invalid keyword '$nextword'");
     }                                                                           
-    $instance  = shift @ARGV  if ($nextword eq '-instance');
+    $instance   = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism  = shift @ARGV  if ($nextword eq '-organism');
+    $organism   = shift @ARGV  if ($nextword eq '-organism');
 
-    $project   = shift @ARGV  if ($nextword eq '-project');
+    $project    = shift @ARGV  if ($nextword eq '-project');
 
-    $fofn      = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn       = shift @ARGV  if ($nextword eq '-fofn');
 
-    $verbose   = 1            if ($nextword eq '-verbose');
+    $verbose    = 1            if ($nextword eq '-verbose');
 
-    $verbose   = 2            if ($nextword eq '-debug');
+    $verbose    = 2            if ($nextword eq '-debug');
 
-    $padded    = 1            if ($nextword eq '-padded');
+    $padded     = 1            if ($nextword eq '-padded');
 
-    $fasta     = 1            if ($nextword eq '-fasta');
+    $caforfasta = 2            if ($nextword eq '-fasta');
+    $caforfasta = 1            if ($nextword eq '-caf');
 
-    $FileDNA   = shift @ARGV  if ($nextword eq '-FDNA');
+    $output     = shift @ARGV  if ($nextword eq '-out');
 
-    $FileQTY   = shift @ARGV  if ($nextword eq '-FQTY');
+    $FileDNA    = shift @ARGV  if ($nextword eq '-FDNA');
 
-    $nolock    = 1            if ($nextword eq '-nolock');
+    $FileQTY    = shift @ARGV  if ($nextword eq '-FQTY');
 
-    $batch     = 1            if ($nextword eq '-batch');
+    $lock       = 1            if ($nextword eq '-lock');
+
+    $batch      = 1            if ($nextword eq '-batch');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -71,9 +75,15 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
-
 &showUsage("Missing organism database") unless $organism;
+
+&showUsage("Missing server instance") unless $instance;
+
+&showUsage("Missing caf or fasta specification") unless $caforfasta;
+
+unless ($output || $caforfasta == 2 && $FileDNA && $FileQTY) {
+    &showUsage("Missing output file");
+}
 
 &showUsage("Missing project ID or name") unless ($project || $fofn);
 
@@ -99,14 +109,23 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-$logger->warning("Redundant '-padded' key ignored") if ($padded && $fasta);
+$logger->warning("Redundant '-padded' key ignored") if ($padded && $caforfasta == 2);
 
 # get file handles
 
-$FileDNA = new FileHandle($FileDNA,"w") if $FileDNA;
-$FileDNA = *STDOUT unless $FileDNA;
+if ($caforfasta == 1) {
+# caf output
+    $FileDNA = new FileHandle("$output.caf","w");
+    &showUsage("Failed to create output file $output.caf") unless $FileDNA;
+}
+elsif ($caforfasta == 2) {
+    $output = $FileDNA unless $output;  
+    $FileDNA = new FileHandle("$output.bases","w");
+    &showUsage("Failed to create output file $output.bases") unless $FileDNA;
+    $FileQTY = new FileHandle("$output.quals","w");
+    &showUsage("Failed to create output file $output.bases") unless $FileQTY;
+}
 
-$FileQTY = new FileHandle($FileQTY,"w") if $FileQTY;
 
 # get project(s) to be exported
 
@@ -122,7 +141,7 @@ if ($fofn) {
 
 my %exportoptions;
 $exportoptions{padded} = 1 if $padded;
-$exportoptions{nolock} = 1 if $nolock;
+$exportoptions{acquirelock} = 1 if $lock;
 
 foreach my $project (@projects) {
 
@@ -142,9 +161,9 @@ foreach my $project (@projects) {
 
     my ($s,$m);
 
-    ($s,$m) = $Project->writeContigsToCaf($FileDNA,\%exportoptions) unless $fasta;
+    ($s,$m) = $Project->writeContigsToCaf($FileDNA,\%exportoptions) unless $caforfasta;
 
-    ($s,$m) = $project->writeToFasta($FileDNA,$FileQTY,\%exportoptions) if $fasta;
+    ($s,$m) = $Project->writeToFasta($FileDNA,$FileQTY,\%exportoptions) if $caforfasta;
 
     $logger->warning($m) unless $s; # no contigs exported
 
@@ -165,7 +184,10 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n\n";
+    print STDERR "-organism\tArcturus database name\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n\n";
+    print STDERR "-caf\t\t(no value) export contigs in caf format\n";
+    print STDERR "-fasta\t\t(no value) export contigs in fasta format\n";
     print STDERR "either -contig_id or -fofn :\n\n";
     print STDERR "-project\tProject ID or name\n";
     print STDERR "-fofn \t\tname of file with list of project IDs or names\n\n";
@@ -173,16 +195,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "The default export is in CAF on STDOUT\n";
     print STDERR "\n";
-    print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
     print STDERR "-padded\t\t(no value) export contigs in padded format\n";
-    print STDERR "-fasta\t\t(no value) export contigs in fasta format\n";
-    print STDERR "-FDNA\t\tfile name for output (overrides default; DNA if fasta)\n";
-    print STDERR "-FQTY\t\tfile name for quality data (with fasta only)\n";
+#    print STDERR "-FDNA\t\tfile name for output (overrides default; DNA if fasta)\n";
+#    print STDERR "-FQTY\t\tfile name for quality data (with fasta only)\n";
     print STDERR "\n";
     print STDERR "Default setting exports only projects which either have\n";
     print STDERR "the unlocked status or are owned by the user\n";
     print STDERR "\n";
-    print STDERR "-nolock\t\t(no value) export all contigs\n";
+    print STDERR "-lock\t\t(no value) export all contigs\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
