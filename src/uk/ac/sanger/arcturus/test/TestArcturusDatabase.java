@@ -5,8 +5,11 @@ import javax.naming.*;
 import javax.sql.*;
 import java.sql.*;
 import java.util.*;
+import java.text.SimpleDateFormat;
 
 public class TestArcturusDatabase {
+    private static SimpleDateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd 'at' kk:mm:ss z");
+
     public static void main(String args[]) {
 	System.out.println("TestArcturusDatabase");
 	System.out.println("====================");
@@ -132,7 +135,7 @@ public class TestArcturusDatabase {
 	DatabaseMetaData dmd = conn.getMetaData();
 	System.out.println("Connection URL = " + dmd.getURL());
 
-	String query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length)" +
+	String query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(updated)" +
 	    " from CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id" +
 	    " where C2CMAPPING.parent_id is null and length >= ?";
 
@@ -149,10 +152,16 @@ public class TestArcturusDatabase {
 	    int avgLength = rs.getInt(4);
 	    int stdLength = rs.getInt(5);
 	    int maxLength = rs.getInt(6);
+	    java.sql.Timestamp updated = rs.getTimestamp(7);
 
-	    System.out.println(nContigs + " contigs, containing " + nReads + " reads and " + nLength +
-			       " bp (length stats: " + avgLength + " +/- " + stdLength + ", max " +
-			       maxLength + ")");
+	    System.out.print(nContigs + " contigs, containing " + nReads + " reads and " + nLength +
+			     " bp (length stats: " + avgLength + " +/- " + stdLength + ", max " +
+			     maxLength);
+
+	    if (updated != null)
+		System.out.print(", most recent "  + dateformat.format(updated));
+
+	    System.out.println(")");
 	}
 
 	rs.close();
