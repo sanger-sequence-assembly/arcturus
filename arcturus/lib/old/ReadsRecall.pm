@@ -10,6 +10,8 @@ use strict;
 
 use Compress;
 
+#use Devel::MyTimer;
+
 #############################################################################
 # Global variables
 #############################################################################
@@ -25,6 +27,12 @@ my %reverse;  # hash for reverse substitutions of DNA
 
 my %library;  # hash for dictionary lookup data
 
+#my $MyTimer;
+
+my $loadQuality; # default do not load quality data
+
+my $USENEWREADLAYOUT;
+
 #############################################################################
 # constructor item init; serves only to create a handle the stored READS
 # database and the Compress module
@@ -33,16 +41,15 @@ my %library;  # hash for dictionary lookup data
 sub init {
 # initialize the readobjects constructor
     my $prototype = shift;
-    my $tblhandle = shift || &dropDead; # handle of DbaseTable for READS 
+    my $tblhandle = shift || &dropDead; # handle of Arcturus database table 
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
 # test if input table handle is of the READS table
 
-    $READS = $tblhandle->spawn('READS','self');
-    $RTAGS = $tblhandle->spawn('READTAGS','self');
-#    $R2C   = $tblhandle->spawn('READS2CONTIG','self');
+    $READS = $tblhandle->spawn('READS');
+    $RTAGS = $tblhandle->spawn('READTAGS');
 
 # set up prepared queries on these table handles
 
@@ -53,6 +60,8 @@ sub init {
     %reverse = ( A => 'T', T => 'A', C => 'G', G => 'C', '-' => '-',
                  a => 't', t => 'a', c => 'g', g => 'c',
                  U => 'A', u => 'a');
+
+#    $MyTimer = new MyTimer;
 
     bless ($self, $class);
     return $self;
@@ -197,7 +206,9 @@ sub spawnReads {
                 foreach my $hash (@$hashrefs) {
                     push @reads,$self->new($hash);
                     delete $notfound{$hash->{$keyword}}; # remove from list
+                    undef $hash;
                 }
+                undef @$hashrefs;
             }
         }
 # test number of read instances not spawned
@@ -223,7 +234,7 @@ sub findInstanceOf {
     }
     else {
         return \%instance;
-    }  
+    }
 }
 
 #############################################################################
@@ -235,6 +246,32 @@ sub prepareQueries {
     $READS->prepareQuery("select * from <self> where  read_id=?",'nmbrQuery');
 
 #    $RTAGS->prepareQuery("select * from <self> where read_id=?",'tagsQuery');
+
+    return if !$USENEWREADLAYOUT; 
+
+    my $DNAitems = 'DNA.scompress,DNA.sequence,DNA.qcompres,DNA.quality';
+    my $query = "select READS.*,$DNAitems from READS left join DNA using (read_id) ";
+    $query .= "where READS.read_id=?"; # to get all items except read_id in DNA
+    $READS->prepareQuery($query,'nmbrQuery');
+
+    $query =~ s/read_id=/readname=/;
+    $READS->prepareQuery($query,'nameQuery');
+}
+
+#############################################################################
+
+sub prepareCaches {
+
+    my $self = shift;
+    my $rids = shift; # read ID or array of read IDs
+    
+    my $readlist = " = $rids" || 0;
+    $readlist = " in (" . join(',',@$rids) . ")" if (ref($rids) eq 'ARRAY');
+
+    my $query = "select * from <self> ";
+    $query .= "where read_id $readlist" if $readlist;
+
+    $READS->cacheBuild($query,{indexKey=>'read_id', list=>0});
 }
 
 #############################################################################
@@ -256,7 +293,7 @@ sub getNamedRead {
 
     $readhash = $READS->usePreparedQuery('nameQuery',$readname,1) if !$readhash;
 
-    $readhash = $READS->associate('hashref',$readname,'readname') if !$readhash;
+#    $readhash = $READS->associate('hashref',$readname,'readname') if !$readhash;
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
@@ -275,8 +312,9 @@ sub getNamedRead {
 
 sub getNumberedRead {
 # reads a numbered Read file 
-    my $self     = shift;
-    my $number   = shift;
+    my $self    = shift;
+    my $number  = shift;
+    my $nocache = shift;
 
     my $status = $self->clear;
 
@@ -284,15 +322,17 @@ sub getNumberedRead {
 
     my $readhash;
 
+#$MyTimer->timer('get numbered read',0);
+
 # first try if there is cached data on the READS table interface (indexed on read_id)
 
-    $readhash = $READS->cacheRecall($number,{indexName=>'read_id',returnHash=>1}) if !shift;
+    $readhash = $READS->cacheRecall($number,{indexName=>'read_id',returnHash=>1}) if !$nocache;
 
 # if not, query database using a prepared query (if it exists, else returns undef)
 
     $readhash = $READS->usePreparedQuery('nmbrQuery',$number,1) if !$readhash;
 
-    $readhash = $READS->associate('hashref',$number,'read_id') if !$readhash;
+#    $readhash = $READS->associate('hashref',$number,'read_id')  if !$readhash;
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
@@ -302,6 +342,7 @@ sub getNumberedRead {
         $status->{report} .= "! Read nr. $number does not exist";
         $status->{errors}++;
     }
+#$MyTimer->timer('get numbered read',1);
 
     return $self->status;
 }
@@ -320,7 +361,15 @@ sub getLabeledRead {
 
 # retrieve the (first encountered) read name for the specified condition 
 
-    my $readhash = $READS->associate('hashref',$itsvalue,$readitem);
+    my $readhash;
+    if ($USENEWREADLAYOUT) {
+# first get the read_id, then pull dat out with a query on a join
+        my $number = $READS->associate('read_id',$itsvalue,$readitem);
+        $readhash  = $READS->usePreparedQuery('nmbrQuery',$number,1);
+    }
+    else {
+        $readhash = $READS->associate('hashref',$itsvalue,$readitem);
+    }
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
@@ -340,140 +389,224 @@ sub getLabeledRead {
 sub getUnassembledReads {
 # short way using READS2ASSEMBLY; long way with a left join READS, R2CR2
     my $self = shift;
-    my $hash = shift || 0; # default "short" & no date selection
-
-# decode input "hash"
-
-    my $date = 0;
-    my $full = $hash;
-    if (ref($hash) eq 'HASH') {
-        $full = $hash->{full} || 0;
-        $date = $hash->{date} || 0;
-    }
+    my $opts = shift || 0; # default "short" & no date selection
 
     &dropDead("ReadsRecall needs to be initialized with the ->init method") if !$READS;
 
-    my $reads;
+# decode input options
 
-    if (!$full) {
+    my %options = (date => 0, full => 0, item => 'read_id');
+    $READS->importOptions(\%options, $opts);
+    my $readitem = $options{item};
+    
+    if ($readitem ne 'read_id' && $readitem ne 'readname') {
+        &dropDead("Invalid read item $readitem for ReadsRecall::getUnassembledReads");
+    } 
+
+#$MyTimer->timer('getUnassembledReads',0);
+
+    my $R2C = $READS->spawn('READS2CONTIG');
+    my $CONTIGS = $READS->spawn('CONTIGS');
+
+    my @output;
+    my $output = \@output;
+
+    if (!$options{full}) {
 
 # short option: use info in READS2ASSEMBLY.astatus (assuming it to be complete and consistent)
 
         my $R2A = $READS->spawn('READS2ASSEMBLY','<self>',0,0); # get table handle
-        $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
-# find the readnames in READS by searching on astatus in READS2CONTIG
-        if (!$date) {
-            $reads = $READS->associate('readname',"! '2'",'astatus',{returnScalar => 0});
+        $READS->autoVivify(0,0.5); # build links (existing tables only)
+# find the readnames in READS by searching on astatus in READS2ASSEMBLY
+        if (!$options{date}) {
+            $output = $READS->associate($readitem,"! '2'",'astatus',{returnScalar => 0});
         }
         else {
 # TO BE TESTED !!
-            my $where = "date <= '$date' and astatus != 2";
-            $reads = $READS->associate('readname','where',$where,{returnScalar => 0});
+            my $where = "date <= '$options{date}' and astatus != 2";
+            $output = $READS->associate($readitem,'where',$where,{returnScalar => 0});
         }
-        if (!$reads) {
-            $self->{report} = "! INVALID query in Saurian->getUnassembledReads: $READS->{lastQuery}\n";
+        if (!$output) {
+            $self->{report} = "! INVALID query in ReadsRecall::getUnassembledReads:\n $READS->{lastQuery}\n";
         }
     }
 
     else {
 
-# the long way, bypassing READS2ASSEMBLY; first find all reads not in READS2CONTIG
+# the long way, bypassing READS2ASSEMBLY; first find all reads not in READS2CONTIG with a left join
 
         my $report = "Find all reads not in READS2CONTIG with left join: ";
-        my $ljoin = "select distinct READS.readname from READS left join READS2CONTIG ";
+        my $ljoin = "select distinct READS.$readitem from READS left join READS2CONTIG ";
         $ljoin  .= "on READS.read_id=READS2CONTIG.read_id ";
         $ljoin  .= "where READS2CONTIG.read_id IS NULL ";
-# TO BE TESTED !!!
-        $ljoin  .= "and date <= '$date' " if $date;
-        $ljoin  .= "order by readname"; 
-#print "DATE test unassembled reads: $ljoin\n" if $date;
-# this query gets all reads in READS not referenced in READS2CONTIG
-        undef my @reads;
-        $reads = \@reads;
+        $ljoin  .= "and READS.date <= '$options{date}' " if $options{date}; # TO BE TESTED !!!
+        $ljoin  .= "order by $readitem"; 
+print "Find unassembled reads with left join\n";
+
+        undef my @output;
+        $output = \@output;
+#$MyTimer->timer('Finding reads with left join',0);
         my $hashes = $READS->query($ljoin,0,0);
+#$MyTimer->timer('Finding reads with left join',1);
         if (ref($hashes) eq 'ARRAY') {
             foreach my $hash (@$hashes) {
-                push @reads,$hash->{readname};
+                push @output,$hash->{$readitem};
             }
+            undef @$hashes;
         }
         elsif (!$hashes) {
             $report .= "! INVALID query in Saurian->getUnassembledReads: $ljoin\n";
         }
-        $report .= scalar(@reads)." reads found\n";
+        $report .= scalar(@output)." reads found\n";
 
-# now we check on possible (deallocated) reads in READS2CONTIG which do NOT figure in generation 0 or 1
+# now we check on (deallocated)reads in READS2CONTIG; those do NOT figure in generation<=1, only in >1
+# this is done by finding ALL (distinct) reads with generation > 1, and subtract from those the reads
+# found in generation <= 1. The ones left in generation > 1 have been deallocated from a previous 
+# assembly and are therefore unassembled reads, to be added to @output
 
         $report .= "Checking for reads deallocated from previous assembly ";
-        if ($full == 1) {
+
+        if ($options{full} == 1) {
 # first alternative method: create a temporary table and do a left join
             $report .= "using a temporary table: ";
             my $extra = "create temporary table R2CTEMP select distinct read_id ";
-            $extra  .=  "from READS2CONTIG where generation <= 1";
+            $extra  .=  "from READS2CONTIG where generation <= 1 and label >= 10";
             if ($READS->query($extra,0,0)) {
                 $READS->query("ALTER table R2CTEMP add primary key (read_id)");
                 $ljoin  = "select distinct READS2CONTIG.read_id from READS2CONTIG left join R2CTEMP ";
                 $ljoin .= "on READS2CONTIG.read_id = R2CTEMP.read_id ";
                 $ljoin .= "where R2CTEMP.read_id is NULL";
+#                $ljoin .= " and READS2CONTIG.label >= 10"; # ?? TO BE TESTED
                 my $hashes = $READS->query($ljoin,0,0);
                 if (ref($hashes) eq 'ARRAY') {
                     $report .= scalar(@$hashes)." reads found\n";
                     foreach my $hash (@$hashes) {
                         $hash = $hash->{read_id}; # replace each hash by its value
                     }
-                    my $extra = $READS->associate('readname',$hashes,'read_id',{returnScalar => 0});
-                    push @$reads, @$extra if @$extra;
+                    my $extra = $READS->associate($readitem,$hashes,'read_id',{returnScalar => 0});
+                    push @$output, @$extra if @$extra;
                 }
                 elsif ($hashes) {
                     $report .= "no deallocated reads found\n$hashes\n$READS->{lastQuery}\n";
                 }
                 else {
-                    $full = 2; # failed query, try to recover
+                    $options{full} = 2; # failed query, try to recover
                 }
             }
             else {
-                $full = 2; # creation of R2CTEMP probably failed, try to recover
+                $options{full} = 2; # creation of R2CTEMP probably failed, try to recover
             }
 	}
 
-        if ($full == 2) {
+        if ($options{full} == 2) {
+print "Checking for reads deallocated from previous assembly with full=2\n";
 # second alternative method: scan READS2CONTIG with simple queries; first find al reads with generation > 1
             $report .= "with consecutive queries on READS2CONTIG and READS: ";
-            my $R2C = $READS->spawn('READS2CONTIG','<self>',0,0); # get table handle
-            $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
-            $hashes = $READS->associate('distinct readname','where',"generation > 1",{returnScalar => 0});
+            my $where = "generation > 1 and label >= 10";
+#$MyTimer->timer('Finding other reads with method 2 step 1',0);
+            if ($readitem eq 'readname') {
+#                $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
+                $READS->autoVivify(0,0.5); # build links (existing tables only)
+                $hashes = $READS->associate("distinct $readitem",'where',$where,{returnScalar => 0});
+#print "found $hashes with '$READS->{lastQuery}' '$READS->{qerror}'\n";
+                $report = "WARNING: error in query:\n $READS->{lastQuery} $READS->{qerror}\n" if !$hashes; 
+	    }
+            else {
+                $hashes = $R2C->associate("distinct $readitem",'where',$where,{returnScalar => 0});
+#print "found $hashes with '$R2C->{lastQuery}' '$R2C->{qerror}'\n";
+                $report = "WARNING: error in query:\n $R2C->{lastQuery} $R2C->{qerror}\n" if !$hashes; 
+            }
+#$MyTimer->timer('Finding other reads with method 2 step 1',1);
             if (ref($hashes) eq 'ARRAY' && @$hashes) {
-                undef my %added; # the ones with generation > 1
-                foreach my $name (@$hashes) {
-                   $added{$name}++;
+# the ones with generation > 1
+                undef my %added;
+                foreach my $item (@$hashes) {
+                    $added{$item}++;
+#                    $added{$hash->{$readitem}}++;
                 }
 # now find al reads with generation <=1 and get the difference
-                $hashes = $READS->associate('distinct readname','where',"generation <= 1",{returnScalar => 0});
-                foreach my $name (@$hashes) {
-                    delete $added{$name};
+                $where = "generation <= 1 and label >= 10";
+#$MyTimer->timer('Finding other reads with method 2 step 2',0);
+                if ($readitem eq 'readname') {
+                    $hashes = $READS->associate('distinct $readitem','where',$where,{returnScalar => 0});
+                    $report = "WARNING: error in query:\n $READS->{lastQuery} $READS->{qerror}\n" if !$hashes; 
                 }
-# what's left has to be added to @reads
+                else {
+                    $hashes = $R2C->associate('distinct $readitem','where',$where,{returnScalar => 0});
+                    $report = "WARNING: error in query:\n $R2C->{lastQuery} $R2C->{qerror}\n" if !$hashes; 
+                }
+#$MyTimer->timer('Finding other reads with method 2 step 2',1);
+                foreach my $item (@$hashes) {
+                    delete $added{$item};
+#                    delete $added{$hash->{$readitem}};
+                }
+# what's left has to be added to @output
                 my $n = keys %added;
-                $report .= "$n reads found\n";
-                push @$reads, keys(%added) if $n;
+                $report .= "$n deallocated reads found\n";
+                push @$output, keys(%added);
             }
             elsif ($hashes) {
                 $report .= "NONE found\n";
-            }
-            else {
-                $report = "WARNING: error in query:\n $READS->{lastQuery} \n"; 
             }
 	}
         $self->{report} = $report;
         undef $hashes;
     }
 
+# finally add possible reads in single-read contigs
+
+print "Finding reads in single-read contigs\n";
+    $R2C->autoVivify(0,0.5);
+#$MyTimer->timer('Finding reads in single-read contigs',0);
+
+    my $where = "nreads = 1 and generation <= 1 and label >= 10";
+    my $readids = $R2C->associate('distinct read_id','where',$where,{returnScalar => 0});
+    if ($readitem eq 'readname' && @$readids) {
+	print "translating into readnames \n";
+        $readids = $READS->associate('readname',$readids,'read_id',{returnScalar => 0});
+    }
+    push @$output, @$readids if @$readids;
+#$MyTimer->timer('Finding reads in single-read contigs',1);
+    
+
 my $DEBUG = 0;
 print $self->{report} if $DEBUG;
-my $n = @$reads; print "reads $reads $n from $reads->[0] to $reads->[$n-1]\n" if $DEBUG;
+#my $n = @$output; print "reads $output $n from $output->[0] to $output->[$n-1]\n" if $DEBUG;
+#$MyTimer->timer('getUnassembledReads',1);
 
-    return $reads;
+    return $output;
 }
 
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method getUnassembledReads
+
+=head2 Synopsis
+
+Find reads in current database which are not allocated to any contig
+
+=head2 Parameter (optional)
+
+hash
+
+=over 2
+
+=item hash key 'full'
+
+= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
+
+= 1 for complete search using temporary table; if this fails falls back on:
+
+= 2 for complete search without using temporary table (slowest)
+
+=item hash key 'date'
+
+Select only reads before and including the given date
+
+=head2 Returns: reference to array of readnames
+
+=cut
 #############################################################################
 
 # use this method if you do not want to create a new ReadsRecall object
@@ -481,25 +614,17 @@ my $n = @$reads; print "reads $reads $n from $reads->[0] to $reads->[$n-1]\n" if
 sub newReadHash {
 # replace the current read hash by a new one
     my $self = shift;
-    my $read = shift || return 0;
+    my $hash = shift || return 0;
 
 # input a hash of read items or a read name or ID 
 
-    if (ref($read) eq 'HASH') {
-        &loadReadData(0,$self,$read);
-print "status: $self->status() \n" if $self->status;
-        return $self->status;
-    }
-    elsif ($read =~ /[a-z]/i) {
-#print "get named read: $read\n";
-        return $self->getNamedRead($read,@_);
-    }
-    elsif ($read =~ /\d/) {
-#print "get numbered read: $read\n";
-        return $self->getNumberedRead($read,@_);
-    }
+    return if (ref($hash) ne 'HASH');
 
-    return 0;
+    my $status = $self->clear;
+
+    &loadReadData(0,$self,$hash,@_);
+
+    return $self->status;
 }
   
 #############################################################################
@@ -536,9 +661,9 @@ sub clear {
 
 # reset error logging
 
-    undef $status->{report};
     $status->{errors}   = 0;
     $status->{warnings} = 0;
+    $status->{report}  = '';
 
     return $status;
 }
@@ -557,6 +682,7 @@ sub loadReadData {
 
     my $status = $self->{status};
     my $range  = $self->{range};
+    $range->[0] = 1; # default
 
 # if the read exists, build the (local) buffers with the sequence data
 
@@ -564,17 +690,18 @@ sub loadReadData {
     my $qcount = 0; my $qstring = 0;
     my $length = 0;
 
+#$MyTimer->timer('loadReadData hash',0);
+
     if (defined($hash) && ref($hash) eq 'HASH') {
 
-        $self->{readhash} = $hash;
-        undef @{$self->{sequence}};
+        $self->{readhash} = $hash; # ??? this should be a copy with splitting off the READS.keyname etc ?? test !!
         undef @{$self->{quality}};
 
-# decode the sequence
+# decode the sequence data (after  loading the compressed data are deleted)
 
         if (defined($hash->{scompress}) && defined($Compress)) {
 
-            if (defined($hash->{sequence})) {
+             if (defined($hash->{sequence})) {
                 my $dc = $hash->{scompress};
                ($scount, $sstring) = $Compress->sequenceDecoder($hash->{sequence},$dc,0);
                 if (!$sstring || $sstring !~ /\S/) {
@@ -585,6 +712,7 @@ sub loadReadData {
                     $sstring =~ s/\s+//g; # remove blanks
                     $qcount = $scount; # preset for absent quality data
                 }
+ 	        $hash->{sequence} = ''; # clear, but leave the key (re: sub list)
             }
             else {
                 $status->{report} .= "! Missing DNA sequence\n";
@@ -607,10 +735,10 @@ sub loadReadData {
                     $status->{report} .= "! Missing or empty quality data ($dq)\n";
                     $status->{errors}++;
                 }
-                else {
-                    $qstring =~ s/\b(\d)\b/0$1/g;
-                    $qstring =~ s/^\s+//; # remove leading blanks
+                elsif ($loadQuality) {
+                    @{$self->{quality}} = $Compress->getQualityData(); # copy the original array
                 }
+                $hash->{quality} = ''; # clear, but leave the key (re: sub list);
             }
         }
     } 
@@ -618,28 +746,34 @@ sub loadReadData {
         $status->{report} .= "! MISSING readname in ReadsRecall\n";
         $status->{errors}++;
     }
-
+ 
 # cleanup the sequences and store in buffers @sequence and @quality
 
     if (!$status->{errors}) {
 
         $self->{sstring} = $sstring;
         $self->{qstring} = $qstring;
-        @{$self->{sequence}} = split /\s+|/,$sstring if $sstring;
-        @{$self->{quality}}  = split  /\s+/,$qstring if $qstring;
 
 # test length against database value
 
         $length = $hash->{slength} if (defined($hash->{slength}));
         $length = $scount if ($scount == $qcount && $length == 0); # temporary recovery
-        if ($scount != $qcount || $scount != $length || $length == 0) {
-            $status->{report} .= "! Sequence length mismatch: DNA=$scount, Q=$qcount ($length)\n";
-            $status->{errors}++;    
-        }
-        else {
 # default mask
-            $range->[0] = 1;
-            $range->[1] = $length;
+        $range->[1] = $length || $scount;
+# test 
+        if ($scount != $qcount || $scount != $length || $length == 0) {
+            $status->{report} .= "! Sequence length mismatch: DNA=$scount, Q=$qcount ($hash->{slength})\n";
+# this is a patch for length errors in consensus sequence
+            if ($qcount == ($scount+1) && $self->{qstring} =~ /^\s*0\s+/ && $qstring !~ /[^\s01]/) {
+# it probably is a spurious leading 0 in the quality data
+                shift @{$self->{quality}}; # if @{$self->{quality}};
+                $self->{qstring} =~ s/^\s*0\s+//;
+                $status->{report} .= "Recovered: spurious leading 0 removed from quality data\n";
+                $status->{warnings}++;
+            }
+            else {
+                $status->{errors}++;
+            }   
         }
     }
 
@@ -668,6 +802,10 @@ sub loadReadData {
         $range->[1] = $hash->{svright} - 1;
     }
 
+# either copy the input hash or pass the pointer to readhash key
+
+#$MyTimer->timer('loadReadData hash',1);
+
     $range->[0]--;
     $range->[1]--;
 }
@@ -682,8 +820,6 @@ sub segmentToContig {
 # input of reads to contig mapping
     my $self     = shift;
     my $segment  = shift; # hash with mapping data of individual read section
-
-    return if ($segment->{deprecated} && $segment->{deprecated} !~ /M|N/);  
 
     my $rtoc = $self->{toContig};
 
@@ -702,8 +838,6 @@ sub segmentToContig {
     $rtoc->[2+$k] = $pcstart; $rtoc->[3-$k] = $pcfinal;
     my $clength = $rtoc->[3] - $rtoc->[2] + 1;
 
-# my $read = $self->{readhash}->{read_id}; print "segment for $read @$rtoc ($mapkey)\n" if ($read == 75068);
-
     $self->{contig} = $segment->{contig_id};
 
     return $clength - $rlength; # should be 0
@@ -714,7 +848,7 @@ sub segmentToContig {
 sub readToContig {
 # input of overall read to contig mapping
     my $self     = shift;
-    my $mapping  = shift; # hash with mapping data of individual read section
+    my $mapping  = shift; # hash with mapping data
 
     my $rtoc = $self->{toContig};
 
@@ -734,6 +868,88 @@ sub readToContig {
         $self->{cupper} = $mapping->{pcstart};
         $self->{clower} = $mapping->{pcfinal};
     }
+}
+
+#############################################################################
+
+sub putSegmentsToContig {
+# combines segmentToContig and readToContig in one call for whole mapping
+    my $self       = shift;
+    my $maphashes  = shift; # array with mapping segment hashes
+    my $generation = shift;
+
+    $generation = 1 unless defined($generation);
+
+    my $RTOC = $self->{toContig};
+    undef %$RTOC; # clear the memory
+
+    my $status = 0;
+
+    my $contig = 0;
+    my $alignment = 0;
+    foreach my $segment (@$maphashes) {
+
+        next if ($segment->{generation} != $generation);
+        next if ($segment->{deprecated} !~ /N|M|Y/);
+
+# test contig value; error adds 1000000 to status
+
+        $contig = $segment->{contig_id} if !$contig;
+        $status += 1000000 if ($segment->{contig_id} != $contig);
+        
+# get segment on read
+
+        my $prstart = $segment->{prstart};
+        my $prfinal = $segment->{prfinal};
+        my $rlength = $prfinal - $prstart + 1;
+
+# determine orientation
+
+        my $pcstart = $segment->{pcstart};
+        my $pcfinal = $segment->{pcfinal};
+# contig window range should be positive for consensus; flip windows if required  
+        my $k = 1; $k = 2 if ($pcfinal < $pcstart);
+# test against previous orientations (all should be the same)
+        if ($rlength > 1) {
+            $alignment = $k if !$alignment;
+            $status++ if ($alignment != $k);
+# print "? $pcstart, $pcfinal, $prstart, $prfinal  $alignment $k \n" if ($alignment != $k);
+        }
+         
+# assemble data in array
+
+        undef my @rtoc;
+        my $rtoc = \@rtoc;
+# in case of inversion (k=2) ensure contig window is aligned by swapping indices
+        $rtoc->[$k-1] = $prstart; $rtoc->[2-$k] = $prfinal;
+        $rtoc->[$k+1] = $pcstart; $rtoc->[4-$k] = $pcfinal;
+        my $clength = $rtoc->[3] - $rtoc->[2] + 1;
+
+# store the array ref in the RTOC hash
+
+        my $label = $segment->{label};
+        my $mapkey = sprintf("%04d",$prstart).sprintf("%04d",$prfinal);
+
+        if ($label < 20) {
+# store the individual mapping(s)
+            $RTOC->{$mapkey} = $rtoc;
+# test length info (signal possible mapping errors)
+            $status += 1000 if ($clength != $rlength);
+print "? $pcstart, $pcfinal, $prstart, $prfinal,  @$rtoc \n" if ($clength != $rlength);
+        }
+
+        if ($label >= 10) {
+# special case for overall map (with different ordering)
+            undef @{$RTOC->{0}}; 
+            @{$RTOC->{0}} = ($pcstart, $pcfinal, $prstart, $prfinal);
+            $self->{clower} = $rtoc->[2];
+            $self->{cupper} = $rtoc->[3];
+        }
+    }
+
+    $self->{contig} = $contig;
+    
+    return $status;
 }
 
 #############################################################################
@@ -787,10 +1003,14 @@ sub invertMap {
 
 # replace sequence by complement (?)
 
-    my $sequence = $self->{sequence};
-    foreach my $allele (@$sequence) {
-        $allele = $reverse{$allele} || '-';
+    my $sstring = $self->{sstring};
+    my $nstring = '';
+    while (my $allele = chop $sstring) {
+       $allele = $reverse{$allele} || '-';
+       $nstring .= $allele;
     }
+    $self->{sstring} = $nstring;
+    undef @{$self->{sequence}};
 
     $self->contigRange;
 
@@ -807,8 +1027,8 @@ sub contigRange {
     $self->{cupper} = 0;
     $self->{ranges} = 0;
 
-my $read =  $self->{readhash}->{read_id};
-print "\ncontigRange for read $read \n" if ($read == 75068);
+#my $read =  $self->{readhash}->{read_id};
+#print "\ncontigRange for read $read \n" if ($read == 75068);
 
     my $rtoc = $self->{toContig};
     foreach my $key (keys %$rtoc) {
@@ -816,7 +1036,7 @@ print "\ncontigRange for read $read \n" if ($read == 75068);
         my $map = $rtoc->{$key};
         $self->{clower} = $map->[2] if (!$self->{clower} || $map->[2] < $self->{clower}); 
         $self->{cupper} = $map->[3] if (!$self->{cupper} || $map->[3] > $self->{cupper});
-print "read $read: $key  map @$map | $self->{clower} $self->{cupper} \n" if ($read == 70417);
+#print "read $read: $key  map @$map | $self->{clower} $self->{cupper} \n" if ($read == 70417);
         $self->{ranges}++;
     }     
 }
@@ -824,7 +1044,7 @@ print "read $read: $key  map @$map | $self->{clower} $self->{cupper} \n" if ($re
 #############################################################################
 
 sub inContigWindow {
-# sample part of read in specified contig window
+# sample part of reads in specified contig window
     my $self   = shift;
     my $wstart = shift; # start on contig
     my $wfinal = shift; # end on contig (start<end ?)
@@ -838,8 +1058,22 @@ sub inContigWindow {
     }
 
     my $rtoc = $self->{toContig};
+
+# get at the DNA in sequence array; if not, build it from $sstring
+
     my $sequence = $self->{sequence};
+    if (!@$sequence) {
+        my @sequence = split //,$self->{sstring}; # slow!
+        $sequence = \@sequence;
+    }
+
+# get at the quality data in array; if not, build it from qstring
+
     my $quality  = $self->{quality};
+    if (!@$quality) {
+        my @quality = split /\s+/, $self->{qstring};
+        $quality = \@quality;
+    }
     
     my $count = 0;
     my $length = 0;
@@ -897,7 +1131,10 @@ sub indexing {
     my %enumerate = ('A','0','C','1','G','2','T','3','U','3',
                      'a','0','c','1','g','2','t','3','u','3');
 
-    my $sequence = $self->{sequence};
+    my $sstring  = $self->{sstring};
+    my @sequence = split /\s+|/,$sstring if $sstring; # slow!
+    my $sequence = \@sequence;
+
     my $range    = $self->{range};
     my $index    = $self->{index};
 
@@ -928,7 +1165,9 @@ sub edit {
     my $self = shift;
     my $edit = shift; # the edit recipe as string
 
-    my $sequence = $self->{sequence};
+    my $sstring  = $self->{sstring};
+    my @sequence = split /\s+|/,$sstring if $sstring; # slow!
+    my $sequence = \@sequence;
 
 # edits encoded as string nnnCcnnnCc., to replace existing base nnn S by s
 # successful replacement only if base nr. nnn is indeed S
@@ -1007,15 +1246,20 @@ sub list {
     foreach my $key (sort keys (%{$hash})) {
         undef my $string;
         my $wrap = 'WRAP';
-        if (defined($hash->{$key})) { 
+        if (defined($hash->{$key})) {
+# for keys sequence and quality we have to pick up the decompressed strings in $self->{} 
             if ($key eq 'sequence' || $key eq 'SQ') {
                 $string = $self->{sstring};
-                $string =~ s/(.{60})/$1\n/g; # prepare for print
+                $string =~ s/(.{60})/$1\n/g;
             }
             if ($key eq 'quality'  || $key eq 'AV') {
                 $string = $self->{qstring};
-                $string =~ s/(.{90})/$1\n/g; # prepare for print
+# prepare the string for printout: each number on I3 field
+                $string =~ s/\b(\d)\b/0$1/g;
+                $string =~ s/^\s+//; # remove leading blanks
+                $string =~ s/(.{90})/$1\n/g;
             }
+# some formatting for HTML output
             if ($string && $html) {
                 $string = "<code>$string</code>";
                 $string = "<small>$string</small>" if ($key eq 'quality'  || $key eq 'AV');
@@ -1024,14 +1268,15 @@ sub list {
 	    }
             $string = $hash->{$key} if (!$string);
             $string = "&nbsp" if ($string !~ /\S/);
-        # test for linked information
+# test for linked information
             if ($links->{$key}) {
                 my ($dbtable,$dbalias,$dbtarget) = split ('/',$links->{$key});
                 my $alias = $dbtable->associate($dbalias,$key,$dbtarget);
                 $key .= " ($alias)" if ($alias); 
             }
             $n++;
-        } else {
+        }
+        else {
             $string = "&nbsp";
 	}
         $report .= "$key = $string\n" if (!$html);
@@ -1039,7 +1284,7 @@ sub list {
     }
     $report .= "</TABLE><P>" if ($html);
 
-    if (!$html || $status->{errors}) {
+    if (!$html || $status->{errors} || $status->{report} =~ /spurious/) {
         $report .= "\n$n items found; $status->{errors} errors";
         $report .= ", $status->{warnings} warnings\n";
         $report .= "<P>" if ($html);
@@ -1055,8 +1300,9 @@ sub list {
 
 sub writeReadToCaf {
 # write this read in caf format (unpadded) to $FILE
-    my $self = shift;
-    my $FILE = shift;
+    my $self    = shift;
+    my $FILE    = shift;
+    my $blocked = shift;
 
     $self->translate(0); # substitute dictionary items
 
@@ -1068,7 +1314,7 @@ sub writeReadToCaf {
 
     print $FILE "\n\n";
     print $FILE "Sequence : $hash->{readname}\n";
-    print $FILE "Is_read\nPadded\nSCF_File $hash->{readname}SCF\n";
+    print $FILE "Is_read\nUnpadded\nSCF_File $hash->{readname}SCF\n";
     print $FILE "Template $hash->{template}\n";
     print $FILE "Insert_size $hash->{insertsize}\n";
     print $FILE "Ligation_no $hash->{ligation}\n";
@@ -1078,29 +1324,70 @@ sub writeReadToCaf {
     print $FILE "Clone $hash->{clone}\n";
     print $FILE "ProcessStatus PASS\nAsped $hash->{date}\n";
     print $FILE "Base_caller $hash->{basecaller}\n";
+# add the alignment info
+    $self->writeMapToCaf($FILE,1) if shift;
 
-    print $FILE "\n";
-    print $FILE "DNA : $hash->{readname}\n";
     my $sstring = $self->{sstring};
+# replace by loop using substr
     $sstring =~ s/(.{60})/$1\n/g;
-    print $FILE "$sstring\n";
-    print $FILE "\n";
-    print $FILE "BaseQuality : $hash->{readname}\n";
+    print $FILE "\nDNA : $hash->{readname}\n$sstring\n";
+
+# the quality data
+
     my $qstring = $self->{qstring};
-    $qstring =~ s/(.{90})/$1\n/g;
-    print $FILE "$qstring\n";
+    if ($blocked) {
+# prepare the string for printout as a block: each number on I3 field
+        $qstring =~ s/\b(\d)\b/0$1/g;
+        $qstring =~ s/^\s+//; # remove leading blanks
+        $qstring =~ s/(.{90})/$1\n/g;
+    }
+    print $FILE "\nBaseQuality : $hash->{readname}\n$qstring\n";
 
 # process read tags ?
-}
 
+
+    return $status->{errors};
+}
 
 #############################################################################
 
 sub writeMapToCaf {
-# write the read-to-contig mapping in caf format to $FILE
+# write the reads to contig mapping to file as 'assembled from' lines
     my $self = shift;
     my $FILE = shift;
-    my $long = shift; # 0 for segments for this read; 1 for assembled from
+    my $read = shift;
+
+    my $hash = $self->{readhash};
+    my $rtoc = $self->{toContig};
+
+    if ($read && $rtoc && $rtoc->{0}) {
+# add one Align_to_SCF record per read 
+        my $rs  = $rtoc->{0}->[2];
+        my $rf  = $rtoc->{0}->[3];
+        print $FILE "Align_to_SCF $rs $rf $rs $rf\n";
+        return;
+    }
+    elsif (!$read) {
+# list the individual mappings of this read for the contig
+        my $lines = '';
+        foreach my $map (sort keys %$rtoc) {
+            next if !$map;
+            my $cs = $rtoc->{$map}->[2]; my $cf = $rtoc->{$map}->[3];
+            my $rs = $rtoc->{$map}->[0]; my $rf = $rtoc->{$map}->[1];
+            $lines .= "Assembled_from $hash->{readname} $cs $cf $rs $rf\n" if $map;
+        }
+        print $FILE $lines if $FILE;
+        return $lines;
+    }
+}
+
+#############################################################################
+
+sub writeToCafPadded {
+# write both the read and the read-to-contig mapping in caf format to $FILE
+    my $self = shift;
+    my $FILE = shift;
+    my $long = shift; # 0 for segments for this read; 1 for "assembled from"
 
     $self->translate(0);
 
@@ -1122,6 +1409,7 @@ sub writeMapToCaf {
     }
     else {
         print STDOUT "Missing reads-to-contig overall map in $hash->{readname}\n";
+exit 0;
         return 0; # error status: missing or invalid overall map
     }
 
@@ -1131,7 +1419,7 @@ sub writeMapToCaf {
         return $line;
     }
 
-# to get the to SCF mapping we have to backtransform the contig window
+# to get the to-SCF mapping we have to backtransform the contig window
 
     my $sign = 1;
     if ($scfmap[1] < $scfmap[0]) {
@@ -1157,14 +1445,20 @@ sub writeMapToCaf {
     print $FILE "Clone $hash->{clone}\n";
     print $FILE "Base_caller $hash->{basecaller}\n";
 
-# here list the SCF alignments and build the padded sequence at the same time
+# here list the Align_to_SCF alignments and build the padded sequence at the same time
 
     my $padded = '';
     my $quality = '';
     my $previous = 0;
     my $length = $hash->{slength};
     my $lastsegment = $segments[$#segments];
+
     my $qualitydata = $self->{quality};
+    if (!@$qualitydata) {
+        my @quality = split /\s+/, $self->{qstring};
+        $qualitydata = \@quality;
+    }
+
     foreach my $segment (@segments) {
         next if !$segment; # skip the overall map
         my $map = $rtoc->{$segment};
@@ -1184,7 +1478,7 @@ sub writeMapToCaf {
             my $remainder = $length - $rdfinal;
 #print "last  segment $segment  $rdfinal  $scfinal  $length $remainder\n";
             $rdfinal += $remainder;
-            $scfinal += $remainder; 
+            $scfinal += $remainder;
         }
 
         my $pad = $scstart - $previous - 1; 
@@ -1194,7 +1488,7 @@ sub writeMapToCaf {
         if ($pad > 0) {
             while ($pad--) {
                 $padded .= '-';
-                $quality .= " 00";
+                $quality .= '  0';
             }
         }
         elsif ($pad < 0) {
@@ -1205,6 +1499,12 @@ sub writeMapToCaf {
         for my $i ($rdstart .. $rdfinal) {
             $quality .= sprintf "%3d", $qualitydata->[$i-1];
         }
+    }
+
+    if (!$previous) {
+	print "ABORTED: no segments for read $hash->{readname} $hash->{read_id} \n"; 
+        print "segments: '@segments' \n";
+        exit 0;
     }
 
     print $FILE "Seq_vec SVEC ";
@@ -1227,8 +1527,79 @@ sub writeMapToCaf {
 
     $padded =~ s/(.{60})/$1\n/g; # split in lines of 60
     print $FILE "\n\nDNA : $hash->{readname}\n$padded\n";
-
     print $FILE "\n\nBaseQuality : $hash->{readname}\n$quality\n";
+}
+
+#############################################################################
+
+sub cafUnassembledReads {
+# fetch all unassembled reads and write data to a CAF file
+    my $self = shift;
+    my $FILE = shift;
+    my $opts = shift;
+
+    my %options = (onTheFly => 0,item => 'read_id');
+    $READS->importOptions(\%options, $opts);
+
+    my $readitem = $options{item};
+
+    my $count = 0;
+    undef my @missed;
+
+    my $reads = $self->getUnassembledReads($opts);
+
+    if (ref($reads) eq 'ARRAY' && @$reads) {
+# NOTE: bulk processing does not require separate cacheing (see spawnReads)
+        my $start = 0;
+        my $block = 10000;
+        while (@$reads) {
+            $block = @$reads if ($block > @$reads);
+            undef my @test;
+            for (my $i = 0 ; $i < $block ; $i++) {
+                push @test, (shift @$reads);
+            }
+            $start += $block;
+
+            if ($options{onTheFly}) {
+print "testing onTheFly method\n";
+                my $hashes = $READS->associate('hashrefs',\@test,$readitem,{returnScalar=>0});
+# returns array of hashes
+                foreach my $hash (@$hashes) {
+# load the read hash
+                    if (my $status = $self->newReadHash($hash)) {
+                        push @missed,$hash->{readname};
+                    }
+                    elsif (!$self->writeReadToCaf($FILE)) {
+                        $count++;
+                    }
+                    else {
+                        push @missed,$hash->{readname};
+                    } 
+                }
+                undef $hashes;
+            }
+# build read instances
+#            elsif (my $readinstances = $self->getRead(\@test,'hashrefs')) {
+            elsif (my $readinstances = $self->spawnReads(\@test,'hashrefs')) {
+
+                foreach my $instance (@$readinstances) {
+                    if (!$instance->writeReadToCaf($FILE)) {
+                        $count++;
+                    }
+                    else {
+                        push @missed,$instance->{readhash}->{readname};
+                    }
+                }
+                undef $readinstances;
+            }          
+
+        }
+    }
+
+# what to do with error message?
+my $missed=@missed; # print "$count reads written to output device; missed $missed \n" if $DEBUG;
+
+    return $count; # 0 to signal NO reads found, OR query failed
 }
 
 #############################################################################
@@ -1421,6 +1792,28 @@ sub minimize {
 }
 
 #############################################################################
+
+sub delete {
+# remove references to this object to clear memory
+    my $self = shift;
+
+# remove all references to the object
+
+    my $read = $self->{readhash}->{read_id};
+    delete $instance{$read};
+    $read = $self->{readhash}->{readname};
+    delete $instance{$read};
+
+#    undef $self->{sstring};
+#    undef $self->{qstring};
+#    undef $self->{sequence};
+#    undef $self->{quality};
+#    undef $self->{rtoc};
+
+    undef $self;
+}
+
+#############################################################################
 #############################################################################
 
 sub colofon {
@@ -1428,7 +1821,7 @@ sub colofon {
         author  => "E J Zuiderwijk",
         id      =>  "ejz, group 81",
         version =>             0.8 ,
-        updated =>    "01 Oct 2003",
+        updated =>    "17 Oct 2003",
         date    =>    "15 Jan 2001",
     };
 }

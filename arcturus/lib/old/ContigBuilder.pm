@@ -1439,13 +1439,14 @@ my $errlist = 0;
 
     print STDOUT "Read a maximum of $maxLines lines $break" if ($list && $maxLines);
     print STDOUT "Contig (or alias) name filter $cnfilter $break" if ($list && $cnfilter);
-    print STDOUT "Contigs with fewer than $minOfReads reads are tested ??? $break" if ($list && $minOfReads > 1);
+    print STDOUT "Contigs with fewer than $minOfReads reads are NOT dumped $break" if ($list && $minOfReads > 1);
 
     my $line = 0;
     my $status = 0;
 
     my $exactmatch = 0;
     $exactmatch = 1 if ($cnfilter =~ s/^exact\s+//i);
+#    my $exact = ($cnfilter =~ /(\S+)exact/$1/); # remove 'exact' appendix
 
     undef my $object;
     undef my $length;
@@ -1455,7 +1456,7 @@ my $errlist = 0;
     my $currentcontig;
     my $truncated = 0;
 
-    my $plist = int(log($maxLines)/log(10));
+    my $plist = int(log($maxLines || 1)/log(10));
     $plist = $plist - 1 if ($plist > 1);
     $plist = int(exp($plist*log(10))+0.5);
     my $TESTMODE = $self->{TESTMODE};

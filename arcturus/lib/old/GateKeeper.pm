@@ -333,7 +333,18 @@ sub ping_MySQL {
 
     my $alive = ($? == 0);
 
+    if (!$alive) {
+# if specified in in local/bin try to recover with bin 
+        $mysqladmin =~ s/\/local//;
+
+       `$mysqladmin -h $host -P $port -u ping ping >/dev/null 2>&1`;
+
+        $alive = ($? == 0);
+    }
+
+
     $self->report("The MySQL instance $host:$port is not available") if !$alive;
+
 
     $self->dropDead() if ($kill && !$alive);
 
@@ -348,12 +359,13 @@ sub opendb_MySQL_unchecked {
     my $host = shift; # hostname:TCPport
     my $hash = shift;
 
-    my %options = (defaultOpenNew => 0, # force a new connection with 1
-                   defaultInstall => 1, # adopt new values for server, TCPort, etc
-                   dieOnNoTable   => 0, # default continue even if ORGANISMS table not accessible 
-                   dieOnError     => 1, 
-                   writeAccess    => 0, # default no write access
-                   RaiseError     => 0);
+    my %options = (defaultOpenNew    => 0, # force a new connection with 1
+                   defaultInstall    => 1, # adopt new values for server, TCPort, etc
+                   dieOnNoTable      => 0, # default continue even if ORGANISMS table not accessible 
+                   dieOnError        => 1, 
+                   writeAccess       => 0, # default no write access
+                   returnTableHandle => 0, # default return database handle
+                   RaiseError        => 0);
     &importOptions(\%options,$hash);
 
 # test against default server, else open a new connection
@@ -394,12 +406,12 @@ sub opendb_MySQL_unchecked {
         return 0;
     }
 
-# okay, here the database has been properly opened on host/port $self->{server};
+# okay, here the database has been properly opened on host/port $host;
 
-    my $mother = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
+    my $mother = new ArcturusTable($handle,'ORGANISMS','arcturus',1,'dbasename');
 
     if ($mother->{errors} && $options{dieOnNoTable}) {
-        &dropDead($self,"Failed to access table ORGANISMS on $server");
+        &dropDead($self,"Failed to access table ORGANISMS on $host");
     }
 
 
@@ -422,6 +434,8 @@ $self->{open} .= "opendb_MySQL_unchecked: defining self->server: $server <br>";
 $self->report("NEW GATEKEEPER on current residence $residence server:$self->{server}") if $debug;
         $instances{$residence} = $self if !$instances{$residence};
     }
+
+    $handle = $mother if ($options{returnTableHandle});
 
     return $handle;
 }
@@ -563,6 +577,7 @@ $self->dropDead("server $self->{server}") if $debug;
 
 # TEMPORARY fix:this line is added because the pcs3 cluster is not visible as pcs3.sanger.ac.uk
         $self->{server} =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
+#        $self->{server} =~ s/pcs3/pcs3.internal/ if ($self->{server} !~ /internal/);
 
 # check the MySQL port against the CGI port and/or the scriptname
 
@@ -813,7 +828,8 @@ print "GateKeeper enter dbHandle $database $hash $debug" if $debug;
         foreach my $hash (@$hashrefs) {
 # TEMPORARY fix: pcs3 cluster is not visible as pcs3.sanger.ac.uk but as pcs3 only
             my $residence = $hash->{residence};
-            $residence =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
+$residence =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
+# $residence =~ s/pcs3/pcs3.internal.sanger.ac.uk/;
             $residence =~ s/\:\w+\:/:/; # strip out TCP port to get host:cgiport
             $residence{$hash->{dbasename}} = $residence;
             $available{$hash->{dbasename}} = $hash->{available};
@@ -832,6 +848,7 @@ print "GateKeeper enter dbHandle $database $hash $debug" if $debug;
 
 # see if the arcturus database is on this server, else redirect
 
+#$debug = 1;
     my $cgi = $self->{cgi};
     undef $self->{database};
     if ($database && !$residence{$database}) {
@@ -863,7 +880,8 @@ print "GateKeeper enter dbHandle $database $hash $debug" if $debug;
             delete $instances{$residence} if ($instances{$residence} eq $self);
 # open the new connection and repeat the setting up of the database/table handle
 &report($self,"Opening new connection on $host:$port") if $debug;
-            $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1}); # no write access
+            my %uoptions = (defaultInstall => 1, writeAccess => 0, defaultOpenNew => 1);
+            $self->opendb_MySQL_unchecked("$host:$port",\%uoptions); # no write access
             delete $options{defaultRedirect};
             $dbh = $self->dbHandle($database,\%options);
         }
@@ -1567,6 +1585,7 @@ sub GUI {
 # find server with the same host name but different port
         if ($full || $server =~ /\b$url[0]\b/ && $server !~ /\b$url[$#url]\b/) {
             $server =~ s/\.sanger\.ac\.uk//;
+#            $server =~ s/pcs3/pcs3.internal.sanger.ac.uk/; # temporary fix 
             push @alternates, $server;
             foreach my $map (@$pmaps) {
                 my @ports = split ':',$map;
@@ -1612,8 +1631,8 @@ sub GUI {
 
 # okay, now compose the page
 
-#    $self->cgiHeader(2); # in case not yet done
-#    my $page = $cgi->openPage("ARCTURUS $title");
+# $self->cgiHeader(2); # in case not yet done
+# my $page = $cgi->openPage("ARCTURUS $title");
     my $width  = 60;
     my $height = 50;
     $page->arcturusGUI($height,$width,$yell);
@@ -1688,20 +1707,28 @@ sub GUI {
 
     $page->partition(5);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> DATABASE </th></tr>";
+#push @databases,'TEST1','Test2';
+    my $column = 1; $column = 2 if (@databases > 7);
+    $table .= "<tr><th bgcolor='$purp' colspan=$column width=100%> DATABASE </th>";
     if (@databases) {
         my $current = $cgi->parameter('database',0);
-        foreach my $database (sort @databases) {
+        @databases = sort @databases;
+        for (my $i = 0 ; $i < @databases ; $i++) {
+#        foreach my $database (@databases) {
+            my $database = $databases[$i];
+            $table .= "</tr><tr>" if !($i%($column));
             my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
             $target .= "\&database=$database" if ($target !~ /\b$database\b/);
       	    $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
             my $link = $database; my $ulink = uc($link);
+            $link = "<font size=-1>$link</font>" if ($column == 2);
             my $alt = "onMouseOver=\"window.status='SELECT THE $ulink DATABASE'; return true\"";
             my $override = 0; $override = 1 if ($self->currentScript =~ /\bcreate\b|drop\b|copy\b/); 
             $link = "<a href=\"$target\" $alt> $link </a>" if (!$current || $current ne $link || $override);
-            $table .= "<tr><td $cell width=100%>$link</td></tr>";
+            $table .= "<td $cell width=100%>$link</td>";
         }
+        $table .= "</tr>";
     }
     $table .= $emptyrow;
     $table .= "</table>";
@@ -1884,7 +1911,8 @@ sub GUI {
         $update .= "\&noGUI=1"; # must have no possible links to other databases  
         $title = "COPY THE $database database to another node";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        $table .= "<tr><td $cell><a href=\"$update\" $alt><font size=-1> COPY $database </font></a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$update\" target='workframe' $alt>";
+        $table .= "<font size=-1> COPY $database </font></a></td></tr>";
 # drop database link
         $update = "/cgi-bin/drop/process".$cgi->postToGet(1,'session','database');
         $update .= "\&noGUI=1"; # must have no possible links to other databases  
@@ -2069,7 +2097,52 @@ sub currentResidence {
 
     return $residence;
 }
- 
+#*******************************************************************************
+
+sub getMySQLports {
+# return a list of all MySQL instances (host:port combinations)
+    my $self = shift;
+    my $same = shift; # set true if the current host:port is to be included
+
+    my @ports;
+    if (my $config = $self->{config}) {
+
+        my $ports = $config->get("mysql_ports",'insist unique array');
+
+        foreach my $port (sort @$ports) {
+            my ($h,$p) = split ':',$port;
+            next if (!$same && $h eq $self->currentHost && $p eq $self->currentDbPort);
+            push @ports, $port;
+        }
+    }
+    return \@ports;
+}
+
+#*******************************************************************************
+
+sub findInstance {
+# return the full specification of an arcturus instance, give partial info
+    my $self = shift;
+    my $info = shift;
+
+    my @servers;
+    my $pservers = $self->lookup("mysql_prod",'insist unique array');
+    push @servers, @$pservers; 
+    my $dservers = $self->lookup("mysql_dev" ,'insist unique array');
+    push @servers, @$dservers; 
+    my $tservers = $self->lookup("mysql_test",'insist unique array');
+    push @servers, @$tservers;
+
+    undef my $result;
+    $info =~ s/\:/\\b.+\\b/g; # pattern to match
+    foreach my $server (@servers) {
+        $result = 0       if ( defined($result) && $server =~ /$info/);
+        $result = $server if (!defined($result) && $server =~ /$info/);
+    }
+# returns the full instance specification or 0 for double matches or undef if not found
+    return $result;
+}
+
 #*******************************************************************************
 
 sub currentUser {

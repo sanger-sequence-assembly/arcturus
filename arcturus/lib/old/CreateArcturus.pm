@@ -115,6 +115,34 @@ sub create_organism {
         &record ($historyTable,$userid,'READS');
     }
 
+# new structure for READS table: 
+
+    if (!$target || $target eq 'NEWREADS') {    
+        push @tables, 'NEWREADS';
+        &create_NEWREADS ($dbh, $list);
+        &record ($historyTable,$userid,'NEWREADS');
+    }
+
+    if (!$target || $target eq 'DNA') {    
+        push @tables, 'DNA';
+        &create_DNA ($dbh, $list);
+        &record ($historyTable,$userid,'DNA');
+    }
+
+    if (!$target || $target eq 'TEMPLATE') {    
+        push @tables, 'TEMPLATE';
+        &create_TEMPLATE ($dbh, $list);
+        &record ($historyTable,$userid,'TEMPLATE');
+    }
+
+    if (!$target || $target eq 'COMMENT') {    
+        push @tables, 'COMMENT';
+        &create_COMMENT ($dbh, $list);
+        &record ($historyTable,$userid,'COMMENT');
+    }
+
+# end new structure
+
     if (!$target || $target eq 'READPAIRS') {    
         push @tables, 'READPAIRS';
         &create_READPAIRS ($dbh, $list);
@@ -669,6 +697,108 @@ any (i.p. comment found in flat files)
 =back
 
 =cut
+# new readstable structure to be implemented
+
+sub create_NEWREADS {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"NEWREADS", $list);
+    print STDOUT "Creating table NEWREADS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE NEWREADS(
+             read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+             readname         CHAR(32) BINARY      NOT NULL, 
+	     date             DATE                 NOT NULL,
+#             ligation         SMALLINT UNSIGNED    NOT NULL,
+             clone            SMALLINT UNSIGNED        NULL,
+#             template         CHAR(24) BINARY      NOT NULL, 
+             template         MEDIUMINT UNSIGNED   NOT NULL, 
+             strand           CHAR(1)                  NULL, 
+             primer           TINYINT  UNSIGNED   DEFAULT 0, 
+             chemistry        TINYINT  UNSIGNED        NULL,
+             basecaller       TINYINT  UNSIGNED        NULL,
+             direction        ENUM ('?','+','-')  DEFAULT '?', 
+             slength          SMALLINT UNSIGNED    NOT NULL,
+             lqleft           SMALLINT UNSIGNED    NOT NULL,
+             lqright          SMALLINT UNSIGNED    NOT NULL,
+             svcsite          SMALLINT                 NULL,
+             svpsite          SMALLINT                 NULL,
+             svector          TINYINT  UNSIGNED   DEFAULT 0,               
+             svleft           SMALLINT UNSIGNED        NULL,
+             svright          SMALLINT UNSIGNED        NULL,
+             cvector          TINYINT  UNSIGNED   DEFAULT 0,          
+             cvleft           SMALLINT UNSIGNED        NULL,
+             cvright          SMALLINT UNSIGNED        NULL,
+             pstatus          TINYINT  UNSIGNED   DEFAULT 0,
+             rstatus          MEDIUMINT UNSIGNED  DEFAULT 0,
+             paired           ENUM ('N','F','R')  DEFAULT 'N',
+             tstatus          ENUM ('N','I','T')  DEFAULT 'N',
+             comment          MEDIUMINT UNSIGNED   NOT NULL, 
+             CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
+         )]);
+
+    print STDOUT "... DONE!\n" if ($list);
+
+# Make indices
+
+    print STDOUT "Building indexes ...\n" if ($list);
+    $dbh->do(qq[CREATE UNIQUE INDEX READNAMES ON READS (readname)]);
+    print STDOUT "Indexed READNAME ON READS ... DONE\n" if ($list);
+
+}
+
+#---
+
+sub create_DNA {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"DNA", $list);
+    print STDOUT "Creating table DNA ..." if ($list);
+    $dbh->do(qq[CREATE TABLE DNA(
+             read_id          MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY,
+             scompress        TINYINT  UNSIGNED   DEFAULT 0,     
+             sequence         BLOB                 NOT NULL,
+             qcompress        TINYINT  UNSIGNED   DEFAULT 0,     
+             quality          BLOB                 NOT NULL
+         )]);
+			     
+    print STDOUT "... DONE!\n" if ($list);
+}
+
+#---
+
+sub create_TEMPLATE {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"TEMPLATE", $list);
+    print STDOUT "Creating table TEMPLATE ..." if ($list);
+    $dbh->do(qq[CREATE TABLE TEMPLATE(
+             template        MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+             templatename    CHAR(24) BINARY      NOT NULL, 
+             ligation        SMALLINT UNSIGNED    NOT NULL,
+             counted         INT UNSIGNED         DEFAULT 0
+         )]);
+    print STDOUT "Building indexes ...\n" if ($list);
+    $dbh->do(qq[CREATE UNIQUE INDEX TEMPLATE_INDEX ON TEMPLATE (template)]);
+
+    print STDOUT "... DONE!\n" if ($list);
+}
+
+#---
+
+sub create_COMMENT {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"COMMENT", $list);
+    print STDOUT "Creating table COMMENT ..." if ($list);
+    $dbh->do(qq[CREATE TABLE COMMENT(
+             comment         MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+             commenttext     TEXT                 NOT NULL,
+             counted         INT UNSIGNED         DEFAULT 0
+        )]);
+			     
+    print STDOUT "... DONE!\n" if ($list);
+}
+
 
 #*********************************************************************************************************
 
@@ -1651,6 +1781,8 @@ sub create_STRANDS {
 	    )]);
     print STDOUT "... loading ..." if ($list);
     my %strands = (
+               'a','forward strand, assumed double',
+               'b','reverse strand, assumed double',
                'p','Puc double strand forward',
                'q','Puc double strand reverse',
                's','strand of M13 forward',
@@ -1664,7 +1796,7 @@ sub create_STRANDS {
                'z','unknown, assumed single strand');
 
     foreach my $key (keys (%strands)) {
-        my $strands = 1; $strands++ if ($key eq 'p' || $key eq 'q' || $key eq 'y');
+        my $strands = 1; $strands++  if ($key =~ /[abpqy]/);
         my $sth = $dbh->prepare ("INSERT INTO STRANDS (strand,description,strands) "
                                   . "VALUES (\'$key\',\'$strands{$key}\', $strands)");
         $sth->execute();
@@ -1919,7 +2051,8 @@ sub create_STATUS {
 sub create_LIGATIONS {
     my ($dbh, $list) = @_;
 
-# silow, sihigh: SV insertion length ; origin: O for Oracle, R for reads, U for unidentified
+# silow, sihigh: SV insertion length
+# origin: O for Oracle, R for reads, F for foreign; U for unidentified
 
     &dropTable ($dbh,"LIGATIONS", $list);
     print STDOUT "Creating table LIGATIONS ..." if ($list);
@@ -2130,9 +2263,10 @@ sub create_DATAMODEL {
                  'ASSEMBLY           creator             USERS      userid',
                  'ASSEMBLY          assembly    READS2CONTIG      assembly',
 #                 'SESSIONS            userid            USERS      userid',
-                 'READS              read_id     READS2CONTIG     read_id',
-                 'READS              read_id   READS2ASSEMBLY     read_id',
-                 'READS              read_id        READEDITS     read_id',
+                 'READS              read_id     READS2CONTIG      read_id',
+                 'READS              read_id   READS2ASSEMBLY      read_id',
+                 'READS              read_id        READEDITS      read_id',
+#                 'READS              read_id              DNA      read_id',
                  'READS             ligation        LIGATIONS    ligation/identifier ',
                  'READS                clone           CLONES       clone/clonename  ',
                  'READS               strand          STRANDS      strand/description',
@@ -2141,6 +2275,8 @@ sub create_DATAMODEL {
                  'READS           basecaller       BASECALLER  basecaller/name       ',
                  'READS              svector  SEQUENCEVECTORS     svector/name       ',
                  'READS              cvector   CLONINGVECTORS     cvector/name       ',
+#                 'READS              comment          COMMENT      comment',
+#                 'READS             template         TEMPLATE     template', # ?  template/ligation',
                  'READS              pstatus           STATUS      status/identifier');
 
     foreach my $line (@input) {
@@ -2200,6 +2336,12 @@ sub create_INVENTORY {
                  'VECTORS           c  r  0  1',
                  'CHEMTYPES         c  r  2  1',
                  'READS             o  p  0  0',
+
+#                 'NEWREADS          o  p  0  0',
+#                 'DNA               o  p  0  0',
+#                 'COMMENT           o  d  1  0',
+#                 'TEMPLATE          o  d  1  0',
+
                  'READEDITS         o  a  0  0',
                  'READTAGS          o  t  0  0',
                  'READPAIRS         o  l  3  0',

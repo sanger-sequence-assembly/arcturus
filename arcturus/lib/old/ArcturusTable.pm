@@ -663,7 +663,7 @@ sub htmlTable {
 	    if ($include) {
                 $lines++;
                 $list .= "<TR>";
-                undef my $morefields;
+                my $morefields = '';
                 foreach my $column (@{$self->{columns}}) {
                     if (!defined($mask) || $mask{$column}) {
                         my $field = '&nbsp';

@@ -286,7 +286,6 @@ sub cacheBuild {
 
     my $indexname = $options{indexName} || $options{indexKey} || 'index';
     my $nhashrefs = "hashrefs$indexname";
-print "cacheBuild indexname $indexname   hashrefs $nhashrefs \n";
 
     my $report = "cache building query $query \n";
 
@@ -294,19 +293,10 @@ print "cacheBuild indexname $indexname   hashrefs $nhashrefs \n";
 
     my $storedhashrefs = $self->{$nhashrefs};
     my $hashrefs = $self->query($query,0,$options{queryTrace});
-    $report .= "query: '$self->{lastQuery} \n";
+    $report .= "query result : $hashrefs \n ('$self->{lastQuery}) \n";
     if ($hashrefs && ref($hashrefs) eq 'ARRAY') {
         undef @$storedhashrefs if !$options{extend};
         push  @$storedhashrefs, @$hashrefs; 
-
-if ($self->{tablename} eq 'READS2CONTIG') {
-#     my $n = @$storedhashrefs; print "$report: $n hashes stored \n";
-#     print "cacheBuild storedhashrefs: @$storedhashrefs \n";
-#    foreach my $hash (@$storedhashrefs) {
-#        print "$hash  $hash->{read_id} $hash->{deprecated} $hash->{label} \n";
-#    } 
-}
-
     }
     else {
         $report .= "! No data found \n";
@@ -491,6 +481,15 @@ sub whoAmI {
 # return the database handle and the full tablename
 
     return $dbh, $tbl;
+}
+
+#############################################################################
+
+sub doExist {
+# returns 1 if the table exists, else 0
+    my $self = shift;
+
+    return ($self->{errors} !~ /does not exist/);
 }
 
 #############################################################################
@@ -1268,6 +1267,26 @@ sub count {
         $self->{'count'} = $count if !$where;
     }
     return $count;
+}
+
+#############################################################################
+
+sub isEqual {
+# compare two database tables; return number of lines if equal, 0 if different
+    my $self = shift;
+    my $test = shift; # table handle to the the test table
+
+    return 0 if (ref($self) ne ref($test));
+
+    my $scnt = $self->count;
+    my $tcnt = $self->count;
+
+    return 0 if ($scnt != $tcnt);
+
+    $self->{errors} = "Equality test to be implemented"; print "$self->{errors} <br>\n";
+# to be completed
+
+    return $scnt;
 }
 
 #############################################################################
@@ -2054,7 +2073,7 @@ sub query {
     $self->{lastQuery} .= $query;
     my $sth = $dbh->prepare($query); 
     my $status = $sth->execute();
-print "<br>failed query $query <br>" if !$status;
+# print "<br>failed query $query <br>" if !$status;
     $status = 0 if !defined($status);
 # beware: $status:0 (false) indicates an error; 0E0 indicates no data returned
     if ($status > 0 && $query =~ /select|show/i) {

@@ -12,6 +12,8 @@ use ReadsRecall;
 
 use Compress;
 
+use Devel::MyTimer;
+
 #############################################################################
 # Global variables
 #############################################################################
@@ -25,6 +27,7 @@ my $DNA;      # database table handle to CONSENSUS table
 #my $TAGS;     # database table handle to TAGS
 
 my $ReadsRecall; # handle to ReadsRecall module
+my $MyTimer;
 
 my %instances; # what purpose?
 
@@ -62,6 +65,8 @@ sub init {
 # now initialise the table handles: default init is for building contig(s) and
 # read maps, e.g. for display or caf output; non default for output as hash
 
+$MyTimer = new MyTimer;
+
 $DEBUG = 0;
     if (!$initmode ) {
 	print "standard initialisation $tblhandle\n" if $DEBUG;
@@ -89,34 +94,11 @@ $DEBUG = 0;
 print "NON-standard initialisation \n" if $DEBUG;
         $C2C = $tblhandle->spawn('CONTIGS2CONTIG');
 # initialisation for output of contig hash table
-
-	$CONTIGS =$tblhandle->spawn('CONTIGS');
-        $self->{R2C}    = $CONTIGS->spawn('READS2CONTIG');
-        $self->{READS}  = $CONTIGS->spawn('READS');
-        $self->{CLONES} = $CONTIGS->spawn('CLONES');
-        $CONTIGS->autoVivify('<self>',2.5);
-        $CONTIGS->setAlternates('contigname','aliasname');
-        $self->{CONTIGS} = $CONTIGS;
-
-        $self->{CLONES}->autoVivify('<self>',1.5);
-
-        $self->{ASSEMBLY} = $CONTIGS->spawn('ASSEMBLY');
-        $self->{ASSEMBLY}->autoVivify('<self>',2.5,0); # rebuild links of tables involved
-
-        $self->{PROJECTS} = $CONTIGS->spawn('PROJECTS');
-        $self->{PROJECTS}->autoVivify('<self>',2.5,0); # rebuild links of tables involved
-
-        $self->{C2S} = $CONTIGS->spawn('CONTIGS2SCAFFOLD');
-        $self->{C2S}->autoVivify('<self>',1.5);
-
-        $self->{SEQUENCE} = $CONTIGS->spawn('CONSENSUS');
-#my $snapshot = $CONTIGS->snapshot; print $snapshot;
-
-#        my $DNA = $options->{DNA}; # may be empty
-        my $Compress = new Compress($dna);
-        $self->{Compress} = $Compress;
-print "DONE $self \n" if $DEBUG;
+# ??       my $DNA = $options->{DNA}; # may be empty
+        $self->internalInitialisation($tblhandle,$dna);
     }
+
+    $self->prepareQueries;
 
     return $self;
 }
@@ -128,10 +110,10 @@ print "DONE $self \n" if $DEBUG;
 sub new {
 # create instance for new contig
     my $prototype  = shift;
-    my $contigitem = shift; # the Contig name or item
-    my $itsvalue   = shift;
+    my $identifier = shift; # the Contig name, id or value of associated item
+    my $options    = shift;
 
-    if (!$contigitem) {
+    if (!$identifier) {
         die "You must specify a name, number or item & value identifying the contig in ContigRecall\n";
     }
 
@@ -140,62 +122,102 @@ sub new {
 
     bless ($self, $class);
 
-# allocate internal counters
+# the actual build of the ContigRecall object is done in ->contigBuild
 
-    $self->{contig}  =  0; # contig id
-    $self->{ctgname} = ''; # contigname
-    $self->{readids} = []; # for read names
-    $self->{rhashes} = []; # for ReadsRecall hashes
-    $self->{markers} = []; # re: speeding up consensus builder
-    $self->{status}  = {}; # for error status report
-    $self->{sensus}  = ''; # consensus sequence
-#    $self->{forward} = {};
-#    $self->{reverse} = {};
-
+    $self->{status}  = {};
     my $status = $self->{status};
     $status->{report} = '';
     $status->{errors} = 0;
 
-    if (defined($itsvalue)) {
-        
-        my $cids = $self->findContigByAlias($itsvalue,{attribute => $contigitem});
+    if ($options && ref($options) eq 'HASH' && $options->{attribute}) {
+
+        my $cids = $self->findContigByAlias($identifier,$options);
 # output always an array
         if (!$cids || (ref($cids) eq 'ARRAY' && !@$cids)) {
-            $status->{report} = "No such contig linked with $itsvalue";
+            $status->{report} = "No such contig linked with $identifier";
             $status->{errors} = 1;
         }
-        else {
-# build the first
+        elsif (ref($cids) eq 'ARRAY' && $options->{limit} == 1) {
+# build the first encountered one
+            delete $options->{attribute};
             my $number = @$cids;
-            $status->{report} = "$number contigs linked with $itsvalue";
-            $self->buildContig($cids->[0]);
+            $status->{report} = "$number contigs linked with $identifier";
+            $self->buildContig($cids->[0], $options);
+        }
+        else {
+# build a series of objects
+print "ContigRecall::new building a series of contig @$cids \n";
+            return $self->buildContig($cids);
         }        
     }
 
-    elsif ($contigitem =~ /[0-9]+/ && $contigitem !~ /[a-z]/i) {
+    elsif ($identifier =~ /[0-9]+/ && $identifier !~ /[a-z]/i) {
 # case: contig_id specified
-        $self->buildContig($contigitem);
+        $self->buildContig($identifier);
     }
 
-    elsif (my $cids = $self->findContigByName($contigitem)) {
-# case: contig or alias name specified
-        if (ref($cids) ne 'ARRAY') {
-            $self->buildContig($cids);
-            $self->{ctgname} = $contigitem;
+    elsif (my $cids = $self->findContigByName($identifier)) {
+# case: contig or alias name specified (can return several ids!)
+        $self->{ctgname} = $identifier;
+        if (!$cids || (ref($cids) eq 'ARRAY' && !@$cids)) {
+            $status->{report} = "No such contig linked with $identifier";
+            $status->{errors} = 1;
         }
-        else {
+        elsif (ref($cids) eq 'ARRAY' && $options->{limit} == 1) {
 # take the first one
             my $number = @$cids;
-            $status->{report} = "$number contigs named $itsvalue";
+            $status->{report} = "$number contigs named $identifier";
             $self->buildContig($cids->[0]);
+        }        
+        else {
+# build a single or a series of objects
+            return $self->buildContig($cids);
         }        
     } 
     else {
-        $status->{report} = "No such contig linked with $itsvalue";
+        $status->{report} = "No such contig linked with $identifier";
         $status->{errors} = 1;
     }   
 
     return $self;
+}
+
+###########################################################################
+
+sub internalInitialisation {
+# store all table handles internally
+    my $self      = shift;
+    my $tblhandle = shift;
+    my $dna       = shift;
+
+print "internal initialisation \n" if $DEBUG;
+
+    my $CONTIGS =$tblhandle->spawn('CONTIGS');
+    $self->{R2C}    = $CONTIGS->spawn('READS2CONTIG');
+    $self->{READS}  = $CONTIGS->spawn('READS');
+    $self->{CLONES} = $CONTIGS->spawn('CLONES');
+    $CONTIGS->autoVivify('<self>',2.5);
+    $CONTIGS->setAlternates('contigname','aliasname');
+    $self->{CONTIGS} = $CONTIGS;
+
+    $self->{CLONES}->autoVivify('<self>',1.5);
+
+    $self->{ASSEMBLY} = $CONTIGS->spawn('ASSEMBLY');
+    $self->{ASSEMBLY}->autoVivify('<self>',2.5,0); # rebuild links of tables involved
+
+    $self->{PROJECTS} = $CONTIGS->spawn('PROJECTS');
+    $self->{PROJECTS}->autoVivify('<self>',2.5,0); # rebuild links of tables involved
+
+    $self->{C2S} = $CONTIGS->spawn('CONTIGS2SCAFFOLD');
+    $self->{C2S}->autoVivify('<self>',1.5);
+
+#my $snapshot = $CONTIGS->snapshot; print $snapshot;
+    $self->{SEQUENCE} = $CONTIGS->spawn('CONSENSUS');
+
+    $self->{C2C} = $CONTIGS->spawn('CONTIGS2CONTIG');
+
+    $self->{Compress} = new Compress($dna);
+print "DONE $self \n" if $DEBUG;
 }
 
 #############################################################################
@@ -205,8 +227,35 @@ sub new {
 sub buildContig {
 # build a ContigRecall object for given contig_id
     my $self   = shift;
-    my $contig = shift; # contig_id
+    my $contig = shift; # contig_id or array of 
     my $opts   = shift;
+
+    if (ref($contig) eq 'ARRAY') {
+# for array of hashes: only allow sort option to be specified or default no sort
+        if (ref($opts) eq 'HASH') {
+            delete $opts->{scpos};
+            delete $opts->{fcpos};
+            $opts->{sort} = 0 if !defined($opts->{sort});
+        }
+# create an array of ContigRecall objects
+        undef my @ContigRecall;
+	foreach my $cid (@$contig) {
+            my $ContigRecall = $self->new($cid, $opts);
+            push @ContigRecall, $ContigRecall;
+        }
+        return \@ContigRecall;
+    }
+ 
+# allocate hash items
+
+    $self->{contig}  =  0; # contig id
+    $self->{ctgname} = ''; # contigname
+    $self->{readids} = []; # for read names
+    $self->{rhashes} = []; # for ReadsRecall hashes
+    $self->{markers} = []; # re: speeding up consensus builder
+    $self->{sensus}  = ''; # consensus sequence
+#    $self->{forward} = {};
+#    $self->{reverse} = {};
 
     my %options = ( sort => 1,       # sort maps according to increasing lower range
                     generation => 1, # select contigs and maps for generation 1
@@ -225,34 +274,45 @@ sub buildContig {
 
 # build read mapping query required for this contig
 
-    my $query = "contig_id = $contig ";
+    my $where = "contig_id = $contig ";
     my $generation = $options{generation};
-    $query .= "and generation = $generation " if ($generation >= 0);
-    $query .= "and deprecated in ('N','M') ";
+    $where .= "and generation = $generation " if ($generation >= 0);
+    $where .= "and deprecated != 'X'";
 
     my $scpos = $options{scpos};
     my $fcpos = $options{fcpos};
     if ($scpos > 0 && $fcpos > 0 && $scpos <= $fcpos) {
         $scpos *= 2; $fcpos *= 2;
-        $query .= "and (pcstart+pcfinal + abs(pcfinal-pcstart) >= $scpos) "; 
-        $query .= "and (pcstart+pcfinal - abs(pcfinal-pcstart) <= $fcpos) "; 
-print "query: where $query \n";
+        $where .= "and (pcstart+pcfinal + abs(pcfinal-pcstart) >= $scpos) "; 
+        $where .= "and (pcstart+pcfinal - abs(pcfinal-pcstart) <= $fcpos) "; 
+print "query: where $where \n";
     }
-print "query: where $query \n";
+print "query: where $where \n";
 
 # get hashes with mapping information to get the read_id involved
 
     my %reads;
     my $maphashes = $R2C->cacheRecall($contig); # if built beforehand
-    $maphashes = $R2C->associate('hashrefs','where',$query,{traceQuery => 0}) if !$maphashes;
+
+print "ContigRecall::buildContig: no cached maphashes: use prepared query \n" if !$maphashes;
+    $maphashes = $R2C->usePreparedQuery('contigMapQuery',$contig,0) if !$maphashes;
+
+    if (!$maphashes || !@$maphashes) {
+print "ContigRecall::buildContig: no cached maphashes: use associate query \n";
+        my %soptions = (traceQuery => 0, returnScalar => 0);
+        $maphashes = $R2C->associate('hashrefs','where',$where,\%soptions);
+    }
+print "ContigRecall::buildContig: maphashes: $maphashes \n";
+
     if ($maphashes && @$maphashes) {
         foreach my $hash (@$maphashes) {
-            $reads{$hash->{read_id}} .= $hash.' '; # in case of multiple occurrances
+            $reads{$hash->{read_id}}++;
         }        
     }
     else {
         $status->{report} = "No results found: query = $R2C->{lastQuery} ($R2C->{qerror})";
         $status->{errors}++;
+print "$status->{report}\n";
         return 0;
     }
 
@@ -265,7 +325,7 @@ print "query: where $query \n";
 
     foreach my $hash (@$maphashes) {
         next if ($generation >= 0 && $hash->{generation} ne $generation);
-        next if ($hash->{deprecated} eq 'X' || $hash->{deprecated} eq 'Y');
+        next if ($hash->{deprecated} eq 'X');
         my $recall = $series->{$hash->{read_id}}; # the instance of ReadsRecall read_id
 # load the individual segment in the read
         if ($hash->{label} < 20 && $recall->segmentToContig($hash)) {
@@ -290,7 +350,7 @@ print "query: where $query \n";
     my $result = 0;
     if ($hashes) {
         $self->{rhashes} = $hashes;
-        $result = @$hashes+0;
+#        $result = @$hashes+0;
     }
     else {
         $status->{errors} = $ReadsRecall->{status}->{errors};
@@ -301,7 +361,7 @@ print "query: where $query \n";
 
     $instances{$contig} = $self;
 
-    return $result;
+    return $self;
 }
 
 #############################################################################
@@ -724,19 +784,20 @@ sub getContigHashById {
         return $contigid;
     }
 
-# find data for contig nr $contigid 
- 
-    my $CONTIGS = $self->{CONTIGS};
+# find data for contig nr $contigid
+
+    $self->internalInitialisation($CONTIGS) if !$self->{CONTIGS};
+    my $DBCONTIGS = $self->{CONTIGS};
 
     my %soptions = (concise => 0, noSequence => 0);
-    $CONTIGS->importOptions(\%soptions, $ioptions);
+    $DBCONTIGS->importOptions(\%soptions, $ioptions);
     
 # prepare output hash
 
     my %contig;
     my $contig = \%contig;
 
-    my $hashref = $CONTIGS->associate('hashref',$contigid,'contig_id',{traceQuery=>0});
+    my $hashref = $DBCONTIGS->associate('hashref',$contigid,'contig_id',{traceQuery=>0});
     if ($hashref->{contig_id}) {
         foreach my $key (sort keys %$hashref) {
             $contig->{$key} = $hashref->{$key} if $hashref->{$key};
@@ -744,7 +805,7 @@ sub getContigHashById {
         $contig->{status} = 'Passed';
     }
     else {
-print "No such contig ($contigid):\n $CONTIGS->{lastQuery}\n" if $DEBUG;  
+print "No such contig ($contigid):\n $DBCONTIGS->{lastQuery}\n" if $DEBUG;  
         $contig->{status} = "Not found ($contigid)";
         return $contig;
     }
@@ -778,7 +839,7 @@ print "no data for project:\n $qstatus \n" if $DEBUG;
         $contig->{assembly} = $assembly if $assembly;
         $contig->{aupdated} = $hashref->{updated};
         if ($hashref->{organism}) {
-            my $ORGANISM = $ASSEMBLY->spawn('ORGANISMS','arcturus');
+            my $ORGANISM = $DBCONTIGS->spawn('ORGANISMS','arcturus');
             $hashref = $ORGANISM->associate('hashref',$hashref->{organism},'number');
             $contig->{database} = $hashref->{dbasename};
             my $organism = $hashref->{genus};
@@ -861,9 +922,9 @@ sub getContigHashByAttribute {
                     limit      => 0, attribute  => 0, concise => 0);
     my $soptions = \%soptions; 
 
-    my $CONTIGS = $self->{CONTIGS};
+    my $DBCONTIGS = $self->{CONTIGS} || $CONTIGS;
 
-    $CONTIGS->importOptions($soptions, $ioptions); # i(nput)options override default s(earch)options
+    $DBCONTIGS->importOptions($soptions, $ioptions); # i(nput)options override default s(earch)options
 
     $soptions->{mask} = '1000' if ($soptions->{mask} !~ /\S/); # defaults to contig name
 
@@ -915,16 +976,16 @@ $TEST = 1; print "mask $soptions->{mask}:  @mask <br>\n" if $TEST;
 # $where .= "tagname   = '$attribute'" if $mask[3];
 # $qoptions{debug} = 1 if ($mask[2] || $mask[3]);
 print "ContigRecall : $where <br>\n" if $TEST;
-        my $output  = $CONTIGS->associate('distinct contig_id','where',$where,\%qoptions);
+        my $output  = $DBCONTIGS->associate('distinct contig_id','where',$where,\%qoptions);
         push @cids, @$output if (ref($output) eq 'ARRAY' && @$output);
-print "ContigRecall : $CONTIGS->{lastQuery} <br>\n" if $TEST;
+print "ContigRecall : $DBCONTIGS->{lastQuery} <br>\n" if $TEST;
     }
 print "ContigRecall : @cids<br>\n\n" if $TEST;
 
 # then try TAGS (STSTAGS, GAP4TAGS, HAPPYTAGS) via tagname
 
     if ($mask[3]) {
-        my $hashes = $CONTIGS->associate('contig_id','where',"tagname = '$attribute'",\%qoptions);
+        my $hashes = $DBCONTIGS->associate('contig_id','where',"tagname = '$attribute'",\%qoptions);
         push @cids, @$hashes if (ref($hashes) eq 'ARRAY' && @$hashes);
     }
 
@@ -947,7 +1008,7 @@ print "ContigRecall : @cids\n\n" if $TEST;
 
     if (@cids > 1) {
         my $where = "contig_id in (".join(',',@cids).")";
-        $self->{R2C} = $CONTIGS->spawn('READS2CONTIG') if !$self->{R2C};
+        $self->{R2C} = $DBCONTIGS->spawn('READS2CONTIG') if !$self->{R2C};
         $qoptions{traceQuery} = 0; $qoptions{orderBy} = 'generation';
         my $hashes = $self->{R2C}->associate('distinct contig_id','where',$where,\%qoptions);
         @cids = @$hashes if @$hashes;
@@ -1001,9 +1062,11 @@ sub findContigByName {
     my $self = shift;
     my $name = shift;
 
+    my $DBCONTIGS = $self->{CONTIGS} || $CONTIGS;
+
     my %options = (traceQuery => 0, returnScalar => 0);
     my $query = "contigname = '$name' or aliasname = '$name'";
-    my $cids = $CONTIGS->associate('contig_id','where',$query,\%options);
+    my $cids = $DBCONTIGS->associate('contig_id','where',$query,\%options);
 
 # returns 0 for failure, a scalar contig_id if one found,
 # or a reference to an array with contig ids (e.g. if name contains wildcard)
@@ -1025,8 +1088,10 @@ sub findContigByQuery {
     my $self  = shift;
     my $where = shift;
 
+    my $DBCONTIGS = $self->{CONTIGS} || $CONTIGS;
+
     my %options = (traceQuery => 1, returnScalar => 0);
-    my $cids = $CONTIGS->associate('contig_id','where',$where,\%options);
+    my $cids = $DBCONTIGS->associate('contig_id','where',$where,\%options);
 
     return $cids;
 }
@@ -1052,18 +1117,21 @@ sub listContigHash {
 
 #############################################################################
 #############################################################################
-# dumpToCaf: write ContigRecall and ReadsRecall data in caf format to file.
+# dumpThisToCaf: write ContigRecall and ReadsRecall data in caf format to file.
 #            This method takes the Recall objects built earlier with 'new'
 #            (i.e. 'buildContig') and dumps the data; use this method only 
-#            for a few contigs as building the modules in memory may slow 
-#            the process substantially
+#            for a few contigs as building the modules in memory.
 #############################################################################
 #############################################################################
 
-sub dumpToCaf {
+sub dumpThisToCaf {
 # write the contig (its read mappings and its reads) in caf format to $FILE
-    my $self = shift;
-    my $FILE = shift;
+    my $self   = shift;
+    my $FILE   = shift;
+    my $padded = shift;
+    my $keep   = shift;
+
+    $padded = 1 unless defined($padded); # default
 
 # write the reads to contig mappings
 
@@ -1071,33 +1139,68 @@ sub dumpToCaf {
 
 # write the individual read mappings ("align to caf")
 
+    my $n = @$ReadsRecall; print "$self->dumpThisToCaf $n reads\n";
+
+    return if ($n <= 1);
+
+$MyTimer->timer('dumpThisToCaf',0);
+ 
     foreach my $ReadObject (@$ReadsRecall) {
-        $ReadObject->writeMapToCaf($FILE,1);
+        $ReadObject->writeToCafPadded($FILE,1)  if $padded;
+        $ReadObject->writeReadToCaf($FILE,0,1) if !$padded;
     }
 
 # write the overall maps for for the contig ("assembled from")
 
     my $outputname = sprintf("contig%08d",$self->{contig});
-    print $FILE "\nSequence : $outputname\nIs_contig\nPadded\n";
+    print $FILE "\nSequence : $outputname\nIs_contig\n";
+    print $FILE "Padded\n"    if $padded;
+    print $FILE "Unpadded\n" if !$padded;
 
     foreach my $ReadObject (@$ReadsRecall) {
-        $ReadObject->writeMapToCaf($FILE,0);
+        $ReadObject->writeToCafPadded($FILE,0) if $padded;
+        $ReadObject->writeMapToCaf($FILE,0)   if !$padded;
     }
     print $FILE "\n\n";
     
 
 # write the consensus sequence / or all the reads ?
 
+$MyTimer->timer('dumpThisToCaf',1);
+
+# free memory
+
+    return if $keep;
+
+$MyTimer->timer('Destroying ReadObjects',0);
+
+#    my $mpid = $$; my $stat = grep (/$mpid/,`ps ux`);
+
+    print "Destroying objects step 1\n" if ($n >= 100);
+
+    foreach my $ReadObject (@$ReadsRecall) {
+        $ReadObject->delete;
+    }
+
+    print "Destroying step 2\n" if ($n >= 100);
+
+    foreach my $read (@$ReadsRecall) {
+        undef $read;
+    }
+
+    undef $ReadsRecall;
+
+$MyTimer->timer('Destroying ReadObjects',1);
 }
 
 #############################################################################
-# writeToCaf: does the same a dumpToCaf, but on-the-fly,  without building 
-#             all ReadsRecall objects to avoid grabbing a large chunk of 
-#             memory, doing the calculations for each read in turn 
+# writeToCaf : does the same a dumpThisToCaf, but on-the-fly,  without having
+#              to build all ReadsRecall objects, avoid grabbing a large chunk 
+#              of memory, doing the calculations for each read in turn 
 #############################################################################
 
-sub writeToCaf {
-# write this contig on the fly in caf format to $FILE
+sub writeToCafPadded {
+# write named contig on the fly in padded caf format to $FILE
     my $self   = shift;
     my $FILE   = shift;
     my $contig = shift; # contig ID or list of contig IDs
@@ -1105,53 +1208,55 @@ sub writeToCaf {
     if (ref($contig) eq 'ARRAY') {
         my $count = 0;
         foreach my $contig (@$contig) {
-            $count++ if $self->writeToCaf($contig);
+            $count++ if $self->writeToCafPadded($contig);
         }
         return $count;
     }
 
 # get the reads belonging to this contig
  
-    my $reads = $R2C->cacheRecall($contig,{indexName=>'names'});
+# $MyTimer->timer('Getting reads from contigs cache',0);
+    my $reads = $R2C->cacheRecall($contig,{indexName=>'contigs'});
+# $MyTimer->timer('Getting reads from contigs cache',1);
     print "recalled $reads \n";
-    if (ref($reads) eq 'ARRAY') {
-        my $n = @$reads;  
-        print "$n :  @$reads \n"; $n--;
-        print "read 0 $reads->[0]->{read_id}  read $n $reads->[$n]->{read_id} \n";
-    }
 
     $self->{assembled} = '';
     foreach my $read (@$reads) {
 # get the read_id
         my $read_id = $read->{read_id};
 # load the read into memory, replacing the existing hash
-        $ReadsRecall->newReadHash($read_id);
+        $ReadsRecall->getNumberedRead($read_id);
 # get the map hashes
         my $maphashes = $R2C->cacheRecall($read_id,{indexName=>'mappings'}); # cached previously on read_id
-print "No cacahed maphashes: useprepared query\n" if !$maphashes;
-        $maphashes = $R2C->usePreparedQuery('mapQuery', $read_id) if !$maphashes;
 
+        $maphashes = $R2C->usePreparedQuery('readMapQuery', $read_id) if !$maphashes;
+
+print "  prepared query failed or not found, try associate\n" if !$maphashes;
         $maphashes = $R2C->associate('hashrefs',$read_id,'read_id') if !$maphashes;
 
 # put mappings into place
 
-        foreach my $hash (@$maphashes) {
-#print "map hash $hash: $hash->{generation} $hash->{deprecated} $hash->{read_id} $hash->{contig_id} \n";
-            next if ($hash->{generation} != 1);
-            next if ($hash->{deprecated} eq 'X' || $hash->{deprecated} eq 'Y');
+        if (my $status = $ReadsRecall->putSegmentsToContig($maphashes)) {
+# try to recover
+            foreach my $hash (@$maphashes) {
+
+                next if ($hash->{generation} != 1);
+                next if ($hash->{deprecated} eq 'X');
 # load the individual segment in the read
-            if ($hash->{label} < 20 && $ReadsRecall->segmentToContig($hash)) {
-                print "WARNING: invalid mapping ranges for read $hash->{read_id}!\n";
-            }
+                if ($hash->{label} < 20 && $ReadsRecall->segmentToContig($hash)) {
+                    print "WARNING: invalid mapping ranges for read $hash->{read_id}!\n";
+                    exit 0;
+                }
 # load the (overall) read to contig alignment
-            $ReadsRecall->readToContig($hash) if ($hash->{label} >= 10);
+                $ReadsRecall->readToContig($hash) if ($hash->{label} >= 10);
+            }
         }
 
 # write out the read and SCF alignments on the fly
 
-        $ReadsRecall->writeMapToCaf($FILE,1);
+        $ReadsRecall->writeToCafPadded($FILE,1);
 # write the contig mapping into the assembled string
-        $self->{assembled} .= $ReadsRecall->writeMapToCaf(0,0);      
+        $self->{assembled} .= $ReadsRecall->writeToCafPadded(0,0);      
     }
 
 # finally write out the Contig part
@@ -1183,14 +1288,60 @@ sub writeAssemby {
 
 #############################################################################
 
+sub prepareCaches {
+# build cached data for a given contig id or ids 
+    my $self = shift;
+    my $cids = shift; # contig ID or array of contig IDs
+
+# prepare caches used in e.g. caf output methods
+    
+    my $contiglist = " = $cids" || 0;
+    $contiglist = " in (" . join(',',@$cids) . ")" if (ref($cids) eq 'ARRAY');
+
+    my $query = "select distinct read_id,contig_id from <self> where label>=10 and generation=1";
+    $query .= " and contig_id $contiglist" if $contiglist;
+#    $query .= " order by contig_id";
+
+print "building R2C names caches with $query\n";
+    $R2C->cacheBuild($query,{indexKey=>'contig_id', indexName=>'contigs', list=>0});
+print "DONE \n";
+
+    my $cache = 1;
+
+    if ($cache) {
+# get the read-to-contig maps for all reads in this contig and cache them keyed on read_id
+        $query = "select * from <self> where generation=1 ";
+        $query .= "and contig_id $contiglist " if $contiglist;
+        $query .= "and deprecated != 'X' order by read_id";
+
+print "building R2C mappings cache ($query) \n";
+        $R2C->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings',list=>0});  
+print "DONE \n\n";
+    }
+
+}
+
+#############################################################################
+
 sub prepareQueries {
 
+# readMapQuery: get the read-to-contig mapping for given read at generation 1
+
     my $query = "select * from <self> where read_id=? and";
-    $query .= " deprecated in ('N','M') and generation = 1";
+    $query .= " deprecated != 'X' and generation = 1";
     $R2C->prepareQuery($query,'readMapQuery');
+
+# contigMapQuery: get the read-to-contig mapping for given contig (all reads)
 
     $query =~ s/read/contig/;
     $R2C->prepareQuery($query,'contigMapQuery');
+
+# readsQuery: get all read_ids for given contig
+
+    $query  = "select distinct read_id from <self> where ";
+    $query .= "contig_id=? and label>9 and generation=1 ";
+    $query .= "order by read_id";
+    $R2C->prepareQuery($query,'readsQuery');
 }
 
 #############################################################################
@@ -1202,7 +1353,7 @@ sub colofon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.8 ,
-        updated =>    "30 Sep 2003",
+        updated =>    "31 Oct 2003",
         date    =>    "08 Aug 2002",
     };
 }

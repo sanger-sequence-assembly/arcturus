@@ -14,6 +14,7 @@ our ($VERSION, @ISA);
 use ReadsRecall;
 use ContigBuilder;
 use ContigRecall;
+use Devel::MyTimer;
 
 #############################################################################
 my $DEBUG = 1;
@@ -126,7 +127,7 @@ Returns an array of ReadsRecall objects
 #############################################################################
 
 sub cafRead {
-# write named read into caf file
+# write named read into caf file (unpadded)
     my $self = shift;
     my $FILE = shift;
     my $name = shift; # read name or array of readnames
@@ -194,174 +195,6 @@ Retrieve read ID for named read
 =cut
 #############################################################################
 #############################################################################
-#TO BE DEPRECATED
-sub getUnassembledReadsOLD {
-# short way using READS2ASSEMBLY; long way with a left join READS, R2CR2
-    my $self = shift;
-    my $hash = shift || 0; # default "short" & no date selection
-
-# decode input "hash"
-
-    my $date = 0;
-    my $full = $hash;
-    if (ref($hash) eq 'HASH') {
-        $full = $hash->{full} || 0;
-        $date = $hash->{date} || 0;
-    }
-
-    my $READS = $self->{READS}; # the READS table handle in the current database 
-
-    my $reads;
-
-    if (!$full) {
-
-# short option: use info in READS2ASSEMBLY.astatus (assuming it to be complete and consistent)
-
-        my $R2A = $READS->spawn('READS2ASSEMBLY','<self>',0,0); # get table handle
-        $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
-# find the readnames in READS by searching on astatus in READS2CONTIG
-        if (!$date) {
-            $reads = $READS->associate('readname',"! '2'",'astatus',{returnScalar => 0});
-        }
-        else {
-# TO BE TESTED !!
-            my $where = "date <= '$date' and astatus != 2";
-            $reads = $READS->associate('readname','where',$where,{returnScalar => 0});
-        }
-        if (!$reads) {
-            $self->{report} = "! INVALID query in Saurian->getUnassembledReads: $READS->{lastQuery}\n";
-        }
-    }
-
-    else {
-
-# the long way, bypassing READS2ASSEMBLY; first find all reads not in READS2CONTIG
-
-        my $report = "Find all reads not in READS2CONTIG with left join: ";
-        my $ljoin = "select distinct READS.readname from READS left join READS2CONTIG ";
-        $ljoin  .= "on READS.read_id=READS2CONTIG.read_id ";
-        $ljoin  .= "where READS2CONTIG.read_id IS NULL ";
-# TO BE TESTED !!!
-        $ljoin  .= "and date <= '$date' " if $date;
-        $ljoin  .= "order by readname"; 
-#print "DATE test unassembled reads: $ljoin\n" if $date;
-# this query gets all reads in READS not referenced in READS2CONTIG
-        undef my @reads;
-        $reads = \@reads;
-        my $hashes = $READS->query($ljoin,0,0);
-        if (ref($hashes) eq 'ARRAY') {
-            foreach my $hash (@$hashes) {
-                push @reads,$hash->{readname};
-            }
-        }
-        elsif (!$hashes) {
-            $report .= "! INVALID query in Saurian->getUnassembledReads: $ljoin\n";
-        }
-        $report .= scalar(@reads)." reads found\n";
-
-# now we check on possible (deallocated) reads in READS2CONTIG which do NOT figure in generation 0 or 1
-
-        $report .= "Checking for reads deallocated from previous assembly ";
-        if ($full == 1) {
-# first alternative method: create a temporary table and do a left join
-            $report .= "using a temporary table: ";
-            my $extra = "create temporary table R2CTEMP select distinct read_id ";
-            $extra  .=  "from READS2CONTIG where generation <= 1";
-            if ($READS->query($extra,0,0)) {
-                $READS->query("ALTER table R2CTEMP add primary key (read_id)");
-                $ljoin  = "select distinct READS2CONTIG.read_id from READS2CONTIG left join R2CTEMP ";
-                $ljoin .= "on READS2CONTIG.read_id = R2CTEMP.read_id ";
-                $ljoin .= "where R2CTEMP.read_id is NULL";
-                my $hashes = $READS->query($ljoin,0,0);
-                if (ref($hashes) eq 'ARRAY') {
-                    $report .= scalar(@$hashes)." reads found\n";
-                    foreach my $hash (@$hashes) {
-                        $hash = $hash->{read_id}; # replace each hash by its value
-                    }
-                    my $extra = $READS->associate('readname',$hashes,'read_id',{returnScalar => 0});
-                    push @$reads, @$extra if @$extra;
-                }
-                elsif ($hashes) {
-                    $report .= "no deallocated reads found\n$hashes\n$READS->{lastQuery}\n";
-                }
-                else {
-                    $full = 2; # failed query, try to recover
-                }
-            }
-            else {
-                $full = 2; # creation of R2CTEMP probably failed, try to recover
-            }
-	}
-
-        if ($full == 2) {
-# second alternative method: scan READS2CONTIG with simple queries; first find al reads with generation > 1
-            $report .= "with consecutive queries on READS2CONTIG and READS: ";
-            my $R2C = $READS->spawn('READS2CONTIG','<self>',0,0); # get table handle
-            $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
-            $hashes = $READS->associate('distinct readname','where',"generation > 1",{returnScalar => 0});
-            if (ref($hashes) eq 'ARRAY' && @$hashes) {
-                undef my %added; # the ones with generation > 1
-                foreach my $name (@$hashes) {
-                   $added{$name}++;
-                }
-# now find al reads with generation <=1 and get the difference
-                $hashes = $READS->associate('distinct readname','where',"generation <= 1",{returnScalar => 0});
-                foreach my $name (@$hashes) {
-                    delete $added{$name};
-                }
-# what's left has to be added to @reads
-                my $n = keys %added;
-                $report .= "$n reads found\n";
-                push @$reads, keys(%added) if $n;
-            }
-            elsif ($hashes) {
-                $report .= "NONE found\n";
-            }
-            else {
-                $report = "WARNING: error in query:\n $READS->{lastQuery} \n"; 
-            }
-	}
-        $self->{report} = $report;
-        undef $hashes;
-    }
-
-print $self->{report} if $DEBUG;
-my $n = @$reads; print "reads $reads $n from $reads->[0] to $reads->[$n-1]\n" if $DEBUG;
-
-    return $reads;
-}
-
-#--------------------------- documentation --------------------------
-=pod
-
-=head1 method getUnassembledReads
-
-=head2 Synopsis
-
-Find reads in current database which are not allocated to any contig
-
-=head2 Parameter (optional)
-
-hash
-
-=over 2
-
-=item hash key 'full'
-
-= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
-
-= 1 for complete search using temporary table; if this fails falls back on:
-
-= 2 for complete search without using temporary table (slowest)
-
-=item hash key 'date'
-
-Select only reads before and including the given date
-
-=head2 Returns: reference to array of readnames
-
-=cut
-#############################################################################
 
 sub cafUnassembledReads {
 # fetch all unassembled reads and write data to a CAF file
@@ -369,69 +202,12 @@ sub cafUnassembledReads {
     my $FILE = shift;
     my $opts = shift;
 
-    my $ReadsRecall = $self->{ReadsRecall}->new(); # get the class handle
+    my $ReadsRecall = $self->{ReadsRecall};
 
-    my $count = 0;
-    undef my @missed;
+    my %hash; $opts = \%hash if !$opts; $opts->{onTheFly} = 1;
 
-$DEBUG=1;
-print "Finding unassembled reads ($opts)\n" if $DEBUG;
-#    my $readnames = $self->getUnassembledReads($opts);
-    my $readnames = $ReadsRecall->getUnassembledReads($opts);
-print "readnames $readnames \n" if $DEBUG;
-    if (ref($readnames) eq 'ARRAY' && @$readnames) {
-# NOTE: bulk processing does not require separate cacheing (see spawnReads)
-        my $start = 0;
-        my $block = 10000;
-        while (@$readnames) {
-            $block = @$readnames if ($block > @$readnames);
-print "processing block $start $block\n" if $DEBUG;
-            undef my @test;
-            for (my $i = 0 ; $i < $block ; $i++) {
-                push @test, (shift @$readnames);
-            }
-            $start += $block;
-print "reads to be built: @test \n" if ($DEBUG > 1);
-# to be replaced by on-the-fly
-            my $onTheFly = 0;
-            if ($onTheFly) {
-print "testing onTheFly method\n";
-                my $query = "select * from READS where read_id in ".join(',',@test).")";
-#                $self->{READS}->cacheBuild($query,{indexKey=>'read_id'});
-                foreach my $read (@test) {
-#                    $ReadsRecall->newReadHash($read);
-                    $ReadsRecall->newReadHash($read, 1); # no cache
-                    if ($ReadsRecall->writeReadToCaf($FILE)) {
-                        $count++;
-                    }
-                    else {
-                        push @missed,$read;
-                    }       
-                }
-            }
-            else {
-# build read instances
-                my $readinstances = $self->getRead(\@test,'hashrefs','readname');
-                foreach my $instance (@$readinstances) {
-                    if ($instance->writeReadToCaf($FILE)) {
-                        $count++;
-                    }
-                    else {
-                        push @missed,$instance->{readhash}->{readname};
-                    }
-                }
-                undef $readinstances;
-            }          
-
-        }
-    }
-
-print "$count reads output \n" if $DEBUG;
-print "reads missed: @missed \n" if ($DEBUG && @missed);
-
-    return $count; # 0 to signal NO reads found, OR query failed
+    return $ReadsRecall->cafUnassembledReads($FILE, $opts);
 }
-
 #--------------------------- documentation --------------------------
 =pod
 
@@ -452,7 +228,7 @@ File handle of output device; can be \*STDOUT
 
 =item hash (optional)
 
-=over 2
+=over 3
 
 =item hash key 'full'
 
@@ -465,6 +241,10 @@ File handle of output device; can be \*STDOUT
 =item hash key 'date'
 
 Select only reads before and including the given date
+
+=item hash key 'onTheFly'
+
+Uses less memory if set to 1
 
 =head2 Output
 
@@ -482,24 +262,7 @@ $DEBUG = 1;
 
     my $ContigRecall = $self->{ContigRecall} || return 0;
 
-    my $contigrecall;
-    if (ref($name) eq 'ARRAY') {
-# return an array of ContigRecall objects
-        undef my @contigrecall;
-        $contigrecall = \@contigrecall;
-print "building contig " if $DEBUG;
-        foreach my $contig (@$name) {
-            my $buildContig = $self->buildContig($contig);
-            push @contigrecall, $buildContig  if $buildContig;
-my $nr = @contigrecall; print "$nr .. " if ($DEBUG && ($nr == 1 || !($nr%50)));
-        }
-print "\n" if $DEBUG;
-    }
-    else {
-        $contigrecall = $ContigRecall->new($name,@_);
-    }
-
-    return $contigrecall; 
+    return $ContigRecall->buildContig($name,@_);
 }
 
 #--------------------------- documentation --------------------------
@@ -517,12 +280,12 @@ Build a ContigRecall object and its ReadsRecall objects
 
 =item name
 
-name of contig OR contig ID (both if no value is given) OR name of 
-contig attribute (e.g. Tag) (and then a value must be defined)
+contig identifier: name of contig or contig ID or value of an
+attribute (e.g. a tag name)
 
-=item value
+=item options
 
-value of attribute to identify a contig
+hash image with options:
 
 =head2 Output
 
@@ -536,22 +299,25 @@ sub cafDumpContig {
     my $self = shift;
     my $FILE = shift; # reference to file handle
     my $name = shift || return 0; # name or list of names (compulsory)
-print "cafContig $name \n";
+    my $padd = shift || 0;
+
+print "cafDumpContig $name padded $padd\n";
 
     my $ccaf = 0;
 
-    if (ref($name) ne 'ARRAY') { 
+    if (ref($name) ne 'ARRAY') {
 print "get contig $name \n";
         my $contig = $self->buildContig($name);
-        $ccaf++ if $contig->dumpToCaf($FILE);
+        $ccaf++ if $contig->dumpThisToCaf($FILE,$padd);
     }
 
     else { 
+$DEBUG=1;
         my $start = 0;
-        my $block = 1000;
+        my $block = 10;
         while (@$name) {
             $block = @$name if ($block > @$name);
-print "processing block $start $block\n" if $DEBUG;
+print "Saurian::processing block $start $block\n" if $DEBUG;
             undef my @test;
             for (my $i = 0 ; $i < $block ; $i++) {
                 push @test, (shift @$name);
@@ -559,9 +325,10 @@ print "processing block $start $block\n" if $DEBUG;
             $start += $block;
 print "contigs to be built: @test \n" if ($DEBUG > 1);
             my $contiginstances = $self->buildContig(\@test);
-#undef @$contiginstances;
+print "contig instances: $contiginstances @$contiginstances\n" if ($DEBUG > 1);
             foreach my $instance (@$contiginstances) {
-                if ($instance->dumpToCaf($FILE)) {
+
+                if ($instance->dumpThisToCaf($FILE,$padd)) {
                     $ccaf++;
                 }
                 else {
@@ -583,6 +350,7 @@ sub cafTestContig {
     my $self = shift;
     my $FILE = shift; # reference to file handle
     my $nmbr = shift;
+    my $cache = shift;
 
     my $ContigRecall = $self->{ContigRecall} || return 0;
 
@@ -593,33 +361,28 @@ sub cafTestContig {
 
 # build cached data
 
-    my $query = "select * from <self> where read_id=? and deprecated in ('N','M') and generation = 1";
-    $R2C->prepareQuery($query,'mapQuery');
-    
-    $query = "select distinct read_id,contig_id from <self> where label>=10 and generation=1";
-# $query .= "and assembly=$assembly "; ?
-$query .= " and contig_id=$nmbr"; # to speed up
-    print "building R2C names cache with '$query') \n";
-    $R2C->cacheBuild($query,{indexKey=>'contig_id', indexName=>'names', list=>1});
-    print "DONE \n";
+    $ContigRecall->prepareCaches($nmbr) if $cache;
 
+    my $reads = $R2C->cacheRecall($nmbr,{indexName=>'contigs'});
 
-    $query = "select * from <self> where contig_id=$nmbr and generation=1 ";
-    $query .= "and deprecated in ('N','M')";
-    print "building R2C mappings cache ($query) \n";
-    $R2C->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings',list=>1});  
-    print "DONE \n\n";
+    $reads = $R2C->usePreparedQuery('readsQuery',$nmbr) if !$reads;
 
+#    if (my $reads = $R2C->cacheRecall($nmbr,{indexName=>'contigs'})) {
 
-    my $reads = $R2C->cacheRecall($nmbr,{indexName=>'names'});
-    foreach my $hash (@$reads) {
-        $hash = $hash->{read_id};
+# or prepared query?
+    if ($reads) {
+
+        foreach my $hash (@$reads) {
+            $hash = $hash->{read_id};
+        }
+
+        $READS->prepareCaches($reads) if $cache;
+
+        $ContigRecall->writeToCafPadded($FILE,$nmbr);
     }
-    $query = "select * from <self> where read_id in (". join(',',@$reads) .")";
-    $READS->cacheBuild($query,{indexKey=>'read_id', list=>1});
-
-
-    $ContigRecall->writeToCaf($FILE,$nmbr);
+    else {
+        print "No data found! (No such contig $nmbr in generation 1, perhaps ?)\n";
+    }
 }
 
 sub cafAssembly {
@@ -638,14 +401,17 @@ print "cafAssembly entered \n";
 # contig tags
     $CONTIGS->autoVivify($self->{database},0.5);
 
-    my %opts = (returnScalar => 0);
-    my $cids = $CONTIGS->associate('distinct contig_id',1,'generation',\%opts);
+    my %opts = (returnScalar => 0, orderBy => 'contig_id');
+#    my $cids = $CONTIGS->associate('distinct contig_id',1,'generation',\%opts);
+    my $where = "generation=1 and label>=10";
+    my $cids = $R2C->associate('distinct contig_id','where',$where,\%opts);
 print "last query: $CONTIGS->{lastQuery}\n";
+print "last query: $R2C->{lastQuery}\n";
 print "output R2C search: $cids @$cids \n";
 
 # cache all data in READS, READTAGS, READS2CONTIG and contig TAGS on initialization
 
-    my $cacheing = 1;
+    my $cacheing = 0;
     if ($cacheing) {
 print "READS cache being built \n";
 my $tstart = time;
@@ -666,7 +432,7 @@ print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
 # Consensus
     }
 
-    $self->cafContig($FILE,$cids);    
+    $self->cafDumpContig($FILE,$cids,0);
 }
 
 #############################################################################
@@ -687,7 +453,6 @@ sub update {
 
 #############################################################################
 #############################################################################
-#############################################################################
 
 sub colophon {
     return colophon => {
@@ -696,7 +461,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "26 Sep 2003",
+        updated =>    "20 Oct 2003",
     };
 }
 

@@ -1,6 +1,6 @@
 package Bootes;
 
-# ASP interface to Arcturus database
+# ASP/loader interface to Arcturus database
 
 use strict;
 
@@ -105,13 +105,15 @@ not be loaded
 #############################################################################
 
 sub probeRead {
-# return hash or array of hashes with read items
+# return read_id or array of read_ids for input readname(s)
     my $self = shift;
     my $name = shift;
 
-    my $READS = $self->{READS} | return 0;
+    my $READS = $self->{READS} || return 0;
 
-    return $READS->associate('read_id',$name,'readname');
+    my %options = (traceQuery => 0, returnScalar => 0);
+
+    return $READS->associate('read_id',$name,'readname',\%options);
 }
 #--------------------------- documentation --------------------------
 =pod
@@ -127,6 +129,41 @@ Retrieve read_id for named read
 =cut
 #############################################################################
 
+sub getReadNames {
+# return array of readnames in database (possibly satisfying some criterium)
+    my $self  = shift;
+    my $where = shift;
+
+    my $READS = $self->{READS} || return 0;
+
+    my %options = (traceQuery => 0, returnScalar => 0);
+
+    if ($where && $where =~ /[a-zA-Z]/) {
+# the where condition contains a name (hence a column name somewhere)
+        $READS->autoVivify($self->{database},3);
+        $options{traceQuery} = 1;
+    }
+    else {
+        $where = '1';
+    }
+
+    return $READS->associate('readname','where',$where);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method getReadNames
+
+=head2 Synopsis
+
+Retrieve the readnames in the current database; a selection condition can be
+specified as a SQL "where" clause. 
+
+=head2 Parameter (optional): the SQL "where" clause
+
+=cut
+#############################################################################
+
 sub putRead {
 # enter hash with read items into database
     my $self = shift;
@@ -137,13 +174,18 @@ sub putRead {
 
     $self->dropDead("No write access granted") if !$ReadsReader;
 
-    my %options = (sencode => 1, qencode => 3, readback => 1, dataSource => 1);
+    my $TEST = 1;
+    my %options = (sencode => 99, qencode => 99, readback => 1, dataSource => 1);
     $self->importOptions(\%options, $opts);
 
     my $inserted = 0;
 
     if ($self->allowTableAccess('READS',1)) {
 
+      if ($TEST) {
+        $inserted = $ReadsReader->insertRead($hash, $opts);
+      }
+      else {
 
         $ReadsReader->erase;
         $ReadsReader->enter($hash, $options{dataSource});
@@ -184,7 +226,7 @@ print "summary $summary \nerrors $errors \n" if $DEBUG;
 print "putRead errors: $errors \n" if $DEBUG;
 # note rollback in multi mode inserts is not applicable
         $ReadsReader->rollBack($errors,'SESSIONS'); # undo any changes to dictionary tables if errors
-
+      }
     }
 
     return $inserted; # e.g. number of read items inserted
@@ -213,13 +255,9 @@ hash table with read data keyed on standard Sanger items (e.g. RN, SQ, etc)
 
 hash image with options presented as data keyed on the option name:
 
-sencode    : (default 1) Sequence compression code [0 - 2]
-
-qencode    : (default 3) Quality data compression code [0 - 3]
-
 readback   : (default 1) After writing to database table, verify by readback 
 
-dataSource : 0 = undefined; 1 = experiment file (default); 2 = Oracle;
+dataSource : 1 = experiment (asped) file (default); 2 = Oracle; 3 = Foreign
 
 =back
 
@@ -281,6 +319,36 @@ use as:  ->pendingReads(\@names)
 =head2 Returns: number of read names entered
 
 =cut
+
+#############################################################################
+
+sub cafImportForeignReads {
+# import foreign reads from a caf file
+    my $self = shift;
+    my $file = shift;
+    my $opts = shift;
+
+    my $ReadsReader = $self->{ReadsReader};
+
+    $self->dropDead("No write access granted") if !$ReadsReader;
+
+    if ($self->allowTableAccess('READS',1)) {
+# ensure that the data source is defined as foreign by default
+        my %opts; $opts = \%opts if !$opts;
+        $opts->{dataSource} = 3  if !$opts->{dataSource};
+
+        if (!$ReadsReader->cafFileReader($file,$opts)) {
+            my ($status, $errors) = $ReadsReader->status(2);
+            $self->{GateKeeper}->report("No data loaded");
+            $self->{GateKeeper}->report("$status") if $errors;
+            return;
+        }
+# update ORGANISMS table etc.
+        my $userid = $self->{USER} || 'arcturus';
+        $ReadsReader->housekeeper($userid);
+    }
+
+}
 
 #############################################################################
 
@@ -355,6 +423,43 @@ trace archive
 
 =cut
 #############################################################################
+
+sub repairReads {
+
+    my $self = shift;
+
+    $self->allowTableAccess('READS',1);
+
+    my $ReadsReader = $self->{ReadsReader} || return 0;
+
+    return $ReadsReader->repairReads(@_);
+}
+
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method repairReads
+
+=head2 Synopsis:
+
+Runs through the READS table and tests DNA against Quality Data for length
+missmatch. Repairs Quality data for consensus sequences by shifting leading
+spurious zero (added by an error in earlier version of rloader script)
+
+=head2 Parameters:
+
+=over 3
+
+=item commit (0 or 1)
+
+=item start read_id (default 1)
+ 
+=item final read_id (default all)
+
+=back
+
+=cut
+#############################################################################
 #############################################################################
 
 sub colophon {
@@ -364,7 +469,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "02 Sep 2003",
+        updated =>    "02 Dec 2003",
     };
 }
 

@@ -236,7 +236,7 @@ sub qualityEncoder {
 
     $string =~ s/^\s+|\s+$//g;
 
-    return &numbersEncoder($string)  if ($method == 1);
+    return $self->numbersEncoder($string)  if ($method == 1);
  
     return $self->huffmanEncoder($string)  if ($method == 2);
  
@@ -260,7 +260,7 @@ sub qualityDecoder {
 
     $status = 0;
 
-    return &numbersDecoder($string)  if ($method == 1);
+    return $self->numbersDecoder($string)  if ($method == 1);
  
     return $self->huffmanDecoder($string)  if ($method == 2);
  
@@ -323,6 +323,8 @@ sub zlibQualityDecoder {
 	}
     }
 
+    $self->{quality} = \@quality; # for possible later reference
+
     return $datalen, join(' ', @quality);
 }
 
@@ -330,6 +332,7 @@ sub zlibQualityDecoder {
 
 sub numbersEncoder {
 # encode an input string with integer numbers [0-255] using byte representation
+    my $self  = shift;
     my $input = shift;
 
     $input =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
@@ -386,18 +389,22 @@ sub differsEncoder {
 
 sub numbersDecoder {
 # expand input into string of integer numbers separated by blanks 
+    my $self  = shift;
     my $input = shift;
     
     my @chrnumbers = split //,$input;
 
     my $count = 0;
-    undef my $output;
+    my $output = '';
     foreach my $number (@chrnumbers) {
-        $output .= ' '.unpack ('C*',$number);
+        $output .= ' ' if $output;
+        $output .= unpack ('C*',$number);
         $count++;
     }
 
-    $output =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
+#    $output =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
+
+    $self->{quality} = \@chrnumbers; # for later reference
 
     $count,$output;
 }
@@ -420,6 +427,8 @@ sub differsDecoder {
         $chrnumbers[$i] += $chrnumbers[$i-1];
         $count++; 
     }
+
+    $self->{quality} = \@chrnumbers; # for possible later reference
 
     $string = join ' ',@chrnumbers;
 
@@ -740,6 +749,15 @@ sub status {
     my $self = shift;
   
     return $status;
+}
+
+#############################################################################
+
+sub getQualityData {
+# return the reference to the quality data array
+    my $self = shift;
+
+    return @{$self->{quality}} || undef;
 }
 
 #############################################################################

@@ -84,7 +84,6 @@ print "Bootean: changing focus to $dbasename\n" if $DEBUG;
 
     $self->{session} = 0; # acts also as default for NO write access
 
-$DEBUG=1;
     if (my $tables = $options{writeAccess}) {
 # setup access code for authorization; first get tables
         undef my @tables; $tables[0] = $tables;
