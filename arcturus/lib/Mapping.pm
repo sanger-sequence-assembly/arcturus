@@ -328,6 +328,9 @@ sub assembledFromToString {
         $segment->normaliseOnY(); # ensure rstart <= rfinish
         $string .= $assembledFrom.$segment->toString()."\n";
     }
+
+    $string = "$assembledFrom"."is undefined\n" if (!$string && shift); 
+
     return $string;
 }
 

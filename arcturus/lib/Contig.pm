@@ -735,25 +735,18 @@ sub writeToCaf {
 
 # dump all reads
 
-#print STDERR "Dumping Reads\n"; my $nr = 0;
-
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
-        $read->writeToCafForAssembly($FILE);
-#print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
+        $read->writeToCafForAssembly($FILE); 
     }
 
 # write the overall maps for for the contig ("assembled from")
 
-
-#print STDERR "Dumping Contig\n";
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
-#print STDERR "Dumping Mappings\n"; my $mr = 0;
     my $mappings = $this->getMappings();
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
-#print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 == 0);    
     }
 
 # write tags, if any
@@ -780,12 +773,9 @@ sub writeToFasta {
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
 
-#print STDERR "Dumping Reads\n"; my $nr = 0;
-
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
         $read->writeToFasta($DFILE,$QFILE);
-#print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
     }
 
     $this->writeDNA($DFILE);
@@ -868,10 +858,12 @@ sub metaDataToString {
 # if the contig has parents, get their names by testing/loading the mappings
 
     my $parentlist = '';
+    my @assembledfrom;
     if ($pcntgs && (my $mappings = $this->getContigToContigMappings(1))) {
         my @parents;
         foreach my $mapping (@$mappings) {
             push @parents, $mapping->getMappingName();
+            push @assembledfrom, $mapping->assembledFromToString(1);
         }
         $parentlist = "(".join(',',sort @parents).")" if @parents;
     }
@@ -881,7 +873,10 @@ sub metaDataToString {
                  "Parent contigs  = $pcntgs $parentlist\n" .
                  "Consensuslength = $length\n" .
                  "Average cover   = $cover\n" .   
-                 "End reads       : left $rleft  right $right\n";
+                 "End reads       : left $rleft  right $right\n\n";
+    foreach my $assembled (sort @assembledfrom) {
+        $string   .= $assembled;
+    }
 
     return $string;
 }
