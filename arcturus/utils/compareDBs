@@ -49,7 +49,7 @@ print STDERR "Trying to lock READS table on $dsnb ...\n";
 $dbhb->do($lockquery);
 &db_die("do($lockquery) failed on $dsnb");
 
-$query = 'SELECT readname, slength, sequence from READS';
+$query = 'SELECT read_id, readname, slength, sequence from READS';
 
 print STDERR "Executing $query on $dsna ...\n";
 
@@ -60,7 +60,8 @@ $stha->execute();
 &db_die("execute($query) failed on $dsna");
 
 while(@ary = $stha->fetchrow_array()) {
-    ($readname, $slength, $sequence) = @ary;
+    ($read_id, $readname, $slength, $sequence) = @ary;
+    $readida{$readname} = $read_id;
     $hasha{$readname} = md5_hex($sequence);
     $seqlena{$readname} = $slength;
 }
@@ -80,7 +81,8 @@ $sthb->execute();
 &db_die("execute($query) failed on $dsnb");
 
 while(@ary = $sthb->fetchrow_array()) {
-    ($readname, $slength, $sequence) = @ary;
+    ($read_id, $readname, $slength, $sequence) = @ary;
+    $readidb{$readname} = $read_id;
     $hashb{$readname} = md5_hex($sequence);
     $seqlenb{$readname} = $slength;
 }
@@ -100,6 +102,9 @@ foreach $readname (keys %seqlena) {
 	}
 	if ($hasha{$readname} ne $hashb{$readname}) {
 	    print "$readname sequence hash mismatch\n";
+	}
+	if ($readida{$readname} != $readidb{$readname}) {
+	    print "$readname ID mismatch: ",$readida{$readname}," ",$readidb{$readname},"\n";
 	}
     } else {
 	print "$readname in first DB but not in second\n";
