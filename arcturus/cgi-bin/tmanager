@@ -6,12 +6,12 @@
 #
 #############################################################################
 
-use strict; # Constraint variables declaration before using them
+use strict;
 
 use GateKeeper; 
-use ArcturusTable;
+# use ArcturusTable;
 use Compress;
-use MyHTML;
+# use MyHTML;
 
 ##############################################################################
 # unbuffered output
@@ -25,7 +25,7 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',0,'Insist on CGI');
+my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
 
 my $config     = $GateKeeper->configHandle();
 
@@ -33,7 +33,7 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my ($void,$action,$database,$tablename) = split ('/',$GateKeeper->origin);
 
-my $dbh        = $GateKeeper->dbHandle($database);
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
@@ -46,21 +46,20 @@ my $db_manager  = $config->get("db_manager");
 my $arc_cgi_dir = $config->get("ARC_CGI_DIR");  
 my $arc_htm_dir = $config->get("ARC_HTML_DIR");
 
-my $page = MyHTML->new('ARCTURUS ASSEMBLY-TRACKING DATABASE');
-$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
-$page->frameborder(100,15,'white',15);
+my $page = $GateKeeper->GUI('ARCTURUS ASSEMBLY-TRACKING DATABASE');
+#$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+#$page->frameborder(100,15,'white',15);
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 # open the ORGANISMS table in arcturus
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
 my $loadinfo  = $organisms->unpackAttributes($database); # ($database,'dbasename','attributes');
 
-$page->partition(2);
+#$page->partition(2);
 $page->sectionheader("ARCTURUS assembly tracking database: INGEST",3,0);
-$page->partition(1);
-$page->center(1);
+#$page->partition(1);
+#$page->center(1);
 
 # protect against unintended usage of this script
 
@@ -69,7 +68,7 @@ if ($cgi->parameter('database') ne "$database" || $cgi->parameter('tablename') n
 }
 
 elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
-    $page->center(1);
+#    $page->center(1);
     $page->sectionheader("Please define input data files for STS tags",4,0); 
     $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
     my $comment = "Note: if the filenames submitted contain the wildcard ";
@@ -80,8 +79,7 @@ elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
     $page->preload('stsmapfile',$loadinfo->{stsmap});
     $page->preload('stsfasfile',$loadinfo->{stsfas});
     $page->preload('stsepcfile',$loadinfo->{stsepc});
-    $cgi->delete('confirm'); $cgi->delete('submit');
-    $page->ingestCGI($cgi);
+    $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
     my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
     $page->linkbutton('REJECT',$reject,0);
@@ -89,7 +87,7 @@ elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
 
 elsif ($action eq 'specify' && $tablename eq 'CLONEMAP') {
 
-    $page->center(1);
+#    $page->center(1);
     $page->sectionheader("Please define input data file for the Physical Map",4,0); 
     $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
     my $comment = "Note: if the filename submitted contains the wildcard ";
@@ -98,8 +96,8 @@ elsif ($action eq 'specify' && $tablename eq 'CLONEMAP') {
     $page->messagebox($comment,0,1,'yellow');
     $page->add(&physmapform,0,1); 
     $page->preload('physmapfile',$loadinfo->{physmap});
-    $cgi->delete('confirm'); $cgi->delete('submit');
-    $page->ingestCGI($cgi);
+#    $cgi->delete('confirm'); $cgi->delete('submit');
+    $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
     my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
     $page->linkbutton('REJECT',$reject,0);
@@ -123,7 +121,7 @@ elsif ($action eq 'specify' && $tablename eq 'STS2CONTIG') {
 }
 
 elsif ($action eq 'specify') {
-    $page->center(1);
+#    $page->center(1);
     $page->errorbox("Invalid table $tablename");
     my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
     $page->linkbutton('BACK TO MAIN',$reject,0);
@@ -146,14 +144,14 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 
     undef my $updates;
 
-    $page->center(1);
+#    $page->center(1);
     $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
     $page->sectionheader("Update STS tags database",4,1);
 
 # if CONFIRM is specified a username and password have to be defined
 
     if ($confirm eq 'CONFIRM') {
-        my $people = $organisms->new($dbh,'USERS','arcturus',1);
+        my $people = $organisms->spawn('USERS','arcturus',0,1);
         my $PASSWORD = $people->associate('password',$identify,'userid') || 0;
         if (!$password || !$PASSWORD || !$cgi->VerifyEncrypt($password,$PASSWORD)) {
             $confirm = -1; # suppress some subsequent output
@@ -165,11 +163,11 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 
 # set up the encoder module
 
-    my $encoder = Compress->new('ACGTN ');
+    my $encoder = new Compress('ACGTN ');
 
 # open ststags database and store the data in a hash
 
-    my $ststags = ArcturusTable->new($dbh,'STSTAGS',$database,1);
+    my $ststags = $organisms->spawn('STSTAGS',$database,0,1);
     my $hashrefs = $ststags->{hashrefs}; # array of hashes for the STS data
 # build the inverse hash with tagname as a key (test name)
     undef my %tagnamehash;
@@ -325,7 +323,7 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
         $ststags->historyLogger($identify); # update history table
     }
     elsif ($confirm >= 0 && $count > 0) {
-        $page->ingestCGI($cgi);
+        $page->ingestCGI();
         $page->sectionheader("Please provide your password again and confirm",3,0);
         $page->identify('00',0,1);
         $page->confirmbuttonbar($return,1);
@@ -354,7 +352,7 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
 
 # open ststags database and store the data in a hash
 
-    my $physmap = $organisms->new($dbh,'CLONEMAP',$database,1);
+    my $physmap = $organisms->spawn('CLONEMAP',$database,0,1);
     my $hashrefs = $physmap->{hashrefs}; # array of hashes for the clone data
 # build the inverse hash with clone name as a key to register clones already loaded
     undef my $report;
@@ -377,8 +375,8 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
 
 # identify the assembly and clones therein and list what's actually in database
 
-    my $clones   = $organisms->new($dbh,'CLONES',  $database,1);
-    my $assembly = $organisms->new($dbh,'ASSEMBLY',$database,1);
+    my $clones   = $organisms->spawn('CLONES',  $database,0,1);
+    my $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
 
     undef my $updates;
     my ($afound, $anotfound);
@@ -386,9 +384,9 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
     $report = '<TABLE BORDER=0 CELLPADDING=2>';
     foreach my $entry (@mapentry) {
         my $name;
-    # first try if there is a clone name; else it should be an assembly entry
+# first try if there is a clone name; else it should be an assembly entry
         if ($name = $entry->{clonename}) {
-    # test if there is a clone of that name in CLONES
+# test if there is a clone of that name in CLONES
             if (my $clone = $clones->associate('clone',$name,'clonename')) {
                 $cfound .= ' '.$name;
 	    }
@@ -408,7 +406,7 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
             }
         }
         elsif ($name = $entry->{assembly}) {
-    # test if there is an assembly of that name in ASSEMBLY
+# test if there is an assembly of that name in ASSEMBLY
             if (my $number = $assembly->associate('assembly',$name,'assemblyname')) {
                 $afound .= ' '.$name;
             }
@@ -442,7 +440,7 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
         if (($name = $entry->{clonename}) && !(my $hash = $clonehash{$name})) {
             push @newclones, $entry;
 	}
-    # comparison of data for clone already existing in CLONEMAP (i.e. %clonehash)
+# comparison of data for clone already existing in CLONEMAP (i.e. %clonehash)
         elsif ($name = $entry->{clonename}) {
              my $aname = $entry->{assembly};
              my $anmbr = $assembly->associate('assembly',$aname,'assemblyname');
@@ -458,7 +456,7 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
                  $testExisting .= "<TR><TD>clone $name tested OK</TD></TR>";
 	     }
         }
-    # process assembly info: add to 
+# process assembly info: add to 
         elsif ($name = $entry->{assembly}) {
             my $size = $assembly->associate('size',$name,'assemblyname');
         # size is defined if the assembly exists in the database
@@ -547,7 +545,7 @@ else {
  
 $page->form(0);
 $page->flush();
-$dbh->disconnect;
+$GateKeeper->disconnect;
 exit 0;
 
 ########################################## forms ###############################

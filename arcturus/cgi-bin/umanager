@@ -39,7 +39,7 @@ my $people     = $organisms->spawn('USERS','arcturus',0,1,'userid');
 ##############################################################################
 
 my $USERSUPPORT = $config->get("USERSUPPORT");
-my $db_manager  = $config->get("db_manager");      
+my $db_manager  = $config->get("db_manager");
 my $arc_scr_dir = $config->get("ARC_TMP_DIR");
 my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
 
@@ -250,7 +250,6 @@ elsif ($option eq "getmenu") {
 elsif ($option eq "modify") {
 # displayed in new window 'userframe' without full GUI
     $page->frameborder(100,15); # overrides GUI
-#    $page->center(1);
 
     undef my $error;
     my $link = "$arc_cgi_dir/umanager/modify";
@@ -262,12 +261,14 @@ elsif ($option eq "modify") {
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Information",4,1);
 # alternative: multi-column table of usernames and preselection of names on e.g first letter
+        my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
+        $page->add($users,0,1);
         my $dbusers = $people->htmlOptions('userid','userid',0,0,'myself');
         my $query = "<TABLE><TR><TH>User whose information needs updating:</th>";
         $query .= "<td>$dbusers</td></tr></table>";
-        $page->add("$query",0,1);
+        $page->add($query,0,1);
         $page->submitbuttonbar(0,0,0);
-        $page->ingestCGI(0,'USER');
+        $page->ingestCGI();
     }
 
     elsif ($action eq 'getdata') {
@@ -279,7 +280,7 @@ elsif ($option eq "modify") {
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercode, \%returnpath))) {
             $error = $GateKeeper->{error};
         }            
-        $userid = $cgi->parameter('USER') if ($userid eq 'myself');
+        $userid = $GateKeeper->currentUser if ($userid eq 'myself');
         $cgi->replace('userid',$userid); # ensure correct name in CGI field
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Information for user: $userid",4,1);
@@ -298,7 +299,7 @@ elsif ($option eq "modify") {
             $editlist =~ s/(\>\s*$function)/SELECTED$1/;
             $page->add($editlist,0,1);
             $page->submitbuttonbar($link,0,0);
-            $page->ingestCGI(0,'USER');
+            $page->ingestCGI();
         }
     }
 
@@ -321,7 +322,7 @@ elsif ($option eq "modify") {
             if ($changes > 0) {
                 my $action = "$arc_cgi_dir/umanager/modify/confirm";
                 $page->promptbox($report,$action,$link); # return button to modify
-                $page->ingestCGI(0,'USER');
+                $page->ingestCGI();
             }
             else {
                 $error = "No changes specified for user $userid";
@@ -348,7 +349,6 @@ elsif ($option eq "modify") {
 elsif ($option eq "pwupdate") {
 # displayed in new window 'userframe' without full GUI
     $page->frameborder(100,15); # overrides GUI
-#    $page->center(1);
 
     undef my $error;
     my $link = "$arc_cgi_dir/umanager/modify";
@@ -359,25 +359,27 @@ elsif ($option eq "pwupdate") {
         $page->form("$arc_cgi_dir/umanager/pwupdate/getdata");
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Password",4,1);
+        my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
+        $page->add($users,0,1);
         my $dbusers = $people->htmlOptions('userid','userid',0,0,'myself');
         my $query = "<TABLE><TR><TH>User whose password needs updating:</th>";
         $query .= "<td>$dbusers</td></tr></table>";
         $page->add("$query",0,1);
         $page->submitbuttonbar(0);
-        $page->ingestCGI(0,'USER');
+        $page->ingestCGI();
 
     }
     elsif ($action eq 'getdata') {
 # get the relevant data from the database and throw back an edit form
         my $userid   = $cgi->parameter('userid');
-# authorize (will define cgi parameter 'USER')
+# authorize (will define GateKeeper->currentUser)
         my %usercodes  = (user => $userid, mask => 100);
         my %returnpath = (returnPath => '/pwupdate/getdata', noGUI => 1); 
         if (($userid eq 'myself' && !$GateKeeper->authorize(100, \%returnpath)) 
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercodes, \%returnpath))) {
             $error = $GateKeeper->{error};
         }            
-        $userid = $cgi->parameter('USER') if ($userid eq 'myself');
+        $userid = $GateKeeper->currentUser if ($userid eq 'myself');
         $cgi->replace('userid',$userid); # ensure correct name in CGI field
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Password for $userid",4,1);
@@ -391,7 +393,7 @@ elsif ($option eq "pwupdate") {
             $page->sectionheader("Enter new password for user $userid and repeat",4,1);
             $page->identify('01'); $page->hline(); # prompt for password and repeat
             $page->submitbuttonbar(0,0);
-            $page->ingestCGI(0,'USER');
+            $page->ingestCGI();
         }
     }
 
@@ -422,7 +424,7 @@ elsif ($option eq "pwupdate") {
             $page->errorbox("The password should have at least 4 characters and may not contain blanks");
             $page->add("Please use the \"Back\" button and try again",0,1,$font);
         }
-        elsif ($userid eq $cgi->parameter('USER') && $cgi->VerifyEncrypt($password,$hash->{password})) {
+        elsif ($userid eq $GateKeeper->currentUser && $cgi->VerifyEncrypt($password,$hash->{password})) {
             $page->errorbox("Please provide a password different from your previous one");
             $page->add("Please use the \"Back\" button and try again",0,1,$font);
         }
@@ -452,8 +454,8 @@ elsif ($option eq "pwupdate") {
 elsif ($option eq "delete") {
 # displayed in new window 'userframe' without full GUI
     $page->frameborder(100,15); # overrides GUI
-#    $page->center(1);
 
+    my $bgcolor = 'G0G000';
     undef my $error;
     my $link = "$arc_cgi_dir/umanager/delete";
     $link .= $cgi->postToGet(1,'session');
@@ -466,20 +468,21 @@ elsif ($option eq "delete") {
         $page->add("Delete or Retire a user",0,0,'size=+1');
         $page->space(1);
         $page->add("This function requires supervisor access priviledge",0,1,"size=+1 color='lightsteelblue'");
-        $page->space(1);
+        my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
+        $users =~ s/ITEMS/Arcturus users/;
+        $page->add($users,0,0);
         my $text = "A user can be deleted only if no allocation to a project ";
         $text .= "exists; otherwise the user will be retired. ";
         $text .= "A deleted user will be removed from the database; a retired ";
         $text .= "user's information will be retained.";
         $text = "<table width=72%><tr><td bgcolor='FAFAD2'>$text</td></tr></table>";
         $page->add($text,0,1);
-
         my $dbusers = $people->htmlOptions('userid','userid',0,0);
         my $query = "<TABLE><TR><TH>User to be deleted:</th>";
         $query .= "<td>$dbusers</td></tr></table>";
         $page->add($query,0,1);
         $page->submitbuttonbar(0);
-        $page->ingestCGI(0,'USER');
+        $page->ingestCGI();
     }
     elsif ($action eq "confirm") {
 # test input user names and priviledges
@@ -499,28 +502,33 @@ elsif ($option eq "delete") {
         }
         elsif (!$GateKeeper->authorize(\%usercodes,\%returnpath)) {
             $error = $GateKeeper->{error};
-            $error =~ s/xxx/delete/;
+            $error =~ s/\<[^\<\>]*\>/delete/;
         }
-#        elsif ($confirm eq 'CONFIRM') {
         else {
-    # check userid against projects via USERS2PROJECTS
-            my $isAllocated = 0;
-        # search all databases for a reference to this user; exit on first found
-            foreach my $hash (@{$organisms->{hashrefs}}) {
-                my $database = $hash->{dbasename};
-                my $ptop = $organisms->spawn('USERS2PROJECTS',$database,0);
-                last if ($isAllocated = $ptop->associate('project',$userid,'userid'));
+# check userid against projects via USERS and USERS2PROJECTS
+            my $isAllocated;
+            if ($isAllocated = &listUserData($people,$userid)) {
+                $isAllocated = "User $userid is allocated to $isAllocated project(s)";
             }
+            else {
+# to be sure search all databases for a reference to this user; exit on first found
+                foreach my $hash (@{$organisms->{hashrefs}}) {
+                    my $database = $hash->{dbasename};                     
+                    my $ptop = $organisms->spawn('USERS2PROJECTS',$database,0);
+                    if ($isAllocated = $ptop->associate('project',$userid,'userid')) {
+                        $isAllocated = "User $userid is allocated to project $isAllocated";
+                        last;
+                    }
+                }
+	    }
 
-            my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
             my $action = "$arc_cgi_dir/umanager";
+            my $reject = $action.'/locate'.$cgi->postToGet(0,'userid');
 	    if ($isAllocated) {
-        # the user cannot be deleted
-                my $text = "User $userid is allocated to projects<p>";
-                $text   .= "User $userid will be retired"; 
-                $page->hidden('function','Retired');
-                $cgi->transpose('password','passwd');
-                $page->ingestCGI($cgi);
+# the user cannot be deleted
+                my $text = "$isAllocated<p>User $userid will be retired"; 
+                $page->hidden("userid\&$userid\&ustatus",'retired');
+                $page->ingestCGI();
                 $action .= "/modify/confirm";      
                 $page->promptbox($text,$action,$reject);
             }
@@ -536,10 +544,10 @@ elsif ($option eq "delete") {
 		    $page->messagebox($text,$reject);
                 }
                 else {
-                    undef $action;
+                    $action .= '/delete/confirm';
                     $page->ingestCGI();
                     $page->promptbox($text,$action,$reject);
-                } 
+                }
             }
         }
     }
@@ -555,7 +563,6 @@ elsif ($option eq "delete") {
 elsif ($option eq "authorize") {
 # displayed in new window 'userframe' without full GUI
     $page->frameborder(100,15); # overrides GUI
-#    $page->center(1);
 
     undef my $error;
     my $link = "$arc_cgi_dir/umanager/delete";
@@ -576,6 +583,8 @@ elsif ($option eq "authorize") {
 
 elsif ($option eq "locate") {
 # find a user from a bit of information
+    $page->frameborder(100,15); # overrides GUI
+
     my $userid;
     $page->sectionheader("ARCTURUS user administration",3,0);
     if (!$action || $action eq 'getform') {
@@ -596,24 +605,14 @@ elsif ($option eq "locate") {
         $page->submitbuttonbar(1);     
     }
     elsif ($action eq 'search') {
-    # do the query, list the results
+# do the query, list the results
         $page->sectionheader("Find a user: results",4,1);
-    # build the query
         my $input = $cgi->{'cgi_input'}; # the hash with item-value pairs
         my $match = $cgi->parameter('match');
         if (my $users = $people->find($input,'*',$match)) {
             if (@$users == 1) {
-                $userid = $$users[0]->{'userid'};
-                $page->add($people->htmlEditRecord($userid,'userid',0,'0111111000'),0,1);
-               my $attributes = $people->unpackAttributes($userid,'userid');
-               my $table = "<table><caption>Projects of user $userid</caption>";
-               $table .= "<tr><th>Assembly</th><th>Project</th></tr>";
-               foreach my $key (sort keys %$attributes) {
-                    my ($assembly,$project) = split ':',$key;
-                    $table .= "<tr><td>$assembly</td><td>$project</td></tr>";
-               }
-               $table .= "</table>";
-                $page->add($table,0,0);
+                $userid = $users->[0]->{'userid'};
+                &listUserData($people,$userid);
             }
             else {
                 my $table = "<TABLE>";
@@ -637,23 +636,8 @@ elsif ($option eq "locate") {
     }
     elsif ($action eq 'user' && ($userid = $cgi->parameter('userid'))) {
 
-        $page->sectionheader("List particulars for user $userid",4,1);
-        if (my $list = $people->htmlEditRecord($userid,'userid',0,'011111110')) {
-            $page->add($list,0,1);
-            my $attributes = $people->unpackAttributes($userid,'userid');
-# attributes contains the projects and assemblies a user is involved with
-            my $table = "<table><caption>Projects of user $userid</caption>";
-            $table .= "<tr><th>Assembly</th><th>Project</th></tr>";
-            foreach my $key (sort keys %$attributes) {
-                my ($assembly,$project) = split ':',$key;
-                $table .= "<tr><td>$assembly</td><td>$project</td></tr>";
-            }
-            $table .= "</table>";
-            $page->add($table,0,0);
-        } 
-        else {
-            $page->errorbox("No such user: $userid");
-        }
+        &listUserData ($people,$userid);
+
     }
     else {
         $page->errorbox("Invalid input for umanager/$option/$action");
@@ -675,7 +659,7 @@ else {
 # CLOSE
 ###############################################################################
 
-$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2) if ($option =~ /mod|pwu|del|aut|loc/);
 $page->form(0);
 $page->flush();
 
@@ -685,6 +669,13 @@ $GateKeeper->disconnect;
 
 &mailnotice ($email,$message,$arc_scr_dir) if ($message && $email);
 &mailnotice ($db_manager,$report,$arc_scr_dir) if ($report);
+
+# finally harmonize the USERS tables of development and production server
+
+my $root = $GateKeeper->currentScriptRoot;
+my $temp = $config->get('ARC_TMP_DIR');
+system ("$root/harmonize users copy >> $temp/harmonize.log");
+
 
 exit 0;
 
@@ -718,3 +709,44 @@ sub mailnotice {
 
     return 0;
 }
+
+
+sub listUserData {
+    my ($people, $userid) = @_;
+
+    my $isAllocated = 0;
+    $page->sectionheader("Arcturus user $userid",4,0);
+    if (my $list = $people->htmlEditRecord($userid,'userid',0,'011111110')) {
+        $page->add($list,0,0);
+        my %stype = (D => 'Development', P => 'Production');
+        my $attributes = $people->unpackAttributes($userid,'userid');
+        my $table = "<table cellpadding=2 border=2>";
+        $table .= "<tr><th>Project</th><th>Assembly</th><th>server</th></tr>";
+        foreach my $key (sort keys %$attributes) {
+            my ($project,$assembly) = split '-',$key;
+            $table .= "<tr><td>$assembly</td><td>$project</td>";
+            $table .= "<td>$stype{$attributes->{$key}}</td></tr>";
+            $isAllocated++;
+        }
+        $table .= "</table>";
+        $page->space(1);
+        if ($isAllocated) {
+            $page->sectionheader("Projects of user $userid",4,0);            
+            $page->add($table,0,0);
+        }
+        else {
+            my $text = "User $userid is not allocated to any project";
+            $page->sectionheader($text,4,0);
+        }
+    } 
+    else {
+        $page->errorbox("No such user: $userid");
+    }
+
+    return $isAllocated;
+}
+
+
+
+
+
