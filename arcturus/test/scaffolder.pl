@@ -86,6 +86,7 @@ my @scaffoldlist;
 my %contigref;
 my %scaffoldtoid;
 my $scaffoldid = 0;
+my %scaffoldlength;
 
 my $alldone = scalar(@contiglist);
 my $done = 0;
@@ -180,12 +181,6 @@ foreach my $contigid (@contiglist) {
 	$lastend = ($linkend eq 'L') ? 'R' : 'L';
     }
 
-    ###
-    ### Display the scaffold
-    ###
-
-    next unless (scalar(@{$scaffold}) > 1);
-
     my $report = "";
 
     my $isContig = 1;
@@ -194,7 +189,7 @@ foreach my $contigid (@contiglist) {
     my $totctg = 0;
     my $curpos = 0;
 
-    while (my $item = shift @{$scaffold}) {
+    foreach my $item (@{$scaffold}) {
 	if ($isContig) {
 	    my ($contigid, $contigdir) = @{$item};
 	    my $contiglen = $contiglength->{$contigid};
@@ -213,6 +208,14 @@ foreach my $contigid (@contiglist) {
 
 	$isContig = !$isContig;
     }
+
+    $scaffoldlength{$scaffold} = $totlen + $totgap;
+
+    ###
+    ### Display the scaffold
+    ###
+
+    $totgap = '   *** DEGENERATE ***' unless (scalar(@{$scaffold}) > 1);
 
     print "SCAFFOLD $scaffoldid $totctg $totlen $totgap\n\n";
 
@@ -273,7 +276,18 @@ while (my ($template_id, $template_name, $sihigh) = $sth_templates->fetchrow_arr
 		    $sense = ($direction eq 'Forward') ? 'Reverse' : 'Forward';
 		}
 
-		print "            IN SCAFFOLD $scaffoldid AT $ctgoffset $sense\n\n";
+		my $overhang = -1;
+		my $scaflen = $scaffoldlength{$scaffold};
+
+		if ($sense eq 'Forward') {
+		    $overhang = $sihigh - ($scaflen - $ctgoffset);
+		} else {
+		    $overhang = $sihigh - $ctgoffset;
+		}
+
+		$sense .= " OVERHANG $overhang" if ($overhang > 0);
+
+		print "            IN SCAFFOLD $scaffoldid ($scaflen bp) AT $ctgoffset $sense\n\n";
 	    } else {
 		print "\n";
 	    }
