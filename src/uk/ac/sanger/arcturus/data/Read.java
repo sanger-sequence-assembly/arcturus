@@ -1,10 +1,10 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.database.*;
+
 /**
  * This class represents a sequence reading.
  */
-
-import uk.ac.sanger.arcturus.database.*;
 
 public class Read extends Core {
     /**

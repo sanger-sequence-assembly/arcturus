@@ -1,10 +1,10 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.database.*;
+
 /**
  * This class represents a ligation of a clone.
  */
-
-import uk.ac.sanger.arcturus.database.*;
 
 public class Ligation extends Core {
     private Clone clone;

@@ -1,10 +1,10 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.database.*;
+
 /**
  * This class represents a sub-clone or read template.
  */
-
-import uk.ac.sanger.arcturus.database.*;
 
 public class Template extends Core {
     private Ligation ligation;
