@@ -148,14 +148,16 @@ CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
   assembly_id smallint(5) unsigned default '0',
   updated datetime default NULL,
-  owner varchar(8) default NULL,
+  owner varchar(8) binary default NULL,
   locked datetime default NULL,
   created datetime default NULL,
-  creator varchar(8) NOT NULL default 'arcturus',
+  creator varchar(8) binary NOT NULL default 'arcturus',
   comment text default NULL,
   PRIMARY KEY  (project_id)
 ) TYPE=MyISAM;
 
+#  projectname varchar(16) binary default NULL,
+#  UNIQUE KEY projectname (projectname)
 #
 # Table structure for table 'READCOMMENT'
 #
@@ -301,23 +303,6 @@ CREATE TABLE STATUS (
   status_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(64) default NULL,
   PRIMARY KEY (status_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'STSTAG'
-#
-
-CREATE TABLE STSTAG (
-  tag_id mediumint(8) unsigned NOT NULL auto_increment,
-  tagname varchar(6) NOT NULL default '',
-  sequence blob NOT NULL,
-  scompress tinyint(3) unsigned NOT NULL default '0',
-  slength smallint(5) unsigned NOT NULL default '0',
-  position float default NULL,
-  linkage smallint(5) unsigned NOT NULL default '0',
-  assembly tinyint(3) unsigned NOT NULL default '0',
-  PRIMARY KEY  (tag_id),
-  UNIQUE KEY tagname (tagname)
 ) TYPE=MyISAM;
 
 #
