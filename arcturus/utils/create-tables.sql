@@ -128,17 +128,15 @@ CREATE TABLE CONSENSUS (
 
 CREATE TABLE CONTIGS (
   contig_id mediumint(8) unsigned NOT NULL auto_increment,
-  contigname varchar(32) NOT NULL default '',
-  aliasname varchar(32) NOT NULL default '',
   length int(11) default '0',
   ncntgs smallint(5) unsigned NOT NULL default '0',
   nreads mediumint(8) unsigned NOT NULL default '0',
   newreads mediumint(9) NOT NULL default '0',
   cover float(8,2) default '0.00',
   origin enum('Arcturus CAF parser','Finishing Software','Other') default NULL,
-  userid varchar(8) default 'arcturus',
+  userid char(8) default 'arcturus',
   updated datetime NOT NULL default '0000-00-00 00:00:00',
-  readnamehash varchar(16) default NULL,
+  readnamehash char(16) default NULL,
   PRIMARY KEY  (contig_id),
   KEY rnhash (readnamehash(8))
 ) TYPE=MyISAM;
