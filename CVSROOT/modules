@@ -29,5 +29,6 @@ diana powmap/diana
 collections powmap/collections
 powmap_etc powmap/etc
 powmap_corba powmap/corba
+Diana.java powmap/Diana.java
 flatserve flatimpl &powmap_corba &powmap_etc &uk &collections
-agct agctimpl &uk &diana &powmap_etc &collections
+agct agctimpl &uk &diana &powmap_etc &collections &Diana.java
