@@ -32,7 +32,7 @@ $dsn = 'DBI:mysql:' . $database . ';host=' . $dbhost . ';port=' . $dbport;
 
 print STDERR "# DSN=$dsn\n" if $debug;
 
-$dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***');
+$dbh = DBI->connect($dsn, 'analysedb', 'dbviewer');
 
 &db_die('Unable to connect to ' . $dsn) unless $dbh;
 
