@@ -1367,8 +1367,15 @@ sub putSequenceForRead {
 
 	    $rc = $sth->execute($seqid, $seqvecid, $svleft, $svright);
 
-	    return (0, "failed to insert seq_id,svector_id,svleft,svright into SEQVEC for $readname ($readid);" .
-		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+            unless (defined($rc) && $rc == 1) {
+                print STDERR "read $readname: \n";
+                foreach my $entry (@{$seqveclist}) {
+                    print STDERR "($seqvec, $svleft, $svright)\n";
+                }
+      	        return (0, "failed to insert seq_id,svector_id,svleft,svright "
+                     . "into SEQVEC for $readname ($readid, $seqid, $seqvecid, "
+                     . "$svleft, $svright) DBI::errstr=$DBI::errstr"); 
+            }
 	}
 
 	$sth->finish();
@@ -1829,9 +1836,20 @@ sub OLDgetSequenceIDforReads {
 #----------------------------------------------------------------------------- 
 
 sub getTagsForReads {
+# bulk mode extraction
     my $this = shift;
     my $reads = shift; # array of Read instances
 
+}
+
+sub putTagsForReads {
+# bulk insertion
+    my $this = shift;
+    my $reads = shift; # array of Read instances
+
+# a: get all tags for these reads already in the database
+# b: check which ones have to be added; link to DNASNIPPET if applicable
+# c: insert in bulkmode (READTAG table, DNASNIPPET table [oligos, ststags etc])
 }
 
 #-----------------------------------------------------------------------------
