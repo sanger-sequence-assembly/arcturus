@@ -183,8 +183,6 @@ else {
     elsif ($option eq 'specify') {
 # list all assemblies
         $database  = $cgi->parameter('database'); # compulsory
-#        my $userid = $cgi->parameter('identify'); # compulsory
-#        my $passwd = $cgi->parameter('password'); # compulsory
         my $asname = $cgi->parameter('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
 
@@ -192,28 +190,30 @@ else {
         $page->partition(2);
         $page->sectionheader("ARCTURUS assembly database '$database': CONTIGs loader specifications",3,0);
         $page->partition(1);
-
+#print "<br>database $database";
+#$cgi->PrintVariables(1);
+#print "\n";
         if ($cgi->{und_error} || !$database) {
             $page->errorbox("Please define all form entries");
             $page->add($cgi->PrintVariables());
         }
         else {
-    # open assembly database; abort if no assemblies defined
+# open assembly database; abort if no assemblies defined
             $assembly = $organisms->spawn('ASSEMBLY',$database,1);
             if ($assembly && $assembly->count() > 0) {
-    # get the default assembly name if no assemblyname in CGI input; first try attributes
+# get the default assembly name if no assemblyname in CGI input; first try attributes
                 my $attributes = $organisms->unpackAttributes($database,'dbasename');
                 $asname = $attributes->{anlast} if (!$asname && $attributes->{anlast});
-    # if still undefined, just take the first one
+# if still undefined, just take the first one
                 $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname);
-    # substitute (possible) database placeholder
+# substitute (possible) database placeholder
                 $config{CLF} =~ s/DATABASE/$database/; # log file
-    # overwrite the preset configuration data with those in ORGANISM attributes if any
+# overwrite the preset configuration data with those in ORGANISM attributes if any
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
 # print "ORGANISM attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
-    # overwrite the preset configuration data with those in ASSEMBLY attributes if any
+# overwrite the preset configuration data with those in ASSEMBLY attributes if any
                 $attributes = $assembly->unpackAttributes($asname,'assemblyname');
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
@@ -236,7 +236,7 @@ else {
     # but overwrite with values in CGI input 
                 $page->preload('cgi_input',$cgi,1);
     # and add hidden fields  
-                $page->ingestCGI($cgi);
+                $page->ingestCGI;
 
     # add a three-way button bar and a return link 
 
@@ -263,25 +263,28 @@ else {
     }
 
     elsif ($option eq 'process') {
-    # get assembly 
+# get assembly 
         $database = $cgi->parameter('database'); # redefine database
+print "<br>database $database";
+$cgi->PrintVariables(1);
+print "\n";
         $assembly = $organisms->spawn('ASSEMBLY',$database,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
 
-    # test mode
+# test mode
         $TEST   = 1 if $cgi->parameter('testrun',0);
         $REPAIR = 1 if $cgi->parameter('repair' ,0);
         $logON  = 1 if $cgi->parameter('logON'  ,0);
         $reload = 1 if $cgi->parameter('reload' ,0);
         $update = 1 if $cgi->parameter('update' ,0);
         $forced = 1 if $cgi->parameter('forced' ,0);
-    # identity check
+# identity check
       
         if ($cgi->{und_error}) {
             $error = "Please define every input field $cgi->{und_error} ";
         }
-    # authorisation level 100 required (temp)
+# authorisation level 100 required (temp)
         elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process"})) {
             $error = $GateKeeper->{report};
         }
