@@ -693,11 +693,11 @@ sub list {
     $readname =  $hash->{readname} if (defined( $hash->{readname}));
     $readname =  $hash->{ID} if (!$readname && defined( $hash->{ID}));
     $readname = "UNDEFINED" if (!$readname);
-    $report .= "<CENTER><p><h3><b>" if ($html);
+    $report .= "<CENTER><h3>" if ($html);
     $report .= "\nContents of read $readname:\n\n";
-    $report .= "</b><h3>" if ($html);
-    $report .= "<CENTER><TABLE BORDER=1 CELPADDING=2 WIDTH=100%>" if ($html);
-    $report .= "<TR><TH>key</TH><TH ALIGN=LEFT>value</TH></TR>\n" if ($html);
+    $report .= "</h3></center>" if ($html);
+    $report .= "<CENTER><TABLE BORDER=1 CELPADDING=2 VALIGN=TOP WIDTH=98%>" if ($html);
+    $report .= "<TR><TH>key</TH><TH ALIGN=LEFT>value</TH></TR>" if ($html);
 
     my $n = 0;
     foreach my $key (sort keys (%{$hash})) {
@@ -725,9 +725,9 @@ sub list {
             $string = "&nbsp";
 	}
         $report .= "$key = $string\n" if (!$html);
-        $report .= "<TR><TD ALIGN=CENTER>$key</TD><TD $wrap>$string</TD></TR>\n" if ($html);
+        $report .= "<TR><TD ALIGN=CENTER>$key</TD><TD $wrap>$string</TD></TR>" if ($html);
     }
-    $report .= "</TABLE><P>\n" if ($html);
+    $report .= "</TABLE><P>" if ($html);
 
     if (!$html || $status->{errors}) {
         $report .= "\n$n items found; $status->{errors} errors";
@@ -736,7 +736,7 @@ sub list {
         $report .= "$status->{report}\n" if (defined($status->{report}));
     }
 
-    $report .= "</CENTER>\n" if ($html);
+    $report .= "</CENTER>" if ($html);
     
     return $report;
 }

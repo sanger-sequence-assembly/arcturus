@@ -718,7 +718,7 @@ sub frameborder {
     $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=0 CELLPADDING=0 CELLSPACING=0>";
     $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mtop BGCOLOR=$bgcolor>CON1</TD></TR>";
     $layout .= "<TR><TD WIDTH=$side\% BGCOLOR=$bgcolor>CON2</TD>";
-    $layout .= "<TD>CON0</TD>";
+    $layout .= "<TD VALIGN=TOP>CON0</TD>";
     $layout .= "<TD WIDTH=$side\%  BGCOLOR=$bgcolor>CON3</TD></TR>";
     $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mbot BGCOLOR=$bgcolor>CON4</TD></TR>";
     $layout .= "</TABLE>";

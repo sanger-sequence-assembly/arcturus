@@ -474,7 +474,7 @@ my $hashes = $datamodel->findInstanceOf(0);
 
 my $PENDING = $organisms->spawn('PENDING',$database,0,0);
 my $RRS2ASS = $organisms->spawn('READS2ASSEMBLY',$database,0,0);
-
+$RRS2ASS->setMultiLineInsert(100);
 
 foreach my $key (keys %$hashes) {
 #    print "$key $hashes->{$key}$brtag";# if (!$origin);
@@ -875,8 +875,8 @@ print $reader->list($origin,1);
                 $PENDING->delete('readname',$entry->{ID});
             }
     # add the entry to READS2ASSEMBLY
-#            my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
-            my $read_id = $readhash->{read_id};
+            my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
+#            my $read_id = $readhash->{read_id};
             if (!$RRS2ASS->newrow('read_id',$read_id,'assembly',$assemblynumber)) {
                 print "$RRS2ASS->{qerror}$brtag";
                 $RRS2ASS->status(1); # reset the error status

@@ -1283,9 +1283,10 @@ sub copy {
 
     foreach my $hash (@$hashes) {
 # test if the unique key exists in target; if so update, else newrow
-        my $targethash;
         $report .= "\n\nProcessing entry for $marker = $hash->{$marker}\n";
-        if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
+        my $targethash = $target->associate('hashref',$hash->{$marker},$marker);
+print "target hash  $marker $hash->{$marker} $targethash \n";
+        if (!$targethash) {
             $report .= "creating new row for $hash->{$marker}";
             if ($option{doCopy} && $target->newrow($marker,$hash->{$marker})) {
                 $report .= " ... done\n";
@@ -1306,7 +1307,8 @@ sub copy {
 
         foreach my $key (keys %$hash) {
 # key must be defined and not have a unique index 
-            if ($key ne $target->{autoinc} && $key ne $marker && defined($hash->{$key}) && $hash->{$key}=~/\S/) {
+            $hash->{$key} = ' ' if !defined($hash->{$key});
+            if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key}=~/\S/) {
 
                 if ($hash->{$key} ne $targethash->{$key}) {
                     $report .= "key $key to be updated to $hash->{$key} for $hash->{$marker}";

@@ -2033,7 +2033,7 @@ sub create_USERS {
     print STDOUT "Creating table USERS ..." if ($list);
     $dbh->do(qq[CREATE TABLE USERS(
              user             SMALLINT            NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             userid           CHAR(8)             NOT NULL,
+             userid           CHAR(8) binary      NOT NULL,
              lastname         VARCHAR(24)         NOT NULL,
              givennames       VARCHAR(16)             NULL,
              affiliation      VARCHAR(32)         DEFAULT "Genomic Research Limited",

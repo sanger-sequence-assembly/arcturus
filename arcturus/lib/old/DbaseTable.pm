@@ -1003,14 +1003,17 @@ sub newrow {
 
     if (!defined($cname) || !defined($value)) {
         $inputStatus = 0;
+        $error = "undefined column name $cname or value $value";
     }
     elsif (ref($cname) eq 'ARRAY' && ref($value) eq 'ARRAY') {
         @cinserts = @$cname;
         @vinserts = @$value;
         $inputStatus = 0 if (@cinserts != @vinserts);
+        $error = "unequal array sizes" if !$inputStatus;
     }
     elsif (ref($cname) eq 'ARRAY' || ref($value) eq 'ARRAY') {
         $inputStatus = 0; # one array missing
+        $error = "missing input array";
     }
     else {
 # test input value against database if column value has to be unique
@@ -1027,9 +1030,11 @@ sub newrow {
             push @cinserts, @$Cname;
             push @vinserts, @$Value;
             $inputStatus = 0 if (@cinserts != @vinserts);
+            $error = "unequal array sizes" if !$inputStatus;
         }
         elsif (ref($Cname) eq 'ARRAY' || ref($Value) eq 'ARRAY') {
             $inputStatus = 0;
+            $error = "missing input array";
         }
         elsif (defined($Cname) && defined($Value)) {
             push @cinserts, $Cname;
@@ -1037,6 +1042,7 @@ sub newrow {
         }
         elsif (defined($Cname) || defined($Value)) {
             $inputStatus = 0;
+            $error = "missing column name or value";
         }
     }
 
@@ -1079,7 +1085,7 @@ sub newrow {
         }
 
 #my $list = 0;
-#print "multiline = $multiLine <br>" if $list;
+#print "multiline = $multiLine <br>" if ($multiLine > 1);
 
         if (!$multiLine || $multiLine <= 1) {
 
@@ -1126,7 +1132,8 @@ sub newrow {
     }
 
     if (!$inputStatus) {
-        $self->{qerror} = "Failed to insert new row into table <self>: $error";
+        $self->{qerror}  = "Failed to insert new row into table ";
+        $self->{qerror} .= "$self->{tablename}: '$error'";
     }
 
 # return value: 0 for failure, > 0 for success with status = nr of row added

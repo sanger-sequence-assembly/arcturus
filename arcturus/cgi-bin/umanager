@@ -695,11 +695,14 @@ $GateKeeper->disconnect;
 # finally harmonize the USERS tables of development and production server
 
 if ($doCopy || $doDelete) {
-#    my $root = $GateKeeper->currentScriptRoot;
+    my $root = $GateKeeper->currentScriptRoot;
     my $temp = $config->get('ARC_TMP_DIR');
     my $action = "copy:";
     $action .= "delete:$doDelete" if $doDelete;
-    system ("/cgi-bin/harmonize users $action >> $temp/harmonize.log");
+    delete $ENV{'GATEWAY_INTERFACE'};
+    $ENV{SCRIPT_FILENAME} = "$root/harmonize";
+    $ENV{SCRIPT_NAME} = "/cgi-bin/harmonize";
+    system ("$root/harmonize users $action >> $temp/harmonize.log");
 }
 
 exit 0;
