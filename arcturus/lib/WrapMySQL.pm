@@ -9,9 +9,12 @@ use DBI;
 @WrapMySQL::ISA = qw(DBI);
 
 my $users;
+my $errorstring;
 
 BEGIN {
     $users = {};
+
+    $errorstring = 'No error';
 
     my $inifile = $ENV{'WRAPMYSQL_INI'};
 
@@ -29,7 +32,9 @@ BEGIN {
 		if ($name =~ /^role\.(\w+)/) {
 		    $name = $1;
 		    ($username, $password) = split(/,/, $value);
-		    $users->{$instance}->{$name} = [$username, $password];
+		    $users->{$instance}->{'ROLE'} = {} unless
+			defined($users->{$instance}->{'ROLE'});
+		    $users->{$instance}->{'ROLE'}->{$name} = [$username, $password];
 		} else {
 		    $users->{$instance}->{$name} = $value;
 		}
@@ -43,25 +48,28 @@ BEGIN {
 sub connect {
     my ($type, $db, $mode, $attrs) = @_;
 
-    die "No database specified" unless $db;
+    $errorstring = 'No error';
 
-    die "No mode specified" unless $mode;
-
-    unless ($mode eq 'admin' || $mode eq 'read' || $mode eq 'write') {
-	print STDERR "*** WrapMySQL->connect($db, $mode): Invalid access mode \"$mode\" ***\n";
+    unless (defined($db)) {
+	$errorstring = "No database specified";
 	return undef;
     }
 
-    $attrs = {RaiseError => 1, PrintError => 0} unless $attrs;
+    unless (defined($mode))  {
+	$errorstring = "No role specified";
+	return undef;
+    }
+
+    $attrs = {RaiseError => 0, PrintError => 0} unless $attrs;
 
     my $info = $users->{$db};
 
     unless (defined($info)) {
-	print STDERR "*** WrapMySQL->connect($db, $mode): Unknown meta-database \"$db\" ***\n";
+	$errorstring = "Instance \"$db\" is not known";
 	return undef;
     }
 
-    my ($uname, $passwd, $dbname, $server, $dbport);
+    my ($uname, $passwd, $dbname, $server, $dbport, $roledata);
 
     $dbname = $info->{'dbname'};
 
@@ -69,11 +77,24 @@ sub connect {
 
     $dbport = $info->{'port'} || 3306;
 
-    ($uname, $passwd) = @{$info->{$mode}};
+    $roledata = $info->{'ROLE'}->{$mode};
+
+    unless (defined($roledata)) {
+	$errorstring = "Role \"$mode\" does not exist in instance \"$db\"";
+	return undef;
+    }
+
+    ($uname, $passwd) = @{$roledata};
 
     my $dsn = "DBI:mysql:$dbname:$server:$dbport";
 
     my $dbh = DBI->connect($dsn, $uname, $passwd, $attrs);
 
+    $errorstring = $DBI::errstr;
+
     return $dbh;
+}
+
+sub getErrorString {
+    return $errorstring;
 }
