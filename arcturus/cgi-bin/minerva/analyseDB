@@ -1,20 +1,22 @@
 #!/usr/local/bin/perl
 
+use strict;
+
 use WrapMySQL;
 use CGI;
 
-$cgi = new CGI;
+my $cgi = new CGI;
 
 print $cgi->header();
 
 print $cgi->start_html(-title => 'Database Analyser',
 		       -bgcolor => '#FFFFFF');
 
-$debug = $cgi->param('debug');
+my $debug = $cgi->param('debug');
 
-$instance = $cgi->param('instance');
-$database = $cgi->param('database');
-$table = $cgi->param('table');
+my $instance = $cgi->param('instance');
+my $database = $cgi->param('database');
+my $table = $cgi->param('table');
 
 if (defined($instance)) {
     print $cgi->h1("Database Analyser: $instance");
@@ -24,7 +26,7 @@ if (defined($instance)) {
     exit(0);
 }
 
-$dbh = WrapMySQL->connect($instance, 'read');
+my $dbh = WrapMySQL->connect($instance, 'read');
 
 &db_die("Unable to connect to instance $instance") unless $dbh;
 
@@ -135,8 +137,8 @@ sub countTables {
 
 	my $nTables = 0;
 
-	while (@ary = $sth->fetchrow_array()) {
-	    ($tablename, $junk) = @ary;
+	while (my @ary = $sth->fetchrow_array()) {
+	    my ($tablename, $junk) = @ary;
 	    $nTables++;
 	}
 
@@ -171,8 +173,8 @@ sub countContigs {
 
 	my $nContigs = 0;
 
-	while (@ary = $sth->fetchrow_array()) {
-	    ($nContigs, $junk) = @ary;
+	while (my @ary = $sth->fetchrow_array()) {
+	    my ($nContigs, $junk) = @ary;
 	}
 
 	$sth->finish();
@@ -219,28 +221,28 @@ sub showDatabase {
 
 	my @alltables;
 
-	while (@ary = $sth->fetchrow_array()) {
-	    ($tablename, $junk) = @ary;
+	while (my @ary = $sth->fetchrow_array()) {
+	    my ($tablename, $junk) = @ary;
 	    push @alltables, $tablename;
 	}
 
 	$sth->finish();
 	&db_die("finish($query) failed");
 
-	foreach $tablename (@alltables) {
-	    $metadata = &getTableMetadata($dbh, $tablename);
+	foreach my $tablename (@alltables) {
+	    my $metadata = &getTableMetadata($dbh, $tablename);
 
-	    $rowcount = defined($metadata->{'Rows'}) ? $metadata->{'Rows'} : $unknown;
-	    $created  = defined($metadata->{'Create_time'}) ? $metadata->{'Create_time'} : $unknown;
-	    $updated  = defined($metadata->{'Update_time'}) ? $metadata->{'Update_time'} : $unknown;
+	    my $rowcount = defined($metadata->{'Rows'}) ? $metadata->{'Rows'} : $unknown;
+	    my $created  = defined($metadata->{'Create_time'}) ? $metadata->{'Create_time'} : $unknown;
+	    my $updated  = defined($metadata->{'Update_time'}) ? $metadata->{'Update_time'} : $unknown;
 
-	    $tabletype = $metadata->{'Type'};
+	    my $tabletype = $metadata->{'Type'};
 
-	    $isInnoDB = $tabletype =~ /InnoDB/;
+	    my $isInnoDB = $tabletype =~ /InnoDB/;
 
-	    $tr = $isInnoDB ? "<TR BGCOLOR=\"#99FF99\">" : "<TR>";
+	    my $tr = $isInnoDB ? "<TR BGCOLOR=\"#99FF99\">" : "<TR>";
 
-	    $scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
+	    my $scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
 	    printf "$tr\n<TD>";
 	    print "<A HREF=\"$scriptlink\">$tablename</A></TD>\n";
 	    print "<TD>$rowcount</TD>\n";
@@ -263,78 +265,105 @@ sub showTable {
     if ($DBI::err) {
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print $cgi->h2("Table description for $database.$table");
-	
-	$query = "DESCRIBE $table";
+	my $showdescription = $cgi->param('describetable');
+	my $showstatus = $cgi->param('tablestatus');
 
-	my $sth = $dbh->prepare($query);
-	&db_die("prepare($query) failed");
-
-	$sth->execute();
-	&db_die("execute($query) failed");
-
-	my @colnames = @{$sth->{NAME}};
-
-	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
-
-	print "<TR BGCOLOR=\"#FFCC00\">\n";
-
-	foreach $hdr (@colnames) {
-	    print "<TH ALIGN=\"LEFT\">$hdr</TH>\n";
+	if (!defined($showdescription) && !defined($showstatus)) {
+	    $showdescription = 1;
+	    $showstatus = 1;
 	}
 
-	print "</TR>\n";
+	$showdescription = 0 unless defined($showdescription);
+	$showstatus = 0 unless defined($showstatus);
 
-	while (@ary = $sth->fetchrow_array()) {
-	    print "<TR>\n";
-	    foreach $item (@ary) {
-		print "<TD>", ((defined($item) && $item ne "") ? $item : "&nbsp;"), "</TD>\n";
-	    }
-	    print "</TR>\n";
-	}
+	&showTableDescription($cgi, $dbh, $instance, $database, $table)
+	    if $showdescription;
 
-	$sth->finish();
-
-	print "</TABLE>\n";
-
-	print $cgi->h2("Table status for $database.$table");
-
-	$query = "SHOW TABLE STATUS LIKE '$table'";
-
-	$sth = $dbh->prepare($query);
-	&db_die("prepare($query) failed");
-
-	$sth->execute();
-	&db_die("execute($query) failed");
-
-	my @values = $sth->fetchrow_array();
-
-	my @colnames = @{$sth->{NAME}};
-
-	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
-
-	while (my $colname = shift @colnames) {
-	    my $colvalue = shift @values;
-
-	    next if ($colname eq 'Name');
-
-	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
-
-	    if ($colname eq 'Type') {
-		$tr = "<TR BGCOLOR=\"" . (($colvalue eq 'InnoDB') ? '#99FF99' : '#FFCC00') . "\">";
-	    } else {
-		$tr = '<TR>';
-	    }
-
-	    print $tr;
-	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
-	    print "<TD>$colvalue</TD></TR>\n";
-	}
-
-	$sth->finish();
-
-	print "</TABLE>\n";
+	&showTableStatus($cgi, $dbh, $instance, $database, $table)
+	    if $showstatus;
     }
+}
+
+sub showTableDescription {
+    my ($cgi, $dbh, $instance, $database, $table, $junk) = @_;
+
+    print $cgi->h2("Table description for $database.$table");
+	
+    my $query = "DESCRIBE $table";
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    my @colnames = @{$sth->{NAME}};
+
+    print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
+    print "<TR BGCOLOR=\"#FFCC00\">\n";
+
+    foreach my $hdr (@colnames) {
+	print "<TH ALIGN=\"LEFT\">$hdr</TH>\n";
+    }
+
+    print "</TR>\n";
+
+    while (my @ary = $sth->fetchrow_array()) {
+	print "<TR>\n";
+	foreach my $item (@ary) {
+	    print "<TD>", ((defined($item) && $item ne "") ? $item : "&nbsp;"), "</TD>\n";
+	}
+	    print "</TR>\n";
+    }
+    
+    $sth->finish();
+
+    print "</TABLE>\n";
+}
+
+sub showTableStatus {
+    my ($cgi, $dbh, $instance, $database, $table, $junk) = @_;
+
+    print $cgi->h2("Table status for $database.$table");
+
+    my $query = "SHOW TABLE STATUS LIKE '$table'";
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+    
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    my @values = $sth->fetchrow_array();
+
+    my @colnames = @{$sth->{NAME}};
+
+    print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
+    while (my $colname = shift @colnames) {
+	my $colvalue = shift @values;
+	
+	next if ($colname eq 'Name');
+	
+	$colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
+
+	my $tr;
+
+	if ($colname eq 'Type') {
+	    $tr = "<TR BGCOLOR=\"" . (($colvalue eq 'InnoDB') ? '#99FF99' : '#FFCC00') . "\">";
+	} else {
+	    $tr = '<TR>';
+	}
+
+	print $tr;
+	print "\n<TD><STRONG>$colname</STRONG></TD>\n";
+	print "<TD>$colvalue</TD></TR>\n";
+    }
+    
+    $sth->finish();
+    
+    print "</TABLE>\n";
 }
 
 sub getTableMetadata {
