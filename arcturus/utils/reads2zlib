@@ -36,6 +36,8 @@ while ($nextword = shift @ARGV) {
 
     $batchmode = 1 if ($nextword eq '-batchmode');
 
+    $optimise = 1 if ($nextword eq '-optimise' || $nextword eq '-optimize');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -75,6 +77,9 @@ foreach $dbname (@dblist) {
     $dbh->do($query);
     &db_die("$query failed");
     print STDERR "\n" if $verbose;
+
+    $ndna = 0;
+    $nquality = 0;
 
     if ($dodna) {
 	$query = "SELECT read_id,sequence,scompress FROM READS WHERE scompress != 99";
@@ -133,6 +138,8 @@ foreach $dbname (@dblist) {
 	$update->finish();
 
 	print STDERR "Total sequence length was $oldlen, now $newlen\n" if ($ndone > 0);
+
+	$ndna = $ndone;
     }
 
     if ($doquality) {
@@ -191,6 +198,15 @@ foreach $dbname (@dblist) {
 	$update->finish();
 
 	print STDERR "Total quality length was $oldlen, now $newlen\n" if ($ndone > 0);
+
+	$nquality = $ndone;
+    }
+
+    if ($optimise && ($ndna >0 || $nquality > 0)) {
+	$query = "OPTIMIZE TABLE READS";
+	print STDERR "Optimising READS table\n";
+	$dbh->do($query);
+	&db_die("$query failed");
     }
 }
 
@@ -221,4 +237,5 @@ sub showUsage {
     print STDERR "    -verbose\t\tVerbose output\n";
     print STDERR "    -batchmode\t\tDo not display progress info\n";
     print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
+    print STDERR "    -optimise\t\tOptimise the READS table after updating\n";
 }
