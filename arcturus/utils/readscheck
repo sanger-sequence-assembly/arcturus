@@ -29,6 +29,8 @@ while ($nextword = shift @ARGV) {
 	}
     }
 
+    $namelike = shift @ARGV if ($nextword eq '-namelike');
+
     $verbose = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
@@ -89,13 +91,18 @@ foreach $dbname (@dblist) {
     $nbad = 0;
 
     $query = "SELECT read_id,readname,slength,sequence,scompress,quality,qcompress FROM READS";
+    $query .= " WHERE readname like '$namelike'" if defined($namelike);
     $query .= " LIMIT $limit" if defined($limit);
-    
+
+    print STDERR "prepare($query) ...";
     $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed on $dsn");
+    print STDERR "done\n";
 
+    print STDERR "execute($query) ...";
     $sth->execute();
     &db_die("execute($query) failed on $dsn");
+    print STDERR "done\n";
 
     printf STDERR "%8d %8d", $ndone, $nbad;
     $format = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010%8d %8d";
@@ -157,4 +164,5 @@ sub showUsage {
     print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
     print STDERR "    -verbose\t\tVerbose output\n";
     print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
+    print STDERR "    -namelike\t\tSelect readnames like this from the database\n";
 }
