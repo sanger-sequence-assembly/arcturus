@@ -16,9 +16,9 @@ sub new {
 
     $this->{contigname} = $contigname;
     $this->{data}       = {}; # meta data hash
-    $this->{Reads}      = []; # array of Read instances
-    $this->{Mappings}   = []; # array of Mappings
-    $this->{Tags}       = []; # array of Tag instances
+    $this->{Read }      = []; # array of Read instances
+    $this->{Mapping}    = []; # array of Mappings
+    $this->{Tag}        = []; # array of Tag instances
 
     return $this;
 }
@@ -226,6 +226,8 @@ sub importComponent {
     my $this = shift;
     my $Component = shift;
     my $type = shift;
+
+    die "Contig->importComponent expects a component type" unless $type;
 
     if (ref($Component) eq 'ARRAY') {
 # recursive use with scalar parameter

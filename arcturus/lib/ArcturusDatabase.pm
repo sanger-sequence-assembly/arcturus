@@ -1801,6 +1801,18 @@ sub getMappingsOfReadsInLinkedContigs {
 }
 
 sub addContig {
+    my $this = shift;
+    my $Contig = shift;
+#    print "Contig $Contig to be added\n";
+# 1) test contig for completeness (names, checksum, all Maps defined etc)
+# 1a) test if contig already loaded; if so ignore
+# 2) lock MAPPING and SEGMENT tables
+# 3) enter record in MAPPING for each read and contig=0 (bulk loading)
+# 4) enter segments for each mapping (bulk loading)
+# 5) enter record in CONTIGS with meta data, gets contig_id
+# 6) replace contig_id=0 by new contig_id in MAPPING
+# 7) release lock on MAPPING 
+
 
 }
 
