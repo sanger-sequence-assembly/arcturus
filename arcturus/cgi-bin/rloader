@@ -44,7 +44,7 @@ my ($void, $database, $option, $origin, $session);
 
 if ($cgi) {
    ($void, $database, $option) = split ('/',$GateKeeper->origin());
-#   $database = $cgi->parameter('database') if !$database;
+    $database = $cgi->parameter('database') if $cgi->parameter('database');
 #   $database = $cgi->parameter('organism') if !$database;
 #   $database = 'arcturus if !$database';
    $option = 'getform' if !$option;
@@ -299,7 +299,7 @@ print "RDD taken from Repository:  $config{RDD} <br>";
         }
     # authorisation level 100 required
         elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process",silently => 1})) {
-            $error = $GateKeeper->{report}; # authorisation failed
+            $error = $GateKeeper->{error}; # authorisation failed
         }
     # okay, now assign read specifications
         elsif ($source == 2) {
