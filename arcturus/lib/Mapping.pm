@@ -69,10 +69,10 @@ sub setAlignmentDirection {
     my $direction = shift;
 
     if ($direction eq 'Forward') {
-        $this->{direction} = 1;
+        $this->setAlignment(1);
     }
     elsif ($direction eq 'Reverse') {
-        $this->{direction} = -1;
+        $this->setAlignment(-1);
     }
 }
 
@@ -95,6 +95,7 @@ sub setAlignment {
 # define alignment direction as +1 or -1
     my $this = shift;
     my $adir = shift;
+
     return unless (abs($adir) == 1);
     $this->{direction} = $adir;
 }
@@ -103,12 +104,10 @@ sub getAlignment {
 # returns +1, -1 or undef
     my $this = shift;
 
-# if the direction is undefined, get it from Segments, if any
+# if the direction is undefined (or 0), analyse the segments (if any)
+# (orders the segments and determines the mapping alignment direction)
 
-    if (!defined($this->{direction}) && $this->hasSegments()) {
-        my $segments = $this->getSegments();
-        $this->{direction} = $segments->[0]->getAlignment();
-    }
+    $this->analyseSegments() unless $this->{direction};
 
     return $this->{direction};
 }
@@ -126,8 +125,8 @@ sub compare {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
-    my $tmaps = $this->orderSegments();
-    my $cmaps = $compare->orderSegments();
+    my $tmaps = $this->analyseSegments();
+    my $cmaps = $compare->analyseSegments();
 
     return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
     return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
@@ -156,7 +155,7 @@ sub compare {
     return (1,$align,$shift);
 }
 
-sub orderSegments {
+sub analyseSegments {
 # sort the segments according to increasing read position
     my $this = shift;
 
@@ -172,15 +171,37 @@ sub orderSegments {
 
     @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
-# deal with unit-length intervals (if the read and contig are counter aligned)
+# determine the alignment direction from the range covered by all segments
+# if it is a reverse alignment we have to reset the alignment direction in
+# single base segments by applying the counterAlign... method
 
     my $n = scalar(@$segments) - 1;
+ 
+    my $direction = 1;
     if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
 # the counter align method only works for unit length intervals
+        $direction = -1;
         foreach my $segment (@$segments) {
             $segment->counterAlignUnitLengthInterval();
         }
     }
+
+# test consistency of alignments
+
+    foreach my $segment (@$segments) {
+	if ($segment->getAlignment() != $direction) {
+# should never occur, but put here just in case
+            print STDERR "Inconsistent alignment direction in mapping "
+                         .($this->getReadName || $this->getSequenceID).
+			 "\n: ".$this->assembledFromToString;
+            undef $direction;
+            last;
+        }
+    }
+
+# register the alignment direction
+    
+    $this->setAlignment($direction);
 
     return $segments;
 }
@@ -190,7 +211,7 @@ sub orderSegments {
 #-------------------------------------------------------------------
 
 sub applyShiftToContigPosition {
-# apply a linear contig shift to each segment
+# apply a linear contig (i.e. X) shift to each segment
     my $this = shift;
     my $shift = shift;
 
@@ -204,11 +225,12 @@ sub applyShiftToContigPosition {
 }
  
 #-------------------------------------------------------------------
-# store alignment segments
+# importing alignment segments
 #-------------------------------------------------------------------
 
 sub addAlignmentFromDatabase {
 # input 3 array (cstart, rstart, length) and combine with direction
+# this import requires that the alignment direction is defined beforehand
     my $this = shift;
     my ($cstart, $rstart, $length, $dummy) = @_;
 
@@ -232,7 +254,7 @@ sub addAlignmentFromDatabase {
 }
 
 sub addAssembledFrom {
-# input 4 array (contigstart, contigfinis, (read)seqstart, seqfinis) 
+# input 4 array (contigstart, contigfinis, (read)seqstart, seqfinis)
     my $this = shift;
 
 # validity input is tested in Segment constructor
@@ -247,7 +269,7 @@ sub addAssembledFrom {
 }
 
 #-------------------------------------------------------------------
-# export of alignment / segment info
+# export of alignment segments and 
 #-------------------------------------------------------------------
 
 sub hasSegments {

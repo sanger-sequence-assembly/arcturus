@@ -40,7 +40,7 @@ sub setOutputDevice {
         $this->{output} = new FileHandle($output, "w");
     }
     else {
-        $this->{output} = new FileHandle(">&STDOUT");
+        $this->{output} = new FileHandle(">&STDERR");
     }
 }
 

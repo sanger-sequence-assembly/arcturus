@@ -127,9 +127,13 @@ print STDERR "new getContig: $query\n";
 
     $this->getReadsForContig($contig);
 
-# get mappings (and implicit segments)
+# get read-to-contig mappings (and implicit segments)
 
-    $this->getMappingsForContig($contig);
+    $this->getMappingsForContig($contig,type=>'read');
+
+# get contig-to-contig mappings (and implicit segments)
+
+#    $this->getMappingsForContig($contig,type=>'contig');
 
 # get contig tags
 
@@ -172,6 +176,8 @@ sub getSequenceAndBaseQualityForContigID {
 	$quality = [@qualarray];
     }
 
+    $sequence =~ s/\*/N/g; # temporary fix 
+
     return ($sequence, $quality);
 }
 
@@ -182,6 +188,79 @@ sub hasContig {
     my $contig_id = shift;
 
     return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
+}
+
+sub getCurrentContigs {
+# returns a list of contig_ids of generation (age) 0
+    my $this = shift;
+
+# parse options (default long look-up excluding singleton contigs)
+
+# option singleton : set true for including single-read contigs (default F)
+# option short     : set true for doing the search using age column of 
+#                    C2CMAPPING; F for a left join for contigs which are
+#                    not a parent (results in 'current' generation age=0)
+# option age       : if specified > 0 search will default to short method
+
+    my $age = 0;
+    my $short = 0;
+    my $singleton = 0;
+    while (my $nextword = shift) {
+        if ($nextword eq 'short') {
+            $short = shift;
+        }
+        elsif ($nextword eq 'singleton') {
+            $singleton = shift;
+        }
+        elsif ($nextword eq 'age') {
+            $age = shift;
+        }
+        else {
+            die "Invalid parameter $nextword for ->getCurrentContigs";
+        }
+    }
+
+# there are two ways of searching: the short way assumes that all
+# contigs in CONTIG occur in C2CMAPPING and that the age structure
+# is consistent; the long way checks from scratch using a left join.
+
+# if the age is specified > 0 we default to the short method.
+
+    my $query;
+    if ($short && !$singleton) {
+# use age column information and exclude singleton contigs
+        $query = "select distinct(CONTIG.contig_id)".
+                 "  from CONTIG join C2CMAPPING".
+                 "    on CONTIG.contig_id = C2CMAPPING.contig_id".
+                 " where C2CMAPPING.age = $age".
+		 "   and CONTIG.nreads > 1";
+    }
+    elsif ($short || $age) {
+# use age column information and include possible singletons
+	$query = "select distinct(contig_id) from C2CMAPPING where age = $age";
+    }
+    else {
+# generation 0 consists of all those contigs which are not a parent.
+# search from scratch for those contigs which are not a parent
+        $query = "select CONTIG.contig_id".
+                 "  from CONTIG left join C2CMAPPING".
+                 "    on CONTIG.contig_id = C2CMAPPING.parent_id".
+	         " where C2CMAPPING.parent_id is null";
+        $query .= "  and CONTIG.nreads > 1" unless $singleton;
+    }
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+    return [@contigids];
 }
 
 #------------------------------------------------------------------------------
@@ -198,6 +277,7 @@ sub putContig {
         "as parameter" unless (ref($contig) eq 'Contig');
 
 # do the statistics on this contig, allow zeropoint correction
+#    this method also checks and orders the mappings 
 
     $contig->getStatistics(2);
 
@@ -242,7 +322,7 @@ sub putContig {
     if ($previous) {
 # the read name hash or the sequence IDs hash do match
 # pull out previous contig mappings and compare them one by one with contig
-        $this->getMappingsForContig($previous);
+        $this->getMappingsForContig($previous,type=>'read');
         if ($contig->isSameAs($previous)) {
             print STDERR "Contig ".$contig->getContigName.
                          " is identical to contig ".
@@ -265,7 +345,7 @@ print "linked contigs: @$contigids for contig ".$contig->getContigName."\n";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
                                             metaDataOnly=>1);
-            $this->getMappingsForContig($previous);
+            $this->getMappingsForContig($previous,type=>'read');
             unless ($contig->linkToContig($previous)) {
                 print STDERR "Empty link to contig ".
                              $previous->getContigName().
@@ -282,10 +362,14 @@ print STDOUT "Contig ".$contig->getContigName." ".
     }
     elsif ($list) {
 # the contig has no precursor, is completely new
-        print STDERR "Contig ".$contig->getContigName." has no precursors\n";
+        print STDERR "Contig ".$contig->getContigName." has no parents\n";
+# add a dummy mapping to the contig (without segments)
+        my $mapping = new Mapping();
+        $mapping->setSequenceID(0); # parent 0
+        $contig->addMapping($mapping);
     }
 
-#return 0; # testing
+return 0; # testing
 
 # now load the contig into the database
 
@@ -634,7 +718,7 @@ my $test = 0; # to removed later
                 $mappings = $contig->getContigToContigMapping();
                 return 1 unless $mappings; # MAY have contig-to-contig mappings
                 $mquery = "insert into C2CMAPPING " .
-	                  "(contig_id,linked_id,cstart,cfinish,direction) ";
+	                  "(contig_id,parent_id,cstart,cfinish,direction) ";
                 $squery = "insert into C2CSEGMENT " .
                           " (mapping_id,cstart,pstart,length) values ";
             }
@@ -673,7 +757,7 @@ my $test = 0; # to removed later
             print STDOUT "Mapping TEST: contig_id $contigid, seq_id ".
             $mapping->getSequenceID().
             " cstart $cstart, cfinal $cfinish, alignment ".
-            $mapping->getAlignmentDirection()."\n";
+            ($mapping->getAlignmentDirection() || "undef")."\n";
             $mapping->setMappingID($test++);
             next;
         }
@@ -804,38 +888,64 @@ sub getLinkedContigsForContigID {
     return [@contigids];
 }
 
-sub ageByOne {
+sub buildHistoryTreeForContigs {
 # EXPERIMENTAL cascade age increase from the top
     my $this = shift;
-    my @contigids = (shift); # initialise with one contig_id
+    my @contigids = @_; # initialise with one contig_id
+
+print "\nFrom the top : @contigids\n";
 
     my $dbh = $this->getConnection();
 
 # accumulate IDs of linked contigs by recursive query
 
     my @updateids;
+    my $targetAge = 0;
     while (@contigids) {
 
-        my $query = "select linked_id from C2CMAPPING" .
-	            " where contig_id in (".join(',',@contigids).")";
+        $targetAge++;
+        my $query = "select parent_id, age from C2CMAPPING" .
+	            " where contig_id in (".join(',',@contigids).")".
+                    "   and age <= $targetAge".
+                    " order by parent_id";
 
+#print "query $query\n";
         my $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
 
         undef @contigids;
-        while (my ($linked_id) = $sth->fetchrow_array()) {
-            push @updateids, $linked_id;
-            push @contigids, $linked_id;
+        while (my ($parent_id, $age) = $sth->fetchrow_array()) {
+            push @updateids, $parent_id if ($age < $targetAge);
+            push @contigids, $parent_id;
 	}
+print "sampled contigids of previous generation ".scalar(@contigids)."\n";
+print "sampled contigids to be updated ".scalar(@updateids)."\n";
     }
 
-# here we have accumulated all IDs of contigs linked to input contig_id    
+    return 0 unless @updateids;
+
+# here we have accumulated all IDs of contigs linked to input contig_id
+# increase the age for these entries by 1
+
+#print "updateids @updateids\n";
+
+    my $query = "update C2CMAPPING set age=age+1".
+	        " where contig_id in (".join(',',@updateids).")";
+print "$query \n"; # return 0;
+    
+    my $sth = $dbh->prepare($query);
+
+    my $update = $sth->execute() || &queryFailed($query);
+print "updated $update\n";
+    return $update + 0;
 }
 
 sub rebuildHistory {
 # EXPERIMENTAL build contig links from scratch
     my $this = shift;
+
+# this method rebuilds the 'age' column of C2CMAPPING from scratch
 
     my $dbh = $this->getConnection();
 
@@ -843,28 +953,24 @@ sub rebuildHistory {
 
     my $query = "update C2CMAPPING set age=0";
 
-    $dbh->do($query) || &queryFailed($query);
+#    $dbh->do($query) || &queryFailed($query);
 
-# step 2: get all contig_ids not among the linked_ids, i.e. true generation 0
+# step 2: get all contig_ids of age 0
 
-    $query = "select C2C1.contig_id from C2CMAPPING as C2C1 left join".
-             "                           C2CMAPPING as C2C2".
-             "    on C2C1.contig_id = C2C2.linked_id".
-             "   and C2C2.linked_id is null";
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    undef my @contigids;
-    while (my ($contig_id) = $sth->fetchrow_array()) {
-        push @contigids, $contig_id;
-    }
+    my $contigids = $this->getCurrentContigs(0); # long way
 
 # step 3: each contig id is the starting point for tree build from the top
 
-    foreach my $contig_id (@contigids) {
-        $this->ageByOne($contig_id);
+my $count=50;
+#    foreach my $contig_id (@$contigids) {
+#        $this->buildHistoryTreeForContigs($contig_id);
+#return unless $count--;
+#    }
+
+# or?
+    my $update = 1;
+    while ($update) {
+        $update = $this->buildHistoryTreeForContigs(@$contigids);
     }
 }
 

@@ -745,7 +745,7 @@ sub getUnassembledReads {
     my $nextword;
 
     my @dateselect;
-    my $withsingleton = 1;    
+    my $withsingletoncontigs = 0; # default INCLUDE reads in singleton contigs
     while ($nextword = shift) {
 	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
 	    my $date = shift;
@@ -756,7 +756,7 @@ sub getUnassembledReads {
 	    push @dateselect, "asped < '$date'";
 	}
         elsif ($nextword eq '-nosingleton') {
-            $withsingleton = 0;
+            $withsingletoncontigs = 1; # EXCLUDE reads in singleton contigs
             my $dummy = shift;
         }
         else {
@@ -766,54 +766,38 @@ sub getUnassembledReads {
         }
     }
 
+# step 1: get a list of contigs of age 0 (long method)
+
+    my $contigids = $this->getCurrentContigs(singleton=>$withsingletoncontigs);
+
+# step 2: find the read_id-s in the contigs
+
     my $dbh = $this->getConnection();
 
-# step 1: get a list of contigs of age 0
-
-    my $query = "select contig_id from C2CMAPPING where age=0 ".
-                "union ".
-                "select contig_id from CONTIG left join C2CMAPPING ".
-		"using (contig_id) where C2CMAPPING.contig_id is null";
-#print STDOUT "step 1 query $query\n"; NEW QUERY TO BE TESTED
-# this is the query for the old system
-$query = "select newcontig as contig_id from CONTIG2CONTIG where genofo=0".
-         " union ".
-         "select contig_id from CONTIG left join CONTIG2CONTIG".
-         "    on CONTIG.contig_id = CONTIG2CONTIG.newcontig".
-	 "   and CONTIG2CONTIG.newcontig is null";
-
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    my $contigids = [];
-    while (my ($contig_id) = $sth->fetchrow_array()) {
-	push @{$contigids}, $contig_id;
-    }
-
-# step 2: (optionally) filter for nreads > 1
-
-    if (@$contigids && $withsingleton) {
-# remove singletons from list of contig_ids
-        $query = "select contig_id from CONTIG".
-                 " where contig_id in (".join(",",@$contigids).")".
-	         "   and nreads > 1";
- 
-        $sth = $dbh->prepare($query);
-        $sth->execute() || &queryFailed($query);
-
-        $contigids = []; # replace contig IDs
-        while (my ($contig_id) = $sth->fetchrow_array()) {
-	    push @{$contigids}, $contig_id;
-        }
-    }
-
-# step 3: find the read_id-s in the contigs
+    my ($query, $sth);
 
     my $readids = [];
 
-    if (@$contigids) {
+    my $SUBSELECT = 0;
+    if ($SUBSELECT || !@$contigids) {
+#*** this is the query using subselects which should replace steps 2 & 3
+        $query  = "select READS.read_id from READS where ";
+        $query .=  join(" and ", @dateselect) if @dateselect;
+        $query .= " and " if (@dateselect && @$contigids);
+        $query .= "read_id not in (select distinct SEQ2READ.read_id ".
+                  "  from SEQ2READ join MAPPING on (seq_id)".
+	          " where MAPPING.contig_id in (".join(",",@$contigids)."))"
+                   if @$contigids;
+
+        $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+        
+        while (my ($read_id) = $sth->fetchrow_array()) {
+            push @{$readids}, $read_id;
+        }
+    }
+    else {
 # get read_id-s with a join on SEQ2READ and MAPPING
         $query  = "select distinct SEQ2READ.read_id " .
 	          "  from SEQ2READ join MAPPING using (seq_id)" .
@@ -826,32 +810,24 @@ $query = "select newcontig as contig_id from CONTIG2CONTIG where genofo=0".
         while (my ($read_id) = $sth->fetchrow_array()) {
             push @{$readids}, $read_id;
         }
-    }
+print "reads found in the contigs: ".scalar(@$readids)."\n";
 
-#*** this is the query using subselects which should replace steps 3 & 4
-    $query  = "select READS.read_id from READS where ";
-    $query .=  join(" and ", @dateselect) if @dateselect;
-    $query .= " and " if (@dateselect && @$contigids);
-    $query .= "read_id not in (select distinct SEQ2READ.read_id ".
-              "  from SEQ2READ join MAPPING on (seq_id)".
-	      " where MAPPING.contig_id in (".join(",",@$contigids)."))";
-#print STDOUT "subselect query $query\n"; NEW QUERY TO BE TESTED
-#*** end query using subselects
+# step 3 : get the read_id-s NOT found in the contigs
 
-# step 4 : get the read_id-s NOT found in the contigs
-
-    $query  = "select READS.read_id from READS where ";
-    $query .=  join(" and ", @dateselect) if @dateselect;
-    $query .= " and " if (@dateselect && @$readids);
-    $query .= "read_id not in (".join(",",@$readids).")" if @$readids;
+        $query  = "select READS.read_id from READS where ";
+        $query .=  join(" and ", @dateselect) if @dateselect;
+        $query .= " and " if (@dateselect && @$readids);
+        $query .= "read_id not in (".join(",",@$readids).")" if @$readids;
  
-    $sth = $dbh->prepare_cached($query);
+        $sth = $dbh->prepare_cached($query);
 
-    $sth->execute() || &queryFailed($query);
+        $sth->execute() || &queryFailed($query);
 
-    $readids = [];
-    while (my ($read_id) = $sth->fetchrow_array()) {
-	push @{$readids}, $read_id;
+        $readids = [];
+        while (my ($read_id) = $sth->fetchrow_array()) {
+	    push @{$readids}, $read_id;
+        }
+print "reads found NOT in the contigs: ".scalar(@$readids)."\n";
     }
 
     return $readids;
