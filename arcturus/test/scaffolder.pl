@@ -7,6 +7,7 @@ use ArcturusDatabase;
 my $instance;
 my $organism;
 my $verbose = 0;
+my $progress = 0;
 my $minbridges = 1;
 my $minlen = 0;
 my $puclimit = 8000;
@@ -23,6 +24,7 @@ while (my $nextword = shift @ARGV) {
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
 
     $verbose = 1 if ($nextword eq '-verbose');
+    $progress = 1 if ($nextword eq '-progress');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -82,8 +84,28 @@ $sth->finish();
 my $contigtoscaffold = {};
 my @scaffoldlist;
 my %contigref;
+my %scaffoldtoid;
+my $scaffoldid = 0;
+
+my $alldone = scalar(@contiglist);
+my $done = 0;
+
+my $format = "%8d of %8d";
+my $bs = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010";
+
+if ($progress) {
+    print STDERR "Building scaffolds ...\n"; 
+    printf STDERR $format, $done, $alldone;
+}
 
 foreach my $contigid (@contiglist) {
+    $done++;
+
+    if ($progress && (($done % 10) == 0)) {
+	print STDERR $bs;
+	printf STDERR $format, $done, $alldone;
+    }
+
     ###
     ### Skip this contig if it has already been assigned to a
     ### scaffold.
@@ -105,6 +127,10 @@ foreach my $contigid (@contiglist) {
     push @scaffoldlist, $scaffold;
 
     my $seedcontigid = $contigid;
+
+    $scaffoldid++;
+
+    $scaffoldtoid{$scaffold} = $scaffoldid;
 
     ###
     ### Extend scaffold to the right
@@ -188,14 +214,80 @@ foreach my $contigid (@contiglist) {
 	$isContig = !$isContig;
     }
 
-    print "SCAFFOLD $totctg $totlen $totgap\n\n";
+    print "SCAFFOLD $scaffoldid $totctg $totlen $totgap\n\n";
 
     print $report;
 
     print "\n";
 }
 
+if ($progress) {
+    print STDERR $bs;
+    printf STDERR $format, $done, $alldone;
+    print STDERR "\nDone\n\n";
+    print STDERR "Finding long-range bridges...\n";
+}
 
+print "\n\n----------------------------------------------------------------------\n\n";
+
+my $sth_templates = $statements->{'bacendtemplate'};
+my $sth_bacreads = $statements->{'readsfortemplate'};
+my $sth_mappings = $statements->{'mappings'};
+
+$sth_templates->execute($puclimit);
+
+while (my ($template_id, $template_name, $sihigh) = $sth_templates->fetchrow_array()) {
+    my $found = 0;
+
+    $sth_bacreads->execute($template_id);
+
+    while (my ($read_id, $readname, $strand, $seq_id) = $sth_bacreads->fetchrow_array()) {
+	$sth_mappings->execute($seq_id);
+
+	while (my ($contig_id, $cstart, $cfinish, $direction) = $sth_mappings->fetchrow_array()) {
+	    next unless defined($contiglength->{$contig_id});
+	    my $scaffold = $contigtoscaffold->{$contig_id};
+	    next unless defined($scaffold);
+
+	    $found++;
+
+	    print "BAC_CLONE $template_id ($template_name) $sihigh\n\n" if ($found == 1);
+
+	    print "    READ $read_id ($readname) STRAND $strand SEQ $seq_id\n";
+	    print "        IN CONTIG $contig_id $cstart..$cfinish $direction\n";
+
+	    my $scaffoldid = $scaffoldtoid{$scaffold};
+
+	    my $item = $contigref{$contig_id};
+
+	    if (defined($item)) {
+		my ($ctgid, $ctgdir, $ctgoffset) = @{$item};
+
+		my $sense;
+
+		if ($ctgdir eq 'F') {
+		    $ctgoffset += ($direction eq 'Forward') ? $cstart : $cfinish;
+		    $sense = $direction;
+		} else {
+		    $ctgoffset -= ($direction eq 'Forward') ? $cstart : $cfinish;
+		    $sense = ($direction eq 'Forward') ? 'Reverse' : 'Forward';
+		}
+
+		print "            IN SCAFFOLD $scaffoldid AT $ctgoffset $sense\n\n";
+	    } else {
+		print "\n";
+	    }
+	}
+
+	$sth_mappings->finish();
+    }
+
+    $sth_bacreads->finish();
+
+    print "\n\n" if $found;
+}
+
+$sth_templates->finish();
 
 $dbh->disconnect();
 
@@ -242,12 +334,12 @@ sub CreateStatements {
 		   "select contig_id,cstart,cfinish,direction from MAPPING where seq_id = ?",
 
 		   "bacendtemplate",
-		   "select template_id,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
+		   "select template_id,TEMPLATE.name,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
 		   " where sihigh > ?",
 
 		   "readsfortemplate",
 		   "select READS.read_id,readname,strand,seq_id from READS left join SEQ2READ" .
-		   " using(read_id) where template_id = ?"
+		   " using(read_id) where template_id = ? order by strand asc, READS.read_id asc"
 		   );
 
     my $statements = {};
@@ -457,4 +549,5 @@ sub showUsage {
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
     print STDERR "-puclimit\tMaximum insert size for pUC subclones (default: 8000)\n";
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
+    print STDERR "-progress\tDisplay progress info on STDERR (default: false)\n";
 }
