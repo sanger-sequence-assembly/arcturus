@@ -60,22 +60,38 @@ sub getTags {
 }
 
 #-------------------------------------------------------------------
-# lazy instantiation of DNA and quality data (private)
+# lazy instantiation of DNA and quality data 
 #-------------------------------------------------------------------
 
 sub importSequence {
+# private method
     my $this = shift;
 
     my $ADB = $this->{ADB} || return; # the parent database
 
-    my ($sequence, $quality) = $ADB->getSequenceForRead(
-                                     seq_id => $this->getSequenceID(),
-#                                     read_id => $this->getReadID(),
-#                                     name => $this->getReadName(),
-                                     $this->getVersion());
+# try successively: sequence id, read id and readname, whichever comes first
+   
+    my ($sequence, $quality);
 
+    if (my $seq_id = $this->getSequenceID()) {
+       ($sequence, $quality) = $ADB->getSequenceForRead(
+                                     seq_id => $seq_id);
+    }
+    elsif (my $read_id =  $this->getReadID()) {
+       ($sequence, $quality) = $ADB->getSequenceForRead(
+                                     read_id => $read_id,
+                                     $this->getVersion());
+    }
+    elsif (my $readname =  $this->getReadName()) {
+# print "using readname $readname\n";
+       ($sequence, $quality) = $ADB->getSequenceForRead(
+                                     readname => $readname,
+                                     $this->getVersion());
+    }
+  
     $this->setSequence($sequence); # a string
     $this->setQuality($quality);   # reference to an array of integers
+#    $this->setQuality([@$quality]); # alternative ? copy array, pass ref
 }
 
 #-------------------------------------------------------------------
@@ -298,7 +314,7 @@ sub setQuality {
 sub getQuality {
 # return the quality data (possibly) using lazy instatiation
     my $this = shift;
-    $this->importSequence(@_) unless defined($this->{BaseQuality});
+    $this->importSequence() unless defined($this->{BaseQuality});
     return $this->{BaseQuality}; # returns an array reference
 }
 
@@ -342,7 +358,7 @@ sub setSequence {
 sub getSequence {
 # return the DNA (possibly) using lazy instatiation
     my $this = shift;
-    $this->importSequence(@_) unless defined($this->{Sequence});
+    $this->importSequence() unless defined($this->{Sequence});
     return $this->{Sequence};
 }
 
@@ -363,6 +379,7 @@ sub getSequenceID {
 
 sub getSequenceLength {
     my $this = shift;
+    $this->importSequence() unless defined($this->{Sequence});
     return $this->{data}->{slength};
 }
 
@@ -463,6 +480,35 @@ sub getVersion {
 }
 
 #----------------------------------------------------------------------
+# comparing Read instances
+#----------------------------------------------------------------------
+
+sub compareSequence {
+# compare sequence in input read against this
+    my $this = shift;
+    my $read = shift || return undef;
+
+# test respectively, sequence length, DNA and quality
+
+    if ($this->getSequenceLength() != $read->getSequenceLength()) {
+        return 1; # different lengths
+    }
+
+    elsif ($this->getSequence() ne $read->getSequence()) {
+        return 2; # different DNA strings
+    }
+
+    my $thisBQD = $this->getQuality();
+    my $readBQD = $read->getQuality();
+
+    for (my $i=0 ; $i<@$thisBQD ; $i++) {
+        return 3 if ($thisBQD->[$i] != $readBQD->[$i]);
+    }
+
+    return 0; # identical sequences 
+}
+
+#----------------------------------------------------------------------
 # dumping data
 #----------------------------------------------------------------------
 
@@ -481,9 +527,9 @@ sub writeToCaf {
     print $FILE "Unpadded\n";
     print $FILE "SCF_File $this->{readname}SCF\n";
     print $FILE "Template $data->{template}\n"                  if defined $data->{template};
-    print $FILE "Insert_size $data->{insertsize}\n"             if defined $data->{insertsize};
+    print $FILE "Insert_size @{$data->{insertsize}}\n"          if defined $data->{insertsize};
     print $FILE "Ligation_no $data->{ligation}\n"               if defined $data->{ligation};
-    print $FILE "Primer ".ucfirst($data->{primer})."_primer\n"  if defined $data->{primer};
+    print $FILE "Primer ".ucfirst($data->{primer})."\n"         if defined $data->{primer};
     print $FILE "Strand $data->{strand}\n"                      if defined $data->{strand};
     print $FILE "Dye Dye_$data->{chemistry}\n"                  if defined $data->{chemistry};
     print $FILE "Clone $data->{clone}\n"                        if defined $data->{clone};

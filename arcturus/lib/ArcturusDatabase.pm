@@ -581,7 +581,7 @@ sub addSequenceMetaDataForRead {
 }
 
 sub getReadsByReadID {
-# returns an array of Read instances with (meta data only) for input array of read IDs 
+# returns array of Read instances with (meta data only) for input array of read IDs 
     my $this    = shift;
     my $readids = shift; # array ref
 
@@ -1118,7 +1118,7 @@ sub flushReadsToPending {
     $this->addReadsToPending(\@dummy, 0);
 }
 #****************
-#-----------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 sub putRead {
 # insert read into the database
@@ -1138,7 +1138,7 @@ sub putRead {
     ($rc, $errmsg) = $this->checkReadForConsistency($read);
     return (0, "failed consistency check ($errmsg)") unless $rc;
 
-# b) encode dictionary item; special case: template & ligation
+# b) encode dictionary items; special case: template & ligation
 
     my $dbh = $this->getConnection();
 
@@ -1149,8 +1149,7 @@ sub putRead {
 				       $this->{LoadingDictionary}->{'clone'},
 				       $this->{SelectStatement}->{'clone'},
 				       $this->{InsertStatement}->{'clone'});
-
-    $clone_id = 0 unless defined($clone_id);
+    $clone_id = 0 unless defined($clone_id); # ensure its definition
 
     # LIGATION
 
@@ -1226,7 +1225,8 @@ sub putRead {
 
     $read->setReadID($readid);
 
-#$this->putSequenceForRead($read);
+    my ($seq_id,$report) = $this->putSequenceForRead($read);
+    return (0,$report) unless $seq_id;
 
 # insert READCOMMENT, if any
 
@@ -1237,21 +1237,33 @@ sub putRead {
 		    "DBI::errstr=$DBI::errstr") unless $rc;
         }
     }
-#}
+
+    $read->setSequenceID($seq_id);
+    $read->setVersion(0);
+
+    return (1, "OK"); # or $readid?
+}
 
 # SPLIT this part of because we will need it to insert edited sequences
-# sub putSequenceForRead {
-#     my $this = shift;
-#     my $read = sfift; # Read instance
-#     my $readid = $read->getReadID();
+
+sub putSequenceForRead {
+# private method to load all sequence related data
+    my $this = shift;
+    my $read = shift; # Read instance
+    my $version = shift || 0;
+
+    my $readid = $read->getReadID();
+    my $readname = $read->getReadName();
+
+    my $dbh = $this->getConnection();
 
 # Get a seq_id for this read
 
-    $query = "insert into SEQ2READ(read_id) VALUES(?)";
+    my $query = "insert into SEQ2READ(read_id,version) VALUES(?,?)";
 
-    $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($readid);
+    my $rc = $sth->execute($readid,$version);
 
     return (0, "failed to insert read_id into SEQ2READ table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
@@ -1354,24 +1366,66 @@ sub putRead {
 }
 
 sub addNewSequenceForRead {
-# add the sequence of this read as 
+# add the sequence of this read as a new (edited) sequence for existing read
     my $this = shift;
     my $read = shift; # a Read instance
 
-# test if the readname already occurs in the database; if not return undef
+# a) test consistency and completeness  (? NOT NECESSARY ?)
 
-# test if the current read sequence (both DNA and BaseQuality) is different 
-# from the exiting one(s); if not return the seq_id
+    my ($rc, $errmsg) = $this->checkReadForCompleteness($read);
+    return (0, "failed completeness check ($errmsg)") unless $rc;
 
-# test if there are more than one align-to-SCF record in this read
-# if not, return with an error message and undef
+    ($rc, $errmsg) = $this->checkReadForConsistency($read);
+    return (0, "failed consistency check ($errmsg)") unless $rc;
 
-# enter the new record
+# b) test if the readname already occurs in the database
+
+    my $readname = $read->getReadName();
+
+# get and/or test readname against read_id (we don't know how $read was made)
+
+    my $read_id = $this->hasRead($readname);
+
+    if (!$read_id) {
+        return (0,"unknown read $readname");
+    } 
+    elsif ($read->getReadID() && $read->getReadID() != $read_id) {
+        return (0,"incompatible read IDs ($read::getReadID vs $read_id)");
+    }
+    
+# c) test if it is an edited read by counting alignments to the trace file
+
+    my $alignToSCF = $read->getAlignToTrace();
+    if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
+        return (0,"insufficient alignment information");
+    }
+
+# d) ok, now we get the previous versions of the read and compare
+
+    my $prior;  
+    my $version = 0;
+    while ($version == 0 || $prior) {
+        $prior = $this->getRead(read_id=>$read_id,version=>$version);
+        if ($prior && $prior->compareSequence($read)) {
+            return ($prior->getSequenceID(),"identical to version $version");
+        }
+        $version++;
+    }
+
+# e) load this new version of the sequence
+
+    my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
+    return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
+
+    $read->setSequenceID($seq_id);
+    $read->setVersion($version);
+
+    return ($seq_id,"OK");
 }
 
 
 sub putCommentForReadID {
-# add a comment for a given read_id or readname (finishers entry of comment?)
+# add a comment for a given read_id (finishers entry of comment?)
     my $this = shift;
     my $read_id = shift;
     my $comment = shift;
@@ -1385,6 +1439,14 @@ sub putCommentForReadID {
     my $sth = $dbh->prepare_cached($query);
 
     return $sth->execute($read_id,$comment) ? 1 : 0;
+}
+
+sub putCommentForReadName {
+# add a comment for a given readname (finishers entry of comment?)
+    my $this = shift;
+
+    my $readid = $this->hasRead(shift);
+    return $this->putCommentForReadID($readid,shift);
 }
 
 sub checkReadForCompleteness {

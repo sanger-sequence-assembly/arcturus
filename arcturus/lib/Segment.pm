@@ -66,7 +66,7 @@ sub normaliseOnX {
 # order X interval
     my $this = shift;
 
-    $this->invert() if ($this->[0] > $this->[1]);
+    $this->invert() if ($this->getXstart > $this->getXfinis);
 }
 
 #----------------------------------------------------------------------
@@ -114,21 +114,35 @@ sub getOffset {
 
 #----------------------------------------------------------------------
 
-sub shiftXdomain {
-# apply shift to X domain
+sub compare {
+# compare two segments; return offset of segment to this and alignment
     my $this = shift;
-    my $tran = shift || 0;
+    my $segment = shift; # another Segment instance
 
-    $this->[1] += $tran * $this->[0];
-}
+    if (ref($segment) ne 'Segment') {
+        die "Segment->compare expects an instance of the Segment class";
+    }
 
-sub shiftYdomain {
-# apply shift to Y domain
-    my $this = shift;
-    my $tran = shift || 0;
+# the two segments have to be normalized on Y and have identical Y range
+# the method will return the alignment and offset for the x ranges
 
-    $this->[2] += $tran;
-    $this->[3] += $tran;
+    $this->normalizeOnY();
+    $segment->normalizeOnY();
+
+    return 0 unless ($this->getYstart() == $segment->getYstart());
+    return 0 unless ($this->getYfinis() == $segment->getYfinis());
+
+# the transformation between X (this) and X (segment) is given by
+# X(segment) = align * X(this) + (offset(segment) - align * offset(this))
+
+    my $alignment = $this->getAlignment();
+    $alignment = -$alignment if ($segment->getAlignment() < 0);
+
+    my $offset = $this->getOffset();
+    $offset = -$offset if ($alignment < 0);
+    $offset += $segment->getOffset();
+
+    return (1, $offset, $alignment);
 }
 
 #----------------------------------------------------------------------
@@ -138,14 +152,14 @@ sub getXforY {
     my $this = shift;
     my $ypos = shift;
 
-# apply transformation X = d*Y - o
+# apply transformation X = d*Y + o
 
     if ($ypos < $this->[2] || $ypos > $this->[3]) {
         return undef;
     }
     else {
         $ypos = -$ypos if ($this->[0] < 0);
-        return $ypos - $this->[1];
+        return $ypos + $this->[1];
     }
 }
 
@@ -154,10 +168,10 @@ sub getYforX {
     my $this = shift;
     my $xpos = shift;
 
-# apply transformation Y = d*X + o
+# apply transformation Y = d*X - o
 
     $xpos = -$xpos if ($this->[0] < 0);
-    my $ypos = $xpos + $this->[1];
+    my $ypos = $xpos - $this->[1];
 
     if ($ypos < $this->[2] || $ypos > $this->[3]) {
         return undef; # out of range
@@ -173,7 +187,6 @@ sub toString {
     my $xstart = $this->getXstart();
     my $xfinis = $this->getXfinis();
 
-#    return "[$xstart $xfinis]-->[$this->[2] $this->[3]]";
     return "$xstart $xfinis    $this->[2] $this->[3]";
 }
 

@@ -16,7 +16,6 @@ sub new {
 
     bless $this, $class;
 
-    $this->{readToContig}    = [];
     $this->{assembledFrom}   = [];
     $this->{alignToTrace}    = [];
 
@@ -54,6 +53,31 @@ sub setReadName {
 }
  
 #-------------------------------------------------------------------
+# compare mappings
+#-------------------------------------------------------------------
+
+sub compare {
+# compare this Mapping instance with input Mapping
+    my $this = shift;
+    my $mapping = shift;
+
+    if (ref($mapping) ne 'Mapping') {
+        die "Mapping->compare expects an instance of the Mapping class";
+    }
+
+    my $lmaps = $this->export();
+    my $fmaps = $mapping->export();
+
+    return 0 unless (scalar(@$lmaps) == scalar(@$fmaps));
+
+# compare each segment individually; if the mappings are identical
+# apart from a linear shift and possibly counter alignment, all
+# return values of of alignment and offset will be identical
+
+    
+}
+ 
+#-------------------------------------------------------------------
 # store alignment segments
 #-------------------------------------------------------------------
 
@@ -81,123 +105,12 @@ sub addAssembledFrom {
     return scalar(@{$this->{assembledFrom}});
 }
 
-sub addReadToContig {
-# from raw read (trace file) to consensus contig (stored in Arcturus)
-# input 4 array (contigstart, contigfinis, tracestart, tracefinis)
-    my $this = shift;
-
-    my $segment = new Segment(@_);
-
-    push @{$this->{readToContig}},$segment;
-
-    return scalar(@{$this->{readToContig}});
-}
-
-#-------------------------------------------------------------------
-# transform the assembled_from alignment(s) & align_to_SCF records 
-# to read-to-contig alignments and vice-versa. The transform from
-# read-to-contig to_assembled from will result in one align_to_SCF
-# record; the one to align_to_SCF in one assembled_from record
-#
-# If there are more than one align_to_SCF records and more than one
-# assembled_from records, these transformations are not each other's
-# inverse. 
-#-------------------------------------------------------------------
-
-sub toReadToContig {
-# from align_to_SCF & assembled_from to read-to-contig
-    my $this = shift;
-
-# check alignment consistence for alignToTrace & assembledFrom ?
-
-    my $alignToTrace = $this->{alignToTrace};
-
-    if (@{$this->{alignToTrace}} <= 1) {
-# the read-to-contig maps are identical to the assembled_from records
-        $this->{readToContig} = $this->{assembledFrom};
-# if also alignToTrace is defined, test it; if it's not, ignore
-        if (shift && @{$this->{alignToTrace}}) {
-            my ($cs, $cf, $rs, $rf) = $this->getOverallAlignment();
-            $rf = $rs + abs($cf-$cs); # SCF range defined by Assembled_from
-            my $segment = $this->{alignToTrace}->[0];
-            my $ts = $segment->getYstart();
-            my $tf = $segment->getYfinis();
-            if ($rs > $ts || $rf < $tf) {
-                print STDERR "Conflicting SCF alignment $rs $rf  ($ts $tf)\n";
-            }
-        }
-    }
-    else {
-# this is the big one ..
-	print "to be completed\n";
-# first translate the assembled from to read to contig
-        $this->{readToContig} = $this->{assembledFrom};
-
-# then weed out alignments which are consecutive in bot X and Y 
-    }
-    return scalar @{$this->{readToContig}};
-}
-
-sub toAlignToTrace {
-# from read-to-contig to (multi) align_to_SCF & single assembled_from
-    my $this = shift;
-
-# check alignment consistence for readToContig ?
-
-    my ($cs, $cf, $rs, $rf) = $this->getOverallAlignment();
-print "overall alignment: $cs, $cf, $rs, $rf\n";
-
-# get ONE assembled_from mapping derived from overall alignment
-
-    $this->{assembledFrom} =[];
-
-    return 0 unless defined $rs;
-
-    $this->{assembledFrom}->[0] = new Segment($cs, $cf, $rs, $rs+abs($cf-$cs));
-
-# replace any existing alignToTrace maps by current readToContig maps ..... 
-
-    @{$this->{alignToTrace}} = @{$this->{readToContig}}; # copy, preserve the original
-
-# .... and transform the individual trace-to-contig into read-to-trace alignments
-
-    foreach my $segment (@{$this->{alignToTrace}}) {
-	print "toTrace transform to be completed\n";
-    }
-
-    return scalar @{$this->{alignToTrace}};
-}
-
-sub toAssembledFrom {
-# from read-to-contig to SINGLE align_to_SCF & (multi) assembled_from
-    my $this = shift;
-
-# check alignment consistence for readToContig ?
-
-    my ($cs,$cf,$rs,$rf) = $this->getOverallAlignment();
-print "overall alignment: $cs, $cf, $rs, $rf\n";
-
-# replace any existing alignToTrace maps by ONE derived from overall alignment
-
-    $this->{alignToTrace} =[];
-
-    return 0 unless $rs;
-
-    $this->{alignToTrace}->[0] = new Segment($rs, $rf, $rs, $rf);
-
-# the assembledFrom maps are given by the existing readToContig maps
-
-    $this->{assembledFrom} = $this->{readToContig};
-
-    return scalar @{$this->{assembledFrom}};
-}
-
 #-------------------------------------------------------------------
 # export of alignments
 #-------------------------------------------------------------------
 
 sub export {
-# export the contig to (raw) read mappings as array of segments
+# export the assembledFrom mappings as array of segments
     my $this = shift;
 
 # NOTE: the segments are internally normalised (aligned) on read data
@@ -205,25 +118,23 @@ sub export {
 #       used in a consensus calculation (and e.g. need to be sorted)
 #       re: use Segment->normaliseOnX method on all segments
 
-    $this->toReadToContig() unless @{$this->{readToContig}};
-
-    return $this->{readToContig}; # array reference
+    return $this->{assembledFrom}; # array reference
 }
 
 sub getOverallAlignment {
     my $this = shift;
 
-# find the first and the last segment of the readToContig map to be used for the overal map
+# find the first and the last segment of the assembledFrom map
 
     my ($first, $final);
-    foreach my $segment (@{$this->{readToContig}}) {
+    foreach my $segment (@{$this->{assembledFrom}}) {
 # ensure the correct alignment (on read segment, it may have been changed outside after export)
         $segment->normaliseOnY();
         $first = $segment if (!defined($first) || $first->getYstart < $segment->getYstart);
         $final = $segment if (!defined($final) || $final->getYfinis > $segment->getYfinis);
     }
 
-print "OverallAlignment UNDEFINED \n" unless $first;
+#print "OverallAlignment UNDEFINED \n" unless $first;
     return undef if !$first;
 
     return ($first->getXstart, $final->getXfinis, $first->getYstart, $final->getYfinis);
