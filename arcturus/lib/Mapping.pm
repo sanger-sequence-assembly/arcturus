@@ -3,75 +3,71 @@ package Mapping;
 use strict;
 
 #-------------------------------------------------------------------
-# Constructor new
+# Constructor new 
 #-------------------------------------------------------------------
 
 sub new {
-    my $class    = shift;
+    my $class   = shift;
+    my $mapping = shift; # mapping number, optional
 
-    my $self = {};
+    my $this = {};
 
-    bless $self, $class;
+    bless $this, $class;
 
-    $self->{MappingSegments} = [];
+    $this->{MappingSegments} = [];
 
-    return $self;
+    $this->{mapping} = $mapping if defined($mapping);
+
+    return $this;
 }
 
 #-------------------------------------------------------------------
-# inventory of instances of this class (methods for quick look-up)
-#-------------------------------------------------------------------
-
-my %Mappings;
-
-sub addToInventory {
-# add this read to the inventory keyed on either read_id (default) or readname
-    my $self = shift;
-    my $item = shift || 'read_id';
-
-    return undef unless ($item eq 'read_id' || $item eq 'readname');
-
-    my $key = $self->{data}->{$item} || return undef;
-
-    $Mappings{$key} = $self;
-}
-
-sub findReadInInventory {
-# return the instance if present in the inventory
-    my $self = shift;
-    my $item = shift;
-
-    return $Mappings{$item};
-}
-
-sub getInventoryKeys {
-# return inventory list
-
-    my @keys = sort keys %Mappings;
-
-    return \@keys;
-}
-
-#-------------------------------------------------------------------
-# parent data base handle
+# import handle to related objects
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
 # import the parent Arcturus database handle
-    my $self = shift;
+    my $this = shift;
+    my $ADB  = shift;
 
-    $self->{ADB} = shift;
+    if (ref($ADB) eq 'ArcturusDatabase') {
+        $this->{ADB} = $ADB;
+    }
+    else {
+        die "Invalid object passed: $ADB";
+    }
 }
 
-sub getArcturusDatabase {
-# export the parent Arcturus database handle
-    my $self = shift;
+sub setRead {
+# import the handle to the Read instance for this mapping
+    my $this = shift;
+    my $Read = shift;
 
-    return $self->{ADB};
+    if (ref($Read) eq 'Read') {
+        $this->{Read} = $Read;
+    }
+    else {
+        die "Invalid object passed: $Read";
+    } 
 }
-
+ 
 #-------------------------------------------------------------------
 #
 #-------------------------------------------------------------------
 
+sub getReadID {
+    my $this = shift;
+
+    return $this->{data}->{read_id};
+}
+
+sub setReadID {
+    my $this = shift;
+
+    $this->{data}->{read_id} = shift;
+}
+
 1;
+
+
+

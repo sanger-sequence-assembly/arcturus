@@ -3,54 +3,128 @@ package Read;
 use strict;
 
 #-------------------------------------------------------------------
-# Constructor new
+# Constructor new (instantiation with readname is optional)
 #-------------------------------------------------------------------
 
 sub new {
     my $class    = shift;
     my $readname = shift; # optional
 
-    my $self = {};
+    my $this = {};
 
-    bless $self, $class;
+    bless $this, $class;
 
-    $self->{readname} = $readname;
-    $self->{data}     = {}; # metadata hash
+    $this->{readname} = $readname;
+    $this->{data}     = {}; # metadata hash
 
-    return $self;
+    $this->addToInventory('readname') if $readname;
+
+    return $this;
 }
 
 #-------------------------------------------------------------------
-# parent data base handle
+# inventory of instances of this class (methods for quick look-up)
+#-------------------------------------------------------------------
+
+my %Reads;
+
+sub addToInventory {
+# add this instance to the inventory keyed on either read_id (default) or readname
+    my $this = shift;
+    my $item = shift || 'read_id';
+
+    return undef unless ($item eq 'read_id' || $item eq 'readname');
+
+    my $key = $this->{data}->{$item} || return undef;
+
+    $Reads{$key} = $this;
+}
+
+sub fingerRead {
+# return the instance if present in the inventory
+    my $this = shift;
+    my $item = shift;
+
+    return $Reads{$item};
+}
+
+sub getInventory {
+# return reference to inventory list
+    return \%Reads;
+}
+
+sub clearInventory {
+# delete the current inventory
+    undef %Reads;
+}
+
+#-------------------------------------------------------------------
+# import of handles to related objects
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
 # import the parent Arcturus database handle
-    my $self = shift;
+    my $this = shift;
+    my $ADB  = shift;
 
-    $self->{ADB} = shift;
+    if (ref($ADB) eq 'ArcturusDatabase') {
+        $this->{ADB} = $ADB;
+    }
+    else {
+        die "Invalid object passed: $ADB";
+    }
 }
 
-sub getArcturusDatabase {
-# export the parent Arcturus database handle
-    my $self = shift;
+sub setMapping {
+# import the Mapping instance for this Read
+    my $this    = shift;
+    my $Mapping = shift;
 
-    return $self->{ADB};
-}
+    if (ref($Mapping) ne 'Mapping') {
+        die "Invalid object passed: $Mapping";
+    }
+# test consistent read_id values
+    elsif ($Mapping->getReadID == $this->getReadID) {
+        $this->{Mapping} = $Mapping;
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}    
 
 #-------------------------------------------------------------------
 # lazy instantiation of DNA and quality data
 #-------------------------------------------------------------------
 
 sub importSequence {
-    my $self = shift;
+    my $this = shift;
 
-    my $ADB = $self->{ADB} || return; # the parent database
+    my $ADB = $this->{ADB} || return; # the parent database
 
-    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForRead(id => $self->getReadID());
+    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForRead(id => $this->getReadID());
 
-    $self->setSequence($sequence); # a string
-    $self->setQuality($quality);   # reference to an array of integers
+    $this->setSequence($sequence); # a string
+    $this->setQuality($quality);   # reference to an array of integers
+}
+
+#-------------------------------------------------------------------
+# delayed loading of comment(s)
+#-------------------------------------------------------------------
+
+sub importComment {
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return; # the parent database
+
+    my $comment = $ADB->getCommentForRead(id => $this->getReadID()) || '';
+
+    if (ref($comment) eq 'ARRAY') {
+        $this->{comment} = join "\n",@$comment;
+    }
+    elsif ($comment) {
+        $this->{comment} = $comment;
+    }
 }
 
 #-------------------------------------------------------------------    
@@ -59,17 +133,17 @@ sub importSequence {
 
 sub importData {
 # input of meta data into this instance with a hash
-    my $self = shift;
+    my $this = shift;
     my $hash = shift;
 
 # copy the input hash elements (disconnect from outside interference)
 
     my $copied = 0;
     if (ref($hash) eq 'HASH') {
-        my $data = $self->{data};
+        my $data = $this->{data};
         foreach my $key (%$hash) {
             if ($key eq 'readname') {
-                $self->{$key} = $hash->{$key};
+                $this->{$key} = $hash->{$key};
             } 
             else {
 		$data->{$key} = $hash->{$key};
@@ -83,12 +157,12 @@ sub importData {
 
 sub exportData {
 # export of meta data of this instance with a hash
-    my $self = shift;
+    my $this = shift;
 
     my %export;
-    my $data = $self->{data};
+    my $data = $this->{data};
 
-    $export{readname} = $self->{readname} if $self->{readname};
+    $export{readname} = $this->{readname} if $this->{readname};
 
     foreach my $key (%$data) {
         $export{$key} = $data->{$key} if defined $data->{$key};
@@ -100,331 +174,339 @@ sub exportData {
 #-------------------------------------------------------------------    
 
 sub setBaseCaller {
-    my $self = shift;
-    $self->{data}->{basecaller} = shift;
+    my $this = shift;
+    $this->{data}->{basecaller} = shift;
 }
 
 sub getBaseCaller {
-    my $self = shift;
-    return $self->{data}->{basecaller};
+    my $this = shift;
+    return $this->{data}->{basecaller};
 }
 
 #-----------------
 
 sub setChemistry {
-    my $self = shift;
-    $self->{data}->{chemistry} = shift;
+    my $this = shift;
+    $this->{data}->{chemistry} = shift;
 }
 
 sub getChemistry {
-    my $self = shift;
-    return $self->{data}->{chemistry};
+    my $this = shift;
+    return $this->{data}->{chemistry};
 }
 
 #-----------------
 
 sub setClone {
-    my $self = shift;
-    $self->{data}->{clone} = shift;
+    my $this = shift;
+    $this->{data}->{clone} = shift;
 }
 
 sub getClone {
-    my $self = shift;
-    return $self->{data}->{clone};
+    my $this = shift;
+    return $this->{data}->{clone};
 }
 
 #-----------------
 
 sub setCloningVector {
-    my $self = shift;
-    $self->{data}->{cvector} = shift;
+    my $this = shift;
+    $this->{data}->{cvector} = shift;
 }
 
 sub getCloningVector {
-    my $self = shift;
-    return $self->{data}->{cvector};
-}
-
-#-----------------
-
-sub setComment {
-    my $self = shift;
-    $self->{data}->{comment} = shift;
-}
-
-sub getComment {
-    my $self = shift;
-    return $self->{data}->{comment};
+    my $this = shift;
+    return $this->{data}->{cvector};
 }
 
 #-----------------
 
 sub setCloningVectorLeft {
-    my $self = shift;
-    $self->{data}->{cvleft} = shift;
+    my $this = shift;
+    $this->{data}->{cvleft} = shift;
 }
 
 sub getCloningVectorLeft {
-    my $self = shift;
-    return $self->{data}->{cvleft};
+    my $this = shift;
+    return $this->{data}->{cvleft};
 }
 
 #-----------------
 
 sub setCloningVectorRight {
-    my $self = shift;
-    $self->{data}->{cvright} = shift;
+    my $this = shift;
+    $this->{data}->{cvright} = shift;
 }
 
 sub getCloningVectorRight {
-    my $self = shift;
-    return $self->{data}->{cvright};
+    my $this = shift;
+    return $this->{data}->{cvright};
+}
+
+#-----------------
+
+sub setComment {
+    my $this = shift;
+    $this->{comment} = shift;
+}
+
+sub getComment {
+    my $this = shift;
+    $this->importComment unless defined($this->{comment});
+    return $this->{comment};
 }
 
 #-----------------
 
 sub setDate {
-    my $self = shift;
-    $self->{data}->{date} = shift;
+    my $this = shift;
+    $this->{data}->{date} = shift;
 }
 
 sub getDate {
-    my $self = shift;
-    return $self->{data}->{date};
+    my $this = shift;
+    return $this->{data}->{date};
 }
 
 #-----------------
 
 sub setDirection {
-    my $self = shift;
-    $self->{data}->{direction} = shift;
+    my $this = shift;
+    $this->{data}->{direction} = shift;
 }
 
 sub getDirection {
-    my $self = shift;
-    return $self->{data}->{direction};
+    my $this = shift;
+    return $this->{data}->{direction};
 }
 
 #-----------------
 
 sub setInsertSize {
-    my $self = shift;
-    $self->{data}->{insertsize} = shift;
+    my $this = shift;
+    $this->{data}->{insertsize} = shift;
 }
 
 sub getInsertSize {
-    my $self = shift;
-    return $self->{data}->{insertsize};
+    my $this = shift;
+    return $this->{data}->{insertsize};
 }
 
 #-----------------
 
 sub setLigation {
-    my $self = shift;
-    $self->{data}->{ligation} = shift;
+    my $this = shift;
+    $this->{data}->{ligation} = shift;
 }
 
 sub getLigation {
-    my $self = shift;
-    return $self->{data}->{ligation};
+    my $this = shift;
+    return $this->{data}->{ligation};
 }
 
 #-----------------
 
 sub setLowQualityLeft {
-    my $self = shift;
-    $self->{data}->{lqleft} = shift;
+    my $this = shift;
+    $this->{data}->{lqleft} = shift;
 }
 
 sub getLowQualityLeft {
-    my $self = shift;
-    return $self->{data}->{lqleft};
+    my $this = shift;
+    return $this->{data}->{lqleft};
 }
 
 #-----------------
 
 sub setLowQualityRight {
-    my $self = shift;
-    $self->{data}->{lqright} = shift;
+    my $this = shift;
+    $this->{data}->{lqright} = shift;
 }
 
 sub getLowQualityRight {
-    my $self = shift;
-    return $self->{data}->{lqright};
+    my $this = shift;
+    return $this->{data}->{lqright};
 }
 
 #-----------------
 
 sub setPrimer {
-    my $self = shift;
-    $self->{data}->{primer} = shift;
+    my $this = shift;
+    $this->{data}->{primer} = shift;
 }
 
 sub getPrimer {
-    my $self = shift;
-    return $self->{data}->{primer};
+    my $this = shift;
+    return $this->{data}->{primer};
 }
 
 #-----------------
 
 sub setQuality {
 # import the reference to an array with base qualities
-    my $self = shift;
+    my $this = shift;
 
     my $quality = shift;
 
-    if (defined($quality)) {
-	$self->{BaseQuality} = $quality;
+    if (defined($quality) and ref($quality) eq 'ARRAY') {
+	$this->{BaseQuality} = $quality;
     }
 }
 
 sub getQuality {
 # return the quality data (possibly) using lazy instatiation
-    my $self = shift;
-    $self->importSequence(@_) unless defined($self->{BaseQuality});
-    return $self->{BaseQuality}; # returns an array reference
+    my $this = shift;
+    $this->importSequence(@_) unless defined($this->{BaseQuality});
+    return $this->{BaseQuality}; # returns an array reference
 }
 
 #-----------------
 
 sub setReadID {
-    my $self = shift;
-    $self->{data}->{read_id} = shift;
+    my $this = shift;
+    $this->{data}->{read_id} = shift;
 }
 
 sub getReadID {
-    my $self = shift;
-    return $self->{data}->{read_id};
+    my $this = shift;
+    return $this->{data}->{read_id};
 }
 
 #-----------------
 
 sub setReadName {
-    my $self = shift;
-    $self->{readname} = shift;
+    my $this = shift;
+    $this->{readname} = shift;
 }
 
 sub getReadName {
-    my $self = shift;
-    return $self->{readname};
+    my $this = shift;
+    return $this->{readname};
 }
 
 #-----------------
 
 sub setSequence {
-    my $self = shift;
+    my $this = shift;
 
     my $sequence = shift;
 
     if (defined($sequence)) {
-	$self->{Sequence} = $sequence;
-	$self->{data}->{slength} = length($sequence);
+	$this->{Sequence} = $sequence;
+	$this->{data}->{slength} = length($sequence);
     }
 }
 
 sub getSequence {
 # return the DNA (possibly) using lazy instatiation
-    my $self = shift;
-    $self->importSequence(@_) unless defined($self->{Sequence});
-    return $self->{Sequence};
+    my $this = shift;
+    $this->importSequence(@_) unless defined($this->{Sequence});
+    return $this->{Sequence};
 }
 
 #-----------------
 
 sub getSequenceLength {
-    my $self = shift;
-    return $self->{data}->{slength};
+    my $this = shift;
+    return $this->{data}->{slength};
 }
 
 #-----------------
 
 sub setStrand {
-    my $self = shift;
-    $self->{data}->{strand} = shift;
+    my $this = shift;
+    $this->{data}->{strand} = shift;
 }
 
 sub getStrand {
-    my $self = shift;
-    return $self->{data}->{strand};
+    my $this = shift;
+    return $this->{data}->{strand};
 }
 
 #-----------------
 
 sub setSequenceVectorSite {
-    my $self = shift;
-    $self->{data}->{svcsite} = shift;
+    my $this = shift;
+    $this->{data}->{svcsite} = shift;
 }
 
 sub getSequenceVectorSite {
-    my $self = shift;
-    return $self->{data}->{svcsite};
+    my $this = shift;
+    return $this->{data}->{svcsite};
 }
 
 #-----------------
 
 sub setSequencingVector {
-    my $self = shift;
-    $self->{data}->{svector} = shift;
+    my $this = shift;
+    $this->{data}->{svector} = shift;
 }
 
 sub getSequencingVector {
-    my $self = shift;
-    return $self->{data}->{svector};
+    my $this = shift;
+    return $this->{data}->{svector};
 }
 
 #-----------------
 
 sub setSequenceVectorLeft {
-    my $self = shift;
-    $self->{data}->{svleft} = shift;
+    my $this = shift;
+    $this->{data}->{svleft} = shift;
 }
 
 sub getSequenceVectorLeft {
-    my $self = shift;
-    return $self->{data}->{svleft};
+    my $this = shift;
+    return $this->{data}->{svleft};
 }
 
 #-----------------
 
 sub setSequenceVectorRight {
-    my $self = shift;
-    $self->{data}->{svright} = shift;
+    my $this = shift;
+    $this->{data}->{svright} = shift;
 }
 
 sub getSequenceVectorRight {
-    my $self = shift;
-    return $self->{data}->{svright};
+    my $this = shift;
+    return $this->{data}->{svright};
 }
 
 #-----------------
 
 sub setTemplate {
-    my $self = shift;
-    $self->{data}->{template} = shift;
+    my $this = shift;
+    $this->{data}->{template} = shift;
 }
 
 sub getTemplate {
-    my $self = shift;
-    return $self->{data}->{template};
+    my $this = shift;
+    return $this->{data}->{template};
 }
 
 #----------------------------------------------------------------------
 # dumping data
 #----------------------------------------------------------------------
 
+sub importMapping {
+# link this Read with a Mapping object
+    my $this = shift;
+    
+    $this->{Mapping} = shift;
+}
+
 sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
-    my $self    = shift;
+    my $this    = shift;
     my $FILE    = shift; # obligatory
 
-    my $data = $self->{data};
+    my $data = $this->{data};
 
 # first write the Sequence, then DNA, then BaseQuality
 
-    print $FILE "Sequence : $self->{readname}\n";
+    print $FILE "Sequence : $this->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
-    print $FILE "SCF_File $self->{readname}SCF\n";
+    print $FILE "SCF_File $this->{readname}SCF\n";
     print $FILE "Template $data->{template}\n"                  if defined $data->{template};
     print $FILE "Insert_size $data->{insertsize}\n"             if defined $data->{insertsize};
     print $FILE "Ligation_no $data->{ligation}\n"               if defined $data->{ligation};
@@ -435,19 +517,25 @@ sub writeToCaf {
     print $FILE "ProcessStatus PASS\n";
     print $FILE "Asped $data->{date}\n"                         if defined $data->{date} ;
     print $FILE "Base_caller $data->{basecaller}\n"             if defined $data->{basecaller};
+
 # add the alignment info (the padded maps)
-#    $self->writeMapToCaf($FILE,1) if shift; # see below
+
+    my $Mapping = $this->{Mapping};
+    $Mapping->writeMapToCaf($FILE,1) if $Mapping;
+
 # process read tags ?
 
+    my $Tags = $this->{Tags};
 
-    my $dna = $self->getSequence();
+# process read tags ? 
+
+    my $dna = $this->getSequence();
 
     if (defined($dna)) {
-	print $FILE "\nDNA : $self->{readname}\n";
-
+	print $FILE "\nDNA : $this->{readname}\n";
+# output in blocks of 60 characters
 	my $offset = 0;
 	my $length = length($dna);
-# replace by loop using substr
 	while ($offset < $length) {    
 	    print $FILE substr($dna,$offset,60)."\n";
 	    $offset += 60;
@@ -456,15 +544,14 @@ sub writeToCaf {
 
 # the quality data
 
-    my $quality = $self->getQuality();
+    my $quality = $this->getQuality();
 
     if (defined($quality)) {
-	print $FILE "\nBaseQuality : $self->{readname}\n";
+	print $FILE "\nBaseQuality : $this->{readname}\n";
 	my $line;
 	my $next = 0;
-
+# output in lines of 24 numbers
 	my @bq = @{$quality};
-
 	while (my $n = scalar(@bq)) {
 	    print $FILE join(' ',@bq[0..24]),"\n";
 	    @bq = @bq[25..$n];
@@ -484,10 +571,10 @@ sub writeToCaf {
 #######################
 
 sub dump {
-    my $self = shift;
+    my $this = shift;
 
-    foreach my $key (sort keys %{$self}) {
-        my $item = $self->{$key};
+    foreach my $key (sort keys %{$this}) {
+        my $item = $this->{$key};
         print STDERR "self key $key -> $item\n";
         if (ref($item) eq 'HASH') {
             foreach my $key (sort keys %$item) {

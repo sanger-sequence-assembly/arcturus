@@ -7,18 +7,26 @@ use Compress::Zlib;
 
 use DataSource;
 use Read;
+use Contig;
+use Mapping;
+#use Bridge;
+
+# ----------------------------------------------------------------------------
+# constructor and initialisation
+#-----------------------------------------------------------------------------
 
 sub new {
-    my $type = shift;
+    my $class = shift;
 
     my $this = {};
-    bless $this, $type;
+    bless $this, $class;
 
     my $ds = @_[0];
 
     if (defined($ds) && ref($ds) && ref($ds) eq 'DataSource') {
 	$this->{DataSource} = $ds;
-    } else {
+    }
+    else {
 	$this->{DataSource} = new DataSource(@_);
     }
 
@@ -37,6 +45,8 @@ sub init {
     $this->{Connection} = $ds->getConnection();
 
     $this->populateDictionaries();
+
+    $this->{prepared} = {}; # placeholder for prepared queries
 
     $this->{inited} = 1;
 }
@@ -59,7 +69,8 @@ sub getURL {
 
     if (defined($ds)) {
 	return $ds->getURL();
-    } else {
+    }
+    else {
 	return undef;
     }
 }
@@ -136,25 +147,59 @@ sub dictionaryLookup {
     if (defined($dict)) {
 	my $value = $dict->{$pkey};
 	return $value;
-    } else {
+    }
+    else {
 	return undef;
     }
 }
 
 sub dictionaryInsert {
-# add a new line to the dictionary table
+# add a new line to the dictionary table, if it does not exist
     my $this = shift;
 
 }
 
+sub processReadData {
+# dictionary lookup
+    my $this = shift;
+    my $hashref = shift;
+
+    $hashref->{'insertsize'} = $hashref->{'ligation'};
+
+    foreach my $key (keys %{$hashref}) {
+	my $dict = $this->{Dictionary}->{$key};
+	my $value = $hashref->{$key};
+
+	if (defined($dict)) {
+	    $value = &dictionaryLookup($dict, $value);
+	    if (ref($value) && ref($value) eq 'ARRAY') {
+		$value = join(' ', @{$value});
+	    }
+	    $hashref->{$key} = $value;
+	}
+    }
+
+# ligation info ?
+}
+
+#-----------------------------------------------------------------------------
+
 sub getReadByID {
+# returns a Read instance with (meta data only) for input read IDs 
     my $this = shift;
 
     my $readid = shift;
 
-    my $dbh = $this->getConnection();
+    my $sth = $this->{prepared}->{getReadByID};
 
-    my $sth = $dbh->prepare("select * from READS where read_id=$readid");
+    if (!defined($sth)) {
+
+        my $dbh = $this->getConnection();
+
+        $sth = $dbh->prepare("select * from READS where read_id=$readid");
+
+        $this->{prepared}->{getReadByID} = $sth;
+    }
 
     $sth->execute();
 
@@ -172,17 +217,18 @@ sub getReadByID {
 	$read->setArcturusDatabase($this);
 
 	return $read;
-    } else {
+    } 
+    else {
 	return undef;
     }
 }
 
 sub getReadsByID {
-    my $this = shift;
+# returns an array of Read instances with (meta data only) for input array of read IDs 
+    my $this    = shift;
+    my $readids = shift; # array ref
 
-    my $readids = shift;
-
-# in case a single read ID is passed as parameter, cast it as a one element array
+# in case a single read ID is passed as parameter, recast it as a one element array
 
     my @reads;
 
@@ -220,27 +266,54 @@ sub getReadsByID {
     return \@Reads;
 }
 
-sub processReadData {
+sub getReadsForContigID{
+# returns an array of Reads (meta data only) for the given contig
     my $this = shift;
-    my $hashref = shift;
+    my $cid  = shift; # contig_id
 
-    $hashref->{'insertsize'} = $hashref->{'ligation'};
+    my $sth = $this->{prepared}->{getReadsForContigID};
 
-    foreach my $key (keys %{$hashref}) {
-	my $dict = $this->{Dictionary}->{$key};
-	my $value = $hashref->{$key};
+    if (!defined($sth)) {
 
-	if (defined($dict)) {
-	    $value = &dictionaryLookup($dict, $value);
-	    if (ref($value) && ref($value) eq 'ARRAY') {
-		$value = join(' ', @{$value});
-	    }
-	    $hashref->{$key} = $value;
-	}
+        my $dbh = $this->getConnection();
+
+        my $query = "select READS.* from READS join READS2CONTIG on (read_id) ";
+        $query   .= "where READS2CONTIG.contig_id = $cid";
+
+        $sth = $dbh->prepare($query);
+
+        $this->{prepared}->{getReadsForContigID} = $sth;
     }
+
+    $sth->execute();
+
+    my @Reads;
+
+    while (my $hashref = $sth->fetchrow_hashref()) {
+
+	my $Read = new Read();
+
+	$this->processReadData($hashref);
+
+	$Read->importData($hashref);
+
+	$Read->setArcturusDatabase($this);
+
+        $Read->addToInventory;
+
+        push @Reads, $Read;
+    }
+
+    $sth->finish();
+
+    return \@Reads;
 }
 
+#-----------------------------------------------------------------------------
+
 sub getSequenceAndBaseQualityForRead {
+# returns DNA sequence (string) and quality (array reference)
+# this method is called from the Read class when using lazy instantiation
     my $this = shift;
     my ($key, $value, $junk) = @_;
 
@@ -248,9 +321,10 @@ sub getSequenceAndBaseQualityForRead {
 
     my $query = "select sequence,quality from ";
 
-    if ($key eq 'id') {
+    if ($key eq 'id' || $key eq 'read_id') {
 	$query .= "SEQUENCE where read_id=?";
-    } elsif ($key eq 'name' || $key eq 'readname') {
+    }
+    elsif ($key eq 'name' || $key eq 'readname') {
 	$query .= "READS left join SEQUENCE using(read_id) where readname=?";
     }
 
@@ -277,19 +351,21 @@ sub getSequenceAndBaseQualityForRead {
     return ($sequence, $quality);
 }
 
-sub putSequenceAndBaseQualityForReads {
-    my $this = shift;
-
+sub putSequenceAndBaseQualityInReads {
+# takes an array of Read instances and puts the DNA and quality sequence in
+    my $this  = shift;
     my $Reads = shift; # array of Reads objects
 
-# build a list of read IDs
+# build a list of read IDs / or use the Read instances inventory
 
     my %rids;
+    my $rids = \%rids;
     foreach my $Read (@$Reads) {
-        $rids{$Read->getReadID} = $Read;
+        $rids->{$Read->getReadID} = $Read;
     }
+# my $rids = Read->getInventory; # handle to Read instances inventory
 
-    my $range = join ',',keys(%rids);
+    my $range = join ',',keys(%$rids);
 
     my $dbh = $this->getConnection();
 
@@ -303,7 +379,7 @@ sub putSequenceAndBaseQualityForReads {
 
 	my ($read_id, $sequence, $quality) = @ary;
 
-        if (my $Read = $rids{$read_id}) {
+        if (my $Read = $rids->{$read_id}) {
 
             $sequence = uncompress($sequence) if defined($sequence);
 
@@ -315,11 +391,45 @@ sub putSequenceAndBaseQualityForReads {
             $Read->setSequence($sequence);
             $Read->setQuality($quality);
         }
-
     }
 
     $sth->finish();
+
+# test if all objects have been completed
 }
+
+sub getCommentForRead {
+# returns a list of comments, if any, for the specifed read
+    my $this = shift;
+    my ($key,$value,$junk) = @_;
+
+    my $query = "select comment from ";
+
+    if ($key eq 'id' || $key eq 'read_id') {
+	$query .= "READCOMMENT where read_id=?";
+    }
+    elsif ($key eq 'name' || $key eq 'readname') {
+	$query .= "READS left join READCOMMENT using(read_id) where readname=?";
+    }
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($value);
+
+    my @comment;
+
+    while(my @ary = $sth->fetchrow_array()) {
+	push @comment, @ary;
+    }
+
+    $sth->finish();
+
+    return \@comment;
+}
+
+#----------------------------------------------------------------------------------------- 
 
 sub putRead {
 # insert read into the database
@@ -349,9 +459,329 @@ sub pingRead {
 #----------------------------------------------------------------------------------------- 
 
 sub getContigByID {
+# return a Contig object with the meta data only for the specified contig ID
+    my $this       = shift;
+    my $contig_id  = shift;
+
+    my $sth = $this->{prepared}->{getContigByID};
+
+    if (!defined($sth)) {
+
+        my $dbh = $this->getConnection();
+
+        $sth = $dbh->prepare("select * from CONTIGS where contig_id = ? ");
+
+        $this->{prepared}->{getContigByID} = $sth;
+    }
+
+    $sth->execute();
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish($contig_id);
+
+    if (defined($hashref)) {
+
+	my $Contig = new Contig();
+
+	$Contig->importData($hashref);
+
+	$Contig->setArcturusDatabase($this);
+
+        return $Contig;
+    }
+    else {
+# no such contig found
+        return undef;
+    }
 }
 
 sub getContigByName {
+# returns a Contig object with the meta data only for the specified contigname
+    my $this = shift;
+    my $name = shift;
+
+
+    my $sth = $this->{prepared}->{getContigByName};
+
+    if (!defined($sth)) {
+
+        my $dbh = $this->getConnection();
+
+        $sth = $dbh->prepare("select * from CONTIGS where contigname = ? or aliasname = ? ");
+
+        $this->{prepared}->{getContigByName} = $sth;
+    } 
+
+    $sth->execute($name,$name);
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish();
+
+    if (defined($hashref)) {
+
+	my $Contig = new Contig();
+
+	$Contig->importData($hashref);
+
+	$Contig->setArcturusDatabase($this);
+
+        return $Contig;
+    }
+    else {
+# no such contig found
+        return undef;
+    }
+}
+
+sub getContigWithRead {
+# returns a Contig object with the meta data only which contains the read specified by name
+    my $this = shift;
+    my $name = shift;
+
+
+    my $sth = $this->{prepared}->{getContigWithRead};
+
+    if (!defined($sth)) {
+
+        my $dbh = $this->getConnection();
+
+        my $query  = "select CONTIGS.* from CONTIGS join READS2CONTIG on (contig_id) where ";
+           $query .= "read_id = (select read_id from READS where readname = ?)";
+# ensure the latest contig
+        $sth = $dbh->prepare($query);
+
+        $this->{prepared}->{getContigWithRead} = $sth;
+    } 
+
+    $sth->execute($name);
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish();
+
+    if (defined($hashref)) {
+
+	my $Contig = new Contig();
+
+	$Contig->importData($hashref);
+
+	$Contig->setArcturusDatabase($this);
+
+        return $Contig;
+    }
+    else {
+# no such contig found
+        return undef;
+    }
+}
+
+sub getContigWithTag {
+# returns a Contig object with the meta data only which contains the specified read
+    my $this = shift;
+    my $name = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select CONTIGS.* from CONTIGS join TAGS2CONTIG on (contig_id) where ";
+    $query   .= "tag_id = (select tag_id from TAGS where tagname = ?)";
+
+# note: use the merge table concept for tag table, else query should be several UNIONs
+
+    my $sth = $dbh->prepare($query);
+
+# ? replace by prepared query 
+
+    $sth->execute($name);
+
+    my $hashref = $sth->fetchrow_hashref();
+
+    $sth->finish();
+
+    if (defined($hashref)) {
+
+	my $Contig = new Contig();
+
+	$Contig->importData($hashref);
+
+	$Contig->setArcturusDatabase($this);
+
+        return $Contig;
+    }
+    else {
+# no such contig found
+        return undef;
+    }
+}
+
+sub getContig {
+# return a Contig instance with its Reads, Mappings and Tags for the given identification
+    my $this  = shift;
+    my $key   = shift;
+    my $value = shift;
+
+# create a new Contig instance and load the meta data
+
+    my $Contig;
+
+    if ($key eq 'id' || $key eq 'contig_id') {
+	$Contig = $this->getContigByID($value);
+    }
+    elsif ($key eq 'name' || $key eq 'contigname') {
+        $Contig = $this->getContigByName($value);
+    }
+    elsif ($key eq 'read') {
+	$Contig = $this->getContigWithRead($value);
+    }
+    elsif ($key eq 'tag') {
+	$Contig = $this->getContigWithTag($value);
+    }
+
+    return undef unless $Contig;
+
+# get the reads for this contig with their DNA sequences
+
+    Reads->clearInventory;
+
+    my $Reads = $this->getReadsForContigID($Contig->getContigID); # an array ref
+
+    $this->putSequenceAndBaseQualityForReads($Reads);
+
+    $Contig->importReads($Reads);
+
+# get mappings
+
+    my $Mappings = $this->getMappingsForContigID($Contig->getContigID); # an array ref
+
+    $Contig->importMappings($Mappings);
+
+# link the Mappings to the Reads and vice versa
+
+    foreach my $Mapping (@$Mappings) {
+# find the Read instance for read_id taken from Mapping
+        my $readid = $Mapping->getReadID;
+# first test if there is such a Read
+        if ( !(my $Read = Read->fingerRead($readid)) ) {
+            print STDERR "! Incomplete contig $key=$value : no read for mapping ".$readid;
+        }
+# okay, now put the Mapping in and test if read and mapping correspond
+        elsif (!$Read->setMapping($Mapping)) {
+            print STDERR "! Inconsistent Read and Mapping instances for read ".$readid;
+        }
+        else {
+# okay, finally put the reference to the in the read in the mapping
+            $Mapping->setRead($Read);
+        }
+    }
+
+# get tags
+
+    my $Tags = $this->getTagsForContigID($Contig->getContigID); # an array ref
+
+    $Contig->importTags($Tags);
+
+# for consensus sequence we use lazy instantiation in the Contig class
+
+    return $Contig;
+}
+
+sub getSequenceAndBaseQualityForContig {
+# returns DNA sequence (string) and quality (array reference) for the specified contig
+# this method is called from the Contig class when using lazy instantiation
+    my $this = shift;
+    my ($key, $value, $junk) = @_;
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select sequence,quality from ";
+
+    if ($key eq 'id' || $key eq 'contig_id') {
+	$query .= "SEQUENCE where contig_id = ?";
+    }
+    elsif ($key eq 'name' || $key eq 'contigname') {
+	$query .= "CONTIGS left join SEQUENCE using(contig_id) where ";
+        $query .= "contigname = ? or aliasname = ?";
+    }
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($value,$value);
+
+    my ($sequence, $quality);
+
+    while(my @ary = $sth->fetchrow_array()) {
+	($sequence, $quality) = @ary;
+    }
+
+    $sth->finish();
+
+    $sequence = uncompress($sequence) if defined($sequence);
+
+    if (defined($quality)) {
+	$quality = uncompress($quality);
+	my @qualarray = unpack("c*", $quality);
+	$quality = [@qualarray];
+    }
+
+    return ($sequence, $quality);
+}
+
+#----------------------------------------------------------------------------------------- 
+# methods dealing with Mappings and links between Contigs
+#----------------------------------------------------------------------------------------- 
+
+sub getMappingsForContigID {
+# returns an array of MAPPINGS for the input contig_id
+    my $this = shift;
+    my $cid  = shift;
+
+    my $dbh = $this->getConnection();
+
+# pull maps out in one step
+
+    my $query = "select read_id, pcstart, pcfinal, prstart, prfinal, label ";
+    $query   .= "from READS2CONTIG join R2CMAPPING using (mapping) ";
+    $query   .= "where contig_id = ? and deprecated in ('M','N')";
+    $query   .= "order by read_id,pcstart";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($cid);
+
+    my @Mappings;
+
+    my $previousread_id = 0;
+    while(my @ary = $sth->fetchrow_array()) {
+# create a new Mapping instance and define its mapping number (signal it's from the database)
+        my $label = pop @ary;
+        my $read_id = shift @ary;
+        if ($read_id != $previousread_id) {
+# a Mapping instance does not yet exist for this read_id
+            my $Mapping = new Mapping();
+            $Mapping->setReadID($read_id);
+            push @Mappings, $Mapping;
+        }
+        $Mapping->addUnpaddedAlignment(@ary) if ($label < 20);
+        $Mapping->addOverallAlignment(@ary) if ($label >= 10);
+    }
+
+    $sth->finish();
+
+    return [@Mappings];
+}
+
+sub getMappingsOfReadsInLinkedContigs {
+# returns mappings in contigs of age=1 for an input array of read_ids
+    my $this = shift;
+    my $rids = shift; # array reference
+
+    my $query = "select read_id, contig_id ";
+    $query   .= "from READS2CONTIG as R2C, CONTIGS2CONTIG as C2C where ";
+    $query   .= "C2C.newcontig = R2C.contig_id and age = 1 and ";
+    $query   .= "R2C.read_id in (".join(',',@$rids).") and";
+    $query   .= "R2C.deprecated in ('M','N')";
+
 }
 
 #----------------------------------------------------------------------------------------- 
@@ -363,8 +793,3 @@ sub getContigByName {
 #----------------------------------------------------------------------------------------- 
 
 1;
-
-
-
-
-

@@ -177,6 +177,12 @@ sub create_organism {
         &record ($historyTable,$userid,'READS2CONTIG');
     }
 
+    if (!$target || $target eq 'R2CMAPPINGS') {    
+        push @tables, 'R2CMAPPINGS';
+        &create_R2CMAPPINGS ($dbh, $list);
+        &record ($historyTable,$userid,'R2CMAPPINGS');
+    }
+
     if (!$target || $target eq 'GAP4TAGS') {    
         push @tables, 'GAP4TAGS';
         &create_GAP4TAGS ($dbh, $list);
@@ -1355,7 +1361,7 @@ number of read in READS table
 
 =item mapping
 
-auto-incremented foreign key to MAPPINGS table
+auto-incremented foreign key to R2CMAPPINGS table
 
 =item deprecated
 
@@ -1609,7 +1615,8 @@ sub create_CONTIGS {
              cover            FLOAT(8,2)              DEFAULT '0.00',      
              origin           ENUM ('Arcturus CAF parser','Finishing Software','Other')  NULL,
              userid           VARCHAR(8)              DEFAULT 'arcturus',
-             updated          DATETIME                 NOT NULL
+             updated          DATETIME                 NOT NULL,
+             readnamehash     VARCHAR(16)              NOT NULL
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1721,8 +1728,7 @@ sub create_CONSENSUS {
     $dbh->do(qq[CREATE TABLE CONSENSUS(
              contig_id       MEDIUMINT UNSIGNED        NOT NULL PRIMARY KEY,
              sequence        LONGBLOB                  NOT NULL,
-             quality         LONGBLOB                  NOT NULL,
-             length          INT                       DEFAULT 0
+             quality         LONGBLOB                  NOT NULL
          ) type = MyISAM ]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1788,7 +1794,7 @@ sub create_CONTIGS2CONTIG {
 
 # contig to contig mapping implicitly contains the history
 
-# generation : of the newly added contig / generation of first occurance gofo REPLACE by genofo
+# age        : of the contig (updated with new assembly)
 #       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade No, not so
 # newcontig  : contig id
 # nranges    : starting point in new contig
@@ -1800,7 +1806,7 @@ sub create_CONTIGS2CONTIG {
     &dropTable ($dbh,"CONTIGS2CONTIG", $list);
     print STDOUT "Creating table CONTIGS2CONTIG ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2CONTIG(
-             genofo           SMALLINT  UNSIGNED DEFAULT 0,
+             age              SMALLINT  UNSIGNED DEFAULT 0,
              newcontig        MEDIUMINT UNSIGNED  NOT NULL,
              nranges          INT                DEFAULT 0,
              nrangef          INT                DEFAULT 0,
@@ -2899,6 +2905,7 @@ sub create_DATAMODEL {
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
                  'READS2CONTIG     contig_id   CONTIGS2PROJECT   contig_id',
                  'READS2ASSEMBLY     read_id             READS     read_id',
+                 'READS2CONTIG       mapping        R2CMAPPING     mapping',
 #                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
 #                 'USERS               userid    USERS2PROJECTS      userid',
                  'USERS2PROJECTS      userid             USERS      userid',
@@ -3073,6 +3080,7 @@ sub create_INVENTORY {
                  'READPAIRS         o  l  3  0',
                  'PENDING           o  p  0  0',
                  'READS2CONTIG      o  m  0  0',
+                 'R2CMAPPING        o  m  0  0',
                  'GAP4TAGS          o  t  0  0',
                  'STSTAGS           o  t  3  1',
                  'HAPPYTAGS         o  t  3  1',

@@ -1,6 +1,10 @@
 package Contig;
 
+use strict;
 
+# ----------------------------------------------------------------------------
+# constructor and initialisation
+#-----------------------------------------------------------------------------
 
 sub new {
     my $class      = shift;
@@ -10,10 +14,11 @@ sub new {
 
     bless $this, $class;
 
-    $self->{contigname} = $contigname;
-    $self->{data}      = {}; # meta data hash
-    $self->{Reads}     = []; # array of Read instances
-    $self->{Mappingss} = []; # array of Mappings
+    $this->{contigname} = $contigname;
+    $this->{data}       = {}; # meta data hash
+    $this->{Reads}      = []; # array of Read instances
+    $this->{Mappings}   = []; # array of Mappings
+    $this->{Tags}       = []; # array of Tag instances
 
     return $this;
 }
@@ -24,31 +29,29 @@ sub new {
 
 sub setArcturusDatabase {
 # import the parent Arcturus database handle
-    my $self = shift;
+    my $this = shift;
 
-    $self->{ADB} = shift;
-}
-
-sub getArcturusDatabase {
-# export the parent Arcturus database handle
-    my $self = shift;
-
-    return $self->{ADB};
+    $this->{ADB} = shift;
 }
 
 #-------------------------------------------------------------------
-# delayed loading of DNA and quality data
+# delayed loading of DNA and quality data from database
 #-------------------------------------------------------------------
 
 sub importSequence {
-    my $self = shift;
+    my $this = shift;
 
-    my $ADB = $self->{ADB} || return; # the parent database
+    my $ADB = $this->{ADB} || return 0; # the parent database
 
-    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForContig(id => $self->getContigID());
+    my $cid = $this->getContigID() || return 0; 
 
-    $self->setSequence($sequence); # a string
-    $self->setQuality($quality);   # reference to an array of integers
+    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForContig(id => $cid);
+
+    $this->setSequence($sequence); # a string
+
+    $this->setQuality($quality);   # reference to an array of integers
+
+    return 1;
 }
 
 #-------------------------------------------------------------------    
@@ -57,17 +60,17 @@ sub importSequence {
 
 sub importData {
 # input of meta data into this instance with a hash
-    my $self = shift;
+    my $this = shift;
     my $hash = shift;
 
 # copy the input hash elements (disconnect from outside interference)
 
     my $copied = 0;
     if (ref($hash) eq 'HASH') {
-        my $data = $self->{data};
+        my $data = $this->{data};
         foreach my $key (%$hash) {
             if ($key eq 'contigname') {
-                $self->{$key} = $hash->{$key};
+                $this->{$key} = $hash->{$key};
             } 
             else {
 		$data->{$key} = $hash->{$key};
@@ -114,71 +117,89 @@ sub setContigID {
 
     $this->{data}->{contig_id} = $cid;
 }
+#-------------------------------------------------------------------   
+
+sub getContigName {
+    my $this = shift;
+    return $this->{data}->{contigname};
+}
+
+sub setContigName {
+    my $this = shift;
+    $this->{data}->{contigname} = shift;
+}
 
 #-------------------------------------------------------------------   
 
 sub setQuality {
-# import the reference to an array with base qualities
-    my $self = shift;
-
+# import base quality as an array with base quality values
+    my $this    = shift;
     my $quality = shift;
 
     if (defined($quality) and ref($quality) eq 'ARRAY') {
-	$self->{BaseQuality} = $quality;
+	$this->{BaseQuality} = $quality;
     }
 }
 
 sub getQuality {
-# return the quality data (possibly) using lazy instatiation
-    my $self = shift;
-    $self->importSequence(@_) unless defined($self->{BaseQuality});
-    return $self->{BaseQuality}; # returns an array reference
+# return the quality data (possibly) using delayed loading
+    my $this = shift;
+
+    $this->importSequence() unless defined($this->{BaseQuality});
+    return $this->{BaseQuality}; # returns an array reference
 }
 
 #-------------------------------------------------------------------   
 
 sub setSequence {
-    my $self = shift;
-
+# import consensus sequence (string) and its length (derived)
+    my $this     = shift;
     my $sequence = shift;
 
     if (defined($sequence)) {
-	$self->{Sequence} = $sequence;
-	$self->{data}->{slength} = length($sequence);
+	$this->{Sequence} = $sequence;
+	$this->{data}->{slength} = length($sequence);
     }
 }
 
 sub getSequence {
-# return the DNA (possibly) using lazy instatiation
-    my $self = shift;
-    $self->importSequence(@_) unless defined($self->{Sequence});
-    return $self->{Sequence};
+# return the DNA (possibly) using delayed loading
+    my $this = shift;
+
+    $this->importSequence() unless defined($this->{Sequence});
+    return $this->{Sequence};
 }
 
 #-------------------------------------------------------------------    
-# getting Contigs from database
+# importing Contig components
 #-------------------------------------------------------------------    
 
 sub importReads {
-# import the reads for this contig as an array
+# import the reads for this contig as an array of Read instances
     my $this  = shift;
 
     my $this->{Reads} = shift;
 }
 
-
 sub importMappings {
-# import the reads for this contig as an array
+# import the r-to-c mappings for this contig as an array of Mapping instances
     my $this  = shift;
 
     my $this->{Mappings} = shift;
 }
 
+sub importTags {
+# import the tags for this contig as an array of Tag instances
+    my $this  = shift;
+
+    my $this->{Tags} = shift;
+}
 
 #-------------------------------------------------------------------    
-
+# 
 #-------------------------------------------------------------------    
 
+1;
 
 
 

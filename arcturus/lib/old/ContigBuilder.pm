@@ -1889,7 +1889,7 @@ sub ageByOne {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
-        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
             return "Blocked entries detected in assembly $assembly";
         }
 
@@ -1904,14 +1904,14 @@ sub ageByOne {
 
 # now test if any unblocked entries or generation 0 entries remain; if so, something has gone wrong
 
-        $where = "assembly = $assembly and (generation = 0 or blocked = '0')";
+        $where = "assembly = $assembly and generation = 0";
         if ($R2C->probe('contig_id',undef,$where)) {
             $comment = "Last generation update attempt FAILED (partially)";
             $ASSEMBLY->update('comment',$comment,'assembly',$assembly);
         }
 	else {
 # the ageing was successful: remove the blocking flag and reset assembly status
-            $R2C->update('blocked','0','assembly',$assembly); # remove the flag (replace by script afterwards)
+#            $R2C->update('blocked','0','assembly',$assembly); # remove the flag (replace by script afterwards)
 #?           $C2C->update('generation','generation+1');
             $ASSEMBLY->update('status','complete','assembly',$assembly);
             my $completed = "Last generation update successfully completed";
@@ -1946,7 +1946,7 @@ sub unbuild {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
-        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
             return "Blocked entries detected in assembly $assembly";
         }
 
@@ -2013,7 +2013,7 @@ sub updateAssembly {
         print "Error status on assembly $assembly $break" if $list;
         return 0;
     }
-    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
         print "Blocked status on assembly $assembly $break" if $list;
         return 0;
     }
@@ -2113,7 +2113,7 @@ print STDOUT "**** Testing assembly $assembly **** $break$break";
 
 # now test if any blocked entries found
 
-    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
         $report = "Blocked entries detected in assembly $assembly";
     }
 
