@@ -520,6 +520,10 @@ sub getReads{
 	    my $date = shift;
 	    push @conditions, "asped < '$date'";
 	}
+	elsif ($nextword eq '-namelike') {
+	    my $namepattern = shift;
+	    push @conditions, "readname like '$namepattern'";
+	}
         else {
             print STDERR "Invalid keyword $nextword in getReads\n";
         }
