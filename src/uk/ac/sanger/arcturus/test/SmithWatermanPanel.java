@@ -1,6 +1,8 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.Vector;
+import java.util.Enumeration;
 
 import uk.ac.sanger.arcturus.utils.*;
 
@@ -8,6 +10,8 @@ public class SmithWatermanPanel extends JPanel {
     private static final int CELL_SIZE = 40;
 
     private SmithWatermanEntry[][] sw = null;
+    private byte[] seqa;
+    private byte[] seqb;
 
     private Font fontSans12 = new Font("SansSerif", Font.PLAIN, 12);
     private Font fontBold12 = new Font("SansSerif", Font.BOLD, 12);
@@ -41,8 +45,8 @@ public class SmithWatermanPanel extends JPanel {
 
 	ScoringMatrix smat = new ScoringMatrix(sMatch, sMismatch, sGapInit, sGapExt);
 
-	byte[] seqa = sequenceA.getBytes();
-	byte[] seqb = sequenceB.getBytes();
+	seqa = sequenceA.getBytes();
+	seqb = sequenceB.getBytes();
 
 	sw = SmithWaterman.calculateMatrix(seqa, 1, seqa.length, seqb, 1, seqb.length, smat);
 
@@ -81,10 +85,33 @@ public class SmithWatermanPanel extends JPanel {
 	int col = maxCol;
 	int row = maxRow;
 	int score = maxScore;
+
+	Vector segments = new Vector();
+
+	int startA = 0, endA = 0, startB = 0, endB = 0;
+	boolean inSegment = false;
 	
 	while (score > 0 && col > 0 && row > 0) {
 	    sw[row][col].setOnBestAlignment(true);
 	    int direction = sw[row][col].getDirection();
+
+	    boolean match = seqa[row-1] == seqb[col-1];
+
+	    if (match) {
+		startA = row;
+		startB = col;
+
+		if (!inSegment) {
+		    endA = row;
+		    endB = col;
+		    inSegment = true;
+		}
+	    } else {
+		if (inSegment) {
+		    segments.add(new Segment(startA, endA, startB, endB));
+		    inSegment = false;
+		}
+	    }
 
 	    switch (direction) {
 	    case SmithWatermanEntry.DIAGONAL:
@@ -107,6 +134,49 @@ public class SmithWatermanPanel extends JPanel {
 
 	    score = sw[row][col].getScore();
 	}
+
+	if (inSegment)
+	    segments.add(new Segment(startA, endA, startB, endB));
+
+	System.err.println("There are " + segments.size() + " segments:");
+
+	int maxlen = 0;
+	Segment maxseg = null;
+
+	for (Enumeration e = segments.elements() ; e.hasMoreElements() ;) {
+	    Segment segment = (Segment)e.nextElement();
+	    if (segment.getLength() > maxlen) {
+		maxlen = segment.getLength();
+		maxseg = segment;
+	    }
+	    System.out.println(segment);
+	}
+
+	System.out.println();
+	System.out.println("Largest segment: " + maxseg + " (" + maxlen + " bp)");
+    }
+
+    public class Segment {
+	private int startA, endA, startB, endB;
+
+	public Segment(int startA, int endA, int startB, int endB) {
+	    this.startA = startA;
+	    this.endA = endA;
+	    this.startB = startB;
+	    this.endB = endB;
+	}
+
+	public int getLength() { return endA - startA + 1; }
+
+	public int getStartA() { return startA; }
+
+	public int getEndA() { return endA; }
+
+	public int getStartB() { return startB; }
+
+	public int getEndB() { return endB; }
+
+	public String toString() { return "Segment[" + startA + ":" + endA + ", " + startB + ":" + endB + "]"; }
     }
 
     public class SmithWatermanCanvas extends JPanel implements MouseMotionListener, Scrollable {
