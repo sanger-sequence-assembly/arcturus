@@ -71,7 +71,9 @@ else
 endif
 
 # Specify minimum heap size
-set JAVA_HEAP_SIZE=-Xmx256M
+if ( ! $?JAVA_HEAP_SIZE) then
+    setenv JAVA_HEAP_SIZE -Xmx256M
+endif
 
 # Specify Arcturus default parameters
 set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.default.algorithm=arcturus.test.Gap4BayesianConsensus"
