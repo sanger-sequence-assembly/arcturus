@@ -149,7 +149,7 @@ $adb->populateLoadingDictionaries();
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
 
-$PARS{include} = &getNamesFromFile($PARS{include}) if $PARS{include};
+$PARS{include} = &readNamesFromFile($PARS{include}) if $PARS{include};
 
 #----------------------------------------------------------------
 # if assembly not defined, use default assembly
