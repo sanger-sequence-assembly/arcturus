@@ -218,7 +218,5 @@ foreach my $instance (keys %handles) {
     $handles{$instance}->disconnect();
 }
 
-
-
-
+print "\nFinished\n";
 
