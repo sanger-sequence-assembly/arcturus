@@ -208,7 +208,7 @@ CREATE TABLE READTAG (
 #
 
 CREATE TABLE CONTIGTAG (
-  seq_id mediumint(8) unsigned NOT NULL default '0',
+  contig_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
   tagname VARCHAR(32) binary NULL,
   tag_id mediumint(8) unsigned NOT NULL default '0',
