@@ -1,0 +1,124 @@
+#!/usr/local/bin/perl
+#
+# readscheck
+#
+# This script extracts one or more reads and generates a CAF file
+
+use DBI;
+use Term::ReadKey;
+use Compress::Zlib;
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $dbname = shift @ARGV if ($nextword eq '-database');
+
+    $minlen = shift @ARGV if ($nextword eq '-minlen');
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	defined($dbname)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$minlen = 1000 unless defined($minlen);
+
+$query = "USE $dbname";
+print STDERR "Switching to database $dbname\n";
+$dbh->do($query);
+&db_die("$query failed");
+
+print STDERR "\n" if $verbose;
+
+$query = "select CONTIGS.contig_id,CONTIGS.length,CONSENSUS.sequence,CONSENSUS.quality " .
+    "from CONTIGS left join CONSENSUS using(contig_id) ".
+    "where CONSENSUS.contig_id is not null and CONTIGS.length >= $minlen";
+
+$sth = $dbh->prepare($query);
+&db_die("createDictionary: prepare($query) failed");
+
+$sth->execute();
+&db_die("createDictionary: execute($query) failed");
+
+while(@ary = $sth->fetchrow_array()) {
+    ($contigid, $contiglength, $compressedsequence, $compressedquality) = @ary;
+
+    $sequence = uncompress($compressedsequence);
+    $qualitydata = uncompress($compressedquality);    
+    @quality = unpack("c*", $qualitydata);
+
+    if ($contiglength != length($sequence)) {
+	print STDERR "Sequence length mismatch for contig $contigid: $contiglength vs ",
+	length($sequence),"\n";
+    }
+
+    printf ">CONTIG%04d\n", $contigid;
+
+    while (length($sequence) > 0) {
+	print substr($sequence, 0, 50), "\n";
+	$sequence = substr($sequence, 50);
+    }
+
+    if ($contiglength != scalar(@quality)) {
+	print STDERR "Quality length mismatch for contig $contigid: $contiglength vs ",
+	scalar(@quality),"\n";
+    }
+
+}
+
+$sth->finish();
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+}
