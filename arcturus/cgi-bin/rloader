@@ -430,11 +430,11 @@ print "testing II project $gbfilter \n";
 # open assembly database
 
     $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
-    if (my $number = $assembly->associate('assemblynmbr',$gbfilter,'assemblyname')) {
+    if (my $number = $assembly->associate('assembly',$gbfilter,'assemblyname')) {
         $assemblynmbr = $number;
         $assemblyname = $gbfilter;
     }
-    elsif ($assemblyname = $assembly->associate('assemblyname',$gbfilter,'assemblynmbr')) {
+    elsif ($assemblyname = $assembly->associate('assemblyname',$gbfilter,'assembly')) {
         $assemblynmbr = $gbfilter;
     }
     else {
