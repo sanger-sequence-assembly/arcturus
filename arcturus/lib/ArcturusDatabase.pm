@@ -2042,7 +2042,7 @@ sub putContig {
 # test the Contig reads and mappings for completeness (using readname)
 
     if (!$this->testContigForImport($contig)) {
-        print STDERR "Contig ".$contig->getContigName." NOT loaded";
+        print STDERR "Contig ".$contig->getContigName." NOT loaded\n";
     }
 
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
@@ -2076,24 +2076,29 @@ sub putContig {
 # now load it into the database
 # first the meta data
 
-    my $contigid = $this->putMetaDataForContig($contig) || return 0;
+    my $contigid = $this->putMetaDataForContig($contig);
+$contigid =9999; # testing purpose
+
+    return 0 unless $contigid;
 
     $contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances
 
-    my $success = $this->putMappingsForContigID($contig);
+    my $success = $this->putMappingsForContig($contig);
 
-# and finally the CONTIG2CONTIG mappings
+# the CONTIG2CONTIG mappings
 
 # $this_>put...
+
+# and contig tags?
 
     return $success;
    
 # 2) lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
 # 4) enter segments for each mapping (bulk loading)
-# 5) enter record in CONTIGS with meta data, gets contig_id
+# 5) enter record in CONTIG with meta data, gets contig_id
 # 6) replace contig_id=0 by new contig_id in MAPPING
 # 7) release lock on MAPPING 
 # BETTER? add a function deleteContig(contig_id) to remove contig if any error
@@ -2105,19 +2110,19 @@ sub putMetaDataForContig {
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    my $query = "insert into CONTIGS " .
-                "(length,nctgs,nreads,newreads,cover,origin,updated,readnamehash) ".
-                "VALUES (?,?,?,?,?,?,?,now(),?)";
+    my $query = "insert into CONTIG " .
+                "(length,ncntgs,nreads,newreads,cover,origin,updated,readnamehash) ".
+                "VALUES (?,?,?,?,?,?,now(),?)";
 
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($contig->getLength(),
-                           $contig->getConnectingContigs(), 
+    my $rc = $sth->execute($contig->getConsensusLength(),
+                           $contig->hasPreviousContigs(),
                            $contig->getNumberOfReads(),
                            $contig->getNumberOfNewReads(),
-                           $contig->getCover(),
+                           $contig->getAverageCover(),
                            $contig->getOrigin(),
                            $contig->getReadNameHash()) || &queryFailed($query);
 
@@ -2144,21 +2149,66 @@ sub putMappingsForContig {
     my $contigid = $contig->getContigID();
     my $mappings = $contig->getMappings();
 
-    foreach my $mapping (@$mappings) {
+my $TEST = 1;
+    my $mapping;
+    foreach $mapping (@$mappings) {
+#
         my ($cstart, $cfinish) = $mapping->getContigRange();
+
+if ($TEST) {
+print STDERR "Mapping $TEST: contig_id $contigid, seq_id ".
+$mapping->getSequenceID()." cstart $cstart, cfinal $cfinish, alignment ".
+$mapping->getAlignmentDirection()."\n";
+$mapping->setMappingID($TEST++);
+next;
+}
         my $rc = $sth->execute($contigid,
                                $mapping->getSequenceID(),
                                $cstart,
                                $cfinish,
-                               $mapping->getAlignment()) || &queryFailed($query);
+                               $mapping->getAlignmentDirection()) 
+              || &queryFailed($query);
         $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
     }
 
 # 2) the individual segments (in block mode)
 
+    $query = "insert into SEGMENT (mapping_id,cstart,rstart,length) values ";
 
+    my $success = 1;
+    my $accumulated = 0;
+    my $accumulatedQuery = $query;
+    my $lastMapping = $mappings->[@$mappings-1];
     foreach my $mapping (@$mappings) {
 # test existence of mappingID
+        my $mappingid = $mapping->getMappingID();
+        if ($mappingid) {
+            my $segments = $mapping->getSegments();
+            foreach my $segment (@$segments) {
+                my ($cstart, $rstart, $length) = $segment->getMetaData();
+print "metaData: id $mappingid c $cstart, r $rstart, l $length \n";
+                $accumulatedQuery .= "," if $accumulated++;
+                $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
+            }
+        }
+        else {
+            print STDERR "Mapping ".$mapping->getReadName().
+		" has no mapping_id\n";
+            $success = 0;
+        }
+# dump the accumulated query if a number of inserts has been reach
+        if ($accumulated >= 100 || $mapping eq $lastMapping) {
+            $sth = $dbh->prepare($accumulatedQuery);
+if (!$TEST) { 
+            my $rc = $sth->execute() || &queryFailed($query);
+            $success = 0 unless $rc;
+}
+else {
+    print STDERR "accumulated query : \n $accumulatedQuery\n\n";
+}
+            $accumulatedQuery = $query;
+            $accumulated = 0;
+        }
     }
  
 }
@@ -2187,10 +2237,10 @@ sub getSequenceIDforReads {
 
 # get the sequence IDs for the unedited reads (version = 0)
 
-    my $range = join ',',sort keys(%$unedited);
+    my $range = join "','",sort keys(%$unedited);
     my $query = "select READS.read_id,readname,seq_id" .
                 "  from READS left join SEQ2READ using(read_id) " .
-                " where readname in ($range)" .
+                " where readname in ('$range')" .
 	        "   and version = 0";
 
     my $dbh = $this->getConnection();
@@ -2218,49 +2268,6 @@ sub getSequenceIDforReads {
     }
 }
 
-#****************  
-sub addReadsToPending {
-# OBSOLETE, but TEMPLATE for bulk loading  of SEGMENT and MAPPING
-    my $this      = shift;
-    my $readnames = shift; # array reference
-    my $multiline = shift; # 
-
-    if (ref($readnames) ne 'ARRAY') {
-        print STDERR "addReadsToPending expects an array as input\n";
-        return undef;
-    }
-
-# this section deals with multiline inserts; active when multiline defined
-# a buffer is filled up until the buffer exceeds the limit set
-
-    if (defined($multiline)) {
-    }
-
-# okay
-
-    my $dbh = $this->getConnection();
-
-    my $query = "insert ignore into PENDING (readname) VALUES ('".join("'),('",@$readnames)."')";
-
-    my $sth = $dbh->prepare($query);
-
-    return 1 if $sth->execute();
-
-    &dataBaseError("addReadsToPending: failed");
-
-    return 0;
-}
-  
-sub flushReadsToPending {
-# flush any remaining entries in the buffer
-    my $this = shift;
-
-    my @dummy;
-    
-    $this->addReadsToPending(\@dummy, 0);
-}
-#****************
-
 sub testContigForExport {
     &testContig(shift,shift,0);
 }
@@ -2287,7 +2294,7 @@ sub testContig {
     my $ID;
     if ($contig->hasReads()) {
         my $success = 1;
-        my $reads = $contig->getRead();
+        my $reads = $contig->getReads();
         foreach my $read (@$reads) {
 # test identifier: for export sequence ID; for import readname (or both? for both)
             $ID = $read->getReadName()   if  $level; # import
@@ -2311,22 +2318,30 @@ sub testContig {
         return 0;
     }
 
-# test contents of the contig's Mapping instances against the Reads
+# test contents of the contig's Mapping instances and against the Reads
 
     if ($contig->hasMappings()) {
         my $success = 1;
-	my $mappings = $contig->getMapping();
+	my $mappings = $contig->getMappings();
         foreach my $mapping (@$mappings) {
 # get the identifier: for export sequence ID; for import readname
-            $ID = $mapping->getReadName()    if $level;
-	    $ID = $mapping->getSequenceID() if !$level;
+            if ($mapping->hasSegments) {
+                $ID = $mapping->getReadName()    if $level;
+	        $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
-            if (!$identifier{$ID}) {
-                print STDERR "Missing Read for Mapping ".$mapping->getReadName.
-                             " ($ID)\n";
+                if (!$identifier{$ID}) {
+                    print STDERR "Missing Read for Mapping ".
+                            $mapping->getReadName." ($ID)\n";
+                    $success = 0;
+                }
+                delete $identifier{$ID}; # delete the key
+            }
+	    else {
+                print STDERR "Mapping ".$mapping->getReadName().
+                         " for Contig ".$contig->getContigName().
+                         " has no Segments\n";
                 $success = 0;
             }
-            delete $identifier{$ID}; # delete the key
         }
         return 0 unless $success;       
     } 
@@ -2346,7 +2361,7 @@ sub testContig {
 # test the number of Reads against the contig meta data (info only; non-fatal)
 
     if (my $numberOfReads = $contig->getNumberOfReads()) {
-        my $reads = $contig->getRead();
+        my $reads = $contig->getReads();
         my $nreads =  scalar(@$reads);
         if ($nreads != $numberOfReads) {
 	    print STDERR "Read count error for contig ".$contig->getContigName.

@@ -22,8 +22,18 @@ sub new {
 }
  
 #-------------------------------------------------------------------
-# mapping metadata (readname, sequence ID, and alignment)
+# mapping metadata (readname, sequence ID, mapping ID and alignment)
 #-------------------------------------------------------------------
+
+sub getMappingID {
+    my $this = shift;
+    return $this->{mapping_id};
+}
+
+sub setMappingID {
+    my $this = shift;
+    $this->{mapping_id} = shift;
+}
 
 sub getSequenceID {
     my $this = shift;
@@ -46,7 +56,7 @@ sub setReadName {
 }
 
 sub setAlignment {
-# must be defined when creating from database
+# must be defined when creating Mapping instance from database
     my $this = shift;
     my $direction = shift;
 
@@ -58,18 +68,33 @@ sub setAlignment {
     }
 }
 
-sub getAlignment {
+sub getAlignmentDirection {
+# returns 'Forward', 'Reverse' or undef
     my $this = shift;
 
-    my $direction = $this->{direction};
-# extra: if undefined derive from current contents (for import)
-    if ($direction == 1) {
+    my $direction = $this->getAlignment() || 0;
+
+    if ($direction > 0) {
         return 'Forward';
     }
-    elsif ($direction == -1) {
+    elsif ($direction < 0) {
         return 'Reverse';
     }
     return undef;
+}
+
+sub getAlignment {
+# returns +1, -1 or undef
+    my $this = shift;
+
+# if the direction is undefined, get it from Segments, if any
+
+    if (!defined($this->{direction}) && $this->hasSegments()) {
+        my $segments = $this->getSegments();
+        $this->{direction} = $segments->[0]->getAlignment();
+    }
+
+    return $this->{direction};
 }
  
 #-------------------------------------------------------------------
@@ -113,9 +138,9 @@ sub addAlignmentFromDatabase {
     if ($length < 0) {
         die "Invalid length specification in Mapping ".$this->getReadName; 
     }
-    elsif (my $d = $this->{direction}) {
+    elsif (my $direction = $this->{direction}) {
        
-        $length = -$length if ($d < 0);
+        $length = -$length if ($direction < 0);
         my $cfinis = $cstart + $length;
 
         $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
@@ -126,8 +151,8 @@ sub addAlignmentFromDatabase {
 }
 
 sub addAssembledFrom {
-# from contig to (possibly edited) read
-# input 4 array (contigstart, contigfinis, readstart, readfinis) 
+# from contig to sequence
+# input 4 array (contigstart, contigfinis, seqstart, seqfinis) 
     my $this = shift;
 
 # validity input is tested in Segment constructor
@@ -141,7 +166,7 @@ sub addAssembledFrom {
     return scalar(@{$this->{assembledFrom}});
 }
 
-sub hasAlignments {
+sub hasSegments {
 # returns true if at least one alignment exists
     my $this = shift;
 
@@ -166,20 +191,6 @@ sub getSegments {
     return $this->{assembledFrom}; # array reference
 }
 
-sub NgetOverallAlignment {
-# REDUNDENT?
-    my $this = shift;
-
-# find the first and the last segment of the assembledFrom map
-
-    my ($first, $final) = $this->getOuterSegments();
-
-#print "OverallAlignment UNDEFINED \n" unless $first;
-    return undef if !$first;
-
-    return ($first->getXstart, $final->getXfinis, $first->getYstart, $final->getYfinis);
-}
-
 sub getContigRange {
 # find contig begin and end positions from segments of the assembledFrom map
     my $this = shift;
@@ -188,7 +199,7 @@ sub getContigRange {
 
     return undef if !$first;
 
-    if ($this->{direction} > 0) {
+    if ($this->getAlignment() > 0) {
 # co-aligned contig and read segments
 	return ($first->getXstart, $final->getXfinis);
     }
@@ -205,6 +216,7 @@ sub getOuterSegments {
 # find contig begin and end positions from segments of the assembledFrom map
 
     my ($first,$final);
+
     foreach my $segment (@{$this->{assembledFrom}}) {
 # ensure the correct alignment (it may have been changed outside after export)
         $segment->normaliseOnY(); # ensure rstart <= rfinish

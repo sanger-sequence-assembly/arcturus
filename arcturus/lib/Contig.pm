@@ -62,7 +62,7 @@ sub setAverageCover {
 
 sub getAverageCover {
     my $this = shift;
-    return $this->{data}->{averagecover};
+    return $this->{data}->{averagecover} || 0;
 }
 
 #-------------------------------------------------------------------   
@@ -116,7 +116,11 @@ sub setContigName {
   
 sub getNumberOfReads {
     my $this = shift;
-    return $this->{data}->{numberofreads};   
+# if number of reads not defined get it from the Read array
+    if (!defined($this->{data}->{numberofreads}) && $this->hasReads()) {
+        $this->{data}->{numberofreads} = scalar(@{$this->getReads});
+    }    
+    return $this->{data}->{numberofreads} || 0;   
 }
   
 sub setNumberOfReads {
@@ -126,9 +130,9 @@ sub setNumberOfReads {
 
 #------------------------------------------------------------------- 
   
-sub hasNumberOfNewReads {
+sub getNumberOfNewReads {
     my $this = shift;
-    return $this->{data}->{numberofnewreads};   
+    return $this->{data}->{numberofnewreads} || 0;  
 }
   
 sub setNumberOfNewReads {
@@ -138,14 +142,36 @@ sub setNumberOfNewReads {
 
 #-------------------------------------------------------------------   
 
-sub hasPreviousContigs {
+sub getOrigin {
     my $this = shift;
-    return $this->{data}->{previouscontigs};   
+    return $this->{data}->{origin};   
+}
+
+sub setOrigin {
+    my $this = shift;
+    $this->{data}->{origin} = shift;
+}
+
+#-------------------------------------------------------------------   
+
+sub getPreviousContigs {
+# returns array of previous contigs
+    my $this = shift;
+    return $this->{previouscontigs};   
 }
 
 sub setPreviousContigs {
+# add previous contig (ID or object or whatever) to array
     my $this = shift;
-    $this->{data}->{previouscontigs} = shift;   
+    $this->{previouscontigs} = [] unless $this->{previouscontigs};
+    push @{$this->{previouscontigs}}, shift;   
+}
+
+sub hasPreviousContigs {
+# returns number of previous contigs
+    my $this = shift;
+    my $cpre = $this->getPreviousContigs();
+    return $cpre ? scalar($cpre) : 0;
 }
 
 #-------------------------------------------------------------------   
@@ -176,12 +202,12 @@ sub getQuality {
 
 sub getReadNameHash {
     my $this = shift;
-    return $this->{data}->{readnamehash};
+    return $this->{readnamehash} || ' ';
 }
 
 sub setReadNameHash {
     my $this = shift;
-    $this->{data}->{readnamehash} = shift;
+    $this->{readnamehash} = shift;
 }
 
 #-------------------------------------------------------------------   
@@ -209,7 +235,7 @@ sub getSequence {
 # importing/exporting Read(s), Mapping(s) & Tag(s) (or others)
 #-------------------------------------------------------------------    
 
-sub getRead {
+sub getReads {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
     return $this->{Read};
@@ -226,10 +252,10 @@ sub addRead {
 sub hasReads {
 # returns true if the contig has reads
     my $this = shift;
-    return $this->getRead() ? 1 : 0;
+    return $this->getReads() ? 1 : 0;
 }
 
-sub getMapping {
+sub getMappings {
 # return a reference to the array of Mapping instances (can be empty)
     my $this = shift;
     return $this->{Mapping};
@@ -246,7 +272,7 @@ sub addMapping {
 sub hasMappings {
 # returns true if the contig has mappings
     my $this = shift;
-    return $this->getMapping() ? 1 : 0;
+    return $this->getMappings() ? 1 : 0;
 }
 
 sub getTag {
@@ -312,6 +338,23 @@ sub importer {
 }
 
 #-------------------------------------------------------------------    
+# calculate consensus length, readnamehash, cover, etc
+#-------------------------------------------------------------------
+
+sub statistics {
+    my $this = shift;
+
+
+    if (my $reads = $this->getReads()) {
+        my @readnames;
+        foreach my $read (@$reads) {
+            push @readnames, $read->getReadName();
+        }
+        $this->putReadNameHash( md5(sort @readnames) );
+    }
+}    
+
+#-------------------------------------------------------------------    
 # exporting to CAF
 #-------------------------------------------------------------------    
 
@@ -326,7 +369,7 @@ sub writeToCaf {
 
 print STDERR "Dumping Reads\n"; my $nr = 0;
 
-    my $reads = $this->getRead();
+    my $reads = $this->getReads();
     foreach my $read (@$reads) {
         $read->writeToCafForAssembly($FILE);
 print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
@@ -339,7 +382,7 @@ print STDERR "Dumping Contig\n";
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
 print STDERR "Dumping Mappings\n"; my $mr = 0;
-    my $mappings = $this->getMapping();
+    my $mappings = $this->getMappings();
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
 print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 == 0);    
@@ -375,7 +418,7 @@ sub writeToFasta {
 
 print STDERR "Dumping Reads\n"; my $nr = 0;
 
-    my $reads = $this->getRead();
+    my $reads = $this->getReads();
     foreach my $read (@$reads) {
         $read->writeToFasta($DFILE,$QFILE);
 print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
@@ -443,3 +486,6 @@ sub writeBaseQuality {
 #-------------------------------------------------------------------    
 
 1;
+
+
+

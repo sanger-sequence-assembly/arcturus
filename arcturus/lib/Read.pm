@@ -570,6 +570,12 @@ sub writeToCaf {
     print $FILE "Asped $data->{date}\n"                 if defined $data->{date} ;
     print $FILE "Base_caller $data->{basecaller}\n"     if defined $data->{basecaller};
 
+# quality clipping
+
+    if (defined($data->{lqleft}) && defined($data->{lqright})) {
+        print $FILE "Clipping QUAL $data->{lqleft} $data->{lqright}\n";
+    }
+
 # for reads written to an assembly CAF file add align-to-trace information
 
     if ($forAssembly) {
@@ -651,6 +657,33 @@ sub writeBaseQuality {
 	    print $FILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
+}
+
+#----------------------------------------------------------------------
+# masking data
+#----------------------------------------------------------------------
+
+sub maskLowQuality {
+# mask DNA with 'x'-s outside the quality range
+    my $this = shift;
+
+    my $ql = $this->getLowQualityLeft();
+    my $qr = $this->getLowQualityRight();
+
+    return unless (defined($ql) && defined($qr));
+    
+    my $dna = $this->getSequence();
+
+    my ($part1, $part2, $part3);
+
+    $part1 = substr($dna,0,$ql);
+    $part2 = substr($dna,$ql,$qr-$ql-1);
+    $part3 = substr($dna,$qr-1);
+
+    $part1 =~ s/./x/g;
+    $part3 =~ s/./x/g;
+
+    $this->setSequence($part1.$part2.$part3);
 }
 
 ##############################################################

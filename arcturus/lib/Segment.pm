@@ -120,8 +120,8 @@ sub compare {
         die "Segment->compare expects an instance of the Segment class";
     }
 
-# the two segments have to be normalized on Y and have identical Y range
-# the method will return the alignment and offset for the x ranges
+# the two segments should be normalized on Y and have identical Y (read) range
+# the method will return the alignment and offset for the X (contig) ranges
 
     $this->normalizeOnY();
     $segment->normalizeOnY();
@@ -187,7 +187,28 @@ sub toString {
     return "$xstart $xfinis    $this->[2] $this->[3]";
 }
 
+sub getMetaData {
+# returns xstart, ystart, length
+    my $this = shift;
+
+    $this->normaliseOnY();
+
+    my $ystart = $this->getYstart();
+    my $length = $this->getYfinis() - $ystart + 1;
+    my $xstart;
+    if ($this->getAlignment() > 0) {
+        $xstart = $this->getXstart();
+    }
+    else {
+        $xstart = $this->getXfinis();
+    }
+
+    return ($xstart, $ystart, $length);
+}
+
 #----------------------------------------------------------------------
 
 1;
+
+
 
