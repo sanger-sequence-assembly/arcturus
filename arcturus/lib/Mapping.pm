@@ -296,6 +296,10 @@ sub applyShiftToContigPosition {
     foreach my $segment (@$segments) {
         $segment->applyShiftToX($shift);
     }
+
+    # Force re-calculation of range when getContigRange is next called
+    undef $this->{contigrange};
+
     return 1;
 }
  
