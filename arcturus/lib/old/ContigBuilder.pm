@@ -17,6 +17,7 @@ use Compress;
 
 my %ContigBuilder; # hash for references to instances of this class
 my %forward;       # hash for forward mapping of contig ranges from generation 1
+my %testAssembly;  # hash for registering completed tests on an assembly
 
 my $ReadMapper; # handle to ReadMapper module
 my $Compress;   # handle to Compress   module
@@ -211,6 +212,7 @@ sub testAssembly {
     my $assembly = shift;
 
 # test assembly status and blocked status on READS2CONTIG table
+print STDOUT "**** Testing assembly $assembly **** $break$break";
 
     my $hashref = $ASSEMBLY->associate('hashref',$assembly,'assembly',{traceQuery=>0});
     
@@ -464,6 +466,7 @@ sub dump {
 
     $userid      = $self->{USERID}   if !$userid;
     $assembly    = $self->{ASSEMBLY} if !$assembly;
+    $assembly    = 1 if !$assembly; # default BLOB
 
 # output format
 
@@ -487,9 +490,11 @@ sub dump {
 # (0) test error status on ASSEMBLY for this assembly
 #############################################################################
 
-    my $estatus = $self->testAssembly($assembly);
+    my $estatus = 0;
+    $estatus = $self->testAssembly($assembly) if !$testAssembly{$assembly};
 # block the dump if error (protect against corrupting READS2CONTIG table)
     return $estatus if $estatus;
+    $testAssembly{$assembly} = 1;
 
 #############################################################################
 # (I) first test: any input errors on this contig?
