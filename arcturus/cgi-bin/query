@@ -12,19 +12,9 @@ use GateKeeper;
 use ReadsRecall;
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-#open(STDERR,">&STDOUT") || die "content-type:text/plain\nCan't dump to STDOUT: $!\n";
-#select(STDERR); $| = 1; # Make unbuffered.
-#select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',0,'Insist on CGI');
 $GateKeeper->cgiHeader(2); # return string plain
-
-my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle();
 
@@ -44,13 +34,16 @@ $GateKeeper->cgiHeader(2); # return string plain
 # MAIN
 ##############################################################################
 
-my $USERSUPPORT = $config->get("USERSUPPORT");
-my $db_manager  = $config->get("db_manager");    
-my $arc_cgi_dir = $config->get("ARC_CGI_DIR");  
-my $arc_htm_dir = $config->get("ARC_HTML_DIR");  
+my $USERSUPPORT = $GateKeeper->lookup("USERSUPPORT");
+my $db_manager  = $GateKeeper->lookup("db_manager");    
+my $arc_cgi_dir = $GateKeeper->lookup("ARC_CGI_DIR");  
+my $arc_htm_dir = $GateKeeper->lookup("ARC_HTML_DIR");
+  
+my $signame = $GateKeeper->lookup('signature_name');
+my $sigmail = $GateKeeper->lookup('signature_mail');
 
 my $page = $cgi->openPage("ARCTURUS assembly-tracking database $database");
-$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+$page->address($sigmail,$signame,2);
 $page->frameborder(100,15,'white',15);
 $page->center(1);
 
@@ -170,7 +163,9 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
+    $page->space(1);
 
     $page->partition(1);
     $list = "<table border=1 cellpadding=3 $tw>";
@@ -192,7 +187,8 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
 
     $page->partition(1);
     $list = "<table border=1 cellpadding=3 $tw>";
@@ -218,7 +214,9 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
+    $page->space(1);
  
 # the dictionary tables
 
@@ -243,7 +241,9 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
+    $page->space(1);
 
 # the map tables
 
@@ -268,7 +268,8 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
 
 # the link tables
 
@@ -293,7 +294,8 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
 
     $page->partition(1);
     $list = "<table border=1 cellpadding=3 $tw>";
@@ -315,7 +317,8 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
 
     $page->partition(7);
     $list = "<table border=1 cellpadding=3 $tw>";
@@ -340,7 +343,8 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-    $page->add($list,0,0);
+#    $page->add($list,0,0);
+    $page->add($list);
 }
 
 elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {

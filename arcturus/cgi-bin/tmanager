@@ -666,7 +666,7 @@ sub parseSTSfile {
     if (open (TAGFILE,"$filename")) {
         my $count = 0;
         undef my $line; my $onemore = 0;
-        undef my ($tag, $assembly, $DNA, $length);
+        undef my $tag; undef my $assembly; undef my $DNA; undef my $length;
         while (defined($line = <TAGFILE>) || $onemore) {
             if ($DNA && ($onemore || $line =~ /([G\d+|P\w+]\.)/i)) {
     # if the tag name already appears as key hash signal a duplicate value
@@ -735,7 +735,7 @@ sub parseSTSmap {
         my $assembly = 0; # default unknown
         $assembly = $2 if ($file =~ /\/(\w+?)(\d+)\.stsmap/i);
         undef my $line; 
-        undef my ($tag, $position, $linkage);
+        undef my $tag; undef my $position; undef my $linkage;
         while (defined($line = <MAPFILE>)) {
             next if ($line !~ /\S/);
         # process data in variables on reading a new identifier
@@ -801,7 +801,7 @@ sub parsePMfile {
         $ASSEMBLY = $1 if ($file =~ /\/(\w+?\d+)\.physmap/i);
         $report .= "<TR><TD $yel>! Assembly could not be determined from file name $file</TD></TR>" if !$ASSEMBLY;
         undef my $line; my $count = 0;
-        undef my ($clone, $pstart, $pfinal,$assembly);
+        undef my $clone; undef my $pstart; undef my $pfinal; undef my $assembly;
         while (defined($line = <MAPFILE>)) {
             next if ($line !~ /\S/);
         # process data in variables on reading a new identifier

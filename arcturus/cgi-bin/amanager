@@ -628,9 +628,168 @@ elsif ($action eq 'process') {
 
 #-----------------------------------------------------------------------------
 
-elsif ($action eq 'modify') {
-# modify description of project or assembly
-print "amanager: modify (to be developed)<br>";
+elsif ($action eq 'editor') {
+# modify description of assembly
+    my $script  = $GateKeeper->currentScript;
+    my $session = $GateKeeper->lookup('session');
+    my $signame = $GateKeeper->lookup('signature_name');
+    my $sigmail = $GateKeeper->lookup('signature_mail');
+    $page->frameborder(80,5,'white',5); # overrides GUI
+    $page->address($sigmail,$signame,2);
+    $page->partition(2);
+    $page->center(1);
+    $page->add("ARCTURUS contents manager",0,0,'size=+1');
+    $page->partition(1);
+    $page->space(1);
+
+    my $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
+    my $projects = $organisms->spawn('PROJECTS',$database,0,1);
+
+    my $assemblyname = $GateKeeper->lookup('assemblyname',0);
+    my $projectname  = $GateKeeper->lookup('projectname',0);
+
+    if ($option eq 'agetform' || ($option =~ /^a\w+$/ && !defined($assemblyname))) {
+
+        $page->form("$script/editor/aeditform");
+        my $assemblys = $assembly->htmlTableColumn('assemblyname',{itemLink=>0, noHeader=>1});
+        $page->add($assemblys,0,0);
+        my $list = "<table><tr><th>Select an assembly</th><td> : </td>";
+        my $assemblylist = $assembly->htmlOptions('assemblyname',0,0,0,0);
+        $list .= "<td>$assemblylist</td></tr></table>";
+        $page->add($list,0,0);
+        $page->submitbuttonbar();
+        $page->ingestCGI();
+
+    }
+    elsif ($option eq 'aeditform') {
+
+        $page->form("$script/editor/aprocess");
+        my $mask = '0100011011120021102';
+        $mask = '0100011011120021122' if ($session && $session =~ /\b(ejz|oper)\b/);
+
+        my $editlist = $assembly->htmlEditRecord($assemblyname,'assemblyname',0,$mask,'preset');
+        if (!$editlist) {
+            $page->errorbox("No such Assembly: $assemblyname");
+
+        }
+        else {  
+            $page->add($editlist,0,0);
+            $page->ingestCGI();
+            $page->space(1);
+            $page->add("Complete changes and submit",0,0,'size=+1');
+            $page->space(1);
+            $page->submitbuttonbar();
+        }
+    }
+    elsif ($option eq 'aprocess') {
+# the form is submitted for confirmation; test the user and password
+        $assemblyname = $GateKeeper->lookup('assemblyname',0);
+        my $confirm   = $GateKeeper->lookup('confirm',0) || 0;
+
+        undef my $error;
+        if ($GateKeeper->cgiError(0)) {
+            $error = "This function is invoked in an invalid manner";
+        }
+        elsif (!$GateKeeper->authorize(2<<14)) {
+            $error = $GateKeeper->{error};
+        }
+        elsif (!$confirm) {
+# generate a confirm form for changes
+            my $cgihash = $cgi->{cgi_input};
+            my ($changes,$report) = $assembly->cgiEditTable($cgihash,0);
+            if (!$changes) {
+                $page->messagebox($report);
+                $page->space(1);
+                $page->add("No changes specified",0,0,'size=+1 color="lightsteelblue"');
+            }
+            else {
+                my @transfer = ('database','assemblyname','session');
+                my $reject = "$script/editor/agetform".$cgi->postToGet(1,@transfer);
+                $page->promptbox($report,"$script/editor/aprocess",$reject);
+                $page->ingestCGI(); # transport current cgi input
+                $page->form(0);
+            }
+        }
+        elsif ($confirm eq 'CONFIRM') {
+            undef my $report;
+            my $cgihash = $cgi->{cgi_input};
+            $report = $assembly->cgiEditTable($cgihash,1);
+            $page->messagebox($report);
+        }
+    }
+
+    elsif ($option eq 'pgetform' || ($option =~ /^p\w+$/ && !defined($projectname))) {
+
+        $page->form("$script/editor/peditform");
+        my $choices = $projects->htmlTableColumn('projectname',{itemLink=>0, noHeader=>1});
+        $page->add($choices,0,0);
+        my $list = "<table><tr><th>Select a project</th><td> : </td>";
+        my $projectlist = $projects->htmlOptions('projectname',0,0,0,0);
+        $list .= "<td>$projectlist</td></tr></table>";
+        $page->add($list,0,0);
+        $page->submitbuttonbar();
+        $page->ingestCGI();
+
+    }
+    elsif ($option eq 'peditform') {
+
+        $page->form("$script/editor/pprocess");
+        my $mask = '012011111202';
+        $mask = '0120110001222' if ($session && $session =~ /\b(ejz|oper)\b/);
+
+        my $editlist = $projects->htmlEditRecord($projectname,'projectname',0,$mask,'preset');
+        if (!$editlist) {
+            $page->errorbox("No such project: $projectname");
+
+        }
+        else {  
+            $page->add($editlist,0,0);
+            $page->ingestCGI();
+            $page->space(1);
+            $page->add("Complete changes and submit",0,0,'size=+1');
+            $page->space(1);
+            $page->submitbuttonbar();
+        }
+    }
+    elsif ($option eq 'pprocess') {
+# the form is submitted for confirmation; test the user and password
+        $assemblyname = $GateKeeper->lookup('projectname',0);
+        my $confirm   = $GateKeeper->lookup('confirm',0) || 0;
+
+        undef my $error;
+        if ($GateKeeper->cgiError(0)) {
+            $error = "This function is invoked in an invalid manner";
+        }
+        elsif (!$GateKeeper->authorize(2<<14)) {
+            $error = $GateKeeper->{error};
+        }
+        elsif (!$confirm) {
+# generate a confirm form for changes
+            my $cgihash = $cgi->{cgi_input};
+            my ($changes,$report) = $projects->cgiEditTable($cgihash,0);
+            if (!$changes) {
+                $page->messagebox($report);
+                $page->space(1);
+                $page->add("No changes specified",0,0,'size=+1 color="lightsteelblue"');
+            }
+            else {
+                my @transfer = ('database','projectname','session');
+                my $reject = "$script/editor/pgetform".$cgi->postToGet(1,@transfer);
+                $page->promptbox($report,"$script/editor/pprocess",$reject);
+                $page->ingestCGI(); # transport current cgi input
+                $page->form(0);
+            }
+        }
+        elsif ($confirm eq 'CONFIRM') {
+            undef my $report;
+            my $cgihash = $cgi->{cgi_input};
+            $report = $projects->cgiEditTable($cgihash,1);
+            $page->messagebox($report);
+        }
+    }
+    
+    $page->form(0);
+    $page->flush();
 }
 
 #-----------------------------------------------------------------------------
@@ -683,6 +842,8 @@ print "amanager: testUserAllocation (to be developed)<br>";
 else {
     $GateKeeper->report("Invalid option $action for amanager script");
 }
+
+#********************************************************************************************************
 
 $GateKeeper->disconnect;
 

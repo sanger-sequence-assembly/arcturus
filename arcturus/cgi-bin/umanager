@@ -38,7 +38,7 @@ my $currentScript = $GateKeeper->currentScript;
 
 $option = 'abort' if !$people;
 
-undef my ($userid, $page, $email, $report, $message, $doCopy, $doDelete);
+my ($userid, $page, $email, $report, $message, $doCopy, $doDelete);
 
 $page = $GateKeeper->GUI("ARCTURUS user information maintenance and updates", {doTransport => 0});
 

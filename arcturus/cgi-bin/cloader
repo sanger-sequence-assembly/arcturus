@@ -11,28 +11,18 @@ use ContigBuilder;
 use ReadMapper;
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',0);
 
-my $config     = $GateKeeper->configHandle();
-
-my $cgi        = $GateKeeper->cgiHandle(1);
+$GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
 # how is this script invoked?
 
-my ($void, $database, $option);
+my ($void, $database, $option, $cgi);
 
-if ($cgi) {
+if ($cgi = $GateKeeper->cgiHandle(1)) {
    ($void, $database, $option) = split ('/',$GateKeeper->origin());
     $database  = $cgi->parameter('database') if $cgi->parameter('database');
 }
@@ -42,24 +32,24 @@ else {
 
 my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-$GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
+my $users     = $organisms->spawn('USERS','arcturus',0,1);
 
 ##############################################################################
 # MAIN
 ##############################################################################
 
 my %config;
-$config{CDD} = $config->get('ROOTDIR');  # root data dir for caf files
-$config{CFN} = '<m>.<n>.caf';         # name of individual caf file
-$config{CNF} = '';                       # name filter
-$config{CGN} = '';                       # generation number
-$config{SRC} = 1;                        # default ignore single read contigs
-$config{CPR} = 1000;                     # default nr of contigs to process
+$config{CDD} = $GateKeeper->lookup('ROOTDIR'); # root data dir for caf files
+$config{CFN} = '<m>.<n>.caf';                  # name of individual caf file
+$config{CNF} = '';                             # name filter
+$config{CGN} = '';                             # generation number
+$config{SRC} = 1;                              # default ignore single read contigs
+$config{CPR} = 1000;                           # default nr of contigs to process
 
-my $arc_cgi_dir = $config->get('ARC_CGI_DIR');
-my $arc_log_dir = $config->get('ARC_LOG_DIR');
-my $arc_tmp_dir = $config->get('ARC_TMP_DIR');
-my $db_manager  = $config->get('db_manager');
+my $arc_cgi_dir = $GateKeeper->lookup('ARC_CGI_DIR');
+my $arc_log_dir = $GateKeeper->lookup('ARC_LOG_DIR');
+my $arc_tmp_dir = $GateKeeper->lookup('ARC_TMP_DIR');
+my $db_manager  = $GateKeeper->lookup('db_manager');
 
 $config{CLF} = "$arc_log_dir/cloader.DATABASE.log"; # default logfile
 
@@ -68,7 +58,7 @@ my ($userid, $caffile, $page);
 my ($list, $limit, $exactmatch);
 my ($TEST, $REPAIR, $logON, $reload, $update, $forced);
 my ($CDD, $CFN, $CNF, $CGN, $CLF, $CPR, $SRC);
-my ($assembly, $assemblyname, $assemblynmbr);
+my ($ASSEMBLY, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
 
 my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu";
@@ -76,13 +66,6 @@ my $session = $cgi->parameter('session',0);
 $lreturn .= "\?session=$session" if $session;
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
-
-###############################################################################
-# open ORGANISMS table
-###############################################################################
-
-# my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
-my $users = $organisms->spawn('USERS','arcturus',1);
 
 ###############################################################################
 # input from command line
@@ -199,13 +182,13 @@ else {
         }
         else {
 # open assembly database; abort if no assemblies defined
-            $assembly = $organisms->spawn('ASSEMBLY',$database,1);
-            if ($assembly && $assembly->count() > 0) {
+            $ASSEMBLY = $organisms->spawn('ASSEMBLY',$database,0,1);
+            if ($ASSEMBLY && $ASSEMBLY->count() > 0) {
 # get the default assembly name if no assemblyname in CGI input; first try attributes
                 my $attributes = $organisms->unpackAttributes($database,'dbasename');
                 $asname = $attributes->{anlast} if (!$asname && $attributes->{anlast});
 # if still undefined, just take the first one
-                $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname);
+                $asname = $ASSEMBLY->{hashrefs}->[0]->{assemblyname} if (!$asname);
 # substitute (possible) database placeholder
                 $config{CLF} =~ s/DATABASE/$database/; # log file
 # overwrite the preset configuration data with those in ORGANISM attributes if any
@@ -214,7 +197,7 @@ else {
 # print "ORGANISM attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
 # overwrite the preset configuration data with those in ASSEMBLY attributes if any
-                $attributes = $assembly->unpackAttributes($asname,'assemblyname');
+                $attributes = $ASSEMBLY->unpackAttributes($asname,'assemblyname');
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
 # print "ASSEMBLY attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
@@ -225,7 +208,7 @@ else {
                 my $form = form();
                 $form =~ s/DATABASE/$database/g;
 # build the selectlist for assembly and add to form
-                my $selectlist = $assembly->htmlOptions('assemblyname','assemblyname',90,0,$asname);
+                my $selectlist = $ASSEMBLY->htmlOptions('assemblyname','assemblyname',90,0,$asname);
                 $form =~ s/SELECTTAG/$selectlist/ if ($selectlist); # substitute the HTML selectlist
                 $page->add($form,0,1); # add the form to the page and preload
 # NOTE: contigs will inherit project from earlier versions; unallocated ones are put in BIN
@@ -264,9 +247,9 @@ else {
     elsif ($option eq 'process') {
 # get assembly 
         $database = $cgi->parameter('database'); # redefine database
-        $assembly = $organisms->spawn('ASSEMBLY',$database,1);
+        $ASSEMBLY = $organisms->spawn('ASSEMBLY',$database,0,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
-        $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
+        $assemblynmbr = $ASSEMBLY->associate('assembly',$assemblyname,'assemblyname');
 
 # test mode
         $TEST   = 1 if $cgi->parameter('testrun',0);
@@ -327,14 +310,14 @@ die "No assembly defined" if !$assemblynmbr;
 
         $organisms->packAttribute ($database,,'dbasename','attributes','anlast',$assemblyname);
 
-	print "assembly $assembly<br>";
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','CDD',$CDD);
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','CFN',$CFN);
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','CLF',$CLF) if $logON;
+	print "assembly $ASSEMBLY<br>";
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CDD',$CDD);
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CFN',$CFN);
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CLF',$CLF) if $logON;
 
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','CNF',$CNF) if $CNF;
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','SRC',$SRC) if $SRC;
-        $assembly->packAttribute ($assemblyname,'assemblyname','attributes','CPR',$CPR) if $CPR;
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CNF',$CNF) if $CNF;
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','SRC',$SRC) if $SRC;
+        $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CPR',$CPR) if $CPR;
     }
 
 ###############################################################################
@@ -343,23 +326,17 @@ die "No assembly defined" if !$assemblynmbr;
 
     my $READS    = $organisms->spawn("READS",$database,0);
     my $CONTIGS  = $organisms->spawn("CONTIGS",$database,0);
-    my $cctocc   = $organisms->spawn("CONTIGS2CONTIG",$database,0);
-    my $cctopp   = $organisms->spawn("CONTIGS2SCAFFOLD",$database,0);
-    my $rrtocc   = $organisms->spawn("READS2CONTIG",$database,0);
-    my $redits   = $organisms->spawn("READEDITS",$database,0);
     my $PENDING  = $organisms->spawn("PENDING",$database,0);
-    my $gaptags  = $organisms->spawn("GAP4TAGS",$database,0);
-    my $tttocc   = $organisms->spawn("TAGS2CONTIG",$database,0);
-    my $projects = $organisms->spawn("PROJECTS",$database,1);
-    my $rrtoaa   = $organisms->spawn("READS2ASSEMBLY",$database,0);
-  
-    if ($REPAIR) {
-        $organisms->spawn("LIGATIONS",$database,1);
-        $organisms->spawn("SEQUENCEVECTORS",$database,1);
-        $organisms->spawn("CLONINGVECTORS",$database,1);
-    }
 
-    my $snapshot = $organisms->snapshot($database);
+    my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
+    $R2A->setMultiLineInsert(100);
+    my $R2C = $organisms->spawn("READS2CONTIG",$database,0,0);
+    $R2C->setMultiLineInsert(100);
+  
+    $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
+    $READS->autoVivify($database,0.5); # install links on opened tables only
+
+#    my $snapshot = $organisms->snapshot($database);
 #    print "$snapshot" if ($cgi); # only in CGI mode
 
 ###############################################################################
@@ -374,7 +351,7 @@ die "No assembly defined" if !$assemblynmbr;
         my $contignames;
         my $where = "assembly=$assemblynmbr AND generation=0";
         $where .= " AND (aliasname like '\%${CNF}\%')" if $CNF;
-        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
+#        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
         $contignames = $CONTIGS->associate('aliasname','where',$where,1);
 # the alias name is one appearing on the caf file
         if (ref($contignames) =~ /ARRAY/) {
@@ -402,7 +379,7 @@ die "No assembly defined" if !$assemblynmbr;
     my $dbreads = 0;
     undef my %dbreads;
     if ($rblocker) { 
-        $READS->autoVivify($database,0.5); # install links on opened tables only
+#        $READS->autoVivify($database,0.5); # install links on opened tables only
         print "Scanning database $database for Reads with existing mappings ...";       
         my $where = 'label > 9';
         if (my $refs = $READS->associate('readname','distinct where',$where,1)) {
@@ -431,10 +408,9 @@ die "No assembly defined" if !$assemblynmbr;
     if ($contigcount && !$CNF) {
 # test if all contigs in the CONTIG table have indeed been mapped in the READS2CONTIG table
         print "Scanning database $database (again) for Contigs with existing mappings ..."; 
-        $CONTIGS->autoVivify($database,0.5,1); # install links on already opened tables
-      
+#        $CONTIGS->autoVivify($database,0.5,1); # install links on already opened tables     
         my $ncm = 0;
-        my $where = "generation=0 AND assembly=$assemblynmbr"; #  links to READS2CONTIG and CONTIGS2SCAFFOLD
+        my $where = "generation=0 AND assembly=$assemblynmbr"; #  links to READS2CONTIG ?? and CONTIGS2SCAFFOLD
         if (my $contignames = $CONTIGS->associate('contigname','distinct where',$where,1)) {
             if (ref($contignames) eq 'ARRAY') {
                 foreach my $contig (@$contignames) {
@@ -473,75 +449,77 @@ die "No assembly defined" if !$assemblynmbr;
 #
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
+    my $ContigBuilder = ContigBuilder->init($CONTIGS);
 
-# initialize global parameters in ReadMapper
+    $ContigBuilder->setMinOfReads($SRC) if ($SRC > 1);
+    $ContigBuilder->setOwnership($assemblynmbr,$userid);
+    $ContigBuilder->setTestModes($TEST,$REPAIR);
 
-    my $mapper = ReadMapper->init($READS,$cgi);
+# okay, parse the specified CAF file; this builds all contigs and readmappers in memory
 
-# initialize global parameters in ContigBuilder
+    my $truncated = $ContigBuilder->cafFileParser ($CFN,$CPR,$CNF,$dbcontigs,$dbreads,$list);
 
-    my $cbuild = ContigBuilder->init($mapper,$CONTIGS,$cgi);
-#    my $cbuild = ContigBuilder->init($CONTIGS,$cgi);
-
-    $cbuild->setMinOfReads($SRC) if ($SRC > 1);
-    $cbuild->setOwnership($assemblynmbr,$userid);
-    $cbuild->setTestModes($TEST,$REPAIR);
-
-# okay, parse the specified CAF file
-
-    my $truncated = $cbuild->cafFileParser ($CFN,$CPR,$CNF,$dbcontigs,$dbreads,$list);
+    if ($truncated > 1) {
+        print "Can't open CAF file $CFN $brtag";
+    }
+    else {
 
 # round up all remaining unprocessed but completed contigs
 
-    print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
-    my $left = $cbuild->flush(0,$assemblynmbr,$forced);
-    print "End scanning caf file: contigs left unprocessed=$left $brtag";
+        print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
+        my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced);
+        print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
-    if (!$CNF && !$left && !$truncated && $cgi->parameter('promote')) {
+        if (!$CNF && !$left && !$truncated && $cgi->parameter('promote')) {
 # okay, we have had all contigs in this assembly
-# update counters length and l2000
-        my $query  = "select sum(distinct CONTIGS.length) from CONTIGS,READS2CONTIG where ";
-        $query    .= "CONTIGS.contig_id=READS2CONTIG.contig_id and READS2CONTIG.generation=0";
-        my $length = $CONTIGS->query($query,0,0);
-        $assembly->update('length',$length,'assembly',$assemblynmbr);
-        $query   .= " and CONTIGS.length>=2000";
-        $length = $CONTIGS->query($query);
-        $assembly->update('l2000',$length,'assembly',$assemblynmbr);
-# process reads in generation 1 but not in 0
-        $mapper->endOfLine();
-# now update the generation counter and cleanup the older generations
-        print "UPDATE and cleanup of mapped generations$brtag\n";
-        $mapper->ageByOne($assemblynmbr);
-    }
-    elsif ($cgi->parameter('promote')) {
-        print "There remain data to be processed on caf file $CFN$brtag";
-    }
+            $ContigBuilder->promote;
+        }
+        elsif ($cgi->parameter('promote')) {
+            print "There remain data to be processed on caf file $CFN$brtag";
+        }
 
 # update counters in ASSEMBLY & ORGANISMS table
 
-    my $ncontiga = $CONTIGS->count("assembly=$assembly");
-    $assembly->update('contigs',$ncontiga,'assembly',$assembly);
-    my $nreadsa  = $rrtoaa->count("assembly=$assembly"); # reads
-    $assembly->update('contigs',$nreadsa,'assembly',$assembly);
+        $R2C->flush;
+        $R2A->flush;
 
-    my $ncontigs = $CONTIGS->count(1); 
-    $organisms->update('contigs',$ncontigs,'dbasename',$database);
-    my $npending = $PENDING->count(1);  
-    $organisms->update('reads_pending',$npending,'dbasename',$database);
+my $snapshot = $organisms->snapshot($database);
+# print "$snapshot <br>";
 
-    $organisms->historyUpdate($userid,0,2);
+#print "CONTIGS<br>";
+        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
+        my $ncontiga = $CONTIGS->count("assembly=$assemblynmbr",1);
+#print "$CONTIGS->{lastQuery}<br>";
+#print "update ASSEMBLY<br>";
+        $ASSEMBLY->update('contigs',$ncontiga,'assembly',$assemblynmbr);
+#print "READS<br>";
+#        my $R2A = $organisms->spawn('READS2ASSEMBLY',$database,0,0);
+        my $nreadsa  = $R2A->count("assembly=$assemblynmbr");
+print "update ASSEMBLY<br>";
+        $ASSEMBLY->update('reads',$nreadsa,'assembly',$assemblynmbr);
+
+        my $ncontigs = $CONTIGS->count(1); 
+        $organisms->update('contigs',$ncontigs,'dbasename',$database);
+        my $npending = $PENDING->count(1);  
+        $organisms->update('reads_pending',$npending,'dbasename',$database);
+
+        $organisms->historyUpdate($userid,0,2);
+    }
 
 # to be added: update of defaults (which ones)
 
     if ($TEST) {
         my $ccount = $CONTIGS->count(1); 
         print "$brtag$ccount$brtag";
-        my $rcount = $rrtocc->count(1); 
-        print "$brtag$rcount$brtag";
-        my $ecount = $redits->count(1); 
-        print "$brtag$ecount$brtag";
-        my $vcount = $cctocc->count(1); 
-        print "$brtag$vcount$brtag";
+#        my $rrtocc   = $organisms->spawn("READS2CONTIG",$database,0);
+#        my $rcount = $rrtocc->count(1); 
+#        print "$brtag$rcount$brtag";
+#        my $redits   = $organisms->spawn("READEDITS",$database,0);
+#        my $ecount = $redits->count(1); 
+#        print "$brtag$ecount$brtag";
+#        my $cctocc   = $organisms->spawn("CONTIGS2CONTIG",$database,0);
+#        my $vcount = $cctocc->count(1); 
+#        print "$brtag$vcount$brtag";
         my $pcount = $PENDING->count(1);
         print "$brtag$pcount$brtag";
     }
@@ -631,8 +609,8 @@ sub form {
 
     $form .= "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 80%>";
     $form .= "<TR><TH> Listing :</TH>";
-    $form .= "<TH> None  <INPUT type=radio name=listing value=0 checked></TH><TD>&nbsp</TD>";
-    $form .= "<TH> Short <INPUT type=radio name=listing value=1></TH><TD>&nbsp</TD>";
+    $form .= "<TH> None  <INPUT type=radio name=listing value=0></TH><TD>&nbsp</TD>";
+    $form .= "<TH> Short <INPUT type=radio name=listing value=1 checked></TH><TD>&nbsp</TD>";
     $form .= "<TH> Long  <INPUT type=radio name=listing value=2></TH></TR>";
     $form .= "</TABLE>";
 

@@ -55,7 +55,7 @@ my $currentHost = $GateKeeper->currentHost;
 
 my $report;
 foreach my $instance (@$instances) {
- print "instance  $instance \n";
+# print "instance  $instance \n";
     $instance =~ s/\.sanger\.ac\.uk//;
     my ($host,$port) = split ':',$instance;
     next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));

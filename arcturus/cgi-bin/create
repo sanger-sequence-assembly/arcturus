@@ -529,7 +529,7 @@ elsif ($action eq 'organism') {
     $page->flush;
     $GateKeeper->disconnect;
 
-# ? prime environment via GateKeeper for harmonize script
+# prime environment via GateKeeper for harmonize script
 
     $csroot = $GateKeeper->prepareFork('harmonize');
     system ("$csroot/harmonize organisms copy >> $arctmpdir/harmonize.log") if $harmonize;     
@@ -595,7 +595,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
     my $contents = "<TABLE><TR><TD VALIGN=TOP> <TABLE>";
     foreach my $table (sort keys %tablecount) {
         if ($count++ == $half) {
-            $contents .= "</TABLE> </TD><TD WIDTH=16%>&nbsp</TD><TD VALIGN=TOP> <TABLE>";
+            $contents .= "</TABLE> </TD><TD WIDTH=10%>&nbsp</TD><TD VALIGN=TOP> <TABLE>";
         }
         $contents .= "<TR><TD>$table</TD>";
         if ($tablecount{$table} > 0) {
@@ -607,10 +607,10 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             push @extras, $table;
         }
         elsif ($redefined{$table}) {
-            $contents .= "<TD bgcolor=$yellow>CHANGED FORMAT</TD>";
+            $contents .= "<TD bgcolor=$yellow nowrap>CHANGED FORMAT</TD>";
         }
         else {
-            $contents .= "<TD>Found</TD>";
+            $contents .= "<TD>Conforms</TD>";
         }
         $contents .= "</TR>";
     }
@@ -891,6 +891,133 @@ elsif ($action eq 'existing') {
     $page->flush;
     $GateKeeper->disconnect;
 }
+
+#*********************************************************************************************************
+#*********************************************************************************************************
+#
+# The next section deals with editing of the description of an existing database
+#
+#*********************************************************************************************************
+#*********************************************************************************************************
+
+elsif ($action eq 'editor') {
+
+    my $signame = $GateKeeper->lookup('signature_name');
+    my $sigmail = $GateKeeper->lookup('signature_mail');
+    $page->frameborder(80,5,'white',5); # overrides GUI
+    $page->address($sigmail,$signame,2);
+    $page->partition(2);
+    $page->center(1);
+    $page->add("ARCTURUS contents manager",0,0,'size=+1');
+    $page->partition(1);
+    $page->space(1);
+    my $dbasename = $GateKeeper->lookup('database',0) || 'database';
+    $page->add("Update organism $dbasename description",0,0,'size=+1');
+    $page->space(2);
+
+    $option = 'getform'  if (!$option); # default
+    $option = 'editform' if ($option eq 'getform' && $database ne 'arcturus');
+
+    my $error = '';
+    my $harmonize = 0;
+    my $nrdbases = $organisms->count;
+
+    if ($nrdbases <= 0) {
+
+        $error = "There are no organism databases";
+    } 
+
+    elsif ($option eq 'getform' && $nrdbases > 1) {
+
+        $page->form("$arc_cgi_dir/create/editor/editform");
+        my $dbases = $organisms->htmlTableColumn ('dbasename',{itemLink => 0, noHeader => 1});
+        $page->add($dbases,0,0);
+
+        my $list = "<TABLE><TR><TH>Select a database</TH><TD>:</TD>";
+        my $dbaselist = $organisms->htmlOptions('dbasename','dbasename',0,0,0);
+        $list .= "<TD>$dbaselist</TD></TR></TABLE>";
+        $page->add($list,0,0);
+        $page->submitbuttonbar();
+
+    }
+
+    elsif (($option eq 'getform' && $nrdbases == 1) || $option eq 'editform') {
+    
+        if ($option eq 'getform') {
+            my $hash = $organisms->{hashrefs}->[0]; # the first entry (there is only one)
+	    $database = $hash->{dbasename};
+        }            
+        $page->form("$script/editor/process");
+        my $mask = '0122222000002000220'; # default
+        my $session = $GateKeeper->lookup('session');
+        $mask = '0122222000002000222' if ($session && $session =~ /\b(ejz|oper)\b/);
+        my $editlist = $organisms->htmlEditRecord($database,'dbasename',0,$mask);
+        if (!defined($editlist) || !$editlist) {
+            $page->errorbox("No such Organism database: $database");
+
+        }
+        else {  
+            $page->add($editlist,0,0);
+#            $page->hidden('dbasename',$database);
+            $page->ingestCGI();
+            $page->space(1);
+            $page->add("Complete changes and submit",0,0,'size=+1');
+            $page->space(1);
+            $page->submitbuttonbar();
+        }
+    }
+
+    elsif ($option eq 'process') {
+
+# the form is submitted for confirmation; test the user and password
+
+        $database   = $GateKeeper->lookup('database'); # to test it's really defined
+        my $confirm = $GateKeeper->lookup('confirm',0) || 0;
+
+        undef my $error;
+        if ($GateKeeper->cgiError(0)) {
+            $error = "This function is invoked in an invalid manner";
+        }
+        elsif (!$GateKeeper->authorize(2<<14)) {
+            $error = $GateKeeper->{error};
+        }
+        elsif (!$confirm) {
+# generate a confirm form for changes
+            my $cgihash = $cgi->{cgi_input};
+            my ($changes,$report) = $organisms->cgiEditTable($cgihash,0);
+            if (!$changes) {
+                $page->messagebox($report);
+                $page->space(1);
+                $page->add("No changes specified",0,0,'size=+1 color="lightsteelblue"');
+            }
+            else {
+                my $option = "$script/editor/process";
+                $page->promptbox($report,$option,$script);
+                $page->ingestCGI(); # transport current cgi input
+                $page->form(0);
+            }
+	}
+	elsif ($confirm eq 'CONFIRM') {
+            undef my $report;
+            my $cgihash = $cgi->{cgi_input};
+            $report = $organisms->cgiEditTable($cgihash,1);
+            $page->messagebox($report);
+            $harmonize = 1;
+	}
+    }
+
+
+    $page->errorbox("Operation Refused!<br>$error") if $error;
+
+    $page->form(0);
+    $page->flush;
+    $GateKeeper->disconnect;
+
+# prime environment via GateKeeper for harmonize script
+
+    $csroot = $GateKeeper->prepareFork('harmonize');
+    system ("$csroot/harmonize organisms copy >> $arctmpdir/harmonize.log") if $harmonize;     
+} 
 
 #*********************************************************************************************************
 #*********************************************************************************************************
