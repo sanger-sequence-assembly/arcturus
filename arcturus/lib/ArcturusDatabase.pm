@@ -339,10 +339,33 @@ sub getReadByID {
 
 	$read->setInsertSize($insertsize);
 
+	$query = "select svector_id,svleft,svright from SEQVEC where read_id=?";
+
+	$sth = $dbh->prepare_cached($query);
+
+	while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
+	    my $svector = &dictionaryLookup($this->{Dictionary}->{svector},
+					    $svector_id);
+
+	    $read->addSequencingVector([$svector, $svleft, $svright]);
+	}
+
+	$sth->finish();
+
+	$query = "select cvector_id,cvleft,cvright from CLONEVEC where read_id=?";
+
+	$sth = $dbh->prepare_cached($query);
+
+	while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
+	    my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},
+					    $cvector_id);
+
+	    $read->addCloningVector([$cvector, $cvleft, $cvright]);
+	}
+
+	$sth->finish();
 	
 	$read->setArcturusDatabase($this);
-
-	$read->importSequence();
 
 	return $read;
     } 
