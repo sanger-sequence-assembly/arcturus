@@ -1,9 +1,3 @@
-<?xml version='1.0' encoding='utf-8' ?>
-
-<!--
-  Preliminary DTD for describing scaffold information
--->
-
 <!ELEMENT assembly (superscaffold*) >
 
 <!ATTLIST assembly
@@ -11,18 +5,18 @@
 	    date    CDATA       #REQUIRED
 >
 
-<!ELEMENT superscaffold (scaffold+) ?
+<!ELEMENT superscaffold (scaffold+) >
 
 <!ATTLIST superscaffold
             id      CDATA       #REQUIRED
 	    size    CDATA       #REQUIRED
 >
 
-<!ELEMENT scaffold (contig, (gap|contig)* >
+<!ELEMENT scaffold (contig, (gap|contig)*) >
 
 <!ATTLIST scaffold
             id      CDATA       #REQUIRED
-	    sense   type (F|R)	#REQUIRED
+	    sense   (F|R)	#REQUIRED
 >
 
 <!ELEMENT contig EMPTY>
@@ -30,7 +24,7 @@
 <!ATTLIST contig
             id      CDATA       #REQUIRED
 	    size    CDATA	#REQUIRED
-	    sense   type (F|R)	#REQUIRED
+	    sense   (F|R)	#REQUIRED
 >
 
 <!ELEMENT gap EMPTY>
