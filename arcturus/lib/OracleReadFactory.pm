@@ -181,13 +181,14 @@ sub getNextRead {
     my $read = new Read();
 
     $read->setClone($clone);
-    $read->setDate($asped);
+    $read->setAspedDate($asped);
     $read->setBaseCaller($caller);
     $read->setTemplate($template);
     $read->setLigation($lig);
     $read->setStrand($strand);
     $read->setPrimer($primer);
     $read->setChemistry($dye);
+    $read->setProcessStatus('PASS');
 
     my ($imin, $imax);
     if (exists($this->{ligations}->{$ligid})) {
@@ -205,6 +206,8 @@ sub getNextRead {
     my ($scfdir) = $this->{sth}->{scfdir}->fetchrow_array();
 
     my $traceref = "$scfdir/$scf";
+
+    $read->setTraceArchiveIdentifier($traceref);
 
     $this->{sth}->{dna}->execute($seqid);
 
