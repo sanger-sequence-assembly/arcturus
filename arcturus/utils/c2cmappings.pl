@@ -11,23 +11,25 @@ use strict;
 my $nextword;
 my $instance;
 my $organism;
-my $contigid;
+my $contigids;
 my $logfile;
 my $outfile;
 my $loose = 0;
 my $align = 0;
+my $terse = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
-    $contigid = shift @ARGV if ($nextword eq '-contig');
+    $contigids = shift @ARGV if ($nextword eq '-contigs');
     $logfile  = shift @ARGV if ($nextword eq '-log');
     $outfile  = shift @ARGV if ($nextword eq '-out');
     $loose    = 1 if ($nextword eq '-loose');
     $align    = 1 if ($nextword eq '-align');
+    $terse    = 1 if ($nextword eq '-terse');
 }
 
-unless (defined($instance) && defined($organism) && defined($contigid)) {
+unless (defined($instance) && defined($organism)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(0);
@@ -40,31 +42,35 @@ die "Failed to create ArcturusDatabase" unless $adb;
 
 my $dbh = $adb->getConnection();
 
-my $mappings = &getReadToContigMappings($dbh, $contigid);
+my $query = "SELECT contig_id,nreads,length,updated FROM CONTIG";
 
-my $query = "SELECT parent_id,cstart,cfinish,direction FROM C2CMAPPING WHERE contig_id = ? ORDER BY cstart ASC";
+$query .= " WHERE contig_id IN ($contigids)" if defined($contigids);
 
-my $stmt = $dbh->prepare($query);
+my $contig_stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
-$stmt->execute($contigid);
-&db_die("Failed to execute query \"$query\"");
+$query = "SELECT parent_id,cstart,cfinish,direction FROM C2CMAPPING WHERE contig_id = ? ORDER BY cstart ASC";
 
-$query = "SELECT sequence FROM CONSENSUS WHERE contig_id = ?";
+my $parent_stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
 
 my $seq_stmt; 
 
-my $masterseq;
-
 if ($align) {
+    $query = "SELECT sequence FROM CONSENSUS WHERE contig_id = ?";
     $seq_stmt = $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");
-
-    $seq_stmt->execute($contigid);
-    ($masterseq) = $seq_stmt->fetchrow_array();
-    $masterseq = uncompress($masterseq);
-    $seq_stmt->finish();
 }
+
+$query = "SELECT seq_id,mapping_id,cstart,cfinish,direction FROM MAPPING WHERE contig_id = ? ORDER BY cstart ASC";
+
+my $map_stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? AND length > 1 ORDER BY rstart ASC";
+
+my $seg_stmt =  $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
 
 my ($logfh, $outfh);
 
@@ -80,69 +86,89 @@ if (defined($outfile)) {
     $outfh = new FileHandle(">&STDOUT");
 }
 
-while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) {
-    print $logfh "Parent contig: $parentid";
-    if (defined($cstart) && defined($cfinish) && defined($direction)) {
-	print $logfh "      Mapping: $cstart $cfinish $direction\n";
-    } else {
-	print $logfh "      --- NO MAPPING ---\n";
-    }
+$contig_stmt->execute();
 
-    print $logfh "\n";
+while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array()) {
+    print $logfh "PROCESSING CONTIG: $contigid\n\n";
+    print $outfh "PROCESSING CONTIG: $contigid\n\n";
 
-    my $newMappings = &getReadToContigMappings($dbh, $parentid);
+    my $mappings = &getReadToContigMappings($map_stmt, $seg_stmt, $contigid);
 
-    my $segments = [];
-    my $sense;
-
-    foreach my $seqid (keys %{$newMappings}) {
-	my $oldmapping = $mappings->{$seqid};
-	my $newmapping = $newMappings->{$seqid};
-
-	my $newsegs;
-
-	($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose)
-	    if defined($oldmapping);
-
-	push @{$segments}, @{$newsegs};
-
-	print $logfh "\n";
-    }
-
-    &normaliseMappings($segments);
-
-    my @sortedsegments = sort byOldStartThenFinish @{$segments};
-
-    print $logfh "\nOVERALL MAPPING:\n\n";
-
-    print $logfh "RAW SEGMENTS\n\n";
-
-    &displaySegments(\@sortedsegments, $logfh);
-
-    $segments = &mergeContigSegments(\@sortedsegments, $sense, $loose);
-
-    print $logfh "\n\nMERGED\n\n";
-
-    &displaySegments($segments, $logfh);
-
-    print $logfh "\n\n";
-
-    print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
-    &displaySegments($segments, $outfh);
+    my $masterseq;
 
     if ($align) {
-	$seq_stmt->execute($parentid);
-	my ($parentseq) = $seq_stmt->fetchrow_array();
-	$parentseq = uncompress($parentseq);
+	$seq_stmt->execute($contigid);
+	($masterseq) = $seq_stmt->fetchrow_array();
+	$masterseq = uncompress($masterseq);
 	$seq_stmt->finish();
-
-	foreach my $segment (@{$segments}) {
-	    print $outfh "\n\n";
-	    &displayAlignment($segment, $masterseq, $parentseq, 50, $sense, $outfh);
-	}
     }
 
-    print $outfh "\n\n";
+    $parent_stmt->execute($contigid);
+
+    while (my ($parentid, $cstart, $cfinish, $direction) = $parent_stmt->fetchrow_array()) {
+	print $logfh "Parent contig: $parentid";
+	if (defined($cstart) && defined($cfinish) && defined($direction)) {
+	    print $logfh "      Mapping: $cstart $cfinish $direction\n";
+	} else {
+	    print $logfh "      --- NO MAPPING ---\n";
+	}
+
+	print $logfh "\n";
+
+	my $newMappings = &getReadToContigMappings($map_stmt, $seg_stmt, $parentid);
+
+	my $segments = [];
+	my $sense;
+
+	foreach my $seqid (keys %{$newMappings}) {
+	    my $oldmapping = $mappings->{$seqid};
+	    my $newmapping = $newMappings->{$seqid};
+	    
+	    my $newsegs;
+	    
+	    ($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose)
+		if defined($oldmapping);
+
+	    push @{$segments}, @{$newsegs};
+	    
+	    print $logfh "\n";
+	}
+
+	&normaliseMappings($segments);
+	
+	my @sortedsegments = sort byOldStartThenFinish @{$segments};
+
+	print $logfh "\nOVERALL MAPPING:\n\n";
+
+	print $logfh "RAW SEGMENTS\n\n";
+
+	&displaySegments(\@sortedsegments, $logfh);
+
+	$segments = &mergeContigSegments(\@sortedsegments, $sense, $loose);
+
+	print $logfh "\n\nMERGED\n\n";
+
+	&displaySegments($segments, $logfh);
+
+	print $logfh "\n\n";
+
+	print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
+	&displaySegments($segments, $outfh);
+
+	if ($align) {
+	    $seq_stmt->execute($parentid);
+	    my ($parentseq) = $seq_stmt->fetchrow_array();
+	    $parentseq = uncompress($parentseq);
+	    $seq_stmt->finish();
+	    
+	    foreach my $segment (@{$segments}) {
+		print $outfh "\n\n";
+		&displayAlignment($segment, $masterseq, $parentseq, 50, $sense, $outfh, $terse);
+	    }
+	}
+	
+	print $outfh "\n\n";
+    }
 }
 
 $dbh->disconnect();
@@ -160,29 +186,27 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-instance\tName of instance\n";
     print STDERR "-organism\tName of organism\n";
-    print STDERR "-contig\t\tID of contig\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-contigs\tComma-separated list of contig IDs [default: all contigs]\n";
+    print STDERR "-log\t\tName of log file [default: standard error]\n";
+    print STDERR "-out\t\tName of output file [default: standard output]\n";
+    print STDERR "-loose\t\tAllow merging of non-contiguous contig-to-contig segments\n";
+    print STDERR "-align\t\tCalculate and display contig-to-contig sequence alignments\n";
+    print STDERR "-terse\t\tOnly display discrepant contig-to-contig alignments\n";
 }
 
 sub getReadToContigMappings {
-    my $dbh = shift;
+    my $map_stmt = shift;
+    my $seg_stmt = shift;
     my $contigid = shift;
 
     my $mappings = {};
 
-    my $query = "SELECT seq_id,mapping_id,cstart,cfinish,direction FROM MAPPING WHERE contig_id = ? ORDER BY cstart ASC";
+    $map_stmt->execute($contigid);
 
-    my $seq_stmt = $dbh->prepare($query);
-    &db_die("Failed to create query \"$query\"");
-
-    $seq_stmt->execute($contigid);
-    &db_die("Failed to execute query \"$query\"");
-
-    $query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? AND length > 1 ORDER BY rstart ASC";
-
-    my $seg_stmt =  $dbh->prepare($query);
-    &db_die("Failed to create query \"$query\"");
-
-    while (my ($seqid,$mappingid,$cstart,$cfinish,$direction) = $seq_stmt->fetchrow_array()) {
+    while (my ($seqid,$mappingid,$cstart,$cfinish,$direction) = $map_stmt->fetchrow_array()) {
 	my $entry = [$cstart, $cfinish, $direction];
 
 	$seg_stmt->execute($mappingid);
@@ -210,7 +234,7 @@ sub getReadToContigMappings {
 	$mappings->{$seqid} = $entry;
     }
 
-    $seq_stmt->finish();
+    $map_stmt->finish();
 
     return $mappings;
 }
@@ -437,23 +461,56 @@ sub displayAlignment {
 	$pseq =~ tr/ACGTacgt/TGCAtgca/;
     }
 
-    while (length($cseq)) {
-	printf $fh "%8d  ", $cstart;
-	print $fh substr($cseq, 0, $linelen), "\n";
-	$cseq = substr($cseq, $linelen);
-	$cstart += $linelen;
-
-	printf $fh "%8d  ", $forward ? $pstart : $pfinish;
-	print $fh substr($pseq, 0, $linelen), "\n";
-	$pseq = substr($pseq, $linelen);
-	if ($forward) {
-	    $pstart += $linelen;
-	} else {
-	    $pfinish -= $linelen;
-	}
-
-	print $fh "\n";
+    if ($cseq eq $pseq) {
+	print $fh "PERFECT MATCH\n";
+    } else {
+	my $diffcount = &countDiffs($cseq, $pseq);
+	print $fh "MISMATCHES $diffcount\n";
     }
+
+    unless ($terse) {
+	print $fh "\n";
+
+	while (length($cseq)) {
+	    printf $fh "%6d  ", $cstart;
+	    my $subseq = substr($cseq, 0, $linelen);
+	    my $seqlen = length($subseq);
+	    print $fh $subseq;
+	    $cseq = substr($cseq, $linelen);
+	    printf $fh "  %6d\n", $cstart + $seqlen - 1;
+	    $cstart += $linelen;
+
+	    printf $fh "%6d  ", $forward ? $pstart : $pfinish;
+	    $subseq = substr($pseq, 0, $linelen);
+	    my $seqlen = length($subseq);
+	    print $fh $subseq;
+	    $pseq = substr($pseq, $linelen);
+	    if ($forward) {
+		printf $fh "  %6d\n", $pstart + $seqlen - 1;
+		$pstart += $linelen;
+	    } else {
+		printf $fh "  %6d\n", $pfinish - $seqlen + 1;
+		$pfinish -= $linelen;
+	    }
+
+	    print $fh "\n";
+	}
+    }
+}
+
+sub countDiffs {
+    my $seqa = shift;
+    my $seqb = shift;
+
+    my ($diffs, $chara, $charb);
+
+    $diffs = 0;
+
+    while (($chara = chop($seqa)) && ($charb = chop($seqb))) {
+	$diffs += 1 if ($chara ne $charb);
+    }
+
+    return $diffs;
 }
 
 sub byReadStart ($$) {
