@@ -1368,10 +1368,11 @@ sub putSequenceForRead {
 	    $rc = $sth->execute($seqid, $seqvecid, $svleft, $svright);
 
             unless (defined($rc) && $rc == 1) {
-                print STDERR "read $readname: \n";
-                foreach my $entry (@{$seqveclist}) {
-                    print STDERR "($seqvec, $svleft, $svright)\n";
-                }
+#                print STDERR "read $readname: \n";
+#                foreach my $entry (@{$seqveclist}) {
+#                    my ($seqvec, $svleft, $svright) = @{$entry};
+#                    print STDERR "($seqvec, $svleft, $svright)\n";
+#                }
       	        return (0, "failed to insert seq_id,svector_id,svleft,svright "
                      . "into SEQVEC for $readname ($readid, $seqid, $seqvecid, "
                      . "$svleft, $svright) DBI::errstr=$DBI::errstr"); 
@@ -1839,6 +1840,60 @@ sub getTagsForReads {
 # bulk mode extraction
     my $this = shift;
     my $reads = shift; # array of Read instances
+
+    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
+        print STDERR "getSequenceForReads expects an array of Read objects\n";
+        return undef;
+    }
+
+# build a list of sequence IDs (all sequence IDs must be defined)
+
+    my $sids = {};
+    foreach my $read (@$reads) {
+# test if sequence ID is defined
+        if (my $seq_id = $read->getSequenceID()) {
+            $sids->{$seq_id} = $read;
+        }
+        else {
+# warning message
+            print STDERR "Missing sequence identifier in read ".
+                          $read->getReadName."\n";
+        }
+    }
+
+    my @sids = sort {$a <=> $b} keys(%$sids);
+
+    return unless @sids;
+
+    my $items = "seq_id,readtag,pstart,pfinal,strand,comment";
+#             . ",sequence";
+#    my $query = "select * from READTAG left join TAGSEQUENCE"
+    my $query = "select * from READTAG"
+#              . " using tag_id"
+	      . " where seq_id = (".join (',',@sids) .")"
+              . "   and deprecated != 'Y'";
+print "getReadTags query: $query\n";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    while (my @ary = $sth->fetchrow_array()) {
+        my ($seq_id,$type,$pstart,$pfinal,$strand,$comment,$sequence) = @ary;
+# create a new Tag instance
+        my $tag = new Tag('readtag');
+        $tag->setSequenceID($seq_id);
+        $tag->setType($type);
+        $tag->setPosition($pstart,$pfinal);
+        $tag->setStrand($strand);
+        $tag->setComment($comment);
+        $tag->setDNA($sequence);
+# add to read
+        my $read = $sids->{$seq_id};
+        $read->addTag($tag);
+    }
 
 }
 
