@@ -1151,7 +1151,7 @@ sub chemistry {
             $readItem{CH} = $chemistry;
 #            $CHEMISTRY->newrow('identifier', $chemistry);
 &logger("... recovered: = $readItem{CH})");
-            $CHEMISTRY->update('chemtype'  , $readItem{CHT});
+            $CHEMISTRY->update('chemtype', $readItem{CHT},'identifier', $chemistry);
             $CHEMISTRY->build(1); # rebuild internal table
         }
         else {
