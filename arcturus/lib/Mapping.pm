@@ -33,6 +33,22 @@ sub setContigRange {
     $this->{contigrange} = [@range];
 }
 
+sub getContigRange {
+    my $this = shift;
+
+    my $range = $this->{contigrange};
+
+    unless ($range && @$range) {
+# no contig range defined, use (all) segments to find it
+        my $segments = $this->getSegments();
+        $range = &findContigRange($segments); # arrayref
+        return undef unless defined($range);
+        $this->{contigrange} = $range;
+    }
+
+    return @$range;
+}
+
 sub getMappingID {
     my $this = shift;
     return $this->{mapping_id};
@@ -140,26 +156,73 @@ sub compare {
 # but only consider the alignment direction and offset.
 
     return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps) || $relaxed);
+print "\n\nMapping ".$this->getMappingName." tm ".scalar(@$tmaps)." cm ".
+      scalar(@$cmaps)."\n" if ($relaxed > 1); 
 
 # return 0 on first encountered mismatch of direction, offset (or 
 # segment size); otherwise return true and alignment direction & offset 
 
+    my %segment;
+    my %scounts;
     my ($align,$shift);
     for (my $i = 0 ; $i < scalar(@$tmaps) ; $i++) {
+# note: in relaxed mode there can be extra segments at begin; ignored for the moment
 	my $tsegment = $tmaps->[$i];
 	my $csegment = $cmaps->[$i] || next; # can occur when relaxed
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
+
 # in relaxed mode we allow !$identical and test only alignment and offset
-        return 0 unless ($identical || $relaxed);
-# on first one register shift and alignment direction
-        if (!defined($align) && !defined($shift)) {
-            $align = $aligned; # either +1 or -1
-            $shift = $offset;
+
+        if ($relaxed) {
+print "segment: id=$identical al=$aligned off=$offset \n" if ($relaxed > 1);
+# on first one register alignment direction
+	    $align = $aligned unless defined($align);
+# break on alignment inconsistency; should never occur
+            return 0 unless ($align == $aligned);  
+# accumulate the segments for a given shift
+            $segment{$offset} = [] unless $segment{$offset};
+            push @{$segment{$offset}}, $tsegment;
+            $scounts{$offset}++;
         }
+# in non-relaxed mode we require all mapped segments to be identical
+        elsif ($identical) {
+# on first one register shift and alignment direction
+            if (!defined($align) && !defined($shift)) {
+                $align = $aligned; # either +1 or -1
+                $shift = $offset;
+            }
 # the alignment and offsets between the mappings must all be identical 
-        elsif ($align != $aligned || $shift != $offset) {
+            elsif ($align != $aligned || $shift != $offset) {
+                return 0;
+            }
+        }
+# inconsistent segment alignments detected in non-relaxed mode
+        else {
             return 0;
         }
+    }
+
+# in relaxed mode we now have to analyse the segment counts
+
+    if ($relaxed) {
+# find shift with largest number of segments
+my $list = $relaxed - 1;
+print "Processing shift statistics for ".$this->getMappingName."\n" if $list;
+        undef $shift;
+        my $totalcount = 0;
+        foreach my $offset (keys %scounts) {
+print "shift $offset  counts $scounts{$offset} \n" if $list;
+            $shift = $offset unless defined ($shift);
+            $shift = $offset if ($scounts{$offset} > $scounts{$shift});
+            $totalcount += $scounts{$offset};
+        }
+# is this a sufficiently large number? require (nearly) majority
+        return 0 unless ($scounts{$shift} >= ($totalcount-1)/2);
+# build the contig range on this mapping for this shift
+print "building contig range of this mapping offset $shift \n" if $list;
+        my $range = &findContigRange($segment{$shift});
+print "range $range @$range\n" if $list;
+        $this->setContigRange($range);
     }
 
     return (1,$align,$shift);
@@ -281,7 +344,7 @@ sub addAssembledFrom {
 }
 
 #-------------------------------------------------------------------
-# export of alignment segments and 
+# export of alignment segments
 #-------------------------------------------------------------------
 
 sub hasSegments {
@@ -300,24 +363,6 @@ sub getSegments {
     return $this->{assembledFrom}; # array reference
 }
 
-sub getContigRange {
-# find contig begin and end positions from the mapping segments
-    my $this = shift;
-
-    my ($cstart,$cfinal);
-
-    foreach my $segment (@{$this->getSegments()}) {
-# ensure the correct alignment cstart <= cfinish
-        $segment->normaliseOnX();
-        my $cs = $segment->getXstart();
-        $cstart = $cs if (!defined($cstart) || $cs < $cstart);
-        my $cf = $segment->getXfinis();
-        $cfinal = $cf if (!defined($cfinal) || $cf > $cfinal);
-    }
-
-    return ($cstart, $cfinal);
-}
-
 sub assembledFromToString {
 # write alignments as (block of) 'Assembled_from' records
     my $this = shift;
@@ -332,12 +377,38 @@ sub assembledFromToString {
         my $ystart = $segment->getYstart();
         my $yfinis = $segment->getYfinis();
         $string .= $assembledFrom." $xstart $xfinis $ystart $yfinis\n";
-#        $string .= $assembledFrom.$segment->toString()."\n";
     }
 
     $string = "$assembledFrom"."is undefined\n" if (!$string && shift); 
 
     return $string;
+}
+
+#-------------------------------------------------------------------
+# private function
+#-------------------------------------------------------------------
+
+sub findContigRange {
+# private find contig begin and end positions from input mapping segments
+    my $segments = shift; # arrayref for Segments
+
+# if no segments specified default to all
+
+#print "findContigRange invoked $segments\n";
+    return undef unless (ref($segments) eq 'ARRAY');
+
+    my ($cstart,$cfinal);
+
+    foreach my $segment (@$segments) {
+# ensure the correct alignment cstart <= cfinish
+        $segment->normaliseOnX();
+        my $cs = $segment->getXstart();
+        $cstart = $cs if (!defined($cstart) || $cs < $cstart);
+        my $cf = $segment->getXfinis();
+        $cfinal = $cf if (!defined($cfinal) || $cf > $cfinal);
+    }
+
+    return defined($cstart) ? [($cstart, $cfinal)] : undef;
 }
 
 #-------------------------------------------------------------------

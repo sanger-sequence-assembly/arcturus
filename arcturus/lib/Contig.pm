@@ -640,8 +640,8 @@ sub linkToContig {
         my ($identical,$aligned,$offset) = $match->compare($mapping,$relaxed);
 # printing mode
         if ($relaxed > 1) {
-            print "mapping: id=$identical  align=$aligned  ";
-            print "offset=$offset  ".$mapping->getMappingName."\n";
+            print "mapping: id=$identical  align=".($aligned||' ')."  ";
+            print "offset=".($offset||' ')."  ".$mapping->getMappingName."\n";
         } 
 # keep the first encountered (contig-to-contig) alignment value != 0 
         $alignment = $aligned unless $alignment;
@@ -681,6 +681,8 @@ sub linkToContig {
 # adjust for small numbers (2 and 3)
     $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
     $guillotine = 2  if ($guillotine < 2); # minimum required
+
+print "g: $guillotine \n" if ($relaxed > 1);
 
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
