@@ -29,6 +29,7 @@ my $cgi        = $GateKeeper->cgiHandle(1);
 my $database   = $cgi->parameter('database') || 'arcturus';
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
+print "organisms $organisms\n";
 
 ##############################################################################
 # MAIN
