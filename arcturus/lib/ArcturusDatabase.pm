@@ -731,10 +731,11 @@ sub putRead {
 
     my $readname = $read->getReadName();
 
-    my $sequence = compress($read->getSequence());
-    my $basequality = compress(pack("c*", @{$read->getQuality()}));
-
+    my $sequence = $read->getSequence();
     my $seqlen = length($sequence);
+
+    $sequence = compress($sequence);
+    my $basequality = compress(pack("c*", @{$read->getQuality()}));
 
     my $query = "insert into" .
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
