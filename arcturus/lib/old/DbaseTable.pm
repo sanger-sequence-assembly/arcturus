@@ -47,6 +47,7 @@ sub new {
     $self->{autoinc}   = ''; # for a possible autoincremental column
     $self->{hashrefs}  = []; # array with hashrefs for table rows
     $self->{hashref}   = ''; # hash reference of last accessed table row 
+    $self->{'build'}   =  0; # build hash status; true if table is loaded
     $self->{errors}    = ''; # build/instantiate error status
     $self->{warnings}  = ''; # build warning
 
@@ -54,10 +55,17 @@ sub new {
 
     $self->{lastQuery} = ''; # the most recent query attempted 
     $self->{qerror}    = ''; # possible query eror status
-    $self->{qTracer}   =  1; # default query tracing on
+    $self->{qTracer}   =  1; # default query tracing 'on'
     $self->{sublinks}  = {}; # hash with links to other tables
     $self->{timestamp} = ''; # timestamp if database contents changed
     $self->{alternate} = []; # array for alternate column names (re: tracing)
+
+# multi line and counter insert mode
+
+    $self->{stack}     = {}; # hash for multiple line insert stack
+    $self->{multiLine} =  1; # default one line at time
+    $self->{counts}    = {}; # hash for counter stack
+    $self->{polyCount} = 64; # default update (possible) table counter 
 
 # initialize the table only if build is defined (preset error status for build)
 
@@ -177,6 +185,7 @@ sub build {
 # if switch set build a hash of the whole table in memory
 # order by the column defined, or else by the primary key, if any
 
+    $self->{'build'} = 0;
     $switch = 0 if (!defined($switch));
     if ($switch && $order) {
         $count = buildhash(0, $self, $order);
@@ -224,6 +233,7 @@ sub buildhash {
     if ($hashrefs && $hashrefs != 0) {
         $self->{hashrefs} = $hashrefs;
         $count = @{$self->{hashrefs}};
+        $self->{'build'} = 1;
     }
     else {
         $self->{warnings} = "! Table $self->{tablename} is empty";
@@ -845,9 +855,13 @@ sub quoteColValue {
 #############################################################################
 
 sub locate {
+# locate a column $item of value $wval in the internal hash table
     my $self = shift;
     my $wval = shift;
     my $item = shift;
+# update an associated column with a ne value in the internal hash
+    my $column = shift;
+    my $nvalue = shift;
 
 # return hash reference to a row where:
 # (1) the value of column  item equals "wval" (if $item defined) ; return hash reference and item value
@@ -863,6 +877,9 @@ sub locate {
             if (defined($item) && defined($hash->{$item}) && $hash->{$item} eq $wval) {
                 $result = $hash;
                 $rvalue = $hash->{$item};
+                if (defined($column) && defined($nvalue)) {
+                    $hash->{$column} = $nvalue;
+                }
             } 
             elsif (!defined($item)) {
                 foreach my $column (@{$self->{columns}}) {
@@ -1023,6 +1040,10 @@ sub counter {
     my $count = shift; # set to 0 if the counter is to be unchanged
     my $alter = shift; # alternative column name
 
+# define a count, if it's not done on input
+                
+    $count = 1 if !defined($count);
+
 # (1) test if column name cname exists i.e. is among the @columns
 # (2) if so then test if $value exists (exact match)
 
@@ -1039,6 +1060,7 @@ sub counter {
                     $iden = 1 if ($value eq $hash->{$column});
                 }
             }
+# this branch is used when the table is not loaded as a hash into memory
             elsif ($self->associate($cname,$value,$column)) {
                 $iden = 1;
             }
@@ -1051,34 +1073,41 @@ sub counter {
 
     if ($iden) {
 
+# get the insert mode
+
+        my $polyCount = $self->{polyCount} || 1;
+        $polyCount = 1 if !$self->{'build'}; # no stored table
+$polyCount = 1; # test
+
         undef my $whereclause;
 
         if ($iden == 2) {
-    # create a new row (this creates the "whereclause" for the new row)
+# create a new row (with counter at 0; also this creates the "where clause" for the new row)
             &newrow ($self, $cname, $value) or $iden = 0;
 	    $whereclause = $self->{whereclause};
+            &buildhash(0,$self) if ($iden && $self->{'build'}); # reload the counter table
+print "New Row for $self->{tablename} <br>" if ($polyCount > 1);
         } 
         else {
-    # the row already exists; get the "where clause" to target it
-            $value = &quoteColValue($self,$cname,$value);
-            $whereclause = "$cname = $value";
-            $whereclause =~ s/\=\s+null/IS NULL/i;
+# the row already exists; get the "where clause" to target it
+            my $quotedvalue = &quoteColValue($self,$cname,$value);
+            $whereclause = "$cname = $quotedvalue";
+            $whereclause =~ s/\=\s+null/IS NULL/i; # in case value "null" is specified
         }
 
-    # update the row counter
+# update the row counter
 
         if ($iden && $counter && $whereclause) {
-#            $whereclause =~ s/(\%|\_)/\\$1/g; # quote MySQL wildcards; we do an exact match
-            if (!defined($count)) {
-                $count = 1;
+# protect against counter underflow (and leave table unchanged)
+            if ($count < 0) {
+                $count = 0 if (associate($self,$counter,$cname,$value) < -$count);
+                $self->{warnings} .= "attempt to decrease counter $counter by $count to below 0\n"; 
             }
-            elsif ($count < 0) {
-                $count = 0 if (associate($self,$counter,$cname,$value) < -$count); # protect
-print "$self->{tablename} counter: attempt to decrease counter $counter by $count to below 0<br>"; 
-            }
-            if ($count != 0) {
+
+            if ($count != 0 && $polyCount <= 1) {
+# single count insert mode (probably very inefficient)
                 my $command = "UPDATE <self> SET $counter=$counter+$count WHERE $whereclause";
-                $command =~ s/\+\s*\-/-/; # change +- to -
+                $command =~ s/\+\s*\-/-/; # change possible '+-' to '-'
                 &query($self,$command,1,0) or $iden = 0;
                 if (!$iden) {
                     $error = "failed to modify column $counter";
@@ -1087,8 +1116,23 @@ print "$self->{tablename} counter: attempt to decrease counter $counter by $coun
                     $command =~ s/\+1\sW/-1 W/; # decrement counter
                     push @{$self->{undoclause}}, $command;
                 }
+# update the stored hash image ($counter + $count for $cname = $value) 
+                foreach my $hash (@{$self->{hashrefs}}) {
+                    $hash->{$counter} += $count if ($hash->{$cname} eq $value);
+                }
             }
-            &buildhash(0,$self) if @{$self->{columns}}; # reload the counter table
+# the next branch handles the polyCount mode
+            elsif ($count != 0) {
+                my $counts = $self->{counts};
+
+#print "internal update $self->{tablename} $counter $count for value $value<br>";
+#                my $list = $self->list(); $list =~ s/\n/<br>/g; print $list;
+# update the stored hash image ($counter + $count for $cname = $value) 
+                foreach my $hash (@{$self->{hashrefs}}) {
+                    $hash->{$counter} += $count if ($hash->{$cname} eq $value);
+#print "internal update $self->{tablename} $counter  $hash->{$counter} <br><br>" if ($hash->{$cname} eq $value);
+                }
+            }
         } 
         elsif ($counter) {
             $error = "failed to create a new row";
@@ -1304,6 +1348,8 @@ sub flush {
     my $string = shift; # undef for all stacks
 
 #print "FLUSH $self->{tablename}\n";
+# process any pending new line inserts
+
     my $status = 0;
     my $stack = $self->{stack};
     foreach my $cstring (keys %$stack) {
@@ -1316,6 +1362,11 @@ sub flush {
             undef $self->{stack}->{$cstring} if $status;
         } 
     }
+
+# process any pending count updates
+
+    my $counts = $self->{counts};
+
     return $status;
 }
 
@@ -1568,6 +1619,7 @@ sub query {
     my $query = shift;
     my $stamp = shift; # undefined or true for timestamp on (updates);
     my $trace = shift;
+    my $bhash = shift || 0; # rebuild a hash table after an update
 
     $self->qclean;
 
@@ -1623,7 +1675,7 @@ sub query {
     if ($status > 0 && $query =~ /^\s*(insert|update|delete|replace)/i) {
         &timestamp(0,$self,lc($1)) if (!defined($stamp) || $stamp);
 # rebuild the table in memory if a hash list exists
-        buildhash(0,$self) if (defined($self->{hashrefs}) && @{$self->{hashrefs}});
+        buildhash(0,$self) if ($bhash && $self->{'build'});
     }
 
 # output status is either  UNDEFINED or 0 (FALSE) for a failed query
