@@ -76,6 +76,7 @@ $config{GBF} = '';
 
 my $arc_cgi_dir = $config->get('ARC_CGI_DIR');
 my $arc_log_dir = $config->get('ARC_LOG_DIR');
+my $arc_tmp_dir = $config->get('ARC_TMP_DIR');
 my $db_manager  = $config->get('db_manager'); 
 my $BADGERDIR   = $config->get('BADGERDIR');
 
@@ -952,6 +953,12 @@ print $reader->list($origin,1);
         $page->linkbutton('MAIN MENU',$lreturn,0);
         $page->flush();
     }
+
+    my $csroot = $GateKeeper->currentScriptRoot;
+    $ENV{SCRIPT_FILENAME} = "$csroot/harmonize";
+    $ENV{SCRIPT_NAME} = "/cgi-bin/harmonize";
+# ? prime environment via GateKeeper for harmonize script
+    system ("$csroot/harmonize organisms copy >> $arc_tmp_dir/harmonize.log");     
 
     exit 0;
 
