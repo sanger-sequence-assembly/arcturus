@@ -126,7 +126,7 @@ sub populateDictionaries {
     $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
     $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
-    $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
+    $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
     $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
 # a place holder for template dictionary which will be built on the fly
 #    $this->{Dictionary}->{template} = {};
@@ -726,12 +726,59 @@ sub putRead {
     $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($read->getAspedDate(), $template_id, $read->getStrand(),
-			$read->getChemistry(), $read->getStrand(), $readid);
+			$read->getChemistry(), $read->getPrimer(), $readid);
 
     return (0, "failed to set asped,template_id,strand,chemistry,primer for $readname ($readid);" .
 	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 
     $sth->finish();
+
+    my $seqlen = length($read->getSequence());
+
+    $query = "update READS set slength=?,lqleft=?,lqright=? where read_id=?";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($seqlen, $read->getLowQualityLeft(),
+			$read->getLowQualityRight(), $readid);
+
+    return (0, "failed to set slength,lqleft,lqright for $readname ($readid);" .
+	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+    $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    my $sequence = compress($read->getSequence());
+    my $basequality = compress(pack("c*", @{$read->getQuality()}));
+
+    $rc = $sth->execute($readid, $sequence, $basequality);
+
+    return (0, "failed to insert sequence and base-quality for $readname ($readid);" .
+	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+    my $seqvec = $read->getSequencingVector();
+    my $seqvecid = $this->getSequencingVectorID($read);
+
+    my $svleft = $read->getSequencingVectorLeft();
+    my $svright = $read->getSequencingVectorRight();
+
+    if (defined($seqvecid)) {
+	$query = "update READS set svector_id=?,svleft=?,svright=? where read_id=?";
+
+	$sth = $dbh->prepare_cached($query);
+
+	$rc = $sth->execute($seqvecid, $svleft, $svright, $readid);
+
+    return (0, "failed to set svector_id,svleft,svright for $readname ($readid);" .
+	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+    }
 
     return (1, "OK");
 }
@@ -740,23 +787,53 @@ sub checkReadForCompleteness {
     my $this = shift;
     my $read = shift;
 
-    return (0, "invalid argument") unless (defined($read) && ref($read) && ref($read) eq 'Read');
+    return (0, "invalid argument")
+	unless (defined($read) && ref($read) && ref($read) eq 'Read');
 
-    return (0, "undefined readname") unless defined($read->getReadName());
-    return (0, "undefined sequence") unless defined($read->getSequence());
-    return (0, "undefined base-quality") unless defined($read->getQuality());
-    return (0, "undefined asped-date") unless defined($read->getAspedDate());
-    return (0, "undefined template") unless defined($read->getTemplate());
-    return (0, "undefined ligation") unless defined($read->getLigation());
-    return (0, "undefined insert-size") unless defined($read->getInsertSize());
-    return (0, "undefined strand") unless defined($read->getStrand());
-    return (0, "undefined chemistry") unless defined($read->getChemistry());
-    return (0, "undefined primer") unless defined($read->getPrimer());
-    return (0, "undefined low-quality-left") unless defined($read->getLowQualityLeft());
-    return (0, "undefined low-quality-right") unless defined($read->getLowQualityRight());
-    return (0, "undefined sequencing-vector") unless defined($read->getSequencingVector());
-    return (0, "undefined sequencing-vector-left") unless defined($read->getSequencingVectorLeft());
-    return (0, "undefined sequencing-vector-right") unless defined($read->getSequencingVectorRight());
+    return (0, "undefined readname")
+	unless defined($read->getReadName());
+
+    return (0, "undefined sequence")
+	unless defined($read->getSequence());
+
+    return (0, "undefined base-quality")
+	unless defined($read->getQuality());
+
+    return (0, "undefined asped-date")
+	unless defined($read->getAspedDate());
+
+    return (0, "undefined template")
+	unless defined($read->getTemplate());
+
+    return (0, "undefined ligation")
+	unless defined($read->getLigation());
+
+    return (0, "undefined insert-size")
+	unless defined($read->getInsertSize());
+
+    return (0, "undefined strand")
+	unless defined($read->getStrand());
+
+    return (0, "undefined chemistry")
+	unless defined($read->getChemistry());
+
+    return (0, "undefined primer")
+	unless defined($read->getPrimer());
+
+    return (0, "undefined low-quality-left")
+	unless defined($read->getLowQualityLeft());
+
+    return (0, "undefined low-quality-right")
+	unless defined($read->getLowQualityRight());
+
+#    return (0, "undefined sequencing-vector")
+#	unless defined($read->getSequencingVector());
+
+#    return (0, "undefined sequencing-vector-left")
+#	unless defined($read->getSequencingVectorLeft());
+
+#    return (0, "undefined sequencing-vector-right")
+#	unless defined($read->getSequencingVectorRight());
 
     return (1, "OK");
 }
@@ -794,11 +871,13 @@ sub getTemplateID {
 
     return $template_id if defined($template_id);
 
-    $query = "insert into TEMPLATE(name) VALUES(?)";
+    my $ligation_id = $this->getLigationID($read);
+
+    $query = "insert into TEMPLATE(name,ligation_id) VALUES(?,?)";
 
     $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($template);
+    $rc = $sth->execute($template, $ligation_id);
 
     if ($rc == 1) {
 	$template_id = $dbh->{'mysql_insertid'};
@@ -809,6 +888,86 @@ sub getTemplateID {
     $sth->finish();
 
     return $template_id;
+}
+
+sub getSequencingVectorID {
+    my $this = shift;
+    my $read = shift;
+
+    my $dbh = $this->getConnection();
+
+    return undef unless defined($dbh);
+
+    my $query = "select svector_id from SEQUENCEVECTORS where name=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $seqvec = $read->getSequencingVector();
+
+    my $rc = $sth->execute($seqvec);
+
+    my ($seqvec_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $seqvec_id if defined($seqvec_id);
+
+    $query = "insert into SEQUENCEVECTORS(name) VALUES(?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($seqvec);
+
+    if ($rc == 1) {
+	$seqvec_id = $dbh->{'mysql_insertid'};
+    } else {
+	undef $seqvec_id;
+    }
+
+    $sth->finish();
+
+    return $seqvec_id;
+}
+
+sub getLigationID {
+    my $this = shift;
+    my $read = shift;
+
+    my $dbh = $this->getConnection();
+
+    return undef unless defined($dbh);
+
+    my $query = "select ligation_id from LIGATIONS where identifier=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $ligation = $read->getLigation();
+
+    my $rc = $sth->execute($ligation);
+
+    my ($ligation_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $ligation_id if defined($ligation_id);
+
+    my ($silow, $sihigh) = @{$read->getInsertSize()};
+
+    $query = "insert into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($ligation, $silow, $sihigh);
+
+    if ($rc == 1) {
+	$ligation_id = $dbh->{'mysql_insertid'};
+    } else {
+	undef $ligation_id;
+    }
+
+    $sth->finish();
+
+    return $ligation_id;
 }
 
 sub updateRead {

@@ -16,7 +16,8 @@ sub new {
 
     my $this = $type->SUPER::new();
 
-    my ($schema, $projid, $aspedafter, $readnamelike, $includes, $excludes);
+    my ($schema, $projid, $aspedafter, $aspedbefore,
+	$readnamelike, $includes, $excludes);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -24,6 +25,8 @@ sub new {
 	$schema = shift if ($nextword eq 'schema');
 
 	$projid = shift if ($nextword eq 'projid');
+
+	$aspedbefore = shift if ($nextword eq 'aspedbefore');
 
 	$aspedafter = shift if ($nextword eq 'aspedafter');
 
@@ -75,6 +78,9 @@ sub new {
 
     unshift @conditions, "projid = $projid"
 	if defined($projid);
+
+    unshift @conditions, "asped < '" . $aspedbefore . "'"
+	if defined($aspedbefore);
 
     unshift @conditions, "asped > '" . $aspedafter . "'"
 	if defined($aspedafter);
