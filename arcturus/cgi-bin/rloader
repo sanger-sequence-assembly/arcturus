@@ -391,15 +391,9 @@ else { # invoked from the command line (ejz/adh only)
             }
         }
         elsif ($gbfilter) {
-    # test if gbfilter is a project name; find its root directory ? 
+# test if gbfilter is a project name; find its root directory ? 
+print "testing project $gbfilter <br>";
             $config{PDD} = `$BADGERDIR/pfind -q $gbfilter`;
-#            my @rootdatadir = `pfind $gbfilter`;
-#            chomp $rootdatadir[0];
-#            if ($rootdatadir[0] =~ /nfs/) {
-#                $config{PDD} = $rootdatadir[0] ;
-#                $config{PDD} =~ s/.*(\/nfs\S*)$/$1/;
-#                $config{PDD} =~ s/^(.*)$gbfilter$/$1/;
-#            }
         }
         else {
             $gbfilter = '';

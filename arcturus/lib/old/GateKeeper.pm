@@ -192,6 +192,7 @@ sub origin {
 # return PATH information
     my $self = shift;
     my $path = shift; # (max) number of path elements (ARGV input)
+#    my $skip = shift; # true for skipping PATH_INFO
 
     undef my $origin;
     if ($ENV{'GATEWAY_INTERFACE'}) {
@@ -1458,13 +1459,13 @@ sub GUI {
      
     if ($self->instance && $cgi->parameter('session',0)) {
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet(1,@include);
+        my $query = "/cgi-bin/arcturus/signoff".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightgreen' nowrap align=center";
         $table .= "<tr><td $cell><a href=\"$query\" $alt>SIGN OFF</a></td></tr>";
     }
     elsif ($self->instance) {
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $query = "/cgi-bin/herdsman/signon".$cgi->postToGet(1,@include);
+        my $query = "/cgi-bin/arcturus/signon".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightblue' nowrap align=center";
         $table .= "<tr><td $cell><a href=\"$query\" $alt>SIGN ON</a></td></tr>";
     }
@@ -1652,6 +1653,8 @@ sub environment {
     }
 
     $text .= $self->{cgi}->PrintVariables if $self->{cgi};
+
+    $text .= "\nARGV: @ARGV\n" if @ARGV;
 
     &report($self,$text);
 }
