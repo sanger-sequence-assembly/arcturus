@@ -16,9 +16,10 @@ my $organism;
 my $instance;
 my $projectname;
 my $project_id;
+my $generation = 'current';
 my $verbose;
 
-my $validKeys  = "organism|instance|projectname|project_id|verbose|help";
+my $validKeys  = "organism|instance|projectname|project_id|generation|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -29,6 +30,8 @@ while (my $nextword = shift @ARGV) {
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
+    $generation   = shift @ARGV  if ($nextword eq '-generation');
+
     $projectname  = shift @ARGV  if ($nextword eq '-projectname');
 
     $project_id   = shift @ARGV  if ($nextword eq '-project_id');
@@ -38,7 +41,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage(0,"Missing project name") unless $projectname;
+#&showUsage(0,"Missing project name") unless $projectname;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -83,6 +86,10 @@ if ($project_id) {
     my $project = $adb->getProject(project_id=>$project_id);
     $logger->warning("Failed to find project $project_id") unless $project;
     push @projects, $project if $project;
+}
+
+unless (@projects) {
+    print $adb->getProjectInventoryToString(generation=>$generation);
 }
 
 $adb->disconnect();
