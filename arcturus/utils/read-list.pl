@@ -87,7 +87,7 @@ $instance = 'prod' unless defined($instance);
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
-if ($adb->errorStatus()) {
+if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
@@ -261,7 +261,7 @@ sub list {
         $L{sequence} = $sequence;
     }
 
-    my $quality    = $read->getQuality;
+    my $quality    = $read->getBaseQuality;
     if (defined($quality)) {
         $L{quality} = '';
 # output in lines of 20 numbers

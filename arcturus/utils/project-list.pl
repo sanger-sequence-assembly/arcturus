@@ -89,7 +89,17 @@ if ($project_id) {
 }
 
 unless (@projects) {
-    print $adb->getProjectInventoryToString(generation=>$generation);
+
+    my $output = $adb->getProjectInventory(generation=>$generation);
+    &showUsage("Invalid input $generation") unless $output;
+
+    print STDOUT "\nProject inventory ($generation generation) :\n\n". 
+                 " nr Project      Contigs   Reads  ".
+                 "Total lgt  Average     Mean   Maximum \n";
+    foreach my $line (@$output) {
+        printf STDOUT ("%3d %-12s %7d %7d  %9d %8d %8d %9d\n",@$line);
+    }
+    print STDOUT "\n";
 }
 
 $adb->disconnect();
