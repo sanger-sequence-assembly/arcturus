@@ -23,8 +23,8 @@ use ReadsReader;
 # unbuffered output
 ##############################################################################
 
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-#open(STDERR,">&/dev/null");
+#open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+open(STDERR,">&/dev/null");
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
@@ -192,8 +192,8 @@ if ($cgi) {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
 #print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
-                $config{RDD} = `$BADGERDIR/pfind -q $database > /dev/null 2>&1`;
-		$config{RDD} =~ s/[^\w\/]/ BR /g;
+#                $config{RDD} = `$BADGERDIR/pfind -q $database`;
+#		$config{RDD} =~ s/[^\w\/]/ BR /g;
 print "RDD Ia:  $config{RDD} <br>";
 #               my $repository = new PathogenRepository;
 #               $config{RDD} = $repository->getAssemblyDirectory($database); 
@@ -209,7 +209,13 @@ print "RDD Ia:  $config{RDD} <br>";
                 $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname); 
     # update the data dir name (if assembly has changed)
                 my $target = $asname; $target =~ s/\d+/\\d\+/g;
-                $config{RDD} =~ s/$target/$asname/;
+                $config{RDD} =~ s/$target/$asname/ if $config{RDD};
+    # next handles the case where RDD is not yet defined
+                if (!$config{RDD} || $config{RDD} =~ /to be d/) {
+                    my $repository = new PathogenRepository;
+                    $config{RDD} = $repository->getAssemblyDirectory($asname); 
+print "RDD Ib:  $config{RDD} <br>";
+                }
     # overwrite the preset configuration data with those in ORGANISM attributes if any
                 $config{LGF} =~ s/DATABASE/$database/; # log file
                 foreach my $key (keys %config) {
