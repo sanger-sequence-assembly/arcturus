@@ -657,8 +657,6 @@ sub writeDNA {
     $marker = ">" unless defined($marker); # default FASTA format
 
     if (my $dna = $this->getSequence(@_)) {
-# replace dashes by N if it's the original read
-# $dna =~ s/\-/N/g unless $this->getVersion();
 # output in blocks of 60 characters
 	print $FILE "\n$marker$this->{readname}\n";
 	my $offset = 0;

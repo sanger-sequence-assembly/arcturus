@@ -1525,11 +1525,8 @@ sub putNewSequenceForRead {
 
     my $readname = $read->getReadName();
     return (0,"incomplete Read instance: missing readname") unless $readname; 
-
-# get and/or test readname against read_id (we don't know how $read was made)
-
     my $read_id = $this->hasRead($readname);
-
+# test db read_id against Read read_id (we don't know how $read was made)
     if (!$read_id) {
         return (0,"unknown read $readname");
     } 
@@ -1868,7 +1865,6 @@ sub getContig {
 	if ($nextword eq 'ID' || $nextword eq 'contig_id') {
             $query .= "from CONTIG where contig_id = ?";
             $value = shift;
-print STDERR "new getContig: $query\n";
         }
         elsif ($nextword eq 'withChecksum') {
 # should include age specification?
@@ -2082,11 +2078,15 @@ sub putContig {
 # determine the readnamehash and other tests of uniqueness of the contig
 # find out if the contig has been loaded before
 
+print "\nTesting contig ".$contig->getContigName."\n";
     my $readnamehash = md5(sort keys %seqids);
-    if (my $previous = $this->getContig(withChecksum=>$readnamehash,
-                                        metaDataOnly=>1)
-                    || $this->getContig(withChecksum=>md5(sort @seqids),
-                                        metaDataOnly=>1) ) {
+# first try the readname hash
+    my $previous = $this->getContig(withChecksum=>$readnamehash,
+                                    metaDataOnly=>1);
+# if not found try the sequence ID hash
+    $previous = $this->getContig(withChecksum=>md5(sort @seqids),
+                                 metaDataOnly=>1) unless $previous;
+    if ($previous) {
 # the read name hash or the sequence IDs hash do match
 print STDOUT "Contig ".$contig->getContigName.
 " may be identical to contig ".$previous->getContigName."\n";
@@ -2101,21 +2101,26 @@ print STDOUT "comparison result identical=$identical\n";
 # contigs (i.e. build the C2CMAPPING CONTIG2CONTIG links)
 
     my $contigids = $this->getLinkedContigsForContig($contig);
-print "output getLinkedContigsForContig: $contigids\n";
+print "output getLinkedContigsForContig: $contigids @$contigids\n";
 # pull out mappings for those previous contigs
     my @linkmappings;
     if ($contigids && @$contigids) {
 # compare each contig and return/store mapings/segments
+	print "new contig has ".$contig->getNumberOfReads." reads\n";
+print "test against contigs @$contigids \n";
         foreach my $contigid (@$contigids) {
-            my $previous = $this->getContig(withContigID=>$contigid,
+            my $previous = $this->getContig(ID=>$contigid,
                                             metaDataOnly=>1);
+print "linked contig has ".$previous->getNumberOfReads." reads\n";
             $this->getMappingsForContig($previous);
             my $mapping = $contig->compare($previous);
             push @linkmappings,$mapping if $mapping;
-print "previous $previous : ".$mapping->assembledFromToString."\n";
         }
     }
-
+foreach my $mapping (@linkmappings) {
+print STDOUT "Contig ".$contig->getContigName." ".
+              ($mapping->assembledFromToString || "\n");
+}
 return 0; # testing
 
 # now load it into the database
