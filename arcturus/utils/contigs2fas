@@ -4,15 +4,28 @@
 #
 # This script extracts one or more contigs and generates a FASTA file
 
+use strict;
+
 use DBI;
 use DataSource;
 use Compress::Zlib;
 use FileHandle;
 
-$verbose = 0;
-@dblist = ();
+my $verbose = 0;
+my @dblist = ();
 
-while ($nextword = shift @ARGV) {
+my $instance;
+my $organism;
+my $minlen;
+my $verbose;
+my $fastafile;
+my $destdir;
+my $padton;
+my $padtox;
+my $depad;
+my $fastafh;
+
+while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
 
@@ -22,7 +35,11 @@ while ($nextword = shift @ARGV) {
 
     $fastafile = shift @ARGV if ($nextword eq '-fasta');
 
+    $destdir = shift @ARGV if ($nextword eq '-destdir');
+
     $padton = 1 if ($nextword eq '-padton');
+    $padtox = 1 if ($nextword eq '-padtox');
+
     $depad = 1 if ($nextword eq '-depad');
 
     if ($nextword eq '-help') {
@@ -32,21 +49,24 @@ while ($nextword = shift @ARGV) {
 }
 
 unless (defined($organism) &&
-	defined($fastafile)) {
+	defined($instance) &&
+	(defined($fastafile) || defined($destdir))) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
 }
 
 $depad = 0 unless defined($depad);
+
 $padton = 0 unless defined($padton);
 $padton = 0 if $depad;
 
-$instance = 'dev' unless defined($instance);
+$padtox = 0 unless defined($padtox);
+$padtox = 0 if $depad;
 
-$ds = new DataSource(-instance => $instance, -organism => $organism);
+my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
-$dbh = $ds->getConnection();
+my $dbh = $ds->getConnection();
 
 unless (defined($dbh)) {
     print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
@@ -55,26 +75,31 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-$fastafh = new FileHandle($fastafile, "w");
-
-die "Unable to open FASTA file \"$fastafile\" for writing" unless $fastafh;
+if (defined($fastafile)) {
+    $fastafh = new FileHandle($fastafile, "w");
+    die "Unable to open FASTA file \"$fastafile\" for writing" unless $fastafh;
+} else {
+    if (! -d $destdir) {
+	die "Unable to create directory \"$destdir\"" unless mkdir($destdir);
+    }
+}
 
 $minlen = 1000 unless defined($minlen);
 
-$query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence " .
+my $query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence " .
     "from CONTIG left join CONSENSUS using(contig_id) ".
     "where CONSENSUS.contig_id is not null and CONTIG.length >= $minlen";
 
-$sth = $dbh->prepare($query);
+my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $sth->execute();
 &db_die("execute($query) failed");
 
-while(@ary = $sth->fetchrow_array()) {
-    ($contigid, $contiglength, $compressedsequence) = @ary;
+while(my @ary = $sth->fetchrow_array()) {
+    my ($contigid, $contiglength, $compressedsequence) = @ary;
 
-    $sequence = uncompress($compressedsequence);
+    my $sequence = uncompress($compressedsequence);
 
     if ($contiglength != length($sequence)) {
 	print STDERR "Sequence length mismatch for contig $contigid: $contiglength vs ",
@@ -87,6 +112,15 @@ while(@ary = $sth->fetchrow_array()) {
     } elsif ($padton) {
 	# Convert pads to N ...
 	$sequence =~ s/[^\w\-]/N/g;
+    } elsif ($padtox) {
+	# Convert pads to X ...
+	$sequence =~ s/[^\w\-]/X/g;
+    }
+
+    if ($destdir) {
+	my $filename = sprintf("%s/contig%04d.fas", $destdir, $contigid);
+	$fastafh = new FileHandle("> $filename");
+	die "Unable to open new file \"$filename\"" unless $fastafh;
     }
 
     printf $fastafh ">CONTIG%04d\n", $contigid;
@@ -94,6 +128,11 @@ while(@ary = $sth->fetchrow_array()) {
     while (length($sequence) > 0) {
 	print $fastafh substr($sequence, 0, 50), "\n";
 	$sequence = substr($sequence, 50);
+    }
+
+    if ($destdir) {
+	$fastafh->close();
+	undef $fastafh;
     }
 }
 
@@ -114,12 +153,16 @@ sub db_die {
 
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -instance\t\tName of instance [default: prod]\n";
     print STDERR "    -organism\t\tName of organism\n";
+    print STDERR "\n";
     print STDERR "    -fasta\t\tName of output FASTA file\n";
+    print STDERR "    -- OR --\n";
+    print STDERR "    -destdir\t\tDirectory for individual FASTA files\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "    -instance\t\tName of instance [default: prod]\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
+    print STDERR "    -padtox\t\tConvert pads to X\n";
 }
