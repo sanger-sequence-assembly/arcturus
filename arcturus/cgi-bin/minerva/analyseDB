@@ -10,22 +10,24 @@ print $cgi->header();
 print $cgi->start_html(-title => 'Database Analyser',
 		       -bgcolor => '#FFFFFF');
 
-print $cgi->h1('Database Analyser');
-
 $scriptname = $cgi->script_name;
 
 $debug = $cgi->param('debug');
 $instance = $cgi->param('instance');
 
-unless (defined($instance)) {
+if (defined($instance)) {
+    print $cgi->h1("Database Analyser: $instance");
+} else {
     @allinstances = ('babel.prod', 'babel.dev', 'babel.test',
 		     'pcs3.prod',  'pcs3.dev',  'pcs3.test');
+
+    print $cgi->h1("Select an instance");
 
     print "Please select the instance that you wish to analyse:\n";
     print "<UL>\n";
 
     foreach $instance (@allinstances) {
-	print "<LI><A HREF=\"$scriptname?instance=$instance\">$instance</A>\n";
+	print "<LI><A HREF=\"$scriptname?instance=$instance\">$instance</A>\n<P>\n";
     }
 
     print "</UL>\n";
@@ -55,7 +57,7 @@ if(defined($database) && defined($table)) {
     if ($DBI::err) {
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print $cgi->h2("Table description for $database.$table on instance $instance");
+	print $cgi->h2("Table description for $database.$table");
 	
 	$query = "DESCRIBE $table";
 
@@ -89,7 +91,7 @@ if(defined($database) && defined($table)) {
 
 	print "</TABLE>\n";
 
-	print $cgi->h2("Table status for $database.$table on instance $instance");
+	print $cgi->h2("Table status for $database.$table");
 
 	$query = "SHOW TABLE STATUS LIKE '$table'";
 
