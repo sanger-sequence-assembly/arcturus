@@ -8,6 +8,8 @@ use NewHTML;
 use ArcturusTable;
 use ConfigReader;
 
+my $debug = 0;
+
 #############################################################################
 #
 # GateKeeper module for the ARCTURUS assembly tracking database system
@@ -54,6 +56,7 @@ sub new {
     my %options = (eraiseMySQL=>0 , insistOnCgi=>0, diagnosticsOn=>0);
     if ($eraise && ref($eraise) eq 'HASH') {
         &importOptions(\%options,$eraise);
+        $debug = $options{diagnosticsOn};
     }
     else {
         $options{eraiseMySQL} = $eraise if $eraise;
@@ -67,17 +70,14 @@ sub new {
 # produce return string for diagnostic purposes, if specified
 
     &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
-    print "CGI opened \n" if $options{diagnosticsOn};
 
 # open and parse the configuration file
 
     &configure(0,$self);
-    print "Config opened \n" if $options{diagnosticsOn};
 
 # open the database
 
     &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
-    print "MySQL opened \n" if $options{diagnosticsOn};
 
 #    &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
@@ -258,6 +258,8 @@ sub opendb_MySQL {
     my $lock   = shift;
     my $self   = shift;
     my $eraise = shift;
+
+    print "GateKeeper enter opendb_MySQL \n" if $debug;
 
     &dropDead($self,"You're not supposed to access this method") if $lock;
 
@@ -447,6 +449,8 @@ sub dbHandle {
     my $database = shift; # name of arcturus database to be probed
     my $hash     = shift; 
 
+    print "GateKeeper enter dbHandle \n" if $debug;
+
     my %options = (undefinedDatabase => 0, defaultRedirect => 1, returnTableHandle => 0);
     &importOptions(\%options, $hash);
 
@@ -588,6 +592,8 @@ sub authorize {
     my $hash = shift;
 
 # start by defining session, password, identify
+
+    print "GateKeeper enter authorize \n" if $debug;
 
     undef my ($cgi, $session, $password, $identify);
 
