@@ -1,6 +1,6 @@
 package Saurian;
 
-# Assembler interface to Arcturus database
+# Assembly interface to Arcturus database
 
 use strict;
 
@@ -15,8 +15,6 @@ use ContigBuilder;
 use ContigRecall;
 use ReadMapper;
 
-#############################################################################
-my $DEBUG = 1;
 #############################################################################
 
 sub new {
@@ -133,14 +131,17 @@ sub cafRead {
 
 # to be extended using on the fly caf output for many reads
 
-    my $read = $self->getRead($name); # returns a ReadsRecall object
+    my $ReadsRecall = $self->getRead($name); # returns (a) ReadsRecall object(s)
 
-    my @reads;
-    my $reads = \@reads;
-    (ref($read) eq 'ARRAY') ? $reads = $read: $reads->[0] = $read;
+    if (ref($ReadsRecall) ne 'ARRAY') {
+# put the single read object as first el;ement of a local array
+        my @ReadsRecall;
+        $ReadsRecall[0] = $ReadsRecall;
+        $ReadsRecall   = \@ReadsRecall;
+    }    
 
     my $count = 0;
-    foreach my $instance (@$reads) {
+    foreach my $instance (@$ReadsRecall) {
         $count++ if ($instance->writeReadToCaf($FILE));
     }
 
@@ -204,11 +205,41 @@ sub testReadAllocation {
     return $ReadsRecall->checkReadAllocation($opts);
 }
 #--------------------------- documentation --------------------------
+=pod
 
+=head1 method testReadAllocation
+
+=head2 Synopsis
+
+Test and if needed update reads-to-assembly allocation
+
+=head2 Parameter: options (optional)
+
+Reference to a hash table with control parameters
+
+=over 3
+
+=item hash key 'resetAll'
+
+Reset the table from scratch
+
+=item hash key 'includeNew'
+
+Take generation 0 into account
+
+=item hash key 'lockTable' (NOT YET operational)
+
+If set to 1, the READS2ASSEMBLY table will be write locked
+
+=back
+
+=head2 Returns 0 after successful execution; else number of problem entries 
+
+=cut
 #############################################################################
 
 sub testReadMaps {
-# fetch all unassembled reads and write data to a CAF file
+# analyse read maps (and e.g. chemistry; ad hoc application for the moment)  
     my $self = shift;
     my $opts = shift;
 
@@ -217,11 +248,43 @@ sub testReadMaps {
     return $ReadMapper->mapAnalysis($opts);
 }
 #--------------------------- documentation --------------------------
+=pod
 
+=head1 method testReadMaps
+
+=head2 Synopsis
+
+Analyse read map characteristics (e.g. as function of chemistry)
+
+The analysis is prone to further development
+
+=head2 Parameter: options (optional)
+
+Reference to a hash table with control parameters
+
+=over 3
+
+=item hash key 'minimum'
+
+Smallest number of reads for a given chemistry top be considered
+
+=item hash key 'list'
+
+Just what it says
+
+=item hash key 'normalise'
+
+Produce distribution output in percentage bins instead of counts
+
+=back
+
+=head2 Returns a report with summary of results
+
+=cut
 #############################################################################
 
 sub listUnassembledReads {
-# fetch all unassembled reads and write data to a CAF file
+# list all unassembled reads
     my $self = shift;
     my $opts = shift;
 
@@ -269,7 +332,7 @@ Include reads belonging to single-read contigs
 
 =head2 Output
 
-Value returned is a reference to an array with the values thought 
+Value returned is a reference to an array with read names or IDs
 
 =cut
 #############################################################################
@@ -336,8 +399,6 @@ sub buildContig {
     my $self = shift;
     my $name = shift;
 
-$DEBUG = 1;
-
     my $ContigRecall = $self->{ContigRecall} || return 0;
 
     return $ContigRecall->buildContig($name,@_);
@@ -370,6 +431,8 @@ hash image with options:
 Return the reference the ContigRecall object
 
 =cut
+#############################################################################
+my $DEBUG = 1;
 #############################################################################
 
 sub cafDumpContig {
@@ -518,10 +581,10 @@ print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
 sub update {
 # update counters for assembly status
     my $self       = shift;
-    my $assembly   = shift;
+    my $assembly   = shift; # number or name ?
     my $generation = shift;
 
-    print "enter update: $self->{ContigBuilder} \n";
+print "enter update: $self->{ContigBuilder} \n";
     my $ContigBuilder = $self->{ContigBuilder} || return 0;
 
     $self->allowTableAccess('ASSEMBLY',1);
@@ -539,7 +602,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "20 Oct 2003",
+        updated =>    "25 Jan 2004",
     };
 }
 

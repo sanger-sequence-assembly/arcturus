@@ -96,6 +96,7 @@ sub new {
     $self->{padtocon} = []; # mapping padded read to contig
     $self->{read2con} = {}; # mapping read (segment) to contig
     $self->{contocon} = []; # for possible contig to contig alignment info
+    $self->{assemble} = []; # array for assembled from records ..
 
     $self->{counts}   = []; # counters
     $self->{marked}   = ''; # marker 'N' or 'M' for deprecation status
@@ -330,8 +331,8 @@ sub edit {
 
 ###############################################################################
 
-sub alignToCaf {
-# load caf alignment(s) for this read
+sub addAlignToCaf {
+# input caf alignment(s) for this read (allows several records per read)
     my $self  = shift;
     my $block = shift; # input array of length 4 with mapped positions
 
@@ -358,11 +359,9 @@ sub alignToCaf {
             $error = "block length/orientation mismatch ($rlgt<>$clgt)";
         } 
         else {
-# get the hash value (string!) for this alignment ('999999' used as terminator)
+# get the hash value (string!) for this alignment ('999999' will be used as terminator)
             $counts->[1]++; # it's the next alignment
             my $hash = sprintf ("%06d",$counts->[1]);
-# my $hash = "00000$counts->[1])";
-# $hash =~ s/.*(\d{6})$/$1/;         
             @{$read2pad->{$hash}} = @$block;
             my $next = @$quality || 0;
             my $default = $quality->[$next];
@@ -388,8 +387,10 @@ sub alignToCaf {
 
 ################################################################################
 
-sub alignToContig {
-# load contig alignment (should be only one!) for this read (after padding)
+
+# SURPLUSS TO REQUIREMENT. TO BE DEPRECATED
+sub oldalignToContig {
+# input contig alignment (should be only one!) for this read (after padding)
     my $self     = shift;
     my $block    = shift; # input array of length 4 with mapped positions
 
@@ -399,25 +400,30 @@ sub alignToContig {
     my $counts   = $self->{counts};
     my $status   = $self->{status};
 
+#    undef $self->{counterAlign};
+
 # test the input: sections must be equal length but may have opposite direction
 
     my $report = "alignToContig input: @$block$break";
 
     my $error;
     if (@$block == 4) {
-    # test length and orientation of alignment
+# test length and orientation of alignment
         my $clength = $block->[1] - $block->[0];
         my $rlength = $block->[3] - $block->[2];
 
-        if ($rlength != -$clength && $rlength != $clength) {
+        if (abs($rlength) != abs($clength)) {
+#        if ($rlength != -$clength && $rlength != $clength) {
             $error = "block length mismatch ($rlength<>$clength)";
         } 
         else {
             @$padtocon = @$block;
-            $counts->[2] = 1; # signal alignment as defined
-        # determine alignment direction
-            $self->{align} = 0; # default co-aligned
-            $self->{align}++ if ($rlength == -$clength);
+            $counts->[2] = 1; # signal padded alignment as defined
+# to be replaced by final test on consistence
+# determine alignment direction 
+            $self->{counterAlign} = ($rlength == $clength) ? 0 : 1;
+#            $self->{counterAlign} = 0; # default co-aligned
+#            $self->{counterAlign} = 1 if ($rlength == -$clength);
         }
     } 
     else {
@@ -434,6 +440,190 @@ sub alignToContig {
     }
 
     $self->{report} .= $report;
+}
+
+################################################################################
+
+sub addAssembledFrom {
+# input of Assembled_from reads to contig alignments
+    my $self = shift;
+    my $from = shift; # ref to array of mappings: cstart, cfinal, rstart, rfinal
+
+# loading section for Assembled_from alignments
+
+    my $assemble = $self->{assemble}; # reference to array of arrays
+
+    my $error = '';
+    my $success = 0;
+
+my $DEBUG = 1;
+print "addAssembledFrom : @$from $break" if $DEBUG;
+
+    if ($from && @$from == 4) {
+# test length of Assembled_from alignment
+        my $clength = $from->[1] - $from->[0];
+        my $rlength = $from->[3] - $from->[2];
+
+        if (abs($clength) != abs($rlength)) {
+            $error = "section length error ($rlength <> $clength)";
+        } 
+        else {
+# make a local copy and add to the array of arrays
+            my @amap = @$from;
+            push @$assemble, \@amap;
+            $success = @$assemble+0;
+# determine the alignment and its consistence
+            my $align = $amap[1] - $amap[0];
+            if (!defined($self->{counterAlign}) || $self->{counterAlign} < 0) {
+# define at first use of method, but leave unchanged if $align == 0 (single base section)
+                $self->{counterAlign} = 0 if ($align > 0); # co-aligned
+                $self->{counterAlign} = 1 if ($align < 0); # counter-aligned
+            }
+            elsif ($self->{counterAlign} == 0 && $align < 0 
+               or  $self->{counterAlign} >  0 && $align > 0) {
+# there is an inconsistence of alignment in multiple assembled_from mappings
+               $error = "inconsistent alignment in unpadded mapping";
+            }
+        }
+    }
+    elsif ($from) {
+        $error = "Invalid Assembled_from mapping @{$from}";
+    }
+    else {
+        $error = "Missing Assembled_from mapping";
+    }
+
+# error status
+
+    if ($error =~ /\S/) {
+        my $status = $self->{status};        
+        $status->{inputlog} .= "! Invalid Assembled_from mapping : ";
+        $status->{inputlog} .= "(@{$from})" if $from;
+        $status->{inputlog} .= "$break";
+        $status->{inerrors}++;
+    }
+
+# returns number of alignments
+
+print "success $success align $self->{counterAlign} err: $error $break" if $DEBUG;
+
+    return $success;    
+
+# after loading into this buffer, use 'getAssembledFrom' to sort out padded and
+# unpadded representations, and prepare the read2con alignments, either via
+# alignToSCF/alignToContig and align method, or directly into read2con 
+
+}
+
+################################################################################
+
+sub alignToContig {
+    my $self = shift;
+
+# loading section for assemble from alignments
+
+    my $read2pad = $self->{read2pad}; #  hash of arrays
+    my $assemble = $self->{assemble}; # array of arrays
+    my $padtocon = $self->{padtocon}; # array for padded alignment
+    my $counts   = $self->{counts};
+    my $status   = $self->{status};
+
+my $DEBUG = 0;
+print "enter new alignToContig for $self->{names}->[0]$break" if $DEBUG;
+
+    my $alignToCaf = scalar(keys %$read2pad); # number of align_to_caf maps
+    my $assembled  = scalar(@$assemble);    # number of assembled_from maps
+
+# there are two buffers: the "read2pad" hash of arrays, filled by align_to_SCF
+# data, and the "assemble" array of arrays, filled with Assembled_from data; 
+# one of these MUST contain only one alignment. This enables a decision whether
+# we deal with padded or unpadded data; we derive the unpadded data accordingly.
+
+    if ($assembled == 1 && $alignToCaf >= 1) {
+
+# it's PADDED data; the read-to-scf map(s) are already in place in the read2pad hash
+# the padded read-to-contig alignment is the first (and only) assembled from map,
+# which will be put in the pad2con hash /// entry via the oldalignToContig method 
+
+# $self->oldalignToContig($paddedReadToContigMap);
+ 
+        $self->{padtocon} = $assemble->[0];
+        $counts->[2] = 1; # signal padded alignment as defined
+        $self->align(); # calculate the unpadded alignments and put into the reads2con hash
+my $read2con = $self->{read2con};
+print "PADDED or single alignment detected @{$self->{padtocon}} (@{$read2con->{'000001'}})$break$break" if $DEBUG;
+    }
+
+    elsif ($assembled > 1 &&  $alignToCaf <= 1 && defined($self->{counterAlign})) {
+
+print "UNPADDED alignment detected @{$self->{padtocon}} $break" if $DEBUG;
+# it's UNPADDED data; read2pad can have only one (or none) alignments. Store alignments
+# directly into the "read2con" hash of arrays; afterwards use alignToContig to update
+# counters and do some testing
+  
+        my $read2con = $self->{read2con}; # for hash of arrays
+        undef %$read2con;
+
+        my $k = $self->{counterAlign} ? 1 : 0;
+        my $l = 1 - $k;
+print "align $self->{counterAlign} k=$k l=$l $break" if $DEBUG;
+
+        undef my @rtoc;
+        $counts->[1] = 0;
+        foreach my $from (@$assemble) {
+            $counts->[1]++; # number of alignment
+            my $hash = sprintf("%06d",$counts->[1]);
+         my @r2c = ($from->[2],$from->[3],$from->[0],$from->[1]); # positions interchanged (see align/dump)
+            $read2con->{$hash} = \@r2c; # array reference
+# keep track of padded read to contig mapping
+            if ($counts->[1] == 1) {
+# print "range  1: @$from $break" if $DEBUG;
+                @rtoc = @$from;
+            }
+            else{
+# print "ranges  : @$from ---- @rtoc $break" if $DEBUG;
+# get the range on the contig and the starting position on the read
+                $rtoc[$k] = $from->[$k] if ($from->[$k] < $rtoc[$k]);
+                $rtoc[$l] = $from->[$l] if ($from->[$l] > $rtoc[$l]);
+                $rtoc[2]  = $from->[2]  if ($from->[2]  < $rtoc[2]);
+                $rtoc[3]  = $from->[3]  if ($from->[3]  > $rtoc[3]);
+            }           
+        }
+# do here some test on the caf alignment if defined
+        if ($alignToCaf == 1) {
+            my $toCaf = $read2pad->{'000001'};
+# print "align to caf: @rtoc <---> @$toCaf  $break" if $DEBUG;
+            if ($toCaf->[0] > $rtoc[2] || $toCaf->[1] < $rtoc[3]) {
+                $status->{diagnosis} .= "! Mismatch of alignToCaf and Assemble_from mappings : ";
+                $status->{diagnosis} .= "$toCaf->[0] $toCaf->[1] <-> $rtoc[2]  $rtoc[3]$break";
+                $status->{warnings}++;
+            }
+        }
+# get the range of the padded read 
+        $rtoc[3] = $rtoc[2] + abs($rtoc[1] - $rtoc[0]);
+        $self->{padtocon} = \@rtoc;
+print "PADDED alignment calculated @{$self->{padtocon}} $break$break" if $DEBUG;
+undef @{ $self->{padtocon}} if $DEBUG; # test option
+
+
+# counts->[1]++, counts->[2]=1 should updated; however we have to get the overal mapping
+# range and return it as an array
+
+    }
+    elsif (!defined($self->{counterAlign})) {
+        $status->{diagnosis} .= "! Missing alignment information$break";
+        $status->{errors}++;
+    }
+    else {
+# incompatible mappings
+        $status->{diagnosis} .= "! Incompatible mappings: cannot decide ";
+        $status->{diagnosis} .= "between padded and unpadded status$break"; 
+        $status->{errors}++;
+    }
+
+# returns the padded read to contig alignment
+
+    return $self->{padtocon};
 }
 
 ################################################################################
@@ -629,7 +819,7 @@ sub mtest {
 
     undef my %oldmaps;
 
-    my $read2con = $self->{read2con}; # hash reference to (new) read-to-contig alignment
+    my $read2con = $self->{read2con}; # hash reference to current read-to-contig alignment
     my $con2con  = $self->{contocon}; # hash reference to contig-to-contig alignments
     my $dbrefs   = $self->{dbrefs};
     my $counts   = $self->{counts};
@@ -1073,7 +1263,7 @@ print "++++ DUMP for ReadMapper $self->{names}->[0] ($self) counts: @$counts +++
 
 # test validity of alignments; go on if no inconsistencies found
  
-    if (&align($self) == 0 && $contig) {
+    if ($self->align() == 0 && $contig) {
 
 # alignment tested okay: all alignments consistent and contig ID defined
 # only proceed if the read is actually present in READS, i.e. reads_id exists
@@ -1084,7 +1274,7 @@ $DEBUG = 0; # $DEBUG = 1 if ($read_id == 73701);
 
     # test edits against possible exiting data in READEDITS
 print "ETEST for  ReadMapper $self->{names}->[0]$break" if $DEBUG;
-	    &etest($self);
+	    $self->etest();
 
     # counts->[5] = 0 (set in etest) if new edits have to be put into database 
 
@@ -1112,7 +1302,7 @@ print "ETEST for  ReadMapper $self->{names}->[0]$break" if $DEBUG;
 
     # test alignment data against possible existing data in READS2CONTIG
 
-            &mtest($self);
+            $self->mtest();
 
     # we store all readmaps of the current generation; afterwards we have to
     # remove copies marked 'M' in previous generation, which leaves us with
@@ -1131,12 +1321,10 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                 my $aligntype = 1; # default single alignment in this read
                 my @read2conKeys = sort keys %$read2con;
                 if (@read2conKeys > 1) {
-#                if (keys (%$read2con) > 1) {
                    $aligntype = 0; # multiple alignments
                     undef my @range;
-                    my $l = 3 - $self->{align}; my $k = 5 - $l; # 2,3 or 3,2
+                    my $l = 3 - $self->{counterAlign}; my $k = 5 - $l; # 2,3 or 3,2
                     foreach my $alignment (@read2conKeys) {
-#                    foreach my $alignment (sort keys (%$read2con)) {
                         my $block = $read2con->{$alignment};
                         @range = @$block  if !@range;
                         $range[0]  = $block->[0]  if ($block->[0]  < $range[0]);
@@ -1153,7 +1341,6 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
 #$self->list(1) if $DEBUG;
 		#$MyTimer->timer('RM newline(s)',0) if $TIMER;
                 foreach my $alignment (@read2conKeys) {
-#                foreach my $alignment (sort keys (%$read2con)) {
 # print "alignment key $alignment$break";
                     my @block = @{$read2con->{$alignment}};
                     if (@block != 4) {
@@ -1164,8 +1351,8 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                     else {
                 # define label: 0 for one in a series; 1 for a single record; 2 for end series
                         my $label = $aligntype;
-                        $label = 2 if ($alignment eq '999999'); # last of a series 
-                        $label = $label*10 + $self->{align};    # odd if aligned against contig
+                        $label = 2 if ($alignment eq '999999');     # last of a series 
+                        $label = $label*10 + $self->{counterAlign}; # 1 if aligned against contig
                 # assemble arrays
                         undef my @columns;
                         undef my @cvalues;
@@ -1265,7 +1452,13 @@ sub align {
     my $status   = $self->{status};
     my $dbrefs   = $self->{dbrefs};
 
-    #$MyTimer->timer('align',0) if $TIMER; 
+# $MyTimer->timer('align',0) if $TIMER;
+
+# if the read2con hash is defined, this method has already been executed 
+
+    return 0 if ($read2con && keys %$read2con); # prevent repeat run
+
+    undef %$read2con;
 
     my $error = $status->{errors};
  
@@ -1293,16 +1486,15 @@ print "++++ ALIGN for ReadMapper $self->{names}->[0] ($self) (counts = @$counts)
         my $rlength = $paddf - $padds; # read (and contig) section length
 
         if ($rlength < $qlength) {
-    # warning, info only,  to be printed only in case of other warnings or errors
+# warning, info only,  to be printed only in case of other warnings or errors
             $status->{diagnosis} .= "  Quality range $ql - $qr not fully covered $padds - $paddf$break";
         } 
         elsif ($rlength > $qlength) {
-    # warning always printed: may indicate more serious problem with mapping
+# warning always printed: may indicate more serious problem with mapping
             $status->{warnings}++;
             $status->{diagnosis} .= "! Mapped range @{$padtocon}";
             $status->{diagnosis} .= " overflows quality range $ql - $qr$break";
         }
-
 
         if (int($shifts-$shiftf) != 0) {
             $status->{errors}++; # shifts must be the same
@@ -1360,7 +1552,7 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
         }
     }
     else {
-    # error in alignment data
+# error in alignment data
         $status->{errors}++;
         $status->{diagnosis} .= "! Missing mapping information, counts:@{$counts}$break";
         $status->{diagnosis} .= "  Missing CAF alignment(s)$break" if ($counts->[1] == 0);

@@ -1751,12 +1751,13 @@ $self->logger("Test chemistry in file $self->{fileName}SCF$break");
     if ($scffile !~ /\//) { 
 # no directory indicated: try to find directory using SCHEMA (temp fix for ORACLE data)
         if (!$self->{READATADIR}) {
-# print "Chemistry test schema $self->{SCHEMA} $break";
+ print "Chemistry test schema $self->{SCHEMA} $break";
             my $dirdata = `$BADGERDIR/pfind $self->{SCHEMA}`;
             my @dirdata = split /\s+/,$dirdata;
             $self->{READATADIR} = $dirdata[4];
         }
         $scffile = "$self->{READATADIR}/*/$scffile";
+ print "Chemistry test SCF file $scffile $break";
     }
 $self->logger("SCF file full name: $scffile$break");
 

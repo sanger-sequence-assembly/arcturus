@@ -87,6 +87,7 @@ sub init {
     $self->{TESTMODE}    = 0; # test mode for caf file parser
     $self->{REPAIR}      = 0; # test/repair mode for read attributes
     $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
+    $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
 $self->{nameChange}  = 1; # TEST override
 
     bless ($self, $class);
@@ -150,6 +151,7 @@ sub new {
         $self->{TESTMODE}    = $prototype->{TESTMODE}    || 0;
         $self->{REPAIR}      = $prototype->{REPAIR}      || 0;
         $self->{READSCAN}    = $prototype->{READSCAN}    || 0;
+        $self->{WRITEDNA}    = $prototype->{WRITEDNA}    || 0;
 # test only for presence of assembled reads in database
         $self->{preload}     = $prototype->{preload}     || 0;
 #print STDOUT "new ContigBuilder inherits from prototype $prototype  (class $class)$break";
@@ -164,6 +166,7 @@ print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
         $self->{TESTMODE}    = 0; # test mode for caf file parser
         $self->{REPAIR}      = 0; # test/repair mode for read attributes
         $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
+        $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
         $self->{preload}     = 0;
     }
 
@@ -297,27 +300,34 @@ sub setTestMode {
 
 #############################################################################
 
-sub addRead {
-# add a new read to the contig list
-    my $self = shift;
-    my $read = shift; # read name
-    my $map  = shift; # mapping info as string of 4 integers
+sub assembledFrom {
+# add a new read to contig alignment
+    my $self     = shift;
+    my $readname = shift;
+    my $mapping  = shift; # mapping info as string of 4 integers
 
     my $readmap = $self->{readmap};
     my $counts  = $self->{counts};
     my $status  = $self->{status};
 
-    $map =~ s/^\s+//; # remove leading blanks 
-    my @fields = split /\s+|\:/,$map if ($map);
-    my $entry = ++$counts->[0]; # count number of reads
-    if (defined($read) && defined($map) && @fields == 4) {
-        @{$readmap->{$read}} = @fields; 
+    $mapping =~ s/^\s+|\s+$//; # remove leading/trailing blanks
+    my @fields = split /\s+|\:/,$mapping if ($mapping);
+
+print "assembledFrom $break";
+    if (defined($readname) && defined($mapping) && @fields == 4) {
+# pick up an already exiting ReadMapper or create a new one
+        my $readmapper = $ReadMapper->new($readname);
+# add the mapping to the ReadMapper instance
+        my $entry = $readmapper->addAssembledFrom(\@fields); 
+        $counts->[0]++ if ($entry == 1); # count number of reads (at first alignment presented)
+        $status->{inerrors}++ if !$entry;
+        $readmap->{$readname}++;
     } 
     else {
-        $readmap->{$read} = 0;
+        $readmap->{$readname} = 0;
         $status->{inerrors}++;
-        $status->{diagnosis} .= "! Invalid or missing data for read $entry:";
-        $status->{diagnosis} .= " \"$read\" \"$map\"$break";
+        $status->{diagnosis} .= "! Invalid or missing data for read $readname:";
+        $status->{diagnosis} .= " \"$readname\" \"$mapping\"$break";
     }
 }
 
@@ -498,7 +508,9 @@ sub dump {
     my @reads = sort keys %$readmap; # all reads specified for this contig
     $ReadMapper->preload(\@reads,'0011'); # preload data into ReadMapper buffer (R2C + EDITS) 
 
-    undef my %readmapper; # hash for readmapper objects for reads in this contig
+# NOTE: we use keys %$readmap (instead of @reads) throughout because readmap keys may be deleted
+
+    undef my %readmapper; # hash for reference to readmapper objects for reads in this contig
 
     my $missed = 0;
     my $tested = 0;
@@ -510,7 +522,7 @@ sub dump {
             print "Testing read $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
             my $readobject = $ReadMapper->lookup($readname);
             if (defined($readobject)) {
-# add pointer to table
+# add pointer to ReadMapper to internal list
                 $readmapper{$readname} = $readobject;
 # now test if the read is in the database using ReadMapper
                 if (my $dbrref = $readobject->isInDataBase(0,1,$assembly)) {
@@ -524,7 +536,7 @@ sub dump {
                     $status->{warnings}++;
                     $status->{diagnosis} .= "Read $readname not in ARCTURUS database: ";
                     $status->{diagnosis} .= "FORCED to ignore its absence $break";
-                    delete $readmap->{$readname};
+                    delete  $readmap->{$readname};
                     delete $readmapper{$readname};
                     $readobject->delete();
                     $counts->[0] -= 1;
@@ -543,7 +555,7 @@ sub dump {
 # complete 0 forces skip to exit
         $complete = 0 if (!$nrOfReads || $missed);
         $complete = 0 if (($nrOfReads+$missed) != $ntotal);
-        $complete = 0 if ($ntotal != $counts->[0]);
+        $complete = 0 if ($ntotal > $counts->[0]); # the != test is in the next (III) block
         $status->{diagnosis} .= "$nrOfReads ReadMappers defined, $missed missed or incomplete out ";
         $status->{diagnosis} .= "of $ntotal ($counts->[0]) for contig $cnames->[0]$break";
         &timer('ContigBuilder dump part II',1) if $TIMER;
@@ -571,12 +583,19 @@ sub dump {
         undef my @names; # of first and last reads
         foreach my $readname (keys (%$readmap)) {
 # get the mapping of this read to the contig and test the range
-            print "Testing readmapping $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
-            if (@{$readmap->{$readname}} == 4) {
-                my $pcstart = $readmap->{$readname}->[0];
-                my $pcfinal = $readmap->{$readname}->[1];
-                my $prstart = $readmap->{$readname}->[2];
-                my $prfinal = $readmap->{$readname}->[3];
+            print "Testing readmapper $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
+
+# my $readMap = $readmap->{$readname} if $PADDED; # to be SUPERceded
+# the assemble method will organise the mapping information stored in the ReadMapper instance
+# and return the (padded) read-to-contig alignment (one single map) as an array of length 4
+            my $readobject = $readmapper{$readname};
+            my $readMap = $readobject->alignToContig; # data stored in readmapper (padded/unpadded)
+
+            if ($readMap && @$readMap == 4) {
+                my $pcstart = $readMap->[0];
+                my $pcfinal = $readMap->[1];
+                my $prstart = $readMap->[2];
+                my $prfinal = $readMap->[3];
                 $progress .= "read $readname: $pcstart $pcfinal $prstart  $prfinal $break";
                 my $lastmin = $cmin;
 	        $cmin = $pcstart if (!defined($cmin) || $pcstart<$cmin);
@@ -620,46 +639,51 @@ sub dump {
 	    }
             else {
                 $status->{diagnosis} .= "! Invalid mapping for read $readname in contig ";
-                $status->{diagnosis} .= "cnames->[0]: @{$readmap->{$readname}}$break";
+                $status->{diagnosis} .= "cnames->[0]: @$readMap$break";
                 $status->{errors}++;
                 $complete = 0;
             }
 	}
 # test contig cover
-	if ($cmin != 1) {
+	if ($cmin && $cmin != 1) {
             $status->{diagnosis} .= "! unusual lower bound $cmin of mapping";
             $status->{diagnosis} .= " range for contig $cnames->[0]$break";
             $status->{warnings}++;
         }
-# test current read count against input tally (addRead)
+# test current read count against input tally
         if ($nreads != $counts->[0]) {
-            $status->{diagnosis} .= "! Read count error on contig $cnames->[0]: ";
-            $status->{diagnosis} .= "$nreads against $counts->[0]$break";
+            $status->{diagnosis} .= "! Read count error on contig $cnames->[0]: $nreads ";
+            $status->{diagnosis} .= "against $counts->[0] (Mixed padding perhaps?)$break";
             $status->{errors}++;
             $complete = 0;
         }
         else {
-            $complete = $nreads;
+            $complete = $nreads if $complete;
             $counts->[1] = $cmax-$cmin+1; # the length of the contig
         }
-# determine full name of this contig
-        $cover = $counts->[2]/$counts->[1]; # r/c
+
+        if ($counts->[1]) {
+# determine full name of this contig from cover, length and begin and end read ids
+            $cover  = $counts->[2]/$counts->[1];
 # build the number as sqrt(r**2+c**2)*2*cover; produces an <=I12 number
 # which is sensitive to a change of only one in either r or c for all
 # practical values of cover (1-20); max contig length about 1.2-5 10**8
-        my $uniquenumber = sqrt($cover*$cover + 1) * $counts->[2] * 1.75;
-        my $uniquestring = sprintf("%012d",$uniquenumber);
-        $cover = &truncate($cover,2); # truncate to 2 decimals
+            my $uniquenumber = sqrt($cover*$cover + 1) * $counts->[2] * 1.75;
+            my $uniquestring = sprintf("%012d",$uniquenumber);
+            $cover = &truncate($cover,2); # truncate to 2 decimals
 # cleanup the readnames
-        $progress .= "minread $minread    maxread $maxread $break";
-        $minread = &readAlias($minread);
-        $maxread = &readAlias($maxread);
-        $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
+            $progress .= "minread $minread    maxread $maxread $break";
+            $minread = &readAlias($minread);
+            $maxread = &readAlias($maxread);
+            $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
+	}
+        else {
+            $cnames->[1] = 'cannot be determined';
+        }
 
         &timer('ContigBuilder dump part III',1) if $TIMER;
 
         $report .= "III : Full Arcturus contigname: $cnames->[1] (complete=$complete)$break";
-#        print $progress;
     }
 
 
@@ -693,18 +717,18 @@ sub dump {
         $tested = 0;
         $counts->[0] = 0;
         my $emptyReads = 0;
-        foreach my $read (keys (%$readmap)) {
+        foreach my $read (keys %$readmap) {
             print "Building map for read $read (nr $tested)$break" if ($CGI && !((++$tested)%50));
             my $readobject = $readmapper{$read};
             my $contocon = $readobject->{contocon};
 
-# transfer the read-to-contig alignment to the ReadMapper instance 
+# transfer the read-to-contig alignment to the ReadMapper instance REDUNDENT when calculations done in Mapper
 
-            $readobject->alignToContig(\@{$readmap->{$read}});
+# $readobject->alignToContig(\@{$readmap->{$read}}) if $PADDED;
 
 # test the ReadMapper alignment specification and status for this read
 
-            $readobject->align();
+# $readobject->align() if $PADDED; # already done with getAssembledFrom
 
 # test previous alignments of this read in the database
 
@@ -720,7 +744,7 @@ sub dump {
             if ($readobject->status(0) && $contocon->[4] < 0 && $self->{ignoreEmpty}) {
                 $status->{diagnosis} .= "Empty read $read wil be ignored $break";
                 $status->{warnings}++;
-                delete $readmap->{$read};
+                delete  $readmap->{$read};
                 delete $readmapper{$read};
                 print "$fonts->{o} Empty read $read wil be ignored $fonts->{e} $break" if $CGI;
                 $emptyReads++;
@@ -1018,7 +1042,7 @@ print "VI $break";
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
 # SHOULDN'T WE ACQUIRE A LOCK HERE on READS2CONTIG ????
-        foreach my $readname (keys (%readmapper)) {
+        foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
             print "Processing read $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
             if ($readobject) {
@@ -1115,7 +1139,7 @@ print "VII $break";
 #            $self->dumpDNA($contig,$counts->[1]) if $self->{WRITEDNA};
 # here remove the ReadMappers and this contigbuilder to free memory
             my $dumped = 0;
-            foreach my $readname (keys (%readmapper)) {
+            foreach my $readname (keys %readmapper) {
                 my $readobject = $readmapper{$readname};
                 print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
                 $readobject->status(2); # dump warnings
@@ -1140,7 +1164,7 @@ print $report;
 #$self->dumpDNA($contig,$counts->[1]); # for test purposes
 # the new contig is identical to a previous one; remove the ReadMappers and this contigbuilder
         my $dumped = 0;
-        foreach my $readname (keys (%readmapper)) {
+        foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
             print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
             $readobject->status(2); # dump warnings
@@ -1150,8 +1174,8 @@ print $report;
 # undo the addition to CONTIGS, if any
         $CONTIGS->rollback(1); 
         $status->{warnings}++;
-        $status->{diagnosis} .= "Contig $cnames->[0] $fonts->{'y'} not added$fonts->{e}: ";
-        $status->{diagnosis} .= "is identical to contig $oldContig$break";
+        $status->{diagnosis} .= "Contig $cnames->[0] ($cnames->[1])$fonts->{'y'} not added";
+        $status->{diagnosis} .= "$fonts->{e}: is identical to contig $oldContig$break";
 # if the previous contig is part of generation 1, amend its assembly status (from N) to C (current)
         my $generation = $RRTOCC->associate('distinct generation',$oldContig,'contig_id');
         if (ref($generation) eq 'ARRAY') {
@@ -1200,7 +1224,7 @@ print $report;
         $RRTOCC->delete('contig_id',$contig);
         $CCTOSS->delete('contig_id',$contig);
 # and list the status of the individual readobjects
-        foreach my $readname (keys (%readmapper)) {
+        foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
             $readobject->status(2); # full error/warnings list 
         }
@@ -1294,7 +1318,7 @@ sub list {
 
     print "${break}$counts->[0] Reads for Contig $cnames->[0]$break";
 
-    foreach my $read (sort keys (%$readmap)) {
+    foreach my $read (sort keys %$readmap) {
         print STDOUT "$read   @{$readmap->{$read}}$break" if ($readmap->{$read});
         print STDOUT "$read   NO or INVALID data$break"  if (!$readmap->{$read});
     }
@@ -1479,6 +1503,8 @@ print "minOfReads = $minOfReads $break";
     $rblocker = \%rblocker if !$rblocker;
 
     my $type = 0;
+    my $isPadded = 1; # set default padded caf file
+
     while (defined($record = <CAF>)) {
         $line++; 
         chomp $record;
@@ -1490,6 +1516,21 @@ print "minOfReads = $minOfReads $break";
             $truncated = 1;
             $line--;
             last;
+        }
+
+# test for padded/unpadded keyword
+
+        if ($record =~ /([un])padded/i) {
+# test consistence of character
+            my $unpadded = $1 || 0;
+            if ($isPadded == 1) {
+                $isPadded = ($unpadded ? 0 : 2); # on first entry
+print "Padded set to $isPadded $break";
+            }
+            elsif ($isPadded && $unpadded || !$isPadded && !$unpadded) {
+                print STDOUT "WARNING: inconsistent padding specification at line $line $break";
+            }
+            next;
         }
 
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
@@ -1613,7 +1654,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
             }
             elsif ($record =~ /Align\w+\s+((\d+)\s+(\d+)\s+(\d+)\s+(\d+))\s*$/) {
                 my @positions = split /\s+/,$1;
-                $currentread->alignToCaf(\@positions);
+                $currentread->addAlignToCaf(\@positions); # for both padded and unpadded files
             }
             elsif ($record =~ /clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
                 $currentread->quality ($1,$2,0);
@@ -1659,7 +1700,9 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
         elsif ($type == 2) {
 # processing a contig, get constituent reads and mapping
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
-                $currentcontig->addRead($1,$2);
+# add the "assembled from" data: padded allows only one record per read, unpadded multiple records
+# has to be done via a method on this module in order to access the internal counts
+                $currentcontig->assembledFrom($1,$2);
             }
             elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
                 my $name = $1; my $trps = $2; my $trpf = $3; 
