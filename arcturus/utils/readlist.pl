@@ -22,11 +22,11 @@ my $contig_id;
 my $SCFchem;
 my $caf;
 my $fasta;
+my $mask;
 my $fofn;
-my $html;
 my $verbose;
 
-my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|html|caf|fasta|verbose|help";
+my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|caf|fasta|mask|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -51,7 +51,7 @@ while (my $nextword = shift @ARGV) {
 
     $SCFchem   = 1            if ($nextword eq '-chemistry');
 
-    $html      = 1            if ($nextword eq '-html');
+    $mask      = shift @ARGV  if ($nextword eq '-mask');
 
     $fasta     = 1            if ($nextword eq '-fasta');
 
@@ -70,7 +70,7 @@ my $logger = new Logging();
  
 $logger->setFilter(0) if $verbose; # set reporting level
 
-my $break = $html ? "<br>" : "\n";
+my $break = "\n";
  
 #----------------------------------------------------------------
 # get the database connection
@@ -130,15 +130,16 @@ if ($fofn) {
 
 if ($contig_id) {
 #test mode construction to be changed
-    my @rids = (1099,1100,1102,1103);
+#    my @rids = (1099,1100,1102,1103);
+    my @rids = (1099,1100);
     print "get reads @rids\n";
     my $reads = $adb->getReadsBySequenceID(\@rids);
 #    my $reads = $adb->getReadsByReadID(\@rids);
-    $adb->addSequenceToReads($reads);
+    $adb->getSequenceForReads($reads);
     push @reads, @$reads;
     print "Reads: @reads\n";
 
-    $adb->getReadsForContigID($contig_id);
+#    $adb->getReadsForContigID($contig_id);
 }
 
 
@@ -150,12 +151,15 @@ my @items = ('read_id','readname','seq_id','version',
 
 $logger->warning("No reads selected") if !@reads;
 
+my %option;
+$option{qualitymask} = $mask if $mask;
+
 foreach my $read (@reads) {
 #print STDERR "$break";
 
-    $read->writeToCaf(*STDOUT) if $caf;
+    $read->writeToCaf(*STDOUT,%option) if $caf;
 
-    $read->writeToFasta(*STDOUT,*STDOUT) if $fasta;
+    $read->writeToFasta(*STDOUT,*STDOUT,%option) if $fasta;
 
     next if ($caf || $fasta);
 
@@ -166,7 +170,7 @@ foreach my $read (@reads) {
         $logger->info("Assembly directory: $rdir");
     }
 
-    &list($read,$rdir);
+    &list($read,$rdir,%option);
  
 }
 
@@ -244,7 +248,7 @@ sub list {
 
     undef %L;
 
-    my $sequence   = $read->getSequence;
+    my $sequence   = $read->getSequence(@_);
 # output in blocks of 60 characters
     if (defined($sequence)) {
         $sequence =~ s/(.{60})/$1$break              /g;
