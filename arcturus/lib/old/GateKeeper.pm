@@ -484,6 +484,11 @@ sub dbHandle {
             &dropDead($self,"Database $database resides on $residence{$database}");
         }
         elsif ($available{$database} ne 'off-line') {
+my $TEST = 1;
+if ($TEST) {
+    $self->cgiHeader(1);
+    print "redirecting: database: $database residence: $residence{$database} server:$server\n";
+}
             $self->disconnect();
             my $redirect = "http://$residence{$database}$ENV{REQUEST_URI}";
             $redirect .= $cgi->postToGet if $cgi->MethodPost;
