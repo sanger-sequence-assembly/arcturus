@@ -235,6 +235,10 @@ sub qualityEncoder {
  
     return $self->differsEncoder($string)  if ($method == 3);
 
+    return $self->zlibQualityEncoder($string, 0) if ($method == 99);
+
+    return $self->zlibQualityEncoder($string, 1) if ($method == 98);
+
     die "Invalid encoding method $method for quality";    
 }
 
@@ -255,7 +259,62 @@ sub qualityDecoder {
  
     return $self->differsDecoder($string)  if ($method == 3);
 
+    return $self->zlibQualityDecoder($string, 0) if ($method == 99);
+
+    return $self->zlibQualityDecoder($string, 1) if ($method == 98);
+
     die "Invalid decoding method $method for quality";    
+}
+
+#############################################################################
+
+sub zlibQualityEncoder {
+# Encode base-quality values by converting into a byte array, (optionally)
+# differencing, then applying the Zlib compression algorithm
+    my $self  = shift; 
+    my $input = shift;
+    my $dodiff = shift;
+
+    $dodiff = 0 unless defined($dodiff);
+
+    my @quality = split(/\s+/, $input);
+
+    my $datalen = scalar(@quality);
+
+    if ($dodiff) {
+	for (my $j = $datalen - 1; $j > 0; $j--) {
+	    $quality[$j] -= $quality[$j - 1];
+	}
+    }
+
+    my $qualdata = pack("c*", @quality);
+
+    return $datalen, compress($qualdata);
+}
+
+sub zlibQualityDecoder {
+# Decode base-quality values by applying the Zlib decompression algorithm,
+# (optionally) reversing differences, and converting the resulting byte
+# array back to a string of numbers
+    my $self  = shift; 
+    my $input = shift;
+    my $dodiff = shift;
+
+    $dodiff = 0 unless defined($dodiff);
+
+    my $qualdata = uncompress($input);
+
+    my @quality = unpack("c*", $qualdata);
+
+    my $datalen = scalar(@quality);
+
+    if ($dodiff) {
+	for (my $j = 1; $j < $datalen; $j++) {
+	    $quality[$j] += $quality[$j - 1];
+	}
+    }
+
+    return $datalen, join(' ', @quality);
 }
 
 #############################################################################
@@ -328,6 +387,8 @@ sub numbersDecoder {
         $output .= ' '.unpack ('C*',$number);
         $count++;
     }
+
+    $output =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
 
     $count,$output;
 }
