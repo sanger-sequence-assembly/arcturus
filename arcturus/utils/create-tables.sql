@@ -36,9 +36,9 @@ CREATE TABLE ASSEMBLY (
 #
 
 CREATE TABLE BASECALLER (
-  basecaller smallint(5) unsigned NOT NULL auto_increment,
+  basecaller_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(32) NOT NULL default '',
-  PRIMARY KEY  (basecaller)
+  PRIMARY KEY  (basecaller_id)
 ) TYPE=MyISAM;
 
 #
@@ -59,10 +59,10 @@ CREATE TABLE CLONEMAP (
 #
 
 CREATE TABLE CLONES (
-  clone smallint(5) unsigned NOT NULL auto_increment,
-  clonename varchar(20) NOT NULL default '',
+  clone_id smallint(5) unsigned NOT NULL auto_increment,
+  name varchar(20) NOT NULL default '',
   origin varchar(20) default 'The Sanger Institute',
-  PRIMARY KEY  (clone)
+  PRIMARY KEY  (clone_id)
 ) TYPE=MyISAM;
 
 #
@@ -106,7 +106,6 @@ CREATE TABLE CLONEVEC (
 CREATE TABLE CLONINGVECTORS (
   cvector_id tinyint(3) unsigned NOT NULL auto_increment,
   name varchar(16) NOT NULL default '',
-  vector tinyint(3) unsigned default '0',
   PRIMARY KEY  (cvector_id),
   UNIQUE KEY name (name)
 ) TYPE=MyISAM;
@@ -187,14 +186,14 @@ CREATE TABLE GAP4TAGS (
 
 CREATE TABLE LIGATIONS (
   ligation_id smallint(5) unsigned NOT NULL auto_increment,
-  identifier varchar(20) NOT NULL default '',
+  name varchar(20) NOT NULL default '',
   clone_id smallint(5) unsigned NOT NULL,
   origin char(1) default NULL,
   silow mediumint(8) unsigned default NULL,
   sihigh mediumint(8) unsigned default NULL,
-  svector smallint(6) NOT NULL,
+  svector_id smallint(5) NOT NULL,
   PRIMARY KEY  (ligation_id),
-  UNIQUE KEY identifier (identifier)
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
@@ -205,7 +204,7 @@ CREATE TABLE MAPPING (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   read_id mediumint(8) unsigned NOT NULL default '0',
   mapping_id mediumint(8) unsigned NOT NULL auto_increment,
-  revision mediumint(8) unsigned NOT NULL default '0',
+  revision smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
   KEY read_id (read_id)
@@ -373,10 +372,9 @@ CREATE TABLE SEQUENCEVECTORS (
 #
 
 CREATE TABLE STATUS (
-  status smallint(5) unsigned NOT NULL auto_increment,
-  identifier varchar(64) default NULL,
-  comment varchar(8) default NULL,
-  PRIMARY KEY  (status)
+  status_id smallint(5) unsigned NOT NULL auto_increment,
+  name varchar(64) default NULL,
+  PRIMARY KEY  (status_id)
 ) TYPE=MyISAM;
 
 #
