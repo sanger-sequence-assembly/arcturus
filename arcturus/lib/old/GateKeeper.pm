@@ -1002,7 +1002,8 @@ sub GUI {
         foreach my $database (sort @databases) {
            my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
-            $target .= "?database=$database" if ($target !~ /\b$database\b/);
+            $target .= "&database=$database" if ($target !~ /\b$database\b/);
+	   $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
             my $link = $database;
             $link = "<a href=\"$target\"> $link </a>" if (!$current || $current ne $link);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
@@ -1051,10 +1052,11 @@ sub GUI {
     $table .= "</table>";
     $page->add($table);   
 
-# compose the input table
+# compose the input table (direct to new window if session defined)
 
     my $target = &currentHost($self).&currentPort($self);
-    my $target = "target=\"${target}input\"";
+    $target = "target=\"${target}input\""; # e.g. 'babel19090input'
+    $target = '' if !$cgi->parameter('session');
 
     $page->partition(4);
     $table = "<table $tablelayout>";
@@ -1103,17 +1105,19 @@ sub GUI {
     $table .= "</table>";
     $page->add($table); 
 
-# add the query options
+# add the query options (always direct to 'querywindow')
 
     $page->partition(9);
+    my $querywindow =  "target=\"querywindow\"";
+
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
     if ($database && $database ne 'arcturus') {
-        my $query = "/cgi-bin/query/overview/$database";
-        $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">$database</a></td></tr>";
+        my $query = "/cgi-bin/query/overview?database=$database";
+        $table .= "<tr><td $cell><a href=\"$query\" $querywindow>$database</a></td></tr>";
     }
-    my $query = "/cgi-bin/query/overview/arcturus";
-    $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">arcturus</a></td></tr>";
+    my $query = "/cgi-bin/query/overview?database=arcturus";
+    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>arcturus</a></td></tr>";
     $table .= "</table>";
     $page->add($table); 
 
@@ -1121,13 +1125,18 @@ sub GUI {
 
     $page->partition(10);
     $table = "<table $tablelayout>";
-    my $query = "/cgi-bin/query/overview/arcturus";
+    $query = "/cgi-bin/query/overview/arcturus";
     $cell = "bgcolor='yellow' nowrap align=center";
-    $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">HELP</a></td></tr>";
+    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>HELP</a></td></tr>";
     if ($cgi->parameter('session')) {
         my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet;
-        $cell = "bgcolor='green' nowrap align=center";
-        $table .= "<tr><td $cell><a href=\"$query\" target=\"querywindow\">SIGN OFF</a></td></tr>";
+        $cell = "bgcolor='lightgreen' nowrap align=center";
+        $table .= "<tr><td $cell><a href=\"$query\">SIGN OFF</a></td></tr>";
+    }
+    else {
+        my $query = "/cgi-bin/herdsman/signon".$cgi->postToGet;
+        $cell = "bgcolor='lightblue' nowrap align=center";
+        $table .= "<tr><td $cell><a href=\"$query\">SIGN ON</a></td></tr>";
     }
     $table .= "</table>";
     $page->add($table); 
@@ -1192,14 +1201,11 @@ sub dropDead {
         elsif ($edbi) {
             $text .= " (No DBI error reported)";
         }
-        $self->disconnect("! $text");
+        $self->disconnect($text);
     }
     else {
         $self->disconnect();
     }
-
-# my $output = $self->{cgi}->PrintVariables;
-# &report($self,"$output");
 
     exit 0;
 }
@@ -1211,10 +1217,10 @@ sub transfer {
     my $self = shift;
     my $link = shift;
 
-#print "redirect: self $self\n";
+    print "GateKeeper enter transfer $debug" if $debug;
+
     $self->disconnect();
     print redirect({-location=>$link});
-#print "after redirecting:\n";
     exit 0;
 }
 

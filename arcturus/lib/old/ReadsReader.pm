@@ -888,17 +888,20 @@ sub chemistry {
 
 &logger("<br>** Default Chemistry Type: $readEntry{CHT}<br>");
 &logger("Test chemistry in file ${readFileName}SCF<br>");
+
     my $command = "$SCFREADDIR/get_scf_field ${readFileName}SCF | grep -E '(dye|DYE)'";
-&logger("Command $command<br>");
-    my $chemistry = `$command`;
-&logger("first attempt chemistry='$chemistry' Estat='$?'<br>");
-    undef $chemistry if ($chemistry =~ /load.+disabled/i);
-    if (!$chemistry) {
-&logger("trying to recover:");
-        $chemistry = `$RECOVERDIR/recover.sh $SCFREADDIR/get_scf_field ${readFileName}SCF`;
+
+#&logger("Command $command<br>");
+#    my $chemistry = `$command`;
+#&logger("first attempt chemistry='$chemistry' Estat='$?'<br>");
+#    undef $chemistry if ($chemistry =~ /load.+disabled/i);
+#    if (!$chemistry) {
+#&logger("trying to recover:");
+
+        my $chemistry = `$RECOVERDIR/recover.sh $SCFREADDIR/get_scf_field ${readFileName}SCF`;
 &logger("recovered chemistry=\"$chemistry\"<br>");
         undef $chemistry if ($chemistry =~ /load.+disabled/i);
-    }
+#    }
     chomp $chemistry;
 &logger("SCF chemistry found: $chemistry<br>");
     $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
