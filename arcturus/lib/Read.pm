@@ -644,7 +644,7 @@ sub writeToCaf {
 
     if (my $clonevec = $this->getCloningVector()) {
         foreach my $vector (@$clonevec) {
-            my $name = $vector->[0];
+            my $name = $vector->[0] || "unknown";
             print $FILE "Clone_vec CVEC $vector->[1] $vector->[2] \"$name\"\n";
         }
     }
