@@ -20,6 +20,11 @@ while (my $nextword = shift @ARGV) {
     $minbridges = shift @ARGV if ($nextword eq '-minbridges');
     $minlen = shift @ARGV if ($nextword eq '-minlen');
     $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
 }
 
 die "Organism not specified" unless defined($organism);
@@ -421,4 +426,17 @@ sub FindNextBridge {
     }
 
     return [[$bestcontig, $bestend], [$bestgap, $templatelist]];
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-organism\tName of organism\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-instance\tName of instance (default: 'dev')\n";
+    print STDERR "-minbridges\tMinimum number of pUC bridges (default: 1)\n";
+    print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
+    print STDERR "-verbose\tShow lots of detail (default: false)\n";
 }
