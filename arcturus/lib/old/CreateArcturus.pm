@@ -1939,7 +1939,7 @@ sub create_DATAMODEL {
              tablename     VARCHAR(16)           NOT NULL,
              tcolumn       VARCHAR(16)           NOT NULL,
              linktable     VARCHAR(16)           NOT NULL, 
-             lcolumn       VARCHAR(24)           NOT NULL
+             lcolumn       VARCHAR(32)           NOT NULL
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
@@ -1999,7 +1999,7 @@ sub create_DATAMODEL {
                  'READS                clone           CLONES       clone/clonename  ',
                  'READS               strand          STRANDS      strand/description',
                  'READS               primer      PRIMERTYPES      primer/description',
-                 'READS            chemistry        CHEMISTRY   chemistry/identifier ',
+                 'READS            chemistry        CHEMISTRY   chemistry/identifier/chemtype',
                  'READS           basecaller       BASECALLER  basecaller/name       ',
                  'READS              svector  SEQUENCEVECTORS     svector/name       ',
                  'READS              cvector   CLONINGVECTORS     cvector/name       ',
