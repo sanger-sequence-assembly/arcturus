@@ -1864,21 +1864,16 @@ sub isSameType {
         if ($value =~ /^\s*[+-]?\d+\s*$/) {
             $vtype = 1 ;  # numerical integer
         }
-        elsif ($value =~ /^\s*[+-]?\d+\.\d*(\D\S*)$/ || $value =~ /^\s*[+-]?\.\d+(\D\S*)$/) {
+        elsif ($value =~ /^\s*[+-]?\d+\.\d*\b(\S*)$/ || $value =~ /^\s*[+-]?\.\d+\b(\S*)$/) {
             my $exponent = $1;
             $vtype = 2 unless ($exponent && $exponent !~ /E[+-]?\d+/i); # floating specification
         }
- 
-#        my $vtype = 1; # default integer numerical;
-#        $vtype = 0 if ($value =~ /\S/ && $value =~ /[^\d\.\s]/); # contains non-numerical
-#        $vtype = 2 if ($vtype && $value =~ /\d+\.\d*/); # floating specification
 
 # numerical specifications must be matched; everything else is considered string
 
         $same = 0 if ($ctype =~ /int/i   && $vtype != 1);
         $same = 0 if ($ctype =~ /float/i && $vtype == 0); # allow both integer and float
 
-# print "ctype $ctype, value $value, vtype $vtype, same $same <br>"; 
 # do a detailed analysis of some character strings (also for numerical types!)
 
         if ($same && $ctype =~ /char/) {
@@ -1891,13 +1886,9 @@ sub isSameType {
 
         if ($same && $ctype =~ /enum/ && ($input || $value !~ /\%|\?/)) {
 # note: this version uses pattern matches; alternative would be to split and test each item
-#print "Enum test: $ctype  value $value .. ";
             $ctype =~ s/enum\(\'|\'\,\'|\'\)/  /ig; # separate enumerate items by only blanks 
             $value =~ s/(\\|\||\(|\)|\[|\]|\{|\}|\^|\$|\*|\+|\?|\.)/\\$1/g; # backslash metacharacters
-#print "cleaned: $ctype ..  $value .. ";
             $same = 0 if ($ctype !~ /\s$value\s/); # no match 
-#print "same $same <br>";
-# $same =0; # for test purposes 
         }
     }
     return $same;
