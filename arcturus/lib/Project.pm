@@ -87,7 +87,7 @@ sub addContigID {
 sub getContigIDs {
 # export reference to the contig IDs array
     my $this = shift;
-    my $nolockcheck = shift || 0; 
+    my $dolockcheckandlock = shift || 0; 
 
 # get the contig IDs for this project always by reference to the database
 
@@ -97,14 +97,14 @@ sub getContigIDs {
 
     my ($cids, $status);
 
-    if ($nolockcheck) {
-# get all contig IDs belonging to this project
-       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
-    }
-    else {
-# get contigs only if not locked or owned by user
+    if ($dolockcheckandlock) {
+# access project only if not locked or owned by user; if so, then lock project
        ($cids, $status) = $ADB->checkOutContigIDsForProjectID($pid);
         $status = "No accessible contigs: $status" unless ($cids && @$cids);
+    }
+    else {
+# get all contig IDs belonging to this project with locking project
+       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
     }
 
     if ($cids) {
@@ -225,7 +225,7 @@ sub writeContigsToCaf {
     my $FILE = shift; # obligatory file handle
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{nolock});
+    my ($contigids,$status) = $this->getContigIDs($options->{acquirelock});
 
     return (0,$status) unless ($contigids && @$contigids);
 
@@ -234,7 +234,6 @@ sub writeContigsToCaf {
     my $export = 0;
     my $report = '';
     foreach my $contig_id (@$contigids) {
-print STDOUT "processing contig $contig_id \n";
         my $contig = $ADB->getContig(contig_id=>$contig_id);
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id";
@@ -254,7 +253,7 @@ sub writeContigsToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{nolock}); 
+    my ($contigids,$status) = $this->getContigIDs($options->{acquirelock}); 
 
     return (0,$status) unless ($contigids && @$contigids);
 
