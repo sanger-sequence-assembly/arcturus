@@ -12,7 +12,7 @@ use ReadsRecall;
 
 use Compress;
 
-use Devel::MyTimer;
+#use Devel::MyTimer;
 
 #############################################################################
 # Global variables
@@ -65,7 +65,7 @@ sub init {
 # now initialise the table handles: default init is for building contig(s) and
 # read maps, e.g. for display or caf output; non default for output as hash
 
-$MyTimer = new MyTimer;
+#$MyTimer = new MyTimer;
 
 $DEBUG = 0;
     if (!$initmode ) {
@@ -1143,7 +1143,7 @@ sub dumpThisToCaf {
 
     return if ($n <= 1);
 
-$MyTimer->timer('dumpThisToCaf',0);
+#$MyTimer->timer('dumpThisToCaf',0);
  
     foreach my $ReadObject (@$ReadsRecall) {
         $ReadObject->writeToCafPadded($FILE,1)  if $padded;
@@ -1166,13 +1166,13 @@ $MyTimer->timer('dumpThisToCaf',0);
 
 # write the consensus sequence / or all the reads ?
 
-$MyTimer->timer('dumpThisToCaf',1);
+#$MyTimer->timer('dumpThisToCaf',1);
 
 # free memory
 
     return if $keep;
 
-$MyTimer->timer('Destroying ReadObjects',0);
+#$MyTimer->timer('Destroying ReadObjects',0);
 
 #    my $mpid = $$; my $stat = grep (/$mpid/,`ps ux`);
 
@@ -1190,7 +1190,7 @@ $MyTimer->timer('Destroying ReadObjects',0);
 
     undef $ReadsRecall;
 
-$MyTimer->timer('Destroying ReadObjects',1);
+#$MyTimer->timer('Destroying ReadObjects',1);
 }
 
 #############################################################################
@@ -1215,9 +1215,9 @@ sub writeToCafPadded {
 
 # get the reads belonging to this contig
  
-# $MyTimer->timer('Getting reads from contigs cache',0);
+#$MyTimer->timer('Getting reads from contigs cache',0);
     my $reads = $R2C->cacheRecall($contig,{indexName=>'contigs'});
-# $MyTimer->timer('Getting reads from contigs cache',1);
+#$MyTimer->timer('Getting reads from contigs cache',1);
     print "recalled $reads \n";
 
     $self->{assembled} = '';

@@ -14,7 +14,6 @@ our ($VERSION, @ISA);
 use ReadsRecall;
 use ContigBuilder;
 use ContigRecall;
-use Devel::MyTimer;
 
 #############################################################################
 my $DEBUG = 1;
