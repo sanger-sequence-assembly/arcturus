@@ -732,7 +732,7 @@ sub putRead {
 
     my $query = "insert into READS(readname) VALUES(?)";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($readname);
 
@@ -745,7 +745,7 @@ sub putRead {
 
     $query = "update READS set asped=?,template_id=?,strand=?,chemistry=?,primer=? where read_id=?";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($read->getAspedDate(), $template_id, $read->getStrand(),
 			$read->getChemistry(), $read->getPrimer(), $readid);
@@ -759,7 +759,7 @@ sub putRead {
 
     $query = "update READS set slength=?,lqleft=?,lqright=? where read_id=?";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($seqlen, $read->getLowQualityLeft(),
 			$read->getLowQualityRight(), $readid);
@@ -771,7 +771,7 @@ sub putRead {
 
     $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     my $sequence = compress($read->getSequence());
     my $basequality = compress(pack("c*", @{$read->getQuality()}));
@@ -788,7 +788,7 @@ sub putRead {
     if (defined($seqveclist)) {
 	$query = "insert into SEQVEC(read_id,svector_id,begin,end) VALUES(?,?,?,?)";
 
-	$sth = $dbh->prepare_cached($query);
+	$sth = $dbh->prepare($query);
 
 	foreach my $entry (@{$seqveclist}) {
 	    my ($seqvec, $svleft, $svright) = @{$entry};
@@ -809,7 +809,7 @@ sub putRead {
     if (defined($cloneveclist)) {
 	$query = "insert into CLONEVEC(read_id,cvector_id,begin,end) VALUES(?,?,?,?)";
 
-	$sth = $dbh->prepare_cached($query);
+	$sth = $dbh->prepare($query);
 
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
@@ -902,7 +902,7 @@ sub getTemplateID {
 
     my $query = "select template_id from TEMPLATE where name=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     my $rc = $sth->execute($template);
 
@@ -920,7 +920,7 @@ sub getTemplateID {
 
     $query = "insert into TEMPLATE(name,ligation_id) VALUES(?,?)";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($template, $ligation_id);
 
@@ -953,7 +953,7 @@ sub getCloningVectorID {
 
     my $query = "select cvector_id from CLONINGVECTORS where name=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     my $rc = $sth->execute($cvec);
 
@@ -969,7 +969,7 @@ sub getCloningVectorID {
 
     $query = "insert into CLONINGVECTORS(name) VALUES(?)";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($cvec);
 
@@ -1002,7 +1002,7 @@ sub getSequencingVectorID {
 
     my $query = "select svector_id from SEQUENCEVECTORS where name=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     my $rc = $sth->execute($seqvec);
 
@@ -1018,7 +1018,7 @@ sub getSequencingVectorID {
 
     $query = "insert into SEQUENCEVECTORS(name) VALUES(?)";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($seqvec);
 
@@ -1053,7 +1053,7 @@ sub getLigationID {
 
     my $query = "select ligation_id from LIGATIONS where identifier=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     my $rc = $sth->execute($ligation);
 
@@ -1071,7 +1071,7 @@ sub getLigationID {
 
     $query = "insert into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
 
-    $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare($query);
 
     $rc = $sth->execute($ligation, $silow, $sihigh);
 
