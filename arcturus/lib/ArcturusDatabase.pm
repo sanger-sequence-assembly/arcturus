@@ -998,8 +998,8 @@ sub putRead {
     my $readname = $read->getReadName();
 
     my $query = "insert into" .
-	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright,basecaller,status)" .
-	    " VALUES(?,?,?,?,?,?,?,?,?,?,?)";
+	" READS(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
+	    " VALUES(?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1009,9 +1009,6 @@ sub putRead {
 			$read->getStrand(),
 			$read->getChemistry(),
 			$read->getPrimer(),
-                        $read->getSequenceLength(),
-			$read->getLowQualityLeft(),
-			$read->getLowQualityRight(),
 			$basecaller,
                         $status);
 
@@ -1024,17 +1021,32 @@ sub putRead {
 
     $read->setReadID($readid);
 
+# Get a seq_id for this read
+
+    $query = "insert into SEQ2READ(read_id) VALUES(?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($readid);
+
+    return (0, "failed to insert read_id into SEQ2READ table;DBI::errstr=$DBI::errstr")
+	unless (defined($rc) && $rc == 1);
+
+    my $seqid = $dbh->{'mysql_insertid'};
+
+    $sth->finish();
+
 # insert sequence and base quality
 
     my $sequence = compress($read->getSequence());
 
     my $basequality = compress(pack("c*", @{$read->getQuality()}));
 
-    $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
+    $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
 
     $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($readid, $sequence, $basequality);
+    $rc = $sth->execute($seqid, $read->getSequenceLength(), $sequence, $basequality);
 
 # shouldn't we undo the insert in READS? if it fails
 
@@ -1043,12 +1055,28 @@ sub putRead {
 
     $sth->finish();
 
+# Insert quality clipping
+
+    $query = "insert into QUALITYCLIP(seq_id, qleft, qright) VALUES(?,?,?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($seqid, $read->getLowQualityLeft(), $read->getLowQualityRight());
+
+# shouldn't we undo the insert in READS? if it fails
+
+    return (0, "failed to insert quality clipping data for $readname ($readid);" .
+	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+
 # insert sequencing vector data, if any
 
     my $seqveclist = $read->getSequencingVector();
 
     if (defined($seqveclist)) {
-	$query = "insert into SEQVEC (read_id,svector_id,svleft,svright) VALUES(?,?,?,?)";
+	$query = "insert into SEQVEC (seq_id,svector_id,svleft,svright) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
@@ -1062,9 +1090,9 @@ sub putRead {
 				               $this->{SelectStatement}->{'svector'},
 				               $this->{InsertStatement}->{'svector'}) || 0;
 
-	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
+	    $rc = $sth->execute($seqid, $seqvecid, $svleft, $svright);
 
-	    return (0, "failed to insert read_id,svector_id,svleft,svright into SEQVEC for $readname ($readid);" .
+	    return (0, "failed to insert seq_id,svector_id,svleft,svright into SEQVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
@@ -1076,7 +1104,7 @@ sub putRead {
     my $cloneveclist = $read->getCloningVector();
 
     if (defined($cloneveclist)) {
-	$query = "insert into CLONEVEC (read_id,cvector_id,cvleft,cvright) VALUES(?,?,?,?)";
+	$query = "insert into CLONEVEC (seq_id,cvector_id,cvleft,cvright) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
@@ -1089,9 +1117,9 @@ sub putRead {
 				                 $this->{SelectStatement}->{'cvector'},
 				                 $this->{InsertStatement}->{'cvector'}) || 0;
 
-	    $rc = $sth->execute($readid,$clonevecid, $cvleft, $cvright);
+	    $rc = $sth->execute($seqid,$clonevecid, $cvleft, $cvright);
 
-	    return (0, "failed to insert read_id,cvector_id,cvleft,cvright into CLONEVEC for $readname ($readid);" .
+	    return (0, "failed to insert seq_id,cvector_id,cvleft,cvright into CLONEVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
