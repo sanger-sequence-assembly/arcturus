@@ -331,6 +331,9 @@ else {
 #    $page->add($cgi->PrintVariables());
 #    my $vars = $cgi->PrintVariables(); print STDOUT "$vars<br>\n";
 }
+#####################
+# MAIN
+#####################
 
     $GateKeeper->dropDead("No assembly defined") if !$assemblynmbr;
 
@@ -414,10 +417,10 @@ else {
         print "Scanning database $database for Contigs of $assemblyname ...";
         print "... (using name filter \"$CNF\") ..." if ($CNF);
         my $contignames;
-        my $where = "assembly=$assemblynmbr AND generation=0";
+        my $where = "assembly=$assemblynmbr AND generation=0 AND label>=10";
         $where .= " AND (aliasname like '\%${CNF}\%')" if $CNF;
-#        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
-        $contignames = $CONTIGS->associate('aliasname','where',$where,1);
+        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
+        $contignames = $CONTIGS->associate('aliasname','where',$where,{returnScalar=>0});
 # the alias name is one appearing on the caf file
         if (ref($contignames) =~ /ARRAY/) {
             foreach my $contig (@$contignames) {
