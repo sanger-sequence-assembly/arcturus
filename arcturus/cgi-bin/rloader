@@ -119,7 +119,7 @@ if ($cgi) {
 # test if database and option are defined
         $database = $cgi->parameter('database'); # compulsory
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
-            $source   = $cgi->parameter('source');
+#            $source   = $cgi->parameter('source');
         }
 #        $option = 'getform' if $cgi->{und_error};   
     }
@@ -129,11 +129,8 @@ if ($cgi) {
         $page = $GateKeeper->GUI('READS loader');
         $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
         $page->form("$arc_cgi_dir/rloader/arcturus/specify");
-#        $page->partition(2);
 #        $page->sectionheader("ARCTURUS READS loader specifications",3,0);
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
-#        $page->partition(1);
-#       $page->add($organisms->htmlTable('0100000111110001110'),0,0);
         $page->add($organisms->htmlTable('0100000011110000100'),0,0,"size=-1");
         $page->sectionheader("Select a Database and Read specification",4,0);
         my $database = $cgi->parameter('database') || $cgi->parameter('organism');
@@ -153,7 +150,7 @@ if ($cgi) {
         $asname = 0 if !$asname; # to have it explicitly defined
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source = $cgi->parameter('source');   # compulsory
-            my $redirect = "/cgi-bin/$database/getform";
+            my $redirect = "/cgi-bin/rloader/$database/getform";
             $GateKeeper->transfer($redirect) if ($cgi->MethodGet && $cgi->{und_error});
         }
         else {
