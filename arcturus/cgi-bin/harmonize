@@ -52,10 +52,11 @@ undef my %handles;
 
 my $currentPort = $GateKeeper->currentPort;
 my $currentHost = $GateKeeper->currentHost;
+#my $currentDbPt = $GateKeeper->currentDbPort;
 
 my $report;
 foreach my $instance (@$instances) {
-# print "instance  $instance \n";
+# print "instance  $instance  cPort $currentPort  cHost $currentHost cDbPt  $currentDbPt\n";
     $instance =~ s/\.sanger\.ac\.uk//;
     my ($host,$port) = split ':',$instance;
 #    next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));

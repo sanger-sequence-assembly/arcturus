@@ -142,11 +142,13 @@ elsif ($action eq 'overview') {
 
     my %tables;
     $inventory->autoVivify($database,1,0);    
+    my $session = $GateKeeper->lookup('session') || '';
+    $inventory->spawn("HISTORY$database",$database) if ($session =~ /\boper\b/);
     foreach my $table (keys %$instances) {
         $tables{$table}++;
     }
 
-    my $w1 = "WIDTH=140"; my $w2 = "WIDTH=65"; my $w3 = "WIDTH=40";
+    my $w1 = "WIDTH=60%"; my $w2 = "WIDTH=23%"; my $w3 = "WIDTH=18%";
     my $bg = "BGCOLOR='yellow'"; my $tw = "WIDTH=100%";
     my $more = "bgcolor=lightsteelblue";
 
@@ -156,15 +158,14 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH $bg $w1>Table Name</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
 
     foreach my $table (sort keys %tables) {
-        my $dbase  = $instances->{$table};
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
-#print "name $name <br>\n";
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'o' && $status eq 'p') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/select/$table";
             if ($count) {
@@ -177,22 +178,22 @@ elsif ($action eq 'overview') {
         }
     }
     $list .= "</table>";
-#    $page->add($list,0,0);
     $page->add($list);
     $page->space(1);
 
     $page->partition(1);
     $list = "<table border=1 cellpadding=3 $tw>";
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
-        my $domain = $inventory->associate ('domain',$name,'tablename');
-        my $status = $inventory->associate ('status',$name,'tablename');
+        next if ($name =~ /HISTORY\w*/ && $session !~ /oper/);
+        my $hname = $name; $hname =~ s/HISTORY\w+/DBHISTORY/;
+        my $domain = $inventory->associate ('domain',$hname,'tablename');
+        my $status = $inventory->associate ('status',$hname,'tablename');
         if ($domain eq 'o' && $status eq 'o') {
-            undef my $entry;
-            my $count = $dbase->count(0);
-            $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
+            my $count = "&nbsp"; $count = $handle->count(0) if $handle;
+            my $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
             if ($count) {
                 $target = "target=\"arcturustable\""; 
@@ -214,14 +215,14 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
 
     foreach my $table (sort keys %tables) {
-        my $dbase  = $instances->{$table};
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'o' && ($status eq 't' || $status eq 's')) {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/dictionary/$table";
@@ -247,15 +248,15 @@ elsif ($action eq 'overview') {
     $list = "<table border=1 cellpadding=3 $tw>";
     $list .= "<TR><TH ALIGN=CENTER COLSPAN=3 BGCOLOR='lightyellow'>Dictionary Tables</TH></TR>";
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($status eq 'd') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/dictionary/$table";
@@ -279,15 +280,15 @@ elsif ($action eq 'overview') {
     $list = "<table border=1 cellpadding=3 $tw>";
     $list .= "<TR><TH ALIGN=CENTER COLSPAN=3 BGCOLOR='lightyellow'>Mapping</TH></TR>";
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'o' && $status eq 'm') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/linkselect/$table";
@@ -309,15 +310,15 @@ elsif ($action eq 'overview') {
     $list = "<table border=1 cellpadding=3 $tw>";
     $list .= "<TR><TH ALIGN=CENTER COLSPAN=3 BGCOLOR='lightyellow'>Link Tables</TH></TR>";
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($status eq 'l') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/linkselect/$table";
@@ -336,15 +337,15 @@ elsif ($action eq 'overview') {
     $page->partition(1);
     $list = "<table border=1 cellpadding=3 $tw>";
 #    $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($status eq 'a') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/select/$table";
@@ -365,15 +366,15 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH ALIGN=CENTER COLSPAN=3 BGCOLOR='lightyellow'>Common Tables</TH></TR>";
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
 #    my $session = $GateKeeper->lookup('session') || '';
-    foreach my $table (keys %tables) {
-        my $dbase  = $instances->{$table};
+    foreach my $table (sort keys %tables) {
+        my $handle  = $instances->{$table};
         $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'c' && $status ne 'o') {
             undef my $entry;
-            my $count = $dbase->count(0);
+            my $count = $handle->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/dictionary/$table";
@@ -405,6 +406,9 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     $dbtable->build(1,'assembly,tagname') if ($tablename =~ /STS/);
     $dbtable->build(1,'chemtype')         if ($tablename =~ /CHEMTYPES/);
     $dbtable->build(1,'timebegin DESC')   if ($tablename =~ /SESSIONS/);
+    $dbtable->build(1,'chromosome')       if ($tablename =~ /ASSEM/);
+    $dbtable->build(1,'tablename,date')   if ($tablename =~ /HISTORY$/);
+    $dbtable->build(1,'tablename')        if ($tablename =~ /HISTORY\w+/);
     $dbtable->autoVivify($database,0) if ($name ne 'INVENTORY'); # setup of possible sublinks
 # $dbtable->expandSequence('ACGTN ');
 
@@ -420,11 +424,14 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     my $session = $GateKeeper->lookup('session') || '';
     $mask = '010000011111000012'      if ($tablename =~ /ORG/ && $session =~ /\boper|ejz\b/);
     $mask = '03101111'            if ($tablename =~ /STSTAG/);
-    $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
+    $mask = '010101111110001020000' if ($tablename =~ /ASSEM/);
+#    $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
     $mask = '011111000000002'     if ($tablename =~ /USER/);
     $mask = '011111111000112'     if ($tablename =~ /PROJ/);
     my $table = $dbtable->htmlTable($mask);
     $table =~ s/\<TABLE/<TABLE WIDTH=60%/;
+    $table =~ s/chromosome/chr/   if ($tablename =~ /ASSEM/);
+    $table =~ s/assembled reads/allocated/ if ($tablename =~ /ASSEM/);
 # fill in placeholders, if any
     $table =~ s?TABLELINK?$arc_cgi_dir/query/dictionary/?g;
     $table =~ s/TABLETARGET/target="arcturustable"/g;

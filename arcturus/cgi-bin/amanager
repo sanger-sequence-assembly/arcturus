@@ -664,8 +664,8 @@ elsif ($action eq 'editor') {
     elsif ($option eq 'aeditform') {
 
         $page->form("$script/editor/aprocess");
-        my $mask = '0100011011120021102';
-        $mask = '0100011011120021122' if ($session && $session =~ /\b(ejz|oper)\b/);
+        my $mask = '0100011101110120021102';
+        $mask    = '0200021101110120021122' if ($session && $session =~ /\b(ejz|oper)\b/);
 
         my $editlist = $assembly->htmlEditRecord($assemblyname,'assemblyname',0,$mask,'preset');
         if (!$editlist) {

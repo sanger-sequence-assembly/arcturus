@@ -59,8 +59,8 @@ $config{SDS} = ''; # default search sub-directories
 $config{GMD} = $GateKeeper->lookup("GELMINDDIR");
 $config{SCF} = $GateKeeper->lookup("SCFREADDIR");
 $config{EKS} = join ' ',@{$GateKeeper->lookup("excludekeys")}; # default reject strings
-$config{PRO} = $GateKeeper->lookup("PROJECT",0); # for Oracle reads
-$config{SCH} = $GateKeeper->lookup("SCHEMA" ,0);  # for Oracle reads
+#$config{PRO} = $GateKeeper->lookup("PROJECT",0); # for Oracle reads
+#$config{SCH} = $GateKeeper->lookup("SCHEMA" ,0);  # for Oracle reads
 $config{LPR} = $GateKeeper->lookup("LOADPERRUN");
 $config{FNF} = '';
 $config{GBF} = '';
@@ -116,7 +116,7 @@ if ($cgi) {
         $page = $GateKeeper->GUI('READS loader');
         $page->form("$arc_cgi_dir/rloader/$database/specify");
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
-        my %options = (mask=>'011000001111000001',
+        my %options = (mask=>'0110000001111000001',
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
         if ($database eq 'arcturus') {
             my $table = $organisms->htmlTable(\%options);
@@ -125,8 +125,8 @@ if ($cgi) {
             $page->add($organisms->htmlOptions('dbasename','database',20,0),0,0);
         }
         else {
-            my %options = (mask=>'011000001111000001',
-                           headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+#            my %options = (mask=>'0110000001111000001',
+#                           headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
             my $table = $organisms->htmlTable(\%options,'dbasename',$database);
             $cgi->addkey('database',$database);
             $page->add($table);
@@ -220,6 +220,13 @@ if ($cgi) {
                 my $alink = "$arc_cgi_dir/amanager/specify/assembly\?database=$database";
 		$alink .= "\&session=$session" if $session;
                 $form =~ s/ASSEMBLYLINK/$alink/;
+    # oracle data 
+                if ($source == 2) {
+                    my $schema = $organisms->associate('schema',$database,'dbasename');
+                    $form =~ s/\<s\>/$schema/i if $schema;
+                    my $project = $assembly->associate('oracleproject',$asname,'assemblyname');
+                    $form =~ s/\<p\>/$project/i if $project;
+                }
                 $page->add($form,0,1); # add the form to the page and preload
     # preload the remaining placeholders with data in %config 
                 foreach my $key (keys %config) {
@@ -366,11 +373,12 @@ else { # invoked from the command line (ejz/adh/pathdb only)
         $GateKeeper->dropDead("specify a database and a source or directory "
                              ."name filter\n  rloader  database  PENDING "
                              ."assembly [LPR or test]\n  rloader  database  PENDING "
-                             ."ORACLE [SCHEMA] [PROJECT] [LPR or test]\n  "
+                             ."ORACLE assembly [forced] [LPR or test]\n  "
                              ."rloader  database  HARVEST nr-of-days\n");
     }
     $fnfilter = shift @ARGV;
-    $gbfilter = shift @ARGV || 0;
+    $gbfilter = shift @ARGV;
+    my $assembly_id = $gbfilter || 'BLOB'; # default assembly
 
     $fnfilter =~ s/^.*\b(HARVEST)\b.*$/$1/; # remove any blanks
 
@@ -378,13 +386,8 @@ else { # invoked from the command line (ejz/adh/pathdb only)
         $source = 1;
         if ($gbfilter eq 'ORACLE') {
             $source  = 2;
-            $SCHEMA  = $config{SCH} if $config{SCH};
-            $PROJECT = $config{PRO} if $config{PRO};
-            $SCHEMA  = $ARGV[0] if $ARGV[0];
-            $PROJECT = $ARGV[1] if $ARGV[1];
-            if (!$SCHEMA || !$PROJECT) {
-                $GateKeeper->dropDead("no SCHEMA or PROJECT specified for ORACLE data");
-            }
+            $SCHEMA  = $organisms->associate('schema',$database,'dbasename');
+            $assembly_id =  shift @ARGV || 'BLOB';
         }
         elsif ($gbfilter && $gbfilter =~ /\D/) {
 # test if gbfilter is a project name; find its root directory ? 
@@ -397,12 +400,17 @@ print "testing II project $gbfilter \n";
     }
     elsif ($fnfilter eq 'HARVEST') {
         $GateKeeper->dropDead("Command line invocation HARVEST must have a number of days defined") if !$gbfilter;
+        $assembly_id =  shift @ARGV || 'BLOB';
     }
     else {
         $GateKeeper->dropDead("Command line invocation only for PENDING files or HARVEST mode");
     }
 
     $TEST = shift @ARGV;
+    if ($TEST eq 'forced') {
+        $forced = 1;
+        $TEST = shift @ARGV;      
+    }
 
     $arc_logfile = "$arc_log_dir/rloader.$database.log"; # default
 
@@ -425,21 +433,22 @@ print "testing II project $gbfilter \n";
         $GateKeeper->dropDead("Command line invocation aborted: Unknown database $database");
     }
 
-    $assemblynmbr = $gbfilter if ($source == 1);
-
 # open assembly database
 
     $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
-    if (my $number = $assembly->associate('assembly',$gbfilter,'assemblyname')) {
-        $assemblynmbr = $number;
-        $assemblyname = $gbfilter;
+# try to identify the assembly; first try assembly name
+    if ($assemblynmbr = $assembly->associate('assembly',$assembly_id,'assemblyname')) {
+        $assemblyname = $assembly_id;
     }
-    elsif ($assemblyname = $assembly->associate('assemblyname',$gbfilter,'assembly')) {
-        $assemblynmbr = $gbfilter;
+# or try a number
+    elsif ($assemblyname = $assembly->associate('assemblyname',$assembly_id,'assembly')) {
+        $assemblynmbr = $assembly_id;
     }
     else {
         $GateKeeper->dropDead("Command line invocation aborted: Unknown assembly $gbfilter");
     }
+
+    $PROJECT = $assembly->associate('oracleproject',$assemblynmbr,'assembly') if ($source == 2);
 
     if ($attributes = $assembly->unpackAttributes($assemblynmbr,'assembly')) {
 
@@ -476,11 +485,8 @@ print "testing II project $gbfilter \n";
         $TEST = 0;
     }
 
- foreach my $key (keys %config) {
-#     print "key $key  $config{$key}\n";
- }
-    print "ROOTDATADIR = $ROOTDATADIR\nlog file $arc_logfile \n";
-#$GateKeeper->disconnect; exit;
+#    print "ROOTDATADIR = $ROOTDATADIR\nlog file $arc_logfile \n";
+#$GateKeeper->dropDead("Test run exit: $fnfilter $gbfilter $LOADPERRUN") if ($source == 2);
 }
 
 #*********************************** HERE WE GO ********************************
@@ -512,8 +518,9 @@ foreach my $key (sort keys %$links) {
 }
 
 if ($logON || !$origin) {
-    open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
+ #   open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
     print "LOG opened: $arc_logfile $break";
+    $logON=0;
 } else {
     *LOG = *STDOUT;
 }
@@ -604,6 +611,8 @@ if ($logON || !$origin) {
         print " $break";
     # output in array @$newfiles with names of files in disk
 
+        $GateKeeper->dropDead("ABORTED: $ROOTDATADIR") if ($ROOTDATADIR =~ /\<.*\>/);
+
         $newfiles = &getNewReadFiles (\%dbfiles,$ROOTDATADIR,\@excludekeys,$fnfilter,$gbfilter,$LOADPERRUN); 
 
     # if in harvest mode, add files to PENDING
@@ -653,11 +662,16 @@ if ($logON || !$origin) {
 
         undef my @pendingfiles;
         if ($gbfilter && $gbfilter eq "ORACLE") {
-    # get the files from Oracle: build array with names to be sent to Oracle reader
+# get the files from Oracle
+print "SCHEMA $SCHEMA, PROJECT $PROJECT ${break}"; 
+            if (!$SCHEMA || !$PROJECT) {
+                $GateKeeper->dropDead("no SCHEMA or PROJECT specified for ORACLE data");
+            }
+# build array with names to be sent to Oracle reader
             foreach my $key (keys (%dbfiles)) {
                 push @pendingfiles, $key;
             }
-print "SCHEMA $SCHEMA, PROJECT $PROJECT ${break}"; # print "pending files @pendingfiles $break";
+# print "pending files @pendingfiles $break";
 	    my $success = $reader->fetchOracleData($SCHEMA,$PROJECT,\@pendingfiles);
 print "success = $success $break";
             undef @pendingfiles if !$success; # protection, forcing controlled exit
@@ -994,6 +1008,9 @@ $LOADPERRUN =~ s/\W/x/g;
         print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads $userid$break";
         $assembly->update('reads',$areads,'assemblyname',$assemblyname);
         $assembly->signature($userid,'assemblyname',$assemblyname);
+        if ($assembly->associate('progress',$assemblyname,'assemblyname') eq 'other') {
+            $assembly->update('progress','in shotgun','assemblyname',$assemblyname);
+        }
     }
 
     my $nreads = $READS->count(0);
@@ -1179,10 +1196,10 @@ sub form2 {
 
     elsif ($source == 2) {
         $form .= "<TR><TH ALIGN=LEFT>Oracle Schema Name</TH>";
-        $form .= "<TD><INPUT NAME='SCH'  SIZE=16 MAXSIZE=32 VALUE=''></TD>";
+        $form .= "<TD><INPUT NAME='SCH'  SIZE=16 MAXSIZE=32 VALUE='<S>'></TD>";
         $form .= "<TD>&nbsp</TD></TR>";
         $form .= "<TR><TH ALIGN=LEFT>Oracle Project Name</TH>";
-        $form .= "<TD><INPUT NAME='PRO' SIZE=16 MAXSIZE=32 VALUE=''></TD>";
+        $form .= "<TD><INPUT NAME='PRO' SIZE=16 MAXSIZE=32 VALUE='<P>'></TD>";
         $form .= "<TD>&nbsp</TD></TR>";
     }
 

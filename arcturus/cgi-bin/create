@@ -266,7 +266,8 @@ elsif ($action eq 'arebuild') {
             $page->message($redefined{$tablename},$purple,0,1);
             $page->space(2);
             my $return = "$script/arebuild/getform";
-            $return .= "\?database=$database" if $database;
+            $return .= $cgi->postToGet(0,'tablename','password','identify');
+#            $return .= "\?database=$database" if $database;
             if (!$confirm || $confirm ne 'ALTER') {
                 $page->confirmbuttonbar($return); # include reject button
                 $page->substitute('CONFIRM',"ALTER");
@@ -401,7 +402,7 @@ elsif ($action eq 'organism') {
             $page->message("The new database will be added to the $location",$yellow,"size = +1");
             $page->space(1);
 
-            my @items = ('genus','species','serovar','strain','isolate','template','comment');
+            my @items = ('genus','species','serovar','strain','isolate','schema','template','comment');
 
             my $summary = "<table>";
             $summary .= "<tr><th align=left>Database name</th><th>:</th><td>$dbasename</td></tr>";
@@ -968,9 +969,9 @@ elsif ($action eq 'editor') {
 	    $database = $hash->{dbasename};
         }            
         $page->form("$script/editor/process");
-        my $mask = '0122222000002000220'; # default
+        my $mask = '01222222000002000220'; # default
         my $session = $GateKeeper->lookup('session');
-        $mask = '0122222000002000222' if ($session && $session =~ /\b(ejz|oper)\b/);
+        $mask = '01222222000002000222' if ($session && $session =~ /\b(ejz|oper)\b/);
         my $editlist = $organisms->htmlEditRecord($database,'dbasename',0,$mask);
         if (!defined($editlist) || !$editlist) {
             $page->errorbox("No such Organism database: $database");
@@ -1158,6 +1159,11 @@ sub form {
     $form .= "<TD ALIGN=LEFT NOWRAP><INPUT NAME=\"isolate\"   SIZE=16 MAXSIZE=16 VALUE=''></TD>";
     $form .= "<TD ALIGN=CENTER> (16) </TD>";
     $form .= "<TD ALIGN=LEFT NOWRAP>e.g. Clinical/Laboratory/Environment</TD></TR>";
+
+    $form .= "<TR><TH ALIGN=LEFT NOWRAP>Oracle Schema</TH>";
+    $form .= "<TD ALIGN=LEFT NOWRAP><INPUT NAME=\"schema\"   SIZE=16 MAXSIZE=16 VALUE=''></TD>";
+    $form .= "<TD ALIGN=CENTER> (16) </TD>";
+    $form .= "<TD ALIGN=LEFT NOWRAP>&nbsp</TD></TR>";
 
     my $template = "<name><n>P<m>";
     $form .= "<TR><TH ALIGN=LEFT NOWRAP>Template</TH>";

@@ -555,6 +555,7 @@ else {
             if (my $ncontigs = $R2C->probe('contig_id',undef,$where)) {
 # there is a new assembly being built but not yet promoted
                 $ASSEMBLY->update('status','loading','assembly',$assemblynmbr);
+#               $ContigBuilder->updateAssembly($assemblynmbr,0); # generation = 0
             }
 
 # update counters in ORGANISMS table (ALL contigs and pending reads in database)
