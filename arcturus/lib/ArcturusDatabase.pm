@@ -20,7 +20,84 @@ sub new {
 	$this->{DataSource} = new DataSource(@_);
     }
 
+    $this->init();
+
     return $this;
+}
+
+sub init {
+    my $this = shift;
+
+    return if defined($this->{inited});
+
+    my $ds = $this->{DataSource};
+
+    $this->{Connection} = $ds->getConnection();
+
+    $this->populateDictionaries();
+
+    $this->{inited} = 1;
+}
+
+sub populateDictionaries {
+    my $this = shift;
+
+    my $dbh = $this->{Connection};
+
+    $this->{Dictionary} = {};
+
+    $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'silow, sihigh');
+    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
+    $this->{Dictionary}->{primer}       = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
+    $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
+    $this->{Dictionary}->{strand}       = &createDictionary($dbh, 'STRANDS', 'strand', 'direction');
+    $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
+    $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
+    $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
+
+    $this->{Dictionary}->{chemistry}    = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
+							    'chemistry', 'type', 'USING(chemtype)');
+}
+
+sub createDictionary {
+    my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
+
+    #print STDERR "createDictionary($table, $pkey, $vals)\n";
+
+    my $query = "SELECT $pkey,$vals FROM $table";
+
+    $query .= " $where" if defined($where);
+
+    my $sth = $dbh->prepare($query);
+
+    if ($DBI::err) {
+	my $msg = "createDictionary: prepare($query) failed";
+	print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+	return undef;
+    }
+
+    $sth->execute();
+
+    if ($DBI::err) {
+	my $msg = "createDictionary: execute($query) failed";
+	print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+	return undef;
+    }
+
+    my $dict = {};
+
+    while(my @ary = $sth->fetchrow_array()) {
+	my $key = shift @ary;
+	if (scalar(@ary) > 1) {
+	    $dict->{$key} = [@ary];
+	} else {
+	    $dict->{$key} = shift @ary;
+	}
+    }
+
+    $sth->finish();
+
+    return $dict;
 }
 
 sub getURL {
@@ -46,7 +123,7 @@ sub getConnection {
     return $this->{Connection};
 }
 
-sub getReadFromID {
+sub getReadByID {
     my $this = shift;
 
     my $readid = shift;
@@ -57,14 +134,49 @@ sub getReadFromID {
 
     $sth->execute();
 
-    my $arrayref = $sth->fetchrow_arrayref();
+    my $hashref = $sth->fetchrow_hashref();
 
     $sth->finish();
 
-    if (defined($arrayref)) {
+    if (defined($hashref)) {
 	my $read = new Read();
-	$read->importData(%{$arrayref});
+
+	$this->processReadData($hashref);
+
+	$read->importData($hashref);
+
 	return $read;
+    } else {
+	return undef;
+    }
+}
+
+sub processReadData {
+    my $this = shift;
+    my $hashref = shift;
+
+    $hashref->{'insertsize'} = $hashref->{'ligation'};
+
+    foreach my $key (keys %{$hashref}) {
+	my $dict = $this->{Dictionary}->{$key};
+	my $value = $hashref->{$key};
+
+	if (defined($dict)) {
+	    $value = &dictionaryLookup($dict, $value);
+	    if (ref($value) && ref($value) eq 'ARRAY') {
+		$value = join(' ', @{$value});
+	    }
+	    $hashref->{$key} = $value;
+	}
+    }
+}
+
+sub dictionaryLookup {
+    my ($dict, $pkey, $junk) = @_;
+
+    if (defined($dict)) {
+	my $value = $dict->{$pkey};
+	return $value;
     } else {
 	return undef;
     }
