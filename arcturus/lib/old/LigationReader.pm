@@ -88,7 +88,7 @@ sub build {
    if (!@fields) {
 # try a recovery by going to another machine
        @fields = `/usr/bin/rsh babel "$PEEKDIR/peek ligation $ligation"`; # execute Oracle query
-#print "recovered peek: @{fields}<br>\n";
+ print "recovered peek: @{fields}<br>\n";
    }
 
    undef my @plates;

@@ -661,7 +661,7 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
                             $readItem{CN} = $litem; # replace by Oracle value
                             $warnings++;
                         }
-                        elsif ($item eq 'SIH' && ($litem>30000 || $readItem{$item}>30000)) {
+                        elsif ($item =~ /SIH|SIL/ && ($litem>30000 || $readItem{$item}>30000)) {
                             $readItem{RPS} += 16; # bit 5
                             $diagnosis .= " (Overblown insert value(s) ignored)\n";
                             $warnings++; # flag, but ignore the range data
