@@ -242,18 +242,6 @@ CREATE TABLE READCOMMENT (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'READEDITS'
-#
-
-CREATE TABLE READEDITS (
-  seq_id mediumint(8) unsigned NOT NULL default '0',
-  base smallint(5) unsigned NOT NULL default '0',
-  edit char(4) default NULL,
-  deprecated enum('N','Y','X') default 'N',
-  KEY reads_index (seq_id)
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'READS'
 #
 
@@ -458,6 +446,18 @@ CREATE TABLE QUALITYCLIP (
   primary key (seq_id)
 ) TYPE=MyISAM;
 
+
+#
+# Table structure for table 'ALIGN2SCF'
+#
+
+CREATE TABLE ALIGN2SCF (
+  seq_id mediumint unsigned NOT NULL,
+  startinseq smallint unsigned NOT NULL,
+  startinscf  smallint unsigned NOT NULL,
+  length smallint unsigned NOT NULL,
+  primary key (seq_id)
+) TYPE=MyISAM;
 
 
 
