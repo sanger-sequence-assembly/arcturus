@@ -108,7 +108,7 @@ print STDERR "\n" unless $batchmode;
 
 $sth_contigs->finish();
 $sth_reads->finish();
-$sth_mappings->finish();
+$sth_segments->finish();
 
 $sth_new_mapping->finish();
 $sth_new_segment->finish();
