@@ -83,6 +83,22 @@ while (my ($ctgid, $ctglen) = $sth->fetchrow_array()) {
 $sth->finish();
 
 ###
+### Retrieve contig names
+###
+
+my $contigname = {};
+
+$sth = $statements->{'gap4contigname'};
+
+foreach my $ctgid (@contiglist) {
+    $sth->execute($ctgid);
+    my ($ctgname) = $sth->fetchrow_array();
+    $contigname->{$ctgid} = $ctgname;
+}
+
+$sth->finish();
+
+###
 ### Make a contig-to-project mapping
 ###
 
@@ -218,7 +234,8 @@ foreach my $contigid (@contiglist) {
 	    my ($contigid, $contigdir) = @{$item};
 	    my $contiglen = $contiglength->{$contigid};
 	    my $projid = $project->{$contigid};
-	    $report .= "  CONTIG $contigid/$projid ($contiglen) $contigdir\n";
+	    my $ctgname = $contigname->{$contigid};
+	    $report .= "  CONTIG $contigid/$projid ($ctgname, $contiglen bp) $contigdir\n";
 	    push @{$item}, ($contigdir eq 'F') ? $curpos : $curpos + $contiglen;
 	    $contigref{$contigid} = $item;
 	    $totlen += $contiglen;
@@ -545,6 +562,11 @@ sub CreateStatements {
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
 		   " order by CONTIG.length desc",
+
+		   "gap4contigname",
+		   "select readname from MAPPING,SEQ2READ,READS" .
+		   " where cstart = 1 and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id" .
+		   " and contig_id = ? limit 1",
 
 		   "projectforcontig",
 		   "select CONTIG.contig_id,project" .
