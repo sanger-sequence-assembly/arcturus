@@ -12,6 +12,7 @@ my $instance;
 my $organism;
 my $contigid;
 my $logfile;
+my $outfile;
 my $loose = 0;
 
 while ($nextword = shift @ARGV) {
@@ -19,7 +20,8 @@ while ($nextword = shift @ARGV) {
     $organism = shift @ARGV if ($nextword eq '-organism');
     $contigid = shift @ARGV if ($nextword eq '-contig');
     $logfile  = shift @ARGV if ($nextword eq '-log');
-    $loose = 1 if ($nextword eq '-loose');
+    $outfile  = shift @ARGV if ($nextword eq '-out');
+    $loose    = 1 if ($nextword eq '-loose');
 }
 
 unless (defined($instance) && defined($organism) && defined($contigid)) {
@@ -45,12 +47,18 @@ my $stmt = $dbh->prepare($query);
 $stmt->execute($contigid);
 &db_die("Failed to execute query \"$query\"");
 
-my $logfh;
+my ($logfh, $outfh);
 
 if (defined($logfile)) {
     $logfh = new FileHandle("> $logfile");
 } else {
     $logfh = new FileHandle(">&STDERR");
+}
+
+if (defined($outfile)) {
+    $outfh = new FileHandle("> $outfile");
+} else {
+    $outfh = new FileHandle(">&STDOUT");
 }
 
 while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) {
@@ -65,14 +73,34 @@ while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) 
 
     my $newMappings = &getReadToContigMappings($dbh, $parentid);
 
+    my $segments = [];
+    my $sense;
+
     foreach my $seqid (keys %{$newMappings}) {
 	my $oldmapping = $mappings->{$seqid};
 	my $newmapping = $newMappings->{$seqid};
 
-	&processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose) if defined($oldmapping);
+	my $newsegs;
+
+	($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose) if defined($oldmapping);
+
+	push @{$segments}, @{$newsegs};
 
 	print $logfh "\n";
     }
+
+    &normaliseMappings($segments);
+
+    my @sortedsegments = sort byOldStartThenFinish @{$segments};
+
+    $segments = &mergeSegments(\@sortedsegments, 'Forward', $sense, $loose);
+
+    print $logfh "\nOVERALL MAPPING:\n\n";
+
+    &displaySegments($segments, $logfh);
+
+    print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
+    &displaySegments($segments, $outfh);
 }
 
 $dbh->disconnect();
@@ -181,11 +209,13 @@ sub processMappings {
 
     &displaySegments($c2csegments, $logfh);
 
-    my $nsegs = &mergeSegments($c2csegments, $olddirection, $newdirection, $loose);
+    $c2csegments = &mergeSegments($c2csegments, $olddirection, $newdirection, $loose);
 
     print $logfh "\nSEGMENTS AFTER MERGING:\n\n";
 
-    &displaySegments($c2csegments, $logfh, $nsegs);
+    &displaySegments($c2csegments, $logfh);
+
+    return ($c2csegments, $sense);
 }
 
 sub processSegments {
@@ -195,9 +225,9 @@ sub processSegments {
     my $newdirection = shift;
     my $logfh = shift;
 
-    my @oldsegs = sort byRstart @{$oldsegments};
+    my @oldsegs = sort byReadStart @{$oldsegments};
 
-    my @newsegs = sort byRstart @{$newsegments};
+    my @newsegs = sort byReadStart @{$newsegments};
 
     my $segments = [];
 
@@ -263,7 +293,13 @@ sub mergeSegments {
 	}
     }
 
-    return $curseg + 1;
+    my $newsegs = [];
+
+    for ($nsegs = 0; $nsegs <= $curseg; $nsegs++) {
+	push @{$newsegs}, $segments->[$nsegs];
+    }
+
+    return $newsegs;
 }
 
 sub canMerge {
@@ -283,7 +319,7 @@ sub canMerge {
     my $newdiff = ($newdirection eq 'Forward') ?
 	($rightseg->[2] - $leftseg->[3] - 1) : ($leftseg->[3] - $rightseg->[2] - 1);
 
-    return ($olddiff == 0 && $newdiff == 0);
+    return ($olddiff <= 0 && $newdiff <= 0);
 }
 
 sub doMerge {
@@ -298,7 +334,7 @@ sub doMerge {
 sub displaySegments {
     my $segments = shift;
     my $fh = shift;
-    my $nsegs = shift || scalar(@{$segments});
+    my $nsegs = scalar(@{$segments});
 
     for (my $segnum = 0; $segnum < $nsegs; $segnum++) {
 	my $segment = $segments->[$segnum];
@@ -306,11 +342,20 @@ sub displaySegments {
     }
 }
 
-sub byRstart ($$) {
+sub byReadStart ($$) {
     my $sega = shift;
     my $segb = shift;
 
     return $sega->[2] <=> $segb->[2];
+}
+
+sub byOldStartThenFinish ($$) {
+    my $sega = shift;
+    my $segb = shift;
+
+    my $cond = $sega->[0] <=> $segb->[0];
+
+    return ($cond != 0) ? $cond : $sega->[1] <=> $segb->[1];
 }
 
 sub overlap {
@@ -344,4 +389,20 @@ sub readToContig {
 	return ($segment->[0] - ($rstart - $segment->[2]),
 		$segment->[0] - ($rfinish - $segment->[2]));
     }
+}
+
+sub normaliseMappings {
+    my $segments = shift;
+
+    my $nsegs = scalar(@{$segments});
+
+    for (my $segnum = 0; $segnum < $nsegs; $segnum++) {
+	my $segment = $segments->[$segnum];
+
+	if ($segment->[0] > $segment->[1]) {
+	    $segments->[$segnum] = [$segment->[1], $segment->[0], $segment->[3], $segment->[2], $segment->[4]];
+	}
+    }
+
+    return $segments;
 }
