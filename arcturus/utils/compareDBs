@@ -21,11 +21,17 @@ while ($nextword = shift @ARGV) {
 
     $limit = shift @ARGV if ($nextword eq '-limit');
 
+    $byname = 1 if ($nextword eq '-byname');
+
+    $namelike = shift @ARGV if ($nextword eq '-namelike');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
     }
 }
+
+$byname = 0 unless defined($byname);
 
 $dodna = 0 unless defined($dodna);
 $doquality = 0 unless defined($doquality);
@@ -89,6 +95,8 @@ $dbhb->do($lockquery);
 
 $querya = "SELECT read_id, readname, slength $dnaselect $qualityselect from READS";
 
+$querya .= " WHERE readname like '$namelike'" if defined($namelike);
+
 $querya .= " LIMIT $limit" if defined($limit);
 
 print STDERR "Preparing \"$querya\" on $dsna ...\n";
@@ -96,7 +104,9 @@ print STDERR "Preparing \"$querya\" on $dsna ...\n";
 $stha = $dbha->prepare($querya);
 &db_die("prepare($querya) failed on $dsna");
 
-$queryb = "SELECT readname, slength $dnaselect $qualityselect from READS where read_id=?";
+$tomatch = $byname ? 'readname' : 'read_id';
+
+$queryb = "SELECT read_id, readname, slength $dnaselect $qualityselect from READS where $tomatch=?";
 
 print STDERR "Preparing \"$queryb\" on $dsnb ...\n";
 
@@ -109,6 +119,8 @@ $format = "\010\010\010\010\010\010\010\010%8d";
 
 $stha->execute();
 &db_die("execute($querya) failed on $dsna");
+
+$nmatched = 0;
 
 while (@arya = $stha->fetchrow_array()) {
     $read_id = shift @arya;
@@ -127,20 +139,32 @@ while (@arya = $stha->fetchrow_array()) {
 	($qlen, $quala) = $compressor->qualityDecoder($quala, $method) if ($method > 0);
 	$quala =~ s/^\s+|\s+$//;
 	$quala = pack("c*", split(/\s+/, $quala));
+	$qualalen = length($quala);
 	$qualahash = md5_hex($quala);
     }
 
-    $sthb->execute($read_id);
+    if ($byname) {
+	$sthb->execute($readnamea);
+    } else {
+	$sthb->execute($read_id);
+    }
+
+    $nmatchb = 0;
 
     while (@aryb = $sthb->fetchrow_array()) {
+	$read_idb = shift @aryb;
 	$readnameb = shift @aryb;
 
-	print "$read_id: readname mismatch: $readnamea vs $readnameb\n"
-	    if ($readnamea ne $readnameb);
+	if (!$byname) {
+	    print "$read_id: readname mismatch: $readnamea vs $readnameb\n"
+		if ($readnamea ne $readnameb);
+	}
+
+	$uniqueid = $byname ? $readnamea : $read_id;
 
 	$slengthb = shift @aryb;
 
-	print "$read_id: slength mismatch: $slengtha vs $slengthb\n"
+	print "$uniqueid: slength mismatch: $slengtha vs $slengthb\n"
 	    if ($slengtha != $slengthb);
 
 	if ($dodna) {
@@ -148,7 +172,7 @@ while (@arya = $stha->fetchrow_array()) {
 	    $method = shift @aryb;
 	    ($slenb, $seqb) = $compressor->sequenceDecoder($seqb, $method) if ($method > 0);
 
-	    print "$read_id: sequence mismatch\n" if ($seqa != $seqb);
+	    print "$uniqueid: sequence mismatch\n" if ($seqa != $seqb);
 	}
 
 	if ($doquality) {
@@ -157,11 +181,21 @@ while (@arya = $stha->fetchrow_array()) {
 	    ($qlen, $qualb) = $compressor->qualityDecoder($qualb, $method) if ($method > 0);
 	    $qualb =~ s/^\s+|\s+$//;
 	    $qualb = pack("c*", split(/\s+/, $qualb));
-	    $qualbhash = md5_hex($qualb);
+	    $qualblen = length($qualb);
 
-	    print "$read_id: base quality mismatch\n" if ($qualahash ne $qualbhash);
+	    if ($qualalen == $qualblen) {
+		$qualbhash = md5_hex($qualb);
+		print "$uniqueid: base quality mismatch\n" if ($qualahash ne $qualbhash);
+	    } else {
+		print "$uniqueid: base quality length mismatch: $qualalen vs $qualblen\n";
+	    }
+
 	}
+
+	$nmatchb++;
     }
+
+    $nmatched++ if ($nmatchb > 0);
 
     $nreads++;
     printf STDERR $format, $nreads if (($nreads % 50) == 0);
@@ -169,6 +203,10 @@ while (@arya = $stha->fetchrow_array()) {
 
 printf STDERR $format, $nreads;
 print STDERR " reads found ... done.\n";
+
+if ($nmatched < $nreads) {
+    print STDERR "*** Only found matches for $nmatched reads from $dba\n";
+}
 
 $stha->finish();
 $sthb->finish();
@@ -203,4 +241,6 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
     print STDERR "    -limit\t\tSpecify the maximum number of reads to compare\n";
+    print STDERR "    -byname\t\tCompare reads by name instead of read_id\n";
+    print STDERR "    -namelike\t\tSelect readnames like this from first database\n";
 }
