@@ -691,44 +691,44 @@ sub flushReadsToPending {
 sub putRead {
 # insert read into the database
     my $this = shift;
-    my $read = shift || return;
+    my $Read = shift || return;
     my $options = shift;
 
-    if (ref($read) ne 'Read') {
+    if (ref($Read) ne 'Read') {
         print STDERR "putRead expects an instance of the Read class\n";
         return undef;
     }
 
-    #my $errorstatus = $read->status;
-
 # a) test consistency and completeness
 
-    my ($rc, $errmsg) = $this->checkReadForCompleteness($read, $options);
+    my ($rc, $errmsg) = $Read->checkReadForCompleteness($options);
+#    my ($rc, $errmsg) = $this->checkReadForCompleteness($Read, $options);
     return (0, "failed completeness check: $errmsg") unless $rc;
 
-    ($rc, $errmsg) = $this->checkReadForConsistency($read);
+    ($rc, $errmsg) = $this->checkReadForConsistency($Read);
     return (0, "failed consistency check: $errmsg") unless $rc;
 
-# b) encode dictionary items; special case: TEMPLATE
+# b) encode dictionary item; special case: template & ligation
 
-    my $template_id = $this->getTemplateID($read);
+    my $template_id = $this->getTemplateID($Read);
 
     return (0, "failed to retrieve template_id") unless defined($template_id);
 
-# c) insert (if not exists) 1) readname, then for read_id=last_insert_id: 2) meta data READS
-#                                             3) sequence into SEQUENCE 4) comments
+# c) encode dictionary items basecaller, clone, status
+
+
+# d) insert Read meta data
 
     my $dbh = $this->getConnection();
 
     return (0, "no database connection") unless defined($dbh);
 
-    my $readname = $read->getReadName();
+    my $readname = $Read->getReadName();
 
-    my $sequence = $read->getSequence();
-    my $seqlen = length($sequence);
+    my $sequence = $Read->getSequence();
 
     $sequence = compress($sequence);
-    my $basequality = compress(pack("c*", @{$read->getQuality()}));
+    my $basequality = compress(pack("c*", @{$Read->getQuality()}));
 
     my $query = "insert into" .
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
@@ -737,14 +737,14 @@ sub putRead {
     my $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readname,
-			$read->getAspedDate(),
+			$Read->getAspedDate(),
 			$template_id,
-			$read->getStrand(),
-			$read->getChemistry(),
-			$read->getPrimer(),
-			$seqlen,
-			$read->getLowQualityLeft(),
-			$read->getLowQualityRight());
+			$Read->getStrand(),
+			$Read->getChemistry(),
+			$Read->getPrimer(),
+                        $Read->getSequenceLength(),
+			$Read->getLowQualityLeft(),
+			$Read->getLowQualityRight());
 
     return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
@@ -752,6 +752,8 @@ sub putRead {
     my $readid = $dbh->{'mysql_insertid'};
 
     $sth->finish();
+
+# insert sequence and base quality
 
     $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
 
@@ -764,12 +766,14 @@ sub putRead {
 
     $sth->finish();
 
-    my $seqveclist = $read->getSequencingVector();
+# insert sequencing vector data, if any
+
+    my $seqveclist = $Read->getSequencingVector();
 
     if (defined($seqveclist)) {
 	$query = "insert into SEQVEC(read_id,svector_id,begin,end) VALUES(?,?,?,?)";
 
-	$sth = $dbh->prepare($query);
+	$sth = $dbh->prepare_cached($query);
 
 	foreach my $entry (@{$seqveclist}) {
 
@@ -786,12 +790,14 @@ sub putRead {
 	$sth->finish();
     }
 
-    my $cloneveclist = $read->getCloningVector();
+# insert cloning vector data, if any
+
+    my $cloneveclist = $Read->getCloningVector();
 
     if (defined($cloneveclist)) {
 	$query = "insert into CLONEVEC(read_id,cvector_id,begin,end) VALUES(?,?,?,?)";
 
-	$sth = $dbh->prepare($query);
+	$sth = $dbh->prepare_cached($query);
 
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
@@ -807,9 +813,12 @@ sub putRead {
 	$sth->finish();
     }
 
+# insert READCOMMENT, TRACEARCHIVE, TAGS
+
     return (1, "OK");
 }
 
+# MOVED TO READ CLASS
 sub checkReadForCompleteness {
     my $this = shift;
     my $read = shift;
@@ -1121,6 +1130,110 @@ sub getLigationID {
 		      $ligation, $ligation_id) if defined($ligation_id);
 
     return $ligation_id;
+}
+
+sub getDictionaryItemID {
+    my $this = shift;
+# the next two items are always required
+    my $key      = shift; # e.g. 'template'
+    my $keyvalue = shift; #
+# the next three parameters are required when accessing the database table
+    my $tableID     = shift; # e.g. 'template_id'
+    my $tablename   = shift; # e.g. 'TEMPLATE'
+    my $tablecolumn = shift; # e.g. 'name'
+
+# 1) test validity of input key
+
+    my $validItems = "template|ligation|cvectors|svectors|
+                      clone|status|basecaller";
+    if ($key !~ /\b$validItems\b/) {
+        die "valid keys for 'getDictionaryItemID' are: ".
+             join(' ',split ('|',$validItems));
+    }
+
+# 2) try to identify the key's value in the current dictionary table
+
+    my $key_id = &dictionaryLookup($this->{LoadingDictionary}->{$key},
+                                    $keyvalue);
+
+    return $key_id if defined($key_id);
+
+# 3) not found in current dictionary, try the database table
+
+    my $dbh = $this->getConnection();
+
+    return undef unless defined($dbh);
+
+# test the dictionary table descriptors 
+
+    if (!defined($tableID) || !defined($tablename) || !defined($tablecolumn)) {
+        die "Missing dictionary table data for 'getDictionaryItemID'";
+    }
+
+    my $query = "select $tableID from $tablename where $tablecolumn=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($keyvalue);
+
+    ($key_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    if (defined($key_id)) {
+# the key value is found in the database table; update the dictionary hash
+	&dictionaryInsert($this->{LoadingDictionary}->{$key},
+			  $keyvalue, $key_id);
+	return $key_id;
+    }
+
+# 4) not found in database either, add new value to database table
+
+    my $insertkeys = $key;
+    my $placeholders = "?";
+    my @insertvals;
+    push @insertvals,$keyvalue;
+    if (scalar(@_) && scalar(@_)%2) {
+# there is an odd number of extra input, should be even
+        die "Incomplete additional INSERT data for 'getDictionaryItemID'";
+    }
+    while (scalar(@_)) {
+# add extra parameter(s) and value(s) when defined, e.g. ligation for template
+        $insertkeys .= ",".shift;
+        push @insertvals,shift;
+        $placeholders .= ",?";
+    } 
+
+    my $insert = "insert into $tablename ($insertkeys) VALUES ($placeholders)";
+
+    $sth = $dbh->prepare_cached($insert);
+
+    $rc = $sth->execute(@insertvals);
+
+    if (defined($rc)) {
+	my $nrows = $sth->rows();
+	if ($nrows == 1) {
+# get the ID for the newly added item
+	    $key_id = $dbh->{'mysql_insertid'};
+# and store the newly added value in the dictionary hash
+            &dictionaryInsert($this->{LoadingDictionary}->{$key},
+		              $keyvalue, $key_id);
+	}
+        elsif ($nrows == 0) {
+	    # By an amazing coincidence, another read-loader
+	    # has inserted a record with the same identifer
+	    # between our SELECT and INSERT commands, so we
+	    # need to re-execute the SELECT.
+            $key_id = 0;
+	}
+    } 
+    else {
+	undef $key_id;
+    }
+
+    $sth->finish();
+
+    return $key_id;
 }
 
 sub updateRead {
