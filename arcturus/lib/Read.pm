@@ -315,11 +315,6 @@ sub getSequence {
 
 #-----------------
 
-sub setSequenceLength {
-    my $self = shift;
-    $self->{data}->{slength} = shift;
-}
-
 sub getSequenceLength {
     my $self = shift;
     return $self->{data}->{slength};
@@ -415,16 +410,16 @@ sub writeToCaf {
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
     print $FILE "SCF_File $self->{readname}SCF\n";
-    print $FILE "Template $data->{template}\n"        if defined $data->{template};
-    print $FILE "Insert_size $data->{insertsize}\n"   if defined $data->{insertsize};
-    print $FILE "Ligation_no $data->{ligation}\n"     if defined $data->{ligation};
-    print $FILE "Primer $data->{primer}\n"            if defined $data->{primer};
-    print $FILE "Strand $data->{strand}\n"            if defined $data->{strand};
-    print $FILE "Dye $data->{chemistry}\n"            if defined $data->{chemistry};
-    print $FILE "Clone $data->{clone}\n"              if defined $data->{clone};
+    print $FILE "Template $data->{template}\n"                  if defined $data->{template};
+    print $FILE "Insert_size $data->{insertsize}\n"             if defined $data->{insertsize};
+    print $FILE "Ligation_no $data->{ligation}\n"               if defined $data->{ligation};
+    print $FILE "Primer ".ucfirst($data->{primer})."_primer\n"  if defined $data->{primer};
+    print $FILE "Strand $data->{strand}\n"                      if defined $data->{strand};
+    print $FILE "Dye Dye_$data->{chemistry}\n"                  if defined $data->{chemistry};
+    print $FILE "Clone $data->{clone}\n"                        if defined $data->{clone};
     print $FILE "ProcessStatus PASS\n";
-    print $FILE "Asped $data->{date}\n"               if defined $data->{date} ;
-    print $FILE "Base_caller $data->{basecaller}\n"   if defined $data->{basecaller};
+    print $FILE "Asped $data->{date}\n"                         if defined $data->{date} ;
+    print $FILE "Base_caller $data->{basecaller}\n"             if defined $data->{basecaller};
 # add the alignment info (the padded maps)
 #    $self->writeMapToCaf($FILE,1) if shift; # see below
 # process read tags ?
@@ -478,7 +473,7 @@ sub dump {
 
     foreach my $key (sort keys %{$self}) {
         my $item = $self->{$key};
-        print STDERR "hash key $key -> $item\n";
+        print STDERR "self key $key -> $item\n";
         if (ref($item) eq 'HASH') {
             foreach my $key (sort keys %$item) {
                 print STDERR "    $key -> $item->{$key}\n";
