@@ -36,7 +36,7 @@ unless (defined($organism) &&
     exit(1);
 }
 
-$instance = 'prod' unless defined($instance);
+$instance = 'dev' unless defined($instance);
 
 $ds = new DataSource(-instance => $instance, -organism => $organism);
 
@@ -61,9 +61,9 @@ die "Unable to open quality file \"$qualfile\" for writing" unless $qualityfh;
 
 $minlen = 1000 unless defined($minlen);
 
-$query = "select CONTIGS.contig_id,CONTIGS.length,CONSENSUS.sequence,CONSENSUS.quality " .
-    "from CONTIGS left join CONSENSUS using(contig_id) ".
-    "where CONSENSUS.contig_id is not null and CONTIGS.length >= $minlen";
+$query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence,CONSENSUS.quality " .
+    "from CONTIG left join CONSENSUS using(contig_id) ".
+    "where CONSENSUS.contig_id is not null and CONTIG.length >= $minlen";
 
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
