@@ -88,11 +88,18 @@ sub showAllDatabases {
 
 	my $nTables = &countTables($dbh, $database);
 
+	my $nContigs = &countContigs($dbh, $database);
+
 	if (defined($nTables)) {
 	    if ($nTables > 0) {
-		$nTables = "($nTables table" . ($nTables > 1 ? 's' : '') . ")";
+		$nTables = "($nTables table" . ($nTables > 1 ? 's' : '');
 	    } else {
-		$nTables = "(no tables)";
+		$nTables = "(no tables";
+	    }
+	    if ($nContigs > 0) {
+		$nTables .= ", $nContigs contigs)";
+	    } else {
+		$nTables .= ")";
 	    }
 	} else {
 	    $nTables = "(cannot query)";
@@ -137,6 +144,41 @@ sub countTables {
 	&db_die("finish($query) failed");
 
 	return $nTables;
+    }
+}
+
+sub countContigs {
+    my ($dbh, $database, $junk) = @_;
+
+    my $query = "USE $database";
+
+    $dbh->do($query);
+
+    if ($DBI::err) {
+	return undef;
+    } else {
+	$query = 'select count(*) from CONTIGS';
+
+	my $sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+
+	if ($DBI::err) {
+	    $sth->finish();
+	    return 0;
+	}
+
+	my $nContigs = 0;
+
+	while (@ary = $sth->fetchrow_array()) {
+	    ($nContigs, $junk) = @ary;
+	}
+
+	$sth->finish();
+	&db_die("finish($query) failed");
+
+	return $nContigs;
     }
 }
 
