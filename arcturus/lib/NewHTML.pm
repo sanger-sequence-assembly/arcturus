@@ -125,7 +125,8 @@ sub submitbuttonbar {
     $buttonbar .= "'submit' value='&nbsp Submit &nbsp'></TD>";
     if (defined($reset) && $reset eq '1') {
         $buttonbar .= "<TD WIDTH=50%><INPUT name='reset'  type='reset'></TD>";
-    } elsif (defined($reset) && $reset =~ /\w/ && $reset =~ /\D/) {
+    }
+    elsif (defined($reset) && $reset =~ /\w/ && $reset =~ /\D/) {
     # require text
         if (!defined($jump) || $jump) {
             $buttonbar .= "</TR><TR><TD ALIGN='CENTER'>or</TD></TR><TR>";
@@ -235,7 +236,7 @@ sub errorbox {
         $error .= "</TR></TABLE>";
     }
  
-    $$content[$part] .= $error;
+    $content->[$part] .= $error;
 }
 
 ###############################################################################
@@ -442,7 +443,7 @@ sub ingestCGI {
 
     foreach my $key (keys (%$in)) {
         my $accept = 1;
-        $accept = 0 if ($key =~ /^(submit|confirm|action)$/i); # always
+        $accept = 0 if ($key =~ /^(submit|confirm|action|USER)$/i); # always
         $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
         $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
         hidden($self,$key,$in->{$key}) if $accept;
@@ -594,7 +595,7 @@ sub locate {
         my $counter = 0;
         foreach my $part (@{$self->{content}}) {
             $counter++;
-            $output = $counter if ($part =~ /$tracer/);
+            $output = $counter if ($part && $part =~ /$tracer/);
             last if ($output);
         }
     }
@@ -632,6 +633,10 @@ sub arcturusGUI {
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON8</TD>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON9</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON10</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON11</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON12</TD>";
     $layout .= "</TR></TABLE>";
 
     $self->{layout} = $layout;
@@ -715,16 +720,17 @@ sub address {
     my $mail = shift;
     my $name = shift;
     my $lout = shift; # 0 for nocenter; 1 for center; 2 for no center & line; 3 for center & line
+    my $part = shift;
 
     my $address;
-    $address .= "<center>"  if ($lout == 1 || $lout == 3);
-    $address .= "</center>" if ($lout == 0 || $lout == 2);
     $address .= "<hr>" if ($lout >= 2);
-
+    $address .= "<center>"  if ($lout == 1 || $lout == 3);
     $address .= "<address>Please send suggestions or problem reports ";
     $address .= "to <a href=\"mailto:$mail\">$name</a></address>";
+    $address .= "</center>" if ($lout == 1 || $lout == 3);
 
-    $self->{address} = $address;
+    $self->add($address,$part)  if  $part;
+    $self->{address} = $address if !$part;
 }
 
 ###############################################################################
@@ -749,13 +755,12 @@ sub flush {
 
     if (defined($layout)) {
         my $blank = "&nbsp";
-        foreach (my $i=0 ; $i <= 9 ; $i++) {
+        foreach (my $i=0 ; $i <= 12 ; $i++) {
 # test if the contents element contains any text
-	    my $fill = 0;
-            $fill = 1 if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
-# print "part $i  $content->[$i]  fill <br>";
-            $layout =~ s/CON$i/$content->[$i]/ if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
-            $layout =~ s/CON$i/$blank/g       if (!$content->[$i] || $content->[$i] !~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
+            my $hasContent = 0;
+            $hasContent = 1 if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
+            $layout =~ s/CON$i/$content->[$i]/ if  $hasContent;
+            $layout =~ s/CON$i/$blank/g        if !$hasContent;
         }
         $output .= $layout;
     } else {

@@ -526,10 +526,12 @@ sub associate {
 	    $sty->finish();
 
             $self->{querytotalresult} = @result;
-    # compose the output value: either a value or array reference
+# compose the output value: either a value or array reference
+#            if (@result == 1 && !$multi) {
             if (@result == 1) {
                 $result = $result[0];
             }
+#            elsif (@result >= 1) {
             elsif (@result > 1) {
                 $result = \@result;
             }
@@ -585,14 +587,25 @@ sub associate {
         $result = 0 if !defined($result);
 
         if (!$self->{querytotalresult} && !$queryStatus) {
-            print "$self->{lastQuery} <br>" if ($tablename =~ /CONTIGS|USERS/); # temp tests
+            print "$self->{lastQuery} <br>" if ($tablename =~ /\b(CONTIGS|USERS)\b/); # temp tests
         }
     }
+
     elsif ($item eq 'hashrefs') {
         $result = $self->{hashrefs}; # if any
     }
-    elsif (defined($item) && !@{$self->{hashrefs}}) {
-        $result = $self->associate($item,'where',1); # returns an array or undefined
+
+    elsif (defined($item) && (!@{$self->{hashrefs}} || $multi)) {
+        $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
+    }
+
+    elsif (defined($item)) {
+        undef my @values;
+        foreach my $hash (@{$self->{hashrefs}}) {
+            push @values, $hash->{$item};
+        }
+        @values = sort @values;
+        $result = \@values;
     }
 
     $result;
@@ -1430,7 +1443,7 @@ print "query \"$query\" to be traced <br>\n" if ($list>1);
         my @targets = split ',',$targets;
         my $tables  = $3;
         my @tables  = split ',',$tables;
-        my $clauses = $4; $clauses =~ s/\s*limit.*//i;
+        my $clauses = $4; $clauses =~ s/\s*\b(limit|order)\b.*//i;
         my @clauses = split /\sand\s|\sor\s/i,$clauses;
 
 print "traceQuery targets: @{targets}<br>\n" if ($list>1);

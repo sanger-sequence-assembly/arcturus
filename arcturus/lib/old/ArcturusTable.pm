@@ -626,17 +626,16 @@ sub snapshot {
 #############################################################################
 
 sub htmlTable {
-# list the table on STDOUT
+# construct an HTML formatted masked table list with additional constraints
     my $self   = shift;
-    my $mask   = shift; # optional masking of table columns
+    my $mask   = shift; # optional masking of table columns OR a hash with parameters
     my $Column = shift; # optional (list only if column $Column has value $Cvalue 
     my $Cvalue = shift; # optional
 
     my %options = (headColor=>'yellow'      , cellColor=>'lightblue',
                    linkColor=>'lightblue'   , mask=>$mask           ,
                    linkItem =>'onPrimaryKey', linkTarget=>'1');
-
-    &importOptions (\%options,$mask) if (ref($mask) eq 'HASH');
+    &importOptions (\%options,$mask); # if mask is a HASH
 
     undef my $list;
 
@@ -738,7 +737,7 @@ sub htmlTable {
                                 $link = "href = \"ITEMLINK\?$column=$hash->{$column}\"";
                             }
                             if ($link) {
-                                $link .= " ITEMTARGET" if $options{linkTarget}; 
+                                $link .= " LINKTARGET" if $options{linkTarget}; 
                                 $field = "<A $link>$field</A>";
                                 $colour = $options{linkColor};
                             }
@@ -749,7 +748,7 @@ sub htmlTable {
      # add a link field for details
                 if ($more) {
                     my $link = "href = \"ITEMLINK\?column=$keyColumn\&";
-                    $link .= "value=$hash->{$keyColumn}\" ITEMTARGET";
+                    $link .= "value=$hash->{$keyColumn}\" LINKTARGET";
                     $list .= "<TD BGCOLOR='lightblue'><A $link>LINKTEXT</A></TD>";
                 }
                 $list .= "</TR>";
@@ -783,7 +782,7 @@ sub htmlMaskedTable {
     }
     else { # build a new temporary hash
         my $currentHash = $self->{hashrefs}; # memorize current hash
-        my $query = "select * from <self> where ($clause)";
+        my $query = "select * from <self> where $clause";
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
 # print "masked table query: $query<br>";
         $self->{hashrefs} = $self->query($query,0); # use query trace if needed
@@ -792,6 +791,54 @@ sub htmlMaskedTable {
     }
 
     return $list;
+}
+
+#############################################################################
+
+sub htmlTableColumn {
+# list the data of one column in a n*m table
+    my $self   = shift;
+    my $column = shift || '';
+    my $hash   = shift; # control data
+
+    my %option = (maxColumns => 8       , maxAspect => 3, noHeader => 0,
+                  cellColor => 'CCCCCC' , itemLink => 0 , cellWidth => 50);
+    &importOptions(\%option,$hash);
+
+    my $colour = "bgcolor='$option{cellColor}'";
+    my $table = "<TABLE BORDFER=1 CELLPADDING=2>";
+    if (defined($column) && $self->{coltype}->{$column}) {
+        my $values = $self->associate($column); # returns array ref
+# determine number of rows and columns to be used
+        my $nrcols = int(sqrt(@$values*$option{maxAspect})+0.5);
+        $nrcols = $option{maxColumns} if ($nrcols > $option{maxColumns});
+        my $nrrows = int((@$values-1)/$nrcols) + 1;
+        
+        my $items = @$values;
+        $table .= "<thead>There are $items ITEMS</thead>" if !$option{noHeader};
+        for (my $i = 0 ; $i < $nrrows ; $i++) {
+            $table .= "<TR>";
+            for (my $j = 0 ; $j < $nrcols ; $j++) {
+                if (my $field = $values->[$i + $j*$nrrows]) {
+                    my $link = '';
+                    $link = "href=\"ITEMLINK\?column=$field\"" if $option{itemLink};
+                    $field = "<A $link>$field</A>" if ($link =~ /\S/);
+                    $table .= "<TD $colour width=$option{cellWidth}>$field</TD>";
+                }
+                else {
+                    $table .= "<TD> &nbsp </TD>";
+                }
+            }
+            $table .= "</TR>";
+        }
+    }
+    else {
+        $table .= "<TR><TD bgcolor='ORANGE' ALIGN=CENTER>";
+        $table .= "WARNING: column '$column' does not exist</TD></TR>";
+    }
+    $table .= "</TABLE>";
+
+    return $table;
 }
 
 #############################################################################
@@ -1262,7 +1309,7 @@ sub copy {
     my $column = shift; # column name or 'where' keyword
     my $cvalue = shift; # column value or selection condition for rows in this table
     my $doCopy = shift; # False for test purposes
-#    my $cnames = shift; # optional, array with column names to be copied; else all
+    my $hash   = shift; # hash for additional options
 
     my $unique =  $self->{unique};
 # find, if any, the first unique key which is not numerical, else take the first one 
@@ -1271,6 +1318,10 @@ sub copy {
         $marker = $key;
         last if ($key ne $self->{autoinc});
     }
+
+    my %option = (keyColumn => $marker);
+    &importOptions(\%option,$hash);
+    $marker = $option{keyColumn};
 
     if ($target eq $self) {
         return;
@@ -1286,8 +1337,7 @@ sub copy {
 
 # get the rows to be copied
 
-    my $hashes = $self->associate('hashrefs',$column,$cvalue,1);
-
+    my $hashes = $self->associate('hashrefs',$column,$cvalue,-1);
 
     my $report = "copy data from $self to $target (query: $column $cvalue) using marker $marker\n";
 
@@ -1299,9 +1349,17 @@ sub copy {
             $report .= "creating new row for $hash->{$marker}\n";
             if ($doCopy && !$target->newrow($marker,$hash->{$marker})) {
                 $report .= "Failed to create a new entry for $marker $hash->{$marker}\n";
-                next
+                next;
+            }
+            elsif (!$doCopy) {
+                next;
+            }
+            if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
+                $report = "Can't access the newly created row?\n";
+                next;
             }
         }
+
         foreach my $key (keys %$hash) {
 # key must be defined and not have a unique index 
             if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key} =~ /\S/) {
@@ -1315,6 +1373,7 @@ sub copy {
 	    }
         }
     }
+
     return $report;
 }
 

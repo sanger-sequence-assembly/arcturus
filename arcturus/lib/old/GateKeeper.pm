@@ -48,12 +48,18 @@ sub new {
     undef $self->{database};
     undef $self->{config};
     undef $self->{cgi};
+    $self->{ARGV} = [];
+    undef $self->{USER};
 
     bless ($self, $class);
 
 # get options
 
-    my %options = (eraiseMySQL=>0 , insistOnCgi=>0, diagnosticsOn=>0);
+    my %options = (eraiseMySQL   => 0,  # open (MySQL) with RaiseError =0 
+                   dieOnNoTable  => 1,  # die if ORGANISMS table not found/ opened
+                   insistOnCgi   => 0,  # default alow command-line access
+                   diagnosticsOn => 0); # set to 1 for some progress information
+
     if ($eraise && ref($eraise) eq 'HASH') {
         &importOptions(\%options,$eraise);
         $debug =  "\n"  if ($options{diagnosticsOn} == 1);
@@ -63,6 +69,10 @@ sub new {
         $options{eraiseMySQL} = $eraise if $eraise;
         $options{insistOnCGI} = $usecgi if $usecgi;
     }
+
+# check on command-line input
+
+    &clinput(0,$self);
 
 # open the CGI input handler if in CGI mode
 
@@ -79,6 +89,7 @@ sub new {
 # open the database
 
     &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
+#    &opendb_MySQL(0,$self,\%options) if ($engine && $engine =~ /^mysql$/i);
 
 # &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
@@ -130,7 +141,6 @@ sub cginput {
 
     &dropDead($self,"You're not supposed to access this method") if $lock;
 
-#    $self->{cgi} = MyCGI->new(0);
     $self->{cgi} = NewHTML->new(0);
 
     if (!$self->{cgi}) {
@@ -167,7 +177,22 @@ sub cgiHeader {
 
 #*******************************************************************************
 
+sub clinput {
+# process command-line input
+    my $lock = shift;
+    my $self = shift;
+
+    &dropDead($self,"You're not supposed to access this method") if $lock;
+
+    @{$self->{ARGV}} = @ARGV  if @ARGV;    
+}
+
+#*******************************************************************************
+
 sub origin {
+# return PATH information
+    my $self = shift;
+    my $path = shift; # (max) number of path elements (ARGV input)
 
     undef my $origin;
     if ($ENV{'GATEWAY_INTERFACE'}) {
@@ -175,6 +200,17 @@ sub origin {
     }
 
 # either path_info or blank (under CGI, both 'true') OR undef (not CGI, 'false')
+
+# the next part builds $origin from ARGV (first $path elements) as quasi 'path info'
+# (this allows command line access and PERL system(..) or back-tick execution to be
+#  interpreted in identical manner)
+
+    if ((!$origin || $origin !~ /\S/) && @{$self->{ARGV}}) {
+        $origin = '';
+        while (@{$self->{ARGV}} && $path--) {
+            $origin .= '/'.(shift @{$self->{ARGV}});
+        }
+    }
 
     return $origin;
 }
@@ -255,9 +291,15 @@ sub opendb_MySQL_unchecked {
 
 sub opendb_MySQL {
 # create database handle on the current server and port
-    my $lock   = shift;
-    my $self   = shift;
-    my $eraise = shift;
+    my $lock = shift;
+    my $self = shift;
+    my $hash = shift;
+
+    my %options = (RaiseError   => 0,  # default do NOT die on error
+                   dieOnNoTable => 1); # default die on ORGANISMS table error
+
+    &importOptions(\%options,$hash);
+    my $eraise = $options{RaiseError} || 0;
 
     print "GateKeeper enter opendb_MySQL $debug" if $debug;
 
@@ -389,7 +431,7 @@ sub opendb_MySQL {
 # open the ORGANISMS table in the arcturus database
 
     $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
-    if ($self->{mother}->{errors}) {
+    if ($self->{mother}->{errors} && $options{dieOnNoTable}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
 }
@@ -514,7 +556,8 @@ sub dbHandle {
             &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
         }
 # the requested database is somewhere else; redirect if in CGI mode
-        if (!&origin || !$options{defaultRedirect}) {
+        if (!&cgiHandle($self,1) || !$options{defaultRedirect}) {
+#        if (!&origin || !$options{defaultRedirect}) {
             &dropDead($self,"Database $database resides on $residence{$database}");
         }
         elsif ($available{$database} ne 'off-line') {
@@ -557,10 +600,14 @@ sub focus {
     my $self = shift;
     my $fail = shift;
 
-    if ((my $mother = $self->{mother}) && $self->{database}) {
-        $mother->query("use $self->{database}");
+    my %options = (dieOnError => 0, useDatabase => $self->{database});
+    $options{dieOnError} = $fail if (ref($fail) ne 'HASH');
+    &importOptions(\%options, $fail); # if $fail's a hash
+
+    if ((my $mother = $self->{mother}) && $options{useDatabase}) {
+        $mother->query("use $options{useDatabase}");
     }
-    elsif ($fail) {
+    elsif ($options{dieOnError}) {
         &dropDead($self,"Can't change focus: no database information");
     }
 }
@@ -608,11 +655,13 @@ sub authorize {
         $identify = $cgi->parameter('identify',0);
 # recover USER from input info, if not from 'identify', then from 'session'
         if ($identify) {
-            $cgi->transpose('identify','USER'); # rename 'identify' to 'USER'
+  $cgi->transpose('identify','USER'); # rename 'identify' to 'USER'
+            $self->{USER} = $identify;
         }
         elsif ($session) {
             my @sdata = split ':',$session;
-	    $cgi->addkey('USER',$sdata[0]);
+  $cgi->addkey('USER',$sdata[0]);
+            $self->{USER} = $sdata[0];
         }
     }
 
@@ -650,13 +699,15 @@ sub authorize {
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hashref->{priviledges} || 0;
             $seniority   = $hashref->{seniority}   || 0;
-            if (!$cgi->VerifyEncrypt('arcturus',$code)) { # check integrity 
+            my $seed = &compoundName($identify,'arcturus',8);
+            if (!$cgi->VerifyEncrypt($seed,$code)) { # check integrity 
+# if (!$cgi->VerifyEncrypt('arcturus',$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
                 $session = 0; # force (new) prompt for password 
             }
         }
         else {
-            $self->{report} .= "! User $identify does not exist";
+            $self->{report} .= "! User $identify is not registered on this server";
             $session = 0;
         }
 # test if session for this user still open; if not, force new request for password and username
@@ -851,7 +902,7 @@ sub authorize {
         if (my $user = $code->{user}) {
             my $users = $mother->spawn('USERS','self',0,1);
             if ($user eq $identify && $code->{notOnSelf}) {
-                $self->{error} = "You can't xxx yourself";
+                $self->{error} = "You can't <do this to> yourself"; # note the place holder
                 return 0;
             }
             elsif ($user eq $identify) {
@@ -880,11 +931,13 @@ sub authorize {
 #############################################################################
 
 sub allowServerAccess {
-# authorize for special case when user not registered
+# authorize for special case when user not (yet) registered
     my $self = shift;
     my $user = shift;
 
 # limit access to development server to names listed in 'devserver_access'
+# access ALWAYS granted on production server! 
+# use only for registration purposes
 
     if (!$self->whereAmI(1)) {
         my $allowed = $self->{config}->get('devserver_access','insist unique array');
@@ -904,10 +957,34 @@ sub newSessionNumber {
     my $self = shift;
     my $user = shift;
 
-    my $encrypt = $self->{cgi}->ShortEncrypt('arcturus',$user);
+    my $seed = &compoundName($user,'arcturus',8);
+    my $encrypt = $self->{cgi}->ShortEncrypt($seed,$user);
+# my $encrypt = $self->{cgi}->ShortEncrypt('arcturus',$user);
     my $session = "$user:$encrypt"; # name folowed by some 'random' sequence
 
     return $session;
+}
+
+#############################################################################
+
+sub compoundName {
+# scramble an input name with a radix string
+    my $name = shift || 'n';
+    my $radx = shift || 's';
+    my $nmbr = shift ||  8 ; # length of output string 
+
+    my @name = split //,$name;
+    my @radx = split //,$radx;
+
+    undef my $output;
+    my $i = 0; my $j = 0;
+    while (!defined($output) || length($output) < $nmbr) {
+        $i = 0 if ($i >= @name);
+        $j = 0 if ($j >= @radx);
+        $output .= $name[$i++];
+        $output .= $radx[$j++] if (length($output) < $nmbr);
+    }
+    return $output;
 }
 
 #*******************************************************************************
@@ -921,7 +998,10 @@ sub GUI {
 
     print "GateKeeper enter GUI $debug" if $debug;
 
+# test if in CGI mode; else abort
+
     my $cgi = &cgiHandle($self,1);
+    print "$title \n" if (!$cgi && $title);
     return 0 if !$cgi;
 
     my $script = $self->currentScript;
@@ -933,10 +1013,11 @@ sub GUI {
 
 # get other servers, either on the same host or all of them
 
+    my $config = $self->{config};
     my $full = 1; # include all servers
     my @url = split /\:|\./,$self->{server};
-    my $hosts = $self->{config}->get('mysql_hosts','insist unique array');
-    my $pmaps = $self->{config}->get('port_maps'  ,'insist unique array');
+    my $hosts =$config->get('mysql_hosts','insist unique array');
+    my $pmaps =$config->get('port_maps'  ,'insist unique array');
     undef my @alternates;
     undef my %altertypes;
     foreach my $server (@$hosts) {
@@ -967,6 +1048,18 @@ sub GUI {
         }
     }
 
+# get the default database if appropriate
+
+    my $database;
+    if (@databases == 1) {
+        $database = $databases[0];
+        $cgi->replace('database',$database); # make it the default database
+    }
+    else {
+        $database = $cgi->parameter('database',0) || $cgi->parameter('organism',0);
+    }
+    $database = 'arcturus' if !$database;
+
 # colour palet
 
     my $gray = 'CCCCCC';
@@ -981,6 +1074,9 @@ sub GUI {
     my $width = '10%';
     my $height = 50;
     $page->arcturusGUI($height,$width,$yell);
+    my $smail = $config->get('signature_mail');
+    my $sname = $config->get('signature_name');
+    $page->address($smail,$sname,0,12);
 # substitute values for standard place holders
     my $href="href=\"/icons/bootes.jpg\"";
     my $imageformat = "width=\"$width\" height=$height vspace=1";
@@ -988,8 +1084,6 @@ sub GUI {
     $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
 
 # compose the top bar (partition 2)
-
-    my $database=$cgi->parameter('database',0) || $cgi->parameter('organism',0) || 'arcturus';
 
     $page->partition(2); $page->center(1);
     $connection =~ s/\b(dev\w+)\b/<font size=+1 color=red>$1<\/font>/;
@@ -1054,6 +1148,10 @@ sub GUI {
 
     my @include = ('database','organism','dbasename','session');
 
+    my $target = &currentHost($self).&currentPort($self);
+    $target = "target=\"${target}input\""; # e.g. 'babel19090input'
+    $target = '' if !$cgi->parameter('session',0);
+
 # compose the 'create' table: include assemblies and projects only if database is defined
 
     $page->partition(7);
@@ -1062,10 +1160,16 @@ sub GUI {
     my $create = "/cgi-bin/create/newform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\"> Database </a></td></tr>";
     if ($database && $database ne 'arcturus') {
+        $create = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $target> Assembly </a></td></tr>";
+        $create = "/cgi-bin/amanager/specify/project" .$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $target> Project </a></td></tr>";
+    }
+    else {
         $create = "/cgi-bin/amanager/preselect/assembly".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\"> Assembly </a></td></tr>";
-        $create = "/cgi-bin/amanager/preselect/project".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\"> Project </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$create\" $target> Assembly </a></td></tr>";
+        $create = "/cgi-bin/amanager/preselect/project" .$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $target> Project </a></td></tr>";
     }
     $create = "/cgi-bin/umanager/getform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\"> User </a></td></tr>";
@@ -1079,10 +1183,10 @@ sub GUI {
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
     if ($database && $database ne 'arcturus') {
-        my $update = "/cgi-bin/pmanager/specify/users".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
-        $update = "/cgi-bin/pmanager/specify/contigs".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\"> Contigs </a></td></tr>";
+        my $update = "/cgi-bin/amanager/specify/users".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\" $target> Users </a></td></tr>";
+        $update = "/cgi-bin/amanager/specify/contigs".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\" $target> Contigs </a></td></tr>";
     }
     $table .= $emptyrow;
     $table .= $emptyrow;
@@ -1090,10 +1194,6 @@ sub GUI {
     $page->add($table);   
 
 # compose the input table (direct to new window if session defined)
-
-    my $target = &currentHost($self).&currentPort($self);
-    $target = "target=\"${target}input\""; # e.g. 'babel19090input'
-    $target = '' if !$cgi->parameter('session',0);
 
     $page->partition(4);
     $table = "<table $tablelayout>";
@@ -1193,6 +1293,8 @@ sub GUI {
 }
 
 #*******************************************************************************
+# current server and script data
+#*******************************************************************************
 
 sub currentScript {
     my $self = shift;
@@ -1202,13 +1304,25 @@ sub currentScript {
 
     return $script;
 }
+
+#*******************************************************************************
+
+sub currentScriptRoot {
+    my $self = shift;
+
+    my $scriptroot = $ENV{SCRIPT_FILENAME};
+    $scriptroot =~ s?^(.*cgi-bin)/\S*$?$1?;
+
+    return $scriptroot;
+}
 #*******************************************************************************
 
 sub currentOptions {
+# return any additional path_info fater script name
     my $self = shift;
 
-    my $options ='';
-    $options = $self->origin if ($self->origin =~ /\S/);
+    my $options = $self->origin(@_);
+    $options = '' if ($options !~ /\S/); # defined but 'false'
 
     return $options;
 }
@@ -1231,6 +1345,32 @@ sub currentPort {
     my @hostinfo = split /\.|\:/,$self->{server};
 
     return $hostinfo[$#hostinfo];
+}
+
+#*******************************************************************************
+
+sub currentServer {
+    my $self = shift;
+
+    return $self->{server}; # the internal name used for the server URL
+}
+ 
+#*******************************************************************************
+
+sub currentUser {
+# return the current(ly authorized) user
+    my $self = shift;
+
+    return $self->{USER} || '';
+}
+ 
+#*******************************************************************************
+
+sub currentSession {
+# return the current(ly authorized) user
+    my $self = shift;
+
+    return $self->{cgi}->parameter('session',0) || '';
 }
 
 #*******************************************************************************
@@ -1289,7 +1429,7 @@ sub disconnect {
 #*******************************************************************************
 
 sub report {
-# print message with check check on return header status 
+# print message with check on return header status (i.e. current page or STDOUT)
     my $self = shift;
     my $text = shift;
 
@@ -1298,9 +1438,16 @@ sub report {
         $self->{cgi}->PrintHeader(1) if !$self->{cgi}->{'header'}; # plain text
         $tag = "<br>" if ($self->{cgi}->{'header'} == 1);
         $text = $self->{report} if ! $text;
-        $text =~ s/\\n/$tag/g if $text;
+        $text =~ s/\n/$tag/g if $text;
     }
-    print STDOUT "$tag$text$tag\n" if $text;
+
+    if ((my $page = $self->{cgi}) && $self->{cgi}->pageExists) {
+        $page->add($text.$tag);
+#        print STDOUT "added: $text \n" if $text;
+    }
+    else {
+        print STDOUT "$tag$text$tag\n" if $text;
+    }
 }
 
 #############################################################################
@@ -1313,6 +1460,8 @@ sub environment {
     foreach my $key (keys %ENV) {
         $text .= "key $key  = $ENV{$key}\n";
     }
+
+    $text .= $self->{cgi}->PrintVariables if $self->{cgi};
 
     &report($self,$text);
 }
