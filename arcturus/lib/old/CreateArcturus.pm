@@ -1858,7 +1858,7 @@ sub create_LIGATIONS {
     print STDOUT "Creating table LIGATIONS ..." if ($list);
     $dbh->do(qq[CREATE TABLE LIGATIONS(
              ligation         SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             identifier       VARCHAR(10)        NOT NULL,
+             identifier       VARCHAR(16)        NOT NULL,
              clone            VARCHAR(20)        NOT NULL,
              origin           CHAR(1)                NULL,
              silow            MEDIUMINT UNSIGNED     NULL,
