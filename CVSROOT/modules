@@ -24,13 +24,13 @@
 # character to interpose another module into the current module.  This
 # can be useful for creating a module that consists of many directories
 # spread out over the entire source repository.
-powmap_uk powmap/uk
-powmap_diana powmap/diana
-powmap_collections powmap/collections
-powmap_etc powmap/etc
-powmap_lib powmap/lib
-powmap_META-INF powmap/META-INF
-powmap_corba powmap/corba
+uk powmap/uk
+diana powmap/diana
+collections powmap/collections
+etc powmap/etc
+lib powmap/lib
+META-INF powmap/META-INF
+corba powmap/corba
 
 flatserve flatimpl &diana &corba &etc &uk &collections
 agct agctimpl &uk &diana &etc &collections
@@ -40,12 +40,12 @@ artemis_applet artemis_applet_impl &powmap_diana &powmap_etc &powmap_uk &powmap_
 AnT zoo/modules/AnT
 public_modules public_modules_impl &AnT
 
-zoo_art_config psu/config/art
-zoo_data psu/data
-zoo_app psu/src/perl/app
-zoo_general psu/src/perl/general
-zoo_modules psu/src/perl/modules
-zoo_pombe psu/src/perl/pombe
-zoo_strepc psu/src/perl/strepc
+art_config psu/config/art
+data psu/data
+app psu/src/perl/app
+general psu/src/perl/general
+modules psu/src/perl/modules
+pombe psu/src/perl/pombe
+strepc psu/src/perl/strepc
 
 zoo zoo_impl &zoo_art_config &zoo_data &zoo_app &zoo_general &zoo_modules &zoo_pombe &zoo_strepc 
