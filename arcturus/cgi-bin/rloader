@@ -114,15 +114,6 @@ if ($cgi) {
 
 # preprocessing of input info
 
-#        $GateKeeper->cgiHeader(2); # return string HTML under CGI
-    if ($option eq 'specify' && $cgi->MethodGet) {
-# test if database and option are defined
-        $database = $cgi->parameter('database'); # compulsory
-        if ($organisms->associate('reads_pending',$database,'dbasename')) {
-#            $source   = $cgi->parameter('source');
-        }
-#        $option = 'getform' if $cgi->{und_error};   
-    }
 
     undef my $error;
     if ($option eq 'getform') {
@@ -131,10 +122,19 @@ if ($cgi) {
         $page->form("$arc_cgi_dir/rloader/arcturus/specify");
 #        $page->sectionheader("ARCTURUS READS loader specifications",3,0);
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
-        $page->add($organisms->htmlTable('0100000011110000100'),0,0,"size=-1");
-        $page->sectionheader("Select a Database and Read specification",4,0);
         my $database = $cgi->parameter('database') || $cgi->parameter('organism');
-        $page->add($organisms->htmlOptions('dbasename','database',20,0,$database),0,0);
+        if (!$database || $database eq 'arcturus') {
+            $page->add($organisms->htmlTable('0100000011110000100'),0,0,"size=-1");
+            $page->sectionheader("Select a Database and Read specification",4,0);
+            $page->add($organisms->htmlOptions('dbasename','database',20,0,$database),0,0);
+        }
+        else {
+            my %options = (mask=>'011000001111000001',
+                           headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+            my $table = $organisms->htmlTable(\%options,'dbasename',$database);
+            $page->add($table);
+            $page->sectionheader("Select a Read specification",4,0);
+        }
         $page->add(&form1(),0,1);
         $page->submitbuttonbar($lreturn,0,0);
         $page->ingestCGI();
@@ -255,8 +255,12 @@ if ($cgi) {
         $page->frameborder(100,15,'white',10);
         $page->center(1);
 
-
-        $source   = $cgi->parameter('source');
+        if ($organisms->associate('reads_pending',$database,'dbasename')) {
+            $source = $cgi->parameter('source');   # compulsory
+        }
+        else {
+            $source = 0;
+        }
         $database = $cgi->parameter('database'); # redefine database
     # get assembly 
         $assembly     = $organisms->spawn('ASSEMBLY',$database,0,1);
