@@ -1,0 +1,167 @@
+#!/usr/local/bin/perl
+#
+# cloneDB
+#
+# This script creates a new MySQL database using the structure of
+# an existing database.
+
+use DBI;
+use Term::ReadKey;
+
+$user = $ENV{'USER'};
+die "Username not defined" unless defined($user);
+
+$createhistory = 1;
+$verbose = 0;
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $dbname = shift @ARGV if ($nextword eq '-olddb');
+
+    $newdbname = shift @ARGV if ($nextword eq '-newdb');
+
+    $createhistory = 0 if ($nextword eq '-nohistory');
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($user) &&
+	defined($dbname) &&
+	defined($newdbname)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$query = "SHOW TABLES";
+
+$sth = $dbh->prepare($query);
+&db_die("prepare($query) failed on $dsna");
+
+$sth->execute();
+&db_die("execute($query) failed on $dsna");
+
+@alltables = ();
+
+while(@ary = $sth->fetchrow_array()) {
+    $tablename = $ary[0];
+    next if ($tablename eq 'HISTORY');
+    push @alltables, $tablename;
+}
+
+$sth->finish();
+
+foreach $tablename (@alltables) {
+    $query = "SHOW CREATE TABLE $tablename";
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed on $dsna");
+
+    $sth->execute();
+    &db_die("execute($query) failed on $dsna");
+
+    @ary = $sth->fetchrow_array();
+
+    $create{$ary[0]} = $ary[1];
+
+    $sth->finish();
+}
+
+
+$query = "CREATE DATABASE $newdbname";
+print STDERR "Creating database $newdbname\n";
+print STDERR "\n$query\n" if $verbose;
+$dbh->do($query);
+&db_die("$query failed");
+print STDERR "\n";
+
+$query = "USE $newdbname";
+print STDERR "Switching to database $newdbname\n";
+print STDERR "\n$query\n" if $verbose;
+$dbh->do($query);
+&db_die("$query failed");
+print STDERR "\n";
+
+if ($createhistory) {
+    $query = qq/CREATE TABLE `HISTORY` (`tablename` varchar(20) not null,
+					`date` datetime not null,
+					`user` varchar(20) not null,
+					`action` text not null
+					) TYPE=MyISAM/;
+
+    print STDERR "Creating HISTORY table\n";
+    print STDERR "\n$query\n" if $verbose;
+    $dbh->do($query);
+    &db_die("$query failed");
+    print STDERR "\n";
+
+    $query = "INSERT INTO HISTORY(tablename, date, user, action) VALUES(?, NOW(), '$user', ?)";
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+}
+
+foreach $tablename (sort keys %create) {
+    $query = $create{$tablename};
+    print STDERR "Creating table $tablename\n";
+    print STDERR "\n$query\n" if $verbose;
+    $dbh->do($query);
+    &db_die("$query failed");
+
+    if ($createhistory) {
+	$sth->execute($tablename, $query);
+	&db_die("Update of HISTORY failed");
+    }
+
+    print STDERR "\n";
+}
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -olddb\t\tExisting database to be used as template\n";
+    print STDERR "    -newdb\t\tDatabase which will be created\n";
+    print STDERR "\nOPTIONAL PARAMETERS:\n";
+    print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
+    print STDERR "    -nohistory\t\tDo not create a HISTORY table\n";
+    print STDERR "    -verbose\t\tShow all MySQL statements\n";
+}
