@@ -17,13 +17,12 @@ my $assembly;
 my $cafFileName ='';
 my $aspedbefore;
 my $aspedafter;
-my $withsingleton;
+my $nosingleton;
 
-#my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "withsingleton|info|help";
+                 "nosingleton|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -44,7 +43,7 @@ while (my $nextword = shift @ARGV) {
 
     $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
 
-    $withsingleton    = 1            if ($nextword eq '-withsingleton');
+    $nosingleton      = 1            if ($nextword eq '-nosingleton');
 
     $logLevel         = 0            if ($nextword eq '-verbose'); 
 
@@ -54,11 +53,10 @@ while (my $nextword = shift @ARGV) {
 }
 
 #----------------------------------------------------------------
-# open file handle for output via a Reporter module
+# open file handle for output via a Logging module
 #----------------------------------------------------------------
 
-#my $logger = new Logging($outputFile);
-my $logger = new Logging();
+my $logger = new Logging(); # STDOUT
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
@@ -82,7 +80,7 @@ $logger->info("Getting read IDs for unassembled reads");
 
 
 my %options;
-$options{-withsingleton} = 1 if $withsingleton;
+$options{-nosingleton} = 1 if $nosingleton;
 $options{-aspedbefore} = $aspedbefore if $aspedbefore;
 $options{-aspedafter} = $aspedafter if $aspedafter;
 
@@ -129,7 +127,8 @@ sub showUsage {
     print STDERR "-caf\t\tcaf file name for output\n";
     print STDERR "-aspedbefore\tdate\n";
     print STDERR "-aspedafter\tdate\n";
-    print STDERR "-withsingleton\tinclude reads from single-read contigs\n";
+    print STDERR "-nosingleton\texclude reads from single-read contigs ".
+                 "(default include)\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
