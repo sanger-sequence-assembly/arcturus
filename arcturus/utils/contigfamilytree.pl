@@ -33,6 +33,7 @@ while ($nextword = shift @ARGV) {
 }
 
 unless (defined($instance) && defined($organism) && defined($contigid)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(0);
 }
@@ -75,8 +76,10 @@ unless (defined($nreads) && defined($ctglen) && defined($updated)) {
     exit(1);
 }
 
+my $depth = 0;
+
 if ($doAncestors) {
-    my $depth = 0;
+    print "ANCESTORS OF CONTIG $contigid\n\n";
 
     &displayContig($contigid, $nreads, $ctglen, $updated, $indent, $depth);
 
@@ -88,6 +91,21 @@ if ($doAncestors) {
     &db_die("Failed to create query \"$query\"");
 
     &displayParents($contigid, $nreads, $stmt, $indent, $depth, $maxdepth);
+}
+
+if ($doDescendants) {
+    print "DESCENDANTS OF CONTIG $contigid\n\n";
+
+    &displayContig($contigid, $nreads, $ctglen, $updated, $indent, $depth);
+
+    $query = "SELECT C2CMAPPING.contig_id,nreads,length,updated,cstart,cfinish,direction" .
+	" FROM C2CMAPPING left join CONTIG USING(contig_id)" .
+	    " WHERE C2CMAPPING.parent_id = ?";
+
+    $stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    &displayChildren($contigid, $stmt, $indent, $depth, $maxdepth);
 }
 
 $dbh->disconnect();
@@ -125,6 +143,36 @@ sub displayParents {
 
     if ($creads > $preads) {
 	&displayNewReads($creads - $preads, $indent, $depth + 1);
+    }
+}
+
+sub displayChildren {
+    my ($contigid, $stmt, $indent, $depth, $maxdepth) = @_;
+
+    return unless ($maxdepth < 1 || $depth < $maxdepth);
+
+    $stmt->execute($contigid);
+
+    my @children;
+    my $preads = 0;
+
+    while (my ($childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) =
+	   $stmt->fetchrow_array()) {
+	push @children, [$childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction];
+	$preads += $nreads;
+    }
+
+    $stmt->finish();
+
+    return unless (scalar(@children) > 0);
+
+    foreach my $child (@children) {
+	my ($childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$child};
+
+	&displayContig($childid, $nreads, $ctglen, $updated, $indent, $depth + 1,
+		       $cstart, $cfinish, $direction);
+
+	&displayChildren($childid, $stmt, $indent, $depth + 1, $maxdepth);
     }
 }
 
