@@ -3786,13 +3786,13 @@ sub diagnose {
 # if the table is empty, simply do the add and drop in two passes, else apply rename 
 # if (!$fields{$column} && $alterTable && $table->count) {
             if (!$fields{$column} && $alterTable) {
-print "there is an added column $alterTable and a column $column to be dropped <br>";
+#print "there is an added column $alterTable and a column $column to be dropped <br>";
 # to be completed (tricky)
 # get the definition for the column to be dropped
                 my $info = $table->getColumnInfo($column,1);
                 $info =~ s/$column\s+//; # remove column name; left is specification
                 $info =~ s/\s+//g; # remove all blanks
-print "$info <br>";
+#print "$info <br>";
 # split the add column instruction into the add column ... specification 
                 my $changeTable = $alterTable;
                 $changeTable =~ s/first|after\s+\w+//; # remove position info 
@@ -3802,7 +3802,7 @@ print "$info <br>";
                     my $colspecs = $3;
                     $colspecs =~ s/first|after\s+\w+//; # remove position info
                     $colspecs =~ s/\s+//g; # remove all blanks
-print "specs: '$colspecs'  '$info' <br>";
+#print "specs: '$colspecs'  '$info' <br>";
                     if (uc($colspecs) eq uc($info)) {
 # specs are identical, hence the add / drop can be replaced by a change construct
                         $changeTable =~ s/$namepart/change column $column $newname/;
