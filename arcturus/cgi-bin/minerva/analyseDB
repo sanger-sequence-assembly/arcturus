@@ -83,8 +83,6 @@ if(defined($database) && defined($table)) {
 	$sth->execute();
 	&db_die("execute($query) failed");
 
-	@values = $sth->fetchrow_array();
-
 	@colnames = @{$sth->{NAME}};
 
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
