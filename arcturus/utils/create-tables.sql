@@ -467,7 +467,7 @@ CREATE TABLE C2CSEGMENT (
   mapping_id mediumint(8) unsigned NOT NULL,
   cstart int(10) unsigned NOT NULL default '0',
   pstart int(10) unsigned NOT NULL default '0',
-  length smallint(5) unsigned NOT NULL default '1',
+  length int(10) unsigned NOT NULL default '1',
   KEY mapping_id (mapping_id)
 ) TYPE=MyISAM;
 
