@@ -591,7 +591,7 @@ sub CreateStatements {
     my $dbh = shift;
 
     my %queries = ("currentcontigs",
-		   "select CONTIG.contig_id,CONTIG.length,CONTIG.project" .
+		   "select CONTIG.contig_id,CONTIG.length,CONTIG.project_id" .
 		   "  from CONTIG left join C2CMAPPING" .
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
@@ -635,7 +635,7 @@ sub CreateStatements {
 		   " using(read_id) where template_id = ? order by strand asc, READS.read_id asc",
 
 		   "setproject",
-		   "update CONTIG set project = ? where contig_id = ?"
+		   "update CONTIG set project_id = ? where contig_id = ?"
 		   );
 
     my $statements = {};
