@@ -787,7 +787,7 @@ elsif ($action eq "selectcontig") {
         $error = "please provide a Contig Name or other identifier";
     }
     else {
-        $page->patience(4);
+        $page->patience(3);
         $contigname .= "\%" if ($wildcard == 1);
         $contigname = "\%$contigname\%" if ($wildcard == 2);
         $mask = sprintf("%04d",$mask) if (length($mask) < 4);

@@ -12,6 +12,7 @@ BEGIN {
 
 use GateKeeper; 
 use ContigBuilder;
+#use ASSEMBLY;
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -146,7 +147,7 @@ $TEST = 0;
     $rblocker = 0;
     $SRC = 1;
 print "\n\n CNF $CNF \n CGN $CGN \n CFN $CFN \n CPR $CPR \n CLF $CLF  \n\n";
-    $nopreload = 1; # for initial loading only
+    $nopreload = 0; # for initial loading only but not for repeat tests!
 #    exit;
 }
 
@@ -352,7 +353,7 @@ else {
     if ($GateKeeper->lookup('anew')) {
 # test if any previous generation 0 has been cleared to start a new assembly
         $error ='';
-        if ($status ne 'complete') {
+        if ($status ne 'complete' && $status ne 'virgin') {
             $error .= "Assembly $assemblyname is not cleared for a new generation: ";
             $error .= "status = $status $brtag";
         }
@@ -530,11 +531,19 @@ else {
     my $ContigBuilder = ContigBuilder->init($CONTIGS,$nopreload);
 print STDOUT "preloading set to $nopreload\n";
 
+    $ContigBuilder->setParameter('minOfReads',$SRC) if ($SRC > 1); 
+    $ContigBuilder->setParameter('ASSEMBLY'  ,$assemblynmbr); 
+    $ContigBuilder->setParameter('USERID'    , $userid);
+    $ContigBuilder->setParameter('TESTMODE'  ,$TEST);
+    $ContigBuilder->setParameter('REPAIR'    ,$REPAIR);
+    $ContigBuilder->setParameter('READSCAN'  ,1) if $rdscan;
+
     $ContigBuilder->setMinOfReads($SRC) if ($SRC > 1);
     $ContigBuilder->setOwnership($assemblynmbr,$userid);
     $ContigBuilder->setTestMode('TESTMODE',$TEST);
     $ContigBuilder->setTestMode('REPAIR',$REPAIR);
     $ContigBuilder->setTestMode('READSCAN',1) if $rdscan;
+
     $ContigBuilder->setTestMode('TIMER',1);
 
     if (my $estatus = $ContigBuilder->testAssembly($assemblynmbr)) {
@@ -555,7 +564,7 @@ print STDOUT "preloading set to $nopreload\n";
 
             print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
 # flushing ContigBuilder also flushes ReadMapper and tablehandles R2A, R2C and PENDING
-            my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced,1);
+            my $left = $ContigBuilder->flush(1,$forced);
             print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
             my $promote = $GateKeeper->lookup('promote');
