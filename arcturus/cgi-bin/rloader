@@ -124,7 +124,7 @@ if ($cgi) {
         my %options = (mask=>'011000001111000001',
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
         if ($database eq 'arcturus') {
-            my $table = $organisms->htmlTable(\%options,'dbasename',$database);
+            my $table = $organisms->htmlTable(\%options);
             $page->add($table,0,0,"size=-1");
             $page->sectionheader("Select a Database and Read specification",4,0);
             $page->add($organisms->htmlOptions('dbasename','database',20,0,$database),0,0);
