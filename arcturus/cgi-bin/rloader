@@ -121,7 +121,7 @@ if ($cgi) {
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source   = $cgi->parameter('source');
         }
-#        $option = 'getform' if $cgi->{und_error};   
+        $option = 'getform' if $cgi->{und_error};   
     }
 
     undef my $error;
