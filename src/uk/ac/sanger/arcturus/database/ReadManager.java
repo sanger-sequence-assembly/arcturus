@@ -58,9 +58,9 @@ public class ReadManager {
 	    int id = rs.getInt(1);
 	    int template_id = rs.getInt(2);
 	    java.sql.Date asped = rs.getDate(3);
-	    short strand = parseStrand(rs.getString(4));
-	    short primer = parsePrimer(rs.getString(5));
-	    short chemistry = parseChemistry(rs.getString(6));
+	    int strand = parseStrand(rs.getString(4));
+	    int primer = parsePrimer(rs.getString(5));
+	    int chemistry = parseChemistry(rs.getString(6));
 	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
@@ -77,16 +77,16 @@ public class ReadManager {
 	    String name = rs.getString(1);
 	    int template_id = rs.getInt(2);
 	    java.sql.Date asped = rs.getDate(3);
-	    short strand = parseStrand(rs.getString(4));
-	    short primer = parsePrimer(rs.getString(5));
-	    short chemistry = parseChemistry(rs.getString(6));
+	    int strand = parseStrand(rs.getString(4));
+	    int primer = parsePrimer(rs.getString(5));
+	    int chemistry = parseChemistry(rs.getString(6));
 	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
 	return read;
     }
 
-    private short parseStrand(String text) {
+    private int parseStrand(String text) {
 	if (text.equals("Forward"))
 	    return Read.FORWARD;
 
@@ -96,7 +96,7 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private short parsePrimer(String text) {
+    private int parsePrimer(String text) {
 	if (text.equals("Universal_primer"))
 	    return Read.UNIVERSAL_PRIMER;
 
@@ -106,7 +106,7 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private short parseChemistry(String text) {
+    private int parseChemistry(String text) {
 	if (text.equals("Dye_terminator"))
 	    return Read.DYE_TERMINATOR;
 
@@ -117,7 +117,7 @@ public class ReadManager {
     }
 
     private Read registerNewRead(String name, int id, int template_id, java.sql.Date asped,
-					 short strand, short primer, short chemistry) throws SQLException {
+					 int strand, int primer, int chemistry) throws SQLException {
 	Template template = adb.getTemplateManager().getTemplateByID(template_id);
 
 	Read read = new Read(name, id, template, asped, strand, primer, chemistry, adb);
@@ -140,9 +140,9 @@ public class ReadManager {
 	    String name = rs.getString(2);
 	    int template_id = rs.getInt(3);
 	    java.sql.Date asped = rs.getDate(4);
-	    short strand = parseStrand(rs.getString(5));
-	    short primer = parsePrimer(rs.getString(6));
-	    short chemistry = parseChemistry(rs.getString(7));
+	    int strand = parseStrand(rs.getString(5));
+	    int primer = parsePrimer(rs.getString(6));
+	    int chemistry = parseChemistry(rs.getString(7));
 	    registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 

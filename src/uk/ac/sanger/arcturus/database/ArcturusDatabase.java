@@ -209,12 +209,14 @@ public class ArcturusDatabase {
     protected LigationManager ligationManager;
     protected TemplateManager templateManager;
     protected ReadManager readManager;
+    protected SequenceManager sequenceManager;
 
     private void createManagers() throws SQLException {
 	cloneManager = new CloneManager(this);
 	ligationManager = new LigationManager(this);
 	templateManager = new TemplateManager(this);
 	readManager = new ReadManager(this);
+	sequenceManager = new SequenceManager(this);
     }
 
     /**
@@ -248,6 +250,14 @@ public class ArcturusDatabase {
      */
 
     public ReadManager getReadManager() { return readManager; }
+
+    /**
+     * Returns the SequenceManager belonging to this ArcturusDatabase.
+     *
+     * @return the SequenceManager belonging to this ArcturusDatabase.
+     */
+
+    public SequenceManager getSequenceManager() { return sequenceManager; }
 
     /**
      * Returns a text representation of this object.
