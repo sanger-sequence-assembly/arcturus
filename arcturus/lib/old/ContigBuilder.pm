@@ -87,6 +87,7 @@ sub init {
     $self->{nameChange}  = 0; # default name change only for generation 0
     $self->{TESTMODE}    = 0; # test mode for caf file parser
     $self->{REPAIR}      = 0; # test/repair mode for read attributes
+    $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
 $self->{nameChange}  = 1; # TEST override
 
     bless ($self, $class);
@@ -287,6 +288,18 @@ sub setTestModes {
     $self->{TESTMODE} = $test;
 
     $self->{REPAIR}   = $repair;
+}
+#############################################################################
+
+sub setTestMode {
+# (re)define class variables;
+    my $self = shift;
+    my $item = shift || 0; # either TESTMODE, REPAIR or READSCAN have meaning
+    my $mode = shift || 0;
+
+    return if ($item !~ /\b(TESTMODE|REPAIR|READSCAN)\b/);
+
+    $self->{$item} = $mode;
 }
 
 #############################################################################
@@ -1426,7 +1439,6 @@ my $errlist = 0;
 
     undef my $object;
     undef my $length;
-    my $type = 0;
 #    my $suppress = 0;
     undef my $record;
     my $currentread;
@@ -1437,12 +1449,14 @@ my $errlist = 0;
     $plist = $plist - 1 if ($plist > 1);
     $plist = int(exp($plist*log(10))+0.5);
     my $TESTMODE = $self->{TESTMODE};
+    my $READSCAN = $self->{READSCAN};
 
 # setup a buffer for rejected reads
 
     undef my %rblocker;
     $rblocker = \%rblocker if !$rblocker;
 
+    my $type = 0;
     while (defined($record = <CAF>)) {
         $line++; 
         chomp $record;
@@ -1488,7 +1502,7 @@ my $errlist = 0;
             }
         }
 
-        if ($record =~ /Is_contig/ && $type == 0) {
+        if ($record =~ /Is_contig/ && $type == 0 && !$READSCAN) {
 # standard contig initiation
             $type = 2 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
             $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
@@ -1502,6 +1516,12 @@ my $errlist = 0;
                 print "    contig = $object SKIPPED$break" if ($list > 1);
             }
         } 
+
+        elsif ($record =~ /Is_read/ && $READSCAN) {
+# test presence of required read in database
+            $ReadMapper->inDataBase($object,1,1,0);
+        }
+
         elsif ($record =~ /Is_read/) {
     # standard read initiation
             $type = 1;
@@ -1531,6 +1551,7 @@ my $errlist = 0;
                 $type = 4; # will cause DNA for reads to be ignored
             }
         }
+
         elsif ($type == 1) {
 # processing a read, test for Alignments Quality specification and EDITs
 	    if ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
@@ -1589,6 +1610,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
                 print STDOUT "not recognized: $record$break" if ($list > 1);
             }
         }
+
         elsif ($type == 2) {
 # processing a contig, get constituent reads and mapping
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
@@ -1607,6 +1629,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
                 print "$line ignored: $record$break" if $list;
             }
         }
+
         elsif ($type == -2) {
 # processing a contig
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
@@ -1614,10 +1637,12 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
 #                print "read $1 marked as blocked $break" if (!((keys %$rblocker)%100));
             }
         }
+
         elsif ($type == 3) {
 # add DNA consensus sequence 
             $currentcontig->addDNA($record, $length);
         }
+
         elsif ($type && $type != 4) {
 	    print "$line ignored: $record (t=$type)$break" if ($record !~ /sequence/i);
         }
