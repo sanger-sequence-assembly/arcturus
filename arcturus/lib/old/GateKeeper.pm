@@ -192,6 +192,17 @@ sub cginput {
     elsif (!$self->{cgi}->{status} && $fail) {
         &dropDead($self,"This script cannot be run from the command line");
     }
+
+# the next block handles redirection debugging; remove later
+
+  if ($self->lookup("EJZREDIRECT",0)) {
+    $debug = 1;
+    $self->cgiHeader(2);
+    $self->report("Redirected");
+    $self->{cgi}->PrintEnvironment(1);
+    $self->{cgi}->delete("EJZREDIRECT");
+    $self->{cgi}->PrintVariables(1);
+  }
 }
 
 #*******************************************************************************
@@ -431,7 +442,7 @@ print "config $self->{config}\n" if $debug;
         my $status    = $config->probe(1);
         &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $status;
 
-print "test combinations: @$port_maps\n" if $debug;
+$self->report("test combinations: @$port_maps") if $debug;
 
 # The next section may be somewhat paranoid, but I want to be absolutely
 # certain that the server port (if in CGI), the MySQL port and the script
@@ -467,7 +478,7 @@ print "test combinations: @$port_maps\n" if $debug;
 # HTTP_POST not defined, i.e. no CGI: test if the host/port combination option is defined
         elsif ($options{HostAndPort}) {
            ($self->{server}, $mysqlport) = split /\:/,$options{HostAndPort};
-print "NON CGI HostAndPort host:$self->{server}, port: $mysqlport\n" if $debug;
+$self->report("NON CGI HostAndPort host:$self->{server}, port: $mysqlport") if $debug;
             $self->{TCPort} = $mysqlport;
             delete $ENV{MYSQL_TCP_PORT}; # override
 	    $url[0] = $self->{server};
@@ -476,13 +487,13 @@ print "NON CGI HostAndPort host:$self->{server}, port: $mysqlport\n" if $debug;
         else {
             my $name = `echo \$HOST`;
             chomp $name;
-print "host from echo HOST: $name\n" if $debug;
+$self->report("host from echo HOST: $name") if $debug;
             foreach my $host (@$hosts) {
                 @url = split /\.|\:/,$host;
                 $self->{server} = $url[0] if ($name eq $url[0]);
             }
             $self->{server} = $config->get("default_host") if !$self->{server}; # default
-#print "server $self->{server}\n";
+#$self->report("server $self->{server}");
         }
 
 # TEMPORARY fix:this line is added because the pcs3 cluster is not visible as pcs3.sanger.ac.uk
@@ -496,13 +507,13 @@ print "host from echo HOST: $name\n" if $debug;
             if (my $scriptname = $ENV{SCRIPT_FILENAME}) {
 # test the MySQL port and script name combination; get cgi port
                 my $identify = 0;
-print "test combinations: @$port_maps\n" if $debug;
+$self->report("test combinations: @$port_maps") if $debug;
                 foreach my $combination (@$port_maps) {
                     my ($script, $tcp, $cgi) = split /\:/,$combination;
-print "combination $combination MSQLPORT $ENV{MYSQL_TCP_PORT} $scriptname $script\n" if $debug;
+$self->report("combination $combination MSQLPORT $ENV{MYSQL_TCP_PORT} $scriptname $script") if $debug;
 	            if ($tcp eq $ENV{MYSQL_TCP_PORT} && $scriptname =~ /^.*\b($script)\b.*$/) {
 # MySQL port and script directory verified; finally test the cgi port (if any)
-print "http_port $http_port   cgi $cgi\n" if $debug;
+$self->report("http_port $http_port   cgi $cgi") if $debug;
                         if (!$http_port || $cgi == $http_port) {
                             $self->{TCPort} = $mysqlport;
                             $self->{Script} = $scriptname;
@@ -526,7 +537,7 @@ print "http_port $http_port   cgi $cgi\n" if $debug;
             &ping_MySQL($self,$url[0],$mysqlport,1);       
 # check whether the driver is available
             my @drivers = DBI->available_drivers;
-# print "\nDrivers : @drivers\n\n";
+# $self->report("\nDrivers : @drivers\n");
             my $i = 0;
             while (($i < @drivers) && ($driver ne $drivers[$i])) {
                $i++;
@@ -535,7 +546,7 @@ print "http_port $http_port   cgi $cgi\n" if $debug;
 # build the data source name
             my $dsn = "DBI:".$driver.":".$db_name.":".$url[0];
             $dsn .= ":$mysqlport" if $mysqlport;
-print "DSN : $dsn  selserver $self->{server}\n" if $debug;
+$self->report("DSN : $dsn  selserver $self->{server}") if $debug;
 # and open up the connection
             $eraise = 1 if !defined($eraise);
             $self->{handle} = DBI->connect($dsn, $username, $password, {RaiseError => $eraise}) 
@@ -557,7 +568,7 @@ print "DSN : $dsn  selserver $self->{server}\n" if $debug;
 
     $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
 # if !dieOnNoTable : use self->instance afterwards to test existence of instance
-print "options $options{dieOnNoTable} \n" if $debug;
+$self->report("options $options{dieOnNoTable} ") if $debug;
     if ($self->{mother}->{errors} && $options{dieOnNoTable}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
@@ -766,6 +777,7 @@ print "GateKeeper enter dbHandle $debug" if $debug;
     } 
     elsif ($database && $residence{$database} !~ /$serverstring/) {
 # to be removed later:  redirection diagnostics
+$debug = 1;
         if ($options{redirectTest}) {
             &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
         }
@@ -773,7 +785,7 @@ print "GateKeeper enter dbHandle $debug" if $debug;
         if (!&cgiHandle($self,1) || !$options{defaultRedirect}) {
 # if defaultRedirect <= 1 always abort; else, i.e. in batch mode, switch to specified server
 &report($self,"Redirecting: database $database resides on $residence{$database}") if $debug;
-	    &dropDead($self,"Access to $database denied") if ($options{defaultRedirect} <= 1);
+	    &dropDead($self,"Access to $database denied (no redirect)") if ($options{defaultRedirect} <= 1);
 # close the current connection and open new one on the proper server 
             &disconnect($self);
 # get the server and TCP port to redirect to
@@ -1478,7 +1490,7 @@ sub GUI {
     my $capt = "onMouseOver=\"window.status='About Arcturus'; return true\"";
     my $imageformat = "width=\"$width\" height=\"$height\" vspace=1";
     $page->{layout} =~ s/ARCTURUSLOGO/<A $href $capt><IMG SRC="\/icons\/bootes.jpg" $imageformat><\/A>/;
-    $page->{layout} =~ s/SANGERLOGO/<IMG SRC="..\/icons\/helix.gif" $imageformat>/;
+    $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif" $imageformat>/;
 
 # compose the top bar (partition 2)
 
@@ -1511,11 +1523,13 @@ sub GUI {
     my $table = "<table $tablelayout>";
     if (@alternates) {
         $table .= "<tr><th colspan=2 bgcolor='$purp' width=100%> Servers </th></tr>";
-        foreach my $server (@alternates) {
+        my @aliases = ('VENUS','MARS','PLUTO','CHARON','LUNA','TIC'); my $demo =1;
+        foreach my $i (0 .. $#alternates) {
+            my $server = $alternates[$i];
             my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
             my $type = uc($altertypes{$server}); $type =~ s/^(\w)\w*$/$1/;
             my %s = (D => 'DEVELOPMENT', P => 'PRODUCTION' , C => 'CURRENT');
-            my $link = "$url[0]";
+            my $link = "$url[0]"; $link = $aliases[$i] if $demo;
             my $title = "GO TO THE $s{$type} SERVER ON $url[0]";
             my $alt = "onMouseOver=\"window.status='$title'; return true\"";
             $link = "<a href=\"http://$server$script\" $alt> $link </a>" if ($type ne 'C');
@@ -1617,7 +1631,7 @@ sub GUI {
 
     $page->partition(6);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> ASSIGN </th></tr>";
     if ($database && $database ne 'arcturus') {
         $title = "ALLOCATE USERS TO A PROJECT OF ".uc($database);
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
@@ -1630,22 +1644,34 @@ sub GUI {
     }
     $table .= "</table>";
     $page->add($table);   
-    $page->space(2-@databases); 
+    $page->space(3-@databases); 
     $page->space(1);   
 # and the TEST menu on the same partion
     $page->partition(6);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> TESTS </th></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> UPDATE </th></tr>";
+    $connection = &whereAmI($self); $connection =~ s/database on.*/SERVER/i;
+    $title = "HARMONISE THE CONTENTS OF THE COMMON DATABASES ON THE ".uc($connection);
+    $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+    my $update = "/cgi-bin/emanager/harmonize/getform".$cgi->postToGet(1,'session');
+    $table .= "<tr><td $cell><a href=\"$update\" $alt> Harmonize </a></td></tr>";
     if ($database && $database ne 'arcturus') {
-        $title = "RUN SELECTED TEST(S) ON THE ".uc($database)." CONTENTS";
+        $title = "UPDATE PAIRS IN THE ".uc($database)." DATABASE";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $update = "/cgi-bin/emanager/getmenu".$cgi->postToGet(1,@include); # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" $alt> Menu </a></td></tr>";
-        $title = "DO ALL STANDARD TESTS ON THE ".uc($database)." CONTENTS";
-        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        $update = "/cgi-bin/emanager/runtest/all".$cgi->postToGet(1,@include); # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" $alt target='workframe'> All </a></td></tr>";
+        $update = "/cgi-bin/emanager/pairstest".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> Pairs </a></td></tr>";
+
+#        $title = "TEST DATABASE ".uc($database)." STRUCTURE";
+#        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+#        $update = "/cgi-bin/create/existing/overview".$cgi->postToGet(1,@include); # other URL
+#        $table .= "<tr><td $cell><a href=\"$update\" $alt> $database </a></td></tr>";
     }
+    $title = "CHANGE DESCRIPTIONS OF ".uc($database)." OR ITS ASSEMBLIES, PROJECTS OR VECTORS";
+    $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+    $update = "/cgi-bin/emanager/editor/getmenu".$cgi->postToGet(1,@include); # other URL
+    $table .= "<tr><td $cell><a href=\"$update\" $alt> Edits </a></td></tr>";
+
     $table .= "</table>";
     $page->add($table);
     $page->space(2-@databases); 
@@ -1697,21 +1723,24 @@ sub GUI {
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100% nowrap> MODIFY </th></tr>";
     if ($database && $database ne 'arcturus') {
-# $title = "LOAD TAG INFORMATION FOR ".uc($database);
-# $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
-        $update = "/cgi-bin/amanager/modify/assembly".$cgi->postToGet(1,@include); # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
-        $update = "/cgi-bin/pmanager/modify/project".$cgi->postToGet(1,@include);  # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
+        $title = "TEST AND MODIFY TABLES OF THE ".uc($database)." ORGANISM DATABASE";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> $database </a></td></tr>";
+#        $update = "/cgi-bin/amanager/modify/assembly".$cgi->postToGet(1,@include); # other URL
+#        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
+#        $update = "/cgi-bin/pmanager/modify/project".$cgi->postToGet(1,@include);  # other URL
+#        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
     }
     if ($self->instance) {
-        my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
-        $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
-#    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
-        $update = "/cgi-bin/create/arebuild".$cgi->postToGet(1,'session');
-        $table .= "<tr><td $cell><a href=\"$update\"> arcturus </a></td></tr>";
+        my $update = "/cgi-bin/create/arebuild".$cgi->postToGet(1,'session');
+        $title = "TEST AND MODIFY TABLES OF THE COMMON DATABASE";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> arcturus </a></td></tr>";
+        $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
+        $title = "USER ADMINISTRATION OPERATIONS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> Users </a></td></tr>";
     }
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
