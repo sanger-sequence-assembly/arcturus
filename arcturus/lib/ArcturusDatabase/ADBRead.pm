@@ -2169,17 +2169,18 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
 # here we have a list of new tags which have to be loaded
 
-    return &putTags($dbh,\@tags,'READ',$autoload);
+    return &putTags($dbh,\@tags,'READTAG','seq_id',$autoload);
 }
 
 sub putTags {
 # use as private (generic) method only
     my $dbh = shift;
     my $tags = shift;
-    my $type = shift;
+    my $table = shift;
+    my $seqkeyid = shift;
     my $autoload = shift; # of missing tag names and sequences
 
-print "ENTER putTags $type ".scalar(@$tags)."\n" if $DEBUG;;
+print "ENTER putTags $table ".scalar(@$tags)."\n" if $DEBUG;;
 
     return undef unless ($tags && @$tags);
 
@@ -2244,9 +2245,9 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
    
 # insert in bulkmode
 
-    my $query = "insert into ${type}TAG ". # insert ignore ?
-                "(seq_id,tagtype,tag_id,pstart,pfinal,strand,comment) values ";
-    $query =~ s/tagtype/tagtype,tagname/ if ($type eq 'CONTIG');
+    my $query = "insert into $table ". # insert ignore ?
+                "($seqkeyid,tagtype,tag_id,pstart,pfinal,strand,comment) values ";
+    $query =~ s/tagtype/tagtype,tagname/ if ($table eq 'CONTIGTAG');
 
     my $success = 1;
     my $block = 100; # insert block size
@@ -2272,7 +2273,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
 
         $accumulatedQuery .= ',' if $accumulated++;
         $accumulatedQuery .= "($seq_id,'$tagtype',";
-        $accumulatedQuery .=  "'$tagname'," if ($type eq 'CONTIG');
+        $accumulatedQuery .=  "'$tagname'," if ($table eq 'CONTIGTAG');
         $accumulatedQuery .=  "$tag_id,$pstart,$pfinal,'$strand',$comment)";
 
         if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {

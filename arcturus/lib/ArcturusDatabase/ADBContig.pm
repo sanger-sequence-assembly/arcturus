@@ -1474,7 +1474,7 @@ print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 #exit; # temporary
     }
 
-    return &putTags ($dbh,$ctags,'CONTIG',1);
+    return &putTags ($dbh,$ctags,'CONTIGTAG','contig_id',1);
 }
 
 #------------------------------------------------------------------------------
