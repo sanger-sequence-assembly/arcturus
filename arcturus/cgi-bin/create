@@ -8,7 +8,7 @@ use strict; # Constraint variables declaration before using them
 
 use GateKeeper; 
 
-require "arc_create_mysql.pl";
+use CreateArcturus;
 
 ##############################################################################
 
@@ -42,6 +42,9 @@ my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
 
 my $page = $GateKeeper->GUI("database maintenance and updates",{doTransport => 0});
 
+my $script = $GateKeeper->currentScript;
+my $csroot = $GateKeeper->currentScriptRoot;
+
 ###############################################################################
 # Test contents of the common database (always)
 ###############################################################################
@@ -55,9 +58,10 @@ my $page = $GateKeeper->GUI("database maintenance and updates",{doTransport => 0
 my $inventory;
 undef my @tables; # tables present
 undef my @missed; # tables missing
-undef my @extras; # tables in common which should not be there 
+undef my @extras; # tables in common which should not be there
 my $count = 0;
 undef my %tablecount;
+undef my %redefined;
 
 if ($dbh->do("SHOW TABLES FROM arcturus LIKE 'INVENTORY'") == 0) {
 # the inventory table is missing; signal only this table
@@ -84,9 +88,16 @@ else {
 	}
     }
 # now determine if there are any missing or extra tables
+    $csroot =~ s/cgi-bin/lib/; # for modules
     foreach my $table (keys %tablecount) {
         push @missed, $table if ($tablecount{$table} > 0);
         push @extras, $table if ($tablecount{$table} < 0);
+# test the table definition (if the table exists)
+        if (!$tablecount{$table}) {
+            my $ArcturusTable = $organisms->spawn($table,'arcturus',0,0);
+            my $diagnosis = diagnose($ArcturusTable,$csroot);
+            $redefined{$table} = $diagnosis if $diagnosis;
+        }
     }
 }
 
@@ -95,7 +106,7 @@ else {
 if (@tables == 0) {
     $action = 'arcturus'; # override to creation of common database
 }
-elsif (@tables > 0 && @missed > 0 || $action eq 'arcturus') {
+elsif (@tables > 0 && (@missed > 0 || keys(%redefined)) || $action eq 'arcturus') {
     $action = 'arebuild'; # override to (re)install common database table(s)
 }
 
@@ -112,21 +123,19 @@ my $arctmpdir  = $config->get('ARC_TMP_DIR');
 my $harmonize = 0;
 
 my $purple = 'E2E2FF';
-my $yellow = 'FAFAD2';
+my $yellow = 'yellow';
 my $orange = 'FFCA88';
 
 ##############################################################################
 # MAIN
 ##############################################################################
 
-my $script = $GateKeeper->currentScript;
-
 my $font = "size=6 face='sans-serif'"; my $efnt = "</font>";
 
 my $confirm = $cgi->parameter('confirm',0) || '';
     
-$page->message("! There are foreign tables @extras found in the common database",'yellow',$font) if @extras; 
-$page->message("! There are tables missing in the common database",'yellow',$font) if @missed;
+$page->message("! There are foreign tables @extras found in the common database",$yellow,$font) if @extras; 
+$page->message("! There are tables missing in the common database",$yellow,$font) if @missed;
 
 #-----------------------------------------------------------------------------
 # build the arcturus database where none exists
@@ -157,7 +166,7 @@ if ($action eq 'arcturus') {
             my $text = "DONE!<br>$created tables initialized<br>in the common database<br>on $server";
             $page->add($text,0,0,$font);
             $page->space(2);
-            $page->message('IMPORTANT !','yellow',$font);
+            $page->message('IMPORTANT !',$yellow,$font);
             $page->space(1);
             $text = "The operations password has now to be updated";
             $page->add($text,0,0,$font);
@@ -190,21 +199,29 @@ if ($action eq 'arcturus') {
 
 elsif ($action eq 'arebuild') {
 
-    if (!$option || $option eq 'getaform') {
+    if (!$option || $option eq 'getform') {
 
         $page->form("$script/arebuild/process");
         $page->space(1);
         $page->add("Rebuild a table in the Common Database",0,0,$font);
         $page->space(2);
-        $page->message("There are missing tables !",'yellow',$font) if @missed;
+        $page->message("There are missing tables !",$yellow,$font) if @missed;
+        $page->message("There are changed tables !",$yellow,$font) if keys(%redefined);
         $page->space(1);
 # add list of contents
         my $preset;
         my $existlist = "<TABLE>";
-        foreach my $table (@tables) {
+        foreach my $table (sort keys %tablecount) {
 	    $existlist .= "<TR><TH ALIGN=LEFT>$table</TH><TH>:</TH>";
-            if ($tablecount{$table}) { # table==1 for missing tables
-                $existlist .= "<TD bgcolor='orange'>missing</TD></TR>"; 
+            if ($tablecount{$table} > 0) { # table==1 for missing tables
+                $existlist .= "<TD bgcolor='orange'>MISSING</TD></TR>"; 
+                $preset = $table if !$preset;
+            }
+            elsif ($tablecount{$table} < 0) { 
+                $existlist .= "<TD bgcolor=$yellow>FOREIGN</TD></TR>"; 
+            }
+            elsif ($redefined{$table}) {
+                $existlist .= "<TD bgcolor=$yellow>DEFINITION HAS CHANGED</TD></TR>"; 
                 $preset = $table if !$preset;
             }
             else {
@@ -246,13 +263,39 @@ elsif ($action eq 'arebuild') {
         elsif (!$skipAuthorize && !$GateKeeper->authorize(255,\%options)) {
             $error = $GateKeeper->{error};
         }
+# deal with tables to be altered
+        elsif ($redefined{$tablename}) {
+            $page->space(2);            
+            my $message = "Table $tablename will be altered to conform to the current template";
+            $page->message($message,$yellow,"size = +1",1);
+            $page->space(2);
+            $page->message($redefined{$tablename},$purple,0,1);
+            $page->space(2);
+            my $return = "$script/arebuild/getform";
+            $return .= "\?database=$database" if $database;
+            if (!$confirm || $confirm ne 'ALTER') {
+                $page->confirmbuttonbar($return); # include reject button
+                $page->substitute('CONFIRM',"ALTER");
+            }
+            elsif ($organisms->query($redefined{$tablename})) {
+                $page->message('DONE','yellow',"size = +1",1);
+                $page->space(2);
+                $page->linkbutton('CONTINUE',$return);
+            }
+	    else {
+                $page->message('FAILED !',$orange,"size = +1",1);
+                $page->space(2);
+                $page->linkbutton('CONTINUE',$return);
+            }
+        }
+# deal with tables to rebuild
         elsif (!$confirm || $confirm ne 'CONFIRM') {
             my $message = "All data in table $tablename will be lost!\n";
             $message .= "Be sure before you continue";
             $message = "Table $tablename will be created" if $tablecount{$tablename};
             $page->space(2);
-            $page->message($message,'yellow',"size = +1",1);
-            my $return = "$script/arebuild/getaform";
+            $page->message($message,$yellow,"size = +1",1);
+            my $return = "$script/arebuild/getform";
             $page->space(2);
             $page->confirmbuttonbar($return); # include reject button
         }
@@ -264,7 +307,7 @@ elsif ($action eq 'arebuild') {
                 $page->add("$created tables created in ARCTURUS common database",0,0,"size = +1");
                 $page->space(2);
                 if ($tablename eq 'USERS') {
-                    $page->message('IMPORTANT','yellow',$font);
+                    $page->message('IMPORTANT',$yellow,$font);
                     $page->space(1);
                     my $text = "The operations password has now to be initialized";
                     $page->add($text,0,0,$font);
@@ -278,7 +321,7 @@ elsif ($action eq 'arebuild') {
             else {
                 $page->message('FAILED !','orange',$font);
                 $page->space(1);
-                $page->message("Table $tablename could not be created",'yellow',"size = +1");
+                $page->message("Table $tablename could not be created",$yellow,"size = +1");
                 $page->space(3);
                 $page->add("Please contact $db_manager",0,0,$font);
             }
@@ -287,10 +330,10 @@ elsif ($action eq 'arebuild') {
             $page->errorbox("<h3>undefined table: $tablename<h3>"); # something really fishy
         }
         $page->form(0);
-        $page->message($error,'yellow',"size = +1",1) if $error;
+        $page->message($error,$yellow,"size = +1",1) if $error;
     }
     else {
-        $page->errorbox("Invalid option $option for $script/$action",0,0,'yellow');
+        $page->errorbox("Invalid option $option for $script/$action",0,0,$yellow);
     }
     $page->flush;
     $GateKeeper->disconnect;
@@ -361,7 +404,7 @@ elsif ($action eq 'organism') {
         elsif (!$confirm || $confirm ne 'CONFIRM') {
 # here is the substance: compose confirm form
             my $location = $GateKeeper->whereAmI;
-            $page->message("The new database will be added to the $location",'yellow',"size = +1");
+            $page->message("The new database will be added to the $location",$yellow,"size = +1");
             $page->space(1);
 
             my @items = ('genus','species','serovar','strain','isolate','template','comment');
@@ -438,7 +481,7 @@ elsif ($action eq 'organism') {
                         foreach my $table (sort @$created) {
                             $report .= "<TR><TD ALIGN=LEFT>$table</TD>";
                             if ($organisms->query("show tables from $dbasename like \"$table\"")) {
-                                $report .= "<TD BGCOLOR='yellow'>created</TD>";
+                                $report .= "<TD BGCOLOR=$yellow>created</TD>";
                                 $diagnosis = "INCOMPLETE"; # for possible error message at end
                                 $count++;
                             }
@@ -494,9 +537,8 @@ elsif ($action eq 'organism') {
     $page->flush;
     $GateKeeper->disconnect;
 
-    my $root = $GateKeeper->currentScriptRoot;
-# ? prime environment via GateKeeper for next next script
-    system ("$root/harmonize organisms copy >> $arctmpdir/harmonize.log") if $harmonize;     
+# ? prime environment via GateKeeper for harmonize script
+    system ("$csroot/harmonize organisms copy >> $arctmpdir/harmonize.log") if $harmonize;     
 }
 
 #*********************************************************************************************************
@@ -533,7 +575,6 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
     if ($sth->execute()) {
         while (my $table = $sth->fetchrow_array()) {
             $tablecount{$table}--; # i.e. on table found set to zero
-#            $count++;
 	}
     }
 
@@ -542,10 +583,21 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 # $tablecount{READS}++;
 # $tablecount{PENDING}++;
 # $tablecount{EXTRA}--; push @tables,'EXTRA';
+
     $count = 0;
     my $half = int(@tables/2 + 0.5);
     undef @missed;
     undef @extras;
+# test table definition against current one
+    undef %redefined;
+    foreach my $table (@tables) {
+        if (!$tablecount{$table}) {
+            my $ArcturusTable = $organisms->spawn($table,$database,0,0);
+            my $diagnosis = diagnose($ArcturusTable, $csroot);
+            $redefined{$table} = $diagnosis if $diagnosis;
+        }
+    }
+
     my $contents = "<TABLE><TR><TD VALIGN=TOP> <TABLE>";
     foreach my $table (sort keys %tablecount) {
         if ($count++ == $half) {
@@ -560,6 +612,9 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             $contents .= "<TD bgcolor=$purple>FOREIGN</TD>";
             push @extras, $table;
         }
+        elsif ($redefined{$table}) {
+            $contents .= "<TD bgcolor=$yellow>DEFINITION HAS CHANGED</TD>";
+        }
         else {
             $contents .= "<TD>Found</TD>";
         }
@@ -573,7 +628,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
     if ($tablecount{$historytable}) {
         $page->message("! The history table $historytable is not found",$orange,$font);
         $page->space(1);
-        $page->message("? Maybe you are accessing the wrong database",'yellow',$font);
+        $page->message("? Maybe you are accessing the wrong database",$yellow,$font);
         $page->space(1);
         $page->add($contents);
         $page->space(1);
@@ -583,14 +638,13 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
     elsif (@extras) {
         $page->message("! There are foreign tables found in database $database",'orange',$font);
         $page->space(1);
-        $page->message("! The database may have been corrupted",'yellow',$font);
+        $page->message("! The database may have been corrupted",$yellow,$font);
         $page->space(1);
         $page->add($contents);
         $page->space(1);
         $page->message("Please contact $db_manager",'white',$font);
     }
     elsif ($option eq 'overview' || $option eq 'getform' || (@missed && $option ne 'process')) {
-#        $page->message("! There are tables missing from database $database",'yellow',$font) if @missed;
         $page->space(1);
         $page->message("Overview of database $database",$purple,$font);
         $page->space(1);
@@ -616,8 +670,12 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             }
             else {
 # here possibly special provision for HISTORY
+                undef my $preset;
+                if (my @altered = sort keys(%redefined)) {
+                    $preset = $altered[0];
+                }
                 my $where = "domain = 'o' ";
-                my $choices = $inventory->htmlMaskedOptions('tablename','where',$where,'tablename');
+                my $choices = $inventory->htmlMaskedOptions('tablename','where',$where,'tablename',0,0,$preset);
                 $page->message("Select a table to rebuild: ",$purple,'size = +1',0,0,'CC');
                 $page->substitute('CC',$choices);
                 my $enforce = "<TABLE><TR><TD>Check <INPUT type=checkbox name='reinitialize'>";
@@ -629,8 +687,9 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         }
     }
 
+# create missing tables before doing anything else
+
     elsif ($option eq 'process' && @missed) {
-# create a missing table
         my $missed = join ' ',@missed;
         my $tablename = $cgi->parameter('tablename');
 
@@ -672,14 +731,13 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         $page->message($error,$orange,'size = +1') if $error;
     }
 
-# here all tables exist in the database; only now consider to rebuild one
+# here all tables exist in the database; only now consider to rebuild a table
 
     elsif ($option eq 'process') {
 # rebuild a table in the database; get rebuild status from inventory table
         my $tablename = $cgi->parameter('tablename');
         my $rebuild = $inventory->associate('rebuild',$tablename,'tablename');
         
-
 # note: rebuild=0 for protected tables, only rebuild if empty or by user 'oper';
 #       rebuild=1 for a dictonary table by a special script prcocessing READS;
 #       rebuild=2 for an unprotected table;
@@ -703,6 +761,38 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         elsif ($cgi->{und_error}) {
             $error = "Please define all input fields: $cgi->{und_error}";
         }
+# either alter the table
+        elsif ($redefined{$tablename}) {
+            $page->space(2);            
+            my $message = "Table $tablename will be altered to conform to the current template";
+            $page->message($message,$yellow,"size = +1",1);
+            $page->space(2);
+            $page->message($redefined{$tablename},$purple,0,1);
+            $page->space(2);
+            $options{noConfirm} = 'ALTER';
+            my $return = "$script/existing/getform";
+            $return .= $cgi->postToGet();
+            if (!$confirm || $confirm ne 'ALTER') {
+                $page->form("$script/existing/process");
+                $page->confirmbuttonbar($return); # include reject button
+                $page->substitute('CONFIRM',"ALTER");
+                $page->ingestCGI;
+            }
+            elsif (!$GateKeeper->authorize(255,\%options)) {
+                $error = $GateKeeper->{error};
+            }
+            elsif ($organisms->query($redefined{$tablename})) {
+                $page->message('DONE','yellow',"size = +1",1);
+                $page->space(2);
+                $page->linkbutton('CONTINUE',$return);
+            }
+	    else {
+                $page->message('FAILED !',$orange,"size = +1",1);
+                $page->space(2);
+                $page->linkbutton('CONTINUE',$return);
+            }
+        }
+# or rebuild the table
         else {
             my $report = "Table $database.$tablename will be rebuilt ...";
             if ($confirm ne "CONFIRM") {
@@ -879,7 +969,7 @@ sub addEntry {
         }
         else {
             my $message = "Could not create an entry for assembly BLOB";
-            $page->message($message,'yellow',0,1);
+            $page->message($message,$yellow,0,1);
         }
 # and update the assembly count
         my $count = $assembly->count;
@@ -1010,7 +1100,7 @@ sub updateCounters {
 # and compare
         my $changes = 0;        
         $report .= "<TABLE CELLPADDING=1 BORDER=0>";
-        $report .= "<TR><TD COLSPAN=4 bgcolor=yellow ALIGN=CENTER>$warning</TD></TR>" if ($warning);
+        $report .= "<TR><TD COLSPAN=5 bgcolor=yellow ALIGN=CENTER>$warning</TD></TR>" if ($warning);
         foreach my $key (sort keys %inventory) {
             my $tc = $inventory{$key}->[0] || 0; # the  table count
             my $mc = $inventory{$key}->[1] || 0; # the master count
@@ -1018,18 +1108,19 @@ sub updateCounters {
         # print only meaningful information
                 if ($tc > 0) {
                     $report .= "<TR><TD>$column</TD><TD>$key</TD><TD>checked</TD>";
-                    $report .= "<TD ALIGN=RIGHT>($tc)</TD></TR>";
+#                    $report .= "<TD COLSPAN=2 ALIGN=RIGHT>($tc)</TD></TR>";
+                    $report .= "<TD>$tc</TD><TD ALIGN=RIGHT>($mc)</TD></TR>";
                 }
             }
             elsif (!$update) {
                 $report .= "<TR><TD>$column</TD><TD>$key</TD><TD bgcolor=orange>mismatch</TD>";
-                $report .= "<TD ALIGN=CENTER>$tc ($mc)</TD></TR>";
+                $report .= "<TD ALIGN=CENTER>$tc</TD><TD ALIGN=RIGHT>($mc)</TD></TR>";
                 $changes++;
             }
             else {
-                my $update = $stable->update('counted',$mc,$linker,$key);
+                $tc = $mc if $stable->update('counted',$mc,$linker,$key);
                 $report .= "<TR><TD>$column</TD><TD>$key</TD><TD bgcolor=yellow>updated</TD>";
-                $report .= "<TD ALIGN=RIGHT>($mc)</TD></TR>";
+                $report .= "<TD>$tc</TD><TD ALIGN=RIGHT>($mc)</TD></TR>";
                 $stable->historyLogger($update); # $update is the user here
             }
         }

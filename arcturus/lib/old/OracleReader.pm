@@ -4,17 +4,11 @@ package OracleReader;
 #
 # Read a standard Sanger format READ from the Oracle database
 # Hacked from the ADB_get_caf script by Robert Davies
-# $Id: OracleReader.pm,v 1.1 2002-11-21 16:26:33 ejz Exp $
+# $Id: OracleReader.pm,v 1.2 2002-11-25 15:17:29 ejz Exp $
 #
 #############################################################################
 
 use strict;
-
-#use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-#require Exporter;
-#@ISA = qw(Exporter);
-#@EXPORT = qw();
-#@EXPORT_OK = qw();
 
 use lib '/usr/local/badger/bin','/nfs/disk100/pubseq/PerlModules/Modules';
 
@@ -23,11 +17,6 @@ use AssemblyDB2;
 
 #############################################################################
 
-my $schema;   # see description of ADB_get_caf 
-my $project;  # see description of ADB_get_caf
-
-my %readHash; # hash of hash references to retrieved reads 
-
 my $ADB_DIR = "/nfs/disk222/yeastpub/scripts/WGSassembly/bin";
 
 #############################################################################
@@ -35,17 +24,16 @@ my $ADB_DIR = "/nfs/disk222/yeastpub/scripts/WGSassembly/bin";
 sub new {
 # constructor for Oracle reader from specified schema & project
    my $prototype = shift;
-   my $inschema  = shift;
-   my $inproject = shift;
+   my $schema    = shift;
+   my $project   = shift;
 
    my $class = ref($prototype) || $prototype;
    my $self  = {};
 
-   $schema   = $inschema;
-   $project  = $inproject;
    $self->{schema}  = $schema;
    $self->{project} = $project;
    $self->{reads}   = {};# hash of hash references to retrieved reads 
+   $self->{status}  = '';
 
    bless ($self, $class);
    return $self;
@@ -60,10 +48,8 @@ sub getOracleReads {
 
     my $schema  = $self->{schema};
     my $project = $self->{project};
-#print "schema $schema  project $project <br>\n";
-#print "files @{$files} <br>\n";
 
-    undef my $readHash;
+    undef my %readHash;
     $self->{reads} = \%readHash;
 
 # translate readnames into hash
@@ -77,14 +63,17 @@ sub getOracleReads {
 
 # access the Oracle database
 
-    my $adb = AssemblyDB->new(login => 'pathlook',schema => $schema);
+    my $adb = AssemblyDB->new(login => 'pathlook', schema => $schema, RaiseError => 0);
+    if (!$adb) {
+        $self->{status} = "Unknown SCHEMA $schema";
+        return 0;
+    }
 
 # retrieve the reads and store as hashes under the $caf handle
 
     undef my $caf;
     if ($project =~ /^\d+$/) {
 
-#print "enter caf <br>";
         $caf = $adb->get_caf({
 	    projid => $project,
 	    fofn => \%reads,
@@ -98,7 +87,6 @@ sub getOracleReads {
 	    project => $project,
 	    fofn => \%reads,
 	    ignore => $ignore,
-#	delay_finishing => $opts{delay_finishing},
 	    delay_finishing => 1,
         });
     
@@ -108,7 +96,6 @@ sub getOracleReads {
 
     undef my $number;
     my @reads = $caf->readsList();
-#print "test: @reads<BR>\n";
     foreach my $read (@reads) {
         $readHash{$read} = $caf->getEntry($read);
         $number++;

@@ -2,16 +2,14 @@
 
 #############################################################################
 #
-# return an HTML query form for ARCTURUS database searches
+# auxilliary script to update specific database tables (re: 'create' script)
 #
 #############################################################################
 
 use strict;
 
 use GateKeeper; 
-# use ArcturusTable;
 use Compress;
-# use MyHTML;
 
 ##############################################################################
 # unbuffered output
@@ -35,7 +33,7 @@ my ($void,$action,$database,$tablename) = split ('/',$GateKeeper->origin);
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-$GateKeeper->cgiHeader(1); # return string plain
+$GateKeeper->cgiHeader(2); # return string plain
 
 ##############################################################################
 # MAIN
@@ -65,6 +63,7 @@ $page->sectionheader("ARCTURUS assembly tracking database: INGEST",3,0);
 
 if ($cgi->parameter('database') ne "$database" || $cgi->parameter('tablename') ne $tablename) {
     $page->errorbox("This script is invoked in an invalid manner",0,0,'yellow');
+    $page->add($cgi->PrintVariables);
 }
 
 elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
@@ -81,8 +80,8 @@ elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
     $page->preload('stsepcfile',$loadinfo->{stsepc});
     $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
-    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
-    $page->linkbutton('REJECT',$reject,0);
+#    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
+#    $page->linkbutton('REJECT',$reject,0);
 }
 
 elsif ($action eq 'specify' && $tablename eq 'CLONEMAP') {
@@ -99,8 +98,8 @@ elsif ($action eq 'specify' && $tablename eq 'CLONEMAP') {
 #    $cgi->delete('confirm'); $cgi->delete('submit');
     $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
-    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
-    $page->linkbutton('REJECT',$reject,0);
+#    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
+#    $page->linkbutton('REJECT',$reject,0);
 }
 
 
@@ -123,8 +122,8 @@ elsif ($action eq 'specify' && $tablename eq 'STS2CONTIG') {
 elsif ($action eq 'specify') {
 #    $page->center(1);
     $page->errorbox("Invalid table $tablename");
-    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
-    $page->linkbutton('BACK TO MAIN',$reject,0);
+#    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
+#    $page->linkbutton('BACK TO MAIN',$reject,0);
 }
 
 #************************** process STS maps ******************************
@@ -134,12 +133,12 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
     my $stsmapfile = $cgi->parameter('stsmapfile') || 0;
     my $stsfasfile = $cgi->parameter('stsfasfile') || 0;
     my $stsepcfile = $cgi->parameter('stsepcfile') || 0;
-    my $fulltest   = $cgi->parameter('fulltest') || 0;
-    my $cleanup    = $cgi->parameter('cleanup')  || 0;
-    my $update     = $cgi->parameter('update')   || 0;
-    my $confirm    = $cgi->parameter('confirm')  || 0;
-    my $identify   = $cgi->parameter('identify') || 0;
-    my $password   = $cgi->parameter('PASSWORD') || 0;
+    my $fulltest   = $cgi->parameter('fulltest')   || 0;
+    my $cleanup    = $cgi->parameter('cleanup')    || 0;
+    my $update     = $cgi->parameter('update')     || 0;
+    my $confirm    = $cgi->parameter('confirm')    || 0;
+    my $identify   = $cgi->parameter('identify')   || 0;
+    my $password   = $cgi->parameter('PASSWORD')   || 0;
     $fulltest = 1 if ($cleanup);
 
     undef my $updates;

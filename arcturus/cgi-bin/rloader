@@ -616,19 +616,14 @@ if ($logON || !$origin) {
                 push @pendingfiles, $key;
             }
 print "SCHEMA $SCHEMA, PROJECT $PROJECT $brtag";
-#            $oracle = ADB_get_caf->new($SCHEMA,$PROJECT); # reads from Oracle database
-        # ingest the reads (and store as hashes in ADB_get_caf reader)
 print "pending files @pendingfiles $brtag";
-#	    my $success = $oracle->getOracleReads(\@pendingfiles);
 	    my $success = $reader->fetchOracleData($SCHEMA,$PROJECT,\@pendingfiles);
 print "success = $success $brtag";
             undef @pendingfiles if !$success; # protection, forcing controlled exit
-        # setup a link to ReadsReader in order to try Oracle if flat file not found
-#            $reader->linkToOracle($oracle) if ($success);
 # undef @pendingfiles;
-        } else {
-        # reads are assumed to be in project directory; we test the ROOTDATADIR and
-        # if not found, its subdirectories
+        } 
+        else {
+# reads are assumed to be in project directory; we test the ROOTDATADIR and its subdirectories
 # print "rdd $ROOTDATADIR SDS: @SEARCH_DIR  $brtag";
             my @subdirs = `ls -d ${ROOTDATADIR}*`;
             foreach my $key (sort keys (%dbfiles)) {

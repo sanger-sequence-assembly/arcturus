@@ -7,12 +7,11 @@ package ReadsReader;
 #############################################################################
 
 use strict;
-# use vars qw($VERSION);
 
 use LigationReader;
  use Ligationreader;
 use Compress;
-use ADB_get_caf;
+use OracleReader;
 
 #############################################################################
 
@@ -116,7 +115,7 @@ sub fetchOracleData {
 # builds a set of hashes for the input readnames in specified schema and project
     my $self = shift;
 
-    $OracleData = new ADB_get_caf(shift, shift) || return 0; # input SCHEME, PROJECT
+    $OracleData = new OracleReader (shift, shift) || return 0; # input SCHEME, PROJECT
 
     return $OracleData->getOracleReads(shift); # input array ref of filenames
 }

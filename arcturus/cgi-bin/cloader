@@ -40,7 +40,7 @@ else {
    $database = shift @ARGV;
 }
 
-my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1, dbhandle=>0});
+my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
@@ -86,6 +86,8 @@ my $users = $organisms->spawn('USERS','arcturus',1);
 ###############################################################################
 # input from command line
 ###############################################################################
+
+undef my $error;
 
 if (!$cgi) {
 # test user
@@ -155,7 +157,6 @@ else {
     $page->frameborder(100,15,'white',10);
     $page->center(1);
 
-    undef my $error;
     if ($option eq 'getform') {
  
         $page->form("$arc_cgi_dir/cloader/arcturus/specify");
@@ -168,8 +169,6 @@ else {
         my $database = $cgi->parameter('database') || $cgi->parameter('organism');
         my $select = $organisms->htmlOptions('dbasename','database',20,0,$database);
         $page->sectionheader("Select a Database : $select",4,0);
-#        $page->sectionheader("Provide your User Identification and Submit",4,0);
-#        $page->identify('10',8,1);
         $page->partition(5);
         $page->center(1);
         $page->submitbuttonbar($lreturn,0,0,'MAIN MENU');
@@ -219,26 +218,26 @@ else {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
 # print "ASSEMBLY attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
-    # update the caf file name if it contains a place holder ?
+# update the caf file name if it contains a place holder ?
 #                $config{CFN} =~ s/^\S+?(\<m\>)/$asname/;
-    # open the form and replace the placeholders
+# open the form and replace the placeholders
                 my $form = form();
                 $form =~ s/DATABASE/$database/g;
-    # build the selectlist for assembly and add to form
+# build the selectlist for assembly and add to form
                 my $selectlist = $assembly->htmlOptions('assemblyname','assemblyname',90,0,$asname);
                 $form =~ s/SELECTTAG/$selectlist/ if ($selectlist); # substitute the HTML selectlist
                 $page->add($form,0,1); # add the form to the page and preload
-    # NOTE: contigs will inherit project from earlier versions; unallocated ones are put in BIN
-    # preload the remaining placeholders with data in %config 
+# NOTE: contigs will inherit project from earlier versions; unallocated ones are put in BIN
+# preload the remaining placeholders with data in %config 
                 foreach my $key (keys %config) {
                     $page->preload($key,$config{$key},1) if defined($config{$key});
                 }
-    # but overwrite with values in CGI input 
+# but overwrite with values in CGI input 
                 $page->preload('cgi_input',$cgi,1);
-    # and add hidden fields  
+# and add hidden fields  
                 $page->ingestCGI;
 
-    # add a three-way button bar and a return link 
+# add a three-way button bar and a return link 
 
                 my $text = "Repeat to update this form for a newly chosen assembly, or<br>";
                 $text   .= "Continue to start loading CONTIGS with these specified values, or<br>";
@@ -255,7 +254,6 @@ else {
                 $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
             }
         }
-    # close form
         $page->form(0);
         $page->flush();
         $GateKeeper->disconnect;
@@ -265,9 +263,6 @@ else {
     elsif ($option eq 'process') {
 # get assembly 
         $database = $cgi->parameter('database'); # redefine database
-print "<br>database $database";
-$cgi->PrintVariables(1);
-print "\n";
         $assembly = $organisms->spawn('ASSEMBLY',$database,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
@@ -279,7 +274,8 @@ print "\n";
         $reload = 1 if $cgi->parameter('reload' ,0);
         $update = 1 if $cgi->parameter('update' ,0);
         $forced = 1 if $cgi->parameter('forced' ,0);
-# identity check
+
+# error test and authorization check
       
         if ($cgi->{und_error}) {
             $error = "Please define every input field $cgi->{und_error} ";

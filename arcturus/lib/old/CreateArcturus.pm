@@ -892,7 +892,7 @@ sub create_CONTIGS {
     print STDOUT "Creating table CONTIGS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS(
              contig_id        MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             contigname       VARCHAR(48)              NOT NULL,
+             contigname       VARCHAR(64)              NOT NULL,
              aliasname        VARCHAR(32)              NOT NULL,
              zeropoint        INT                     DEFAULT 0,
              length           INT                     DEFAULT 0,
@@ -2361,12 +2361,14 @@ sub diagnose {
     undef my $record;
     undef my %columns;
     undef my $previous;
+    my $testname = $tablename;
+    $testname = 'HISTORY' if ($testname =~ /history/i);
     while (defined ($record = <SOURCE>)) {
 
         if (!$collect && $record !~ /\bdo\b/  || $record !~ /\S/) {
             next;
         }
-        elsif (!$collect && $record =~ /\bcreate\s+table\b/i && $record =~ /\b$tablename[\w+]?\b/) {
+        elsif (!$collect && $record =~ /\bcreate\s+table\b/i && $record =~ /\b$testname[\w+]?\b/) {
             $collect = 1; # tablename found start scanning on next line
 	}
         elsif (!$collect) {
@@ -2430,7 +2432,9 @@ print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: 
     if (!$alterTable || $alterTable =~ /\badd\scolumn/) {
 # compare $table->{columns} with keys %columns
         my $count = $table->count;
-        foreach my $column (%{$table->{columns}}) {
+        foreach my $column (@{$table->{columns}}) {
+#print "testing column $column <br>" if ($table->{tablename} =~ /HIST/);
+#print "fields: $fields{$column} count $count <br>" if ($table->{tablename} =~ /HIST/);
 # there is a deleted column; if there is a missing column as well, perhaps it was renamed?
 # if the table is empty, simply do the add and drop in two passes, else apply rename 
             if (!$fields{$column} && $alterTable && $count) {
@@ -2440,6 +2444,7 @@ print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: 
                 $alterTable = "ALTER table $tablename drop column $column";
             }
         }
+# print "diagnose $table->{tablename}: alterTable=$alterTable<br>\n" if $alterTable;
     }
 
     return $alterTable || 0;

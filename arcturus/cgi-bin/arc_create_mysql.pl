@@ -330,6 +330,7 @@ sub create_READS {
              comment          VARCHAR(255)             NULL,
              CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
          )]);
+#             tstatus          ENUM ('N','I','A')  DEFAULT 'N',
 
     print STDOUT "... DONE!\n" if ($list);
 
@@ -515,6 +516,10 @@ cloning vector position at right, if on right
 =item rstatus      
 
 read processing status (when loaded from file) encoding (possible) load-time warnings 
+
+=item astatus      
+
+trace archive status: N (not), I (ignore) for not entered, or T for entry confirmed  
 
 =item paired      
 
