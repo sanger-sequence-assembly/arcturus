@@ -1484,7 +1484,7 @@ sub create_CLONEMAP {
     &dropTable ($dbh,"CLONEMAP", $list);
     print STDOUT "Creating table CLONEMAP ..." if ($list);
     $dbh->do(qq[CREATE TABLE CLONEMAP(
-             clonename         VARCHAR(16)          NOT NULL PRIMARY KEY,
+             clonename         VARCHAR(20)          NOT NULL PRIMARY KEY,
              assembly          TINYINT UNSIGNED     NOT NULL,
              cpkbstart         MEDIUMINT UNSIGNED   NOT NULL,
              cpkbfinal         MEDIUMINT UNSIGNED   NOT NULL,
@@ -1766,7 +1766,7 @@ sub create_CLONES {
     print STDOUT "Creating table CLONES ..." if ($list);
     $dbh->do(qq[CREATE TABLE CLONES(
              clone            SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             clonename        VARCHAR(16)        NOT NULL,
+             clonename        VARCHAR(20)        NOT NULL,
              clonetype        ENUM ('PUC finishing','PCR product' ,'unknown') DEFAULT 'unknown',
              library          ENUM ('transposition','small insert','unknown') DEFAULT 'unknown',
              origin           VARCHAR(20)        DEFAULT 'The Sanger Institute',
@@ -1859,7 +1859,7 @@ sub create_LIGATIONS {
     $dbh->do(qq[CREATE TABLE LIGATIONS(
              ligation         SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
              identifier       VARCHAR(10)        NOT NULL,
-             clone            VARCHAR(16)        NOT NULL,
+             clone            VARCHAR(20)        NOT NULL,
              origin           CHAR(1)                NULL,
              silow            MEDIUMINT UNSIGNED     NULL,
              sihigh           MEDIUMINT UNSIGNED     NULL,
