@@ -26,3 +26,6 @@
 # spread out over the entire source repository.
 uk powmap/uk
 collections powmap/collections
+powmap_etc powmap/etc
+flatserve flatimpl &powmap_etc &uk &collections &embl_corba
+
