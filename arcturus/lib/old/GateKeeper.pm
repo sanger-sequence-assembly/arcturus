@@ -464,12 +464,17 @@ sub dbHandle {
             $hash->{residence} =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
             $residence{$hash->{dbasename}} = $hash->{residence};
             $available{$hash->{dbasename}} = $hash->{available};
-#            $self->{instances}->{$hash->{residence}}++; # count ARCTURUS instances ?
         }
     }
     else {
         &dropDead($self,"Empty table 'ORGANISMS' on $server");
     }
+
+# prepare 'server' for comparison: strip out sanger part and put in wildcard
+# is required because residence can come both with or without the 'sanger' bit
+
+    $server =~ s/\.sanger\.ac\.uk//;
+    $server =~ s/\:/\\S*:/;
 
 # see if the arcturus database is on this server, else redirect
 
@@ -478,7 +483,7 @@ sub dbHandle {
     if ($database && !$residence{$database}) {
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
-    elsif ($database && $residence{$database} ne $server) {
+    elsif ($database && $residence{$database} =~ /$server/) {
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&origin || !$options{defaultRedirect}) {
             &dropDead($self,"Database $database resides on $residence{$database}");
