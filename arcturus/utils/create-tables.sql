@@ -246,7 +246,7 @@ CREATE TABLE READCOMMENT (
 # Table structure for table 'READ'
 #
 
-CREATE TABLE READ (
+CREATE TABLE READS (
   read_id mediumint(8) unsigned NOT NULL auto_increment,
   readname char(32) binary default NULL,
   template_id mediumint(8) unsigned default NULL,
