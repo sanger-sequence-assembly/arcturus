@@ -17,6 +17,7 @@ use OracleReader;
 
 my $BADGERDIR  = '/usr/local/badger/bin'; 
 my $SCFREADDIR = '/usr/local/badger/distrib-1999.0/alpha-bin';
+my $SCFREADLIB = '/usr/local/badger/distrib-1999.0/lib/alpha-binaries';
 my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
 my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
@@ -82,6 +83,10 @@ sub new {
     $self->{fatal} = 1; # default errors treated as fatal 
 
     $self->{CGI} = $ENV{PATH_INFO} || 0; # true for CGI mode
+
+    my $library = $ENV{LD_LIBRARY_PATH} || '';
+    $ENV{LD_LIBRARY_PATH} = $SCFREADLIB;
+    $ENV{LD_LIBRARY_PATH} .= ':'.$library if ($library !~ /$SCFREADLIB/);
 
     bless ($self, $class);
     return $self;
@@ -1100,10 +1105,9 @@ $self->logger("Test chemistry in file $self->{fileName}SCF\n");
     }
 $self->logger("SCF file full name: $scffile\n");
 
-    my $test = 1;
+    my $test = 0;
     my $chemistry;
     my $command = "$SCFREADDIR/get_scf_field $scffile";
-$self->logger("command: $command \n");
     if (!$self->{CGI}) {
         $chemistry = `$command`;
 $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'\n");
@@ -1115,9 +1119,9 @@ $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'\n");
 	}
 $self->logger("chemistry=$chemistry\n");
     }
-    elsif ($test) {
-        $chemistry = `$RECOVERDIR/nrecover.sh $command`;
-$self->logger("test nrecover chemistry: '$chemistry'\n");
+    elsif (!$test) {
+        $chemistry = `$RECOVERDIR/recover.sh $command`;
+$self->logger("test recover chemistry: '$chemistry'\n");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
         }
@@ -1127,7 +1131,7 @@ $self->logger("test nrecover chemistry: '$chemistry'\n");
 $self->logger("chemistry=$chemistry\n");
     }
     else {
-        $chemistry = `$RECOVERDIR/recover.sh $command`;
+        $chemistry = `$RECOVERDIR/orecover.sh $command`;
         chomp $chemistry;
         undef $chemistry if ($chemistry =~ /load.+disabled/i);
         $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
