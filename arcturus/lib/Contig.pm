@@ -603,10 +603,31 @@ sub linkToContig {
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
-    my $strong = shift || 0; # set True for comparison at read mapping level  
-my $DEBUG = shift;
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
+
+# decode control input
+
+    my $DEBUG = 0;
+    my $strong = 0; # set True for comparison at read mapping level
+    my $guillotine = 0;
+    while (my $nextword = shift) {
+
+        if ($nextword eq 'strong') {
+            $strong = shift || 0;
+        }
+        elsif ($nextword eq 'readclipping') {
+            $guillotine = shift || 0;
+        }
+        elsif ($nextword eq 'debug') {
+            $DEBUG = shift || 0;
+	}
+        else {
+            print STDERR "Invalid keyword $nextword in 'linkToContig'\n";
+        }
+    }
+
+# test completeness
 
     return undef unless $this->hasMappings();
     return undef unless $compare->hasMappings();
@@ -644,8 +665,8 @@ my $DEBUG = shift;
 # test alignment of complete mapping
             my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
 
-print "\nmapping: id=$identical  align=".($aligned||' ').
-    "  offset=".($offset||' ')."  ".$mapping->getMappingName if $DEBUG;
+            print STDERR "\nmapping: id=$identical  align=".($aligned||' ').
+            "  offset=".($offset||' ')."  ".$mapping->getMappingName if $DEBUG;
  
 # keep the first encountered (contig-to-contig) alignment value != 0 
             $alignment = $aligned unless $alignment;
@@ -655,8 +676,8 @@ print "\nmapping: id=$identical  align=".($aligned||' ').
 # build a hash key based on offset and alignment direction and add segment
             my $hashkey = sprintf("%08d",$offset);
             $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
-print " contig segment @segment " if $DEBUG;
             push @{$inventory->{$hashkey}},[@segment];
+            print STDERR " contig segment @segment " if $DEBUG;
         }
 
 # otherwise do a segment-by-segment comparison and find ranges of identical mapping
@@ -664,7 +685,7 @@ print " contig segment @segment " if $DEBUG;
         else {
             my $debug = $DEBUG;
             if ($DEBUG) {
-                my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
+                my ($identical,$al,$of) = $match->compareStrong($mapping);
                 $debug = 0 if $identical;
             }
 
@@ -672,8 +693,8 @@ print " contig segment @segment " if $DEBUG;
 # keep the first encountered (contig-to-contig) alignment value != 0 
             $alignment = $aligned unless $alignment;
 
-print "Fine comparison of segments for mapping: align=".($aligned||' ').
-      "  ".$mapping->getMappingName."\n" if $DEBUG;
+            print STDERR "Fine comparison of segments for mapping: align=".
+             ($aligned||' ')."  ".$mapping->getMappingName."\n" if $DEBUG;
 
             next unless ($alignment && $aligned == $alignment);
 # add the mapping range(s) returned in the list to the inventory 
@@ -682,12 +703,12 @@ print "Fine comparison of segments for mapping: align=".($aligned||' ').
                 my $hashkey = sprintf("%08d",$offset);
                 $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
                 my @segment = @$osegment; # copy
-print " contig segment @segment \n" if $DEBUG;
                 push @{$inventory->{$hashkey}},[@segment];
+                print STDERR " contig segment @segment \n" if $DEBUG;
 	    }
 	}
     }
-print "\n" if $DEBUG;
+    print "\n" if $DEBUG;
 
 # OK, here we have an inventory: the number of keys equals the number of 
 # different alignments between $this and $compare. On each key we have an
@@ -699,14 +720,19 @@ print "\n" if $DEBUG;
 
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
-# accept only alignments with a minimum number of reads 
-    my $guillotine = 1 + log(scalar(@$mappings)); 
+
+# determine guillotine; accept only alignments with a minimum number of reads 
+
+    if ($guillotine) {
+        $guillotine = 1 + log(scalar(@$mappings)); 
 # adjust for small numbers (2 and 3)
-    $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
-    $guillotine = 2  if ($guillotine < 2); # minimum required
+        $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
+        $guillotine = 2  if ($guillotine < 2); # minimum required
+        print STDERR "guillotine: $guillotine \n" if $DEBUG;
+    }
 
-print "g: $guillotine \n" if $DEBUG;
 
+    my @c2csegments;
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
         my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
@@ -724,8 +750,10 @@ print "g: $guillotine \n" if $DEBUG;
                 if ($nreads >= $guillotine) {
                     my $start = ($segmentstart + $offset) * $alignment;
                     my $finis = ($segmentfinis + $offset) * $alignment;
-                    $mapping->addAssembledFrom($start,$finis,$segmentstart,
-                                                            $segmentfinis);
+		    my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
+                    push @c2csegments,[@segment];
+#                    $mapping->addAssembledFrom($start,$finis,$segmentstart,
+#                                                            $segmentfinis);
                 }
 # initialize the new mapping interval
                 $nreads = 0;
@@ -741,10 +769,43 @@ print "g: $guillotine \n" if $DEBUG;
         next unless ($nreads >= $guillotine);
         my $start = ($segmentstart + $offset) * $alignment;
         my $finis = ($segmentfinis + $offset) * $alignment;
-        $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
+        my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
+        push @c2csegments,[@segment];
+#        $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
     }
 
-# if mapping has segments, or if a finescan has been done, return 
+# the segment list now may on rare occasions contain overlapping segments
+# the position of overlap have conflicting offsets, and therefore have to
+# be removed by adjusting the intervals
+
+    @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
+
+    for (my $i = 1 ; $i < @c2csegments ; $i++) {
+        my $this = $c2csegments[$i-1];
+        my $next = $c2csegments[$i];
+# the aligned case
+        while ($alignment > 0 && $this->[1] >= $next->[0]) {
+            $this->[1]--;
+            $this->[3]--;
+            $next->[0]++;
+            $next->[2]++;
+	}
+# the counter-aligned case
+        while ($alignment < 0 && $this->[0] >= $next->[1]) {
+            $this->[0]--;
+            $this->[2]++;
+            $next->[1]++;
+            $next->[3]--;
+	}
+    }
+
+# enter the segments to the mapping
+
+    foreach my $segment (@c2csegments) {
+	print "segment @$segment \n" if $DEBUG;
+        next if ($segment->[3] < $segment->[2]); # in case the boundaries have changed
+        $mapping->addAssembledFrom(@$segment);
+    }
 
     if ($mapping->hasSegments()) {
 # store the Mapping as a contig-to-contig mapping

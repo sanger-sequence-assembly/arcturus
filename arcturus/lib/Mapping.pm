@@ -43,6 +43,12 @@ sub getContigRange {
     return @$range;
 }
 
+sub getContigStart {
+    my $this = shift;
+    my @range = $this->getContigRange();
+    return $range[0];
+}
+
 sub getMappingID {
     my $this = shift;
     return $this->{mapping_id};

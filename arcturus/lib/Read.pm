@@ -47,6 +47,8 @@ sub addTag {
 
     $this->{Tags} = [] unless defined $this->{Tags};
 
+    $Tag->setSequenceID($this->getSequenceID()); # transfer seq_id, if any
+
     push @{$this->{Tags}}, $Tag;
 }
 
@@ -420,6 +422,12 @@ sub maskDNA {
 sub setSequenceID {
     my $this = shift;
     $this->{data}->{sequence_id} = shift;
+# add the sequence ID to any tags
+    if (my $tags = $this->getTags()) {
+        foreach my $tag (@$tags) {
+            $tag->setSequenceID($this->getSequenceID());
+        }
+    }
 }
 
 sub getSequenceID {
@@ -589,7 +597,8 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
-# optionally takes 'qualitymask=>'N' to mask out low quality data
+
+# optionally takes 'qualitymask=>'N' to mask low quality data (transfer to writeDNA)
 
     die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
@@ -653,7 +662,7 @@ sub writeToCaf {
 
     if (my $tags = $this->getTags()) {
         foreach my $tag (@$tags) {
-#?          $tag->writeTagToCaf($FILE);
+            $tag->writeToCaf($FILE);
         }
     }
 
