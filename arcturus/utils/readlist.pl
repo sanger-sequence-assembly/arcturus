@@ -155,7 +155,6 @@ my %option;
 $option{qualitymask} = $mask if $mask;
 
 foreach my $read (@reads) {
-#print STDERR "$break";
 
     $read->writeToCaf(*STDOUT,%option) if $caf;
 
