@@ -706,14 +706,14 @@ any (i.p. comment found in flat files)
 =cut
 #=item COMMENT
 #---------------------------------------------------------------------------------
-# new readstable structure to be implemented
+# new readstable structure to be implemented (REPLACE NREADS by READS)
 
 sub create_NEWREADS {
     my ($dbh, $list) = @_;
 
-    &dropTable ($dbh,"READS", $list);
-    print STDOUT "Creating table READS ..." if ($list);
-    $dbh->do(qq[CREATE TABLE READS(
+    &dropTable ($dbh,"NREADS", $list);
+    print STDOUT "Creating table NREADS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE NREADS(
              read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
              readname         CHAR(32) BINARY      NOT NULL, 
 	     date             DATE                 NOT NULL,
@@ -750,8 +750,8 @@ sub create_NEWREADS {
 # Make indices
 
     print STDOUT "Building indexes ...\n" if ($list);
-    $dbh->do(qq[CREATE UNIQUE INDEX READNAMES ON READS (readname)]);
-    print STDOUT "Indexed READNAME ON READS ... DONE\n" if ($list);
+    $dbh->do(qq[CREATE UNIQUE INDEX READNAMES ON NREADS (readname)]);
+    print STDOUT "Indexed READNAME ON NREADS ... DONE\n" if ($list);
 
 }
 
@@ -3762,7 +3762,7 @@ sub diagnose {
                 if ($info ne $fields{$column}) {
 #print "info: $info <br>fields: $fields{$column}<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
-# print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
+#print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }
 	    }
 # if the column is missing, generate an add column instruction
@@ -3862,6 +3862,3 @@ Ed Zuiderwijk, E<lt>ejz@sanger.ac.ukE<gt>.
 #--------------------------------------------------------------------
 
 1;
-
-
-
