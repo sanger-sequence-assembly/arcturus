@@ -11,7 +11,7 @@ use strict;
 use ReadMapper;
 use Compress;
 
-use Devel::MyTimer;
+#use Devel::MyTimer;
 
 #############################################################################
 # Global variables
@@ -95,7 +95,7 @@ $self->{nameChange}  = 1; # TEST override
 
     $Compress = new Compress('ACGTN ');
 
-    $MyTimer  = new MyTimer;
+    #$MyTimer  = new MyTimer;
 
 #    &buildForwardMap;
 
@@ -453,7 +453,7 @@ sub dump {
 
     my $report = "${break}Attempting to dump contig $cnames->[0] ....$break";
 
-$MyTimer->timer('CB dump',0) if $TIMER;
+#$MyTimer->timer('CB dump',0) if $TIMER;
 
 #############################################################################
 # (0) test error status on ASSEMBLY for this assembly
@@ -494,7 +494,7 @@ $MyTimer->timer('CB dump',0) if $TIMER;
     my $nrOfReads = 0;
 
     if ($complete) {
-$MyTimer->timer('CB dump part II',0) if $TIMER;
+#$MyTimer->timer('CB dump part II',0) if $TIMER;
         foreach my $readname (keys (%$readmap)) {
             print "Testing read $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
             my $readobject = $ReadMapper->lookup($readname);
@@ -535,7 +535,7 @@ $MyTimer->timer('CB dump part II',0) if $TIMER;
         $complete = 0 if ($ntotal != $counts->[0]);
         $status->{diagnosis} .= "$nrOfReads ReadMappers defined, $missed missed or incomplete out ";
         $status->{diagnosis} .= "of $ntotal ($counts->[0]) for contig $cnames->[0]$break";
-$MyTimer->timer('CB dump part II',1) if $TIMER;
+#$MyTimer->timer('CB dump part II',1) if $TIMER;
     }
 
     $report = "I&II: number of reads: $nrOfReads complete $complete $break";
@@ -548,7 +548,7 @@ $MyTimer->timer('CB dump part II',1) if $TIMER;
     my $cover = 0;
 
     if ($complete) {
-$MyTimer->timer('CB dump part III',0) if $TIMER;
+#$MyTimer->timer('CB dump part III',0) if $TIMER;
         my $progress = '';
         my $nreads = 0;
         $counts->[2] = 0; # for total read length
@@ -642,7 +642,7 @@ $MyTimer->timer('CB dump part III',0) if $TIMER;
         $minread = &readAlias($minread);
         $maxread = &readAlias($maxread);
         $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
-$MyTimer->timer('CB dump part III',1) if $TIMER;
+#$MyTimer->timer('CB dump part III',1) if $TIMER;
         $report .= "III : Full Arcturus contigname: $cnames->[1] (complete=$complete)$break";
 #        print $progress;
     }
@@ -661,7 +661,7 @@ $MyTimer->timer('CB dump part III',1) if $TIMER;
 
     my $isWeeded = 0;
     while ($complete && !$isWeeded) {
-$MyTimer->timer('CB dump part IV',0) if $TIMER;
+#$MyTimer->timer('CB dump part IV',0) if $TIMER;
 
         my $progress = ''; # local report
         $isWeeded = 1; # switch to 0 later if not
@@ -906,7 +906,7 @@ print "read $read is deprecated because of overlap$break";
 	    $report .= sprintf ("%6d %1d %8d  %8d-%8d %8d-%8d  %6d %5d",$contig,$order,$shift,@$map);
             $report .= $break;
         }
-$MyTimer->timer('CB dump part IV',1) if $TIMER;
+#$MyTimer->timer('CB dump part IV',1) if $TIMER;
         print $progress;
     }
 
@@ -944,7 +944,7 @@ print "V $break";
     elsif ($complete) {
 # add the new contig to CONTIGS and get its contig_id
 
-$MyTimer->timer('CB dump part V',0) if $TIMER;
+#$MyTimer->timer('CB dump part V',0) if $TIMER;
         $report .= "Adding new contig $cnames->[1] ($cnames->[0]) to CONTIGS table$break";
 
         undef my @columns;
@@ -980,7 +980,7 @@ $MyTimer->timer('CB dump part V',0) if $TIMER;
             $report .= "to CONTIGS ($counts->[0] reads)$break";
         }
 # RELEASE THE LOCK HERE ????
-$MyTimer->timer('CB dump part V',1) if $TIMER;
+#$MyTimer->timer('CB dump part V',1) if $TIMER;
     }
 
 #############################################################################
@@ -990,7 +990,7 @@ $MyTimer->timer('CB dump part V',1) if $TIMER;
 print "VI $break";
 
     if ($complete && $accepted) {
-$MyTimer->timer('CB dump part VI',0) if $TIMER;
+#$MyTimer->timer('CB dump part VI',0) if $TIMER;
         $report .= "VI  : Writing read maps to database $break";
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
@@ -1010,14 +1010,14 @@ $MyTimer->timer('CB dump part VI',0) if $TIMER;
 # if complete, dumps are done okay; remove the ReadMappers at the very end
 
         $report .= "Failed to dump (some of the) read maps $break" if !$complete;
-$MyTimer->timer('CB dump part VI',1) if $TIMER;
+#$MyTimer->timer('CB dump part VI',1) if $TIMER;
     }
 
 #############################################################################
 # (VII) here contig and map dumps are done (and successful if $complete)
 #############################################################################
 print "VII $break";
-$MyTimer->timer('CB dump',1) if $TIMER;
+#$MyTimer->timer('CB dump',1) if $TIMER;
 
     undef my @priorContigList;
     foreach my $hash (@priorContigHash) {
@@ -1026,7 +1026,7 @@ $MyTimer->timer('CB dump',1) if $TIMER;
     }
 
     if ($complete && $accepted && !$isIdentical) {
-$MyTimer->timer('CB dump part VII',0) if $TIMER;
+#$MyTimer->timer('CB dump part VII',0) if $TIMER;
 # link the new contig to a scaffold and add assembly status 
         $CCTOSS->newrow('contig_id',$contig,'assembly',$assembly); # astatus N by default
 # inherit the project from connecting contig(s), if any
@@ -1082,7 +1082,7 @@ $MyTimer->timer('CB dump part VII',0) if $TIMER;
             $CCTOSS->update('astatus','S','contig_id',$priorContig);
         }
 
-$MyTimer->timer('CB dump part VII',1) if $TIMER;
+#$MyTimer->timer('CB dump part VII',1) if $TIMER;
 
         if ($complete) {
 # if there is a consensus sequence, dump it using this contig_id
@@ -1383,7 +1383,7 @@ sub flush {
 
     $ReadMapper->flush;
 
-    $MyTimer->summary;
+    #$MyTimer->summary;
 
     return keys %ContigBuilder; # return number of leftover ContigBuilders
 }
@@ -1412,7 +1412,7 @@ my $errlist = 0;
     open (CAF,"$filename") || return 2; # die "cannot open $filename";
     print STDOUT "... DONE $break" if $list;
 
-    $MyTimer->timer('caf parser',0) if $TIMER;
+    #$MyTimer->timer('caf parser',0) if $TIMER;
 
     print STDOUT "Read a maximum of $maxLines lines $break" if ($list && $maxLines);
     print STDOUT "Contig (or alias) name filter $cnfilter $break" if ($list && $cnfilter);
@@ -1628,7 +1628,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
     my $nr = keys %{$ReadMapper->lookup(0)}; my $nc = keys %ContigBuilder;
     print STDOUT "$nc ContigBuilder(s), $nr ReadMapper(s) still active $break";
 
-    $MyTimer->timer('caf parser',1) if $TIMER;
+    #$MyTimer->timer('caf parser',1) if $TIMER;
 
     return $truncated;
 }

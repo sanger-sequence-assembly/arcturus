@@ -8,7 +8,7 @@ package ReadMapper;
 
 use strict;
 
-use Devel::MyTimer;
+#use Devel::MyTimer;
 
 #############################################################################
 # Global variables
@@ -64,7 +64,7 @@ sub init {
 
     $break = &break; # output line break
 
-$MyTimer = new MyTimer;
+#$MyTimer = new MyTimer;
 
     bless ($self, $class);
 
@@ -546,7 +546,7 @@ sub etest {
 # find any existing edit instructions for this read in the database
 # if there is, compare stored one with current one; deprecate if different
 
-        $MyTimer->timer('etest',0) if $TIMER; 
+        #$MyTimer->timer('etest',0) if $TIMER; 
 
         $counts->[5] = 0;
         my $edits = $EDITS->cacheRecall($read_id); # look in cached data first
@@ -602,7 +602,7 @@ sub etest {
             }
             print "$status->{diagnosis} $break" if $DEBUG;
 	}
-        $MyTimer->timer('etest',1) if $TIMER; 
+        #$MyTimer->timer('etest',1) if $TIMER; 
     }
 
     elsif (!$read_id) {
@@ -643,7 +643,7 @@ sub mtest {
     my $REPORT = "${break}++++ MTEST for ReadMapper $self->{names}->[0] ($read_id) @$counts ++++$break";
 
     if ($read_id && $counts->[6] < 0) {
-$MyTimer->timer('mtest',0) if $TIMER;
+#$MyTimer->timer('mtest',0) if $TIMER;
 
         my @read2conKeys = sort keys %$read2con;
 
@@ -971,7 +971,7 @@ $MyTimer->timer('mtest',0) if $TIMER;
         $status->{diagnosis} .= $progress if $progress;
 
         $REPORT .= $progress.$break;
-$MyTimer->timer('mtest',1) if $TIMER;
+#$MyTimer->timer('mtest',1) if $TIMER;
     }
     elsif (!$read_id) {
         $status->{diagnosis} .= "! Read $read_id not found in READS database$break";
@@ -1063,7 +1063,7 @@ sub dump {
 $DEBUG = 0; # $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
 print "++++ DUMP for ReadMapper $self->{names}->[0] ($self) counts: @$counts ++++$break" if $DEBUG;
 
-    $MyTimer->timer('RM dump',0) if $TIMER; 
+    #$MyTimer->timer('RM dump',0) if $TIMER; 
 
 # reinitialize error status
 
@@ -1151,7 +1151,7 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                 my $clone_id = $self->{clone} || 0;
 
 #$self->list(1) if $DEBUG;
-		$MyTimer->timer('RM newline(s)',0) if $TIMER;
+		#$MyTimer->timer('RM newline(s)',0) if $TIMER;
                 foreach my $alignment (@read2conKeys) {
 #                foreach my $alignment (sort keys (%$read2con)) {
 # print "alignment key $alignment$break";
@@ -1199,7 +1199,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
                         $RR2AA->update('assembly',$assembly,'read_id',$read_id);
                     }
                 } 
-		$MyTimer->timer('RM newline(s)',1) if $TIMER;
+		#$MyTimer->timer('RM newline(s)',1) if $TIMER;
                 $status->{diagnosis} .= "$break";
     # here you could do the cleanup of marked mappings of previous generations
                 if ($piecemealwise) {
@@ -1235,7 +1235,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
         $status->{errors}++;           
     }
 
-    $MyTimer->timer('RM dump',1) if $TIMER; 
+    #$MyTimer->timer('RM dump',1) if $TIMER; 
 
 print "$self->{report}" if $DEBUG;
 
@@ -1265,7 +1265,7 @@ sub align {
     my $status   = $self->{status};
     my $dbrefs   = $self->{dbrefs};
 
-    $MyTimer->timer('align',0) if $TIMER; 
+    #$MyTimer->timer('align',0) if $TIMER; 
 
     my $error = $status->{errors};
  
@@ -1368,7 +1368,7 @@ print "Alignment block $number to be added: $rstart-$rfinal $break" if $DEBUG;
         $status->{diagnosis} .= "  Invalid or missing Quality Window$break" if ($counts->[4] == 0);
     }
 
-    $MyTimer->timer('align',1) if $TIMER; 
+    #$MyTimer->timer('align',1) if $TIMER; 
 
     return $status->{errors} - $error; # will be 0 if no errors
 }
@@ -1487,7 +1487,7 @@ sub lookup {
 
     return \%ReadMapper if !$read;
 
-    $MyTimer->timer('lookup',0) if $TIMER; 
+    #$MyTimer->timer('lookup',0) if $TIMER; 
 
     my $result = $ReadMapper{$read};
 
@@ -1501,7 +1501,7 @@ sub lookup {
         }
     }
 
-    $MyTimer->timer('lookup',1) if $TIMER; 
+    #$MyTimer->timer('lookup',1) if $TIMER; 
 
     return $result;
 }
@@ -1584,7 +1584,7 @@ sub isInDataBase {
 
 # if the read is not in the READS database test for it in PENDING table
 
-    $MyTimer->timer('isInDataBase',0) if $TIMER;
+    #$MyTimer->timer('isInDataBase',0) if $TIMER;
 
     if (!$dbrefs->[0] || !$dbrefs->[1]) {
 
@@ -1603,7 +1603,7 @@ sub isInDataBase {
         }
     }
 
-    $MyTimer->timer('isInDataBase',1) if $TIMER;
+    #$MyTimer->timer('isInDataBase',1) if $TIMER;
 
 # return value > 0 only if read present in database READS table
 
@@ -1636,7 +1636,7 @@ sub inDataBase {
     my $dbpref = 0;
     my $hashes = 0;
 
-    $MyTimer->timer('inDataBase',0) if $TIMER; 
+    #$MyTimer->timer('inDataBase',0) if $TIMER; 
 
     if (!$readname) {
         return 0, 0;
@@ -1654,25 +1654,25 @@ sub inDataBase {
     }
 # if not found in either two tables: try find the read in the READS tablehandle
     elsif ($dbsearch) {
-        $MyTimer->timer('inDataBase db-lookup',0) if $TIMER; 
+        #$MyTimer->timer('inDataBase db-lookup',0) if $TIMER; 
         $dbrref = $READS->associate('read_id',$readname,'readname',{useCache => 0});
         $dbpref = $PENDS->associate('record' ,$readname,'readname',{useCache => 0}) if !$dbrref;
-        $MyTimer->timer('inDataBase db-lookup',1) if $TIMER; 
+        #$MyTimer->timer('inDataBase db-lookup',1) if $TIMER; 
     }
 
-    $MyTimer->timer('inDataBase',1) if $TIMER; 
+    #$MyTimer->timer('inDataBase',1) if $TIMER; 
 
 # if read not found in either READS or PENDING : add to PENDING
 
     if (!$dbrref && !$dbpref && $append) {
-        $MyTimer->timer('inDataBase newrow',0) if $TIMER;
+        #$MyTimer->timer('inDataBase newrow',0) if $TIMER;
         if ($assembly) {
             $dbpref = $PENDS->newrow('readname',$readname,'assembly',$assembly);
         }
         else {
             $dbpref = $PENDS->newrow('readname',$readname);
         }
-        $MyTimer->timer('inDataBase newrow',1) if $TIMER;
+        #$MyTimer->timer('inDataBase newrow',1) if $TIMER;
 # error status checking
 print "Adding to PENDING: $readname (as $dbpref)$break";
         if (!$dbpref) {
