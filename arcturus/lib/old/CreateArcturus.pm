@@ -905,8 +905,9 @@ sub create_READS2CONTIG {
 # assembly   : assembly number reference to ASSEMBLY.assembly; duplicates
 #              info in CONTIGS2SCAFFOLD but required for delete actions
 # generation : incremented after each completed assembly
-# deprecated : on for mappings transient (X) or no longer current (Y)
+# deprecated : on for mappings final (X) or no longer current (Y)
 #              or marked for deletion (M) 
+# blocked    : re: full-proof upgrade generation counters
 #    $list = 1;
     &dropTable ($dbh,"READS2CONTIG", $list);
     print STDOUT "Creating table READS2CONTIG ..." if ($list);
@@ -920,8 +921,9 @@ sub create_READS2CONTIG {
              label            TINYINT  UNSIGNED        NOT NULL,
              clone            SMALLINT UNSIGNED        NOT NULL,
              assembly         SMALLINT UNSIGNED        NOT NULL,
-             generation       TINYINT  UNSIGNED        NOT NULL,
-             deprecated       ENUM ('N','M','Y','X') DEFAULT 'X'
+             generation       SMALLINT UNSIGNED        NOT NULL,
+             deprecated       ENUM('N','M','Y','X') DEFAULT 'X',
+             blocked          ENUM('0','1')         DEFAULT '0'
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
@@ -999,18 +1001,16 @@ sub create_CONTIGS {
     print STDOUT "Creating table CONTIGS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS(
              contig_id        MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             contigname       VARCHAR(64)              NOT NULL,
+             contigname       VARCHAR(32)              NOT NULL,
              aliasname        VARCHAR(32)              NOT NULL,
-             zeropoint        INT                     DEFAULT 0,
              length           INT                     DEFAULT 0,
              ncntgs           SMALLINT  UNSIGNED       NOT NULL,
              nreads           MEDIUMINT UNSIGNED       NOT NULL,
              newreads         MEDIUMINT                NOT NULL,
-             cover            FLOAT                    NOT NULL,      
-             origin           ENUM ('Arcturus CAF parser','Other')  NULL,
+             cover            FLOAT(8,2)               NOT NULL,      
+             origin           ENUM ('Arcturus CAF parser','Finishing Software','Other')  NULL,
              userid           VARCHAR(8)              DEFAULT 'arcturus',
-             updated          DATETIME                 NOT NULL,
-             CONSTRAINT CONTIGNAMEUNIQUE UNIQUE (CONTIGNAME)  
+             updated          DATETIME                 NOT NULL
          )]);
     print STDOUT "... DONE!\n" if ($list);
 # index on contig_id implicit in PRIMARY key declaration 
@@ -1043,7 +1043,7 @@ run from the Arcturus GUI under B<INPUT> --E<gt> B<CONTIGS>
 
 =head2 Description of columns:
 
-=over 4
+=over 11
 
 =item contig_id    
 
@@ -1051,8 +1051,8 @@ auto-incremented primary key (foreign key in many other tables)
 
 =item contigname 
 
-unique Arcturus contig name (indexed), build-up from first and last
-readname, length and coverage; abour 30 characters, usually 
+unique Arcturus contig name, built-up from first and last
+readname, length and coverage; about 30 characters (usually) 
 #  note: determine name from farthest lefthand/righthand reads
 #  note: find a parity test on nr of reads and total length
 
@@ -1060,10 +1060,6 @@ readname, length and coverage; abour 30 characters, usually
 
 other name to indicate the contig, for example the (not-unique) name used
 in CAF files or a phrap name
-
-=item zeropoint
-
-integer zeropoint of contig in assembly
 
 =item length
 
@@ -1076,6 +1072,11 @@ number of previous contigs merged into this contig (=0 for first generation)
 =item nreads
 
 number of assembled reads
+
+
+=item newreads
+
+number of reads appearing for the first time in the assembly (can be negative)
 
 =item cover
 
@@ -1091,7 +1092,7 @@ userid of contig creator to or the user last to access
 
 =item updated
 
-creation date (or date of last modification)
+creation date
 
 =back
 
@@ -1124,10 +1125,12 @@ sub create_CONSENSUS {
     &dropTable ($dbh,"CONSENSUS", $list);
     print STDOUT "Creating table CONSENSUS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONSENSUS(
-             contig_id        MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             contig_uid       MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             contigname       VARCHAR(32)              NOT NULL,
              sequence         BLOB                     NOT NULL,
              scompress        TINYINT  UNSIGNED        DEFAULT 0,     
-             length           INT                      DEFAULT 0
+             reverse_id       MEDIUMINT UNSIGNED       DEFAULT 0,
+             CONSTRAINT CONTIGNAMEUNIQUE UNIQUE (CONTIGNAME)  
          )]);
     print STDOUT "... DONE!\n" if ($list);
 # index on contig_id implicit in PRIMARY key declaration 
@@ -1154,16 +1157,19 @@ sub create_CONTIGS2CONTIG {
 
 # contig to contig mapping implicitly contains the history
 
-# newcontig : contig id
-# nranges   : starting point in new contig
-# nrangef   : implicit in the above
-# oldcontig : contig id
-# oranges   : starting point in old contig
-# orangef   : end point in old contig
+# generation : of the newly added contig
+#       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade
+# newcontig  : contig id
+# nranges    : starting point in new contig
+# nrangef    : implicit in the above
+# oldcontig  : contig id
+# oranges    : starting point in old contig
+# orangef    : end point in old contig
 
     &dropTable ($dbh,"CONTIGS2CONTIG", $list);
     print STDOUT "Creating table CONTIGS2CONTIG ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2CONTIG(
+             generation       SMALLINT  UNSIGNED DEFAULT 0,
              newcontig        MEDIUMINT UNSIGNED  NOT NULL,
              nranges          INT                DEFAULT 0,
              nrangef          INT                DEFAULT 0,
@@ -1249,6 +1255,7 @@ sub create_CONTIGS2SCAFFOLD {
              scaffold         SMALLINT           UNSIGNED NOT NULL,
              orientation      ENUM ('F','R','U')       DEFAULT 'U',
              ordering         SMALLINT           UNSIGNED NOT NULL,
+             zeropoint        INT                        DEFAULT 0,
              assembly         SMALLINT           UNSIGNED NOT NULL,
              astatus          ENUM ('N','C','S','X')   DEFAULT 'N'
          )]);
@@ -1265,6 +1272,11 @@ sub create_CONTIGS2SCAFFOLD {
 =head2 Description of columns:
 
 =head2 Linked Tables on key ..
+
+
+=item zeropoint
+
+integer zeropoint of contig in assembly
 
 =cut
 #--------------------------------------------------------------------
@@ -2000,9 +2012,10 @@ sub create_DATAMODEL {
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
                  'READS2CONTIG     contig_id  CONTIGS2SCAFFOLD   contig_id',
                  'READS2CONTIG         clone            CLONES       clone',
+                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
                  'READS2ASSEMBLY     read_id             READS     read_id',
-                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
-                 'USERS               userid    USERS2PROJECTS      userid',
+#                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
+#                 'USERS               userid    USERS2PROJECTS      userid',
                  'USERS2PROJECTS      userid             USERS      userid',
                  'USERS2PROJECTS     project          PROJECTS     project',
                  'CONTIGS          contig_id      READS2CONTIG   contig_id',
@@ -2020,6 +2033,7 @@ sub create_DATAMODEL {
                  'TAGS2CONTIG         tag_id          GAP4TAGS      tag_id',
                  'GAP4TAGS            tag_id       TAGS2CONTIG      tag_id',
                  'ASSEMBLY          assembly          CLONEMAP    assembly',
+                 'CLONES               clone      READS2CONTIG       clone',
                  'CLONEMAP          assembly          ASSEMBLY    assembly',
                  'CONTIGS          oldcontig    CONTIGS2CONTIG   contig_id',
                  'CONTIGS2CONTIG   oldcontig           CONTIGS   contig_id',
@@ -2027,6 +2041,7 @@ sub create_DATAMODEL {
                  'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
 #                 'CONTIGS2SCAFFOLD contig_id    CONTIGS2CONTIG   oldcontig',
                  'CONTIGS2SCAFFOLD contig_id           CONTIGS   contig_id',
+                 'CONTIGS2SCAFFOLD  assembly          ASSEMBLY    assembly',
                  'CONTIGS          contig_id  CONTIGS2SCAFFOLD   contig_id',
                  'CONTIGS2SCAFFOLD  scaffold  SCAFFOLD2PROJECT    scaffold',
                  'SCAFFOLD2PROJECT  scaffold  CONTIGS2SCAFFOLD    scaffold',
@@ -2043,9 +2058,10 @@ sub create_DATAMODEL {
                  'PROJECTS          assembly          ASSEMBLY    assembly',
                  'PROJECTS            userid             USERS      userid',
                  'PROJECTS           creator             USERS      userid',
-                 'ASSEMBLY          organism         ORGANISMS    organism',
+#                 'ASSEMBLY          organism         ORGANISMS    organism',
                  'ASSEMBLY            userid             USERS      userid',
                  'ASSEMBLY           creator             USERS      userid',
+                 'ASSEMBLY          assembly    READS2CONTIG      assembly',
 #                 'SESSIONS            userid            USERS      userid',
                  'READS              read_id     READS2CONTIG     read_id',
                  'READS              read_id   READS2ASSEMBLY     read_id',
@@ -2162,7 +2178,7 @@ sub create_ASSEMBLY {
 # Assembly Number
 # Assembly Name (possibly standardized, taken from Oracle?)
 # Alias name (e.g. for projects from outside)
-# Organism: REFerence to organism table
+## to be removed # Organism: REFerence to organism table (refered to in amanager and create)
 # chromosome: 0 for blob; 1-99 nr of a chromosome; 100 for other; > 100 e.g. plasmid
 # Origin of DNA sequences (Sanger for in-house; any other name for outside sources)
 # size    : approxinmate length (kBase) of assembly, estimated e.g. from physical maps
@@ -2173,7 +2189,8 @@ sub create_ASSEMBLY {
 # progress: status of data collection
 # updated : date of last modification (time of last assembly)
 # userid  : user (authorized or from USERS2PROJECT list last accessed/modified the project
-# status  : status of assembly
+# status  : status of assembly ('loading' if generation 0 in progress, 'completed' if generation
+#           1 is the lowest generation; changes through each loading cycle)
 # created : date of creation
 # creator : reference to nr in USERS table
 # attributes : any info (maybe used by ARCTURS scripts)
@@ -2192,10 +2209,10 @@ sub create_ASSEMBLY {
              reads            INT UNSIGNED         DEFAULT 0,
              contigs          INT UNSIGNED         DEFAULT 0,
              projects         SMALLINT             DEFAULT 0,
-             progress         ENUM ('shotgun','in finishing','finished','other') DEFAULT 'other', 
+             progress         ENUM ('in shotgun','in finishing','finished','other') DEFAULT 'other', 
              updated          DATETIME                  NULL,
              userid           CHAR(8)                   NULL,
-             status           ENUM ('in progress','completed','error','unknown') DEFAULT 'unknown', 
+             status           ENUM ('loading','completed','error','unknown') DEFAULT 'unknown', 
              created          DATETIME              NOT NULL,
 	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
              attributes       BLOB                      NULL,
@@ -2510,7 +2527,7 @@ sub create_VECTORS {
 # creator     : user ID of creator 
 # last_backup : date of last backup
 # residence   : url of arcturus incarnation or off line device
-# available   : 0 for blocked, 1 for on line and available, 2 for off line  (what about on-line and in use)
+# available   : 'on-line', 'blocked', 'copied','off-line'
 # attributes  : data last loaded from (e.g. directory or device name, see rloader script)
 
 sub create_ORGANISMS {
@@ -2536,7 +2553,7 @@ sub create_ORGANISMS {
              creator         CHAR(8)             NOT NULL,
              last_backup     DATETIME                NULL,
              residence       VARCHAR(32)         NOT NULL,
-             available       ENUM ('on-line','blocked','remote','off-line') DEFAULT 'on-line',
+             available       ENUM ('on-line','blocked','copied','off-line') DEFAULT 'on-line',
              attributes      BLOB                    NULL,
              CONSTRAINT DBASENAMEUNIQUE UNIQUE (DBASENAME)  
 	 )]);

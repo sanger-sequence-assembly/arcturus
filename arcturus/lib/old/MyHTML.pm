@@ -72,6 +72,18 @@ sub partition {
 
 ###############################################################################
 
+sub patience {
+# print a patience message immediately when invoked
+    my $self = shift;
+    my $font = shift;
+
+    my $string = "Please be patient .... this can take some time!";
+    $string = "<font size=+$font color='white'> $string </font>" if $font;
+    print STDOUT "<TABLE align=center><TR><TD>$string</TD></TR></TABLE>\n";
+}
+
+###############################################################################
+
 sub title {
 # (re)define page title to be displayed on top of the browser
     my $self  = shift;
@@ -713,7 +725,7 @@ sub arcturusGUI {
 ###############################################################################
 
 sub frameborder {
-# put the partition 0 inside a 
+# put the partition 0 inside an empty boundary
     my $self = shift;
     my $mtop = shift;
     my $side = shift;
@@ -727,8 +739,8 @@ sub frameborder {
     $content->[0] = '';
 
     $mtop = 5   if (!defined($mtop));
-    $side = 25  if (!$side);
-    $bgcolor = "beige" if (!$bgcolor);
+    $side = 15  if (!$side);
+    $bgcolor = "white" if (!$bgcolor);
     $mbot = $mtop      if (!defined($mbot));
 
     undef my $layout;

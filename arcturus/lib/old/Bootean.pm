@@ -166,7 +166,7 @@ The password for the given username
 #*******************************************************************************
 
 sub importOptions {
-# (private function) decoding/overwriting input options hash
+# decoding/overwriting input options hash
     my $self    = shift;
     my $options = shift;
     my $hash    = shift;

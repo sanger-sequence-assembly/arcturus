@@ -64,7 +64,7 @@ sub init {
 
     $break = &break; # output line break
 
-    $MyTimer = new MyTimer;
+$MyTimer = new MyTimer;
 
     bless ($self, $class);
 
@@ -248,7 +248,7 @@ sub testAttributes {
             $report .= "! Could not repair 'cvector' for read $read_id: $error $break" if $error;
         }
         elsif ($repair && $repair > 1 && $svector) {
-    # full repair mode, replacing incorrect data, to be developed
+# full repair mode, replacing incorrect data, to be developed
         }
 
 # ligations
@@ -643,8 +643,7 @@ sub mtest {
     my $REPORT = "${break}++++ MTEST for ReadMapper $self->{names}->[0] ($read_id) @$counts ++++$break";
 
     if ($read_id && $counts->[6] < 0) {
-
-        $MyTimer->timer('mtest',0) if $TIMER;
+$MyTimer->timer('mtest',0) if $TIMER;
 
         my @read2conKeys = sort keys %$read2con;
 
@@ -664,7 +663,7 @@ sub mtest {
         $dbmaps = $RR2CC->associate ('hashrefs',$read_id,'read_id',-1,'deprecated,label') if ($DBS && !$dbmaps); 
 # dbmaps is a reference to an array of hashes with existing mapping info in the database
         if (ref($dbmaps) eq 'ARRAY' && @$dbmaps > 0) {
-# there are mappings of this read in the database; make an inventory for each generation
+# there are mappings of this read in the cache/database; make an inventory for each generation
             $notDeprecated = 0;
             foreach my $map (@$dbmaps) {
                 my $generation = $map->{generation};
@@ -677,9 +676,14 @@ sub mtest {
                 }
                 $REPORT .= "mapping: generation $generation deprecation $deprecated $break";
             }
+            $REPORT .= "STEP 1 (generation profile): notDeprecated = $notDeprecated$break";
+        }
+        else {
+            $REPORT .= "NO readmap found for read $read_id$break";
         }
 
-# if there is, compare stored map with new one; deprecate if different
+# test the new map against the stored map, if any (in the lowest generation, 0 or 1);
+# analyse the deprecation profile; if different deprecate.  
 
         if ($notDeprecated && @$dbmaps > 0) {
     # get lastly loaded previous generation (could be 0)
@@ -704,35 +708,34 @@ sub mtest {
             if (@$gen == 1 && ($gen->[0] > 1 || $deprecation ne 'N')) {
                 $error .= "assignment status $deprecation (must be N) " if ($deprecation ne 'N');
                 $error .= "first generation = @$gen (should be 0 or 1)" if ($gen->[0] > 1);
-        # repair generation not necessary (filling in generation 1 not meaningful)
-        # repair deprecation: set flag to 'N' on mappings not equal 'Y'
+    # repair generation not necessary (filling in generation 1 not meaningful)
+    # repair deprecation: set flag to 'N' on mappings not equal 'Y'
                 my $where = "read_id = $read_id AND generation = $gen->[0] AND deprecated != 'Y'";
                 $RR2CC->update('deprecated','N','where',$where);
             }
             elsif (@$gen == 2 && (($gen->[1] != 1 && $gen->[0] != 1) || $deprecation ne 'MN')) {
                 $error .= "deprecation sequence $deprecation (should be MN)" if ($deprecation ne 'MN');
                 $error .= "generation sequence @$gen (0 1 or 1 n)" if ($gen->[1] != 1 && $gen->[0] != 1);
-        # possible repair on generations: delete the generation between 1 and n (will be done by reaper)
-        # possible repair on deprecation: NN to NY (to be implemented) 
+    # possible repair on generations: delete the generation between 1 and n (will be done by reaper)
+    # possible repair on deprecation: NN to NY (to be implemented) 
             }
             elsif (@$gen == 3 && ($gen->[1] != 1 || $deprecation ne 'MMN')) {
                 $error .= "deprecation sequence $deprecation (must be MMN)" if ($deprecation ne 'MMN');
                 $error .= "generation sequence @$gen (0 1 n)" if ($gen->[1] != 1);
-        # possible repair on generations: delete the generation between 1 and n (will be done by reaper)
-        # possible repair on deprecation: MNN to MNY, NNN & NMN to NYY(to be implemented)
+    # possible repair on generations: delete the generation between 1 and n (will be done by reaper)
+    # possible repair on deprecation: MNN to MNY, NNN & NMN to NYY(to be implemented)
              }
             elsif (@$gen > 3) {
                 $error .= "Too many mapping generations @$gen$break";
-        # possible repair to generations: delete the generation between 1 and n (will be done by reaper)
-        # possible repair to deprecation: MMMN will be done by reaper, M..N..N to M..NYYY
+    # possible repair to generations: delete the generation between 1 and n (will be done by reaper)
+    # possible repair to deprecation: MMMN will be done by reaper, M..N..N to M..NYYY
             }
-        # none of the above errors is fatal (reaper will sort out repair)
+    # none of the above errors is fatal (reaper will sort out repair)
             $REPORT .= "Errors in mappings of this read $read_id: $error$break$break" if $error;
             $REPORT .= "No errors detected$break" if !$error;                
-       
 
-    # now collect the mapping profile for each generation and all contigs referred to by this read
-    # store the maps of the last previous occurrence of this read in @crange (i.e. generation 1)
+# now collect the mapping profile for each generation and all contigs referred to by this read
+# store the maps of the last previous occurrence of this read in @crange (i.e. generation 1)
 
             undef my %profile;
             foreach my $map (@$dbmaps) {
@@ -740,17 +743,17 @@ sub mtest {
                 my $label = $map->{label};
                 my $deprecated = $map->{deprecated};
                 my $generation = $map->{generation};
-            # memorize the last previous mapping: should be generation 1 or possibly 0 for a new one
+# memorize the last previous mapping: should be generation 1 or possibly 0 or 0 & 1 for a new one
                 my $consider = 0;
-                $consider = 1 if ($generation == 1);
-                $consider = 1 if (@$gen == 1 && $generation == 0);
+                $consider = 1 if ($generation == $gen->[0]);
+# test the alignments against the previous one apart from the overall alignment (label = 20,21)
                 if ($consider && $deprecated ne 'Y' && $label <= 11) {
                     $lastmap[0] = $map->{prstart};
                     $lastmap[1] = $map->{prfinal};
                     $lastmap[2] = $map->{pcstart};
                     $lastmap[3] = $map->{pcfinal};
                     @{$oldmaps{$map}} = @lastmap;
-            # get range on contig; $m ensures ascending order comparison
+# get range on contig; $m ensures ascending order comparison
                     my $segment = $lastmap[3] - $lastmap[2];
                     my $m = 2; $m = 3 if ($segment < 0); # $m measures alignment inversion
                     $con2con->[0] = $lastmap[$m]   if (!$counts->[6] || $lastmap[$m]   < $con2con->[0]);
@@ -767,22 +770,24 @@ sub mtest {
                 }
                 my $contig = $map->{contig_id};
                 if ($label >= 10) {
-                    my $status = 'S'; # 'Single' record (stored in lastmap hash)
+                    my $status = 'S'; # 'Single' record (as stored in lastmap hash)
                     $status = 'F' if ($label > 11); # 'Final' record (not stored in lastmap hash)
-                    $status = lc($status) if ($deprecated eq 'Y');
+                    $status = lc($status) if ($deprecated eq 'Y'); # lowercase 's' or 'f'
                     $deprecated = $status;
                 }
-                $profile{$contig} .= $deprecated;
+                $profile{$contig} .= $deprecated if $consider; # register only generation 0 or 1
             }
+            $REPORT .= "ReadMapper after profile loop: isDifferent=$isDifferent $break";
 
-    # test the alignment profiles for the read segments in each generation
+# test the alignment profiles for the read segments in each generation
+# note: currently only the last previously loaded map is tested 
 
             foreach my $contig (keys %profile) {
-                undef my $report;
                 $previous .= ' ' if $previous;
                 $previous .= $contig; 
-    # test contig for consistence: should be either 'YYYYf', 's', 'NNNNF','MMMMF' or 'S'
-    # cleanup deprecated mappings in same generation alongside active mappings
+                my $progress= "Testing mappings against contig $contig: $profile{$contig} $break";
+# test contig for consistence: should be either 'Y..Yf', 's', 'N..NF','M..MF','[M..MF]+N..NF' or 'S'
+# cleanup deprecated mappings in same generation alongside active mappings
                 my $mapping = $profile{$contig};
                 if ($mapping =~ /[MNS]/ && $mapping =~ s/[Yfs]//g) {
                     $status->{diagnosis} .= "! Redundant deprecated mappings from contig ";
@@ -792,40 +797,50 @@ sub mtest {
                 }
 
                 if ($mapping =~ /^(Y{2,}f|s)$/) {
-                    $report .= "Deprecated mapping of read $read_id ";
+                    $progress .= "Deprecated mapping of read $read_id ";
+                    if ($gen->[0] == 0) {
+                        $progress =~ s/Dep/Unexpected dep/;
+                        $progress .= " found for generation 0";
+                    }
                 } 
                 elsif ($mapping =~ /^([NM]{2,}F|S)$/) {
-                    $report .= "Standard mapping of read $read_id ";
+                    $progress .= "Standard mapping of read $read_id ";
                 }
+# extra here? e.g.  /^(M{2,}FN{2,}F)|SS)$/   /^(N{2,}FY{2,}f)|Ss)$/ if both generation 0 and 1 tested
                 else {
-                    $report .= "Incomplete or inconsistent mapping of read $read_id ";
+                    $progress .= "Incomplete or inconsistent mapping of read $read_id ";
                     $isDifferent = 1; # force deprecation of all current mappings
+# this condition is fatal for generation 0: it occurs when a previous assembly load has not been finallized
+                    if ($gen->[0] == 0) {
+                        $status->{diagnosis} .= $progress;
+                        $status->{errors}++; 
+                    }
                 }
-                $REPORT .= "$report ($mapping) to contig $contig$break";
+                $REPORT .= "$progress ($mapping) to contig $contig$break";
 	    }
+            $REPORT .= "ReadMapper after contig loop : isDifferent=$isDifferent previous=$previous$break";
 	}
         elsif (@read2conKeys > 0) {
-#        elsif (keys %$read2con > 0) {
              $isDifferent = 1; # It's the first mapping of this read: force 'N' label
         }
 
+        $REPORT .= "STEP 2 (deprecation profile) : isDifferent = $isDifferent previous = $previous$break";
+
 # compare previously stored map with new specification (if any; should be identical apart from shift)
+# compare ranges on contigs and test co-alignments for consistency
 
-        $REPORT .= "intermediate ReadMapper status: isDifferent=$isDifferent previous=$previous$break";
-
-        if ($counts->[6]) {
+        if ($counts->[6]) {  #?        if ($counts->[6] && !$isDifferent) {
 
 	    $REPORT .= "Testing existing ($counts->[6]) alignments against $counts->[1] new ones $break";
 
             if ($counts->[1] > 0) {
-        # test the previous alignments against the current data 
+# test the previous alignments against the current data 
                 my $m = $con2con->[2];
-        # get range for current (new) readmap to the new contig
+# get range for current (new) readmap to the new contig
                 my $first = 1;
                 $con2con->[4] = 0;
                 my $alignments = 0;
                 foreach my $alignment (@read2conKeys) {
-#                foreach my $alignment (keys (%$read2con)) {
                     my @thismap = @{$read2con->{$alignment}};
                     my $segment = $thismap[3] - $thismap[2];
                     my $l = 2; $l = 3 if ($segment < 0);
@@ -842,48 +857,50 @@ sub mtest {
 
                 $REPORT .= "ReadMapper read nr $dbrefs->[0] aligned to previous contig(s): $previous$break";
                 if ($alignments == $counts->[6] && $oldrange == $newrange) {
-        # numbers and overall range are identical; now test each individual mapping segment
+# numbers and overall range are identical; now test each individual mapping segment
                     undef my $offset;
                     foreach my $alignment (@read2conKeys) {
-#                    foreach my $alignment (keys (%$read2con)) {
-        # get range for current (new) readmap to the new contig
+# get range for current (new) readmap to the new contig
                         my @thismap = @{$read2con->{$alignment}};
                         $REPORT .= "Testing alignment @thismap$break";
                         my $found = 0; 
                         my $error = 0;
-                # find the matching alignment on the read in previous map, then compare contig alignments 
+                        my $progress = '';
+# find the matching alignment on the read in previous map, then compare contig alignments 
                         foreach my $map (keys (%oldmaps)) {
                             my @lastmap = @{$oldmaps{$map}};
                             if ($lastmap[0] == $thismap[0] && $lastmap[1] == $thismap[1]) {
                                 $found++; # there should be only one alignment
-                # get the "shift" between the contig maps; if inverted, use mirror image
+# get the "shift" between the contig maps; if inverted, use mirror image
                                 if ($con2con->[4]) {
                                     $lastmap[2] = -$lastmap[2];
                                     $lastmap[3] = -$lastmap[3];
-print "reversal detected in  read nr $dbrefs->[0] $break";
                                 }
-                # the offset between the maps should be identical for all mapped read segments
+# the offset between the maps should be identical for all mapped read segments
                                 my $shift = $thismap[2] - $lastmap[2];
                                 $offset = $shift if !defined($offset);
                                 $error = $map if ($shift != $offset);
                                 $shift = $thismap[3] - $lastmap[3];
                                 $error = $map if ($shift != $offset);
-
-                                $REPORT .= "old alignment: @{lastmap}$break";
-                                $REPORT .= "new alignment: @{thismap}$break";
+# register progress (possibly used below)
+                                $progress .= "old alignment: @{lastmap} ";
+                                $progress .= "new alignment: @{thismap} ";
+                                $progress .= "reversal detected" if $con2con->[4];
+                                $progress .= $break;
                             }
 			}
 
                         if ($error) {                     
-                # the mapping range does not match
+# the mapping range does not match
                             $isDifferent++;
-                            $REPORT .= "! Inconsistent alignment, ";
-                            $REPORT .= "old: @{$oldmaps{$error}}, new: @{thismap}$break";
+                            $REPORT .= "! Inconsistent alignment(s), ";
+                            $REPORT .= "(old: @{$oldmaps{$error}}, new: @{thismap})$break";
+                            $REPORT .= $progress; # add details for this map
  	                } 
                         elsif ($found == 0) {
-                # no matching alignment found; update contig ranges
+# no matching alignment found
                             $isDifferent++;
-                            $REPORT .= "! Alignment @{thismap} not matched$break";
+                            $REPORT .= "! NO matching alignment found for @{thismap}$break";
                         }
                         elsif ($found > 1) {
                             $isDifferent++;
@@ -893,68 +910,75 @@ print "reversal detected in  read nr $dbrefs->[0] $break";
                     $con2con->[5] = $offset; # register shift between contigs
                 }
   	        elsif ($counts->[1] != $counts->[6]) {
-        # the maps are different in number of alignments and possibly in total range covered
+# the maps are different in number of alignments and possibly in total range covered
                     $status->{warnings}++;
                     $REPORT .= "! Inconsistent number of alignments: in database ";
                     $REPORT .= "$counts->[6] new: $counts->[1]$break";
                     $isDifferent = 99;
                 }
                 else {
-        # the maps are different in total range covered
+# the maps are different in total range covered
+                    $REPORT .= "! Inconsistent alignment cover (new: $newrange, old:$oldrange)$break";
                     $isDifferent = 99;
                 }
             } 
             else {
-            #  there is no current (new) mapping info ($counts->[1]=0)
+# there is no current (new) mapping info ($counts->[1]=0)
                 $status->{errors}++;
                 $REPORT .= "There is mapping info in database but no new info$break";
                 $isDifferent = 99;
             }
         }
 
-        $REPORT .= "intermediate ReadMapper status: isDifferent=$isDifferent previous=$previous$break";
+        $REPORT .= "STEP 3 (after alignment test): isDifferent = $isDifferent previous = $previous$break";
 
-    # now deprecate the old mappings if they are different from current ones
+# now deprecate the old mappings if they are different from current ones
 
-        my $report;
+        my $progress;
         if ($isDifferent && $previous) {
-    # the alignments to a previous contig are different from those 
-    # to the new contig; old alignments have to be superseded
-            &deprecate($self);
-            $report .= " New alignments of this read $dbrefs->[0] to the new contig:";
-            $report .= " $con2con->[0]-$con2con->[1] to $con2con->[2]-$con2con->[3] $break";
+# the alignments to a previous contig are different from those to the new contig; old 
+# alignments have to be superseded. However, if the previous contig was in generation 0,
+# the error flag is set, since this indicates that something went seriously wrong with 
+# the generation incrementation of the previous assembly
+            if ($gen->[0] == 0) {
+                $status->{diagnosis} .= "Incompatible assembly generations: update NOT DONE$break";
+                $status->{errors}++;
+	    }
+       	    else {
+                &deprecate($self);
+                $progress .= " New alignments of this read $dbrefs->[0] to the new contig:";
+                $progress .= " $con2con->[0]-$con2con->[1] to $con2con->[2]-$con2con->[3] $break";
+            }
             $con2con->[4] += 2; # signal deprecated readmap to ContigBuilder
         }
         elsif ($isDifferent && !$previous) {
-    # this alignment has not been seen before
-            $report = " First time assembly of read $dbrefs->[0] $break";
+# this alignment has not been seen before
+            $progress = " First time assembly of read $dbrefs->[0] $break";
             $self->{marked} = 'N';
             $counts->[6] = 0;
         }
         elsif (@read2conKeys) {
-#        elsif (keys %$read2con) {
-    # the alignments to the previous contig are identical to those to the new
-    # contig, apart from a (possible) shift;
-            $report = "Alignments are identical to those to a contig in generation $gen->[0]$break";   
+# the alignments to the previous contig are identical to those to the new contig, apart from a (possible) shift;
+            $progress = "Alignments are identical to those to a contig in generation $gen->[0]$break";   
             $self->{marked} = 'M' if ($gen->[0]  > 0); # mark for delete by reaper
             $self->{marked} = 'X' if ($gen->[0] == 0); # mark as already stored for new generation
         }
         else {
-    # the read is completely empty (after alignment)
+# the read is completely empty (after alignment)
             &deprecate($self) if $counts->[6]; # deprecate existing data
             $con2con->[4] = -1; # signal empty mapping to ContigBuilder
         }
-        $status->{diagnosis} .= $report if $report;
+        $status->{diagnosis} .= $progress if $progress;
 
-$REPORT .= "$report$break" if $report;
-$self->{report} .= $REPORT;
-&reporter($self,0) if ($isDifferent && $previous); # TEMPORARY TEST
-        $MyTimer->timer('mtest',1) if $TIMER;
+        $REPORT .= $progress.$break;
+$MyTimer->timer('mtest',1) if $TIMER;
     }
     elsif (!$read_id) {
         $status->{diagnosis} .= "! Read $read_id not found in READS database$break";
         $status->{errors}++;
     }
+
+#    print $REPORT;
 
     return $counts->[6];
 }
@@ -1246,7 +1270,7 @@ sub align {
     my $error = $status->{errors};
  
 # count [1]=number of maps, [2]=alignment defined, [4]=quality right
-$DEBUG = 0; $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
+$DEBUG = 0; # $DEBUG=1 if ($self->{names}->[0] =~ /mal4N18g10\.p2co17frA/);
 print "++++ ALIGN for ReadMapper $self->{names}->[0] ($self) (counts = @$counts)++++$break" if $DEBUG;
 
     if ($counts->[1] > 0 && $counts->[2] == 1 && ($counts->[4] > 0 || $counts->[3] > 0)) {
@@ -1483,78 +1507,64 @@ sub lookup {
 }
 
 ##################################################################################
+# retire and reap obsolete or older readmaps
+##################################################################################
+
+sub retire {
+# to be invoked after generation 0 is completed: retire reads in G1 but not in G0
+    my $self     = shift;
+    my $assembly = shift || 0;
+
+    my $retired = 0;
+
+    my $query  = "select G1.read_id from <self> as G1 left join <self> as G0 ";
+    $query .= "on G1.read_id = G0.read_id where G0.label >= 10 and G1.label >= 10 and ";
+    $query .= "G0.assembly = $assembly and G1.assembly = $assembly and ";
+    $query .= "G0.generation = 0 and G1.generation = 1 and ";
+    $query .= "G0.read_id = NULL";
+
+    my $hashes = $RR2CC->query($query,0,0);
+print "retire query $RR2CC->{lastQuery}$break";
+print "retire hashes $hashes \n";
+    if ($hashes && ref($hashes) eq 'ARRAY') {
+my $length=@$hashes; print "retire hashes= $hashes $length $break"; print "retire hashes: @$hashes \n";
+	$retired = @$hashes;
+        foreach my $hash (@$hashes) {
+            $hash = $hash->{read_id};
+        }
+print "retire: readid: @$hashes \n";
+# retire: set deprecated to 'X' where read_id in (join ',',@$hashes) and generation=1
+#        $RR2CC->update('deprecated','X','read_id',$hashes) if $assembly;     
+    }
+
+    $retired;
+
+# NEW setup tests
+#      select distinct(read_id) from READS2CONTIG, CONTIGS2CONTIG where
+#      READS2CONTIG.contig_id = CONTIGS2CONTIG.oldcontig and
+#      CONTIGS2CONTIG.generation=0;
+
+#      select distinct read_id,deprecated from READS2CONTIG, CONTIGS2CONTIG where
+#      READS2CONTIG.assembly=1 and READS2CONTIG.deprecated in ('M','N') and label>=10 and
+#      READS2CONTIG.contig_id=CONTIGS2CONTIG.oldcontig and CONTIGS2CONTIG.generation=0;
+
+#ysql> select distinct read_id,deprecated from READS2CONTIG, CONTIGS2CONTIG where
+#   -> READS2CONTIG.assembly=1 and label>=10 and
+#   -> READS2CONTIG.contig_id=CONTIGS2CONTIG.newcontig and CONTIGS2CONTIG.generation=0;
+}
+
+##################################################################################
 
 sub reaper {
-# cleanup all marked readmaps in previous generations
+# cleanup all marked readmaps in older generations
     my $self     = shift;
-    my $assembly = shift;
+    my $assembly = shift || 0;
 
 # leave generation  1 untouched! (i.e. do reaper after ageByOne)
 
     my $where = "generation > 1 AND deprecated = 'M' AND assembly=$assembly";
-#print "reaper: delete from READS2CONTIG where $where $break";
-    $RR2CC->delete('where',$where) if ($assembly && $assembly > 0);
-}
-
-##################################################################################
-
-sub ageByOne {
-# increase all generation counters by one
-    my $self     = shift;
-    my $assembly = shift;
-
-# only apply aging if generation 0 exists
-
-    my $where = "generation=0 AND assembly=$assembly";
-    if ($assembly && $assembly > 0 && $RR2CC->count($where)) {
-        my $query = "UPDATE <self> set generation=generation+1 WHERE $where";
-#print "ageByOne: $query $break";
-        $RR2CC->query($query,1);
-        &reaper($self,$assembly);
-    }
-}
-
-##################################################################################
-
-sub endOfLine {
-# to be invoked after generation 0 is completed: retire reads in G1 but not in G0
-    my $self = shift;
-
-    my $query  = "select G1.read_id from READS2CONTIG as G1 left join READS2CONTIG as G0 ";
-    $query .= "on G1.read_id = G0.read_id where G1.label >= 10 and G0.label >= 10 and ";
-    $query .= "G0.read_id = NULL";
-print "endOfLine query $query$break";
-    if (my $hashes = $RR2CC->query($query,0,0)) {
-my $length=@$hashes;
-print "hashes= $hashes $length $break";
-        $RR2CC->update('deprecated','X','read_id',$hashes);     
-    }
-}
-
-##################################################################################
-
-sub oldinDataBase {
-# test where the named read is in the ARCTURUS database
-    my $self = shift;
-    my $read = shift;
-    my $pend = shift;
-
-# if the read is not in the READS database test for it in PENDING table
-
-    my $dbpref = 0;
-    my $dbrref = 0;
-    
-#    if (!$dbrref && defined($read) && !($dbrref=$READS->associate('read_id',$read,'readname'))) {
-#        $dbrref = 0; # read not found in READS
-#        if (!($dbpref = $PENDS->associate('record',$read,'readname'))) {
-#            $dbpref = 0; # read not found in PENDING either
-#            if (defined($pend) && $pend && $PENDS->newrow('readname',$read)) {
-#                $PENDS->update('assembly',$ASSEMBLY) if $ASSEMBLY;
-#                $dbpref = $PENDS->associate('record',$read,'readname');
-#            }
-#        } 
-#    }
-    return ($dbrref, $dbpref);
+print "reaper: delete from READS2CONTIG where $where $break";
+    $RR2CC->delete('where',$where) if ($assembly > 0);
 }
 
 ################################################################################

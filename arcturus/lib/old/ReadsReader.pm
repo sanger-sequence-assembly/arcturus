@@ -800,7 +800,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$bre
         # if no errors detected, add to LIGATIONS table
             if (!$status->{errors}) {
                 $LIGATIONS->newrow('identifier' , $readItems->{LG});
-print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n";
+print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerror};
                 $LIGATIONS->update('clone'      , $readItems->{CN});
 # new  use ref    my $clone = $CLONES->associate('clone',$readItems->{CN},'clonename' 0, 0, 1);
 # new             $LIGATIONS->update('clone'      , $clone);
@@ -1153,6 +1153,9 @@ $self->logger("SCF file full name: $scffile$break");
 $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'$break");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
+            if ($chemistry =~ /Tag/) {
+                undef $chemistry; # Tag not present
+            }
         }
         else {
             undef $chemistry;

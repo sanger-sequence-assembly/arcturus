@@ -49,6 +49,7 @@ sub new {
     undef $self->{TCPort};
     undef $self->{handle};
     undef $self->{database};
+    undef $self->{available};
     undef $self->{config};
     undef $self->{cgi};
     $self->{ARGV} = [];
@@ -818,7 +819,9 @@ $debug = "\n";
         &dropDead($self,"Database $database is off-line");
     }
 
-    $self->{database} = $database;
+    $self->{database}  = $database;
+
+    $self->{available} = $available{$database};
     
     return $dbh;
 }
@@ -1318,6 +1321,21 @@ sub allowServerAccess {
     return 1; # authorization granted
 }
 
+#############################################################################
+
+sub allowDatabaseAccess {
+# test the available status of the database
+    my $self  = shift;
+    my $abort = shift;
+
+    if ($self->{available} ne "on-line") {
+        $self->{error} .= "Database $self->{database} is inaccessible ";
+        $self->{error} .= "because of access status: $self->{available}";
+        $self->dropDead($self->{error}) if $abort;
+        return 0;
+    }
+    return 1;
+}
 
 #############################################################################
 
@@ -1325,22 +1343,26 @@ sub allowTableAccess {
 # authorize access for a specific table
     my $self  = shift;
     my $table = shift;
+    my $abort = shift || 0;
 
-# current version rather crude: 
+# if you want to protect a table, put a call to this method just before accessing it
+
+    return 0 if !$self->allowDatabaseAccess($abort);
+ 
 # STD standard access to all tables except TAGS and HISTORY
 # ALL for all tables in database except HISTORY and GENE2CONTIG
 # USERS and ORGANISMS or COMMON for all tables
-# if you want to protect a table, put a call to this method just before accessing it 
-
+# (current version rather crude)
 
     my $allowed = $self->{taccess} || 'ALL'; # defaults to be changed later 
 
     my $access = 1;
     $access = 0 if ($table =~ /GENE2CONTIG/i && $allowed !~ /\bGENE2CONTIG\b/);
-    $access = 0 if ($allowed !~ /ALL/i && $allowed !~ /\b$table\b/i); 
+    $access = 0 if ($allowed !~ /ALL/i && $allowed !~ /\b$table\b/i);
     
     my $user = $self->{USER} || 'unidentified';
     $self->{error} .= "User '$user' has no access to table $table\n" if !$access;
+    $self->dropDead($self->{error}) if (!$access && $abort);
 
     return $access;  
 }
@@ -1414,6 +1436,16 @@ sub GUI {
     print "\n$title \n" if (!$cgi && $title);
     return 0 if !$cgi;
 
+# open the page
+
+    $self->cgiHeader(2); # in case not yet done
+    my $page = $cgi->openPage("ARCTURUS $title");
+#  if noGUI specified, default to central page with blank borders 
+    if ($self->lookup('noGUI',0)) {
+        $page->frameborder();
+        return $page;
+    }
+
     my $script = $self->currentScript;
     $script .=  $self->currentOptions if $options{doTransport}; # ? a good idea?
     my @exclude = ('USER','redirect');
@@ -1479,8 +1511,8 @@ sub GUI {
 
 # okay, now compose the page
 
-    $self->cgiHeader(2); # in case not yet done
-    my $page = $cgi->openPage("ARCTURUS $title");
+#    $self->cgiHeader(2); # in case not yet done
+#    my $page = $cgi->openPage("ARCTURUS $title");
     my $width  = 60;
     my $height = 50;
     $page->arcturusGUI($height,$width,$yell);

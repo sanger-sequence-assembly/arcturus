@@ -24,7 +24,7 @@ my $SPLIT  = '\:|\,'; # the default split string
 
 sub new {
 # constructor invoking the constructor of the DbaseTable class
-    my $caller    = shift;
+    my $caller = shift;
 
 # determine the class and invoke the class variable
 
@@ -576,7 +576,7 @@ sub htmlTable {
                    linkColor=>'lightblue'   , mask=>$mask           ,
                    linkItem =>'onPrimaryKey', linkTarget=>'1'       ,
                    noHeader => 0);
-    &importOptions (\%options,$mask); # if mask is a HASH
+    $self->importOptions(\%options,$mask); # if mask is a HASH
 
     undef my $list;
 
@@ -751,7 +751,7 @@ sub htmlTableColumn {
     my %option = (maxColumns => 8       , maxAspect => 3, noHeader => 0,
                   cellColor => 'CCCCCC' , itemLink => 0 , cellWidth => 50,
                   useCache => 0         , returnScalar => 0);
-    &importOptions(\%option,$hash);
+    $self->importOptions(\%option,$hash);
 
     my $colour = "bgcolor='$option{cellColor}'";
     my $table = "<TABLE BORDFER=1 CELLPADDING=2>";
@@ -1288,7 +1288,7 @@ sub copy {
 # define options from defaults and input via $hash
 
     my %option = (keyColumn => $marker, doCopy => 0, doDelete => 0, delTarget => '');
-    &importOptions(\%option,$hash);
+    $self->importOptions(\%option,$hash);
     $marker = $option{keyColumn};
 
 # test tables
@@ -1388,24 +1388,6 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
     }
 
     return $report;
-}
-
-#*******************************************************************************
-
-sub importOptions {
-# private function 
-    my $options = shift;
-    my $hash    = shift;
-
-    my $status = 0;
-    if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
-        foreach my $option (keys %$hash) {
-            $options->{$option} = $hash->{$option};
-        }
-        $status = 1;
-    }
-
-    $status;
 }
 
 #############################################################################
