@@ -58,17 +58,12 @@ $outfh = new FileHandle($outfile, "w");
 
 print STDERR "\n" if $verbose;
 
-$dict_ligation   = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'silow, sihigh');
+$dict_ligation   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
 $dict_clone      = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
-$dict_primer     = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
 $dict_status     = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
-$dict_strand     = &createDictionary($dbh, 'STRANDS', 'strand', 'direction');
 $dict_basecaller = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
 $dict_svector    = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
 $dict_cvector    = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
-
-$dict_chemistry  = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
-				     'chemistry', 'type', 'USING(chemtype)');
 
 $readranges = &parseReadIDRanges($readids);
 
@@ -82,7 +77,8 @@ $query = "SELECT readname,date,ligation,clone,strand,primer,chemistry,basecaller
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed on $dsn");
 
-$tmplquery = "SELECT name FROM READS LEFT JOIN TEMPLATE USING (template_id) WHERE READS.read_id=?";
+$tmplquery = "SELECT name,ligation_id FROM READS LEFT JOIN TEMPLATE USING (template_id)" .
+    " WHERE READS.read_id=?";
 
 $tmplsth = $dbh->prepare($tmplquery);
 &db_die("prepare($tmplquery) failed on $dsn");
@@ -102,12 +98,12 @@ foreach $readrange (@{$readranges}) {
 
 	$tmplsth->execute($readid);
 
-	($template) = $tmplsth->fetchrow_array();
+	($template,$ligation) = $tmplsth->fetchrow_array();
 
 	@ary = $sth->fetchrow_array();
 
 	if (scalar(@ary) > 0) {
-	    ($readname, $asped, $ligation, $clone, $strand, $primer, $chemistry,
+	    ($readname, $asped, $clone, $strand, $primer, $chemistry,
 	     $basecaller, $pstatus, $qleft, $qright, $svector, $svleft, $svright,
 	     $cvector, $cvleft, $cvright, $slength, $sequence, $quality) = @ary;
 
@@ -140,17 +136,11 @@ foreach $readrange (@{$readranges}) {
 
 	    print $outfh "Clone $clonename\n" if defined($clonename);
 
-	    ($strand) = &dictionaryLookup($dict_strand, $strand);
+	    print $outfh "Strand $strand\n" if defined($strand);
 
-	    print $outfh "Strand ", ucfirst($strand), "\n" if defined($strand);
+	    print $outfh "Primer $primer\n" if defined($primer);
 
-	    ($primer) = &dictionaryLookup($dict_primer, $primer);
-
-	    print $outfh "Primer ", ucfirst($primer), "_primer\n" if defined($primer);
-
-	    ($dye) = &dictionaryLookup($dict_chemistry, $chemistry);
-
-	    print $outfh "Dye Dye_$dye\n" if defined($dye);
+	    print $outfh "Dye $chemistry\n" if defined($chemistry);
 
 	    ($bc) = &dictionaryLookup($dict_basecaller, $basecaller);
 
