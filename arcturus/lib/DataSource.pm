@@ -131,8 +131,14 @@ sub getConnection {
     my $this = shift;
 
     my $url      = $this->{URL};
-    my $username = $this->{Username};
-    my $password = $this->{Password};
+
+    my $username = shift;
+    my $password = shift;
+
+    unless (defined($username) && defined($password)) {
+	$username = $this->{Username};
+	$password = $this->{Password};
+    }
 
     my $dbh = DBI->connect($url, $username, $password, {RaiseError => 0, PrintError => 0});
 
