@@ -144,6 +144,12 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
+# Populate the dictionaries and statement handles for loading reads
+#----------------------------------------------------------------
+
+$adb->populateLoadingDictionaries();
+
+#----------------------------------------------------------------
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
 
