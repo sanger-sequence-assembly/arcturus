@@ -9,47 +9,53 @@ use Segment;
 #-------------------------------------------------------------------
 
 sub new {
-    my $class   = shift;
-    my $mapping = shift; # mapping number or name, optional
+    my $class = shift;
+    my $identifier = shift; # mapping number or name, optional
 
     my $this = {};
 
     bless $this, $class;
 
-    $this->{assembledFrom}   = [];
-    $this->{alignToTrace}    = [];
-
-    $this->setReadName($mapping);
+    $this->setReadName($identifier) if $identifier;
 
     return $this;
 }
  
 #-------------------------------------------------------------------
-#
+# mapping metadata (readname, sequence ID, and alignment)
 #-------------------------------------------------------------------
 
-sub getReadID {
+sub getSequenceID {
     my $this = shift;
-
-    return $this->{read_id};
+    return $this->{seq_id};
 }
 
-sub setReadID {
+sub setSequenceID {
     my $this = shift;
-
-    $this->{read_id} = shift;
+    $this->{seq_id} = shift;
 }
 
 sub getReadName {
     my $this = shift;
-
     return $this->{readname};
 }
 
 sub setReadName {
     my $this = shift;
-
     $this->{readname} = shift;
+}
+
+sub setAlignmentDirection {
+# must be defined when creating from database
+    my $this = shift;
+    my $direction = shift;
+
+    if ($direction eq 'Forward') {
+        $this->{direction} = 1;
+    }
+    elsif ($direction eq 'Reverse') {
+        $this->{direction} = -1;
+    }    
 }
  
 #-------------------------------------------------------------------
@@ -81,16 +87,28 @@ sub compare {
 # store alignment segments
 #-------------------------------------------------------------------
 
-sub addAlignToTrace {
-# from (possibly edited) read to trace file (raw read)
-# input 4 array (readstart, readfinis, tracestart, tracefinis)
+sub addAlignmentFromDatabase {
+# input 3 array (cstart, rstart, length) and combine with direction
     my $this = shift;
+    my ($cstart, $rstart, $length, $dummy) = @_;
 
-    my $segment = new Segment(@_);
+    $length -= 1;
 
-    push @{$this->{alignToTrace}},$segment;
+    my $cfinis = $cstart + $length;
 
-    return scalar(@{$this->{alignToTrace}});
+    if ($length < 0) {
+        die "Invalid length specification in Mapping $this::getReadName"; 
+    }
+    elsif (my $d = $this->{direction}) {
+       
+        $length = -$length if ($d < 0);
+        my $rfinis = $rstart + $length;
+
+        $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
+    }
+    else {
+        die "Undefind alignment direction in Mapping $this::getReadName";
+    }
 }
 
 sub addAssembledFrom {
@@ -98,9 +116,22 @@ sub addAssembledFrom {
 # input 4 array (contigstart, contigfinis, readstart, readfinis) 
     my $this = shift;
 
-    my $segment = new Segment(@_);
+# validity input is tested in Segment constructor
+
+    my $segment = new Segment(@_); 
+
+    $this->{assembledFrom} = [] if !$this->{assembledFrom};
 
     push @{$this->{assembledFrom}},$segment;
+
+    return scalar(@{$this->{assembledFrom}});
+}
+
+sub hasAlignments {
+# returns true if at least one alignment exists
+    my $this = shift;
+
+    return 0 unless $this->{assembledFrom};
 
     return scalar(@{$this->{assembledFrom}});
 }
@@ -143,21 +174,12 @@ sub getOverallAlignment {
 sub assembledFromToString {
     my $this = shift;
 
+#    my $assembledFrom = "Assembled_from $this::getReadName ";
     my $assembledFrom = "Assembled_from ".$this->getReadName()." ";
 
     my $string = '';
     foreach my $segment (@{$this->{assembledFrom}}) {
         $string .= $assembledFrom.$segment->toString()."\n";
-    }
-    return $string;
-}
-
-sub alignToTraceToString {
-    my $this = shift;
-    my $string = '';
-
-    foreach my $segment (@{$this->{alignToTrace}}) {
-        $string .= "Align_to_SCF ".$segment->toString()."\n";
     }
     return $string;
 }

@@ -43,19 +43,16 @@ sub addTag {
     my $this = shift;
     my $Tag  = shift;
 
-    if (ref($Tag) eq 'Tag') {
-        $this->{Tags} = [] unless defined $this->{Tags};
-        push @{$this->{Tags}}, $Tag;
-    }
-    else {
-        die "Invalid object passed: $Tag";
-    }
+    die "Read->addTag expects a Tag instance as parameter" if (ref($Tag) ne 'Tag');
+
+    $this->{Tags} = [] unless defined $this->{Tags};
+
+    push @{$this->{Tags}}, $Tag;
 }
 
 sub getTags {
 # export reference to the Tags array
     my $this = shift;
-
     return $this->{Tags};
 }
 
@@ -92,6 +89,13 @@ sub importSequence {
     $this->setSequence($sequence); # a string
     $this->setQuality($quality);   # reference to an array of integers
 #    $this->setQuality([@$quality]); # alternative ? copy array, pass ref
+    return 1;
+}
+
+sub hasSequence {
+# return true if both DNA and BaseQuality are defined
+    my $this = shift;
+    return ($this->{Sequence} && $this->{BaseQuality});
 }
 
 #-------------------------------------------------------------------
@@ -130,6 +134,13 @@ sub addAlignToTrace {
 sub getAlignToTrace {
     my $this = shift;
     return $this->{alignToTrace}; # array of arrays
+}
+
+sub isEdited {
+    my $this = shift;
+# return true if the number of alignments > 1, else false
+    my $align = $this->getAlignToTrace();
+    return ($align && scalar(@$align) > 1) ? 1 : 0;
 }
 
 #-----------------
@@ -526,51 +537,57 @@ sub compareSequence {
 # dumping data
 #----------------------------------------------------------------------
 
+sub writeToCafForAssembly {
+# write this read in caf format (unpadded)
+# include align to trace file information and possible tags
+    &writeToCaf(shift,shift,1);
+}
+
 sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
-    my $this    = shift;
-    my $FILE    = shift; # obligatory
-    my $Mapping = shift; # optional
+    my $this = shift;
+    my $FILE = shift;        # obligatory output file handle
+    my $forAssembly = shift; # optional
+
+    die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
     my $data = $this->{data};
 
 # first write the Sequence, then DNA, then BaseQuality
 
-    print $FILE "Sequence : $this->{readname}\n";
+    print $FILE "\nSequence : $this->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
     print $FILE "SCF_File $this->{readname}SCF\n";
-    print $FILE "Template $data->{template}\n"                  if defined $data->{template};
-    print $FILE "Insert_size @{$data->{insertsize}}\n"          if defined $data->{insertsize};
-    print $FILE "Ligation_no $data->{ligation}\n"               if defined $data->{ligation};
-    print $FILE "Primer ".ucfirst($data->{primer})."\n"         if defined $data->{primer};
-    print $FILE "Strand $data->{strand}\n"                      if defined $data->{strand};
-    print $FILE "Dye Dye_$data->{chemistry}\n"                  if defined $data->{chemistry};
-    print $FILE "Clone $data->{clone}\n"                        if defined $data->{clone};
+    print $FILE "Template $data->{template}\n"          if defined $data->{template};
+    print $FILE "Insert_size @{$data->{insertsize}}\n"  if defined $data->{insertsize};
+    print $FILE "Ligation_no $data->{ligation}\n"       if defined $data->{ligation};
+    print $FILE "Primer ".ucfirst($data->{primer})."\n" if defined $data->{primer};
+    print $FILE "Strand $data->{strand}\n"              if defined $data->{strand};
+    print $FILE "Dye Dye_$data->{chemistry}\n"          if defined $data->{chemistry};
+    print $FILE "Clone $data->{clone}\n"                if defined $data->{clone};
     print $FILE "ProcessStatus PASS\n";
-    print $FILE "Asped $data->{date}\n"                         if defined $data->{date} ;
-    print $FILE "Base_caller $data->{basecaller}\n"             if defined $data->{basecaller};
+    print $FILE "Asped $data->{date}\n"                 if defined $data->{date} ;
+    print $FILE "Base_caller $data->{basecaller}\n"     if defined $data->{basecaller};
 
-# if a Mapping is provided, add the alignment info (the padded maps)
+# for reads written to an assembly CAF file add align-to-trace information
 
-    if ($Mapping) {
-# test validity; fail most likely due to programming error, hence die
-        if (ref($Mapping) ne 'Mapping') {
-            die "Invalid object passed as Mapping in writeToCaf: $Mapping";
+    if ($forAssembly) {
+# get the align to trace mapping(s)
+        if (my $alignToTrace = $this->getAlignToTrace()) {
+            foreach my $alignment (@$alignToTrace) {
+                print $FILE "Align_to_SCF @$alignment\n";
+            }
         }
-# test consistent read_id values
-        elsif ($Mapping->getReadID != $this->getReadID) {
-            die "Inconsistent read IDs in writeToCaf";
-        }
-# write out the mapping and possible Tag info
         else {
-            $Mapping->writeMapToCaf($FILE);
+            my $length = $this->getSequenceLength();
+            print $FILE "Align_to_SCF 1 $length  1 $length\n";  
+        }
 # process read tags
-            if (my $tags = $this->{Tags}) {
-                foreach my $tag (@$tags) {
-#?                    $tag->writeTagToCaf($FILE);
-                }
-	    }
+        if (my $tags = $this->getTags()) {
+            foreach my $tag (@$tags) {
+#?              $tag->writeTagToCaf($FILE);
+            }
         }
     }
 
