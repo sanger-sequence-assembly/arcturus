@@ -419,7 +419,7 @@ else {
         my $contignames;
         my $where = "assembly=$assemblynmbr AND generation=0 AND label>=10";
         $where .= " AND (aliasname like '\%${CNF}\%')" if $CNF;
-        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
+        $CONTIGS->autoVivify($database,1);
         $contignames = $CONTIGS->associate('aliasname','where',$where,{returnScalar=>0});
 # the alias name is one appearing on the caf file
         if (ref($contignames) =~ /ARRAY/) {
