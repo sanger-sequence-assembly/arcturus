@@ -220,7 +220,7 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
 		foreach my $newsegment (@{$segments}) {
 		    my $newcstart = $newsegment->[0];
 		    my $newpstart = $newsegment->[2];
-		    my $newlength = $newsegment->[1] - $newcstart;
+		    my $newlength = $newsegment->[1] - $newcstart + 1;
 
 		    my $rc2 = $newsegment_stmt->execute($newmappingid, $newcstart, $newpstart, $newlength);
 
