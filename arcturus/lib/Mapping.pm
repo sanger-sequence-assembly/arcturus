@@ -136,7 +136,7 @@ sub compare {
 # compare this Mapping instance with input Mapping
     my $this = shift;
     my $compare = shift;
-    my $relaxed = shift; # optional
+    my $relaxed = shift || 0; # optional
 
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
