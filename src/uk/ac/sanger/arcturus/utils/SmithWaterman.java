@@ -26,8 +26,15 @@ public class SmithWaterman {
 
 		boolean isMatch = baseA == baseB;
 		boolean isN = baseA == 'N' || baseB == 'N';
+		boolean isX = baseA == 'X' || baseB == 'X';
 
-		int score = isN ? 0 : (isMatch ? sMatch : sMismatch);
+		int score = isMatch ? sMatch : sMismatch;
+
+		if (isX)
+		    score = sMismatch;
+
+		if (isN)
+		    score = 0;
 
 		int diagonal = sw[row - 1][col - 1].getScore() + score;
 		int up       = sw[row - 1][col].getScore() + sGapInit;
