@@ -7,7 +7,7 @@
 use ArcturusDatabase;
 use Read;
 
-$verbose = 0;
+$quiet = 0;
 $loadsequence = 0;
 
 while ($nextword = shift @ARGV) {
@@ -16,7 +16,7 @@ while ($nextword = shift @ARGV) {
 
     $readids = shift @ARGV if ($nextword eq '-readids');
 
-    $verbose = 1 if ($nextword eq '-verbose');
+    $quiet = 1 if ($nextword eq '-quiet');
 
     $loadsequence = 1 if ($nextword eq '-loadsequence');
 
@@ -45,7 +45,7 @@ $readranges = &parseReadIDRanges($readids);
 $ndone = 0;
 $nfound = 0;
 
-printf STDERR "%8d %8d", $ndone, $nfound unless $verbose;
+printf STDERR "%8d %8d", $ndone, $nfound unless $quiet;
 $format = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010%8d %8d";
 
 foreach $readrange (@{$readranges}) {
@@ -62,12 +62,16 @@ foreach $readrange (@{$readranges}) {
 	    $nfound++;
 	}
 
-	printf STDERR $format, $ndone, $nfound if (($ndone % 50) == 0);
+	printf STDERR $format, $ndone, $nfound if (!$quiet && ($ndone % 50) == 0);
     }
 }
 
-printf STDERR $format, $ndone, $nfound;
-print STDERR "\n";
+if ($quiet) {
+    print STDERR "Loaded $nfound reads out of $ndone\n";
+} else {
+    printf STDERR $format, $ndone, $nfound;
+    print STDERR "\n";
+}
 
 $adb->disconnect();
 
@@ -100,4 +104,6 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance [default: dev]\n";
+    print STDERR "    -quiet\t\tDo not display running count of reads loaded\n";
+    print STDERR "    -loadsequence\tLoad sequence and base quality data\n";
 }
