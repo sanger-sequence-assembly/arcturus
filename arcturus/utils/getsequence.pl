@@ -1,8 +1,6 @@
 #!/usr/local/bin/perl
 #
-# reads2fas
-#
-# This script extracts one or more reads and generates a FASTA file
+# This script extracts a sequence from Arcturus
 
 use DBI;
 use FileHandle;
@@ -10,6 +8,7 @@ use DataSource;
 use Compress::Zlib;
 
 my $raw = 0;
+my $mask = 1;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -18,6 +17,8 @@ while ($nextword = shift @ARGV) {
     $seqid = shift @ARGV if ($nextword eq '-seqid');
 
     $raw = 1 if ($nextword eq '-raw');
+
+    $mask = 0 if ($nextword eq '-nomask');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -53,8 +54,53 @@ $sth->execute($seqid);
 
 ($sequence) = $sth->fetchrow_array();
 
+$sth->finish();
+
 if (defined($sequence)) {
     $sequence = uncompress($sequence);
+
+    if ($mask) {
+	$query = "SELECT qleft,qright from QUALITYCLIP where seq_id = ?";
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
+
+	$sth->execute($seqid);
+
+	my ($qleft, $qright) = $sth->fetchrow_array();
+
+	if (defined($qleft) && defined($qright)) {
+	    my $left = substr($sequence, 0, $qleft);
+	    my $middle = substr($sequence, $qleft, $qright - $qleft + 1);
+	    my $right = substr($sequence, $qright);
+
+	    $left =~ tr/[ACGTacgt]/X/;
+	    $right =~ tr/[ACGTacgt]/X/;
+
+	    $sequence = $left . $middle . $right;
+	}
+
+	$sth->finish();
+
+	$query = "SELECT svleft,svright from SEQVEC where seq_id = ?";
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
+
+	$sth->execute($seqid);
+
+	while (my ($svleft, $svright) = $sth->fetchrow_array()) {
+	    my $left = substr($sequence, 0, $svleft);
+	    my $middle = substr($sequence, $svleft, $svright - $svleft + 1);
+	    my $right = substr($sequence, $svright);
+
+	    $middle =~ tr/[ACGTacgt]/X/;
+
+	    $sequence = $left . $middle . $right;
+	}
+
+	$sth->finish();
+    }
 
     if ($raw) {
 	print $sequence,"\n";
@@ -66,8 +112,6 @@ if (defined($sequence)) {
 	}
     }
 }
-
-$sth->finish();
 
 $dbh->disconnect();
 
