@@ -36,14 +36,14 @@ my $arc_tmp_dir = $GateKeeper->lookup("ARC_TMP_DIR");
 
 $GateKeeper->focus({useDatabase => 'arcturus', dieOnError => 1});
 
-my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates for $database",{doTransport => 0});
+my $page = $GateKeeper->GUI("database maintenance and updates for $database",{doTransport => 0});
 my $font = "size=4 face='sans-serif'";
 
 my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
 
-my $hcolour = "bgcolor=$options{headColor}";
-my $ccolour = "bgcolor=$options{cellColor}";
-my $lcolour = "bgcolor=$options{linkColor}";
+my $hcolour = "bgcolor='$options{headColor}'";
+my $ccolour = "bgcolor='$options{cellColor}'";
+my $lcolour = "bgcolor='$options{linkColor}'";
 
 my $thisScript = $GateKeeper->currentScript;
 
@@ -236,22 +236,25 @@ elsif ($action eq 'editor') {
 
     $lcolour .= " align=center";
     my $target = 'target="workframe"';
-    my $link = "$arc_cgi_dir/create/editor/".$session;
-    $form .= "<tr><td $lcolour><a href=\"$link\" $target> Database Description </A></td></tr>";
+    my $link;
 
-    $link = "$arc_cgi_dir/amanager/editor/agetform".$session;
-    $form .= "<tr><td $lcolour><a href=\"$link\" $target> Assembly Description </A></td></tr>";
+    if ($option eq 'editmenu') {
 
-    $link = "$arc_cgi_dir/amanager/editor/pgetform".$session;
-    $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Project Description </A></td></tr>";
+        $link = "$arc_cgi_dir/create/editor".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target> Database Description </A></td></tr>";
 
-    $session = $cgi->postToGet(1,'session');
-    $link = "$arc_cgi_dir/update/arcturus/vectors".$session;
-    $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
+        $link = "$arc_cgi_dir/amanager/editor/agetform".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target> Assembly Description </A></td></tr>";
 
+        $link = "$arc_cgi_dir/amanager/editor/pgetform".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Project Description </A></td></tr>";
+
+        $session = $cgi->postToGet(1,'session'); # print "session=$session";
+        $link = "$arc_cgi_dir/update/arcturus/vectors".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
+    }
 # actions on an assembly 
-
-    if ($database ne 'arcturus' && $GateKeeper->authorize(896,{noGUI => 1})) { # require bit 7,8,9
+    elsif ($database ne 'arcturus' && $GateKeeper->authorize(896,{noGUI => 1})) { # require bit 7,8,9
 
         $session = $cgi->postToGet(1,'session','database');
         $session .= "\&noGUI=1";
@@ -263,7 +266,7 @@ elsif ($action eq 'editor') {
     }
 
     $form .= "</table>";
-    $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
+    $form =~ s/\>([\s\w]+)\</>$fnt$1$eft</g;
     $page->add($form);
       
 }

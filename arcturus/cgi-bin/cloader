@@ -76,8 +76,8 @@ if (!$cgi) {
 # test user
     $userid = $ENV{USER};
     if ($userid ne 'ejz' && $userid ne 'adh') {
-# test against the priviledges for this user
-        $GateKeeper->dropDead("user $userid does not have priviledge to run "
+# test against the privileges for this user
+        $GateKeeper->dropDead("user $userid does not have privilege to run "
                              ."'cloader' from the command line.\nTry the "
                              ."web-based version");
     }
@@ -122,7 +122,7 @@ if (!$cgi) {
     }
    
     $CNF = $ARGV[1] || ''; # contig name filter
-    $rdscan = 1 if ($CNF =~ /\breadscan\b/);
+    $rdscan = 1 if ($CNF =~ /\breadscan\b/i);
 
 # get file name filter and global (directory) filter 
 
@@ -580,7 +580,7 @@ else {
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
 my $query  = "select sum(nreads) AS total from <self>";
-my $shash  = $CONTIGS->query($query);
+my $shash  = $CONTIGS->query($query,{traceQuery => 0});
 my $scount = $shash->[0]->{total};
 $scount = 0 if !$scount;
 

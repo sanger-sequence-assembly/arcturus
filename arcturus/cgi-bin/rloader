@@ -12,8 +12,8 @@ BEGIN {
    $ENV{ORACLE_HOME} = '/usr/local/oracle';
    $ENV{ORACLE_SID}  = 'inform';
    $ENV{TWO_TASK}    = 'sids';
-   $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
-   $ENV{PERL5LIB}   .= ':/nfs/pathsoft/arcturus/dev/lib';
+#   $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
+#   $ENV{PERL5LIB}   .= ':/nfs/pathsoft/arcturus/dev/lib';
    $ENV{PATH}       .= ':/usr/local/badger/bin';
 #   use lib '/nfs/pathsoft/arcturus/dev/lib';
 }
@@ -84,6 +84,7 @@ my ($FNF, $GBF, @SEARCH_DIR, @excludekeys);
 my ($action, $page, $confirm);
 my ($userid  , $project , $assembly, $assemblyname, $assemblynmbr);
 my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update, $pending);
+my ($atop, $reload);
 my ($arc_logfile, $logON, $TEST, $abortfile);
 $abortfile = $GateKeeper->lookup('abortfile');
 
@@ -288,10 +289,10 @@ if ($cgi) {
     # test mode
         $TEST   = 1 if $GateKeeper->lookup('testrun',0);
         $logON  = 1 if $GateKeeper->lookup('logON'  ,0);
-#        $reload = 1 if $GateKeeper->lookup('reload' ,0);
+        $reload = 1 if $GateKeeper->lookup('reload' ,0);
         $forced = 1 if $GateKeeper->lookup('forceload' ,0);
         $update = 1 if $GateKeeper->lookup('update', 0);
-      
+
     # test form completion
         if (my $status = $GateKeeper->cgiError(0)) {
             $error = "Please define every input field $status ";
@@ -363,7 +364,7 @@ else { # invoked from the command line (ejz/adh/pathdb only)
 
     $userid = $ENV{USER};
     if ($userid ne 'ejz' && $userid ne 'adh' && $userid ne 'pathdb') {
-        $GateKeeper->dropDead("user $userid does not have priviledge to run "
+        $GateKeeper->dropDead("user $userid does not have privilege to run "
                              ."'rloader' from the command line.\nTry the "
                              ."web-based version");
     }
@@ -533,7 +534,9 @@ if ($logON || !$origin) {
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
     undef my %dbfiles;
-    my $newfiles; my $nr;
+    undef my @newfiles;
+    my $newfiles = \@newfiles;
+    my $nr;
     my $reader; 
 #my $oracle;
 
@@ -549,6 +552,7 @@ if ($logON || !$origin) {
         $GateKeeper->environment;
         exit 0;
     }
+
     elsif ($fnfilter ne "PENDING") {
 
         print "Scanning database $database for Previously Processed Reads ... ";
@@ -569,7 +573,7 @@ if ($logON || !$origin) {
         $nr = keys %dbfiles;
         print "($nr Pending reads found) ... ";
     # get files in READS and add to list
-        $querystring = "SELECT readname FROM $database.READS";
+        $querystring = "SELECT readname FROM $database.READS ";
         if ($fnfilter && $fnfilter ne 'HARVEST') {
             print "(using filename filter \"$fnfilter\") ..."; 
             $querystring .= "WHERE readname LIKE \"%${fnfilter}%\" ";
@@ -601,8 +605,10 @@ if ($logON || !$origin) {
         }
         $sth->finish();
         $nr = keys %dbfiles;
+        undef %dbfiles if $reload;
 
         print "DONE $break $nr files found which have previously been processed$break$break";
+
         if ($nr == 0 ) {
             print "NULL result: query = '$querystring' $break $break";
         }
@@ -645,8 +651,8 @@ if ($logON || !$origin) {
         }
     }
 
-    else {
-# load PENDING reads
+    elsif (!$reload) {
+# load PENDING reads (if reload is ignored)
         print "Scanning database $database for PENDING Reads only ... ";
         my $querystring = "SELECT PENDING.readname FROM $database.PENDING left join ";
         $querystring .= "$database.READS on PENDING.readname=READS.readname where READS.readname is null ";
@@ -913,9 +919,9 @@ $LOADPERRUN =~ s/\W/x/g;
 #  (4) Insert a new row into reads by defining new primary key and add values
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           
-        my $text = "Insert new data into READS ...";
-        my $update = $reader->insert();
-        $text .= "... $update READ items entered into database";
+        my $text = "Insert/update new data into READS ...";
+        my $update = $reader->insert(1,$reload);
+        $text .= "... $update READ items entered/updated into database";
         print STDOUT "$text$break\n";
         print LOG "$text\n" if $logON;
 
@@ -1095,7 +1101,7 @@ sub getNewReadFiles {
 
     $MAXREAD = 1000 if (!defined($MAXREAD));
  
-#$DEBUG = 1 if ($directory =~ /MUST/);
+$DEBUG = 1 if ($directory =~ /MAL/);
 my $nrr = keys %$dbfiles;
 print "directory $directory $break dbfiles $nrr $break" if $DEBUG;
 print "exclude: @{$excluders}${break}filter : $flnfilter$break gbfilter : $glbfilter$break" if ($DEBUG);
@@ -1143,7 +1149,8 @@ if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG) {
             next NEXT if (!($file =~ /^$subdir(\S+\/)?([\w\-\.]+\.(\w\d?\w*)$)/));
             my $shortname = $2;
 print "shortname = $shortname $break" if ($DEBUG);
-	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/));
+	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/) && $flnfilter ne $shortname);
+print "shortname = $shortname $break" if ($DEBUG);
             next NEXT if ($dbfiles->{$shortname} && (!$DEBUG || $DEBUG <= 1));
         # find possible directories beneath the $subdir
             my $subdirname = $file;
@@ -1151,11 +1158,12 @@ print "shortname = $shortname $break" if ($DEBUG);
         # test against rejection strings
             foreach my $exclude (@{$excluders}) {
 print "rejected file: $file (exclude $exclude) $break" if ($subdirname =~ /$exclude/i && $DEBUG);
-                next NEXT if ($subdirname =~ /$exclude/i);
+#                next NEXT if ($subdirname =~ /$exclude/i);
             }
 print "NEW FILE: $file  (maxread= $MAXREAD) $break" if $DEBUG;
             last if ($MAXREAD-- <= 0);
             push @newReads, $file;
+	    $dbfiles->{$shortname}++;
             $filecount++;
 print "new file: $file $break" if($DEBUG);
         }
@@ -1202,7 +1210,8 @@ sub form2 {
             $form .= "<TD>&nbsp</TD></TR>";
             $form .= "<TR><TH ALIGN=LEFT>Directory Filter</TH>";
             $form .= "<TD><INPUT NAME='GBF' SIZE=16 MAXSIZE=64 VALUE=''></TD>";
-            $form .= "<TD>&nbsp</TD></TR>";
+            $form .= "<TD><b>Check</b> <INPUT type=checkbox name=reload> to RELOAD data </TD></TR>";
+#            $form .= "<TD>&nbsp</TD></TR>";
         }
     }
 
@@ -1223,7 +1232,7 @@ sub form2 {
     $form .= "<TR><TH ALIGN=LEFT>Check <INPUT type=checkbox name=logON checked> for log file</TH>";
     $form .= "<TD COLSPAN=2><INPUT NAME='LGF' SIZE=32 MAXSIZE=64 VALUE=''></TD></TR>";
 
-    $form .= "<TR><TH AKIGN=LEFT>Check <INPUT type=checkbox name=testrun> for TEST run </TH>";
+    $form .= "<TR><TH ALIGN=LEFT>Check <INPUT type=checkbox name=testrun> for TEST run </TH>";
     $form .= "<TH ALIGN=RIGHT COLSPAN=2> Check <INPUT type=checkbox name=update> for update of defaults </TH></TR>";
     $form .= "</TABLE>";
 

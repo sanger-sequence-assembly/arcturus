@@ -67,7 +67,7 @@ if ($option eq 'getform') {
     my $ft = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
     my $text = "<TABLE ALIGN=CENTER WIDTH=80%><tr>";
     $text .= "<td align=left wrap>${ft}You must register as an Arcturus user if you ";
-    $text .= "require access to a database with (some level of) priviledge to ";
+    $text .= "require access to a database with (some level of) privilege to ";
     $text .= "add to, or modify its contents$eft</td>";
     $text .= "</tr><tr>";
     $text .= "<td align=left wrap>${ft}Please provide a username of up to 8 but at ";
@@ -162,7 +162,7 @@ elsif ($option eq "register") {
         my $items = $people->{columns};
         foreach my $item (@$items) {
             next if ($item eq 'user');
-            next if ($item eq 'priviledges');
+            next if ($item eq 'privilegea');
             next if ($item eq 'ustatus');
             next if ($item eq 'seniority');
             next if ($item eq 'attributes');
@@ -182,7 +182,7 @@ elsif ($option eq "register") {
         else {
             my $status = 0;
             $passwd = $cgi->ShortEncrypt($passwd,$userid);
-            $status++ if (!$people->newrow('userid',$userid,'priviledges',0));
+            $status++ if (!$people->newrow('userid',$userid,'privilegea',0));
             $status++ if (!$people->update('password',$passwd));
             foreach my $item (@useritems) {
                 if ($item ne 'userid' && $item ne 'password') {
@@ -240,7 +240,7 @@ elsif ($option eq "getmenu") {
     $menu .= "<TD>&nbsp</TD><TD>Redefine user password</TD>"; 
     $menu .= "</TR><TR>";
     $menu .= "<TD $color><A href=\"$currentScript/authorize$session\" $target>AUTHORIZE</A><TD>";
-    $menu .= "<TD>&nbsp</TD><TD>Assign user priviledges</TD>"; 
+    $menu .= "<TD>&nbsp</TD><TD>Assign user privileges</TD>"; 
     $menu .= "</TR><TR>";
     $menu .= "<TD $color><A href=\"$currentScript/delete$session\" $target>DELETE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Delete or Retire a user</TD>";
@@ -479,7 +479,7 @@ elsif ($option eq "delete") {
         $page->space(1);
         $page->add("Delete or Retire a user",0,0,'size=+1');
         $page->space(1);
-        $page->add("This function requires supervisor access priviledge",0,1,"size=+1 color='lightsteelblue'");
+        $page->add("This function requires supervisor access privilege",0,1,"size=+1 color='lightsteelblue'");
         my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
         $users =~ s/ITEMS/Arcturus users/;
         $page->add($users,0,0);
@@ -497,7 +497,7 @@ elsif ($option eq "delete") {
         $page->ingestCGI();
     }
     elsif ($action eq "confirm") {
-# test input user names and priviledges
+# test input user names and privileges
         my $userid   = $cgi->parameter('userid');
         my $confirm  = $cgi->parameter('confirm',0) || 0; # no check for presence
 
@@ -592,9 +592,9 @@ elsif ($option eq "authorize") {
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->partition(1);
 #        $page->space(1);
-        $page->add("Access Priviledges Allocation",0,0,'size=+1');
+        $page->add("Access Privileges Allocation",0,0,'size=+1');
         $page->space(1);
-        $page->add("This function requires supervisor access priviledge",0,1,"size=+1 color='lightsteelblue'");
+        $page->add("This function requires supervisor access privilege",0,1,"size=+1 color='lightsteelblue'");
         my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
         $users =~ s/ITEMS/Arcturus users/; # replace placeholder
         $page->add($users,0,0);
@@ -612,7 +612,7 @@ elsif ($option eq "authorize") {
         $page->partition(2);
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->partition(1);
-        $page->add("Access priviledges allocation for user '$userid'",0,0,'size=+1');
+        $page->add("Access privileges allocation for user '$userid'",0,0,'size=+1');
         $usercode{user} = $userid;
 # test input and values
         if ($cgi->{'und_error'} || !$userid) {
@@ -621,11 +621,11 @@ elsif ($option eq "authorize") {
 # test the authorization for this operation to ensure USER is defined
         elsif (!$GateKeeper->authorize(\%usercode, \%returnpath)) { 
             $error = $GateKeeper->{error};
-            $error =~ s/\<do.+\>/change your priviledges/;
+            $error =~ s/\<do.+\>/change your privileges/;
         }
 # exclude the database owner and the superuser (just in case)
         elsif ($userid eq 'oper' || $userid eq 'arcturus') {
-            $error = "User '$userid' has default maximum access priviledges which cannot be altered";
+            $error = "User '$userid' has default maximum access privileges which cannot be altered";
         }
 
         else {
@@ -650,12 +650,12 @@ elsif ($option eq "authorize") {
             $seniority .= "<td> ($user->{seniority}) </td></tr></table>";
             $seniority =~ s/white/CCCCCC/ if ($seniority !~ /select/i);
             $page->add($seniority,0,0);
-# the current access priviledge
+# the current access privilege
             my $access = $cgi->parameter('access');
-            $user->{priviledges} = $access if defined($access); # preset
-            $page->add("Select priviledges (current code $user->{priviledges}) :",0,0,'size=+1');
+            $user->{privilegea} = $access if defined($access); # preset
+            $page->add("Select privileges (current code $user->{privilegea}) :",0,0,'size=+1');
             $page->space(1);
-            $page->add(&listPriviledges($user->{priviledges},1)); # including tick boxes
+            $page->add(&listPrivileges($user->{privilegea},1)); # including tick boxes
 # current restrictions on database
             $data->{databases} = 'NONE' if !$data->{databases};
             $data->{databases} =~ s/\:|\\\&/ /g; 
@@ -689,7 +689,7 @@ elsif ($option eq "authorize") {
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->partition(1);
         my $user = $people->associate('hashref',$userid,'userid');
-        $page->add("Access priviledges allocation for user $userid",0,0,'size=+1');
+        $page->add("Access privileges allocation for user $userid",0,0,'size=+1');
         $usercode{user} = $userid;
 # test database restrictions
         undef my $dbaccess;
@@ -734,7 +734,7 @@ elsif ($option eq "authorize") {
 # test the authorization for this operation to ensure USER is defined
         elsif (!$GateKeeper->authorize(\%usercode, \%returnpath)) { 
             $error = $GateKeeper->{error};
-            $error =~ s/\<do.+\>/change your priviledges/;
+            $error =~ s/\<do.+\>/change your privileges/;
         }
 # test if database restrictions are valid
         elsif (!$error) {
@@ -756,8 +756,8 @@ elsif ($option eq "authorize") {
 	        }
             }
             $page->space(1);
-            $page->add("Enable these priviledges (code $access) for user $userid:",0,0,'size=+1');
-            $page->add(&listPriviledges($access));
+            $page->add("Enable these privileges (code $access) for user $userid:",0,0,'size=+1');
+            $page->add(&listPrivileges($access));
 # restrictions to database or table access
             $page->space(1);
             $page->add("Access restricted to database(s): $dbaccess",0,0,'size=+1') if $dbaccess;
@@ -773,7 +773,7 @@ elsif ($option eq "authorize") {
                 $page->ingestCGI(); # (0,'default');
             }
             else {
-                $people->update('priviledges',$access,'userid',$userid);
+                $people->update('privilegea',$access,'userid',$userid);
                 $people->update('seniority',$seniority,'userid',$userid);
                 $people->packAttribute($userid,'userid','attributes','databases',$dbaccess) if $dbaccess;
                 $people->packAttribute($userid,'userid','attributes','tablename',$dtaccess) if $dtaccess;
@@ -965,12 +965,12 @@ sub listUserData {
 }
 
 
-sub listPriviledges {
-# return a listing of the priviledges set for a user as HTML formatted table
+sub listPrivileges {
+# return a listing of the privileges set for a user as HTML formatted table
     my $code = shift;
     my $tick = shift; # if true, return a form with check boxes
 
-    return "<table><tr><td bgcolor='CCCCCC'>No priviledges enabled</td></tr></table>" if (!$code && !$tick);
+    return "<table><tr><td bgcolor='CCCCCC'>No privileges enabled</td></tr></table>" if (!$code && !$tick);
 
     my @description = (
        'Create a new ARCTURUS database',          # bit 15 (includes drop and backup)
@@ -986,7 +986,7 @@ sub listPriviledges {
        'Define new assemblies and projects',      # bit  5 (includes delete)
        'Make assembly & project allocations',     # bit  4 (subject to seniority)
        'Modify assembly & project descriptions',  # bit  3 (always for creator itself)
-       'Define user priviledges',                 # bit  2 (only seniority >= 5)
+       'Define user privileges',                  # bit  2 (only seniority >= 5)
        'Change user data',                        # bit  1 (subject to seniority; always own info)
        'Has additional restrictions');            # bit  0 
 

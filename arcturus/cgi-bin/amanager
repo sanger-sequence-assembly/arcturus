@@ -582,7 +582,7 @@ elsif ($action eq 'process') {
 
         my $project  = $projects->associate('project',$projectname,'projectname') || 0;
         my $inquiry  = "select * from <self> where project=$project AND userid='$pjuser'";
-        my $presence = $uutopp->query($inquiry,0,0);
+        my $presence = $uutopp->query($inquiry,{traceQuery => 0});
 
         if ($presence > 0) {
             $error .= "User $pjuser is already assigned to project $projectname";
@@ -820,7 +820,7 @@ print "amanager: testUserAllocation (to be developed)<br>";
             $query .= "from PROJECTS,ASSEMBLY,USERS2PROJECTS ";
             $query .= "where  PROJECTS.project = USERS2PROJECTS.project ";
             $query .= "and ASSEMBLY.assembly = PROJECTS.assembly ";
-            my $hashes = $organisms->query($query,0,0);
+            my $hashes = $organisms->query($query,{traceQuery => 0});
 #$GateKeeper->report("hashes $hashes");
             my %numbers;
             foreach my $hash (@$hashes) {

@@ -127,8 +127,8 @@ elsif ($action eq 'overview') {
 
     $page->partition(5);
     $page->center(1);
-    my $link = "$arc_cgi_dir/query/preselect";
-    $page->linkbutton("RETURN to OVERVIEW",$link,0,'lightgreen');
+# my $link = "$arc_cgi_dir/query/preselect";
+# $page->linkbutton("RETURN to OVERVIEW",$link,0,'lightgreen');
 
     $page->partition(2);
     $page->sectionheader("ARCTURUS assembly tracking database $database",3,0);
@@ -163,10 +163,11 @@ elsif ($action eq 'overview') {
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
+        my $grey = " "; $grey = "bgcolor=lightgrey" if ($handle->{tabletype} =~ /innodb/i);
         if ($domain eq 'o' && $status eq 'p') {
             undef my $entry;
             my $count = $handle->count(0);
-            $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
+            $entry .= "<TR><TD $grey>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/select/$table";
             if ($count) {
                 $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\"> query </a></td></tr>";
@@ -286,10 +287,11 @@ elsif ($action eq 'overview') {
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
+        my $grey = " "; $grey = "bgcolor=lightgrey" if ($handle->{tabletype} =~ /innodb/i);
         if ($domain eq 'o' && $status eq 'm') {
             undef my $entry;
             my $count = $handle->count(0);
-            $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
+            $entry .= "<TR><TD $grey>$name</TD><TD>$count</TD>";
             if ($count) {
                 my $anchor = "$arc_cgi_dir/query/linkselect/$table";
                 $entry .= "<TD ALIGN=CENTER $more><A href=\"$anchor\"> query </a></td></tr>";
@@ -398,18 +400,18 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     my ($database,$name) = split /\./,$tablename;
 #    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
     my $dbtable = $organisms->spawn($name,$database,0,1);
-    $dbtable->build(1,'tablename')        if ($tablename =~ /INV/);
-    $dbtable->build(1,'identifier')       if ($tablename =~ /LIG/);
-    $dbtable->build(1,'projectname')      if ($tablename =~ /PRO/);
-    $dbtable->build(1,'userid')           if ($tablename =~ /USE/);
-    $dbtable->build(1,'cpkbstart')        if ($tablename =~ /MAP/);
-    $dbtable->build(1,'assembly,tagname') if ($tablename =~ /STS/);
-    $dbtable->build(1,'chemtype')         if ($tablename =~ /CHEMTYPES/);
-    $dbtable->build(1,'strands,strand')   if ($tablename =~ /STRANDS/);
-    $dbtable->build(1,'timebegin DESC')   if ($tablename =~ /SESSIONS/);
-    $dbtable->build(1,'chromosome')       if ($tablename =~ /ASSEM/);
-    $dbtable->build(1,'tablename,date')   if ($tablename =~ /HISTORY$/);
-    $dbtable->build(1,'tablename')        if ($tablename =~ /HISTORY\w+/);
+    $dbtable->build(1,'tablename')          if ($tablename =~ /INV/);
+    $dbtable->build(1,'identifier')         if ($tablename =~ /LIG/);
+    $dbtable->build(1,'projectname')        if ($tablename =~ /PRO/);
+    $dbtable->build(1,'userid')             if ($tablename =~ /USE/);
+    $dbtable->build(1,'cpkbstart')          if ($tablename =~ /MAP/);
+    $dbtable->build(1,'assembly,tagname')   if ($tablename =~ /STS/);
+    $dbtable->build(1,'chemtype')           if ($tablename =~ /CHEMTYPES/);
+    $dbtable->build(1,'strands,strand')     if ($tablename =~ /STRANDS/);
+    $dbtable->build(1,'timebegin DESC')     if ($tablename =~ /SESSIONS/);
+    $dbtable->build(1,'chromosome')         if ($tablename =~ /ASSEM/);
+    $dbtable->build(1,'date desc, tablename')    if ($tablename =~ /HISTORY$/);
+    $dbtable->build(1,'lastouch desc,tablename') if ($tablename =~ /HISTORY\w+/);
     $dbtable->autoVivify($database,0) if ($name ne 'INVENTORY'); # setup of possible sublinks
 # $dbtable->expandSequence('ACGTN ');
 
@@ -635,7 +637,8 @@ my $hashes = $ReadsRecall->spawnReads(\@number,'scompress,sequence,slength');
     }
     elsif (!$wildcard) {
         my $status = $ReadsRecall->getNamedRead($readname);
-        $number = 1 if ($status <= 1);  
+        $error = "! No reads found " if ($status >= 2);  
+        $number = 1 if ($status <= 1);
     }
     else {
 # readname and wildcard specified: compose the query constraints
@@ -679,8 +682,8 @@ my $hashes = $ReadsRecall->spawnReads(\@number,'scompress,sequence,slength');
         }
         $querystring .= " limit $limit";
 # print "query: $querystring<br>";
-# now query the database
-        $hashrefs = $READS->query($querystring);
+# now query the database (using defaults)
+        $hashrefs = $READS->query($querystring,{debug=>0});
 # determine output depending on number of reads selected
         $number = @$hashrefs if ($hashrefs && $hashrefs > 0);
         if ($number == 1) {
@@ -707,7 +710,7 @@ my $hashes = $ReadsRecall->spawnReads(\@number,'scompress,sequence,slength');
     elsif ($number == 1) {
 #        $ReadsRecall->touch();
         $page->add($ReadsRecall->list(1),0,0);
-    } 
+    }
     else {
     # compose selection table
         my $table = "<TABLE CELLPADDING=1 BORDER=1>";

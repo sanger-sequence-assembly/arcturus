@@ -226,7 +226,7 @@ elsif ($action eq 'arebuild') {
         $page->add("$existlist",0,0);
         $page->space(1);
 # generate a select form for reinitialising of a table in the common database
-        my $message = "changing anything in the common tables\nrequires database access priviledges";
+        my $message = "changing anything in the common tables\nrequires database access privileges";
         $page->message($message,$purple,"size = +1",1);
         $page->space(1);
         $page->message("Select a table to rebuild",'white',"size = +1");
@@ -360,7 +360,7 @@ elsif ($action eq 'organism') {
         $text .= "for the various data fields. If anyhow possible adhere to standard ";
         $text .= "naming schemes; some fields can be modified afterwards, if needed.\n\n";
         $text .= "Creating a new database requires that you are registered as ";
-        $text .= "ARCTURUS user and have the highest level of access priviledges.\n\n";
+        $text .= "ARCTURUS user and have the highest level of access privileges.\n\n";
         $page->message($text,0,0,0,"70%");
 
 # build the form
@@ -1200,7 +1200,7 @@ sub updateCounters {
 # find the connecting column name via the database model if it exists
 
     my $query = "select tcolumn,lcolumn from <SELF> where tablename='$master' and linktable='$slave'";
-    my $hash  = $dmodel->query($query,0,0); # no tracing
+    my $hash  = $dmodel->query($query,{traceQuery=>0});
     if (@$hash != 1) {
         $report = "Error in identification of column names (@$hash)";
         return $report;
@@ -1215,7 +1215,7 @@ sub updateCounters {
 
     $query = "select $column AS target, count(*) AS counted from <SELF> group by $column";
 
-    if (my $frequency = $mtable->query($query,0,0)) {
+    if (my $frequency = $mtable->query($query,{traceQuery=>0})) {
 
         my $accumulator = $stable->{hashrefs};
 

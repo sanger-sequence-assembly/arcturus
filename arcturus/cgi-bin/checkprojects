@@ -48,7 +48,7 @@ if (my $databases = $organisms->associate('dbasename',$server,'residence',1)) {
         $query .= "from PROJECTS,ASSEMBLY,USERS2PROJECTS ";
         $query .= "where  PROJECTS.project = USERS2PROJECTS.project ";
         $query .= "and ASSEMBLY.assembly = PROJECTS.assembly ";
-        my $hashes = $organisms->query($query,0,0);
+        my $hashes = $organisms->query($query,{traceQuery => 0});
 #$GateKeeper->report("hashes $hashes");
         foreach my $hash (@$hashes) {
 #$GateKeeper->report("$hash->{userid}  $hash->{projectname}  $hash->{assemblyname}");

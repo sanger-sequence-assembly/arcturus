@@ -55,7 +55,7 @@ if ($action eq 'getform') {
     $page->sectionheader("Drop an arcturus database",3,0);
 
     $page->space(1);
-    $page->add("This function needs database manager access priviledge",0,0,'size=+1 color="blue"');
+    $page->add("This function needs database manager access privilege",0,0,'size=+1 color="blue"');
     $page->space(2);
     $page->add($choices);
 
@@ -86,7 +86,7 @@ elsif ($action eq 'process') {
     $page->sectionheader("ARCTURUS contents manager");
     $page->sectionheader("Drop arcturus database $database");
     $page->space(1);
-    $page->add("This function needs database manager access priviledge",0,0,'size=+1 color="blue"');
+    $page->add("This function needs database manager access privilege",0,0,'size=+1 color="blue"');
 
 # test if database is empty (count reads) or available status is 'copied'
 
