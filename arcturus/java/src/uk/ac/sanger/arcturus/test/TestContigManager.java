@@ -14,10 +14,31 @@ public class TestContigManager {
 	lasttime = System.currentTimeMillis();
 
 	boolean verbose = Boolean.getBoolean("verbose");
-	boolean fullSequence = Boolean.getBoolean("fullSequence");
-	boolean fullContig = Boolean.getBoolean("fullContig");
+	String mappingOptionString = System.getProperty("mappingOption");
+	String consensusOptionString = System.getProperty("consensusOption");
 	String logfile = System.getProperty("logfile");
 	boolean displayContig = Boolean.getBoolean("displayContig");
+
+	int mappingOption = ArcturusDatabase.CONTIG_NO_MAPPING;
+
+	if (mappingOptionString == null) {
+	    mappingOptionString = "noMapping";
+	} else {
+	    if (mappingOptionString.equalsIgnoreCase("basicMapping"))
+		mappingOption = ArcturusDatabase.CONTIG_BASIC_MAPPING;
+
+	    if (mappingOptionString.equalsIgnoreCase("fullMapping"))
+		mappingOption = ArcturusDatabase.CONTIG_FULL_MAPPING;
+	}
+
+	int consensusOption = ArcturusDatabase.CONTIG_NO_CONSENSUS;
+
+	if (consensusOptionString == null) {
+	    consensusOptionString = "noConsensus";
+	} else {
+	    if (consensusOptionString.equalsIgnoreCase("consensus"))
+		consensusOption = ArcturusDatabase.CONTIG_CONSENSUS;
+	}
 
 	System.out.println("TestContigManager");
 	System.out.println("=================");
@@ -111,9 +132,7 @@ public class TestContigManager {
 			    System.out.println("LOOKING UP CONTIG[" + id + "]");
 			}
 
-			Contig contig = fullContig ?
-			    adb.getFullContigByID(id, true, fullSequence) :
-			    adb.getContigByID(id);
+			Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
 
 			if (verbose) {
 			    if (contig == null)
@@ -241,6 +260,52 @@ public class TestContigManager {
 
 		ps.println();
 	    }
+	}
+
+	byte[] dna = contig.getConsensus();
+
+	if (dna != null) {
+	    String seq = new String(dna);
+	    int seqlen = seq.length();
+
+	    ps.println();
+	    ps.println("Consensus:");
+	    ps.println();
+
+	    for (int i = 0; i < seqlen; i += 50) {
+		int j = i + 50;
+		ps.println(seq.substring(i, (j < seqlen) ? j : seqlen - 1));
+	    }
+
+	    ps.println();
+
+	    ps.println();
+	    ps.println("Compisition:");
+	    ps.println();
+
+	    int a = 0, c = 0, g = 0, t = 0, n = 0, x = 0;
+
+	    for (int i = 0; i < dna.length; i++) {
+		switch (dna[i]) {
+		case 'a': case 'A': a++; break;
+		case 'c': case 'C': c++; break;
+		case 'g': case 'G': g++; break;
+		case 't': case 'T': t++; break;
+		case 'n': case 'N': n++; break;
+		default: x++; break;
+		}
+	    }
+
+	    ps.println("A: " + a);
+	    ps.println("C: " + c);
+	    ps.println("G: " + g);
+	    ps.println("T: " + t);
+	    if (n > 0)
+		ps.println("N: " + n);
+	    if (x > 0)
+		ps.println("X: " + x);
+
+	    ps.println();
 	}
 
 	ps.println(">>> ------------------------------------------------------------------ <<<");
