@@ -27,5 +27,5 @@
 uk powmap/uk
 collections powmap/collections
 powmap_etc powmap/etc
-flatserve flatimpl &powmap_etc &uk &collections &embl_corba
-
+powmap_corba powmap/corba
+flatserve flatimpl &powmap_corba &powmap_etc &uk &collections
