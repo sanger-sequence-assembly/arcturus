@@ -109,7 +109,7 @@ sub create_organism {
         push @tables, 'HISTORY';
     }
 
-    my $NEWREADS = 0;
+    my $NEWREADS = 1;
     if (!$NEWREADS) {
 # old structure for READS table: 
       if (!$target || $target eq 'READS') {    
@@ -125,24 +125,24 @@ sub create_organism {
         &create_NEWREADS ($dbh, $list);
         &record ($historyTable,$userid,'READS');
       }
+    }
 
-      if (!$target || $target eq 'SEQUENCE') {    
+    if (!$target || $target eq 'SEQUENCE') {    
         push @tables, 'SEQUENCE';
         &create_SEQUENCE ($dbh, $list);
         &record ($historyTable,$userid,'SEQUENCE');
-      }
+    }
 
-      if (!$target || $target eq 'TEMPLATE') {    
+    if (!$target || $target eq 'TEMPLATE') {   
         push @tables, 'TEMPLATE';
         &create_TEMPLATE ($dbh, $list);
         &record ($historyTable,$userid,'TEMPLATE');
-      }
+    }
 
-      if (!$target || $target eq 'READCOMMENT') {    
+    if (!$target || $target eq 'READCOMMENT') {    
         push @tables, 'READCOMMENT';
         &create_READCOMMENT ($dbh, $list);
         &record ($historyTable,$userid,'READCOMMENT');
-      }
     }
 
 # end new structure
@@ -781,7 +781,7 @@ sub create_TEMPLATE {
     $dbh->do(qq[CREATE TABLE TEMPLATE(
              template_id     MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
              name            CHAR(24)  BINARY         NULL 
-         )]);
+          )]);
 #             ligation        SMALLINT UNSIGNED    NOT NULL, later to be added?
 }
 
@@ -795,7 +795,7 @@ sub create_READCOMMENT {
     $dbh->do(qq[CREATE TABLE READCOMMENT(
              read_id         MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY, 
              comment         VARCHAR(255)         NOT NULL
-        )]);
+            )]);
 
 #    $dbh->do(qq[CREATE INDEX RCR ON READCOMMENT (read_id)]);
 			     
