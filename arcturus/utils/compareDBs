@@ -49,7 +49,7 @@ print STDERR "Trying to lock READS table on $dsnb ...\n";
 $dbhb->do($lockquery);
 &db_die("do($lockquery) failed on $dsnb");
 
-$query = 'SELECT read_id, readname, slength, sequence from READS';
+$query = 'SELECT read_id, readname, slength, md5(sequence) from READS';
 
 print STDERR "Executing $query on $dsna ...\n";
 
@@ -62,7 +62,7 @@ $stha->execute();
 while(@ary = $stha->fetchrow_array()) {
     ($read_id, $readname, $slength, $sequence) = @ary;
     $readida{$readname} = $read_id;
-    $hasha{$readname} = md5_hex($sequence);
+    $hasha{$readname} = $sequence;
     $seqlena{$readname} = $slength;
 }
 
@@ -83,7 +83,7 @@ $sthb->execute();
 while(@ary = $sthb->fetchrow_array()) {
     ($read_id, $readname, $slength, $sequence) = @ary;
     $readidb{$readname} = $read_id;
-    $hashb{$readname} = md5_hex($sequence);
+    $hashb{$readname} = $sequence;
     $seqlenb{$readname} = $slength;
 }
 
