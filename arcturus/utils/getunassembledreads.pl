@@ -25,7 +25,7 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "nosingleton|info|help";
+                 "nosingleton|info|verbose|help";
 
 
 while (my $nextword = shift @ARGV) {

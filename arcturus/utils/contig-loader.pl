@@ -288,11 +288,11 @@ while (defined($record = <$CAF>)) {
                 $read->setBaseQuality ([@BaseQuality]);
             }
             elsif ($contig = $contigs{$objectName}) {
-                $contig->setQuality ([@BaseQuality]);
+                $contig->setBaseQuality ([@BaseQuality]);
             }
             elsif ($objectName =~ /contig/i) {
                 $contig = new Contig($objectName);
-                $contig->setQuality ([@BaseQuality]);
+                $contig->setBaseQuality ([@BaseQuality]);
             }
             else {
                 $read = new Read($objectName);
