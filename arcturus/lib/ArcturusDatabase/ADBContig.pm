@@ -14,7 +14,7 @@ our (@ISA);
 @ISA = qw(ADBRead);
 
 # ----------------------------------------------------------------------------
-# constructor and initialisation
+# constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
 
 sub new {
@@ -22,22 +22,12 @@ sub new {
 
     my $this = $class->SUPER::new(@_);
 
-    $this->defineContigMetaData();
-
     return $this;
 }
 
-
 #------------------------------------------------------------------------------
-# methods dealing with CONTIGs
+# methods for exporting CONTIGs or CONTIG attributes
 #------------------------------------------------------------------------------
-
-sub defineContigMetaData {
-    my $this = shift;
-
-    $this->{contig_attributes} = 
-           "length,ncntgs,nreads,newreads,cover,readnamehash";
-}
 
 sub getContig {
 # return a Contig object  (under development)
@@ -47,10 +37,11 @@ sub getContig {
 
 # decode input parameters and compose the query
 
-    my $query  = "select CONTIG.contig_id,$this->{contig_attributes} "; 
+    my $query  = "select CONTIG.contig_id,length,ncntgs,nreads,".
+                 "newreads,cover,readnamehash "; 
 
     my $nextword;
-    my $metadataonly = 0; # default the lot
+    my $metadataonly = 0; # default export the lot
     my $value;
 
     while ($nextword = shift) {
@@ -123,8 +114,6 @@ print STDERR "new getContig: $query\n";
         my $cover = shift @attributes;
         $contig->setAverageCover($cover);
 
-# ?    $contig->setReadNameHash($readnamehash); 
-
 	$contig->setArcturusDatabase($this);
     }
 
@@ -136,22 +125,18 @@ print STDERR "new getContig: $query\n";
 
 # get the reads for this contig with their DNA sequences and tags
 
-print STDERR "enter getReadsForContig\n";
     $this->getReadsForContig($contig);
 
 # get mappings (and implicit segments)
 
-print STDERR "enter getMappingsForContig\n";
     $this->getMappingsForContig($contig);
 
 # get contig tags
 
-print STDERR "enter getTagsForContig\n";
     $this->getTagsForContig($contig);
 
 # for consensus sequence we use lazy instantiation in the Contig class
 
-print STDERR "enter testContigForExport\n";
     return $contig if ($this->testContigForExport($contig));
 
     return undef; # invalid Contig instance
@@ -191,45 +176,17 @@ sub getSequenceAndBaseQualityForContigID {
 }
 
 sub hasContig {
-# test presence of contig with given contig_id and/or readchecksum
+# test presence of contig with given contig_id;
+# if so, return Contig instance with metadata only
     my $this = shift;
-    my $hash = shift; 
+    my $contig_id = shift;
 
-# compose the query
-
-    my $query = "select contig_id from CONTIG where";
-
-    my @params;
-    if ($hash->{contig_id}) {
-        $query .= "contig_id=?";
-        push @params, $hash->{contig_id};
-    }
-    if ($hash->{readnamehash}) {
-        $query .= " and" if @params;
-        $query .= " readnamehash=?";
-        push @params, $hash->{readnamehash};
-    }
-    $query .= " limit 1";
-print STDERR "has Contig: $query \n";
-
-    die "hasContig expects a contig_id or readnamehash value" unless @params;
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute(@params);
-
-    undef my $contig_id;
-
-    if (my @ary = $sth->fetchrow_array()) {
-	($contig_id) = @ary;
-    }
-
-    $sth->finish();
-
-    return $contig_id; # returns undefined if no such contig found
+    return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
 }
+
+#------------------------------------------------------------------------------
+# methods for importing CONTIGs or CONTIG attributes into the database
+#------------------------------------------------------------------------------
 
 sub putContig {
 # enter a contig into the database
@@ -254,7 +211,7 @@ sub putContig {
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
  
     my $reads = $contig->getReads();
-    return 0 unless $this->getSequenceIDforReads($reads);
+    return 0 unless $this->getSequenceIDForAssembledReads($reads);
 
 # get the sequenceIDs (from Read); also build the readnames array 
 
@@ -275,12 +232,12 @@ sub putContig {
 
 # test if the contig has been loaded before using the readname/sequence hash
 
-    my $readnamehash = md5(sort keys %seqids);
-# first try the readname hash
-    my $previous = $this->getContig(withChecksum=>$readnamehash,
+    my $readhash = md5(sort @seqids);
+# first try the sequence ID hash
+    my $previous = $this->getContig(withChecksum=>$readhash,
                                     metaDataOnly=>1);
-# if not found try the sequence ID hash
-    $previous = $this->getContig(withChecksum=>md5(sort @seqids),
+# if not found try the readname hash
+    $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
     if ($previous) {
 # the read name hash or the sequence IDs hash do match
@@ -294,20 +251,20 @@ sub putContig {
         }
     }
 
-# okay, the contig is new; find out if it is connected to existing
-# contigs (i.e. build the C2CMAPPING CONTIG2CONTIG links)
+# okay, the contig is new; find out if it is connected to existing contigs
 
     my $contigids = $this->getLinkedContigsForContig($contig);
-#print "output getLinkedContigsForContig: $contigids @$contigids\n";
-#print "new contig has ".$contig->getNumberOfReads." reads\n";
-# pull out mappings for those previous contigs
+# to be replaced later by this method using sub-queries:
+#    my $contigids = $this->getLinkedContigsForContigID($contigid);
+
+# pull out mappings for those previous contigs, if any
+
     if ($contigids && @$contigids) {
 # compare with each previous contig and return/store mapings/segments
-#print "test against contigs @$contigids \n";
+print "linked contigs: @$contigids for contig ".$contig->getContigName."\n";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
                                             metaDataOnly=>1);
-#print "linked contig has ".$previous->getNumberOfReads." reads\n";
             $this->getMappingsForContig($previous);
             unless ($contig->linkToContig($previous)) {
                 print STDERR "Empty link to contig ".
@@ -316,7 +273,7 @@ sub putContig {
 			     $contig->getContigName()."\n" if $list;
             }
         }
-# to be removed
+# to be removed after testing
 foreach my $mapping (@{$contig->getContigToContigMapping}) {
 print STDOUT "Contig ".$contig->getContigName." ".
               ($mapping->assembledFromToString || "\n");
@@ -328,13 +285,13 @@ print STDOUT "Contig ".$contig->getContigName." ".
         print STDERR "Contig ".$contig->getContigName." has no precursors\n";
     }
 
-return 0; # testing
+#return 0; # testing
 
 # now load the contig into the database
 
     my $dbh = $this->getConnection();
 
-    my $contigid = &putMetaDataForContig($dbh,$contig);
+    my $contigid = &putMetaDataForContig($dbh,$contig,$readhash);
 
     $this->{lastinsertedcontigid} = $contigid;
 
@@ -354,6 +311,8 @@ return 0; # testing
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
+# $this->ageByOne($contigid);
+
     return $contigid;
    
 # 2) lock MAPPING and SEGMENT tables
@@ -370,6 +329,7 @@ sub putMetaDataForContig {
 # private method
     my $dbh = shift; # database handle
     my $contig = shift; # Contig instance
+    my $readhash = shift; 
 
     my $query = "insert into CONTIG " .
                 "(length,ncntgs,nreads,newreads,cover".
@@ -384,161 +344,17 @@ sub putMetaDataForContig {
                            $contig->getNumberOfNewReads(),
                            $contig->getAverageCover(),
                            $contig->getOrigin(),
-                           $contig->getReadNameHash()) || &queryFailed($query);
+                           $readhash) || &queryFailed($query);
 
     return 0 unless ($rc == 1);
     
     return $dbh->{'mysql_insertid'}; # the contig_id
 }
 
-sub putMappingsForContig {
-# private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
-    my $dbh = shift; # database handle
-    my $contig = shift;
-
-# this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
-# tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
-# (contig-to-contig mapping) depending on the parameters option specified
-
-# define the queries and the mapping source
-
-    my $mquery; # for insert on the (C2C)MAPPING table 
-    my $squery; # for insert on the (C2C)SEGMENT table
-    my $mappings; # for the array of Mapping instances
-
-    my $test = 0;
-    while (my $nextword = shift) {
-        my $value = shift;
-        if ($nextword eq "test") {
-            $test = $value;
-        }
-        elsif ($nextword eq "type") {
-# for read-to-contig mappings
-            if ($value eq "read") {
-                $mappings = $contig->getMappings();
-                $mquery = "insert into MAPPING " .
-	                  "(contig_id,seq_id,cstart,cfinish,direction) ";
-                $squery = "insert into SEGMENT " .
-                          "(mapping_id,cstart,rstart,length) values ";
-            }
-# for contig-to-contig mappings
-            elsif ($value eq "contig") {
-                $mappings = $contig->getContigToContigMapping();
-                $mquery = "insert into C2CMAPPING " .
-	                  "(contig_id,linked_id,cstart,cfinish,direction) ";
-                $squery = "insert into C2CSEGMENT " .
-                          " (mapping_id,cstart,pstart,length) values ";
-            }
-            else {
-                die "Invalid parameter value for ->putMappingsForContig";
-            }
-        }
-        else {
-            die "Invalid parameter $nextword for ->putMappingsForContig";
-        }
-    }
-
-    die "Missing parameter for ->putMappingsForContig" unless $mappings;
-
-    $mquery .= "values (?,?,?,?,?)";
-
-    my $sth = $dbh->prepare_cached($mquery);
-
-    my $contigid = $contig->getContigID();
-
-# 1) the overall mapping
-
-    my $mapping;
-    foreach $mapping (@$mappings) {
-
-        my ($cstart, $cfinish) = $mapping->getContigRange();
-
-        if ($test) {
-            print STDOUT "Mapping TEST: contig_id $contigid, seq_id ".
-            $mapping->getSequenceID().
-            " cstart $cstart, cfinal $cfinish, alignment ".
-            $mapping->getAlignmentDirection()."\n";
-            $mapping->setMappingID($test++);
-            next;
-        }
-
-        my $rc = $sth->execute($contigid,
-                               $mapping->getSequenceID(),
-                               $cstart,
-                               $cfinish,
-                               $mapping->getAlignmentDirection()) 
-              || &queryFailed($mquery);
-        $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
-    }
-
-# 2) the individual segments (in block mode)
-
-    my $success = 1;
-    my $accumulated = 0;
-    my $accumulatedQuery = $squery;
-    my $lastMapping = $mappings->[@$mappings-1];
-    foreach my $mapping (@$mappings) {
-# test existence of mappingID
-        my $mappingid = $mapping->getMappingID();
-        if ($mappingid) {
-            my $segments = $mapping->getSegments();
-            foreach my $segment (@$segments) {
-                my $length = $segment->normaliseOnX(); # order contig range
-                my $cstart = $segment->getXstart();
-                my $rstart = $segment->getYstart();
-                $accumulatedQuery .= "," if $accumulated++;
-                $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
-            }
-        }
-        else {
-            print STDERR "Mapping ".$mapping->getReadName().
-		" has no mapping_id\n";
-            $success = 0;
-        }
-# dump the accumulated query if a number of inserts has been reached
-        if ($accumulated >= 100 || ($accumulated && $mapping eq $lastMapping)) {
-            $sth = $dbh->prepare($accumulatedQuery); 
-            my $rc = $sth->execute() || &queryFailed($squery);
-            $success = 0 unless $rc;
-            $accumulatedQuery = $squery;
-            $accumulated = 0;
-        }
-    }
-    return $success;
-}
-
-sub ageByOne {
-#
-    my $this = shift;
-    my @contigids = (shift);
-
-    my $dbh = $this->getConnection();
-
-# accumulate IDs of linked contigs by recursive query
-
-    my @updateids;
-    while (@contigids) {
-
-        my $query = "select linked_id from C2CMAPPING" .
-	            " where contig_id in (".join(',',@contigids).")";
-
-        my $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
-
-        undef @contigids;
-        while (my ($linked_id) = $sth->fetchrow_array()) {
-            push @updateids, $linked_id;
-            push @contigids, $linked_id;
-	}
-    }
-
-# here we have accumulated all IDs of contigs linked to input contig_id    
-}
-
-sub getSequenceIDforReads {
+sub getSequenceIDForAssembledReads {
 # put sequenceID, version and read_id into Read instances given their 
-# readname (for unedited reads) or their sequence (edited reads) 
+# readname (for unedited reads) or their sequence (edited reads)
+# NOTE: this method may insert new read sequence
     my $this = shift;
     my $reads = shift;
 
@@ -595,41 +411,6 @@ sub getSequenceIDforReads {
     return $success;
 }
 
-sub getLinkedContigsForContig {
-# private function: returns a list of IDs of connected contig(s) for contig
-    my $this = shift;
-    my $contig = shift;
-
-    return undef unless $contig->hasReads();
-
-    my $reads = $contig->getReads();
-
-# get the sequenceIDs (from Read instances)
-
-    my @seqids;
-    foreach my $read (@$reads) {
-        push @seqids,$read->getSequenceID();
-    }
-
-    my $query = "select distinct(contig_id) from MAPPING ".
-	        " where seq_id in (".join(',',@seqids).")";
-    
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    my @contigids;
-    while (my ($contigid) = $sth->fetchrow_array()) {
-        push @contigids, $contigid;
-    }
-
-    $sth->finish();
-
-    return [@contigids];
-}
-
 sub testContigForExport {
     &testContig(shift,shift,0);
 }
@@ -639,7 +420,7 @@ sub testContigForImport {
 }
 
 sub testContig {
-# private method
+# use via ForExport and ForImport aliases
     my $this = shift;
     my $contig = shift || return undef; # Contig instance
     my $level = shift;
@@ -746,6 +527,8 @@ sub deleteContig {
     return unless $contigid;
 
     my @tables = ('CONTIG','MAPPING','SEGMENT','C2CMAPPING','C2CSEGMENT');
+
+# to be completed
 }
 
 #----------------------------------------------------------------------------------------- 
@@ -753,9 +536,9 @@ sub deleteContig {
 #----------------------------------------------------------------------------------------- 
 
 sub getMappingsForContig {
-# private method, returns an array of MAPPINGS for the input contig_id
+# adds an array of read-to-read MAPPINGS to the input Contig instance
     my $this = shift;
-    my $contig = shift; # Contig instance
+    my $contig = shift;
 
     die "getMappingsForContig expects a Contig instance" 
          unless (ref($contig) eq 'Contig');
@@ -818,17 +601,271 @@ sub getMappingsForContig {
     $contig->addMapping([@mappings]);
 }
 
-sub getMappingsOfReadsInLinkedContigs {
-# ??? returns mappings in contigs of age=1 for an input array of read_ids
+sub putMappingsForContig {
+# private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
+    my $dbh = shift; # database handle
+    my $contig = shift;
+
+# this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
+# tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
+# (contig-to-contig mapping) depending on the parameters option specified
+
+# define the queries and the mapping source
+
+    my $mquery; # for insert on the (C2C)MAPPING table 
+    my $squery; # for insert on the (C2C)SEGMENT table
+    my $mappings; # for the array of Mapping instances
+
+my $test = 0; # to removed later
+    while (my $nextword = shift) {
+        my $value = shift;
+        if ($nextword eq "type") {
+# for read-to-contig mappings
+            if ($value eq "read") {
+                $mappings = $contig->getMappings();
+                return 0 unless $mappings; # MUST have read-to-contig mappings
+                $mquery = "insert into MAPPING " .
+	                  "(contig_id,seq_id,cstart,cfinish,direction) ";
+                $squery = "insert into SEGMENT " .
+                          "(mapping_id,cstart,rstart,length) values ";
+            }
+# for contig-to-contig mappings
+            elsif ($value eq "contig") {
+                $mappings = $contig->getContigToContigMapping();
+                return 1 unless $mappings; # MAY have contig-to-contig mappings
+                $mquery = "insert into C2CMAPPING " .
+	                  "(contig_id,linked_id,cstart,cfinish,direction) ";
+                $squery = "insert into C2CSEGMENT " .
+                          " (mapping_id,cstart,pstart,length) values ";
+            }
+            else {
+                die "Invalid parameter value for ->putMappingsForContig";
+            }
+        }
+
+# to be removed later
+        elsif ($nextword eq "test") {
+            $test = $value;
+        }
+
+        else {
+            die "Invalid parameter $nextword for ->putMappingsForContig";
+        }
+    }
+
+    die "Missing parameter for ->putMappingsForContig" unless $mappings;
+
+    $mquery .= "values (?,?,?,?,?)";
+
+    my $sth = $dbh->prepare_cached($mquery);
+
+    my $contigid = $contig->getContigID();
+
+# 1) the overall mapping
+
+    my $mapping;
+    foreach $mapping (@$mappings) {
+
+        my ($cstart, $cfinish) = $mapping->getContigRange();
+
+        if ($test) {
+# to be removed later
+            print STDOUT "Mapping TEST: contig_id $contigid, seq_id ".
+            $mapping->getSequenceID().
+            " cstart $cstart, cfinal $cfinish, alignment ".
+            $mapping->getAlignmentDirection()."\n";
+            $mapping->setMappingID($test++);
+            next;
+        }
+
+        my $rc = $sth->execute($contigid,
+                               $mapping->getSequenceID(),
+                               $cstart,
+                               $cfinish,
+                               $mapping->getAlignmentDirection()) 
+              || &queryFailed($mquery);
+        $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
+    }
+
+# 2) the individual segments (in block mode)
+
+    my $success = 1;
+    my $accumulated = 0;
+    my $accumulatedQuery = $squery;
+    my $lastMapping = $mappings->[@$mappings-1];
+    foreach my $mapping (@$mappings) {
+# test existence of mappingID
+        my $mappingid = $mapping->getMappingID();
+        if ($mappingid) {
+            my $segments = $mapping->getSegments();
+            foreach my $segment (@$segments) {
+                my $length = $segment->normaliseOnX(); # order contig range
+                my $cstart = $segment->getXstart();
+                my $rstart = $segment->getYstart();
+                $accumulatedQuery .= "," if $accumulated++;
+                $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
+            }
+        }
+        else {
+            print STDERR "Mapping ".$mapping->getReadName().
+		" has no mapping_id\n";
+            $success = 0;
+        }
+# dump the accumulated query if a number of inserts has been reached
+        if ($accumulated >= 100 || ($accumulated && $mapping eq $lastMapping)) {
+            $sth = $dbh->prepare($accumulatedQuery); 
+            my $rc = $sth->execute() || &queryFailed($squery);
+            $success = 0 unless $rc;
+            $accumulatedQuery = $squery;
+            $accumulated = 0;
+        }
+    }
+    return $success;
+}
+
+sub getLinkedContigsForContig {
+# returns a list of connected contig(s) for input contig based on r-c mappings
     my $this = shift;
-    my $rids = shift || return; # array reference
+    my $contig = shift; # Contig Instance
 
-    my $query = "select read_id, contig_id ";
-    $query   .= "from MAPPING as R2C, CONTIG2CONTIG as C2C where ";
-    $query   .= "C2C.newcontig = R2C.contig_id and age = 1 and ";
-    $query   .= "R2C.read_id in (".join(',',@$rids).") and";
-    $query   .= "R2C.deprecated in ('M','N')";
+    return undef unless $contig->hasReads();
 
+    my $reads = $contig->getReads();
+
+# get the sequenceIDs (from Read instances)
+
+    my @seqids;
+    foreach my $read (@$reads) {
+        push @seqids,$read->getSequenceID();
+    }
+
+# we have to select linked contigs of age 0
+# this query allows for empty entries in C2CMAPPING
+# NOTE: the alternative query is getLinkedContigsForContigID using subqueries
+
+    my $query = "select distinct(MAPPING.contig_id)".
+                "  from MAPPING join C2CMAPPING using (contig_id)".
+	        " where seq_id in (".join(',',@seqids).")".
+                "   and age = 0 ".
+                "UNION ".
+                "select distinct(MAPPING.contig_id)".
+                "  from MAPPING left join C2CMAPPING using (contig_id)".
+	        " where seq_id in (".join(',',@seqids).")".
+	        "   and age is null";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my @contigids;
+    while (my ($contigid) = $sth->fetchrow_array()) {
+        push @contigids, $contigid;
+    }
+
+    $sth->finish();
+
+    return [@contigids];
+}
+
+sub getLinkedContigsForContigID {
+# returns a list of IDs of connected contig(s) using sub-queries
+    my $this = shift;
+    my $contig_id = shift;
+
+# we have to select linked contigs of age 0 or missing from C2CMAPPING
+
+    my $query = "select distinct(MAPPING.contig_id)".
+                "  from MAPPING join C2CMAPPING using (contig_id)".
+	        " where seq_id in ".
+                "      (select seq_id from MAPPING where contig_id=$contig_id)".
+                "   and age = 0 ".
+                "UNION ".
+                "select distinct(MAPPING.contig_id)".
+                "  from MAPPING left join C2CMAPPING using (contig_id)".
+	        " where seq_id in ".
+                "      (select seq_id from MAPPING where contig_id=$contig_id)".
+	        "   and age is null";
+    
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my @contigids;
+    while (my ($contigid) = $sth->fetchrow_array()) {
+        push @contigids, $contigid;
+    }
+
+    $sth->finish();
+
+    return [@contigids];
+}
+
+sub ageByOne {
+# EXPERIMENTAL cascade age increase from the top
+    my $this = shift;
+    my @contigids = (shift); # initialise with one contig_id
+
+    my $dbh = $this->getConnection();
+
+# accumulate IDs of linked contigs by recursive query
+
+    my @updateids;
+    while (@contigids) {
+
+        my $query = "select linked_id from C2CMAPPING" .
+	            " where contig_id in (".join(',',@contigids).")";
+
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        undef @contigids;
+        while (my ($linked_id) = $sth->fetchrow_array()) {
+            push @updateids, $linked_id;
+            push @contigids, $linked_id;
+	}
+    }
+
+# here we have accumulated all IDs of contigs linked to input contig_id    
+}
+
+sub rebuildHistory {
+# EXPERIMENTAL build contig links from scratch
+    my $this = shift;
+
+    my $dbh = $this->getConnection();
+
+# step 1: reset the complete table to age 0
+
+    my $query = "update C2CMAPPING set age=0";
+
+    $dbh->do($query) || &queryFailed($query);
+
+# step 2: get all contig_ids not among the linked_ids, i.e. true generation 0
+
+    $query = "select C2C1.contig_id from C2CMAPPING as C2C1 left join".
+             "                           C2CMAPPING as C2C2".
+             "    on C2C1.contig_id = C2C2.linked_id".
+             "   and C2C2.linked_id is null";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+# step 3: each contig id is the starting point for tree build from the top
+
+    foreach my $contig_id (@contigids) {
+        $this->ageByOne($contig_id);
+    }
 }
 
 #------------------------------------------------------------------------------
