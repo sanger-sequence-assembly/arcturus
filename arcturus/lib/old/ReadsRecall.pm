@@ -289,8 +289,9 @@ sub getLabeledRead {
 sub loadReadTags {
     my $self   = shift;
     my $number = shift;
+    my $list   = shift;
 
-print "load TAGS for read_id $number\n";
+print "load TAGS for read_id $number\n" if $list;
 }
 
 #############################################################################
@@ -1031,6 +1032,7 @@ sub translate {
         $hashes = $CHEMISTRY->{hashrefs};
         foreach my $hash (@$hashes) {
             my $chemistry = $hash->{chemistry};
+            $hash->{chemtype} = "?" if !$hash->{chemtype}; # to have it defined
             $library->{chemistry}->{$chemistry} = "Unknown" if !$library->{chemistry}->{$chemistry};
             $library->{chemistry}->{$chemistry} .= " :  \"$hash->{identifier}\"  ($hash->{chemtype})" if $long;
         }
