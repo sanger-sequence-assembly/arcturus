@@ -579,7 +579,14 @@ sub authorize {
         $password = $cgi->parameter('password',0);
         $cgi->transpose('password') if $password; # remove from CGI input
         $identify = $cgi->parameter('identify',0);
-        $cgi->transpose('identify','USER') if $identify; # rename 'identify' to 'USER'
+# recover USER from input info, if not from 'identify', then from 'session'
+        if ($identify) {
+            $cgi->transpose('identify','USER'); # rename 'identify' to 'USER'
+        }
+        elsif ($session) {
+            my @sdata = split ':',$session;
+	    $cgi->addkey('USER',$sdata[0]);
+        }
     }
 
 # process possible hash input 
@@ -595,11 +602,6 @@ sub authorize {
 		  );
 
     &importOptions(\%options, $hash);
-#    if (ref($hash) eq 'HASH') {
-#        foreach my $key (keys %$hash) {
-#            $options{$key} = $hash->{$key};
-#        }
-#    }
 
     my $mother = $self->{mother};
     undef my ($priviledges,$seniority);
@@ -639,7 +641,6 @@ sub authorize {
         }
 # there is no such session number on the current server (e.g. after switching servers)
         else {
-#$options{silently} = 0;
 # try if the session is on another server
             my $found = 0;
             my $instances = $self->{config}->get("mysql_ports",'insist unique array');
@@ -668,7 +669,7 @@ sub authorize {
             $session = 0 if !$found; # force prompt for password
         }
         $cgi->delete('session') if !$session; # remove from CGI input
-        &report($self,$self->{report}) if !$options{silently};
+        &report($self) if !$options{silently};
         undef $self->{report};
     }
 
@@ -688,7 +689,6 @@ sub authorize {
             elsif ($options{interim} || !$cgi->pageExists) {
                 $self->cgiHeader(2); # if not already done
                 my $script = $self->currentScript;
-#                $script =~ s?^.*cgi-bin?/cgi-bin?;
                 $script .= $options{returnpath} if $options{returnpath};
                 my $page = $self->GUI("ARCTURUS authorisation");
                 $page->form($script); # return to same url
@@ -749,9 +749,15 @@ sub authorize {
                 &dropDead($self,$sessions->{error}) if $options{dieOnError};
 	        return $sessions->{errors};
             }
+# cleanup the sessions table (delete after 1 month, close yesterday if still open)
+            my $interval = "timebegin < DATE_SUB(CURRENT_DATE, interval 1 MONTH)";
+            $sessions->do("delete from SESSIONS where $interval");
+            $interval =~ s/MONTH/DAY/;
+            $interval .= ' and (closed_by is NULL or timeclose is NULL)';
+            $sessions->signature('oper','where',$interval,'closed_by','timeclose');
 # test if a previous session for this user is still open; if so, how old is it?
-            my $query = "select session, timebegin, UNIX_TIMESTAMP(NOW())-";
-            $query .= "UNIX_TIMESTAMP(timebegin) AS age from <self> where ";
+            my $query = "select session, timebegin, (UNIX_TIMESTAMP(NOW())+0)-";
+            $query .= "(UNIX_TIMESTAMP(timebegin)+0) AS age from <self> where ";
             $query .= "session like '$identify%' AND closed_by is NULL";
             my $array = $sessions->query($query,0,0);
             if ($array && ref($array) eq 'ARRAY') {
@@ -759,19 +765,21 @@ sub authorize {
                 my $openSession = $array->[0]->{session};
                 $self->{report} = "There is an existing active session $openSession; "; 
                 if (defined($ageOfSession) && $ageOfSession/60 <= $options{ageWindow}) {
-                    $self->{report} .= "Previous session $openSession will be continued. ";
+                    $self->{report} .= "Previous session $openSession will be continued ";
+                    $self->{report} .= "(window $options{ageWindow} minutes $ageOfSession)";
                     $sessions->counter('session',$openSession,1,'access'); # update access counter
                     $session = $openSession;
                 }
                 elsif (defined($openSession)) {
                     $self->{report} .= "Previous session $openSession will be closed. ";
-                    $sessions->signature(0,'session',$openSession,0,'timeclose');
-                    $sessions->update('closed_by','oper','session',$openSession);
+                    $sessions->signature('oper','session',$openSession,'closed_by','timeclose');
                 }
                 else {
                     $self->{report} .= "Possibly corrupted SESSIONS table: inconsistent data for $identify. ";
                 }
             }
+            &report($self) if !$options{silently};
+            undef $self->{report};
 
 # open a new session number if no one defined
 
@@ -797,7 +805,7 @@ sub authorize {
         }    
     }
 
-    &report($self,$self->{report}) if !$options{silently};
+    &report($self) if !$options{silently};
     undef $self->{report};
 
 # here priviledges should be defined; test priviledge(s) sought
@@ -853,8 +861,8 @@ sub GUI {
     return 0 if !$cgi;
 
     my $script = $self->currentScript;
-    my @exclude = ('USER');
-    my $postToGet = $cgi->postToGet(@exclude); # include 'database' but not USER
+    my @exclude = ('USER','redirect');
+    my $postToGet = $cgi->postToGet(0,@exclude); # include 'database' but not USER
 
     my $connection = &whereAmI($self); # production or development
 
@@ -916,16 +924,22 @@ sub GUI {
 
 # compose the top bar (partition 2)
 
+    my $database=$cgi->parameter('database') || $cgi->parameter('organism');
+
     $page->partition(2); $page->center(1);
     $connection =~ s/\b(dev\w+)\b/<font size=+1 color=red>$1<\/font>/;
     $connection =~ s/\b(pro\w+)\b/<font size=+1 color=blue>$1<\/font>/;
-    $page->add("<font size=+1> You are connected to the ARCTURUS $connection</font>");
+    my $banner = "You are connected to the ARCTURUS $connection";
+    $banner =~ s/ARCTURUS/$database/ if ($database ne 'arcturus');
+    $page->add($banner,0,0,"size=+1");
     
 # compose the left-side link table  (dev/prod database functions; partitions 3,5)
+# transfer to same script on different server; requires to omit database specification
 
     $page->partition(3);
     push @exclude, 'database';
-    $script .= $cgi->postToGet(@exclude); # without current database
+    push @exclude, 'organism';
+    $script .= $cgi->postToGet(0,@exclude);
     my $tablelayout = "cellpadding=2 border=0 cellspacing=0 width=$width align=center";
     my $table = "<table $tablelayout>";
     if (@alternates) {
@@ -943,7 +957,7 @@ sub GUI {
     $table .= "</table>";
     $page->add($table);   
 
-# compose the database table
+# compose the database table for chosing a different database
 
     $page->partition(5);
     $table = "<table $tablelayout>";
@@ -961,39 +975,41 @@ sub GUI {
     }
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
-    $page->add($table);   
+    $page->add($table); 
+
+# the other table require the input database specification  
+
+    my @include = ('database','organism','dbasename','session');
 
 # compose the 'create' table: include assemblies and projects only if database is defined
 
     $page->partition(7);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Create </th></tr>";
-    my $create = "cgi-bin/create/newform".$cgi->postToGet(@exclude);
+    my $create = "/cgi-bin/create/newform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\"> Database </a></td></tr>";
-    if (my $database=$cgi->parameter('database')) {
-        $create = "cgi-bin/amanager/preselect/assembly".$cgi->postToGet('USER');
+    if ($database && $database ne 'arcturus') {
+        $create = "/cgi-bin/amanager/preselect/assembly".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$create\"> Assembly </a></td></tr>";
-        $create = "cgi-bin/amanager/preselect/project".$cgi->postToGet('USER');
+        $create = "/cgi-bin/amanager/preselect/project".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$create\"> Project </a></td></tr>";
     }
-    $create = "cgi-bin/umanager/newform".$cgi->postToGet(@exclude);
+    $create = "/cgi-bin/umanager/newform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\"> User </a></td></tr>";
     $table .= "<tr><td $cell>&nbsp </td></tr>";
     $table .= "</table>";
-    $page->add($table);   
+    $page->add($table);
 
 # compose the update table
 
     $page->partition(6);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Update </th></tr>";
-    if (my $database=$cgi->parameter('database')) {
-        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(@exclude);
-        $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
-        $update = "/cgi-bin/amanager/newform".$cgi->postToGet('USER');
-        $table .= "<tr><td $cell><a href=\"$update\"> Assembly </a></td></tr>";
-        $update = "/cgi-bin/pmanager/newform".$cgi->postToGet('USER');
-        $table .= "<tr><td $cell><a href=\"$update\"> Project </a></td></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
+    if ($database && $database ne 'arcturus') {
+        my $update = "/cgi-bin/pmanager/specify/users".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
+        $update = "/cgi-bin/pmanager/specify/contigs".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\"> Contigs </a></td></tr>";
     }
     $table .= "</table>";
     $page->add($table);   
@@ -1003,12 +1019,12 @@ sub GUI {
     $page->partition(4);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Input </th></tr>";
-    my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet('USER');
+    my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet(1,@include);
     $table .= "<tr><td $cell><a href=\"$input\"> READS </a></td></tr>";
-    $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet('USER');
+    $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet(1,@include);
     $table .= "<tr><td $cell><a href=\"$input\"> CONTIGS </a></td></tr>";
-    if (my $database=$cgi->parameter('database')) {
-        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet('USER');
+    if ($database && $database ne 'arcturus') {
+        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$input\"> TAGS </a></td></tr>";
     }
     else {
@@ -1021,10 +1037,18 @@ sub GUI {
 
     $page->partition(8);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Update </th></tr>";
-    my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(@exclude);
+    $table .= "<tr><th bgcolor='$purp' width=100%> Edit Info </th></tr>";
+    if ($database && $database ne 'arcturus') {
+        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
+        $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\"> Assembly </a></td></tr>";
+        $update = "/cgi-bin/pmanager/specify/project".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$update\"> Project </a></td></tr>";
+    }
+    my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
-    $update = "/cgi-bin/update/newform".$cgi->postToGet(@exclude);
+    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$update\"> Common </a></td></tr>";
 
     $table .= "<tr><td $cell> </td></tr>";
@@ -1115,6 +1139,7 @@ sub report {
     if ($self->{cgi} && $self->{cgi}->{status}) {
         $self->{cgi}->PrintHeader(1) if !$self->{cgi}->{'header'}; # plain text
         $tag = "<br>" if ($self->{cgi}->{'header'} == 1);
+        $text = $self->{report} if ! $text;
         $text =~ s/\\n/$tag/g if $text;
     }
     print STDOUT "$tag$text$tag\n" if $text;

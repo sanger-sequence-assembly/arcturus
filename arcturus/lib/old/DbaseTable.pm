@@ -1180,7 +1180,7 @@ sub update {
         $self->{errors}  = "! Failed to update  table $tablename:";
         $self->{errors} .= " $self->{qerror}" if  $self->{qerror};
         $self->{errors} .= " Invalid or undefined column name $cname or value $value" if !$self->{qerror};
-# print "errors: $self->{errors}\n";
+#print "errors: $self->{errors}\n";
     }
 
     return $status;   

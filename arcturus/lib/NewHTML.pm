@@ -349,11 +349,14 @@ sub add {
 # add to the current partition
     my $self  = shift;
     my $text  = shift;
-    my $part  = shift;
-    my $hline = shift;
+    my $part  = shift; # optional, default the curent part
+    my $hline = shift; # optional, default no closing line
+    my $font  = shift; # optional, font specification
 
     $part = $self->{current} if (!defined($part) || $part <= 0);
     my $content = $self->{content}; #  partition contents
+
+    $text = "<FONT $font>$text</FONT>" if $font;
 
     $text =~ s/banner/$self->{banner}/ if ($text && $self->{banner});
 
@@ -405,7 +408,7 @@ sub ingestCGI {
     return if (ref($in) ne 'HASH');
 
     foreach my $key (keys (%$in)) {
-        hidden($self,$key,$in->{$key}) if ($key !~ /submit|confirm/i);
+        hidden($self,$key,$in->{$key}) if ($key !~ /submit|confirm|action/i);
     }
 }
 
@@ -580,7 +583,7 @@ sub arcturusGUI {
     $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON2</TD>";
-    $layout .= "<TD ROWSPAN=3>CON0</TD>";
+    $layout .= "<TD ROWSPAN=4>CON0</TD>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON3</TD>";
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON4</TD>";
@@ -588,6 +591,9 @@ sub arcturusGUI {
     $layout .= "</TR><TR>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON6</TD>";
     $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON7</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>&nbsp</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>&nbsp</TD>";
     $layout .= "</TR></TABLE>";
 
     $self->{layout} = $layout;

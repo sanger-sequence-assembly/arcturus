@@ -431,17 +431,15 @@ sub signature {
     $update = 'updated' if !$update; # default column name for datetime
 
 #print "signature on $self->{tablename}: $user, $tcname, $tvalue, $userid, $update\n";
-    if ($tcname && $tvalue && defined($self->{coltype}->{$tcname})) {
+    if ($tcname && $tvalue && (defined($self->{coltype}->{$tcname}) || lc($tcname) eq 'where')) {
 # update the 'userid' if the column exists
         if (defined($user) && $user && defined($self->{coltype}->{$userid})) {
             $self->update($userid,$user,$tcname,$tvalue);
-#print "user: $userid update\n";
         }
-# update the 'updated' if the column exists
+# update the 'updated' column if the column exists
         if (defined($self->{coltype}->{$update})){
             my $datetime = $self->timestamp();
             $self->update($update,$datetime,$tcname,$tvalue);
-#print "update: $update\n";
         }
     }
 }

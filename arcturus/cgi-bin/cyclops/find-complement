@@ -45,7 +45,7 @@ else {
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-if (!$GateKeeper->authorize(100,{nosession => $nosession, silently => 1, diagnosis => 1})) {
+if (!$GateKeeper->authorize(100,{nosession => $nosession, silently => 1, diagnosis => 1, ageWindow => 25})) {
     my $error = $GateKeeper->{error};
     $GateKeeper->dropDead($error);
 }
@@ -53,43 +53,66 @@ if (!$GateKeeper->authorize(100,{nosession => $nosession, silently => 1, diagnos
 # decide on the interface to be used
 
 my $brtag = "\n";
-if ($cgi && $cgi->MethodGet) {
+my $noGUI = $cgi->parameter('noGUI');
+undef my $redirect;
+
+if ($cgi && $database ne 'arcturus' && $noGUI) {
     $GateKeeper->cgiHeader(1); # return string plain
-# $cgi->PrintVariables(1);
 }
-elsif ($cgi && $cgi->MethodPost) {
-    if ($database eq 'arcturus') {
+elsif ($cgi && $noGUI) {
+    $GateKeeper->dropDead("Please define a database");
+}
+elsif ($cgi) {
+
+    my $action = $cgi->parameter('action');
+    if (!$action || $action ne 'Search') {
+# compose the query form
         $brtag = "<br>";
-        my $page = $GateKeeper->GUI("ARCTURUS read pairs finder");
-# $cgi->PrintVariables(1);
+        my $page = $GateKeeper->GUI("read pairs finder");
         my $host   = $GateKeeper->currentHost;
         my $script = $GateKeeper->currentScript;
-        $page->form($script,0,"${host}pairs");
         my $head = "Welcome to the Arcturus Read Pairs finder";
         $page->sectionheader($head,3,0);
         my $body = "Read Pairs are identified in the specified database <br>";
         $body   .= "and will be marked";
-        $page->add("<FONT color='blue'>$body</FONT>",0,1);
+        $page->add($body,0,1,"color='blue'");
         my $text = "Please specify the search constraints and submit";
         $page->sectionheader($text,3,1);
+# the data fields (always allow a change of database)
         my $form = &form;
-        my $dbases = $organisms->htmlOptions('dbasename','organism',20);
+        my $dbases = $organisms->htmlOptions('dbasename','organism',20,0,$database);
         $form =~ s/DATABASE/$dbases/;
+        if ($database ne 'arcturus') {
+            my $attribute = $organisms->unpackAttributes($database,'dbasename');
+            $blocksize = $attribute->{PRbs} if $attribute->{PRbs};
+            $start     = $attribute->{PRst} if $attribute->{PRst};
+            $length    = $attribute->{PRlt} if $attribute->{PRlt};
+            $suffix    = $attribute->{PRsf} if $attribute->{PRsf};
+        }
+        $redirect = "${host}pairs" if $cgi->parameter('redirect');
+        $page->form($script,0,$redirect); 
         $page->add($form,0,1);        
         $page->preload('blocksize',$blocksize,1);
         $page->preload('start',$start,1);
         $page->preload('length',$length,1);
         $page->preload('suffix',$suffix,1) if $suffix;
-#        $cgi->delete('USER');
+        $cgi->delete('USER');
         $page->ingestCGI;
-        $page->submitbuttonbar(0,0,0);
+        my @buttons;
+        push @buttons, 'type=submit value="Redirect" name="redirect"' if !$redirect;
+        push @buttons, 'type=submit value="Recall" name="action"';
+        push @buttons, 'type=submit value="Search" name="action"';
+        push @buttons, 'type=reset  value="Reset"';
+        $page->buttonbartemplate(@buttons+0,0,\@buttons);
         $page->form(0);
         $page->flush;
         $GateKeeper->disconnect;
         exit 0;
     }
     $GateKeeper->cgiHeader(1); # line mode on the viewing window
-# $cgi->PrintVariables(1);
+}
+elsif ($database eq 'arcturus') {
+    $GateKeeper->dropDead("Please define a database");
 }
 
 ##############################################################################
@@ -119,7 +142,7 @@ $PAIRS->setMultiLineInsert(10); # block inserts
 # $GateKeeper->disconnect; exit 0; # test mode
 
 my $continue = 1;
-$length = $length + $start;
+my $tlength = $length + $start;
 my $list = 0;
 
 while ($continue) {
@@ -134,7 +157,6 @@ while ($continue) {
     undef my $hashes;
     my $where = "read_id >= $start and read_id <= $final and paired='N'";
     if ($hashes = $READS->associate('read_id,readname,template','where',$where)) {
-# print "hashes: $hashes query $READS->{lastQuery}$brtag";
         undef my %readhash;
         if (ref($hashes) eq 'ARRAY') {
             foreach my $hash (@$hashes) {
@@ -143,7 +165,6 @@ while ($continue) {
             }
         }
         $hashes = \%readhash;
-# print "hashes: $hashes $brtag";
     }
     else {
         $GateKeeper->dropDead("Query FAILED: $READS->{qerror}");
@@ -172,6 +193,7 @@ while ($continue) {
             print "Non-standard readname $readname $brtag";
             next;
         }
+        $tested++;
         undef my $where;
         if ($template && $template !~ /\b(unknown|NULL)\b/) {
             $where = "template = '$template' and ";
@@ -182,7 +204,6 @@ while ($continue) {
             print "$readid $readname : No complement found$brtag" if ($list > 1);
             next;
         }
-        $tested++;
 
         my $warn = 0; $warn = 1 if (@$chash > 1);
         print "   $readid $readname WARNING: several complements found! " if $warn;
@@ -240,16 +261,26 @@ while ($continue) {
         print "$brtag" if $warn;
     }
 
-    print "$tested unpaired reads tested; $paired new pairs found in this block$brtag";
+    print "$tested unpaired reads tested; ** $paired ** new pairs found in this block$brtag";
 
     $start = $final + 1; # preset next cycle
-    $continue = 0 if ($start >= $length);
-
-# add a continuation link for the next block (using a session id!)
+    $continue = 0 if ($start >= $tlength);
 
 }
 
 $PAIRS->flush(); # dump remaining pair entries
+
+# add link for the next block (using a session id!)
+
+if (!$redirect) {
+}
+
+# pack attributes, preload for subsequent search
+
+$organisms->packAttribute($database,'dbasename','attributes','PRbs',$blocksize);
+$organisms->packAttribute($database,'dbasename','attributes','PRst',$start);
+$organisms->packAttribute($database,'dbasename','attributes','PRlt',$length);
+$organisms->packAttribute($database,'dbasename','attributes','PRsf',$suffix) if $suffix;
 
 my $userid = $cgi->parameter('USER');
 
@@ -263,6 +294,7 @@ $GateKeeper->disconnect();
 
 exit 0;
 
+##############################################################################
 
 sub form {
 

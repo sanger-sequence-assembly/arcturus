@@ -165,7 +165,8 @@ else {
         my $count = $organisms->count();
         $page->sectionheader("There are $count Organism databases",3,0);
         $page->add($organisms->htmlTable('0310000011100000')); # list them
-        my $select = $organisms->htmlOptions('dbasename','database',20);
+        my $database = $cgi->parameter('database') || $cgi->parameter('organism');
+        my $select = $organisms->htmlOptions('dbasename','database',20,0,$database);
         $page->sectionheader("Select a Database : $select",4,0);
 #        $page->sectionheader("Provide your User Identification and Submit",4,0);
 #        $page->identify('10',8,1);

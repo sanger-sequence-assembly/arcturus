@@ -154,20 +154,31 @@ sub transport {
 sub postToGet {
 # convert posted CGI parameters/values into a get formatted string
     my $self = shift;
+    my $type = shift;
 
 # a list of parameter/values to be excluded can be provided as array
 
-    my %exclude;
-    $exclude{submit}++; # always
+    if (!defined($type)) {
+        $type = -1;
+    }
+    elsif ($type != 0 && $type != 1) {
+        return "Invalid type specification in postToGet";
+    }
+
+    my %inexclude;
     while (@_) {
         my $name = shift;
-        $exclude{$name}++;
+        $inexclude{$name}++;
     }
 
     my $string = '';
     my $in = $self->{cgi_input};
     foreach my $key (keys (%$in)) {
-        if (!$exclude{$key} && $in->{$key} =~ /\w/) {
+        my $accept = 1;
+        $accept = 0 if ($key eq 'submit'); # always
+        $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
+        $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
+        if ($accept && $in->{$key} =~ /\w/) {
             $string .= "\&" if ($string =~ /\w/);
             $string .= "\?" if ($string !~ /\S/);
             $string .= "$key=$in->{$key}";
@@ -229,12 +240,25 @@ sub replace {
     my $value  = shift;
     my $append = shift;
 
+    return if (!defined($key) || !defined($value));
+
     my $in = $self->{cgi_input};
 
     $append = 0 if (!$append || !defined($in->{$key}));
 
     $in->{$key} = $value if (!$append);
     $in->{$key} .= $value if ($append);
+}
+
+#------------------------------------------------------------------------------
+
+sub addkey {
+# add a key and value to the %in buffer
+    my $self   = shift;
+    my $key    = shift;
+    my $value  = shift;
+
+    &replace($self,$key,$value);
 }
 
 ###############################################################################
@@ -276,6 +300,11 @@ sub PrintVariables {
     }
 
     $output .= "<P>";
+
+    if ($self->{header} != 1) {
+        $output =~ s/\<\/tr\>|\<p\>/\n/ig; # replace line tags by line break
+        $output =~ s/\<[^\<\>]+\>/ /g; # remove all other tags
+    }
 
     print STDOUT "$output\n" if ($show);
 
