@@ -4,6 +4,8 @@ use strict;
 
 use ArcturusDatabase;
 
+use FileHandle;
+
 my $instance;
 my $organism;
 my $verbose = 0;
@@ -16,6 +18,7 @@ my $usesilow = 0;
 my $updateproject = 0;
 my $minprojectsize = 5000;
 my $outfile;
+my $xmlfile;
 
 ###
 ### Parse arguments
@@ -30,6 +33,7 @@ while (my $nextword = shift @ARGV) {
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
     $minprojectsize = shift @ARGV if ($nextword eq '-minprojectsize');
     $outfile = shift @ARGV if ($nextword eq '-out');
+    $xmlfile = shift @ARGV if ($nextword eq '-xml');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
 
@@ -433,6 +437,12 @@ foreach my $keya (sort keys %{$baclinks}) {
 print "\n\n----------------------------------------------------------------------\n\n";
 print "SUPER-SCAFFOLDS\n\n";
 
+my $xmlfh;
+
+if ($xmlfile) {
+    $xmlfh = new FileHandle($xmlfile, "w");
+}
+
 my $scaffoldtosuperscaffold = {};
 
 my $project = 0;
@@ -535,6 +545,36 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
     if ($totscaff > 1) {
 	print "\n\nSEED: $seedscaffoldid, $totscaff scaffolds, $contigcount contigs, $totbp bp\n\n";
+    }
+
+    if ($xmlfh && $totbp >= $minprojectsize) {
+	print $xmlfh "<super-scaffold scaffolds=\"$totscaff\" contigs=\"$contigcount\" basepairs=\"$totbp\">\n";
+
+	foreach my $scaffold (@{$superscaffold}) {
+	    my ($scaffoldid, $sense) = @{$scaffold};
+
+	    $scaffold = $scaffoldfromid{$scaffoldid};
+
+	    print $xmlfh "    <scaffold id=\"$scaffoldid\" sense=\"$sense\">\n";
+
+	    my $isContig = 1;
+
+	    foreach my $entry (@{$scaffold}) {
+		if ($isContig) {
+		    my ($contigid, $sense) = @{$entry};
+		    print $xmlfh "        <contig id=\"$contigid\" sense=\"$sense\" />\n";
+		} else {
+		    my ($gapsize, $bridges) = @{$entry};
+		    print $xmlfh "        <gap size=\"$gapsize\" bridges=\"",join(",",@{$bridges}),"\" />\n";
+		}
+
+		$isContig = !$isContig;
+	    }
+
+	    print $xmlfh "    </scaffold>\n";
+	}
+
+	print $xmlfh "</super-scaffold>\n\n";
     }
 
     if ($updateproject && $contigcount > 1 && $totbp >= $minprojectsize) {
@@ -842,6 +882,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-out\t\tName of output file (default: standard output)\n";
+    print STDERR "-xml\t\tName of XML file to store scaffolds\n";
     print STDERR "-minbridges\tMinimum number of pUC bridges (default: 2)\n";
     print STDERR "-minbacbridges\tMinimum number of BAC bridges (default: 2)\n";
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
