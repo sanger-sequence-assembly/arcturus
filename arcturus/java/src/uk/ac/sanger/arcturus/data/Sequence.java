@@ -127,7 +127,7 @@ public class Sequence extends Core {
      * @param cvectorClip the cloning vector clipping.
      */
 
-    public void setCloneVectorClipping(Clipping cvectorClip) {
+    public void setCloningVectorClipping(Clipping cvectorClip) {
 	this.cvectorClip = cvectorClip;
     }
 
@@ -137,7 +137,7 @@ public class Sequence extends Core {
      * @return the cloning vector clipping.
      */
 
-    public Clipping getCloneVectorClipping() { return cvectorClip; }
+    public Clipping getCloningVectorClipping() { return cvectorClip; }
 
     /**
      * Sets the left sequence vector clipping.
