@@ -74,11 +74,6 @@ sub addReadToList {
     my $this = shift;
     my ($readname, $object) = @_;
 
-    if (!defined($object) or ref($object) ne 'Read') {
-        print STDERR "addReadNameToList requires a readname and an object reference\n";
-        return undef;
-    }
-
     my $list = $this->{readlist};
 
     push @$list, [$readname,$object];
