@@ -121,9 +121,14 @@ while(@ary = $sth->fetchrow_array()) {
     $diffcount = 0;
 
     if ($arcseqlen == $gapseqlen) {
+	$chunkoffset = 0;
+
 	while (length($arcsequence) > 0) {
-	    print substr($arcsequence, 0, $chunk), "\n";
-	    print substr($gapsequence, 0, $chunk), "\n";
+	    print substr($arcsequence, 0, $chunk);
+	    print "    ",$chunkoffset;
+	    print "\n";
+	    print substr($gapsequence, 0, $chunk);
+	    print "\n";
 
 	    $cmplen = (length($arcsequence) > $chunk) ? $chunk : length($arcsequence);
 
@@ -145,6 +150,8 @@ while(@ary = $sth->fetchrow_array()) {
 
 	    $arcsequence = substr($arcsequence, $chunk);
 	    $gapsequence = substr($gapsequence, $chunk);
+
+	    $chunkoffset += $chunk;
 
 	    print "\n" if ($ndiffs);
 	}
