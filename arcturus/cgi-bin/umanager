@@ -2,21 +2,13 @@
 
 #############################################################################
 #
-# Create ARCTURUS Assembly Database (for organism or common)
+# User Administration Manager (including authorization)
 #
 #############################################################################
 
-use strict; # Constraint variables declaration before using them
+use strict;
 
 use GateKeeper; 
-
-##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -41,9 +33,8 @@ my $people     = $organisms->spawn('USERS','arcturus',0,1,'userid');
 my $USERSUPPORT = $config->get("USERSUPPORT");
 my $db_manager  = $config->get("db_manager");
 my $arc_scr_dir = $config->get("ARC_TMP_DIR");
-my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
 
-my $getMenu = "$arc_cgi_dir/update/arcturus/getmenu";
+my $currentScript = $GateKeeper->currentScript;
 
 $option = 'abort' if !$people;
 
@@ -71,7 +62,7 @@ if ($option eq 'getform') {
 
     $page->space(1);
     $page->add('ARCTURUS User Registration Form',0,0,'size=+2');
-    $page->form("/cgi-bin/umanager/register");
+    $page->form("$currentScript/register");
 
     my $ft = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
     my $text = "<TABLE ALIGN=CENTER WIDTH=80%><tr>";
@@ -159,7 +150,7 @@ elsif ($option eq "register") {
         $page->errorbox("Your password should have at least 4 characters and may not contain blanks");
         $page->add("Please use the \"Back\" button and try again",0,1,$font);
     }
-    elsif ($email && (my $hash = $people->associate('hashref',$email,'email'))) {
+    elsif ($email && $email !~ /ejz/ && (my $hash = $people->associate('hashref',$email,'email'))) {
         my $other = $hash->{userid};
         $page->errorbox("User $other has the same email address");
         $page->add("Please use your previously registered username",0,1,$font);
@@ -239,19 +230,19 @@ elsif ($option eq "getmenu") {
     my $session = $cgi->postToGet(1,'session');
     my $target = "target='userframe'";  
     my $menu = "<TABLE border=0 cellpadding=2><TR>";
-    $menu .= "<TD $color><A href=\"$arc_cgi_dir/umanager/getform$session\">NEW USER</A><TD>";
+    $menu .= "<TD $color><A href=\"$currentScript/getform$session\">NEW USER</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Register a new user</TD>";
     $menu .= "</TR><TR>";
-    $menu .= "<TD $color><A href=\"$arc_cgi_dir/umanager/modify$session\" $target>UPDATE</A><TD>";
+    $menu .= "<TD $color><A href=\"$currentScript/modify$session\" $target>UPDATE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Modify user information</TD>"; 
     $menu .= "</TR><TR>";
-    $menu .= "<TD $color><A href=\"$arc_cgi_dir/umanager/pwupdate$session\" $target>PASSWORD</A><TD>";
+    $menu .= "<TD $color><A href=\"$currentScript/pwupdate$session\" $target>PASSWORD</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Redefine user password</TD>"; 
     $menu .= "</TR><TR>";
-    $menu .= "<TD $color><A href=\"$arc_cgi_dir/umanager/authorize$session\" $target>AUTHORIZE</A><TD>";
+    $menu .= "<TD $color><A href=\"$currentScript/authorize$session\" $target>AUTHORIZE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Assign user priviledges</TD>"; 
     $menu .= "</TR><TR>";
-    $menu .= "<TD $color><A href=\"$arc_cgi_dir/umanager/delete$session\" $target>DELETE</A><TD>";
+    $menu .= "<TD $color><A href=\"$currentScript/delete$session\" $target>DELETE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Delete or Retire a user</TD>";
     $menu .= "</TR></TABLE>";
     my $fnt = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
@@ -266,12 +257,12 @@ elsif ($option eq "modify") {
     $page->frameborder(100,15); # overrides GUI
 
     undef my $error;
-    my $link = "$arc_cgi_dir/umanager/modify";
+    my $link = "$currentScript/modify";
     $link .= $cgi->postToGet(1,'session');
 
     if (!$action || $action eq 'getform') {
 # throw back a form to select userid to modify and own userid + password
-        $page->form("$arc_cgi_dir/umanager/modify/getdata");
+        $page->form("$currentScript/modify/getdata");
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Information",4,1);
 # alternative: multi-column table of usernames and preselection of names on e.g first letter
@@ -290,9 +281,9 @@ elsif ($option eq "modify") {
     elsif ($action eq 'getdata') {
 # get the relevant data from the database and throw back an edit form
         my $userid   = $cgi->parameter('userid');
-        my %usercode = (user => $userid, mask => 100);
+        my %usercode = (user => $userid, mask => 2);
         my %returnpath = (returnPath => '/modify/getdata', noGUI => 1); 
-        if (($userid eq 'myself' && !$GateKeeper->authorize(100, \%returnpath)) 
+        if (($userid eq 'myself' && !$GateKeeper->authorize(2, \%returnpath)) 
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercode, \%returnpath))) {
             $error = $GateKeeper->{error};
         }            
@@ -307,7 +298,7 @@ elsif ($option eq "modify") {
         }
         else {
 # password checked okay, get list of items to be edited
-            $page->form("$arc_cgi_dir/umanager/modify/confirm");
+            $page->form("$currentScript/modify/confirm");
             my $editlist = $people->htmlEditRecord($userid,'userid',0,'0022222020002');
         # get current value of user's function
             my $function = $people->associate('function',$userid,'userid');
@@ -327,7 +318,7 @@ elsif ($option eq "modify") {
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Information for user: $userid",4,1);
 
-        my %usercode = (user => $userid, mask => 100);
+        my %usercode = (user => $userid, mask => 2);
         my %returnpath = (returnPath => '/modify/confirm', noGUI => 1); 
         if  (!$GateKeeper->authorize(\%usercode, \%returnpath)) {
             $error = $GateKeeper->{error};
@@ -336,7 +327,7 @@ elsif ($option eq "modify") {
 # tally the changes and return a list of changes to confirm
             my ($changes,$report) = $people->cgiEditTable($cgi->{cgi_input},0);
             if ($changes > 0) {
-                my $action = "$arc_cgi_dir/umanager/modify/confirm";
+                my $action = "$currentScript/modify/confirm";
                 $page->promptbox($report,$action,$link); # return button to modify
                 $page->ingestCGI();
             }
@@ -368,12 +359,12 @@ elsif ($option eq "pwupdate") {
     $page->frameborder(100,15) if !$cgi->parameter('GUI',0); # overrides GUI
 
     undef my $error;
-    my $link = "$arc_cgi_dir/umanager/modify";
+    my $link = "$currentScript/modify";
     $link .= $cgi->postToGet(1,'session');
 
     if (!$action || $action eq 'getform') {
     # throw back a form to select userid to modify and own userid + password
-        $page->form("$arc_cgi_dir/umanager/pwupdate/getdata");
+        $page->form("$currentScript/pwupdate/getdata");
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Modify User Password",4,1);
         my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
@@ -394,9 +385,9 @@ elsif ($option eq "pwupdate") {
         my $userid   = $cgi->parameter('userid');
 # authorize (will define GateKeeper->currentUser)
         my $noGui = 1; $noGui = 0 if $cgi->parameter('GUI',0); 
-        my %usercodes  = (user => $userid, mask => 100);
+        my %usercodes  = (user => $userid, mask => 6);
         my %returnpath = (returnPath => '/pwupdate/getdata', noGUI => $noGui); 
-        if (($userid eq 'myself' && !$GateKeeper->authorize(100, \%returnpath)) 
+        if (($userid eq 'myself' && !$GateKeeper->authorize(6, \%returnpath)) 
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercodes, \%returnpath))) {
             $error = $GateKeeper->{error};
         }            
@@ -410,7 +401,7 @@ elsif ($option eq "pwupdate") {
         } 
         elsif (!$error) {
 # the password is found to be okay, generate form to enter new password for user
-            $page->form("$arc_cgi_dir/umanager/pwupdate/confirm");
+            $page->form("$currentScript/pwupdate/confirm");
             $page->sectionheader("Enter new password for user $userid and repeat",4,1);
             $page->identify('01'); $page->hline(); # prompt for password and repeat
             $page->submitbuttonbar(0,0);
@@ -419,7 +410,7 @@ elsif ($option eq "pwupdate") {
     }
 
     elsif ($action eq 'confirm') {
-# read the user data, the new password and its repeat; authorizing user is in session
+# read the user data, the new password and its repeat; authorizing user is in $session
         my $userid   = $cgi->parameter('userid');   # the target user
         my $password = $cgi->parameter('PASSWORD'); # the new password for userid
         my $repeat   = $cgi->parameter('pwrepeat'); # its repeat
@@ -431,7 +422,7 @@ elsif ($option eq "pwupdate") {
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->sectionheader("Redefine User Password for $userid",4,1);
 # get authorization
-        my %usercodes  = (user => $userid, mask => 100);
+        my %usercodes  = (user => $userid, mask => 6);
         my %returnpath = (returnPath => '/pwupdate/confirm', noGUI => 1); 
         if  (!$GateKeeper->authorize(\%usercodes, \%returnpath)) {
             $error = $GateKeeper->{error};
@@ -478,12 +469,12 @@ elsif ($option eq "delete") {
 
     my $bgcolor = 'G0G000';
     undef my $error;
-    my $link = "$arc_cgi_dir/umanager/delete";
+    my $link = "$currentScript/delete";
     $link .= $cgi->postToGet(1,'session');
 
     if (!$action || $action eq 'getform') {
 # throw back a form to select userid to modify and own userid + password
-        $page->form("$arc_cgi_dir/umanager/delete/confirm");
+        $page->form("$currentScript/delete/confirm");
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->space(1);
         $page->add("Delete or Retire a user",0,0,'size=+1');
@@ -510,12 +501,12 @@ elsif ($option eq "delete") {
         my $userid   = $cgi->parameter('userid');
         my $confirm  = $cgi->parameter('confirm',0) || 0; # no check for presence
 
-        $page->form("$arc_cgi_dir/umanager/delete/confirm");
+        $page->form("$currentScript/delete/confirm");
         $page->sectionheader("ARCTURUS user administration",3,0);
         $page->space(1);
         $page->add("Delete or Retire a user",0,1,'size=+1');
 
-        my %usercodes  = (user => $userid, mask => 100, notOnSelf => 1);
+        my %usercodes  = (user => $userid, mask => 6, notOnSelf => 1);
         my %returnpath = (returnPath => '/delete/confirm', noGUI => 1); 
 
         if ($cgi->{'und_error'}) {
@@ -543,7 +534,7 @@ elsif ($option eq "delete") {
                 }
 	    }
 
-            my $action = "$arc_cgi_dir/umanager";
+            my $action = "$currentScript";
             my $reject = $action.'/locate'.$cgi->postToGet(0,'userid');
 	    if ($isAllocated) {
 # the user cannot be deleted
@@ -584,21 +575,221 @@ elsif ($option eq "delete") {
 
 elsif ($option eq "authorize") {
 # displayed in new window 'userframe' without full GUI
-    $page->frameborder(100,15); # overrides GUI
+    $page->frameborder(100,15,'white',5); # overrides GUI
 
     undef my $error;
-    my $link = "$arc_cgi_dir/umanager/delete";
-    $link .= $cgi->postToGet(1,'session');
+    my $link = "$currentScript/getmenu";
+    $link .= $cgi->postToGet(1,'session','noGUI');
 
+    my %usercode = (mask => 6, notOnSelf => 1);
+    $action = 'getform' if !$action;
+    my %returnpath = (returnPath => "/$option/$action", noGUI => 1); 
 
-    $GateKeeper->currentOptions;
+    if ($action eq 'getform') {
+# throw back a form to select a user
+        $page->form("$currentScript/$option/getdata");
+        $page->partition(2);
+        $page->sectionheader("ARCTURUS user administration",3,0);
+        $page->partition(1);
+#        $page->space(1);
+        $page->add("Access Priviledges Allocation",0,0,'size=+1');
+        $page->space(1);
+        $page->add("This function requires supervisor access priviledge",0,1,"size=+1 color='lightsteelblue'");
+        my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
+        $users =~ s/ITEMS/Arcturus users/; # replace placeholder
+        $page->add($users,0,0);
+        my $dbusers = $people->htmlMaskedOptions('userid','where',"seniority < 6",'userid');
+        my $query = "<TABLE><TR><TH>Select a User:</th>";
+        $query .= "<td>$dbusers</td></tr></table>";
+        $page->add($query,0,1);
+        $page->submitbuttonbar($link,0,0);
+        $page->ingestCGI();
+    }
 
-    $page->sectionheader("Under development",4,0);
+    elsif ($action eq "getdata") {
+# get the relevant data from the database and throw back an edit form
+        my $userid   = $cgi->parameter('userid') || '';
+        $page->partition(2);
+        $page->sectionheader("ARCTURUS user administration",3,0);
+        $page->partition(1);
+        $page->add("Access priviledges allocation for user '$userid'",0,0,'size=+1');
+        $usercode{user} = $userid;
+# test input and values
+        if ($cgi->{'und_error'} || !$userid) {
+            $error = "Please define all input fields";
+        }
+# test the authorization for this operation to ensure USER is defined
+        elsif (!$GateKeeper->authorize(\%usercode, \%returnpath)) { 
+            $error = $GateKeeper->{error};
+            $error =~ s/\<do.+\>/change your priviledges/;
+        }
+# exclude the database owner and the superuser (just in case)
+        elsif ($userid eq 'oper' || $userid eq 'arcturus') {
+            $error = "User '$userid' has default maximum access priviledges which cannot be altered";
+        }
 
-    $page->form(0);
-# $doCopy = 1;
+        else {
+# password checked out okay, get list of items to be edited
+            $page->form("$currentScript/$option/confirm");            
+            my $user = $people->associate('hashref',$userid,'userid');
+            my $data = $people->unpackAttributes($userid,'userid');
+            my $smax = $people->associate('seniority',$GateKeeper->{USER},'userid');
+            $smax-- if ($smax);  # maximum allowed seniority
+# get current seniority and build seniority select menu (if a choice is available)
+            my @seniority;
+            for (my $i=0 ; $i <= $smax ; $i++) {
+                    push @seniority, $i;
+            }
+            $page->center(0); # revert to left justified
+
+            my $seniority = $cgi->parameter('seniority');
+            $user->{seniority} = $seniority if defined($seniority); # preset, if any
+            my $select = $page->choicelist('seniority',\@seniority,0,-1,$user->{seniority});
+            $seniority = "<table><tr><td><font size=+1> Seniority for user \"$userid\" :</font></td>";
+            $seniority .= "<td bgcolor='white' width=20 align=center>$select</td>";
+            $seniority .= "<td> ($user->{seniority}) </td></tr></table>";
+            $seniority =~ s/white/CCCCCC/ if ($seniority !~ /select/i);
+            $page->add($seniority,0,0);
+# the current access priviledge
+            my $access = $cgi->parameter('access');
+            $user->{priviledges} = $access if defined($access); # preset
+            $page->add("Select priviledges (current code $user->{priviledges}) :",0,0,'size=+1');
+            $page->space(1);
+            $page->add(&listPriviledges($user->{priviledges},1)); # including tick boxes
+# current restrictions on database
+            $data->{databases} = 'NONE' if !$data->{databases};
+            $data->{databases} =~ s/\:|\\\&/ /g; 
+            my $databases = "<table><tr><td nowrap><font size = +1> Database restrictions :</font></td>";
+            $databases .= "<td><input type=text name=dbrange value='$data->{databases}' size=30 maxlength=256>";
+            $databases .= "</td></tr>";
+            $page->add($databases,0,0);
+# current restrictions on tables
+            $data->{tablename} = 'NONE' if !$data->{tablename};
+            $data->{tablename} =~ s/\:|\\\&/ /g; 
+            my $tablename = "<tr><td><font size = +1 nowrap> Database Table restrictions :</font></td>";
+            $tablename .= "<td><input type=text name=tbrange value='$data->{tablename}' size=30 maxlength=256>";
+            $tablename .= "</td></tr></table>";
+            $page->add($tablename,0,0);
+            $page->center(1); # restore centering
+            $page->submitbuttonbar($link,0,0);
+            $page->ingestCGI();
+        }
+        $page->add($error,0,0,'size=+1') if $error;
+    }
+
+    elsif ($action eq "confirm") {
+# get the relevant data from the database and throw back a confirm form
+        my $userid    = $cgi->parameter('userid') || '';
+        my $confirm   = $cgi->parameter('confirm',0) || 0; # no check for presence
+        my $seniority = $cgi->parameter('seniority',0);   # no check for presence
+        my $access    = $cgi->parameter('access',0) || 0;
+        my $dbrange   = $cgi->parameter('dbrange',0) || 'NONE';
+        my $tbrange   = $cgi->parameter('tbrange',0) || 'NONE';
+        $page->partition(2);
+        $page->sectionheader("ARCTURUS user administration",3,0);
+        $page->partition(1);
+        my $user = $people->associate('hashref',$userid,'userid');
+        $page->add("Access priviledges allocation for user $userid",0,0,'size=+1');
+        $usercode{user} = $userid;
+# test database restrictions
+        undef my $dbaccess;
+        my %htcoptions = (maxColumns => 5, noHeader => 1, cellWidth => 120);
+        if ($dbrange && $dbrange ne 'NONE') {
+            $dbrange =~ s/\s*$//; # chop trailing blanks
+            my @databases = split /\s*[\,\;\|\&]\s*/,$dbrange;
+            my $list = $organisms->htmlTableColumn('dbasename',\%htcoptions);
+            my $problem = 0;
+            foreach my $database (@databases) {
+                $dbaccess .= $database.' ';
+                if (!$organisms->associate('number',$database,'dbasename')) {
+                    $error .= "Unknown database '$database'<p>";
+                    $problem = 1;
+                }
+            }
+            $error .= "Valid databases are: $list <p>" if $problem;
+        }
+# test database table restrictions
+        undef my $dtaccess;
+        if ($tbrange && $tbrange ne 'NONE') {
+            $tbrange =~ s/\s*$//; # chop trailing blanks
+            my @tables = split /\s*[\,\;\|\&]\s*/,$tbrange;
+            my $inventory = $organisms->spawn('INVENTORY','arcturus',0,1);
+            my $list = $inventory->htmlTableColumn('tablename',\%htcoptions,'domain','o');
+            my $problem = 0;
+            foreach my $table (@tables) {
+                $dtaccess .= $table.' ';
+                my $where = "tablename = '$table' and domain = 'o'";
+                if (!$inventory->associate('domain','where',$where)) {
+                    $error .= "Invalid database tablename '$table' <p>";
+                    $problem = 1;
+                }
+            }
+            $error .= "Valid tablenames are: $list <p>" if $problem;
+        }
+       
+# test input and values
+        if ($cgi->{'und_error'} || !$userid) {
+            $error .= "Please define all input fields";
+        }
+# test the authorization for this operation to ensure USER is defined
+        elsif (!$GateKeeper->authorize(\%usercode, \%returnpath)) { 
+            $error = $GateKeeper->{error};
+            $error =~ s/\<do.+\>/change your priviledges/;
+        }
+# test if database restrictions are valid
+        elsif (!$error) {
+# compare with current setting : seniority
+            $page->center(0);
+            $page->space(3);
+            if (!defined($seniority) || $seniority == $user->{seniority}) {
+                $page->add("Seniority ($user->{seniority}) for $userid not changed",0,0,'size=+1'); 
+            }
+            else {
+                $page->add("Current seniority $user->{seniority} for $userid to be changed to : $seniority",0,0); 
+            }
+# access code
+            if ($access) {
+                my @access = split /\0|\s\&\s/,$access;
+                $access = 0;
+                foreach my $bit (@access) {
+                    $access = $access | (1 << $bit);
+	        }
+            }
+            $page->space(1);
+            $page->add("Enable these priviledges (code $access) for user $userid:",0,0,'size=+1');
+            $page->add(&listPriviledges($access));
+# restrictions to database or table access
+            $page->space(1);
+            $page->add("Access restricted to database(s): $dbaccess",0,0,'size=+1') if $dbaccess;
+            $page->add("No restriction on access to database(s)",0,0,'size=+1') if !$dbaccess;
+            $page->space(1);
+            $page->add("Access restricted to database table(s): $dtaccess",0,0,'size=+1') if $dtaccess;
+            $page->add("No restriction on access to database table(s)",0,0,'size=+1') if !$dtaccess;
+	    $page->center(1);
+# decision time
+            if (!$confirm || $confirm ne 'CONFIRM') {
+                $page->form("$currentScript/$option/confirm");            
+                $page->promptbox($report,$action,$link); # return button to modify
+                $page->ingestCGI(); # (0,'default');
+            }
+            else {
+                $people->update('priviledges',$access,'userid',$userid);
+                $people->update('seniority',$seniority,'userid',$userid);
+                $people->packAttribute($userid,'userid','attributes','databases',$dbaccess) if $dbaccess;
+                $people->packAttribute($userid,'userid','attributes','tablename',$dtaccess) if $dtaccess;
+                $people->update('ustatus','active','userid',$userid);
+                $page->space(2);
+                $page->add("DONE",0,0,'size=+1');
+                $doCopy = 1;
+            }
+        }
+
+        if ($error) {
+            $page->center(0);
+            $page->add($error,0,0,'size=+1');
+        }
+    }
 }
-
 
 ###############################################################################
 # QUERY
@@ -612,7 +803,7 @@ elsif ($option eq "locate") {
     $page->sectionheader("ARCTURUS user administration",3,0);
     if (!$action || $action eq 'getform') {
     # generate query form
-        $page->form("$arc_cgi_dir/umanager/locate/search");
+        $page->form("$currentScript/locate/search");
         $page->sectionheader("Find a user: formulate your query",4,1);
     # get the query form
         $page->add($people->htmlEditRecord(0,0,0,'02222220000','any'),0,1);
@@ -641,7 +832,7 @@ elsif ($option eq "locate") {
                 my $table = "<TABLE>";
                 foreach my $hash (@$users) {
                     $userid = $hash->{'userid'};
-                    my $anchor = "<a href=\"$arc_cgi_dir/umanager/locate/user\?userid=$userid\">";
+                    my $anchor = "<a href=\"$currentScript/locate/user\?userid=$userid\">";
                     $anchor .= "$userid</A>";
                     $table .= "<TR><TD>$anchor</TD><TD>&nbsp</TD><TD>$hash->{'lastname'}</TD>";
                     $table .= "<TD>&nbsp</TD><TD>$hash->{'givennames'}</TD>";
@@ -686,6 +877,7 @@ $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2) if ($option =~ /mod|pwu|del
 $page->form(0);
 $page->flush();
 
+# print "history update ... \n";
 $organisms->historyUpdate($userid,0,0);
 
 $GateKeeper->disconnect;
@@ -693,16 +885,13 @@ $GateKeeper->disconnect;
 &mailnotice ($email,$message,$arc_scr_dir) if ($message && $email);
 &mailnotice ($db_manager,$report,$arc_scr_dir) if ($report);
 
-# finally harmonize the USERS tables of development and production server
+# finally harmonize the USERS tables of all instances instances
 
 if ($doCopy || $doDelete) {
-    my $root = $GateKeeper->currentScriptRoot;
     my $temp = $config->get('ARC_TMP_DIR');
     my $action = "copy:";
     $action .= "delete:$doDelete" if $doDelete;
-    delete $ENV{'GATEWAY_INTERFACE'};
-    $ENV{SCRIPT_FILENAME} = "$root/harmonize";
-    $ENV{SCRIPT_NAME} = "/cgi-bin/harmonize";
+    my $root = $GateKeeper->prepareFork('harmonize');
     system ("$root/harmonize users $action >> $temp/harmonize.log");
 }
 
@@ -712,14 +901,13 @@ exit 0;
 # subroutines
 #******************************************************************************
 
-
 sub mailnotice {
 
     my ($address,$message,$scratch_dir) = @_;
 
 # Write content to the temporary mail file
 
-#print "mailnotice to $address <br><br>$message<br><br>dir: $scratch_dir<br><br>";
+print "mailnotice to $address <br><br>$message<br><br>dir: $scratch_dir<br><br>";
 
     my $user;
    ($user = $address) =~ s/(.*)\@\S*/$1/;
@@ -751,10 +939,12 @@ sub listUserData {
         my $table = "<table cellpadding=2 border=2>";
         $table .= "<tr><th>Project</th><th>Assembly</th><th>server</th></tr>";
         foreach my $key (sort keys %$attributes) {
-            my ($project,$assembly) = split '-',$key;
-            $table .= "<tr><td>$assembly</td><td>$project</td>";
-            $table .= "<td>$stype{$attributes->{$key}}</td></tr>";
-            $isAllocated++;
+            if ($key =~ /-/) {
+                my ($project,$assembly) = split '-',$key;
+                $table .= "<tr><td>$assembly</td><td>$project</td>";
+                $table .= "<td>$stype{$attributes->{$key}}</td></tr>";
+                $isAllocated++;
+            }
         }
         $table .= "</table>";
         $page->space(1);
@@ -775,6 +965,43 @@ sub listUserData {
 }
 
 
+sub listPriviledges {
+# return a listing of the priviledges set for a user as HTML formatted table
+    my $code = shift;
+    my $tick = shift; # if true, return a form with check boxes
 
+    return "<table><tr><td bgcolor='CCCCCC'>No priviledges enabled</td></tr></table>" if (!$code && !$tick);
 
+    my @description = (
+       'Create a new ARCTURUS database',          # bit 15 (includes drop and backup)
+       'Modify database description',             # bit 14 (always if creator)
+       'Re-initialize tables or change format',   # bit 13 (could be destructive rebuild)
+       'Rebuild table contents ',                 # bit 12 (non-destructive with arcturus scripts)
+       'Re-initialize common database tables',    # bit 11
+       'Enter new reads',                         # bit 10
+       'Do reads-related maintenance',            # bit  9
+       'Process a new assembly (i.e. contigs)',   # bit  8
+       'Do assembly-related maintenance',         # bit  7
+       'Enter or modify tags',                    # bit  6
+       'Define new assemblies and projects',      # bit  5 (includes delete)
+       'Make assembly & project allocations',     # bit  4 (subject to seniority)
+       'Modify assembly & project descriptions',  # bit  3 (always for creator itself)
+       'Define user priviledges',                 # bit  2 (only seniority >= 5)
+       'Change user data',                        # bit  1 (subject to seniority; always own info)
+       'Has additional restrictions');            # bit  0 
 
+    my $font = "<font size=4 face='sans-serif'>";
+    my $list = "<table cellpadding=0 cellspacing=0 border=0>";
+    for (my $i = 0 ; $i < 15 ; $i++) {
+        my $bit = 15 - $i;
+        my $checked = ''; $checked = 'checked' if ($code & (1 << $bit));
+        $list .= "<tr>";
+        $list .= "<td> - </td>" if (!$tick && $code & (1 << $bit));
+        $list .= "<td><input type=checkbox name=access value=\"$bit\" $checked>&nbsp</td>" if $tick;
+        $list .= "<td> $font $description[$i]</font> </td>" if ($tick || $code & (1 << $bit)); 
+        $list .= "</tr>";
+    } 
+    $list .= "</table>";
+
+    return $list;
+}

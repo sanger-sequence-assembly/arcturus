@@ -13,23 +13,10 @@ use GateKeeper;
 use ArcturusTable;
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql');
-$GateKeeper->environment;
-
-my $config     = $GateKeeper->configHandle();
-
-my $cgi        = $GateKeeper->cgiHandle(1);
 
 # this script may be run:
 # (1) from the arcturus GUI under CGI
@@ -39,18 +26,18 @@ my $cgi        = $GateKeeper->cgiHandle(1);
 my $subject = '';
 my $action  = '';
 
-my $origin = $GateKeeper->origin(2,1) || '';
-print "origin:  $origin \n";
+my $origin = $GateKeeper->origin(2,1) || ''; # print "origin:  $origin \n";
+
 (my $void, $subject, $action) = split '/',$origin if $origin;
    
-$GateKeeper->cgiHeader(1) if ($cgi && !@ARGV); # return string plain
+$GateKeeper->cgiHeader(1) if !@ARGV; # return string plain
 
 ##############################################################################
-# MAIN
+# PREPARATIONS
 ##############################################################################
 
-my $instances  = $config->get('mysql_ports');
-my $port_maps  = $config->get('port_maps');
+my $instances  = $GateKeeper->lookup('mysql_ports');
+my $port_maps  = $GateKeeper->lookup('port_maps');
 undef my %maps;
 foreach my $map (@$port_maps) {
     my @parts = split /\W/,$map;
@@ -68,7 +55,7 @@ my $currentHost = $GateKeeper->currentHost;
 
 my $report;
 foreach my $instance (@$instances) {
-# print "instance  $instance \n";
+ print "instance  $instance \n";
     $instance =~ s/\.sanger\.ac\.uk//;
     my ($host,$port) = split ':',$instance;
     next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));
@@ -117,6 +104,7 @@ if ($subject && $subject =~ /\borganisms\b/i) {
         foreach my $hash (@$hashrefs) {
             my $residence = $hash->{residence};
             $residence =~ s/\.sanger\.ac\.uk//;
+            $residence =~ s/\:\w+\:/:/; # temporary fix
             $servers{$residence}++;
         }
     }

@@ -2,7 +2,7 @@
 
 #############################################################################
 #
-# ARCTURUS Assembly and Project manager
+# ARCTURUS Assembly and Projects manager; allocation of users and contigs
 #
 #############################################################################
 
@@ -11,26 +11,14 @@ use strict;
 use GateKeeper; 
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
 
-my $config     = $GateKeeper->configHandle();
-
-my $cgi        = $GateKeeper->cgiHandle();
-
 my ($void,$action,$option) = split '/',$GateKeeper->origin;
 
-my $database   = $cgi->parameter('database') || 'arcturus';
+my $database   = $GateKeeper->lookup('database') || 'arcturus';
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
@@ -38,24 +26,33 @@ my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 # MAIN
 ##############################################################################
 
-my $USERSUPPORT = $config->get("USERSUPPORT");
-my $db_manager  = $config->get("db_manager");      
-my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
-
-my $userupdate = 0;
+my $db_manager  = $GateKeeper->lookup("db_manager");      
+my $arc_cgi_dir = $GateKeeper->lookup("ARC_CGI_DIR");
 
 $GateKeeper->focus({useDatabase => 'arcturus', dieOnError => 1});
 
-my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates");
-my $font = "size=4 face='sans-serif'";
-
-my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
-my $reject = "$arc_cgi_dir/amanager/specify/$option".$cgi->postToGet(1,('session','database'));
+my $cgi; my $page; my $reject;
+if ($cgi = $GateKeeper->cgiHandle(1)) {
+# running under CGI
+    $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates");
+    $reject = "$arc_cgi_dir/amanager/specify/$option".$cgi->postToGet(1,('session','database'));
+}
+elsif ($action ne 'testUserAllocation') {
+# not in CGI mode with the wrong parameters
+    $GateKeeper->disconnect("action $action can only be used under CGI control");
+    exit 0;
+}
 
 my $operation = "define a new $option";
 $operation = "allocate $option to a project" if ($option =~ /user|cont/i);
+my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+my $font = "size=4 face='sans-serif'";
 
-if ($action eq "preselect" || $database eq 'arcturus') {
+my $userupdate = 0;
+
+#-----------------------------------------------------------------------------
+
+if ($action eq "preselect" || ($action ne 'testUserAllocation' && $database eq 'arcturus')) {
 # preselection of a database
     $page->frameborder(50,10,'white') if $GateKeeper->currentSession;
     $page->form("$arc_cgi_dir/amanager/specify/$option");
@@ -68,7 +65,11 @@ if ($action eq "preselect" || $database eq 'arcturus') {
     $page->sectionheader("Select a database and submit: $select",4,1);
     $page->ingestCGI();
     $page->submitbuttonbar(); # only submit button
-} 
+    $page->form(0);
+    $page->flush();
+}
+ 
+#-----------------------------------------------------------------------------
 
 elsif ($action eq "specify") {
 # list all assemblies
@@ -90,7 +91,7 @@ elsif ($action eq "specify") {
     if ($option ne 'assembly' && $na> 0) {
 # build form for new project selection
         undef my $form;
-        my $aname = $cgi->parameter('assemblyname');
+        my $aname = $GateKeeper->lookup('assemblyname');
         if (!$aname && $na > 1) {
 # an assembly has to be chosen first
             $page->sectionheader("There are $na assemblies defined for database $database",3,0);
@@ -174,21 +175,21 @@ elsif ($action eq "specify") {
         }
 
         elsif ($option eq 'users') {
-$page->add($cgi->PrintVariables());
+#$page->add($cgi->PrintVariables());
 
             my $anmbr = $assembly->associate('assembly',$aname,'assemblyname');
             my $projects = $organisms->spawn('PROJECTS',$database,0,1);
 	    my $users = $organisms->spawn('USERS','arcturus',0,1);
 # find the project name; take the one in CGI input, or get a choice list
-            my $projectlist = $cgi->parameter('projectname');
+            my $projectlist = $GateKeeper->lookup('projectname');
 	    if (!$projectlist) {
                  $projectlist = $projects->htmlMaskedOptions('projectname','assembly',$anmbr,0,0,0);
 	    }
 # get choicelist of users; Finishers & Trainees only or choose from all 
             my $clause = "(function like 'Fin%' or function like 'Tra%')"; 
-            $clause = "userid != 'oper' and userid != 'arcturus'" if $cgi->parameter('allusers');
+            $clause = "userid != 'oper' and userid != 'arcturus'" if $GateKeeper->lookup('allusers');
             $clause .= " and ustatus != 'retired'";
-            my $team = $cgi->parameter('division'); undef $team if ($team && $team eq 'any');
+            my $team = $GateKeeper->lookup('division'); undef $team if ($team && $team eq 'any');
             $clause = "($clause) and division = '$team'" if $team;
 	    my $userlist = $users->htmlMaskedOptions('userid','where',$clause,70,0,0);
 # get the available users and projects in table form
@@ -205,7 +206,7 @@ $page->add($cgi->PrintVariables());
             $page->add($form,0,1);
             $cgi->delete('division');
             $page->ingestCGI();
-            if ($cgi->parameter('allusers')) {
+            if ($GateKeeper->lookup('allusers')) {
                 $reject = '';
             }
             else {
@@ -301,7 +302,7 @@ $page->add($cgi->PrintVariables());
         }
         $lastnmbr = 99 if ($lastnmbr < 99);
         push @newnumbers, ++$lastnmbr;
-        my $choicelist = $page->choicelist('chromosome',\@newnumbers,20,-1);
+        my $choicelist = $page->choicelist('chromosome',\@newnumbers,0,-1);
         $choicelist =~ s/\>\s*(\d+)/>chromosome $1/g;
         $choicelist =~ s/chromosome\s*(\d{3})/other $1/g;
 	$form =~ s/ASELECTLIST/$choicelist/;
@@ -331,7 +332,7 @@ $page->add($cgi->PrintVariables());
 
     if (!$page->locate('Sorry')) {
         $page->ingestCGI();
-        if ($option eq 'users' && $cgi->parameter('projectlist')) {
+        if ($option eq 'users' && $GateKeeper->lookup('projectlist')) {
             $page->submitbuttonbar($reject,0,0,'SELECT FROM ALL USERS');
         }
         elsif ($option eq 'users' || $option eq 'assembly') {
@@ -349,7 +350,11 @@ $page->add($cgi->PrintVariables());
     else {
         $page->linkbutton("RETURN TO MAIN",$reject,0);
     }
+    $page->form(0);
+    $page->flush();
 }
+
+#-----------------------------------------------------------------------------
 
 elsif ($action eq 'process') {
 
@@ -357,16 +362,16 @@ elsif ($action eq 'process') {
     $page->form("$arc_cgi_dir/amanager/process/$option");
 
     undef my $error; my $projectname;
-    my $database     = $cgi->parameter('database');
+    my $database     = $GateKeeper->lookup('database');
     $cgi->delete('assemblyname','test'); # remove possible bracketed entry
-    my $assemblyname = $cgi->parameter('assemblyname');
+    my $assemblyname = $GateKeeper->lookup('assemblyname');
     $cgi->delete('projectname','test');  # remove possible bracketed entry
-    $projectname = $cgi->parameter('projectname') if ($option ne 'assembly');
-    my $confirm      = $cgi->parameter('confirm',0) || 0; 
+    $projectname = $GateKeeper->lookup('projectname') if ($option ne 'assembly');
+    my $confirm      = $GateKeeper->lookup('confirm',0) || 0; 
     my $timestamp    = $organisms->timestamp(0);
 
     my $pjuser = ''; # project username
-    $pjuser = $cgi->parameter('userid') if ($option eq 'users');
+    $pjuser = $GateKeeper->lookup('userid') if ($option eq 'users');
 
 # start by checking input definition and authorisation
 
@@ -390,7 +395,7 @@ elsif ($action eq 'process') {
         my $assembly = $organisms->spawn('ASSEMBLY',$database,0,0);
         $page->sectionheader("ARCTURUS assembly database: define a new $option",3,0);
         $page->partition(1);
-        my $chromosome = $cgi->parameter('override');
+        my $chromosome = $GateKeeper->lookup('override');
         if (defined($chromosome) && $chromosome =~ /\d/ && $chromosome >= 0 && $chromosome < 256) {
             $cgi->transpose('override','chromosome',1); # force copy to 'chromosome'
         }
@@ -401,7 +406,7 @@ elsif ($action eq 'process') {
         my $organism = $organisms->associate('number',$database,'dbasename');
         undef my $error;
         foreach my $item (@items) {
-            if ((my $value = $cgi->parameter($item)) =~ /\S/) {
+            if ((my $value = $GateKeeper->lookup($item)) =~ /\S/) {
                 $report .= "<TR><TH ALIGN=LEFT> $item </TH><TD> $value </TD>";
                 if ($confirm eq 'CONFIRM') {
                     if ($item eq 'assemblyname' && $assembly->associate('assembly',$value,'assemblyname') > 0) {
@@ -454,14 +459,14 @@ elsif ($action eq 'process') {
         else {
 # update the number of assemblies in the ORGANISMS table
             $organisms->increment('assemblies','dbasename',$database);
-            my $name = $cgi->parameter('assemblyname');
+            my $name = $GateKeeper->lookup('assemblyname');
             my $template = $name.'P<n>';
             $assembly->packAttribute($name,'assemblyname','attributes','dfltp',$template); 
 # update the defaults in ORGANISMS for this database (i.p. assembly template name)
-            if ($cgi->parameter('update')) {
+            if ($GateKeeper->lookup('update')) {
                ($template = $name) =~ s/(\w+?)(\d+)$/$1/; # get default assembly name template
                 $organisms->packAttribute($database,'dbasename','attributes','dflta',$template);
-                if (my $dfltd = $cgi->parameter('directory')) {
+                if (my $dfltd = $GateKeeper->lookup('directory')) {
                     $dfltd =~ s?/$name??; # get the default root directory for assemblies
                     $organisms->packAttribute($database,'dbasename','attributes','dfltd',$dfltd);
                     $page->sectionheader("Attributes of database $database were updated",4,1);
@@ -481,7 +486,7 @@ elsif ($action eq 'process') {
         my $projects = $organisms->spawn('PROJECTS',$database,0,0);
         $page->sectionheader("A new Project will be added for database $database, assembly $assemblyname",4,0);
         my $anmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
-        my $projecttype = $cgi->parameter('projecttype');
+        my $projecttype = $GateKeeper->lookup('projecttype');
         $projecttype = 'Other' if !$projecttype;
 
         undef my $error;
@@ -509,7 +514,7 @@ elsif ($action eq 'process') {
             $report .= "<TD bgcolor='orange'> ...... FAILED!</TD>" if ($error);
         }
 
-        if (!$error && (my $comment = $cgi->parameter('comment'))) {
+        if (!$error && (my $comment = $GateKeeper->lookup('comment'))) {
             $report .= "</TR><TR><TH ALIGN=LEFT>comment</TH><TD>$comment</TD>";
             if ($confirm eq 'CONFIRM') {
                 my $status = $projects->update('comment',$comment);
@@ -532,7 +537,7 @@ elsif ($action eq 'process') {
             undef $report;
 # update the number of projects in the assembly table
             $assembly->increment('projects','assemblyname',$assemblyname);
-            if ($cgi->parameter('update')) {
+            if ($GateKeeper->lookup('update')) {
 # add the default project name template to the attributes of this assembly
                 $projectname =~ s/(\w+?)(\d+)$/$1<n>/; # get template name from current
                 $assembly->packAttribute($assemblyname,'assemblyname','attributes','dfltp',$projectname);
@@ -615,19 +620,76 @@ elsif ($action eq 'process') {
             $page->confirmbuttonbar($reject,0);
         }
     }
+    $page->form(0);
+    $page->flush();
 
-# timestamps on altered tables (no list)
-
-    $organisms->historyUpdate($userid,0,0);
+    $organisms->historyUpdate($userid,0,0); # put timestamps on altered tables (no list)
 }
 
-$page->form(0);
-$page->flush();
+#-----------------------------------------------------------------------------
+
+elsif ($action eq 'modify') {
+# modify description of project or assembly
+print "amanager: modify (to be developed)<br>";
+}
+
+#-----------------------------------------------------------------------------
+
+elsif ($action eq 'testUserAllocation') {
+# ?? to be redeveloped
+print "amanager: testUserAllocation (to be developed)<br>";
+    my $whereAmI = $GateKeeper->whereAmI;
+    $GateKeeper->dropDead($whereAmI) if !($whereAmI =~ s/^(\w).*$/$1/); 
+    $whereAmI = uc($whereAmI); # P or D
+
+    my $server = $GateKeeper->{server};
+    $server =~ s/(\.sanger\.ac\.uk)?\:/%/;
+
+    my $page = $GateKeeper->GUI("Checking project allocations on current server $server");
+    my $users = $organisms->spawn('USERS','arcturus',0,1);
+
+    if (my $databases = $organisms->associate('dbasename',$server,'residence',1)) {
+
+        my @databases;
+        $databases[0] = $databases;
+        @databases = @$databases if (ref($databases) eq 'ARRAY');
+
+        foreach my $database (@databases) {
+            $GateKeeper->focus({useDatabase=>$database});
+            $GateKeeper->report("Testing database $database");
+            my $query = "select USERS2PROJECTS.userid,PROJECTS.projectname,ASSEMBLY.assemblyname ";
+            $query .= "from PROJECTS,ASSEMBLY,USERS2PROJECTS ";
+            $query .= "where  PROJECTS.project = USERS2PROJECTS.project ";
+            $query .= "and ASSEMBLY.assembly = PROJECTS.assembly ";
+            my $hashes = $organisms->query($query,0,0);
+#$GateKeeper->report("hashes $hashes");
+            my %numbers;
+            foreach my $hash (@$hashes) {
+#$GateKeeper->report("$hash->{userid}  $hash->{projectname}  $hash->{assemblyname}");
+                my $attribute = "$hash->{projectname}-$hash->{assemblyname}";
+                $users->packAttribute($hash->{userid},'userid','attributes',$attribute,$whereAmI);
+                $numbers{$hash->{userid}}++; # projects per user
+            }
+            foreach my $userid (keys %numbers) {
+                $users->update('projects',$numbers{$userid},'userid',$userid);
+            }
+        }
+    }
+    else {
+        $GateKeeper->report("No Arcturus database found on this server");
+    }
+}
+
+else {
+    $GateKeeper->report("Invalid option $action for amanager script");
+}
+
 $GateKeeper->disconnect;
 
 if ($userupdate) {
-    my $root = $GateKeeper->currentScriptRoot;
-    my $temp = $config->get('ARC_TMP_DIR');
+# copy change accross other ARCTURUS instances 
+    my $temp = $GateKeeper->lookup('ARC_TMP_DIR');
+    my $root = $GateKeeper->prepareFork('harmonize');
     system ("$root/harmonize users copy >> $temp/harmonize.log");
 }
 
@@ -640,7 +702,7 @@ sub intermediateform {
     my $kind = shift;
     
     my $form = "<TABLE BORDER=0 CELLPADDING=2><TR>";
-    $form .= "<TH ALIGN=LEFT> Assembly:</TH><TD> ASELECTION </TD>";
+    $form .= "<TH ALIGN=LEFT> Assembly:</TH><TD width=20> ASELECTION </TD>";
     $form .= "<TD WIDTH=25>&nbsp</TD><TH ALIGN=LEFT> Team:</TH><TD> GSELECTION </TD>" if $kind;
     $form .= "</TR></TABLE>";
 
@@ -675,7 +737,7 @@ sub assemblyform {
     $form .= "<TD COLSPAN=3> <INPUT TYPE=text NAME=assemblyname VALUE=\"ANAME\" SIZE=32></TD> ";
     $form .= "<TH> (Compulsory)</TH>";
     $form .= "</TR><TR>";
-    $form .= "<TH ALIGN=LEFT> Chromosome </TH><TD> ASELECTLIST </TD>";
+    $form .= "<TH ALIGN=LEFT> Chromosome </TH><TD width=20> ASELECTLIST </TD>";
     $form .= "<TH> OR </TH><TD> <INPUT TYPE=text NAME=override VALUE=\"OVERRIDE\" SIZE=3></TD>";
     $form .= "</TR><TR>";
     $form .= "<TH ALIGN=LEFT> Origin </TH>";

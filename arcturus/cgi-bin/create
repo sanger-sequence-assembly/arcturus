@@ -11,18 +11,10 @@ use GateKeeper;
 use CreateArcturus;
 
 ##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL for database arcturus
 ##############################################################################
 
 my $GateKeeper  = GateKeeper->new('mysql',{insistOnCGI => 1,  dieOnNoTable => 0});
-
-my $config      = $GateKeeper->configHandle();
 
 my $cgi         = $GateKeeper->cgiHandle();
 
@@ -30,7 +22,7 @@ my ($void,$action,$option) = split '/', $GateKeeper->currentOptions(2);
 
 my $dbh         = $GateKeeper->dbHandle('arcturus'); # the database handle
 
-my $database    = $cgi->parameter('database',0) || 'arcturus';
+my $database    = $GateKeeper->lookup('database',0) || 'arcturus';
 
 # opening the required database depends on the action
 
@@ -38,7 +30,7 @@ my $targetdb    = 'arcturus'; $targetdb = $database if ($action eq 'existing');
 
 my $organisms   = $GateKeeper->dbHandle($targetdb,{returnTableHandle => 1});
 
-my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
+my $arc_cgi_dir = $GateKeeper->lookup("ARC_CGI_DIR");
 
 my $page = $GateKeeper->GUI("database maintenance and updates",{doTransport => 0});
 
@@ -116,9 +108,9 @@ elsif (@tables > 0 && (@missed > 0 || keys(%redefined)) || $action eq 'arcturus'
 # option   = what to do         | e.g. rebuild, clear, create
 ##############################################################################
 
-my $db_manager = $config->get("db_manager");      
-my $BADGERDIR  = $config->get("BADGERDIR");
-my $arctmpdir  = $config->get('ARC_TMP_DIR');
+my $db_manager = $GateKeeper->lookup("db_manager");      
+my $BADGERDIR  = $GateKeeper->lookup("BADGERDIR");
+my $arctmpdir  = $GateKeeper->lookup('ARC_TMP_DIR');
 
 my $harmonize = 0;
 
@@ -132,7 +124,7 @@ my $orange = 'FFCA88';
 
 my $font = "size=6 face='sans-serif'"; my $efnt = "</font>";
 
-my $confirm = $cgi->parameter('confirm',0) || '';
+my $confirm = $GateKeeper->lookup('confirm',0) || '';
     
 $page->message("! There are foreign tables @extras found in the common database",$yellow,$font) if @extras; 
 $page->message("! There are tables missing in the common database",$yellow,$font) if @missed;
@@ -156,7 +148,7 @@ if ($action eq 'arcturus') {
         $page->confirmbuttonbar(0,0);
         $page->form(0);
     }
-    elsif ($GateKeeper->authorize(255,{testSession => 0, makeSession => 0})) {
+    elsif ($GateKeeper->authorize(32768,{testSession => 0, makeSession => 0})) {
         $page->space(6);
         $page->add("Create the ARCTURUS common area tables",0,0,$font);
         $page->space(3);
@@ -245,7 +237,7 @@ elsif ($action eq 'arebuild') {
 
     elsif ($option eq 'process') {
 # generate confirm form for rebuild; test userid and password
-        my $tablename = $cgi->parameter('tablename');
+        my $tablename = $GateKeeper->lookup('tablename');
         $page->form("$script/arebuild/process");
         $page->ingestCGI; # put here to ensure possible password info is kept
         $page->space(3);
@@ -260,7 +252,7 @@ elsif ($action eq 'arebuild') {
         if ($cgi->{und_error}) {
             $error = "Please define every input field ($cgi->{und_error})";
         }
-        elsif (!$skipAuthorize && !$GateKeeper->authorize(255,\%options)) {
+        elsif (!$skipAuthorize && !$GateKeeper->authorize(2048,\%options)) {
             $error = $GateKeeper->{error};
         }
 # deal with tables to be altered
@@ -384,7 +376,7 @@ elsif ($action eq 'organism') {
 
         $page->form("$script/organism/initialize");
 
-        my $dbasename = $cgi->parameter('dbasename'); # the database to be created
+        my $dbasename = $GateKeeper->lookup('dbasename'); # the database to be created
 
         my %options = (returnPath => '/organism/initialize', noConfirm => 'Continue');
 
@@ -398,7 +390,7 @@ elsif ($action eq 'organism') {
         elsif ($organisms->associate('hashref',$dbasename,'dbasename')) {
             $error = "Organism database $dbasename already exists";
         }
-        elsif (!$GateKeeper->authorize(255, \%options)) {
+        elsif (!$GateKeeper->authorize(32768, \%options)) {
             $error = $GateKeeper->{error};
         }
         elsif (!$confirm || $confirm ne 'CONFIRM') {
@@ -412,7 +404,7 @@ elsif ($action eq 'organism') {
             my $summary = "<table>";
             $summary .= "<tr><th align=left>Database name</th><th>:</th><td>$dbasename</td></tr>";
             foreach my $item (@items) {
-                my $value = $cgi->parameter($item);
+                my $value = $GateKeeper->lookup($item);
                 $value = "UNDEFINED" if (!$value);
                 $value =~ s/\<name\>/$dbasename/; # template  hacks
                 $cgi->replace($item,$value) if ($item eq 'template');
@@ -500,7 +492,7 @@ elsif ($action eq 'organism') {
                     if (!$count) {
                         $error = "Failed to create tables of database $dbasename";
 		    }
-                    elsif ($oentry || $cgi->parameter('forced')) {
+                    elsif ($oentry || $GateKeeper->lookup('forced')) {
                         &addEntry($dbasename); # add record to ORGANISMS
                         $page->message("Organism database $dbasename added to inventory",$purple,"size = +1");
                         $harmonize = 1;
@@ -538,6 +530,8 @@ elsif ($action eq 'organism') {
     $GateKeeper->disconnect;
 
 # ? prime environment via GateKeeper for harmonize script
+
+    $csroot = $GateKeeper->prepareFork('harmonize');
     system ("$csroot/harmonize organisms copy >> $arctmpdir/harmonize.log") if $harmonize;     
 }
 
@@ -613,7 +607,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             push @extras, $table;
         }
         elsif ($redefined{$table}) {
-            $contents .= "<TD bgcolor=$yellow>DEFINITION HAS CHANGED</TD>";
+            $contents .= "<TD bgcolor=$yellow>CHANGED FORMAT</TD>";
         }
         else {
             $contents .= "<TD>Found</TD>";
@@ -691,7 +685,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 
     elsif ($option eq 'process' && @missed) {
         my $missed = join ' ',@missed;
-        my $tablename = $cgi->parameter('tablename');
+        my $tablename = $GateKeeper->lookup('tablename');
 
         my $report = "Table $tablename will be created in the $database database...";
    
@@ -700,7 +694,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         if ($cgi->{und_error}) {
             $error = "Please define all input fields: $cgi->{und_error}";
         }
-        elsif (!$GateKeeper->authorize(100,{returnPath => "/existing/process"})) {
+        elsif (!$GateKeeper->authorize(8192,{returnPath => "/existing/process"})) {
             $error = $GateKeeper->{error};
         }
         elsif ($missed !~ /\b$tablename\b/) {
@@ -735,7 +729,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 
     elsif ($option eq 'process') {
 # rebuild a table in the database; get rebuild status from inventory table
-        my $tablename = $cgi->parameter('tablename');
+        my $tablename = $GateKeeper->lookup('tablename');
         my $rebuild = $inventory->associate('rebuild',$tablename,'tablename');
         
 # note: rebuild=0 for protected tables, only rebuild if empty or by user 'oper';
@@ -747,7 +741,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         if ($rebuild != 2 && $tablename) {
             my $table = $inventory->spawn($tablename,$database,0,0);
             $count = $table->counted if $table; # nr of lines or counts in counter table
-            $rebuild = 0 if $cgi->parameter('reinitialize',0);
+            $rebuild = 0 if $GateKeeper->lookup('reinitialize',0);
         }
 
         my %options = (testSession => 0, makeSession => 0, #noConfirm => 'Continue',
@@ -778,7 +772,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                 $page->substitute('CONFIRM',"ALTER");
                 $page->ingestCGI;
             }
-            elsif (!$GateKeeper->authorize(255,\%options)) {
+            elsif (!$GateKeeper->authorize(8192,\%options)) {
                 $error = $GateKeeper->{error};
             }
             elsif ($organisms->query($redefined{$tablename})) {
@@ -844,17 +838,15 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             }
 
             else { # CONFIRM
-                my $authorize = 100; # default
-                $authorize = 255 if ($rebuild == 0 && $count > 0); # highest authorization level
-#$rebuild = 99;
 
+                my $authorize = 4096; # default
+                $authorize = 8192 if ($rebuild == 0 && $count > 0);
                 if (!$GateKeeper->authorize($authorize, \%options)) {
                     $error = $GateKeeper->{error};
                     $report .= "... FAILED!";
                 }
 		elsif ($rebuild == 0 || $rebuild == 2 || !$count) {
                     my $identify = $GateKeeper->{USER};
-#print "USER $identify <br>";
                     my $level = 0; $level = 1 if ($identify eq 'oper');
                     my $created = &create_organism($dbh,$database,$tablename,$identify,$level);
                     my $counted = @$created;
@@ -895,7 +887,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 
 elsif ($action eq 'existing') {
 
-    $page->warningbox("Invalid or missing database $database in '$script/$action'",1);
+    $page->warningbox("Invalid or missing database $database in '$script/$action' ($database)",1);
     $page->flush;
     $GateKeeper->disconnect;
 }
@@ -920,15 +912,14 @@ sub addEntry {
     my $dbasename = shift;
 
     my $organisms = $GateKeeper->dbHandle('arcturus',{returnTableHandle => 1});
-    my $cgi       = $GateKeeper->cgiHandle;
-    my $userid    = $GateKeeper->{USER};
-    my $residence = $GateKeeper->{server};
+    my $userid    = $GateKeeper->currentUser;
+    my $residence = $GateKeeper->currentResidence; # under CGI: "host:mysqlport:cgiport"
 
 # add a line to ORGANISMS
 
     $organisms->newrow('dbasename',$dbasename);
     foreach my $item (@{$organisms->{columns}}) {
-        my $cgivalue = $cgi->parameter($item);
+        my $cgivalue = $GateKeeper->lookup($item);
         if ($item ne 'dbasename' && defined($cgivalue)) {
             $organisms->update($item,$cgivalue);
         }
@@ -941,7 +932,7 @@ sub addEntry {
     $organisms->update('residence',$residence);
 # add (pack) attributes: first check if a template is defined
     my ($dflta,$dfltp);
-    if (my $cgivalue = $cgi->parameter('template')) {
+    if (my $cgivalue = $GateKeeper->lookup('template')) {
 # decode the default assembly name and project name
        ($dflta,$dfltp) = split /\<\w+\>/,$cgivalue;
 #print "test dflta dfltp: |$dflta| |$dfltp|  (cgi: $cgivalue)<br>";

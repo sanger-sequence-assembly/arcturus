@@ -2,21 +2,13 @@
 
 #############################################################################
 #
-# Upload Reads into ARCTURUS database
+# ARCTURUS database entrance portal
 #
 #############################################################################
 
 use strict; # Constraint variables declaration before using them
 
 use GateKeeper; 
-
-##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -105,7 +97,7 @@ else {
             my $thisScript = $GateKeeper->currentScript;
             my $session = $cgi->parameter('session');
             $table =~ s/ITEMLINK\?/ITEMLINK?session=$session&/g if $session;
-            $table =~ s/ITEMLINK/$thisScript/g;
+            $table =~ s/ITEMLINK/$thisScript/g; # replace placeholder
             $table =~ s/dbasename/database/g;
             $page->add($table);
             $page->space;
@@ -132,6 +124,11 @@ else {
 $GateKeeper->disconnect;
 
 exit 0;
+
+
+
+
+
 
 
 

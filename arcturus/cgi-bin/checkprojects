@@ -3,22 +3,12 @@
 #############################################################################
 # Housekeeping script to check the allocation of projects on current server
 #
-# This script can be run under backticks
-# servers. Should also be run of the GUI
+# This script can be run under backticks servers. Should also be run in GUI
 #############################################################################
 
-use strict; # Constraint variables declaration before using them
+use strict;
 
 use GateKeeper; 
-use ArcturusTable;
-
-##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -28,9 +18,9 @@ my $GateKeeper = GateKeeper->new('mysql');
 
 my $config     = $GateKeeper->configHandle();
 
-my $organisms = $GateKeeper->dbHandle('arcturus',{returnTableHandle => 1});
+my $organisms  = $GateKeeper->dbHandle('arcturus',{returnTableHandle => 1});
 
-my $users = $organisms->spawn('USERS','arcturus',0,1);
+my $users      = $organisms->spawn('USERS','arcturus',0,1);
 
 ##############################################################################
 # MAIN
@@ -84,8 +74,8 @@ $page->flush  if $page;
 
 # now startup the equalizing script on the USERS tables
 
-my $root = $GateKeeper->currentScriptRoot;
-my $tmp = $config->get('ARC_TMP_DIR');
-system ("$root/harmonize users copy > $tmp/harmonize.log");
+my $temp = $config->get('ARC_TMP_DIR');
+my $root = $GateKeeper->prepareFork('harmonize');
+system ("$root/harmonize users copy > $temp/harmonize.log");
 
 exit 0;

@@ -13,6 +13,8 @@ BEGIN {
    $ENV{ORACLE_SID}  = 'inform';
    $ENV{TWO_TASK}    = 'sids';
    $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
+   $ENV{PATH}       .= ':/usr/local/badger/bin';
+   use lib '/nfs/pathsoft/arcturus/dev/lib';
 }
 
 use GateKeeper; 
@@ -20,37 +22,27 @@ use ReadsReader;
 use PathogenRepository;
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-#open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-open(STDERR,">&/dev/null");
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',1);
+my %options = (eraiseMySQL => 1, errorToNull => 0);
+my $GateKeeper = GateKeeper->new('mysql',\%options);
 
-my $config     = $GateKeeper->configHandle();
-
-my $cgi        = $GateKeeper->cgiHandle(1);
-
-my ($void, $database, $option, $origin, $session);
+my ($cgi, $void, $database, $option, $origin, $session);
 
 # how is this script invoked?
 
-if ($cgi) {
+if ($cgi = $GateKeeper->cgiHandle(1)) {
    ($void, $database, $option) = split ('/',$GateKeeper->origin());
-    $database = $cgi->parameter('database') if $cgi->parameter('database');
-#   $database = $cgi->parameter('organism') if !$database;
-#   $database = 'arcturus if !$database';
-   $option = 'getform' if !$option;
+    my $alternate = $GateKeeper->lookup('database');
+    $database = $alternate if $alternate;
+#    $database = $GateKeeper->lookup('database') if $GateKeeper->lookup('database');
+#    $database = $GateKeeper->lookup('organism') if !$database;
+#    $database = 'arcturus if !$database';
+    $option = 'getform' if !$option;
 }
 else {
-   $database = shift @ARGV;
+    $database = shift @ARGV;
 }
 
 my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
@@ -62,23 +54,23 @@ my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 my %config;
 $config{RDD} = "<to be defined>";
 $config{SDS} = ''; # default search sub-directories
-# $config{SDS} = join ' ',@{$config->get("SEARCH_DIR")}; # default search sub-directories
-$config{GMD} = $config->get("GELMINDDIR");
-$config{SCF} = $config->get("SCFREADDIR");
-$config{EKS} = join ' ',@{$config->get("excludekeys")}; # default reject strings
-$config{PRO} = $config->get("PROJECT"); # for Oracle reads
-$config{SCH} = $config->get("SCHEMA");  # for Oracle reads
-$config{LPR} = $config->get("LOADPERRUN");
+# $config{SDS} = join ' ',@{$GateKeeper->lookup("SEARCH_DIR")}; # default search sub-directories
+$config{GMD} = $GateKeeper->lookup("GELMINDDIR");
+$config{SCF} = $GateKeeper->lookup("SCFREADDIR");
+$config{EKS} = join ' ',@{$GateKeeper->lookup("excludekeys")}; # default reject strings
+$config{PRO} = $GateKeeper->lookup("PROJECT",0); # for Oracle reads
+$config{SCH} = $GateKeeper->lookup("SCHEMA" ,0);  # for Oracle reads
+$config{LPR} = $GateKeeper->lookup("LOADPERRUN");
 $config{FNF} = '';
 $config{GBF} = '';
 
 # all of these may be overwritten by 'attributes' data from ORGANISMS or ASSEMBLY 
 
-my $arc_cgi_dir = $config->get('ARC_CGI_DIR');
-my $arc_log_dir = $config->get('ARC_LOG_DIR');
-my $arc_tmp_dir = $config->get('ARC_TMP_DIR');
-my $db_manager  = $config->get('db_manager'); 
-my $BADGERDIR   = $config->get('BADGERDIR');
+my $arc_cgi_dir = $GateKeeper->lookup('ARC_CGI_DIR');
+my $arc_log_dir = $GateKeeper->lookup('ARC_LOG_DIR');
+my $arc_tmp_dir = $GateKeeper->lookup('ARC_TMP_DIR');
+my $db_manager  = $GateKeeper->lookup('db_manager'); 
+my $BADGERDIR   = $GateKeeper->lookup('BADGERDIR');
 
 $config{LGF} = "$arc_log_dir/rloader.DATABASE.log"; # default logfile
 
@@ -87,12 +79,9 @@ my ($FNF, $GBF, @SEARCH_DIR, @excludekeys);
 
 undef my ($action, $page, $confirm);
 undef my ($userid  , $project , $assembly, $assemblyname, $assemblynmbr);
-undef my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update);
-undef my ($arc_logfile, $logON, $TEST);
-
-my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu"; # return link
-$session = $cgi->parameter('session',0) if $cgi;
-$lreturn .= "\?session=$session" if $session; 
+undef my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update, $pending);
+undef my ($arc_logfile, $logON, $TEST, $abortfile);
+$abortfile = $GateKeeper->lookup('abortfile');
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
 
@@ -113,7 +102,7 @@ if ($cgi) {
 
 # redefine option if a "specify" option comes with process defined, else get form
 
-    $option = 'process' if ($option eq 'specify' && $cgi->parameter('process',0));
+    $option = 'process' if ($option eq 'specify' && $GateKeeper->lookup('process',0));
 
 # preprocessing of input info
 
@@ -121,7 +110,6 @@ if ($cgi) {
     undef my $error;
     if ($option eq 'getform') {
         $page = $GateKeeper->GUI('READS loader');
-#        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
         $page->form("$arc_cgi_dir/rloader/$database/specify");
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
         my %options = (mask=>'011000001111000001',
@@ -141,7 +129,7 @@ if ($cgi) {
             $page->sectionheader("Select a Read specification",4,0);
         }
         $page->add(&form1(),0,1);
-        $page->submitbuttonbar($lreturn,0,0);
+        $page->submitbuttonbar(0,0,0);
         $page->ingestCGI();
         $page->form(0);
         $page->flush();
@@ -150,15 +138,14 @@ if ($cgi) {
     }
     elsif ($option eq 'specify') {
 # get source, database, and whether an assembly choice exists
-        $database  = $cgi->parameter('database'); # compulsory
-        my $asname = $cgi->parameter('assemblyname',0); # no test
+        $database  = $GateKeeper->lookup('database',1); # compulsory
+        my $asname = $GateKeeper->lookup('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
-        if ($organisms->associate('reads_pending',$database,'dbasename')) {
-            $source = $cgi->parameter('source');   # compulsory
+        if ($pending = $organisms->associate('reads_pending',$database,'dbasename')) {
+            $source = $GateKeeper->lookup('source',1);  # compulsory
             my $redirect = "/cgi-bin/rloader/$database/getform";
-            $redirect .= $cgi->postToGet()   if $cgi->MethodGet; 
-            $GateKeeper->transfer($redirect) if $cgi->MethodGet;
-            $GateKeeper->transfer($redirect) if $cgi->{und_error};
+            $GateKeeper->redirect($redirect) if $cgi->MethodGet;
+            $GateKeeper->redirect($redirect) if $GateKeeper->cgiError(0);
         }
         else {
             $source = 0;
@@ -185,11 +172,11 @@ if ($cgi) {
             $page->sectionheader("(PENDING reads taken from ORACLE)",4,1);
         }
 
-        if ($cgi->{und_error} || !$database) {
-            $page->errorbox("Please define all form entries");
+        if (!$database) {
+            $page->errorbox("Please define all form entries: missing database name");
             $page->add($cgi->PrintVariables());
         }
-        else {
+        elsif (!$GateKeeper->cgiError(1)) {
     # open assembly database; abort if no assemblies defined
             $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
             if ($assembly && $assembly->count() > 0) {
@@ -240,21 +227,22 @@ if ($cgi) {
 
     # add a three-way button bar and a return link 
 
-                my $text = "Repeat to update this form for a newly chosen assembly, or<br>";
-                $text   .= "Continue to start loading READS with these specified values, or<br>";
-                $text   .= "Click on the return link to the main UPDATE menu<br>";
+                my $text = "Rebuild to update this form for a newly chosen assembly, or<br>";
+                $text   .= "Continue to start loading READS with the specified values";
+                $text   .= ", or<br>Click on the return link to change the data source<br>" if $pending;
                 $page->sectionheader($text,4,0);
-                my @buttons = ('type=submit value=" Repeat "',
+                my @buttons = ('type=submit value=" Rebuild "',
                                'type=submit value="Continue" name="process"',
                                'type=reset  value=" Reset "');
-                $page->buttonbartemplate(3,0,\@buttons);                 
-                $page->linkbutton('RETURN',$lreturn,0);
+                $page->buttonbartemplate(3,0,\@buttons);
+                my $lreturn = "$arc_cgi_dir/rloader/$database/getform".$cgi->postToGet(0,'source');
+                $page->linkbutton('RETURN',$lreturn,0) if $pending;
             }
             else {
                 $page->errorbox("There are no assemblies defined for $database",0,0,'yellow');
                 my $count = $assembly->count() || 0;
                 $page->messagebox("assembly $assembly $count");
-                $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
+                $page->messagebox("Please contact $db_manager or your project manager");
             }
         }
     # close form
@@ -271,32 +259,29 @@ if ($cgi) {
         $page->frameborder(100,15,'white',10);
         $page->center(1);
 
-        $database = $cgi->parameter('database'); # redefine database
+        $database = $GateKeeper->lookup('database'); # redefine database
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
-            $source = $cgi->parameter('source');   # compulsory
+            $source = $GateKeeper->lookup('source');   # compulsory
         }
         else {
             $source = 0;
         }
-#print "$cgi->PrintVariables() \n";
-#$page->add($cgi->PrintVariables());
-#$page->add("source = $source");
     # get assembly 
         $assembly     = $organisms->spawn('ASSEMBLY',$database,0,1);
-        $assemblyname = $cgi->parameter('assemblyname'); # translate into number
+        $assemblyname = $GateKeeper->lookup('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
 
-        $LOADPERRUN = $cgi->parameter('LPR');
+        $LOADPERRUN = $GateKeeper->lookup('LPR');
     # test mode
-        $TEST   = 1 if $cgi->parameter('testrun',0);
-        $logON  = 1 if $cgi->parameter('logON'  ,0);
-#        $reload = 1 if $cgi->parameter('reload' ,0);
-        $forced = 1 if $cgi->parameter('forceload' ,0);
-        $update = 1 if $cgi->parameter('update', 0);
+        $TEST   = 1 if $GateKeeper->lookup('testrun',0);
+        $logON  = 1 if $GateKeeper->lookup('logON'  ,0);
+#        $reload = 1 if $GateKeeper->lookup('reload' ,0);
+        $forced = 1 if $GateKeeper->lookup('forceload' ,0);
+        $update = 1 if $GateKeeper->lookup('update', 0);
       
     # test form completion
-        if ($cgi->{und_error}) {
-            $error = "Please define every input field $cgi->{und_error} ";
+        if (my $status = $GateKeeper->cgiError(0)) {
+            $error = "Please define every input field $status ";
         }
     # authorisation level 100 required
         elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process",silently => 1})) {
@@ -306,16 +291,17 @@ if ($cgi) {
         elsif ($source == 2) {
 	    $gbfilter = 'ORACLE';
             $fnfilter = 'PENDING';
-            $SCHEMA   = $cgi->parameter('SCH');
-            $PROJECT  = $cgi->parameter('PRO');
+            $SCHEMA   = $GateKeeper->lookup('SCH');
+            $PROJECT  = $GateKeeper->lookup('PRO');
         }
         else {
-            $ROOTDATADIR = $cgi->parameter('RDD');
-            $GELMINDDIR  = $cgi->parameter('GMD');
-            $SCFREADDIR  = $cgi->parameter('SCF');
+            $ROOTDATADIR = $GateKeeper->lookup('RDD');
+            $GELMINDDIR  = $GateKeeper->lookup('GMD');
+            $SCFREADDIR  = $GateKeeper->lookup('SCF');
             if ($source == 0) {
-                $fnfilter   = $cgi->parameter('FNF');
-                $gbfilter   = $cgi->parameter('GBF');
+                $fnfilter   = $GateKeeper->lookup('FNF');
+                $fnfilter =~ s/^.*\b(HARVEST)\b.*$/$1/; # remove any blanks
+                $gbfilter   = $GateKeeper->lookup('GBF');
                 my $EXCLUDE = $config{EKS};
                 @excludekeys = split /\s/,$EXCLUDE if ($EXCLUDE);
             }
@@ -325,10 +311,9 @@ if ($cgi) {
             }
             my $SEARCH   = $config{SDS};
             @SEARCH_DIR  = split /\s/,$SEARCH if ($SEARCH);          
-         }
-         $session = $cgi->parameter('session');
-         $lreturn .= "\?session=$session" if ($lreturn !~ /session/ && $session); 
-         $arc_logfile = $cgi->parameter('LGF') if ($logON);
+        }
+        $session = $GateKeeper->lookup('session');
+        $arc_logfile = $GateKeeper->lookup('LGF') if ($logON);
     }
     else {
         $error = "Invalid option $option for rloader";
@@ -341,8 +326,7 @@ if ($cgi) {
         $page->sectionheader("ARCTURUS READS loader specifications",3,0);
         $page->partition(1);
         $page->sectionheader("Sorry, an error status aborts this loader session",3,1);
-# $page->add($cgi->PrintVariables());
-        $page->errorbox($error,$lreturn);
+        $page->errorbox($error);
         $page->flush();
         $GateKeeper->disconnect;
         exit 0;
@@ -352,7 +336,7 @@ if ($cgi) {
 ###############################################################################
 # invocation from the command line
 ###############################################################################
-else { # invoked from the command line (ejz/adh only)
+else { # invoked from the command line (ejz/adh/pathdb only)
     $origin = 0;
     $brtag = "\n";
     $yfont = '';
@@ -365,7 +349,7 @@ else { # invoked from the command line (ejz/adh only)
 # test user
 
     $userid = $ENV{USER};
-    if ($userid ne 'ejz' && $userid ne 'adh') {
+    if ($userid ne 'ejz' && $userid ne 'adh' && $userid ne 'pathdb') {
         $GateKeeper->dropDead("user $userid does not have priviledge to run "
                              ."'rloader' from the command line.\nTry the "
                              ."web-based version");
@@ -382,6 +366,8 @@ else { # invoked from the command line (ejz/adh only)
     $fnfilter = shift @ARGV;
     $gbfilter = shift @ARGV || 0;
 
+    $fnfilter =~ s/^.*\b(HARVEST)\b.*$/$1/; # remove any blanks
+
     if ($fnfilter eq 'PENDING') {
         $source = 1;
         if ($gbfilter eq 'ORACLE') {
@@ -394,12 +380,12 @@ else { # invoked from the command line (ejz/adh only)
                 $GateKeeper->dropDead("no SCHEMA or PROJECT specified for ORACLE data");
             }
         }
-        elsif ($gbfilter) {
+        elsif ($gbfilter && $gbfilter =~ /\D/) {
 # test if gbfilter is a project name; find its root directory ? 
-# print "testing II project $gbfilter <br>";
+print "testing II project $gbfilter \n";
             $config{PDD} = `$BADGERDIR/pfind -q $gbfilter > /dev/null 2>&1`;
         }
-        else {
+        elsif (!$gbfilter) {
             $gbfilter = '';
         }
     }
@@ -412,6 +398,7 @@ else { # invoked from the command line (ejz/adh only)
 
     $TEST = shift @ARGV;
 
+    print "\n\n\n";
     my $attributes;
     if ($database && $organisms->associate('dbasename',$database,'dbasename')) {
  # get the default attributes
@@ -433,7 +420,8 @@ else { # invoked from the command line (ejz/adh only)
  
     $ROOTDATADIR = $config{RUT};
     $ROOTDATADIR = $config{RDD} if $config{RDD};
-    $ROOTDATADIR.= $gbfilter.'/' if ($source == 1);
+#    $ROOTDATADIR.= $gbfilter.'/' if ($source == 1);
+    $assemblynmbr = $gbfilter if ($source == 1);
     $ROOTDATADIR =~ s?//?/?g; # remove double slashes
     $GELMINDDIR  = $config{GMD};
     $SCFREADDIR  = $config{SCF};
@@ -457,7 +445,7 @@ else { # invoked from the command line (ejz/adh only)
  }
     print "ROOTDATADIR = $ROOTDATADIR     log file $arc_logfile \n";
 #$GateKeeper->disconnect;
-#exit;
+# exit;
 }
 
 #*********************************** HERE WE GO ********************************
@@ -471,7 +459,7 @@ $READS->autoVivify($database,2); # initialize all dictionary tables in database
 
 # get an inventory of all open database tables
 
-my $hashes = $datamodel->findInstanceOf(0);
+my $hashes = $datamodel->getInstanceOf(0);
 
 # open the PENDING table and the READS2FRAGMENTS table
 
@@ -488,8 +476,8 @@ foreach my $key (sort keys %$links) {
 }
 
 if ($logON || !$origin) {
-    open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
-    print "LOG opened: $arc_logfile<br>";
+#    open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
+    print "LOG opened: $arc_logfile $brtag";
 } else {
     *LOG = *STDOUT;
 }
@@ -568,27 +556,27 @@ if ($logON || !$origin) {
     # if in harvest mode, add files to PENDING
 
         if ($fnfilter eq 'HARVEST') {
+            $PENDING->setMultiLineInsert(200);
+            my $loaded = 0;
+            my $np = $PENDING->count(0,0);
             foreach my $read (@$newfiles) {
                 my @parts = split '/',$read;
                 $read = $parts[$#parts];
-                print "add to PENDING: $read for assembly nr $assemblynmbr<br>";
-                &addPending($read,$assemblynmbr);
+#                print "add to PENDING: $read for assembly nr $assemblynmbr<br>";
+#                &addPending($read,$assemblynmbr);
+                $PENDING->newrow('readname',$read,'assembly',$assemblynmbr);
+                $loaded++;
             }
-
+            $PENDING->flush();
             my $npends = $PENDING->count(0,0);
-            $organisms->update('reads_pending',$npends,'dbasename',$database);
-            $organisms->signature($userid,'dbasename',$database);
+            $np = $npends - $np;
+            print "$brtag $np filenames added to PENDING ($loaded) $brtag";
 
-            if ($page) {
-                my $rreturn = $lreturn;
-                $rreturn =~ s/update/rloader/;
-                $rreturn =~ s/getmenu/specify/;
-                $rreturn .= "\&database=$database\&source=$source\&assemblyname=$assemblyname";
-                $page->linkbutton('LOAD MORE',$rreturn,0);
-                $page->linkbutton('MAIN MENU',$lreturn,0);
-                $page->flush();
-            }
-            $GateKeeper->dropDead("Use the loader from the command line to load PENDING data");
+#            $organisms->update('reads_pending',$npends,'dbasename',$database);
+#            $organisms->signature($userid,'dbasename',$database);
+
+            $LOADPERRUN = 0;
+#            $GateKeeper->dropDead("Use the loader from the command line to load PENDING data");
         }
     }
 
@@ -625,10 +613,13 @@ print "success = $success $brtag";
         } 
         else {
 # reads are assumed to be in project directory; we test the ROOTDATADIR and its subdirectories
-# print "rdd $ROOTDATADIR SDS: @SEARCH_DIR  $brtag";
-            my @subdirs = `ls -d ${ROOTDATADIR}*`;
+# print "rdd $ROOTDATADIR  $brtag";
+            my @subdirs = `ls -d ${ROOTDATADIR}/*`;
+# print "sub @subdirs $brtag";
+            my $counter = 0;
             foreach my $key (sort keys (%dbfiles)) {
                 my $filename = $ROOTDATADIR.$key;
+                $counter++; print STDOUT "trying to find file $key ($counter) $brtag" if ($counter%1000 == 0);
 # print "find 1 $key: try $filename$brtag";                     
                 if (-e $filename) {
                     push @pendingfiles, $filename;
@@ -677,7 +668,7 @@ print "success = $success $brtag";
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
     $nr = @$newfiles;
-    print "polling DONE$brtag$brtag";
+    print "polling DONE ($nr new files) $brtag$brtag";
 $LOADPERRUN =~ s/\W/x/g;
     print "$nr new Reads found (of which at most ${LOADPERRUN} will be processed)$brtag$brtag";
 
@@ -731,7 +722,7 @@ $LOADPERRUN =~ s/\W/x/g;
     my $timestamp = $organisms->timestamp(0);
     print LOG "\nNEW SESSION $timestamp\n" if ($logON);
 
-    my $consensus = $cgi->parameter('consensus');
+    my $consensus = $GateKeeper->lookup('consensus');
 
     undef my %assemblycount;
 
@@ -746,7 +737,7 @@ $LOADPERRUN =~ s/\W/x/g;
         $errors = 0;
         $warning = 0;
 
-   # treat a consensus file differently from a standard read
+# treat a consensus file differently from a standard read
 
         my ($scm, $qcm);
         my $entry;
@@ -759,13 +750,11 @@ $LOADPERRUN =~ s/\W/x/g;
 
             print STDOUT "${brtag}Processing consensus read $file ($tested) ...$brtag";
           
-            $entry = $reader->newRead($file,1);
+            $entry = $reader->newRead($file,1); # 1 for consensus file
 
             $scm = 2; # switch to Huffman encoding
             $qcm = 2; # Huffman encoding
  
-# my $text = $reader->list($origin,1);
-# print STDOUT "$brtag $text $brtag";
 	}
         else {
 
@@ -873,6 +862,7 @@ print $reader->list($origin,1);
 # reset if $errors == 0, else undo updates 
             $hashes->{$key}->rollback($errors) unless ($errors && $key =~ /PENDING|SESSION/);
         }
+#        $reader->rollBack($error,'PENDING|SESSION');
         if ($errors && $READS->{qerror} =~ /already\sexists/) {
             $PENDING->delete('readname',$entry->{ID}) if $entry->{ID};
             $ignored++;
@@ -886,14 +876,18 @@ print $reader->list($origin,1);
         elsif (!$errors) {
             $loaded++;
             my $assemblynumber = $assemblynmbr; # use current specification
+# print "assembly $assemblynmbr $brtag";
     # check if the entry was in PENDING
-            if (my $hashref = $PENDING->associate('hashref',$entry->{ID},'readname')) {
+            if (!$cgi && $assemblynmbr) {
+                $PENDING->delete('readname',$entry->{ID});
+            }
+            elsif (my $hashref = $PENDING->associate('hashref',$entry->{ID},'readname')) {
     # get the assemblynumber
                 $assemblynumber = $hashref->{assembly} || 0;             
     # and clear the entry if it was in pending
                 $PENDING->delete('readname',$entry->{ID});
             }
-    # add the entry to READS2ASSEMBLY
+     # add the entry to READS2ASSEMBLY
             my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
 #            my $read_id = $readhash->{read_id};
             if (!$RRS2ASS->newrow('read_id',$read_id,'assembly',$assemblynumber)) {
@@ -910,6 +904,11 @@ print $reader->list($origin,1);
         }
         print STDOUT "$brtag";
 # next file
+        if ($LOADPERRUN%100 == 0 && $abortfile && (-e $abortfile)) {
+            $LOADPERRUN = 0;
+            print "${brtag}ABORT command received $brtag$brtag";
+            unlink $abortfile;
+        }
     }
 
     $RRS2ASS->flush();
@@ -934,23 +933,19 @@ print $reader->list($origin,1);
     my $npends = $PENDING->count(0,0);
     $organisms->update('reads_pending',$npends,'dbasename',$database);
     $organisms->signature($userid,'dbasename',$database);
-
     $GateKeeper->disconnect;
 
 # closing line
 
     my $report = "END of SESSION: $tested reads processed, $loaded loaded, ";
-    $report .= " $yfont$ignored ignored$efont because of errors" if (!$TEST);
+    $report .= " $yfont$ignored ignored$efont" if (!$TEST);
     print STDOUT "$report$brtag";
     print LOG "$report\n" if $logON;
 
     if ($page) {
-        my $rreturn = $lreturn;
-        $rreturn =~ s/update/rloader/;
-        $rreturn =~ s/getmenu/specify/;
-        $rreturn .= "\&database=$database\&assemblyname=$assemblyname";
+        my $rreturn = "$arc_cgi_dir/rloader/$database/specify";
+        $rreturn .= $cgi->postToGet(1,'database','assemblyname','source','session');
         $page->linkbutton('LOAD MORE',$rreturn,0);
-        $page->linkbutton('MAIN MENU',$lreturn,0);
         $page->flush();
     }
 

@@ -15,13 +15,14 @@ use ReadsRecall;
 # unbuffered output
 ##############################################################################
 
-open(STDERR,">&STDOUT") || die "content-type:text/plain\nCan't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
+#open(STDERR,">&STDOUT") || die "content-type:text/plain\nCan't dump to STDOUT: $!\n";
+#select(STDERR); $| = 1; # Make unbuffered.
+#select(STDOUT); $| = 1; # Make unbuffered.
 
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',0,'Insist on CGI');
+$GateKeeper->cgiHeader(2); # return string plain
 
 my $config     = $GateKeeper->configHandle();
 
@@ -35,7 +36,7 @@ $database = 'arcturus' if ($action =~ /select|empty|dictionary|listentry/ && !$d
 
 my $organisms = $GateKeeper->dbHandle($database, {returnTableHandle => 1});
 
-my $inventory = $organisms->spawn('INVENTORY','arcturus',1);
+my $inventory = $organisms->spawn('INVENTORY','arcturus',1,1);
 
 $GateKeeper->cgiHeader(2); # return string plain
 
@@ -48,7 +49,7 @@ my $db_manager  = $config->get("db_manager");
 my $arc_cgi_dir = $config->get("ARC_CGI_DIR");  
 my $arc_htm_dir = $config->get("ARC_HTML_DIR");  
 
-my $page = $cgi->openPage('ARCTURUS assembly-tracking database $database');
+my $page = $cgi->openPage("ARCTURUS assembly-tracking database $database");
 $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
 $page->frameborder(100,15,'white',15);
 $page->center(1);
@@ -84,16 +85,19 @@ elsif ($action eq 'overview' && $database eq 'arcturus') {
     my $instances = $inventory->findInstanceOf(0);
 
     $page->partition(2);
-    $page->sectionheader("ARCTURUS assembly tracking database",3,0);
+    $page->sectionheader("ARCTURUS assembly-tracking database",3,0);
 
     $page->partition(1);
     $page->sectionheader("Common Tables",3,0);
     my $w1 = "WIDTH=120"; my $w2 = "WIDTH=60"; my $w3 = "WIDTH=40";
     my $list  = "<table border=1 cellpadding=3>"; my $bg = "BGCOLOR='yellow'";
     $list .= "<TR><TH $bg $w1>table</TH><TH $bg $w2>size</TH><TH $bg $w3>&nbsp</TH></TR>";
+    my $session = $GateKeeper->lookup('session') || '';
     foreach my $table (keys %$instances) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
+#        my $name   = (split '\.',$table)[2];
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'c' && $status ne 'l') {
@@ -101,6 +105,7 @@ elsif ($action eq 'overview' && $database eq 'arcturus') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $detail = "$arc_cgi_dir/query/dictionary/$table";
+            $detail .= "\?session=$session" if ($session =~ /\boper|ejz\b/);
             $entry .= "<TD ALIGN=CENTER><A href=\"$detail\"> show </a></td>";
             $list .= "$entry</tr>";
         }
@@ -125,10 +130,10 @@ elsif ($action eq 'overview') {
 
     $page->partition(2);
     $page->sectionheader("ARCTURUS assembly tracking database $database",3,0);
-    my $DMODEL  = $organisms->spawn("DATAMODEL",'arcturus',0);
-    my $READS   = $organisms->spawn("READS"  ,$database,0);
-    my $PENDING = $organisms->spawn("PENDING",$database,0);
-    my $CONTIGS = $organisms->spawn("CONTIGS",$database,0);
+    my $DMODEL  = $organisms->spawn("DATAMODEL",'arcturus',0,0);
+    my $READS   = $organisms->spawn("READS"  ,$database,0,0);
+    my $PENDING = $organisms->spawn("PENDING",$database,0,0);
+    my $CONTIGS = $organisms->spawn("CONTIGS",$database,0,0);
     my $instances = $DMODEL->findInstanceOf(0);
 
     undef my $target;
@@ -149,7 +154,9 @@ elsif ($action eq 'overview') {
 
     foreach my $table (sort keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
+#print "name $name <br>\n";
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
         if ($domain eq 'o' && $status eq 'p') {
@@ -169,6 +176,7 @@ elsif ($action eq 'overview') {
     $list = "<table border=1 cellpadding=3 $tw>";
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -193,10 +201,10 @@ elsif ($action eq 'overview') {
 
     foreach my $table (sort keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
-# print "$name domain $domain status $status<br>";
         if ($domain eq 'o' && ($status eq 't' || $status eq 's')) {
             undef my $entry;
             my $count = $dbase->count(0);
@@ -220,6 +228,7 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -244,6 +253,7 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -268,6 +278,7 @@ elsif ($action eq 'overview') {
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -289,6 +300,7 @@ elsif ($action eq 'overview') {
 #    $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -309,8 +321,10 @@ elsif ($action eq 'overview') {
     $list = "<table border=1 cellpadding=3 $tw>";
     $list .= "<TR><TH ALIGN=CENTER COLSPAN=3 BGCOLOR='lightyellow'>Common Tables</TH></TR>";
     $list .= "<TR><TH $bg $w1>Table</TH><TH $bg $w2>Size</TH><TH $bg $w3>&nbsp</TH></TR>";
+#    my $session = $GateKeeper->lookup('session') || '';
     foreach my $table (keys %tables) {
         my $dbase  = $instances->{$table};
+        $table =~ s/\w+\.(\w+\.\w+)/$1/;
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
@@ -319,6 +333,7 @@ elsif ($action eq 'overview') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
+#            $anchor .= "\?session=$session" if ($session =~ /\boper|ejz\b/);
             $target = "target=\"arcturustable\""; 
             $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
             $list .= "$entry</tr>";
@@ -331,7 +346,7 @@ elsif ($action eq 'overview') {
 elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
     my $dbtable = $organisms->spawn($name,$database,0,1);
     $dbtable->build(1,'tablename')        if ($tablename =~ /INV/);
     $dbtable->build(1,'identifier')       if ($tablename =~ /LIG/);
@@ -352,7 +367,9 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     undef my $mask;
     $page->partition(1);    
     $mask = '111111100'           if ($tablename =~ /PEOPLE/);
-    $mask = '01110001111102'      if ($tablename =~ /ORG/);
+    $mask = '01110000111002'      if ($tablename =~ /ORG/);
+    my $session = $GateKeeper->lookup('session') || '';
+    $mask = '010000011111000012'      if ($tablename =~ /ORG/ && $session =~ /\boper|ejz\b/);
     $mask = '03101111'            if ($tablename =~ /STSTAG/);
     $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
     $mask = '011111000000002'     if ($tablename =~ /USER/);
@@ -387,7 +404,7 @@ elsif ($action eq "select") {
 # open the table in build 0 mode
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
     my $dbtable = $organisms->spawn($name,$database,0);
     my $dbcount = $dbtable->count(0);
 
@@ -488,8 +505,8 @@ elsif ($action eq "tagselect") {
 
 elsif ($action eq "selectread") {
 
-#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
-    my $dbread  = $organisms->spawn("READS",$database,0);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
+    my $dbread  = $organisms->spawn("READS",$database,0,0);
     my $initial = ReadsRecall->init($dbread);
     my $reader  = ReadsRecall->new();
 
@@ -514,17 +531,25 @@ elsif ($action eq "selectread") {
         $dbread->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
     }
     elsif ($readitem && $readnmbr) {
-        if ($readnmbr !~ /\,/) {
+        if ($readnmbr =~ /\blast\b/i) {
+            $constraints = "read_id = LAST_INSERT_ID()";
+# print "constraints: $constraints<br>\n";
+         }
+        elsif ($readnmbr !~ /\,|\-|\./) {
             my $status = $reader->getNumberedRead($readnmbr);
             $number = 1 if ($status <= 1);
         }
-        else {
+        elsif ($readnmbr =~ /\,/) {
             $constraints = "read_id in ($readnmbr)";
 # test setup for spawning new reads in a series
 my @number = split /\,/,$readnmbr; # test mode
 my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
-
         }  
+        else {
+            my ($first,$last) = split /[\s\,\.\:\-]+/,$readnmbr;
+            $constraints = "(read_id >= $first and read_id <= $last)";
+# print "constraints: $constraints<br>\n";
+        }
     }
     elsif ($readitem && !$readnmbr) {
         $error = "please provide a Read Number";
@@ -556,12 +581,12 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
                     $constraints .= " and " if ($constraints);
                     $constraints .= "$keyname = $keyvalue";
                 }
-print "constraints: $constraints<br>\n";
+# print "constraints: $constraints<br>\n";
             }
         }
     }
 
-#print "error $error  number $number<br>";
+# print "error $error  number $number<br>";
     if (!$error && !$number) {
 # test if either nameselect or constraints exist
         my $querystring = "select read_id,readname from <self>";  
@@ -570,7 +595,8 @@ print "constraints: $constraints<br>\n";
             if ($nameselect) {
                 $querystring .= $nameselect;
                 $querystring .= ' and ' if ($constraints);
-            } else {
+            }
+            else {
                 $querystring .= $constraints;
             }
         }

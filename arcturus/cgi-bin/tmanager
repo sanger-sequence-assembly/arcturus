@@ -2,7 +2,7 @@
 
 #############################################################################
 #
-# auxilliary script to update specific database tables (re: 'create' script)
+# Tags and Clone(map) manager
 #
 #############################################################################
 
@@ -12,20 +12,10 @@ use GateKeeper;
 use Compress;
 
 ##############################################################################
-# unbuffered output
-##############################################################################
-
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-select(STDERR); $| = 1; # Make unbuffered.
-select(STDOUT); $| = 1; # Make unbuffered.
-
-##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
-
-my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle();
 
@@ -35,18 +25,18 @@ my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(2); # return string plain
 
+my $thisScript = $GateKeeper->currentScript();
+
 ##############################################################################
 # MAIN
 ##############################################################################
 
-my $USERSUPPORT = $config->get("USERSUPPORT");
-my $db_manager  = $config->get("db_manager");    
-my $arc_cgi_dir = $config->get("ARC_CGI_DIR");  
-my $arc_htm_dir = $config->get("ARC_HTML_DIR");
+my $signame = $GateKeeper->lookup('signature_name');
+my $sigmail = $GateKeeper->lookup('signature_mail');
 
-my $page = $GateKeeper->GUI('ARCTURUS ASSEMBLY-TRACKING DATABASE');
-#$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
-#$page->frameborder(100,15,'white',15);
+my $page = $GateKeeper->GUI('TAGS and MAPS');
+$page->frameborder(100,15,'white',5);
+$page->address($signame,$sigmail,2);
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 # open the ORGANISMS table in arcturus
@@ -54,22 +44,19 @@ my $page = $GateKeeper->GUI('ARCTURUS ASSEMBLY-TRACKING DATABASE');
 
 my $loadinfo  = $organisms->unpackAttributes($database); # ($database,'dbasename','attributes');
 
-#$page->partition(2);
-$page->sectionheader("ARCTURUS assembly tracking database: INGEST",3,0);
-#$page->partition(1);
-#$page->center(1);
+$page->sectionheader("ARCTURUS assembly tracking database: input tags",3,0);
 
 # protect against unintended usage of this script
 
-if ($cgi->parameter('database') ne "$database" || $cgi->parameter('tablename') ne $tablename) {
+if ($GateKeeper->lookup('database') ne "$database" || $GateKeeper->lookup('tablename') ne $tablename) {
     $page->errorbox("This script is invoked in an invalid manner",0,0,'yellow');
     $page->add($cgi->PrintVariables);
 }
 
 elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
-#    $page->center(1);
+
     $page->sectionheader("Please define input data files for STS tags",4,0); 
-    $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
+    $page->form("$thisScript/compare/$database/$tablename");
     my $comment = "Note: if the filenames submitted contain the wildcard ";
     $comment   .= "symbol '*' the tag data<br>for several assemblies of the ";
     $comment   .= "$database genome may be checked and updated";
@@ -80,28 +67,38 @@ elsif ($action eq 'specify' && $tablename eq 'STSTAGS') {
     $page->preload('stsepcfile',$loadinfo->{stsepc});
     $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
-#    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
-#    $page->linkbutton('REJECT',$reject,0);
 }
 
 elsif ($action eq 'specify' && $tablename eq 'CLONEMAP') {
 
-#    $page->center(1);
     $page->sectionheader("Please define input data file for the Physical Map",4,0); 
-    $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
+    $page->form("$thisScript/compare/$database/$tablename");
     my $comment = "Note: if the filename submitted contains the wildcard ";
     $comment   .= "symbol '*' the physical<br>maps for several assemblies of the ";
     $comment   .= "$database genome may be checked and updated";
     $page->messagebox($comment,0,1,'yellow');
     $page->add(&physmapform,0,1); 
     $page->preload('physmapfile',$loadinfo->{physmap});
-#    $cgi->delete('confirm'); $cgi->delete('submit');
     $page->ingestCGI();
     $page->submitbuttonbar(1,0,0);
-#    my $reject = "$arc_cgi_dir/update/arcturus/getmenu";
-#    $page->linkbutton('REJECT',$reject,0);
 }
 
+
+elsif ($action eq 'specify' && $tablename eq 'HAPPYMAP') {
+
+    $page->sectionheader("Please define input data files for the Happy Map",4,0); 
+    $page->form("$thisScript/compare/$database/$tablename");
+    my $comment = "Note: if the filename submitted contains the wildcard ";
+    $comment   .= "symbol '*', the matching <br>maps of all assemblies of the ";
+    $comment   .= "$database genome will be checked and updated";
+    $page->messagebox($comment,0,1,'yellow');
+    $page->add(&happymapform,0,1); 
+    $page->preload('happymapfile',$loadinfo->{happymaps});
+    $page->preload('happytagfile',$loadinfo->{happytags});
+    $page->preload('happymaproot',$loadinfo->{happyroot});
+    $page->ingestCGI();
+    $page->submitbuttonbar(1,0,0);
+}
 
 elsif ($action eq 'specify' && $tablename eq 'CLONES2CONTIG') {
 # this needs a subroutine scanning through the contigs
@@ -130,21 +127,20 @@ elsif ($action eq 'specify') {
 
 elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 
-    my $stsmapfile = $cgi->parameter('stsmapfile') || 0;
-    my $stsfasfile = $cgi->parameter('stsfasfile') || 0;
-    my $stsepcfile = $cgi->parameter('stsepcfile') || 0;
-    my $fulltest   = $cgi->parameter('fulltest')   || 0;
-    my $cleanup    = $cgi->parameter('cleanup')    || 0;
-    my $update     = $cgi->parameter('update')     || 0;
-    my $confirm    = $cgi->parameter('confirm')    || 0;
-    my $identify   = $cgi->parameter('identify')   || 0;
-    my $password   = $cgi->parameter('PASSWORD')   || 0;
+    my $stsmapfile = $GateKeeper->lookup('stsmapfile') || 0;
+    my $stsfasfile = $GateKeeper->lookup('stsfasfile') || 0;
+    my $stsepcfile = $GateKeeper->lookup('stsepcfile') || 0;
+    my $fulltest   = $GateKeeper->lookup('fulltest')   || 0;
+    my $cleanup    = $GateKeeper->lookup('cleanup')    || 0;
+    my $update     = $GateKeeper->lookup('update')     || 0;
+    my $confirm    = $GateKeeper->lookup('confirm')    || 0;
+    my $identify   = $GateKeeper->lookup('identify')   || 0;
+    my $password   = $GateKeeper->lookup('PASSWORD')   || 0;
     $fulltest = 1 if ($cleanup);
 
     undef my $updates;
 
-#    $page->center(1);
-    $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
+    $page->form("$thisScript/compare/$database/$tablename");
     $page->sectionheader("Update STS tags database",4,1);
 
 # if CONFIRM is specified a username and password have to be defined
@@ -307,7 +303,7 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
         $page->messagebox($updates,0,1);
     }
 
-    my $return = "$arc_cgi_dir/tmanager/specify/$database/STSTAGS";
+    my $return = "$thisScript/specify/$database/STSTAGS";
     $return .= "\?tablename=$tablename\&database=$database\&identify=ejz";
     if ($confirm eq 'CONFIRM' && $count > 0) {
         my $message = "$count tags processed";
@@ -340,14 +336,14 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 
 elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
 
-    $page->form("$arc_cgi_dir/tmanager/compare/$database/$tablename");
+    $page->form("$thisScript/compare/$database/$tablename");
 
-    my $confirm = $cgi->parameter('confirm');
+    my $confirm = $GateKeeper->lookup('confirm');
     $confirm = 0 if (!$confirm || $confirm ne 'CONFIRM'); 
-    my $fulltest = $cgi->parameter('fulltest');
-    my $addclone = $cgi->parameter('addclone');
+    my $fulltest = $GateKeeper->lookup('fulltest');
+    my $addclone = $GateKeeper->lookup('addclone');
 
-    my $physmapfile = $cgi->parameter('physmapfile');
+    my $physmapfile = $GateKeeper->lookup('physmapfile');
 
 # open ststags database and store the data in a hash
 
@@ -522,10 +518,10 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
 
 # confirm button
 
-    my $reject = "$arc_cgi_dir/tmanager/specify/$database/$tablename";
+    my $reject = "$thisScript/specify/$database/$tablename";
     $reject .= "\?database=$database\&tablename=$tablename";
     if ($confirm ne 'CONFIRM' && $updates) {
-        $page->ingestCGI($cgi);
+        $page->ingestCGI();
         $page->confirmbuttonbar($reject,0);
     }
     else {
@@ -534,6 +530,45 @@ elsif ($action eq 'compare' && $tablename eq 'CLONEMAP') {
 
 # $page->add($cgi->PrintVariables());
 }   
+
+#****************************** processing Happy Maps ***********************
+
+elsif ($action eq 'compare' && $tablename eq 'HAPPYMAP') {
+
+    $page->form("$thisScript/compare/$database/$tablename");
+
+    my $confirm = $GateKeeper->lookup('confirm',0);
+    $confirm = 0 if (!$confirm || $confirm ne 'CONFIRM'); 
+    my $fulltest = $GateKeeper->lookup('fulltest',0);
+    my $update   = $GateKeeper->lookup('update',0);
+
+    my $happymaproot = $GateKeeper->lookup('happymaproot',1);
+    my $happymapfile = $GateKeeper->lookup('happymapfile',1);
+    my $happytagfile = $GateKeeper->lookup('happytagfile',1);
+
+    if (my $error = $GateKeeper->cgiError(0)) {
+        $page->errorbox("Please define all input afields: $error");
+    }
+    else {
+# open the Tags table and get the complete current contents (build)
+        my $happytags = $organisms->spawn('HAPPYTAGS',$database,0,1);
+        my $happymaps = $organisms->spawn('HAPPYMAP' ,$database,0,1);
+# parse the tags file and return an array of hashes with all entries
+        my ($tags, $treport) = &parseHappyTagsFile("$happymaproot/$happytagfile");
+        my ($maps, $mreport) = &parseHappyMapsFile("$happymaproot/$happymapfile");
+        my $report = $treport.$mreport;
+
+        my $hashrefs = $happytags->{hashrefs} || 0;
+print "tags array: $tags     data: $hashrefs <br>";
+
+        if ($update) {
+            $update  = $organisms->packAttribute($database,'dbasename','attributes','happymaps',$happymapfile);
+            $update += $organisms->packAttribute($database,'dbasename','attributes','happytags',$happytagfile);
+            $update += $organisms->packAttribute($database,'dbasename','attributes','happyroot',$happymaproot);
+            $report .= "<br>Default filenames updated" if $update;
+	}
+    }
+ }
 
 
 else {
@@ -583,6 +618,30 @@ sub physmapform {
     $form .= "</TR><TR>";
     $form .= "<TD>&nbsp</TD><TH ALIGN=LEFT>Check  <INPUT type=checkbox name='fulltest'> ";
     $form .= " for a full test</TH>";
+    $form .= "</TR></TABLE>";
+
+    return $form;
+}
+
+
+sub happymapform {
+    my $form;
+
+    $form  = "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 80%><TR>";
+    $form .= "<TH ALIGN=LEFT>Happy Map Root Directory</TH>";
+    $form .= "<TD COLSPAN=1><INPUT NAME='happymaproot' SIZE=40 MAXSIZE=64 VALUE=''></TD>";
+    $form .= "</TR><TR>";
+    $form .= "<TH ALIGN=LEFT>Happy Map Tags file</TH>";
+    $form .= "<TD COLSPAN=1><INPUT NAME='happytagfile' SIZE=30 MAXSIZE=64 VALUE=''></TD>";
+    $form .= "</TR><TR>";
+    $form .= "<TH ALIGN=LEFT>Happy Map Linkage Groups</TH>";
+    $form .= "<TD COLSPAN=1><INPUT NAME='happymapfile' SIZE=30 MAXSIZE=64 VALUE=''></TD>";
+    $form .= "</TR><TR>";
+#    $form .= "<TD>&nbsp</TD>";
+    $form .= "<TH ALIGN=LEFT>Check <INPUT type=checkbox name='fulltest'> "; 
+    $form .= "for full test</TH>";
+    $form .= "<TH ALIGN=LEFT>Check <INPUT type=checkbox name='update'> "; 
+    $form .= "for update defaults  </TH>";
     $form .= "</TR></TABLE>";
 
     return $form;
@@ -788,3 +847,141 @@ sub parsePMfile {
 
     return $newentry,$report;
 }
+
+
+####################################### parseHTfile ##############################
+
+sub parseHappyTagsFile {
+# parse the happy tag file and return a hash structure with its contents
+    my $filename = shift;
+    my $tagEntry = shift;
+
+    my @tagEntry; $tagEntry = \@tagEntry if !$tagEntry;
+
+    open (FILES, "ls $filename|") || return $tagEntry, "! Happy Map file(s) $filename not accessible: $!\n"; 
+
+    my $file;
+    my $report = '';
+    while (defined($file=<FILES>)) {
+        $report .= "Processing file $file\n";
+        if (open(TAGFILE,$file)) {
+            my $chromosome = 0;
+            while (defined(my $line = <TAGFILE>)) {
+                next if ($line !~ /\S/);
+                next if ($line =~ /\bID\b/);
+
+                my ($tagname,$identifier,$sequence,$length);
+                my $comment = '';
+
+#	    my $test = 1;
+                if ($line =~ /chromosome\s+(\d+)\b/) {
+                    $chromosome = $1;
+                    $report .= "Processing chromosome $chromosome\n";
+                }
+                elsif ($line =~ /^\s*(\w+)\s+(.*?)\b([ACGT]{4}.*)$/i) {
+                    $tagname    = $1;
+                    $identifier = $2;
+                    $sequence   = $3;
+# split possible comment off the identifier
+                    my @comment = split /\s+|\"|\'/,$identifier;
+                    $identifier = shift @comment;
+                    $comment    = join ' ',@comment if @comment;
+# is the sequence followed by a length?
+                    if ($sequence =~ /\b(\w+.*?)\b(\d+)\b\s?$/) {
+                        $sequence = $1;
+                        $length = $2;
+                    }         
+                    $sequence =~ s/[^ACGTN]//ig;
+                    $length = length($sequence) if !$length;
+                    my $l = length($sequence);
+# add tag to output list
+                    my %taghash;
+                    my $taghash = \%taghash;
+                    $taghash->{tagname}    = $tagname;
+                    $taghash->{chromosome} = $chromosome;
+                    $taghash->{identifier} = $identifier;
+                    $taghash->{comment}    = $comment;
+                    $taghash->{sequence}   = $sequence;
+                    $taghash->{'length'}   = $length;
+                    push @tagEntry, $taghash; # ? or $tagEntry->{tagname} = $taghash; 
+#print "$tagname   $identifier  $comment  $length ($l) <br>";
+#print "$sequence <br>";             
+                }
+                else {
+                    $report .= "Input not recognized: $line\n";
+                }
+            }        
+            my $nrOfTags = @tagEntry;
+            $report .= "$nrOfTags marker sequences read from file $file\n";
+        }
+        else {
+            $report = "! Happy Tag file $file inaccessible: $!\n";
+        }
+    }
+  
+$report =~ s/\n/<br>/g; print "$report<br>";
+    return $tagEntry, $report;
+}
+
+####################################### parseHMfile ##############################
+
+sub parseHappyMapsFile {
+# parse the happy tag file and return a hash structure with its contents
+    my $filename = shift;
+    my $mapEntry = shift;
+
+    my @mapEntry; $mapEntry = \@mapEntry if !$mapEntry;
+
+    open (FILES, "ls $filename|") || return $mapEntry, "! Happy Map file(s) $filename not accessible: $!\n"; 
+
+    my $file;
+    my $report = '';
+    while (defined($file=<FILES>)) {
+        $report .= "Processing file $file\n";
+        if (open(MAPFILE,$file)) {
+            my ($quality, $chromosome);
+            while (defined(my $line = <MAPFILE>)) {
+                next if ($line !~ /\S/);
+                next if ($line =~ /\bID\b/);
+                $line =~ s/presumably//i;
+                $line =~ s/\b\d+\/\d+\b/0/;
+
+                if ($line =~ /lod\s+([\d\.]+)\b.*\bchromosome\s+(\d+)\b/i) {
+                    $quality    = $1;
+                    $chromosome = $2;
+                    $report .= "Processing chromosome $chromosome\n";
+                }
+                elsif ($line =~ /(\w+)\s(.*?)\s(\d+)\s+([\d\.]+)\s+(\d+)\s*$/i) {
+		    my %maphash;
+                    my $maphash = \%maphash;
+                    $maphash->{tagname}  = $1;
+                    $maphash->{linkage}  = $3;
+                    $maphash->{assembly} = $5;
+                    $maphash->{position} = $4;
+                    $maphash->{quality} = $quality;
+                    if ($chromosome != $maphash->{assembly}) {
+                        $report .= "! assembly mismatch on $file: $chromosome vs. $maphash->{assembly}\n"; 
+                    }
+                    else {
+                        push @mapEntry, $maphash;
+                    }
+                }
+                else {
+                    $report .= "! unrecognized input on $file: $line\n";
+                }
+            }
+            my $nrOfTags = @mapEntry;
+            $report .= "$nrOfTags markers read for quality $quality from file $file\n";
+        }
+        else {
+            $report = "! Happy Map file $file inaccessible: $!\n";
+        }
+    }
+  
+$report =~ s/\n/<br>/g; print "$report<br>";
+    return $mapEntry, $report;
+}
+
+
+
+
