@@ -98,7 +98,7 @@ sub loginfo {
 # return the next readname and attribute
 #----------------------------------------------------------------
 
-sub addReadNameToList {
+sub addReadToList {
 # add the input readname to the internal list
     my $this = shift;
     my ($readname, $object) = @_;
@@ -115,7 +115,7 @@ sub addReadNameToList {
     return 1;
 } 
 
-sub nextReadName {
+sub getNextReadName {
 # returns the next readname
     my $this = shift;
 
@@ -134,7 +134,7 @@ sub nextReadName {
     return $this->{readname}->[0];
 }
 
-sub getCurrentRead {
+sub getNextRead {
 # returns the information stored in the local buffer
     my $this = shift;
 
