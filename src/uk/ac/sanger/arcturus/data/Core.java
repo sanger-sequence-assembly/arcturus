@@ -59,6 +59,19 @@ public class Core {
     }
 
     /**
+     * Constructs an object which has an ID.
+     * This constructor will typically be used when an object
+     * is retrieved from an Arcturus database.
+     *
+     * @param ID the ID of the object.
+     * @param adb the Arcturus database to which this object belongs.
+     */
+
+    public Core(int ID, ArcturusDatabase adb) {
+	this(null, ID, adb);
+    }
+
+    /**
      * Returns the name of the object.
      *
      * @return the name of the object.
