@@ -94,6 +94,14 @@ role.admin=arcturus,***REMOVED***
 role.write=arcturus,***REMOVED***
 role.read=analysedb,dbviewer
 
+[hoyle.prod]
+database=arcturus
+host=hoyle
+port=14641
+role.admin=arcturus,***REMOVED***
+role.write=arcturus,***REMOVED***
+role.read=analysedb,dbviewer
+
 [DYS]
 database=DYS
 host=pcs3
