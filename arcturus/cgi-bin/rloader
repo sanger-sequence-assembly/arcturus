@@ -114,14 +114,14 @@ if ($cgi) {
 
 # preprocessing of input info
 
-        $GateKeeper->cgiHeader(2); # return string HTML under CGI
+#        $GateKeeper->cgiHeader(2); # return string HTML under CGI
     if ($option eq 'specify' && $cgi->MethodGet) {
 # test if database and option are defined
         $database = $cgi->parameter('database'); # compulsory
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source   = $cgi->parameter('source');
         }
-        $option = 'getform' if $cgi->{und_error};   
+#        $option = 'getform' if $cgi->{und_error};   
     }
 
     undef my $error;
