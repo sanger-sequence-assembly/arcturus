@@ -163,11 +163,9 @@ sub parseTableName {
 
     return undef unless defined($command);
 
-    return $1 if ($command =~ /^\s*alter\s+table\s(\w+)\s+/);
+    return $1 if ($command =~ /^\s*(alter|create|drop)\s+table\s(\w+)/);
 
     return $1 if ($command =~ /^\s*update\s+(\w+)\s+/);
-
-    return $1 if ($command =~ /^\s*drop\s+table\s+(\w+)/);
 
     return undef;
 }
