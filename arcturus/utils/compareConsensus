@@ -27,6 +27,8 @@ while ($nextword = shift @ARGV) {
 
     $chunk = shift @ARGV if ($nextword eq '-chunk');
 
+    $summary = 1 if ($nextword eq '-summary');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -43,6 +45,8 @@ unless (defined($host) &&
 }
 
 $doquality = 0 unless defined($doquality);
+
+$summary = 0 unless defined($summary);
 
 $chunk = 50 unless defined($chunk);
 
@@ -79,6 +83,9 @@ $sth = $dbh->prepare($query);
 
 $sth->execute();
 &db_die("execute($query) failed");
+
+$totaldiffs = 0;
+$totalbases = 0;
 
 while(@ary = $sth->fetchrow_array()) {
     ($contigid,
@@ -141,12 +148,19 @@ while(@ary = $sth->fetchrow_array()) {
 
 	    print "\n" if ($ndiffs);
 	}
+
+	$totalbases += $gapseqlen;
+	$totaldiffs += $diffcount;
     }
 
     print "\n";
 
     print STDERR " >>> $diffcount DIFFS <<<" if $diffcount;
     print STDERR "\n";
+}
+
+if ($summary) {
+    print STDERR "\n\nSUMMARY\n$totalbases bp compared, $totaldiffs differences found.\n";
 }
 
 $sth->finish();
@@ -170,5 +184,8 @@ sub showUsage {
     print STDERR "    -database\t\tDatabase for reads\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -pass\t\tMySQL password\n";
+    print STDERR "    -doquality\t\tCompare base quality data\n";
+    print STDERR "    -summary\t\tPrint a summary at the end\n";
     print STDERR "    -chunk\t\tNumber of bases per line for output\n";
 }
