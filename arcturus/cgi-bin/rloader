@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl5.004
+#!/usr/local/bin/perl
 
 #############################################################################
 #
@@ -1098,7 +1098,7 @@ print "find: $find $break" if $DEBUG;
         my $filecount = 0;
 NEXT:   while (defined($file=<FILE>)) {
             chomp $file; # cleanup
-print "1 test file $file$break" if ($DEBUG);
+my $l = length($file);	    print "1 test file $file  (length $l)$break" if ($DEBUG);
             $filetest++; # keep track
         # test against filters
 print "1 reject $file ($flnfilter)$break" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
