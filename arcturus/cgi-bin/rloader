@@ -23,8 +23,8 @@ use ReadsReader;
 # unbuffered output
 ##############################################################################
 
-#open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
-open(STDERR,">&/dev/null");
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+#open(STDERR,">&/dev/null");
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
@@ -192,7 +192,7 @@ if ($cgi) {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
 #print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
-                $config{RDD} = `$BADGERDIR/pfind -q $database`;
+                $config{RDD} = `$BADGERDIR/pfind -q $database > /dev/null 2>&1`;
 		$config{RDD} =~ s/[^\w\/]/ BR /g;
 print "RDD Ia:  $config{RDD} <br>";
 #               my $repository = new PathogenRepository;
