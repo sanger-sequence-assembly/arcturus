@@ -2,12 +2,16 @@ package uk.ac.sanger.arcturus.data;
 
 import uk.ac.sanger.arcturus.database.*;
 
+import java.util.*;
+
 /**
  * This class represents a sub-clone or read template.
  */
 
 public class Template extends Core {
     private Ligation ligation;
+    private HashSet forwardReads;
+    private HashSet reverseReads;
 
     /**
      * Constructs a Template which does not yet have an ID.
@@ -36,6 +40,9 @@ public class Template extends Core {
 	super(name, ID, adb);
 
 	this.ligation = ligation;
+
+	forwardReads = new HashSet();
+	reverseReads = new HashSet();
     }
 
     /**
@@ -55,4 +62,48 @@ public class Template extends Core {
      */
 
     public Ligation getLigation() { return ligation; }
+
+    /**
+     * Adds the specified read to the set of forward or reverse reads belonging
+     * to this template.
+     *
+     * @param read the read which is to be added to this template's set.
+     */
+
+    void addRead(Read read) throws IllegalArgumentException {
+	Template tmpl = read.getTemplate();
+
+	if (tmpl == null || tmpl != this)
+	    throw new IllegalArgumentException("Read[name=" + read.getName() +
+					      "] does not belong to Template[name=" + name + "]");
+
+	if (read.getStrand() == Read.FORWARD)
+	    forwardReads.add(read);
+	else
+	    reverseReads.add(read);
+    }
+
+    /**
+     * Returns an Iterator for the set of forward reads which belong to this
+     * template.
+     *
+     * @return an Iterator for the set of forward reads which belong to this
+     * template.
+     */
+
+    public Iterator getForwardReadsIterator() {
+	return forwardReads.iterator();
+    }
+
+    /**
+     * Returns an Iterator for the set of reverse reads which belong to this
+     * template.
+     *
+     * @return an Iterator for the set of reverse reads which belong to this
+     * template.
+     */
+
+    public Iterator getReverseReadsIterator() {
+	return reverseReads.iterator();
+    }
 }
