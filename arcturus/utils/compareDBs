@@ -94,7 +94,7 @@ while (@arya = $stha->fetchrow_array()) {
     if ($dodna) {
 	$seqa = shift @arya;
 	$method = shift @arya;
-	$seqa = $compressor->sequenceDecoder($seqa, $method) if ($method > 0);
+	($slena, $seqa) = $compressor->sequenceDecoder($seqa, $method) if ($method > 0);
     }
 
     if ($doquality) {
@@ -122,7 +122,7 @@ while (@arya = $stha->fetchrow_array()) {
 	if ($dodna) {
 	    $seqb = shift @aryb;
 	    $method = shift @aryb;
-	    $seqb = $compressor->sequenceDecoder($seqb, $method) if ($method > 0);
+	    ($slenb, $seqb) = $compressor->sequenceDecoder($seqb, $method) if ($method > 0);
 
 	    print "$read_id: sequence mismatch\n" if ($seqa != $seqb);
 	}
