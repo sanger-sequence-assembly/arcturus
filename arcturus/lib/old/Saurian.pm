@@ -125,6 +125,55 @@ Returns an array of ReadsRecall objects
 
 #############################################################################
 
+sub cafRead {
+# write named read into caf file
+    my $self = shift;
+    my $FILE = shift;
+    my $name = shift; # read name or array of readnames
+
+# to be extended using on the fly caf output for many reads
+
+    my $read = $self->getRead($name); # returns a ReadsRecall object
+
+    my @reads;
+    my $reads = \@reads;
+    (ref($read) eq 'ARRAY') ? $reads = $read: $reads->[0] = $read;
+
+    my $count = 0;
+    foreach my $instance (@$reads) {
+        $count++ if ($instance->writeReadToCaf($FILE));
+    }
+
+    return $count; # compare externally with length of input nr of name(s)
+}
+#--------------------------- documentation --------------------------
+=pod
+ 
+=head1 method getRead
+
+=head2 Synopsis
+
+Retrieve read(s) from the current database as hash image(s)
+
+=head2 Parameters: 
+
+=over 1
+
+=item name: the read name
+
+Returns a single object of the ReadsRecall class for a named read
+
+Read items can be accessed in $object->{readdata}->{}
+
+=item name: reference to array of readnames
+
+Returns an array of ReadsRecall objects
+
+=back
+
+=cut
+#############################################################################
+
 sub probeRead {
 # return read_id for named read
     my $self = shift;
@@ -132,14 +181,13 @@ sub probeRead {
 
     return $self->{READS}->associate('read_id',$name,'readname');
 }
-#--------------------------- documentation --------------------------
 =pod
 
 =head1 method probeRead
 
 =head2 Synopsis
 
-Retrieve readid for named read
+Retrieve read ID for named read
 
 =head2 Parameter: the read name
 
