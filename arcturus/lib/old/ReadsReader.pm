@@ -827,10 +827,10 @@ sub strands {
 
     $suffixes[1] = ' ' if (!defined($suffixes[1])); # ensure it's definition
 
-    my $primertype = 0; # default unknown
-    $primertype  = 1 if ($suffixes[0] =~ /[pstf]/i); # forward
-    $primertype  = 2 if ($suffixes[0] =~ /[qru]/i);  # reverse
-    $primertype += 2 if ($primertype && $suffixes[1] > 1); # custom primers
+    my $primertype = 5; # default unknown
+    $primertype  = 1 if ($suffixes[0] =~ /[pstfw]/i); # forward
+    $primertype  = 2 if ($suffixes[0] =~ /[qru]/i);   # reverse
+    $primertype += 2 if ($primertype <= 2 && $suffixes[1] > 1); # custom primers
 
     if ($isExperimentFile) {
 # PR value should match extension information
@@ -1105,11 +1105,11 @@ sub insert {
         $tagHasValue = 1 if (defined($readEntry{$tag}) && $readEntry{$tag} =~ /\w/);
         my $link = $linkhash->{$key};
         if ($link && $tagHasValue) {
-    # it's a linked column; find the link table, column and table handle
+# it's a linked column; find the link table, column and table handle
             my ($database,$linktable,$linkcolumn) = split /\./,$link;
             $linktable = $database.'.'.$linktable;
             my $linkhandle = $READS->findInstanceOf($linktable);
-    # find the proper column name in the dictionary table
+# find the proper column name in the dictionary table
             undef my @columns;
             my $pattern = "name|identifier";
             foreach my $column (@{$linkhandle->{columns}}) {
@@ -1117,12 +1117,10 @@ sub insert {
                     push @columns, $1;
                 }
             }
-    # replace the read entry by the reference
+# replace the read entry by the reference
             if (@columns == 1) {
-# print "trying $linkcolumn $columns[0] tag=$tag $readEntry{$tag} <br>" if ($linkcolumn eq 'chemistry');
                 $linkhandle->counter($columns[0],$readEntry{$tag});
                 my $reference = $linkhandle->associate($linkcolumn,$readEntry{$tag},$columns[0], 0, 0, 1);
-# print "trying $linkcolumn $columns[0] $readEntry{$tag} ref=$reference<br>";
                 $readEntry{$tag} = $reference;
             }
             elsif (!@columns) {
@@ -1138,7 +1136,6 @@ sub insert {
     }
 
 # finally, enter the defined read items in a new record of the READS table 
-# here split for update
 
     undef my ($counted, $parity);
     if (!defined($readEntry{ID}) || $readEntry{ID} !~ /\w/) {
@@ -1154,8 +1151,6 @@ sub insert {
             if ($tag ne 'ID' && $tag ne 'RN' && $column ne 'readname') {
                 my $entry = $readEntry{$tag};
                 if (defined($entry) && $entry =~ /\S/) {
-# print "add tag $tag $column  $readEntry{$tag}<br>" if ($tag ne 'AV' && $tag ne 'SQ');
-# print "add tag $tag $column  <br>" if ($tag eq 'AV' || $tag eq 'SQ');
                     push @columns,$column;
                     push @cvalues,$entry;
                     $counted++;
@@ -1164,6 +1159,7 @@ sub insert {
         }
         $parity = @columns + 1;
         if (!$READS->newrow('readname',$readEntry{ID},\@columns,\@cvalues)) {
+# here develop update of previously loaded reads
             $diagnosis = "Failed to create new entry for read $readEntry{ID}";
             $diagnosis .= ": $READS->{errors}" if $READS->{errors};
             $diagnosis .= "\n";
@@ -1171,11 +1167,6 @@ sub insert {
             $errors++;
         } 
     }
-
-#    else {
-#        $diagnosis = "Failed to create new entry for read $readEntry{ID}\n";
-#        $errors++; 
-#    }
     return $counted, $parity;
 }
 

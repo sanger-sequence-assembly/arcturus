@@ -224,11 +224,10 @@ sub errorbox {
     my $content = $self->{content}; #  partition contents
 
     undef my $error;
-    $colour = "orange" if (!$colour);
-    $error .= "<TABLE ALIGN=CENTER><TR><TD BGCOLOR=\"$colour\" WRAP><H3>";
-    $error .= $text if ($text);
-    $error .= "unspecified error" if (!$text);
-    $error .= "</H3></TD></TR></TABLE><HR>";
+    $colour = 'F0C0C0' if (!$colour);
+    $text = "unspecified error" if (!$text);
+    $error .= "<TABLE ALIGN=CENTER><TR><TD VALIGN='center' BGCOLOR=\"$colour\">";
+    $error .= "<H3>! $text</H3></TD></TR></TABLE><HR>";
     if ($link) {
         $ltxt = "GO BACK" if (!$ltxt);
         $error .= "<TABLE ALIGN=CENTER><TR>";
@@ -415,13 +414,39 @@ sub identify {
 
 sub ingestCGI {
 # transfer CGI input values as hidden values to current page (see MyCGI.pm)
-    my $self  = shift;
+    my $self = shift;
+    my $type = shift;
+
+# a list of parameter/values to be excluded can be provided as array
+
+    if (!defined($type)) {
+        $type = -1;
+    }
+    elsif ($type !~ /\d/) {
+        $type = -1; # deal with deprecated usage with non-numeric parameter
+    }
+    elsif ($type != 0 && $type != 1) {
+        return "Invalid type specification in postToGet";
+    }
+
+    my %inexclude;
+    while (@_) {
+        my $name = shift;
+        $inexclude{$name}++;
+    }
+
+# import CGI parameters as hidden variables
 
     my $in = $self->{cgi_input};
     return if (ref($in) ne 'HASH');
 
     foreach my $key (keys (%$in)) {
-        hidden($self,$key,$in->{$key}) if ($key !~ /submit|confirm|action/i);
+        my $accept = 1;
+        $accept = 0 if ($key =~ /^(submit|confirm|action)$/i); # always
+        $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
+        $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
+        hidden($self,$key,$in->{$key}) if $accept;
+# print "CGI key $key  $in->{$key}  accept:$accept  type=$type<br>"; 
     }
 }
 
@@ -622,6 +647,12 @@ sub frameborder {
     my $bgcolor = shift;
     my $mbot = shift;
 
+# clear any existing layout
+
+    my $content = $self->{content};
+    undef @$content;
+    $content->[0] = '';
+
     $mtop = 5   if (!defined($mtop));
     $side = 25  if (!$side);
     $bgcolor = "beige" if (!$bgcolor);
@@ -637,6 +668,11 @@ sub frameborder {
     $layout .= "</TABLE>";
 
     $self->{layout} = $layout;
+
+# make partition 1 (CON0) the default
+
+    $self->{current} = 1;
+    $self->center(1);
 }
 
 ###############################################################################

@@ -80,7 +80,7 @@ sub new {
 
     &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
 
-#    &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
+# &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
     &dropDead($self,"Invalid database engine $engine") if ($engine && !$self->{handle});
 
@@ -148,7 +148,6 @@ sub cgiHandle {
     my $test = shift; # id true: test and return 0 if not in CGI mode
 
     my $cgi = $self->{cgi};
-#    $cgi = 0 if ($test && $cgi && !$cgi->{status});
     $cgi = 0 if ($test && (!$cgi || !$cgi->{status}));
 
     return $cgi;
@@ -418,18 +417,20 @@ sub importOptions {
 sub whereAmI {
 # return a string with information about the instance accessed
     my $self = shift;
-    my $full = shift;
+    my $nmbr = shift; # if True: return 0 for development, 1 for production server
 
     my $server = $self->{server};
     my $script = $self->{Script};
 
     my $text;
-    if (!$server || !$script) {
+    if ($nmbr) {
+        $text = 0 if ($script =~ /\bdev\b/);
+        $text = 1 if ($script =~ /\bprod\b/);
+    }
+    elsif (!$server || !$script) {
         $text  = "don't know where I am:";
         $text .= " undefined server " if !$server;
         $text .= " undefined script " if !$script;
-    }
-    elsif ($full) {
     }
     else {
         $server =~ s/^.*(babel|pcs3).*$/$1/;
@@ -624,6 +625,8 @@ sub authorize {
                     silently   => 1, # do everything quietly
                     dieOnError => 0, # do not abort on error but return error message
                     ageWindow => 30, # acceptance window (minutes) for previously opened session
+                    returnPath => 0, # default return to same script
+                    noGUI      => 0, # default standard Arcturus GUI; else contents only
                     diagnosis  => 0  # default off
 		  );
 
@@ -646,6 +649,7 @@ sub authorize {
         my $users = $mother->spawn('USERS','self',0,1);
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hashref->{priviledges} || 0;
+            $seniority   = $hashref->{seniority}   || 0;
             if (!$cgi->VerifyEncrypt('arcturus',$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
                 $session = 0; # force (new) prompt for password 
@@ -715,8 +719,9 @@ sub authorize {
             elsif ($options{interim} || !$cgi->pageExists) {
                 $self->cgiHeader(2); # if not already done
                 my $script = $self->currentScript;
-                $script .= $options{returnpath} if $options{returnpath};
+                $script .= $options{returnPath} if $options{returnPath};
                 my $page = $self->GUI("ARCTURUS authorisation");
+                $page->frameborder(100,25) if $options{noGUI}; # display form only
                 $page->form($script); # return to same url
                 $page->sectionheader("ARCTURUS authorisation",3,1);
                 $page->sectionheader("The requested ARCTURUS operation requires authorisation",4,0);
@@ -750,9 +755,13 @@ sub authorize {
         undef $self->{error};
         my $users = $mother->spawn('USERS','self',0,1);
         if (my $hash = $users->associate('hashref',$identify,'userid')) {
-            $priviledges = $hash->{priviledges};
-            $seniority   = $hash->{seniority};
-            if (!$cgi->VerifyEncrypt($password,$hash->{password})) {
+            $priviledges = $hash->{priviledges} || 0;
+            $seniority   = $hash->{seniority}   || 0;
+# special case for initialization of password of super user oper (un-encrypted in USERS) 
+            if ($hash->{password} eq 'update' && ($identify ne 'oper' || $password ne 'update')) {
+                $self->{error} = "Invalid password : initialize operations account first";
+            }
+            elsif (!$cgi->VerifyEncrypt($password,$hash->{password})) {
                 $self->{error} = "Invalid password provided for user $identify";
             }
             elsif (!$priviledges) {
@@ -835,31 +844,58 @@ sub authorize {
     undef $self->{report};
 
 # here priviledges should be defined; test priviledge(s) sought
-    
-#    print "priviledges for user $identify: $priviledges\n";
 
     my $mask = $code;
     if (ref($code) eq 'HASH') {
         $mask = $code->{mask};
         if (my $user = $code->{user}) {
-# test the seniority of the user mentioned against the one of $identify
             my $users = $mother->spawn('USERS','self',0,1);
-            if ($seniority <= $users->associate('seniority',$user,'userid')) {
+            if ($user eq $identify && $code->{notOnSelf}) {
+                $self->{error} = "You can't xxx yourself";
+                return 0;
+            }
+            elsif ($user eq $identify) {
+                $mask = 0; # actions on myself need no further test 
+            }   
+# test the seniority of the user mentioned against the one of $identify
+            elsif ($seniority <= $users->associate('seniority',$user,'userid')) {
                 $self->{error} = "User $identify has no priviledge for this operation";
                 return 0;
             }        
         }
     }
 
-    if ($code) {
+    if ($mask) {
 # &report ($self,"code $code  mask $mask priviledges $priviledges");
         if (!$priviledges || $mask != ($mask & $priviledges)) {
             $self->{error} = "User $identify has no priviledge for this operation";
+# $self->{error} = "User $identify has no priviledge on the development servers"; if ?
             return 0;
         }
     }
 
-    return 1; # user authorized
+    return 1; # authorization granted
+}
+
+#############################################################################
+
+sub allowServerAccess {
+# authorize for special case when user not registered
+    my $self = shift;
+    my $user = shift;
+
+# limit access to development server to names listed in 'devserver_access'
+
+    if (!$self->whereAmI(1)) {
+        my $allowed = $self->{config}->get('devserver_access','insist unique array');
+        my $string = join ' ',@$allowed;
+        if ($string !~ /\b$user\b/) {
+            $self->{error} = "User '$user' has no priviledges on the development servers";
+            return 0;
+        }
+    }
+
+    return 1; # authorization granted
 }
 
 #############################################################################
@@ -889,6 +925,7 @@ sub GUI {
     return 0 if !$cgi;
 
     my $script = $self->currentScript;
+    $script .=  $self->currentOptions; # ? a good idea?
     my @exclude = ('USER','redirect');
     my $postToGet = $cgi->postToGet(0,@exclude); # include 'database' but not USER
 
@@ -952,7 +989,7 @@ sub GUI {
 
 # compose the top bar (partition 2)
 
-    my $database=$cgi->parameter('database') || $cgi->parameter('organism') || 'arcturus';
+    my $database=$cgi->parameter('database',0) || $cgi->parameter('organism',0) || 'arcturus';
 
     $page->partition(2); $page->center(1);
     $connection =~ s/\b(dev\w+)\b/<font size=+1 color=red>$1<\/font>/;
@@ -997,13 +1034,13 @@ sub GUI {
     $page->partition(5);
     $table = "<table $tablelayout>";
     if (@databases) {
-        my $current = $cgi->parameter('database');
+        my $current = $cgi->parameter('database',0);
         $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
         foreach my $database (sort @databases) {
-           my $target = $script;
+            my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
             $target .= "&database=$database" if ($target !~ /\b$database\b/);
-	   $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
+      	    $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
             my $link = $database;
             $link = "<a href=\"$target\"> $link </a>" if (!$current || $current ne $link);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
@@ -1056,7 +1093,7 @@ sub GUI {
 
     my $target = &currentHost($self).&currentPort($self);
     $target = "target=\"${target}input\""; # e.g. 'babel19090input'
-    $target = '' if !$cgi->parameter('session');
+    $target = '' if !$cgi->parameter('session',0);
 
     $page->partition(4);
     $table = "<table $tablelayout>";
@@ -1118,6 +1155,9 @@ sub GUI {
     }
     my $query = "/cgi-bin/query/overview?database=arcturus";
     $table .= "<tr><td $cell><a href=\"$query\" $querywindow>arcturus</a></td></tr>";
+    my $sessioninfo = $cgi->postToGet();
+    $query = "/cgi-bin/umanager/locate$sessioninfo";
+    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>users</a></td></tr>";
     $table .= "</table>";
     $page->add($table); 
 
@@ -1125,16 +1165,16 @@ sub GUI {
 
     $page->partition(10);
     $table = "<table $tablelayout>";
-    $query = "/cgi-bin/query/overview/arcturus";
+    $query = "/cgi-bin/query/help?script=$script";
     $cell = "bgcolor='yellow' nowrap align=center";
     $table .= "<tr><td $cell><a href=\"$query\" $querywindow>HELP</a></td></tr>";
-    if ($cgi->parameter('session')) {
-        my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet;
+    if ($cgi->parameter('session',0)) {
+        my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightgreen' nowrap align=center";
         $table .= "<tr><td $cell><a href=\"$query\">SIGN OFF</a></td></tr>";
     }
     else {
-        my $query = "/cgi-bin/herdsman/signon".$cgi->postToGet;
+        my $query = "/cgi-bin/herdsman/signon".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightblue' nowrap align=center";
         $table .= "<tr><td $cell><a href=\"$query\">SIGN ON</a></td></tr>";
     }
@@ -1161,6 +1201,16 @@ sub currentScript {
     $script =~ s?^.*cgi-bin?/cgi-bin?;
 
     return $script;
+}
+#*******************************************************************************
+
+sub currentOptions {
+    my $self = shift;
+
+    my $options ='';
+    $options = $self->origin if ($self->origin =~ /\S/);
+
+    return $options;
 }
 
 #*******************************************************************************

@@ -87,7 +87,7 @@ sub sequenceEncoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
-    my $method = shift;
+    my $method = shift || 0;
 
     return &tripletEncoder($self,$string)  if ($method == 1);
  
@@ -103,7 +103,7 @@ sub sequenceDecoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
-    my $method = shift;
+    my $method = shift || 0;
 
     return &tripletDecoder($self,$string,@_)  if ($method == 1);
  

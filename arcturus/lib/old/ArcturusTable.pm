@@ -291,8 +291,8 @@ sub expandSequence {
             my $encoder =  Compress->new($seed);
             foreach my $hash (@$hashrefs) {
                 my $sequence = $hash->{sequence};
-                if (defined($hash->{$compress}) && $hash->{$compress} == 1 && $sequence) {
-                   (my $length,$sequence) = $encoder->sequenceDecoder($sequence);
+                if (defined($hash->{$compress}) && $sequence) {
+                   (my $length,$sequence) = $encoder->sequenceDecoder($sequence,$hash->{$compress});
 		   $hash->{sequence} = $sequence;
                    $hash->{$compress} = 0;
                 }
