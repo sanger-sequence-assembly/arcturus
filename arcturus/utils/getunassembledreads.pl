@@ -19,7 +19,7 @@ my $cafFileName ='';
 my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
-my $blocksize = 50000;
+my $blocksize = 10000;
 
 
 my $outputFile;            # default STDOUT
@@ -107,10 +107,12 @@ while (my $remainder = scalar(@$readids)) {
     $blocksize = $remainder if ($blocksize > $remainder);
 
     my @readblock = splice (@$readids,0,$blocksize);
-#undef @readblock; # testing
 
     $logger->info("Processing next $blocksize reads");
 
+    $logger->info("$readblock[0] $readblock[$#readblock] ".scalar(@readblock));
+
+#undef @readblock; # testing
     my $reads = $adb->getReadsByReadID(\@readblock);
 
     $logger->info("Adding sequence");
