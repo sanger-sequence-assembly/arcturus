@@ -483,7 +483,7 @@ sub dbHandle {
     if ($database && !$residence{$database}) {
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
-    elsif ($database && $residence{$database} =~ /$server/) {
+    elsif ($database && $residence{$database} !~ /$server/) {
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&origin || !$options{defaultRedirect}) {
             &dropDead($self,"Database $database resides on $residence{$database}");
