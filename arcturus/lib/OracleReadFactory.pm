@@ -17,7 +17,7 @@ sub new {
     my $this = $type->SUPER::new();
 
     my ($schema, $projid, $aspedafter, $aspedbefore,
-	$readnamelike, $includes, $excludes);
+	$readnamelike, $includes, $excludes, $minreadid, $maxreadid);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -37,6 +37,9 @@ sub new {
 			      $nextword eq 'fofn');
 
 	$excludes = shift if ($nextword eq 'exclude');
+
+	$minreadid = shift if ($nextword eq 'minreadid');
+	$maxreadid = shift if ($nextword eq 'maxreadid');
     }
 
     die "No schema specified" unless defined($schema);
@@ -78,6 +81,12 @@ sub new {
 
     unshift @conditions, "projid = $projid"
 	if defined($projid);
+
+    unshift @conditions, "readid >= $minreadid"
+	if defined($minreadid);
+
+    unshift @conditions, "readid <= $maxreadid"
+	if defined($maxreadid);
 
     unshift @conditions, "asped < '" . $aspedbefore . "'"
 	if defined($aspedbefore);

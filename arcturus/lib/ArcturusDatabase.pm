@@ -132,6 +132,26 @@ sub populateDictionaries {
 #    $this->{Dictionary}->{template} = {};
 }
 
+sub populateLoadingDictionaries {
+    my $this = shift;
+
+    my $dbh = $this->getConnection;
+
+    $this->{LoadingDictionary} = {};
+
+    $this->{LoadingDictionary}->{ligation} =
+	&createDictionary($dbh, "LIGATIONS", "identifier", "ligation_id");
+
+    $this->{LoadingDictionary}->{svector} =
+	&createDictionary($dbh, "SEQUENCEVECTORS", "name", "svector_id");
+
+    $this->{LoadingDictionary}->{cvector} =
+	&createDictionary($dbh, "CLONINGVECTORS", "name", "cvector_id");
+
+    $this->{LoadingDictionary}->{template} =
+	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
+}
+
 sub createDictionary {
     my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
 
@@ -186,9 +206,11 @@ sub dictionaryLookup {
 }
 
 sub dictionaryInsert {
-# add a new line to the dictionary table, if it does not exist
-    my $this = shift;
+    my ($dict, $pkey, $value, $junk) = @_;
 
+    if (defined($dict) && defined($pkey)) {
+	$dict->{$pkey} = $value;
+    }
 }
 
 sub processReadData {
@@ -867,6 +889,13 @@ sub getTemplateID {
     my $this = shift;
     my $read = shift;
 
+    my $template = $read->getTemplate();
+
+    my $template_id = &dictionaryLookup($this->{LoadingDictionary}->{template},
+					$template);
+
+    return $template_id if defined($template_id);
+
     my $dbh = $this->getConnection();
 
     return undef unless defined($dbh);
@@ -875,15 +904,17 @@ sub getTemplateID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $template = $read->getTemplate();
-
     my $rc = $sth->execute($template);
 
-    my ($template_id) = $sth->fetchrow_array();
+    ($template_id) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return $template_id if defined($template_id);
+    if (defined($template_id)) {
+	&dictionaryInsert($this->{LoadingDictionary}->{template},
+			  $template, $template_id);
+	return $template_id;
+    }
 
     my $ligation_id = $this->getLigationID($read);
 
@@ -901,12 +932,20 @@ sub getTemplateID {
 
     $sth->finish();
 
+    &dictionaryInsert($this->{LoadingDictionary}->{template},
+		      $template, $template_id);
+
     return $template_id;
 }
 
 sub getCloningVectorID {
     my $this = shift;
     my $cvec = shift;
+
+    my $cvec_id = &dictionaryLookup($this->{LoadingDictionary}->{cvectors},
+				    $cvec);
+
+    return $cvec_id if defined($cvec_id);
 
     my $dbh = $this->getConnection();
 
@@ -918,11 +957,15 @@ sub getCloningVectorID {
 
     my $rc = $sth->execute($cvec);
 
-    my ($cvec_id) = $sth->fetchrow_array();
+    ($cvec_id) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return $cvec_id if defined($cvec_id);
+    if (defined($cvec_id)) {
+	&dictionaryInsert($this->{LoadingDictionary}->{cvectors},
+			  $cvec, $cvec_id);
+	return $cvec_id;
+    }
 
     $query = "insert into CLONINGVECTORS(name) VALUES(?)";
 
@@ -938,12 +981,20 @@ sub getCloningVectorID {
 
     $sth->finish();
 
+    &dictionaryInsert($this->{LoadingDictionary}->{cvectors},
+		      $cvec, $cvec_id);
+
     return $cvec_id;
 }
 
 sub getSequencingVectorID {
     my $this = shift;
     my $seqvec = shift;
+
+    my $seqvec_id = &dictionaryLookup($this->{LoadingDictionary}->{svectors},
+				      $seqvec);
+
+    return $seqvec_id if defined($seqvec_id);
 
     my $dbh = $this->getConnection();
 
@@ -955,11 +1006,15 @@ sub getSequencingVectorID {
 
     my $rc = $sth->execute($seqvec);
 
-    my ($seqvec_id) = $sth->fetchrow_array();
+    ($seqvec_id) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return $seqvec_id if defined($seqvec_id);
+    if (defined($seqvec_id)) {
+	&dictionaryInsert($this->{LoadingDictionary}->{svectors},
+			  $seqvec, $seqvec_id);
+	return $seqvec_id;
+    }
 
     $query = "insert into SEQUENCEVECTORS(name) VALUES(?)";
 
@@ -975,12 +1030,22 @@ sub getSequencingVectorID {
 
     $sth->finish();
 
+    &dictionaryInsert($this->{LoadingDictionary}->{svectors},
+		      $seqvec, $seqvec_id);
+
     return $seqvec_id;
 }
 
 sub getLigationID {
     my $this = shift;
     my $read = shift;
+
+    my $ligation = $read->getLigation();
+
+    my $ligation_id = &dictionaryLookup($this->{LoadingDictionary}->{ligation},
+					$ligation);
+
+    return $ligation_id if defined($ligation_id);
 
     my $dbh = $this->getConnection();
 
@@ -990,15 +1055,17 @@ sub getLigationID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $ligation = $read->getLigation();
-
     my $rc = $sth->execute($ligation);
 
-    my ($ligation_id) = $sth->fetchrow_array();
+    ($ligation_id) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return $ligation_id if defined($ligation_id);
+    if (defined($ligation_id)) {
+	&dictionaryInsert($this->{LoadingDictionary}->{ligation},
+			  $ligation, $ligation_id);
+	return $ligation_id;
+    }
 
     my ($silow, $sihigh) = @{$read->getInsertSize()};
 
@@ -1015,6 +1082,9 @@ sub getLigationID {
     }
 
     $sth->finish();
+
+    &dictionaryInsert($this->{LoadingDictionary}->{ligation},
+		      $ligation, $ligation_id);
 
     return $ligation_id;
 }
