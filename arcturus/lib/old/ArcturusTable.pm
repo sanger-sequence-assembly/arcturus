@@ -1370,7 +1370,8 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
             $report .= "deleting row for $marker $hash->{$marker}";
             if ($option{doDelete}) {
                 if ($option{delTarget} =~ /^(any|all)$/i || $hash->{$marker} eq $option{delTarget}) {
-                    if ($target->delete($marker,$option{delTarget})) {
+#$report .= ".. marker=$marker  delTarget=$option{delTarget}\n";
+                    if ($target->delete($marker,$hash->{$marker})) {
                         $report .= " ... done\n";
                     }
                     else {
@@ -1378,7 +1379,7 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
                     }
                 }
                 else {
-                    $report .= " ... skipped (delTarget='$option{delTarget})'\n";
+                    $report .= " ... skipped (delTarget='$option{delTarget}')\n";
                 }
             }
             else {

@@ -295,6 +295,7 @@ sub lookup {
     }
 
     $value = $self->{$name};
+
 # $self->report("lookup in GateKeeper module $name : $value") if defined($value);
         
     return $value;
@@ -1258,6 +1259,8 @@ print "GateKeeper authorize Test Error\n" if $debug;
     my $mask = $code;
     if (ref($code) eq 'HASH') {
         $mask = $code->{mask};
+        $mask = 65535 if !defined($mask);
+# test against data for another named user
         if (my $user = $code->{user}) {
             my $users = $mother->spawn('USERS','self',0,1);
             if ($user eq $identify && $code->{notOnSelf} && $seniority < 6) {
@@ -1273,6 +1276,12 @@ print "GateKeeper authorize Test Error\n" if $debug;
                 $self->{error} .= ": insufficient seniority";
                 return 0;
             }        
+        }
+# test seniority
+        if ($code->{seniority} && $seniority < $code->{seniority}) {
+            $self->{error} = "User $identify has no priviledge for this operation: ";
+            $self->{error} .= "insufficient seniority ($code->{seniority} required)";
+            return 0;
         }
     }
 
@@ -1453,6 +1462,12 @@ sub GUI {
     print "\n$title \n" if (!$cgi && $title);
     return 0 if !$cgi;
 
+    my $session = $self->currentSession;
+    if ($session && !$self->{USER}) {
+        my @session = split ':',$session;
+        $self->{USER} = $session[0];
+    }
+
 # open the page
 
     $self->cgiHeader(2); # in case not yet done
@@ -1613,7 +1628,7 @@ sub GUI {
       	    $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
             my $link = $database; my $ulink = uc($link);
             my $alt = "onMouseOver=\"window.status='SELECT THE $ulink DATABASE'; return true\"";
-            my $override = 0; $override = 1 if ($self->currentScript =~ /\bcreate\b/); 
+            my $override = 0; $override = 1 if ($self->currentScript =~ /\bcreate\b|drop\b|copy\b/); 
             $link = "<a href=\"$target\" $alt> $link </a>" if (!$current || $current ne $link || $override);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
@@ -1784,7 +1799,7 @@ sub GUI {
 #        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
     }
     if ($self->instance) {
-        my $update = "/cgi-bin/create/arebuild".$cgi->postToGet(1,'session');
+        $update = "/cgi-bin/create/arebuild".$cgi->postToGet(1,'session');
         $title = "TEST AND MODIFY TABLES OF THE COMMON DATABASE";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         $table .= "<tr><td $cell><a href=\"$update\" $alt> arcturus </a></td></tr>";
@@ -1792,6 +1807,20 @@ sub GUI {
         $title = "USER ADMINISTRATION OPERATIONS";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         $table .= "<tr><td $cell><a href=\"$update\" $alt> Users </a></td></tr>";
+    }
+    if ($database && $database ne 'arcturus' && $self->currentUser eq 'oper') {
+# copy database link
+        $update = "/cgi-bin/new/newcopy/getform".$cgi->postToGet(1,'session','database');
+        $update .= "\&noGUI=1"; # must have no possible links to other databases  
+        $title = "COPY THE $database database to another node";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $table .= "<tr><td $cell><a href=\"$update\" $alt><font size=-1> COPY $database </font></a></td></tr>";
+# drop database link
+        $update = "/cgi-bin/drop/process".$cgi->postToGet(1,'session','database');
+        $update .= "\&noGUI=1"; # must have no possible links to other databases  
+        $title = "DROP THE $database database";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $table .= "<tr><td $cell><a href=\"$update\" $alt><font size=-1> DROP $database </font></a></td></tr>";
     }
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
@@ -1805,7 +1834,6 @@ sub GUI {
 
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
-    my $session = $self->currentSession;
     if ($database && $database ne 'arcturus') {
         $title = "QUERY THE ".uc($database)." CONTENTS";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 

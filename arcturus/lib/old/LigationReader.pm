@@ -83,6 +83,7 @@ sub build {
    my $count = 0;
 
    print "Polling the ORACLE database ... be patient, please ....\n";
+   $ENV{PATH} .= ':/usr/local/badger/bin' if ($ENV{PATH} !~ /badger\/bin/);
    my @fields = `$PEEKDIR/peek ligation $ligation`; # execute Oracle query
    print "<br>" if $ENV{'PATH_INFO'}; # CGI mode
    if (!@fields) {
@@ -98,15 +99,17 @@ sub build {
        $value =~ s/\"//g;
        if ($item =~ /plate/i) {
            push @plates, $value;
-       } else {
-       #decode this lot
+       } 
+       else {
+#decode this lot
            if ($item =~ /size/i) {
                $value *= 1000; $value /= 1000 if ($value > 10E4);
                $other *= 1000; $other /= 1000 if ($other > 10E4);
                $contents{'SIL'} = $value;
                $contents{'SIH'} = $other;
                $count += 2;
-           } else {
+           } 
+           else {
                $item =~ s/lig\w+/LG/i;
                $item =~ s/clo\w+/CN/i;
                $item =~ s/seq\w+/SV/i;
@@ -118,7 +121,8 @@ sub build {
    # if any plates defined set up an alternative to CN
        if (@plates) {
            $contents{'cn'} = join ' ',@plates;
-       } else {
+       }
+       else {
            $contents{'cn'} = ' ';
        }
 
