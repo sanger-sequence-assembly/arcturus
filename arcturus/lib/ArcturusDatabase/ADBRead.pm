@@ -862,7 +862,7 @@ print STDERR "reads found in the contigs: ".scalar(@tempids)."\n" if $DEBUG;
 # step 3 : get the read_id-s NOT found in the contigs
 
         unless (scalar(@tempids)) {
-# no reads found (should not happen)
+# no reads found (should not happen except for empty assembly)
             $query  = "select READS.read_id from READS";
             $query .= " where ".join(" and ", @dateselect) if @dateselect;
   
@@ -885,9 +885,9 @@ print STDERR "reads found in the contigs: ".scalar(@tempids)."\n" if $DEBUG;
 print STDERR "doing block $ridstart to $ridfinal ($blocksize)\n" if $DEBUG;
 
             $query  = "select READS.read_id from READS";
-            $query .= " where read_id > $ridstart";
+            $query .= " where read_id > $ridstart ";
             $query .= "   and read_id <= $ridfinal" if $ridfinal;
-            $query .=  join(" and ", @dateselect) if @dateselect;
+            $query .= "   and ".join(" and ", @dateselect) if @dateselect;
             $query .= "   and read_id not in (".join(",",@readblock).")";
             $query .= " order by read_id";
  
