@@ -1206,8 +1206,9 @@ print "Ligation hash $ligation \n" if $DEBUG;
 # load with non-oracle id; possibly Oracle database inaccessible
                 $origin = 'R'; # Defined in the Read itself
                 $status->{diagnosis} .= "! Warning" if (!$self->{fatal});
-                $status->{diagnosis} .= "! CGI access Error" if ($self->{fatal});
+                $status->{diagnosis} .= "! Error  " if ($self->{fatal});
                 $status->{diagnosis} .= ": ligation $readItems->{LG} not found in Oracle database$break";
+                $status->{diagnosis} .= " (possibly failed to access Oracle)";
                 $readItems->{RPS} += 512; # bit 10
                 $status->{warnings}++ if (!$self->{fatal});
                 $status->{errors}++   if  ($self->{fatal});
