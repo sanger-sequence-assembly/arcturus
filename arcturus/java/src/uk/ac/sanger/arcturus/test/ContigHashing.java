@@ -46,12 +46,12 @@ public class ContigHashing {
 	organism = args[1];
 	int kmersize = Integer.parseInt(args[2]);
 
-	boolean storeKmers = Boolean.getBoolean("storeKmers");
+	int cutoff = Integer.getInteger("cutoff", 20).intValue();
 
 	Connection conn = null;
 	PreparedStatement pstmt = null;
 
-	HashMap kmers = new HashMap();
+	HashMap kmers = new HashMap(2 << kmersize);
 
 	try {
 	    System.out.println("Creating an ArcturusInstance for " + instance);
@@ -63,11 +63,6 @@ public class ContigHashing {
 	    System.out.println();
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-
-	    if (storeKmers) {
-		conn = adb.getConnection();
-		pstmt = conn.prepareStatement("INSERT INTO KMER(contig_id,offset,kmer) VALUES(?,?,?)");
-	    }
 
 	    int[] contigIdList = adb.getCurrentContigIDList();
 
@@ -105,28 +100,111 @@ public class ContigHashing {
 		    Kmer newHead = new Kmer(offset, kmer, head);
 
 		    kmers.put(iKmer, newHead);
+		}
+	    }
 
-		    if (storeKmers) {
-			pstmt.setInt(1, id);
-			pstmt.setInt(2, offset);
-			pstmt.setInt(3, kmer);
+	    report("GENERATED KMERS");
 
-			pstmt.executeUpdate();
+	    Set entries = kmers.entrySet();
+
+	    Iterator iter = entries.iterator();
+
+	    int nEntries = 0;
+	    int maxCount = 0;
+	    int sumCount = 0;
+	    int nTrimmedEntries = 0;
+
+	    while (iter.hasNext()) {
+		Map.Entry mapentry = (Map.Entry)iter.next();
+
+		Integer iKmer = (Integer)mapentry.getKey();
+
+		Kmer head = (Kmer)mapentry.getValue();
+
+		int headCount = 0;
+
+		while (head != null) {
+		    headCount++;
+		    head = head.getNext();
+		}
+
+		if (headCount > 0) {
+		    nEntries++;
+		    sumCount += headCount;
+		    if (headCount > maxCount)
+			maxCount = headCount;
+
+		    if (headCount > cutoff) {
+			iter.remove();
+		    } else {
+			nTrimmedEntries++;
 		    }
 		}
 	    }
 
-	    if (storeKmers) {
-		pstmt.close();
-	    }
+	    float average = (float)sumCount/(float)nEntries;
 
-	    report();
+	    System.err.println("There are " + nEntries + " distinct kmers, and " + nTrimmedEntries +
+			       " after trimming to " + cutoff);
+	    System.err.println("The average cardinality is " + average);
+	    System.err.println("The maximum cardinality is " + maxCount);
+
+	    report("ANALYSED KMER STATISTICS");
 
 	    int[] readIdList = adb.getUnassembledReadIDList();
 
 	    System.out.println("There are " + readIdList.length + " unassembled reads");
 
-	    report();
+	    report("LOADED UNASSEMBLED READS");
+
+	    int hits = 0;
+
+	    for (int i = 0; i < readIdList.length; i++) {
+		if (i%1000 == 0)
+		    report("HASHED " + i + " READS");
+
+		int readid = readIdList[i];
+		Sequence seq = adb.getFullSequenceByReadID(readid);
+
+		byte[] dna = seq.getDNA();
+
+		int maxoffset = dna.length - kmersize;
+
+		for (int offset = 0; offset < maxoffset; offset += kmersize) {
+		    int kmer = 0;
+
+		    for (int j = 0; j < kmersize; j++) {
+			int val = 0;
+
+			switch (dna[offset + j]) {
+			case 'a': case 'A': val = 0; break;
+			case 'c': case 'C': val = 1; break;
+			case 'g': case 'G': val = 2; break;
+			case 't': case 'T': val = 3; break;
+			default: val = 0; break;
+			}
+
+			kmer <<= 2;
+			kmer |= val;
+		    }
+
+		    Integer iKmer = new Integer(kmer);
+
+		    Kmer head = (Kmer)kmers.get(iKmer);
+
+		    while (head != null) {
+			int contigid = head.getContigID();
+			int contigoffset = head.getOffset();
+			hits++;
+			//System.out.println(kmer + " " + contigid + " " + contigoffset + " " + readid + " " + offset);
+			head = head.getNext();
+		    }
+		}
+	    }
+
+	    System.err.println("Found " + hits + " kmer matches between contigs and reads");
+
+	    report("FINISHED");
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
@@ -135,10 +213,11 @@ public class ContigHashing {
     }
 
 
-    public static void report() {
+    public static void report(String message) {
 	long timenow = System.currentTimeMillis();
 
 	System.out.println("******************** REPORT ********************");
+	System.out.println("Message: " + message);
 	System.out.println("Time: " + (timenow - lasttime));
 
 	lasttime = timenow;
@@ -150,6 +229,18 @@ public class ContigHashing {
 	System.out.println();
     }
 
+    byte[] KmerToSequence(int kmer, int kmerlength) {
+	byte[] alphabet = {'A','C','G','T'};
+	byte[] chars = new byte[kmerlength];
+
+	for (int i = 0; i < kmerlength; i++) {
+	    int code = kmer % 4;
+	    chars[kmerlength - i] = (byte)code;
+	    kmer >>>= 2;
+	}
+
+	return chars;
+    }
 }
 
 class Kmer {
