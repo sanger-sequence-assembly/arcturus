@@ -477,6 +477,8 @@ else { # invoked from the command line (ejz/adh/pathdb only)
     $SCFREADDIR  = $config{SCF};
     my $SEARCH   = $config{SDS};
     @SEARCH_DIR  = split /\s/,$SEARCH if ($SEARCH);          
+    my $EXCLUDE = $config{EKS};
+    @excludekeys = split /\s/,$EXCLUDE if ($EXCLUDE);
 
 # get file name filter and global (directory) filter 
 
@@ -655,6 +657,15 @@ if ($logON || !$origin) {
             $dbfiles{$dbfile}++;
         }
         $sth->finish();
+
+        foreach my $key (keys %dbfiles) {
+# test if read already loaded to weed out possible double entries
+            if ($READS->associate('read_id',$key,'readname')) {
+                $PENDING->delete('readname',$key);
+                delete $dbfiles{$key};
+            } 
+        }
+
         $nr = keys %dbfiles;
 
         print "DONE ... $nr pending files found";
