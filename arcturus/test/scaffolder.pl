@@ -4,11 +4,12 @@ use strict;
 
 use ArcturusDatabase;
 
-my $instance = 'dev';
+my $instance;
 my $organism;
 my $verbose = 0;
 my $minbridges = 1;
 my $minlen = 0;
+my $puclimit = 8000;
 
 ###
 ### Parse arguments
@@ -19,6 +20,8 @@ while (my $nextword = shift @ARGV) {
     $organism = shift @ARGV if ($nextword eq '-organism');
     $minbridges = shift @ARGV if ($nextword eq '-minbridges');
     $minlen = shift @ARGV if ($nextword eq '-minlen');
+    $puclimit = shift @ARGV if ($nextword eq '-puclimit');
+
     $verbose = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
@@ -27,7 +30,11 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
-die "Organism not specified" unless defined($organism);
+unless (defined($organism) && defined($instance)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(0);
+}
 
 ###
 ### Create the ArcturusDatabase proxy object
@@ -43,6 +50,13 @@ my $adb = new ArcturusDatabase(-instance => $instance,
 my $dbh = $adb->getConnection();
 
 ###
+### Create statement handles for all the queries that we will need
+### later.
+###
+
+my $statements = &CreateStatements($dbh);
+
+###
 ### Enumerate the list of active contigs, excluding singletons and
 ### ordering them by size, largest first.
 ###
@@ -50,17 +64,9 @@ my $dbh = $adb->getConnection();
 my $contiglength = {};
 my @contiglist;
 
-my $query = "select CONTIG.contig_id,CONTIG.length".
-    "  from CONTIG left join C2CMAPPING".
-    "    on CONTIG.contig_id = C2CMAPPING.parent_id".
-    " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= $minlen" .
-    " order by CONTIG.length desc";
+my $sth = $statements->{'currentcontigs'};
 
-my $sth = $dbh->prepare($query);
-&db_die("prepare($query) failed");
-
-$sth->execute();
-&db_die("execute($query) failed");
+$sth->execute($minlen);
 
 while (my ($ctgid, $ctglen) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
@@ -70,18 +76,12 @@ while (my ($ctgid, $ctglen) = $sth->fetchrow_array()) {
 $sth->finish();
 
 ###
-### Create statement handles for all the queries that we will need
-### later.
-###
-
-my $statements = &CreateStatements($dbh);
-
-###
 ### Process each contig in turn
 ###
 
 my $contigtoscaffold = {};
 my @scaffoldlist;
+my %contigref;
 
 foreach my $contigid (@contiglist) {
     ###
@@ -113,7 +113,7 @@ foreach my $contigid (@contiglist) {
     my $lastcontigid = $seedcontigid;
     my $lastend = 'R';
 
-    while (my $nextbridge = &FindNextBridge($lastcontigid, $lastend, $minbridges,
+    while (my $nextbridge = &FindNextBridge($lastcontigid, $lastend, $minbridges, $puclimit,
 					    $statements, $contiglength, $contigtoscaffold, $verbose)) {
 	my ($nextcontig, $nextgap) = @{$nextbridge};
 
@@ -137,7 +137,7 @@ foreach my $contigid (@contiglist) {
     my $lastcontigid = $seedcontigid;
     my $lastend = 'L';
 
-    while (my $nextbridge = &FindNextBridge($lastcontigid, $lastend, $minbridges,
+    while (my $nextbridge = &FindNextBridge($lastcontigid, $lastend, $minbridges, $puclimit,
 					    $statements, $contiglength, $contigtoscaffold, $verbose)) {
 	my ($nextcontig, $nextgap) = @{$nextbridge};
 
@@ -166,18 +166,23 @@ foreach my $contigid (@contiglist) {
     my $totlen = 0;
     my $totgap = 0;
     my $totctg = 0;
+    my $curpos = 0;
 
     while (my $item = shift @{$scaffold}) {
 	if ($isContig) {
 	    my ($contigid, $contigdir) = @{$item};
 	    my $contiglen = $contiglength->{$contigid};
 	    $report .= "  CONTIG $contigid ($contiglen) $contigdir\n";
+	    push @{$item}, ($contigdir eq 'F') ? $curpos : $curpos + $contiglen;
+	    $contigref{$contigid} = $item;
 	    $totlen += $contiglen;
 	    $totctg += 1;
+	    $curpos += $contiglen;
 	} else {
 	    my ($gapsize, $bridges) = @{$item};
 	    $report .= "     GAP $gapsize [" . join(",", @{$bridges}).  "]\n";
 	    $totgap += $gapsize;
+	    $curpos += $gapsize;
 	}
 
 	$isContig = !$isContig;
@@ -189,6 +194,8 @@ foreach my $contigid (@contiglist) {
 
     print "\n";
 }
+
+
 
 $dbh->disconnect();
 
@@ -203,7 +210,13 @@ sub db_die {
 sub CreateStatements {
     my $dbh = shift;
 
-    my %queries = (
+    my %queries = ("currentcontigs",
+		   "select CONTIG.contig_id,CONTIG.length" .
+		   "  from CONTIG left join C2CMAPPING" .
+		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
+		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
+		   " order by CONTIG.length desc",
+
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
 		   " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" .
@@ -226,28 +239,32 @@ sub CreateStatements {
 		   " where template_id = ? and strand != ?",
 
 		   "mappings",
-		   "select contig_id,cstart,cfinish,direction from MAPPING where seq_id = ?"
+		   "select contig_id,cstart,cfinish,direction from MAPPING where seq_id = ?",
+
+		   "bacendtemplate",
+		   "select template_id,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
+		   " where sihigh > ?",
+
+		   "readsfortemplate",
+		   "select READS.read_id,readname,strand,seq_id from READS left join SEQ2READ" .
+		   " using(read_id) where template_id = ?"
 		   );
 
     my $statements = {};
 
     foreach my $query (keys %queries) {
 	$statements->{$query} = $dbh->prepare($queries{$query});
+	&db_die("Failed to create query \"$query\"");
     }
 
     return $statements;
 }
 
 sub FindNextBridge {
-    my ($contigid, $contigend, $minbridges, $statements, $contiglength, $contigtoscaffold, $junk) = @_;
+    my ($contigid, $contigend, $minbridges, $puclimit,
+	$statements, $contiglength, $contigtoscaffold, $junk) = @_;
 
     my $contiglen = $contiglength->{$contigid};
-
-    ###
-    ### Assume pUC insert size no larger than 8kb
-    ###
-
-    my $puclimit = 8000;
 
     my $limit = ($contigend eq 'R') ? $contiglen - $puclimit : $puclimit;
 
@@ -431,12 +448,13 @@ sub FindNextBridge {
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-instance\tName of instance\n";
     print STDERR "-organism\tName of organism\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\tName of instance (default: 'dev')\n";
     print STDERR "-minbridges\tMinimum number of pUC bridges (default: 1)\n";
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
+    print STDERR "-puclimit\tMaximum insert size for pUC subclones (default: 8000)\n";
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
 }
