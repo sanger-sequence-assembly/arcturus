@@ -148,6 +148,43 @@ sub populateLoadingDictionaries {
 
     $this->{LoadingDictionary}->{template} =
 	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
+
+    $this->{LoadingDictionary}->{basecaller} =
+	&createDictionary($dbh, "BASECALLER", "name", "basecaller");
+
+    $this->{LoadingDictionary}->{clone} =
+	&createDictionary($dbh, "CLONES", "clonename", "clone");
+
+    $this->{LoadingDictionary}->{status} =
+	&createDictionary($dbh, "STATUS", "identifier", "status");
+
+    $this->{SelectStatement} = {};
+    $this->{InsertStatement} = {};
+
+    my %attributeQueries =
+	('ligation',   ["select ligation_id from LIGATIONS where identifier=?",
+			"insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)"],
+	 'template',   ["select template_id from TEMPLATE where name=?",
+			"insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)"],
+	 'basecaller', ["select basecaller from BASECALLER where name=?",
+			"insert ignore into BASECALLER(name) VALUES(?)"],
+	 'status',     ["select status from STATUS where identifier=?",
+			"insert ignore into STATUS(identifier) VALUES(?)"],
+	 'clone',      ["select clone from CLONES where clonename=?",
+			"insert ignore into CLONES(clonename) VALUES(?)"],
+	 'svector',    ["select svector_id from SEQUENCEVECTORS where name=?",
+			"insert ignore into SEQUENCEVECTORS(name) VALUES(?)"],
+	 'cvector',    ["select cvector_id from CLONINGVECTORS where name=?",
+			"insert ignore into CLONINGVECTORS(name) VALUES(?)"]
+	 );
+
+    foreach my $key (keys %attributeQueries) {
+	my ($squery, $iquery) = @{$attributeQueries{$key}};
+	$this->{SelectStatement}->{$key} = $dbh->prepare_cached($squery);
+	print STDERR "\"$squery\" failed: $DBI::errstr\n" if !defined($this->{SelectStatement}->{$key});
+	$this->{InsertStatement}->{$key} = $dbh->prepare_cached($iquery);
+	print STDERR "\"$iquery\" failed: $DBI::errstr\n" if !defined($this->{InsertStatement}->{$key});
+    }
 }
 
 sub createDictionary {
@@ -701,39 +738,24 @@ sub putRead {
 
     my $dbh = $this->getConnection();
 
-
     # LIGATION
 
     my ($sil,$sih) = @{$read->getInsertSize()}; 
 
-    my $query = "select ligation_id from LIGATIONS where identifier=?";
-    my $select_sth = $dbh->prepare_cached($query);
-    $query = "insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
-    my $insert_sth = $dbh->prepare_cached($query);
-
-    my $dict = $this->{LoadingDictionary}->{'ligation'};
-
     my $ligation_id = &getReadAttributeID($read->getLigation(),
-					  $dict,
-					  $select_sth,
-					  $insert_sth,
+					  $this->{LoadingDictionary}->{'ligation'},
+					  $this->{SelectStatement}->{'ligation'},
+					  $this->{InsertStatement}->{'ligation'},
 					  [$sil, $sih]);
 
     return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
 
     # TEMPLATE
 
-    $query = "select template_id from TEMPLATE where name=?";
-    $select_sth = $dbh->prepare_cached($query);
-    $query = "insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)";
-    $insert_sth = $dbh->prepare_cached($query);
-
-    $dict = $this->{LoadingDictionary}->{'template'};
-
     my $template_id = &getReadAttributeID($read->getTemplate(),
-					  $dict,
-					  $select_sth,
-					  $insert_sth,
+					  $this->{LoadingDictionary}->{'template'},
+					  $this->{SelectStatement}->{'template'},
+					  $this->{InsertStatement}->{'template'},
 					  [$ligation_id]);
 
     return (0, "failed to retrieve template_id") unless defined($template_id);
@@ -742,45 +764,24 @@ sub putRead {
 
     # BASECALLER
 
-    $query = "select basecaller from BASECALLER where name=?";
-    $select_sth = $dbh->prepare_cached($query);
-    $query = "insert ignore into BASECALLER(basecaller) VALUES(?)";
-    $insert_sth = $dbh->prepare_cached($query);
-
-    $dict = $this->{LoadingDictionary}->{'basecaller'};
-
     my $basecaller = &getReadAttributeID($read->getBaseCaller(),
-					 $dict,
-					 $select_sth,
-					 $insert_sth);
+					 $this->{LoadingDictionary}->{'basecaller'},
+					 $this->{SelectStatement}->{'basecaller'},
+					 $this->{InsertStatement}->{'basecaller'});
 
     # STATUS
 
-    $query = "select status from STATUS where identifier=?";
-    $select_sth = $dbh->prepare_cached($query);
-    $query = "insert ignore into STATUS(identifier) VALUES(?)";
-    $insert_sth = $dbh->prepare_cached($query);
-
-    $dict = $this->{LoadingDictionary}->{'status'};
-
     my $status = &getReadAttributeID($read->getProcessStatus(),
-				     $dict,
-				     $select_sth,
-				     $insert_sth);
+				     $this->{LoadingDictionary}->{'status'},
+				     $this->{SelectStatement}->{'status'},
+				     $this->{InsertStatement}->{'status'});
 
     # CLONE
 
-    $query = "select clone from CLONES where clonename=?";
-    $select_sth = $dbh->prepare_cached($query);
-    $query = "insert ignore into CLONES(clonename) VALUES(?)";
-    $insert_sth = $dbh->prepare_cached($query);
-
-    $dict = $this->{LoadingDictionary}->{'clone'};
-
     my $clone = &getReadAttributeID($read->getClone(),
-				    $dict,
-				    $select_sth,
-				    $insert_sth);
+				    $this->{LoadingDictionary}->{'clone'},
+				    $this->{SelectStatement}->{'clone'},
+				    $this->{InsertStatement}->{'clone'});
 
 # d) insert Read meta data
 
@@ -788,7 +789,7 @@ sub putRead {
 
     my $readname = $read->getReadName();
 
-    $query = "insert into" .
+    my $query = "insert into" .
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
 	    " VALUES(?,?,?,?,?,?,?,?,?)";
 
@@ -843,10 +844,10 @@ sub putRead {
 
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
-	    my $seqvecid = $this->getDictionaryItemID(
-                           'svector', $seqvec,
-                           'svector_id','SEQUENCEVECTORS','name') || 0;
-# my $seqvecid = $this->getSequencingVectorID($seqvec) || 0;
+	    my $seqvecid = &getReadAttributeID($seqvec,
+					       $this->{LoadingDictionary}->{'svector'},
+					       $this->{SelectStatement}->{'svector'},
+					       $this->{InsertStatement}->{'svector'}) || 0;
 
 	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
 
@@ -869,10 +870,10 @@ sub putRead {
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
 
-	    my $clonevecid = $this->getDictionaryItemID(
-                             'cvector', $clonevec,
-                             'cvector_id','CLONINGVECTORS','name') || 0;
-# my $clonevecid = $this->getCloningVectorID($clonevec) || 0;
+	    my $clonevecid = &getReadAttributeID($clonevec,
+						 $this->{LoadingDictionary}->{'cvector'},
+						 $this->{SelectStatement}->{'cvector'},
+						 $this->{InsertStatement}->{'cvector'}) || 0;
 
 	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
 
