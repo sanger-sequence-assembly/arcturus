@@ -23,8 +23,6 @@ sub new {
 
     $this->init(); # get the database connection
 
-    return undef unless $this->{Connection}; # test it
-
     $this->populateDictionaries();
 
     return $this;
@@ -57,10 +55,6 @@ sub init {
 
     my $ds = $this->{DataSource} || return; 
 
-    $this->{Connection} = $ds->getConnection();
-
-    return unless $this->{Connection};
-
     $this->{inited} = 1;
 }
 
@@ -69,7 +63,8 @@ sub getConnection {
 
     if (!defined($this->{Connection})) {
 	my $ds = $this->{DataSource};
-	$this->{Connection} = $ds->getConnection() if defined($ds);
+	print STDERR "DataSource->getConnection(", join(',', @_),")\n";
+	$this->{Connection} = $ds->getConnection(@_) if defined($ds);
     }
 
     return $this->{Connection};

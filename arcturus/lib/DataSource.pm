@@ -8,7 +8,7 @@ use DBI;
 sub new {
     my $type = shift;
 
-    my ($url, $base, $instance, $organism);
+    my ($url, $base, $instance, $organism, $newUsername, $newPassword);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
@@ -20,6 +20,10 @@ sub new {
 	$instance = shift if ($nextword eq 'instance');
 
 	$organism = shift if ($nextword eq 'organism');
+
+	$newUsername = shift if ($nextword eq 'username');
+
+	$newPassword = shift if ($nextword eq 'password');
     }
 
     $url = 'ldap.internal.sanger.ac.uk' unless defined($url);
@@ -74,6 +78,11 @@ sub new {
 	}
 	
 	my ($url, $username, $password) = &buildUrl($datasourcetype, $datasource);
+
+	if (defined($newUsername) && defined($newPassword)) {
+	    $username = $newUsername;
+	    $password = $newPassword;
+	}
 
 	if (defined($url)) {
 	    $this->{URL} = $url;
@@ -136,7 +145,7 @@ sub buildOracleUrl {
 sub getConnection {
     my $this = shift;
 
-    my $url      = $this->{URL};
+    my $url = $this->{URL};
 
     return undef unless defined($url);
 
