@@ -285,7 +285,7 @@ while (defined($record = <$CAF>)) {
             $BaseQuality =~ s/^\s|\s$//g; # remove leading/trailing
             my @BaseQuality = split /\s/,$BaseQuality;
             if ($read = $reads{$objectName}) {
-                $read->setQuality ([@BaseQuality]);
+                $read->setBaseQuality ([@BaseQuality]);
             }
             elsif ($contig = $contigs{$objectName}) {
                 $contig->setQuality ([@BaseQuality]);
@@ -296,7 +296,7 @@ while (defined($record = <$CAF>)) {
             }
             else {
                 $read = new Read($objectName);
-                $read->setQuality ([@BaseQuality]);
+                $read->setBaseQuality ([@BaseQuality]);
             }
         }
 # prepare for the new object
