@@ -33,16 +33,18 @@ my $projectname;           # projectname for which the data are to be loaded
 my $projectID;             # alternatively the project ID
 
 my $lowMemory;             # specify to minimise memory usage
-my $usePadded;             # allow a padded assembly
+my $usePadded = 0;         # 1 to allow a padded assembly
 my $consensus;             # load consensus sequence
-my $noload = 0;
+my $noload = 1; # CHANGE to 0
+my $list = 0;
+my $batch = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|" .
-                 "projectname|project_id|test|minimum|filter|ignore|" .
-                 "frugal|padded|readtags|noload|verbose|info|help";
+                 "projectname|project_id|test|minimum|filter|ignore|list|" .
+                 "frugal|padded|readtags|noload|verbose|batch|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -91,6 +93,10 @@ while (my $nextword = shift @ARGV) {
 
     $noload           = 1            if ($nextword eq '-noload');
 
+    $list             = 1            if ($nextword eq '-list');
+
+    $batch            = 1            if ($nextword eq '-batch');
+
     &showUsage(0) if ($nextword eq '-help');
 }
 
@@ -117,9 +123,9 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 # test the CAF file name
 #----------------------------------------------------------------
         
-&showUsage("Missing CAF file name") unless $cafFileName;
+&showUsage("Missing CAF file name") unless ($cafFileName || $batch);
 
-if ($cafFileName eq 'default') {
+if ($cafFileName && $cafFileName eq 'default') {
 # use the default assembly caf file in the assembly repository
     my $PR = new PathogenRepository();
     $cafFileName = $PR->getDefaultAssemblyCafFile($organism);
@@ -128,7 +134,9 @@ if ($cafFileName eq 'default') {
 
 # test existence of the caf file
 
-&showUsage("CAF file $cafFileName does not exist") unless (-e $cafFileName);
+if ($cafFileName) {
+    &showUsage("CAF file $cafFileName does not exist") unless (-e $cafFileName);
+}
 
 #----------------------------------------------------------------
 # if no project is defined, the loader allocates by inheritance
@@ -154,7 +162,14 @@ if ($projectname || $projectID) {
 # open file handle for input CAF file
 #----------------------------------------------------------------
 
-my $CAF = new FileHandle($cafFileName, "r");
+my $CAF;
+if ($cafFileName) {
+    $CAF = new FileHandle($cafFileName, "r");
+}
+else {
+    $CAF = *STDIN;
+    $cafFileName = "STDIN";
+}
        
 &showUsage("Invalid caf file name") unless $CAF;
 
@@ -197,9 +212,9 @@ my $objectName = '';
 my $buildReads = 0;
 my $buildContigs = 1;
 
-# assume default padded caf file
+# assume default unpadded caf file
 
-my $isUnpadded = 1; 
+my $isUnpadded = 1 - $usePadded; 
 my $isTruncated = 0;
 
 $logger->info("Parsing CAF file $cafFileName");
@@ -239,7 +254,7 @@ while (defined($record = <$CAF>)) {
         my $unpadded = $1 || 0;
         if ($isUnpadded <= 1) {
             $isUnpadded = ($unpadded ? 2 : 0); # on first entry
-            $logger->info("Padded set to $isUnpadded ");
+            $logger->info("is not Padded set to $isUnpadded ");
             if (!$isUnpadded && !$usePadded) {
                 $logger->severe("Padded assembly not accepted");
                 last;
@@ -265,7 +280,7 @@ while (defined($record = <$CAF>)) {
 # objectType 1 needs no further action here
         elsif ($objectType == 3) {
 # DNA data. Get the object, given the object name
-#print "loading DNA sequence\n'$DNASequence'\n\n";
+# print "loading DNA sequence for $objectName\n'$DNASequence'\n\n";
             $DNASequence =~ s/\s//g; # clear all blank space
             if ($read = $reads{$objectName}) {
                 $read->setSequence($DNASequence);
@@ -275,10 +290,12 @@ while (defined($record = <$CAF>)) {
             }
             elsif ($objectName =~ /contig/i) {
                 $contig = new Contig($objectName);
-                $contig->setSequence($DNASequence);
+                 $contigs{$objectName} = $contig;
+               $contig->setSequence($DNASequence);
             }
             else {
                 $read = new Read($objectName);
+                $reads{$objectName} = $read;
                 $read->setSequence($DNASequence);
             }     
         }
@@ -295,10 +312,12 @@ while (defined($record = <$CAF>)) {
             }
             elsif ($objectName =~ /contig/i) {
                 $contig = new Contig($objectName);
+                $contigs{$objectName} = $contig;
                 $contig->setBaseQuality ([@BaseQuality]);
             }
             else {
                 $read = new Read($objectName);
+                $reads{$objectName} = $read;
                 $read->setBaseQuality ([@BaseQuality]);
             }
         }
@@ -322,7 +341,10 @@ while (defined($record = <$CAF>)) {
             elsif ($read = $reads{$objectName}) {
 # we consider an existing read only if the number of SCF-alignments is NOT 1
 	        my $align = $read->getAlignToTrace();
-                $objectType = 0 if ($align && scalar(@$align) == 1);
+                $objectType = 0 if ($isUnpadded && $align && scalar(@$align) == 1);
+#	         my $aligntotracemapping = $read->getAlignToTraceMapping();
+#                $objectType = 0 if ($isUnpadded && $aligntotracemapping
+#                                && ($aligntotracemapping->hasSegments() == 1));
             }
 # for DNA and Quality 
             elsif ($rnBlocker{$objectName}) {
@@ -422,6 +444,7 @@ while (defined($record = <$CAF>)) {
             }
             else {
                 $logger->severe("Invalid alignment: ($lineCount) $record",2);
+                $logger->severe("positions: @positions",2);
             }
         }
         elsif ($record =~ /Clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
@@ -455,7 +478,6 @@ while (defined($record = <$CAF>)) {
                     $info .= '"'; # closing quote
                 }
             }
-#print STDERR "read Tag info ($info) \n";
 
 # print STDERR "TAG info: $info \n" if ($info =~ /\\n\\/); exit if ($type eq 'OLIG');
  
@@ -480,18 +502,18 @@ while (defined($record = <$CAF>)) {
                     my $name = $1;
                     $name =~ s/^0/o/; # correct typo 0 for o
 #print "OLIG detected: $info -> $name\n";
-                    $tag->setName($name);
+                    $tag->setTagSequenceName($name);
                 }
                 if ($type eq 'AFOL' && $info =~ /oligoname\s*(\w+)/i) {
-                    $tag->setName($1);
+                    $tag->setTagSequenceName($1);
                 }
 		$logger->info("Missing oligo name in read tag for ".
-                        $read->getReadName()) unless $tag->getName();
+                        $read->getReadName()) unless $tag->getTagSequenceName();
             }
             elsif ($type eq 'REPT') {
 # pickup the repeat name
-		if ($info =~ /^\s*(\w+)\s/i) {
-                    $tag->setName($1);
+		if ($info =~ /^\s*([\w\-]+)\s/i) {
+                    $tag->setTagSequenceName($1);
 		}
                 else {
 		    $logger->info("Missing repeat name in read tag for ".
@@ -536,7 +558,7 @@ while (defined($record = <$CAF>)) {
 
     elsif ($objectType == 2) {
 # parsing a contig, get constituent reads and mapping
-        if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
+        if ($record =~ /Ass\w+from\s+(\S+)\s+(.*)$/) {
 # an Assembled from alignment, identify the Mapping for this readname ($1)
             $mapping = $mappings{$1};
             if (!defined($mapping)) {
@@ -569,6 +591,7 @@ $positions[1] = invert($positions[1]);
             }
             else {
                 $logger->severe("Invalid alignment: ($lineCount) $record");
+                $logger->severe("positions: @positions",2);
             }
         }
         elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
@@ -584,6 +607,17 @@ $logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $nol
             $tag->setComment($info);
             if ($info =~ /([ACGT]{5,})/) {
                 $tag->setDNA($1);
+            }
+# pickup repeat name
+            if ($type eq 'REPT') {
+		if ($info =~ /^\s*(r[\w\-]+)\s/i) {
+$logger->warning("TagSequenceName $1") if $noload;
+                    $tag->setTagSequenceName($1);
+		}
+                else {
+		    $logger->info("Missing repeat name in contig tag for ".
+                            $contig->getContigName());
+                }
             }
         }
         elsif ($record =~ /Tag/) {
@@ -643,7 +677,8 @@ $logger->info("$nc Contigs, $nm Mappings, $nr Reads built");
 
 $origin = 'Arcturus CAF parser' unless $origin;
 $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
-                          $origin eq 'Finishing Software'); 
+                          $origin eq 'Finishing Software');
+ 
 my $number = 0;
 foreach my $identifier (keys %contigs) {
 # minimum number of reads test
@@ -654,23 +689,47 @@ foreach my $identifier (keys %contigs) {
     }         
     $contig->setOrigin($origin);
 
-    if ($noload) {
-       
-        my $tags = $contig->getTags();
-        next unless ($tags && @$tags);
-        $contig->setContigID(1000000 + $number++); # test  purpose
-        my $success = $adb->putTagsForContigPublic($contig);
+    unless ($isUnpadded) {
+# convert padded reads and mappings into unpadded representation
+        my $reads = $contig->getReads();
+        my $mappings = $contig->getMappings();
+        if ($reads && @$reads && $mappings && @$mappings) {
+            my $namelookup = {};
+            for (my $i = 0 ; $i < scalar(@$mappings) ; $i++) {
+                $namelookup->{$mappings->[$i]->getMappingName()} = $i;
+	    }
+
+            foreach my $paddedread (@$reads) {
+                my $mappingnumber = $namelookup->{$paddedread->getReadName};
+		my $paddedmapping = $mappings->[$mappingnumber];
+                unless ($paddedmapping) {
+                    print STDERR "missing mapping for read ".
+                        $paddedread->getReadName."\n";
+                    next;
+                }
+# convert the padded read / mapping to unpadded representations
+                my $intermediate = new PaddedRead($paddedread);
+                $intermediate->setPadded();
+                $mappings->[$mappingnumber] = $intermediate->dePad($paddedmapping);
+                $paddedread = $intermediate->exportAsRead();
+	    }
+	}
+	else {
+            print STDERR "Cannot convert to unpadded contig ".
+		$contig->getContigName()."\n";
+            next;
+	}
+	$contig->writeToCaf(*STDOUT) if $list;
+exit; # test
     }
-    else {
 
-        my ($added,$msg) = $adb->putContig($contig,$project); # return 0 fail
+    my ($added,$msg) = $adb->putContig($contig,$project,$noload); # return 0 fail
 
-        $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
-                      " reads : status $added, $msg");
+    $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
+                  " reads : status $added, $msg");
 
       # $adb->clearLastContig() unless $added;
-        delete $contigs{$identifier} if $added;
-    }
+    delete $contigs{$identifier} if $added;
 }
 
 # test again
@@ -687,16 +746,15 @@ if ($readTags) {
         my $read = $reads{$identifier};
         push @reads, $read;
 #        if ($noload) {
-            my $tags = $read->getTags();
-            next unless ($tags && @$tags);
-            foreach my $tag (@$tags) {
-#                $tag->writeToCaf(*STDOUT);
-            }
-#        }
+        my $tags = $read->getTags();
+        next unless ($tags && @$tags);
+        foreach my $tag (@$tags) {
+#            $tag->writeToCaf(*STDOUT) if $noload;
+        }
     }
     my $autoload = 1;
     my $success = $adb->putTagsForReads(\@reads,$autoload); # unless $noload;
-    print STDOUT "putTagsForReads success = $success\n";
+    $logger->info("putTagsForReads success = $success");
 }
 
 # finally update the meta data for the Assembly and the Organism
@@ -777,3 +835,5 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
+
