@@ -33,6 +33,19 @@ sub getComment {
     return $this->{comment} || '';
 }
 
+sub setDescent {
+    my $this = shift;
+    my $text = shift;
+
+    $this->{descent} .= $text if $text;
+}
+
+sub getDescent {
+    my $this = shift;
+
+    return $this->{descent} || '';
+}
+
 sub setDNA {
 # DNA sequence of (special) tags, e.g. oligos
     my $this = shift;
@@ -47,7 +60,7 @@ sub getDNA {
 }
 
 sub setName {
-# tag type, 4 char abbreviation
+# tag type, up to 32 char
     my $this = shift;
 
     $this->{name} = shift;
@@ -57,6 +70,21 @@ sub getName {
     my $this = shift;
 
     return $this->{name} || '';
+}
+
+sub composeName {
+# compose a descriptive name from tag data
+    my $this = shift;
+
+    my $name = $this->{label} || '';
+    $name .= ":" if $name;
+    $name .= sprintf ("%9d",$this->getSequenceID());
+    my ($ps, $pf) = $this->getPosition();
+    $name .= sprintf ("/%11d", $ps);
+    $name .= sprintf ("-%11d", $pf);
+    $name =~ s/\s+//g; # remove any blanks
+
+    $this->setName($name);
 }
 
 sub setPosition {
@@ -111,6 +139,19 @@ sub getStrand {
     }    
 }
 
+sub setTagSequenceName {
+# tag type, 4 char abbreviation
+    my $this = shift;
+
+    $this->{tsname} = shift;
+}
+
+sub getTagSequenceName {
+    my $this = shift;
+
+    return $this->{tsname} || '';
+}
+
 sub setType {
 # tag type, 4 char abbreviation
     my $this = shift;
@@ -126,24 +167,47 @@ sub getType {
 
 #----------------------------------------------------------------------
 
-my %inverse; # class variable
-
 sub transpose {
-# transpose a tag by applying a linear transformation, return new Tag
+# transpose a tag by applying a linear transformation, return new Tag (or undef)
     my $this = shift;
     my $align = shift;
-    my $offset = shift;
+    my $offset = shift; # array length 2 with offset at begin and end
+    my $window = shift || 1; # position in range 1 .. window
 
-# transpose the position
+# transpose the position range using the offset info. An undefined offset
+# indicates a boundery outside the range 1 .. length; adjust accordingly
+   
+    return undef unless (defined($offset->[0]) && defined($offset->[1])); 
 
     my @tpos = $this->getPosition();
 
     for my $i (0,1) {
         $tpos[$i] *= $align if ($align eq -1);
-        $tpos[$i] += $offset;
+        $tpos[$i] += $offset->[$i];
     }
 
-# transpose the strand (if needed)
+    if ($tpos[0] > $window && $tpos[1] > $window or $tpos[0] < 0 && $tpos[1] < 0) {
+# the transposed tag is completely out of range
+        return undef;
+    }
+
+# adjust boundaries to ensure tag position inside allowed window
+    
+    my $truncated;
+    for my $i (0,1) {
+        if ($tpos[$i] > $window) {
+            $tpos[$i] = $window;
+            $truncated++;
+        }
+        elsif ($tpos[$i] <= 0) {
+            $tpos[$i] = 1;
+            $truncated++;
+	}
+    }
+
+    @tpos = sort {$a <=> $b} @tpos if @tpos;
+
+# transpose the strand (if needed); we don't transpose DNA
 
     my $strand = $this->getStrand();
     if ($strand eq 'Forward' and $align < 0) {
@@ -153,38 +217,31 @@ sub transpose {
         $strand = 'Forward';
     }
 
-# transpose the DNA, if applicable
-
-    my $newdna;
-    if (my $dna = $this->getDNA()) {
-        unless (keys %inverse) {
-            %inverse = (A => 'T', T => 'A', C => 'G', G => 'C',
-                        a => 't', t => 'a', c => 'g', g => 'c');
-        }
-        my $length = length($dna);
-        for my $i (1 .. $length) {
-            my $base = substr $dna, $length-$i, 1;
-            my $newbase = $inverse{$base} || $base;
-            $newdna .= $newbase;
-        }
-    }
-
 # create (spawn) a new tag instance
 
     my $newtag = $this->new($this->{label});
 
-    $newtag->setComment($this->setComment());
-    $newtag->setDNA($newdna) if $newdna;
+    $newtag->setComment($this->getComment());
+    $newtag->setDNA($this->getDNA());
+    $this->composeName() unless $this->getName();
     $newtag->setName($this->getName());
+    $newtag->setTagSequenceName($this->getTagSequenceName());
     $newtag->setPosition(@tpos);
     $newtag->setStrand($strand);
     $newtag->setType($this->getType());
+
+# finally compose the imported tag history; to be printed to caf only? 
+
+    $newtag->setDescent("imported ".$this->getName);
+    $newtag->setDescent(" truncated") if $truncated;
+    $newtag->setDescent(" frame-shifted") if ($offset->[0] != $offset->[1]);
 
     return $newtag;
 }
 
 #----------------------------------------------------------------------
 
+my $etest=10;
 sub isEqual {
 # compare tis tag with input tag
     my $this = shift;
@@ -192,26 +249,32 @@ sub isEqual {
 
 # compare tag type
 
+$etest-- if $etest;
+print "Tag comparison: ".$this->getType." against ".$tag->getType."\n" if $etest;
     return 0 unless ($this->getType() eq $tag->getType());
 
 # compare tag position range
 
-    my $spos = $this->getPosition();
-    my $tpos = $tag->getPosition();
+    my @spos = $this->getPosition();
+    my @tpos = $tag->getPosition();
+print "  position: @spos  against  @tpos \n" if $etest;
 
-    return 0 unless (@$spos == @$tpos);
-    return 0 if (@$spos && $spos->[0] != $tpos->[0]);
-    return 0 if (@$spos && $spos->[1] != $tpos->[1]);
+    return 0 unless (scalar(@spos) && scalar(@spos) == scalar(@tpos));
+    return 0 if ($spos[0] != $tpos[0]);
+    return 0 if ($spos[1] != $tpos[1]);
 
 # compare strands
 
+    print "   strands: ".$this->getStrand." against ".$tag->getStrand."\n" if $etest;
     return 0 unless ($this->getStrand() eq $tag->getStrand());
 
 # finally compare comments
 
+    print "  comment: ".$this->getComment."\n against ".$tag->getComment."\n" if $etest;
     return 0 unless ($this->getComment() eq $tag->getComment());
 
 # the tags are identical:
+print "Tags are EQUAL \n" if $etest;
 
     return 1;
 }
@@ -227,10 +290,14 @@ sub writeToCaf {
     my $type = $this->getType();
     my @pos  = $this->getPosition();
     my $comment = $this->getComment();
+    $comment =~ s/\\n\\/\\n\\\n/g;
 
-    print $FILE "Tag ($this->{label}) $type ";
+    my $descent = $this->getDescent();
+
+    print $FILE "Tag $type ";
     print $FILE "@pos " unless ($type eq "NOTE");
     print $FILE "\"$comment\"" if $comment;
+    print $FILE " $descent" if $descent;
     print $FILE "\n";
 }
 

@@ -18,7 +18,6 @@ my $assembly;
 my $cafFileName ='';
 my $aspedbefore;
 my $aspedafter;
-my $nosingleton;
 my $blocksize = 10000;
 my $fasta;
 
@@ -27,7 +26,7 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "nosingleton|blocksize|info|verbose|help";
+                 "blocksize|info|verbose|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -44,13 +43,11 @@ while (my $nextword = shift @ARGV) {
 
     $aspedafter       = shift @ARGV  if ($nextword eq '-aspedafter');
 
-    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
+#    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
     $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
 
     $blocksize        = shift @ARGV  if ($nextword eq '-blocksize');
-
-    $nosingleton      = 1            if ($nextword eq '-nosingleton');
 
     $fasta            = 1            if ($nextword eq '-fasta');
 
@@ -80,12 +77,13 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 
 &showUsage("Unknown organism '$organism'") unless $adb;
 
-
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
-# allocate basic objects
+my %options;
+$options{-aspedbefore} = $aspedbefore if $aspedbefore;
+$options{-aspedafter}  = $aspedafter  if $aspedafter;
 
 $logger->info("Opening CAF file $cafFileName for output") if $cafFileName;
 
@@ -93,40 +91,19 @@ my $CAF;
 $CAF = new FileHandle($cafFileName,"w") if $cafFileName;
 $CAF = *STDOUT unless $CAF;
 
+$logger->info("Retrieving Reads");
 
-my %options;
-$options{-nosingleton} = 1 if $nosingleton;
-$options{-aspedbefore} = $aspedbefore if $aspedbefore;
-$options{-aspedafter} = $aspedafter if $aspedafter;
+my $reads = $adb->getReads(%options);
 
-$logger->info("Getting read IDs for unassembled reads");
+$logger->info("Adding sequence to ".scalar(@$reads)." reads");
 
-my $readids = $adb->getIDsForUnassembledReads(%options);
+$adb->getSequenceForReads($reads);
 
-$logger->info("Retrieving ".scalar(@$readids)." Reads");
+$logger->info("Writing to CAF file $cafFileName");
 
-while (my $remainder = scalar(@$readids)) {
-
-    $blocksize = $remainder if ($blocksize > $remainder);
-
-    my @readblock = splice (@$readids,0,$blocksize);
-
-    $logger->info("Processing next $blocksize reads");
-
-    $logger->info("$readblock[0] $readblock[$#readblock] ".scalar(@readblock));
-
-    my $reads = $adb->getReadsByReadID(\@readblock);
-
-    $logger->info("Adding sequence");
-
-    $adb->getSequenceForReads($reads);
-
-    $logger->info("Writing to CAF file $cafFileName");
-
-    foreach my $read (@$reads) {
-        $read->writeToCaf($CAF) unless $fasta;
-        $read->writeFasta($CAF) if $fasta;
-    }
+foreach my $read (@$reads) {
+    $read->writeToCaf($CAF) unless $fasta;
+    $read->writeFasta($CAF) if $fasta;
 }
 
 $adb->disconnect();
@@ -158,8 +135,6 @@ sub showUsage {
     print STDERR "-aspedbefore\tdate\n";
     print STDERR "-aspedafter\tdate\n";
     print STDERR "-fasta\t\t(no value) write in fasta format (default CAF)\n".
-    print STDERR "-nosingleton\tdon't include reads from single-read".
-                 " contigs (default include)\n";
     print STDERR "-blocksize\t(default 50000) for blocked execution\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";

@@ -38,6 +38,7 @@ sub setOutputDevice {
 
     if (defined($output)) {
         $this->{output} = new FileHandle($output, "w");
+print "output device: $this->{output}\n";
     }
     else {
         $this->{output} = new FileHandle(">&STDERR");

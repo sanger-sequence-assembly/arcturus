@@ -4,6 +4,8 @@ use strict;
 
 use Mapping;
 
+my $DEBUG = 0;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -94,6 +96,11 @@ sub getContigID {
     return $this->{data}->{contig_id} || 0;
 }
 
+sub getSequenceID {
+    my $this = shift;
+    return $this->getContigID();
+}
+
 sub setContigID {
     my $this = shift;
     my $cid  = shift;
@@ -101,6 +108,14 @@ sub setContigID {
     return if ($cid =~ /\D/); # must be a number
 
     $this->{data}->{contig_id} = $cid;
+
+# add the sequence ID to any tags
+
+    if (my $tags = $this->getTags()) {
+        foreach my $tag (@$tags) {
+            $tag->setSequenceID($this->getSequenceID());
+        }
+    }
 }
 
 #-------------------------------------------------------------------   
@@ -256,6 +271,11 @@ sub getSequence {
 sub getReads {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{Read} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getReadsForContig($this);
+    }
     return $this->{Read};
 }
 
@@ -296,7 +316,7 @@ sub addMapping {
 sub hasMappings {
 # returns true if this Contig has (read-to-contig) mappings
     my $this = shift;
-    return $this->getMappings() ? 1 : 0;
+    return $this->getMappings(shift) ? 1 : 0;
 }
 
 # contig tags
@@ -310,18 +330,22 @@ sub getTags {
         $ADB->getTagsForContig($this);
     }
     return $this->{Tag};
-} 
+}
 
 sub addTag {
 # add Tag object or an array of Tag objects to the internal buffer
     my $this = shift;
-    $this->importer(shift,'Tag');
+    my $ctag = shift;
+
+    $this->importer($ctag,'Tag');
+
+    $ctag->setSequenceID($this->getSequenceID());
 }
 
 sub hasTags {
 # returns true if this Contig has tags
     my $this = shift;
-    return $this->getTags() ? 1 : 0;
+    return $this->getTags(shift) ? 1 : 0;
 }
 
 # contig-to-parent mappings
@@ -344,7 +368,7 @@ sub addContigToContigMapping {
 
 sub hasContigToContigMappings {
 # returns true if this Contig has contig-to-contig mappings
-    return &getContigToContigMappings(shift) ? 1 : 0;
+    return &getContigToContigMappings(@_) ? 1 : 0;
 }
 
 # parent contig instances
@@ -369,7 +393,33 @@ sub addParentContig {
 sub hasParentContigs {
 # returns number of previous contigs
     my $this = shift;
-    my $parents = $this->getParentContigs();
+    my $parents = $this->getParentContigs(shift);
+    return $parents ? scalar(@$parents) : 0;
+}
+
+# child contig instances (re: tag propagation)
+
+sub getChildContigs {
+# returns array of parent Contig instances
+    my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{ChildContig} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getChildContigsForContig($this);
+    }
+    return $this->{ChildContig};
+}
+
+sub addChildContig {
+# add parent Contig instance
+    my $this = shift;
+    $this->importer(shift,'Contig','ChildContig');
+}
+
+sub hasChildContigs {
+# returns number of previous contigs
+    my $this = shift;
+    my $parents = $this->getChildContigs(shift);
     return $parents ? scalar(@$parents) : 0;
 }
 
@@ -578,7 +628,7 @@ sub isSameAs {
 print STDERR "cannot find mapping for key $key \n" unless $match;
             return 0 unless defined($match); # there is no counterpart in $this
 # compare the two maps
-            my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
+            my ($identical,$aligned,$offset) = $match->isEqual($mapping);
             return 0 unless $identical;
 # on first one register shift
             $shift = $offset unless defined($shift);
@@ -609,6 +659,7 @@ sub linkToContig {
 # decode control input
 
     my $DEBUG = 0;
+
     my $strong = 0; # set True for comparison at read mapping level
     my $guillotine = 0;
     while (my $nextword = shift) {
@@ -629,7 +680,7 @@ sub linkToContig {
 
 # test completeness
 
-    return undef unless $this->hasMappings();
+    return undef unless $this->hasMappings(); 
     return undef unless $compare->hasMappings();
 
 # make the comparison using sequence ID; start by getting an inventory of $this
@@ -663,7 +714,7 @@ sub linkToContig {
 
         if ($strong) {
 # test alignment of complete mapping
-            my ($identical,$aligned,$offset) = $match->compareStrong($mapping);
+            my ($identical,$aligned,$offset) = $match->isEqual($mapping);
 
             print STDERR "\nmapping: id=$identical  align=".($aligned||' ').
             "  offset=".($offset||' ')."  ".$mapping->getMappingName if $DEBUG;
@@ -685,7 +736,7 @@ sub linkToContig {
         else {
             my $debug = $DEBUG;
             if ($DEBUG) {
-                my ($identical,$al,$of) = $match->compareStrong($mapping);
+                my ($identical,$al,$of) = $match->isEqual($mapping);
                 $debug = 0 if $identical;
             }
 
@@ -752,8 +803,6 @@ sub linkToContig {
                     my $finis = ($segmentfinis + $offset) * $alignment;
 		    my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
                     push @c2csegments,[@segment];
-#                    $mapping->addAssembledFrom($start,$finis,$segmentstart,
-#                                                            $segmentfinis);
                 }
 # initialize the new mapping interval
                 $nreads = 0;
@@ -771,7 +820,6 @@ sub linkToContig {
         my $finis = ($segmentfinis + $offset) * $alignment;
         my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
         push @c2csegments,[@segment];
-#        $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
     }
 
 # the segment list now may on rare occasions contain overlapping segments
@@ -823,6 +871,180 @@ sub linkToContig {
 }
 
 #-------------------------------------------------------------------    
+# Tags
+#-------------------------------------------------------------------    
+
+sub inheritTags {
+# inherit tags from this contig's parents
+    my $this = shift;
+    my $depth = shift;
+
+    $depth = 1 unless defined($depth);
+
+# get the parents
+
+    my $parents = $this->getParentContigs(1);
+
+    return unless ($parents && @$parents);
+
+    foreach my $parent (@$parents) {
+# if this parent does not have tags, test its parent(s)
+        if ($depth && !$parent->hasTags(1)) {
+            $parent->inheritTags($depth-1);
+        }
+# get the tags from the parent into this contig
+        next unless $parent->hasTags();
+        $parent->propagateTagsToContig($this);
+    }
+
+    $depth-- if $depth;
+}
+
+sub propagateTags {
+# propagate the tags from this contig to its child(ren)
+    my $this = shift;
+
+# get the child(ren) of this contig
+
+    my $children = $this->getChildContigs(1);
+
+    foreach my $child (@$children) {
+        $this->propagateTagsToContig($child);
+    }
+}
+
+sub propagateTagsToContig {
+# propagate tags from this (parent) to target contig
+    my $parent = shift;
+    my $target = shift;
+
+    return 0 unless $parent->hasTags(1);
+print "propagateTagsToContig ".
+      "parent $parent (".$parent->getContigID().")  target $target ("
+                        .$target->getContigID().")\n" if $DEBUG;
+
+# check the parent-child relation: is there a mapping between them and
+# is the ID of the one of the parents identical to to the input $parent?
+# we do this by getting the parents on the $target and compare with $parent
+
+    my $mapping;
+
+    my $cparents = $target->getParentContigs(1);
+
+    my $parent_id = $parent->getContigID();
+
+
+    if ($cparents && @$cparents && $target->hasContigToContigMappings(1)) {
+# there are mappings: hence the child is taken from the database (and has parents)
+        foreach my $cparent (@$cparents) {
+print "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
+	    if ($cparent->getContigID() == $parent_id) {
+# yes, there is a parent child relation between the input Contigs
+# find the corresponding mapping using contig and mapping names
+                my $c2cmappings = $target->getContigToContigMappings();
+                foreach my $c2cmapping (@$c2cmappings) {
+		    if ($c2cmapping->getMappingName eq $parent->getContigName) {
+                        $mapping = $c2cmapping;
+                        last;
+                    }
+                }
+	    }
+	}
+    }
+
+print "mapping found: ".($mapping || 'not found')."\n" if $DEBUG;
+
+# if mapping is not defined here, we have to find it from scratch
+
+    unless ($mapping) {
+print "Finding mappings from scratch \n";
+        my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
+print "number of mapping segments : ",($nrofsegments || 0)."\n";
+        return 0 unless $nrofsegments;
+# identify the mapping using contig and mapping names
+        my $c2cmappings = $target->getContigToContigMappings();
+        foreach my $c2cmapping (@$c2cmappings) {
+	    if ($c2cmapping->getMappingName eq $parent->getContigName) {
+                $mapping = $c2cmapping;
+                last;
+            }
+        }
+# protect against the mapping still not found, but this should not occur
+print "mapping identified: ".($mapping || 'not found')."\n";
+        return 0 unless $mapping;
+    }
+print $mapping->assembledFromToString() if $DEBUG;
+
+# check if the length of the target contig is defined
+
+    my $tlength = $target->getConsensusLength();
+    unless ($tlength) {
+        $target->getStatistics(1); # no zeropoint shift; use contig as is
+        $tlength = $target->getConsensusLength();
+        unless ($tlength) {
+            print STDERR "Undefined length in (child) contig\n";
+            return 0;
+        }
+    }
+print "Target contig length : $tlength \n" if $DEBUG;
+
+# ok, propagate the tags from parent to target
+
+    my $c2csegments = $mapping->getSegments();
+    my $alignment = $mapping->getAlignment();
+
+    my @tags;
+    my $ptags = $parent->getTags(1); # tags in parent
+    foreach my $ptag (@$ptags) {
+
+# determine the segment(s) of the mapping with the tag's position
+print "processing tag $ptag (align $alignment) \n"; 
+
+        undef my @offset;
+        my @position = $ptag->getPosition();
+print "tag position (on parent) @position \n";
+        foreach my $segment (@$c2csegments) {
+# for the correct segment, getXforY returns true
+            for my $i (0,1) {
+print "testing position $position[$i] \n" if $DEBUG;
+                if ($segment->getXforY($position[$i])) {
+                    $offset[$i] = $segment->getOffset();
+print "offset to be applied : $offset[$i] \n" if $DEBUG;
+# ensure that both offsets are defined; this line ensures definition in
+# case the counterpart falls outside any segment (i.e. outside the contig)
+                    $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
+                }
+            }
+        }
+# accept the new tag only if the position offsets are defined
+print "offsets: @offset \n";
+        next unless @offset;
+# create a new tag by spawning from the old tag
+        my $newtag = $ptag->transpose($alignment,\@offset,$tlength);
+
+print "tag on parent : "; $ptag->writeToCaf(*STDOUT);
+print "tag on target : "; $newtag->writeToCaf(*STDOUT);
+
+# test if the new tag is not already present in the child
+
+        my $present = 0;
+        my $ctags = $target->getTags(0);
+        foreach my $ctag (@$ctags) {
+            if ($newtag->isEqual($ctag)) {
+                $present = 1;
+                last;
+	    }
+        }
+        next if $present;
+
+# it's a new tag       
+
+print "new tag added\n";
+        $target->addTag($newtag);
+    }
+}
+
+#-------------------------------------------------------------------    
 # exporting to CAF
 #-------------------------------------------------------------------    
 
@@ -855,7 +1077,7 @@ sub writeToCaf {
     if ($this->hasTags) {
         my $tags = $this->getTags();
         foreach my $tag (@$tags) {
-# $tag->toString ?
+            $tag->writeToCaf($FILE);
         }
     }
 
@@ -980,6 +1202,9 @@ sub metaDataToString {
     }
 
     return $string;
+}
+
+sub writeToCafPadded {
 }
 
 #-------------------------------------------------------------------    

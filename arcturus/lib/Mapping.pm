@@ -132,7 +132,7 @@ sub getAlignment {
 # compare mappings
 #-------------------------------------------------------------------
 
-sub compareStrong {
+sub isEqual {
 # compare this Mapping instance with input Mapping
 # return 0 if mappings are in any respect different
     my $this = shift;

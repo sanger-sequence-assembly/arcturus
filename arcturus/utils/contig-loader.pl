@@ -446,17 +446,18 @@ while (defined($record = <$CAF>)) {
 #print STDERR "read Tag ($record) \n";
 # test for a continuation mark (\n\); if so, read until final mark
             while ($info =~ /\\n\\\s*$/) {
-#print STDERR "read Tag info ($info) \n";
                 if (defined($record = <$CAF>)) {
                     chomp $record;
-                    $info .= "\n$record";
+                    $info .= $record;
                     $lineCount++;
                 }
                 else {
-                    $info .= "\""; # closing quote
+                    $info .= '"'; # closing quote
                 }
             }
-#print STDERR "TAG info: $info \n" if ($info =~ /\\n\\/); exit if ($type eq 'OLIG');
+#print STDERR "read Tag info ($info) \n";
+
+# print STDERR "TAG info: $info \n" if ($info =~ /\\n\\/); exit if ($type eq 'OLIG');
  
             $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
 
@@ -467,9 +468,35 @@ while (defined($record = <$CAF>)) {
             $tag->setPosition($trps,$trpf);
             $tag->setStrand('Forward');
             $tag->setComment($info);
-            if ($info =~ /([ACGT]{5,})/) {
-                $logger->info("Read Tag $type DNA '$1'");
-                $tag->setDNA($1);
+
+            if ($type eq 'OLIG' || $type eq 'AFOL') {
+# test info for sequence specification
+                if ($info =~ /([ACGT]{5,})/) {
+                    $logger->info("Read Tag $type DNA '$1'");
+                    $tag->setDNA($1);
+                }
+# pick up the oligo name
+                if ($type eq 'OLIG' && $info =~ /\b([opt]?\d+)\s*$/) {
+                    my $name = $1;
+                    $name =~ s/^0/o/; # correct typo 0 for o
+#print "OLIG detected: $info -> $name\n";
+                    $tag->setName($name);
+                }
+                if ($type eq 'AFOL' && $info =~ /oligoname\s*(\w+)/i) {
+                    $tag->setName($1);
+                }
+		$logger->info("Missing oligo name in read tag for ".
+                        $read->getReadName()) unless $tag->getName();
+            }
+            elsif ($type eq 'REPT') {
+# pickup the repeat name
+		if ($info =~ /^\s*(\w+)\s/i) {
+                    $tag->setName($1);
+		}
+                else {
+		    $logger->info("Missing repeat name in read tag for ".
+                            $read->getReadName());
+                }
             }
             $read->addTag($tag);
         }
@@ -502,7 +529,7 @@ while (defined($record = <$CAF>)) {
 	    $logger->warning("NOTE detected $1 but not processed");
         }
 # finally
-        elsif ($record !~ /SCF|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
+        elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
             $logger->warning("not recognized ($lineCount): $record");
         }
     }
@@ -617,7 +644,7 @@ $logger->info("$nc Contigs, $nm Mappings, $nr Reads built");
 $origin = 'Arcturus CAF parser' unless $origin;
 $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
                           $origin eq 'Finishing Software'); 
-
+my $number = 0;
 foreach my $identifier (keys %contigs) {
 # minimum number of reads test
     my $contig = $contigs{$identifier};
@@ -628,12 +655,11 @@ foreach my $identifier (keys %contigs) {
     $contig->setOrigin($origin);
 
     if ($noload) {
-
+       
         my $tags = $contig->getTags();
         next unless ($tags && @$tags);
-        foreach my $tag (@$tags) {
-            $tag->writeToCaf(*STDOUT);
-        }
+        $contig->setContigID(1000000 + $number++); # test  purpose
+        my $success = $adb->putTagsForContigPublic($contig);
     }
     else {
 
@@ -668,7 +694,9 @@ if ($readTags) {
             }
 #        }
     }
-    $adb->putTagsForReads(\@reads); # unless $noload;
+    my $autoload = 1;
+    my $success = $adb->putTagsForReads(\@reads,$autoload); # unless $noload;
+    print STDOUT "putTagsForReads success = $success\n";
 }
 
 # finally update the meta data for the Assembly and the Organism

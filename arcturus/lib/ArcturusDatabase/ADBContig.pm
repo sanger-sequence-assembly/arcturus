@@ -14,6 +14,8 @@ our @ISA = qw(ArcturusDatabase::ADBRead);
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
+my $DEBUG = 0;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
@@ -141,7 +143,7 @@ print STDERR "new getContig: $query\n";
 
 # get contig tags
 
-    $this->getTagsForContig($contig);
+#    $this->getTagsForContig($contig);
 
 # for consensus sequence we use lazy instantiation in the Contig class
 
@@ -186,6 +188,15 @@ print STDERR "undefined quality in contig_id = $contig_id\n" unless $quality;
     return ($sequence, $quality);
 }
 
+sub hasContig {
+# test presence of contig with given contig_id; (REDUNDENT?)
+# if so, return Contig instance with metadata only
+    my $this = shift;
+    my $contig_id = shift;
+
+    return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
+}
+
 sub getParentContigsForContig {
 # adds the parent Contig instances, if any, to the input Contig 
 # this method is called from the Contig class when using delayed data loading
@@ -205,8 +216,15 @@ sub getParentContigsForContig {
     }
 # alternatively, get the IDs from the database given contig_id
     elsif (my $contigid = $contig->getContigID()) {
-        my $parents = $this->getParentIDsForContigID($contigid);
+        my $dbh = $this->getConnection();
+        my $parents = &getParentIDsForContigID($dbh,$contigid);
         @parentids = @$parents if $parents;
+    }
+# or, if no contig_id available, get the parents from read comparison
+    else {
+print "searching parents from scratch\n" if $DEBUG; 
+        my $parents = $this->getParentIDsForContig($contig);
+        @parentids = @$parents if $parents;        
     }
 
 # build the Contig instances (metadata only) and add to the input Contig object
@@ -217,13 +235,31 @@ sub getParentContigsForContig {
     }
 }
 
-sub hasContig {
-# test presence of contig with given contig_id; (REDUNDENT?)
-# if so, return Contig instance with metadata only
+sub getChildContigsForContig {
+# adds the Child Contig instances, if any, to the input Contig 
+# this method is called from the Contig class when using delayed data loading
     my $this = shift;
-    my $contig_id = shift;
+    my $contig = shift;
 
-    return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
+    return if $contig->hasChildContigs(); # already done
+
+# get the IDs from the database given contig_id
+
+    my $contig_id = $contig->getContigID();
+
+    return unless defined($contig_id);
+
+    my $dbh = $this->getConnection();
+
+    my $childids = &getChildIDsForContigID($dbh,$contig_id);
+
+# build the Contig instances (metadata only) and add to the input Contig object
+
+    foreach my $child_id (@$childids) {
+        my $child = $this->getContig(ID=>$child_id, metaDataOnly=>1);
+print "contig $child for id=$child_id\n";
+        $contig->addChildContig($child) if $child;
+    }
 }
 
 #------------------------------------------------------------------------------
@@ -749,6 +785,7 @@ sub getContigMappingsForContig {
                  "  from C2CMAPPING" .
                  " where contig_id = ?" .
                  " order by cstart";
+print "DEBUG getContigMappingsForContig: \n$mquery\n" if $DEBUG;
  
     my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
                  "       pstart,length" .
@@ -799,7 +836,6 @@ sub getContigMappingsForContig {
 
     $sth->finish();
 
-#    $contig->addMapping([@mappings]);
     $contig->addContigToContigMapping([@mappings]);
 }
 
@@ -974,7 +1010,6 @@ sub getParentIDsForContig {
 # its reads sequence IDs and the sequence-to-contig MAPPING data
     my $this = shift;
     my $contig = shift; # Contig Instance
-    my $debug = shift;
 
     return undef unless $contig->hasReads();
 
@@ -1004,7 +1039,7 @@ sub getParentIDsForContig {
         $query .= " and contig_id != $contig_id";
     }
 
-    print STDERR "query 1 getParentIDsForContig : \n$query\n" if $debug;
+    print STDOUT "query 1 getParentIDsForContig : \n$query\n" if $DEBUG;
 
     my $dbh = $this->getConnection();
 
@@ -1023,7 +1058,7 @@ sub getParentIDsForContig {
 
     if (scalar(@contigids)) {
 
-        print STDERR "Linked contigs found : @contigids\n" if $debug;
+        print STDOUT "Linked contigs found : @contigids\n" if $DEBUG;
 
 # step 2 : remove the parents of the contigs found in step 1 from the list
 
@@ -1048,7 +1083,7 @@ sub getParentIDsForContig {
 
         @contigids = keys %contigids;
 
-        print STDERR "Possible parents found : @contigids\n" if $debug;
+        print STDOUT "Possible parents found : @contigids\n" if $DEBUG;
 
 # However, this list still may contain spurious parents due to 
 # misassembled reads in early contigs which are picked up in the
@@ -1065,23 +1100,19 @@ sub getParentIDsForContig {
 
     @contigids = keys %contigids;
 
-    print STDERR "Confirmed parents found : @contigids\n" if $debug;
+    print STDOUT "Confirmed parents found : @contigids\n" if $DEBUG;
 
     return [@contigids];
 }
 
 sub getParentIDsForContigID {
-# returns a list of contig IDs of connected contig(s) based on the
-# contig ID using the C2CMAPPING table (exported contig)
-    my $this = shift;
+# private,  returns a list of contig IDs of connected contig(s)
+# using the C2CMAPPING table
+    my $dbh = shift;
     my $contig_id = shift;
-
-# we have to select linked contigs of age 0 or missing from C2CMAPPING
 
     my $query = "select distinct(parent_id) from C2CMAPPING".
 	        " where contig_id = ?";
-    
-    my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1094,6 +1125,30 @@ sub getParentIDsForContigID {
 
     $sth->finish();
 
+    return [@contigids];
+}
+
+sub getChildIDsForContigID {
+# private, returns a list of contig IDs of child contig(s)
+# using the C2CMAPPING table
+    my $dbh = shift;
+    my $contig_id = shift;
+
+    my $query = "select distinct(contig_id) from C2CMAPPING".
+	" where parent_id = ?"; print "$query $contig_id\n";
+    
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($contig_id) || &queryFailed($query);
+
+    my @contigids;
+    while (my ($contigid) = $sth->fetchrow_array()) {
+        push @contigids, $contigid;
+    }
+
+    $sth->finish();
+
+print "children @contigids\n";
     return [@contigids];
 }
 
@@ -1322,74 +1377,108 @@ sub getInitialContigIDs {
 # methods dealing with contig TAGs
 #------------------------------------------------------------------------------
 
-sub putTagsForContig {
-    my $dbh = shift;
-    my $contig = shift; # Contig instance
-
-    die "getTagsForContig expects a Contig instance" 
-    unless (ref($contig) eq 'Contig');
-
-    return 1 unless $contig->hasTags();
-
-# to be completed
-    return 1;
-}
-
-
-sub putContigTags {
-# use as private method only; 
-    my $dbh = shift;
-    my $tags = shift;
-    my $block = shift || 1000;
-
-    while (@$tags) {
-print "putContigTags : next block (".scalar(@$tags)." left)\n";
-        my @block;
-        my $count = 0;
-        while ($count < $block) {
-            last unless @$tags;
-            push @block, (shift @$tags);
-        }
-        &putTags($dbh,\@block,'READ');
-    }
-}
-
-
 sub getTagsForContig {
+# add tags to Contig instance; returns number of tags added; undef on error
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    die "getTagsForContig expects a Contig instance" 
-    unless (ref($contig) eq 'Contig');
+    die "getTagsForContig expects a Contig instance" unless (ref($contig) eq 'Contig');
 
-    return if $contig->hasTags(); # only 'empty' instance allowed
+    return 0 if $contig->hasTags(); # only 'empty' instance allowed
 
-# to be completed
+    my $cid = $contig->getContigID() || return undef;
+
+    my @sid = ($cid);
+
+    my $dbh = $this->getConnection();
+
+    my $tags = &getTagsForSequenceIDs ($dbh,[@sid],'CONTIG');
+
+    foreach my $tag (@$tags) {
+        $contig->addTag($tag);
+    }
+
+    return scalar(@$tags); # tags added
 }
 
 
-sub getContigTagsForSequenceIDs {
-# use as private method only; blocked retrieval of read tags
+sub putTagsForContigPublic {
+# public method for test purposes
+    my $this = shift;
+    my $contig = shift;
+
+    die "getTagsForContigPublic expects a Contig instance" 
+    unless (ref($contig) eq 'Contig');
+
+    my $dbh = $this->getConnection();
+
+    return &putTagsForContig($dbh,$contig,1);
+}
+
+sub putTagsForContig {
+# private method
     my $dbh = shift;
-    my $seqIDs = shift;
-    my $blocksize = shift || 1000;
+    my $contig = shift;
+    my $testexistence = shift;
 
-    my @tags;
-    while (my $block = scalar(@$seqIDs)) {
+    return 0 unless $contig->hasTags();
 
-        $block = $blocksize if ($block > $blocksize);
-#print "getContigTagsForSequenceIDs: next block $block\n";
+    my $cid = $contig->getContigID();
+print STDOUT "putTagsForContig: contig ID = $cid\n" if $DEBUG;
 
-        my @sids = splice @$seqIDs, 0, $block;
+    return undef unless defined $cid;
 
-        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,'READ');
+# to be completed
 
-        push @tags, @$tags;
+    my $ctags = $contig->getTags();
+print STDOUT "putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
+
+    if ($testexistence) {
+# test contig instance tags against possible tags in database
+print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
+# construct a hash table for tag instance names
+
+        my $tags = {};
+        foreach my $ctag (@$ctags) {
+            $tags->{$ctag} = $ctag;
+        }
+
+# delete the existing tags from the hash
+
+        my $existingtags = &getTagsForSequenceIDs ($dbh,[($cid)],'CONTIG');
+
+        foreach my $etag (@$existingtags) {
+            foreach my $ctag (@$ctags) {
+                if ($ctag->isEqual($etag)) {
+                    delete $tags->{$ctag};
+                    last;
+		}
+            }
+        }
+
+# collect the tags left
+
+        my @tags;
+        foreach my $key (keys %$tags) {
+            push @tags, $tags->{$key};
+	}
+     
+
+        $ctags = [@tags];
+print STDOUT "putTagsForContig: new tags ".scalar(@$ctags)."\n" if $DEBUG;
+
+        foreach my $tag (@$ctags) {
+            $tag->writeToCaf(*STDOUT);
+        }
+print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
+#exit; # temporary
     }
 
-    return [@tags];
+    return &putTags ($dbh,$ctags,'CONTIG',1);
 }
 
 #------------------------------------------------------------------------------
 
 1;
+
+
