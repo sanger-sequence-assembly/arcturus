@@ -73,6 +73,14 @@ if ($action eq 'pairstest') {
     $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">PAIRS find</A></td>";
     $form .= "<td $ccolour>Find Pairs ab initio</td></tr>";
 
+    $link = "$arc_cgi_dir/cyclops/find-bridges$session&noGUI=0&length=20000";
+    $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">BRIDGES</A></td>";
+    $form .= "<td $ccolour>Find Bridges</td></tr>";
+
+    $link = "$arc_cgi_dir/cyclops/lose-ends$session&noGUI=0";
+    $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">Loose Ends</A></td>";
+    $form .= "<td $ccolour>Find reads in endregions of contigs without complement</td></tr>";
+
     $form .= "</table>";
 
     $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;

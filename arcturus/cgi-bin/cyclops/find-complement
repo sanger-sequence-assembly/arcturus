@@ -160,12 +160,12 @@ while ($continue) {
 
     undef my $hashes;
     my $where = "read_id >= $start and read_id <= $final and paired='N'";
-    if ($hashes = $READS->associate('read_id,readname,template','where',$where)) {
+    if ($hashes = $READS->associate('read_id,readname,template_id','where',$where)) {
         undef my %readhash;
         if (ref($hashes) eq 'ARRAY') {
             foreach my $hash (@$hashes) {
-                $hash->{template} = 'NULL' if !$hash->{template};
-                $readhash{$hash->{read_id}}  = $hash->{template}.'&'.$hash->{readname};
+                $hash->{template_id} = 'NULL' if !$hash->{template_id};
+                $readhash{$hash->{read_id}}  = $hash->{template_id}.'&'.$hash->{readname};
             }
         }
         $hashes = \%readhash;
@@ -200,9 +200,9 @@ while ($continue) {
         $tested++;
         undef my $where;
         if ($template && $template !~ /\b(unknown|NULL)\b/) {
-            $where = "template = '$template' and ";
+            $where = "template_id = $template and ";
         }
-        $where .= "readname != '$readname' and readname like '$complement'";
+        $where .= "readname not like '$readname' and readname like '$complement'";
         my $chash = $READS->associate('read_id,readname','where',$where,-1);
         if (ref($chash) ne 'ARRAY' || @$chash == 0) {
             print "$readid $readname : No complement found$brtag" if ($list > 1);

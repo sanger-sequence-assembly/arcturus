@@ -528,8 +528,8 @@ else {
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
     $nopreload = 1 if $rdscan;
+print STDOUT "no preloading set to $nopreload\n";
     my $ContigBuilder = ContigBuilder->init($CONTIGS,$nopreload);
-print STDOUT "preloading set to $nopreload\n";
 
     $ContigBuilder->setParameter('minOfReads',$SRC) if ($SRC > 1); 
     $ContigBuilder->setParameter('ASSEMBLY'  ,$assemblynmbr); 
@@ -547,6 +547,8 @@ print STDOUT "preloading set to $nopreload\n";
     $ContigBuilder->setTestMode('TIMER',1);
 
     if (my $estatus = $ContigBuilder->testAssembly($assemblynmbr)) {
+
+        print "Error status: $estatus $brtag";
 
     }
     else {
@@ -714,3 +716,4 @@ sub form {
 
     return $form;
 }
+

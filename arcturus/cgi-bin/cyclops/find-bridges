@@ -26,7 +26,7 @@ my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle();
 
-my $database   = $cgi->parameter('organism');
+my $database   = $cgi->parameter('database') || $cgi->parameter('organism');
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
