@@ -27,6 +27,8 @@ my $source; # name of factory type
 
 my $exclude = 1;
 
+my $skipaspedcheck = 0;
+
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
@@ -34,7 +36,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|noexclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
    $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
-   $validKeys .= "minreadid|maxreadid";
+   $validKeys .= "minreadid|maxreadid|skipaspedcheck";
 
 my %PARS;
 
@@ -55,6 +57,11 @@ while (my $nextword = shift @ARGV) {
 # exclude defines if reads already loaded are to be ignored (default = Y) 
 
     $exclude          = 0            if ($nextword eq '-noexclude');
+
+# Do not check Read objects for the presence of an Asped date. This allows
+# us to load external reads, which lack this information.
+
+    $skipaspedcheck = 1 if ($nextword eq '-skipaspedcheck');
 
 # logging
 
@@ -239,6 +246,9 @@ $factory->setLogging($logger);
 
 my $processed = 0;
 
+my $loadoptions = {};
+$loadoptions->{skipaspedcheck} = 1 if $skipaspedcheck;
+
 while (my $readname = $factory->getNextReadName()) {
     next if $adb->hasRead($readname);
 
@@ -246,7 +256,7 @@ while (my $readname = $factory->getNextReadName()) {
 
     print STDERR "Storing $readname\n" if $verbose;
 
-    my ($success,$errmsg) = $adb->putRead($Read);
+    my ($success,$errmsg) = $adb->putRead($Read, $loadoptions);
 
     print STDERR "Unable to put read $readname: $errmsg\n"
 	unless $success;

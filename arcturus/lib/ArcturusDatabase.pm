@@ -699,6 +699,7 @@ sub putRead {
 # insert read into the database
     my $this = shift;
     my $read = shift || return;
+    my $options = shift;
 
     if (ref($read) ne 'Read') {
         print STDERR "putRead expects an instance of the Read class\n";
@@ -709,7 +710,7 @@ sub putRead {
 
 # a) test consistency and completeness
 
-    my ($rc, $errmsg) = $this->checkReadForCompleteness($read);
+    my ($rc, $errmsg) = $this->checkReadForCompleteness($read, $options);
     return (0, "failed completeness check: $errmsg") unless $rc;
 
     ($rc, $errmsg) = $this->checkReadForConsistency($read);
@@ -779,7 +780,7 @@ sub putRead {
 	foreach my $entry (@{$seqveclist}) {
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
-	    my $seqvecid = $this->getSequencingVectorID($seqvec);
+	    my $seqvecid = $this->getSequencingVectorID($seqvec) || 0;
 
 	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
 
@@ -800,7 +801,7 @@ sub putRead {
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
 
-	    my $clonevecid = $this->getCloningVectorID($clonevec);
+	    my $clonevecid = $this->getCloningVectorID($clonevec) || 0;
 
 	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
 
@@ -817,6 +818,13 @@ sub putRead {
 sub checkReadForCompleteness {
     my $this = shift;
     my $read = shift;
+    my $options = shift;
+
+    my $skipAspedCheck = 0;
+
+    if (defined($options) && ref($options) && ref($options) eq 'HASH') {
+	$skipAspedCheck = $options->{skipaspedcheck} || 0;
+    }
 
     return (0, "invalid argument")
 	unless (defined($read) && ref($read) && ref($read) eq 'Read');
@@ -831,7 +839,7 @@ sub checkReadForCompleteness {
 	unless defined($read->getQuality());
 
     return (0, "undefined asped-date")
-	unless defined($read->getAspedDate());
+	unless (defined($read->getAspedDate()) || $skipAspedCheck);
 
     return (0, "undefined template")
 	unless defined($read->getTemplate());
@@ -976,6 +984,8 @@ sub getCloningVectorID {
 sub getSequencingVectorID {
     my $this = shift;
     my $seqvec = shift;
+
+    return undef unless defined($seqvec);
 
     my $seqvec_id = &dictionaryLookup($this->{LoadingDictionary}->{svectors},
 				      $seqvec);
