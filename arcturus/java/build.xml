@@ -3,6 +3,7 @@
 <!-- build.xml - a simple Ant buildfile -->
 <project name="Simple Buildfile" default="compile" basedir=".">
   <property name="project.name" value="arcturus"/>
+  <property name="package.prefix" value="uk.ac.sanger"/>
 
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
@@ -39,7 +40,7 @@
   </target>
 
   <target name="jar" depends="compile"
-          description="Generates the Minerva JAR file.">
+          description="Generates the JAR file.">
     <jar jarfile="${build.lib}/${project.name}.jar" 
          basedir="${build.classes}"/>
   </target>
@@ -56,7 +57,7 @@
 	     private="no"
 	     protected="no"
 	     package="no"
-             packagenames="${project.name}.*,${project.name}.*.*"/>
+             packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
   </target>
 
   <target name="test" depends="jar"
