@@ -89,13 +89,21 @@ sub dataBaseError {
     return $DBI::err;
 }
 
+sub queryFailed {
+    my $query;
+
+    $query =~ s/\s+/ /g; # remove redundent white space
+
+    &dataBaseError("FAILED query: $query");
+}
+
 sub errorStatus {
-# return 0 for correctly opened database
+# returns DBI::err or 0
     my $this = shift;
 
-    return 1 unless $this->getConnection();
+    return "Can't get a database handle" unless $this->getConnection();
 
-    return &dataBaseError();
+    return &dataBaseError() || 0;
 }
 
 sub disconnect {
@@ -343,7 +351,7 @@ sub countReadDictionaryItem {
 
     my $sth = $dbh->prepare($query);
 
-    $sth->execute();
+    $sth->execute() || &queryFailed($query);
 
     my %outputhash;
 
@@ -412,7 +420,7 @@ sub getRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($readitem);
+    $sth->execute($readitem) || &queryFailed($query);
 
     my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array();
 
@@ -509,7 +517,7 @@ sub addSequenceMetaDataForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id);
+    $sth->execute($seq_id) || &queryFailed($query);
 
     while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
 	my $svector = &dictionaryLookup($this->{Dictionary}->{svector},$svector_id);
@@ -525,7 +533,7 @@ sub addSequenceMetaDataForRead {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id);
+    $sth->execute($seq_id) || &queryFailed($query);
 
     while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
         my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},$cvector_id);
@@ -541,7 +549,7 @@ sub addSequenceMetaDataForRead {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id);
+    $sth->execute($seq_id) || &queryFailed($query);
 
     if (my ($qleft, $qright) = $sth->fetchrow_array()) {
 
@@ -550,6 +558,26 @@ sub addSequenceMetaDataForRead {
     }
 
     $sth->finish();
+
+# multiple align to trace records, if any
+
+    return unless $read->getVersion();
+
+    my $query = "select startinseq,startinscf,length from ALIGN2SCF where seq_id=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($seq_id) || &queryFailed($query);
+
+    while (my($startinseq, $startinscf, $length) = $sth->fetchrow_array()) {
+# convert to intervals
+        my $finisinseq = $startinseq + $length - 1;
+        my $finisinscf = $startinscf + $length - 1;
+
+	$read->addAlignToTrace([$startinseq,$finisinseq,$startinscf,$finisinscf]);
+    }
+
+    $sth->finish();   
 }
 
 sub getReadsByReadID {
@@ -578,7 +606,7 @@ sub getReadsByReadID {
 
     my $sth = $dbh->prepare($query);
 
-    $sth->execute();
+    $sth->execute() || &queryFailed($query);
 
     my @reads;
 
@@ -632,7 +660,7 @@ sub getReadsBySequenceID {
 
     my $sth = $dbh->prepare($query);
 
-    $sth->execute() || print STDERR "FAILED: $query\n";
+    $sth->execute() || &queryFailed($query);
 
     my @reads;
 
@@ -680,7 +708,7 @@ sub getReadsForContigID{
     my $sth = $dbh->prepare_cached($query);
 
 $query =~ s/\s+/ /g; print "ContigID: $query\n";
-    my $nr = $sth->execute($cid);
+    my $nr = $sth->execute($cid);# || &queryFailed($query);
 
     my @reads;
 
@@ -711,7 +739,7 @@ $query =~ s/\s+/ /g; print "ContigID: $query\n";
    
     $sth = $dbh->prepare_cached($query);
 
-    $nr = $sth->execute($cid); print "nr $nr\n";
+    $nr = $sth->execute($cid) || &queryFailed($query);
 
     if (my ($nreads) = $sth->fetchrow_array()) {
         if ($nreads != scalar(@reads)) {
@@ -726,7 +754,7 @@ $query =~ s/\s+/ /g; print "ContigID: $query\n";
     return \@reads;
 }
 
-sub addSequenceToReads {
+sub getSequenceForReads {
 # takes an array of Read instances and adds the DNA and BaseQuality (in bulk)
     my $this  = shift;
     my $reads = shift; # array of Reads objects
@@ -753,8 +781,9 @@ sub addSequenceToReads {
         }
     }
 
+    return unless keys(%$sids);
+
     my $range = join ',',sort keys(%$sids);
-    return unless $range;
 
     my $query = "select seq_id,sequence,quality from SEQUENCE
                  where seq_id in ($range)";
@@ -763,7 +792,7 @@ sub addSequenceToReads {
 
 # pull the data from the SEQUENCE table in bulk
 
-    $sth->execute();
+    $sth->execute() || &queryFailed($query);
 
     while(my @ary = $sth->fetchrow_array()) {
 
@@ -823,7 +852,7 @@ sub getSequenceForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value);
+    $sth->execute($value) || &queryFailed($query);
 
     my ($sequence, $quality);
 
@@ -863,7 +892,7 @@ sub getCommentForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value);
+    $sth->execute($value) || &queryFailed($query);
 
     my @comment;
 
@@ -896,7 +925,7 @@ sub getTraceArchiveIdentifier {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value);
+    $sth->execute($value) || &queryFailed($query);
 
     my $traceref;
 
@@ -942,7 +971,8 @@ sub getListOfReadNames {
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
-    $sth->execute();
+
+    $sth->execute() || &queryFailed($query);
 
     my @reads;
     while (my @ary = $sth->fetchrow_array()) {
@@ -967,9 +997,9 @@ sub hasRead {
 
     my $read_id;
 
-    my $row = $sth->execute($readname);
+    $sth->execute($readname) || &queryFailed($query);
 
-    while ($row && (my @ary = $sth->fetchrow_array())) {
+    while (my @ary = $sth->fetchrow_array()) {
         $read_id = $ary[0];
         last; # just in case
     }
@@ -1000,9 +1030,10 @@ sub areReadsNotInDatabase {
                  where  readname in ('".join ("','",@$readnames)."')";
 
     my $sth = $dbh->prepare($query);
-    my $row = $sth->execute();
 
-    while ($row && (my @ary = $sth->fetchrow_array())) {
+    $sth->execute() || &queryFailed($query);
+
+    while (my @ary = $sth->fetchrow_array()) {
         delete $namehash{$ary[0]};
     }
 
