@@ -127,7 +127,7 @@ sub populateDictionaries {
     $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
-    $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
+    $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
 # a place holder for template dictionary which will be built on the fly
 #    $this->{Dictionary}->{template} = {};
 }
@@ -761,23 +761,46 @@ sub putRead {
 
     $sth->finish();
 
-    my $seqvec = $read->getSequencingVector();
-    my $seqvecid = $this->getSequencingVectorID($read);
+    my $seqveclist = $read->getSequencingVector();
 
-    my $svleft = $read->getSequencingVectorLeft();
-    my $svright = $read->getSequencingVectorRight();
-
-    if (defined($seqvecid)) {
-	$query = "update READS set svector_id=?,svleft=?,svright=? where read_id=?";
+    if (defined($seqveclist)) {
+	$query = "insert into SEQVEC(read_id,svector_id,begin,end) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
-	$rc = $sth->execute($seqvecid, $svleft, $svright, $readid);
+	foreach my $entry (@{$seqveclist}) {
+	    my ($seqvec, $svleft, $svright) = @{$entry};
 
-    return (0, "failed to set svector_id,svleft,svright for $readname ($readid);" .
-	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+	    my $seqvecid = $this->getSequencingVectorID($seqvec);
 
-    $sth->finish();
+	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
+
+	    return (0, "failed to insert read_id,seqvec_id,begin,end into SEQVEC for $readname ($readid);" .
+		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+	}
+
+	$sth->finish();
+    }
+
+    my $cloneveclist = $read->getCloningVector();
+
+    if (defined($cloneveclist)) {
+	$query = "insert into CLONEVEC(read_id,cvector_id,begin,end) VALUES(?,?,?,?)";
+
+	$sth = $dbh->prepare_cached($query);
+
+	foreach my $entry (@{$cloneveclist}) {
+	    my ($clonevec, $cvleft, $cvright) = @{$entry};
+
+	    my $clonevecid = $this->getCloningVectorID($clonevec);
+
+	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
+
+	    return (0, "failed to insert read_id,ceqvec_id,begin,end into CLONEVEC for $readname ($readid);" .
+		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+	}
+
+	$sth->finish();
     }
 
     return (1, "OK");
@@ -825,15 +848,6 @@ sub checkReadForCompleteness {
 
     return (0, "undefined low-quality-right")
 	unless defined($read->getLowQualityRight());
-
-#    return (0, "undefined sequencing-vector")
-#	unless defined($read->getSequencingVector());
-
-#    return (0, "undefined sequencing-vector-left")
-#	unless defined($read->getSequencingVectorLeft());
-
-#    return (0, "undefined sequencing-vector-right")
-#	unless defined($read->getSequencingVectorRight());
 
     return (1, "OK");
 }
@@ -890,9 +904,46 @@ sub getTemplateID {
     return $template_id;
 }
 
+sub getCloningVectorID {
+    my $this = shift;
+    my $cvec = shift;
+
+    my $dbh = $this->getConnection();
+
+    return undef unless defined($dbh);
+
+    my $query = "select cvector_id from CLONINGVECTORS where name=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($cvec);
+
+    my ($cvec_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $cvec_id if defined($cvec_id);
+
+    $query = "insert into CLONINGVECTORS(name) VALUES(?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($cvec);
+
+    if ($rc == 1) {
+	$cvec_id = $dbh->{'mysql_insertid'};
+    } else {
+	undef $cvec_id;
+    }
+
+    $sth->finish();
+
+    return $cvec_id;
+}
+
 sub getSequencingVectorID {
     my $this = shift;
-    my $read = shift;
+    my $seqvec = shift;
 
     my $dbh = $this->getConnection();
 
@@ -901,8 +952,6 @@ sub getSequencingVectorID {
     my $query = "select svector_id from SEQUENCEVECTORS where name=?";
 
     my $sth = $dbh->prepare_cached($query);
-
-    my $seqvec = $read->getSequencingVector();
 
     my $rc = $sth->execute($seqvec);
 

@@ -228,20 +228,14 @@ sub getNextRead {
 
     $this->{sth}->{seqvecs}->execute($seqid);
 
-    my ($seqleft, $seqright, $seqtext) = $this->{sth}->{seqvecs}->fetchrow_array();
-
-    $read->setSequencingVectorLeft($seqleft);
-    $read->setSequencingVectorRight($seqright);
-    $read->setSequencingVector($seqtext);
+    while (my ($seqleft, $seqright, $seqtext) = $this->{sth}->{seqvecs}->fetchrow_array()) {
+	$read->addSequencingVector([$seqtext, $seqleft, $seqright]);
+    }
 
     $this->{sth}->{clonevecs}->execute($seqid);
 
-    my ($cloneleft, $cloneright, $clonetext) = $this->{sth}->{clonevecs}->fetchrow_array();
-
-    if (defined($cloneleft) && defined($cloneright)) {
-	$read->setCloningVectorLeft($cloneleft);
-	$read->setCloningVectorRight($cloneright);
-	$read->setCloningVector($clonetext);
+    while (my ($cloneleft, $cloneright, $clonetext) = $this->{sth}->{clonevecs}->fetchrow_array()) {
+	$read->addCloningVector([$clonetext, $cloneleft, $cloneright]);
     }
 
     $this->{sth}->{clippings}->execute($seqid);

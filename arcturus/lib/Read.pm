@@ -190,9 +190,16 @@ sub getClone {
 
 #-----------------
 
-sub setCloningVector {
+sub addCloningVector {
     my $this = shift;
-    $this->{data}->{cvector} = shift;
+
+    my $value = shift;
+
+    return unless defined($value);
+
+    $this->{data}->{cvector} = [] unless defined($this->{data}->{cvector});
+
+    push @{$this->{data}->{cvector}}, $value;
 }
 
 sub getCloningVector {
@@ -200,29 +207,6 @@ sub getCloningVector {
     return $this->{data}->{cvector};
 }
 
-#-----------------
-
-sub setCloningVectorLeft {
-    my $this = shift;
-    $this->{data}->{cvleft} = shift;
-}
-
-sub getCloningVectorLeft {
-    my $this = shift;
-    return $this->{data}->{cvleft};
-}
-
-#-----------------
-
-sub setCloningVectorRight {
-    my $this = shift;
-    $this->{data}->{cvright} = shift;
-}
-
-sub getCloningVectorRight {
-    my $this = shift;
-    return $this->{data}->{cvright};
-}
 
 #-----------------
 
@@ -418,38 +402,21 @@ sub getSequencingVectorSite {
 
 #-----------------
 
-sub setSequencingVector {
+sub addSequencingVector {
     my $this = shift;
-    $this->{data}->{svector} = shift;
+
+    my $value = shift;
+
+    return unless defined($value);
+
+    $this->{data}->{svector} = [] unless defined($this->{data}->{svector});
+
+    push @{$this->{data}->{svector}}, $value;
 }
 
 sub getSequencingVector {
     my $this = shift;
     return $this->{data}->{svector};
-}
-
-#-----------------
-
-sub setSequencingVectorLeft {
-    my $this = shift;
-    $this->{data}->{svleft} = shift;
-}
-
-sub getSequencingVectorLeft {
-    my $this = shift;
-    return $this->{data}->{svleft};
-}
-
-#-----------------
-
-sub setSequencingVectorRight {
-    my $this = shift;
-    $this->{data}->{svright} = shift;
-}
-
-sub getSequencingVectorRight {
-    my $this = shift;
-    return $this->{data}->{svright};
 }
 
 #-----------------

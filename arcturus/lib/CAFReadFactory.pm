@@ -192,23 +192,14 @@ sub CAFFileParser {
                 $Read->setTemplate($items[1]);
             }
             elsif ($items[0] =~ /Ins/i) {
-                $Read->setInsertSize("$items[1]..$items[2]");
+                $Read->setInsertSize([$items[1],$items[2]]);
             }
             elsif ($items[0] =~ /Liga/i) {
                 $Read->setLigation($items[1]);
             }
             elsif ($items[0] =~ /Seq/i) {
-#print "seq: field '$field' @items <br>";
-                $items[3]++  if ($items[2] == 0);
-                $Read->setSequencingVectorLeft($items[3]) if ($items[2] <= 1);
-#                $reads{$object}->{SL} = $items[3] if ($items[2] <= 1);
-#                $reads{$object}->{SL}++           if ($items[2] == 0);
-                $Read->setSequencingVectorRight($items[2]) if ($items[2] > 1);
-#                $reads{$object}->{SR} = $items[2] if ($items[2]  > 1);
-                if ($record =~ s/Seq.*\d+\s+\d+\s+(\S.*)$/$1/) {
-                    $record =~ s/[\"\']//g;
-                    $Read->setSequencingVector($record);
-                }
+		my ($svleft, $svright, $svname) = $record =~ /^Seq_vec\s+\S+\s+(\d+)\s+(\d+)\s+\"(\S+)\"/;
+		$Read->addSequencingVector([$svname, $svleft, $svright]);
             }
             elsif ($items[0] =~ /Pri/i) {
                 $Read->setPrimer($items[1]);
@@ -220,7 +211,8 @@ sub CAFFileParser {
                 $Read->setChemistry($items[1]);
             }
             elsif ($items[0] =~ /Clone_vec/i) {
-                $Read->setCloningVector($items[1]);
+		my ($cvleft, $cvright, $cvname) = $record =~ /^Clone_vec\s+\S+\s+(\d+)\s+(\d+)\s+\"(\S+)\"/;
+		$Read->addCloningVector([$cvname, $cvleft, $cvright]);
             }
             elsif ($items[0] =~ /Clo/i) {
                 $Read->setClone($items[1]);
