@@ -134,7 +134,7 @@ sub getNextReadName {
     return $this->{readname}->[0];
 }
 
-sub getNextRead {
+sub getNextReadAuxiliaryData {
 # returns the information stored in the local buffer
     my $this = shift;
 
