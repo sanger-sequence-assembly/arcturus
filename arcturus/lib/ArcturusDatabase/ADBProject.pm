@@ -363,7 +363,7 @@ sub getCountsForProject {
                 "       count(distinct seq_id) as reads" .
                 "  from CONTIG2PROJECT join MAPPING using (contig_id)" .
                 " where project=?";
-
+ 
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($project_id) || &queryFailed($query) && return 0;
@@ -394,7 +394,7 @@ sub updateMetaDataForProject {
 
 # get the number of contigs and reads in this project
 
-    my ($cnr, $rnr) = $this->getCountsForProject(); # number of contigs, reads
+    my ($cnr, $rnr) = $this->getCountsForProject($project_id); # number of contigs, reads
 
     my $dbh = $this->getConnection();
 
@@ -410,6 +410,76 @@ sub updateMetaDataForProject {
     return $success;
 }
 
+sub getProjectInventoryToString {
+    my $this = shift;
+
+    my $output = $this->getProjectInventory(@_);
+
+    my $string = " nr Project      Contigs   Reads  ".
+                 "Total lgt  Average     Mean   Maximum \n";
+    foreach my $line (@$output) {
+        $string .= sprintf ("%3d %-12s %7d %7d  %9d %8d %8d %9d\n",@$line);
+    }
+
+    return $string;
+}
+
+sub getProjectInventory {
+    my $this = shift;
+    my ($key,$value) = @_;
+
+    my $contigs;
+
+    if ($key eq 'generation') {
+        if ($value eq 'parent') {
+            $contigs = $this->getCurrentParentIDs();
+        } 
+        elsif ($value eq 'current') {
+            $contigs = $this->getCurrentContigIDs();
+        }
+        else {
+            return undef;
+        }
+    }
+    elsif ($key) {
+        return undef;
+    }
+    else {
+        $contigs = $this->getCurrentContigIDS();
+    }
+
+    my $dbh = $this->getConnection();
+
+# get the number of contigs and reads in this project
+
+    my $query = "select PROJECT.project,PROJECT.projectname,".
+                "       count(CONTIG.contig_id) as contigs,".
+                "       sum(nreads) as reads,".
+                "       sum(length) as length,".
+                "       round(avg(length)) as meanlength,".
+                "       round(std(length)) as stdlength,".
+                "       max(length) as maxlength,".
+                "       PROJECT.updated".
+                "  from PROJECT, CONTIG2PROJECT, CONTIG".
+                " where PROJECT.project=CONTIG2PROJECT.project".
+                "   and CONTIG2PROJECT.contig_id=CONTIG.contig_id".
+                "   and CONTIG2PROJECT.contig_id in (".join(',',@$contigs).")".
+                " group by project".
+                " order by project asc";
+ 
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my @output;
+    while (my @ary = $sth->fetchrow_array()) {
+        push @output,[@ary];
+    }
+    $sth->finish();
+
+    return [@output]; # array of arrays
+}
+
 sub addCommentForProject {
 # comment, status, projecttype ?
 }
@@ -417,3 +487,4 @@ sub addCommentForProject {
 #------------------------------------------------------------------------------
 
 1;
+

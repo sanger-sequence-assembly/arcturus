@@ -1120,7 +1120,7 @@ sub getCurrentContigIDs {
 
 # option singleton : set true for including single-read contigs (default F)
 # option short     : set true for doing the search using age column of 
-#                    C2CMAPPING; F for a left join for contigs which are
+#                    C2CMAPPING; false for a left join for contigs which are
 #                    not a parent (results in 'current' generation age=0)
 # option age       : if specified > 0 search will default to short method
 #                    selecting on age (or short) assumes a complete age tree 
