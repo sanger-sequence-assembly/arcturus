@@ -140,6 +140,18 @@ sub exportData {
     return \%export;
 }
 
+#-----------------
+
+sub setAspedDate {
+    my $this = shift;
+    $this->{data}->{asped} = shift;
+}
+
+sub getAspedDate {
+    my $this = shift;
+    return $this->{data}->{asped};
+}
+
 #-------------------------------------------------------------------    
 
 sub setBaseCaller {
@@ -227,18 +239,6 @@ sub getComment {
 
 #-----------------
 
-sub setDate {
-    my $this = shift;
-    $this->{data}->{date} = shift;
-}
-
-sub getDate {
-    my $this = shift;
-    return $this->{data}->{date};
-}
-
-#-----------------
-
 sub setDirection {
     my $this = shift;
     $this->{data}->{direction} = shift;
@@ -307,6 +307,18 @@ sub setPrimer {
 sub getPrimer {
     my $this = shift;
     return $this->{data}->{primer};
+}
+
+#-----------------
+
+sub setProcessStatus {
+    my $this = shift;
+    $this->{data}->{pstatus} = shift;
+}
+
+sub getProcessStatus {
+    my $this = shift;
+    return $this->{data}->{pstatus};
 }
 
 #-----------------
@@ -454,13 +466,19 @@ sub getTemplate {
 
 #-----------------
 
-sub getTraceArchiveStatus {
+sub setTraceArchiveIdentifier {
+    my $this = shift;
+    $this->{TAI} = shift;
+}
+
+sub getTraceArchiveIdentifier {
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return; # the parent database
-
-    $this->{TAS} = $ADB->getTASForRead(id => $this->getReadID) unless defined($this->{TAS});
-    return $this->{TAS};
+    if (!$this->{TAI}) {
+        my $ADB = $this->{ADB} || return undef;
+        $this->{TAI} = $ADB->getTraceArchiveIdentifier(id=>$this->getReadID);
+    }
+    return $this->{TAI};
 }
 
 #----------------------------------------------------------------------
