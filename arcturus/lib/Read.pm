@@ -551,23 +551,24 @@ sub compareSequence {
         return undef;
     }
     elsif ($this->getSequenceLength() != $read->getSequenceLength()) {
-        return 1; # different lengths
+        return 0; # different lengths
     }
 
 # alternative: test if an edit has been made by comparison of align-to-SCF
 
     elsif ($this->getSequence() ne $read->getSequence()) {
-        return 2; # different DNA strings
+        return 0; # different DNA strings
     }
 
     my $thisBQD = $this->getQuality();
     my $readBQD = $read->getQuality();
 
     for (my $i=0 ; $i<@$thisBQD ; $i++) {
-        return 3 if ($thisBQD->[$i] != $readBQD->[$i]);
+        return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
+print "Identical sequences\n";
 
-    return 0; # identical sequences 
+    return 1; # identical sequences 
 }
 
 #----------------------------------------------------------------------
@@ -612,6 +613,8 @@ sub writeToCaf {
         print $FILE "Clipping QUAL $data->{lqleft} $data->{lqright}\n";
     }
 
+# align to trace
+
     if (my $alignToTrace = $this->getAlignToTrace()) {
         foreach my $alignment (@$alignToTrace) {
             print $FILE "Align_to_SCF @$alignment\n";
@@ -621,6 +624,26 @@ sub writeToCaf {
         my $length = $this->getSequenceLength();
         print $FILE "Align_to_SCF 1 $length  1 $length\n";  
     }
+
+# sequencing vector
+
+    if (my $seqvec = $this->getSequencingVector()) {
+        foreach my $vector (@$seqvec) {
+            my $name = $vector->[0];
+            print $FILE "Seq_vec SVEC $vector->[1] $vector->[2] \"$name\"";
+        }
+    }
+
+# cloning vector
+
+    if (my $clonevec = $this->getCloningVector()) {
+        foreach my $vector (@$clonevec) {
+            my $name = $vector->[0];
+            print $FILE "Clone_vec CVEC $vector->[1] $vector->[2] \"$name\"";
+        }
+    }
+
+# tags
 
     if (my $tags = $this->getTags()) {
         foreach my $tag (@$tags) {

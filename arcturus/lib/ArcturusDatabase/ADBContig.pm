@@ -398,7 +398,7 @@ sub putMetaDataForContig {
     my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($contig->getConsensusLength() || 0,
-                           $contig->hasPreviousContigs(),
+                           $contig->hasParentContigs(),
                            $contig->getNumberOfReads(),
                            $contig->getNumberOfNewReads(),
                            $contig->getAverageCover(),
@@ -422,11 +422,14 @@ sub getSequenceIDForAssembledReads {
 # version(s) already in the database with method addNewSequenceForRead
 # for unedited reads pull the data out in bulk with a left join
 
+    my $success = 1;
+
     my $unedited = {};
     foreach my $read (@$reads) {
         if ($read->isEdited) {
-            my ($success,$errmsg) = $this->putNewSequenceForRead($read);
-	    print STDERR "$errmsg\n" unless $success;
+            my ($added,$errmsg) = $this->putNewSequenceForRead($read);
+	    print STDERR "$errmsg\n" unless $added;
+            $success = 0 unless $added;
         }
         else {
             my $readname = $read->getReadName();
@@ -461,7 +464,6 @@ sub getSequenceIDForAssembledReads {
 
 # have we collected all of them? then %unedited should be empty
 
-    my $success = 1;
     if (keys %$unedited) {
         print STDERR "Sequence ID not found for reads: " .
 	              join(',',sort keys %$unedited) . "\n";
@@ -506,7 +508,7 @@ sub testContig {
                 $success = 0;
             }
             $identifier{$ID} = $read;
-# test presence of sequence
+# test presence of sequence and quality data
             if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
                 print STDERR "Missing DNA or BaseQuality in Read ".
                               $read->getReadName."\n";
@@ -601,7 +603,8 @@ sub deleteContig {
 
     my $success = 1;
     foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
-        my $query = "delete from $table where contig_id=$contigid";
+        my $query = "delete from $table where contig_id=$contigid"; 
+# print "$query\n";
         my $deleted = $dbh->do($query) || &queryFailed($query);
         $success = 0 unless $deleted;
     }

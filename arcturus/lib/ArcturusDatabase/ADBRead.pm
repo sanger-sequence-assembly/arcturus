@@ -1286,7 +1286,10 @@ sub putSequenceForRead {
     my $version = shift || 0;
 
     my $readid = $read->getReadID();
+
     my $readname = $read->getReadName();
+
+    return (0,"Failed to add sequence for $readname: missing read_id") unless $readid;
 
     my $dbh = $this->getConnection();
 
@@ -1395,7 +1398,27 @@ sub putSequenceForRead {
 	$sth->finish();
     }
 
-    return (1, "OK");
+# insert align to SCF data , if more than one record
+
+    my $alignToSCF = $read->getAlignToTrace();
+    if (scalar(@$alignToSCF) > 1) {
+        $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
+	$sth = $dbh->prepare_cached($query);
+
+        foreach my $entry (@$alignToSCF) {
+            my ($startinseq,$finisinseq,$startinscf,$finisinscf) = @$entry;
+            my $slength = $finisinseq - $startinseq + 1;
+            my $tlength = $finisinscf - $startinscf + 1;
+            unless ($slength == $tlength) {
+		print STDERR "Length mismatch in SCF alignment ($slength, $tlength)\n";
+                next;
+            }
+            $sth->execute($seqid,$startinseq,$startinscf,$slength) || &queryFailed($query);
+        } 
+	$sth->finish();
+    }
+
+    return ($seqid, "OK");
 }
 
 sub putNewSequenceForRead {
@@ -1411,10 +1434,13 @@ sub putNewSequenceForRead {
     my $readname = $read->getReadName();
     return (0,"incomplete Read instance: missing readname") unless $readname; 
     my $read_id = $this->hasRead($readname);
-# test db read_id against Read read_id (we don't know how $read was made)
+# test db read_id against (possible) Read read_id (we don't know how $read was made)
     if (!$read_id) {
         return (0,"unknown read $readname");
-    } 
+    }
+    elsif (!$read->getReadID()) {
+        $read->setReadID($read_id);
+    }
     elsif ($read->getReadID() && $read->getReadID() != $read_id) {
         return (0,"incompatible read IDs (".$read->getReadID." vs $read_id)");
     }
@@ -1423,29 +1449,36 @@ sub putNewSequenceForRead {
 
     my $alignToSCF = $read->getAlignToTrace();
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
-     return (0,"insufficient alignment information") unless $read->isEdited();
-print STDERR "read slipped through edited test:",$read->getReadName()."\n";
-return;
+        return (0,"insufficient alignment information") unless $read->isEdited();
+        print STDERR "read slipped through edited test:",$read->getReadName()."\n";
     }
 
 # c) ok, now we get the previous versions of the read and compare
 
-    my $prior;  
+    my $prior = 1;  
     my $version = 0;
-    while ($version == 0 || $prior) {
+    while ($prior) {
         $prior = $this->getRead(read_id=>$read_id,version=>$version);
         if ($prior && $prior->compareSequence($read)) {
+print "prior $prior  version $version\n";
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
+print "$prior  $seq_id, is identical to version $version\n";
             return ($seq_id,"is identical to version $version");
         }
-        $version++;
+        elsif ($prior) {
+print "prior $prior  version $version\n";
+            $version++;
+        }
     }
 
 # d) load this new version of the sequence
 
-return (0,"loading test aborted for version $version of read ".$read->getReadName);
+print STDOUT "new version detected $version\n";
+
+#return (0,"loading test aborted for version $version of read ".$read->getReadName);
+
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
 
