@@ -208,7 +208,7 @@ if ($source eq 'CAF') {
 
 # test for excess baggage; abort if present (force correct input)
 
-    my @valid = ('caf','include','exclude','log');
+    my @valid = ('caf','include','exclude','log','readnamelike','filter');
     &showUsage(1) if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new CAFReadFactory(%PARS);

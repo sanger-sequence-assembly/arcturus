@@ -583,7 +583,7 @@ foreach my $identifier (keys %contigs) {
 # minimum number of reads test
     my $contig = $contigs{$identifier};
     if ($contig->getNumberOfReads() < $minOfReads) {
-        $logger->warning("$identifier has less then $minOfReads reads");
+        $logger->warning("$identifier has less than $minOfReads reads");
         next;
     }         
     $contig->setOrigin($origin);

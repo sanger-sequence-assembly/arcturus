@@ -1462,15 +1462,15 @@ sub putNewSequenceForRead {
     while ($prior) {
         $prior = $this->getRead(read_id=>$read_id,version=>$version);
         if ($prior && $prior->compareSequence($read)) {
-print "prior $prior  version $version\n";
+print "prior " . $prior->toString() . " version $version\n";
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
-print "$prior  $seq_id, is identical to version $version\n";
+print $prior->toString() . "  $seq_id, is identical to version $version\n";
             return ($seq_id,"is identical to version $version");
         }
         elsif ($prior) {
-print "prior $prior  version $version\n";
+print "prior " . $prior->toString() . " version $version\n";
             $version++;
         }
     }
