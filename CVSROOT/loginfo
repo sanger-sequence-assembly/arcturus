@@ -16,5 +16,5 @@
 # name and listing the modified file names.
 #
 # For example:
-DEFAULT		(echo "$USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog
-^zoo/		(echo "$USER"; echo %s; date; cat; echo;  (sleep 5; cd ~yeastpub/zoo/; cvs -q update -d) &) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
+DEFAULT		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog
+^zoo/		(echo "user: $USER"; echo %s; date; cat; echo;  (sleep 5; cd /nfs/disk222/yeastpub/zoo/; cvs -q update -d) &) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
