@@ -63,10 +63,10 @@ $dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
 $query = "SHOW TABLES";
 
 $sth = $dbh->prepare($query);
-&db_die("prepare($query) failed on $dsna");
+&db_die("prepare($query) failed on $dsn");
 
 $sth->execute();
-&db_die("execute($query) failed on $dsna");
+&db_die("execute($query) failed on $dsn");
 
 @alltables = ();
 
@@ -82,10 +82,10 @@ foreach $tablename (@alltables) {
     $query = "SHOW CREATE TABLE $tablename";
 
     $sth = $dbh->prepare($query);
-    &db_die("prepare($query) failed on $dsna");
+    &db_die("prepare($query) failed on $dsn");
 
     $sth->execute();
-    &db_die("execute($query) failed on $dsna");
+    &db_die("execute($query) failed on $dsn");
 
     @ary = $sth->fetchrow_array();
 
