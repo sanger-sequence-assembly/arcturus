@@ -465,6 +465,7 @@ $self->report("test combinations: @$port_maps") if $debug;
         undef my $mysqlport;
         if (defined($ENV{HTTP_HOST}) && !$options{HostAndPort}) {
             my $HTTP_HOST = $ENV{HTTP_HOST};
+            $HTTP_HOST =~ s/internal\.//; # for connections from outside Sanger
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
             foreach my $host (@$hosts) {
                 $host =~ s/\:/.${base_url}:/ if ($base_url && $host !~ /\.|$base_url/);
