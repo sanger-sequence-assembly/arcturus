@@ -11,56 +11,33 @@ use DBI;
 my $users;
 
 BEGIN {
-    $users = {
-	'pcs3.prod' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'pcs3',
-	    'port'   => 14641,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-	'pcs3.dev' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'pcs3',
-	    'port'   => 14642,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-	'pcs3.test' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'pcs3',
-	    'port'   => 14651,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-	'babel.prod' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'babel',
-	    'port'   => 14641,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-	'babel.dev' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'babel',
-	    'port'   => 14642,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-	'babel.test' => {
-	    'dbname' => 'arcturus',
-	    'server' => 'babel',
-	    'port'   => 14651,
-	    'admin'  => ['arcturus',  '***REMOVED***'],
-	    'write'  => ['arcturus',  '***REMOVED***'],
-	    'read'   => ['analysedb', 'dbviewer']
-	    },
-    };
+    $users = {};
+
+    my $inifile = $ENV{'WRAPMYSQL_INI'};
+
+    if (defined($inifile) && open(INI, $inifile)) {
+	my ($line, $instance, $name, $value, $roles, $username, $password);
+
+	while ($line = <INI>) {
+	    chop $line;
+
+	    if ($line =~ /\[([\w\-\.]+)\]/) {
+		$instance = $1;
+		$users->{$instance} = {};
+	    } elsif ($line =~ /([\w\-\.]+)=([\w\-\.\,]+)/) {
+		($name, $value) = ($1, $2);
+		if ($name =~ /^role\.(\w+)/) {
+		    $name = $1;
+		    ($username, $password) = split(/,/, $value);
+		    $users->{$instance}->{$name} = [$username, $password];
+		} else {
+		    $users->{$instance}->{$name} = $value;
+		}
+	    }
+	}
+
+	close(INI);
+    }
 }
 
 sub connect {
