@@ -37,7 +37,7 @@ sub new {
 print "Bootes: $self \n" if $DEBUG;
 
     $self->{READS} = $self->{mother}->spawn('READS',$database); 
-
+ 
     $self->{ReadsReader} = new ReadsReader($self->{READS}, $options->{DNA}, $options->{oracle_schema});
 
 print "ReadsReader module $self->{ReadsReader} \n" if $DEBUG;
@@ -142,7 +142,7 @@ sub putRead {
 
     my $inserted = 0;
 
-    if ($self->allowTableAccess('READS')) {
+    if ($self->allowTableAccess('READS',1)) {
 
 
         $ReadsReader->erase;
@@ -223,9 +223,60 @@ dataSource : 0 = undefined; 1 = experiment file (default); 2 = Oracle;
 
 =back
 
-=head2 Returns: reference to array of readnames
+=head2 Returns: number of read items loaded
 
 =cut
+#############################################################################
+
+sub putPendingReads {
+# enter read names into the PENDING table
+    my $self  = shift;
+    my $names = shift || return 0; # name or array reference
+
+    $self->{PENDS} = $self->{READS}->spawn('PENDING');
+
+    $self->{PENDS}->setMultiLineInsert(200);
+
+    my $success = 0;
+
+    if ($self->allowTableAccess('PENDING',1)) {
+
+        undef my @names; $names[0] = $names;
+        $names = \@names if (ref($names) ne 'ARRAY');
+
+        foreach my $name (@$names) {
+
+#	    $success++; print "name to be added $name \n";
+            $success++ if $self->{PENDS}->newrow('readname',$name);
+        }
+    }
+
+    $self->{PENDS}->flush();
+
+    return $success;
+}
+
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method pendingReads
+
+=head2 Synopsis
+
+Enter a read into the PENDING table of the current arcturus organism database
+
+use as:  ->pendingReads(\@names)
+
+=head2 Parameter "names"
+
+       (single) read name OR reference to array with read names
+
+       The array method is much more efficient than single entries
+
+=head2 Returns: number of read names entered
+
+=cut
+
 #############################################################################
 
 sub setTraceStatus {
@@ -238,7 +289,7 @@ sub setTraceStatus {
 
 # will fail if status not one of 'N', 'I' or 'T'
 
-    if ($self->allowTableAccess('READS')) {
+    if ($self->allowTableAccess('READS',1)) {
 
         $success = $self->{READS}->update('tstatus',$status,'readname',$name);
     }
@@ -260,7 +311,9 @@ trace archive
 
 =over 1
 
-=item name:  the read name
+=item name   : the read name
+
+=item status : either 'N', 'I', or 'T'; default 'T'
 
 =back
 
@@ -306,12 +359,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "20 Jan 2003",
+        updated =>    "02 Sep 2003",
     };
 }
 
 #############################################################################
 
 1;
-
-

@@ -141,7 +141,8 @@ sub new {
 
 # allocate internal counters
 
-    $self->{contig}  = '';
+    $self->{contig}  =  0; # contig id
+    $self->{ctgname} = ''; # contigname
     $self->{readids} = []; # for read names
     $self->{rhashes} = []; # for ReadsRecall hashes
     $self->{markers} = []; # re: speeding up consensus builder
@@ -187,8 +188,10 @@ sub new {
 # case: contig or alias name specified
         if (ref($cids) ne 'ARRAY') {
             $self->buildContig($cids);
+            $self->{ctgname} = $contigitem;
         }
         else {
+# take the first one
             my $number = @$cids;
             $status->{report} = "$number contigs named $itsvalue";
             $self->buildContig($cids->[0]);
@@ -203,15 +206,23 @@ sub new {
 }
 
 #############################################################################
+# buildContig: standard build of single ContigRecall and its ReadsRecall objects
+#############################################################################
 
 sub buildContig {
 # build an image of the current contig (generation 1)
     my $self   = shift;
     my $contig = shift; # contig_id
-    my $scpos  = shift; # (optional) start of range on contig
-    my $fcpos  = shift; # (optional)  end  of range on contig
+    my $opts   = shift;
 
-    $self->{contig} .= $contig;
+    my %options = ( sort => 1,       # sort maps according to increasing lower range
+                    generation => 1, # select contigs and maps for generation 1
+                    scpos => -1,     # start position interval (if positive) 
+                    fcpos => -1,     # end   position interval (if positive)
+                   );
+    $self->importOptions(\%options,$opts);
+
+    $self->{contig} .= $contig; # stor contig id
 
     my $status = $self->{status};
 
@@ -219,11 +230,14 @@ sub buildContig {
 
     $R2C->autoVivify('<self>',1.5) if !keys(%{$R2C->{sublinks}});
 
-# build read mappings required for this contig
+# build read mapping query required for this contig
 
-    my $query = "contig_id = $contig and generation <= 1";
-#    my $query = "contig_id = $contig and label < 20 and generation = 0";
-    if (defined($scpos) && defined($fcpos) && $scpos <= $fcpos) {
+    my $query = "contig_id = $contig ";
+    my $generation = $options{generation};
+    $query .= "and generation = $generation " if ($generation >= 0);
+    my $scpos = $options{scpos};
+    my $fcpos = $options{fcpos};
+    if ($scpos > 0 && $fcpos > 0 && $scpos <= $fcpos) {
         $scpos *= 2; $fcpos *= 2;
         $query .= "and (pcstart+pcfinal + abs(pcfinal-pcstart) >= $scpos) "; 
         $query .= "and (pcstart+pcfinal - abs(pcfinal-pcstart) <= $fcpos) "; 
@@ -232,9 +246,10 @@ print "query: where $query \n";
 
 # get hashes with mapping information to get the read_id involved
 
-
-    my $maphashes; my %reads;
-    if ($maphashes = $R2C->associate('hashrefs','where',$query)) {
+    my %reads;
+    my $maphashes = $R2C->cacheRecall($contig); # if built beforehand
+    $maphashes = $R2C->associate('hashrefs','where',$query);
+    if ($maphashes && @$maphashes) {
         foreach my $hash (@$maphashes) {
             $reads{$hash->{read_id}} .= $hash.' '; # in case of multiple occurrances
         }        
@@ -245,32 +260,34 @@ print "query: where $query \n";
         return 0;
     }
 
-    my @reads = keys %reads;
+    my @readids = keys %reads; # the readids in this contig
 
-    my $hashes = $ReadsRecall->spawnReads(\@reads,'hashrefs');  # array of hashes
-    my $series = $ReadsRecall->findInstanceOf;      # reference to hash of hashes
+    my $hashes = $ReadsRecall->spawnReads(\@readids,'hashrefs');  # build the read hashes
+    my $series = $ReadsRecall->findInstanceOf; # returns reference to hash of read hashes
 
 # store the mapping information in the read instances
 
     foreach my $hash (@$maphashes) {
-        my $label = $hash->{label};
+        next if ($generation >= 0 && $hash->{generation} ne $generation);
         my $recall = $series->{$hash->{read_id}}; # the instance of ReadsRecall read_id
-# load the individual segments
-        if ($label < 20 && $recall->segmentToContig($hash)) {
+# load the individual segment in the read
+        if ($hash->{label} < 20 && $recall->segmentToContig($hash)) {
             print "WARNING: invalid mapping ranges for read $hash->{read_id}!\n";
         }
 # load the (overall) read to contig alignment
-        $recall->readToContig($hash) if ($label >= 10);
+        $recall->readToContig($hash) if ($hash->{label} >= 10);
     }
 
-# sort the ReadRecall objects according to increasing upper contig range
+# what about READTAGS, CONSENSUS, and Contig TAGS ??
 
-    @$hashes = sort { $a->{clower} <=> $b->{clower} } @$hashes;
+# sort the ReadRecall objects according to increasing lower contig range
+
+    @$hashes = sort { $a->{clower} <=> $b->{clower} } @$hashes  if $options{sort};
 
 # cleanup
 
     undef %reads;
-    undef @reads;
+    undef @readids;
     undef $maphashes;
 
     my $result = 0;
@@ -981,7 +998,13 @@ sub listContigHash {
 }
 
 #############################################################################
-# caf output
+# writeToCaf: write ContigRecall and ReadsRecall data in caf format to file
+#             this method takes the Recall objects built earlier with 'new'
+#             and dumps the data; use only for a few contigs as building the
+#             modules in memory may take a lot of time.
+# writeToCafOnTheFly: does the same, but reuses Recall modules to limit use
+#             of memory, doing the calculations for each read in turn (and 
+#             speeding up the process); use for output of whole assemblies 
 #############################################################################
 
 sub writeToCaf {
@@ -993,12 +1016,18 @@ print "writeToCaf $self->{contig}\n";
 # write the reads to contig mappings
 
     my $ReadsRecall = $self->{rhashes};
+
 # write the individual read mappings ("align to caf")
+
     foreach my $ReadObject (@$ReadsRecall) {
         $ReadObject->writeMapToCaf($FILE,1);
     }
+
 # write the overall maps for for the contig ("assembled from")
-    print $FILE "Sequence : ..\nIs_contig\nPadded\n";
+
+    my $outputname = sprintf("contig%08d",$self->{contig});
+    print $FILE "\nSequence : $outputname\nIs_contig\nPadded\n";
+
     foreach my $ReadObject (@$ReadsRecall) {
         $ReadObject->writeMapToCaf($FILE,0);
     }
@@ -1007,6 +1036,14 @@ print "writeToCaf $self->{contig}\n";
 
 # write the consensus sequence / or all the reads ?
 
+}
+
+#############################################################################
+
+sub writeToCafOnTheFly {
+# write this contig on the fly in caf format to $FILE
+    my $self = shift;
+    my $FILE = shift;
 }
 
 #############################################################################

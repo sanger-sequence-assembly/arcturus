@@ -85,12 +85,13 @@ sub create_organism {
 
     if ($level > 0 && (!defined($result) || $result <= 0)) {
     # the history table does not exist: create it
-        &create_HISTORY ($dbh, $list);
+        &create_DBHISTORY ($dbh, $list, $userid);
     # after creation rename the table to its required name
-        my $rename = $dbh->do("ALTER TABLE HISTORY RENAME AS $historyTable");
+        my $rename = $dbh->do("ALTER TABLE DBHISTORY RENAME AS $historyTable");
         push @tables, $historyTable if ($rename);
         undef $historyTable if (!$rename);
-    } elsif (!defined($result) || $result <= 0) { # level<=0
+    }
+    elsif (!defined($result) || $result <= 0) { # level<=0
         print "WARNING! Table $historyTable does not exist; create ABORTED<br>";
         $target = 'VOID'; # skips all subsequent create calls
         $result = $dbh->do("SHOW TABLES");
@@ -100,6 +101,13 @@ sub create_organism {
 
     $historyTable = DbaseTable->new($dbh,$historyTable,$database,1);
     $historyTable->setTracer(0); # no query tracing
+
+
+    if (!$target || $target eq 'HISTORY') {
+	&create_HISTORY($dbh, $list, $userid);
+        &record ($historyTable,$userid,'HISTORY');
+        push @tables, 'HISTORY';
+    }
 
     if (!$target || $target eq 'READS') {    
         push @tables, 'READS';
@@ -301,26 +309,79 @@ sub create_organism {
 
     return \@tables; # return a list of tables which have been created
 }
+
 #*********************************************************************************************************
 
 sub record {
-# enter a record into the history table
-    my $history = shift;
-    my $userid  = shift;
-    my $dbtable = shift; 
-  
-    my $timestamp = $history->timestamp(0);
+# enter a record into the history tables
+    my $dbhistory = shift; # HISTORY<DB> table
+    my $userid    = shift;
+    my $dbtable   = shift; 
+
+    my $timestamp = $dbhistory->timestamp(0);
     my ($date, $time) = split /\s/,$timestamp;
 
-# test if the entry exists
+# add record to DBHISTORY table
 
-    if (!$history->associate('created',$dbtable,'tablename')) {
-        $history->newrow('tablename',$dbtable);
+# test if the entry exists; if not, create a new row
+
+    if (!$dbhistory->associate('created',$dbtable,'tablename')) {
+        $dbhistory->newrow('tablename',$dbtable);
     }
-    $history->update('created'  ,$date      ,'tablename',$dbtable);
-    $history->update('lastuser' ,$userid    ,'tablename',$dbtable);
-    $history->update('lastouch' ,$timestamp ,'tablename',$dbtable);
-    $history->update('action'   ,'created'  ,'tablename',$dbtable);
+    $dbhistory->update('created'  ,$date      ,'tablename',$dbtable);
+    $dbhistory->update('lastuser' ,$userid    ,'tablename',$dbtable);
+    $dbhistory->update('lastouch' ,$timestamp ,'tablename',$dbtable);
+    $dbhistory->update('action'   ,'created'  ,'tablename',$dbtable);
+
+# now section add creation SQL instruction to the HISTORY table
+
+    my $history = $dbhistory->spawn('HISTORY');
+
+    my $success = 0;
+# if history does not exist: error message
+    if ($history->{errors}) {
+        print "Failed to add timestamp to HISTORY table: $history->{errors}<br>\n";
+    }
+# if history is the table being created: scan the database for other tables
+# possibly already created and add their creation status as initial record
+    elsif ($dbtable eq 'HISTORY') {
+        my $tables = $history->show('tables',0);
+        foreach my $table (@$tables) {
+            my $action = 'create';
+            $action = 'CREATE' if ($table eq 'HISTORY');
+            $action = 'CREATE' if ($table =~ /HISTORY/ && @$tables <= 2);
+            $success = &updateHistory ($history, $table, $userid, $action);
+            print "Failed to add timestamp for $table to HISTORY table: $history->{qerror}<br>\n" if !$success;
+        }
+    }
+# for all other tables: add create record to history table
+    else {
+        $success = &updateHistory ($history, $dbtable, $userid);
+        print "Failed to add timestamp for $dbtable to HISTORY table: $history->{qerror}<br>\n" if !$success;
+    }
+
+}
+
+#*********************************************************************************************************
+
+sub updateHistory {
+# add a 'CREATE' record to the HISTORY table 
+    my $history = shift; # handle to the HISTORY table
+    my $dbtable = shift; # database table to be updated in HISTORY table
+    my $userid  = shift;
+    my $action  = shift || 'CREATE';
+
+    my $sqlquery  = $history->show("create table $dbtable",1); # get create instruction for the table
+
+    my $success = 0;
+    if (ref($sqlquery) eq 'ARRAY') {
+        my $timestamp = $history->timestamp(0);
+        my @items  = ('tablename', 'date'    , 'user' , 'action', 'command');
+        my @values = ($dbtable   , $timestamp, $userid,  $action, "$sqlquery->[0]");
+        $success = $history->newrow(\@items,\@values);
+    }
+
+    return $success;
 }
 
 #*********************************************************************************************************
@@ -1007,7 +1068,7 @@ sub create_CONTIGS {
              ncntgs           SMALLINT  UNSIGNED       NOT NULL,
              nreads           MEDIUMINT UNSIGNED       NOT NULL,
              newreads         MEDIUMINT                NOT NULL,
-             cover            FLOAT(8,2)               NOT NULL,      
+             cover            FLOAT(8,2)              DEFAULT '0.00',      
              origin           ENUM ('Arcturus CAF parser','Finishing Software','Other')  NULL,
              userid           VARCHAR(8)              DEFAULT 'arcturus',
              updated          DATETIME                 NOT NULL
@@ -1582,10 +1643,11 @@ sub create_STRANDS {
     &dropTable ($dbh,"STRANDS", $list);
     print STDOUT "Creating table STRANDS ..." if ($list);
     $dbh->do(qq[CREATE TABLE STRANDS(
-             strand           CHAR(1)            NOT NULL PRIMARY KEY,
-             strands          ENUM ('1','2')         NULL,
-             description      VARCHAR(48)        NOT NULL, 
-             counted          INT UNSIGNED       DEFAULT 0
+             strand           CHAR(1)                              NOT NULL PRIMARY KEY,
+             strands          ENUM ('1','2')                           NULL,
+             direction        ENUM ('forward','reverse','unknown') DEFAULT 'unknown',
+             description      VARCHAR(48)                          NOT NULL, 
+             counted          INT UNSIGNED                         DEFAULT 0
 	    )]);
     print STDOUT "... loading ..." if ($list);
     my %strands = (
@@ -1607,6 +1669,8 @@ sub create_STRANDS {
                                   . "VALUES (\'$key\',\'$strands{$key}\', $strands)");
         $sth->execute();
         $sth->finish();
+        $dbh->do("update STRANDS set direction='forward' where description like '%forward%'");
+        $dbh->do("update STRANDS set direction='reverse' where description like '%reverse%'");
     }
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1633,9 +1697,10 @@ sub create_PRIMERTYPES {
     &dropTable ($dbh,"PRIMERTYPES", $list);
     print STDOUT "Creating table PRIMERTYPES ..." if ($list);
     $dbh->do(qq[CREATE TABLE PRIMERTYPES(
-             primer           SMALLINT           NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             description      VARCHAR(48)        NOT NULL, 
-             counted          INT UNSIGNED       DEFAULT 0
+             primer      SMALLINT                    NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             type        ENUM ('universal','custom')     NULL,
+             description VARCHAR(48)                 NOT NULL, 
+             counted     INT UNSIGNED                DEFAULT 0
 	 )]);
     print STDOUT "... loading ..." if ($list);
     my %primers = (
@@ -1651,6 +1716,8 @@ sub create_PRIMERTYPES {
         $sth->execute();
         $sth->finish();
     }
+    $dbh->do("update PRIMERTYPES set type='universal' where description like '% from %'");
+    $dbh->do("update PRIMERTYPES set type='custom'  where description like '% custom %'");
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
@@ -2035,7 +2102,7 @@ sub create_DATAMODEL {
                  'ASSEMBLY          assembly          CLONEMAP    assembly',
                  'CLONES               clone      READS2CONTIG       clone',
                  'CLONEMAP          assembly          ASSEMBLY    assembly',
-                 'CONTIGS          oldcontig    CONTIGS2CONTIG   contig_id',
+#                 'CONTIGS          contig_id    CONTIGS2CONTIG   oldcontig',
                  'CONTIGS2CONTIG   oldcontig           CONTIGS   contig_id',
                  'CONTIGS2CONTIG   newcontig           CONTIGS   contig_id',
                  'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
@@ -2162,6 +2229,8 @@ sub create_INVENTORY {
                  'CLONES2PROJECT    o  l  0  1',
                  'LIGATIONS         o  d  1  1',
                  'SESSIONS          c  p  0  1',
+                 'HISTORY           o  p  0  0',
+                 'DBHISTORY         o  p  0  0',
                  'STATUS            o  s  1  1');
 
     foreach my $line (@input) {
@@ -2432,10 +2501,11 @@ sub create_CHEMTYPES {
     &dropTable ($dbh,"CHEMTYPES", $list);
     print STDOUT "Creating table CHEMTYPES ..." if ($list);
     $dbh->do(qq[CREATE TABLE CHEMTYPES(
-             number           SMALLINT UNSIGNED  NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             chemtype         CHAR(1)            NOT NULL,
-             description      VARCHAR(32)        NOT NULL,
-             origin           VARCHAR(16)            NULL
+             number           SMALLINT UNSIGNED                     NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             chemtype         CHAR(1)                               NOT NULL,
+             description      VARCHAR(32)                           NOT NULL,
+             type             ENUM('primer','terminator','unknown') DEFAULT 'unknown',
+             origin           VARCHAR(16)                               NULL
          )]);
     print STDOUT "... loading ..." if ($list);
     my %chemistry = ('b','Big Dye primer',
@@ -2464,6 +2534,8 @@ sub create_CHEMTYPES {
             $sth->finish();
         }
     }
+    $dbh->do("UPDATE CHEMTYPES SET type='primer'     where description like '%primer'");
+    $dbh->do("UPDATE CHEMTYPES SET type='terminator' where description like '%terminator'");
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
@@ -2577,22 +2649,42 @@ sub create_ORGANISMS {
 
 #*********************************************************************************************************
 
-# history table; to be renamed after creating in organism directory to: HISTORY<dbasename>
+# database history table; to be renamed after creating in organism directory to: HISTORY<dbasename>
 # contains: creation date, name of last last accessed user, date/time of that event, and
 # the action which was done (e.g. rebuild, accumulate, edit, etc)
 
-sub create_HISTORY {
-    my ($dbh, $list) = @_;
+sub create_DBHISTORY {
+    my ($dbh, $list, $user) = @_;
 
-    &dropTable ($dbh,"HISTORY", $list);
-    print STDOUT "Creating table HISTORY ..." if ($list);
-    $dbh->do(qq[CREATE TABLE HISTORY(
-             tablename      VARCHAR(16)         NOT NULL,
+    &dropTable ($dbh,"DBHISTORY", $list) if ($user eq 'oper'); # only this user
+    print STDOUT "Creating table DBHISTORY ..." if $list;
+    $dbh->do(qq[CREATE TABLE DBHISTORY(
+             tablename      VARCHAR(20)         NOT NULL,
              created        DATE                NOT NULL,
              lastuser       VARCHAR(8)          NOT NULL,
 	     lastouch       DATETIME            NOT NULL,
              action         VARCHAR(8)          NOT NULL
 	 )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#*********************************************************************************************************
+
+# history table to record changes to the structure of tables in the database
+# This table was added by DH to keep track of table structure updates 
+# This table cannot be dropped (with this script), only changed
+
+sub create_HISTORY {
+    my ($dbh, $list, $user) = @_;
+
+    &dropTable ($dbh,"HISTORY", $list) if ($user eq 'oper'); # only this user
+    print STDOUT "Creating table HISTORY ..." if $list;
+    $dbh->do(qq[CREATE TABLE HISTORY(
+             tablename      VARCHAR(20)         NOT NULL,
+             date           DATETIME            NOT NULL,
+             user           VARCHAR(20)         NOT NULL,
+             action         VARCHAR(20)         NOT NULL,
+             command        TEXT                NOT NULL
+	 ) TYPE = MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
 
@@ -2640,7 +2732,7 @@ sub diagnose {
     undef my %columns;
     undef my $previous;
     my $testname = $tablename;
-    $testname = 'HISTORY' if ($testname =~ /history/i);
+    $testname = 'DBHISTORY' if ($testname =~ /history\w+/i);
     while (defined ($record = <SOURCE>)) {
 
         if (!$collect && $record !~ /\bdo\b/  || $record !~ /\S/) {
@@ -2686,6 +2778,7 @@ sub diagnose {
             }
             $fields{$column} = join ' ',@description;
             $fields{$column} =~ s/\%/ /g; # restore the blanks in quoted values
+            $fields{$column} =~ s/\bFLOAT\b/float/; # to lower case
 
             if (my $info = $table->getColumnInfo($column,1)) {
 # some massaging in order to align table info and script definitions
@@ -2694,6 +2787,7 @@ sub diagnose {
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
 # keep the first encountered mismatch
                 if ($info ne $fields{$column}) {
+#print "info: $info <br>fields: $fields{$column}<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
 # print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }
@@ -2726,8 +2820,8 @@ sub diagnose {
                 $alterTable = "ALTER table $tablename drop column $column";
             }
         }
-# print "diagnose $table->{tablename}: alterTable=$alterTable<br>\n" if $alterTable;
     }
+# print "diagnose $table->{tablename}: alterTable=$alterTable<br>\n" if ($alterTable && $tablename =~ /hist/i);
 
     return $alterTable || 0;
 }

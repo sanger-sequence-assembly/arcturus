@@ -146,7 +146,16 @@ Retrieve readid for named read
 sub getUnassembledReads {
 # short way using READS2ASSEMBLY; long way with a left join READS, R2CR2
     my $self = shift;
-    my $full = shift || 0; # default "short"
+    my $hash = shift || 0; # default "short" & no date selection
+
+# decode input "hash"
+
+    my $date = 0;
+    my $full = $hash;
+    if (ref($hash) eq 'HASH') {
+        $full = $hash->{full} || 0;
+        $date = $hash->{date} || 0;
+    }
 
     my $READS = $self->{READS}; # the READS table handle in the current database 
 
@@ -159,7 +168,14 @@ sub getUnassembledReads {
         my $R2A = $READS->spawn('READS2ASSEMBLY','<self>',0,0); # get table handle
         $READS->autoVivify($self->{database},0.5); # build links (existing tables only)
 # find the readnames in READS by searching on astatus in READS2CONTIG
-        $reads = $READS->associate('readname',"! '2'",'astatus',{returnScalar => 0});
+        if (!$date) {
+            $reads = $READS->associate('readname',"! '2'",'astatus',{returnScalar => 0});
+        }
+        else {
+# TO BE TESTED !!
+            my $where = "date <= $date and astatus != 2";
+            $reads = $READS->associate('readname','where',$where,{returnScalar => 0});
+        }
     }
 
     else {
@@ -169,8 +185,9 @@ sub getUnassembledReads {
         my $report = "Find all reads not in READS2CONTIG with left join: ";
         my $ljoin = "select distinct READS.readname from READS left join READS2CONTIG ";
         $ljoin  .= "on READS.read_id=READS2CONTIG.read_id ";
-# $ljoin  .= "where READS.?? = ? ";
         $ljoin  .= "where READS2CONTIG.read_id IS NULL ";
+# TO BE TESTED !!!
+        $ljoin  .= "and date <= $date " if $date;
         $ljoin  .= "order by readname";
 # this query gets all reads in READS not referenced in READS2CONTIG
         my $hashes = $READS->query($ljoin,0,0);
@@ -180,7 +197,9 @@ sub getUnassembledReads {
             push @reads,$hash->{readname};
         }
         $report .= scalar(@reads)." reads found\n";
+
 # now we check on possible (deallocated) reads in READS2CONTIG which do NOT figure in generation 0 or 1
+
         $report .= "Check for reads deallocated from previous assembly ";
         if ($full == 1) {
 # first alternative method: create a temporary table and do a left join
@@ -279,16 +298,16 @@ sub cafUnassembledReads {
 # fetch all unassembled reads and write data to a CAF file
     my $self = shift;
     my $FILE = shift;
-    my $full = shift;
+    my $hash = shift;
 
     my $count = 0;
     undef my @missed;
 
-print "Finding unassembled reads ($full)\n" if $DEBUG;
-    my $readnames = $self->getUnassembledReads($full);
+print "Finding unassembled reads ($hash)\n" if $DEBUG;
+    my $readnames = $self->getUnassembledReads($hash);
 print "readnames $readnames \n" if $DEBUG;
     if (ref($readnames) eq 'ARRAY' && @$readnames) {
-
+# NOTE: bulk processing does not require separate cacheing (see spawnReads)
         my $start = 0;
         my $block = 1000;
         while (@$readnames) {
@@ -354,13 +373,30 @@ Is written onto the file handle (about 3-5 Kbyte per read)
 #############################################################################
 
 sub getContig {
-# return a ContigRecall object for named contig
+# return a ContigRecall object(s) for named contig(s)
     my $self = shift;
     my $name = shift;
 
+$DEBUG = 1;
+
     my $ContigRecall = $self->{ContigRecall} || return 0;
 
-    my $contigrecall = $ContigRecall->new($name,@_);
+    my $contigrecall;
+    if (ref($name) eq 'ARRAY') {
+# return an array of ContigRecall objects
+        undef my @contigrecall;
+        $contigrecall = \@contigrecall;
+print "building contig " if $DEBUG;
+        foreach my $contig (@$name) {
+            my $getContig = $self->getContig($contig);
+            push @contigrecall, $getContig  if $getContig;
+my $nr = @contigrecall; print "$nr .. " if ($DEBUG && ($nr == 1 || !($nr%50)));
+        }
+print "\n" if $DEBUG;
+    }
+    else {
+        $contigrecall = $ContigRecall->new($name,@_);
+    }
 
     return $contigrecall; 
 }
@@ -393,8 +429,9 @@ value of attribute to identify a contig
 sub cafContig {
 # write mappings of named contig(s) and its reads onto a filehandle in caf format
     my $self = shift;
-    my $FILE = shift;
-    my $name = shift || return 0; # name or list of names compulsory
+    my $FILE = shift; # reference to file handle
+    my $name = shift || return 0; # name or list of names (compulsory)
+print "cafContig $name \n";
 
     my $ccaf = 0;
 
@@ -415,8 +452,9 @@ print "processing block $start $block\n" if $DEBUG;
                 push @test, (shift @$name);
             }
             $start += $block;
-print "reads to be built: @test \n" if ($DEBUG > 1);
+print "contigs to be built: @test \n" if ($DEBUG > 1);
             my $contiginstances = $self->getContig(\@test);
+#undef @$contiginstances;
             foreach my $instance (@$contiginstances) {
                 if ($instance->writeToCaf($FILE)) {
                     $ccaf++;
@@ -434,6 +472,54 @@ print "reads to be built: @test \n" if ($DEBUG > 1);
     return $ccaf;
 }
 
+#############################################################################
+
+sub cafAssembly {
+# write all contigs (and mappings) in generation 1 to file in CAF format
+    my $self = shift;
+    my $FILE = shift; # reference to file handle
+
+print "cafAssembly entered \n";
+
+# do the query on CONTIGS instead of READS2CONTIGS for speed!
+
+    my $READS   = $self->{READS};
+    my $CONTIGS = $READS->spawn('CONTIGS');
+    my $RTAGS   = $READS->spawn('READTAGS');
+    my $R2C     = $READS->spawn('READS2CONTIGS');
+# contig tags
+    $CONTIGS->autoVivify($self->{database},0.5);
+
+    my %opts = (returnScalar => 0);
+    my $cids = $CONTIGS->associate('distinct contig_id',1,'generation',\%opts);
+print "last query: $CONTIGS->{lastQuery}\n";
+print "output R2C search: $cids @$cids \n";
+
+# cache all data in READS, READTAGS, READS2CONTIG and contig TAGS on initialization
+
+    my $cacheing = 1;
+    if ($cacheing) {
+print "READS cache being built \n";
+my $tstart = time;
+        my $query = "select * from <self>";
+        $READS->cacheBuild($query,'read_id',{list => 1});
+my $tfinal = time;
+my $elapsed = $tfinal - $tstart;
+print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
+print "READTAGS cache being built \n";
+$tstart = $tfinal;
+        $RTAGS->cacheBuild($query,'read_id',{list => 1});
+$tfinal = time;
+$elapsed = $tfinal - $tstart;
+print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
+
+# R2C maps
+# CONTIG tags
+# Consensus
+    }
+
+    $self->cafContig($FILE,$cids);    
+}
 
 #############################################################################
 #############################################################################
@@ -446,7 +532,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "28 May 2003",
+        updated =>    "03 Sep 2003",
     };
 }
 

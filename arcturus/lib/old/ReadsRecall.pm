@@ -56,6 +56,7 @@ sub init {
 #############################################################################
 
 sub dropDead {
+
     my $text = shift;
 
     die "$text" if $text; 
@@ -125,7 +126,7 @@ sub new {
     $instance{$readitem} = $self if $readitem; # keyed on read ID
     $readitem = $self->{readhash}->{readname};
     $instance{$readitem} = $self if $readitem; # keyed on readname
-print "read $readitem added to inventory \n";
+#print "read $readitem added to inventory \n";
 
     return $self;
 }
@@ -158,26 +159,44 @@ sub spawnReads {
 
 # the next block builds a single ReadsRecall object (if $readids is either a number 
 # or a name) using the 'new' method, or builds a series of ReadsRecall objects (if
-# $readids is a reference to an array of readnames or readids 
+# $readids is a reference to an array of readnames or readids
+
+# blocked processing of a large number of reads is almost as good as cacheing; for
+# smaller numbers or repeated calls to the new method, cacheing will increase speed 
 
     undef my @reads;
     if (ref($readids) ne 'ARRAY') {
         push @reads,$self->new($readids);
     }
-# $readids is array reference
-# this section may need redoing to include staggered procesing of array and caching in READS
-    elsif (my $hashrefs = $READS->associate($items,$readids,$keyword,{returnScalar => 0})) {
-        undef my %reads;
+    else {
+# first pick up any cached read hashes (cacheing to be done before calling this module) 
+        undef my %notfound;
         foreach my $read (@$readids) {
+print "ReadsRecall->spawnReads: finding reads in cache .. ";
             $read =~ s/^\'|\'$//g if ($keyword eq 'readname'); # remove quoting
-            $reads{$read}++;
+            if (my $hash = $READS->cacheRecall($read)) {
+                push @reads, $self->new($hash);
+print "found \n";
+            }
+            else {
+                $notfound{$read}++;
+print "NOT found \n";
+            }
         }
-        foreach my $hash (@$hashrefs) {
-            push @reads,$self->new($hash);
-            delete $reads{$hash->{$keyword}}; # remove from list
+# pick up any remaining entries from the database
+        my @leftover = keys %notfound; 
+print "remaining @leftover reads \n\n";         
+        if (@leftover) {
+print "recovering remaining reads \n\n";         
+            if (my $hashrefs = $READS->associate($items,\@leftover,$keyword,{returnScalar => 0})) {
+                foreach my $hash (@$hashrefs) {
+                    push @reads,$self->new($hash);
+                    delete $notfound{$hash->{$keyword}}; # remove from list
+                }
+            }
         }
-# test number of read instances against input
-        if (my $leftover = keys(%reads)) {
+# test number of read instances not spawned
+        if (my $leftover = keys(%notfound)) {
             $status->{errors}++;
             $status->{report} = "$leftover reads NOT spawned!";
             return 0;
@@ -215,7 +234,8 @@ sub getNamedRead {
     &dropDead if !$READS;
 
     $readname =~ s/^\s*|\s*$//g; # remove possible leading or trailing blanks
-    my $readhash = $READS->associate('hashref',$readname,'readname');
+    my $readhash = $READS->cacheRecall($readname); # if any, else go to database
+    $readhash = $READS->associate('hashref',$readname,'readname') if !$readhash;
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
@@ -241,7 +261,8 @@ sub getNumberedRead {
 
     &dropDead if !$READS;
 
-    my $readhash = $READS->associate('hashref',$number,'read_id');
+    my $readhash = $READS->cacheRecall($number); # if any, else go to database
+    $readhash = $READS->associate('hashref',$number,'read_id') if !$readhash;
 
     if ($readhash) {
         &loadReadData(0,$self,$readhash);
@@ -286,11 +307,24 @@ sub getLabeledRead {
 
 #############################################################################
 
+# use this method if you do not want to create a new ReadsRecall object
+
+sub loadReadHash {
+# replace the current read hash by a new one
+    my $self = shift;
+    my $hash = shift;
+
+    &loadReadData(0,$self,$hash);
+}
+  
+#############################################################################
+
 sub loadReadTags {
     my $self   = shift;
     my $number = shift;
     my $list   = shift;
 
+# use cached data!
 print "load TAGS for read_id $number\n" if $list;
 }
 
@@ -1010,11 +1044,13 @@ sub translate {
     if (!keys %$library) {
 # on first call set up the translation library from the data in the dictionary
 #print "Initialising library <br>\n";
-        $READS->autoVivify(1); # one level deep
+#        $READS->autoVivify(1); # one level deep
+        $READS->autoVivify('<self>',1); # one level deep
 # process chemistry
         my %options = (returnScalar => 0, useCache => 0);
         my $CHEMISTRY = $READS->spawn('CHEMISTRY');
-        $CHEMISTRY->autoVivify(1); # to get at CHEMTYPES
+#        $CHEMISTRY->autoVivify(1); # to get at CHEMTYPES
+        $CHEMISTRY->autoVivify('<self>',1); # to get at CHEMTYPES
         my $hashes = $CHEMISTRY->associate('chemistry','where',"description like '%primer%'",\%options);
         $library->{chemistry} = {};
         foreach my $chemistry (@$hashes) {

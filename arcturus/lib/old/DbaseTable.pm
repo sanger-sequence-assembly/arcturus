@@ -90,8 +90,8 @@ sub spawn {
     my $self      = shift;
     my $tablename = shift; # obligatory
     my $database  = shift; # defaults to $self->{database} if missing or specified as 'self' 
-    my $forced    = shift; # if true, force creation of a new instance
-    my $build     = shift;
+    my $forced    = shift || 0; # if true, force creation of a new instance
+    my $build     = shift || 0; # ensure definition to have table descriptors setup 
 
     $database = $self->{database} if (!$database || $database =~ /\bself\b/);
 
@@ -364,11 +364,11 @@ if ($self->{tablename} eq 'READS2CONTIG') {
         $report .= "No index key or sorting key defined \n";
     } 
     
-#print "index status: $report \n" if ($self->{tablename} eq 'READS2CONTIG');
-#$options{list} = 1 if ($self->{tablename} eq 'READS2CONTIG');
+    print $report if $options{list};
+
 # list the index 
 
-    if ($options{list}) {
+    if ($options{list} >= 2) {
         print STDOUT $report;
         my $index = $self->{'index'};
         foreach my $key (sort keys %$index) {
@@ -1004,7 +1004,7 @@ sub quoteColValue {
     undef my $output;
     if (defined($value) && (my $columntype = $self->{coltype}->{$cname})) {
         my $quote = 0;
-        $quote = 1 if ($columntype =~ /char|blob|date|enum/i);
+        $quote = 1 if ($columntype =~ /char|blob|date|enum|text/i);
         if (ref($value) =~ /ARRAY/i) {
             my $count = 0;
             foreach my $choice (@$value) {
@@ -1497,7 +1497,7 @@ sub newrow {
 	    my $column = $cinserts[$i];
             my $cvalue = $vinserts[$i];
             if (!$columntype->{$column}) {
-                $error = "column $column does not exist";
+                $error = "column '$column' does not exist";
                 $inputStatus = 0;
             }
             elsif (!isSameType($columntype->{$column},$cvalue,1)) {
@@ -1505,6 +1505,7 @@ sub newrow {
                 $inputStatus = 0;
             }
             else {
+
                 $vinserts[$i] = quoteColValue($self,$column,$cvalue);
             }
         }
@@ -1536,7 +1537,7 @@ sub newrow {
         if (!$multiLine || $multiLine <= 1) {
 
             my $nextrow = $self->count(0) + 1; # number of the next row, force query on table
-            my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
+            my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)"; # print "newrow: $query<br>";
             my $status = $self->query($query,1,0);       
 # on successful completion: store the WHERE string for further updates or rollback
             if ($status && $self->count(0) == $nextrow) {
@@ -1889,6 +1890,33 @@ sub prepare {
     $prep =~ s/\<self\>/$tablename/i; # if placeholder <SELF> given
 
     return $dbh->prepare($prep); 
+}
+
+#############################################################################
+
+sub show {
+# database show [item] query
+    my $self = shift;
+    my $item = shift;
+    my $key  = shift;
+
+    my $result = $self->query("show $item");
+
+# the show command returns an array of hashes
+# use $key to select one hash entry; undefined key return the array as is
+ 
+    if (defined($key) && ref($result) eq 'ARRAY') {
+#print "result show $item: @$result <br>";
+        foreach my $hash (@$result) {
+            if (ref($hash) eq 'HASH') {
+                my @keys = keys %$hash;
+                $hash = $hash->{$keys[$key]} if ($key < @keys);
+            }
+        }
+#print "result show $item: @$result <br>";
+    }
+
+    return $result;
 }
 
 #############################################################################
@@ -2338,7 +2366,7 @@ sub isSameType {
     }
     else {
 # determine the type of the input value
-        my $vtype = 0; # default string type;
+        my $vtype = 0; # default string type (type 'text' will always match)
 
         if ($value =~ /^\s*[+-]?\d+\s*$/) {
             $vtype = 1 ;  # numerical integer

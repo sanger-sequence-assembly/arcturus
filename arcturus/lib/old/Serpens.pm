@@ -36,7 +36,7 @@ sub new {
 
 print "SERPENS: $self \n" if $DEBUG;
 
-    $self->{MAP} = $self->{mother}->spawn('HAPPYTAGS',$database,0,0);
+    $self->{TAGS} = $self->{mother}->spawn('HAPPYTAGS',$database,0,0);
 
     $self->dropDead("Table HAPPYTAGS not accessible") if !$self->{MAP};
 
@@ -58,7 +58,7 @@ print "SERPENS: $self \n" if $DEBUG;
 #############################################################################
 
 sub query {
-# query on GENES2CONTIG table (read only)
+# query on HAPPYTAGS table (read only)
     my $self  = shift;
     my $what  = shift;
     my $where = shift;
@@ -66,24 +66,23 @@ sub query {
     my $query = "select $what from <self> ";
     $query .= "where $where" if $where;
 
-    my $output = $self->{MAP}->query($query,{returnScalar => 0});
+    my $output = $self->{TAGS}->query($query,{returnScalar => 0});
 
     $output; 
 }
 
 #############################################################################
 
-
 sub put {
-# enter a GeneDB tag into the GENE2CONTIGS table
+# enter 
     my $self = shift;
-    my $data = shift; # hash with gene data
+    my $data = shift; # hash with ?? data
 
     my $success = 0;
     if (ref($data) ne 'HASH') {
         $self->{error} = "invalid input for Draco->put: missing data hash";
     }
-    elsif ($self->allowTableAccess('GENE2CONTIG')) {
+    elsif ($self->allowTableAccess('HAPPYTAGS')) {
 # enter as arrays and test presence of all items
 	undef my @items;
         undef my @value;
@@ -97,7 +96,7 @@ sub put {
             $success = $self->{MAP}->newrow(\@items,\@value);
         }
         else {
-            $self->{error} = "incomplete gene descriptors for Draco->put";
+            $self->{error} = "incomplete ?? descriptors for Draco->put";
         }
     }
 
@@ -108,11 +107,11 @@ print $self->error  if !$success;
 #############################################################################
 
 sub update {
-# update any field(s) for a particular GeneDB tag
+# update any field(s) for a particular happy tag
     my $self = shift;
     my $data = shift;
 
-    if ($self->allowTableAccess('GENE2CONTIG')) {
+    if ($self->allowTableAccess('HAPPYTAGS')) {
 # to be developed
 
     }
@@ -127,11 +126,11 @@ sub update {
 #############################################################################
 
 sub get {
-# get all data for a given GeneDB tag
+# get all data for a given tag
     my $self = shift;
     my $name = shift; # the tag name
 
-    my $hash = $self->{MAP}->associate('hashref',$name,'tagname');
+    my $hash = $self->{TAGS}->associate('hashref',$name,'tagname');
 
     return $hash;
 }
@@ -140,8 +139,8 @@ sub get {
 # 
 #############################################################################
 
-sub geneGetContig {
-# get the contig id and name on which a given GeneDB tag resides
+sub tagGetContig {
+# get the contig id and name on which a give tag resides
     my $self = shift;
 }
 
@@ -171,7 +170,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             0.9 ,
         date    =>    "17 Jan 2003",
-        updated =>    "17 Jan 2003",
+        updated =>    "04 Sep 2003",
     };
 }
 

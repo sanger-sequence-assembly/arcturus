@@ -466,7 +466,7 @@ sub unpackAttributes {
         if ($attributes = $self->SUPER::associate($field,$tvalue,$target,{useCache => 0})) {
 # supposedly the field value is a hash image; values may contain a '~' (e.g. for files)
             $attributes =~ s?\~?$EXPAND?g; # replace possible '~' by full file name
-# print "attributes $attributes <br>";
+#print "attributes $attributes <br>";
             %attributes = split /$SPLIT/ , $attributes  if ($attributes);
         }
     }
@@ -511,7 +511,7 @@ sub packAttribute {
         }
         chop $attributes; # remove trailing separator symbol
 # add to database table
-# print "old: $existing <br>\n"; print "new: $attributes <br>\n";
+#print "old: $existing <br>\n"; print "new: $attributes <br>\n";
         if (!$existing || ($attributes && ($attributes ne $existing))) {
             $self->update($field,$attributes,$target,$tvalue);
             $result++;

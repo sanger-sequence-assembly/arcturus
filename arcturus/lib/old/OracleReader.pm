@@ -4,7 +4,7 @@ package OracleReader;
 #
 # Read a standard Sanger format READ from the Oracle database
 # Hacked from the ADB_get_caf script by Robert Davies
-# $Id: OracleReader.pm,v 1.3 2003-01-24 15:38:17 ejz Exp $
+# $Id: OracleReader.pm,v 1.4 2003-09-10 15:19:12 ejz Exp $
 #
 #############################################################################
 
@@ -17,7 +17,10 @@ use AssemblyDB2;
 
 #############################################################################
 
-my $ADB_DIR = "/nfs/disk222/yeastpub/scripts/WGSassembly/bin";
+#my $ADB_DIR = "/nfs/disk222/yeastpub/scripts/WGSassembly/bin";
+my $ADB_DIR = "/nfs/pathsoft/prod/WGSassembly/bin";
+
+my $TMP_DIR = "/tmp";
 
 #############################################################################
 
@@ -51,7 +54,6 @@ sub getOracleReads {
 
     undef my %readHash;
     $self->{reads} = \%readHash;
-
 # translate readnames into hash
 
     undef my %reads;
@@ -65,7 +67,7 @@ sub getOracleReads {
 
     my $adb = AssemblyDB->new(login => 'pathlook', schema => $schema, RaiseError => 0);
     if (!$adb) {
-        $self->{status} = "Unknown SCHEMA $schema";
+        $self->{status} = "Unknown SCHEMA $schema"; print "$self->{status} <br>";
         return 0;
     }
 
@@ -126,15 +128,14 @@ sub getOracleRead {
     my $schema  = $self->{schema};
     my $project = $self->{project};
 
-    print "get new ORACLE read $file\n";
+    print "<br>get new ORACLE read $file\n";
 
-    unlink "/nfs/darth/ejz/tmpfofn.lis" if (-e "/nfs/darth/ejz/tmpfofn.lis");
-    open FOFN,'> /nfs/darth/ejz/tmpfofn.lis' or die "cannot open tmpfofn.lis";
+    unlink "$TMP_DIR/tmpfofn.lis" if (-e "$TMP_DIR/tmpfofn.lis");
+    open FOFN,'> $TMP_DIR/tmpfofn.lis' or die "cannot open tmpfofn.lis";
     print FOFN "$file\n"; # write the file name to FOFN
     close (FOFN); 
 
-    my $image = `$ADB_DIR/ADB_get_caf -fofn /nfs/darth/ejz/tmpfofn.lis $schema $project`;
-    print "$image\n";
+    my $image = `$ADB_DIR/ADB_get_caf -fofn $TMP_DIR/tmpfofn.lis $schema $project`;
 }
 
 #############################################################################

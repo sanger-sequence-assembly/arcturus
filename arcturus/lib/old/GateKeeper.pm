@@ -64,6 +64,7 @@ sub new {
                    dieOnNoTable   => 1,  # die if ORGANISMS table not found/ opened
                    insistOnCgi    => 0,  # default alow command-line access
                    HostAndPort    => '', # (H:P) default use current server; define e.g. in non-CGI mode
+                   writeAccess    => 0,  # default ... to be changed
                    bufferedOutput => 0,  # default use unbuffered output
                    errorToNull    => 0,  # default redirect STDERR to STDOUT
                    standardBuild  => 1,  # don't touch: special provision for spawn method
@@ -97,7 +98,6 @@ sub new {
 # produce return string for diagnostic purposes, if specified
 
         &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
-
     }
 
 # open and parse the configuration file
@@ -348,21 +348,21 @@ sub opendb_MySQL_unchecked {
     my $host = shift; # hostname:TCPport
     my $hash = shift;
 
-    my %options = (defaultOpenNew => 0, dieOnError => 1, RaiseError => 0);
+    my %options = (defaultOpenNew => 0, # force a new connection with 1
+                   defaultInstall => 1, # adopt new values for server, TCPort, etc
+                   dieOnNoTable   => 0, # default continue even if ORGANISMS table not accessible 
+                   dieOnError     => 1, 
+                   writeAccess    => 0, # default no write access
+                   RaiseError     => 0);
     &importOptions(\%options,$hash);
 
 # test against default server, else open a new connection
 
-    my ($name,$port) = split ':',$host;
-    if (!$options{defaultOpenNew} && $self->{handle}) {
+    my ($server,$port) = split ':',$host;
+    if (!$options{defaultOpenNew} && $self->{handle}) { # the current handle!
         &dropDead($self,"Invalid host:TCP port specification in host $host") if ($host !~ /\:/);
-        return $self->{handle} if ($self->{server} =~ /$name/ && $self->{TCPort} == $port);
+        return $self->{handle} if ($self->{server} =~ /$server/ && $self->{TCPort} == $port);
     }
-
-# register server and TCP port
-
-    $self->{server} = $name;
-    $self->{TCPort} = $port;
 
 # build the data source name
 
@@ -372,8 +372,13 @@ sub opendb_MySQL_unchecked {
 
     my $config = $self->{config};
 
-    my $username = $config->get("mysql_username",'insist');
-    my $password = $config->get("mysql_password",'insist');
+    my $username = $config->get("mysql_ro_username",'insist');
+    my $password = $config->get("mysql_ro_password",'insist');
+# writeAccess option overrides default username
+    if ($options{writeAccess}) {
+        $username = $config->get("mysql_username",'insist');
+        $password = $config->get("mysql_password",'insist');
+    }
 # test configuration data input status
     if (my $status = $config->probe(1)) {
         &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $options{dieOnError};
@@ -382,26 +387,43 @@ sub opendb_MySQL_unchecked {
 
 # and open up the connection
 
-    $self->{handle} = DBI->connect($dsn, $username, $password, $options{RaiseError});
-    if (!$self->{handle}) {          
+    my $handle = DBI->connect($dsn, $username, $password, $options{RaiseError});
+
+    if (!$handle) {          
         &dropDead($self,"Failed to access arcturus on host $host",1) if $options{dieOnError};
         return 0;
     }
 
 # okay, here the database has been properly opened on host/port $self->{server};
 
-    $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
-    if ($self->{mother}->{errors} && $options{dieOnNoTable}) {
-        &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
+    my $mother = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
+
+    if ($mother->{errors} && $options{dieOnNoTable}) {
+        &dropDead($self,"Failed to access table ORGANISMS on $server");
     }
 
+
+    if ($options{defaultInstall}) {
+# adopt the (until now) transient connection data TO BE DEVELOPED
+        my $residence = $self->currentResidence;
+# here, delete the current instance from this connection, if any
+# NOTE: this may muck up the counters in case of multiple connection to the same instance; should be improved
+
+        $self->{server} = $server;
+$self->{open} .= "opendb_MySQL_unchecked: defining self->server: $server <br>";
+        $self->{TCPort} = $port;
+        $self->{handle} = $handle;
+        $self->{mother} = $mother;
+
 # register instance on this port (only on first occasion)
+# NOTE: this may muck up the counters in case of multiple connection to the same instance; should be improved
 
-    my $residence = $self->currentResidence;
+        $residence = $self->currentResidence;
 $self->report("NEW GATEKEEPER on current residence $residence server:$self->{server}") if $debug;
-    $instances{$residence} = $self if !$instances{$residence};
+        $instances{$residence} = $self if !$instances{$residence};
+    }
 
-    return $self->{handle};
+    return $handle;
 }
 
 #*******************************************************************************
@@ -413,15 +435,19 @@ $self->report("NEW GATEKEEPER on current residence $residence server:$self->{ser
 # server.
 
 sub getHostAndPort {
+# from apache-set environment
     my $servername = $ENV{'SERVER_NAME'};
     my $serverport = $ENV{'SERVER_PORT'};
 
     if (defined($servername) && defined($serverport)) {
 	return "$servername:$serverport";
-    } else {
+    }
+    else {
 	return 0;
     }
 }
+
+#*******************************************************************************
 
 sub opendb_MySQL {
 # create database handle on the current server and port
@@ -431,6 +457,7 @@ sub opendb_MySQL {
 
     my %options = (RaiseError   => 0,   # default do NOT die on error
                    dieOnNoTable => 1,   # default die on ORGANISMS table error
+                   writeAccess  => 0,   # default no write access
                    HostAndPort  => ''); # define e.g. in non-CGI mode
 
     &importOptions(\%options,$hash);
@@ -450,8 +477,13 @@ print "config $self->{config}\n" if $debug;
     if (my $config = $self->{config}) {
 # get database parameters
         my $driver    = $config->get("db_driver",'insist');
-        my $username  = $config->get("mysql_username",'insist');
-        my $password  = $config->get("mysql_password",'insist');
+        my $username  = $config->get("mysql_ro_username",'insist');
+        my $password  = $config->get("mysql_ro_password",'insist');
+# write access option overrides userinfo
+        if ($options{writeAccess}) {
+            $username = $config->get("mysql_username",'insist');
+            $password = $config->get("mysql_password",'insist');
+        }
         my $db_name   = $config->get("mysql_database");
         $db_name = 'arcturus' if !$db_name; # default
         my $base_url  = $config->get("mysql_base_url");
@@ -489,6 +521,7 @@ $self->report("test combinations: @$port_maps") if $debug;
             foreach my $host (@$hosts) {
                 $host =~ s/\:/.${base_url}:/ if ($base_url && $host !~ /\.|$base_url/);
                 if ($host eq $HTTP_HOST) {
+$self->{open} .= "opendb_MySQL: HTTP_HOST define self->server as $host <br>";
                     $self->{server} = $host;
                     @url = split /\.|\:/,$host;
                     $http_port = $url[$#url];
@@ -497,6 +530,7 @@ $self->report("test combinations: @$port_maps") if $debug;
         }
 # HTTP_POST not defined, i.e. no CGI: test if the host/port combination option is defined
         elsif ($options{HostAndPort}) {
+$self->{open} .= "opendb_MySQL: HostAndPort define self->server as $options{HostAndPort} <br>";
            ($self->{server}, $mysqlport) = split /\:/,$options{HostAndPort};
 $self->report("NON CGI HostAndPort host:$self->{server}, port: $mysqlport") if $debug;
             $self->{TCPort} = $mysqlport;
@@ -510,8 +544,10 @@ $self->report("NON CGI HostAndPort host:$self->{server}, port: $mysqlport") if $
 $self->report("host from echo HOST: $name") if $debug;
             foreach my $host (@$hosts) {
                 @url = split /\.|\:/,$host;
+$self->{open} .= "opendb_MySQL: from local host define self->server as $url[0] <br>";
                 $self->{server} = $url[0] if ($name eq $url[0]);
             }
+$self->{open} .= "opendb_MySQL: from default_host define self->server as $url[0] <br>" if !$self->{server};
             $self->{server} = $config->get("default_host") if !$self->{server}; # default
 #$self->report("server $self->{server}");
         }
@@ -597,21 +633,18 @@ $self->report("options $options{dieOnNoTable} ") if $debug;
 #*******************************************************************************
 
 sub importOptions {
-# private function 
+# private function : override options hash with input hash
     my $options = shift;
     my $hash    = shift;
-    my $list    = shift;
 
     my $status = 0;
     if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
+# put or replace options entries by input hash entries
         foreach my $option (keys %$hash) {
             $options->{$option} = $hash->{$option};
-print "option $option : $options->{$option} \n" if $list;
         }
         $status = 1;
     }
-
-print "\n" if $list;
 
     $status;
 }
@@ -661,6 +694,7 @@ sub whereAmI {
         $text .= " undefined script " if !$script;
     }
     else {
+#print "Where Am I: server = $server <br>\n";
         $server =~ s/^.*(babel|pcs3).*$/$1/;
         $text = "development" if ($script =~ /\bdev\b/);
         $text = "production"  if ($script =~ /\bprod\b\//);
@@ -818,8 +852,8 @@ $debug = "\n";
             my $residence = $self->currentResidence;
             delete $instances{$residence} if ($instances{$residence} eq $self);
 # open the new connection and repaet the setting up of the database/table handle
-&report($self,"Opening new conection on $host:$port") if $debug;
-            $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1});
+&report($self,"Opening new connection on $host:$port") if $debug;
+            $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1}); # no write access
             delete $options{defaultRedirect};
             $dbh = $self->dbHandle($database,\%options);
         }
@@ -864,19 +898,36 @@ sub focus {
     my $self = shift;
     my $fail = shift; # either 1 for dieOnError or 0, or HASH with parameters
 
-    my %options = (dieOnError => 0, useDatabase => $self->{database});
+    my %options = (dieOnError => 1, useDatabase => $self->{database});
     $options{dieOnError} = $fail if (ref($fail) ne 'HASH');
     &importOptions(\%options, $fail); # if $fail's a hash
 
-    if ((my $mother = $self->{mother}) && $options{useDatabase}) {
-#my $test = $mother->htmlTableColumn('dbasename');
-#print "test $test \n";
-#print "use $options{useDatabase}\n";
-        $mother->query("use $options{useDatabase}");
+    my $status = 0;
+    my $database = $options{useDatabase};
+    if ((my $mother = $self->{mother}) && $database) {
+# shift focus to database $database
+        if ($mother->do("use $database")) {
+# verify that the command has executed by probing the default database
+            my $readback = $mother->query("select database()");
+            if (ref($readback) eq 'ARRAY') {
+                $readback = $readback->[0]->{'database()'};
+            }
+            if ($readback eq $database) {
+                $status = 1; # success
+            }
+            elsif ($options{dieOnError}) {
+                $self->dropDead("Can't change focus: command 'use $database' misfired");
+            }
+        }
+        elsif ($options{dieOnError}) {
+            $self->dropDead("Can't change focus: command 'use $database' failed");
+        }
     }
     elsif ($options{dieOnError}) {
-        &dropDead($self,"Can't change focus: no database information");
+        $self->dropDead("Can't change focus: no database information");
     }
+
+    return $status;
 }
 
 #*******************************************************************************
@@ -1041,8 +1092,10 @@ print "GateKeeper authorize: $identify $password session $session \n" if $debug;
             $self->{report} .= "! Specified Arcturus session $session does not ";
             $self->{report} .= "exist on this server ($this_host)";
             foreach my $instance (@$instances) {
+# test the SESSIONS of each server in turn
                 if ($instance ne $this_host) {
-                    if (my $dbh = &opendb_MySQL_unchecked ($self,$instance)) {
+                    my %uoptions = (defaultInstall => 0, writeAccess => 0);
+                    if (my $dbh = &opendb_MySQL_unchecked ($self,$instance,\%uoptions)) {
                         $self->{report} .= " .. opened $instance:";
                         if ($dbh->do("select * from SESSIONS where session = '$session'") > 0) {
 # the session is found on another server: copy to the current server
@@ -1151,6 +1204,7 @@ print "GateKeeper authorize 2 report $self->{report} \n" if $debug;
         elsif (my $hash = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hash->{priviledges} || 0;
             $seniority   = $hash->{seniority}   || 0;
+            $attributes  = $users->unpackAttributes($identify,'userid');
             $self->{seniority} = $seniority; # for use outside the GateKeeper
 # superuser 'oper' has a special status; accounts defined on start-up have to be initialize by 'oper'
 print "identify '$identify'  hash '$hash->{password}'  passwd '$password' \n" if $debug;
@@ -1381,9 +1435,10 @@ sub allowTableAccess {
 # (current version rather crude)
 
     my $allowed = $self->{taccess} || 'ALL'; # defaults to be changed later 
+#print "GateKeeper allowTableAccess $table  allowed $self->{taccess} $allowed \n\n";
 
     my $access = 1;
-    $access = 0 if ($table =~ /GENE2CONTIG/i && $allowed !~ /\bGENE2CONTIG\b/);
+#    $access = 0 if ($table =~ /GENE2CONTIG/i && $allowed !~ /\bGENE2CONTIG\b/); # ??
     $access = 0 if ($allowed !~ /ALL/i && $allowed !~ /\b$table\b/i);
     
     my $user = $self->{USER} || 'unidentified';
@@ -1435,6 +1490,10 @@ sub closeSession {
 # close the current session number
     my $self    = shift;
     my $session = shift || $self->{SESSION} || return;
+    my $origin  = shift; # set true for closing the original session in the file
+
+print "not yet implemented<br>" if $origin;
+return if $origin; # temporary stop pending further development
 
     my $sessions = $self->{mother}->spawn('SESSIONS','self',0,0);
 
@@ -1576,6 +1635,7 @@ sub GUI {
 
     $page->partition(3);
     push @exclude, 'database';
+    push @exclude, 'dbasename';
     push @exclude, 'organism';
     my $defaultScript = $options{defaultScript};
     $defaultScript .= $cgi->postToGet(1,'session'); # if any
@@ -1887,6 +1947,8 @@ sub GUI {
     $page->partition(1);
     $page->center(1);
 
+#    $page->add($self->{open});
+
     print "GateKeeper GUI exit $debug" if $debug;
 
     return $page;
@@ -2037,6 +2099,8 @@ sub dropDead {
     else {
         $self->disconnect();
     }
+
+    $self->{cgi}->flush if $self->{cgi}; # flush any existing output page
 
     exit 0;
 }

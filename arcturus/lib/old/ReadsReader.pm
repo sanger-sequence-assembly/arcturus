@@ -298,7 +298,7 @@ sub getOracleRead {
             my @fields = split /\n/,$hash->{Sequence};
             foreach my $field (@fields) {
 # print "$field $break";
-                my @items = split /\s/,$field;
+                my @items = split /\s+/,$field;
                 if ($items[0] =~ /Temp/i) {
                     $readItems->{TN} = $items[1];
                 }
@@ -309,10 +309,11 @@ sub getOracleRead {
                     $readItems->{LG} = $items[1];
                 }
                 elsif ($items[0] =~ /Seq/i) {
+#print "seq: field '$field' @items <br>";
                     $readItems->{SL} = $items[3] if ($items[2] <= 1);
                     $readItems->{SL}++           if ($items[2] == 0);
-                    $readItems->{SR} = $items[4] if ($items[2]  > 1);
-                    $field =~ s/Seq.*\d\s+\d+\s+(\S.*)$/$1/;
+                    $readItems->{SR} = $items[2] if ($items[2]  > 1);
+                    $field =~ s/Seq.*\d+\s+\d+\s+(\S.*)$/$1/;
                     $field =~ s/[\"\']//g;
                     $readItems->{SV} = $field;
 
@@ -325,6 +326,9 @@ sub getOracleRead {
                 }
                 elsif ($items[0] =~ /Dye/i) {
                     $readItems->{CH} = $items[1];
+                }
+                elsif ($items[0] =~ /Clone_vec/i) {
+                    $readItems->{CV} = $items[1];
                 }
                 elsif ($items[0] =~ /Clo/i) {
                     $readItems->{CN} = $items[1];
@@ -671,7 +675,8 @@ sub ligation {
         $svector = $SQVECTORS->associate('svector',$readItems->{SV},'name'); # get id number           
     }
     else {
-        $readItems->{SV} = 0; # just to have it defined (re: ligation check)
+#        $readItems->{SV} = 0; # just to have it defined (re: ligation check)
+        $readItems->{SV} = ''; # just to have it defined (re: ligation check)
         $status->{diagnosis} .= "! No Sequencing Vector (SV) specified$break";
         $readItems->{RPS} += 32; # bit 6
         $status->{warnings}++;
@@ -1160,19 +1165,19 @@ $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'$break");
         else {
             undef $chemistry;
 	}
-$self->logger("chemistry=$chemistry$break");
+$self->logger("chemistry='$chemistry' .. ");
     }
     elsif (!$test) {
 #print "test recover $RECOVERDIR <br>";
         $chemistry = `$RECOVERDIR/recover.sh $command`;
-$self->logger("test recover chemistry: '$chemistry'$break");
+$self->logger("test recover chemistry: '$chemistry' .. ");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
         }
         else {
             undef $chemistry;
 	}
-$self->logger("chemistry=$chemistry$break");
+$self->logger("chemistry='$chemistry' .. ");
     }
     else {
         $chemistry = `$RECOVERDIR/orecover.sh $command`;
@@ -1317,7 +1322,7 @@ $self->logger(" ... identified (type = $readItems->{CHT})$break");
         if ($chemistry = $CHEMTYPES->associate('description',$readItems->{CHT},'chemtype')) {
             $readItems->{CH} = $chemistry;
             $CHEMISTRY->counter('identifier',$chemistry,0); # the row could exist
-$self->logger("... recovered: = $readItems->{CH})$break");
+$self->logger(".. recovered: = $readItems->{CH})$break");
             $CHEMISTRY->update('chemtype', $readItems->{CHT},'identifier', $chemistry);
             $CHEMISTRY->build(1); # rebuild internal table
         }
