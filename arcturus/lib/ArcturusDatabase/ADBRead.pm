@@ -1764,7 +1764,8 @@ sub deleteRead {
     return (1,"Records for read $readid removed from $delete tables");
 }
 
-sub getSequenceIDforReads {
+# REPLACED by getSequenceIDForAssembledReads in ADBContig
+sub OLDgetSequenceIDforReads {
 # put sequenceID, version and read_id into Read instances given their 
 # readname (for unedited reads) or their sequence (edited reads) 
     my $this = shift;
