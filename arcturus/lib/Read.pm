@@ -372,10 +372,47 @@ sub setSequence {
 sub getSequence {
 # return the DNA (possibly) using lazy instatiation
     my $this = shift;
+
     $this->importSequence() unless defined($this->{Sequence});
-    return $this->{Sequence};
+
+    my $symbol;
+# test for extra input; only accept qualityMask=>'symbol'
+    while (my $nextword = shift) {
+        if ($nextword eq 'qualitymask') {
+            $symbol = shift;
+        }
+    }
+
+    return $this->{Sequence} unless $symbol;
+
+# quality masking 
+
+    my $ql = $this->getLowQualityLeft();
+    my $qr = $this->getLowQualityRight();
+
+    return $this->{Sequence} unless (defined($ql) && defined($qr));
+
+    return &maskDNA($this->{Sequence},$ql,$qr,substr($symbol,0,1));
 }
 
+sub maskDNA {
+# private function: mask DNA with some symbol outside the quality range
+    my $dna = shift; # input DNA sequence
+    my $ql  = shift; # low quality left
+    my $qr  = shift; # low quality right
+    my $sym = shift; # replacement symbol
+
+    my ($part1, $part2, $part3);
+
+    $part1 = substr($dna,0,$ql);
+    $part2 = substr($dna,$ql,$qr-$ql-1);
+    $part3 = substr($dna,$qr-1);
+
+    $part1 =~ s/./$sym/g;
+    $part3 =~ s/./$sym/g;
+
+    return $part1.$part2.$part3;
+}
 
 #-----------------
 
@@ -657,33 +694,6 @@ sub writeBaseQuality {
 	    print $FILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
-}
-
-#----------------------------------------------------------------------
-# masking data
-#----------------------------------------------------------------------
-
-sub maskLowQuality {
-# mask DNA with 'x'-s outside the quality range
-    my $this = shift;
-
-    my $ql = $this->getLowQualityLeft();
-    my $qr = $this->getLowQualityRight();
-
-    return unless (defined($ql) && defined($qr));
-    
-    my $dna = $this->getSequence();
-
-    my ($part1, $part2, $part3);
-
-    $part1 = substr($dna,0,$ql);
-    $part2 = substr($dna,$ql,$qr-$ql-1);
-    $part3 = substr($dna,$qr-1);
-
-    $part1 =~ s/./x/g;
-    $part3 =~ s/./x/g;
-
-    $this->setSequence($part1.$part2.$part3);
 }
 
 ##############################################################
