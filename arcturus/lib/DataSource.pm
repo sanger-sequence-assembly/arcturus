@@ -132,6 +132,8 @@ sub getConnection {
 
     my $url      = $this->{URL};
 
+    return undef unless defined($url);
+
     my $username = undef;
     my $password = undef;
     my $options = undef;
