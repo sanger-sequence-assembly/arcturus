@@ -2,6 +2,8 @@
 
 use WrapMySQL;
 
+WrapMySQL->initFromFile('wrapmysql.ini');
+
 @dbs = ('pcs3.prod', 'pcs3.dev', 'pcs3.test', 'babel.prod', 'babel.dev', 'babel.test');
 
 @modes = ('admin', 'read', 'write', 'root');
@@ -21,6 +23,19 @@ foreach $db (@dbs) {
 	    print " OK\n";
 	    $dbh->disconnect();
 	}
+    }
+    print "\n";
+}
+
+print "Now enumerating instances and roles ...\n\n";
+
+@dbs = WrapMySQL->listInstances();
+
+foreach $db (@dbs) {
+    printf "%-15s", $db;
+    @modes = WrapMySQL->listRolesForInstance($db);
+    foreach $mode (@modes) {
+	printf " %-8s", $mode;
     }
     print "\n";
 }
