@@ -16,13 +16,15 @@ my $organism;
 my $instance;
 my $readname;
 my $read_id;
+my $seq_id;
+my $version;
 my $contig_id;
 my $SCFchem;
 my $fofn;
 my $html;
 my $verbose;
 
-my $validKeys  = "organism|instance|readname|read_id|contig_id|fofn|chemistry|html|verbose|help";
+my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|html|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -36,6 +38,10 @@ while (my $nextword = shift @ARGV) {
     $readname  = shift @ARGV  if ($nextword eq '-readname');
 
     $read_id   = shift @ARGV  if ($nextword eq '-read_id');
+
+    $seq_id    = shift @ARGV  if ($nextword eq '-seq_id');
+
+    $version   = shift @ARGV  if ($nextword eq '-version');
 
     $contig_id = shift @ARGV  if ($nextword eq '-contig_id');
 
@@ -94,18 +100,29 @@ my $rdir;
 my $read;
 my @reads;
 
-$read = $adb->getReadByID($read_id) if $read_id;
+$version = 0 unless defined($version);
+
+$read = $adb->getRead(read_id=>$read_id, version=>$version) if $read_id;
+#$read = $adb->getReadByID($read_id,$version) if $read_id;
 push @reads, $read if $read;
 
 undef $read;
-$read = $adb->getReadByName($readname) if $readname;
+$read = $adb->getRead(readname=>$readname, version=>$version) if $readname;
+#$read = $adb->getReadByName($readname, $version) if $readname;
 push @reads, $read if $read;
 
+undef $read;
+$read = $adb->getReadBySequenceID($seq_id) if $seq_id;
+push @reads, $read if $read;
+
+
 if ($contig_id) {
-#test construction
-    my @rids = (1,2,3);
+#test mode construction to be changed
+    my @rids = (1099,1100,1102,1103);
     print "get reads @rids\n";
-    my $reads = $adb->getReadsByID(\@rids);
+    my $reads = $adb->getReadsBySequenceID(\@rids);
+#    my $reads = $adb->getReadsByReadID(\@rids);
+    $adb->addSequenceToReads($reads);
     push @reads, @$reads;
     print "Reads: @reads\n";
 
@@ -113,7 +130,8 @@ if ($contig_id) {
 }
 
 
-my @items = ('read_id','readname','template','ligation','insertsize','clone',
+my @items = ('read_id','readname','seq_id','version',
+             'template','ligation','insertsize','clone',
              'chemistry','SCFchemistry','strand','primer','aspeddate',
              'basecaller','lqleft','lqright','slength','sequence',
              'quality','pstatus');
@@ -126,6 +144,8 @@ foreach my $read (@reads) {
 
     $L{read_id}    = $read->getReadID;
     $L{readname}   = $read->getReadName;
+    $L{seq_id}     = $read->getSequenceID;
+    $L{version}    = $read->getVersion;
 
     $L{template}   = $read->getTemplate;
     $L{ligation}   = $read->getLigation;
