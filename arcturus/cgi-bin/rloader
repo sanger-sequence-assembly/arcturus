@@ -646,13 +646,13 @@ if ($logON || !$origin) {
     }
 
     else {
+# load PENDING reads
         print "Scanning database $database for PENDING Reads only ... ";
         my $querystring = "SELECT PENDING.readname FROM $database.PENDING left join ";
         $querystring .= "$database.READS on PENDING.readname=READS.readname where READS.readname is null ";
         $querystring .= "order by readname ";
-#        my $querystring = "SELECT readname FROM $database.PENDING order by readname ";
         $querystring .= "limit $LOADPERRUN" if $LOADPERRUN;
- print "querystring: $querystring$break";
+# print "querystring: $querystring$break";
         my $sth = $dbh->prepare ($querystring);
     # get files in PENDING
         $sth->execute();
@@ -661,23 +661,13 @@ if ($logON || !$origin) {
         }
         $sth->finish();
 
-#        $nr = keys %dbfiles;
-#        print "... $nr pending files found${break}Testing against READS table ... ";
-#        foreach my $key (keys %dbfiles) {
-# test if read already loaded to weed out possible double entries
-#            if ($READS->associate('read_id',$key,'readname')) {
-#                $PENDING->delete('readname',$key);
-#                delete $dbfiles{$key};
-#            } 
-#        }
-
         $nr = keys %dbfiles;
-        print "DONE ... $nr (new) pending reads found";
         if (!$nr && $PENDING->count()) {
-            print "WARNING! $database.PENDING contains duplicate readnames$break"; 
+            print "WARNING! $database.PENDING contains only duplicate readnames ... "; 
         }
 
-        print "  (forceload)" if ($forced);
+        print "DONE ... $nr (new) pending reads found";
+        print " (forceload)" if ($forced);
         print "$break$break";
 
         undef my @pendingfiles;
