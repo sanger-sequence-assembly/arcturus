@@ -74,7 +74,7 @@ $query = "select contig_id,length,nreads" .
     " from CONTIGS".
     " where length >= $minlen";
 
-$query .= " and readnamehash is not null" if defined($nullhash);
+$query .= " and readnamehash is null" if defined($nullhash);
 $query .= " limit $limit" if defined($limit);
 
 $sth = $dbh->prepare($query);
