@@ -1,9 +1,6 @@
 package uk.ac.sanger.arcturus.database;
 
-import uk.ac.sanger.arcturus.data.Contig;
-import uk.ac.sanger.arcturus.data.Sequence;
-import uk.ac.sanger.arcturus.data.Mapping;
-import uk.ac.sanger.arcturus.data.Segment;
+import uk.ac.sanger.arcturus.data.*;
 
 import java.sql.*;
 import java.util.*;
@@ -18,6 +15,7 @@ public class ContigManager {
     private HashMap hashByID;
     private PreparedStatement pstmtByID;
     private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByMappingID;
+    private PreparedStatement pstmtReadDataByContigID;
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -45,13 +43,24 @@ public class ContigManager {
 	query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by cstart asc";
 	pstmtSegmentsByMappingID = conn.prepareStatement(query);
 
+	query = "select READS.read_id,READS.readname,asped,strand,primer,chemistry," +
+	    "           TEMPLATE.template_id,TEMPLATE.name,TEMPLATE.ligation_id,SEQ2READ.seq_id,SEQ2READ.version" +
+	    " from READS,TEMPLATE,SEQ2READ,MAPPING" +
+	    " where READS.read_id=SEQ2READ.read_id and READS.template_id=TEMPLATE.template_id and SEQ2READ.seq_id=MAPPING.seq_id" +
+	    " and contig_id = ?";
+	pstmtReadDataByContigID = conn.prepareStatement(query);
+
 	hashByID = new HashMap();
     }
 
     public Contig getContigByID(int id) throws SQLException {
+	return getContigByID(id, true);
+    }
+
+    public Contig getContigByID(int id, boolean autoload) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
-	return (obj == null) ? loadContigByID(id) : (Contig)obj;
+	return (obj == null && autoload) ? loadContigByID(id) : (Contig)obj;
     }
 
     private Contig loadContigByID(int id) throws SQLException {
@@ -65,7 +74,7 @@ public class ContigManager {
 	    int nreads = rs.getInt(2);
 	    java.sql.Date updated = rs.getDate(3);
 
-	    contig = registerNewContig(id, length, nreads, updated);
+	    contig = createAndRegisterNewContig(id, length, nreads, updated);
 	}
 
 	rs.close();
@@ -74,10 +83,14 @@ public class ContigManager {
     }
 
     public Contig getFullContigByID(int id) throws SQLException {
+	return getFullContigByID(id, true);
+    }
+
+    public Contig getFullContigByID(int id, boolean autoload) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
 	if (obj == null)
-	    return loadFullContigByID(id);
+	    return autoload ? loadFullContigByID(id) : null;
 
 	Contig contig = (Contig)obj;
 
@@ -95,24 +108,39 @@ public class ContigManager {
 	return contig;
    }
 
-    private Contig registerNewContig(int id, int length, int nreads, java.sql.Date updated) {
+    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.sql.Date updated) {
 	Contig contig = new Contig(id, length, nreads, updated, adb);
 
-	hashByID.put(new Integer(id), contig);
+	registerNewContig(contig);
 
 	return contig;
     }
 
-    private Contig registerNewContig(int id, int length, int nreads, java.sql.Date updated,
+    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.sql.Date updated,
 				     Mapping[] mappings) {
 	Contig contig = new Contig(id, length, nreads, updated, mappings, adb);
 
-	hashByID.put(new Integer(id), contig);
+	registerNewContig(contig);
 
 	return contig;
     }
 
+    void registerNewContig(Contig contig) {
+	hashByID.put(new Integer(contig.getID()), contig);
+    }
+
     private void loadMappingsForContig(Contig contig) throws SQLException {
+	loadMappingsForContig(contig, true);
+    }
+
+    private void loadMappingsForContig(Contig contig, boolean fast) throws SQLException {
+	if (fast)
+	    fastLoadMappingsForContig(contig);
+	else
+	    slowLoadMappingsForContig(contig);
+    }
+
+    private void slowLoadMappingsForContig(Contig contig) throws SQLException {
 	int id = contig.getID();
 
 	pstmtCountMappingsByContigID.setInt(1, id);
@@ -168,4 +196,54 @@ public class ContigManager {
 
 	contig.setMappings(mappings);
     }
+
+     private void fastLoadMappingsForContig(Contig contig) throws SQLException {
+	int id = contig.getID();
+
+	pstmtReadDataByContigID.setInt(1, id);
+
+	ResultSet rs = pstmtReadDataByContigID.executeQuery();
+
+	while (rs.next()) {
+	    int ligation_id = rs.getInt(9);
+	    Ligation ligation = adb.getLigationByID(ligation_id);
+
+	    int template_id = rs.getInt(7);
+	    Template template = adb.getTemplateByID(template_id, false);
+	    if (template == null) {
+		System.err.print('T');
+		String template_name = rs.getString(8);
+		template = new Template(template_name, template_id, ligation, adb);
+		adb.registerNewTemplate(template);
+	    }
+
+	    int read_id = rs.getInt(1);
+	    Read read = adb.getReadByID(read_id, false);
+	    if (read == null) {
+		System.err.print('R');
+		String readname = rs.getString(2);
+		java.sql.Date asped = rs.getDate(3);
+		int strand = adb.parseStrand(rs.getString(4));
+		int primer = adb.parsePrimer(rs.getString(5));
+		int chemistry = adb.parseChemistry(rs.getString(6));
+
+		read = new Read(readname, read_id, template, asped, strand, primer, chemistry, adb);
+
+		adb.registerNewRead(read);
+	    }
+
+	    int seq_id = rs.getInt(10);
+	    Sequence sequence = adb.getSequenceBySequenceID(seq_id, false);
+	    if (sequence == null) {
+		System.err.print('S');
+		int version = rs.getInt(11);
+		sequence = new Sequence(seq_id, read, null, null, version);
+		adb.registerNewSequence(sequence);
+	    }
+	}
+
+	System.err.println();
+
+	rs.close();
+     }
 }
