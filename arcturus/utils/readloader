@@ -6,4 +6,4 @@ set PERL_LIB_DIR=${SCRIPT_HOME}/../lib
 
 setenv PERL5LIB /nfs/pathsoft/external/perl/lib:${PERL_LIB_DIR}:${PERL5LIB}
 
-exec ${SCRIPT_HOME}/readloader.pl $*
+exec ${SCRIPT_HOME}/read-loader.pl $*
