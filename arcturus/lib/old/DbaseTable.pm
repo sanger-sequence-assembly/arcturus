@@ -57,14 +57,12 @@ sub new {
     $self->{qTracer}   =  1; # default query tracing on
     $self->{sublinks}  = {}; # hash with links to other tables
     $self->{timestamp} = ''; # timestamp if database contents changed
+    $self->{alternate} = []; # array for alternate column names (re: tracing)
 
 # initialize the table only if build is defined (preset error status for build)
 
     $self->{errors} = "Initialisation pending for table $database.$tablename";
     &build($self,$build,$order) if defined($build); # overrides errors 
-#    if (defined($build) && !build($self,$build,$order)) {    
-#        $self->{warnings} = "Initialisation failed for table $database.$tablename";
-#    }
 
     return $self;
 }
@@ -324,6 +322,19 @@ sub findInstanceOf {
 
 #############################################################################
 
+sub listInstances {
+# produce a list of all current instances of DbaseTable
+    
+    undef my $list;
+    foreach my $instance (sort keys (%instances)) {
+        $list .= "$instance  $instances{$instance} \n";  
+    }
+
+    $list;
+}
+
+#############################################################################
+
 sub traceTable {
 # trace the links of this table if the sublinks hash is defined
     my $self  = shift;
@@ -486,7 +497,8 @@ sub associate {
                   useLocate    => 1, # default test table image hash, if it exists
                   returnScalar => 1, # default return scalar if query returns single column value
                   orderBy      => 0, # override with column name if ordering required
-                  limit        => 0); # default no maximum specification
+                  limit        => 0, # default no maximum specification
+                  debug        => 0);
     $option{useLocate} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
     &importOptions(\%option, $multi);
 
@@ -575,7 +587,7 @@ sub associate {
         if ($wval =~ /\bwhere\b/i) {
     # in this case $wcol should contain the full specification
             $select .= ' DISTINCT' if ($wval =~ /distinct/i);
-# print "<br>item:$item  wval:$wval  whereclause:$whereclause $useQueryTracer<br>\n" if ($tablename =~ /CONTIGS/);
+print "<br>item:$item  wval:$wval  whereclause:$whereclause $useQueryTracer<br>\n" if $option{debug};
         }
         else {
     # test and strip negation prefix
@@ -595,7 +607,7 @@ sub associate {
             }
             $whereclause .= $wval;
             $whereclause =~ s/=\s*null\s*$/is null/i; # adjust for NULL values
-# print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if ($tablename =~ /CONTIGS/);
+print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $option{debug};
         }
     # memorize the select where clause
         $self->{querywhereclause} = "$tablename.$whereclause";
@@ -607,33 +619,32 @@ sub associate {
             $query = "$select $item from $tablename WHERE $whereclause $orderby $limit";
             $self->{lastQuery} = $query;
             $query = &traceQuery($self,$query) if ($useQueryTracer);
+            undef my @result; 
+# if (my $array = $dbh->selectcol_arrayref ($query)) {
+#     $result = $array;
             my $sth = $dbh->prepare($query); # return array of hashrefs
-            my @result;
             if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
-#my $arrayref = $sth->fetchall_arrayref({});             
-#print "test fetchall_arrayref 1 <br>";
                 while (my $hash = $sth->fetchrow_hashref()) {
                     push @result, $hash->{$item};
+                    $result = \@result;
                 }
             }
-#	    $sth->finish();
 
             $self->{querytotalresult} = @result;
 # compose the output value: either a value or array reference
             if (@result == 1 && $option{returnScalar}) {
-                $result = $result[0];
-            }
-            elsif (@result >= 1) {
-                $result = \@result;
+                $result = $result->[0];
             }
         }
+
         elsif ($item =~ /\bcount\b/i) {
-    # no query tracing provided in count, nor 'count(item)'
+# no query tracing provided in count, nor 'count(item)'
             $result = count($self,$whereclause);
             $queryStatus = 1 if (defined($result));
             $self->{querytotalresult} = $result || 0;
         }
+
         elsif ($item eq 'hashref') {
             $query = "$select * from $tablename WHERE $whereclause limit 1";
             $self->{lastQuery} = $query;
@@ -644,8 +655,8 @@ sub associate {
                 $result = $sth->fetchrow_hashref();
                 $self->{querytotalresult} = 1;
             }
-#	    $sth->finish();
         }
+
         elsif ($item eq 'hashrefs' || $isComposite) {
             undef my @hashrefs;
             undef my $hashrefs;
@@ -658,13 +669,10 @@ sub associate {
                 $queryStatus = 1; # signal valid query
                 $hashrefs = $sth->fetchall_arrayref({}); # return array of hashrefs
                 $hashrefs = \@hashrefs if !$hashrefs; # to ensure it's a ref to an empty array
-# print "test fetchall_arrayref $self->{tablename} 2 @$hashrefs<br><br>";
 # while (my $hash = $sth->fetchrow_hashref()) {
 #     push @hashrefs, $hash;
 # }
             }
-# $sth->finish();
-# print "result $queryStatus: @hashrefs <br>" if $isComposite;
             $self->{querytotalresult} = @$hashrefs + 0; 
             $result = $hashrefs;
         }
@@ -673,7 +681,7 @@ sub associate {
         }
 
 # $result is either defined, including the numerical value '0', as query answer
-# or undefined which indicates either an invalid query or an empty query. Hence
+# or undefined which indicates either an invalid query or an empty query. Hence (not correct ?)
 # we re-assign '0' (FALSE) also to an undefined result, but this means that output
 # '0' should be accompanied by a test for a valid query with $self->{qerror} or
 # a test on the number of entries returned with $self->{querytotalresult}
@@ -684,15 +692,15 @@ sub associate {
 
     elsif (defined($wval) || defined($wcol)) {
 # one of them is undefined
-        $result = 0; # signal no data found
+        $result = 0; # false, because invalid use of associate
     }
 
     elsif ($item && $item eq 'hashrefs') {
-        $result = $self->{hashrefs}; # if any
+        $result = $self->{hashrefs}; # if any, array reference
     }
 
     elsif (defined($item) && (!$self->{hashrefs} || $multi)) {
-# print "$self->{tablename} associate item=$item  wval=$wval wcol=$wcol multi=$multi \n"; 
+# print "$self->{tablename} associate item=$item  wval=$wval wcol=$wcol multi=$multi \n"; # TO BE TESTED
         $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
 #        $result = $self->associate($item,'where',1,{orderBy => $item}); # returns an ordered array or undefined
     }
@@ -1182,7 +1190,7 @@ sub newrow {
                 my $nextrow = count($self,0) + $multiLine;
                 $vstring = join '),(',@{$self->{stack}->{$cstring}};
                 my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-# print "NEWROW: nextrow=$nextrow\n" if $list;
+#print "NEWROW: nextrow=$nextrow\n" if $list;
                 my $status = &query($self,$query,1,0);      
                 if ($status && count($self,0) == $nextrow) {
                     $inputStatus = $nextrow;
@@ -1508,10 +1516,6 @@ sub query {
 # there is at least one returned row
         $hashrefs = $sth->fetchall_arrayref({});
         $hashrefs = \@hashrefs if !$hashrefs;
-# print "test fetchall_arrayref $self->{tablename} 3 <br>";
-# while (my $hash = $sth->fetchrow_hashref()) {
-#     push @hashrefs, $hash;
-# }
     }
     elsif (!$status) {
         $self->{qerror} = 1;
@@ -1520,7 +1524,6 @@ sub query {
         $status = 0; # just in case, false
         $self->{qerror} = 1;
     }
-#    $sth->finish();
 
 # modify timestamp if query changed the table (update, delete, insert, ..)
 
@@ -1532,9 +1535,9 @@ sub query {
 
 # output status is either  UNDEFINED or 0 (FALSE) for a failed query
 #                      or  0E0 for an empty return table (zero but TRUE)
-#                      or  the reference to an array of row hashes (at least 1)
+#                      or  the reference to an array of hashes (at least 1)
 
-    if (@$hashrefs) {
+    if (@$hashrefs) { # add switch to force return of array ref
         return $hashrefs; # the query returns at least one line
     }
     else {
@@ -1732,6 +1735,8 @@ print "after column test: count=$count status=$status<br>\n" if $list;
 # if no match was found OR no count in the target column, try alternate column names
         if (!$count) {
 print "No column or match found: status=$status.  Try alternates @{alternates}<br>\n" if ($list);
+            my $alternates = $self->{alternate};
+#            foreach my $column (@$alternates) {
             foreach my $column (@alternates) {
 		my $coltype = $self->{coltype}->{$column};
                 if ($column ne $colname && $coltype && &isSameType($coltype,$cvalue)) {
@@ -1912,7 +1917,13 @@ sub setAlternates {
 # (re)define default alternative column names
     my $self = shift;
 
+# has to be developed ....
+
     @alternates = @_ if @_;
+
+    $self->{alternate} = \@alternates;
+
+print "setAlternates for $self->{tablename}: @alternates \n<br>"; 
 }
 
 #############################################################################
@@ -1987,7 +1998,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "30 Nov 2000",
-        updated =>    "02 Sep 2002",
+        updated =>    "26 Nov 2002",
     };
 }
 
