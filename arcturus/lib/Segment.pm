@@ -38,8 +38,6 @@ sub new {
 
     @{$this} = ($direction,$offset,$ys,$yf); # copy to local array
 
-#    $this->normaliseOnY();
-
     return $this;
 }
 
@@ -73,11 +71,11 @@ sub normaliseOnX {
 }
 
 sub applyShiftToX {
-# apply a linear shift to X domain
+# apply a linear shift to X domain (transform X = d * Y + o)
     my $this = shift;
     my $shift = shift || return;
 
-    $shift = -$shift unless ($this->[0] < 0);
+# the shift is done by adjusting the offset (shift X with respect to Y)
 
     $this->[1] += $shift;
 }

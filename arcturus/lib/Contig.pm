@@ -358,24 +358,21 @@ sub importer {
 sub getStatistics {
 # collect a number of contig statistics
     my $this = shift;
-my $list = shift;
-
-    my $success = 1;
 
 # determine the range on the contig and the first and last read
 
-    my $averagecover = 0;
-    my $totalreadcover = 0;
 
     my $cstart = 0;
     my $cfinal = 0;
     my ($readonleft, $readonright);
-    while ($cstart != 1) {
+    my $totalreadcover = 0;
+
+    my $repeat = 2;
+    while ($repeat) {
 # go through the mappings to find begin, end of contig
 # and to determine the reads at either end
         my ($minspanonleft, $minspanonright);
         my $name = $this->getContigName();
-print STDOUT "Statistics for contig $name\n" if $list;
         if (my $mappings = $this->getMappings()) {
             my $init = 0;
             $totalreadcover = 0;
@@ -386,13 +383,11 @@ print STDOUT "Statistics for contig $name\n" if $list;
 # total read cover = sum of contigspan length
                 my $contigspan = $cf - $cs + 1;
                 $totalreadcover += $contigspan;
-#print STDOUT "Mapping $readname contig range : $cs $cf \n"; exit 0 if ($cf < $cs);
 
 # find the leftmost readname
 
                 if (!$init || $cs <= $cstart) {
 # this read(map) aligns with the begin of the contig (as found until now)
-#print STDOUT "Mapping $readname aligns at begin\n";
                     if (!$init || $cs < $cstart || $contigspan < $minspanonleft) {
                         $minspanonleft = $contigspan;
                         $readonleft = $readname;
@@ -402,14 +397,12 @@ print STDOUT "Statistics for contig $name\n" if $list;
                         $readonleft = (sort($readonleft,$readname))[0];
                     }
                     $cstart = $cs;
-#print STDOUT "readonleft $readonleft\n";
                 }
 
 # find the rightmost readname
 
                 if (!$init || $cf >= $cfinal) {
 # this read(map) aligns with the end of the contig (as found until now)
-#print STDOUT "Mapping $readname aligns at end\n";
                     if (!$init || $cf > $cfinal || $contigspan < $minspanonright) {
                         $minspanonright = $contigspan;
                         $readonright = $readname;
@@ -419,43 +412,46 @@ print STDOUT "Statistics for contig $name\n" if $list;
                         $readonright = (sort($readonright,$readname))[0];
                     }
                     $cfinal = $cf;
-#print STDOUT "readonright $readonright\n";
                 }
                 $init = 1;
             }
 
-            if ($cstart != 1) {
-# this is an unusual lower boundary, apply shift to the Mappings 
-# (and Segments) to get the contig starting at position 1
-                my $shift = $cstart - 1;
+            if ($cstart == 1) {
+# the normal situation, exit the loop
+                $repeat = 0;
+            }
+            elsif (--$repeat) {
+# cstart != 1: this is an unusual lower boundary, apply shift to the 
+# Mappings (and Segments) to get the contig starting at position 1
+                my $shift = 1 - $cstart;
                 print STDERR "Contig $name requires shift by $shift\n";
-exit 0;
                 foreach my $mapping (@$mappings) {
                     $mapping->applyShiftToContigPosition($shift);
                 }
-# and redo the loop (as $cstart != 1)
+# and redo the loop (as $repeat > 0)
+            }
+            else {
+# this should never occur, indicative of corrupted data/code in Mapping/Segment
+                print STDERR "Illegal condition in Contig->getStatistics\n";
+                return 0;
             }
         }
         else {
             print STDERR "Contig $name has no mappings\n";
-            $success = 0;
-            last;
+            return 0;
         }
     }
 
-# okay, now we can calculate some overall properties
+# okay, now we can calculate/assign some overall properties
 
     my $clength = $cfinal-$cstart+1;
     $this->setConsensusLength($clength);
-print STDOUT "Consensuslength $clength\n" if $list;
-    $averagecover = $totalreadcover/$clength;
+    my $averagecover = $totalreadcover/$clength;
     $this->setAverageCover( sprintf("%.2f", $averagecover) );
-print STDOUT "Average cover $averagecover\n" if $list;   
     $this->setReadOnLeft($readonleft);
     $this->setReadOnRight($readonright);
-print STDOUT "End reads : left $readonleft  right $readonright\n" if $list;
 
-    return $success;
+    return 1; # register success
 }
 
 #-------------------------------------------------------------------    
@@ -471,17 +467,26 @@ sub isSameAs {
 
 # compare some of the metadata
 
-    $this->getStatistics(1)    unless $this->getReadOnLeft();
+    $this->getStatistics(1)    unless $this->getReadOnLeft(); 
     $compare->getStatistics(1) unless $compare->getReadOnLeft();
 # test the length
     return 0 unless ($this->getConsensusLength() == $compare->getConsensusLength());
 # test the end reads (allow for inversion)
-    my $rl = $this->getReadOnLeft();
-    my $rr = $this->getReadOnRight();
-print STDERR "reads left $rl  right $rr\n";
-    my %endreads = ($rl=>1, $rr=>1);
-    return 0 unless $endreads{$compare->getReadOnLeft()};
-    return 0 unless $endreads{$compare->getReadOnRight()};
+    my $align;
+    if ($compare->getReadOnLeft()  eq $this->getReadOnLeft() && 
+        $compare->getReadOnRight() eq $this->getReadOnRight()) {
+# if the contigs are identical they are aligned
+        $align = 1;
+    } 
+    elsif ($compare->getReadOnLeft() eq $this->getReadOnRight() && 
+           $compare->getReadOnRight() eq $this->getReadOnLeft()) {
+# if the contigs are identical they are counter-aligned
+        $align = -1;
+    }
+    else {
+# the countigs are different
+        return 0;
+    }
 
 # compare the mappings one by one
 # mappings are identified using their sequence IDs or their readnames
@@ -501,7 +506,7 @@ print "getting inventory for mappings\n";
     }
 print "number of mappings $numberofmappings\n";
 
-    my ($align,$shift);
+    undef my $shift;
     if (my $mappings = $compare->getMappings()) {
 # check number of mappings
         return 0 if ($numberofmappings != scalar(@$mappings));
@@ -511,21 +516,19 @@ print "number of mappings $numberofmappings\n";
             my $key = $mapping->getSequenceID() || $mapping->getReadName();
             return undef unless defined($key); # incomplete Mapping
             my $match = $sequence->{$key};
+print "cannot find mapping for key $key \n" unless $match;
             return 0 unless defined($match); # there is no counterpart in $this
 # compare the two maps
             my ($identical,$aligned,$offset) = $match->compare($mapping);
 print "mapping comparison: $identical,$aligned,$offset \n";
+print "match   : ".$match->assembledFromToString unless $identical;
+print "mapping : ".$mapping->assembledFromToString unless $identical;
             return 0 unless $identical;
-# on first one register shift and alignment direction
-            if (!defined($align) && !defined($shift)) {
-                $align = $aligned; # either +1 or -1
-                $shift = $offset;
-            }
+# on first one register shift
+            $shift = $offset unless defined($shift);
 # the alignment and offsets between the mappings must all be identical
 # i.e.: for the same contig: 1,0; for the same contig inverted: -1, some value 
-            elsif ($align != $aligned || $shift != $offset) {
-                return 0;
-            }
+            return 0 if ($align != $aligned || $shift != $offset);
         }
     }
 
@@ -662,6 +665,18 @@ sub writeBaseQuality {
     else {
         print STDERR "Missing BaseQuality data for contig $identifier\n";
     }
+}
+
+sub metaDataToString {
+# list the contig meta data
+    my $this = shift;
+
+    my $string = "Statistics for contig ".$this->getContigName."\n";
+    $string .= "Consensuslength ".$this->getConsensusLength."\n";
+    $string .= "Average cover ".$this->getAverageCover."\n";   
+    $string .=  "End reads : left ".$this->getReadOnLeft.
+                          " right ".$this->getReadOnRight."\n";
+    return $string;
 }
 
 #-------------------------------------------------------------------    

@@ -2191,7 +2191,10 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
                       $previous->getContigName."\n";
 # pull out the contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous);
-        return $previous->getContigID() if $contig->isSameAs($previous);
+        my $identical = $contig->isSameAs($previous);
+print $contig->metaDataToString;
+print $previous->metaDataToString;
+        return $previous->getContigID() if $identical;
 print "comparison passed\n";
     }
 return 0; # testing

@@ -134,7 +134,7 @@ print "compare mapping $this and $compare , sort\n";
 	my $tsegment = $tmaps->[$i];
 	my $csegment = $cmaps->[$i];
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
-#print "segment comparison: $identical,$aligned,$offset \n";
+print "segment comparison: $identical,$aligned,$offset \n" unless $identical;
         return 0 unless $identical;
 # on first one register shift and alignment direction
         if (!defined($align) && !defined($shift)) {
@@ -143,6 +143,9 @@ print "compare mapping $this and $compare , sort\n";
         }
 # the alignment and offsets between the mappings must all be identical 
         elsif ($align != $aligned || $shift != $offset) {
+print "segment comparison: $identical,$aligned,$offset \n";
+print $tsegment->toString;
+print $csegment->toString;
             return 0;
         }
     }
