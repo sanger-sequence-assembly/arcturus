@@ -49,7 +49,7 @@ $option = 'abort' if !$people;
 
 undef my ($userid, $page, $email, $report, $message, $doCopy, $doDelete);
 
-$page = $GateKeeper->GUI("ARCTURUS user information maintenance and updates");
+$page = $GateKeeper->GUI("ARCTURUS user information maintenance and updates", {doTransport => 0});
 
 if ($people->{errors}) {
     my $message = "WARNING: corrupted arcturus common database\n$people->{errors}";
@@ -146,7 +146,7 @@ elsif ($option eq "register") {
         $page->errorbox("Username $userid already exists");
         $page->add("Please use the \"Back\" button and choose a different username",0,1,$font);
     }
-    elsif ($userid =~ /yeast|group|team|myself/i) {
+    elsif ($userid =~ /yeast|group|team|path|myself/i) {
 # the userid may not be yeastpub, yeastie, group9 etc
         $page->errorbox("Username $userid is prohibited");
         $page->add("Please use the \"Back\" button and choose a different username",0,1,$font);
