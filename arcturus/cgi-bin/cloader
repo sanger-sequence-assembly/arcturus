@@ -20,7 +20,6 @@ use ContigBuilder;
 # print "content-type: text/plain\n\n";
 my $GateKeeper = GateKeeper->new('mysql',0);
 
-$GateKeeper->cgiHeader(1); # return string HTML if in CGI mode
 $GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
 # how is this script invoked?
