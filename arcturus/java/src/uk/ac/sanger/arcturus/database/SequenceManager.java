@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.database;
 
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
+import uk.ac.sanger.arcturus.data.Clipping;
 
 import java.sql.*;
 import java.util.*;
@@ -30,6 +31,9 @@ public class SequenceManager {
     private PreparedStatement pstmtBySequenceID;
     private PreparedStatement pstmtFullBySequenceID;
     private PreparedStatement pstmtDNAAndQualityBySequenceID;
+    private PreparedStatement pstmtQualityClipping;
+    private PreparedStatement pstmtSequenceVectorClipping;
+    private PreparedStatement pstmtCloningVectorClipping;
     private Inflater decompresser = new Inflater();
 
     /**
@@ -58,6 +62,14 @@ public class SequenceManager {
 
 	query = "select seqlen,sequence,quality from SEQUENCE where seq_id = ?";
 	pstmtDNAAndQualityBySequenceID = conn.prepareStatement(query);
+
+	query = "select qleft,qright from QUALITYCLIP where seq_id = ?";
+	pstmtQualityClipping = conn.prepareStatement(query);
+
+	query = "select svleft,svright from SEQVEC where seq_id = ?";
+	pstmtSequenceVectorClipping = conn.prepareStatement(query);
+
+	query = "select cvleft,cvright from CLONEVEC where seq_id = ?";
 
 	hashByReadID = new HashMap();
 	hashBySequenceID = new HashMap();
@@ -101,6 +113,8 @@ public class SequenceManager {
 	}
 
 	rs.close();
+
+	setClippings(sequence);
 
 	return sequence;
     }
@@ -155,6 +169,8 @@ public class SequenceManager {
 
 	rs.close();
 
+	setClippings(sequence);
+
 	return sequence;
     }
 
@@ -191,6 +207,8 @@ public class SequenceManager {
 	}
 
 	rs.close();
+
+	setClippings(sequence);
 
 	return sequence;
     }
@@ -240,6 +258,8 @@ public class SequenceManager {
 
 	rs.close();
 
+	setClippings(sequence);
+
 	return sequence;
     }
 
@@ -283,14 +303,80 @@ public class SequenceManager {
 	return buffer;
     }
 
+    /**
+     * Creates and registers a new Sequence object from the given parameters.
+     *
+     * @param seqid the sequence ID of the new sequence.
+     * @param read the Read object to which the new sequence belongs.
+     * @param version the version number of the new sequence.
+     * @param dna the sequence array of the new new sequence.
+     * @param quality the base-quality array of the new sequence.
+     */
+
     private Sequence createAndRegisterNewSequence(int seqid, Read read, int version, byte[] dna, byte[] quality) {
 	Sequence sequence = new Sequence(seqid, read, dna, quality, version);
 	registerNewSequence(sequence);
 	return sequence;
     }
 
+    /**
+     * Registers a newly-created Sequence object by adding it to hash maps which are indexed by read ID
+     * and sequence ID.
+     */
+
     void registerNewSequence(Sequence sequence) {
 	hashByReadID.put(new Integer(sequence.getRead().getID()), sequence);
 	hashBySequenceID.put(new Integer(sequence.getID()), sequence);
+    }
+
+    /**
+     * Retrieves quality, sequence vector and cloning vector clipping information from the database
+     * and sets the relevant Clipping properties of the sequence.
+     */
+
+    private void setClippings(Sequence sequence) throws SQLException {
+	int seqid = sequence.getID();
+
+	pstmtQualityClipping.setInt(1, seqid);
+
+	ResultSet rs = pstmtQualityClipping.executeQuery();
+
+	if (rs.next()) {
+	    int qleft = rs.getInt(1);
+	    int qright = rs.getInt(2);
+	    sequence.setQualityClipping(new Clipping(Clipping.QUAL, qleft, qright));
+	}
+
+	rs.close();
+
+	pstmtCloningVectorClipping.setInt(1, seqid);
+
+	rs = pstmtCloningVectorClipping.executeQuery();
+
+	if (rs.next()) {
+	    int cvleft = rs.getInt(1);
+	    int cvright = rs.getInt(2);
+	    sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC, cvleft, cvright));
+	}
+
+	rs.close();
+
+	pstmtSequenceVectorClipping.setInt(1, seqid);
+
+	rs = pstmtSequenceVectorClipping.executeQuery();
+
+	while (rs.next()) {
+	    int svleft = rs.getInt(1);
+	    int svright = rs.getInt(2);
+
+	    Clipping clipping = new Clipping(Clipping.SVEC, svleft, svright);
+
+	    if (svleft == 1)
+		sequence.setSequenceVectorClippingLeft(clipping);
+	    else
+		sequence.setSequenceVectorClippingRight(clipping);
+	}
+
+	rs.close();
     }
 }
