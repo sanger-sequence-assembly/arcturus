@@ -634,6 +634,38 @@ sub getReadsByReadID {
     return \@reads;
 }
 
+sub getSequenceIDForRead {
+    my $this = shift;
+
+    my $idtype = shift;
+    my $idvalue = shift;
+
+    my $version = shift;
+
+    $version = 0 unless defined($version);
+
+    my $query;
+
+    if ($idtype eq 'readname') {
+	$query = "select seq_id from READS left join SEQ2READ using(read_id) where READS.readname=?" .
+	    " and version=?";
+    } else {
+	$query = "select seq_id from SEQ2READ where read_id=? and version=?";
+    }
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($idvalue, $version) || &queryFailed($query);
+
+    my ($seq_id) = $sth->fetchrow_array();
+
+    $sth->finish();   
+
+    return $seq_id;
+}
+
 sub getReadsBySequenceID {
 # returns an array of Read instances with (meta data only) for input array of sequence IDs
     my $this = shift;
