@@ -1495,7 +1495,7 @@ print "minOfReads = $minOfReads $break";
     my $status = 0;
 
     my $exactmatch = 0;
-    $exactmatch = 1 if ($cnfilter =~ s/^exact\s+//i);
+    $exactmatch = 1 if ($cnfilter && $cnfilter =~ s/^exact\s+//i);
 #    my $exact = ($cnfilter =~ /(\S+)exact/$1/); # remove 'exact' appendix
 
     undef my $object;
