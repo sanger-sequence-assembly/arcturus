@@ -535,6 +535,14 @@ public class ArcturusDatabase {
 	return contigManager.getFullContigByID(id);
     }
 
+    public Contig getFullContigByID(int id, boolean autoload, boolean loadsequence) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullContigByID(" + id + ", autoload=" + autoload + ", loadsequence=" +
+			   loadsequence + ")");
+
+	return contigManager.getFullContigByID(id, autoload, loadsequence);
+    }
+
     /**
      * Returns a text representation of this object.
      *
