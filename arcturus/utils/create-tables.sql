@@ -280,7 +280,7 @@ CREATE TABLE READPAIRS (
 CREATE TABLE READS (
   read_id mediumint(8) unsigned NOT NULL auto_increment,
   readname char(32) binary default NULL,
-  asped date NOT NULL default '0000-00-00',
+  asped date default NULL,
   clone smallint(5) unsigned default NULL,
   strand enum('Forward', 'Reverse') default NULL,
   primer enum('Universal_primer', 'Custom', 'Unknown_primer') default NULL,
