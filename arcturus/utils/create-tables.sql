@@ -5,30 +5,18 @@
 #
 
 CREATE TABLE ASSEMBLY (
-  assembly smallint(5) unsigned NOT NULL auto_increment,
+  assembly_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(16) NOT NULL default '',
-  organism smallint(5) unsigned NOT NULL default '0',
   chromosome tinyint(3) unsigned default '0',
   origin varchar(32) NOT NULL default 'The Sanger Institute',
-  oracleproject tinyint(3) unsigned default '0',
   size mediumint(8) unsigned default '0',
-  length int(10) unsigned default '0',
-  l2000 int(10) unsigned default '0',
-  reads int(10) unsigned default '0',
-  assembled int(10) unsigned default '0',
-  contigs int(10) unsigned default '0',
-  allcontigs int(10) unsigned default '0',
-  projects smallint(6) default '0',
-  progress enum('in shotgun','in finishing','finished','other') default 'other',
+  progress enum('shotgun','finishing','finished','other') default 'other',
   updated datetime default NULL,
-  userid varchar(8) default NULL,
-  status enum('loading','complete','error','virgin','unknown') default 'virgin',
   created datetime NOT NULL default '0000-00-00 00:00:00',
   creator varchar(8) NOT NULL default 'arcturus',
-  attributes blob,
-  comment varchar(255) default NULL,
-  PRIMARY KEY  (assembly),
-  UNIQUE KEY assemblyname (assemblyname)
+  comment text default NULL,
+  PRIMARY KEY  (assembly_id),
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
@@ -62,29 +50,8 @@ CREATE TABLE CLONE (
   clone_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(20) NOT NULL default '',
   origin varchar(20) default 'The Sanger Institute',
+  assembly_id smallint(5) unsigned default '0',
   PRIMARY KEY  (clone_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'CLONE2CONTIG'
-#
-
-CREATE TABLE CLONE2CONTIG (
-  clone_id smallint(5) unsigned NOT NULL default '0',
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  ocp_start int(10) unsigned NOT NULL default '0',
-  ocp_final int(10) unsigned NOT NULL default '0',
-  reads mediumint(9) NOT NULL default '0',
-  cover float NOT NULL default '0'
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'CLONE2PROJECT'
-#
-
-CREATE TABLE CLONE2PROJECT (
-  clone smallint(5) unsigned NOT NULL default '0',
-  project smallint(5) unsigned NOT NULL default '0'
 ) TYPE=MyISAM;
 
 #
@@ -191,20 +158,16 @@ CREATE TABLE MAPPING (
 
 CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
-  projectname varchar(24) NOT NULL default '',
-  projecttype enum('Finishing','Annotation','Comparative Sequencing','Bin','Other') default 'Bin',
-  assembly tinyint(3) unsigned default '0',
-  reads int(10) unsigned default '0',
-  contigs int(10) unsigned default '0',
+  name varchar(24) NOT NULL default '',
+  assembly_id smallint(5) unsigned default '0',
   updated datetime default NULL,
-  userid varchar(8) default NULL,
+  owner varchar(8) default NULL,
+  locked datetime default NULL,
   created datetime default NULL,
   creator varchar(8) NOT NULL default 'arcturus',
-  attributes blob,
-  comment varchar(255) default NULL,
-  status enum('Dormant','Active','Completed','Merged') default 'Dormant',
+  comment text default NULL,
   PRIMARY KEY  (project_id),
-  UNIQUE KEY projectname (projectname)
+  UNIQUE KEY name (name)
 ) TYPE=MyISAM;
 
 #
@@ -236,18 +199,6 @@ CREATE TABLE READS (
   UNIQUE KEY RECORD_INDEX (readname),
   UNIQUE KEY READNAMES (readname),
   KEY template_id (template_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'READ2ASSEMBLY'
-#
-
-CREATE TABLE READ2ASSEMBLY (
-  read_id mediumint(8) unsigned NOT NULL default '0',
-  assembly tinyint(3) unsigned NOT NULL default '0',
-  astatus enum('0','1','2') default '0',
-  PRIMARY KEY  (read_id),
-  KEY bin_index (assembly)
 ) TYPE=MyISAM;
 
 #
@@ -283,7 +234,7 @@ CREATE TABLE CONTIGTAG (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'MARKER'
+# Table structure for table 'TAGSEQUENCE'
 #
 
 CREATE TABLE TAGSEQUENCE (
@@ -412,17 +363,6 @@ CREATE TABLE TRACEARCHIVE (
   read_id MEDIUMINT UNSIGNED NOT NULL, 
   traceref VARCHAR(255) NOT NULL,
   PRIMARY KEY (read_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'USER2PROJECT'
-#
-
-CREATE TABLE USER2PROJECT (
-  userid char(8) NOT NULL default '',
-  project smallint(5) unsigned NOT NULL default '0',
-  date_from date default NULL,
-  date_end date default NULL
 ) TYPE=MyISAM;
 
 #
