@@ -6,7 +6,7 @@ use ArcturusDatabase;
 
 use Compress::Zlib;
 
-my $smithwaterman = "/nfs/team81/adh/sw/smithwaterman.alpha";
+my $smithwaterman = "test/smithwaterman.alpha";
 
 pipe(PARENT_RDR, CHILD_WTR);
 pipe(CHILD_RDR, PARENT_WTR);
@@ -145,6 +145,13 @@ $query = "select svleft,svright from SEQVEC where seq_id = ?";
 my $sth_vectorclip = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
+$query = "select sequence from CONSENSUS where contig_id = ?";
+
+my $sth_consensus = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+my %consensus_by_id;
+
 my $nfound = 0;
 
 foreach my $finishing_readname (keys %finishing_reads) {
@@ -223,12 +230,72 @@ foreach my $finishing_readname (keys %finishing_reads) {
 
 	    print ".\n";
 
+	    my $goodread = 0;
+
 	    while (my $line = <CHILD_RDR>) {
 		last if ($line =~ /^\./);
 		my @words = split(';', $line);
 		my ($score, $smap, $fmap, $segs) = split(',', $words[0]);
-		#print STDOUT " // ",$line if ($segs > 0 && $score > 50);
-		print STDOUT " // $score $smap $fmap $segs" if ($segs > 0 && $score > 50);
+
+		if ($segs > 0 && $score > 50) {
+		    print STDOUT " // $score $fmap $smap $segs";
+		    $goodread = 1;
+		}
+	    }
+
+	    if ($goodread) {
+		my $consensus = $consensus_by_id{$contigid};
+
+		unless (defined($consensus)) {
+		    $consensus = &getConsensus($contigid, $sth_consensus);
+		    $consensus_by_id{$contigid} = $consensus;
+		}
+		
+		my $seqlen = length($consensus);
+
+		if ($seqlen <= 10000) {
+		    if ($direction eq 'Reverse') {
+			$consensus = reverse($consensus);
+			$consensus =~ tr/ACGTacgt/TGCAtgca/;
+		    }
+
+		    $sequence = $consensus;
+		    
+		    while (length($sequence) > 0) {
+			print substr($sequence, 0, 50),"\n";
+			$sequence = substr($sequence, 50);
+		    }
+		    
+		    print ".\n";
+		    
+		    $sequence = $finishing_sequence;
+		    
+		    while (length($sequence) > 0) {
+			print substr($sequence, 0, 50),"\n";
+			$sequence = substr($sequence, 50);
+		    }
+		    
+		    print ".\n";
+		    
+		    while (my $line = <CHILD_RDR>) {
+			last if ($line =~ /^\./);
+			my @words = split(';', $line);
+			my ($score, $fmap, $cmap, $segs) = split(',', $words[0]);
+			
+			if ($segs > 0 && $score > 50) {
+			    if ($direction eq 'Reverse') {
+				my ($cs,$cf) = split(/:/, $cmap);
+				($cs, $cf) = ($seqlen - $cf + 1, $seqlen - $cs + 1);
+				$cmap = "$cs:$cf";
+
+				my ($rs,$rf) = split(/:/, $fmap);
+				$fmap = "$rf:$rs";
+			    }
+
+			    print STDOUT " ## $score $cmap $fmap $segs";
+			}
+		    }
+		}
 	    }
 
 	    print STDOUT "\n";
@@ -290,4 +357,18 @@ sub getSequenceAndClipping {
     $sth_vectorclip->finish();
 
     return ($sequence, $clipleft, $clipright);
+}
+
+sub getConsensus {
+    my ($contigid, $sth_consensus) = @_;
+
+    $sth_consensus->execute($contigid);
+
+    my ($sequence) = $sth_consensus->fetchrow_array();
+
+    $sth_consensus->finish();
+
+    $sequence = uncompress($sequence) if defined($sequence);
+
+    return $sequence;
 }

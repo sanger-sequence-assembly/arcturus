@@ -48,7 +48,7 @@ char *direction[4] = {
 #define MAXSEGMENTS 4096
 
 int readSequence(FILE *fp, char *seqbuf, int seqbufsize) {
-  char buffer[1024];
+  char buffer[1024*1024];
   char *cp = seqbuf;
   int bases = 0;
   int len;
