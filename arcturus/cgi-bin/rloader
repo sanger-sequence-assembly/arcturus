@@ -404,6 +404,8 @@ print "testing II project $gbfilter \n";
 
     $TEST = shift @ARGV;
 
+    $arc_logfile = "$arc_log_dir/rloader.$database.log"; # default
+
     print "\n\n\n";
     my $attributes;
     if ($database && $organisms->associate('dbasename',$database,'dbasename')) {
@@ -427,8 +429,11 @@ print "testing II project $gbfilter \n";
 
 # open assembly database
 
-    $arc_logfile = "$arc_log_dir/rloader.$database.log"; # default
     $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
+    if (my $number = $assembly->associate('assemblynmbr',$gbfilter,'assemblyname')) {
+        $assemblynmbr = $number;
+    }
+
     if ($attributes = $assembly->unpackAttributes($assemblynmbr,'assembly')) {
 
         my @items = keys %$attributes;
@@ -785,6 +790,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
         last if ($LOADPERRUN-- <= 0);
 
+        $file =~ s?//?/?g; # remove possible double slashes
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 #  (0) Get the Read information for the next file
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
