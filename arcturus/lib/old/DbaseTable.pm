@@ -635,7 +635,9 @@ sub quoteColValue {
                 $output .= ',' if $count++;
                 if ($quote) {
                     $choice =~ s/^([\'\"])(.*)\1$/$2/; # chop off any existing quotes
-                    $choice .= $dbh->quote($choice) unless ($choice =~ /^null$/i);
+# print "  chop choice \"$choice\"<br>\n";
+                    $choice = $dbh->quote($choice) unless ($choice =~ /^null$/i);
+# print "  quote choice \"$choice\"<br>\n";
                 }
                 $output .= $choice;
             }

@@ -90,9 +90,15 @@ print "instance  $instance \n";
 # MAIN
 ##############################################################################
 
-my $doCopy = 0;
-$doCopy = 1 if ($action && $action =~ /\bcopy\b/i);
-print "subject=$subject  action=$action  doCopy=$doCopy \n";
+my %options = (doCopy => 0, doDelete => 0); # defaults
+
+# compose the options according to the value of $action
+if ($action) {
+    my @actions = split ':',$action; 
+    $options{doCopy} = 1   if ($actions[0] && $actions[0] =~ /\bcopy\b/i);
+    $options{doDelete} = 1 if ($actions[1] && $actions[1] =~ /\bdelete\b/i);
+    $options{delTarget} = $actions[2] if ($options{doDelete} && $actions[2]);
+}
 
 if ($subject && $subject =~ /\borganisms\b/i) {
 
@@ -129,7 +135,7 @@ if ($subject && $subject =~ /\borganisms\b/i) {
                 my $othandle = $organisms{$oresidence};
                 my $nthandle = $organisms{$nresidence};
                 my $where = "residence like '$ohost%$oport'";
-                $report .= $othandle->copy($nthandle,'where',$where,$doCopy) if ($othandle && $nthandle); 
+                $report .= $othandle->copy($nthandle,'where',$where,\%options) if ($othandle && $nthandle); 
             }
         }    
     }
@@ -154,7 +160,7 @@ elsif ($subject && $subject =~ /\busers\b/i) {
         if ($server ne $whereAmI) {
             my $nuhandle = $userdata{$server};
 	    print "copy from $whereAmI to $server: $ouhandle to $nuhandle\n";
-            $report .= $ouhandle->copy($nuhandle,'where',1,$doCopy) if ($ouhandle && $nuhandle); 
+            $report .= $ouhandle->copy($nuhandle,'where',1,\%options) if ($ouhandle && $nuhandle); 
         }   
     }
 }
@@ -178,7 +184,8 @@ elsif ($subject && $subject =~ /\bvectors\b/i) {
         if ($server ne $whereAmI) {
             my $nvhandle = $vectordata{$server};
 	    print "copy from $whereAmI to $server: $ovhandle to $nvhandle\n";
-            $report .= $ovhandle->copy($nvhandle,'where',1,$doCopy,{keyColumn=>'template'}) if ($ovhandle && $nvhandle); 
+            $options{keyColumn} = 'template';
+            $report .= $ovhandle->copy($nvhandle,'where',1,\%options) if ($ovhandle && $nvhandle); 
         }
     }
 }
@@ -202,7 +209,8 @@ elsif ($subject && $subject =~ /\bchemtypes\b/i) {
         if ($server ne $whereAmI) {
             my $nvhandle = $chemdata{$server};
 	    print "copy from $whereAmI to $server: $ovhandle to $nvhandle\n";
-            $report .= $ovhandle->copy($nvhandle,'where',1,$doCopy,{keyColumn=>'chemtype'}) if ($ovhandle && $nvhandle); 
+            $options{keyColumn} = 'chemtype';
+            $report .= $ovhandle->copy($nvhandle,'where',1,\%options) if ($ovhandle && $nvhandle); 
         }
     }
 }

@@ -10,6 +10,9 @@
 
 # ARCTURUS database creation script for all or individual tables
 
+#--------------------------- documentation --------------------------
+#--------------------------------------------------------------------
+
 sub create_common {
     my ($dbh, $target, $list) = @_;
 
@@ -289,8 +292,6 @@ sub record {
 #*********************************************************************************************************
 #*********************************************************************************************************
 
-# paired : label to mark as Forward or Reverse read of a pair or pairs
-
 sub create_READS {
     my ($dbh, $list) = @_;
 
@@ -342,6 +343,231 @@ sub create_READS {
 
 }
 
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table READS
+
+=head2 Synopsis
+
+Primary Data table.
+
+READS is a static data table: the only change made to data records after 
+data insertion is the (possible) re-definition of the B<paired> column
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item rloader
+
+(I<script>) entering read data from experiment files, (Oracle or caf files);
+
+run from the Arcturus GUI under B<INPUT> --E<gt> B<READS>
+
+=item find-complement
+
+(I<script>) identifying read-pairs (see column B<paired>);
+
+run from the Arcturus GUI under B<TEST> --E<gt> B<MENU> --E<gt> B<PAIRS>
+
+=item ReadsReader.pm 
+
+
+=item Compress.pm
+
+=back 
+
+=head2 Description of columns:
+
+=over 4
+
+=item read_id    
+
+auto-incremented primary key (foreign key in many other tables)
+
+=item readname 
+
+unique readname (index)
+
+=item date        
+
+Asp date
+
+=item ligation     
+
+(integer) reference to table LIGATIONS, linked on foreign key 'ligation' 
+
+=item clone        
+
+(integer) reference to table CLONES, linked on foreign key 'clone'  
+
+=item template     
+
+read template name (indexed)
+
+=item strand       
+
+(character) reference to table STRANDS, linked on foreign key 'strand'  
+
+=item primer       
+
+(integer) reference to PRIMERS, linked on foreign key 'primer' 
+
+=item chemistry    
+
+(integer) reference to CHEMISTRY, linked on foreign key 'chemistry' 
+
+=item basecaller   
+
+(integer) reference to BASECALLER, linked on foreign key 'basecaller' 
+
+=item direction    
+
+direction of read ('+', '-' or '?')
+
+=item slength      
+
+length of stored DNA sequence
+
+=item sequence     
+
+DNA sequence data
+
+=item scompress    
+
+Sequence compression code:
+
+=over 8
+
+=item 0 for no compression (stored as plain text string)
+
+=item 1 for triplet encoding
+
+=item 2 for Huffman compression
+
+=back
+
+=item quality      
+
+Basecaller Quality data
+
+=item qcompress    
+
+Quality data compression code
+
+=over 8
+
+=item 0 for no compression (stored as plain text string)
+
+=item 1 for encoding with number substitution in range 0-100 (1 byte per value)
+
+=item 2 for Huffman compression on text string
+
+=item 3 for Huffman compression on difference data
+
+=back
+
+=item lqleft       
+
+low-quality left boundary
+
+=item lqright      
+
+low-quality right boundary
+
+=item svcsite      
+
+sequence vector cloning site
+
+=item svpcite      
+
+seqeunce vector primer site
+
+=item svector      
+
+(integer) reference to SEQUENCEVECTORS, linked on foreign key 'svector'
+
+=item svleft       
+
+sequence vector presence at left
+
+=item svright      
+
+sequence vector presence at right
+
+=item cvector      
+
+(integer) reference to CLONINGVECTORS, linked on foreign key 'cvector'
+
+=item cvleft       
+
+cloning vector position at left, if on left
+
+=item cvright      
+
+cloning vector position at right, if on right
+
+=item pstatus      
+
+(integer) reference to STATUS table, linked on foreign key 'status'
+
+=item rstatus      
+
+read processing status (when loaded from file) encoding (possible) load-time warnings 
+
+=item paired      
+
+label to mark as Forward or Reverse read of a pair or pairs; this column is the only
+one which can be changed after initial data loading  
+
+=item comment      
+
+any (i.p. comment found in flat files)
+
+=back
+
+=head2 Linked Tables on key read_id
+
+=over 4
+
+=item READEDITS
+
+=item READPAIRS
+
+=item READS2ASSEMBLY
+
+=item READS2CONTIG
+
+=back
+
+=head2 Dictionary Tables
+
+=over 9
+
+=item BASECALLER
+
+=item CHEMISTRY
+
+=item CLONES
+
+=item CLONINGVECTORS
+
+=item LIGATIONS
+
+=item PRIMERS
+
+=item SEQUENCEVECTORS
+
+=item STATUS
+
+=item STRANDS
+
+=back
+
+=cut
+#--------------------------------------------------------------------
+
 #*********************************************************************************************************
 
 sub create_READEDITS {
@@ -371,6 +597,10 @@ sub create_READEDITS {
     $dbh->do(qq[CREATE INDEX reads_index ON READEDITS (read_id)]);
     print STDOUT "Index READS_INDEX ON READEDITS ... DONE\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+=head2 Table READEDITS
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1525,5 +1755,14 @@ sub dropTable {
 
 
 #*********************************************************************************************************
+
+#--------------------------- documentation --------------------------
+
+=head1 AUTHOR
+
+Ed Zuiderwijk, E<lt>ejz@sanger.ac.ukE<gt>.
+
+=cut
+#--------------------------------------------------------------------
 
 1;

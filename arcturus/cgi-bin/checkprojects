@@ -28,8 +28,6 @@ my $GateKeeper = GateKeeper->new('mysql');
 
 my $config     = $GateKeeper->configHandle();
 
-my $cgi        = $GateKeeper->cgiHandle(1);
-
 my $organisms = $GateKeeper->dbHandle('arcturus',{returnTableHandle => 1});
 
 my $users = $organisms->spawn('USERS','arcturus',0,1);
@@ -49,23 +47,21 @@ my $page = $GateKeeper->GUI("Checking project allocations on current server $ser
 
 if (my $databases = $organisms->associate('dbasename',$server,'residence',1)) {
 
-    $GateKeeper->report("databases $databases");
-
     my @databases;
     $databases[0] = $databases;
     @databases = @$databases if (ref($databases) eq 'ARRAY');
 
     foreach my $database (@databases) {
         $GateKeeper->focus({useDatabase=>$database});
-$GateKeeper->report("Testing database $database");
+        $GateKeeper->report("Testing database $database");
         my $query = "select USERS2PROJECTS.userid,PROJECTS.projectname,ASSEMBLY.assemblyname ";
         $query .= "from PROJECTS,ASSEMBLY,USERS2PROJECTS ";
         $query .= "where  PROJECTS.project = USERS2PROJECTS.project ";
         $query .= "and ASSEMBLY.assembly = PROJECTS.assembly ";
         my $hashes = $organisms->query($query,0,0);
-$GateKeeper->report("hashes $hashes");
+#$GateKeeper->report("hashes $hashes");
         foreach my $hash (@$hashes) {
-$GateKeeper->report("$hash->{userid}  $hash->{projectname}  $hash->{assemblyname}");
+#$GateKeeper->report("$hash->{userid}  $hash->{projectname}  $hash->{assemblyname}");
             my $attribute = "$hash->{projectname}-$hash->{assemblyname}";
             $users->packAttribute($hash->{userid},'userid','attributes',$attribute,$whereAmI);
         }
@@ -81,22 +77,15 @@ else {
 # EXIT
 ##############################################################################
 
-$GateKeeper->report(".... Closing down");
-
+$GateKeeper->report("Closing down");
 $GateKeeper->disconnect;
-
-my $root = $GateKeeper->currentScriptRoot;
-$GateKeeper->report("scriptroot $root");
 
 $page->flush  if $page;
 
 # now startup the equalizing script on the USERS tables
 
+my $root = $GateKeeper->currentScriptRoot;
 my $tmp = $config->get('ARC_TMP_DIR');
 system ("$root/harmonize users copy > $tmp/harmonize.log");
 
 exit 0;
-
-
-
-

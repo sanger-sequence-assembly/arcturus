@@ -47,7 +47,7 @@ my $getMenu = "$arc_cgi_dir/update/arcturus/getmenu";
 
 $option = 'abort' if !$people;
 
-undef my ($userid, $page, $email, $report, $message);
+undef my ($userid, $page, $email, $report, $message, $doCopy, $doDelete);
 
 $page = $GateKeeper->GUI("ARCTURUS user information maintenance and updates");
 
@@ -193,6 +193,7 @@ elsif ($option eq "register") {
                 $page->add("You have successfully registered as an ARCTURUS user:",0,1);
                 $page->add($people->htmlEditRecord($userid,'userid',0,'0111111100'),0,1);
                 $page->add("Your user details will be sent to your mail address for reference");
+                $doCopy = 1; # signal copy of new user to other server(s)
 
 # compose the mail message to the user
 
@@ -335,6 +336,7 @@ elsif ($option eq "modify") {
                 $people->build(1); # rebuild the table to get latest data in $people
                 $page->messagebox($report,0,1);
                 $page->linkbutton('CONTINUE',$link);
+                $doCopy = 1;
             }
             else {
                 $error = "No changes made!<BR> $report";
@@ -442,11 +444,11 @@ elsif ($option eq "pwupdate") {
             else {
                 $page->sectionheader("DONE!",3,1);
                 $page->linkbutton("CONTINUE",$link,0);
+                $doCopy = 1;
             }
         }
     }
     $page->errorbox($error,$link,'RETURN') if ($error);
-#$page->add($cgi->PrintVariables());
 }
 
 ###############################################################################
@@ -538,6 +540,7 @@ elsif ($option eq "delete") {
                 if ($confirm eq 'CONFIRM') {
                     if ($people->delete('userid',$userid)) {
                         $text .= " ...... DONE!"; 
+                        $doDelete = $userid;
                     } else {
                         $text .= " ...... FAILED!";
                     }
@@ -574,6 +577,7 @@ elsif ($option eq "authorize") {
     $page->sectionheader("Under development",4,0);
 
     $page->form(0);
+# $doCopy = 1;
 }
 
 
@@ -672,13 +676,15 @@ $GateKeeper->disconnect;
 
 # finally harmonize the USERS tables of development and production server
 
-my $root = $GateKeeper->currentScriptRoot;
-my $temp = $config->get('ARC_TMP_DIR');
-system ("$root/harmonize users copy >> $temp/harmonize.log");
-
+if ($doCopy || $doDelete) {
+    my $root = $GateKeeper->currentScriptRoot;
+    my $temp = $config->get('ARC_TMP_DIR');
+    my $action = "copy:";
+    $action .= "delete:$doDelete" if $doDelete;
+    system ("$root/harmonize users $action >> $temp/harmonize.log");
+}
 
 exit 0;
-
 
 #******************************************************************************
 # subroutines

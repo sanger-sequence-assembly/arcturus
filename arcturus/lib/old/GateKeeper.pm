@@ -1001,7 +1001,7 @@ sub GUI {
 # test if in CGI mode; else abort
 
     my $cgi = &cgiHandle($self,1);
-    print "$title \n" if (!$cgi && $title);
+    print "\n$title \n" if (!$cgi && $title);
     return 0 if !$cgi;
 
     my $script = $self->currentScript;
@@ -1140,9 +1140,10 @@ sub GUI {
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
     }
+    $table .= $emptyrow;
     $table .= "</table>";
     $page->add($table); 
-    $page->space(4-@databases); # a minimum of 4 spaces 
+    $page->space(5-@databases); 
 
 # the other table require the input database specification  
 
@@ -1184,15 +1185,27 @@ sub GUI {
     $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
     if ($database && $database ne 'arcturus') {
         my $update = "/cgi-bin/amanager/specify/users".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\" $target> Users </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$update\" target='userframe'> Users </a></td></tr>";
         $update = "/cgi-bin/amanager/specify/contigs".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\" $target> Contigs </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$update\" target='userframe'> Contigs </a></td></tr>";
     }
-    $table .= $emptyrow;
-    $table .= $emptyrow;
     $table .= "</table>";
     $page->add($table);   
-
+    $page->space(1);   
+# and the TEST menu on the same partion
+    $page->partition(6);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> TESTS </th></tr>";
+    if ($database && $database ne 'arcturus') {
+        my $update = "/cgi-bin/emanager/specify/getmenu".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Menu </a></td></tr>";
+        $update = "/cgi-bin/emanager/all".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> All </a></td></tr>";
+    }
+    $table .= "</table>";
+    $page->add($table);
+    $page->space(1);   
+ 
 # compose the input table (direct to new window if session defined)
 
     $page->partition(4);
@@ -1220,7 +1233,7 @@ sub GUI {
     $page->add($table);   
     $page->space;
 
-# compose the common 
+# compose the 
 
     $page->partition(8);
     $table = "<table $tablelayout>";
@@ -1228,10 +1241,10 @@ sub GUI {
     if ($database && $database ne 'arcturus') {
         my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
-        $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\"> Assembly </a></td></tr>";
-        $update = "/cgi-bin/pmanager/specify/project".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\"> Project </a></td></tr>";
+        $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
+        $update = "/cgi-bin/pmanager/specify/project".$cgi->postToGet(1,@include);  # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
     }
     my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
@@ -1240,7 +1253,7 @@ sub GUI {
 
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
-    $page->add($table); 
+    $page->add($table);
 
 # add the query options (always direct to 'querywindow')
 

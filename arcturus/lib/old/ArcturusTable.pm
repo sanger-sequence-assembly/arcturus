@@ -517,7 +517,6 @@ sub packAttribute {
     return $result; # update made or not
 }
 
-
 #############################################################################
 
 sub packParameters {
@@ -528,68 +527,6 @@ sub packParameters {
 
     $SPLIT  = $split  if $split;  # any number of split symbols
     $EXPAND = $expand if $expand;
-}
-
-#############################################################################
-# authorization
-#############################################################################
-
-sub authorize {
-# authorisation method; works only on ARCTURUS table USERS
-    my $self   = shift;
-    my $userid = shift; 
-    my $passwd = shift; # plain text password
-    my $access = shift; # priviledge sought
-
-# this is a function exclusively for the USERS table: the encrypted password
-# 'passwd' of user 'userid' is tested; access contains a code mask
-
-    my $status = 0;
-
-    my ($dbh,$fullname) = $self->whoAmI(1); # insist on database 
-
-    if ($fullname eq 'arcturus.USERS') {
-# test column userid and password; find the data for user 'userid'
-        if (defined($self->{coltype}->{userid}) && defined($self->{coltype}->{password})) {
-# test input data
-            if ($userid && $passwd) {
-        # get data for user userid
-                if (my $hash = $self->SUPER::associate('hashref',$userid,'userid')) {
-                    my $encrypt = $hash->{password};
-                    my $inverse = crypt($passwd,$encrypt);
-# print "Verify: password=$passwd  encrypt=$encrypt  inverse=$inverse<br>";
-                    if (!$inverse || $inverse ne $encrypt) {
-                        $status = "Invalid password provided for user $userid";
-                    }
-
-                    elsif ($access && (my $priviledges = $hash->{priviledges})) {
-                # test $access against $priviledges
-                        $status = "User $userid has insufficient priviledge" if ($access > $priviledges);
-
-                    } 
-                    elsif ($access) {
-                        $status = "User $userid has no priviledges set";
-                    }
-
-                }
-                else {
-                    $status = "Unknown user: $userid";
-                }
-	    }
-	    else {
-		$status = "Missing userid or password";
-            }
-        }
-        else {
-            $status = "ARCTURUS table $fullname is incorrectly initialised"; 
-        }     
-    }
-    else {
-        $status = "Invalid use of method 'authorize' on table $fullname";
-    }
-
-#    $status = "override successfull authorization" if (!$status);
-    return $status; # 0 if all tests passed
 }
 
 #############################################################################
@@ -1303,13 +1240,12 @@ sub isASCII {
 #############################################################################
 
 sub copy {
-# copy a row or rows from <self> to another instance <target> of the database table 
+# copy (changes in) a row from <self> to another instance <target> of the database table 
     my $self   = shift;
     my $target = shift; # table handle of target database table
     my $column = shift; # column name or 'where' keyword
     my $cvalue = shift; # column value or selection condition for rows in this table
-    my $doCopy = shift; # False for test purposes
-    my $hash   = shift; # hash for additional options
+    my $hash   = shift; # hash for options
 
     my $unique =  $self->{unique};
 # find, if any, the first unique key which is not numerical, else take the first one 
@@ -1319,20 +1255,22 @@ sub copy {
         last if ($key ne $self->{autoinc});
     }
 
-    my %option = (keyColumn => $marker);
+# define options from defaults and input via $hash
+
+    my %option = (keyColumn => $marker, doCopy => 0, doDelete => 0, delTarget => '');
     &importOptions(\%option,$hash);
     $marker = $option{keyColumn};
+
+# test tables
 
     if ($target eq $self) {
         return;
     }
     elsif ($target->{tablename} ne $self->{tablename}) {
-        print "! copy failed: table name mismatch\n";
-        return;
+        return "! copy failed: table name mismatch\n";
     }
     elsif (!$unique || !$marker) {
-        print "! copy failed: no unique key available\n";
-        return;
+        return "! copy failed: no unique key available\n";
     }
 
 # get the rows to be copied
@@ -1346,16 +1284,20 @@ sub copy {
         my $targethash;
         $report .= "\n\nProcessing entry for $marker = $hash->{$marker}\n";
         if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
-            $report .= "creating new row for $hash->{$marker}\n";
-            if ($doCopy && !$target->newrow($marker,$hash->{$marker})) {
-                $report .= "Failed to create a new entry for $marker $hash->{$marker}\n";
+            $report .= "creating new row for $hash->{$marker}";
+            if ($option{doCopy} && $target->newrow($marker,$hash->{$marker})) {
+                $report .= " ... done\n";
+            }
+            elsif ($option{doCopy}) {
+                $report .= " ... FAILED!\n";
                 next;
             }
-            elsif (!$doCopy) {
+            else {
+                $report .= " ... skipped\n";
                 next;
             }
             if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
-                $report = "Can't access the newly created row?\n";
+                $report = "Can't access the newly created row ???\n";
                 next;
             }
         }
@@ -1364,13 +1306,48 @@ sub copy {
 # key must be defined and not have a unique index 
             if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key} =~ /\S/) {
                 if ($hash->{$key} ne $targethash->{$key}) {
-                    $report .= "updating $key to: $hash->{$key} for $hash->{$marker}\n";
-                    $target->update($key,$hash->{$key},$marker,$hash->{$marker}) if $doCopy;
+                    $report .= "key $key to be updated to $hash->{$key} for $hash->{$marker}";
+                    if ($option{doCopy} && $target->update($key,$hash->{$key},$marker,$hash->{$marker})) {
+                        $report .= " ... done\n";
+                    }
+                    elsif ($option{doCopy}) {
+                        $report .= " ... FAILED!\n";
+                    }
+                    else {
+                        $report .= " ... skipped\n";
+                    }
                 }
                 else {
                     $report .= "key $key is identical in both tables\n";
                 }
 	    }
+        }
+    }
+
+# get rows to be deleted (exist in $target but not in $self)
+# delete only if doDelete option AND delTarget defined (delTarget may be blank)
+
+    $hashes = $target->associate('hashrefs',$column,$cvalue,-1);
+
+    foreach my $hash (@$hashes) {
+        if (!$self->associate('hashref',$hash->{$marker},$marker)) {
+            $report .= "deleting row for $marker $hash->{$marker}";
+            if ($option{doDelete}) {
+                if ($option{delTarget} =~ /^(any|all)$/i || $hash->{$marker} eq $option{delTarget}) {
+                    if ($target->delete($marker,$option{delTarget})) {
+                        $report .= " ... done\n";
+                    }
+                    else {
+                        $report .= " ... FAILED\n";
+                    }
+                }
+                else {
+                    $report .= " ... skipped\n";
+                }
+            }
+            else {
+                $report .= " ... skipped\n";
+            }
         }
     }
 
