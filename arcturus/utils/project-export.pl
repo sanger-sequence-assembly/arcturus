@@ -32,7 +32,8 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage(1,"Invalid keyword '$nextword'");
-    }                                                                           
+    }
+
     $instance   = shift @ARGV  if ($nextword eq '-instance');
       
     $organism   = shift @ARGV  if ($nextword eq '-organism');
@@ -126,9 +127,11 @@ if (defined($fastafile)) {
 
 # get project(s) to be exported
 
+$project = 0 if (defined($project) && $project eq 'BIN');
+
 my @projects;
 
-push @projects, $project if $project;
+push @projects, $project if defined($project);
  
 if ($fofn) {
     foreach my $project (@$fofn) {
