@@ -132,9 +132,17 @@ sub getConnection {
 
     my $url      = $this->{URL};
 
-    my $username = shift;
-    my $password = shift;
-    my $options = shift;
+    my $username = undef;
+    my $password = undef;
+    my $options = undef;
+
+    while (my $nextword = shift) {
+	$nextword =~ s/^\-//;
+
+	$username = shift if ($nextword eq 'username');
+	$password = shift if ($nextword eq 'password');
+	$options = shift if ($nextword eq 'options');
+    }
 
     unless (defined($username) && defined($password)) {
 	$username = $this->{Username};
