@@ -7,6 +7,7 @@
 use DBI;
 use Term::ReadKey;
 use Compress::Zlib;
+use FileHandle;
 
 $verbose = 0;
 @dblist = ();
@@ -24,11 +25,10 @@ while ($nextword = shift @ARGV) {
 
     $minlen = shift @ARGV if ($nextword eq '-minlen');
 
-    $depad = 1 if ($nextword eq '-depad');
-
-    $padton = 1 if ($nextword eq '-padton');
-
     $verbose = 1 if ($nextword eq '-verbose');
+
+    $fastafile = shift @ARGV if ($nextword eq '-fasta');
+    $qualfile = shift @ARGV if ($nextword eq '-quality');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -39,14 +39,22 @@ while ($nextword = shift @ARGV) {
 unless (defined($host) &&
 	defined($port) &&
 	defined($mysqluser) &&
-	defined($dbname)) {
+	defined($dbname) &&
+	defined($fastafile)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
 }
 
-$depad = 0 unless defined($depad);
-$padton = 0 unless defined($depad);
+$fastafh = new FileHandle($fastafile, "w");
+
+die "Unable to open FASTA file \"$fastafile\" for writing" unless $fastafh;
+
+$qualfile = $fastafile . '.qual' unless defined($qualfile);
+
+$qualityfh = new FileHandle($qualfile, "w");
+
+die "Unable to open quality file \"$qualfile\" for writing" unless $qualityfh;
 
 $dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
 
@@ -93,15 +101,12 @@ while(@ary = $sth->fetchrow_array()) {
     }
 
     # Convert pads to N ...
-    $sequence =~ s/[^\w\-]/N/g if $padton;
+    $sequence =~ s/[^\w\-]/N/g;
 
-    # ... or remove them completely.
-    $sequence =~ s/[^\w\-]//g if $depad;
-
-    printf ">CONTIG%04d\n", $contigid;
+    printf $fastafh ">CONTIG%04d\n", $contigid;
 
     while (length($sequence) > 0) {
-	print substr($sequence, 0, 50), "\n";
+	print $fastafh substr($sequence, 0, 50), "\n";
 	$sequence = substr($sequence, 50);
     }
 
@@ -110,11 +115,25 @@ while(@ary = $sth->fetchrow_array()) {
 	scalar(@quality),"\n";
     }
 
+    printf $qualityfh ">CONTIG%04d\n", $contigid;
+
+    $nq = 0;
+
+    while ($qvalue = shift @quality) {
+	printf $qualityfh " %2d", $qvalue;
+	$nq++;
+	print $qualityfh "\n" if (($nq % 25) == 0);
+    }
+
+    print $qualityfh "\n";
 }
 
 $sth->finish();
 
 $dbh->disconnect();
+
+$fastafh->close();
+$qualityfh->close();
 
 exit(0);
 
@@ -131,8 +150,11 @@ sub showUsage {
     print STDERR "    -port\t\tPort number of server\n";
     print STDERR "    -user\t\tMySQL username\n";
     print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "    -fasta\t\tName of output FASTA file\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+    print STDERR "    -quality\t\tName of output quality file\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
+    print STDERR "    -padton\t\tConvert pads to N\n";
 }
