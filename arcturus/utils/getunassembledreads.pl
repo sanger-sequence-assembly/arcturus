@@ -6,6 +6,7 @@ use ArcturusDatabase::ADBContig;
 
 use FileHandle;
 use Logging;
+use PathogenRepository;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -19,10 +20,12 @@ my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
 
+
+my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "nosingleton|info|verbose|help";
+                 "nosingleton|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -53,10 +56,10 @@ while (my $nextword = shift @ARGV) {
 }
 
 #----------------------------------------------------------------
-# open file handle for output via a Logging module
+# open file handle for output via a Reporter module
 #----------------------------------------------------------------
 
-my $logger = new Logging(); # STDOUT
+my $logger = new Logging($outputFile);
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
@@ -67,7 +70,7 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 $instance = 'prod' unless defined($instance);
 
 my $adb = new ADBContig (-instance => $instance,
-		       -organism => $organism);
+			 -organism => $organism);
 
 &showUsage("Unknown organism '$organism'") unless $adb;
 
@@ -75,6 +78,8 @@ my $adb = new ADBContig (-instance => $instance,
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
+
+# allocate basic objects
 
 $logger->info("Getting read IDs for unassembled reads");
 
@@ -109,6 +114,11 @@ $adb->disconnect();
 exit 0;
 
 #------------------------------------------------------------------------
+# subroutines
+#------------------------------------------------------------------------
+
+
+#------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
 
@@ -127,8 +137,8 @@ sub showUsage {
     print STDERR "-caf\t\tcaf file name for output\n";
     print STDERR "-aspedbefore\tdate\n";
     print STDERR "-aspedafter\tdate\n";
-    print STDERR "-nosingleton\texclude reads from single-read contigs ".
-                 "(default include)\n";
+    print STDERR "-nosingleton\tdon't include reads from single-read".
+                 " contigs (default include)\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
@@ -136,3 +146,5 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
+

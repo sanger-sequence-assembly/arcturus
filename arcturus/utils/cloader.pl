@@ -574,7 +574,7 @@ foreach my $identifier (keys %contigs) {
     my ($added,$msg) = $adb->putContig($contig,1); # return 0 fail
 #    my ($added,$msg) = $adb->putContigForAssembly($contig,$assembly);
 print "$identifier with ".$contig->getNumberOfReads.
-      " reads : status $added, $msg\n";
+      " reads : status $added, $msg\n\n";
 #    $adb->clearLastContig() unless $added;
 
     delete $contigs{$identifier} if $added;
