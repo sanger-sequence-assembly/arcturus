@@ -30,7 +30,9 @@ sub new {
     undef my %options;
     $options = \%options if (!$options || ref($options) ne 'HASH');
     my @tables = ('READS','CONTIGS');
-    $options->{writeAccess} = \@tables if $options->{writeAccess};
+    if (my $wa = $options->{writeAccess}) {
+        $options->{writeAccess} = \@tables if ($wa !~ /[a-z]/i);
+    }
 
 # determine the class and invoke the class variable
 
@@ -42,7 +44,9 @@ sub new {
     $self->{READS}         = $self->{mother}->spawn('READS',$database); 
     $self->{ReadsRecall}   = ReadsRecall->init($self->{READS},'ACGTN ');
     $self->{ContigRecall}  = ContigRecall->init($self->{READS});
-    $self->{ContigBuilder} = new ContigBuilder() if $options{writeAccess};
+    if ($options->{writeAccess}) {
+        $self->{ContigBuilder} = ContigBuilder->init($self->{READS},1);
+    }
 
     return $self;
 }
@@ -173,8 +177,11 @@ sub getUnassembledReads {
         }
         else {
 # TO BE TESTED !!
-            my $where = "date <= $date and astatus != 2";
+            my $where = "date <= '$date' and astatus != 2";
             $reads = $READS->associate('readname','where',$where,{returnScalar => 0});
+        }
+        if (!$reads) {
+            $self->{report} = "! INVALID query in Saurian->getUnassembledReads: $READS->{lastQuery}\n";
         }
     }
 
@@ -187,20 +194,26 @@ sub getUnassembledReads {
         $ljoin  .= "on READS.read_id=READS2CONTIG.read_id ";
         $ljoin  .= "where READS2CONTIG.read_id IS NULL ";
 # TO BE TESTED !!!
-        $ljoin  .= "and date <= $date " if $date;
-        $ljoin  .= "order by readname";
+        $ljoin  .= "and date <= '$date' " if $date;
+        $ljoin  .= "order by readname"; 
+#print "DATE test unassembled reads: $ljoin\n" if $date;
 # this query gets all reads in READS not referenced in READS2CONTIG
-        my $hashes = $READS->query($ljoin,0,0);
         undef my @reads;
         $reads = \@reads;
-        foreach my $hash (@$hashes) {
-            push @reads,$hash->{readname};
+        my $hashes = $READS->query($ljoin,0,0);
+        if (ref($hashes) eq 'ARRAY') {
+            foreach my $hash (@$hashes) {
+                push @reads,$hash->{readname};
+            }
+        }
+        elsif (!$hashes) {
+            $report .= "! INVALID query in Saurian->getUnassembledReads: $ljoin\n";
         }
         $report .= scalar(@reads)." reads found\n";
 
 # now we check on possible (deallocated) reads in READS2CONTIG which do NOT figure in generation 0 or 1
 
-        $report .= "Check for reads deallocated from previous assembly ";
+        $report .= "Checking for reads deallocated from previous assembly ";
         if ($full == 1) {
 # first alternative method: create a temporary table and do a left join
             $report .= "using a temporary table: ";
@@ -279,15 +292,23 @@ my $n = @$reads; print "reads $reads $n from $reads->[0] to $reads->[$n-1]\n" if
 
 Find reads in current database which are not allocated to any contig
 
-=head2 Parameters
+=head2 Parameter (optional)
 
-mode (optional)
+hash
+
+=over 2
+
+=item hash key 'full'
 
 = 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
 
 = 1 for complete search using temporary table; if this fails falls back on:
 
 = 2 for complete search without using temporary table (slowest)
+
+=item hash key 'date'
+
+Select only reads before and including the given date
 
 =head2 Returns: reference to array of readnames
 
@@ -357,13 +378,21 @@ write them out on a caf-formatted output file
 
 File handle of output device; can be \*STDOUT
 
-=item mode (optional)
+=item hash (optional)
+
+=over 2
+
+=item hash key 'full'
 
 = 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
 
 = 1 for complete search using temporary table; if this fails falls back on:
 
 = 2 for complete search without using temporary table
+
+=item hash key 'date'
+
+Select only reads before and including the given date
 
 =head2 Output
 
@@ -522,6 +551,22 @@ print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
 }
 
 #############################################################################
+
+sub update {
+# update counters for assembly status
+    my $self       = shift;
+    my $assembly   = shift;
+    my $generation = shift;
+
+    print "enter update: $self->{ContigBuilder} \n";
+    my $ContigBuilder = $self->{ContigBuilder} || return 0;
+
+    $self->allowTableAccess('ASSEMBLY',1);
+
+    return $ContigBuilder->updateAssembly($assembly, $generation,@_);
+}
+
+#############################################################################
 #############################################################################
 #############################################################################
 
@@ -532,7 +577,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "03 Sep 2003",
+        updated =>    "12 Sep 2003",
     };
 }
 

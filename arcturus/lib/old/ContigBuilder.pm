@@ -46,7 +46,7 @@ sub init {
 # initialise module by setting class variables
     my $prototype = shift;
     my $tblhandle = shift; # handle to any table in the database
-    my $nopreload = shift; # set T if no caching should be used
+    my $nopreload = shift; # set True if no caching should be used
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
@@ -1659,53 +1659,11 @@ print "UPDATE and cleanup of generations $break";
 
     $ReadMapper->reaper($assembly);
 
-# update counters length and l2000 for the current assembly
+# HERE: update the data for the assembly status $self->assemblyUpdate($assembly,1);
 
-    my $DBVERSION = $CONTIGS->dbVersion;
-# the next will work for version 4.1, using sub query
-    if ($DBVERSION =~ /^4\.1\./) {
-print "$DBVERSION getting length and L2000 ... ";
-        my $query = "select sum(length) as sum from CONTIGS where contig_id in ";
-        $query .= "(select distinct contig_id from READS2CONTIG where ";
-        $query   .= "assembly = $assembly and generation = 1)";
-        my $length = $CONTIGS->query($query,0,0);
-        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
-print "total = $length & ";
+# update counters and length for the current assembly at generation 1
 
-        $query =~ s/where/where length>=2000 and/; # only the irst one
-        $length = $CONTIGS->query($query);
-        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
-print "l2000 = $length & ";
-    }
-# for MySQL versions below 4.1 fall back on indirect method 
-    else {
-print "$DBVERSION getting length and L2000 ... ";
-        my $where = "assembly = $assembly and generation = 1";
-        my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
-        my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
-        my $query = "select sum(length) as sum from <self> where contig_id in (".join(',',@$contigs).")";
-#print "query $query $break";
-        my $length = $CONTIGS->query($query,0,0);
-        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
-print "total $length->[0]->{sum}   $break";
-        $query =~ s/where/where length>=2000 and/; # only once
-#print "query $query $break";
-        $length = $CONTIGS->query($query);
-        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
-print "l2000 = $length->[0]->{sum}  $break";
-    }
-
-# contig count and read count for the assembly of generation 1
-
-#print "Update counters for assembly $assembly ... ";
-    my $where = "assembly = $assembly and generation = 1";
-    my $ncontig = $RRTOCC->count($where,'distinct contig_id');
-#print "contigs $ncontig , ";
-    $ASSEMBLY->update('contigs',$ncontig,'assembly',$assembly);
-
-    my $nreads  = $RRTOCC->count($where,'distinct read_id');
-#print "reads $nreads $break";
-    $ASSEMBLY->update('reads',$nreads,'assembly',$assembly);
+    $self->updateAssembly($assembly, 1);
 
     return;
 }
@@ -1739,7 +1697,7 @@ sub ageByOne {
 # OKAY, there is a 0 generation to be processed, now test the current assembly status
 
         my $astatus = $ASSEMBLY->associate('status',$assembly,'assembly');
-        if ($astatus eq 'error' || $astatus eq 'completed') {
+        if ($astatus eq 'error' || $astatus eq 'complete') {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
@@ -1766,7 +1724,7 @@ sub ageByOne {
 # the ageing was successful: remove the blocking flag and reset assembly status
             $RRTOCC->update('blocked','0','assembly',$assembly); # remove the flag (replace by script afterwards)
 #?           $CCTOCC->update('generation','generation+1');
-            $ASSEMBLY->update('status','completed','assembly',$assembly);
+            $ASSEMBLY->update('status','complete','assembly',$assembly);
             my $completed = "Last generation update successfully completed";
             $ASSEMBLY->update('comment',$completed,'assembly',$assembly);
         }
@@ -1781,7 +1739,7 @@ sub ageByOne {
 #############################################################################
 
 sub unbuild {
-# remove generation 0 for assembly from the database
+# remove generation 0 for given assembly from the database
     my $self     = shift;
     my $assembly = shift;
 
@@ -1823,12 +1781,115 @@ print "query $where $break"; return "Test abort";
         $RRTOCC->delete('where',$where); 
 	$where =~ s/contig_id/newcontig/;
         $CCTOCC->delete('where',$where); # contig to contig
+
+# restore the status of the assembly for generation 1
+
+        $self->updateAssembly($assembly,1);
+
     }
     else {
         $comment = "ContigBuilder::unbuild FAILED: there is no generation 0";
     }
 
     return $comment;
+}
+
+#############################################################################
+
+sub updateAssembly {
+# update counters and length for the current assembly
+    my $self       = shift;
+    my $assembly   = shift || 1;
+    my $generation = shift || 0;
+    my $list       = shift;
+
+# test if the generation provided is legal
+
+    my $accept = -1;
+    if ($ASSEMBLY->associate('status',$assembly,'assembly') eq 'error') {
+        print "Error status on assembly $assembly $break" if $list;
+        return 0;
+    }
+    elsif ($RRTOCC->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        print "Blocked status on assembly $assembly $break" if $list;
+        return 0;
+    }
+    elsif ($RRTOCC->probe('contig_id',undef,"generation=0 AND assembly=$assembly")) {
+        $accept = 0;
+    }
+    elsif ($RRTOCC->probe('contig_id',undef,"generation=1 AND assembly=$assembly")) {
+        $accept = 1;
+    }
+
+    print "update assembly $assembly cleared for generation $accept\n" if $list;
+
+    return 0 if ($accept < 0 || $accept != $generation);
+
+    my $DBVERSION = $CONTIGS->dbVersion;
+
+# the next will work for version 4.1, using sub query
+
+    if ($DBVERSION =~ /^4\.1\./) {
+print "$DBVERSION getting length and L2000 ... " if $list;
+        my $query = "select sum(length) as sum from CONTIGS where contig_id in ";
+        $query .= "(select distinct contig_id from READS2CONTIG where ";
+        $query   .= "assembly = $assembly and generation = 1)";
+        my $length = $CONTIGS->query($query,0,0);
+        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+print "total = $length & " if $list;
+
+        $query =~ s/where/where length>=2000 and/; # only the irst one
+        $length = $CONTIGS->query($query);
+        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
+print "l2000 = $length & " if $list;
+    }
+
+# for MySQL versions below 4.1 fall back on indirect method 
+
+    else {
+        print "VERSION $DBVERSION ${break}getting length and L2000 ... " if $list;
+        my $where = "assembly = $assembly and generation = $generation";
+        $where .= " and label>=10 and deprecated in ('N','M')";
+        my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
+        my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
+        my $query = "select sum(length) as sum from <self> where contig_id in (".join(',',@$contigs).")";
+        my $length = $CONTIGS->query($query,0,0);
+        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+        print "total $length->[0]->{sum}   $break" if $list;
+        $query =~ s/where/where length>=2000 and/; # only once
+        $length = $CONTIGS->query($query);
+	print "l2000 query: $CONTIGS->{lastQuery} \n" if $list;
+        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
+        print "l2000 = $length->[0]->{sum}  $break" if $list;
+    }
+
+# get the total counts for this assembly
+
+    print "Update counters for assembly $assembly ... " if $list;
+    my $where = "assembly = $assembly and label>=10 and deprecated in ('N','M')";
+    print "all contigs in assembly $assembly ... $break" if $list;
+    my $ncontig = $RRTOCC->count($where,'distinct contig_id');
+    $ASSEMBLY->update('allcontigs',$ncontig,'assembly',$assembly);
+    print "all reads in assembly $assembly ... $break" if $list;
+    my $nreads  = $RRTOCC->count($where,'distinct read_id');
+    $ASSEMBLY->update('reads',$nreads,'assembly',$assembly);
+
+# contig count and read count for the assembly of generation
+
+    $where .= " and generation = $generation";
+    print "contigs in assembly $assembly and generation $generation$break" if $list;
+    $ncontig = $RRTOCC->count($where,'distinct contig_id');
+    $ASSEMBLY->update('contigs',$ncontig,'assembly',$assembly);
+    print "assembled reads in assembly $assembly and generation $generation$break" if $list;
+    $nreads  = $RRTOCC->count($where,'distinct read_id');
+    $ASSEMBLY->update('assembled',$nreads,'assembly',$assembly);
+
+# finally set the loading status
+
+    $ASSEMBLY->update('status', 'loading','assembly',$assembly) if ($generation == 0);
+    $ASSEMBLY->update('status','complete','assembly',$assembly) if ($generation == 1);
+
+    return 1;
 }
 
 #############################################################################

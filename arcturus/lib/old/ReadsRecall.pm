@@ -169,25 +169,25 @@ sub spawnReads {
         push @reads,$self->new($readids);
     }
     else {
-# first pick up any cached read hashes (cacheing to be done before calling this module) 
+# first pick up any cached read hashes (cacheing to be done before calling this method) 
         undef my %notfound;
         foreach my $read (@$readids) {
-print "ReadsRecall->spawnReads: finding reads in cache .. ";
+#print "ReadsRecall->spawnReads: finding read $read in cache .. ";
             $read =~ s/^\'|\'$//g if ($keyword eq 'readname'); # remove quoting
             if (my $hash = $READS->cacheRecall($read)) {
                 push @reads, $self->new($hash);
-print "found \n";
+#print "found \n";
             }
             else {
                 $notfound{$read}++;
-print "NOT found \n";
+#print "NOT found \n";
             }
         }
 # pick up any remaining entries from the database
         my @leftover = keys %notfound; 
-print "remaining @leftover reads \n\n";         
+#print "remaining @leftover reads \n\n";         
         if (@leftover) {
-print "recovering remaining reads \n\n";         
+#print "recovering remaining reads \n\n";         
             if (my $hashrefs = $READS->associate($items,\@leftover,$keyword,{returnScalar => 0})) {
                 foreach my $hash (@$hashrefs) {
                     push @reads,$self->new($hash);
@@ -363,7 +363,7 @@ sub loadReadData {
     my $self = shift;
     my $hash = shift;
 
-    &dropDead('Invalid usage of loadReadData method') if $lock;
+    &dropDead('Illegal usage of loadReadData method') if $lock;
 
     my $status = $self->{status};
     my $range  = $self->{range};
@@ -387,8 +387,8 @@ sub loadReadData {
             if (defined($hash->{sequence})) {
                 my $dc = $hash->{scompress};
                ($scount, $sstring) = $Compress->sequenceDecoder($hash->{sequence},$dc,0);
-                if (!($sstring =~ /\S/)) {
-                    $status->{report} .= "! Missing or empty sequence\n";
+                if (!$sstring || $sstring !~ /\S/) {
+                    $status->{report} .= "! Missing or empty sequence ($dc)\n";
                     $status->{errors}++;
                 }
                 else {
@@ -413,8 +413,8 @@ sub loadReadData {
             if (defined($hash->{quality})) {
                 my $dq = $hash->{qcompress};
                ($qcount, $qstring) = $Compress->qualityDecoder($hash->{quality},$dq);
-                if (!($qstring =~ /\S/)) {
-                    $status->{report} .= "! Missing or empty quality data\n";
+                if (!$qstring || $qstring !~ /\S/) {
+                    $status->{report} .= "! Missing or empty quality data ($dq)\n";
                     $status->{errors}++;
                 }
                 else {
@@ -510,9 +510,9 @@ sub segmentToContig {
     $rtoc->[2+$k] = $pcstart; $rtoc->[3-$k] = $pcfinal;
     my $clength = $rtoc->[3] - $rtoc->[2] + 1;
 
-    $self->{contig} = $segment->{contig_id};
+# my $read = $self->{readhash}->{read_id}; print "segment for $read @$rtoc ($mapkey)\n" if ($read == 75068);
 
-    $self->contigRange;
+    $self->{contig} = $segment->{contig_id};
 
     return $clength - $rlength; # should be 0
 }
@@ -533,6 +533,15 @@ sub readToContig {
     push @$omap, $mapping->{pcfinal};
     push @$omap, $mapping->{prstart};
     push @$omap, $mapping->{prfinal};
+
+    if ($mapping->{pcstart} <= $mapping->{pcfinal}) {
+        $self->{clower} = $mapping->{pcstart};
+        $self->{cupper} = $mapping->{pcfinal};
+    }
+    else {
+        $self->{cupper} = $mapping->{pcstart};
+        $self->{clower} = $mapping->{pcfinal};
+    }
 }
 
 #############################################################################
@@ -543,6 +552,7 @@ sub shiftMap {
     my $shift  = shift;
     my $contig = shift; # (optional) new contig reference
 
+    print "shiftMap called \n";
     my $rtoc = $self->{toContig};
     foreach my $key (keys %$rtoc) {
         my $map = $rtoc->{$key};
@@ -564,6 +574,7 @@ sub invertMap {
     my $length = shift || return; # length of contig
     my $contig = shift; # (optional) new contig reference
 
+    print "invertMap called \n";
 # invert the contig mapping window
 
     my $rtoc = $self->{toContig};
@@ -604,11 +615,16 @@ sub contigRange {
     $self->{cupper} = 0;
     $self->{ranges} = 0;
 
+my $read =  $self->{readhash}->{read_id};
+print "\ncontigRange for read $read \n" if ($read == 75068);
+
     my $rtoc = $self->{toContig};
     foreach my $key (keys %$rtoc) {
+        next if !$key; # skip overall range
         my $map = $rtoc->{$key};
         $self->{clower} = $map->[2] if (!$self->{clower} || $map->[2] < $self->{clower}); 
         $self->{cupper} = $map->[3] if (!$self->{cupper} || $map->[3] > $self->{cupper});
+print "read $read: $key  map @$map | $self->{clower} $self->{cupper} \n" if ($read == 70417);
         $self->{ranges}++;
     }     
 }
@@ -620,6 +636,8 @@ sub inContigWindow {
     my $self   = shift;
     my $wstart = shift; # start on contig
     my $wfinal = shift; # end on contig (start<end ?)
+
+#    $self->contigRange;
 
     undef my @output; undef my @quality;
     for (my $i = $wstart; $i <= $wfinal; $i++) {
@@ -635,6 +653,7 @@ sub inContigWindow {
     my $length = 0;
     my $reverse = 0;
     foreach my $key (keys %$rtoc) {
+        next if !$key;
         my $map = $rtoc->{$key};
         my $cstart = $wstart; $cstart = $map->[2] if ($cstart < $map->[2]); 
         my $cfinal = $wfinal; $cfinal = $map->[3] if ($cfinal > $map->[3]);

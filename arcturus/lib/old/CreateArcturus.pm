@@ -2229,8 +2229,8 @@ sub create_INVENTORY {
                  'CLONES2PROJECT    o  l  0  1',
                  'LIGATIONS         o  d  1  1',
                  'SESSIONS          c  p  0  1',
-                 'HISTORY           o  p  0  0',
-                 'DBHISTORY         o  p  0  0',
+                 'HISTORY           o  o  0  0',
+                 'DBHISTORY         o  o  0  0',
                  'STATUS            o  s  1  1');
 
     foreach my $line (@input) {
@@ -2250,10 +2250,13 @@ sub create_ASSEMBLY {
 ## to be removed # Organism: REFerence to organism table (refered to in amanager and create)
 # chromosome: 0 for blob; 1-99 nr of a chromosome; 100 for other; > 100 e.g. plasmid
 # Origin of DNA sequences (Sanger for in-house; any other name for outside sources)
+# oracle project: the oracle project number of this assembly, if any
 # size    : approxinmate length (kBase) of assembly, estimated e.g. from physical maps
 # length  : actual length (base) measured from contigs
 # Number of Reads stored
-# Number of Contigs stored
+# Number of Reads assembled in latest assembly
+# Number of Contigs stored  in latest assembly
+# Number of all Contigs (in assembly history) 
 # Number of Projects
 # progress: status of data collection
 # updated : date of last modification (time of last assembly)
@@ -2272,16 +2275,19 @@ sub create_ASSEMBLY {
              organism         SMALLINT UNSIGNED     NOT NULL,
              chromosome       TINYINT  UNSIGNED  DEFAULT   0,
              origin           VARCHAR(32)           NOT NULL DEFAULT "The Sanger Institute",
+             oracleproject    TINYINT  UNSIGNED  DEFAULT   0,
              size             MEDIUMINT UNSIGNED   DEFAULT 0,
              length           INT UNSIGNED         DEFAULT 0,
              l2000            INT UNSIGNED         DEFAULT 0,
              reads            INT UNSIGNED         DEFAULT 0,
+             assembled        INT UNSIGNED         DEFAULT 0,
              contigs          INT UNSIGNED         DEFAULT 0,
+             allcontigs       INT UNSIGNED         DEFAULT 0,
              projects         SMALLINT             DEFAULT 0,
              progress         ENUM ('in shotgun','in finishing','finished','other') DEFAULT 'other', 
              updated          DATETIME                  NULL,
              userid           CHAR(8)                   NULL,
-             status           ENUM ('loading','completed','error','unknown') DEFAULT 'unknown', 
+             status           ENUM ('loading','complete','error','unknown') DEFAULT 'unknown', 
              created          DATETIME              NOT NULL,
 	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
              attributes       BLOB                      NULL,
@@ -2590,6 +2596,7 @@ sub create_VECTORS {
 # species   : e.g. Falciporum, Pestis , etc...
 # strain    : e.g. mssa
 # isolate   : e.g. Clinical, Laboratory, environment
+# schema    : Oracle Schema (projects to be put in assembly
 # updated       : date time of last update of contents
 # assemblies    : number of assemblies
 # read_loaded   : total number of reads loaded
@@ -2615,6 +2622,7 @@ sub create_ORGANISMS {
              serovar         VARCHAR(24)         NOT NULL,
              strain          VARCHAR(24)         NOT NULL,
              isolate         VARCHAR(16)         NOT NULL,
+             schema          VARCHAR(16)         NOT NULL,
              updated         DATETIME                NULL,
              assemblies      SMALLINT  UNSIGNED  NOT NULL,
              contigs         MEDIUMINT UNSIGNED  NOT NULL,

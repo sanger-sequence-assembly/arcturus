@@ -220,9 +220,9 @@ sub buildContig {
                     scpos => -1,     # start position interval (if positive) 
                     fcpos => -1,     # end   position interval (if positive)
                    );
-    $self->importOptions(\%options,$opts);
+    $CONTIGS->importOptions(\%options,$opts);
 
-    $self->{contig} .= $contig; # stor contig id
+    $self->{contig} .= $contig; # store contig id
 
     my $status = $self->{status};
 
@@ -235,6 +235,8 @@ sub buildContig {
     my $query = "contig_id = $contig ";
     my $generation = $options{generation};
     $query .= "and generation = $generation " if ($generation >= 0);
+    $query .= "and deprecated in ('N','M') ";
+
     my $scpos = $options{scpos};
     my $fcpos = $options{fcpos};
     if ($scpos > 0 && $fcpos > 0 && $scpos <= $fcpos) {
@@ -243,19 +245,20 @@ sub buildContig {
         $query .= "and (pcstart+pcfinal - abs(pcfinal-pcstart) <= $fcpos) "; 
 print "query: where $query \n";
     }
+print "query: where $query \n";
 
 # get hashes with mapping information to get the read_id involved
 
     my %reads;
     my $maphashes = $R2C->cacheRecall($contig); # if built beforehand
-    $maphashes = $R2C->associate('hashrefs','where',$query);
+    $maphashes = $R2C->associate('hashrefs','where',$query,{traceQuery => 0}) if !$maphashes;
     if ($maphashes && @$maphashes) {
         foreach my $hash (@$maphashes) {
             $reads{$hash->{read_id}} .= $hash.' '; # in case of multiple occurrances
         }        
     }
     else {
-        $status->{report} = "No results found: $R2C->{qerror}\n";
+        $status->{report} = "No results found: query = $R2C->{lastQuery} ($R2C->{qerror})";
         $status->{errors}++;
         return 0;
     }
@@ -269,6 +272,7 @@ print "query: where $query \n";
 
     foreach my $hash (@$maphashes) {
         next if ($generation >= 0 && $hash->{generation} ne $generation);
+        next if ($hash->{deprecated} eq 'X' || $hash->{deprecated} eq 'Y');
         my $recall = $series->{$hash->{read_id}}; # the instance of ReadsRecall read_id
 # load the individual segment in the read
         if ($hash->{label} < 20 && $recall->segmentToContig($hash)) {
@@ -297,7 +301,7 @@ print "query: where $query \n";
     }
     else {
         $status->{errors} = $ReadsRecall->{status}->{errors};
-        $status->{result} = $ReadsRecall->{status}->{result};
+        $status->{report} = $ReadsRecall->{status}->{result} || 'unspecified';
     }
 
 # add contig to the list of instances
@@ -332,7 +336,7 @@ sub status {
 
     my $status = $self->{status};
     if ($list && $status->{errors}) {
-        print "Error status on contig $self->{contig}: $self->{report}\n";
+        print "Error status $status->{errors} on contig $self->{contig}: '$status->{report}'\n";
     }
     elsif ($list) {
         my $number = @{$self->{rhashes}};
@@ -585,14 +589,14 @@ sub window {
 
     undef my @SQ;
 
-#    print "test window $wstart $wfinal:\n";
+    print "\ntest window $wstart $wfinal:\n" if $list;
 
     for (my $i = 0; $i < @$rhashes; $i++) {
 
         next if ($mark && $markers->[$i]);
 
         my $read = $rhashes->[$i];
-# print "process read $read $read->{readhash}->{read_id} ($read->{clower} $read->{cupper})\n";
+        print "process read $read->{readhash}->{read_id} ($read->{clower} $read->{cupper})\n" if ($list > 1);
         if (my $SQ = $read->inContigWindow($wstart, $wfinal)) {
             push @SQ, $SQ; # array of arrays of references to sequence & quality and read data
             $markers->[$i] = 1 if ($mark && $read->{cupper} <= $wfinal);
@@ -694,6 +698,15 @@ print "end\n" if $list;
         $start = $final;
     }
     return $length;
+}
+
+#############################################################################
+
+sub reset {
+# reset the markers
+    my $self = shift;
+
+    undef @{$self->{markers}};
 }
 
 #############################################################################

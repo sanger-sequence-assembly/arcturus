@@ -472,6 +472,7 @@ sub opendb_MySQL {
 
 # we now test if the specified database is installed on the current CGI server
 
+#$debug = 1;
 print "config $self->{config}\n" if $debug;
 
     if (my $config = $self->{config}) {
@@ -516,6 +517,7 @@ $self->report("test combinations: @$port_maps") if $debug;
         undef my $mysqlport;
         if (&getHostAndPort() && !$options{HostAndPort}) {
             my $HTTP_HOST = &getHostAndPort();
+$self->report("HTTP_HOST: $HTTP_HOST") if $debug;
             $HTTP_HOST =~ s/internal\.//; # for connections from outside Sanger
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
             foreach my $host (@$hosts) {
@@ -541,14 +543,17 @@ $self->report("NON CGI HostAndPort host:$self->{server}, port: $mysqlport") if $
         else {
             my $name = `echo \$HOST`;
             chomp $name;
+            $name =~ s/pcs3\w*/pcs3/;
+            $name =~ s/pcs2\w*/babel/;
 $self->report("host from echo HOST: $name") if $debug;
             foreach my $host (@$hosts) {
                 @url = split /\.|\:/,$host;
-$self->{open} .= "opendb_MySQL: from local host define self->server as $url[0] <br>";
+#$self->{open} .= "opendb_MySQL: from local host define self->server as $url[0] <br>";
                 $self->{server} = $url[0] if ($name eq $url[0]);
             }
-$self->{open} .= "opendb_MySQL: from default_host define self->server as $url[0] <br>" if !$self->{server};
+#$self->{open} .= "opendb_MySQL: from default_host define self->server as $url[0] <br>" if !$self->{server};
             $self->{server} = $config->get("default_host") if !$self->{server}; # default
+$self->dropDead("server $self->{server}") if $debug;
 #$self->report("server $self->{server}");
         }
 
@@ -838,6 +843,7 @@ $debug = "\n";
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&cgiHandle($self,1) || !$options{defaultRedirect}) {
 # if defaultRedirect <= 1 always abort; else, i.e. in batch mode, switch to specified server
+&report($self,"server $self->{server} $serverstring ($residence{$database})") if $debug;
 &report($self,"Redirecting: database $database resides on $residence{$database}") if $debug;
 	    &dropDead($self,"Access to $database denied (no redirect)") if ($options{defaultRedirect} <= 1);
 # close the current connection and open new one on the proper server 
@@ -1898,6 +1904,7 @@ sub GUI {
         $title = "QUERY THE ".uc($database)." CONTENTS";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $query = "/cgi-bin/query/overview?database=$database";
+        $query .= "\&session=$session" if ($session =~ /\boper\b/);
         $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>$database</a></td></tr>";
     }
     if ($self->instance) {
@@ -2018,7 +2025,8 @@ sub currentPort {
 # print "\ncurrentPort server: $self->{server}\n";
     my @hostinfo = split /\.|\:/,$self->{server};
 
-    return $hostinfo[$#hostinfo];
+#    return $hostinfo[$#hostinfo];
+    return $self->currentCgiPort;
 }
 
 #*******************************************************************************
@@ -2027,8 +2035,8 @@ sub currentCgiPort {
 # return the cgi server port number
     my $self = shift;
 
-    my $cgiPort = '';
-    if ($self->cgiHandle(1)) {
+    my $cgiPort = 0;
+    if ($self->cgiHandle(1) && $self->{server} =~ /\:/) {
         my @hostinfo = split /\.|\:/,$self->{server};
         $cgiPort = $hostinfo[$#hostinfo];
     }

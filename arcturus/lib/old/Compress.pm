@@ -108,7 +108,7 @@ sub sequenceEncoder {
  
     return $self->huffmanEncoder($string)  if ($method == 2);
 
-    return $self->zlibEncoder($string) if ($method == 99);
+    return $self->zlibEncoder($string)     if ($method == 99);
 
     die "Invalid encoding method $method";    
 }
@@ -167,7 +167,7 @@ sub tripletEncoder {
 
     $input =~ s/\s|\://g; # remove all blanks to get number of characters
 
-    return  length($input),$output;
+    return length($input),$output;
 }
 
 ############################################################################
@@ -205,17 +205,22 @@ sub zlibEncoder {
     my $self  = shift;
     my $input = shift;
 
-    return compress($input);
+    $input =~ s/\s|\://g; # remove all blanks to get number of characters
+
+    return length($input),compress($input);
 }
+
+#############################################################################
 
 sub zlibDecoder {
 # decode input DNA (or RNA) base sequence string using Zlib compression
     my $self  = shift;
     my $input = shift;
 
-    return uncompress($input);
-}
+    my $output = uncompress($input);
 
+    return length($output), $output;
+}
 
 #############################################################################
 # encoding/decoding Quality data
@@ -291,6 +296,8 @@ sub zlibQualityEncoder {
 
     return $datalen, compress($qualdata);
 }
+
+#############################################################################
 
 sub zlibQualityDecoder {
 # Decode base-quality values by applying the Zlib decompression algorithm,
