@@ -121,7 +121,7 @@ if ($cgi) {
     if ($option eq 'getform') {
         $page = $GateKeeper->GUI('READS loader');
         $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
-        $page->form("$arc_cgi_dir/rloader/arcturus/specify");
+        $page->form("$arc_cgi_dir/rloader/$database/specify");
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
         my %options = (mask=>'011000001111000001',
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
@@ -135,6 +135,7 @@ if ($cgi) {
             my %options = (mask=>'011000001111000001',
                            headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
             my $table = $organisms->htmlTable(\%options,'dbasename',$database);
+            $cgi->addkey('database',$database);
             $page->add($table);
             $page->sectionheader("Select a Read specification",4,0);
         }
@@ -158,6 +159,7 @@ if ($cgi) {
         }
         else {
             $source = 0;
+            $cgi->addkey('source',0);
         }
 
         $GateKeeper->cgiHeader(2); # return string HTML under CGI
