@@ -1,0 +1,134 @@
+#!/usr/local/bin/perl
+#
+# contigs2fas
+#
+# This script extracts one or more contigs and calculates their MD5 hash
+
+use DBI;
+use Term::ReadKey;
+use Compress::Zlib;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $dbname = shift @ARGV if ($nextword eq '-database');
+
+    $minlen = shift @ARGV if ($nextword eq '-minlen');
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	defined($dbname)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$minlen = 1000 unless defined($minlen);
+
+$query = "USE $dbname";
+print STDERR "Switching to database $dbname\n";
+$dbh->do($query);
+&db_die("$query failed");
+
+print STDERR "\n" if $verbose;
+
+$query = "select contig_id,length,nreads" .
+    " from CONTIGS".
+    " where length >= $minlen";
+
+$sth = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$sth->execute();
+&db_die("execute($query) failed");
+
+$readquery = "select distinct(READS.readname)" .
+    " from READS2CONTIG left join READS using(read_id)" .
+    " where READS2CONTIG.contig_id = ?" .
+    " order by READS.readname";
+
+$readsth = $dbh->prepare($readquery);
+&db_die("prepare($readquery) failed");
+
+$totalcontigs = 0;
+$totalreads = 0;
+
+while(@ary = $sth->fetchrow_array()) {
+    ($contigid, $contiglength, $nreads) = @ary;
+
+    $readsth->execute($contigid);
+
+    undef @readlist;
+
+    while (@ary2 = $readsth->fetchrow_array()) {
+	($readname) = @ary2;
+	push @readlist, $readname;
+    }
+
+    $totalcontigs += 1;
+    $totalreads += scalar(@readlist);
+
+    $hash = md5_hex(@readlist);
+
+    printf "%8d  %8d  %8d  %s\n", $contigid, $contiglength, $nreads, $hash;
+}
+
+$readsth->finish();
+
+$sth->finish();
+
+$dbh->disconnect();
+
+print STDERR "Hashed $totalcontigs contigs, containing $totalreads reads.\n";
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+}
