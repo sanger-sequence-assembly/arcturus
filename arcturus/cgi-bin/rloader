@@ -60,7 +60,6 @@ my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 my %config;
 $config{RDD} = "<to be defined>";
-# $config{RDD} = $config->get("ROOTDATADIR");
 $config{SDS} = ''; # default search sub-directories
 # $config{SDS} = join ' ',@{$config->get("SEARCH_DIR")}; # default search sub-directories
 $config{GMD} = $config->get("GELMINDDIR");
@@ -191,8 +190,8 @@ if ($cgi) {
         else {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
-print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
-                $config{RDD} = `$BADGERDIR/pfind -q $database`;
+#print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
+                $config{RDD} = `$BADGERDIR/pfind -q $database > /dev/null 2>&1`;
 #              my $repository = new PathogenRepository;
 #              $config{RDD} = $repository->getAssemblyDirectory($database); 
              }
@@ -393,8 +392,8 @@ else { # invoked from the command line (ejz/adh only)
         }
         elsif ($gbfilter) {
 # test if gbfilter is a project name; find its root directory ? 
-print "testing II project $gbfilter <br>";
-            $config{PDD} = `$BADGERDIR/pfind -q $gbfilter`;
+# print "testing II project $gbfilter <br>";
+            $config{PDD} = `$BADGERDIR/pfind -q $gbfilter > /dev/null 2>&1`;
         }
         else {
             $gbfilter = '';
