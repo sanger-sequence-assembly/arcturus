@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl5.004
 
 #############################################################################
 #
@@ -87,7 +87,7 @@ my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update, $pending);
 my ($arc_logfile, $logON, $TEST, $abortfile);
 $abortfile = $GateKeeper->lookup('abortfile');
 
-my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
+my ($break, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
 
 ###############################################################################
 # invokation via web: first "getmenu", then the "specify" and "" option
@@ -96,7 +96,7 @@ my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
 if ($cgi) {
     $origin = 1;
 # used as cgi scripts
-    $brtag = "<br>";
+    $break = "<br>";
     $gfont = "<FONT COLOR=lightgreen>";
     $yfont = "<FONT COLOR=yellow>";
     $ofont = "<FONT COLOR=orange>";
@@ -209,7 +209,7 @@ if ($cgi) {
                     my $repository = new PathogenRepository;
                     $config{RDD} = $repository->getAssemblyDirectory($asname);
                     $config{RDD} =~ s/\/assembly//; 
-# print "RDD taken from Repository:  $config{RDD} <br>";
+# print "RDD taken from Repository:  $config{RDD} $break";
                 }
     # open the form and replace the placeholders
                 my $form = form2($source);
@@ -233,9 +233,9 @@ if ($cgi) {
 
     # add a three-way button bar and a return link 
 
-                my $text = "Rebuild to update this form for a newly chosen assembly, or<br>";
+                my $text = "Rebuild to update this form for a newly chosen assembly, or$break";
                 $text   .= "Continue to start loading READS with the specified values";
-                $text   .= ", or<br>Click on the return link to change the data source<br>" if $pending;
+                $text   .= ", or${break}Click on the return link to change the data source$break" if $pending;
                 $page->sectionheader($text,4,0);
                 my @buttons = ('type=submit value=" Rebuild "',
                                'type=submit value="Continue" name="process"',
@@ -344,7 +344,7 @@ if ($cgi) {
 ###############################################################################
 else { # invoked from the command line (ejz/adh/pathdb only)
     $origin = 0;
-    $brtag = "\n";
+    $break = "\n";
     $yfont = '';
     $gfont = '';
     $ofont = '';
@@ -365,8 +365,8 @@ else { # invoked from the command line (ejz/adh/pathdb only)
     if (@ARGV < 2) {
         $GateKeeper->dropDead("specify a database and a source or directory "
                              ."name filter\n  rloader  database  PENDING "
-                             ."SUBDIR [test]\n  rloader  database  PENDING "
-                             ."ORACLE [SCHEMA] [PROJECT] [test]\n  "
+                             ."assembly [LPR or test]\n  rloader  database  PENDING "
+                             ."ORACLE [SCHEMA] [PROJECT] [LPR or test]\n  "
                              ."rloader  database  HARVEST nr-of-days\n");
     }
     $fnfilter = shift @ARGV;
@@ -504,16 +504,16 @@ my $RRS2ASS = $organisms->spawn('READS2ASSEMBLY',$database,0,0);
 $RRS2ASS->setMultiLineInsert(100);
 
 foreach my $key (keys %$hashes) {
-#    print "$key $hashes->{$key}$brtag";# if (!$origin);
+#    print "$key $hashes->{$key}$break";# if (!$origin);
 }
 my $links = $READS->traceTable();
 foreach my $key (sort keys %$links) {
-#    print "key link: $key  $links->{$key}<br> \n";
+#    print "key link: $key  $links->{$key}$break \n";
 }
 
 if ($logON || !$origin) {
     open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
-    print "LOG opened: $arc_logfile $brtag";
+    print "LOG opened: $arc_logfile $break";
 } else {
     *LOG = *STDOUT;
 }
@@ -535,7 +535,7 @@ if ($logON || !$origin) {
     my $dbh = $GateKeeper->{handle};
 
     if (!$GateKeeper->ping) {
-        print "!! MySQL database connection has gone away $brtag";
+        print "!! MySQL database connection has gone away $break";
         $GateKeeper->environment;
         exit 0;
     }
@@ -551,7 +551,7 @@ if ($logON || !$origin) {
             }
         }
         else {
-            print "query failed: '$querystring' $brtag $brtag";
+            print "query failed: '$querystring' $break $break";
             $page->flush;
             $GateKeeper->disconnect;
             exit;
@@ -565,26 +565,26 @@ if ($logON || !$origin) {
             $querystring .= "WHERE readname LIKE \"%${fnfilter}%\" ";
         }
 #        my $aref = $dbh->selectcol_arrayref($querystring);
-#	print "aref=$aref $brtag";
-#        my $len = @$aref; print "length $len $brtag";
+#	print "aref=$aref $break";
+#        my $len = @$aref; print "length $len $break";
 
-        $sth = $dbh->prepare ($querystring); # print "$querystring $brtag";
+        $sth = $dbh->prepare ($querystring); # print "$querystring $break";
         if ($sth->execute()) {
-#print "executed $brtag";
+#print "executed $break";
 #            my $aref = $sth->fetchall_arrayref();
-#            print "aref=$aref $brtag";
-#            my $len = @$aref; print "length $len $brtag";
+#            print "aref=$aref $break";
+#            my $len = @$aref; print "length $len $break";
 #my $line = 0;
             while (my $dbfile = $sth->fetchrow_array()) {
 #$line++; print "$line $dbfile " if (!($line % 10000) || $line > 260000);
-                print "! Double file name $dbfile $brtag" if  $dbfiles{$dbfile};
+                print "! Double file name $dbfile $break" if  $dbfiles{$dbfile};
                 $dbfiles{$dbfile}++;
-#print "hashed $brtag";
+#print "hashed $break";
             }
-#print "sampled $brtag";
+#print "sampled $break";
         }
         else {
-            print "query failed: '$querystring' $brtag $brtag";
+            print "query failed: '$querystring' $break $break";
             $page->flush;
             $GateKeeper->disconnect;
             exit;
@@ -592,16 +592,16 @@ if ($logON || !$origin) {
         $sth->finish();
         $nr = keys %dbfiles;
 
-        print "DONE $brtag $nr files found which have previously been processed$brtag$brtag";
+        print "DONE $break $nr files found which have previously been processed$break$break";
         if ($nr == 0 ) {
-            print "NULL result: query = '$querystring' $brtag $brtag";
+            print "NULL result: query = '$querystring' $break $break";
         }
-        print "Polling repository $ROOTDATADIR for (new) Reads ...$brtag";
+        print "Polling repository $ROOTDATADIR for (new) Reads ...$break";
         print "... using" if ($fnfilter || $gbfilter);
         print " name filter \"$fnfilter\""     if ($fnfilter =~ /\S/);
         print " global filter \"$gbfilter\""   if ($gbfilter =~ /\S/); 
         print "  (forceload)" if ($forced);
-        print " $brtag";
+        print " $break";
     # output in array @$newfiles with names of files in disk
 
         $newfiles = &getNewReadFiles (\%dbfiles,$ROOTDATADIR,\@excludekeys,$fnfilter,$gbfilter,$LOADPERRUN); 
@@ -615,7 +615,7 @@ if ($logON || !$origin) {
             foreach my $read (@$newfiles) {
                 my @parts = split '/',$read;
                 $read = $parts[$#parts];
-#                print "add to PENDING: $read for assembly nr $assemblynmbr<br>";
+#                print "add to PENDING: $read for assembly nr $assemblynmbr$break";
 #                &addPending($read,$assemblynmbr);
                 $PENDING->newrow('readname',$read,'assembly',$assemblynmbr);
                 $loaded++;
@@ -623,7 +623,7 @@ if ($logON || !$origin) {
             $PENDING->flush();
             my $npends = $PENDING->count(0,0);
             $np = $npends - $np;
-            print "$brtag $np filenames added to PENDING ($loaded) $brtag";
+            print "$break $np filenames added to PENDING ($loaded) $break";
 
 #            $organisms->update('reads_pending',$npends,'dbasename',$database);
 #            $organisms->signature($userid,'dbasename',$database);
@@ -637,7 +637,7 @@ if ($logON || !$origin) {
         print "Scanning database $database for PENDING Reads only ... ";
         my $querystring = "SELECT readname FROM $database.PENDING order by readname ";
         $querystring .= "limit $LOADPERRUN" if $LOADPERRUN;
-# print "querystring: $querystring$brtag";
+# print "querystring: $querystring$break";
         my $sth = $dbh->prepare ($querystring);
     # get files in PENDING
         $sth->execute();
@@ -649,7 +649,7 @@ if ($logON || !$origin) {
 
         print "DONE ... $nr pending files found";
         print "  (forceload)" if ($forced);
-        print "$brtag$brtag";
+        print "$break$break";
 
         undef my @pendingfiles;
         if ($gbfilter && $gbfilter eq "ORACLE") {
@@ -657,24 +657,23 @@ if ($logON || !$origin) {
             foreach my $key (keys (%dbfiles)) {
                 push @pendingfiles, $key;
             }
-print "SCHEMA $SCHEMA, PROJECT $PROJECT $brtag";
-print "pending files @pendingfiles $brtag";
+print "SCHEMA $SCHEMA, PROJECT $PROJECT ${break}pending files @pendingfiles $break";
 	    my $success = $reader->fetchOracleData($SCHEMA,$PROJECT,\@pendingfiles);
-print "success = $success $brtag";
+print "success = $success $break";
             undef @pendingfiles if !$success; # protection, forcing controlled exit
 # undef @pendingfiles;
         } 
         else {
 # reads are assumed to be in project directory; we test the ROOTDATADIR and its subdirectories
-# print "rdd $ROOTDATADIR  $brtag";
+# print "rdd $ROOTDATADIR  $break";
             my @subdirs = `ls -d ${ROOTDATADIR}/*`;
-# print "sub @subdirs $brtag";
+# print "sub @subdirs $break";
             my $counter = 0;
             undef my $previous;
             foreach my $key (sort keys (%dbfiles)) {
                 my $filename = $ROOTDATADIR.$key;
-                $counter++; print STDOUT "trying to find file $key ($counter) $brtag" if ($counter%1000 == 0);
-# print "find 1 $key: try $filename$brtag";                     
+                $counter++; print STDOUT "trying to find file $key ($counter) $break" if ($counter%1000 == 0);
+# print "find 1 $key: try $filename$break";                     
                 if (-e $filename) {
                     push @pendingfiles, $filename;
                 } 
@@ -682,7 +681,7 @@ print "success = $success $brtag";
 # try the subdirs; first try the previous one (to speed up)
                     if ($previous) {
                         $filename = "$previous/$key";
-# print "using previous $previous file $key found: $filename$brtag";
+# print "using previous $previous file $key found: $filename$break";
                         if (-e $filename) {
                             push @pendingfiles, $filename;
                             next; 
@@ -692,10 +691,10 @@ print "success = $success $brtag";
                     foreach my $subdir (@subdirs) {
                         chomp $subdir;
                         $filename = "$subdir/$key";
-# print "find 2 $key: try $filename$brtag";                     
+# print "find 2 $key: try $filename$break";                     
                         if (-e $filename) {
                             push @pendingfiles, $filename;
-# print "file $key found: $filename$brtag";
+# print "file $key found: $filename$break";
                             $previous = $subdir;
                             $found = 1; 
                             last;
@@ -705,24 +704,24 @@ print "success = $success $brtag";
 # still not found: try the search dirs
                     foreach my $sdir (@SEARCH_DIR) {
                         $filename = $sdir.$key;
-# print "find 3 $key: SD '$sdir': try  $filename $brtag"; 
+# print "find 3 $key: SD '$sdir': try  $filename $break"; 
                         if (!(-e $filename)) {
                             my $command = "ls ${sdir}*/$key";
-# print "find 4 $key: try $command$brtag"; 
+# print "find 4 $key: try $command$break"; 
                             $filename = `$command`;
                             chop $filename if ($filename);
                         }
                         if (-e $filename) {
                             push @pendingfiles, $filename;
-# print "file $key found: $filename$brtag";
+# print "file $key found: $filename$break";
                             $found = 1;
                             last; 
                         }
 		    }
-                    print "! Failed to locate file $key$brtag" if !$found;
+                    print "! Failed to locate file $key$break" if !$found;
                 }
             }
-# print "Files:@{pendingfiles}$brtag";
+# print "Files:@{pendingfiles}$break";
         }
         $newfiles = \@pendingfiles;
     }
@@ -732,24 +731,24 @@ print "success = $success $brtag";
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
     $nr = @$newfiles;
-    print "polling DONE ($nr new files) $brtag$brtag";
+    print "polling DONE ($nr new files) $break$break";
 $LOADPERRUN =~ s/\W/x/g;
-    print "$nr new Reads found (of which at most ${LOADPERRUN} will be processed)$brtag$brtag";
+    print "$nr new Reads found (of which at most ${LOADPERRUN} will be processed)$break$break";
 
     if (!$origin && $TEST && $TEST =~ /^test$/) {
         foreach my $file (@$newfiles) {
-            print "$file $brtag";
+            print "$file $break";
         }
         $GateKeeper->disconnect;
-        print "test mode ended $brtag";
+        print "test mode ended $break";
         exit 1;
     }
 
 # update the default settings of ORGANISMS and ASSEMBLY tables
 
     if ($update) {
-#print "update source $source<br>";
-#print "update GMD SCF RDD RUT<br>";
+#print "update source $source$break";
+#print "update GMD SCF RDD RUT$break";
         $organisms->packAttribute ($database,'dbasename','attributes','anlast',$assemblyname);
         $organisms->packAttribute ($database,'dbasename','attributes','GMD',$GELMINDDIR);
         $organisms->packAttribute ($database,'dbasename','attributes','SCF',$SCFREADDIR);
@@ -762,12 +761,12 @@ $LOADPERRUN =~ s/\W/x/g;
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','PRO',$PROJECT);
         }
         else {
-#print "update RDD LGF LPR   assemblyname $assemblyname<br>";
+#print "update RDD LGF LPR   assemblyname $assemblyname$break";
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','RDD',$ROOTDATADIR);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LGF',$arc_logfile) if ($logON);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LPR',$LOADPERRUN);
             if ($source == 0) {
-#print "update GBF FNF<br>";
+#print "update GBF FNF$break";
                 $assembly->packAttribute ($assemblyname,'assemblyname','attributes','GBF',$gbfilter);
                 $assembly->packAttribute ($assemblyname,'assemblyname','attributes','FNF',$fnfilter);
             }
@@ -816,7 +815,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
             $isStdRead = 0; # it's a consensus file
 
-            print STDOUT "${brtag}Processing consensus read $file ($tested) ...$brtag";
+            print STDOUT "${break}Processing consensus read $file ($tested) ...$break";
           
             $entry = $reader->newRead($file,1); # 1 for consensus file
 
@@ -828,7 +827,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
             $isStdRead = 1; # it's a standard read
 
-            print STDOUT "${brtag}Processing experiment file $file ($tested) ...$brtag";
+            print STDOUT "${break}Processing experiment file $file ($tested) ...$break";
 
             if ($entry = $reader->newRead($file)) {
                 $reader->format(); # test conformity to Sanger format
@@ -853,7 +852,7 @@ $LOADPERRUN =~ s/\W/x/g;
             print LOG "$fulltext\n" if ($logON && !$TEST);
 # add the entry to PENDING if not already done
             my $add = &addPending ($entry->{ID},$assemblynmbr);
-            print STDOUT "${rfont}$add$efont$brtag";
+            print STDOUT "${rfont}$add$efont$break";
             next; 
         }
         elsif ($logON) {
@@ -866,8 +865,8 @@ $LOADPERRUN =~ s/\W/x/g;
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         if (my $error = $reader->encode($scm, $qcm)) {
-            $error =~ s/\n/$brtag/g;
-            print STDOUT "ERROR: $ofont$error$efont$brtag";
+            $error =~ s/\n/$break/g;
+            print STDOUT "ERROR: $ofont$error$efont$break";
             print LOG "$error\n" if ($logON);
 #print $reader->list($origin,1);
             last if ($error =~ /Invalid/);
@@ -880,7 +879,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
         if ($TEST) {
 	    my $text = $reader->list($origin,1);
-            print STDOUT "$brtag $text $brtag";
+            print STDOUT "$break $text $break";
             next;
         }
 
@@ -891,12 +890,12 @@ $LOADPERRUN =~ s/\W/x/g;
         my $text = "Insert new data into READS ...";
         my $update = $reader->insert();
         $text .= "... $update READ items entered into database";
-        print STDOUT "$text$brtag\n";
+        print STDOUT "$text$break\n";
         print LOG "$text\n" if $logON;
 
         undef my $readhash;
         if ($update <= 0) {
-            print STDOUT "! Read insert $ofont FAILED $efont$brtag";
+            print STDOUT "! Read insert $ofont FAILED $efont$break";
             my $fulltext = $reader->list(1,0);
             print STDOUT "$fulltext";
             print LOG "$fulltext\n" if ($logON);
@@ -911,14 +910,14 @@ $LOADPERRUN =~ s/\W/x/g;
 # read back of data 
             print STDOUT "Readback of Sequence and Quality data .. ";
             if (my $error = $reader->readback) {
-                $error =~ s/\n/$brtag/g;
-                print STDOUT "ERROR: $ofont$error$efont$brtag";
+                $error =~ s/\n/$break/g;
+                print STDOUT "ERROR: $ofont$error$efont$break";
                 print LOG "$error\n" if ($logON);
 #print $reader->list($origin,1);
                 $errors = 1;
             }
             else {
-                print STDOUT "${gfont}PASSED$efont$brtag";
+                print STDOUT "${gfont}PASSED$efont$break";
             }
         }
 
@@ -939,12 +938,12 @@ $LOADPERRUN =~ s/\W/x/g;
             $ignored++;
 # add the entry to PENDING if not already done
             my $add = &addPending ($entry->{ID},$assemblynmbr);
-            print STDOUT "${rfont}$add$efont$brtag" if ($add);
+            print STDOUT "${rfont}$add$efont$break" if ($add);
         }
         elsif (!$errors) {
             $loaded++;
             my $assemblynumber = $assemblynmbr; # use current specification
-# print "assembly $assemblynmbr $brtag";
+# print "assembly $assemblynmbr $break";
     # check if the entry was in PENDING
             if (!$cgi && $assemblynmbr) {
                 $PENDING->delete('readname',$entry->{ID});
@@ -959,7 +958,7 @@ $LOADPERRUN =~ s/\W/x/g;
             my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
 #            my $read_id = $readhash->{read_id};
             if (!$RRS2ASS->newrow('read_id',$read_id,'assembly',$assemblynumber)) {
-                print "$RRS2ASS->{qerror}$brtag";
+                print "$RRS2ASS->{qerror}$break";
                 $RRS2ASS->status(1); # reset the error status
             }
             else {
@@ -968,18 +967,18 @@ $LOADPERRUN =~ s/\W/x/g;
         }
         else {
             $ignored++;
-            print STDOUT "${bfont}read $entry->{ID} is already loaded$efont$brtag";
+            print STDOUT "${bfont}read $entry->{ID} is already loaded$efont$break";
         }
-        print STDOUT "$brtag";
+        print STDOUT "$break";
 # next file
         if ($LOADPERRUN%100 == 0 && $abortfile && (-e $abortfile)) {
             $LOADPERRUN = 0;
-            print "${brtag}ABORT command received $brtag$brtag";
+            print "${break}ABORT command received $break$break";
             unlink $abortfile;
         }
     }
 
-    print STDOUT "${brtag}Flushing tables$brtag";
+    print STDOUT "${break}Flushing tables$break";
     $READS->flush(1); # flush all
 
 # closing down: timestamps on altered tables
@@ -988,11 +987,11 @@ $LOADPERRUN =~ s/\W/x/g;
     $userid = $GateKeeper->{USER} if !$userid;
     $organisms->historyUpdate($userid,0,$list);
 
-    print STDOUT "${brtag}Updating counters and closing database$brtag$brtag";
+    print STDOUT "${break}Updating counters and closing database$break$break";
 
     foreach my $assemblynumber (keys (%assemblycount)) {
         my $areads = $RRS2ASS->count("assembly=$assemblynumber",0);
-        print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads $userid$brtag";
+        print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads $userid$break";
         $assembly->update('reads',$areads,'assemblyname',$assemblyname);
         $assembly->signature($userid,'assemblyname',$assemblyname);
     }
@@ -1008,7 +1007,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
     my $report = "END of SESSION: $tested reads processed, $loaded loaded, ";
     $report .= " $yfont$ignored ignored$efont" if (!$TEST);
-    print STDOUT "$report$brtag$brtag";
+    print STDOUT "$report$break$break";
     print LOG "$report\n" if $logON;
 
     if ($page) {
@@ -1067,28 +1066,28 @@ sub getNewReadFiles {
  
 $DEBUG = 0 if ($directory =~ /LEISH32/);
 my $nrr = keys %$dbfiles;
-print "directory $directory $brtag dbfiles $nrr $brtag" if $DEBUG;
-print "exclude: @{$excluders}${brtag}filter : $flnfilter$brtag gbfilter : $glbfilter$brtag" if ($DEBUG);
+print "directory $directory $break dbfiles $nrr $break" if $DEBUG;
+print "exclude: @{$excluders}${break}filter : $flnfilter$break gbfilter : $glbfilter$break" if ($DEBUG);
 $MAXREAD = 10 if ($DEBUG);
 
     undef my @newReads;
 DIR:foreach my $sdname (@dirs) {
     # analyse next directory name, get files and analyse file names
         chomp $sdname; # cleanup
-#print "testing dir $sdname<br>";
+#print "testing dir $sdname$break";
         next DIR if ($glbfilter =~ /\S/ && $sdname !~ /$glbfilter/);
         foreach my $exclude (@{$excluders}) {
-print "rejected directory: $sdname  $brtag" if ($sdname =~ /$exclude/ && $DEBUG);
+print "rejected directory: $sdname  $break" if ($sdname =~ /$exclude/ && $DEBUG);
             next DIR if ($sdname =~ /$exclude/); # exact match
         }
 
        (my $subdir = "$directory/$sdname/") =~ s/\/\//\//g;
 
-        print "... scanning directory $subdir$brtag";
+        print "... scanning directory $subdir$break";
 
         my $find = "find $subdir";
         $find .= " -atime $glbfilter" if ($flnfilter eq "HARVEST");
-print "find: $find $brtag" if $DEBUG;
+print "find: $find $break" if $DEBUG;
         if ($flnfilter && $flnfilter ne 'HARVEST') {
             open (FILE,"find $subdir | grep $flnfilter |") || die "cannot open directory";
         } else {
@@ -1099,34 +1098,34 @@ print "find: $find $brtag" if $DEBUG;
         my $filecount = 0;
 NEXT:   while (defined($file=<FILE>)) {
             chomp $file; # cleanup
-print "test file $file$brtag" if ($DEBUG);
+print "test file $file$break" if ($DEBUG);
             $filetest++; # keep track
         # test against filters
-print "reject $file ($flnfilter)$brtag" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
+print "reject $file ($flnfilter)$break" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
             next NEXT if ($flnfilter =~ /\S/ && $flnfilter ne 'HARVEST' && !($file =~ /$flnfilter/));
             next NEXT if ($glbfilter =~ /\S/ && !($file =~ /$glbfilter/));
         # test against allowed pattern and get shortname
-print "reject $file$brtag" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
+print "reject $file$break" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
             next NEXT if (!($file =~ /^$subdir(\S+\/)?([\w\-\.]+\.(\w\d?\w*)$)/));
             my $shortname = $2;
 	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/));
-print "shortname = $shortname $brtag" if ($DEBUG);
+print "shortname = $shortname $break" if ($DEBUG);
             next NEXT if ($dbfiles->{$shortname} && (!$DEBUG || $DEBUG <= 1));
         # find possible directories beneath the $subdir
             my $subdirname = $file;
             $subdirname =~ s/$subdir//; # remove the top directory
         # test against rejection strings
             foreach my $exclude (@{$excluders}) {
-print "rejected file: $file $exclude $brtag" if ($subdirname =~ /$exclude/i && $DEBUG);
+print "rejected file: $file $exclude $break" if ($subdirname =~ /$exclude/i && $DEBUG);
                 next NEXT if ($subdirname =~ /$exclude/i);
             }
-print "NEW FILE: $file  (maxread= $MAXREAD) $brtag" if $DEBUG;
+print "NEW FILE: $file  (maxread= $MAXREAD) $break" if $DEBUG;
             last if ($MAXREAD-- <= 0);
             push @newReads, $file;
             $filecount++;
-print "new file: $file $brtag" if($DEBUG);
+print "new file: $file $break" if($DEBUG);
         }
-        print "... $filetest files tested, $filecount accepted$brtag";
+        print "... $filetest files tested, $filecount accepted$break";
         close FILE;
         last DIR if ($MAXREAD <= 0);
     }
