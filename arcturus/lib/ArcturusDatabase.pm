@@ -117,7 +117,7 @@ sub disconnect {
 sub defineMetaData {
     my $this = shift;
 
-    $this->{read_attributes} = "readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
+    $this->{read_attributes} = "readname,asped,strand,primer,chemistry,basecaller,status";
     $this->{template_addons} = "TEMPLATE.name as template,TEMPLATE.ligation_id";
 
     $this->{contig_attributes} = "contigname,aliasname,length,ncntgs,nreads,newreads,cover,origin,updated,userid,readnamehash";
@@ -306,17 +306,36 @@ sub countReadDictionaryItem {
     my $query = "select count(*) as count,";
 
     if ($item eq 'ligation') {
-        $query .= "TEMPLATE.ligation_id from READS,TEMPLATE where READS.template_id=TEMPLATE.template_id group by ligation_id";
+        $query .= "TEMPLATE.ligation_id from READS,TEMPLATE 
+                   where READS.template_id=TEMPLATE.template_id 
+                   group by ligation_id";
     }
     elsif ($item eq 'clone') {
 # build the clone names dictionary on clone_id (different from the one on ligation_id)
         $this->{Dictionary}->{clonename} =
-	     &createDictionary($dbh, 'CLONES','clone_id', 'name');
-        $query .= "LIGATIONS.clone_id from READS,TEMPLATE,LIGATIONS where READS.template_id=TEMPLATE.template_id and TEMPLATE.ligation_id=LIGATIONS.ligation_id group by clone_id";
+	       &createDictionary($dbh, 'CLONES','clone_id', 'name');
+        $query .= "LIGATIONS.clone_id from READS,TEMPLATE,LIGATIONS 
+                   where READS.template_id=TEMPLATE.template_id 
+                     and TEMPLATE.ligation_id=LIGATIONS.ligation_id 
+                   group by clone_id";
         $item = 'clonename';
     }
     elsif ($item =~ /\b(strand|primer|chemistry|basecaller|status)\b/) {
         $query .= "$item from READS group by $item";
+    }
+    elsif ($item eq 'svector') {
+        $query .= "SEQVEC.svector_id, from READS,SEQ2READ,SEQVEC
+                   where READS.read_id = SEQ2READ.read_id
+                   and   SEQ2READ.seq_id = SEQVEC.seq_id
+                   and   SEQ2READ.version = 0
+                   group by svector_id";
+    }
+    elsif ($item eq 'cvector') {
+        $query .= "CLONEVEC.cvector_id, from READS,SEQ2READ,CLONEVEC
+                   where READS.read_id = SEQ2READ.read_id
+                   and   SEQ2READ.seq_id = CLONEVEC.seq_id
+                   and   SEQ2READ.version = 0
+                   group by cvector_id";
     }
     else {
         return undef; 
@@ -345,24 +364,57 @@ sub countReadDictionaryItem {
 
 #-----------------------------------------------------------------------------
 
-sub getReadByID {
+sub getRead {
 # returns a Read instance with (meta data only) for input read IDs 
+# parameter usage: read_id=>ID or readname=>NAME, version=>V
     my $this = shift;
-    my $readid = shift;
+
+# compose the query
+
+    my $query = "select READS.read_id,SEQ2READ.seq_id,
+                 $this->{read_attributes},$this->{template_addons}
+                  from READS,SEQ2READ,TEMPLATE 
+                 where READS.read_id = SEQ2READ.read_id
+                   and READS.template_id = TEMPLATE.template_id ";
+
+    my $nextword;
+    my $readitem;
+    undef my $version;
+    while ($nextword = shift) {
+
+        if ($nextword eq 'seq_id') {
+            $query .= "and SEQ2READ.seq_id = ?";
+            $readitem = shift;
+        }
+        elsif ($nextword eq 'read_id') {
+            $query .= "and READS.read_id = ?";
+            $readitem = shift;
+            $version = 0 unless defined($version); # define default
+        }
+        elsif ($nextword eq 'readname') {
+            $query .= "and READS.readname = ?";
+            $readitem = shift;
+            $version = 0 unless defined($version); # define default
+        }
+        elsif ($nextword eq 'version') {
+            $version = shift;
+        }
+        else {
+            print STDERR "Invalid parameter '$nextword' for ->getRead\n";
+        }
+    }
+
+# add version sepecification if it is defined
+
+    $query .= " and SEQ2READ.version = $version" if defined ($version);
 
     my $dbh = $this->getConnection();
 
-    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
-                 from READS left join TEMPLATE using (template_id) 
-                 where read_id = ?";
-
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($readid);
+    $sth->execute($readitem);
 
-#    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id);
-
-    my ($read_id,@attributes) = $sth->fetchrow_array();
+    my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
@@ -371,9 +423,13 @@ sub getReadByID {
 
         $read->setReadID($read_id);
 
-        $this->addMetaDataForRead($read,@attributes);
+        $read->setSequenceID($seq_id);
 
-        $this->addVectorDataForRead($read);
+        $read->setVersion($version);
+
+        $this->addMetaDataForRead($read, @attributes);
+
+        $this->addSequenceMetaDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -384,11 +440,29 @@ sub getReadByID {
     }
 }
 
+sub getReadBySequenceID {
+# deprecated old method
+    my $this = shift;
+    $this->getRead(seq_id=>shift);
+}
+
+sub getReadByReadID {
+# deprecated old method
+    my $this = shift;
+    $this->getRead(read_id=>shift,version=>shift);
+}
+
+sub getReadByName {
+# deprecated old method
+    my $this = shift;
+    $this->getRead(readname=>shift,version=>shift);
+}
+
 sub addMetaDataForRead {
 # private method: set meta data for input Read 
     my $this = shift;
     my $read = shift; # Read instance
-    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id) = @_;
+    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$status_id,$template,$ligation_id) = @_;
 
     $read->setReadName($readname);
 
@@ -418,26 +492,24 @@ sub addMetaDataForRead {
     my $clone = &dictionaryLookup($this->{Dictionary}->{clone},
 			          $ligation_id);
     $read->setClone($clone);
-
-    $read->setLowQualityLeft($lqleft);
-
-    $read->setLowQualityRight($lqright);
 }
 
-sub addVectorDataForRead {
+sub addSequenceMetaDataForRead {
 # private method : add sequence vector and cloning vector data to Read
     my $this = shift;
     my $read = shift; # Read instance
 
     my $dbh = $this->getConnection() || return;
 
-    my $read_id = $read->getReadID;
+    my $seq_id = $read->getSequenceID;
 
-    my $query = "select svector_id,svleft,svright from SEQVEC where read_id=?";
+# sequencing vector
+
+    my $query = "select svector_id,svleft,svright from SEQVEC where seq_id=?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($read_id);
+    $sth->execute($seq_id);
 
     while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
 	my $svector = &dictionaryLookup($this->{Dictionary}->{svector},$svector_id);
@@ -447,11 +519,13 @@ sub addVectorDataForRead {
 
     $sth->finish();
 
-    $query = "select cvector_id,cvleft,cvright from CLONEVEC where read_id=?";
+# cloning vector, if any
+
+    $query = "select cvector_id,cvleft,cvright from CLONEVEC where seq_id=?";
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($read_id);
+    $sth->execute($seq_id);
 
     while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
         my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},$cvector_id);
@@ -460,63 +534,47 @@ sub addVectorDataForRead {
     }
 
     $sth->finish();
-}
 
-sub getReadByName {
-# returns a Read instance with (meta data only) for input read name 
-    my $this = shift;
-    my $readname = shift;
+# quality clipping
 
-    my $dbh = $this->getConnection();
+    $query = "select qleft,qright from QUALITYCLIP where seq_id=?";
 
-    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
-                 from READS left join TEMPLATE using (template_id) 
-                 where readname = ?";
+    $sth = $dbh->prepare_cached($query);
 
-    my $sth = $dbh->prepare_cached($query);
+    $sth->execute($seq_id);
 
-    $sth->execute($readname);
+    if (my ($qleft, $qright) = $sth->fetchrow_array()) {
 
-    my ($read_id,@attributes) = $sth->fetchrow_array();
+        $read->setLowQualityLeft($qleft);
+        $read->setLowQualityRight($qright);
+    }
 
     $sth->finish();
-
-    if (defined($read_id)) {
-	my $read = new Read();
-
-        $read->setReadID($read_id);
-
-        $this->addMetaDataForRead($read,@attributes);
-
-        $this->addVectorDataForRead($read);
-
-	$read->setArcturusDatabase($this);
-
-	return $read;
-    } 
-    else {
-	return undef;
-    }
 }
 
-sub getReadsByID {
+sub getReadsByReadID {
 # returns an array of Read instances with (meta data only) for input array of read IDs 
     my $this    = shift;
     my $readids = shift; # array ref
 
     if (ref($readids) ne 'ARRAY') {
-        die "'getReadsByID' method expects an array of readIDs";
+        die "'getReadsByReadID' method expects an array of readIDs";
     }
 
 # prepare the range list
 
-    my $range = join ',',@$readids;
+    my $range = join ',',sort @$readids;
 
     my $dbh = $this->getConnection();
 
-    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
-                 from READS left join TEMPLATE using (template_id) 
-                 where read_id in ($range)";
+# retrieve version 0 (un-edited reads only, the raw data)
+
+    my $query = "select READS.read_id,SEQ2READ.seq_id,
+                 $this->{read_attributes},$this->{template_addons}
+                  from READS,SEQ2READ,TEMPLATE 
+                 where READS.read_id = SEQ2READ.read_id and version = 0 
+                   and READS.template_id = TEMPLATE.template_id 
+                   and READS.read_id in ($range)";
 
     my $sth = $dbh->prepare($query);
 
@@ -524,17 +582,73 @@ sub getReadsByID {
 
     my @reads;
 
-    while (my @attributes = $sth->fetchrow_array()) {
+    while (my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array()) {
 
 	my $read = new Read();
 
-        my $read_id = shift @attributes;
-
         $read->setReadID($read_id);
+
+        $read->setSequenceID($seq_id);
+
+        $read->setVersion(0);
 
         $this->addMetaDataForRead($read,@attributes);
 
-        $this->addVectorDataForRead($read);
+        $this->addSequenceMetaDataForRead($read);
+
+	$read->setArcturusDatabase($this);
+
+        push @reads, $read;
+    }
+
+    $sth->finish();
+
+    return \@reads;
+}
+
+sub getReadsBySequenceID {
+# returns an array of Read instances with (meta data only) for input array of sequence IDs
+    my $this = shift;
+    my $seqids = shift; # array ref
+
+    if (ref($seqids) ne 'ARRAY') {
+        die "'getReadsBySequenceID' method expects an array of seqIDs";
+    }
+
+# prepare the range list
+
+    my $range = join ',',sort @$seqids;
+
+    my $dbh = $this->getConnection();
+
+# retrieve version 0 (un-edited reads only, the raw data)
+
+    my $query = "select READS.read_id,SEQ2READ.seq_id,SEQ2READ.version,
+                 $this->{read_attributes},$this->{template_addons}
+                  from SEQ2READ,READS,TEMPLATE
+                 where READS.read_id = SEQ2READ.read_id
+                   and READS.template_id = TEMPLATE.template_id 
+                   and SEQ2READ.seq_id in ($range)";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || print STDERR "FAILED: $query\n";
+
+    my @reads;
+
+    while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
+
+	my $read = new Read();
+
+        $read->setReadID($read_id);
+
+        $read->setSequenceID($seq_id);
+
+        $read->setVersion($version);
+
+        $this->addMetaDataForRead($read,@attributes);
+
+        $this->addSequenceMetaDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -547,38 +661,42 @@ sub getReadsByID {
 }
 
 sub getReadsForContigID{
-# returns an array of Reads (meta data only) for the given contig
+# returns an array of Read instances (meta data only) for the given contig
     my $this = shift;
     my $cid  = shift; # contig_id
 
     my $dbh = $this->getConnection();
 
-# NOTE: this query may have to be optimized
+# NOTE: this query is to be TESTED may have to be optimized
 
-    my $query = "select READS.read_id,$this->{read_attributes},$this->{template_addons}
-                 from  MAPPING, READS, TEMPLATE 
+    my $query = "select READS.read_id,SEQ2READ.seq_id,SEQ2READ.version,
+                 $this->{read_attributes},$this->{template_addons}
+                  from MAPPING,SEQ2READ,READS,TEMPLATE 
                  where MAPPING.contig_id = ?  
-                 and MAPPING.read_id = READS.read_id
-                 and READS.template_id = TEMPLATE.template_id";
+                   and MAPPING.seq_id = SEQ2READ.seq_id
+                   and SEQ2READ.read_id = READS.read_id
+                   and READS.template_id = TEMPLATE.template_id ";
 
     my $sth = $dbh->prepare_cached($query);
 
-    print "ContigID: $query\n";
-    my $nr = $sth->execute($cid); print "nr $nr\n";
+$query =~ s/\s+/ /g; print "ContigID: $query\n";
+    my $nr = $sth->execute($cid);
 
     my @reads;
 
-    while (my @attributes = $sth->fetchrow_array()) {
+    while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
 
 	my $read = new Read();
 
-        my $read_id = shift @attributes;
-
         $read->setReadID($read_id);
+
+        $read->setSequenceID($seq_id);
+
+        $read->setVersion($version);
 
         $this->addMetaDataForRead($read,@attributes);
 
-        $this->addVectorDataForRead($read);
+        $this->addSequenceMetaDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -602,15 +720,14 @@ sub getReadsForContigID{
     }
     else {
 # no nreads found?
-        print STDERR "Mismatch of reads found (0)\n";
+        print STDERR "No metadata available for contig $cid\n";
     } 
-
 
     return \@reads;
 }
 
-sub getSequenceForReads {
-# takes an array of Read instances and puts the DNA and quality sequence in
+sub addSequenceToReads {
+# takes an array of Read instances and adds the DNA and BaseQuality (in bulk)
     my $this  = shift;
     my $reads = shift; # array of Reads objects
 
@@ -621,30 +738,38 @@ sub getSequenceForReads {
 
     my $dbh = $this->getConnection();
 
-# build a list of read IDs
+# build a list of sequence IDs (all sequence IDs must be defined)
 
-    my %rids;
-    my $rids = \%rids;
+    my $sids = {};
     foreach my $read (@$reads) {
-        $rids->{$read->getReadID} = $read;
+# test if sequence ID is defined
+        if (my $seq_id = $read->getSequenceID()) {
+            $sids->{$seq_id} = $read;
+        }
+        else {
+# warning message
+            print STDERR "Missing sequence identifier in read ".
+                          $read->getReadName."\n";
+        }
     }
 
-# pull the data from the SEQUENCE table in bulk
+    my $range = join ',',sort keys(%$sids);
+    return unless $range;
 
-    my $range = join ',',keys(%$rids);
-
-    my $query = "select read_id,sequence,quality from SEQUENCE 
-                 where read_id in ($range)";
+    my $query = "select seq_id,sequence,quality from SEQUENCE
+                 where seq_id in ($range)";
 
     my $sth = $dbh->prepare($query);
+
+# pull the data from the SEQUENCE table in bulk
 
     $sth->execute();
 
     while(my @ary = $sth->fetchrow_array()) {
 
-	my ($read_id, $sequence, $quality) = @ary;
+	my ($seq_id, $sequence, $quality) = @ary;
 
-        if (my $read = $rids->{$read_id}) {
+        if (my $read = $sids->{$seq_id}) {
 
             $sequence = uncompress($sequence) if defined($sequence);
 
@@ -666,19 +791,33 @@ sub getSequenceForReads {
 #-----------------------------------------------------------------------------
 
 sub getSequenceForRead {
-# returns DNA sequence (string) and quality (array reference)
+# returns DNA sequence (string) and quality (array reference) for read_id,
+# readname or seq_id
 # this method is called from the Read class when using delayed data loading
     my $this = shift;
-    my ($key, $value, $junk) = @_;
+    my ($key, $value, $version) = @_;
 
     my $query = "select sequence,quality from ";
 
-    if ($key eq 'id' || $key eq 'read_id') {
-	$query .= "SEQUENCE where read_id=?";
+    if ($key eq 'seq_id') {
+	$query .= "SEQUENCE where seq_id=?";
+    }
+    elsif ($key eq 'id' || $key eq 'read_id') {
+        $version = 0 unless defined($version);
+	$query .= "SEQUENCE,SEQ2READ 
+                   where SEQUENCE.seq_id=SEQ2READ.seq_id
+                     and SEQ2READ.version = $version
+                     and SEQ2READ.read_id = ?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READS left join SEQUENCE using (read_id) where readname=?";
+        $version = 0 unless defined($version);
+	$query .= "SEQUENCE,SEQ2READ,READS 
+                   where SEQUENCE.seq_id=SEQ2READ.seq_id
+                     and SEQ2READ.version = $version
+                     and READS.read_id = SEQ2READ.read_id
+                     and READS.readname = ?";
     }
+# $query =~ s/\s+/ /g; print "getSequenceForRead: $query ($value)\n";
 
     my $dbh = $this->getConnection();
 
@@ -873,7 +1012,8 @@ sub areReadsNotInDatabase {
 
     return \@notPresent;
 }
-  
+
+#****************  
 sub addReadsToPending {
 # OBSOLETE, but TEMPLATE for bulk loading add readnames to the PENDING table
     my $this      = shift;
@@ -914,7 +1054,7 @@ sub flushReadsToPending {
     
     $this->addReadsToPending(\@dummy, 0);
 }
-
+#****************
 #-----------------------------------------------------------------------------------------
 
 sub putRead {
