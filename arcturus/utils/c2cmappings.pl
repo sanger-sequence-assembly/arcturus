@@ -4,6 +4,7 @@ use ArcturusDatabase;
 use Read;
 
 use FileHandle;
+use Compress::Zlib;
 
 use strict;
 
@@ -14,6 +15,7 @@ my $contigid;
 my $logfile;
 my $outfile;
 my $loose = 0;
+my $align = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -22,6 +24,7 @@ while ($nextword = shift @ARGV) {
     $logfile  = shift @ARGV if ($nextword eq '-log');
     $outfile  = shift @ARGV if ($nextword eq '-out');
     $loose    = 1 if ($nextword eq '-loose');
+    $align    = 1 if ($nextword eq '-align');
 }
 
 unless (defined($instance) && defined($organism) && defined($contigid)) {
@@ -46,6 +49,22 @@ my $stmt = $dbh->prepare($query);
 
 $stmt->execute($contigid);
 &db_die("Failed to execute query \"$query\"");
+
+$query = "SELECT sequence FROM CONSENSUS WHERE contig_id = ?";
+
+my $seq_stmt; 
+
+my $masterseq;
+
+if ($align) {
+    $seq_stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    $seq_stmt->execute($contigid);
+    ($masterseq) = $seq_stmt->fetchrow_array();
+    $masterseq = uncompress($masterseq);
+    $seq_stmt->finish();
+}
 
 my ($logfh, $outfh);
 
@@ -82,7 +101,8 @@ while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) 
 
 	my $newsegs;
 
-	($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose) if defined($oldmapping);
+	($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose)
+	    if defined($oldmapping);
 
 	push @{$segments}, @{$newsegs};
 
@@ -109,6 +129,18 @@ while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) 
 
     print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
     &displaySegments($segments, $outfh);
+
+    if ($align) {
+	$seq_stmt->execute($parentid);
+	my ($parentseq) = $seq_stmt->fetchrow_array();
+	$parentseq = uncompress($parentseq);
+	$seq_stmt->finish();
+
+	foreach my $segment (@{$segments}) {
+	    print $outfh "\n\n";
+	    &displayAlignment($segment, $masterseq, $parentseq, 50, $sense, $outfh);
+	}
+    }
 
     print $outfh "\n\n";
 }
@@ -378,6 +410,49 @@ sub displaySegments {
     for (my $segnum = 0; $segnum < $nsegs; $segnum++) {
 	my $segment = $segments->[$segnum];
 	printf $fh "%8d %8d   %8d %8d   %8d\n", @{$segment};
+    }
+}
+
+sub displayAlignment {
+    my $segment = shift;
+    my $childseq = shift;
+    my $parentseq = shift;
+    my $linelen = shift;
+    my $sense = shift;
+    my $fh = shift;
+
+    my $forward = $sense eq 'Forward';
+
+    my ($cstart, $cfinish, $pstart, $pfinish, $offset) = @{$segment};
+
+    print $fh "SEGMENT [$cstart, $cfinish] --> [$pstart, $pfinish]\n\n";
+
+    ($pstart, $pfinish) = ($pfinish, $pstart) if ($pstart > $pfinish);
+
+    my $cseq = substr($childseq,  $cstart - 1, $cfinish - $cstart + 1);
+    my $pseq = substr($parentseq, $pstart - 1, $pfinish - $pstart + 1);
+
+    if ($sense ne 'Forward') {
+	$pseq = scalar reverse $pseq;
+	$pseq =~ tr/ACGTacgt/TGCAtgca/;
+    }
+
+    while (length($cseq)) {
+	printf $fh "%8d  ", $cstart;
+	print $fh substr($cseq, 0, $linelen), "\n";
+	$cseq = substr($cseq, $linelen);
+	$cstart += $linelen;
+
+	printf $fh "%8d  ", $forward ? $pstart : $pfinish;
+	print $fh substr($pseq, 0, $linelen), "\n";
+	$pseq = substr($pseq, $linelen);
+	if ($forward) {
+	    $pstart += $linelen;
+	} else {
+	    $pfinish -= $linelen;
+	}
+
+	print $fh "\n";
     }
 }
 
