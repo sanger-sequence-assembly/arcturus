@@ -405,16 +405,16 @@ sub writeToCaf {
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
     print $FILE "SCF_File $self->{readname}SCF\n";
-    print $FILE "Template $data->{template}\n";
-    print $FILE "Insert_size $data->{insertsize}\n";
-    print $FILE "Ligation_no $data->{ligation}\n";
-    print $FILE "Primer $data->{primer}\n";
-    print $FILE "Strand $data->{strand}\n";
-    print $FILE "Dye $data->{chemistry}\n";
-    print $FILE "Clone $data->{clone}\n";
+    print $FILE "Template $data->{template}\n"        if defined $data->{template};
+    print $FILE "Insert_size $data->{insertsize}\n"   if defined $data->{insertsize};
+    print $FILE "Ligation_no $data->{ligation}\n"     if defined $data->{ligation};
+    print $FILE "Primer $data->{primer}\n"            if defined $data->{primer};
+    print $FILE "Strand $data->{strand}\n"            if defined $data->{strand};
+    print $FILE "Dye $data->{chemistry}\n"            if defined $data->{chemistry};
+    print $FILE "Clone $data->{clone}\n"              if defined $data->{clone};
     print $FILE "ProcessStatus PASS\n";
-    print $FILE "Asped $data->{date}\n";
-    print $FILE "Base_caller $data->{basecaller}\n";
+    print $FILE "Asped $data->{date}\n"               if defined $data->{date} ;
+    print $FILE "Base_caller $data->{basecaller}\n"   if defined $data->{basecaller};
 # add the alignment info (the padded maps)
 #    $self->writeMapToCaf($FILE,1) if shift; # see below
 # process read tags ?
@@ -459,4 +459,26 @@ sub writeToCaf {
 #
 #######################
 
+sub dump {
+    my $self = shift;
+
+    foreach my $key (sort keys %{$self}) {
+        my $item = $self->{$key};
+        print STDERR "hash key $key -> $item\n";
+        if (ref($item) eq 'HASH') {
+            foreach my $key (sort keys %$item) {
+                print STDERR "    $key -> $item->{$key}\n";
+            }
+        }
+        elsif (ref($item) eq 'ARRAY') {
+            print STDERR "    @$item\n";
+        }
+    }
+}
+
+
 1;
+
+
+
+
