@@ -2897,7 +2897,7 @@ sub create_DATAMODEL {
 #                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
                  'READS2CONTIG       read_id             READS     read_id',
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
-                 'READS2CONTIG     contig_id  CONTIGS2PROJECTS   contig_id',
+                 'READS2CONTIG     contig_id   CONTIGS2PROJECT   contig_id',
                  'READS2ASSEMBLY     read_id             READS     read_id',
 #                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
 #                 'USERS               userid    USERS2PROJECTS      userid',
@@ -3954,7 +3954,7 @@ sub diagnose {
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
 # keep the first encountered mismatch of a column definition
                 if ($info ne $fields{$column}) {
-print "info: '$info'<br>fields: '$fields{$column}'<br>";
+#print "info: '$info'<br>fields: '$fields{$column}'<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
 #print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }
