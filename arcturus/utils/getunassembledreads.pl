@@ -19,13 +19,14 @@ my $cafFileName ='';
 my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
+my $blocksize = 50000;
 
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "nosingleton|info|verbose|help";
+                 "nosingleton|blocksize|info|verbose|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -45,6 +46,8 @@ while (my $nextword = shift @ARGV) {
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
     $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
+
+    $blocksize        = shift @ARGV  if ($nextword eq '-blocksize');
 
     $nosingleton      = 1            if ($nextword eq '-nosingleton');
 
@@ -93,20 +96,32 @@ my $readids = $adb->getUnassembledReads(%options);
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
-my $reads = $adb->getReadsByReadID($readids);
-
-$logger->info("Adding sequence");
-
-$adb->getSequenceForReads($reads);
-
-$logger->info("Writing to CAF file $cafFileName");
+$logger->info("Opening CAF file $cafFileName for output") if $cafFileName;
 
 my $CAF;
 $CAF = new FileHandle($cafFileName,"w") if $cafFileName;
 $CAF = *STDOUT unless $CAF;
 
-foreach my $read (@$reads) {
-    $read->writeToCaf($CAF);
+while (my $remainder = scalar(@$readids)) {
+
+    $blocksize = $remainder if ($blocksize > $remainder);
+
+    my @readblock = splice (@$readids,0,$blocksize);
+#undef @readblock; # testing
+
+    $logger->info("Processing next $blocksize reads");
+
+    my $reads = $adb->getReadsByReadID(\@readblock);
+
+    $logger->info("Adding sequence");
+
+    $adb->getSequenceForReads($reads);
+
+    $logger->info("Writing to CAF file $cafFileName");
+
+    foreach my $read (@$reads) {
+        $read->writeToCaf($CAF);
+    }
 }
 
 $adb->disconnect();
@@ -139,6 +154,7 @@ sub showUsage {
     print STDERR "-aspedafter\tdate\n";
     print STDERR "-nosingleton\tdon't include reads from single-read".
                  " contigs (default include)\n";
+    print STDERR "-blocksize\t(default 50000) for blocked execution\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
