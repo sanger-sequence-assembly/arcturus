@@ -16,6 +16,13 @@
 
 use DBI;
 use Cwd;
+use Mail::Send;
+
+###
+### Recipients of fatal error message
+###
+
+$rcpts = ['adh@sanger.ac.uk', 'ejz@sanger.ac.uk'];
 
 ###
 ### Argument parsing
@@ -48,6 +55,8 @@ while ($nextword = shift @ARGV) {
     $cp = shift @ARGV if ($nextword eq '-cp');
 
     $sleeptime = shift @ARGV if ($nextword eq '-sleeptime');
+
+    $forcereport = 1 if ($nextword eq '-forcereport');
 
     if ($nextword eq '-help') {
 	&doHelp();
@@ -184,7 +193,7 @@ if ($dumpfiles) {
     $filename = sprintf('%04d-%02d-%02d-%02d%02d%02d.tar',
 			$tm_year, $tm_mon, $tm_mday,
 			$tm_hour, $tm_min, $tm_sec);
-
+    
     $filename = "$dumpdir/$filename" if (defined($dumpdir) && -d $dumpdir);
 
     print STDERR "tar file will be named $filename\n";
@@ -203,14 +212,41 @@ if ($dumpfiles) {
 
     print STDERR "Done with status=$rc\n";
 
+    if ($rc != 0 || $forcereport) {
+        $subject = "Fatal error in Arcturus MySQL backup script";
+        $msg = ["A serious problem has occurred during the running of the MySQL backup script\n",
+                "on the $host cluster.\n\n",
+                "The script was attempting to backup $datadir to $filename when\n",
+                "it encountered error code $rc whilst executing the command\n\n",
+                "    $cmd\n\n",
+                "*****\n",
+                "***** The data files in $datadir have NOT been backed up!\n",
+                "*****\n\n",
+                "This almost certainly indicates a more serious underlying problem\n",
+                "such as a full disk. Please investigate as soon as possible.\n"];
+        &SendFatalErrorMessage($rcpts, $subject, $msg);
+    }
+
     if ($rc == 0 && $gzip) {
         $cmd = "gzip $filename";
-
+        
         print STDERR "Executing '$cmd' ... \n";
-
+        
         $rc = system($cmd);
 
         print STDERR "Done with status=$rc\n";
+
+        if ($rc != 0 || $forcereport) {
+            $subject = "Fatal error in Arcturus MySQL backup script";
+            $msg = ["A serious problem has occurred during the running of the MySQL backup script\n",
+                    "on the $host cluster.\n\n",
+                    "The script was attempting to backup $datadir to $filename when\n",
+                    "it encountered error code $rc whilst executing the command\n\n",
+                    "    $cmd\n\n",
+                    "This almost certainly indicates a more serious underlying problem\n",
+                    "such as a full disk. Please investigate as soon as possible.\n"];
+            &SendFatalErrorMessage($rcpts, $subject, $msg);
+        }
 
         $filename .= '.gz' if ($rc == 0);
     }
@@ -220,6 +256,18 @@ if ($dumpfiles) {
         print STDERR "Executing '$cmd' ... \n";
         $rc = system($cmd);
         print STDERR "Done with status=$rc\n";
+
+        if ($rc != 0 || $forcereport) {
+            $subject = "Fatal error in Arcturus MySQL backup script";
+            $msg = ["A serious problem has occurred during the running of the MySQL backup script\n",
+                    "on the $host cluster.\n\n",
+                    "The script was attempting to backup $datadir to $filename when\n",
+                    "it encountered error code $rc whilst executing the command\n\n",
+                    "    $cmd\n\n",
+                    "This almost certainly indicates a more serious underlying problem\n",
+                    "such as a full disk. Please investigate as soon as possible.\n"];
+            &SendFatalErrorMessage($rcpts, $subject, $msg);
+        }
     }
 }
 
@@ -322,3 +370,23 @@ sub doHelp {
     print STDERR "  -cp\t\t\tThe command to copy files to the safe directory.\n";
 }
 
+sub SendFatalErrorMessage {
+    my ($recipients, $subject, $msglines, $junk) = @_;
+
+    my $msg = new Mail::Send;
+
+    foreach $rcpt (@{$recipients}) {
+        my $msg = new Mail::Send;
+        $msg->to($rcpt);
+
+        $msg->subject($subject);
+
+        my $fh = $msg->open;
+
+        foreach $line (@{$msglines}) {
+            print $fh $line;
+        }
+
+        $fh->close;
+    }
+}
