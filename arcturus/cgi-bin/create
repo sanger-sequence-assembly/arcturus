@@ -641,7 +641,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         if ($cgi->{und_error}) {
             $error = "Please define all input fields: $cgi->{und_error}";
         }
-        elsif (!$GateKeeper->authorize(100)) {
+        elsif (!$GateKeeper->authorize(100,{returnPath => "/existing/process"})) {
             $error = $GateKeeper->{error};
         }
         elsif ($missed !~ /\b$tablename\b/) {
