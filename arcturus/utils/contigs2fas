@@ -26,6 +26,9 @@ my $depad;
 my $fastafh;
 my $contigids;
 my $allcontigs = 0;
+my $maxseqperfile;
+my $seqfilenum;
+my $totseqlen;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -40,6 +43,8 @@ while (my $nextword = shift @ARGV) {
     $destdir = shift @ARGV if ($nextword eq '-destdir');
 
     $contigids = shift @ARGV if ($nextword eq '-contigs');
+
+    $maxseqperfile = shift @ARGV if ($nextword eq '-maxseqperfile');
 
     $allcontigs = 1 if ($nextword eq '-allcontigs');
 
@@ -82,8 +87,14 @@ unless (defined($dbh)) {
 }
 
 if (defined($fastafile)) {
-    $fastafh = new FileHandle($fastafile, "w");
-    die "Unable to open FASTA file \"$fastafile\" for writing" unless $fastafh;
+    my $filename = $fastafile;
+    if (defined($maxseqperfile)) {
+	$seqfilenum = 1;
+	$filename .= sprintf("%04d", $seqfilenum) . ".fas";
+    }
+
+    $fastafh = new FileHandle($filename, "w");
+    die "Unable to open FASTA file \"$filename\" for writing" unless $fastafh;
 } else {
     if (! -d $destdir) {
 	die "Unable to create directory \"$destdir\"" unless mkdir($destdir);
@@ -119,6 +130,8 @@ $query = "select sequence from CONSENSUS where contig_id = ?";
 my $sth_sequence = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
+$totseqlen = 0;
+
 while(my @ary = $sth->fetchrow_array()) {
     my ($contigid, $contiglength) = @ary;
 
@@ -150,8 +163,23 @@ while(my @ary = $sth->fetchrow_array()) {
 
     if ($destdir) {
 	my $filename = sprintf("%s/contig%04d.fas", $destdir, $contigid);
-	$fastafh = new FileHandle("> $filename");
+	$fastafh = new FileHandle("$filename", "w");
 	die "Unable to open new file \"$filename\"" unless $fastafh;
+    }
+
+    if (defined($maxseqperfile)) {
+	$totseqlen += length($sequence);
+
+	if ($totseqlen > $maxseqperfile) {
+	    $fastafh->close();
+	    $totseqlen = length($sequence);
+	    $seqfilenum++;
+
+	    my $filename = $fastafile . sprintf("%04d", $seqfilenum) . ".fas";
+
+	    $fastafh = new FileHandle("$filename", "w");
+	    die "Unable to open new file \"$filename\"" unless $fastafh;
+	}
     }
 
     printf $fastafh ">CONTIG%04d\n", $contigid;
@@ -198,4 +226,5 @@ sub showUsage {
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
+    print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
 }
