@@ -449,14 +449,14 @@ CREATE TABLE ALIGN2SCF (
 CREATE TABLE C2CMAPPING (
   age smallint(5) unsigned default '0',
   contig_id mediumint(8) unsigned NOT NULL default '0',
-  linked_id mediumint(8) unsigned NOT NULL default '0',
+  parent_id mediumint(8) unsigned NOT NULL default '0',
   mapping_id mediumint(8) unsigned NOT NULL auto_increment,
   cstart int(10) unsigned NULL,
   cfinish int(10) unsigned NULL,
-  direction enum('Forward','Reverse') NOT NULL default 'Forward',
+  direction enum('Forward','Reverse') default 'Forward',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
-  KEY linked_id (linked_id)
+  KEY parent_id (parent_id)
 ) TYPE=MyISAM;
 
 #
