@@ -113,7 +113,8 @@ if ($createhistory) {
     $query = qq/CREATE TABLE `HISTORY` (`tablename` varchar(20) not null,
 					`date` datetime not null,
 					`user` varchar(20) not null,
-					`action` text not null
+					`action` varchar(20) not null,
+					`command` text not null
 					) TYPE=MyISAM/;
 
     print STDERR "Creating HISTORY table\n";
@@ -122,7 +123,8 @@ if ($createhistory) {
     &db_die("$query failed");
     print STDERR "\n" if $verbose;
 
-    $query = "INSERT INTO HISTORY(tablename, date, user, action) VALUES(?, NOW(), '$user', ?)";
+    $query = "INSERT INTO HISTORY(tablename, date, user, action, command)" .
+	" VALUES(?, NOW(), '$user', 'CREATE', ?)";
     $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
 }

@@ -112,7 +112,8 @@ foreach $dbname (@dblist) {
     print STDERR "\n" if $verbose;
 
     if ($loghistory) {
-	$query = "INSERT INTO HISTORY(tablename, date, user, action) VALUES(?, NOW(), '$user', ?)";
+	$query = "INSERT INTO HISTORY(tablename, date, user, action, command)".
+	    " VALUES(?, NOW(), '$user', ?, ?)";
 	$sth = $dbh->prepare($query);
 	&db_die("prepare($query) failed");
     }
@@ -122,10 +123,10 @@ foreach $dbname (@dblist) {
 	$dbh->do($command);
 	&db_die("$command failed");
 
-	$tablename = &parseTableName($command);
+	($cmd, $tablename) = &parseTableName($command);
 
-	if ($loghistory && defined($tablename)) {
-	    $sth->execute($tablename, $command);
+	if ($loghistory && defined($tablename) && defined($cmd)) {
+	    $sth->execute($tablename, $cmd, $command);
 	    &db_die("Update of HISTORY failed");
 	}
 
@@ -163,9 +164,9 @@ sub parseTableName {
 
     return undef unless defined($command);
 
-    return $1 if ($command =~ /^\s*(alter|create|drop)\s+table\s(\w+)/);
+    return (uc($1),$2) if ($command =~ /^\s*(create|alter|drop)\s+table\s+[\`]?(\w+)[\`]?/i);
 
-    return $1 if ($command =~ /^\s*update\s+(\w+)\s+/);
+    return ('UPDATE', $1) if ($command =~ /^\s*update\s+(\w+)\s+/i);
 
     return undef;
 }
