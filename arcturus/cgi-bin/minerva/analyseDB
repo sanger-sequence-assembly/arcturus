@@ -45,6 +45,8 @@ if(defined($database) && defined($table)) {
 	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
+	print $cgi->h2("Table status for $database.$table");
+
 	$query = "SHOW TABLE STATUS LIKE '$table'";
 
 	$sth = $dbh->prepare($query);
@@ -92,6 +94,7 @@ if(defined($database) && defined($table)) {
     }
 
     foreach $database (sort @databases) {
+	$scriptlink = "$scriptname?dbport=$dbport&dbhost=$dbhost&database=$database";
 	$query = "USE $database";
 	$dbh->do($query);
 	if ($DBI::err) {
@@ -99,7 +102,8 @@ if(defined($database) && defined($table)) {
 	    print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
 	    next;
 	} else {
-	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FFCC00\" ALIGN=\"LEFT\">$database</TD>\n</TR>\n";
+	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FFCC00\" ALIGN=\"LEFT\">";
+	    print "<A HREF=\"$scriptlink\"><STRONG>$database</STRONG></A></TD>\n</TR>\n";
 	}
 
 	$query = 'SHOW TABLES';
