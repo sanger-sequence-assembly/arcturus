@@ -2,9 +2,9 @@
 
 use WrapMySQL;
 
-@dbs = ('babel.prod', 'babel.dev', 'babel.test', 'pcs3.prod', 'pcs3.dev', 'pcs3.test');
+@dbs = ('pcs3.prod', 'pcs3.dev', 'pcs3.test', 'babel.prod', 'babel.dev', 'babel.test');
 
-@modes = ('admin', 'read', 'write');
+@modes = ('admin', 'read', 'write', 'root');
 
 print "Content-Type: text/plain\n\n";
 
@@ -16,7 +16,7 @@ foreach $db (@dbs) {
 	my $dbh = WrapMySQL->connect($db, $mode);
 
 	if (!defined($dbh)) {
-	    print " FAILED: $DBI::errstr\n";
+	    print " FAILED: ", WrapMySQL->getErrorString, "\n";
 	} else {
 	    print " OK\n";
 	    $dbh->disconnect();
