@@ -50,6 +50,7 @@ while ($schema = shift @schemas) {
 	($projid, $project, $junk) = @ary;
 	print "<TR>\n  <TD>";
 	print (($nrow > 0) ? "&nbsp;" : $schema);
+	$nrow++;
 	print "</TD>\n  <TD>$projid</TD>\n  <TD>project</TD>\n<TR>\n";
     }
 
