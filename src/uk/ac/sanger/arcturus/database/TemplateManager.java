@@ -79,7 +79,7 @@ public class TemplateManager {
     }
 
     private Template registerNewTemplate(String name, int id, int ligation_id) throws SQLException {
-	Ligation ligation = adb.getLigationManager().getLigationByID(ligation_id);
+	Ligation ligation = adb.getLigationByID(ligation_id);
 
 	Template template = new Template(name, id, ligation, adb);
 

@@ -84,7 +84,7 @@ public class LigationManager {
 
     private Ligation registerNewLigation(String name, int id, int clone_id,
 					 int silow, int sihigh) throws SQLException {
-	Clone clone = adb.getCloneManager().getCloneByID(clone_id);
+	Clone clone = adb.getCloneByID(clone_id);
 
 	Ligation ligation = new Ligation(name, id, clone, silow, sihigh, adb);
 
