@@ -490,8 +490,8 @@ sub opendb_MySQL {
 
 # we now test if the specified database is installed on the current CGI server
 
-#$debug = 1;
-print "config $self->{config}\n" if $debug;
+$debug = 0;
+#print "config $self->{config}\n" if $debug;
 
     if (my $config = $self->{config}) {
 # get database parameters
@@ -539,7 +539,9 @@ $self->report("HTTP_HOST: $HTTP_HOST") if $debug;
             $HTTP_HOST =~ s/internal\.//; # for connections from outside Sanger
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
             foreach my $host (@$hosts) {
+                $HTTP_HOST =~ s/pcs2/babel/; # fix to cope with pcs2 mapping to pcs2.internal
                 $host =~ s/\:/.${base_url}:/ if ($base_url && $host !~ /\.|$base_url/);
+$self->report("host $host  http $HTTP_HOST") if $debug;
                 if ($host eq $HTTP_HOST) {
 $self->{open} .= "opendb_MySQL: HTTP_HOST define self->server as $host <br>";
                     $self->{server} = $host;
