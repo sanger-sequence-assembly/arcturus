@@ -100,7 +100,7 @@ if(defined($database) && defined($table)) {
 	while (@ary = $sth->fetchrow_array()) {
 	    print "<TR>\n";
 	    foreach $item (@ary) {
-		print "<TD>", (defined($item) ? $item : "&nbsp;"), "</TD>\n";
+		print "<TD>", ((defined($item) && $item ne "") ? $item : "&nbsp;"), "</TD>\n";
 	    }
 	    print "</TR>\n";
 	}
