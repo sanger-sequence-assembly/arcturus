@@ -870,6 +870,7 @@ sub htmlMaskedOptions {
     my $item   = shift; # the item for which select options list is made
     my $column = shift; # the column name to be tested for (or 'where')
     my $value  = shift; # this particular value or where clause
+    my $order  = shift; # order by
 
     my $currentHash = $self->{hashrefs}; # memorize current hash
     if ($column ne 'where' && $column ne 'distinct where') {
@@ -878,7 +879,8 @@ sub htmlMaskedOptions {
     else {
         my $query = "select $item from <self> where ($value)";
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
-# print "query $query<br>";
+        $query .= " order by $order" if $order;
+#print "query $query<br>";
         $self->{hashrefs} = $self->query($query,0); # use query trace
     }
     my $list = htmlOptions ($self,$item,$item,@_); # select list new hash

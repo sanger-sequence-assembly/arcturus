@@ -723,14 +723,14 @@ sub authorize {
         $password = $options{password};
         $session  = $options{session};
     }
-# recover USER from input info, if any
-    if ($session) {
+# recover USER from input info, if any ('identify' takes precedence over 'session' if both are present)
+    if ($identify) {
+        $self->{USER} = $identify;
+    }
+    elsif ($session) {
         $self->{SESSION} = $session;
         my @sdata = split ':',$session;
         $self->{USER} = $sdata[0];
-    }
-    elsif ($identify) {
-        $self->{USER} = $identify;
     }
 
     my $mother = $self->{mother};
@@ -1404,9 +1404,9 @@ sub GUI {
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100% nowrap> MODIFY </th></tr>";
     if ($database && $database ne 'arcturus') {
- $title = "LOAD TAG INFORMATION FOR ".uc($database);
- $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
+# $title = "LOAD TAG INFORMATION FOR ".uc($database);
+# $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        my $update = "/cgi-bin/new/newcreate/existing/getform".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
         $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include); # other URL
         $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
@@ -1417,8 +1417,8 @@ sub GUI {
         my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
         $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
 #    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
-        $update = "/cgi-bin/new/newupdate/newform".$cgi->postToGet(1,'session');
-        $table .= "<tr><td $cell><a href=\"$update\"> Common </a></td></tr>";
+        $update = "/cgi-bin/new/newcreate/arebuild".$cgi->postToGet(1,'session');
+        $table .= "<tr><td $cell><a href=\"$update\"> arcturus </a></td></tr>";
     }
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";

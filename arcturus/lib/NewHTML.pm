@@ -280,6 +280,7 @@ sub message {
     my $font   = shift;
     my $center = shift || 0;
     my $twidth = shift || 0;
+    my $extra  = shift || '';
 
     my $part = $self->{current} - 1;
     my $content = $self->{content};
@@ -288,7 +289,8 @@ sub message {
     $text = "<font $font>$text</font>" if $font;
     my $align = ''; $align = "align=center" if $center;
     my $width = ''; $width = "width=$twidth" if $twidth;
-    my $message = "<TABLE $width><TR><TD BGCOLOR=\"$colour\" $align>$text</TD></TR></TABLE>";
+    $extra = "<td>$extra</td>" if $extra;
+    my $message = "<TABLE $width><TR><TD BGCOLOR=\"$colour\" $align>$text</TD>$extra</TR></TABLE>";
 
     $content->[$part] .= $message;
 }
@@ -623,7 +625,7 @@ sub choicelist {
     my $choice = "<SELECT $width name = \'$name\'>";
     foreach my $listitem (@$list) {
        $preselect = $select if (!$mark || $mark eq $listitem); 
-       $choice .= "<OPTION value = \'$listitem\' $preselect>$listitem";
+       $choice .= "<OPTION value = \'$listitem\' $preselect > $listitem";
        $select = '' if $preselect;
     }
     $choice .= "</SELECT>";

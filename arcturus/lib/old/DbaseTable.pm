@@ -79,13 +79,17 @@ sub spawn {
     my $tablename = shift;
     my $database  = shift;
     my $forced    = shift; # if true, force creation of a new instance
+    my $build     = shift;
 
     my $dbhandle = $self->{dbhandle};
     $database = $self->{database} if ($database =~ /\bself\b/);
 
     my $handle = $self->findInstanceOf($database.'.'.$tablename) || '';
-    $handle = $self->new($dbhandle,$tablename,$database,@_) if (!$handle || $forced);
-    
+# force creation of a new instance if build is specified but the existing instance has no build 
+    $handle = 0 if ($handle && $build && !$handle->{hashrefs});
+
+    $handle = $self->new($dbhandle,$tablename,$database,$build,@_) if (!$handle || $forced);
+
     return $handle;
 }
 
@@ -97,7 +101,6 @@ sub build {
 # set switch "on" for full build including hash, else only table columns
     my $self   = shift;
     my $switch = shift;
-# order by column "order" (optional)
     my $order  = shift;
 
     my $count = 0;
