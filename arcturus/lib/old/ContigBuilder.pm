@@ -1571,7 +1571,7 @@ print "Padded set to $isPadded $break";
             }
             else {
                 $type = -2;
-                print "Contig $object SKIPPED$break" if ($list > 1);
+                print "Contig $object SKIPPED$break" if $list;
             }
         }
 
@@ -1586,7 +1586,7 @@ print "Padded set to $isPadded $break";
 	    }
             else {
                 $type = -2;
-                print "    contig = $object SKIPPED$break" if ($list > 1);
+                print "Contig $object SKIPPED$break" if $list;
             }
         } 
 
@@ -1622,7 +1622,7 @@ print "Padded set to $isPadded $break";
                     $length = $extra; # possibly length of contig here
 	        }
                 else {
-                    print "    contig = $object SKIPPED$break" if ($list > 1);
+                    print "Contig $object SKIPPED$break" if ($list > 1);
                 }
             }
             else {
