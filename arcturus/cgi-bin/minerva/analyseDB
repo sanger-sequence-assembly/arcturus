@@ -234,8 +234,14 @@ sub showDatabase {
 	    $created  = defined($metadata->{'Create_time'}) ? $metadata->{'Create_time'} : $unknown;
 	    $updated  = defined($metadata->{'Update_time'}) ? $metadata->{'Update_time'} : $unknown;
 
+	    $tabletype = $metadata->{'Type'};
+
+	    $isInnoDB = $tabletype =~ /InnoDB/;
+
+	    $tr = $isInnoDB ? "<TR BGCOLOR=\"#99FF99\">" : "<TR>";
+
 	    $scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
-	    printf "<TR>\n<TD>";
+	    printf "$tr\n<TD>";
 	    print "<A HREF=\"$scriptlink\">$tablename</A></TD>\n";
 	    print "<TD>$rowcount</TD>\n";
 	    print "<TD>$created</TD>\n";
@@ -314,7 +320,13 @@ sub showTable {
 
 	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
 
-	    print "<TR", ($colname eq 'Type' ? ' BGCOLOR="#FFCC00"' : ''), ">";
+	    if ($colname eq 'Type') {
+		$tr = "<TR BGCOLOR=\"" . (($colvalue eq 'InnoDB') ? '#99FF99' : '#FFCC00') . "\">";
+	    } else {
+		$tr = '<TR>';
+	    }
+
+	    print $tr;
 	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
 	    print "<TD>$colvalue</TD></TR>\n";
 	}
