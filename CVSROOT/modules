@@ -47,4 +47,6 @@ modules psu/src/perl/modules
 pombe psu/src/perl/pombe
 strepc psu/src/perl/strepc
 
+gemini psu/gemini
+
 zoo zoo_impl &zoo_art_config &zoo_data &zoo_app &zoo_general &zoo_modules &zoo_pombe &zoo_strepc 
