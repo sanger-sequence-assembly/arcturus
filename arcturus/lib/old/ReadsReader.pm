@@ -993,7 +993,7 @@ sub chemistry {
 
 # get description from SCF file
 
-&logger("<br>** Default Chemistry Type: $readItem{CHT}<br>");
+&logger("<br>Default Chemistry Type: $readItem{CHT} ..");
 &logger("Test chemistry in file ${readFileName}SCF<br>");
 
     my $scffile = $readItem{SCF} || "${readFileName}SCF";
@@ -1011,7 +1011,7 @@ sub chemistry {
     chomp $chemistry;
     undef $chemistry if ($chemistry =~ /load.+disabled/i);
     $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
-&logger("SCF chemistry: $chemistry <br>");
+&logger("SCF chemistry: '$chemistry' ");
 
 # test against entries in the CHEMISTRY table (exact matches because $chemistry may contain wildcard symbols)
 
