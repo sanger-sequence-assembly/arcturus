@@ -161,7 +161,8 @@ print $self->listInstances('\n');
         my ($linktable,$thiscolumn) = split /\&/,$tableentry;
         $thiscolumn = 'none' if !$thiscolumn; # protection
 print "linktable for $fullname: $linktable  column=$thiscolumn\n" if $LIST;
-        my $domain = $inventory->SUPER::associate('domain',$linktable);
+        my $domain = $inventory->associate('domain',$linktable);
+#        my $domain = $inventory->SUPER::associate('domain',$linktable);
 print "  tabledomain=$domain\n" if $LIST;
         if ($domain) {
             undef my $dbasename;
@@ -242,7 +243,8 @@ sub counted {
         }
         else {
             my $query = "SELECT SUM(counted) AS total FROM <SELF>";
-            my $hash  = $self->SUPER::query($query);
+            my $hash  = $self->query($query,{traceQuery=>0});
+#            my $hash  = $self->SUPER::query($query,{traceQuery=>0});
             $count = $hash->[0]->{total};
         }
     }
@@ -463,7 +465,8 @@ sub unpackAttributes {
 # ensure that the field exists and is of type BLOB; if not, ignore
     if (defined($self->{coltype}->{$field}) && $self->{coltype}->{$field} =~ /blob/i) {
 # get the field value
-        if ($attributes = $self->SUPER::associate($field,$tvalue,$target,{useCache => 0})) {
+        if ($attributes = $self->associate($field,$tvalue,$target,{useCache => 0})) {
+#        if ($attributes = $self->SUPER::associate($field,$tvalue,$target,{useCache => 0})) {
 # supposedly the field value is a hash image; values may contain a '~' (e.g. for files)
             $attributes =~ s?\~?$EXPAND?g; # replace possible '~' by full file name
 #print "attributes $attributes <br>";
@@ -544,8 +547,8 @@ sub snapshot {
     my $instances = $self->getInstanceOf(0);
     return if (!$instances); # may not occur!
 
-    my $table = '<TABLE BORDER=1 CELLPADDING=2>';
-    $table .= '<TR><TH>Table</TH><TH>Database</TH><TH>Size</TH><TH>status</TH></TR>';
+    my $table = "<TABLE BORDER=1 CELLPADDING=2>";
+    $table .= "<TR><TH>Table</TH><TH>Database</TH><TH>Size</TH><TH>status</TH></TR>\n";
     foreach my $tablename (sort keys %$instances) {
         my $instance = $instances->{$tablename};
         my ($port,$dbase, $tname) = split '\.',$tablename;
@@ -553,7 +556,7 @@ sub snapshot {
         my $error = $instance->{errors} || "&nbsp";
         if (!$database || $dbase eq $database) {
             $table .= "<TR><TD>$tname</TD><TD>$dbase</TD>";
-            $table .= "<TD>$count</TD><TD>$error</TD></TR>";
+            $table .= "<TD>$count</TD><TD>$error</TD></TR>\n";
         }
     }
     $table .= "</TABLE>";
@@ -741,7 +744,7 @@ sub htmlMaskedTable {
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
         $query .= " order by $order" if $order;
 # print "masked table query: $query<br>";
-        $self->{hashrefs} = $self->query($query,0); # use query trace if needed
+        $self->{hashrefs} = $self->query($query); # allow query trace
         $list = htmlTable($self,$mask);      
         $self->{hashrefs} = $currentHash; # restore old hash
     }
@@ -901,7 +904,7 @@ sub htmlMaskedOptions {
         my $query = "select $item from <self> where ($value)";
         $query =~ s/select/select distinct/ if ($column =~ /distinct/);
         $query .= " order by $order" if $order;
-        $self->{hashrefs} = $self->query($query,0); # use query trace
+        $self->{hashrefs} = $self->query($query); # allow query trace
     }
     my $list = htmlOptions ($self,$item,$item,@_); # select list new hash
     $self->{hashrefs} = $currentHash; # restore old hash

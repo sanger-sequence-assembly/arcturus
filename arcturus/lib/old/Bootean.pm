@@ -46,6 +46,10 @@ sub new {
 
     $self->importOptions (\%options,$options); # override with input options, if any
 
+    if (!$options{HostAndPort} && $options{host} && $options{port}) {
+         $options{HostAndPort} = $options{host}.':'.$options{port};
+    }
+
     $options{identify} = $options{username} if $options{username}; # to accommodate deprecated usage
 
 # initialize gate keeper and get ArcturusTable handle

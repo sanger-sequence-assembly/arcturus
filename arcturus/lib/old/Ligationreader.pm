@@ -31,6 +31,7 @@ sub new {
 
 # print "$ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
 
+#print "opening Ligationreader ( $ENV{PERL5LIB},  $PEEKDIR ) \n";
     $tracking = Tracking->new();
 
     $self->{lgdata}  = {};

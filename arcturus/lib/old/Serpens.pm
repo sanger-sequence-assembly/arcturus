@@ -66,7 +66,7 @@ sub query {
     my $query = "select $what from <self> ";
     $query .= "where $where" if $where;
 
-    my $output = $self->{TAGS}->query($query,{returnScalar => 0});
+    my $output = $self->{TAGS}->query($query,{returnArray => 1});
 
     $output; 
 }

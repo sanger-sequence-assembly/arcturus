@@ -198,7 +198,7 @@ sub testAttributes {
 # get data from READS for this read
 
         my $query = "select ligation,svector,cvector,clone from <self> where read_id=$read_id";
-        my $hashrefs = $READS->query($query,0,0);
+        my $hashrefs = $READS->query($query,{traceQuery=>0});
         return 0 if !$hashrefs; # protection
 
         my $biology = $self->{biology};
@@ -1175,8 +1175,8 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         push @columns, 'read_id'   ; push @cvalues, $read_id;
                         push @columns, 'prstart'   ; push @cvalues, $block[0];
                         push @columns, 'prfinal'   ; push @cvalues, $block[1];
-                        push @columns, 'assembly'  ; push @cvalues, $assembly;
-                        push @columns, 'clone'     ; push @cvalues, $clone_id;
+                        push @columns, 'assembly'  ; push @cvalues, $assembly; # ?
+                        push @columns, 'clone'     ; push @cvalues, $clone_id; # ?
                         push @columns, 'label'     ; push @cvalues, $label;
                         push @columns, 'generation'; push @cvalues, 0;
                         push @columns, 'deprecated'; push @cvalues, $marker;
@@ -1523,7 +1523,7 @@ sub retire {
     $query .= "G0.generation = 0 and G1.generation = 1 and ";
     $query .= "G0.read_id = NULL";
 
-    my $hashes = $RR2CC->query($query,0,0);
+    my $hashes = $RR2CC->query($query,{traceQuery=>0});
 print "retire query $RR2CC->{lastQuery}$break";
 print "retire hashes $hashes \n";
     if ($hashes && ref($hashes) eq 'ARRAY') {
@@ -1565,6 +1565,101 @@ sub reaper {
     my $where = "generation > 1 AND deprecated = 'M' AND assembly=$assembly";
 print "reaper: delete from READS2CONTIG where $where $break";
     $RR2CC->delete('where',$where) if ($assembly > 0);
+}
+
+##################################################################################
+
+sub mapAnalysis {
+# analyse maps and chemistry (ad hoc application for the moment) 
+    my $self = shift;
+    my $opts = shift;
+
+    my %options = (minimum => 100, list => 0, normalise => 1);
+    $READS->importOptions(\%options,$opts);
+
+    my $CHEMISTRY = $READS->spawn('CHEMISTRY');
+
+# first find the chemistry counts on READS
+
+    my $query = "select chemistry, count(chemistry) as total from <self> group by chemistry";
+    my $hashes = $READS->query($query,{traceQuery=>0}) || return 0;
+    my %counts;
+    foreach my $hash (@$hashes) {
+        $counts{$hash->{chemistry}} = $hash->{total};
+    }
+
+# go through each chemistry and get the reads and map counts
+
+    my %histogram = ( '01'=>0, '02'=>0, '03'=>0, '04'=>0, '05-06'=>0, '07-09'=>0,
+                      '10-15'=>0, '16-20'=>0, '21-30'=>0, '31-50'=>0, '>50'=>0);
+    my $reporth = "    ";
+    foreach my $key (sort keys %histogram) {
+        $reporth .= sprintf "%7s" , $key;
+    }
+    $reporth .= "$break$break";
+    my $reporta = '';
+    my $database = $READS->{database};
+    foreach my $chemistry (sort { $a <=> $b } keys %counts) {
+# apply minimum number quillotine
+        my $chname = $CHEMISTRY->associate('identifier',$chemistry,'chemistry');
+        $reporta .= "Chemistry $chname ($chemistry: $counts{$chemistry})$break";
+        next if ($options{minimum} && $counts{$chemistry} < $options{minimum});
+# get a list of all reads and a count of the maps for this chemistry
+        $query  = "select count(R2C.read_id) as total, R2C.read_id from ";
+        $query .= "$database.READS2CONTIG as R2C, $database.READS as RDS ";
+        $query .= "where R2C.label<20 and R2C.read_id=RDS.read_id and ";
+        $query .= "RDS.chemistry=$chemistry group by read_id";
+print "$query\n" if ($options{list} > 1);
+        my $readids = $RR2AA->query($query,{traceQuery=>0}) || next;
+        next unless (ref($readids) eq 'ARRAY');
+# collate the data
+        my $sum = 0;
+        foreach my $key (sort keys %histogram) {
+            $histogram{$key} = 0;
+        }
+        foreach my $read (@$readids) {
+            my $count  = $read->{total};
+            my $readid = $read->{read_id};
+            if ($count <= 4) {
+                $histogram{"0$count"}++;
+            }
+            elsif ($count <= 6) {
+                $histogram{"05-06"}++;
+            }
+            elsif ($count <= 9) {
+                $histogram{"07-09"}++;
+            }
+            elsif ($count <= 15) {
+                $histogram{"10-15"}++;
+            }
+            elsif ($count <= 20) {
+                $histogram{"16-20"}++;
+            }
+            elsif ($count <= 30) {
+                $histogram{"21-30"}++;
+            }
+            elsif ($count <= 50) {
+                $histogram{"31-50"}++;
+            }
+            else {
+                $histogram{">50"}++;
+            }
+            $sum += $count;
+        }
+# printout
+        my $total = scalar(@$readids); 
+        my $average = $sum / $total;
+        $reporta .= "Chemistry $chemistry : average number of maps per read = ";
+        $reporta .= "$average ($sum / $total)$break$break";
+        $reporth .= sprintf "%3d:", $chemistry;
+        foreach my $key (sort keys %histogram) {
+            $histogram{$key} = int($histogram{$key}*100/$total+0.5) if $options{normalise};
+            $reporth .= sprintf "%7d" , $histogram{$key};
+        }
+        $reporth .= "$break$break";
+    }
+
+    return $reporta.$reporth;
 }
 
 ################################################################################

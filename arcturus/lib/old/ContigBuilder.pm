@@ -11,8 +11,6 @@ use strict;
 use ReadMapper;
 use Compress;
 
-#use Devel::MyTimer;
-
 #############################################################################
 # Global variables
 #############################################################################
@@ -35,8 +33,8 @@ my $ASSEMBLY;   # database table handle to ASSEMBLY
 my $SEQUENCE;   # database table handle to CONSENSUS
 
 my $break;
-
-my $TIMER = 1;
+my $CGI;
+my $TIMER;
 
 #############################################################################
 # constructor init: initialise the global (class) variables
@@ -51,7 +49,7 @@ sub init {
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
-    $break = &break;
+    &setEnvironment; # define $break and $CGI
 
 # if $CONTIGS was defined previously, check if same database
 
@@ -96,8 +94,6 @@ $self->{nameChange}  = 1; # TEST override
 # get the Compress handle
 
     $Compress = new Compress('ACGTN ');
-
-    #$MyTimer  = new MyTimer;
 
 #    &buildForwardMap;
 
@@ -257,7 +253,7 @@ sub buildForwardMap {
     $query .= "CONTIGS2CONTIG,READS2CONTIG where CONTIGS2CONTIG.oldcontig ";
     $query .= "= READS2CONTIG.contig_id and READS2CONTIG.generation=1";
 
-    my $hashes = $CCTOCC->query($query,0,0);
+    my $hashes = $CCTOCC->query($query,{traceQuery=>0});
 
     return if (ref($hashes) ne 'ARRAY');
 
@@ -285,27 +281,18 @@ sub addForwardRange {
 
 #############################################################################
 
-sub setTestModes {
-# (re)define class variables;
-    my $self   = shift;
-    my $test   = shift || 0; # test option for ContigBuilder
-    my $repair = shift || 0; # repair mode for Reads
-
-    $self->{TESTMODE} = $test;
-
-    $self->{REPAIR}   = $repair;
-}
-#############################################################################
-
 sub setTestMode {
 # (re)define class variables;
     my $self = shift;
     my $item = shift || 0; # either TESTMODE, REPAIR or READSCAN have meaning
     my $mode = shift || 0;
 
-    return if ($item !~ /\b(TESTMODE|REPAIR|READSCAN)\b/);
-
-    $self->{$item} = $mode;
+    if ($item =~ /\b(TESTMODE|REPAIR|READSCAN)\b/i) {
+        $self->{$item} = $mode;
+    }
+    elsif ($item =~ /\bTIMER\b/i) {
+        $TIMER = $mode;
+    }
 }
 
 #############################################################################
@@ -404,6 +391,10 @@ sub dumpDNA {
     my $c_id = shift;
     my $size = shift;
 
+    print "Dumping DNA :\n$self->{DNA}\nsize=$size length=";
+    print length($self->{DNA});
+    print "\n";
+
     return 0 if (!$self->{DNA} || !length($self->{DNA}));
 
 # there are three sizes which should all be the same
@@ -415,26 +406,24 @@ sub dumpDNA {
     $self->{'length'} = $length if !$self->{'length'}; # to have it defined
 
     if ($self->{'length'} != $length || $size != $length) {
-        print "Warning: consensus sequence mismatch ($length $self->{'length'} $size)$break";
+        print "Warning: consensus sequence mismatch ($length $size)$break";
     }
-
-# massage the data (uppercase, anything not ACTG replace by -)
-
-    $self->{DNA} =~ tr/a-z/A-Z/;
-    $self->{DNA} =~ s/[^ACGT]/-/g;
 
 # compress the string
 
-    my $scompress = 2; # Huffman
+    my $compress = 99; # Huffman
 
-    my ($count, $sequence) = $Compress->sequenceEncoder($self->{DNA},$scompress);
+    my ($count, $sequence) = $Compress->sequenceEncoder($self->{DNA},$compress);
 
     $length = length($sequence); print "Consensus sequence count $count length $length $break";
 
+    my $quality;
+
+
 # enter 
 
-    my @columns = ('contig_id','sequence','scompress','length');
-    my @cvalues = ($c_id      ,$sequence ,$scompress ,$length );
+    my @columns = ('contig_id','sequence','quality');#,'length');
+    my @cvalues = ($c_id      ,$sequence ,$quality );#,$length );
 #    if (!$SEQUENCE->newrow(\@columns, \@cvalues)) {
 #        print STDOUT "$SEQUENCE->{qerror} $break";
 #    }
@@ -449,6 +438,11 @@ sub dump {
     my $userid   = shift;
     my $forced   = shift;
 
+# process parameter input
+
+    my %options = (forcedLoad   => 0,  # override fatal errors
+                   showWarnings => 0); # print warnings                  
+
 # get the assembly and user name (input values override defaults)
 
     $userid      = $self->{USERID}   if !$userid;
@@ -457,8 +451,6 @@ sub dump {
 # output format
 
     my $fonts = &fonts;
-
-    my $CGI = 0; $CGI = 1 if ($break =~ /br/i);
 
 # we keep track of error conditions with the variable $complete
 
@@ -472,7 +464,7 @@ sub dump {
 
     my $report = "${break}Attempting to dump contig $cnames->[0] ....$break";
 
-#$MyTimer->timer('CB dump',0) if $TIMER;
+    &timer('ContigBuilder dump',0) if $TIMER;
 
 #############################################################################
 # (0) test error status on ASSEMBLY for this assembly
@@ -513,7 +505,7 @@ sub dump {
     my $nrOfReads = 0;
 
     if ($complete) {
-#$MyTimer->timer('CB dump part II',0) if $TIMER;
+        &timer('ContigBuilder dump part II',0) if $TIMER;
         foreach my $readname (keys (%$readmap)) {
             print "Testing read $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
             my $readobject = $ReadMapper->lookup($readname);
@@ -554,7 +546,7 @@ sub dump {
         $complete = 0 if ($ntotal != $counts->[0]);
         $status->{diagnosis} .= "$nrOfReads ReadMappers defined, $missed missed or incomplete out ";
         $status->{diagnosis} .= "of $ntotal ($counts->[0]) for contig $cnames->[0]$break";
-#$MyTimer->timer('CB dump part II',1) if $TIMER;
+        &timer('ContigBuilder dump part II',1) if $TIMER;
     }
 
     $report = "I&II: number of reads: $nrOfReads complete $complete $break";
@@ -567,7 +559,9 @@ sub dump {
     my $cover = 0;
 
     if ($complete) {
-#$MyTimer->timer('CB dump part III',0) if $TIMER;
+
+        &timer('ContigBuilder dump part III',0) if $TIMER;
+
         my $progress = '';
         my $nreads = 0;
         $counts->[2] = 0; # for total read length
@@ -661,7 +655,9 @@ sub dump {
         $minread = &readAlias($minread);
         $maxread = &readAlias($maxread);
         $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
-#$MyTimer->timer('CB dump part III',1) if $TIMER;
+
+        &timer('ContigBuilder dump part III',1) if $TIMER;
+
         $report .= "III : Full Arcturus contigname: $cnames->[1] (complete=$complete)$break";
 #        print $progress;
     }
@@ -680,7 +676,8 @@ sub dump {
 
     my $isWeeded = 0;
     while ($complete && !$isWeeded) {
-#$MyTimer->timer('CB dump part IV',0) if $TIMER;
+
+        &timer('ContigBuilder dump part IV',0) if $TIMER;
 
         my $progress = ''; # local report
         $isWeeded = 1; # switch to 0 later if not
@@ -925,7 +922,9 @@ print "read $read is deprecated because of overlap$break";
 	    $report .= sprintf ("%6d %1d %8d  %8d-%8d %8d-%8d  %6d %5d",$contig,$order,$shift,@$map);
             $report .= $break;
         }
-#$MyTimer->timer('CB dump part IV',1) if $TIMER;
+
+        &timer('ContigBuilder dump part IV',1) if $TIMER;
+
         print $progress;
     }
 
@@ -963,7 +962,8 @@ print "V $break";
     elsif ($complete) {
 # add the new contig to CONTIGS and get its contig_id
 
-#$MyTimer->timer('CB dump part V',0) if $TIMER;
+        &timer('ContigBuilder dump part V',0) if $TIMER;
+
         $report .= "Adding new contig $cnames->[1] ($cnames->[0]) to CONTIGS table$break";
 
         undef my @columns;
@@ -999,7 +999,9 @@ print "V $break";
             $report .= "to CONTIGS ($counts->[0] reads)$break";
         }
 # RELEASE THE LOCK HERE ????
-#$MyTimer->timer('CB dump part V',1) if $TIMER;
+
+        &timer('ContigBuilder dump part V',1) if $TIMER;
+
     }
 
 #############################################################################
@@ -1009,7 +1011,9 @@ print "V $break";
 print "VI $break";
 
     if ($complete && $accepted) {
-#$MyTimer->timer('CB dump part VI',0) if $TIMER;
+
+        &timer('ContigBuilder dump part VI',0) if $TIMER;
+
         $report .= "VI  : Writing read maps to database $break";
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
@@ -1029,14 +1033,15 @@ print "VI $break";
 # if complete, dumps are done okay; remove the ReadMappers at the very end
 
         $report .= "Failed to dump (some of the) read maps $break" if !$complete;
-#$MyTimer->timer('CB dump part VI',1) if $TIMER;
+
+        &timer('ContigBuilder dump part VI',1) if $TIMER;
     }
 
 #############################################################################
 # (VII) here contig and map dumps are done (and successful if $complete)
 #############################################################################
 print "VII $break";
-#$MyTimer->timer('CB dump',1) if $TIMER;
+    &timer('ContigBuilder dump',1) if $TIMER;
 
     undef my @priorContigList;
     foreach my $hash (@priorContigHash) {
@@ -1045,7 +1050,9 @@ print "VII $break";
     }
 
     if ($complete && $accepted && !$isIdentical) {
-#$MyTimer->timer('CB dump part VII',0) if $TIMER;
+
+        &timer('ContigBuilder dump part VII',0) if $TIMER;
+
 # link the new contig to a scaffold and add assembly status 
         $CCTOSS->newrow('contig_id',$contig,'assembly',$assembly); # astatus N by default
 # inherit the project from connecting contig(s), if any
@@ -1101,11 +1108,11 @@ print "VII $break";
             $CCTOSS->update('astatus','S','contig_id',$priorContig);
         }
 
-#$MyTimer->timer('CB dump part VII',1) if $TIMER;
+        &timer('ContigBuilder dump part VII',1) if $TIMER;
 
         if ($complete) {
 # if there is a consensus sequence, dump it using this contig_id
-            $self->dumpDNA($contig,$counts->[1]) if ($self->{DNA});
+            $self->dumpDNA($contig,$counts->[1]);
 # here remove the ReadMappers and this contigbuilder to free memory
             my $dumped = 0;
             foreach my $readname (keys (%readmapper)) {
@@ -1130,6 +1137,7 @@ print $report;
 # next block is activated if the current contig is identical to one entered earlier
 
     elsif ($complete && $accepted && $isIdentical) {
+$self->dumpDNA($contig,$counts->[1]); # for test purposes
 # the new contig is identical to a previous one; remove the ReadMappers and this contigbuilder
         my $dumped = 0;
         foreach my $readname (keys (%readmapper)) {
@@ -1396,6 +1404,7 @@ sub flush {
     if (!defined($minimum) || $pending >= $minimum) {
         foreach my $contig (keys %ContigBuilder) {
             $ContigBuilder{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
+#            $ContigBuilder{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
         }
         foreach my $contig (keys %ContigBuilder) {
 	    print STDOUT "Not Dumped: $contig$break" if $ContigBuilder{$contig};
@@ -1430,12 +1439,13 @@ my $errlist = 0;
     my $STAGS = $self->tagList('STAGS');
     my $ITAGS = $self->tagList('ITAGS');# print STDOUT "itags=$ITAGS<br>";
 
-    my $minOfReads = $self->{minOfReads}; print "minOfReads = $minOfReads $break";
+    my $minOfReads = $self->{minOfReads}; 
+print "minOfReads = $minOfReads $break";
     print STDOUT "file to be opened: $filename ..." if $list;
     open (CAF,"$filename") || return 2; # die "cannot open $filename";
     print STDOUT "... DONE $break" if $list;
 
-    #$MyTimer->timer('caf parser',0) if $TIMER;
+    &timer('caf parser',0) if $TIMER;
 
     print STDOUT "Read a maximum of $maxLines lines $break" if ($list && $maxLines);
     print STDOUT "Contig (or alias) name filter $cnfilter $break" if ($list && $cnfilter);
@@ -1480,13 +1490,12 @@ my $errlist = 0;
             $line--;
             last;
         }
-# $plist = 100 if ($line == 680000);
 
-        if ($record =~ /^\s*(Sequence|DNA)\s*\:?\s*(\S+)/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
 # new object detected, close the existing object
-            if ($type == 2 || $type == 3) {
+            if ($type == 2 || $type == 3 || $type == 4) {
                 print "END Contig $object$break" if $list;
-                $currentcontig->list() if ($list > 1);
+                $currentcontig->list() if ($list > 2);
             }
             elsif ($type == 1) {
 #$self->{REPAIR}=0; # temporary
@@ -1499,7 +1508,7 @@ my $errlist = 0;
 
 
         if (defined($object) && $object =~ /contig/i && $record =~ /assemble/i && abs($type) != 2 && !$READSCAN) {
-# thisblock handles a special case where 'Is_contig' is defined after 'assembled'
+# thisblock handles a special case where 'Is_contig' is defined after 'assembled' (? or abs(type) < 2 ?)
             $type = 2 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
             $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
             $type = 0 if  ($cnfilter && $exactmatch && $object ne $cnfilter); 
@@ -1509,7 +1518,7 @@ my $errlist = 0;
             }
             else {
                 $type = -2;
-                print "    contig = $object SKIPPED$break" if ($list > 1);
+                print "Contig $object SKIPPED$break" if ($list > 1);
             }
         }
 
@@ -1530,6 +1539,7 @@ my $errlist = 0;
 
         elsif ($record =~ /Is_read/ && $READSCAN) {
 # test presence of required read in database
+            print "testing read $object$break" if ($list > 1);
             my $dblookup = 1; $dblookup = 0 if $self->{preload};
             $ReadMapper->inDataBase($object,$dblookup,1,0,1000);
         }
@@ -1547,6 +1557,8 @@ my $errlist = 0;
         elsif ($record =~ /DNA/ && !$READSCAN) {
 # only act on DNA consensus sequence
             if ($record =~ /\bcontig\d+\b(.*)$/i) {
+# register possible extra information
+                my $extra = $1 || 0;
 # contig initialisation
                 $type = 3 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
                 $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
@@ -1554,14 +1566,33 @@ my $errlist = 0;
                 if ($type) {
                     print "Contig $object opened for DNA (triggered by line $line: $record)$break" if $list;
                     $currentcontig = $self->new($object);
-                    $length = $1; # print "length=$length $break" if $length;
+                    $length = $extra; # possibly length of contig here
 	        }
                 else {
                     print "    contig = $object SKIPPED$break" if ($list > 1);
                 }
             }
             else {
-                $type = 4; # will cause DNA for reads to be ignored
+                $type = -3; # will cause DNA for reads to be ignored
+            }
+        }
+
+        elsif ($record =~ /BaseQuality/ && !$READSCAN) {
+# only act on consensus quality sequence
+            if ($record =~ /\bcontig\d+\b(.*)$/i) {
+                $type = 4 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
+                $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
+                $type = 0 if ($exactmatch && $object ne $cnfilter); 
+                if ($type) {
+                    print "Contig $object opened (triggered by line $line: $record)$break" if $list;
+                    $currentcontig = $self->new($object);
+	        }
+                else {
+                    print "Contig $object SKIPPED$break" if ($list > 1);
+                }
+            }
+            else {
+                $type = -3; # will cause Quality for reads to be ignored
             }
         }
 
@@ -1632,7 +1663,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
             elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
                 my $name = $1; my $trps = $2; my $trpf = $3; 
                 my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-#		print STDOUT "CONTIG tag: $record $break $name $trps $trpf $info $break" if ($taglist == ($taglist&2));
+# print STDOUT "CONTIG tag: $record $break $name $trps $trpf $info $break" if ($taglist == ($taglist&2));
                 $currentcontig->addTag($name,$trps,$trpf,$info);
             }
             elsif ($record =~ /Tag/) {
@@ -1652,11 +1683,18 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
         }
 
         elsif ($type == 3) {
-# add DNA consensus sequence 
+# add DNA consensus sequence
+print "DNA added: $record (length $length)$break";
             $currentcontig->addDNA($record, $length);
+#            $currentcontig->addDNA($record, 1);
         }
 
-        elsif ($type && $type != 4) {
+        elsif ($type == 4) {
+# add consensus base quality 
+#            $currentcontig->addDNA($record, 2);
+        }
+
+        elsif ($type > 0) {
 	    print "$line ignored: $record (t=$type)$break" if ($record !~ /sequence/i);
         }
     }
@@ -1664,10 +1702,11 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
     $ReadMapper->flush if $READSCAN; # flush PENDING table
     print STDOUT "$break$line Lines processed on file $filename $break" if $list;
     print STDOUT "Scanning the file was truncated $break" if ($list && $truncated);
-    my $nr = keys %{$ReadMapper->lookup(0)}; my $nc = keys %ContigBuilder;
+    my $nr = keys %{$ReadMapper->lookup(0)}; 
+    my $nc = keys %ContigBuilder;
     print STDOUT "$nc ContigBuilder(s), $nr ReadMapper(s) still active $break";
 
-    #$MyTimer->timer('caf parser',1) if $TIMER;
+    &timer('caf parser',1) if $TIMER;
 
     return $truncated;
 }
@@ -1748,9 +1787,10 @@ sub ageByOne {
 
         $ASSEMBLY->update('status','error','assembly',$assembly);
 # we increase generation and set the blocked item
-        my $query = "UPDATE <self> set generation=generation+1, blocked='1' WHERE assembly=$assembly";
+        my $query = "UPDATE <self> set generation=generation+1 WHERE assembly=$assembly"; # blocked taken out
 #$query .= " limit 10000"; # test (partial) failure
-        $RRTOCC->query($query,1,0); # time stamp & no trace 
+        $RRTOCC->query($query,{traceQuery=>0,timeStamp=>1}); # time stamp & no trace
+#        $RRTOCC->increment('generation','assembly',$assembly,1); # with allow query trace
 
 # now test if any unblocked entries or generation 0 entries remain; if so, something has gone wrong
 
@@ -1887,12 +1927,12 @@ print "$DBVERSION getting length and L2000 ... " if $list;
         my $query = "select sum(length) as sum from CONTIGS where contig_id in ";
         $query .= "(select distinct contig_id from READS2CONTIG where ";
         $query   .= "assembly = $assembly and generation = 1)";
-        my $length = $CONTIGS->query($query,0,0);
+        my $length = $CONTIGS->query($query,{traceQuery=>0});
         $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
 print "total = $length & " if $list;
 
         $query =~ s/where/where length>=2000 and/; # only the irst one
-        $length = $CONTIGS->query($query);
+        $length = $CONTIGS->query($query,{traceQuery=>0});
         $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
 print "l2000 = $length & " if $list;
     }
@@ -1906,14 +1946,14 @@ print "l2000 = $length & " if $list;
         my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
         my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
         my $query = "select sum(length) as sum from <self> where contig_id in (".join(',',@$contigs).")";
-        my $length = $CONTIGS->query($query,0,0);
+        my $length = $CONTIGS->query($query,{traceQuery=>0});
         $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
-        print "total $length->[0]->{sum}   $break" if $list;
+print "total $length->[0]->{sum}   $break" if $list;
         $query =~ s/where/where length>=2000 and/; # only once
-        $length = $CONTIGS->query($query);
-	print "l2000 query: $CONTIGS->{lastQuery} \n" if $list;
+        $length = $CONTIGS->query($query,{traceQuery=>0});
+print "l2000 query: $CONTIGS->{lastQuery} \n" if $list;
         $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
-        print "l2000 = $length->[0]->{sum}  $break" if $list;
+print "l2000 = $length->[0]->{sum}  $break" if $list;
     }
 
 # get the total counts for this assembly
@@ -1947,16 +1987,15 @@ print "l2000 = $length & " if $list;
 
 #############################################################################
 
-sub break {
+sub setEnvironment {
 
 # return the line break appropriate for the environment
 
-    my $break = "\n";
+    $ENV{REQUEST_METHOD} ? $CGI = 1 : $CGI = 0;
 
-    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
-
-    return $break;
+    $CGI ? $break = "<br>" : $break = "\n";
 }
+
 
 #############################################################################
 
@@ -1976,6 +2015,20 @@ sub fonts {
     }
 
     return \%font;
+}
+
+#############################################################################
+
+sub timer {
+# ad hoc local timer function
+    my $name = shift;
+    my $mark = shift;
+
+#    use Devel::MyTimer;
+
+#    $MyTimer = new MyTimer if !$MyTimer;
+
+    $MyTimer->($name,$mark) if $MyTimer;
 }
 
 #############################################################################

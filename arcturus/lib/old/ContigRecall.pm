@@ -604,7 +604,7 @@ sub trace {
         $query .= "and READS.read_id = READS2CONTIG.read_id ";
         $query .= "and CONTIGS.contig_id = READS2CONTIG.contig_id ";
         $query .= "and READS2CONTIG.deprecated = 'N'"; 
-        my $readhashes = $R2C->query($query);
+        my $readhashes = $R2C->query($query,{traceQuery=>0});
     }
                     
 }

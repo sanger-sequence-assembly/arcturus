@@ -13,6 +13,7 @@ our ($VERSION, @ISA);
 use ReadsRecall;
 use ContigBuilder;
 use ContigRecall;
+use ReadMapper;
 
 #############################################################################
 my $DEBUG = 1;
@@ -38,7 +39,7 @@ sub new {
     my $class = ref($caller) || $caller;
     my $self  = $class->SUPER::new($database,$options) || return 0;
 
-# open ReadsReader and ContigReader modules
+# open ReadsRecall and ContigReader modules
 
     $self->{READS}         = $self->{mother}->spawn('READS',$database); 
     $self->{ReadsRecall}   = ReadsRecall->init($self->{READS},'ACGTN ');
@@ -192,6 +193,85 @@ Retrieve read ID for named read
 
 =cut
 #############################################################################
+
+sub testReadAllocation {
+# fetch all unassembled reads and write data to a CAF file
+    my $self = shift;
+    my $opts = shift;
+
+    my $ReadsRecall = $self->{ReadsRecall};
+
+    return $ReadsRecall->checkReadAllocation($opts);
+}
+#--------------------------- documentation --------------------------
+
+#############################################################################
+
+sub testReadMaps {
+# fetch all unassembled reads and write data to a CAF file
+    my $self = shift;
+    my $opts = shift;
+
+    my $ReadMapper = ReadMapper->init($self->{READS});
+
+    return $ReadMapper->mapAnalysis($opts);
+}
+#--------------------------- documentation --------------------------
+
+#############################################################################
+
+sub listUnassembledReads {
+# fetch all unassembled reads and write data to a CAF file
+    my $self = shift;
+    my $opts = shift;
+
+    my $ReadsRecall = $self->{ReadsRecall};
+
+    return $ReadsRecall->getUnassembledReads($opts);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method listUnassembledReads
+
+=head2 Synopsis
+
+Find reads in current database which are not allocated to any contig and
+write them out on a caf-formatted output file
+
+=head2 Parameter
+
+Hash image with control variables (optional)
+
+=over 4
+
+=item hash key 'item'
+
+Type of value to be returned; either "read_id" or "readname"
+
+=item hash key 'full'
+
+= 0 for quick search (fastest, but relies on integrity of READS2ASSEMBLY table)
+
+= 1 for complete search using temporary table; if this fails falls back on:
+
+= 2 for complete search without using temporary table
+
+=item hash key 'date'
+
+Select only reads before and including the given date
+
+=item hash key 'singletons'
+
+Include reads belonging to single-read contigs
+
+=back
+
+=head2 Output
+
+Value returned is a reference to an array with the values thought 
+
+=cut
 #############################################################################
 
 sub cafUnassembledReads {

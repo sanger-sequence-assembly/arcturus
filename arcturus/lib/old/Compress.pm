@@ -108,7 +108,7 @@ sub sequenceEncoder {
  
     return $self->huffmanEncoder($string)  if ($method == 2);
 
-    return $self->zlibEncoder($string)     if ($method == 99);
+    return $self->zlibEncoder($string)     if (!$method || $method == 99);
 
     die "Invalid encoding method $method";    
 }
@@ -128,7 +128,7 @@ sub sequenceDecoder {
  
     return $self->huffmanDecoder($string)     if ($method == 2);
 
-    return $self->zlibDecoder($string)        if ($method == 99);
+    return $self->zlibDecoder($string)        if (!$method || $method == 99);
 
     die "Invalid encoding method $method";    
 }
@@ -242,7 +242,7 @@ sub qualityEncoder {
  
     return $self->differsEncoder($string)  if ($method == 3);
 
-    return $self->zlibQualityEncoder($string, 0) if ($method == 99);
+    return $self->zlibQualityEncoder($string, 0) if (!$method || $method == 99);
 
     return $self->zlibQualityEncoder($string, 1) if ($method == 98);
 
@@ -266,7 +266,7 @@ sub qualityDecoder {
  
     return $self->differsDecoder($string)  if ($method == 3);
 
-    return $self->zlibQualityDecoder($string, 0) if ($method == 99);
+    return $self->zlibQualityDecoder($string, 0) if (!$method || $method == 99);
 
     return $self->zlibQualityDecoder($string, 1) if ($method == 98);
 

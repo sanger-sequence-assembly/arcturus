@@ -25,12 +25,10 @@ my $SCFREADLIB = '/usr/local/badger/distrib-1999.0/lib/alpha-binaries';
 my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
 my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
-my $readbackOnServer = 1;
-
-my $USENEWREADLAYOUT = 0;
-
 my $break;
+my $CGI;
 
+my $readbackOnServer = 1;
 my $pdate;
 
 #############################################################################
@@ -40,7 +38,6 @@ my $pdate;
 sub new {
     my $prototype = shift;
     my $readtable = shift; # the reference to the READS database table
-    my $DNA       = shift;
     my $schema    = shift;
 
     my $class = ref($prototype) || $prototype;
@@ -79,12 +76,17 @@ sub new {
     $self->{READS}->autoVivify($database,2);
 
     $self->{READS}->spawn('READMODEL','arcturus',0,1);
-    $self->{READS}->spawn('DATAMODEL','arcturus',0,1);
+#    $self->{READS}->spawn('DATAMODEL','arcturus',0,1);
 
-# spawn the PENDING and ASSEMBLY tables
+# spawn the DNA, PENDING and ASSEMBLY tables
 
+    $self->{DNA}      = $self->{READS}->spawn('DNA');
     $self->{PENDING}  = $self->{READS}->spawn('PENDING');
     $self->{ASSEMBLY} = $self->{READS}->spawn('ASSEMBLY','<self>',0,1);
+
+# determine if the DNA data are in a separate table; if not, switch table handle to 0
+
+    $self->{DNA} = 0 if (!$self->{DNA}->doesExist || $self->{DNA}->count() != $self->{READS}->count());
 
 # decide what the organism is
 
@@ -92,26 +94,50 @@ sub new {
 
 # create a handle to the data compression module
 
-    $self->{Compress} = new Compress($DNA); # default encoding string for DNA: 'ACGT- '
+    $self->{Compress} = new Compress();
 
 # create a handle to the ligation reader
 
-    $self->{LigationReader} = Ligationreader->new();
+#    $self->{LigationReader} = Ligationreader->new();
 
-    $self->{fatal} = 1; # default errors treated as fatal 
+    $self->{fatal} = 1;     # default errors treated as fatal 
 
-# environment
+    &prepareQueries($self);  # on READS and DNA table handles
 
-    $self->{CGI} = $ENV{PATH_INFO} || 0; # true for CGI mode
-
-    my $library = $ENV{LD_LIBRARY_PATH} || '';
-    $ENV{LD_LIBRARY_PATH} = $SCFREADLIB;
-    $ENV{LD_LIBRARY_PATH} .= ':'.$library if ($library !~ /$SCFREADLIB/);
-
-    $break = &break;
+    &setEnvironment;
 
     bless ($self, $class);
     return $self;
+}
+
+#############################################################################
+
+sub prepareQueries {
+# prepare queries on READS and DNA table handles
+    my $self = shift;
+
+# these queries are used in method 'insert'
+
+    if ($self->{DNA}) {
+
+# we are using a separate table for DNA sequence and quality data
+
+        my $query = "select READS.*,DNA.sequence,DNA.quality from READS left ";
+        $query   .= "join DNA using (read_id) where READS.readname=?";
+        $self->{READS}->prepareQuery($query,'nameQuery');
+
+        $query  = "insert into DNA (read_id,quality,sequence) ";
+        $query .= "values (LAST_INSERT_ID(),?,?)";
+        $self->{DNA}->prepareQuery($query,'insertDNA');
+    }
+ 
+    else {
+
+# we are using the READS table only (which includes the DNA data)
+
+        my $query = "select * from <self> where readname = ?";
+        $self->{READS}->prepareQuery($query,'nameQuery');
+    }
 }
 
 #############################################################################
@@ -385,10 +411,10 @@ sub newConsensusRead {
     my $status = $self->{status};
 
     my $record;
+    undef my $readitem;
     if (open(READ,"$file")) {
         $self->{fileName} = $file;
         $self->{fileName} =~ s/\S+\///g;
-        $readItems->{ID} = $self->{fileName};
         $readItems->{CC} = 'Consensus Read ';     
     # decode data in data file and test
         my $line = 0;
@@ -396,15 +422,46 @@ sub newConsensusRead {
         undef my $quality;
         while (defined($record = <READ>)) {
             chomp $record; $line++;
-            next if (!($record =~ /\S/));
-            if ($record =~ /[^atcgnATCGN-\s]/) {
-                $record =~ s/\s+//g;
-                $readItems->{CC} .= $record;
+            next unless ($record =~ /\w/);
+            if ($record =~ s/^([A-Z]{2})\s*//) {
+                $readitem = $1;
+# point TIGR tags to comment field
+                $readitem = 'CC' if ($readitem eq 'AP');
+                $readitem = 'CC' if ($readitem eq 'TG');
+            }
+            elsif ($record =~ s/^\/\/\s*//) {
+                undef $readitem;
+            }
+$record =~ s/k/N/g; #  ad hoc repair
+            next unless ($record =~ /\w/);
+            if ($record =~ /[^atcgn\-\s]/i) {
+                $record =~ s/\s+/ /g;
+# accept the comment only if it has the structure of a tag ( <....> ); else consider as bad data
+                my $reject = 0;
+# reject if the string is in a DNA block (e.g. TIGR consensus reads)
+                $reject = 1 if ($readitem && $readitem eq 'SQ');
+# reject if the string does not have the <..> or >... structure of Sanger consensus reads
+                $reject = 1 if (!$readitem && ($record !~ /\<[^\<\>]+\>/ && $record !~ /\>\w+/));
+                if ($reject) {
+                    $record =~ s/([\<\>])/ /g;
+                    $status->{diagnosis} .= "! Unrecognized DNA data: '$record' $break$break";           
+                    $status->{errors}++;
+                }
+                elsif ($readitem) {
+                    $readItems->{$readitem} .= $record;
+                }
+                else {
+                    $readItems->{CC} .= $record; # add to comment
+                }
                 next;
             }
-            $record =~ s/\s//g; # no blanks
-            $readItems->{SQ} .= $record;
-            $readItems->{SQ} =~ tr/A-Z/a-z/; # ensure lower case throughout
+            $record =~ s/\s+//g; # no blanks
+            if ($readitem) {
+                $readItems->{$readitem} .= $record;
+            }
+            else {
+                $readItems->{SQ} .= $record;
+            }
         }
         close READ;
     # create a dummy quality sequence of 1 throughout
@@ -414,17 +471,17 @@ sub newConsensusRead {
         if (keys(%$readItems) <= 0) {
             $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
             $status->{errors}++;
-            $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
-            $status->{errors}++;
         }
         else {
     # defined other required read items
+            $readItems->{ID} = $self->{fileName} if !$readItems->{ID};
             $readItems->{DR}  = ' '; # direction unspecified
             $readItems->{ST}  = 'z';
             my @timer = localtime;
             $timer[4]++; # to get month
             $timer[5] += 1900; # & year
-            $readItems->{DT}  = "$timer[5]-$timer[4]-$timer[3]";
+            my $date = sprintf "%4d-%02d-%02d" ,$timer[5],$timer[4],$timer[3];
+            $readItems->{DT}  = $date if !$readItems->{DT};
             $readItems->{QL}  = 0;
             $readItems->{QR}  = length($readItems->{SQ})+1;
             $readItems->{PR}  = 5;  # undefined
@@ -552,8 +609,9 @@ sub insertRead {
 #    my $READS = $self->{READS};
 #print "enter insertRead $break";
 
-    my %options = (sencode => 99, qencode => 99, readback => 1,
-                   dataSource => 1, addToPending => 0); # assembly?
+    my %options = (sencode => 99  , qencode => 99, readback => 1,
+                   dataSource => 1, addToPending => 0,
+                   replace => 0   , verbose => 0); # assembly?
     $self->{READS}->importOptions(\%options, $opts);
     my $inserted = 0;
 
@@ -574,11 +632,11 @@ sub insertRead {
 #print "summary $summary";
 
     if ($errors) {
-        $errors = "Contents error(s) for putRead: $summary\n";
+        $errors = "Contents error(s) for insertRead: $summary\n";
     }
 # encode and dump the data
     elsif ($errors = $self->encode($options{sencode}, $options{qencode})) {
-        $errors = "Encode error status in putRead: $errors\n";
+        $errors = "Encode error status in insertRead: $errors\n";
     }
 
     elsif (!($inserted = $self->insert($options{addToPending}))) {
@@ -588,13 +646,14 @@ sub insertRead {
     }
 
     elsif ($options{readback} && ($errors = $self->readback)) {
-        $errors = "Readback error status in putRead: $errors\n";
+        $errors = "Readback error status in insertRead: $errors\n";
     }
-
-# note: rollback in multi mode inserts is not applicable
-    $self->rollBack($errors,'SESSIONS'); # undo any changes to dictionary tables if errors
     
-#print "$break$break";
+print "$errors $break$break" if $errors;
+
+# undo any changes to dictionary tables if errors
+# note: rollback in multi mode inserts is not applicable
+    $self->rollBack($errors,'SESSIONS',$options{verbose}); 
 
     return $inserted; # e.g. number of read items inserted
 }
@@ -607,13 +666,13 @@ sub cafFileReader {
     my $filename   = shift; # full caf file name
     my $opts       = shift;
 
-$DEBUG=0;
-
     my $READS = $self->{READS};
-    my %options = (nrOfReads => 1000, maxLines => 0  , list => 1000000,
-                   ignoreLoaded => 1, ignoreMask => 0, assembly => 1,
-                   sencode => 99    , qencode => 99  , readback => 1,
-                   addToPending => 0, dataSource => 3, test => 0);
+    my %options = (nrOfReads => 1000 , maxLines => 0    , list => 1000000,
+                   ignoreLoaded => 1 , ignoreMask => 0  , assembly => 1,
+                   sencode => 99     , qencode => 99    , readback => 1,
+                   addToPending => 0 , dataSource => 3  , test => 0,
+                   abortOnPadded => 1, dumpOnTheFly => 1, verbose => 1,
+                   contigFilter => 1);
     $READS->importOptions(\%options, $opts);
 
     undef my %ignore;
@@ -644,8 +703,11 @@ $DEBUG=0;
         $plist = int(exp($plist*log(10))+0.5);
     }
 
-    undef my %reads; # hash of array index keyed on readname
-    print STDOUT "file to be opened: $filename ..." if $list;
+    undef my %reads; # hash of read data keyed on readname
+    undef my %flags; # hash of read flags keyed on readname
+
+    print STDOUT "file $filename to be opened for input " if $list;
+    print STDOUT "of maximum $options{nrOfReads} ... " if $list;
     open (CAF,"$filename") || die "cannot open $filename";
     print STDOUT "... DONE $break" if $list;
 
@@ -658,6 +720,9 @@ $DEBUG=0;
     if (!$self->fingerAssembly($options{assembly})) {
 	return 0; # or with abort on error flag? 
     }
+
+    my $count = 0;
+    my $missed = 0;
 
     print "Reading caf file$break" if $list;
 
@@ -677,14 +742,54 @@ $DEBUG=0;
             last;
         }
 
-        my $nrObjects = 0;
+#        my $nrObjects = 0;
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
-# retrieve the readname
+# there is a possibly new object name
             my $item = $1;
-            $object = $2;
+            my $name = $2;
+# test if the previous read "$object" is complete
+            if ($object && $object ne $name && $reads{$object} && $options{dumpOnTheFly}) {
+                my $readhash = $reads{$object};
+                my $readflag = $flags{$object};
+# only if all flags are set, the read data hash is complete
+                if ($readflag->{f1} && $readflag->{f2} && $readflag->{f3}) {
+# write or dump the previous read 
+print STDOUT "line $line : writing $object to database$break" if $plist;
+	            if ($options{test}) {
+                        print "${break}New read $object "; 
+                        my @keys = keys %{$readhash}; 
+                        print "keys: @keys $break";
+                        print "sequence: $readhash->{SQ}$break";
+                        print "quality : $readhash->{AV}$break";
+                        $count++;
+                    }
+                    elsif ($self->insertRead($readhash,\%options)) {
+                        push @{$self->{uploaded}}, $object;
+                        delete $reads{$object};
+                        $count++;
+                    }
+                    else {
+print STDOUT "line $line : $record $break" if $plist;
+print STDOUT "line $line : $name $object $break" if $plist;
+                        my $last = $readflag->{last};
+                        $last = 1 if ($last < 1 || $last > 3); # ensure its definition
+                        $readflag->{"f$last"} = 0;
+                        $missed++;
+                    }
+# terminate file scan if sufficient reads have been processed
+                    last if (($count+$missed) >= $options{nrOfReads});
+                }
+            }
+# assign the new readname and preset the input type to undefined (i.e. skip data)
             $type = 0;
-            print "read $object ignored $break" if ($options{test} && $ignore{$object});
-            next if ($ignore{$object});
+            $object = $name;
+# ignore reads which have been loaded earlier
+            if ($ignore{$name}) {
+#print STDOUT "line $line : ignore $name $object $break" if $plist;
+                print "read $name ignored $break" if ($options{test});
+                next;
+            }
+# assign the new input type
             $type = 1 if ($item eq 'Sequence');
             $type = 2 if ($item eq 'DNA');
             $type = 3 if ($item eq 'BaseQuality');
@@ -693,27 +798,38 @@ $DEBUG=0;
             if (!defined($reads{$object})) {
 # add next object to hash list
                 my $nreads = scalar(keys %reads);
-                if ($nreads < $options{nrOfReads}) {
-                    my $hash = {};
-                    $hash->{ID} = $object;
-                    $reads{$object} = $hash;
+                if (($nreads + $count + $missed) < $options{nrOfReads}) {
+                    if ($options{contigFilter} && $object !~ /contig/i) {
+# print "Opening readhash for $object ($nreads + 1) $break" if $plist;
+                        my $hash = {};
+                        $hash->{ID} = $object;
+                        $reads{$object} = $hash;
+                    }
                 }
                 else {
-                    $type = 0;
+                    $type = 0; # skip data
                 }
             }
             next;
         }
 
-        if ($record =~ /Is_contig|\bpadded\b/) {
-            $type = 0; # ignore contigs and padded data
+        if ($record =~ /Is_contig\b/) {
+            $type = 0; # ignore contigs
             delete $reads{$object};
             next;
         }
 
+        if ($record =~ /\bpadded\b/) {
+            $type = 0; # ignore padded data
+            print "Padded data for read $object ignored$break" if $list;
+            delete $reads{$object};
+            next if !$options{abortOnPadded};
+            exit 0;
+        }
+
         if ($record =~ /Is_read/) {
             next;
-        }        
+        }
           
         if ($type == 1) {
 # decode the read data
@@ -796,26 +912,38 @@ $DEBUG=0;
             $record =~ s/\b0(\d)\b/$1/g; # remove '0' from values such as '01' .. 
 	    $reads{$object}->{AV} .= $record; 
         }
+# register for this object which section has been completed (on key f1, f2, f3)
+        $flags{$object}->{"f$type"}++ if $reads{$object};
+        $flags{$object}->{last} = $type; # record last flag updated
     }
 
 # okay, here we have a hash of read hashes
 
-    print "Scanning file $filename finished ($line) $break"    if $list;
-    my $nr = keys %reads; print "$nr read hashes build $break" if $list; 
+    print "Scanning file $filename finished ($line)  $break"    if $list;
+    my $nr = scalar(keys %reads) + $count + $missed; 
+    print "$nr reads processes ($count, $missed) $break" if $list; 
 
 
-    my $count = 0;
-    my $missed = 0;
-    foreach my $name (keys %reads) {
+    foreach my $object (keys %reads) {
 
-	if ($options{test}) {
-            print "${break}New read $name "; 
-            my @keys = keys %{$reads{$name}}; 
+        my $readhash = $reads{$object};
+        my $readflag = $flags{$object};
+
+        if ($options{test}) {
+            print "${break}New read $object "; 
+            my @keys = keys %{$readhash}; 
             print "keys: @keys $break";
-            print "quality: $reads{$name}->{AV}$break";
+            print "sequence: $readhash->{SQ}$break";
+            print "quality : $readhash->{AV}$break";
+            $count++;
         }
-        elsif ($self->insertRead($reads{$name},\%options)) {
-            push @{$self->{uploaded}}, $name;
+        elsif (!$readflag->{f1} || !$readflag->{f2} || !$readflag->{f3}) {
+print "read $object is not complete $break" if $list;
+# the read is not complete
+            $missed++;
+        }        
+        elsif ($self->insertRead($readhash,\%options)) {
+            push @{$self->{uploaded}}, $object;
             $count++;
         }
         else {
@@ -824,6 +952,7 @@ $DEBUG=0;
     }
 
     undef %reads; # release memory
+    undef %flags; # release memory
 
     print "$count reads loaded, $missed reads skipped $break";
 
@@ -841,7 +970,9 @@ sub fingerAssembly {
     my $self = shift;
     my $info = shift; # the name or number
 
-    my $ASSEMBLY = $self->{ASSEMBLY};
+# TO BE ADDED:
+
+    my $ASSEMBLY = $self->{ASSEMBLY}; # database table handle
 
     my $success = 0;
     if (!$info) {
@@ -922,10 +1053,10 @@ print "assembly $assembly reads counted: $areads $break";
     my $npends = $self->{PENDING}->count(0);
     my $database = $READS->{database};
 print "updating organisms $break";
-    my $organisms = $READS->spawn('ORGANISMS','arcturus');
-    $organisms->update('reads_loaded' ,$nreads,'dbasename',$database);
-    $organisms->update('reads_pending',$npends,'dbasename',$database);
-    $organisms->signature($user,'dbasename',$database);
+    my $ORGANISMS = $READS->spawn('ORGANISMS','arcturus');
+    $ORGANISMS->update('reads_loaded' ,$nreads,'dbasename',$database);
+    $ORGANISMS->update('reads_pending',$npends,'dbasename',$database);
+    $ORGANISMS->signature($user,'dbasename',$database);
 
     $self->{assembly} = 0;
 }
@@ -1020,9 +1151,9 @@ sub format {
         $status->{errors}++;
     }    
 
-# process comment info
+# process comment info (only if DNA data stored in a separate table)
 
-    return if !$USENEWREADLAYOUT;
+    return if !$self->{DNA};
 
     if ($readItems->{CC} && $readItems->{CC} =~ /\S/) {
         my $COMMENTS = $self->{READS}->getInstanceOf('<self>','COMMENTS');
@@ -1032,7 +1163,7 @@ sub format {
         }
     }
 }
-# error reporting coded as:
+# warning/error reporting coded as:
 
 # bit 1  : mismatch between EN or TN and ID
 # bit 2  : error in read ID (mismatch with fileneme; possibly recoverde)
@@ -1207,8 +1338,8 @@ print "Ligation hash $ligation \n" if $DEBUG;
                 $origin = 'R'; # Defined in the Read itself
                 $status->{diagnosis} .= "! Warning" if (!$self->{fatal});
                 $status->{diagnosis} .= "! Error  " if ($self->{fatal});
-                $status->{diagnosis} .= ": ligation $readItems->{LG} not found in Oracle database$break";
-                $status->{diagnosis} .= " (possibly failed to access Oracle)";
+                $status->{diagnosis} .= ": ligation $readItems->{LG} not found in Oracle database";
+                $status->{diagnosis} .= " (possibly failed to access Oracle)$break";
                 $readItems->{RPS} += 512; # bit 10
                 $status->{warnings}++ if (!$self->{fatal});
                 $status->{errors}++   if  ($self->{fatal});
@@ -1290,6 +1421,10 @@ print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerr
                         $readItems->{CN} = $itest{$item};
                         $status->{warnings}++;
                     }
+                    elsif (!$readItems->{$item}) {
+# the ligation item is not defined in the read data; just give a warning
+                        $status->{warnings}++;
+                    }
                     else {                    
              # total mismatch
                         $status->{warnings}++ if (!$self->{fatal});
@@ -1363,14 +1498,14 @@ print "LIGATIONS error status: $LIGATIONS->{qerror} <br>\n" if $LIGATIONS->{qerr
     }    
     &timer('ligation',1) if $DEBUG;
 
-# process template
+# process template (only if DNA is stored in separate table)
 
-    return if !$USENEWREADLAYOUT;
+    return if !$self->{DNA};
 
-    my $TEMPLATES = $READS->getInstanceOf('<self>.TEMPLATES') or die "undefined TEMPLATES";
+    my $TEMPLATE = $READS->getInstanceOf('<self>.TEMPLATE') or die "undefined TEMPLATE";
 
-    if (!$TEMPLATES->counter('template',$readItems->{TN},0)) {
-        $status->{diagnosis} .= "! Error in update of TEMPLATES (read: $readItems->{TN})$break";
+    if (!$TEMPLATE->counter('template',$readItems->{TN},0)) {
+        $status->{diagnosis} .= "! Error in update of TEMPLATE (read: $readItems->{TN})$break";
         $status->{errors}++;
     }
 }
@@ -1627,7 +1762,7 @@ $self->logger("SCF file full name: $scffile$break");
 
     my $test = 0;
     my $command = "$SCFREADDIR/get_scf_field $scffile";
-    if (!$self->{CGI}) {
+    if (!$CGI) {
         $chemistry = `$command`;
 $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'$break");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
@@ -1858,8 +1993,12 @@ sub encode {
 
 # further status checking
 
-    if (!$qcount || !$scount || $qcount != $scount) {
+    if (!$qcount || !$scount) {
+        $error .= "Missing sequence ($scount) or quality data ($qcount)$break";
+    }
+    elsif ($qcount != $scount) {
         $error .= "Mismatch of sequence ($scount) and quality data ($qcount)$break";
+#	$error .= "$readItems->{sequence} $break $readItems->{quality}$break";
     }
     else {
         $error .= $self->enter('SLN',$scount);
@@ -1889,19 +2028,22 @@ sub newencode {
     undef my $scount;
 
     $readItems->{sequence} = $readItems->{SQ};
-   ($scount,$readItems->{SQ}) = $Compress->sequenceEncoder($readItems->{SQ},99);
+   ($scount,$readItems->{SQ}) = $Compress->sequenceEncoder($readItems->{SQ});
     my $sqcstatus = $Compress->status;
 
     undef my $qcount;
 
     $readItems->{quality} = $readItems->{AV};
-   ($qcount,$readItems->{AV}) = $Compress->qualityEncoder($readItems->{AV},99);
+   ($qcount,$readItems->{AV}) = $Compress->qualityEncoder($readItems->{AV});
     my $qdcstatus = $Compress->status;
 
 # further status checking
 
     undef my $error;
-    if (!$qcount || !$scount || $qcount != $scount) {
+    if (!$qcount || !$scount) {
+        $error .= "Missing sequence ($scount) or quality data ($qcount)$break";
+    }
+    elsif ($qcount != $scount) {
         $error .= "Mismatch of sequence ($scount) and quality data ($qcount)$break";
     }
     else {
@@ -1925,10 +2067,12 @@ sub insert {
 # insert a new record into the READS database table
     my $self = shift;
     my $atop = shift; # add to pending on failure
+    my $subs = shift; # substitute new data for existing read (repair mode)
 
     &timer('insert',0) if $DEBUG; 
 
     my $READS = $self->{READS};
+    my $DNA   = $self->{DNA};
 
     my $status = $self->{status};
 
@@ -1994,52 +2138,111 @@ sub insert {
 # finally, enter the defined read items in a new record of the READS table 
 
     my $counted = 0;
-    if (!defined($readItems->{ID}) || $readItems->{ID} !~ /\w/) {
-        $status->{diagnosis} .= "! Undefined or Invalid Read Name$break";
+    my $readname = $readItems->{ID};
+    if (!defined($readname) || $readname !~ /\w/) {
+        $status->{diagnosis} .= "! Undefined or Invalid Read Name $readname$break";
         $status->{errors}++;
     } 
     else {
         $counted = 1;
         undef my @columns;
         undef my @cvalues;
-	foreach my $column (keys %$linkItems) {
+        undef my @bvalues;
+        undef my %cv;
+	foreach my $column (sort keys %$linkItems) {
             my $tag = $linkItems->{$column};
             if ($tag ne 'ID' && $tag ne 'RN' && $column ne 'readname') {
                 my $entry = $readItems->{$tag};
                 if (defined($entry) && $entry =~ /\S/) {
-                    push @columns,$column;
-                    push @cvalues,$entry;
+# ignore the sequence and quality data here when using separate DNA tables
+                    if (!$DNA || $subs || ($column ne 'sequence' && $column ne 'quality')) {
+                        push @columns,$column;
+                        push @cvalues, $entry;
+                        $cv{$column} = $entry;
+                    }
+# prepare for separate DNA table inserts
+                    if ($column eq 'sequence' || $column eq 'quality') {
+                        push @bvalues, $entry;
+                        $cv{$column} = $entry;
+                    }
                     $counted++;
                 }
             }
         }
 
-#----------------------
-# what about $USENEWREADSLAYOUT?
-#----------------------
+# finally some action on the database
 
-# how to insert into READS and DNA? What about the template?
-        if (!$READS->newrow('readname',$readItems->{ID},\@columns,\@cvalues)) {
-# add the DNA, Quality data to the other table
-# insert into DNA (read_id=last_insert_id() etc)
-#        } 
-#        else {
+        if ($subs) {
+# REPLACE mode: get the current data for this readname and compare/update each column
+print "ReadsReader REPLACE MODE for read $readname $break";
+            if (my $hash = $READS->usePreparedQuery('nameQuery',$readname,1)) {
+                my $read_id = $hash->{read_id};
+#print "read_id: $read_id $break";
+                foreach my $item (keys %$hash) {
+#print "testing item $item $break";
+                    next if ($item eq 'read_id');
+                    next unless ($cv{$item} =~ /\S/);
+                    next if ($hash->{$item} eq $cv{$item}); # no change
+print "changing colum $item  old '$hash->{$item}'  new '$cv{$item}' $break";
+                    my $TTU = $READS; # the table to update
+                    $TTU = $DNA if ($DNA && ($item eq 'sequence' || $item eq 'quality'));
+#print "table: $TTU->{tablename} $break";
+#next;
+		    if (!$TTU->update($item,$cv{$item},'read_id',$read_id)) {
+                        $status->{diagnosis} .= "Failed to replace '$item' value for read $read_id";
+                        $status->{diagnosis} .= ": $TTU->{qerror}" if $TTU->{qerror};
+                        $status->{diagnosis} .= "$break";
+                        $status->{errors}++;
+                        $counted = 0;             
+                    }
+                }
+            }
+            else {
+                $status->{diagnosis} .= "Failed to replace data for read $readname$break";
+                $status->{diagnosis} .= "Failed to read original data ";
+                $status->{diagnosis} .= ": $READS->{qerror}" if $READS->{qerror};
+                $status->{diagnosis} .= "$break";
+                $status->{errors}++;
+                $counted = 0;
+            }
+        }
+
+# INSERT mode: insert a new row in the READS table
+
+        elsif ($READS->newrow('readname',$readname,\@columns,\@cvalues)) {
+# add the sequence and quality data to DNA table
+print "Adding data to the DNA table$break" if $DNA;
+            if ($DNA && !$DNA->usePreparedQuery('insertDNA',\@bvalues)) {
+                $status->{diagnosis} .= "Failed to add DNA data for read $readname";
+                $status->{diagnosis} .= ": $DNA->{qerror}" if $DNA->{qerror};
+                $status->{diagnosis} .= "$break";
+                $status->{errors}++;
+                $counted = 0;
+# now remove the earlier addition to READS
+                $READS->delete('readname',$readname);
+            }
+        } 
+        else {
 # entry failed
-            $status->{diagnosis}  = "Failed to create new entry for read $readItems->{ID}";
+            $status->{diagnosis}  = "Failed to create new entry for read $readname";
             $status->{diagnosis} .= ": $READS->{qerror}" if $READS->{qerror};
             $status->{diagnosis} .= "$break";
             $status->{errors}++;
             $counted = 0;
-# add the readname to the pending list
-            if ($atop) {
-                my $PENDING  = $self->{PENDING};
-                my $assembly = $self->{assembly} || 1;
-                if (!$PENDING->associate('record',$readItems->{ID},'readname',-1)) {
-                    if (!$PENDING->newrow('readname',$readItems->{ID},'assembly',$assembly)) {
-                        $status->{diagnosis}  = "Failed to add $readItems->{ID} to PENDING";
-                        $status->{diagnosis} .= ": $READS->{qerror}" if $PENDING->{qerror};
-                        $status->{diagnosis} .= "$break";
-		    }
+        }
+
+# on error add the readname to the pending list
+
+        if ($status->{errors} && !$subs && $atop) {
+
+            my $PENDING  = $self->{PENDING};
+            my $assembly = $self->{assembly} || 1;
+            if (!$PENDING->associate('record',$readItems->{ID},'readname',{traceQuery=>0})) {
+# ok, there is no entry of this name
+                if (!$PENDING->newrow('readname',$readItems->{ID},'assembly',$assembly)) {
+                    $status->{diagnosis}  = "Failed to add $readname to PENDING";
+                    $status->{diagnosis} .= ": $READS->{qerror}" if $PENDING->{qerror};
+                    $status->{diagnosis} .= "$break";
 		}
             }
         }
@@ -2065,12 +2268,14 @@ sub readback {
 
     my $hash;
     if ($readbackOnServer) {
-# full readback with reading data from database
+# full readback with reading data from database (TO BE REPLACED BY prepared query)
         my $READS     = $self->{READS};
         my %options = (traceQuery => 0);
         $hash = $READS->associate('hashref','where','read_id=LAST_INSERT_ID()',\%options);
-#        print "(readback on server) .. ";   
-        if ($hash->{readname} && $hash->{readname} ne $readItems->{ID}) {
+# recover if previous failed for some reason
+        $hash = $READS->associate('hashref',$readItems->{ID},'readname',\%options) if !$hash;
+# print "(readback on server) .. ";   
+        if (!$hash || $hash->{readname} && $hash->{readname} ne $readItems->{ID}) {
             print "LAST INSERT select failed ..";
             $hash = $READS->associate('hashref',$readItems->{ID},'readname',\%options);
             $error = "Cannot test against server: LAST INSERT select failed$break";
@@ -2087,7 +2292,7 @@ sub readback {
 
     my ($count, $string);
 
-    my $scm = $hash->{scompress};
+    my $scm = $hash->{scompress} || 99;
     my $sequence = $hash->{sequence};
     if ($scm && ($scm == 1 || $scm == 2 || $scm == 99)) {
        ($count, $string) = $Compress->sequenceDecoder($sequence,$scm,1);
@@ -2103,7 +2308,7 @@ sub readback {
         $error .= "Original : $readItems->{sequence}${break}Retrieved: $string$break$break"; 
     } 
 
-    my $qcm = $hash->{qcompress};
+    my $qcm = $hash->{qcompress} || 99;
     my $quality = $hash->{quality};
     if ($qcm && ($qcm >= 1 && $qcm <= 3 || $qcm == 99)) {
        ($count, $string) = $Compress->qualityDecoder($quality,$qcm);
@@ -2217,13 +2422,14 @@ sub rollBack {
     my $self    = shift;
     my $level   = shift;
     my $exclude = shift || ''; # optional array of tables to ignore
+    my $list    = shift;
 
     my $instances = $self->{READS}->getInstanceOf(0);
 
     $exclude = join '|',@$exclude if (ref($exclude) eq 'ARRAY');
 
     foreach my $key (keys %$instances) {
-        $instances->{$key}->rollback($level) if (!$exclude || $key !~ /$exclude/i);
+        $instances->{$key}->rollback($level,$list) if (!$exclude || $key !~ /$exclude/i);
     }
 }
 
@@ -2243,15 +2449,15 @@ sub logger {
 
 #############################################################################
 
-sub break {
+sub setEnvironment {
 
-# return the line break appropriate for the environment (cosmetics)
+    $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
 
-    my $break = "\n";
+    $break = $CGI ? "<br>" : "\n";
 
-    $break = "<br>" if $ENV{REQUEST_METHOD};
-
-    return $break;
+    my $library = $ENV{LD_LIBRARY_PATH} || '';
+    $ENV{LD_LIBRARY_PATH} = $SCFREADLIB;
+    $ENV{LD_LIBRARY_PATH} .= ':'.$library if ($library !~ /$SCFREADLIB/);
 }
 
 #############################################################################
@@ -2270,7 +2476,7 @@ sub timer {
 #----------------------------------------------------------------------------
 
 sub DESTROY {
-
+# output any timer data
     if ($DEBUG) {
         my $list = "$break$break${break}breakdown of time usage:$break";
         foreach my $key (keys %timehash) {
@@ -2278,7 +2484,6 @@ sub DESTROY {
 	    my $iotime = $timehash{$key}->[1]->[1] - $timehash{$key}->[0]->[1];
             $list .= sprintf ("%16s  CPU:%8.2f  IO:%8.2f$break",$key,$cptime,$iotime);
         } 
-        $list =~ s/\n/<br>/ if ($ENV{REQUEST_METHOD});
         print STDOUT $list;
     }
 
@@ -2294,7 +2499,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>              81 ,
         version =>             1.1 ,
-        updated =>    "03 Feb 2003",
+        updated =>    "15 Jan 2004",
         date    =>    "15 Aug 2001",
     };
 }

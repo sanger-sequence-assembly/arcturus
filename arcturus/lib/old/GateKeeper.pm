@@ -936,7 +936,7 @@ sub focus {
 # shift focus to database $database
         if ($mother->do("use $database")) {
 # verify that the command has executed by probing the default database
-            my $readback = $mother->query("select database()");
+            my $readback = $mother->query("select database()",{traceQuery=>0});
             if (ref($readback) eq 'ARRAY') {
                 $readback = $readback->[0]->{'database()'};
             }
@@ -1285,7 +1285,7 @@ print "GateKeeper authorize Test Error\n" if $debug;
             my $query = "select session, timebegin, (UNIX_TIMESTAMP(NOW())+0)-";
             $query .= "(UNIX_TIMESTAMP(timebegin)+0) AS age from <self> where ";
             $query .= "session like '$identify%' AND closed_by is NULL";
-            my $array = $sessions->query($query,0,0);
+            my $array = $sessions->query($query,{traceQuery=>0});
             if ($array && ref($array) eq 'ARRAY' && $options{closeSession}) {
                 my $ageOfSession = $array->[0]->{age};
                 my $openSession = $array->[0]->{session};
