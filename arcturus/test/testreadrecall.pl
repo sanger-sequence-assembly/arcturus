@@ -8,7 +8,7 @@ use ArcturusDatabase;
 use Read;
 
 $verbose = 0;
-@dblist = ();
+$loadsequence = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -17,6 +17,8 @@ while ($nextword = shift @ARGV) {
     $readids = shift @ARGV if ($nextword eq '-readids');
 
     $verbose = 1 if ($nextword eq '-verbose');
+
+    $loadsequence = 1 if ($nextword eq '-loadsequence');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -55,6 +57,8 @@ foreach $readrange (@{$readranges}) {
 	$read = $adb->getReadByID($readid);
 
 	if (defined($read)) {
+	    $read->importSequence() if $loadsequence;
+
 	    $nfound++;
 	}
 
