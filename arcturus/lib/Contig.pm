@@ -2,8 +2,6 @@ package Contig;
 
 use strict;
 
-use Digest::MD5 qw(md5 md5_hex md5_base64);
-
 use Mapping;
 
 # ----------------------------------------------------------------------------
@@ -32,8 +30,14 @@ sub new {
 sub setArcturusDatabase {
 # import the parent Arcturus database handle
     my $this = shift;
+    my $ADB  = shift;
 
-    $this->{ADB} = shift;
+    if (ref($ADB) =~ /^ADB(Contig|Assembly)$/) {
+        $this->{ADB} = $ADB;
+    }
+    else {
+        die "Invalid object passed: $ADB";
+    }
 }
 
 #-------------------------------------------------------------------
@@ -283,7 +287,7 @@ sub addRead {
 }
 
 sub hasReads {
-# returns true if the contig has reads
+# returns true if this Contig has reads
     my $this = shift;
     return $this->getReads() ? 1 : 0;
 }
@@ -303,7 +307,7 @@ sub addMapping {
 }
 
 sub hasMappings {
-# returns true if the contig has mappings
+# returns true if this Contig has (read-to-contig) mappings
     my $this = shift;
     return $this->getMappings() ? 1 : 0;
 }
@@ -323,7 +327,7 @@ sub addTag {
 }
 
 sub hasTags {
-# returns true if the contig has tags
+# returns true if this Contig has tags
     my $this = shift;
     return $this->getTag() ? 1 : 0;
 }
@@ -338,9 +342,14 @@ sub addContigToContigMapping {
     my $this = shift;
     my $ContigMapping = shift;
 
-    $this->importer($ContigMapping,'ContigMapping');
-    my $pc = scalar(@{$this->getContigMapping});
+    $this->importer($ContigMapping,'Mapping','ContigMapping');
+    my $pc = scalar(@{$this->getContigToContigMapping});
     $this->setPreviousContigs($pc);
+}
+
+sub hasContigToContigMappings {
+# returns true if this Contig has contig-to-contig mappings
+    return &getContigToContigMapping(shift) ? 1 : 0;
 }
 
 #-------------------------------------------------------------------    
@@ -349,24 +358,27 @@ sub importer {
 # private generic method for importing objects into a Contig instance
     my $this = shift;
     my $Component = shift;
-    my $type = shift;
+    my $class = shift; # (obligatory) class of object to be stored
+    my $buffername = shift; # (optional) internal name of buffer
 
-    die "Contig->importer expects a component type" unless $type;
+    $buffername = $class unless defined($buffername);
+
+    die "Contig->importer expects a component type" unless $class;
 
     if (ref($Component) eq 'ARRAY') {
 # recursive use with scalar parameter
         while (scalar(@$Component)) {
-            $this->importer(shift @$Component,$type);
+            $this->importer(shift @$Component,$class);
         }
     }
     else {
 # test type of input object against specification
-        my $inputtype = ref($Component);
-        if ($type ne $inputtype) {
-            die "Contig->importer expects a(n array of) $type instance(s) as input";
+        my $instanceref = ref($Component);
+        if ($class ne $instanceref) {
+            die "Contig->importer expects a(n array of) $class instance(s) as input";
         }
-        $this->{$type} = [] if !defined($this->{$type});
-        push @{$this->{$type}}, $Component;
+        $this->{$buffername} = [] if !defined($this->{$buffername});
+        push @{$this->{$buffername}}, $Component;
     }
 }
 
@@ -377,17 +389,20 @@ sub importer {
 sub getStatistics {
 # collect a number of contig statistics
     my $this = shift;
+    my $pass = shift; # >= 2 allow adjustment of zeropoint, else not
+
+    $pass = 1 unless defined($pass);
+    $pass = 1 unless ($pass > 0);
 
 # determine the range on the contig and the first and last read
-
 
     my $cstart = 0;
     my $cfinal = 0;
     my ($readonleft, $readonright);
     my $totalreadcover = 0;
+    my $isShifted = 0;
 
-    my $repeat = 2;
-    while ($repeat) {
+    while ($pass) {
 # go through the mappings to find begin, end of contig
 # and to determine the reads at either end
         my ($minspanonleft, $minspanonright);
@@ -437,9 +452,9 @@ sub getStatistics {
 
             if ($cstart == 1) {
 # the normal situation, exit the loop
-                $repeat = 0;
+                $pass = 0;
             }
-            elsif (--$repeat) {
+            elsif (--$pass) {
 # cstart != 1: this is an unusual lower boundary, apply shift to the 
 # Mappings (and Segments) to get the contig starting at position 1
                 my $shift = 1 - $cstart;
@@ -447,9 +462,10 @@ sub getStatistics {
                 foreach my $mapping (@$mappings) {
                     $mapping->applyShiftToContigPosition($shift);
                 }
-# and redo the loop (as $repeat > 0)
+# and redo the loop (as $pass > 0)
+                $isShifted = 1;
             }
-            else {
+            elsif ($isShifted) {
 # this should never occur, indicative of corrupted data/code in Mapping/Segment
                 print STDERR "Illegal condition in Contig->getStatistics\n";
                 return 0;
@@ -474,7 +490,7 @@ sub getStatistics {
 }
 
 #-------------------------------------------------------------------    
-# compare Contigs on metadata and mappings
+# compare this Contig with another one using metadata and mappings
 #-------------------------------------------------------------------
 
 sub isSameAs {
@@ -485,13 +501,17 @@ sub isSameAs {
 
     die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
 
-# compare some of the metadata
+# ensure that the metadata are defined; do not allow zeropoint adjustments here
 
-    $this->getStatistics(1)    unless $this->getReadOnLeft(); 
+    $this->getStatistics(1)    unless $this->getReadOnLeft();
     $compare->getStatistics(1) unless $compare->getReadOnLeft();
+
 # test the length
+
     return 0 unless ($this->getConsensusLength() == $compare->getConsensusLength());
+
 # test the end reads (allow for inversion)
+
     my $align;
     if ($compare->getReadOnLeft()  eq $this->getReadOnLeft() && 
         $compare->getReadOnRight() eq $this->getReadOnRight()) {
@@ -504,7 +524,7 @@ sub isSameAs {
         $align = -1;
     }
     else {
-# the countigs are different
+# the contigs are different
         return 0;
     }
 
@@ -512,7 +532,6 @@ sub isSameAs {
 # mappings are identified using their sequence IDs or their readnames
 # this assumes that both sets of mappings have the same type of data
 
-#print "getting inventory for mappings\n";
     my $sequence = {};
     my $numberofmappings = 0;
     if (my $mappings = $this->getMappings()) {
@@ -524,7 +543,6 @@ sub isSameAs {
             $sequence->{$key} = $mapping if $key;
         }
     }
-print "number of mappings $numberofmappings\n";
 
     undef my $shift;
     if (my $mappings = $compare->getMappings()) {
@@ -541,8 +559,8 @@ print "cannot find mapping for key $key \n" unless $match;
 # compare the two maps
             my ($identical,$aligned,$offset) = $match->compare($mapping);
 # print "mapping comparison: $identical,$aligned,$offset \n";
-print "match   : ".$match->assembledFromToString unless $identical;
-print "mapping : ".$mapping->assembledFromToString unless $identical;
+#print "match   : ".$match->assembledFromToString unless $identical;
+#print "mapping : ".$mapping->assembledFromToString unless $identical;
             return 0 unless $identical;
 # on first one register shift
             $shift = $offset unless defined($shift);
@@ -556,14 +574,17 @@ print "mapping : ".$mapping->assembledFromToString unless $identical;
 # returns undef if no or invalid mappings found in the $compare Contig instance
 # returns false (but defined = 0) if any mismatch found between mappings
 
-print "Contig ".$this->getContigName()." isSameAs ($align) ".
-                $compare->getContigName()."\n";
+#print "Contig ".$this->getContigName()." isSameAs ($align) ".
+#                $compare->getContigName()."\n";
     return $align; # 1 for identical, -1 for identical but inverted
 }   
 
-sub compare {
-# compare two contigs; return a list of mapping segments, if any, to this contig
-# return undef if incomplete Contig instances or missing sequence IDs in mappings
+sub linkToContig {
+# compare two contigs using sequence IDs in their read-to-contig mappings
+# adds a contig-to-contig Mapping instance with a list of mapping segments, if any, 
+# mapping from $compare to $this contig
+# returns the number of mapped segments (usually 1)
+# returns undef if incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift;
 
@@ -582,7 +603,7 @@ sub compare {
     }
 
 # make an inventory of (identical) alignments from $compare to $this: build a hash list
-    my $list = 0;  $list = 1 if ($compare->getContigID == 1167);
+ my $list = 0; # $list = 1 if ($compare->getContigID == 1167);
 
     my $alignment;
     my $inventory = {};
@@ -608,12 +629,12 @@ print "identical=$identical  aligned=$aligned ($alignment) offset=$offset\n" if 
         my $hashkey = sprintf("%08d",$offset);
         $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
         my @segment = $mapping->getContigRange();
-if ($list) {
-my @matchsegment = $match->getContigRange();
-@matchsegment = sort {$b <=> $a} @matchsegment if ($alignment < 0);
-print "current range @matchsegment   previous range @segment\n";
-}
         push @{$inventory->{$hashkey}},[@segment];
+#if ($list) {
+#my @matchsegment = $match->getContigRange();
+#@matchsegment = sort {$b <=> $a} @matchsegment if ($alignment < 0);
+#print "current range @matchsegment   previous range @segment\n";
+#}
     }
 
 # OK, here we have an inventory: the number of keys equals the number of 
@@ -621,9 +642,10 @@ print "current range @matchsegment   previous range @segment\n";
 # array of arrays with the individual mappings data. For each alignment we
 # determine if the covered interval is contiguous. For each such interval
 # we add a (contig) Segment alignment to the output mapping
+# NOTE: the table can be empty, which occurs if all reads in the current Contig
+# have their mappings changed compared with the previous contig 
 
     my $mapping = new Mapping($compare->getContigName());
-#    $mapping->setAlignment($alignment);
     $mapping->setSequenceID($compare->getContigID());
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
@@ -656,9 +678,15 @@ print "Segment (p2) range  $start $finis (current) ->  $segmentstart $segmentfin
         $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
     }
 print "mapping has ".$mapping->hasSegments." segments\n";
-print "contig has $deallocated deallocated reads\n";
-#? where to put these data?
-    return $mapping;
+print "contig has $deallocated deallocated reads from previous contig\n";
+
+# store the Mapping as a contig-to-contig mapping, if it has segments
+
+    my $ns = $mapping->hasSegments();
+
+    $this->addContigToContigMapping($mapping) if $ns;
+
+    return $ns;
 }
 
 #-------------------------------------------------------------------    

@@ -160,7 +160,9 @@ sub orderSegments {
 # sort the segments according to increasing read position
     my $this = shift;
 
-    my $segments = $this->getSegments() || return;
+    return 0 unless $this->hasSegments();
+
+    my $segments = $this->getSegments();
 
 # ensure all segments are normalised on the read domain and sort on Ystart
 
@@ -252,18 +254,16 @@ sub hasSegments {
 # returns true if at least one alignment exists
     my $this = shift;
 
-    my $segments = $this->getSegments();
-
-    return 0 unless defined($segments);
-
-    return scalar(@$segments);
+    return scalar(@{$this->getSegments});
 }
 
 sub getSegments {
 # export the assembledFrom mappings as array of segments
     my $this = shift;
+# ensure an array ref, also if no segments are defined
+    $this->{assembledFrom} = [] if !$this->{assembledFrom};
 
-    return $this->{assembledFrom}; # array reference or undef
+    return $this->{assembledFrom}; # array reference
 }
 
 sub getContigRange {
@@ -272,7 +272,7 @@ sub getContigRange {
 
     my ($cstart,$cfinal);
 
-    foreach my $segment (@{$this->{assembledFrom}}) {
+    foreach my $segment (@{$this->getSegments()}) {
 # ensure the correct alignment cstart <= cfinish
         $segment->normaliseOnX();
         my $cs = $segment->getXstart();
