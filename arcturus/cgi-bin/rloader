@@ -17,7 +17,7 @@ BEGIN {
 
 use GateKeeper; 
 use ReadsReader;
-#use PathogenRepository;
+use PathogenRepository;
 
 ##############################################################################
 # unbuffered output
