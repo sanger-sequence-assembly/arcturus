@@ -31,7 +31,7 @@ my $logLevel;              # default log warnings and errors only
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|noexclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
-   $validKeys .= "subdir|verbose";
+   $validKeys .= "subdir|verbose|schema|projid|aspedafter";
 
 my %PARS;
 
@@ -70,7 +70,7 @@ while (my $nextword = shift @ARGV) {
     $PARS{include}      = shift @ARGV  if ($nextword eq '-readnames');
     $PARS{include}      = shift @ARGV  if ($nextword eq '-include');
 
-    $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-asped');
+    $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
 
     $PARS{subdirFilter} = shift @ARGV  if ($nextword eq '-subdir');
 
@@ -78,7 +78,7 @@ while (my $nextword = shift @ARGV) {
 
     $PARS{schema}       = shift @ARGV  if ($nextword eq '-schema');
 
-    $PARS{projid}       = shift @ARGV  if ($nextword eq '-project');
+    $PARS{projid}       = shift @ARGV  if ($nextword eq '-projid');
 
     $PARS{readnamelike} = shift @ARGV  if ($nextword eq '-filter');
     $PARS{readnamelike} = shift @ARGV  if ($nextword eq '-readnamelike');
@@ -230,20 +230,20 @@ $factory->setLogging($logger);
 
 my $processed = 0;
 
-while (my $readname = $factory->getNextReadName) {
+while (my $readname = $factory->getNextReadName()) {
 
     print "next read $readname\n";
 
     next if $adb->hasRead($readname);
 
-    my $Read = $factory->getNextRead; # should return a Read object
+    my $Read = $factory->getNextRead(); # should return a Read object
 
-$Read->dump;
+    #$Read->dump;
 
-#    my $success = $adb->putRead($Read); # 0 for failure, 1 for success
+    my ($success,$errmsg) = $adb->putRead($Read); # 0 for failure, 1 for success
 
-    
-
+    print STDERR "Unable to put read $readname: $errmsg\n"
+	unless $success;
 }
 
 #------------------------------------------------------------------------
@@ -328,29 +328,22 @@ sub showUsage {
     print STDERR "-info\t\t(no value) for some progress info\n";
     print STDERR "-verbose\t(no value)\n";
     print STDERR "\n";
-    if ($mode == 1) {
-        print STDERR "Source-specific parameters for CAF input:\n";
-        print STDERR "\n";
-        print STDERR "-caf\t\tcaf file name OR as alternative\n";
-        print STDERR "-cafdefault\t use the default caf file name\n";
-        print STDERR "\n";
-    }
-    if ($mode == 2) {
-        print STDERR "Source-specific parameters for Oracle input:\n";
-        print STDERR "\n";
-        print STDERR "-schema\t(MANDATORY) Oracle schema\n";
-        print STDERR "-projid\t(MANDATORY) Oracle project ID\n";
-        print STDERR "-aspedafter\tasped date guillotine\n";
-        print STDERR "\n";
-    }
-    if ($mode == 3) {
-        print STDERR "Source-specific parameters for Expfiles input:\n";
-        print STDERR "\n";
-        print STDERR "-root\t\troot directory of data repository\n";
-        print STDERR "-sub\t\tsub-directory filter\n";
-        print STDERR "-limit\t\tlargest number of reads to be loaded\n";
-        print STDERR "\n";
-    }
+    print STDERR "Source-specific parameters for CAF input:\n";
+    print STDERR "\n";
+    print STDERR "-caf\t\tcaf file name OR as alternative\n";
+    print STDERR "-cafdefault\t use the default caf file name\n";
+    print STDERR "\n";
+    print STDERR "Source-specific parameters for Oracle input:\n";
+    print STDERR "\n";
+    print STDERR "-schema\t(MANDATORY) Oracle schema\n";
+    print STDERR "-projid\t(MANDATORY) Oracle project ID\n";
+    print STDERR "-aspedafter\tasped date guillotine\n";
+    print STDERR "\n";
+    print STDERR "Source-specific parameters for Expfiles input:\n";
+    print STDERR "\n";
+    print STDERR "-root\t\troot directory of data repository\n";
+    print STDERR "-sub\t\tsub-directory filter\n";
+    print STDERR "-limit\t\tlargest number of reads to be loaded\n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
