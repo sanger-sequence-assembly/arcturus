@@ -15,6 +15,7 @@ my $puclimit = 8000;
 my $usesilow = 0;
 my $updateproject = 0;
 my $minprojectsize = 5000;
+my $outfile;
 
 ###
 ### Parse arguments
@@ -28,6 +29,7 @@ while (my $nextword = shift @ARGV) {
     $minlen = shift @ARGV if ($nextword eq '-minlen');
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
     $minprojectsize = shift @ARGV if ($nextword eq '-minprojectsize');
+    $outfile = shift @ARGV if ($nextword eq '-out');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
 
@@ -46,6 +48,15 @@ unless (defined($organism) && defined($instance)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(0);
+}
+
+###
+### Perform redirection of output if requested
+###
+
+if (defined($outfile)) {
+    close(STDOUT);
+    die "Unable to re-direct output to \"$outfile\"" unless open(STDOUT, "> $outfile");
 }
 
 ###
@@ -532,6 +543,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	foreach my $ctgid (@{$totctg}) {
 	    $sth_setproject->execute($project, $ctgid);
 	}
+
+	print "Saved as project $project\n\n";
     }
 }
 
@@ -828,6 +841,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-out\t\tName of output file (default: standard output)\n";
     print STDERR "-minbridges\tMinimum number of pUC bridges (default: 2)\n";
     print STDERR "-minbacbridges\tMinimum number of BAC bridges (default: 2)\n";
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
