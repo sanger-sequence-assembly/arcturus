@@ -417,13 +417,21 @@ else {
         print "Scanning database $database for Contigs of $assemblyname ...";
         print "... (using name filter \"$CNF\") ..." if ($CNF);
         my $contignames;
-        my $where = "assembly=$assemblynmbr AND generation=0 AND label>=10";
-        $where .= " AND (aliasname like '\%${CNF}\%')" if $CNF;
-        $CONTIGS->autoVivify($database,1);
-        $contignames = $CONTIGS->associate('aliasname','where',$where,{returnScalar=>0});
+#        my $where = "generation=0 AND assembly=$assemblynmbr AND label>=10";
+#        $where .= " AND (aliasname like '\%${CNF}\%')" if $CNF;
+#        $CONTIGS->autoVivify($database,1);
+#my $snapshot = $CONTIGS->snapshot; print "$snapshot\n";
+#        $contignames = $CONTIGS->associate('aliasname','where',$where,{returnScalar=>0,debug=>1});
+
+        my $query = "select distinct aliasname from $database.CONTIGS,$database.READS2CONTIG where ";
+        $query   .= "$database.CONTIGS.contig_id=$database.READS2CONTIG.contig_id and ";
+        $query   .= "generation=0 and assembly=$assemblynmbr and label >= 10";
+
+        $contignames = $CONTIGS->query($query,0,0);
 # the alias name is one appearing on the caf file
         if (ref($contignames) =~ /ARRAY/) {
-            foreach my $contig (@$contignames) {
+            foreach my $hash (@$contignames) {
+                my $contig = $hash->{aliasname};
                 $dbcontigs{$contig}++;
             }
         }
@@ -433,7 +441,7 @@ else {
         my $nrc = keys %dbcontigs;
         print "... DONE$brtag$nrc contigs found which have previously been processed$brtag$brtag";
         $dbcontigs = \%dbcontigs;
-        print "query: $CONTIGS->{lastQuery} $brtag";
+        print "query: $CONTIGS->{lastQuery} $brtag" if !$nrc;
     }
     else {
         print "contig blocker OFF $brtag";
