@@ -757,12 +757,13 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
                 $status->{warnings}++;
                 $status->{diagnosis} .= "contig $cnames->[1] is already present as number $contig$brtag";
                 $CONTIGS->status(1); # clear the error status
+print "SKIPPED: $status->{diagnosis} ";
             }
             else {
                 $status->{errors}++;
                 $status->{diagnosis} .= "Failed to add contig $cnames->[1]: $CONTIGS->{qerror}${brtag}";
                 $complete = 0;
-#print "report !CONTIGS : $report "; return 0;
+print "FAILED: $status->{diagnosis} ";
             }
         }
         else {
@@ -771,7 +772,6 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
             $CONTIGS->signature($userid,'contig_id',$contig);
 print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($counts->[0] reads)$brtag";
 #  print "$bfont nreads $nreads $efont $brtag";
-
         }
     }
     elsif ($complete) {
@@ -981,6 +981,10 @@ sub readAlias {
         }
         $readname .= $section[1];
     }
+
+# remove other symbols
+
+#    $readname =~ s/\-//g;
 
     return $readname;
 }
