@@ -158,7 +158,6 @@ CREATE TABLE MAPPING (
 
 CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
-  name varchar(24) NOT NULL default '',
   assembly_id smallint(5) unsigned default '0',
   updated datetime default NULL,
   owner varchar(8) default NULL,
@@ -166,8 +165,7 @@ CREATE TABLE PROJECT (
   created datetime default NULL,
   creator varchar(8) NOT NULL default 'arcturus',
   comment text default NULL,
-  PRIMARY KEY  (project_id),
-  UNIQUE KEY name (name)
+  PRIMARY KEY  (project_id)
 ) TYPE=MyISAM;
 
 #
