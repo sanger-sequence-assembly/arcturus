@@ -20,10 +20,10 @@ my $batch;
 my $lock;
 my $padded;
 my $output;
-my $caforfasta; # 1 for caf, 2 for fasta
 my $fofn;
-my $FileDNA; # alternative for fasta DNA file
-my $FileQTY; # alternative for fasta Quality file
+my $caffile;
+my $fastafile;
+my $qualityfile;
 
 my $validKeys  = "organism|instance|project|fofn|padded|fasta|"
                . "caf|FileDNA|FileQTY|out|nolock|batch|verbose|debug|help";
@@ -47,14 +47,10 @@ while (my $nextword = shift @ARGV) {
 
     $padded     = 1            if ($nextword eq '-padded');
 
-    $caforfasta = 2            if ($nextword eq '-fasta');
-    $caforfasta = 1            if ($nextword eq '-caf');
+    $fastafile  = shift @ARGV  if ($nextword eq '-fasta');
+    $caffile    = shift @ARGV  if ($nextword eq '-caf');
 
-    $output     = shift @ARGV  if ($nextword eq '-out');
-
-    $FileDNA    = shift @ARGV  if ($nextword eq '-FDNA');
-
-    $FileQTY    = shift @ARGV  if ($nextword eq '-FQTY');
+    $qualityfile = shift @ARGV if ($nextword eq '-quality');
 
     $lock       = 1            if ($nextword eq '-lock');
 
@@ -79,11 +75,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing server instance") unless $instance;
 
-&showUsage("Missing caf or fasta specification") unless $caforfasta;
-
-unless ($output || $caforfasta == 2 && $FileDNA && $FileQTY) {
-    &showUsage("Missing output file");
-}
+&showUsage("Missing CAF or FASTA output file name") unless (defined($fastafile) || defined($caffile));
 
 &showUsage("Missing project ID or name") unless ($project || $fofn);
 
@@ -109,23 +101,28 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-$logger->warning("Redundant '-padded' key ignored") if ($padded && $caforfasta == 2);
+$logger->warning("Redundant '-padded' key ignored") if $padded;
 
 # get file handles
 
-if ($caforfasta == 1) {
-# caf output
-    $FileDNA = new FileHandle("$output.caf","w");
-    &showUsage("Failed to create output file $output.caf") unless $FileDNA;
-}
-elsif ($caforfasta == 2) {
-    $output = $FileDNA unless $output;  
-    $FileDNA = new FileHandle("$output.bases","w");
-    &showUsage("Failed to create output file $output.bases") unless $FileDNA;
-    $FileQTY = new FileHandle("$output.quals","w");
-    &showUsage("Failed to create output file $output.bases") unless $FileQTY;
+my $fhCAF;
+my $fhFASTA;
+my $fhQuality;
+
+if (defined($caffile)) {
+    $fhCAF = new FileHandle($caffile, "w");
+    &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhCAF;
 }
 
+if (defined($fastafile)) {
+    $fhFASTA = new FileHandle($fastafile, "w");
+    &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhFASTA;
+
+    if (defined($qualityfile)) {
+	$fhQuality = new FileHandle($qualityfile, "w");
+	&showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQuality;
+    }
+}
 
 # get project(s) to be exported
 
@@ -140,8 +137,8 @@ if ($fofn) {
 }
 
 my %exportoptions;
-$exportoptions{padded} = 1 if $padded;
-$exportoptions{acquirelock} = 1 if $lock;
+$exportoptions{'padded'} = 1 if $padded;
+$exportoptions{'acquirelock'} = 1 if $lock;
 
 foreach my $project (@projects) {
 
@@ -161,9 +158,9 @@ foreach my $project (@projects) {
 
     my ($s,$m);
 
-    ($s,$m) = $Project->writeContigsToCaf($FileDNA,\%exportoptions) unless $caforfasta;
+    ($s,$m) = $Project->writeContigsToCaf($fhCAF, \%exportoptions) if $fhCAF;
 
-    ($s,$m) = $Project->writeToFasta($FileDNA,$FileQTY,\%exportoptions) if $caforfasta;
+    ($s,$m) = $Project->writeContigsToFasta($fhFASTA, $fhQuality, \%exportoptions) if $fhFASTA;
 
     $logger->warning($m) unless $s; # no contigs exported
 
@@ -179,28 +176,27 @@ exit;
 sub showUsage {
     my $code = shift || 0;
 
-    print STDERR "\n\nExport (contigs in) project(s) by ID/name or using a fofn with IDs or names\n";
+    print STDERR "Export contigs in project(s) by ID/name or using a fofn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
     print STDERR "-instance\teither 'prod' or 'dev'\n\n";
-    print STDERR "-caf\t\t(no value) export contigs in caf format\n";
-    print STDERR "-fasta\t\t(no value) export contigs in fasta format\n";
-    print STDERR "either -contig_id or -fofn :\n\n";
+    print STDERR "-caf\t\tCAF output file name\n";
+    print STDERR "-fasta\t\tFASTA sequence output file name\n";
+    print STDERR "\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-project\tProject ID or name\n";
-    print STDERR "-fofn \t\tname of file with list of project IDs or names\n\n";
+    print STDERR "-fofn\t\tname of file with list of project IDs or names\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "The default export is in CAF on STDOUT\n";
-    print STDERR "\n";
+    print STDERR "-quality\tFASTA quality output file name\n";
     print STDERR "-padded\t\t(no value) export contigs in padded format\n";
-#    print STDERR "-FDNA\t\tfile name for output (overrides default; DNA if fasta)\n";
-#    print STDERR "-FQTY\t\tfile name for quality data (with fasta only)\n";
     print STDERR "\n";
-    print STDERR "Default setting exports only projects which either have\n";
-    print STDERR "the unlocked status or are owned by the user\n";
+    print STDERR "Default setting exports only projects which are either unlocked\n";
+    print STDERR "or are owned by the user running this script\n";
     print STDERR "\n";
     print STDERR "-lock\t\t(no value) export all contigs\n";
     print STDERR "\n";
