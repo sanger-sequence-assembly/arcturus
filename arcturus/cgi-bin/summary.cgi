@@ -75,6 +75,8 @@ foreach $key (sort keys %ENV) {
 print "<HR>\n";
 print "<H1>Perl execution environment</H1>\n";
 
+printf "Perl version: %vd\n", $^V;
+
 print "<H3>INC list</H3>\n";
 
 print "<OL>\n";
