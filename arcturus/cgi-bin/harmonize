@@ -6,8 +6,6 @@
 
 use strict; # Constraint variables declaration before using them
 
-# use lib "/nfs/pathsoft/arcturus/dev/lib";
-
 use GateKeeper; 
 use ArcturusTable;
 
@@ -32,6 +30,12 @@ my $cgi        = $GateKeeper->cgiHandle();
 $GateKeeper->cgiHeader(1); # return string plain
 
 my $instances  = $config->get('mysql_ports');
+my $port_maps  = $config->get('port_maps');
+undef my %maps;
+foreach my $map (@$port_maps) {
+    my @parts = split /\W/,$map;
+    $maps{$parts[1]} = $parts[2];
+}
 
 ##############################################################################
 # connect to all instances 
@@ -45,9 +49,11 @@ foreach my $instance (@$instances) {
     $instance =~ s/\.sanger\.ac\.uk//;
     $report .= "Opening $instance ...";
     my ($host,$port) = split ':',$instance;
+next if ($maps{$port} == 18080);
     if ($GateKeeper->ping_MySQL($host,$port)) {
         my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,{dieOnError => 0});
         print "MySQL instance $instance cannot be opened\n" if !$handle;
+        $instance =~ s/$port/$maps{$port}/; # replace TCP port by apache port
         $handles{$instance} = $handle if $handle;
     }
     else {
@@ -70,11 +76,36 @@ foreach my $instance (keys %handles) {
     $organisms{$instance} = $organism if $organism;
 }
 
+undef my %servers;
 foreach my $instance (keys %organisms) {
     my $organism = $organisms{$instance};
     print "\n\n$instance \n";
-    my $list = $organism->list('111111111111111111111');
+    my $list = $organism->list('1111111111111111110');
     print $list;
+    my $hashrefs = $organism->associate('hashrefs');
+    foreach my $hash (@$hashrefs) {
+        my $residence = $hash->{residence};
+        $residence =~ s/\.sanger\.ac\.uk//;
+        $servers{$residence}++;
+    }
+}
+
+my @columns = ('attributes','last-backup');
+foreach my $oresidence (keys %servers) {
+    my ($ohost, $oport) = split ':',$oresidence;
+print "residence $ohost : $oport \n";
+    foreach my $nresidence (keys %servers) {
+        my ($nhost, $nport) = split ':',$nresidence;
+print "   residence $nhost : $nport \n";
+        if ($ohost ne $nhost  && $oport eq $nport) {
+# copy from instance ohost:oport to instance nhost:nport, those data where residence = ohost:oport
+print "copy from instance $ohost:$oport to instance $nhost:$nport, those data where residence = $ohost:$oport\n\n";
+            my $othandle = $organisms{$oresidence};
+            my $nthandle = $organisms{$nresidence};
+            my $where = "residence like '$ohost%$oport'";
+            $othandle->copy($nthandle,'where',$where) if ($othandle && $nthandle); 
+        }
+    }    
 }
 
 ##############################################################################

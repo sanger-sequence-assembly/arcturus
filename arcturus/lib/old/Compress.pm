@@ -83,7 +83,7 @@ sub buildCodeTables {
 
 #############################################################################
 
-sub NsequenceEncoder {
+sub sequenceEncoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
@@ -99,7 +99,7 @@ sub NsequenceEncoder {
 
 #############################################################################
 
-sub NsequenceDecoder {
+sub sequenceDecoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
@@ -114,7 +114,7 @@ sub NsequenceDecoder {
 
 #############################################################################
 
-sub sequenceEncoder {
+sub tripletEncoder {
 # encode input DNA (or RNA) base sequence string using encoding table
     my $self  = shift;
     my $input = shift;
@@ -124,7 +124,7 @@ sub sequenceEncoder {
 
     $status = 0;
 
-#    &buildCodeTables(0) if (!%$encodeTable);
+#    &buildCodeTables(0) if (!%$encodeTable); # default table
     &buildCodeTables(0) if (!$existsTable); 
 
     $input .= '  ';                    # add two blanks to ensure a complete triplet at end
@@ -155,7 +155,7 @@ sub sequenceEncoder {
 
 ############################################################################
 
-sub sequenceDecoder {
+sub tripletDecoder {
 # decode encoded input DNA/RNA base sequence using decoding table
     my $self   = shift;
     my $input  = shift;
@@ -184,21 +184,21 @@ sub sequenceDecoder {
     $count,$output;
 }
 
-
+#############################################################################
+# encoding/decoding Quality data
 #############################################################################
 
-sub NqualityEncoder {
+sub qualityEncoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
     my $method = shift;
 
-#    return &numbersEncoder($self,$string)  if ($method == 1);
-    return &qualityEncoder($self,$string)  if ($method == 1);
+    return &numbersEncoder($self,$string)  if ($method == 1);
  
-    return &differsEncoder($self,$string)  if ($method == 2);
+    return &huffmanEncoder($self,$string)  if ($method == 2);
  
-    return &huffmanEncoder($self,$string)  if ($method == 3);
+    return &differsEncoder($self,$string)  if ($method == 3);
 
     die "Invalid encoding method $method for quality";    
 }
@@ -206,33 +206,32 @@ sub NqualityEncoder {
 
 #############################################################################
 
-sub NqualityDecoder {
+sub qualityDecoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
     my $method = shift;
 
-#    return &numbersDecoder($self,$string)  if ($method == 1);
-    return &qualityDecoder($self,$string)  if ($method == 1);
+    return &numbersDecoder($self,$string)  if ($method == 1);
  
-    return &differsDecoder($self,$string)  if ($method == 2);
+    return &huffmanDecoder($self,$string)  if ($method == 2);
  
-    return &huffmanDecoder($self,$string)  if ($method == 3);
+    return &differsDecoder($self,$string)  if ($method == 3);
 
     die "Invalid decoding method $method for quality";    
 }
 
 #############################################################################
 
-sub qualityEncoder {
-#sub numbersEncoder {
+sub numbersEncoder {
 # encode an input string with integer numbers [0-255] using byte representation
     my $self  = shift;
     my $input = shift;
 
     $status = 0;
 
-    $input =~ s/^\s+//; # remove leading blanks
+    $input =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
+#    $input =~ s/^\s+//; # remove leading blanks
     my @strnumbers = split /\s+/,$input; # put values in array
 
     my $count = 0;
@@ -259,7 +258,7 @@ sub differsEncoder {
 
     $status = 0;
 
-    $input =~ s/^\s+//; # remove leading blanks
+    $input =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
 #print "\ninput $input\n";
     my @strnumbers = split /\s+/,$input; # put values in array
 
@@ -276,15 +275,19 @@ sub differsEncoder {
     }
 
     $string =~ s/\s(\d)/+$1/g; # add '+' before positive numbers
-    $string =~ s/\s+//g; # remove all blanks
+    $string =~ s/\s+//g; # and remove all blanks
 #print "\nconverted:  $string\n";
 
-    return &huffmanEncoder($self,$string);
+    my ($dummy, $output) = &huffmanEncoder($self,$string);
+
+    my $count  = @strnumbers;
+
+    $count, $output;
 }
 
 #############################################################################
 
-sub qualityDecoder {
+sub numbersDecoder {
 # expand input into string of integer numbers separated by blanks 
     my $self  = shift; 
     my $input = shift;
@@ -303,7 +306,6 @@ sub qualityDecoder {
     $count,$output;
 }
 
-
 #############################################################################
 
 sub differsDecoder {
@@ -311,21 +313,19 @@ sub differsDecoder {
     my $self  = shift; 
     my $input = shift;
 
-    my ($count, $string) = &huffmanDecoder($self, $input);
+    my ($dummy, $string) = &huffmanDecoder($self, $input);
     
-#print "differs restored: $string \n\n";
+# print "differs restored: $string \n\n";
     $string =~ s/([\+\-]\d)/ $1/g;
     $string =~ s/^[\s\+]+//; # remove leading blanks
-#print "differs prepared: $string \n\n";
+# print "differs prepared: $string \n\n";
     my @chrnumbers = split /\s+/,$string;
 
-    my $parity = 1;
+    my $count = 1;
     for (my $i = 1 ; $i < @chrnumbers ; $i++) {
         $chrnumbers[$i] += $chrnumbers[$i-1];
-        $parity++; 
+        $count++; 
     }
-
-    $count = 0 if ($count != $parity);
 
     $string = join ' ',@chrnumbers;
 

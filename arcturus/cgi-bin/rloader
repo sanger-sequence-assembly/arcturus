@@ -13,7 +13,6 @@ BEGIN {
    $ENV{ORACLE_SID}  = 'inform';
    $ENV{TWO_TASK}    = 'sids';
    $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
-#   use lib "/usr/local/badger/bin";
 }
 
 use GateKeeper; 
@@ -39,7 +38,7 @@ my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle(1);
 
-my ($void, $database, $option, $origin);
+my ($void, $database, $option, $origin, $session);
 
 # how is this script invoked?
 
@@ -90,7 +89,7 @@ undef my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update);
 undef my ($arc_logfile, $logON, $TEST);
 
 my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu"; # return link
-my $session = $cgi->parameter('session',0);
+$session = $cgi->parameter('session',0) if $cgi;
 $lreturn .= "\?session=$session" if $session; 
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
@@ -163,7 +162,7 @@ if ($cgi) {
         }
         else {
     # open assembly database; abort if no assemblies defined
-            $assembly  = $organisms->spawn('ASSEMBLY',$database,1);
+            $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
             if ($assembly && $assembly->count() > 0) {
     # get the default assembly name if no assemblyname in CGI input; first try attributes
 		my $attributes = $organisms->unpackAttributes($database,'dbasename');
@@ -233,7 +232,7 @@ if ($cgi) {
         $source   = $cgi->parameter('source');
         $database = $cgi->parameter('database'); # redefine database
     # get assembly 
-        $assembly     = $organisms->spawn('ASSEMBLY',$database,1);
+        $assembly     = $organisms->spawn('ASSEMBLY',$database,0,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
 
@@ -374,7 +373,7 @@ else { # invoked from the command line (ejz/adh only)
         if ($attributes = $organisms->unpackAttributes($database,'dbasename')) {
             print STDOUT "Database $database found; attributes retrieved\n";
             foreach my $item (keys %$attributes) {
-                print STDOUT "item=$item attribute=$attributes->{$item}\n";
+ #               print STDOUT "item=$item attribute=$attributes->{$item}\n";
                 $config{$item} = $attributes->{$item}; # overrides defaults
             }
         }
@@ -388,9 +387,9 @@ else { # invoked from the command line (ejz/adh only)
     $arc_logfile = "$arc_log_dir/rloader.$database.log"; # default
  
     $ROOTDATADIR = $config{RUT};
+    $ROOTDATADIR = $config{RDD} if $config{RDD};
     $ROOTDATADIR.= $gbfilter.'/' if ($source == 1);
     $ROOTDATADIR =~ s?//?/?g; # remove double slashes
-    $ROOTDATADIR = $config{RDD} if $config{RDD};
     $GELMINDDIR  = $config{GMD};
     $SCFREADDIR  = $config{SCF};
     my $SEARCH   = $config{SDS};
@@ -399,13 +398,20 @@ else { # invoked from the command line (ejz/adh only)
 # get file name filter and global (directory) filter 
 
     $LOADPERRUN = 1;
-    $LOADPERRUN = $TEST if ($TEST && $TEST =~ /\d/ && $TEST !~ /\D/);
+    if ($TEST && $TEST =~ /\d/ && $TEST !~ /\D/) {
+        $LOADPERRUN = $TEST;
+        $TEST = 0;
+    }
 
 # open assembly database
 
-    $assembly = $organisms->spawn('ASSEMBLY',$database,1);
+    $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
+
+ foreach my $key (keys %config) {
+#     print "key $key  $config{$key}\n";
+ }
+    print "ROOTDATADIR = $ROOTDATADIR     log file $arc_logfile \n";
 #$GateKeeper->disconnect;
-#print "fnfilter $fnfilter  $gbfilter \n";
 #exit;
 }
 
@@ -413,9 +419,9 @@ else { # invoked from the command line (ejz/adh only)
 
 # autoVivify the READS database and connecting tables
 
-my $datamodel = $organisms->spawn('DATAMODEL','arcturus',1);
-my $readmodel = $organisms->spawn('READMODEL','arcturus',1);
-my $READS     = $organisms->spawn('READS',$database,0);
+my $datamodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
+my $readmodel = $organisms->spawn('READMODEL','arcturus',0,1);
+my $READS     = $organisms->spawn('READS',$database,0,0);
 $READS->autoVivify($database,2); # initialize all dictionary tables in database
 
 # get an inventory of all open database tables
@@ -424,8 +430,8 @@ my $hashes = $datamodel->findInstanceOf(0);
 
 # open the PENDING table and the READS2FRAGMENTS table
 
-my $PENDING = $organisms->spawn('PENDING',$database,0);
-my $RRS2ASS = $organisms->spawn('READS2ASSEMBLY',$database,0);
+my $PENDING = $organisms->spawn('PENDING',$database,0,0);
+my $RRS2ASS = $organisms->spawn('READS2ASSEMBLY',$database,0,0);
 
 
 foreach my $key (keys %$hashes) {
@@ -646,7 +652,7 @@ $LOADPERRUN =~ s/\W/x/g;
 # (IV) go through all those new files and add the reads to the database
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-    my $encoder = Compress->new();
+    my $encoder = Compress->new(); # default encoding string for DNA ('ACGT- ')
 
     my $tested = 0;
     my $loaded = 0;
@@ -672,7 +678,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
    # treat a consensus file differently from a standard read
 
-        my $cm;
+        my ($scm, $qcm);
         my $entry;
         my $isStdRead;
 
@@ -685,9 +691,11 @@ $LOADPERRUN =~ s/\W/x/g;
           
             $entry = $reader->newRead($file,1);
 
-            $cm = 2; # switch to Huffman encoding
-#	    my $text = $reader->list($origin,1);
-#            print STDOUT "$brtag $text $brtag";
+            $scm = 2; # switch to Huffman encoding
+            $qcm = 2; # Huffman encoding
+ 
+# my $text = $reader->list($origin,1);
+# print STDOUT "$brtag $text $brtag";
 	}
         else {
 
@@ -701,7 +709,9 @@ $LOADPERRUN =~ s/\W/x/g;
                 $reader->strands();
                 $reader->chemistry();
             }
-            $cm = 1; # standard triplet encoding
+            $scm = 1; # standard triplet encoding for DNA
+            $qcm = 1; # number substitution on quality data
+            $qcm = 3; # Huffman compression on quality difference data
         }
 
     # skip this file on error
@@ -730,14 +740,11 @@ $LOADPERRUN =~ s/\W/x/g;
 
         undef my $scount; 
         my $rawSequence = $entry->{SQ};
-        if ($cm == 1) {
-           ($scount,$entry->{SQ}) = $encoder->sequenceEncoder($entry->{SQ});
+        if ($scm == 1 || $scm == 2) {
+           ($scount,$entry->{SQ}) = $encoder->sequenceEncoder($entry->{SQ},$scm);
         }
-        elsif ($cm == 2) {
-           ($scount,$entry->{SQ}) = $encoder->huffmanEncoder($entry->{SQ});
-        }
-        elsif ($cm) {
-            my $text = "!FATAL ERROR : Invalid Encoding option = $cm";
+        elsif ($scm) {
+            my $text = "!FATAL ERROR : Invalid Sequence Encoding option = $scm";
             print STDOUT "$ofont$text$efont$brtag";
             print LOG "$text\n" if ($logON);
             last;
@@ -745,11 +752,14 @@ $LOADPERRUN =~ s/\W/x/g;
         my $sqcstatus = $encoder->status();
         undef my $qcount;
         my $rawQuality  = $entry->{AV};
-        if ($cm == 1) {
-           ($qcount,$entry->{AV}) = $encoder->qualityEncoder($entry->{AV});
+        if ($qcm == 1 || $qcm == 2 || $qcm == 3) {
+           ($qcount,$entry->{AV}) = $encoder->qualityEncoder($entry->{AV}, $qcm);
         }
-        elsif ($cm == 2) {
-           ($qcount,$entry->{AV}) = $encoder->huffmanEncoder($entry->{AV});
+        elsif ($qcm) {
+            my $text = "!FATAL ERROR : Invalid Quality Encoding option = $qcm";
+            print STDOUT "$ofont$text$efont$brtag";
+            print LOG "$text\n" if ($logON);
+            last;
         }
         my $qdcstatus = $encoder->status();
 
@@ -772,8 +782,8 @@ $LOADPERRUN =~ s/\W/x/g;
             $text .= " encoded: $i \& $j";
             print STDOUT "$text$brtag";
             print LOG "$text\n" if $logON;
-            $reader->update('SCM',$cm); # insert value
-            $reader->update('QCM',$cm); # insert value
+            $reader->update('SCM',$scm); # insert value
+            $reader->update('QCM',$qcm); # insert value
             $reader->update('SLN',$scount);
         }
  
@@ -796,6 +806,8 @@ $LOADPERRUN =~ s/\W/x/g;
         $text .= "... $update READ items entered into database";
         print STDOUT "$text$brtag\n";
         print LOG "$text\n" if $logON;
+
+        undef my $readhash;
         if ($update <= 0 || $update != $parity) {
             print STDOUT "! Read insert $ofont FAILED on incompleteness ";
             print STDOUT "error ($update vs. $parity)$efont$brtag";
@@ -810,20 +822,28 @@ $LOADPERRUN =~ s/\W/x/g;
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
         else {
+# read back of data 
+            print STDOUT "Readback .. ";
+            $readhash = $READS->associate('hashref','where','read_id=LAST_INSERT_ID()',-1);
+            if ($readhash->{readname} ne $entry->{ID}) {
+                print "LAST INSERT select FAILED ..";
+                $readhash = $READS->associate('hashref',$entry->{ID},'readname',-1);
+                print "Recovered using readname .. "; 
+            }
+
+            print STDOUT "testing DNA Sequence .. ";
+     
+            $scm = $readhash->{scompress};
+            my $sequence = $readhash->{sequence};
+
             my ($string, $count);
-            print STDOUT "Readback DNA Sequence ..";      
-            $cm = $READS->associate('scompress',$entry->{ID},'readname');
-            my $sequence = $READS->associate('sequence',$entry->{ID},'readname');
             my $slength  = length($sequence);
-            if ($cm == 1) {
-               ($count, $string) = $encoder->sequenceDecoder ($sequence,1);
+            if ($scm == 1 || $scm == 2) {
+               ($count, $string) = $encoder->sequenceDecoder ($sequence,$scm,1);
             }
-            elsif ($cm == 2) {
-               ($count, $string) = $encoder->huffmanDecoder ($sequence);
-            }
-            elsif (!defined($cm) || $cm) {
-                $cm = 0 if !$cm;
-                my $text = "! Invalid sequence encoding method readback: $cm";
+            elsif (!defined($scm) || $scm) {
+                $scm = 0 if !$scm;
+                my $text = "! Invalid sequence encoding method readback: $scm";
                 print STDOUT "$text$efont$brtag";
                 print LOG "$text\n" if $logON;
                 $count = 0; # just to define
@@ -841,19 +861,18 @@ $LOADPERRUN =~ s/\W/x/g;
                 print STDOUT "${gfont}PASSED$efont, ";
             }
 
-            print STDOUT "Readback Quality Data ..";       
-            $cm = $READS->associate('qcompress',$entry->{ID},'readname');
-            my $quality  = $READS->associate('quality' ,$entry->{ID},'readname');
+            print STDOUT "Testing Quality Data ..";  
+     
+            $qcm = $readhash->{qcompress};
+            my $quality = $readhash->{quality};
+
             my $qlength  = length($quality);
-            if ($cm == 1) {
-               ($count, $string) = $encoder->qualityDecoder ($quality);
+            if ($qcm == 1 || $qcm == 2 || $qcm == 3) {
+               ($count, $string) = $encoder->qualityDecoder ($quality,$qcm);
             }
-            elsif ($cm == 2) {
-               ($count, $string) = $encoder->huffmanDecoder ($quality);
-            }
-            elsif (!defined($cm) || $cm) {
-                $cm = 0 if !$cm;
-                my $text = "! Invalid quality encoding method: $cm";
+            elsif (!defined($qcm) || $qcm) {
+                $qcm = 0 if !$qcm;
+                my $text = "! Invalid quality encoding method: $qcm";
                 print STDOUT "$text$efont$brtag";
                 print LOG "$text\n" if $logON;
                 $count = 0; # just to define
@@ -898,7 +917,8 @@ $LOADPERRUN =~ s/\W/x/g;
                 $PENDING->delete('readname',$entry->{ID});
             }
     # add the entry to READS2ASSEMBLY
-            my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
+#            my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
+            my $read_id = $readhash->{read_id};
             if (!$RRS2ASS->newrow('read_id',$read_id,'assembly',$assemblynumber)) {
                 print "$RRS2ASS->{errors}$brtag";
                 $RRS2ASS->status(1); # reset the error status
@@ -915,15 +935,18 @@ $LOADPERRUN =~ s/\W/x/g;
 # next file
     }
 
+    $RRS2ASS->flush();
+
 # closing down: timestamps on altered tables
 
-    $organisms->historyUpdate($userid,0,2);
+    my $list = 1; $list = 2 if $cgi;
+    $organisms->historyUpdate($userid,0,$list);
 
     print STDOUT "${brtag}Updating counters and closing database$brtag$brtag";
 
     foreach my $assemblynumber (keys (%assemblycount)) {
         my $areads = $RRS2ASS->count("assembly=$assemblynumber",0);
-print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads<br>";
+        print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads$brtag";
         $assembly->update('reads',$areads,'assemblyname',$assemblyname);
         $assembly->signature($userid,'assemblyname',$assemblyname);
     }

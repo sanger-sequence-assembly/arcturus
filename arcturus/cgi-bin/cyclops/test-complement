@@ -133,7 +133,7 @@ while ($continue) {
             foreach my $hash (@$hashes) {
                 push @reads, $hash->{read_id};
             }
-            $READS->update('paired',' ','read_id',\@reads);
+            $READS->update('paired','N','read_id',\@reads);
         }
         else {
             print "No reads found with paired set to F but absent in READPAIRS\n";
@@ -153,7 +153,7 @@ while ($continue) {
             foreach my $hash (@$hashes) {
                 push @reads, $hash->{read_id};
             }
-            $READS->update('paired',' ','read_id',\@reads);
+            $READS->update('paired','N','read_id',\@reads);
         }
         else {
             print "No reads found with paired set to R but absent in READPAIRS\n";

@@ -16,19 +16,23 @@ open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
+# print "content-type:text/plain\n\n";
+
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql',0);
 
-my ($cgi, $database, $blocksize, $start, $length, $suffix);
+my ($cgi, $database, $blocksize, $start, $length, $suffix, $nosession);
 if ($cgi = $GateKeeper->cgiHandle(1)) {
-    $database  = $cgi->parameter('organism');
+    $database  = $cgi->parameter('organism')  || 'arcturus';
     $blocksize = $cgi->parameter('blocksize') || 1000;
     $start     = $cgi->parameter('start')     || 1;
     $length    = $cgi->parameter('length')    || 100000;
-    $suffix    = $cgi->parameter('suffix');   
+    $suffix    = $cgi->parameter('suffix');
+    $nosession = $cgi->MethodGet || 0;
+    $nosession = 0 if ($cgi->parameter('session'));   
 }
 else {
     $database  = shift @ARGV;
@@ -36,28 +40,67 @@ else {
     $start     = shift @ARGV || 1;
     $length    = shift @ARGV || 10000;
     $suffix    = shift @ARGV;
+    $nosession = 1;
 }
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-my $status = $GateKeeper->authorize(100,{nosession => 1, silently => 0});
-
-if (!$status) {
+if (!$GateKeeper->authorize(100,{nosession => $nosession, silently => 1, diagnosis => 1})) {
     my $error = $GateKeeper->{error};
     $GateKeeper->dropDead($error);
 }
 
-$GateKeeper->cgiHeader(1); # return string plain
+# decide on the interface to be used
+
+my $brtag = "\n";
+if ($cgi && $cgi->MethodGet) {
+    $GateKeeper->cgiHeader(1); # return string plain
+# $cgi->PrintVariables(1);
+}
+elsif ($cgi && $cgi->MethodPost) {
+    if ($database eq 'arcturus') {
+        $brtag = "<br>";
+        my $page = $GateKeeper->GUI("ARCTURUS read pairs finder");
+# $cgi->PrintVariables(1);
+        my $host   = $GateKeeper->currentHost;
+        my $script = $GateKeeper->currentScript;
+        $page->form($script,0,"${host}pairs");
+        my $head = "Welcome to the Arcturus Read Pairs finder";
+        $page->sectionheader($head,3,0);
+        my $body = "Read Pairs are identified in the specified database <br>";
+        $body   .= "and will be marked";
+        $page->add("<FONT color='blue'>$body</FONT>",0,1);
+        my $text = "Please specify the search constraints and submit";
+        $page->sectionheader($text,3,1);
+        my $form = &form;
+        my $dbases = $organisms->htmlOptions('dbasename','organism',20);
+        $form =~ s/DATABASE/$dbases/;
+        $page->add($form,0,1);        
+        $page->preload('blocksize',$blocksize,1);
+        $page->preload('start',$start,1);
+        $page->preload('length',$length,1);
+        $page->preload('suffix',$suffix,1) if $suffix;
+#        $cgi->delete('USER');
+        $page->ingestCGI;
+        $page->submitbuttonbar(0,0,0);
+        $page->form(0);
+        $page->flush;
+        $GateKeeper->disconnect;
+        exit 0;
+    }
+    $GateKeeper->cgiHeader(1); # line mode on the viewing window
+# $cgi->PrintVariables(1);
+}
 
 ##############################################################################
 # MAIN
 ##############################################################################
 
-print "Okay, authorized! \n";
+print "Okay, authorized! $brtag";
 
 print "database=$database blocksize=$blocksize  start=$start  length=$length ";
 print "suffix=$suffix" if $suffix;
-print "\n";
+print "$brtag";
 
 $GateKeeper->focus(1);
 
@@ -66,12 +109,14 @@ $GateKeeper->focus(1);
 # select inside each block those reads without registered counterpart
 # search for its complement and put in place the read_id
 
-my $READS   = $organisms->spawn('READS',$database,0);
-my $PAIRS   = $organisms->spawn('READPAIRS',$database,0);
-my $STRANDS = $organisms->spawn('STRANDS',$database,1);
+my $READS   = $organisms->spawn('READS',$database,0,0);
+my $PAIRS   = $organisms->spawn('READPAIRS',$database,0,0);
+my $STRANDS = $organisms->spawn('STRANDS',$database,0,1);
 
 $READS->setTracer(0); # switch off query tracing
 $PAIRS->setMultiLineInsert(10); # block inserts
+
+# $GateKeeper->disconnect; exit 0; # test mode
 
 my $continue = 1;
 $length = $length + $start;
@@ -87,9 +132,9 @@ while ($continue) {
 # get all reads in start-final window from READPAIRS reverse (for usage later)
 
     undef my $hashes;
-    my $where = "read_id >= $start and read_id <= $final and paired=' '";
+    my $where = "read_id >= $start and read_id <= $final and paired='N'";
     if ($hashes = $READS->associate('read_id,readname,template','where',$where)) {
-# print "hashes: $hashes \n";
+# print "hashes: $hashes query $READS->{lastQuery}$brtag";
         undef my %readhash;
         if (ref($hashes) eq 'ARRAY') {
             foreach my $hash (@$hashes) {
@@ -98,10 +143,10 @@ while ($continue) {
             }
         }
         $hashes = \%readhash;
-# print "hashes: $hashes \n";
+# print "hashes: $hashes $brtag";
     }
     else {
-        $GateKeeper->dropDead("Query FAILED: $organisms->{qerror}");
+        $GateKeeper->dropDead("Query FAILED: $READS->{qerror}");
     }
 
 # the keys of $hashes are the readid's of reads not labeled as belonging to a pair
@@ -109,11 +154,11 @@ while ($continue) {
     my @hashes = sort {$a <=> $b;} keys (%$hashes);
 
     if (!@hashes) {
-        print "No data found in block $start -  $final\n";
+        print "No data found in block $start -  $final$brtag";
     }
     else {
         my $nr = @hashes;
-        print "$nr reads to be investigated\n";
+        print "$nr reads to be investigated$brtag";
     }
 
     foreach my $readid (@hashes) {
@@ -124,7 +169,7 @@ while ($continue) {
         my $pstrand = $1;
         $complement .= $suffix if $suffix;
         if ($complement eq $readname) {
-            print "Non-standard readname $readname \n";
+            print "Non-standard readname $readname $brtag";
             next;
         }
         undef my $where;
@@ -134,13 +179,13 @@ while ($continue) {
         $where .= "readname != '$readname' and readname like '$complement'";
         my $chash = $READS->associate('read_id,readname','where',$where,-1);
         if (ref($chash) ne 'ARRAY' || @$chash == 0) {
-            print "$readid $readname : No complement found\n" if ($list > 1);
+            print "$readid $readname : No complement found$brtag" if ($list > 1);
             next;
         }
         $tested++;
 
         my $warn = 0; $warn = 1 if (@$chash > 1);
-        print "\n$readid $readname WARNING: several complements found! " if $warn;
+        print "   $readid $readname WARNING: several complements found! " if $warn;
         foreach my $hash (@$chash) {
 
             print "$readid $readname " if ($list && !$warn);
@@ -162,7 +207,7 @@ while ($continue) {
             }
             else {
                 print "$readid $readname " if (!$list && !$warn);
-                print "Cannot determine strand in complement $creadname\n" if !$list;
+                print "Cannot determine strand in complement $creadname$brtag" if !$list;
                 next;
             }
 
@@ -176,27 +221,26 @@ while ($continue) {
                 $reverse = $readid;
             }
             else {
-                print "\nread $readname; mate $creadname: !! identical or undetermined strands!!\n";
+                print "read $readname; mate $creadname: !! identical or undetermined strands!!$brtag";
                 next;
             }
 
-# print "pair to added to READPAIRS\n";            
             if ($PAIRS->newrow('forward',$forward,'reverse',$reverse)) {
-                print "Added to READPAIRS\n" if $list;
+                print "Added to READPAIRS$brtag" if $list;
                 $READS->update('paired','F','read_id',$forward);
                 $READS->update('paired','R','read_id',$reverse);
                 $paired++;
             }
             else {
-                print "!! insert error $PAIRS->{errors} !!\n";
+                print "!! insert error $PAIRS->{errors} !!$brtag";
             }
 
             $hashes->{$complement} = 0;  # or delete
         }
-        print "\n" if $warn;
+        print "$brtag" if $warn;
     }
 
-    print "$tested unpaired reads tested; $paired new pairs found in this block\n";
+    print "$tested unpaired reads tested; $paired new pairs found in this block$brtag";
 
     $start = $final + 1; # preset next cycle
     $continue = 0 if ($start >= $length);
@@ -218,3 +262,18 @@ $organisms->historyUpdate($userid,'insert',1);
 $GateKeeper->disconnect();
 
 exit 0;
+
+
+sub form {
+
+    my $form;
+    $form  = "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH=50%>";
+    $form .= "<TR><TH ALIGN=LEFT>Database</TH><TD>DATABASE</TD></TR>";
+    $form .= "<TR><TH ALIGN=LEFT NOWRAP>Starting Position</TH><TD><INPUT VALUE='START' SIZE=7 NAME='start'></TD></TR>";
+    $form .= "<TR><TH ALIGN=LEFT>Length</TH><TD><INPUT VALUE='LENGTH' SIZE=7 NAME='length'></TD></TR>";
+    $form .= "<TR><TH ALIGN=LEFT>Block Size</TH><TD><INPUT VALUE='BLOCK' SIZE=5 NAME='blocksize'></TD></TR>";
+    $form .= "<TR><TH ALIGN=LEFT>Extension Suffix</TH><TD><INPUT NAME='suffix' SIZE=2 VALUE=' '></TD></TR>";
+    $form .= "</TABLE>";
+
+    return $form;
+}

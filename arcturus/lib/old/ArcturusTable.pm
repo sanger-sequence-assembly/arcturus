@@ -20,7 +20,7 @@ $VERSION = 0.9;
 #############################################################################
 
 my $SEED;
-my $EXPAND = '/nfs/disk222/'; # expansion for '~' in file names
+my $EXPAND = '/nfs/repository/'; # expansion for '~' in file names
 my $SPLIT  = '\:|\,'; # the default split string
 
 my $BLOCK  = 0; # block set to suppress looping on INVENTORY
@@ -36,9 +36,9 @@ sub new {
     my $class  = ref($caller) || $caller;
     my $self   = $class->SUPER::new(@_);
 
-# check on the build; if not done, look in INVENTORY for guidance
+# check on the build (test columns); if not done, look in INVENTORY for guidance
 
-    if (!defined($self->{hashrefs}) || !@{$self->{hashrefs}}) {
+    if (!defined($self->{columns}) || !@{$self->{columns}}) {
 # try to open the INVENTORY table
         if (my $inventory = testArcturusInventory ($self,1)) {
             my $build = 0;
@@ -1234,6 +1234,67 @@ sub isASCII {
     }
     return 1;
 # alternative: if (quotemeta($string) eq $string) {return 1;} else {return 0;}
+}
+
+#############################################################################
+
+sub copy {
+# copy a row or rows from <self> to another instance <target> of the database table 
+    my $self   = shift;
+    my $target = shift; # table handle of target database table
+    my $column = shift; # column name or 'where' keyword
+    my $cvalue = shift; # column value or selection condition for rows in this table
+    my $cnames = shift; # optional, array with column names to be copied; else all
+
+print "self $self  target $target $column $cvalue ";
+print "cnames @$cnames" if $cnames;
+print "auto inc: $self->{autoinc}<br>\n";
+    my $unique =  $self->{unique};
+# find the first unique key which is not numerical, if any, else take the first one 
+    undef my $marker;
+    foreach my $key (@$unique) {
+        $marker = $key;
+        last if ($key ne $self->{autoinc});
+    }
+
+    if ($target eq $self) {
+        return;
+    }
+    elsif ($target->{tablename} ne $self->{tablename}) {
+        print "! copy failed: table name mismatch\n";
+        return;
+    }
+    elsif (!$unique || !$marker) {
+        print "! copy failed: no unique key available\n";
+        return;
+    }
+
+# get the rows to be copied
+
+    my $hashes = $self->associate('hashrefs',$column,$cvalue,1);
+print "hashes: $hashes  unique=$unique @$unique $marker\n";
+
+    foreach my $hash (@$hashes) {
+# test if the unique key exists in target; if so update, else newrow
+        my $targethash;
+        if (!($targethash = $target->associate('hashref',$hash->{$marker},$marker))) {
+            print "creating new row for $hash->{$marker}\n";
+#            $target->newrow($marker,$hash->{$marker});
+        }
+        foreach my $key (keys %$hash) {
+   print "key $key  autoinc '$target->{autoinc}' marker $marker hashkey '$hash->{$key}'\n";
+            if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key} =~ /\S/) {
+                if ($hash->{$key} ne $targethash->{$key}) {
+                    print "updating $key = $hash->{$key} for $hash->{$marker}\n";
+#                    $target->update($key,$hash->{$key},$marker,$hash->{$marker});
+                }
+                else {
+		    print "key $key is identical in both tables\n";
+                }
+	    }
+        }
+print "\n\n";       
+    }
 }
 
 #############################################################################

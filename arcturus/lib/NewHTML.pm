@@ -84,9 +84,10 @@ sub title {
 
 sub form {
 # add form instruction and submit link
-    my $self = shift;
-    my $link = shift;
-    my $post = shift;
+    my $self   = shift;
+    my $link   = shift;
+    my $post   = shift;
+    my $target = shift;
 
     my $part = $self->{current} - 1;
     my $content = $self->{content}; #  partition contents
@@ -100,6 +101,7 @@ sub form {
 
     if ($link) {
         my $formtag = "<FORM action=\"$link\" method=\"$post\">";
+        $formtag =~ s/\>/ target="$target">/ if $target;
         if (!($content->[$part] =~ s/\<FORM[^\>]+\>/$formtag/)) {
             $content->[$part] .= "$formtag";
         }
@@ -410,11 +412,12 @@ sub ingestCGI {
 ###############################################################################
 
 sub preload {
-# preset variables in <INPUT NAME='$name' VALUE='$value'> if VALUE undefined 
+# preset variables in <INPUT NAME='$name' VALUE='$value'> if VALUE undefined
+# this method relies critically on the single or double quotes being used  
     my $self  = shift;
     my $name  = shift;
     my $value = shift;
-    my $over  = shift; # 0 to ignore existing values; else replace
+    my $over  = shift; # True to replace existing values; else ignore
 
     my $part = $self->{current} - 1;
     my $content = $self->{content};
@@ -571,17 +574,20 @@ sub arcturusGUI {
     $bgcolor = "beige" if (!$bgcolor);
 
     undef my $layout;
-    $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=1 CELLPADDING=0 CELLSPACING=4><TR>";
-    $layout .= "<TD HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
+    $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=0 CELLPADDING=1 CELLSPACING=3><TR>";
+    $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>ARCTURUSLOGO</TD>";
     $layout .= "<TD HEIGHT=$mtop BGCOLOR=$bgcolor>CON1</TD>";
-    $layout .= "<TD HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>ARCTURUSLOGO</TD>";
+    $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
     $layout .= "</TR><TR>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor>CON2</TD>";
-    $layout .= "<TD ROWSPAN=2>CON0</TD>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor>CON3</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON2</TD>";
+    $layout .= "<TD ROWSPAN=3>CON0</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON3</TD>";
     $layout .= "</TR><TR>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor ALIGN=TOP>CON4</TD>";
-    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor ALIGN=TOP>CON5</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON4</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON5</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON6</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON7</TD>";
     $layout .= "</TR></TABLE>";
 
     $self->{layout} = $layout;
@@ -705,8 +711,8 @@ sub flush {
 
 # substitute values for standard place holders
 
-    $output =~ s/SANGERLOGO/<IMG SRC="sanger.gif">/;
-    $output =~ s/ARCTURUSLOGO/<IMG SRC="arcturus.jpg">/;
+#    $output =~ s/SANGERLOGO/<IMG SRC="sanger.gif">/;
+#    $output =~ s/ARCTURUSLOGO/<IMG SRC="arcturus.jpg">/;
 
 # clear the contents
 

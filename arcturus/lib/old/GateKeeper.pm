@@ -4,7 +4,6 @@ use strict;
 
 use DBI;
 use CGI qw(:standard);
-#use MyCGI;
 use NewHTML;
 use ArcturusTable;
 use ConfigReader;
@@ -45,7 +44,6 @@ sub new {
     undef $self->{TCPort};
     undef $self->{handle};
     undef $self->{database};
-#    $self->{instances} = {};
     undef $self->{config};
     undef $self->{cgi};
 
@@ -227,7 +225,7 @@ sub opendb_MySQL_unchecked {
 
     my $handle = DBI->connect($dsn, $username, $password, $options{RaiseError});
     if (!$handle && $options{dieOnError}) {          
-        &dropDead($self,"Failed to access arcturus on host $host ($DBI::errstr)");
+        &dropDead($self,"Failed to access arcturus on host $host",1);
     }
 
 # okay, here the database has been properly opened on host/port $self->{server};
@@ -354,7 +352,7 @@ sub opendb_MySQL {
 # and open up the connection
             $eraise = 1 if !defined($eraise);
             $self->{handle} = DBI->connect($dsn, $username, $password, {RaiseError => $eraise}) 
-                              or &dropDead($self,"Failed to access $db_name: $DBI::errstr");           
+                              or &dropDead($self,"Failed to access $db_name: (dsn: $dsn)",1); 
 # okay, here the database has been properly opened on host/port $self->{server};
         }
         elsif ($ENV{HTTP_HOST}) {
@@ -374,17 +372,6 @@ sub opendb_MySQL {
     if ($self->{mother}->{errors}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
-#    elsif (my $hashes = $self->{mother}->{hashrefs}) { # array ref
-#$self->cgiHeader(1); print "master table opened: $self->{mother}"; # collect available servers
-#        foreach my $hash (@$hashes) {
-#            my $dbasename = $hash->{dbasename};
-#            my $residence = $hash->{residence};
-#            $self->{residence}->{dbasename} = $residence if ($hash->{available} ne 'off-line');
-#        }
-#    }
-#    else {
-#        &dropDead($self,"No data in table ORGANISMS");
-#    }
 }
 
 #*******************************************************************************
@@ -525,7 +512,7 @@ sub tableHandle {
 
     undef my %options;
     $options = \%options if !$options;
-    $options->{dbhandle} = 0;
+    $options->{returnTableHandle} = 1;
 
     return $self->dbHandle($database,$options);
 }
@@ -595,13 +582,15 @@ sub authorize {
                     silently   => 1, # do everything quietly
                     dieOnError => 0, # do not abort on error but return error message
                     ageWindow => 30, # acceptance window (minutes) for previously opened session
+                    diagnosis  => 0  # default off
 		  );
 
-    if (ref($hash) eq 'HASH') {
-        foreach my $key (keys %$hash) {
-            $options{$key} = $hash->{$key};
-        }
-    }
+    &importOptions(\%options, $hash);
+#    if (ref($hash) eq 'HASH') {
+#        foreach my $key (keys %$hash) {
+#            $options{$key} = $hash->{$key};
+#        }
+#    }
 
     my $mother = $self->{mother};
     undef my ($priviledges,$seniority);
@@ -689,21 +678,20 @@ sub authorize {
 # if interim set or no page exists pop up an intermediate authorisation form
             elsif ($options{interim} || !$cgi->pageExists) {
                 $self->cgiHeader(2); # if not already done
-                my $script = $self->{Script};
-                $script =~ s?^.*cgi-bin?/cgi-bin?;
+                my $script = $self->currentScript;
+#                $script =~ s?^.*cgi-bin?/cgi-bin?;
                 $script .= $options{returnpath} if $options{returnpath};
-                $cgi->openPage("ARCTURUS authorisation");
-                $cgi->frameborder(100,20,'white',20);
-                $cgi->center(1);
-                $cgi->form($script); # return to same url
-                $cgi->sectionheader("ARCTURUS authorisation",3,1);
-                $cgi->sectionheader("The requested ARCTURUS operation requires authorisation",4,0);
-                $cgi->sectionheader("Please provide your User Identification and Password",4,0);
-                $cgi->identify('10',8,1);
-                $cgi->submitbuttonbar(1,0);
-                $cgi->ingestCGI();
-                $cgi->form(0); # end form
-                $cgi->flush;
+                my $page = $self->GUI("ARCTURUS authorisation");
+                $page->form($script); # return to same url
+                $page->sectionheader("ARCTURUS authorisation",3,1);
+                $page->sectionheader("The requested ARCTURUS operation requires authorisation",4,0);
+                $page->sectionheader("Please provide your User Identification and Password",4,0);
+                $page->identify('10',8,1);
+                $page->submitbuttonbar(1,0);
+                $page->ingestCGI();
+                $page->form(0); # end form
+                $page->PrintVariables(0) if $options{diagnosis};
+                $page->flush;
                 &dropDead($self);
             }
     # there is an active form
@@ -747,7 +735,7 @@ sub authorize {
 
         if ($self->cgiHandle(1) && !$options{nosession}) {
             $session = 0;
-            my $sessions = $mother->spawn('SESSIONS','self',1);
+            my $sessions = $mother->spawn('SESSIONS','self',0,1);
             if ($sessions->{errors}) {
                 &dropDead($self,$sessions->{error}) if $options{dieOnError};
 	        return $sessions->{errors};
@@ -855,9 +843,9 @@ sub GUI {
     my $cgi = &cgiHandle($self,1);
     return 0 if !$cgi;
 
-    my $script = $self->{Script};
-    $script =~ s?^.*cgi-bin?/cgi-bin?; # the current script
-    my $postToGet = $cgi->postToGet(); # include current database
+    my $script = $self->currentScript;
+    my @exclude = ('USER');
+    my $postToGet = $cgi->postToGet(@exclude); # include 'database' but not USER
 
     my $connection = &whereAmI($self); # production or development
 
@@ -899,87 +887,169 @@ sub GUI {
 
 # colour palet
 
-    my $bgalter = 'lightblue';
-    my $cell = "bgcolor=$bgalter nowrap align=center";
+    my $gray = 'CCCCCC';
+    my $purp = 'E2E2FF';
+    my $yell = 'FAFAD2';
+    my $cell = "bgcolor=$yell nowrap align=center";
 
 # okay, now compose the page
 
-
+    $self->cgiHeader(2); # in case not yet done
     my $page = $cgi->openPage("ARCTURUS $title");
     my $width = '10%';
-    $page->arcturusGUI(20,$width,'beige');
-    for my $i (1 .. 6) {
-        $page->partition($i);
-        $page->center(1);
-    }
-
-    $page->partition(1);
-    $page->add("partition 1",0,1);
-    $page->add("script $self->{Script}",0,1);
+    my $height = 50;
+    $page->arcturusGUI($height,$width,$yell);
+# substitute values for standard place holders
+    my $href="href=\"/icons/bootes.jpg\"";
+    my $imageformat = "width=\"$width\" height=$height vspace=1";
+    $page->{layout} =~ s/ARCTURUSLOGO/<A $href><IMG SRC="\/icons\/bootes.jpg $imageformat"><\/A>/;
+    $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
 
 # compose the top bar (partition 2)
 
-    $page->partition(2);
-    $page->add("You are connected to the $connection");
+    $page->partition(2); $page->center(1);
+    $connection =~ s/\b(dev\w+)\b/<font size=+1 color=red>$1<\/font>/;
+    $connection =~ s/\b(pro\w+)\b/<font size=+1 color=blue>$1<\/font>/;
+    $page->add("<font size=+1> You are connected to the ARCTURUS $connection</font>");
     
 # compose the left-side link table  (dev/prod database functions; partitions 3,5)
 
     $page->partition(3);
-    $cgi->delete('database');
-    $script .= $cgi->postToGet; # without current database
-    my $table = "<table cellpadding=2 border=0 cellspacing=0>";
+    push @exclude, 'database';
+    $script .= $cgi->postToGet(@exclude); # without current database
+    my $tablelayout = "cellpadding=2 border=0 cellspacing=0 width=$width align=center";
+    my $table = "<table $tablelayout>";
     if (@alternates) {
-        $table .= "<tr><th colspan=2 bgcolor='yellow'> Servers </th></tr>";
+        $table .= "<tr><th colspan=2 bgcolor='$purp' width=100%> Servers </th></tr>";
         foreach my $server (@alternates) {
             my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
             my $type = uc($altertypes{$server}); $type =~ s/^(\w)\w*$/$1/;
             my $link = "$url[0]";
             $link = "<a href=\"http://$server$script\"> $link </a>" if ($type ne 'C');
-            $table .= "<tr><td $cell width=70>$link</td><td $cell width=10>$type</td></tr>";
+            $type = "&nbsp" if ($type eq 'C');
+            $table .= "<tr><td $cell width=87.5%>$link</td><td $cell width=12.5%>$type</td></tr>";
         }
     }
+    $table .= "<tr><td $cell colspan=2> </td></tr>";
     $table .= "</table>";
     $page->add($table);   
 
 # compose the database table
 
     $page->partition(5);
-    $table = "<table cellpadding=2 border=0 cellspacing=0>";
+    $table = "<table $tablelayout>";
     if (@databases) {
-        $table .= "<tr><th bgcolor='yellow'> Databases </th></tr>";
+        my $current = $cgi->parameter('database');
+        $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
         foreach my $database (sort @databases) {
-            my $target = $self->{server}.$script;
+            my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
             $target .= "&database=$database" if ($target !~ /\b$database\b/);
-            my $link = "<a href=\"http://$target\"> $database </a>";
-            $table .= "<tr><td $cell width=80>$link</td></tr>";
+            my $link = $database;
+            $link = "<a href=\"$target\"> $link </a>" if ($current && $current ne $link);
+            $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
     }
-    my $create = "$self->{server}/cgi-bin/create/newform";
-    $create .= $cgi->postToGet();
-    my $new = "<a href=\"http://$create\"> NEW </a>";
-    $table .= "<tr><td bgcolor=$bgalter nowrap align=center>$new</td></tr>";
+    $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
     $page->add($table);   
 
+# compose the 'create' table: include assemblies and projects only if database is defined
 
-# compose the right-side link tables (change servers,   databases; partitions 4,6)
+    $page->partition(7);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Create </th></tr>";
+    my $create = "cgi-bin/create/newform".$cgi->postToGet(@exclude);
+    $table .= "<tr><td $cell><a href=\"$create\"> Database </a></td></tr>";
+    if (my $database=$cgi->parameter('database')) {
+        $create = "cgi-bin/amanager/preselect/assembly".$cgi->postToGet('USER');
+        $table .= "<tr><td $cell><a href=\"$create\"> Assembly </a></td></tr>";
+        $create = "cgi-bin/amanager/preselect/project".$cgi->postToGet('USER');
+        $table .= "<tr><td $cell><a href=\"$create\"> Project </a></td></tr>";
+    }
+    $create = "cgi-bin/umanager/newform".$cgi->postToGet(@exclude);
+    $table .= "<tr><td $cell><a href=\"$create\"> User </a></td></tr>";
+    $table .= "<tr><td $cell>&nbsp </td></tr>";
+    $table .= "</table>";
+    $page->add($table);   
 
-    my $link = "$self->{Script}";
-    my $text = "Development Server"; # or production
-    my $linktable = "<table width=$width><tr><td><a href=\"$link\">$text</a></td></tr></table>";
-
-    $page->partition(4);
-    $page->add("partition 4");
-#    $page->add($linktable);
+# compose the update table
 
     $page->partition(6);
-    $page->add("partition 6");
-#    $page->add($linktable);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Update </th></tr>";
+    if (my $database=$cgi->parameter('database')) {
+        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(@exclude);
+        $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
+        $update = "/cgi-bin/amanager/newform".$cgi->postToGet('USER');
+        $table .= "<tr><td $cell><a href=\"$update\"> Assembly </a></td></tr>";
+        $update = "/cgi-bin/pmanager/newform".$cgi->postToGet('USER');
+        $table .= "<tr><td $cell><a href=\"$update\"> Project </a></td></tr>";
+    }
+    $table .= "</table>";
+    $page->add($table);   
+
+# compose the input table
+
+    $page->partition(4);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Input </th></tr>";
+    my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet('USER');
+    $table .= "<tr><td $cell><a href=\"$input\"> READS </a></td></tr>";
+    $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet('USER');
+    $table .= "<tr><td $cell><a href=\"$input\"> CONTIGS </a></td></tr>";
+    if (my $database=$cgi->parameter('database')) {
+        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet('USER');
+        $table .= "<tr><td $cell><a href=\"$input\"> TAGS </a></td></tr>";
+    }
+    else {
+#        $table .= "<tr><td>select<br>a<br>database></td></tr>";
+    }
+    $table .= "</table>";
+    $page->add($table);   
+
+# compose the common 
+
+    $page->partition(8);
+    $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Update </th></tr>";
+    my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(@exclude);
+    $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
+    $update = "/cgi-bin/update/newform".$cgi->postToGet(@exclude);
+    $table .= "<tr><td $cell><a href=\"$update\"> Common </a></td></tr>";
+
+    $table .= "<tr><td $cell> </td></tr>";
+    $table .= "</table>";
+    $page->add($table);   
 
 # go back to the main section
 
+    $page->partition(1);
+    $page->center(1);
+#    $page->add("script $self->{Script}",0,0);
+
     return $page;
+}
+
+#*******************************************************************************
+
+sub currentScript {
+    my $self = shift;
+
+    my $script = $self->{Script};
+    $script =~ s?^.*cgi-bin?/cgi-bin?;
+
+    return $script;
+}
+
+#*******************************************************************************
+
+sub currentHost {
+    my $self = shift;
+
+    my @hostinfo = split /\.|\:/,$self->{server};
+
+    return $hostinfo[0];
 }
 
 #*******************************************************************************
@@ -990,8 +1060,16 @@ sub dropDead {
 # disconnect and abort with message
     my $self = shift;
     my $text = shift;
+    my $edbi = shift; # reserve for DBI error
 
     if ($text) {
+        $text = "! $text" if $text;
+        if ($edbi && $DBI::errstr) {
+            $text .= ": $DBI::errstr";
+        }
+        elsif ($edbi) {
+            $text .= " (No DBI error reported)";
+        }
         $self->disconnect("! $text");
     }
     else {

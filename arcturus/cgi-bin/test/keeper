@@ -69,7 +69,3 @@ else {
 $GateKeeper->disconnect();
 
 exit 0;
-
-
-
-

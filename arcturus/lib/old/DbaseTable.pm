@@ -40,6 +40,7 @@ sub new {
     $self->{coltype}     = {}; # hash with column types
     $self->{prime_key}   = ''; # place holder for the primary key
     $self->{unique}      = []; # place holders for a possible unique key
+    $self->{autoinc}     = ''; # for a possible autoincremental column
     $self->{hashrefs}    = []; # array with hashrefs for table rows
     $self->{hashref}     = ''; # hash reference of last accessed table row 
     $self->{errors}      = ''; # build/instantiate status
@@ -59,6 +60,25 @@ sub new {
 
     bless ($self, $class);
     return $self;
+}
+
+#############################################################################
+
+sub spawn {
+# spawn a new DbaseTable object with inheritance of current
+# used on an ArcturusTable, the result is a new ArcturusTable instance 
+    my $self      = shift;
+    my $tablename = shift;
+    my $database  = shift;
+    my $forced    = shift; # if true, force creation of a new instance
+
+    my $dbhandle = $self->{dbhandle};
+    $database = $self->{database} if ($database =~ /\bself\b/);
+
+    my $handle = $self->findInstanceOf($database.'.'.$tablename) || '';
+    $handle = $self->new($dbhandle,$tablename,$database,@_) if (!$handle || $forced);
+    
+    return $handle;
 }
 
 #############################################################################
@@ -114,6 +134,7 @@ sub build {
             push @{$self->{unique}}, $description[0] if ($description[3] eq 'PRI');
             push @{$self->{unique}}, $description[0] if ($description[3] eq 'UNI');
             $prime_col = $description[0] if ($tablename =~ /^\w+\.$description[0]$/i);
+            $self->{autoinc} = $description[0] if ($description[5] && $description[5] =~ /auto/i);
             $count++; 
         }
         $self->{coltype} = \%columns ;
@@ -180,24 +201,6 @@ sub buildhash {
 # return the number of table lines
 
     return $count;
-}
-
-#############################################################################
-
-sub spawn {
-# spawn a new DbaseTable object with inheritance of current 
-    my $self      = shift;
-    my $tablename = shift;
-    my $database  = shift;
-    my $forced    = shift; # if true, force creation of a new instance
-
-    my $dbhandle = $self->{dbhandle};
-    $database = $self->{database} if ($database =~ /\bself\b/);
-
-    my $handle = $self->findInstanceOf($database.'.'.$tablename);
-    $handle = $self->new($dbhandle,$tablename,$database,@_) if (!$handle || $forced);    
-    
-    return $handle;
 }
 
 #############################################################################
@@ -391,7 +394,7 @@ sub associate {
     my $item  = shift;
     my $wval  = shift;
     my $wcol  = shift;
-    my $multi = shift; # true i.e !=0 forces search for more than one return items
+    my $multi = shift; # true i.e !=0 forces search for more than one return items <0 no trace
     my $order = shift;
     my $exact = shift; # use '=' and not 'like' in string comparisons (exact match)
 
@@ -419,7 +422,7 @@ sub associate {
 
 # the next two branches relate to internally stored tables and only return 
 # data of the first encountered record matching the query; use for unique items
- 
+
     if (defined($hash) && $item eq 'hashref') {
 # return hash reference to the (**first**) table record found by &locate; store for reference
         $self->{hashref} = $hash;
@@ -588,7 +591,8 @@ sub associate {
     elsif ($item eq 'hashrefs') {
         $result = $self->{hashrefs}; # if any
     }
-    elsif (defined($item)) {
+    elsif (defined($item) && !@{$self->{hashrefs}}) {
+        $result = $self->associate($item,'where',1); # returns an array or undefined
     }
 
     $result;
@@ -652,15 +656,16 @@ sub locate {
     undef my $rvalue;
 
     if (defined($wval) && defined($self->{hashrefs})) {           
-# print "find item: $item  for key $wval \n";
+#print "find item: $item  for key $wval \n" if ($self->{tablename} =~ /INV/);
         foreach my $hash (@{$self->{hashrefs}}) {
             if (defined($item) && defined($hash->{$item}) && $hash->{$item} eq $wval) {
                 $result = $hash;
                 $rvalue = $hash->{$item};
-            } elsif (!defined($item)) {
+            } 
+            elsif (!defined($item)) {
                 foreach my $column (@{$self->{columns}}) {
                     if (defined($hash->{$column}) && $hash->{$column} eq $wval) {
-# print "column:$column value:$hash->{$column} matches, result= $hash->{$item}\n"; 
+#print "column:$column value:$hash->{$column} matches, result= $hash->{$item}\n" if ($self->{tablename} =~ /INV/); 
                         $result = $hash;
                         $rvalue = $column;
                         last; # accept the first match
@@ -1047,7 +1052,7 @@ print "NEWROW: nextrow=$nextrow query: $query \n wstring $wstring \n" if $list;
                 my $nextrow = count($self,0) + $multiLine; # or leave out?
                 $vstring = join '),(',@{$self->{stack}->{$cstring}};
                 my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-print "NEWROW: nextrow=$nextrow query: $query \n";
+# print "NEWROW: nextrow=$nextrow query: $query \n";
                 my $status = &query($self,$query,1,0);      
                 if ($status && count($self,0) == $nextrow) {
                     $inputStatus = $nextrow;
@@ -1087,13 +1092,16 @@ sub flush {
     my $self   = shift;
     my $string = shift;
 
+#print "FLUSH $self->{tablename}\n";
     my $status = 0;
     my $stack = $self->{stack};
     foreach my $cstring (keys %$stack) {
-        if (!$string || $cstring eq $string) {
+#print "key=$cstring\n";
+#print "stack $stack->{$cstring} \n";
+        if ((!$string || $cstring eq $string) && $stack->{$cstring}) {
             my $vstring = join '),(',@{$stack->{$cstring}};
             my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-print "FLUSH query: $query \n";
+#print "FLUSH query: $query \n";
             $status = &query($self,$query,1,0);      
             undef $self->{stack}->{$cstring} if $status;
         } 
@@ -1169,9 +1177,10 @@ sub update {
     }
 
     if (!$status) {
-        $self->{errors}  = "! Failed to update  table $tablename: $self->{qerror}:";
+        $self->{errors}  = "! Failed to update  table $tablename:";
         $self->{errors} .= " $self->{qerror}" if  $self->{qerror};
         $self->{errors} .= " Invalid or undefined column name $cname or value $value" if !$self->{qerror};
+# print "errors: $self->{errors}\n";
     }
 
     return $status;   

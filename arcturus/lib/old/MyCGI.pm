@@ -152,12 +152,22 @@ sub transport {
 ###############################################################################
 
 sub postToGet {
+# convert posted CGI parameters/values into a get formatted string
     my $self = shift;
+
+# a list of parameter/values to be excluded can be provided as array
+
+    my %exclude;
+    $exclude{submit}++; # always
+    while (@_) {
+        my $name = shift;
+        $exclude{$name}++;
+    }
 
     my $string = '';
     my $in = $self->{cgi_input};
     foreach my $key (keys (%$in)) {
-        if ($key ne 'submit' && $in->{$key} =~ /\w/) {
+        if (!$exclude{$key} && $in->{$key} =~ /\w/) {
             $string .= "\&" if ($string =~ /\w/);
             $string .= "\?" if ($string !~ /\S/);
             $string .= "$key=$in->{$key}";

@@ -63,6 +63,8 @@ $page->frameborder(100,25,'white',10); # set-up of page layout
 $page->center(1);
 $page->partition(2);
 $page->center(1);
+# my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates");
+# $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
 
 my $getMenu  = "$arc_cgi_dir/update/arcturus/getmenu";
 
@@ -75,7 +77,6 @@ if ($organisms->do("SHOW TABLES FROM arcturus LIKE 'INVENTORY'") == 0) {
 # the inventory table is not found or cannot be read: generate a form to create it
 
     $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
-#    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
     $page->warningbox("The INVENTORY table is missing!<p>"
                      ."It must be created before you can continue",1);
     $page->linkbutton("CONTINUE","$arc_cgi_dir/create/arcturus/reinit",0);
@@ -91,7 +92,6 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
     my $hashes    = $inventory->associate('hashrefs','c','domain');
     if (!$hashes || !@$hashes) {
         $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
-#        $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
         $page->warningbox("The INVENTORY table cannot be read");
         $page->errorbox("<h3>Please contact $db_manager</h3>");
         $page->flush();
@@ -125,10 +125,8 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
     
 # get a list of the curent databases 
     
-#    my $organisms = $inventory->new($dbh,'ORGANISMS','arcturus');
     my $dbcount   = $organisms->count();
     $hashes = $organisms->{'hashrefs'};
-# $hashes = $organisms->getTableInfo('hashrefs');
     undef my @databases;
     foreach my $hash (@$hashes) {
         push @databases,$hash->{'dbasename'};
@@ -141,7 +139,6 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
 
 # ****** start the return form with an inventory list ******     
 
-#    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
     $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
 
 # flag if common tables are missing
@@ -152,7 +149,7 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
         $page->tablelist(\@mtables);
     }
 
-    $page->add('banner');
+#    $page->add('banner');
 
 # list organism databases
 
@@ -327,7 +324,6 @@ elsif ($database eq 'arcturus' && $option eq 'organisms') {
 
     $page->sectionheader("ARCTURUS contents manager");
     $page->sectionheader("Update organism database description",4,1);
-#    my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
     $action = 'getform' if (!$action); # default
     my $nrdbases = $organisms->build(1); 
 

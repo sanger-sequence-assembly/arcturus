@@ -107,8 +107,8 @@ sub getNumberedRead {
 
     my $readname = $dbREADS->associate('readname',$number,'read_id',0);
 
+    &clear($self);
     if ($readname) {
-        &clear($self); # clear all buffers
         &loadReadData ($self,$readname);
     } else {
         $status->{diagnosis} .= "! Read nr. $number does not exist";
@@ -178,7 +178,9 @@ sub loadReadData {
 
 # retrieve the (uniquely) named read as reference to a (temporary) hash table 
 
+    $name =~ s/^\s*|\s*$//g; # remove possible leading or trailing blanks
     my $hash = $dbREADS->associate('hashref',$name,'readname',0);
+#    print "readname = $name  hash=$hash lastquery=$dbREADS->{lastQuery}<br>";
 
 # if the read exists, build the (local) buffers with the sequence data
 
@@ -198,8 +200,8 @@ sub loadReadData {
         if (defined($hash->{scompress}) && defined($Compress)) {
             if (defined($hash->{sequence})) {
                 my $dc = $hash->{scompress};
-               ($scount, $sstring) = $Compress->sequenceDecoder($hash->{sequence}) if ($dc == 1);
-               ($scount, $sstring) = $Compress->huffmanDecoder ($hash->{sequence}) if ($dc == 2);
+               ($scount, $sstring) = $Compress->sequenceDecoder($hash->{sequence},$dc,0);
+#               ($scount, $sstring) = $Compress->huffmanDecoder ($hash->{sequence}) if ($dc == 2);
                 if (!($sstring =~ /\S/)) {
                     $status->{diagnosis} .= "! Missing or empty sequence\n";
                     $status->{errors}++;
@@ -221,13 +223,13 @@ sub loadReadData {
         if (defined($hash->{qcompress}) && defined($Compress)) {
             if (defined($hash->{quality})) {
                 my $dq = $hash->{qcompress};
-               ($qcount, $qstring) = $Compress->qualityDecoder($hash->{quality}) if ($dq == 1);
-               ($qcount, $qstring) = $Compress->huffmanDecoder($hash->{quality}) if ($dq == 2);
+               ($qcount, $qstring) = $Compress->qualityDecoder($hash->{quality},$dq);
+#               ($qcount, $qstring) = $Compress->huffmanDecoder($hash->{quality}) if ($dq == 2);
                 if (!($qstring =~ /\S/)) {
                     $status->{diagnosis} .= "! Missing or empty quality data\n";
                     $status->{errors}++;
                 } else {
-                    $qstring =~ s/\s(\d)\b/ 0$1/g;
+                    $qstring =~ s/\b(\d)\b/0$1/g;
                     $qstring =~ s/(.{90})/$1\n/g;
                 }
             } else {
@@ -416,7 +418,8 @@ sub list {
 
     my $n = 0;
     foreach my $key (sort keys (%{$hash})) {
-        undef my $string;  
+        undef my $string;
+        my $wrap = 'WRAP';
         if (defined($hash->{$key})) { 
             $string = $self->{sstring} if ($key eq 'sequence' || $key eq 'SQ');
             $string = $self->{qstring} if ($key eq 'quality'  || $key eq 'AV');
@@ -424,6 +427,7 @@ sub list {
                 $string = "<code>$string</code>";
                 $string = "<small>$string</small>" if ($key eq 'quality'  || $key eq 'AV');
                 $string =~ s/\n/\<\/code>\<BR\>\<code\>/g;
+                $wrap = 'NOWRAP';
 	    }
             $string = $hash->{$key} if (!$string);
             $string = "&nbsp" if ($string !~ /\S/);
@@ -438,7 +442,7 @@ sub list {
             $string = "&nbsp";
 	}
         $report .= "$key = $string\n" if (!$html);
-        $report .= "<TR><TD ALIGN=CENTER>$key</TD><TD WRAP>$string</TD></TR>\n" if ($html);
+        $report .= "<TR><TD ALIGN=CENTER>$key</TD><TD $wrap>$string</TD></TR>\n" if ($html);
     }
     $report .= "</TABLE><P>\n" if ($html);
 

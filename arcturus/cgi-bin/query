@@ -360,7 +360,7 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     $mask = '111111100'         if ($tablename =~ /PEOPLE/);
     $mask = '01110001111102'    if ($tablename =~ /ORG/);
     $mask = '03101111'          if ($tablename =~ /STSTAG/);
-    $mask = '010101111111100002' if ($tablename =~ /ASSEM/);
+    $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
     $mask = '0111111100'        if ($tablename =~ /USER/);
     $mask = '011111111000112'   if ($tablename =~ /PROJ/);
     my $table = $dbtable->htmlTable($mask);
