@@ -193,7 +193,7 @@ if ($cgi) {
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
 #print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
                 $config{RDD} = `$BADGERDIR/pfind -q $database`;
-		$config{RDD} =~ s/\n/ BR /g;
+		$config{RDD} =~ s/[^\w\/]/ BR /g;
 print "RDD Ia:  $config{RDD} <br>";
 #               my $repository = new PathogenRepository;
 #               $config{RDD} = $repository->getAssemblyDirectory($database); 
