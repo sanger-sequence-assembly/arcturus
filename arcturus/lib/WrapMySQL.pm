@@ -15,7 +15,8 @@
 # (which maps to a username and password).
 #
 # The aliases and roles are defined in a configuration file whose location
-# is specified at run-time via the WRAPMYSQL_INI environment variable.
+# is specified at run-time via the WRAPMYSQL_INI environment variable (if
+# it is defined) or explicitly via a call to the initFromFile method.
 #
 # The module was inspired by WrapDBI.pm, which performs a similar function
 # for the Oracle instances at the Wellcome Trust Sanger Institute.
@@ -59,31 +60,7 @@ BEGIN {
 
     my $inifile = $ENV{'WRAPMYSQL_INI'};
 
-    if (defined($inifile) && open(INI, $inifile)) {
-	my ($line, $instance, $name, $value, $roles, $username, $password);
-
-	while ($line = <INI>) {
-	    chop $line;
-
-	    if ($line =~ /\[([\w\-\.]+)\]/) {
-		$instance = $1;
-		$users->{$instance} = {};
-	    } elsif ($line =~ /([\w\-\.]+)=([\w\-\.\,]+)/) {
-		($name, $value) = ($1, $2);
-		if ($name =~ /^role\.(\w+)/) {
-		    $name = $1;
-		    ($username, $password) = split(/,/, $value);
-		    $users->{$instance}->{'ROLE'} = {} unless
-			defined($users->{$instance}->{'ROLE'});
-		    $users->{$instance}->{'ROLE'}->{$name} = [$username, $password];
-		} else {
-		    $users->{$instance}->{$name} = $value;
-		}
-	    }
-	}
-
-	close(INI);
-    }
+    &initFromFile($inifile) if (defined($inifile));
 }
 
 sub connect {
@@ -138,4 +115,53 @@ sub connect {
 
 sub getErrorString {
     return $errorstring;
+}
+
+sub initFromFile {
+    return if defined($ENV{'WRAPMYSQL_INI'});
+
+    my $type = shift;
+    my $inifile = shift;
+
+    if (defined($inifile) && open(INI, $inifile)) {
+	my ($line, $instance, $name, $value, $roles, $username, $password);
+
+	while ($line = <INI>) {
+	    chop $line;
+
+	    if ($line =~ /\[([\w\-\.]+)\]/) {
+		$instance = $1;
+		$users->{$instance} = {};
+	    } elsif ($line =~ /([\w\-\.]+)=([\w\-\.\,]+)/) {
+		($name, $value) = ($1, $2);
+		if ($name =~ /^role\.(\w+)/) {
+		    $name = $1;
+		    ($username, $password) = split(/,/, $value);
+		    $users->{$instance}->{'ROLE'} = {} unless
+			defined($users->{$instance}->{'ROLE'});
+		    $users->{$instance}->{'ROLE'}->{$name} = [$username, $password];
+		} else {
+		    $users->{$instance}->{$name} = $value;
+		}
+	    }
+	}
+
+	close(INI);
+    }
+}
+
+sub listInstances {
+    return keys(%{$users});
+}
+
+sub listRolesForInstance {
+    my ($type, $instance, $junk) = @_;
+
+    my $roles = $users->{$instance}->{'ROLE'};
+
+    if (defined($roles)) {
+	return keys(%{$roles});
+    } else {
+	return undef;
+    }
 }
