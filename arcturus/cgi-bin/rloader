@@ -1064,7 +1064,7 @@ sub getNewReadFiles {
 
     $MAXREAD = 1000 if (!defined($MAXREAD));
  
-$DEBUG = 0 if ($directory =~ /LEISH32/);
+$DEBUG = 1 if ($directory =~ /MUST/);
 my $nrr = keys %$dbfiles;
 print "directory $directory $break dbfiles $nrr $break" if $DEBUG;
 print "exclude: @{$excluders}${break}filter : $flnfilter$break gbfilter : $glbfilter$break" if ($DEBUG);
@@ -1074,7 +1074,7 @@ $MAXREAD = 10 if ($DEBUG);
 DIR:foreach my $sdname (@dirs) {
     # analyse next directory name, get files and analyse file names
         chomp $sdname; # cleanup
-#print "testing dir $sdname$break";
+print "testing dir $sdname$break" if $DEBUG;
         next DIR if ($glbfilter =~ /\S/ && $sdname !~ /$glbfilter/);
         foreach my $exclude (@{$excluders}) {
 print "rejected directory: $sdname  $break" if ($sdname =~ /$exclude/ && $DEBUG);
