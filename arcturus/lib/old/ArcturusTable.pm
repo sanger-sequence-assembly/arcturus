@@ -226,10 +226,12 @@ sub counted {
 # if the table has data, check if there is a "counted" column; if so, tally 
 
     if ($count > 0 && $self->{coltype}->{counted}) {
+
  
         $count = 0;
-        if ($self->{hashrefs}) {
-            foreach my $hash (@{$self->{hashrefs}}) {
+        my $hashrefs = $self->{hashrefs};
+        if ($hashrefs && @$hashrefs) {
+            foreach my $hash (@$hashrefs) {
                 $count += $hash->{counted};
             }
         }
@@ -237,7 +239,6 @@ sub counted {
             my $query = "SELECT SUM(counted) AS total FROM <SELF>";
             my $hash  = $self->SUPER::query($query);
             $count = $hash->[0]->{total};
-#print "count= $count<br>";
         }
     }
 
@@ -497,7 +498,7 @@ sub packAttribute {
         $split =~ s/\\//g; # remove possible backslashes
         my @separators = split /\|/, $split;
         $separators[0] = ':' if (!@separators);
-        $separators[1] = $separators[0] if (@separators == 1);
+        $separators[1] = $separators[0] if (@separators <= 1);
         foreach my $key (sort keys %$hash) {
             $attributes .= $key."$separators[0]";
             $attributes .= $hash->{$key}."$separators[1]"; 
@@ -540,7 +541,7 @@ sub snapshot {
     $table .= '<TR><TH>Table</TH><TH>Database</TH><TH>Size</TH><TH>status</TH></TR>';
     foreach my $tablename (sort keys %$instances) {
         my $instance = $instances->{$tablename};
-        my ($dbase, $tname) = split '\.',$tablename;
+        my ($port,$dbase, $tname) = split '\.',$tablename;
         my $count = $instance->count(-1);
         my $error = $instance->{errors} || "&nbsp";
         if (!$database || $dbase eq $database) {
@@ -749,6 +750,7 @@ sub htmlTableColumn {
         my $values = $self->associate($column,$Cvalue,$Column,\%option); # returns array ref
 # determine number of rows and columns to be used
         my $nrcols = int(sqrt(@$values*$option{maxAspect})+0.5);
+        $nrcols = 1 if ($nrcols < 1); # protect against empty table
         $nrcols = $option{maxColumns} if ($nrcols > $option{maxColumns});
         my $nrrows = int((@$values-1)/$nrcols) + 1;
         
@@ -897,7 +899,7 @@ sub htmlEditRecord {
     my $ckey = shift; # item
     my $tick = shift; # yes/no for checkbox tickmarks
     my $mask = shift; # masking info
-    my $null = shift; # add option "null" if an "options" field is present
+    my $null = shift; # option e.g. NULL, 0 or 'preset' for possible enum field
 
     my $primeKey = $self->{prime_key};
 
@@ -954,11 +956,14 @@ sub htmlEditRecord {
                 my $size = $coltype->{$column};
                 if ($size =~ /^.*\((\d+)\).*$/) {
                     $size = $1;
-                } else {
-                    $size = 20; # default standard size
+                }
+                else {
+                    $size = 24; # default standard size
+                    $size = length($value)+12 if $value;
+                    $size = 24 if ($size < 24);
                 }
                 my $max = $size;
-                $size = 20 if ($size > 20); # default maximum display size
+                $size = 24 if ($size > 24); # default maximum display size
                 if ($tick) {
                     $table .= "<TR><TD><INPUT TYPE=checkbox NAME=$fieldname";
 	            $table .= " VALUE=\"$value\"></TD><TD>&nbsp</TD>";
@@ -969,16 +974,26 @@ sub htmlEditRecord {
                     $options =~ s/\'//g;
                     my @options = split /,/,$options;
                     my $list = "<SELECT NAME=\"$fieldname\">";
-                    if ($null) {
+                    if ($null && $null ne 'preset') {
                         $list .= "<OPTION value='0' SELECTED>$null";
                     }
                     foreach my $option (@options) {
-                        $list .= "<OPTION value=\'$option\'>$option";
+                        my $selected = '';
+                        if ($null && $value && $null eq 'preset' && $value eq $option) {
+                            $selected = 'selected';
+                        }
+                        $list .= "<OPTION value=\'$option\' $selected>$option";
                     }
                     $list .= "</SELECT>";
                     $table .= "<TD>$list</TD></TR>";
 # alternative:      &htmlOptions($self,$column,$fieldname,$size,0,0);
-                } else {
+                }
+                elsif ($fieldname eq 'Aattributes') {
+# later to be changed
+                    $table .= "<TD><INPUT TYPE=text NAME=$fieldname SIZE=$size";
+                    $table .= " MAXLENGTH=$max VALUE=\"$value\"></TD></TR>";
+                }
+                else {
                     $table .= "<TD><INPUT TYPE=text NAME=$fieldname SIZE=$size";
                     $table .= " MAXLENGTH=$max VALUE=\"$value\"></TD></TR>";
                 }
@@ -992,7 +1007,7 @@ sub htmlEditRecord {
                 $table .= "<TH ALIGN=LEFT> $column </TH>";
                 $table .= "<TD>&nbsp</TD>" if (!$noinput);
                 $value =~ s/([^\n\s]{40,}?)/$1<br>/g; # wrap long entries
-                my $align = "CENTER"; $align = "LEFT" if ($noinput);
+                my $align = "CENTER"; $align = "LEFT" if (!$tick);
                 $table .= "<TD ALIGN=$align><b> $value </b></TD></TR>"; 
             }
         }
@@ -1190,13 +1205,16 @@ sub cgiEditTable {
                 $newvalue = 'NULL' if (!$newvalue && $currentvalue); 
                 if ($currentvalue ne $newvalue) {
 
+                    my $changes = $newvalue; # re: attributes
                     $currentvalue = "&nbsp" if ($currentvalue !~ /\S/);
+                    $currentvalue =~ s/\,/,<br>/g if ($item eq 'attributes');
+                    $newvalue     =~ s/\,/,<br>/g if ($item eq 'attributes');
                     $report .= "<TR><TH ALIGN=LEFT> $item </TH>";
                     $report .= "<TD>$currentvalue</TD>";
                     $report .= "<TD bgcolor='yellow'>$newvalue</TD>";
                     $report .= "<TD bgcolor='aquamarine'>$wkey = $wval</TD>" if ($records > 1);
 
-                    if ($exec && $self->update($item, $newvalue, $wkey, $wval)) {
+                    if ($exec && $self->update($item, $changes, $wkey, $wval)) {
                         $report .= "<TD bgcolor='lightgreen'>DONE</TD>";
                     }
                     elsif ($exec) {
@@ -1208,6 +1226,7 @@ sub cgiEditTable {
                 else {
                     $report .= "<TR><TH ALIGN=LEFT> $item </TH>";
                     $currentvalue = "&nbsp" if ($currentvalue !~ /\S/);
+                    $currentvalue =~ s/\,/,<br>/g if ($item eq 'attributes');
                     $report .= "<TD>$currentvalue</TD>";
                     $report .= "<TD>&nbsp</TD><TD>no change</TD></TR>";
                 }    
