@@ -149,6 +149,18 @@ sub create_organism {
         &record ($historyTable,$userid,'STSTAGS');
     }
 
+    if (!$target || $target eq 'HAPPYMAP') {    
+        push @tables, 'HAPPYMAP';
+        &create_HAPPYMAP ($dbh, $list);
+        &record ($historyTable,$userid,'HAPPYMAP');
+    }
+
+    if (!$target || $target eq 'HAPPYTAGS') {    
+        push @tables, 'HAPPYTAGS';
+        &create_HAPPYTAGS ($dbh, $list);
+        &record ($historyTable,$userid,'HAPPYTAGS');
+    }
+
     if (!$target || $target eq 'TAGS2CONTIG') {    
         push @tables, 'TAGS2CONTIG';
         &create_TAGS2CONTIG ($dbh, $list);
@@ -1281,6 +1293,68 @@ sub create_STSTAGS {
 }
 
 #******************************************************************
+# tag_id     : number 
+# tagname    : marker
+# identifier : sequence name / source info
+# sequence  : DNA sequence or encoded sequence
+#             note: sequence can be either one continuous string
+#             or two end sections separated by an unknown centre
+# scompress : 0 for none, 1 for triplets, 2 for Huffman etc
+# slength   : sequence length
+# position  : (approximate, absolute) position of tag in its assembly
+# assembly  : "chromosome" on which the tag resides (update with version)
+# comment   : anything else
+
+# changed   : (status) change of chromosome, change of linkage group, etc ...
+
+# tap_start : (actual) position of tag in assembly
+#             tap_start        INT UNSIGNED         NOT NULL,
+#             tap_final        INT UNSIGNED         NOT NULL,
+
+sub create_HAPPYTAGS {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"HAPPYTAGS", $list);
+    print STDOUT "Creating table HAPPYTAGS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE HAPPYTAGS(
+             tag_id           MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             tagname          VARCHAR(6)           NOT NULL,
+             identifier       VARCHAR(32)          NOT NULL, 
+             sequence         BLOB                 NOT NULL,
+             scompress        TINYINT  UNSIGNED    NOT NULL,
+             slength          SMALLINT UNSIGNED    NOT NULL,
+             position         FLOAT                    NULL,
+             assembly         TINYINT  UNSIGNED    NOT NULL,
+             comment          TINYBLOB                 NULL  
+	  ) AUTO_INCREMENT = 30000001 ]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+
+#******************************************************************
+
+# version   : 0 for latest version
+# linkage   : (initial) linkage group number (preliminary?)
+# position  : relative position of tag in its linkage group
+# quality   : lod uniqueness of matches per marker ?
+# assembly  : "chromosome" on which the tag is SUPPOSED to reside
+
+sub create_HAPPYMAP {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"HAPPYMAP", $list);
+    print STDOUT "Creating table HAPPYMAP ..." if ($list);
+    $dbh->do(qq[CREATE TABLE HAPPYMAP(
+             tag_id           MEDIUMINT UNSIGNED   NOT NULL,
+             version          TINYINT  UNSIGNED    NOT NULL,
+             position         FLOAT                    NULL,
+             assembly         TINYINT  UNSIGNED    NOT NULL,
+             linkage          SMALLINT UNSIGNED    NOT NULL,
+             quality          FLOAT                    NULL
+	  )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+
+#******************************************************************
 # tag_id    : reference to a TAGS table;
 #? tag_type  :
 # contig_id : reference to CONTIGS table
@@ -1888,6 +1962,9 @@ sub create_DATAMODEL {
                  'GENE2CONTIG      contig_id          CONTIGS   contig_id',
                  'TAGS2CONTIG         tag_id          STSTAGS      tag_id',
                  'STSTAGS             tag_id      TAGS2CONTIG      tag_id',
+                 'TAGS2CONTIG         tag_id        HAPPYTAGS      tag_id',
+                 'HAPPYTAGS           tag_id      TAGS2CONTIG      tag_id',
+                 'HAPPYMAP            tag_id        HAPPYTAGS      tag_id',
                  'TAGS2CONTIG         tag_id         GAP4TAGS      tag_id',
                  'GAP4TAGS            tag_id      TAGS2CONTIG      tag_id',
                  'ASSEMBLY          assembly         CLONEMAP    assembly',
@@ -1992,6 +2069,8 @@ sub create_INVENTORY {
                  'READS2CONTIG      o  m  0  0',
                  'GAP4TAGS          o  t  0  0',
                  'STSTAGS           o  t  3  1',
+                 'HAPPYTAGS         o  t  3  1',
+                 'HAPPYMAP          o  t  3  1',
                  'TAGS2CONTIG       o  m  3  0',
                  'GENE2CONTIG       o  m  3  0',
                  'CLONEMAP          o  t  3  1',

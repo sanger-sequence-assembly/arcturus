@@ -14,9 +14,11 @@ use GateKeeper;
 # well as the infiltration-implantation-control of human society on earth   #
 # in anticipation of their planned takeover at some point in the future.    #
 #                                                                           #
-# 'Men in Black' Collectables Presents: The Alien Encyclopedia              #
+# 'Men in Black': The Alien Encyclopedia                                    #
 #############################################################################
 my $DEBUG = 1;
+#############################################################################
+my %instances;
 #############################################################################
 
 sub new {
@@ -28,7 +30,7 @@ sub new {
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
-    $self->{database} = $dbasename;
+    $self->{database} = $dbasename; # test existence further down
 
     bless ($self, $class);
 
@@ -39,6 +41,7 @@ sub new {
                    identify      => 0,  # required for write access 
                    username      => 0,  # (alternative for identify)
                    password      => 0,  # required for write access
+                   newGateKeeper => 0,  # if true, forces new database connection; else spawn
                    dieOnError    => 1); # default die on any error; if 0, beware! unpredictable behaviour
 
     $self->importOptions (\%options,$options); # override with input options, if any
@@ -47,20 +50,33 @@ sub new {
 
 # initialize gate keeper and get ArcturusTable handle
 
-print "building GateKeeper \n" if $DEBUG;
+    my @instances = keys %instances;
 
-    $self->{GateKeeper} = new GateKeeper('mysql',$options);
+    my $redirect = 2;
+# (redirect flag set to build database connection in 'unchecked' mode if not on current server)
+    if (!@instances || $options{newGateKeeper}) {
+# open the first GateKeeper
+        $self->{GateKeeper} = new GateKeeper('mysql',\%options);
+    }
+    else {
+# spawn a new GateKeeper from an existing one (to use existing database connection)
+        my $Bootean = $instances{$instances[0]};
+        $self->{GateKeeper} = $Bootean->{GateKeeper}->spawn($dbasename,\%options);
+        $redirect = 0; # disable redirect (should not be activated, but just in case)
+    }
 
-# set redirect flag to build database connection in 'unchecked' mode if not on current server
+# test input database name
 
-print "building table handle \n" if $DEBUG;
+    $self->{GateKeeper}->dropDead("Undefined database name in Bootean constructor") if !$dbasename;    
 
-    my %gkoptions = (returnTableHandle => 1, defaultRedirect => 2);
+print "Bootean: building table handle \n" if $DEBUG;
+
+    my %gkoptions = (returnTableHandle => 1, defaultRedirect => $redirect);
     $self->{mother} = $self->{GateKeeper}->dbHandle($dbasename,\%gkoptions);
 
 # make $dbasename default
 
-print "changing focus to $dbasename\n" if $DEBUG;
+print "Bootean: changing focus to $dbasename\n" if $DEBUG;
 
     $self->{GateKeeper}->focus($options{dieOnError}); 
 
@@ -84,17 +100,19 @@ print "changing focus to $dbasename\n" if $DEBUG;
 # and test the authorisation
         $options{makeSession}  = 2;
         $options{closeSession} = 0;
-print "access code $accessCode\n" if $DEBUG;
         if ($self->{GateKeeper}->authorize($accessCode,\%options)) {
             $self->{session} = $self->{GateKeeper}->{SESSION};
-print "authorization granted\n" if $DEBUG;
+print "Bootean access code $accessCode: authorization granted\n" if $DEBUG;
         }
         else {
             $self->{GateKeeper}->disconnect("authorization FAILED: $self->{GateKeeper}->{error}");
+#            $self->{GateKeeper}->report("authorization FAILED: $self->{GateKeeper}->{error}");
             return 0;
         }
-print "session $self->{session} \n" if $DEBUG;
+print "Bootean: session $self->{session} \n\n" if $DEBUG;
     }
+
+    $instances{$dbasename} = $self;
 
     return $self;
 }
@@ -143,6 +161,8 @@ The password for the given username
 =back
 
 =cut
+
+
 #*******************************************************************************
 
 sub importOptions {
@@ -174,11 +194,16 @@ sub whereIs {
     undef my $output; # default unknown database
 
     if (!$database) {
-        $output = $mother->associate('dbasename,residence'); # array ref of instances
+        $output = $mother->associate('dbasename,residence','where',1); # array of hashes
+#        print "output all:  $output  $mother->{lastQuery}\n";
+#        foreach my $hash (@$output) {
+#            print "$hash->{dbasename}  $hash->{residence} \n";
+#        }
     }
 
     else { 
-        $output = $mother->associate('residence',$database); # host:port of instance
+        $output = $mother->associate('residence',$database,'dbasename',{useLocate=>1}); # host:port of instance
+#        print "output:  $output  $mother->{query}\n";
         print "Database $database is on server $output\n" if $output;
         print "Unknown database: $database\n" if !$output;
     }
@@ -204,10 +229,10 @@ If no database name is give, the call returns an array of all databases and
 #############################################################################
 
 sub whereAmI {
-# return current server and port
+# return current server, database port and (if any) cgi port
     my $self = shift;
 
-    return $self->{GateKeeper}->currentPort;
+    return $self->{GateKeeper}->currentResidence;
 }
 #--------------------------- documentation --------------------------
 =pod
@@ -313,15 +338,12 @@ the Arcturus GateKeeper module and all of the database table instances.
 #############################################################################
 
 sub ping {
-# test if the database is alive
+# test if the database is alive with a GateKeeper ping
     my $self = shift;
 
-    my $alive = 1;
-
-    $alive = 0 if (!$self->{database} || !$self->{GateKeeper}->ping);
-
-    return $alive;
+    return $self->{GateKeeper}->ping;
 }
+#--------------------------- documentation --------------------------
 =pod
 
 =head1 ping
@@ -336,36 +358,31 @@ Test if the database is alive
 
 #############################################################################
 
-sub DESTROY {
-# force disconnect and close session, if not done previously
-    my $self = shift;
-
-    $self->disconnect if $self->{database};
-}
-
-#############################################################################
-
 sub disconnect {
-# cleanly disconnect from database
+# disconnect current Bootean interface from database if it happens to
+# be the only one on this GateKeeper, disconnect GateKeeper as well
     my $self = shift;
+    my $text = shift || 0;
+    my $full = shift || 0; # set true for unconditional disconnect
 
     my $GateKeeper = $self->{GateKeeper} || return;
-    my $database   = $self->{database}   || return;
-    my $mother     = $self->{mother}     || return;
-    my $session    = $self->{session};
-    my $userid     = $GateKeeper->{USER};
+
+# determine the number of interfaces connecting through this GateKeeper
+
+    my %GKcount;
+    foreach my $database (keys %instances) {
+        $GKcount{$instances{GateKeeper}}++;
+    }
+
+# do a full close down if this is the only connection
+
+    $full = 1 if ($GKcount{$GateKeeper} == 1);
 
 # put a time/user signature on modified database tables
 
-    $mother->signature($userid,'dbasename',$database);
+    $GateKeeper->disconnect($text,$full);
 
-# close current session 
-
-    $GateKeeper->closeSession($session) if $session;
-
-    $GateKeeper->disconnect;
-
-    delete $self->{database};
+    delete $self->{GateKeeper};
 }
 
 #--------------------------- documentation --------------------------
@@ -375,7 +392,7 @@ sub disconnect {
 
 =head2 Synopsis
 
-Disconnect cleanly from the database. This method is invoked by DESTROY
+Disconnect the GateKeeper from the database
 
 =head2 Parameters
 
@@ -392,16 +409,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "07 Sep 2002",
-        updated =>    "20 Jan 2003",
+        updated =>    "17 Feb 2003",
     };
 }
 
 #############################################################################
 
 1;
-
-
-
-
-
-

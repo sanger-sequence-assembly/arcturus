@@ -7,9 +7,7 @@ package MyCGI;
 use strict;
 use vars qw($VERSION);
 
-#use MyCGI;
-#use vars qw($VERSION @ISA);
-#@ISA = qw(CGI);
+use CGI qw(:standard); # import from standard CGI module
 
 $VERSION = 1.0;
 
@@ -26,7 +24,7 @@ sub new {
 
     $self->{cgi_input} = {}; # place holder
     $self->{und_error} = ''; # for error info
-    $self->{header}    = 0 ; # return header counter
+    $self->{'header'}  = 0 ; # return header counter
 
     bless ($self, $class);
 
@@ -103,6 +101,23 @@ sub MethodPost {
     return ($ENV{REQUEST_METHOD} eq "POST");
 }
 
+#----------------------------------------------------------------------------
+
+sub ReDirect {
+# print redirect string; must come before any other output of a script
+    my $self = shift;
+    my $link = shift;
+
+#$self->PrintHeader(1);
+#print "redirecting to url $link \n";
+
+    $link .= $self->postToGet if ($link !~ /\?/); # if &MethodPost; # add (possible) parameters
+
+    print redirect(-location=>$link);
+
+    exit 0;
+}
+
 ###############################################################################
 # return header string
 ###############################################################################
@@ -111,13 +126,13 @@ sub PrintHeader {
     my $self = shift;
     my $type = shift;
 
-    return if $self->{header};
+    return if $self->{'header'};
 
     $type = 0 if !defined($type);
     print STDOUT "content-type: text/html\n\n" if !$type; # default response
     print STDOUT "content-type: text/plain\n\n" if $type;
 
-    $self->{header} = 1 + $type; # 1 for HTML, 2 for plain
+    $self->{'header'} = 1 + $type; # 1 for HTML, 2 for plain
 }
 
 ###############################################################################
@@ -134,7 +149,7 @@ sub parameter {
 
     if ((!defined($test) || $test) && (!defined($in->{$key}) || $in->{$key} !~ /\S/)) {
         delete $in->{$key} if $in->{$key};
-        $self->{und_error} .= "$key\0";
+        $self->{und_error} .= "$key ";
     }
 
     return $in->{$key};
@@ -181,8 +196,8 @@ sub postToGet {
         my $accept = 1;
         $accept = 0 if ($key eq 'submit'); # always
         $accept = 0 if ($key eq 'confirm'); # always
-        $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
-        $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
+        $accept = 0 if ($type == 0 &&  $inexclude{$key}); # key in exclude list
+        $accept = 0 if ($type >= 1 && !$inexclude{$key}); # key not in include list
         if ($accept && $in->{$key} =~ /\w/) {
             $string .= "\&" if ($string =~ /\w/);
             $string .= "\?" if ($string !~ /\S/);
@@ -307,7 +322,7 @@ sub PrintVariables {
 
     $output .= "<P>";
 
-    if ($self->{header} != 1) {
+    if ($self->{'header'} != 1) {
         $output =~ s/\<\/tr\>|\<p\>/\n/ig; # replace line tags by line break
         $output =~ s/\<[^\<\>]+\>/ /g; # remove all other tags
     }
@@ -440,12 +455,8 @@ sub VerifyEncrypt {
 }
 
 ###############################################################################
-
-sub LongEncrypt {
-
-}
-
-
+#sub LongEncrypt {
+#}
 #############################################################################
 
 sub colophon {

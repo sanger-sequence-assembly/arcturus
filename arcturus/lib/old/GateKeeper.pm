@@ -3,7 +3,6 @@ package GateKeeper;
 use strict;
 
 use DBI;               # database interface
-use CGI qw(:standard); # import from standard CGI.pm 
 use MyHTML;            # my CGI input and HTML output formatter
 use ArcturusTable;     # ARCTURUS database table interface
 use ConfigReader;      # confuration data input
@@ -27,6 +26,10 @@ my $debug = 0;
 #
 # method isAvailable tests the 'available' status of the requested database
 #
+#############################################################################
+
+my %instances; # class variable
+
 #############################################################################
 
 sub new {
@@ -59,9 +62,10 @@ sub new {
     my %options = (eraiseMySQL    => 0,  # open (MySQL) with RaiseError =0 
                    dieOnNoTable   => 1,  # die if ORGANISMS table not found/ opened
                    insistOnCgi    => 0,  # default alow command-line access
-                   bufferedOutput => 0,  # default use unbuffered output
                    HostAndPort    => '', # (H:P) default use current server; define e.g. in non-CGI mode
+                   bufferedOutput => 0,  # default use unbuffered output
                    errorToNull    => 0,  # default redirect STDERR to STDOUT
+                   standardBuild  => 1,  # don't touch: special provision for spawn method
                    diagnosticsOn  => 0); # set to 1 for some progress information
 
     if ($eraise && ref($eraise) eq 'HASH') {
@@ -74,21 +78,26 @@ sub new {
         $options{insistOnCGI} = $usecgi if $usecgi;
     }
 
+
+    if ($options{standardBuild}) {
+
 # buffering
 
-    &setUnbufferedOutput($self,$options{errorToNull}) if !$options{bufferedOutput};
+        &setUnbufferedOutput($self,$options{errorToNull}) if !$options{bufferedOutput};
 
 # check on command-line input
 
-    &clinput(0,$self);
+        &clinput(0,$self);
 
 # open the CGI input handler if in CGI mode
 
-    &cginput(0,$self,$options{insistOnCGI});
+        &cginput(0,$self,$options{insistOnCGI});
 
 # produce return string for diagnostic purposes, if specified
 
-    &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
+        &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
+
+    }
 
 # open and parse the configuration file
 
@@ -101,6 +110,14 @@ sub new {
 # &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
     &dropDead($self,"Invalid database engine $engine") if ($engine && !$self->{handle});
+
+    $self->{engine} = $engine;
+
+# okay, add the (residence of this) GateKeeper to the list
+
+    my $residence = $self->currentResidence;
+$self->report("NEW GATEKEEPER on current residence $residence") if $debug;
+    $instances{$residence} = $self if !$instances{$residence}; # only on first occasion
 
     return $self;
 }
@@ -180,6 +197,7 @@ sub cginput {
 #*******************************************************************************
 
 sub cgiHandle {
+# return a handle to the cgi input hash, if any
     my $self = shift;
     my $test = shift; # id true: test and return 0 if not in CGI mode
 
@@ -248,11 +266,11 @@ sub lookup {
 # find the value of a named item
     my $self = shift;
     my $name = shift;
+    my $mode = shift; # || 1; # re: cgi input
+ 
+# scan the Config data first, then if not found CGI input data and then GateKeeper hash
 
-# scan the GateKeeper first, then if not found the Config data and then CGI input
-
-    my $value = $self->{$name};
-    return $value if defined($value);
+    undef my $value;
 
     if (my $cfh = $self->configHandle) {
         $value = $cfh->get("$name");
@@ -260,10 +278,28 @@ sub lookup {
     }
 
     if (my $cgi = $self->cgiHandle(1)) {
-        $value = $cgi->parameter("$name",shift); # note possible additional input
+        $value = $cgi->parameter("$name",$mode); # note possible additional input
+        return $value if (defined($value) || $mode);
     }
+
+    $value = $self->{$name};
+# $self->report("lookup in GateKeeper module $name : $value") if defined($value);
         
     return $value;
+}
+
+#*******************************************************************************
+
+sub cgiError {
+# returns true if errors are found on cgi parameter input, else 0
+    my $self = shift;
+    my $list = shift; # add message to output stream
+
+    my $error = $self->{cgi}->{und_error} || 0;
+
+    $self->report("Please define all input fields: $error") if ($error && $list);
+
+    return $error;
 }
 
 #*******************************************************************************
@@ -346,6 +382,12 @@ sub opendb_MySQL_unchecked {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
 
+# register instance on this port (only on first occasion)
+
+    my $residence = $self->currentResidence;
+$self->report("NEW GATEKEEPER on current residence $residence server:$self->{server}") if $debug;
+    $instances{$residence} = $self if !$instances{$residence};
+
     return $self->{handle};
 }
 
@@ -410,7 +452,7 @@ print "test combinations: @$port_maps\n" if $debug;
         my @url;
         my $http_port = 0;
         undef my $mysqlport;
-        if (defined($ENV{HTTP_HOST})) {
+        if (defined($ENV{HTTP_HOST}) && !$options{HostAndPort}) {
             my $HTTP_HOST = $ENV{HTTP_HOST};
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
             foreach my $host (@$hosts) {
@@ -597,6 +639,62 @@ sub whereAmI {
 }
 
 #*******************************************************************************
+# spawn a new GateKeeper
+#*******************************************************************************
+
+sub spawn {
+# return a GateKeeper with a connection to the appropriate database port
+    my $self      = shift;
+    my $database  = shift;
+    my $options   = shift;
+
+    my $engine    = $self->{engine};
+    my $organisms = $self->{mother};
+    my $residence = $organisms->associate('residence',$database,'dbasename');
+# set up alternate residence name for the non-cgi case (host:dbport only)
+    my $alternate = $residence; $alternate =~ s/(\:\w+)\:\w+/$1/;
+ 
+print "GateKeeper spawn database $database  residence=$residence \n";
+my @inst = keys %instances;
+print "existing instances on @inst \n\n";
+
+    if ($residence && $instances{$residence}) {
+# there is an existing GateKeeper which connects to the correct port
+$self->report("Using existing GateKeeper $instances{$residence} \n");
+        return $instances{$residence};
+    }
+    elsif ($residence && $instances{$alternate}) {
+# there is an existing GateKeeper which connects to the correct port
+$self->report("Using existing GateKeeper $instances{$alternate} \n");
+        return $instances{$alternate};
+    }
+    elsif ($residence) {
+# open a connection to the database on this new port by invoking the GateKeeper constructor
+        undef my %options;
+        &importOptions(\%options,$options);
+        $options{standardBuild} = 0;
+        $residence =~ s/(\:\w+)\:\w+/$1/; # chop off apache port 
+        $options{HostAndPort} = $residence;
+$self->report("Spawning new GateKeeper of $self \n");
+        my $spawn  = $self->new($engine,\%options);
+        if ($spawn) {
+# finally copy the CGI configuration and ARGV from the parent
+            $spawn->{cgi}    = $self->{cgi};
+            $spawn->{config} = $self->{config};
+            $spawn->{ARGV}   = $self->{ARGV};
+        }
+        return $spawn;
+    }
+    else {
+        my $server = $self->currentResidence;
+        $self->report("Unkown database $database on $engine instance $server");
+        return 0;
+    }
+        
+
+}
+
+#*******************************************************************************
 # dbHandle : (Arcturus specific) test if the arcturus database $database is
 #            present under the current database incarnation (on this server)
 #*******************************************************************************
@@ -640,8 +738,10 @@ print "GateKeeper enter dbHandle $debug" if $debug;
     if (my $hashrefs  = $organisms->associate('hashrefs')) {
         foreach my $hash (@$hashrefs) {
 # TEMPORARY fix: pcs3 cluster is not visible as pcs3.sanger.ac.uk but as pcs3 only
-            $hash->{residence} =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
-            $residence{$hash->{dbasename}} = $hash->{residence};
+            my $residence = $hash->{residence};
+            $residence =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
+            $residence =~ s/\:\w+\:/:/; # strip out TCP port to get host:cgiport
+            $residence{$hash->{dbasename}} = $residence;
             $available{$hash->{dbasename}} = $hash->{available};
         }
     }
@@ -653,16 +753,18 @@ print "GateKeeper enter dbHandle $debug" if $debug;
 # is required because residence can come both with or without the 'sanger' bit
 
     $server =~ s/\.sanger\.ac\.uk//;
-    $server =~ s/\:/\\S*:/;
+    my $serverstring = $server;
+    $serverstring =~ s/\:/\\S*:/;
 
 # see if the arcturus database is on this server, else redirect
 
     my $cgi = $self->{cgi};
     undef $self->{database};
     if ($database && !$residence{$database}) {
+foreach my $key (%residence) {print "$key $residence{$key}\n";}
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
-    elsif ($database && $residence{$database} !~ /$server/) {
+    elsif ($database && $residence{$database} !~ /$serverstring/) {
 # to be removed later:  redirection diagnostics
         if ($options{redirectTest}) {
             &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
@@ -680,17 +782,18 @@ print "GateKeeper enter dbHandle $debug" if $debug;
             foreach my $map (@$pmaps) {
                 $port = $1 if ($map =~ /\:(\d+)\:$port/);
             }
+# remove the current instance if it was the last one registered
+            my $residence = $self->currentResidence;
+            delete $instances{$residence} if ($instances{$residence} eq $self);
 # open the new connection and repaet the setting up of the database/table handle
             $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1});
             delete $options{defaultRedirect};
             $dbh = $self->dbHandle($database,\%options);
         }
         elsif ($available{$database} ne 'off-line') {
-            $self->disconnect();
+# redirect the cgi query to another url
             my $redirect = "http://$residence{$database}$ENV{REQUEST_URI}";
-            $redirect .= $cgi->postToGet if $cgi->MethodPost;
-#my $packet = $self->{cgi}->redirect(-location=>$redirect); print $packet;
-            print redirect(-location=>$redirect);
+            $self->redirect($redirect);
             exit 0;
         }
         else {
@@ -739,6 +842,22 @@ sub focus {
     elsif ($options{dieOnError}) {
         &dropDead($self,"Can't change focus: no database information");
     }
+}
+
+#*******************************************************************************
+
+sub redirect {
+# redirect command; must come before any other output of a script
+    my $self = shift;
+    my $link = shift;
+
+    $self->disconnect();
+
+    $self->{cgi}->ReDirect($link) if $self->{cgi};
+
+    $self->dropDead("redirection not possible in non-CGI mode");
+
+    exit 0;
 }
 
 #*******************************************************************************
@@ -812,7 +931,7 @@ print "GateKeeper: enter authorize $debug\n" if $debug;
         $cgi = $self->{cgi}; # the module handle
         $identify = $options{identify};
         $password = $options{password};
-        $session  = $options{session};
+        $session  = $options{session} || $self->{SESSION};
     }
 # recover USER from input info, if any ('identify' takes precedence over 'session' if both are present)
     if ($identify) {
@@ -840,14 +959,14 @@ print "GateKeeper authorize: $identify $password session $session \n" if $debug;
     undef $self->{report};
     if ($session && $options{testSession}) {
 # a session  number is defined
-        $self->{report} = "Check existing sessions number $session";
+        $self->{report} = "Check existing session number $session";
         my $sessions = $mother->spawn('SESSIONS','self',0,1); # 0,0 later ?
         if ($self->{error} = $sessions->{errors}) {
             &dropDead($self,$sessions->{errors}) if $options{dieOnError};
 	    return 0;
         }
 # before testing the session number itself, we check the implied username 
-       ($identify, my $code) = split ':',$session;
+       ($identify, my $code) = split ':',substr($session,0,-2);
         my $users = $mother->spawn('USERS','self',0,1);
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hashref->{priviledges} || 0;
@@ -1194,6 +1313,7 @@ sub allowTableAccess {
     my $table = shift;
 
 # current version rather crude: 
+# STD standard access to all tables except TAGS and HISTORY
 # ALL for all tables in database except HISTORY and GENE2CONTIG
 # USERS and ORGANISMS or COMMON for all tables
 # if you want to protect a table, put a call to this method just before accessing it 
@@ -1219,6 +1339,7 @@ sub newSessionNumber {
 
     my $seed = &compoundName($user,'arcturus',8);
     my $encrypt = $self->{cgi}->ShortEncrypt($seed,$user);
+    $encrypt .= sprintf("%02d",int(rand(99.99)));
     my $session = "$user:$encrypt"; # name folowed by some 'random' sequence
 
     return $session;
@@ -1346,7 +1467,7 @@ sub GUI {
 
     $self->cgiHeader(2); # in case not yet done
     my $page = $cgi->openPage("ARCTURUS $title");
-    my $width = '10%';
+    my $width  = 60;
     my $height = 50;
     $page->arcturusGUI($height,$width,$yell);
     my $smail = $config->get('signature_mail');
@@ -1355,9 +1476,9 @@ sub GUI {
 # substitute values for standard place holders
     my $href = "href=\"/Arcturus.html\"";
     my $capt = "onMouseOver=\"window.status='About Arcturus'; return true\"";
-    my $imageformat = "width=\"$width\" height=$height vspace=1";
-    $page->{layout} =~ s/ARCTURUSLOGO/<A $href $capt><IMG SRC="\/icons\/bootes.jpg $imageformat"><\/A>/;
-    $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
+    my $imageformat = "width=\"$width\" height=\"$height\" vspace=1";
+    $page->{layout} =~ s/ARCTURUSLOGO/<A $href $capt><IMG SRC="\/icons\/bootes.jpg" $imageformat><\/A>/;
+    $page->{layout} =~ s/SANGERLOGO/<IMG SRC="..\/icons\/helix.gif" $imageformat>/;
 
 # compose the top bar (partition 2)
 
@@ -1549,13 +1670,17 @@ sub GUI {
         $table .= "<tr><td $cell><a href=\"$input\" $alt $target> CONTIGS </a></td></tr>";
     }
     if ($database && $database ne 'arcturus') {
+        $target = "target='workframe'";
         $title = "LOAD TAG INFORMATION FOR ".uc($database);
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $input = "/cgi-bin/create/existing/process".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$input\&tablename=STSTAGS\" $alt $target> TAGS </a></td></tr>";
         $title = "LOAD MAPPING INFORMATION FOR ".uc($database);
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        $table .= "<tr><td $cell><a href=\"$input\&tablename=CLONEMAP\" $alt $target> MAPS </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$input\&tablename=CLONEMAP\" $alt $target> Clone MAP </a></td></tr>";
+        $title = "LOAD HAPPY MAP INFORMATION FOR ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $table .= "<tr><td $cell><a href=\"$input\&tablename=HAPPYMAP\" $alt $target> Happy MAP </a></td></tr>";
     }
     else {
         $table .= $emptyrow;
@@ -1576,9 +1701,9 @@ sub GUI {
 # $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
-        $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include); # other URL
+        $update = "/cgi-bin/amanager/modify/assembly".$cgi->postToGet(1,@include); # other URL
         $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
-        $update = "/cgi-bin/pmanager/specify/project".$cgi->postToGet(1,@include);  # other URL
+        $update = "/cgi-bin/pmanager/modify/project".$cgi->postToGet(1,@include);  # other URL
         $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
     }
     if ($self->instance) {
@@ -1697,6 +1822,7 @@ sub currentOptions {
 #*******************************************************************************
 
 sub currentHost {
+# return the cgi server host
     my $self = shift;
 
     my @hostinfo = split /\.|\:/,$self->{server};
@@ -1706,9 +1832,20 @@ sub currentHost {
 
 #*******************************************************************************
 
-sub currentPort {
+sub currentServer {
+# return the cgi server name
     my $self = shift;
 
+    return $self->{server}; # the internal name used for the server URL
+}
+ 
+#*******************************************************************************
+
+sub currentPort {
+# return the cgi server port number
+    my $self = shift;
+
+# print "\ncurrentPort server: $self->{server}\n";
     my @hostinfo = split /\.|\:/,$self->{server};
 
     return $hostinfo[$#hostinfo];
@@ -1716,10 +1853,39 @@ sub currentPort {
 
 #*******************************************************************************
 
-sub currentServer {
+sub currentCgiPort {
+# return the cgi server port number
     my $self = shift;
 
-    return $self->{server}; # the internal name used for the server URL
+    my $cgiPort = '';
+    if ($self->cgiHandle(1)) {
+        my @hostinfo = split /\.|\:/,$self->{server};
+        $cgiPort = $hostinfo[$#hostinfo];
+    }
+    
+    return $cgiPort; 
+}
+
+#*******************************************************************************
+
+sub currentDbPort {
+# return the database port number
+    my $self = shift;
+
+    return $self->{TCPort} || '';
+}
+
+#*******************************************************************************
+
+sub currentResidence {
+# return the arcturus residence (host:dbport:cgiport)
+    my $self = shift;
+
+    my $residence = $self->currentHost;
+    $residence .= ':'.$self->currentDbPort;
+    $residence .= ':'.$self->currentCgiPort if $self->currentCgiPort;
+
+    return $residence;
 }
  
 #*******************************************************************************
@@ -1769,32 +1935,6 @@ sub dropDead {
 
 #*******************************************************************************
 
-sub transfer {
-# redirect command; must come before any other output of a script
-    my $self = shift;
-    my $link = shift;
-
-    print "GateKeeper enter transfer $debug" if $debug;
-
-    $self->disconnect();
-    print redirect({-location=>$link});
-    exit 0;
-}
-
-#*******************************************************************************
-
-sub disconnect {
-# disconnect with message
-    my $self = shift;
-    my $text = shift;
-
-    &report($self,$text) if $text;
-
-    $self->{handle}->disconnect if $self->{handle};
-}
-
-#*******************************************************************************
-
 sub report {
 # print message with check on return header status (i.e. current page or STDOUT)
     my $self = shift;
@@ -1814,6 +1954,22 @@ sub report {
     else {
         print STDOUT "$tag$text$tag\n" if $text;
     }
+}
+
+#*******************************************************************************
+
+sub list {
+# list elements of the $self hash
+    my $self = shift;
+
+    $self->report("GateKeeper $self status");
+
+    foreach my $key (keys %$self) {
+        $self->{$key} = "UNDEFINED" if !defined($self->{$key});
+        $self->report("$key = $self->{$key}");
+    }
+
+    $self->report("End List");
 }
 
 #############################################################################
@@ -1851,6 +2007,56 @@ sub prepareFork {
 }
 
 #############################################################################
+
+sub DESTROY {
+# force disconnect and close session, if not done previously
+    my $self = shift;
+
+# full close down (if the database handle still exists at this point)
+
+    $self->disconnect(0,1);
+}
+
+#****************************************************************************
+
+sub disconnect {
+# disconnect with message
+    my $self = shift;
+    my $text = shift;
+    my $full = shift || 0;
+
+    &report($self,$text) if $text;
+
+    $self->ping || return; # already disconnected
+
+# controlled close down
+
+    $self->shutdown if $full;
+
+    $self->{handle}->disconnect if $self->{handle};
+}
+
+#*******************************************************************************
+
+sub shutdown {
+# full shutdown of all open tables
+    my $self = shift;
+
+    my $mother = $self->{mother} || return;
+
+    my $userid  = $self->{USER}  || 'oper';
+    my $session = $self->{SESSION};
+
+# close current session 
+
+    $self->closeSession($session) if $session;
+
+    $mother->historyUpdate($userid);
+
+    delete $self->{mother};
+}
+
+#############################################################################
 #############################################################################
 
 sub colophon {
@@ -1859,7 +2065,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>              81 ,
         version =>             1.0 ,
-        updated =>    "09 Sep 2002",
+        updated =>    "12 Feb 2003",
         date    =>    "26 Jun 2002",
     };
 }

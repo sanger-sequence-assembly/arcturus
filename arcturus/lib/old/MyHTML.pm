@@ -831,10 +831,11 @@ sub flush {
             $layout =~ s/CON$i/$blank/g        if !$hasContent;
         }
         $output .= $layout;
-    } else {
+    }
+    else {
         $output .= $content->[0];
     }
-    $output .= $address if (defined($address));
+    $output .= $address if defined($address);
     $output .= "</BODY></HTML>";
 
 # clear the contents

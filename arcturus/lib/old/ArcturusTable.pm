@@ -334,36 +334,42 @@ sub historyUpdate {
     my $text = shift;
     my $list = shift;
 
-
     my $brtag = "\n";
     $brtag = "<br>" if ($list && $list > 1);
+
+# get current node
+
+    my $fullTableName = $self->makeFullTableName('<self>');
+    my @thisNameSections = split '\.',$fullTableName;
 
     my $instances = $self->getInstanceOf(0);
 # print "historyUpdate: instances=$instances\n";
     return 0 if (!$instances);
 
     print "${brtag}Time stamping modified tables${brtag}" if $list;
+#print "full table name = $fullTableName \n\n";
 
     my $logEvents = 0;
     undef my $organisms;
     undef my %databases;
-    foreach my $instance (keys %$instances) {
-        my ($dbase, $tname) = split '\.',$instance;
+    foreach my $instance (sort keys %$instances) {
+        my ($node,$dbase,$tname) = split '\.',$instance;
+#print "instance $instance to be skipped\n" if ($node ne $thisNameSections[0]);
+        next if ($node ne $thisNameSections[0]);
         my $tablereference = $instances->{$instance};
-# print "instance $instance ref: $tablereference$brtag\n";
-        if ($tablereference =~ /ArcturusTable/) {
-            $organisms = $tablereference if ($instance =~ /ORGANISMS/);
-            if ($tablereference->historyLogger($user, $text, $list)) {
-                $databases{$dbase}++;
-                $logEvents++;
-            }
+#print "instance $instance ref: $tablereference$brtag\n";
+        next if ($tablereference !~ /ArcturusTable/);
+        $organisms = $tablereference if ($tname =~ /ORGANISMS/);
+        if ($tablereference->historyLogger($user, $text, $list)) {
+            $databases{$dbase}++;
+            $logEvents++;
         }
     }
 
     delete $databases{arcturus};
     foreach my $database (keys %databases) {
         if ($organisms) {
-            print "${brtag}SIGNATURE on ORGANISMS for database $database${brtag}" if $list;
+            print "${brtag}SIGNATURE on ORGANISMS for database $database ${brtag}" if $list;
             $organisms->signature($user,'dbasename',$database);
         }
         elsif ($list) {
@@ -420,6 +426,7 @@ sub historyLogger {
                 $history->update('action'  ,$action,'tablename',$tablename);
             }
 	    $logged = 1 if $history->{timestamp};  # successful update
+            undef $self->{timestamp} if $logged;
         }
         else {
             print "${brtag}WARNING: Unable to access table $historyTableName${brtag}";
@@ -1368,7 +1375,7 @@ print "target hash  $marker $hash->{$marker} $targethash \n";
                     }
                 }
                 else {
-                    $report .= " ... skipped\n";
+                    $report .= " ... skipped (delTarget='$option{delTarget})'\n";
                 }
             }
             else {

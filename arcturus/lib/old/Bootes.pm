@@ -13,7 +13,7 @@ use vars qw($VERSION @ISA); #our ($VERSION, @ISA);
 use ReadsReader;
 
 #############################################################################
-my $DEBUG = 1;
+my $DEBUG = 0;
 #############################################################################
 sub new {
 # constructor invoking the constructor of Bootean class

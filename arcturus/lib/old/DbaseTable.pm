@@ -83,9 +83,13 @@ sub spawn {
 
     my $handle = $self->getInstanceOf($database.'.'.$tablename) || '';
 
-    $handle->build(1) if ($handle && !$forced && $build && !$handle->{hashrefs});
-# force creation of a new instance if build is specified but the existing instance has no build 
-#    $handle = 0 if ($handle && $build && !$handle->{hashrefs});
+    $handle = 0 if (ref($handle) eq 'DbaseTable' && ref($handle) ne ref($self)); # $self in sub class
+
+# do a build if so specified and not done before (unless forced, which creates a new instance)
+
+    $handle->build(1) if ($handle && !$forced && $build && !@{$handle->{hashrefs}});
+
+# create, or force creation of, a new instance 
 
     $handle = $self->new($dbhandle,$tablename,$database,$build,@_) if (!$handle || $forced);
 
@@ -114,7 +118,7 @@ sub build {
 
     undef my %columns;
     undef my %coldata;
-    undef $self->{hashrefs};
+    undef @{$self->{hashrefs}};
     undef @{$self->{columns}};
 
 # print "content-type: text/plain\n\n";
@@ -323,7 +327,7 @@ sub getInstanceOf {
 
     return \%instances if !$name;
 
-# else, return the table instance keyed on its full name
+# else, return the table instance keyed on its full name (on the current node)
 
     $name = $self->makeFullTableName($name);
     return $instances{$name};
@@ -346,6 +350,7 @@ sub makeFullTableName {
 # test format of input name and add appropriately 
 
     my $fullTableName = $name;
+    $name =~ s/\<?self\>?/$self->{tablename}/i; # fill placeholder 'self'
     if ($fullTableName !~ /\./) {
 # database nor server specified
         $fullTableName = $prefix.'.'.$name;
@@ -760,7 +765,7 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
         $result = $self->{hashrefs}; # if any, array reference
     }
 
-    elsif (defined($item) && (!$self->{hashrefs} || $multi)) {
+    elsif (defined($item) && (!@{$self->{hashrefs}} || $multi)) {
 # print "$self->{tablename} associate item=$item  wval=$wval wcol=$wcol multi=$multi \n"; # TO BE TESTED
         $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
 #        $result = $self->associate($item,'where',1,{orderBy => $item}); # returns an ordered array or undefined
@@ -852,8 +857,9 @@ sub locate {
     undef my $rvalue;
 
     if (defined($wval) && defined($self->{hashrefs})) {           
-# print "find item: $item  for key $wval \n" if ($self->{tablename} =~ /ORG/);
+  
         foreach my $hash (@{$self->{hashrefs}}) {
+
             if (defined($item) && defined($hash->{$item}) && $hash->{$item} eq $wval) {
                 $result = $hash;
                 $rvalue = $hash->{$item};
@@ -861,7 +867,6 @@ sub locate {
             elsif (!defined($item)) {
                 foreach my $column (@{$self->{columns}}) {
                     if (defined($hash->{$column}) && $hash->{$column} eq $wval) {
-# print "column:$column value:$hash->{$column} matches, result= $hash->{$item}\n" if ($self->{tablename} =~ /ORG/);
                         $result = $hash;
                         $rvalue = $column;
                         last; # accept the first match
@@ -1310,6 +1315,30 @@ sub flush {
             $status = &query($self,$query,1,0);      
             undef $self->{stack}->{$cstring} if $status;
         } 
+    }
+    return $status;
+}
+
+#############################################################################
+
+sub insert {
+# load a dataset presented as an array of hashes keyed on column names
+    my $self     = shift;
+    my $hashrefs = shift || return 0; # single hashref, or array of hashes
+
+    my @hashrefs;
+    $hashrefs[0] = $hashrefs;
+    $hashrefs = \@hashrefs if (ref($hashrefs) ne 'ARRAY');
+
+    my $status = 0;
+    foreach my $hash (@$hashrefs){
+        undef my @columns;
+        undef my @cvalues;
+        foreach my $column (keys %$hash) {
+            push @columns,$column;
+            push @cvalues,$hash->{$column};
+        }
+        $status++ if $self->newrow(\@columns,\@cvalues);
     }
     return $status;
 }
@@ -1842,6 +1871,7 @@ print "linktableref=$ltableref<br>\n" if $list;
                 }
                 else {
                     print "DbaseTable $linktable connect FAILURE: $self->{warnings}<br>\n";
+#  print "last query $self->{lastQuery} <br>\n";
                 }
             # add where clause to AND list
                 if ($output) {
