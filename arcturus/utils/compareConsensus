@@ -23,6 +23,8 @@ while ($nextword = shift @ARGV) {
 
     $dbname = shift @ARGV if ($nextword eq '-database');
 
+    $doquality = 1 if ($nextword eq '-doquality');
+
     $chunk = shift @ARGV if ($nextword eq '-chunk');
 
     if ($nextword eq '-help') {
@@ -39,6 +41,8 @@ unless (defined($host) &&
     &showUsage();
     exit(1);
 }
+
+$doquality = 0 unless defined($doquality);
 
 $chunk = 50 unless defined($chunk);
 
@@ -64,9 +68,11 @@ $dbh->do($query);
 
 print STDERR "\n" if $verbose;
 
-$query = "select CONSENSUS.contig_id,CONSENSUS.length,CONSENSUS.sequence,CONSENSUS.quality," .
-    " GAPCONSENSUS.length,GAPCONSENSUS.sequence,GAPCONSENSUS.quality" .
-    " from CONSENSUS left join GAPCONSENSUS using(contig_id)";
+$fields = "CONSENSUS.contig_id,CONSENSUS.length,CONSENSUS.sequence,GAPCONSENSUS.length,GAPCONSENSUS.sequence";
+
+$fields .= ",CONSENSUS.quality,GAPCONSENSUS.quality" if $doquality;
+
+$query = "select $fields from CONSENSUS left join GAPCONSENSUS using(contig_id)";
 
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -76,26 +82,36 @@ $sth->execute();
 
 while(@ary = $sth->fetchrow_array()) {
     ($contigid,
-     $arclength, $arcsequence, $arcqualdata,
-     $gaplength, $gapsequence, $gapqualdta) = @ary;
+     $arclength, $arcsequence,
+     $gaplength, $gapsequence,
+     $arcqualdata, $gapqualdata) = @ary;
 
     $arcsequence = uncompress($arcsequence);
-
-    $arcqualdata = uncompress($arcqualdata);    
-    @arcquality = unpack("c*", $arcqualdata);
+    $arcseqlen = length($arcsequence);
+ 
+    if ($arcqualdata) {
+	$arcqualdata = uncompress($arcqualdata);    
+	@arcquality = unpack("c*", $arcqualdata);
+	$arcquallen = scalar(@arcquality);
+    }
 
     $gapsequence = uncompress($gapsequence);
-
-    $gapqualdata = uncompress($gapqualdta);    
-    @gapquality = unpack("c*", $gapqualdata);
-
-    $arcseqlen = length($arcsequence);
     $gapseqlen = length($gapsequence);
-    $arcquallen = scalar(@arcquality);
-    $gapquallen = scalar(@gapquality);
 
-    printf "CONTIG %6d:  %d,%d  %d,%d\n", $contigid, $arcseqlen, $gapseqlen, $arcquallen, $gapquallen;
-    printf STDERR "CONTIG %6d:  %d,%d  %d,%d\n", $contigid, $arcseqlen, $gapseqlen, $arcquallen, $gapquallen;
+    if ($gapqualdata) {
+	$gapqualdata = uncompress($gapqualdta);    
+	@gapquality = unpack("c*", $gapqualdata);
+	$gapquallen = scalar(@gapquality);
+    }
+
+    
+    $report = "CONTIG $contigid: $arcseqlen";
+    $report .= " MISMATCH $gapseqlen" if ($arcseqlen != $gapseqlen);
+
+    print $report,"\n";
+    print STDERR $report;
+
+    $diffcount = 0;
 
     if ($arcseqlen == $gapseqlen) {
 	while (length($arcsequence) > 0) {
@@ -112,6 +128,7 @@ while(@ary = $sth->fetchrow_array()) {
 		if (substr($arcsequence, $offset, 1) ne substr($gapsequence, $offset, 1)) {
 		    $diffstr .= '^';
 		    $ndiffs++;
+		    $diffcount++;
 		} else {
 		    $diffstr .= ' ';
 		}
@@ -127,6 +144,9 @@ while(@ary = $sth->fetchrow_array()) {
     }
 
     print "\n";
+
+    print STDERR " >>> $diffcount DIFFS <<<" if $diffcount;
+    print STDERR "\n";
 }
 
 $sth->finish();

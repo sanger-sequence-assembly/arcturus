@@ -228,7 +228,7 @@ sub ReadFasta {
 
 	if ($line =~ /^>/) {
 	    if (defined($seqname)) {
-		$dnahash->{$seqname} = $dna;
+		$dnahash->{$seqname} = uc($dna);
 		undef $seqname;
 		undef $dna;
 	    }
@@ -239,7 +239,7 @@ sub ReadFasta {
     }
     
     if (defined($seqname)) {
-	$dnahash->{$seqname} = $dna;
+	$dnahash->{$seqname} = uc($dna);
 	undef $seqname;
 	undef $dna;
     }
