@@ -326,9 +326,9 @@ sub dump {
             print "Testing read $readname (nr $tested)$brtag" if (!((++$tested)%50));
             my $readobject = $readmapper->lookup($readname);
             if (defined($readobject)) {
-            # add pointer to table
+# add pointer to table
                 $reads{$readname} = $readobject;
-            # now test if the read is in the database using readmapper
+# now test if the read is in the database using readmapper
                 my ($dbrref, $dbpref) = $readobject->inDataBase($readname,1);
                 if (!$dbrref && $dbpref && !$forced) {
                     $missed++;
@@ -375,6 +375,7 @@ sub dump {
 
 my $LIST=0;
 
+    $tested = 0;
     my $cover = 0;
     if ($complete) {
         my $nreads = 0;
@@ -382,7 +383,8 @@ my $LIST=0;
         undef my ($cmin, $cmax);
         undef my ($minread, $maxread, $minspan, $maxspan, @names); # first and last reads
         foreach my $readname (keys (%$readmap)) {
-    # get the mapping of this read to the contig and test the range
+# get the mapping of this read to the contig and test the range
+#            print "Testing readmapping $readname (nr $tested)$brtag" if (!((++$tested)%50));
             if (@{$readmap->{$readname}} == 4) {
                 my $pcstart = $readmap->{$readname}->[0];
                 my $pcfinal = $readmap->{$readname}->[1];
@@ -395,14 +397,14 @@ print "read $readname: $pcstart $pcfinal $prstart  $prfinal $brtag" if $LIST;
                 my $lastmax = $cmax;
 	        $cmax = $pcfinal if (!defined($cmax) || $pcfinal>$cmax);
 	        $cmax = $pcstart if (!defined($cmax) || $pcstart>$cmax);
-        # get range covered by this read
+# get range covered by this read
                 my $readspan = abs($prfinal-$prstart)+1;
                 $counts->[2] += $readspan; # total length of reads
-        # keep track of first and last reads
+# keep track of first and last reads
                 $names[0] = $readname; 
 print "read $readname: $pcstart $pcfinal $cmin  $cmax $brtag" if $LIST;
                 if ($pcstart == $cmin || $pcfinal == $cmin) {
-        # this read aligns with start of the contig
+# this read aligns with start of the contig
 print "read: $readname, minread=$minread readspan=$readspan cmin=$cmin$brtag" if $LIST;
                     if (!defined($minspan) || $readspan < $minspan || $cmin != $lastmin) {
                         $minread = $readname;
@@ -415,7 +417,7 @@ print "read: $readname, minread=$minread readspan=$readspan cmin=$cmin$brtag" if
                     }
                 }
                 if ($pcfinal == $cmax || $pcstart == $cmax) {
-        # this read aligns with end of the contig
+# this read aligns with end of the contig
 print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if $LIST;
                     if (!defined($maxspan) || $readspan < $maxspan || $cmax != $lastmax) {
                         $maxread = $readname;
@@ -436,13 +438,13 @@ print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if
                 $complete = 0;
             }
 	}
-    # test contig cover
+# test contig cover
 	if ($cmin != 1) {
             $status->{diagnosis} .= "! unusual lower bound $cmin of mapping";
             $status->{diagnosis} .= " range for contig $cnames->[0]${brtag}";
             $status->{warnings}++;
         }
-    # test current read count against input tally (addRead)
+# test current read count against input tally (addRead)
         if ($nreads != $counts->[0]) {
             $status->{diagnosis} .= "! Read count error on contig $cnames->[0]: ";
             $status->{diagnosis} .= "$nreads against $counts->[0]${brtag}";
@@ -453,14 +455,14 @@ print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if
             $complete = $nreads;
             $counts->[1] = $cmax-$cmin+1; # the length of the contig
         }
-    # determine full name of this contig
+# determine full name of this contig
         $cover = $counts->[2]/$counts->[1]; # r/c
-    # build the number as sqrt(r**2+c**2)*2*cover; produces an <=I12 number
-    # which is sensitive to a change of only one in either r or c for all
-    # practical values of cover (1-20); max contig length about 1.2-5 10**8
+# build the number as sqrt(r**2+c**2)*2*cover; produces an <=I12 number
+# which is sensitive to a change of only one in either r or c for all
+# practical values of cover (1-20); max contig length about 1.2-5 10**8
         my $uniquenumber = sqrt($cover*$cover + 1) * $counts->[2] * 1.75;
         my $uniquestring = sprintf("%012d",$uniquenumber);
-    # cleanup the readnames
+# cleanup the readnames
 print "minread $minread    maxread $maxread $brtag" if $LIST;
         my @endreads;
 	push @endreads, &readAlias($minread);
@@ -469,13 +471,13 @@ print "minread $minread    maxread $maxread $brtag" if $LIST;
         $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
     }
 
-    print "contigname: $cnames->[1]$brtag";
+    print "Full Arcturus contigname: $cnames->[1] (complete=$complete)$brtag";
 
 #############################################################################
 # (IV) apply mapping to reads, test them and collect contig links
 #############################################################################
 
-$LIST = 0;
+$LIST = 1; print "IV $brtag";
 
     my $isConnected = 0;  
     my $isIdentical = 0;
@@ -495,28 +497,29 @@ $LIST = 0;
             delete $cntgmap->{$cntg};
         }
 
-    # build the mappings for each readmapper; test connections to earlier contigs
+# build the mappings for each readmapper; test connections to earlier contigs
 
-$tested = 0;
+        $tested = 0;
         $counts->[0] = 0;
         my $emptyReads = 0;
         foreach my $read (keys (%$readmap)) {
+            print "Building map for read $read (nr $tested)$brtag" if (!((++$tested)%50));
             my $readobject = $reads{$read};
             my $contocon = $readobject->{contocon};
 
-    # transfer the read-to-contig alignment to the ReadMapper instance 
+# transfer the read-to-contig alignment to the ReadMapper instance 
 
             $readobject->alignToContig(\@{$readmap->{$read}});
-    # test the readmapper alignment specification and status for this read
+# test the readmapper alignment specification and status for this read
             $readobject->align();
-    # test previous alignments of this read in the database
+# test previous alignments of this read in the database
             $readobject->mtest();
 
 #$readobject->reporter(2) if $LIST; # test version
 #$LIST = 0; $LIST = 1 if (!$tested || !((++$tested)%50));
 #print "Testing read $read (nr $tested)  con-to-con @$contocon$brtag" if $LIST;
 
-    # if it's a healthy read (no error status), build history info
+# if it's a healthy read (no error status), build history info
 
             my $previous = $readobject->{dbrefs}->[3]; # the previous contig, if any
 #print "previous contig info: $previous $brtag" if $LIST;
@@ -537,12 +540,12 @@ $tested = 0;
             }
 
             else {
-    # defaults 0 for new readmap or a previous one which is deprecated
+# defaults 0 for new readmap or a previous one which is deprecated
                 my $shift = 0;
                 my $hash = $newContigHash;
-    # new reads and deprecated reads are counted as new alignments at shift 0 
+# new reads and deprecated reads are counted as new alignments at shift 0 
                 if ($previous && $contocon->[4] <= 1) {
-    # read was previously aligned to contig $previous (and not deprecated)
+# read was previously aligned to contig $previous (and not deprecated)
                     $shift = $contocon->[5];
                     $hash  = sprintf("%06d:%01d:%08d",$previous,$contocon->[4],$shift);
                 }
@@ -581,24 +584,24 @@ $LIST = 1;
         }
 
         if (@contigLinkHash == 1 && $contigLinkHash[0] eq $newContigHash) {
-    #** it's a completely new contig (all mappings are new)
+#** it's a completely new contig (all mappings are new)
             $isIdentical = 0;
             $isConnected = 0;  
         }
         elsif (@contigLinkHash == 1 && $contigLinkHash[0] ne $newContigHash) {
-    #** one linked previous contig, but no new or deprecated mappings at all
-    #** the current contig may be identical to the previous one (but not necessarily!)
+#** one linked previous contig, but no new or deprecated mappings at all
+#** the current contig may be identical to the previous one (but not necessarily!)
             my @olinkdata = split ':',$contigLinkHash[0];
 #print "olinkdata @olinkdata $brtag" if $LIST;
             $oldContig = $olinkdata[0];
             $isConnected = 1;
             my $newReads = $cntgmap->{$contigLinkHash[0]}->[4];
-    # now test for reads appearing in the previous version but not in the new one
+# now test for reads appearing in the previous version but not in the new one
 	    my $hashrefs = $CONTIGS->associate('nreads,contigname',$oldContig,'contig_id');
 	    my $hashref = $hashrefs->[0];
 print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contigname}  cnames:$cnames->[1] $brtag" if $LIST;
 	    if ($cnames->[1] ne $hashref->{contigname}) {
-    # the contig hash names differ, test if perhaps the checksums and nr of reads match
+# the contig hash names differ, test if perhaps the checksums and nr of reads match
                 my $oldCheckSum = &checksum($hashref->{contigname});
 	        my $newCheckSum = &checksum($cnames->[1]);
 	        if ($oldCheckSum == $newCheckSum && $newReads == ($hashref->{nreads}-$emptyReads)) {
@@ -610,7 +613,7 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
                 }
             }
             else {
-    # the contig hash name matches the previous one
+# the contig hash name matches the previous one
                 $isIdentical = 1;
                 if ($newReads != $hashref->{nreads}) {
                     $status->{warnings}++;
@@ -623,12 +626,12 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
         }
 	elsif (@contigLinkHash == 2 && $contigLinkHash[0] eq $newContigHash) {
             $isConnected = 1;
-    # there are new and/or deprecated mappings 
+# there are new and/or deprecated mappings 
             my @nlinkdata = split ':',$contigLinkHash[0];
             my @olinkdata = split ':',$contigLinkHash[1];
             my $newContigData = $cntgmap->{$contigLinkHash[0]};
-    # it's the same contig if all new reads are deprecated and the names match, or 
-    # if the order & shift of [1] is 0 and the names matche (e.g. continued after previous abort)
+# it's the same contig if all new reads are deprecated and the names match, or 
+# if the order & shift of [1] is 0 and the names matche (e.g. continued after previous abort)
             if ($newContigData->[4] == $newContigData->[5] || $olinkdata[1] == 0 && $olinkdata[2] == 0) {
 	        my $previous = $CONTIGS->associate('contigname',$olinkdata[0],'contig_id');
                 $isIdentical = 1 if ($previous eq $cnames->[1]); # based on hash value
@@ -636,14 +639,14 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
             $oldContig = $olinkdata[0];
         }
 	else {
-    # more than one linking contig (contigLinkHash >= 2); definitively a new contig
+# more than one linking contig (contigLinkHash >= 2); definitively a new contig
             $isConnected = @priorContigHash;
             $isIdentical = 0;
         }
 
-    # if it's a new contig with connections, check the intervals on the previous contig(s)
-    # if (some) intervals overlap, the reads inside the intervals have to be deprecated
-    # and reallocated as first-appearing reads to this new contig; then redo this step IV
+# if it's a new contig with connections, check the intervals on the previous contig(s)
+# if (some) intervals overlap, the reads inside the intervals have to be deprecated
+# and reallocated as first-appearing reads to this new contig; then redo this step IV
 
         if ($isConnected && !$isIdentical) {
 
@@ -651,7 +654,7 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
                 my $ors = $cntgmap->{$link}->[0];
                 my $orf = $cntgmap->{$link}->[1];
                 my ($previous, $order, $shift) = split /\:/,$link;
-    # go through each alignment on $previous and test for overlap with the current alignment
+# go through each alignment on $previous and test for overlap with the current alignment
                 if (my $forward = $forward{$previous}) {
                     my @intervals = @$forward;
                     while (@intervals) {
@@ -659,14 +662,14 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
                         $range[0] = shift @intervals;
                         $range[1] = shift @intervals;
                         @range = sort @range;
-    # now test the interval $oranges-$orangef against @range 
+# now test the interval $oranges-$orangef against @range 
                         if ($range[0] <= $orf && $range[1] >= $ors) {
-    # there is overlap somewhere, test 4 cases
+# there is overlap somewhere, test 4 cases
                             my $ws = $range[0];
                             my $wf = $range[1];
                             $ws = $ors if ($range[0] < $ors);
                             $wf = $orf if ($range[1] > $orf);
-    # deprecate the reads which fall inside the window on the previous contig
+# deprecate the reads which fall inside the window on the previous contig
                             my $deprecated = 0;
                             foreach my $read (keys %$readmap) {
                                 my $readobject = $reads{$read};
@@ -681,9 +684,9 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
                     }
                 }
 	    }
-    # add current intervals, but only at last iteration
-            if ($isWeeded) {
 
+            if ($isWeeded) {
+# add current intervals, but only at last iteration
                 foreach my $link (@priorContigHash) {
                     my $ors = $cntgmap->{$link}->[0];
                     my $orf = $cntgmap->{$link}->[1];
@@ -698,6 +701,7 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
 
 # at this point, we have collected all the contigs referenced and possibly new reads
 
+$LIST = 1;
 print "$isConnected connecting contig(s) found,  Identical=$isIdentical weeded=$isWeeded $brtag" if $LIST;
 
         foreach my $hash (sort @contigLinkHash) {
@@ -715,15 +719,17 @@ $LIST = 0;
 #############################################################################
 
 $LIST = 1;
+$LIST = 1; print "V $brtag";
 
     my $accepted = 0;
     $accepted = 1 if (!$minOfReads || $counts->[0] >= $minOfReads); 
 
     $counts->[3] = @priorContigHash;
     my $newContigData = $cntgmap->{$newContigHash};
+print "newContigData=$newContigData   cnts priorContigs: @$counts $brtag" if $LIST;
     if ($newContigData && @$newContigData) {
         $counts->[4] = $newContigData->[4] - $newContigData->[5];
-    print "newContigData=$newContigData  @$newContigData  cnts: @$counts $brtag" if $LIST;
+print "newContigData=$newContigData  @$newContigData  cnts: @$counts $brtag" if $LIST;
     }
     else {
         $counts->[4] = 0;
@@ -742,10 +748,10 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
         push @columns, 'newreads';  push @cvalues, $counts->[4]; 
         push @columns, 'cover' ;    push @cvalues, $cover; 
         push @columns, 'origin';    push @cvalues, 'Arcturus CAF parser';
-    # add new record using the compound name as contigname
+# add new record using the compound name as contigname
         $CONTIGS->rollback(0); # clear any (previous) rollbacks 
         if (!$CONTIGS->newrow('contigname',$cnames->[1],\@columns,\@cvalues)) {
-    # if contig already exists get contig number
+# if contig already exists get contig number
             if ($CONTIGS->{errors} =~ /already\sexists/) {
                 $contig =  $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
                 print "contig $cnames->[1] is already present as number $contig$brtag";
@@ -754,7 +760,7 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
             else {
                 $report .= "$CONTIGS->{errors}${brtag}";
                 $complete = 0;
-print "$report "; return 0;
+print "report !CONTIGS : $report "; return 0;
             }
         }
         else {
@@ -778,6 +784,8 @@ print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($count
 # (VI) dump all readmaps onto the database (and test if done successfully)
 #############################################################################
 
+$LIST = 1; print "VI $brtag";
+
     if ($complete && $accepted) {
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
@@ -796,6 +804,7 @@ print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($count
 #############################################################################
 # (VII) here contig and map dumps are done (and successful if $complete)
 #############################################################################
+$LIST = 1; print "VII $brtag";
 
     undef my @priorContigList;
     foreach my $hash (@priorContigHash) {
@@ -1305,3 +1314,16 @@ sub colophon {
 #############################################################################
 
 1;
+
+
+
+
+
+
+
+
+
+
+
+
+
