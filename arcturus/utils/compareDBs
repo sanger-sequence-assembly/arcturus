@@ -160,7 +160,7 @@ while (@arya = $stha->fetchrow_array()) {
 		if ($readnamea ne $readnameb);
 	}
 
-	$uniqueid = $byname ? $readnamea : $read_id;
+	$uniqueid = $byname ? $readnamea : "$read_id ($readnamea)";
 
 	$slengthb = shift @aryb;
 
