@@ -1006,7 +1006,9 @@ $LOADPERRUN =~ s/\W/x/g;
     }
 
     my $csroot = $GateKeeper->prepareFork('harmonize');
-    system ("$csroot/harmonize organisms copy >> $arc_tmp_dir/harmonize.log");     
+    my $harmonize = "$csroot/harmonize organisms copy";
+    $harmonize .= " >> $arc_tmp_dir/harmonize.log" if $cgi;
+    system ($harmonize);  
 
     exit 0;
 
