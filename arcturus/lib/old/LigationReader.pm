@@ -88,11 +88,9 @@ sub build {
    print "<br>" if $ENV{'PATH_INFO'}; # CGI mode
    if (!@fields) {
 # try a recovery by going to another machine
-print "trying to recover .. ";
-       $ENV{ORACLE_HOME} = '/usr/local/oracle';
-       $ENV{ORACLE_SID}  = 'inform';
-       @fields = `/usr/bin/rsh babel "$PEEKDIR/oracle_peek ligation $ligation"`; # execute Oracle query
-print "recovered peek: @{fields}<br>\n";
+#print "trying to recover .. ";
+#       @fields = `/usr/bin/rsh babel "$PEEKDIR/oracle_peek ligation $ligation"`; # execute Oracle query
+#print "recovered peek: @{fields}<br>\n";
    }
 
    undef my @plates;
