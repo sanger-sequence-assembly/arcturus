@@ -313,21 +313,21 @@ sub putContig {
                 print STDERR "Empty link to contig ".
                              $previous->getContigName().
                              " detected in contig ".
-			     $this->getContigName()."\n" if $list;
+			     $contig->getContigName()."\n" if $list;
             }
         }
-    }
-    elsif ($list) {
-# the contig has no precursor, is completely new
-        print STDERR "Contig ".$contig->getContigName." has no precursors\n";
-
-    }
-
+# to be removed
 foreach my $mapping (@{$contig->getContigToContigMapping}) {
 print STDOUT "Contig ".$contig->getContigName." ".
               ($mapping->assembledFromToString || "\n");
 }
-#&putContigMappingsForContig($dbh,$contig);
+# until here
+    }
+    elsif ($list) {
+# the contig has no precursor, is completely new
+        print STDERR "Contig ".$contig->getContigName." has no precursors\n";
+    }
+
 return 0; # testing
 
 # now load the contig into the database
