@@ -102,6 +102,18 @@ if (defined($newmappingtable) && defined($newsegmenttable)) {
     &db_die("Failed to create query \"$query\"");
 
     $saving = 1;
+
+    unless (defined($contigids)) {
+	$query = "DELETE FROM $newsegmenttable";
+	my $stmt = $dbh->prepare($query);
+	my $rc = $stmt->execute();
+	print STDERR "$rc rows deleted from $newsegmenttable\n";
+
+	$query = "DELETE FROM $newmappingtable";
+	$stmt = $dbh->prepare($query);
+	$rc = $stmt->execute();
+	print STDERR "$rc rows deleted from $newmappingtable\n";
+    }
 }
 
 my ($logfh, $outfh);
@@ -178,9 +190,11 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
 	    ($newsegs, $sense) = &processMappings($seqid, $oldmapping, $newmapping, $logfh, $loose)
 		if defined($oldmapping);
 
-	    push @{$segments}, @{$newsegs};
+	    if (defined($newsegs)) {
+		push @{$segments}, @{$newsegs};
 	    
-	    print $logfh "\n";
+		print $logfh "\n";
+	    }
 	}
 
 	&normaliseMappings($segments);
@@ -359,13 +373,7 @@ sub processMappings {
 
     my $c2csegments = &processSegments($oldsegments, $olddirection, $newsegments, $newdirection, $logfh);
 
-    print $logfh "SEGMENTS BEFORE MERGING:\n\n";
-
-    &displaySegments($c2csegments, $logfh);
-
-    $c2csegments = &mergeSegments($c2csegments, $olddirection, $newdirection, $loose);
-
-    print $logfh "\nSEGMENTS AFTER MERGING:\n\n";
+    print $logfh "SEGMENTS:\n\n";
 
     &displaySegments($c2csegments, $logfh);
 
