@@ -313,7 +313,6 @@ sub assembledFrom {
     $mapping =~ s/^\s+|\s+$//; # remove leading/trailing blanks
     my @fields = split /\s+|\:/,$mapping if ($mapping);
 
-print "assembledFrom $break";
     if (defined($readname) && defined($mapping) && @fields == 4) {
 # pick up an already exiting ReadMapper or create a new one
         my $readmapper = $ReadMapper->new($readname);
