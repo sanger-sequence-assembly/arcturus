@@ -1194,6 +1194,25 @@ sub putRead {
 
     $read->setReadID($readid);
 
+#$this->putSequenceForRead($read);
+
+# insert READCOMMENT, if any
+
+    if (my $comments = $read->getComment()) {
+        foreach my $comment (@$comments) {
+            $rc = $this->putCommentForReadID($readid,$comment);
+	    return (0, "failed to insert comment for $readname ($readid);" .
+		    "DBI::errstr=$DBI::errstr") unless $rc;
+        }
+    }
+#}
+
+# SPLIT this part of because we will need it to insert edited sequences
+# sub putSequenceForRead {
+#     my $this = shift;
+#     my $read = sfift; # Read instance
+#     my $readid = $read->getReadID();
+
 # Get a seq_id for this read
 
     $query = "insert into SEQ2READ(read_id) VALUES(?)";
@@ -1299,28 +1318,25 @@ sub putRead {
 	$sth->finish();
     }
 
-# insert READCOMMENT, if any
-
-#    if (my $comments = $read->getComment()) {
-#        foreach my $comment (@$comments) {
-#            $rc = $this->putCommentForReadID($readid,$comment);
-#	    return (0, "failed to insert comment for $readname ($readid);" .
-#		    "DBI::errstr=$DBI::errstr") unless $rc;
-#        }
-#    }
-    if (my $comments = $read->getComment()) {
-        my $query = "insert into READCOMMENT (read_id,comment) VALUES (?,?)";
-        my $sth = $dbh->prepare_cached($query);
-        foreach my $comment (@$comments) {
-            next unless ($comment =~ /\S/);
-            $rc = $sth->execute($readid,$comment);
-	    return (0, "failed to insert comment for $readname ($readid);" .
-		    "DBI::errstr=$DBI::errstr") unless $rc;
-        }
-    }
-
     return (1, "OK");
 }
+
+sub addNewSequenceForRead {
+# add the sequence of this read as 
+    my $this = shift;
+    my $read = shift; # a Read instance
+
+# test if the readname already occurs in the database; if not return undef
+
+# test if the current read sequence (both DNA and BaseQuality) is different 
+# from the exiting one(s); if not return the seq_id
+
+# test if there are more than one align-to-SCF record in this read
+# if not, return with an error message and undef
+
+# enter the new record
+}
+
 
 sub putCommentForReadID {
 # add a comment for a given read_id or readname (finishers entry of comment?)
@@ -1333,9 +1349,10 @@ sub putCommentForReadID {
     my $dbh = $this->getConnection();
 
     my $query = "insert into READCOMMENT (read_id,comment) VALUES (?,?)";
+
     my $sth = $dbh->prepare_cached($query);
-    my $success = $sth->execute($read_id,$comment) ? 1 : 0;
-    return $success;
+
+    return $sth->execute($read_id,$comment) ? 1 : 0;
 }
 
 sub checkReadForCompleteness {
