@@ -730,51 +730,37 @@ sub putRead {
 
     my $readname = $read->getReadName();
 
-    my $query = "insert into READS(readname) VALUES(?)";
+    my $sequence = compress($read->getSequence());
+    my $basequality = compress(pack("c*", @{$read->getQuality()}));
+
+    my $seqlen = length($sequence);
+
+    my $query = "insert into" .
+	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
+	    " VALUES(?,?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare($query);
 
-    $rc = $sth->execute($readname);
+    $rc = $sth->execute($readname,
+			$read->getAspedDate(),
+			$template_id,
+			$read->getStrand(),
+			$read->getChemistry(),
+			$read->getPrimer(),
+			$seqlen,
+			$read->getLowQualityLeft(),
+			$read->getLowQualityRight());
 
-    return (0, "failed to insert readname into READS table;DBI::errstr=$DBI::errstr")
+    return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
 
-    $sth->finish();
-
     my $readid = $dbh->{'mysql_insertid'};
-
-    $query = "update READS set asped=?,template_id=?,strand=?,chemistry=?,primer=? where read_id=?";
-
-    $sth = $dbh->prepare($query);
-
-    $rc = $sth->execute($read->getAspedDate(), $template_id, $read->getStrand(),
-			$read->getChemistry(), $read->getPrimer(), $readid);
-
-    return (0, "failed to set asped,template_id,strand,chemistry,primer for $readname ($readid);" .
-	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
-
-    $sth->finish();
-
-    my $seqlen = length($read->getSequence());
-
-    $query = "update READS set slength=?,lqleft=?,lqright=? where read_id=?";
-
-    $sth = $dbh->prepare($query);
-
-    $rc = $sth->execute($seqlen, $read->getLowQualityLeft(),
-			$read->getLowQualityRight(), $readid);
-
-    return (0, "failed to set slength,lqleft,lqright for $readname ($readid);" .
-	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 
     $sth->finish();
 
     $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
 
     $sth = $dbh->prepare($query);
-
-    my $sequence = compress($read->getSequence());
-    my $basequality = compress(pack("c*", @{$read->getQuality()}));
 
     $rc = $sth->execute($readid, $sequence, $basequality);
 
