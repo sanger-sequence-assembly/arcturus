@@ -101,6 +101,24 @@ public class Mapping {
     public int getContigFinish() { return cfinish; }
 
     /**
+     * Returns the direction of the alignment on the contig.
+     *
+     * @return the direction of the alignment on the contig.
+     */
+
+    public int getDirection() { return direction; }
+
+    /**
+     * Returns true if this sequence is co-aligned with the contig, false if it
+     * is counter-aligned.
+     *
+     * @return  true if this sequence is co-aligned with the contig, false if it
+     * is counter-aligned.
+     */
+
+    public boolean isForward() { return direction == FORWARD; }
+
+    /**
      * Returns the array of Segment objects for this alignment.
      *
      * @return the array of Segment objects for this alignment.

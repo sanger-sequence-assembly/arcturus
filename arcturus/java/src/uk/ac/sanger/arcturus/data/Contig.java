@@ -87,9 +87,7 @@ public class Contig extends Core {
     public Mapping[] getMappings() { return mappings; }
 
     public void setMappings(Mapping[] mappings) {
-	if (mappings == null) {
-	    this.mappings = mappings;
-	    this.nreads = mappings.length;
-	}
+	this.mappings = mappings;
+	this.nreads = mappings.length;
     }
 }
