@@ -822,6 +822,8 @@ $LOADPERRUN =~ s/\W/x/g;
 
     undef my %assemblycount;
 
+# exit 0;
+
     foreach my $file (@{$newfiles}) {
 
         last if ($LOADPERRUN-- <= 0);
@@ -1101,7 +1103,7 @@ sub getNewReadFiles {
 
     $MAXREAD = 1000 if (!defined($MAXREAD));
  
-$DEBUG = 1 if ($directory =~ /MAL/);
+$DEBUG = 0;
 my $nrr = keys %$dbfiles;
 print "directory $directory $break dbfiles $nrr $break" if $DEBUG;
 print "exclude: @{$excluders}${break}filter : $flnfilter$break gbfilter : $glbfilter$break" if ($DEBUG);
@@ -1158,7 +1160,7 @@ print "shortname = $shortname $break" if ($DEBUG);
         # test against rejection strings
             foreach my $exclude (@{$excluders}) {
 print "rejected file: $file (exclude $exclude) $break" if ($subdirname =~ /$exclude/i && $DEBUG);
-#                next NEXT if ($subdirname =~ /$exclude/i);
+                next NEXT if ($subdirname =~ /$exclude/i);
             }
 print "NEW FILE: $file  (maxread= $MAXREAD) $break" if $DEBUG;
             last if ($MAXREAD-- <= 0);
