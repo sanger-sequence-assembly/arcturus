@@ -411,7 +411,7 @@ sub getStatistics {
             my $init = 0;
             $totalreadcover = 0;
             foreach my $mapping (@$mappings) {
-                my $readname = $mapping->getReadName();
+                my $readname = $mapping->getMappingName();
 # find begin/end of contig range cover by this mapping
                 my ($cs, $cf) = $mapping->getContigRange();
 # total read cover = sum of contigspan length
@@ -539,7 +539,7 @@ sub isSameAs {
         foreach my $mapping (@$mappings) {
             my $key = $mapping->getSequenceID();
             $sequence->{$key} = $mapping if $key;
-            $key =  $mapping->getReadName();
+            $key =  $mapping->getMappingName();
             $sequence->{$key} = $mapping if $key;
         }
     }
@@ -551,7 +551,7 @@ sub isSameAs {
 
         foreach my $mapping (@$mappings) {
 # find the corresponding mapping in $this Contig instance
-            my $key = $mapping->getSequenceID() || $mapping->getReadName();
+            my $key = $mapping->getSequenceID() || $mapping->getMappingName();
             return undef unless defined($key); # incomplete Mapping
             my $match = $sequence->{$key};
 print "cannot find mapping for key $key \n" unless $match;
@@ -581,13 +581,15 @@ print "cannot find mapping for key $key \n" unless $match;
 
 sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
-# adds a contig-to-contig Mapping instance with a list of mapping segments, if any, 
-# mapping from $compare to $this contig
-# returns the number of mapped segments (usually 1)
-# returns undef if incomplete Contig instances or missing sequence IDs in mappings
+# adds a contig-to-contig Mapping instance with a list of mapping segments,
+# if any, mapping from $compare to $this contig
+# returns the number of mapped segments (usually 1); returns undef if 
+# incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
-    my $compare = shift;
+    my $compare = shift; # Contig instance to be compared to $this
+    my $detail = shift; # set True for fine scan
 
+print "ENTER linkToContig ".($detail || 0)."\n";
     die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
 
     return undef unless $this->hasMappings();
@@ -611,17 +613,17 @@ sub linkToContig {
     $mappings = $compare->getMappings();
     foreach my $mapping (@$mappings) {
         my $key = $mapping->getSequenceID();
-print "Incomplete Mapping ".$mapping->getReadName."\n" unless defined($key);
+print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
         return undef unless defined($key); # incomplete Mapping
         my $match = $sequence->{$key};
         unless (defined($match)) {
 # this mapping/sequence in $compare does not occur in the current Contig
-print "Mapping in previous ".$mapping->getReadName." has no counterpart in current\n";
+print "Mapping in previous ".$mapping->getMappingName." has no counterpart in current\n";
             $deallocated++;
             next;
         }
 # this mapping/sequence in $compare also figures in the current Contig
-        my ($identical,$aligned,$offset) = $match->compare($mapping);
+        my ($identical,$aligned,$offset) = $match->compare($mapping,$detail);
         $alignment = $aligned unless $alignment; # keep the first encountered value != 0
 print "identical=$identical  aligned=$aligned ($alignment) offset=$offset\n" if $list; 
         next unless ($identical && $aligned == $alignment); # the mappings are different
@@ -680,13 +682,20 @@ print "Segment (p2) range  $start $finis (current) ->  $segmentstart $segmentfin
 print "mapping has ".$mapping->hasSegments." segments\n";
 print "contig has $deallocated deallocated reads from previous contig\n";
 
-# store the Mapping as a contig-to-contig mapping, if it has segments
+# if mapping has segments, or if a finescan has been done, return 
 
-    my $ns = $mapping->hasSegments();
+    if ($mapping->hasSegments() || $detail) {
+# store the Mapping as a contig-to-contig mapping
+        $this->addContigToContigMapping($mapping);
+# and return the number of segments, which could be 0
+        return $mapping->hasSegments();
+    }
 
-    $this->addContigToContigMapping($mapping) if $ns;
+# the mapping has no segments: no mapping range(s) could be determined
+# by the algorithm above. A more refined analysis is required based
+# on analysis of the individual segments: try again with detail on
 
-    return $ns;
+    return $this->linkToContig($compare,1);
 }
 
 #-------------------------------------------------------------------    

@@ -16,13 +16,13 @@ sub new {
 
     bless $this, $class;
 
-    $this->setReadName($identifier) if $identifier;
+    $this->setMappingName($identifier) if $identifier;
 
     return $this;
 }
  
 #-------------------------------------------------------------------
-# mapping metadata (readname, sequence ID, mapping ID and alignment)
+# mapping metadata (mappingname, sequence ID, mapping ID and alignment)
 #-------------------------------------------------------------------
 
 sub setContigRange {
@@ -43,6 +43,16 @@ sub setMappingID {
     $this->{mapping_id} = shift;
 }
 
+sub getMappingName {
+    my $this = shift;
+    return $this->{mappingname};
+}
+
+sub setMappingName {
+    my $this = shift;
+    $this->{mappingname} = shift;
+}
+
 sub getSequenceID {
     my $this = shift;
     return $this->{seq_id};
@@ -51,16 +61,6 @@ sub getSequenceID {
 sub setSequenceID {
     my $this = shift;
     $this->{seq_id} = shift;
-}
-
-sub getReadName {
-    my $this = shift;
-    return $this->{readname};
-}
-
-sub setReadName {
-    my $this = shift;
-    $this->{readname} = shift;
 }
 
 sub setAlignmentDirection {
@@ -157,6 +157,7 @@ sub compare {
 
 sub analyseSegments {
 # sort the segments according to increasing read position
+# determine/test alignment direction from the segments
     my $this = shift;
 
     return 0 unless $this->hasSegments();
@@ -190,11 +191,12 @@ sub analyseSegments {
 
     foreach my $segment (@$segments) {
 	if ($segment->getAlignment() != $direction) {
-# should never occur, but put here just in case
+# if this error occurs it is an indication for an erroneous alignment
+# direction in the MAPPING table, likely in a read with unit-length segment
             print STDERR "Inconsistent alignment direction in mapping "
-                         .($this->getReadName || $this->getSequenceID).
+                         .($this->getMappingName || $this->getSequenceID).
 			 "\n: ".$this->assembledFromToString;
-            undef $direction;
+            $direction = 0;
             last;
         }
     }
@@ -239,7 +241,7 @@ sub addAlignmentFromDatabase {
     my $cfinis = $cstart + $length;
 
     if ($length < 0) {
-        die "Invalid length specification in Mapping ".$this->getReadName; 
+        die "Invalid length specification in Mapping ".$this->getMappingName; 
     }
     elsif (my $direction = $this->{direction}) {
        
@@ -249,7 +251,7 @@ sub addAlignmentFromDatabase {
         $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
     }
     else {
-        die "Undefind alignment direction in Mapping ".$this->getReadName;
+        die "Undefind alignment direction in Mapping ".$this->getMappingName;
     }
 }
 
@@ -310,7 +312,7 @@ sub assembledFromToString {
 # write alignments as (block of) 'Assembled_from' records
     my $this = shift;
 
-    my $assembledFrom = "Assembled_from ".$this->getReadName()." ";
+    my $assembledFrom = "Assembled_from ".$this->getMappingName()." ";
 
     my $string = '';
     foreach my $segment (@{$this->{assembledFrom}}) {
