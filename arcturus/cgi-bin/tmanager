@@ -15,7 +15,7 @@ use Compress;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1, writeAccess => 1});
 
 my $cgi        = $GateKeeper->cgiHandle();
 
@@ -981,7 +981,3 @@ sub parseHappyMapsFile {
 $report =~ s/\n/<br>/g; print "$report<br>";
     return $mapEntry, $report;
 }
-
-
-
-

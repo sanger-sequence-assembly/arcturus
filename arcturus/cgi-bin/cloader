@@ -18,7 +18,7 @@ use ContigBuilder;
 ##############################################################################
 
 # print "content-type: text/plain\n\n";
-my $GateKeeper = GateKeeper->new('mysql',0);
+my $GateKeeper = GateKeeper->new('mysql',{writeAccess => 1});
 
 $GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
@@ -70,7 +70,7 @@ my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
 # input from command line
 ###############################################################################
 
-undef my $error;
+my $error = '';
 
 if (!$cgi) {
 # test user
@@ -328,7 +328,42 @@ else {
 #    my $vars = $cgi->PrintVariables(); print STDOUT "$vars<br>\n";
 }
 
-die "No assembly defined" if !$assemblynmbr;
+    $GateKeeper->dropDead("No assembly defined") if !$assemblynmbr;
+
+    my $status = $ASSEMBLY->associate('status',$assemblyname,'assemblyname');
+# error status always aborts further loading
+    if ($status eq 'error') {
+        $GateKeeper->dropDead("$status status on assembly $assemblyname aborts loading");
+    }
+    elsif ($status eq 'unknown') {
+        print "WARNING! Status of assembly $assemblyname is unknown $brtag"; 
+    }
+
+    my $R2C = $organisms->spawn("READS2CONTIG",$database,0,0);
+    my $new = $R2C->probe('contig_id',undef,"assembly = $assemblynmbr and generation = 0");
+
+    if ($GateKeeper->lookup('anew')) {
+# test if any previous generation 0 has been cleared to start a new assembly
+        $error ='';
+        if ($status ne 'completed') {
+            $error .= "Assembly $assemblyname is not cleared for a new generation: ";
+            $error .= "status = $status $brtag";
+        }
+# test presence of generation 0 entries in READS2CONTIG
+        elsif ($new) {
+            $error .= "Assembly $assemblyname is not cleared for a new generation: ";
+            $error .= "there are generation 0 mappings$brtag";
+        }
+        $GateKeeper->dropDead($error) if $error;
+    }
+    elsif ($new) {
+        print STDOUT "Loading of assembly $assemblyname will be CONTINUED $brtag";
+    }
+    else {
+        print STDOUT "Loading of a new generation of assembly $assemblyname will be STARTED $brtag";
+    }
+#$GateKeeper->dropDead("Test aborted; error = $error");
+
 # update the default settings of ORGANISMS and ASSEMBLY tables
 
     if ($update) {
@@ -355,8 +390,8 @@ die "No assembly defined" if !$assemblynmbr;
     $PENDING->setMultiLineInsert(100);
 
     my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
+ 
     $R2A->setMultiLineInsert(1000);
-    my $R2C = $organisms->spawn("READS2CONTIG",$database,0,0);
     $R2C->setMultiLineInsert(5000);
   
     $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
@@ -579,27 +614,39 @@ sub form {
 
     $form  = "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 100%><TR>";
 
-    $form .= "<TH ALIGN=LEFT WIDTH=33%>Root Data Directory</TH>";
+    $form .= "<TH ALIGN=LEFT WIDTH=33% NOWRAP>Root Data Directory</TH>";
     $form .= "<TD COLSPAN=2><INPUT NAME='CDD' SIZE=32 MAXSIZE=64 VALUE=''></TD>";
 
     $form .= "</TR><TR>";
 
-    $form .= "<TR><TH ALIGN=LEFT>CAF File Name</TH>";
+    $form .= "<TR><TH ALIGN=LEFT NOWRAP>CAF File Name</TH>";
     $form .= "<TD COLSPAN=2><INPUT NAME='CFN' SIZE=32 MAXSIZE=64 VALUE=''></TD>";
 
     $form .= "</TR><TR>";
 
-    $form .= "<TH ALIGN=LEFT>Contig Name Filter</TH>";
+    $form .= "<TH ALIGN=LEFT NOWRAP>Contig Name Filter</TH>";
     $form .= "<TD><INPUT NAME='CNF' SIZE=12 MAXSIZE=64 VALUE=''></TD>";
     $form .= "<TH> Reads per Contig >= <INPUT NAME='SRC' SIZE=3 VALUE='1'></TH>";
 
     $form .= "</TR><TR>";
 
-    $form .= "<TR><TH ALIGN=LEFT>DATABASE Assembly Name</TH><TD>SELECTTAG</TH>";
+    $form .= "<TR><TH ALIGN=LEFT NOWRAP>DATABASE Assembly</TH><TD>SELECTTAG</TH>";
     $form .= "<TH> Process <INPUT VALUE='100000' SIZE=9 NAME='CPR'> lines </TH>";
     $form .= "</TR></TABLE>";
 
+    $form .= "<P><P>";
+
     $form .= "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 90%><TR>";
+    $form .= "<TH>&nbsp</TH>";
+    $form .= "<TH ALIGN=RIGHT> New Assembly ? <INPUT type=checkbox name=anew checked> </TH>";
+    $form .= "<TH>&nbsp</TH>";
+
+    $form .= "</TR><TR>";
+
+    $form .= "<TH>&nbsp</TH><TH>&nbsp</TH><TH>&nbsp</TH>";
+
+    $form .= "</TR><TR>";
+
     $form .= "<TH ALIGN=RIGHT WIDTH=30%> Contig Name block <INPUT type=checkbox name=cblocker> </TH>";
     $form .= "<TH ALIGN=RIGHT WIDTH=30%> TEST run <INPUT type=checkbox name=testrun> </TH>";
     $form .= "<TH ALIGN=RIGHT WIDTH=30%> Promote <INPUT type=checkbox name=promote> </TH>";
@@ -625,7 +672,7 @@ sub form {
     $form .= "<TD><INPUT NAME='CLF' SIZE=32 MAXSIZE=64 VALUE=''></TD></TR>";
     $form .= "</TR></TABLE>";
 
-    $form .= "<HR>";
+#    $form .= "<HR>";
 
     $form .= "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 80%>";
     $form .= "<TR><TH> Listing :</TH>";

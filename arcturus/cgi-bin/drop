@@ -14,7 +14,7 @@ use GateKeeper;
 # get configuration data, open MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1, writeAccess => 1});
 
 my $database   = $GateKeeper->lookup('database',1) || 'arcturus';
 

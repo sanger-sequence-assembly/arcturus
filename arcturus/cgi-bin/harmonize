@@ -62,7 +62,8 @@ foreach my $instance (@$instances) {
     next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bchemtypes\b/));
     $report .= "Opening $instance ... ";
     if ($GateKeeper->ping_MySQL($host,$port)) {
-        my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,{dieOnError => 0});
+        my %options = (dieOnError => 0, writeAccess => 1);
+        my $handle  = $GateKeeper->opendb_MySQL_unchecked($instance,\%options);
         $report .= "MySQL instance $instance cannot be opened\n" if !$handle;
         $instance =~ s/$port/$maps{$port}/; # replace TCP port by apache port
         $handles{$instance} = $handle if $handle;

@@ -14,7 +14,9 @@ use CreateArcturus;
 # get configuration data, open CGI and MySQL for database arcturus
 ##############################################################################
 
-my $GateKeeper  = GateKeeper->new('mysql',{insistOnCGI => 1,  dieOnNoTable => 0});
+my %goptions = (insistOnCGI => 1,  dieOnNoTable => 0, writeAccess => 1);
+
+my $GateKeeper  = GateKeeper->new('mysql',\%goptions);
 
 my $cgi         = $GateKeeper->cgiHandle();
 
@@ -457,6 +459,7 @@ elsif ($action eq 'organism') {
                 if ($exists) {
                     my $count = 0;
                     my $userid = $GateKeeper->{USER};
+# the next statement will cause a drop dead on any error
                     $GateKeeper->focus({useDatabase => $dbasename});
 #  find the tables in this directory; there should not be any!
 # (this is to be sure that we do not accidently overwrite another
@@ -547,18 +550,22 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
  
     $option = '' if !$option;
 
-# always do a test on the current database
+# always do a test on the current database with focus (drops dead on any error)
 
     $GateKeeper->focus({useDatabase => $database});
+
 # read the tables from INVENTORY
+
     my $hashes = $inventory->associate('hashrefs','o','domain');
+    my $historytable = 'HISTORY'.uc($database);
+
     undef %tablecount;
     foreach my $hash (@$hashes) {
         my $tablename = $hash->{tablename};
+        $tablename =~ s/DBHISTORY/$historytable/;
         $tablecount{$tablename} = 1;
     }
 # add the history table to the list
-    my $historytable = 'HISTORY'.uc($database);
     $tablecount{$historytable} = 1;
 
 # get a list of required tables
@@ -663,13 +670,15 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                 $page->substitute('CONFIRM',"CREATE");
             }
             else {
-# here possibly special provision for HISTORY
                 undef my $preset;
                 if (my @altered = sort keys(%redefined)) {
                     $preset = $altered[0];
                 }
                 my $where = "domain = 'o' ";
+                my $user = $GateKeeper->{USER};
+                $where .= "and tablename not like '%HISTORY'" if ($user ne 'oper');
                 my $choices = $inventory->htmlMaskedOptions('tablename','where',$where,'tablename',0,0,$preset);
+                $choices =~ s/DBHISTORY/$historytable/g;
                 $page->message("Select a table to rebuild: ",$purple,'size = +1',0,0,'CC');
                 $page->substitute('CC',$choices);
                 my $enforce = "<TABLE><TR><TD>Check <INPUT type=checkbox name='reinitialize'>";
@@ -777,7 +786,15 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                 $error = $GateKeeper->{error};
             }
             elsif ($organisms->query($redefined{$tablename})) {
+# add timestamp to HISTORY table
+                my $user = $GateKeeper->{USER};
+                my $timestamp = $organisms->timestamp(0);
+                my $history   = $organisms->spawn('HISTORY',$database);
+                my @items  = ('tablename', 'date'    , 'user', 'action', 'command');
+                my @values = ($tablename , $timestamp,  $user,  'ALTER', $redefined{$tablename});
+                my $success = $history->newrow(\@items,\@values);
                 $page->message('DONE','yellow',"size = +1",1);
+                $page->errorbox("<p>Time stamp FAILED on HISTORY table") if !$success;
                 $page->space(2);
                 $page->linkbutton('CONTINUE',$return);
             }

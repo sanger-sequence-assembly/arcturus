@@ -14,8 +14,10 @@ use ContigRecall;
 
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',0,'Insist on CGI');
-$GateKeeper->cgiHeader(2); # return string plain
+my %goptions = (insistOnCgi => 1, writeAccess => 0);
+my $GateKeeper = new GateKeeper('mysql',\%goptions);
+
+#$GateKeeper->cgiHeader(2); # return string plain
 
 my $cgi        = $GateKeeper->cgiHandle();
 

@@ -14,7 +14,7 @@ use GateKeeper;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1, writeAccess => 1});
 
 my ($void,$action,$option) = split '/',$GateKeeper->origin;
 

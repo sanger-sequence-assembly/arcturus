@@ -14,7 +14,7 @@ use GateKeeper;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my %options = (insistOnCGI=>1 , diagnosticsOn=>0 , dieOnNoTable=>0);
+my %options = (insistOnCGI=>1 , diagnosticsOn=>0 , dieOnNoTable=>0, writeAccess => 1);
 
 my $GateKeeper = new GateKeeper('mysql',\%options);
 
@@ -34,18 +34,36 @@ my ($void, $action, $page);
 
 if ($action eq 'signon') {
 
-    $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
+    $page = $GateKeeper->GUI("Welcome to the assembly-tracking database",{doTransport=>0});
     $GateKeeper->authorize(0,{ageWindow=>180}); # bounce authorization form
 }
 
 elsif ($action eq 'signoff') {
 
-    $page = $GateKeeper->GUI("Sign off");
     my ($dummy, $session) = split ':',$cgi->parameter('session');
-    $page->add("Your current session $session will be closed"); 
-    $page->add("TO BE DEVELOPED",0,0,'size=+2'); 
-    $page->flush();
 
+    my $confirm = $GateKeeper->lookup('confirm');
+
+    $cgi->delete('session') if $confirm; # build GUI without
+    $page = $GateKeeper->GUI("Sign off",{doTransport=>0});
+    $page->space(5);
+    if ($confirm) {
+# if no-reopen flag set, close the session on the SESSIONS file
+        $GateKeeper->closeSession($session,1) if $GateKeeper->lookup('no-reopen');
+        $page->add("Your session $session has been closed",0,0,'size=+1');
+    } 
+    else {
+        $page->form($GateKeeper->currentScript.'/signoff');
+        $page->add("Current session $session will be closed",0,0,'size=+1');
+        $page->space(1);
+        my $reopen = "<TABLE><TR><TD><FONT SIZE=+1>Check if session may not be reopened</FONT></TD>";
+        $reopen .= "<TD><INPUT TYPE=checkbox NAME=no-reopen></TD></TR></TABLE>";
+        $page->add($reopen);
+        $page->space(1);
+        $page->confirmbuttonbar(0,0);
+    }
+    $page->ingestCGI;
+    $page->flush();
 }
 
 else {

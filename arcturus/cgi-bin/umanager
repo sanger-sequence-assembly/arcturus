@@ -14,7 +14,7 @@ use GateKeeper;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1, writeAccess => 1});
 
 my $config     = $GateKeeper->configHandle();
 
@@ -387,7 +387,7 @@ elsif ($option eq "pwupdate") {
         my $noGui = 1; $noGui = 0 if $cgi->parameter('GUI',0); 
         my %usercodes  = (user => $userid, mask => 6);
         my %returnpath = (returnPath => '/pwupdate/getdata', noGUI => $noGui); 
-        if (($userid eq 'myself' && !$GateKeeper->authorize(6, \%returnpath)) 
+        if (($userid eq 'myself' && !$GateKeeper->authorize(6,\%returnpath)) 
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercodes, \%returnpath))) {
             $error = $GateKeeper->{error};
         }            
@@ -712,7 +712,7 @@ elsif ($option eq "authorize") {
         undef my $dtaccess;
         if ($tbrange && $tbrange ne 'NONE') {
             $tbrange =~ s/\s*$//; # chop trailing blanks
-            my @tables = split /\s*[\,\;\|\&]\s*/,$tbrange;
+            my @tables = split /\s*[\s\,\;\|\&]\s*/,$tbrange;
             my $inventory = $organisms->spawn('INVENTORY','arcturus',0,1);
             my $list = $inventory->htmlTableColumn('tablename',\%htcoptions,'domain','o');
             my $problem = 0;

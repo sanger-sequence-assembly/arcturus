@@ -376,8 +376,6 @@ $cgi->PrintVariables(1); # either assemblyname or assemblynumber is given
 
 ################################################################################
 
-# $organisms->historyUpdate($userid,0,0);
-
 $page->form(0);
 $page->flush();
 $GateKeeper->disconnect;

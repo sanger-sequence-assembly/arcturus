@@ -14,7 +14,7 @@ use GateKeeper;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI => 1, writeAccess => 1});
 
 my $cgi        = $GateKeeper->cgiHandle();
 
@@ -41,8 +41,6 @@ my $getMenu  = "$thisScript/arcturus/getmenu";
 
 my $open = $organisms->do("use arcturus"); # select the default common database
 $database = 'inaccessible' if (!$open); # results in error status and exit
-
-
 
 ###############################################################################
 # actions on the sequence and cloning vector tables

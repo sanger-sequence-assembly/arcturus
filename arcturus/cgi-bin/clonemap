@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl -w
 
 #############################################################################
-# Upload Contigs into ARCTURUS database
+# Upload Clonemap into ARCTURUS database
 #############################################################################
 
 use strict;
@@ -20,7 +20,7 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql');
+my $GateKeeper = new GateKeeper('mysql',{writeAccess => 1});
 
 my $config     = $GateKeeper->configHandle();
 

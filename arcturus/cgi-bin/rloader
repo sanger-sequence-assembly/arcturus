@@ -26,7 +26,7 @@ use PathogenRepository;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my %options = (eraiseMySQL => 1, errorToNull => 0);
+my %options = (eraiseMySQL => 1, errorToNull => 0, writeAccess => 1);
 my $GateKeeper = GateKeeper->new('mysql',\%options);
 
 my ($cgi, $void, $database, $option, $origin, $session);
@@ -657,7 +657,7 @@ if ($logON || !$origin) {
             foreach my $key (keys (%dbfiles)) {
                 push @pendingfiles, $key;
             }
-print "SCHEMA $SCHEMA, PROJECT $PROJECT ${break}pending files @pendingfiles $break";
+print "SCHEMA $SCHEMA, PROJECT $PROJECT ${break}"; # print "pending files @pendingfiles $break";
 	    my $success = $reader->fetchOracleData($SCHEMA,$PROJECT,\@pendingfiles);
 print "success = $success $break";
             undef @pendingfiles if !$success; # protection, forcing controlled exit
