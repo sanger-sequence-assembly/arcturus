@@ -292,7 +292,7 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $read_attributes = "readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
+    my $read_attributes = "read_id,readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
 
     my $query = "select $read_attributes,TEMPLATE.name as template,TEMPLATE.ligation_id 
                  from READS left join TEMPLATE using (template_id) 
@@ -302,14 +302,14 @@ sub getReadByID {
 
     $sth->execute($readid);
 
-    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,
-	$template,$ligation_id) = $sth->fetchrow_array();
+    my ($read_id,$readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id) = $sth->fetchrow_array();
 
     $sth->finish();
 
     if (defined($readname)) {
 	my $read = new Read();
 
+        $read->setReadID($read_id);
 	$read->setReadName($readname);
 
 	$read->setAspedDate($asped);
@@ -339,9 +339,20 @@ sub getReadByID {
 
 	$read->setInsertSize($insertsize);
 
+	my $clone = &dictionaryLookup($this->{Dictionary}->{clone},
+			              $ligation_id);
+
+	$read->setClone($clone);
+
+        $read->setLowQualityLeft($lqleft);
+
+        $read->setLowQualityRight($lqright);
+
 	$query = "select svector_id,svleft,svright from SEQVEC where read_id=?";
 
 	$sth = $dbh->prepare_cached($query);
+
+        $sth->execute($readid);
 
 	while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
 	    my $svector = &dictionaryLookup($this->{Dictionary}->{svector},
@@ -355,6 +366,8 @@ sub getReadByID {
 	$query = "select cvector_id,cvleft,cvright from CLONEVEC where read_id=?";
 
 	$sth = $dbh->prepare_cached($query);
+
+        $sth->execute($readid);
 
 	while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
 	    my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},
@@ -486,9 +499,9 @@ sub getReadsForContigID{
 
 	my $read = new Read();
 
-	$this->processReadData($hashref);
+#	$this->processReadData($hashref);
 
-	$read->importData($hashref);
+#	$read->importData($hashref);
 
 	$read->setArcturusDatabase($this);
 

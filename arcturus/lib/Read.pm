@@ -575,11 +575,12 @@ sub writeBaseQuality {
 
     if (defined($quality)) {
 	print $FILE "\n$marker$this->{readname}\n";
-# output in lines of 24 numbers
+# output in lines of 25 numbers
 	my @bq = @{$quality};
 	while (my $n = scalar(@bq)) {
-	    print $FILE join(' ',@bq[0..24]),"\n";
-	    @bq = @bq[25..$n];
+            my $m = ($n > 24) ? 24 : $n-1;
+	    print $FILE join(' ',@bq[0..$m]),"\n";
+	    @bq = @bq[25..($n-1)];
 	}
     }
 }
