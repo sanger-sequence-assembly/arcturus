@@ -23,7 +23,8 @@ use ReadsReader;
 # unbuffered output
 ##############################################################################
 
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+#open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+open(STDERR,">&/dev/null");
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
@@ -190,10 +191,12 @@ if ($cgi) {
         else {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
-#print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
-                $config{RDD} = `$BADGERDIR/pfind -q $database > /dev/null 2>&1`;
-#              my $repository = new PathogenRepository;
-#              $config{RDD} = $repository->getAssemblyDirectory($database); 
+print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
+                $config{RDD} = `$BADGERDIR/pfind -q $database`; 
+print "RDD:  $config{RDD} <br>";
+               my $repository = new PathogenRepository;
+               $config{RDD} = $repository->getAssemblyDirectory($database); 
+print "RDD:  $config{RDD} <br>";
              }
     # open assembly database; abort if no assemblies defined
             $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
