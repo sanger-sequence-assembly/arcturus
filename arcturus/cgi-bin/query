@@ -82,7 +82,7 @@ elsif ($action eq 'preselect') {
 elsif ($action eq 'overview' && $database eq 'arcturus') {
 
     $inventory->autoVivify('arcturus',1);
-    my $instances = $inventory->findInstanceOf(0);
+    my $instances = $inventory->getInstanceOf(0);
 
     $page->partition(2);
     $page->sectionheader("ARCTURUS assembly-tracking database",3,0);
@@ -134,7 +134,7 @@ elsif ($action eq 'overview') {
     my $READS   = $organisms->spawn("READS"  ,$database,0,0);
     my $PENDING = $organisms->spawn("PENDING",$database,0,0);
     my $CONTIGS = $organisms->spawn("CONTIGS",$database,0,0);
-    my $instances = $DMODEL->findInstanceOf(0);
+    my $instances = $DMODEL->getInstanceOf(0);
 
     undef my $target;
 

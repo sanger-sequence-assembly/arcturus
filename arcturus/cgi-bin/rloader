@@ -1,4 +1,5 @@
-#!/usr/local/bin/perl 
+#!/usr/local/bin/perl5.6.1 -d:SmallProf
+#!/usr/local/bin/perl -d:SmallProf
 
 #############################################################################
 #
@@ -13,6 +14,7 @@ BEGIN {
    $ENV{ORACLE_SID}  = 'inform';
    $ENV{TWO_TASK}    = 'sids';
    $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
+   $ENV{PERL5LIB}   .= ':/nfs/pathsoft/arcturus/dev/lib';
    $ENV{PATH}       .= ':/usr/local/badger/bin';
 #   use lib '/nfs/pathsoft/arcturus/dev/lib';
 }
@@ -77,10 +79,10 @@ $config{LGF} = "$arc_log_dir/rloader.DATABASE.log"; # default logfile
 my ($LOADPERRUN,$GELMINDDIR,$ROOTDATADIR,$SCFREADDIR,$SCHEMA,$PROJECT,$LOGFILE);
 my ($FNF, $GBF, @SEARCH_DIR, @excludekeys);
 
-undef my ($action, $page, $confirm);
-undef my ($userid  , $project , $assembly, $assemblyname, $assemblynmbr);
-undef my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update, $pending);
-undef my ($arc_logfile, $logON, $TEST, $abortfile);
+my ($action, $page, $confirm);
+my ($userid  , $project , $assembly, $assemblyname, $assemblynmbr);
+my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update, $pending);
+my ($arc_logfile, $logON, $TEST, $abortfile);
 $abortfile = $GateKeeper->lookup('abortfile');
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
@@ -802,7 +804,7 @@ $LOADPERRUN =~ s/\W/x/g;
             $error =~ s/\n/$brtag/g;
             print STDOUT "ERROR: $ofont$error$efont$brtag";
             print LOG "$error\n" if ($logON);
-print $reader->list($origin,1);
+#print $reader->list($origin,1);
             last if ($error =~ /Invalid/);
             next;
         }
@@ -847,7 +849,7 @@ print $reader->list($origin,1);
                 $error =~ s/\n/$brtag/g;
                 print STDOUT "ERROR: $ofont$error$efont$brtag";
                 print LOG "$error\n" if ($logON);
-print $reader->list($origin,1);
+#print $reader->list($origin,1);
                 $errors = 1;
             }
             else {
