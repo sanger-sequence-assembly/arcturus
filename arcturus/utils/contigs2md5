@@ -27,6 +27,12 @@ while ($nextword = shift @ARGV) {
 
     $verbose = 1 if ($nextword eq '-verbose');
 
+    $update = 1 if ($nextword eq '-update');
+
+    $limit = shift @ARGV if ($nextword eq '-limit');
+
+    $nullhash = 1 if ($nextword eq '-nullhash');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -68,6 +74,9 @@ $query = "select contig_id,length,nreads" .
     " from CONTIGS".
     " where length >= $minlen";
 
+$query .= " and readnamehash is not null" if defined($nullhash);
+$query .= " limit $limit" if defined($limit);
+
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
@@ -81,6 +90,12 @@ $readquery = "select distinct(READS.readname)" .
 
 $readsth = $dbh->prepare($readquery);
 &db_die("prepare($readquery) failed");
+
+if ($update) {
+    $insertquery = "update CONTIGS set readnamehash=? where contig_id=?";
+    $insert = $dbh->prepare($insertquery);
+    &db_die("prepare($insertquery) failed");
+}
 
 $totalcontigs = 0;
 $totalreads = 0;
@@ -100,12 +115,18 @@ while(@ary = $sth->fetchrow_array()) {
     $totalcontigs += 1;
     $totalreads += scalar(@readlist);
 
-    $hash = md5_hex(@readlist);
-
-    printf "%8d  %8d  %8d  %s\n", $contigid, $contiglength, $nreads, $hash;
+    if ($update) {
+	$hash = md5(@readlist);
+	$insert->execute($hash, $contigid);
+    } else {
+	$hash = md5_hex(@readlist);
+	printf "%8d  %8d  %8d  %s\n", $contigid, $contiglength, $nreads, $hash;
+    }
 }
 
 $readsth->finish();
+
+$insert->finish();
 
 $sth->finish();
 
@@ -131,4 +152,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+    print STDERR "    -update\t\tInsert hashes into table\n";
+    print STDERR "    -nullhash\t\tOnly process contigs whose hash is null\n";
+    print STDERR "    -limit\t\tSpecify maxmum number of contigs to process\n";
 }
