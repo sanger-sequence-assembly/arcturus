@@ -87,13 +87,11 @@ if(defined($database) && defined($table)) {
 
 	@colnames = @{$sth->{NAME}};
 
-	$ncols = scalar(@colnames);
-
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
 	print "<TR BGCOLOR=\"#FFCC00\">\n";
 
-	while ($hdr = shift @colnames) {
+	foreach $hdr (@colnames) {
 	    print "<TH ALIGN=\"LEFT\">$hdr</TH>\n";
 	}
 
@@ -101,14 +99,8 @@ if(defined($database) && defined($table)) {
 
 	while (@ary = $sth->fetchrow_array()) {
 	    print "<TR>\n";
-	    $col = 0;
-	    while ($item = shift @ary) {
-		print "<TD>$item</TD>\n";
-		$col++;
-	    }
-	    while ($col < $ncols) {
-		print "<TD>&nbsp;</TD>\n";
-		$col++;
+	    foreach $item (@ary) {
+		print "<TD>", (defined($item) ? $item : "&nbsp;"), "</TD>\n";
 	    }
 	    print "</TR>\n";
 	}
