@@ -126,10 +126,10 @@ sub create_organism {
         &record ($historyTable,$userid,'READS');
       }
 
-      if (!$target || $target eq 'DNA') {    
-        push @tables, 'DNA';
-        &create_DNA ($dbh, $list);
-        &record ($historyTable,$userid,'DNA');
+      if (!$target || $target eq 'SEQUENCE') {    
+        push @tables, 'SEQUENCE';
+        &create_SEQUENCE ($dbh, $list);
+        &record ($historyTable,$userid,'SEQUENCE');
       }
 
       if (!$target || $target eq 'TEMPLATE') {    
@@ -138,10 +138,10 @@ sub create_organism {
         &record ($historyTable,$userid,'TEMPLATE');
       }
 
-      if (!$target || $target eq 'COMMENT') {    
-        push @tables, 'COMMENT';
-        &create_COMMENT ($dbh, $list);
-        &record ($historyTable,$userid,'COMMENT');
+      if (!$target || $target eq 'READCOMMENT') {    
+        push @tables, 'READCOMMENT';
+        &create_READCOMMENT ($dbh, $list);
+        &record ($historyTable,$userid,'READCOMMENT');
       }
     }
 
@@ -755,7 +755,7 @@ sub create_NEWREADS {
 
 }
 
-#---
+#-----------------------------------------------------------------------------------------------
 
 sub create_SEQUENCE {
     my ($dbh, $list) = @_;
@@ -771,7 +771,7 @@ sub create_SEQUENCE {
     print STDOUT "... DONE!\n" if ($list);
 }
 
-#-----------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------
 
 sub create_TEMPLATE {
     my ($dbh, $list) = @_;
@@ -801,7 +801,6 @@ sub create_READCOMMENT {
 			     
     print STDOUT "... DONE!\n" if ($list);
 }
-
 
 #*********************************************************************************************************
 
