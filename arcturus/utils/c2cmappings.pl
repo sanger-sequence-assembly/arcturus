@@ -17,6 +17,8 @@ my $outfile;
 my $loose = 0;
 my $align = 0;
 my $terse = 0;
+my $newmappingtable;
+my $newsegmenttable;
 my %seqdb;
 
 while ($nextword = shift @ARGV) {
@@ -28,6 +30,10 @@ while ($nextword = shift @ARGV) {
     $loose    = 1 if ($nextword eq '-loose');
     $align    = 1 if ($nextword eq '-align');
     $terse    = 1 if ($nextword eq '-terse');
+
+    if ($nextword eq '-saveto') {
+	($newmappingtable,$newsegmenttable) = split(/,/, shift @ARGV);
+    }
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -50,7 +56,7 @@ $query .= " WHERE contig_id IN ($contigids)" if defined($contigids);
 my $contig_stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
-$query = "SELECT parent_id,cstart,cfinish,direction FROM C2CMAPPING WHERE contig_id = ? ORDER BY cstart ASC";
+$query = "SELECT age,parent_id,cstart,cfinish,direction FROM C2CMAPPING WHERE contig_id = ? ORDER BY cstart ASC";
 
 my $parent_stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -77,6 +83,26 @@ $query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? AND leng
 
 my $seg_stmt =  $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
+
+my $newmapping_stmt;
+my $newsegment_stmt;
+my $saving = 0;
+
+if (defined($newmappingtable) && defined($newsegmenttable)) {
+    $query = "INSERT INTO $newmappingtable(age,contig_id,parent_id,cstart,cfinish,direction)" .
+	" VALUES(?,?,?,?,?,?)";
+
+    $newmapping_stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    $query = "INSERT INTO $newsegmenttable(mapping_id, cstart, pstart, length)" .
+	" VALUES(?,?,?,?)";
+
+    $newsegment_stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    $saving = 1;
+}
 
 my ($logfh, $outfh);
 
@@ -128,8 +154,8 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
 
     $parent_stmt->execute($contigid);
 
-    while (my ($parentid, $cstart, $cfinish, $direction) = $parent_stmt->fetchrow_array()) {
-	print $logfh "Parent contig: $parentid";
+    while (my ($age, $parentid, $cstart, $cfinish, $direction) = $parent_stmt->fetchrow_array()) {
+	print $logfh "Parent contig: $parentid (age $age)";
 	if (defined($cstart) && defined($cfinish) && defined($direction)) {
 	    print $logfh "      Mapping: $cstart $cfinish $direction\n";
 	} else {
@@ -178,6 +204,39 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
 	print $outfh "CONTIG $contigid PARENT $parentid SENSE $sense\n";
 	&displaySegments($segments, $outfh);
 
+	if ($saving) {
+	    my $newcstart = $segments->[0]->[0];
+	    my $nsegs = scalar(@{$segments});
+	    my $newcfinish = $segments->[$nsegs - 1]->[1];
+
+	    my $rc = $newmapping_stmt->execute($age, $contigid, $parentid,
+					       $newcstart, $newcfinish, $sense);
+
+	    if (defined($rc) && ($rc == 1)) {
+		my $newmappingid = $dbh->{'mysql_insertid'};
+
+		$newmapping_stmt->finish();
+
+		foreach my $newsegment (@{$segments}) {
+		    my $newcstart = $newsegment->[0];
+		    my $newpstart = $newsegment->[2];
+		    my $newlength = $newsegment->[1] - $newcstart;
+
+		    my $rc2 = $newsegment_stmt->execute($newmappingid, $newcstart, $newpstart, $newlength);
+
+		    if (!defined($rc2) || ($rc2 != 1)) {
+			print $logfh "*** ERROR SAVING TO $newsegmenttable (" .
+			    "$newmappingid, $newcstart, $newpstart, $newlength): ",
+			    $DBI::errstr, "\n";
+		    }
+		}
+	    } else {
+		print $logfh "*** ERROR SAVING TO $newmappingtable (" .
+		    "$age, $contigid, $parentid,$newcstart, $newcfinish, $sense): ",
+		    $DBI::errstr, "\n";
+	    }
+	}
+
 	if ($align) {
 	    my $parentseq = $seqdb{$parentid};
 
@@ -223,6 +282,7 @@ sub showUsage {
     print STDERR "-loose\t\tAllow merging of non-contiguous contig-to-contig segments\n";
     print STDERR "-align\t\tCalculate and display contig-to-contig sequence alignments\n";
     print STDERR "-terse\t\tOnly display discrepant contig-to-contig alignments\n";
+    print STDERR "-saveto\t\tComma-separated names of mapping and segment tables to save data\n";
 }
 
 sub getReadToContigMappings {
