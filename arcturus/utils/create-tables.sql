@@ -1,8 +1,4 @@
-# MySQL dump 8.16
-#
-# Host: pcs3    Database: SCHISTO
-#--------------------------------------------------------
-# Server version	4.0.12-standard-log
+# Table creation script for an Arcturus database
 
 #
 # Table structure for table 'ASSEMBLY'
@@ -44,18 +40,6 @@ CREATE TABLE BASECALLER (
   name varchar(32) NOT NULL default '',
   counted int(10) unsigned default '0',
   PRIMARY KEY  (basecaller)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'CHEMISTRY'
-#
-
-CREATE TABLE CHEMISTRY (
-  chemistry smallint(5) unsigned NOT NULL auto_increment,
-  identifier varchar(32) NOT NULL default '',
-  chemtype char(1) default NULL,
-  counted int(10) unsigned default '0',
-  PRIMARY KEY  (chemistry)
 ) TYPE=MyISAM;
 
 #
@@ -190,82 +174,11 @@ CREATE TABLE GAP4TAGS (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'GENE2CONTIG'
-#
-
-CREATE TABLE GENE2CONTIG (
-  tagname varchar(24) binary NOT NULL default '',
-  tagstatus enum('F','P','U') default 'U',
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  tcp_start int(10) unsigned NOT NULL default '0',
-  tcp_final int(10) unsigned NOT NULL default '0',
-  orientation enum('F','R','U') default 'U',
-  cid_first mediumint(8) unsigned NOT NULL default '0',
-  updated enum('T','F','D') default 'T',
-  attributes blob,
-  PRIMARY KEY  (tagname)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'HAPPYMAP'
-#
-
-CREATE TABLE HAPPYMAP (
-  tag_id mediumint(8) unsigned NOT NULL default '0',
-  version tinyint(3) unsigned NOT NULL default '0',
-  position float default NULL,
-  assembly tinyint(3) unsigned NOT NULL default '0',
-  linkage smallint(5) unsigned NOT NULL default '0',
-  quality float default NULL
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'HAPPYTAGS'
-#
-
-CREATE TABLE HAPPYTAGS (
-  tag_id mediumint(8) unsigned NOT NULL auto_increment,
-  tagname varchar(6) NOT NULL default '',
-  identifier varchar(32) NOT NULL default '',
-  sequence blob NOT NULL,
-  scompress tinyint(3) unsigned NOT NULL default '0',
-  slength smallint(5) unsigned NOT NULL default '0',
-  position float default NULL,
-  assembly tinyint(3) unsigned NOT NULL default '0',
-  comment tinyblob,
-  PRIMARY KEY  (tag_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'HISTORY'
-#
-
-CREATE TABLE HISTORY (
-  tablename varchar(20) NOT NULL default '',
-  date datetime NOT NULL default '0000-00-00 00:00:00',
-  user varchar(20) NOT NULL default '',
-  action varchar(20) NOT NULL default '',
-  command text NOT NULL
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'HISTORYSCHISTO'
-#
-
-CREATE TABLE HISTORYSCHISTO (
-  tablename varchar(20) NOT NULL default '',
-  created date NOT NULL default '0000-00-00',
-  lastuser varchar(8) NOT NULL default '',
-  lastouch datetime NOT NULL default '0000-00-00 00:00:00',
-  action varchar(8) NOT NULL default ''
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'LIGATIONS'
 #
 
 CREATE TABLE LIGATIONS (
-  ligation smallint(5) unsigned NOT NULL auto_increment,
+  ligation_id smallint(5) unsigned NOT NULL auto_increment,
   identifier varchar(20) NOT NULL default '',
   clone varchar(20) NOT NULL default '',
   origin char(1) default NULL,
@@ -273,7 +186,7 @@ CREATE TABLE LIGATIONS (
   sihigh mediumint(8) unsigned default NULL,
   svector smallint(6) NOT NULL default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (ligation)
+  PRIMARY KEY  (ligation_id)
 ) TYPE=MyISAM;
 
 #
@@ -288,29 +201,6 @@ CREATE TABLE MAPPING (
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
   KEY read_id (read_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'PENDING'
-#
-
-CREATE TABLE PENDING (
-  record int(11) NOT NULL auto_increment,
-  readname varchar(32) NOT NULL default '',
-  assembly tinyint(3) unsigned NOT NULL default '0',
-  PRIMARY KEY  (record)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'PRIMERTYPES'
-#
-
-CREATE TABLE PRIMERTYPES (
-  primer smallint(6) NOT NULL auto_increment,
-  type enum('universal','custom') default NULL,
-  description varchar(48) NOT NULL default '',
-  counted int(10) unsigned default '0',
-  PRIMARY KEY  (primer)
 ) TYPE=MyISAM;
 
 #
@@ -376,12 +266,11 @@ CREATE TABLE READPAIRS (
 CREATE TABLE READS (
   read_id mediumint(8) unsigned NOT NULL auto_increment,
   readname char(32) binary default NULL,
-  date date NOT NULL default '0000-00-00',
-  ligation smallint(5) unsigned NOT NULL default '0',
+  asped date NOT NULL default '0000-00-00',
   clone smallint(5) unsigned default NULL,
-  strand char(1) default NULL,
-  primer tinyint(3) unsigned default '0',
-  chemistry tinyint(3) unsigned default NULL,
+  strand enum('Forward', 'Reverse') default NULL,
+  primer enum('Universal_primer', 'Custom', 'Unknown_primer') default NULL,
+  chemistry enum('Dye_terminator', 'Dye_primer') default NULL,
   basecaller tinyint(3) unsigned default NULL,
   direction enum('?','+','-') default '?',
   slength smallint(5) unsigned NOT NULL default '0',
@@ -519,19 +408,6 @@ CREATE TABLE STATUS (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'STRANDS'
-#
-
-CREATE TABLE STRANDS (
-  strand char(1) NOT NULL default '',
-  strands enum('1','2') default NULL,
-  direction enum('forward','reverse','unknown') default 'unknown',
-  description varchar(48) NOT NULL default '',
-  counted int(10) unsigned default '0',
-  PRIMARY KEY  (strand)
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'STSTAGS'
 #
 
@@ -564,8 +440,9 @@ CREATE TABLE TAGS2CONTIG (
 #
 
 CREATE TABLE TEMPLATE (
-  name char(24) binary default NULL,
   template_id mediumint(8) unsigned NOT NULL auto_increment,
+  name char(24) binary default NULL,
+  ligation_id smallint unsigned NOT NULL,
   PRIMARY KEY  (template_id)
 ) TYPE=MyISAM;
 
