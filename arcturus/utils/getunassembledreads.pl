@@ -20,6 +20,7 @@ my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
 my $blocksize = 5000;
+my $selectallreads = 0;
 
 
 my $outputFile;            # default STDOUT
@@ -50,6 +51,8 @@ while (my $nextword = shift @ARGV) {
     $blocksize        = shift @ARGV  if ($nextword eq '-blocksize');
 
     $nosingleton      = 1            if ($nextword eq '-nosingleton');
+
+    $selectallreads   = 1            if ($nextword eq '-all');
 
     $logLevel         = 0            if ($nextword eq '-verbose'); 
 
@@ -91,8 +94,9 @@ my %options;
 $options{-nosingleton} = 1 if $nosingleton;
 $options{-aspedbefore} = $aspedbefore if $aspedbefore;
 $options{-aspedafter} = $aspedafter if $aspedafter;
+$options{-all} = 1 if $selectallreads;
 
-my $readids = $adb->getUnassembledReads(%options);
+my $readids = $adb->getIDsForUnassembledReads(%options);
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
@@ -153,6 +157,7 @@ sub showUsage {
     print STDERR "-caf\t\tcaf file name for output\n";
     print STDERR "-aspedbefore\tdate\n";
     print STDERR "-aspedafter\tdate\n";
+    print STDERR "-all\t\t(no value) use all reads (possibly with date constraint)\n";
     print STDERR "-nosingleton\tdon't include reads from single-read".
                  " contigs (default include)\n";
     print STDERR "-blocksize\t(default 50000) for blocked execution\n";
