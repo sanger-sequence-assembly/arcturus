@@ -563,9 +563,9 @@ sub addSequenceMetaDataForRead {
 
     return unless $read->getVersion();
 
-    my $query = "select startinseq,startinscf,length from ALIGN2SCF where seq_id=?";
+    $query = "select startinseq,startinscf,length from ALIGN2SCF where seq_id=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare_cached($query);
 
     $sth->execute($seq_id) || &queryFailed($query);
 
