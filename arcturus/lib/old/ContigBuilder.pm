@@ -639,7 +639,7 @@ sub dump {
 	    }
             else {
                 $status->{diagnosis} .= "! Invalid mapping for read $readname in contig ";
-                $status->{diagnosis} .= "cnames->[0]: @$readMap$break";
+                $status->{diagnosis} .= "$cnames->[0]: @$readMap$break";
                 $status->{errors}++;
                 $complete = 0;
             }
