@@ -334,24 +334,24 @@ sub getReadsByID {
 
     $sth->execute();
 
-    my @Reads;
+    my @reads;
 
     while (my $hashref = $sth->fetchrow_hashref()) {
 
-	my $Read = new Read();
+	my $read = new Read();
 
 	$this->processReadData($hashref);
 
-	$Read->importData($hashref);
+	$read->importData($hashref);
 
-	$Read->setArcturusDatabase($this);
+	$read->setArcturusDatabase($this);
 
-        push @Reads, $Read;
+        push @reads, $read;
     }
 
     $sth->finish();
 
-    return \@Reads;
+    return \@reads;
 }
 
 sub getReadsForContigID{
@@ -373,34 +373,32 @@ sub getReadsForContigID{
 
     $sth->execute($cid);
 
-    my @Reads;
+    my @reads;
 
     while (my $hashref = $sth->fetchrow_hashref()) {
 
-	my $Read = new Read();
+	my $read = new Read();
 
 	$this->processReadData($hashref);
 
-	$Read->importData($hashref);
+	$read->importData($hashref);
 
-	$Read->setArcturusDatabase($this);
+	$read->setArcturusDatabase($this);
 
-        $Read->addToInventory;
-
-        push @Reads, $Read;
+        push @reads, $read;
     }
 
     $sth->finish();
 
-    return \@Reads;
+    return \@reads;
 }
 
 sub getSequenceForReads {
 # takes an array of Read instances and puts the DNA and quality sequence in
     my $this  = shift;
-    my $Reads = shift; # array of Reads objects
+    my $reads = shift; # array of Reads objects
 
-    if (ref($Reads) ne 'ARRAY' or ref($Reads->[0]) ne 'Read') {
+    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
         print STDERR "getSequenceForReads expects an array of Read objects\n";
         return undef;
     }
@@ -411,8 +409,8 @@ sub getSequenceForReads {
 
     my %rids;
     my $rids = \%rids;
-    foreach my $Read (@$Reads) {
-        $rids->{$Read->getReadID} = $Read;
+    foreach my $read (@$reads) {
+        $rids->{$read->getReadID} = $read;
     }
 
 # pull the data from the SEQUENCE table in bulk
@@ -430,7 +428,7 @@ sub getSequenceForReads {
 
 	my ($read_id, $sequence, $quality) = @ary;
 
-        if (my $Read = $rids->{$read_id}) {
+        if (my $read = $rids->{$read_id}) {
 
             $sequence = uncompress($sequence) if defined($sequence);
 
@@ -439,8 +437,8 @@ sub getSequenceForReads {
 	        my @qualarray = unpack("c*", $quality);
 	        $quality = [@qualarray];
             }
-            $Read->setSequence($sequence);
-            $Read->setQuality($quality);
+            $read->setSequence($sequence);
+            $read->setQuality($quality);
         }
     }
 
@@ -691,31 +689,52 @@ sub flushReadsToPending {
 sub putRead {
 # insert read into the database
     my $this = shift;
-    my $Read = shift || return;
+    my $read = shift || return;
     my $options = shift;
 
-    if (ref($Read) ne 'Read') {
+    if (ref($read) ne 'Read') {
         print STDERR "putRead expects an instance of the Read class\n";
         return undef;
     }
 
 # a) test consistency and completeness
 
-    my ($rc, $errmsg) = $Read->checkReadForCompleteness($options);
-#    my ($rc, $errmsg) = $this->checkReadForCompleteness($Read, $options);
+    my ($rc, $errmsg) = $this->checkReadForCompleteness($read, $options);
     return (0, "failed completeness check: $errmsg") unless $rc;
 
-    ($rc, $errmsg) = $this->checkReadForConsistency($Read);
+    ($rc, $errmsg) = $this->checkReadForConsistency($read);
     return (0, "failed consistency check: $errmsg") unless $rc;
 
 # b) encode dictionary item; special case: template & ligation
 
-    my $template_id = $this->getTemplateID($Read);
+    my ($sil,$sih) = @{$read->getInsertSize()}; 
 
+    my $ligation_id = $this->getDictionaryItemID (
+                      'ligation', $read->getLigation(),
+                      'ligation_id','LIGATIONS','identifier',
+		       {silow => $sil, sihigh => $sih});
+    return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
+
+    my $template_id = $this->getDictionaryItemID (
+                      'template', $read->getTemplate(),
+                      'template_id','TEMPLATE','name',
+                       {ligation_id => $ligation_id});                  
+# my $template_id = $this->getTemplateID($read);
     return (0, "failed to retrieve template_id") unless defined($template_id);
 
 # c) encode dictionary items basecaller, clone, status
 
+    my $basecaller  = $this->getDictionaryItemID (
+                      'basecaller', $read->getBaseCaller(),
+		      'basecaller','BASECALLER','name');
+
+    my $status      = $this->getDictionaryItemID (
+                      'status', $read->getStatus(),
+		      'status','STATUS','identifier');
+
+    my $clone       = $this->getDictionaryItemID (
+                      'clone',  $read->getClone(),
+		      'clone','CLONES','clonename');
 
 # d) insert Read meta data
 
@@ -723,12 +742,7 @@ sub putRead {
 
     return (0, "no database connection") unless defined($dbh);
 
-    my $readname = $Read->getReadName();
-
-    my $sequence = $Read->getSequence();
-
-    $sequence = compress($sequence);
-    my $basequality = compress(pack("c*", @{$Read->getQuality()}));
+    my $readname = $read->getReadName();
 
     my $query = "insert into" .
 	" READS(readname,asped,template_id,strand,chemistry,primer,slength,lqleft,lqright)" .
@@ -737,14 +751,14 @@ sub putRead {
     my $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readname,
-			$Read->getAspedDate(),
+			$read->getAspedDate(),
 			$template_id,
-			$Read->getStrand(),
-			$Read->getChemistry(),
-			$Read->getPrimer(),
-                        $Read->getSequenceLength(),
-			$Read->getLowQualityLeft(),
-			$Read->getLowQualityRight());
+			$read->getStrand(),
+			$read->getChemistry(),
+			$read->getPrimer(),
+                        $read->getSequenceLength(),
+			$read->getLowQualityLeft(),
+			$read->getLowQualityRight());
 
     return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
@@ -755,11 +769,17 @@ sub putRead {
 
 # insert sequence and base quality
 
+    my $sequence = compress($read->getSequence());
+
+    my $basequality = compress(pack("c*", @{$read->getQuality()}));
+
     $query = "insert into SEQUENCE(read_id,sequence,quality) VALUES(?,?,?)";
 
     $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readid, $sequence, $basequality);
+
+# shouldn't we undo the insert in READS? if it fails
 
     return (0, "failed to insert sequence and base-quality for $readname ($readid);" .
 	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
@@ -768,7 +788,7 @@ sub putRead {
 
 # insert sequencing vector data, if any
 
-    my $seqveclist = $Read->getSequencingVector();
+    my $seqveclist = $read->getSequencingVector();
 
     if (defined($seqveclist)) {
 	$query = "insert into SEQVEC(read_id,svector_id,begin,end) VALUES(?,?,?,?)";
@@ -779,7 +799,10 @@ sub putRead {
 
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
-	    my $seqvecid = $this->getSequencingVectorID($seqvec) || 0;
+	    my $seqvecid = $this->getDictionaryItemID(
+                           'svector', $seqvec,
+                           'svector_id','SEQUENCEVECTORS','name') || 0;
+# my $seqvecid = $this->getSequencingVectorID($seqvec) || 0;
 
 	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
 
@@ -792,7 +815,7 @@ sub putRead {
 
 # insert cloning vector data, if any
 
-    my $cloneveclist = $Read->getCloningVector();
+    my $cloneveclist = $read->getCloningVector();
 
     if (defined($cloneveclist)) {
 	$query = "insert into CLONEVEC(read_id,cvector_id,begin,end) VALUES(?,?,?,?)";
@@ -802,7 +825,10 @@ sub putRead {
 	foreach my $entry (@{$cloneveclist}) {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
 
-	    my $clonevecid = $this->getCloningVectorID($clonevec) || 0;
+	    my $clonevecid = $this->getDictionaryItemID(
+                             'cvector', $clonevec,
+                             'cvector_id','CLONINGVECTORS','name') || 0;
+# my $clonevecid = $this->getCloningVectorID($clonevec) || 0;
 
 	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
 
@@ -818,7 +844,6 @@ sub putRead {
     return (1, "OK");
 }
 
-# MOVED TO READ CLASS
 sub checkReadForCompleteness {
     my $this = shift;
     my $read = shift;
@@ -886,9 +911,9 @@ sub checkReadForConsistency {
 sub getTemplateID {
 # retrieve template ID from the dictionary tables 
     my $this = shift;
-    my $Read = shift; # instance of Read class
+    my $read = shift; # instance of Read class
 
-    my $template = $Read->getTemplate();
+    my $template = $read->getTemplate();
 
 # try the currently loaded dictionary table
 
@@ -923,7 +948,7 @@ sub getTemplateID {
 # not found in either the stored dictionary table or the database 
 # hence add the new entry with its ligation info to the database
 
-    my $ligation_id = $this->getLigationID($Read);
+    my $ligation_id = $this->getLigationID($read);
 
 # WHAT IF !$ligation_id
 
@@ -938,7 +963,7 @@ sub getTemplateID {
     } 
     elsif (defined($rc) && !shift) {
 # occurs when the ignore clause kicks in
-        $template_id = $this->getTemplateID($Read,1);
+        $template_id = $this->getTemplateID($read,1);
     }
     else {
 	undef $template_id;
@@ -1072,9 +1097,9 @@ sub getSequencingVectorID {
 
 sub getLigationID {
     my $this = shift;
-    my $Read = shift;
+    my $read = shift;
 
-    my $ligation = $Read->getLigation();
+    my $ligation = $read->getLigation();
 
     my $ligation_id = &dictionaryLookup($this->{LoadingDictionary}->{ligation},
 					$ligation);
@@ -1105,7 +1130,7 @@ sub getLigationID {
 
 # not found in database either, add new entry plus its insert-size
 
-    my ($silow, $sihigh) = @{$Read->getInsertSize()};
+    my ($silow, $sihigh) = @{$read->getInsertSize()};
 
     $query = "insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
 
@@ -1118,7 +1143,7 @@ sub getLigationID {
     }
     elsif (defined($rc) && !shift) {
 # occurs when the ignore clause kicks in
-        $ligation_id = $this->getLigationID($Read,1);
+        $ligation_id = $this->getLigationID($read,1);
     }
     else {
 	undef $ligation_id;
@@ -1141,6 +1166,8 @@ sub getDictionaryItemID {
     my $tableID     = shift; # e.g. 'template_id'
     my $tablename   = shift; # e.g. 'TEMPLATE'
     my $tablecolumn = shift; # e.g. 'name'
+# the next parameter can be a reference to a hash, required for some additions
+    my $hash = shift;
 
 # 1) test validity of input key
 
@@ -1154,7 +1181,7 @@ sub getDictionaryItemID {
 # 2) try to identify the key's value in the current dictionary table
 
     my $key_id = &dictionaryLookup($this->{LoadingDictionary}->{$key},
-                                    $keyvalue);
+                                   $keyvalue);
 
     return $key_id if defined($key_id);
 
@@ -1172,13 +1199,13 @@ sub getDictionaryItemID {
 
     my $query = "select $tableID from $tablename where $tablecolumn=?";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $ssth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($keyvalue);
+    my $rc = $ssth->execute($keyvalue);
 
-    ($key_id) = $sth->fetchrow_array();
+   ($key_id) = $ssth->fetchrow_array() if $rc;
 
-    $sth->finish();
+    $ssth->finish();
 
     if (defined($key_id)) {
 # the key value is found in the database table; update the dictionary hash
@@ -1189,49 +1216,55 @@ sub getDictionaryItemID {
 
 # 4) not found in database either, add new value to database table
 
+# we need to build the insert instruction
+
     my $insertkeys = $key;
     my $placeholders = "?";
     my @insertvals;
     push @insertvals,$keyvalue;
-    if (scalar(@_) && scalar(@_)%2) {
-# there is an odd number of extra input, should be even
-        die "Incomplete additional INSERT data for 'getDictionaryItemID'";
+# add additional data to the insert fields if provided with a hash
+    if ($hash && ref($hash) eq 'HASH') {
+        foreach $key (keys %$hash) {
+            $insertkeys .= ",".$key;
+            push @insertvals,$hash->{$key};
+            $placeholders .= ",?";
+        }
     }
-    while (scalar(@_)) {
-# add extra parameter(s) and value(s) when defined, e.g. ligation for template
-        $insertkeys .= ",".shift;
-        push @insertvals,shift;
-        $placeholders .= ",?";
-    } 
 
-    my $insert = "insert ignore into $tablename ($insertkeys) VALUES ($placeholders)";
+    my $insert = "insert ignore into $tablename 
+                  ($insertkeys) VALUES ($placeholders)";
 
-    $sth = $dbh->prepare_cached($insert);
+    my $isth = $dbh->prepare_cached($insert);
 
-    $rc = $sth->execute(@insertvals);
+    $rc = $isth->execute(@insertvals);
 
     if (defined($rc)) {
-	my $nrows = $sth->rows();
+	my $nrows = $isth->rows();
 	if ($nrows == 1) {
 # get the ID for the newly added item
 	    $key_id = $dbh->{'mysql_insertid'};
-# and store the newly added value in the dictionary hash
-            &dictionaryInsert($this->{LoadingDictionary}->{$key},
-		              $keyvalue, $key_id);
 	}
         elsif ($nrows == 0) {
 	    # By an amazing coincidence, another read-loader
 	    # has inserted a record with the same identifer
 	    # between our SELECT and INSERT commands, so we
 	    # need to re-execute the SELECT.
-            $key_id = 0;
+            my $rc = $ssth->execute($keyvalue);
+
+           ($key_id) = $ssth->fetchrow_array();
+
+            $ssth->finish();
 	}
     } 
     else {
 	undef $key_id;
     }
 
-    $sth->finish();
+    $isth->finish();
+
+# store the newly added value in the dictionary hash
+    &dictionaryInsert($this->{LoadingDictionary}->{$key},
+	       $keyvalue, $key_id) if defined($key_id);
 
     return $key_id;
 }
@@ -1239,7 +1272,7 @@ sub getDictionaryItemID {
 sub updateRead {
 # update items for an existing read
     my $this = shift;
-    my $Read = shift || return;
+    my $read = shift || return;
 }
 
 sub pingRead {
@@ -1477,13 +1510,11 @@ sub getContig {
 
 # get the reads for this contig with their DNA sequences
 
-    Reads->clearInventory;
+    my $reads = $this->getReadsForContigID($Contig->getContigID); # array ref
 
-    my $Reads = $this->getReadsForContigID($Contig->getContigID); # an array ref
+    $this->putSequenceAndBaseQualityForReads($reads);
 
-    $this->putSequenceAndBaseQualityForReads($Reads);
-
-    $Contig->importReads($Reads);
+    $Contig->importReads($reads);
 
 # get mappings
 
@@ -1497,16 +1528,16 @@ sub getContig {
 # find the Read instance for read_id taken from Mapping
         my $readid = $Mapping->getReadID;
 # first test if there is such a Read
-        if ( !(my $Read = Read->fingerRead($readid)) ) {
+        if ( !(my $read = Read->fingerRead($readid)) ) {
             print STDERR "! Incomplete contig $key=$value : no read for mapping ".$readid;
         }
 # okay, now put the Mapping in and test if read and mapping correspond
-        elsif (!$Read->setMapping($Mapping)) {
+        elsif (!$read->setMapping($Mapping)) {
             print STDERR "! Inconsistent Read and Mapping instances for read ".$readid;
         }
         else {
 # okay, finally put the reference to the in the read in the mapping
-            $Mapping->setRead($Read);
+            $Mapping->setRead($read);
         }
     }
 
