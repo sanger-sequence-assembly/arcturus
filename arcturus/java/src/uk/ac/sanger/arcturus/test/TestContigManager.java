@@ -17,6 +17,7 @@ public class TestContigManager {
 	boolean fullSequence = Boolean.getBoolean("fullSequence");
 	boolean fullContig = Boolean.getBoolean("fullContig");
 	String logfile = System.getProperty("logfile");
+	boolean displayContig = Boolean.getBoolean("displayContig");
 
 	System.out.println("TestContigManager");
 	System.out.println("=================");
@@ -124,6 +125,9 @@ public class TestContigManager {
 				System.out.println("  UPDATED: " + contig.getUpdated());
 			    }
 			}
+
+			if (displayContig)
+			    dumpContig(System.out, contig);
 		    }
 		}
 		catch (NumberFormatException nfe) {
@@ -183,5 +187,59 @@ public class TestContigManager {
 	System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()/1024 + "/" + runtime.totalMemory()/1024);
 	System.out.println("************************************************");
 	System.out.println();
+    }
+
+    public static void dumpContig(PrintStream ps, Contig contig) {
+	ps.println(">>> CONTIG " + contig.getID() + "<<<");
+	ps.println("");
+	ps.println("Length:   " + contig.getLength());
+	ps.println("Reads:    " + contig.getReadCount());
+	ps.println("Updated:  " + contig.getUpdated());
+
+	Mapping[] mappings = contig.getMappings();
+
+	if (mappings != null) {
+	    ps.println();
+	    ps.println("Mappings:");
+	    ps.println();
+
+	    for (int imap = 0; imap < mappings.length; imap++) {
+		Mapping mapping = mappings[imap];
+
+		Sequence sequence = mapping.getSequence();
+		Read read = sequence.getRead();
+
+		boolean forward = mapping.isForward();
+
+		ps.println("#" + imap + ": seqid=" + sequence.getID() + ", readid=" + read.getID() + ", readname=" + read.getName());
+		ps.println("  Extent: " + mapping.getContigStart() + " to " + mapping.getContigFinish());
+		ps.println("  Sense:  " + (forward ? "Forward" : "Reverse"));
+
+		Segment[] segments = mapping.getSegments();
+
+		if (segments != null) {
+		    ps.println();
+		    ps.println("  Segments:");
+		    ps.println();
+
+		    for (int iseg = 0; iseg < segments.length; iseg++) {
+			Segment segment = segments[iseg];
+
+			int cstart = segment.getContigStart();
+			int rstart = segment.getReadStart();
+			int length = segment.getLength();
+
+			int cfinish = cstart + length - 1;
+			int rfinish = forward ? rstart + length - 1 : rstart - length + 1;
+
+			ps.println("    " + cstart + ".." + cfinish + " ---> " + rstart + ".." + rfinish);
+		    }
+		}
+
+		ps.println();
+	    }
+	}
+
+	ps.println(">>> ------------------------------------------------------------------ <<<");
     }
 }
