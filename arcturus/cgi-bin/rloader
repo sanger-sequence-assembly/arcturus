@@ -1,5 +1,4 @@
 #!/usr/local/bin/perl
-#!/usr/local/bin/perl5.6.1 -d:SmallProf
 
 #############################################################################
 #
@@ -66,13 +65,16 @@ $config{LPR} = $GateKeeper->lookup("LOADPERRUN");
 $config{FNF} = '';
 $config{GBF} = '';
 
-# all of these may be overwritten by 'attributes' data from ORGANISMS or ASSEMBLY 
+# all of the above may be overwritten by 'attributes' data from ORGANISMS or ASSEMBLY 
 
 my $arc_cgi_dir = $GateKeeper->lookup('ARC_CGI_DIR');
 my $arc_log_dir = $GateKeeper->lookup('ARC_LOG_DIR');
 my $arc_tmp_dir = $GateKeeper->lookup('ARC_TMP_DIR');
 my $db_manager  = $GateKeeper->lookup('db_manager'); 
 my $BADGERDIR   = $GateKeeper->lookup('BADGERDIR');
+
+my $signame = $GateKeeper->lookup('signature_name');
+my $sigmail = $GateKeeper->lookup('signature_mail');
 
 $config{LGF} = "$arc_log_dir/rloader.DATABASE.log"; # default logfile
 
@@ -156,7 +158,9 @@ if ($cgi) {
 
         $GateKeeper->cgiHeader(2); # return string HTML under CGI
         $page = $cgi->openPage('ARCTURUS READS loader');
-        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+        my $signame = $GateKeeper->lookup('signature_name');
+        my $sigmail = $GateKeeper->lookup('signature_mail');
+        $page->address($sigmail,$signame,2);
         $page->frameborder(100,15,'white',10);
         $page->center(1);
 
@@ -257,7 +261,7 @@ if ($cgi) {
     elsif ($option eq 'process') {
         $GateKeeper->cgiHeader(2); # return string HTML under CGI
         $page = $cgi->openPage('ARCTURUS READS loader');
-        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+        $page->address($sigmail,$signame,2);
         $page->frameborder(100,15,'white',10);
         $page->center(1);
 
@@ -387,7 +391,7 @@ else { # invoked from the command line (ejz/adh/pathdb only)
 print "testing II project $gbfilter \n";
             $config{PDD} = `$BADGERDIR/pfind -q $gbfilter > /dev/null 2>&1`;
         }
-        elsif (!$gbfilter) {
+        elsif (!defined($gbfilter)) {
             $gbfilter = '';
         }
     }
@@ -403,11 +407,11 @@ print "testing II project $gbfilter \n";
     print "\n\n\n";
     my $attributes;
     if ($database && $organisms->associate('dbasename',$database,'dbasename')) {
- # get the default attributes
+# get the default attributes
         if ($attributes = $organisms->unpackAttributes($database,'dbasename')) {
             print STDOUT "Database $database found; attributes retrieved\n";
             foreach my $item (keys %$attributes) {
- #               print STDOUT "item=$item attribute=$attributes->{$item}\n";
+# print STDOUT "item=$item attribute=$attributes->{$item}\n";
                 $config{$item} = $attributes->{$item}; # overrides defaults
             }
         }
@@ -418,12 +422,34 @@ print "testing II project $gbfilter \n";
     else {
         $GateKeeper->dropDead("Command line invocation aborted: Unknown database $database");
     }
+
+    $assemblynmbr = $gbfilter if ($source == 1);
+
+# open assembly database
+
     $arc_logfile = "$arc_log_dir/rloader.$database.log"; # default
+    $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
+    if ($attributes = $assembly->unpackAttributes($assemblynmbr,'assembly')) {
+
+        my @items = keys %$attributes;
+        if (@items) {
+            print STDOUT "Assembly $assemblynmbr found; attributes retrieved\n";
+            foreach my $item (keys %$attributes) {
+# print STDOUT "item=$item attribute=$attributes->{$item}\n";
+                $config{$item} = $attributes->{$item}; # overrides defaults
+                $logON = 1 if $config{LGF};
+            }
+        }
+        else {
+            print STDOUT "NO assembly attributes found\n";
+        }
+    }
+    else {
+        print STDOUT "Assembly $assemblynmbr found; NO attributes found\n";
+    }
  
     $ROOTDATADIR = $config{RUT};
     $ROOTDATADIR = $config{RDD} if $config{RDD};
-#    $ROOTDATADIR.= $gbfilter.'/' if ($source == 1);
-    $assemblynmbr = $gbfilter if ($source == 1);
     $ROOTDATADIR =~ s?//?/?g; # remove double slashes
     $GELMINDDIR  = $config{GMD};
     $SCFREADDIR  = $config{SCF};
@@ -438,16 +464,11 @@ print "testing II project $gbfilter \n";
         $TEST = 0;
     }
 
-# open assembly database
-
-    $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
-
  foreach my $key (keys %config) {
 #     print "key $key  $config{$key}\n";
  }
-    print "ROOTDATADIR = $ROOTDATADIR     log file $arc_logfile \n";
-#$GateKeeper->disconnect;
-# exit;
+    print "ROOTDATADIR = $ROOTDATADIR\nlog file $arc_logfile \n";
+#$GateKeeper->disconnect; exit;
 }
 
 #*********************************** HERE WE GO ********************************
@@ -479,7 +500,7 @@ foreach my $key (sort keys %$links) {
 }
 
 if ($logON || !$origin) {
-#    open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
+    open (LOG,">>$arc_logfile") or die "Failed to open $arc_logfile";
     print "LOG opened: $arc_logfile $brtag";
 } else {
     *LOG = *STDOUT;
@@ -620,14 +641,24 @@ print "success = $success $brtag";
             my @subdirs = `ls -d ${ROOTDATADIR}/*`;
 # print "sub @subdirs $brtag";
             my $counter = 0;
+            undef my $previous;
             foreach my $key (sort keys (%dbfiles)) {
                 my $filename = $ROOTDATADIR.$key;
                 $counter++; print STDOUT "trying to find file $key ($counter) $brtag" if ($counter%1000 == 0);
 # print "find 1 $key: try $filename$brtag";                     
                 if (-e $filename) {
                     push @pendingfiles, $filename;
-                } else {
-                # try the subdirs
+                } 
+                else {
+# try the subdirs; first try the previous one (to speed up)
+                    if ($previous) {
+                        $filename = "$previous/$key";
+# print "using previous $previous file $key found: $filename$brtag";
+                        if (-e $filename) {
+                            push @pendingfiles, $filename;
+                            next; 
+                        }
+                    }
                     my $found = 0;
                     foreach my $subdir (@subdirs) {
                         chomp $subdir;
@@ -636,12 +667,13 @@ print "success = $success $brtag";
                         if (-e $filename) {
                             push @pendingfiles, $filename;
 # print "file $key found: $filename$brtag";
+                            $previous = $subdir;
                             $found = 1; 
                             last;
 			}
                     }
                     next if ($found);
-                # still not found: try the search dirs
+# still not found: try the search dirs
                     foreach my $sdir (@SEARCH_DIR) {
                         $filename = $sdir.$key;
 # print "find 3 $key: SD '$sdir': try  $filename $brtag"; 
@@ -687,7 +719,8 @@ $LOADPERRUN =~ s/\W/x/g;
 # update the default settings of ORGANISMS and ASSEMBLY tables
 
     if ($update) {
-
+#print "update source $source<br>";
+#print "update GMD SCF RDD RUT<br>";
         $organisms->packAttribute ($database,'dbasename','attributes','anlast',$assemblyname);
         $organisms->packAttribute ($database,'dbasename','attributes','GMD',$GELMINDDIR);
         $organisms->packAttribute ($database,'dbasename','attributes','SCF',$SCFREADDIR);
@@ -700,10 +733,12 @@ $LOADPERRUN =~ s/\W/x/g;
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','PRO',$PROJECT);
         }
         else {
+#print "update RDD LGF LPR   assemblyname $assemblyname<br>";
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','RDD',$ROOTDATADIR);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LGF',$arc_logfile) if ($logON);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LPR',$LOADPERRUN);
             if ($source == 0) {
+#print "update GBF FNF<br>";
                 $assembly->packAttribute ($assemblyname,'assemblyname','attributes','GBF',$gbfilter);
                 $assembly->packAttribute ($assemblyname,'assemblyname','attributes','FNF',$fnfilter);
             }
