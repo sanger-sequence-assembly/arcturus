@@ -143,6 +143,8 @@ sub countTables {
 sub showDatabase {
     my ($cgi, $dbh, $instance, $database, $junk) = @_;
 
+    my $unknown = '<EM>(unknown)</EM>';
+
     my $scriptname = $cgi->script_name;
 
     my $scriptlink = "$scriptname?instance=$instance&database=$database";
@@ -161,6 +163,8 @@ sub showDatabase {
 	print "<TR BGCOLOR=\"#FFCC00\">\n";
 	print "<TH ALIGN=\"LEFT\">Table</TH>\n";
 	print "<TH ALIGN=\"LEFT\">Rows</TH>\n";
+	print "<TH ALIGN=\"LEFT\">Created</TH>\n";
+	print "<TH ALIGN=\"LEFT\">Updated</TH>\n";
 	print "</TR>\n";
 
 	$query = 'SHOW TABLES';
@@ -182,23 +186,19 @@ sub showDatabase {
 	&db_die("finish($query) failed");
 
 	foreach $tablename (@alltables) {
-	    $query = 'SELECT COUNT(*) FROM ' . $tablename;
+	    $metadata = &getTableMetadata($dbh, $tablename);
 
-	    $sth = $dbh->prepare($query);
-	    &db_die("prepare($query) failed");
+	    $rowcount = defined($metadata->{'Rows'}) ? $metadata->{'Rows'} : $unknown;
+	    $created  = defined($metadata->{'Create_time'}) ? $metadata->{'Create_time'} : $unknown;
+	    $updated  = defined($metadata->{'Update_time'}) ? $metadata->{'Update_time'} : $unknown;
 
-	    $sth->execute();
-	    &db_die("execute($query) failed");
-
-	    while (@ary = $sth->fetchrow_array()) {
-		($rowcount, $junk) = @ary;
-		$scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
-		printf "<TR>\n<TD>";
-		print "<A HREF=\"$scriptlink\">$tablename</A></TD><TD>$rowcount</TD>\n</TR>\n";
-	    }
-	    
-	    $sth->finish();
-	    &db_die("finish($query) failed");
+	    $scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
+	    printf "<TR>\n<TD>";
+	    print "<A HREF=\"$scriptlink\">$tablename</A></TD>\n";
+	    print "<TD>$rowcount</TD>\n";
+	    print "<TD>$created</TD>\n";
+	    print "<TD>$updated</TD>\n";
+	    print "</TR>\n";
 	}
     }
 
@@ -281,6 +281,33 @@ sub showTable {
 
 	print "</TABLE>\n";
     }
+}
+
+sub getTableMetadata {
+    my ($dbh, $table, $junk) = @_;
+
+    my $metadata = {};
+
+    my $query = "SHOW TABLE STATUS LIKE '$table'";
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    my @values = $sth->fetchrow_array();
+
+    my @colnames = @{$sth->{NAME}};
+
+    while (my $colname = shift @colnames) {
+	my $colvalue = shift @values;
+	$metadata->{$colname} = $colvalue;
+    }
+
+    $sth->finish();
+
+    return $metadata;
 }
 
 sub db_die {
