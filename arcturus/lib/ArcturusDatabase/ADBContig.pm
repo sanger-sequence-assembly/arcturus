@@ -350,10 +350,12 @@ $previous=0 if $TEST;
         }
 
 # to be removed after testing
-print STDOUT "Contig ".$contig->getContigName."\n" if $TEST;
-foreach my $mapping (@{$contig->getContigToContigMappings}) {
-print STDOUT ($mapping->assembledFromToString || "empty link\n") if $TEST;
-}
+	if ($TEST) {
+	    print STDOUT "Contig ".$contig->getContigName."\n";
+	    foreach my $mapping (@{$contig->getContigToContigMappings}) {
+		print STDOUT ($mapping->assembledFromToString || "empty link\n");
+	    }
+	}
 # until here
 
     }
@@ -1052,7 +1054,7 @@ sub getParentIDsForContig {
 # the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
 
     foreach my $contig_id (keys %contigids) {
-        delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
+        delete $contigids{$contig_id} if (defined($ageprofile{$contig_id}) && ($ageprofile{$contig_id}) > 1);
     }
 
 # those keys left are the true parent(s)
