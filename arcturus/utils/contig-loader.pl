@@ -792,7 +792,7 @@ sub tagList {
                  'STSF','STSX','STSG','COMM','RP20','TELO','REPC',
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SILR','IRPT','LINE','REPA','REPY',
-                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON');
+                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON','TEST');
 
 # software TAGS
 
