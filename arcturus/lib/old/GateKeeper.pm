@@ -56,7 +56,8 @@ sub new {
     my %options = (eraiseMySQL=>0 , insistOnCgi=>0, diagnosticsOn=>0);
     if ($eraise && ref($eraise) eq 'HASH') {
         &importOptions(\%options,$eraise);
-        $debug = $options{diagnosticsOn};
+        $debug =  "\n"  if ($options{diagnosticsOn} == 1);
+        $debug = "<br>" if ($options{diagnosticsOn} == 2);
     }
     else {
         $options{eraiseMySQL} = $eraise if $eraise;
@@ -259,7 +260,7 @@ sub opendb_MySQL {
     my $self   = shift;
     my $eraise = shift;
 
-    print "GateKeeper enter opendb_MySQL \n" if $debug;
+    print "GateKeeper enter opendb_MySQL $debug" if $debug;
 
     &dropDead($self,"You're not supposed to access this method") if $lock;
 
@@ -449,7 +450,7 @@ sub dbHandle {
     my $database = shift; # name of arcturus database to be probed
     my $hash     = shift; 
 
-    print "GateKeeper enter dbHandle \n" if $debug;
+    print "GateKeeper enter dbHandle $debug" if $debug;
 
     my %options = (undefinedDatabase => 0, defaultRedirect => 1, returnTableHandle => 0);
     &importOptions(\%options, $hash);
@@ -469,6 +470,7 @@ sub dbHandle {
         return $dbh;
     }
 # if database not specified, use default arcturus, or abort
+
     elsif (!$database) { 
         &dropDead($self,"Undefined database name") if !$options{undefinedDatabase};
         $self->{database} = 'arcturus';
@@ -593,7 +595,7 @@ sub authorize {
 
 # start by defining session, password, identify
 
-    print "GateKeeper enter authorize \n" if $debug;
+    print "GateKeeper enter authorize $debug" if $debug;
 
     undef my ($cgi, $session, $password, $identify);
 
@@ -881,6 +883,8 @@ sub GUI {
     my $self  = shift;
     my $title = shift;
 
+    print "GateKeeper enter GUI $debug" if $debug;
+
     my $cgi = &cgiHandle($self,1);
     return 0 if !$cgi;
 
@@ -891,6 +895,8 @@ sub GUI {
     my $connection = &whereAmI($self); # production or development
 
 # get other servers, either on the same host or all of them
+
+    print "GateKeeper GUI stage 1 $debug" if $debug;
 
     my $full = 1; # include all servers
     my @url = split /\:|\./,$self->{server};
@@ -912,6 +918,8 @@ sub GUI {
     }
 
 # get other databases
+
+    print "GateKeeper GUI stage 2 $debug" if $debug;
 
     undef my @databases;
     undef my @offliners;
@@ -935,6 +943,8 @@ sub GUI {
 
 # okay, now compose the page
 
+    print "GateKeeper GUI stage 3 partition 1 $debug" if $debug;
+
     $self->cgiHeader(2); # in case not yet done
     my $page = $cgi->openPage("ARCTURUS $title");
     my $width = '10%';
@@ -947,6 +957,8 @@ sub GUI {
     $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
 
 # compose the top bar (partition 2)
+
+    print "GateKeeper GUI stage 3 partition 2 $debug" if $debug;
 
     my $database=$cgi->parameter('database') || $cgi->parameter('organism') || 'arcturus';
 
@@ -963,6 +975,8 @@ sub GUI {
 
 # compose the left-side link table  (dev/prod database functions; partitions 3,5)
 # transfer to same script on different server; requires to omit database specification
+
+    print "GateKeeper GUI stage 3 partition 3 $debug" if $debug;
 
     $page->partition(3);
     push @exclude, 'database';
@@ -990,6 +1004,8 @@ sub GUI {
 
 # compose the database table for chosing a different database
 
+    print "GateKeeper GUI stage 3 partition 5 $debug" if $debug;
+
     $page->partition(5);
     $table = "<table $tablelayout>";
     if (@databases) {
@@ -1014,6 +1030,8 @@ sub GUI {
 
 # compose the 'create' table: include assemblies and projects only if database is defined
 
+    print "GateKeeper GUI stage 3 partition 7 $debug" if $debug;
+
     $page->partition(7);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Create </th></tr>";
@@ -1033,6 +1051,8 @@ sub GUI {
 
 # compose the update table
 
+    print "GateKeeper GUI stage 3 partition 6 $debug" if $debug;
+
     $page->partition(6);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
@@ -1051,6 +1071,8 @@ sub GUI {
 
     my $target = &currentHost($self).&currentPort($self);
     my $target = "target=\"${target}input\"";
+
+    print "GateKeeper GUI stage 3 partition 4 $debug" if $debug;
 
     $page->partition(4);
     $table = "<table $tablelayout>";
@@ -1079,6 +1101,8 @@ sub GUI {
 
 # compose the common 
 
+     print "GateKeeper GUI stage 3 partition 8 $debug" if $debug;
+
     $page->partition(8);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Edit Info </th></tr>";
@@ -1101,6 +1125,8 @@ sub GUI {
 
 # add the query options
   
+    print "GateKeeper GUI stage 3 partition 9 $debug" if $debug;
+
     $page->partition(9);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
@@ -1114,6 +1140,8 @@ sub GUI {
     $page->add($table); 
 
 # add the help and exit buttons
+
+    print "GateKeeper GUI stage 3 partition 10 $debug" if $debug;
 
     $page->partition(10);
     $table = "<table $tablelayout>";
@@ -1134,6 +1162,8 @@ sub GUI {
     $page->partition(1);
     $page->center(1);
 #    $page->add("script $self->{Script}",0,0);
+
+    print "GateKeeper GUI exit $debug" if $debug;
 
     return $page;
 }
