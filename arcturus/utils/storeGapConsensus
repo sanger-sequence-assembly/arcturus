@@ -212,6 +212,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -quality\t\tName of input base quality file\n";
+    print STDERR "    -droptable\t\tDrop existing GAPCONSENSUS table\n";
+    print STDERR "\t\t\t\tand re-create from scratch\n";
+    print STDERR "    -createtable\tCreate GAPCONSENSUS table\n";
 }
 
 sub ReadFasta {
