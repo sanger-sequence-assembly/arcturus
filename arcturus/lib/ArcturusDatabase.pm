@@ -313,14 +313,6 @@ sub getReadsByID {
     my $this    = shift;
     my $readids = shift; # array ref
 
-# in case a single read ID is passed as parameter, recast it as a one element array
-
-    my @reads;
-
-    $reads[0] = $readids;
-
-    $readids = \@reads if (ref($readids) ne 'ARRAY');
-
 # prepare the range list
 
     my $range = join ',',@$readids;
@@ -707,34 +699,63 @@ sub putRead {
 
 # b) encode dictionary item; special case: template & ligation
 
+    my $dbh = $this->getConnection();
+
     my ($sil,$sih) = @{$read->getInsertSize()}; 
 
-    my $ligation_id = $this->getDictionaryItemID (
-                      'ligation', $read->getLigation(),
-                      'ligation_id','LIGATIONS','identifier',
-		       {silow => $sil, sihigh => $sih});
+    #my $ligation_id = $this->getDictionaryItemID (
+    #                  'ligation', $read->getLigation(),
+    #                  'ligation_id','LIGATIONS','identifier',
+    #	       {silow => $sil, sihigh => $sih});
+
+    my $query = "select ligation_id from LIGATIONS where identifier=?";
+    my $select_sth = $dbh->prepare_cached($query);
+    $query = "insert ignore into LIGATIONS(identifier,silow,sihigh) VALUES(?,?,?)";
+    my $insert_sth = $dbh->prepare_cached($query);
+
+    my $dict = $this->{LoadingDictionary}->{'ligation'};
+
+    my $ligation_id = &getReadAttributeID($read->getLigation(),
+					  $dict,
+					  $select_sth,
+					  $insert_sth,
+					  [$sil, $sih]);
+
     return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
 
-    my $template_id = $this->getDictionaryItemID (
-                      'template', $read->getTemplate(),
-                      'template_id','TEMPLATE','name',
-                       {ligation_id => $ligation_id});                  
-# my $template_id = $this->getTemplateID($read);
+    #my $template_id = $this->getDictionaryItemID (
+    #                  'template', $read->getTemplate(),
+    #                  'template_id','TEMPLATE','name',
+    #                   {ligation_id => $ligation_id});                  
+
+    $query = "select template_id from TEMPLATE where name=?";
+    $select_sth = $dbh->prepare_cached($query);
+    $query = "insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)";
+    $insert_sth = $dbh->prepare_cached($query);
+
+    $dict = $this->{LoadingDictionary}->{'template'};
+
+    my $template_id = &getReadAttributeID($read->getTemplate(),
+					  $dict,
+					  $select_sth,
+					  $insert_sth,
+					  [$ligation_id]);
+
     return (0, "failed to retrieve template_id") unless defined($template_id);
 
 # c) encode dictionary items basecaller, clone, status
 
-    my $basecaller  = $this->getDictionaryItemID (
-                      'basecaller', $read->getBaseCaller(),
-		      'basecaller','BASECALLER','name');
+    #my $basecaller  = $this->getDictionaryItemID (
+    #                  'basecaller', $read->getBaseCaller(),
+#		      'basecaller','BASECALLER','name');
 
-    my $status      = $this->getDictionaryItemID (
-                      'status', $read->getStatus(),
-		      'status','STATUS','identifier');
+    #my $status      = $this->getDictionaryItemID (
+    #                  'status', $read->getStatus(),
+#		      'status','STATUS','identifier');
 
-    my $clone       = $this->getDictionaryItemID (
-                      'clone',  $read->getClone(),
-		      'clone','CLONES','clonename');
+    #my $clone       = $this->getDictionaryItemID (
+    #                  'clone',  $read->getClone(),
+#		      'clone','CLONES','clonename');
 
 # d) insert Read meta data
 
@@ -1171,7 +1192,7 @@ sub getDictionaryItemID {
 
 # 1) test validity of input key
 
-    my $validItems = "template|ligation|cvectors|svectors|
+    my $validItems = "template|ligation|cvector|svector|
                       clone|status|basecaller";
     if ($key !~ /\b$validItems\b/) {
         die "valid keys for 'getDictionaryItemID' are: ".
@@ -1267,6 +1288,48 @@ sub getDictionaryItemID {
 	       $keyvalue, $key_id) if defined($key_id);
 
     return $key_id;
+}
+
+sub getReadAttributeID {
+    my $identifier = shift;
+    my $dict = shift;
+    my $select_sth = shift;
+    my $insert_sth = shift;
+    my $extra_data = shift;
+
+    return undef unless defined($identifier);
+
+    my $id = &dictionaryLookup($dict, $identifier);
+
+    return $id if defined($id);
+
+    my $rc = $select_sth->execute($identifier);
+
+    if (defined($rc)) {
+	($id) = $select_sth->fetchrow_array();
+	$select_sth->finish();
+    }
+
+    return $id if defined($id);
+
+    if (defined($extra_data)) {
+	$rc = $insert_sth->execute($identifier, @{$extra_data});
+    } else {
+	$rc = $insert_sth->execute($identifier);
+    }
+
+    if (defined($rc)) {
+	$rc = $select_sth->execute($identifier);
+
+	if (defined($rc)) {
+	    ($id) = $select_sth->fetchrow_array();
+	    $select_sth->finish();
+	}
+    }
+
+    &dictionaryInsert($dict, $identifier, $id) if defined($id);
+
+    return $id;
 }
 
 sub updateRead {
