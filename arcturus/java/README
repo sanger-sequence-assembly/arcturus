@@ -1,0 +1,63 @@
+ARCTURUS IN JAVA
+
+This directory contains the Java implementation of Arcturus.
+
+The "src" directory contains the source file hierarchy. Everything
+is under src/uk/ac/sanger/arcturus and thus the base package name is
+uk.ac.sanger.arcturus
+
+The "test" directory contains the suite of test programs.
+
+The "scripts" directory contains wrapper scripts which run the main
+applications and test suites.
+
+There is an Ant build file named build.xml which puts compiled classes
+in build/classes and the main Arcturus JAR file in build/lib.
+
+Shared JAR files are kept in /nfs/pathsoft/minerva/jars. When you run
+Ant, remember to include this directory via the -lib option, as it
+contains things like the JDBC drivers for MySQL and Oracle and Sun's
+reference implementation of the JNDI LDAP provider.
+
+You may find it convenient to create a soft link with a command such as
+
+  ln -s /nfs/pathsoft/minerva/jars lib
+
+which allows you to invoke Ant with a command such as
+
+  ant -lib lib <target>
+
+A NOTE ON THE WRAPPER SCRIPTS
+
+Most of the scripts in the "scripts" directory are only six or seven lines
+long. They all read the csh script fragment named setup.csh which defines
+the classpath, various environment variables and other run-time options
+for the Java VM.
+
+DON'T MESS WITH SETUP.CSH
+
+Do not alter setup.csh without careful thought. You could prevent the entire
+Arcturus system from working.
+
+WHICH VERSION OF JAVA?
+
+The Arcturus Java classes require Java 1.4 or higher.
+
+You also need Apache Ant in order to build everything from scratch.
+
+WHAT'S IN THE DIFFERENT PACKAGES?
+
+uk.ac.sanger.arcturus is the base package and contains a single class,
+ArcturusInstance. All end-user programs begin by creating an instance
+of this class.
+
+uk.ac.sanger.arcturus.data contains classes which represent data objects
+such as reads, templates, ligations and contigs.
+
+uk.ac.sanger.arcturus.database contains classes which acts as the
+object persistence layer between data objects and the relational database.
+The only class that end-user programs need to know about is
+ArcturusDatabase.
+
+uk.ac.sanger.arcturus.dataloading will contain classes which act as a
+bridge between Arcturus and external source of read data.
