@@ -790,5 +790,5 @@ sub showUsage {
     print STDERR "-puclimit\tMaximum insert size for pUC subclones (default: 8000)\n";
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
     print STDERR "-progress\tDisplay progress info on STDERR (default: false)\n";
-    print STDERR "-isesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
+    print STDERR "-usesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
 }
