@@ -36,8 +36,6 @@ $dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***');
 
 &db_die('Unable to connect to ' . $dsn) unless $dbh;
 
-print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
-
 if(defined($database) && defined($table)) {
     $query = "USE $database";
     $dbh->do($query);
@@ -59,6 +57,8 @@ if(defined($database) && defined($table)) {
 
 	@colnames = @{$sth->{NAME}};
 
+	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
 	while ($colname = shift @colnames) {
 	    $colvalue = shift @values;
 
@@ -70,6 +70,42 @@ if(defined($database) && defined($table)) {
 	}
 
 	$sth->finish();
+
+	print "</TABLE>\n";
+
+	print $cgi->h2("Table description for $database.$table");
+	
+	$query = "DESCRIBE $table";
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	@values = $sth->fetchrow_array();
+
+	@colnames = @{$sth->{NAME}};
+
+	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
+	print "<TR>\n";
+
+	while ($hdr = shift @colnames) {
+	    print "<TH ALIGN=\"LEFT\">$hdr</TH>\n";
+	}
+
+	while (@ary = $sth->fetchrow_array()) {
+	    print "<TR>\n";
+	    while ($item = shift @ary) {
+		print "<TD>$item</TD>\n";
+	    }
+	    print "</TR>\n";
+	}
+
+	$sth->finish();
+
+	print "</TABLE>\n";
     }
 } else {
     if ($alldatabases) {
@@ -92,6 +128,8 @@ if(defined($database) && defined($table)) {
 	$sth->finish();
 	&db_die("finish($query) failed");
     }
+
+    print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
     foreach $database (sort @databases) {
 	$scriptlink = "$scriptname?dbport=$dbport&dbhost=$dbhost&database=$database";
@@ -147,9 +185,9 @@ if(defined($database) && defined($table)) {
 	    &db_die("finish($query) failed");
 	}
     }
-}
 
-print "</TABLE>\n";
+    print "</TABLE>\n";
+}
 
 $dbh->disconnect();
 
