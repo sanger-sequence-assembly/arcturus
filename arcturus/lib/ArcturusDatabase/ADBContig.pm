@@ -293,9 +293,9 @@ $previous=0 if $TEST;
 # pull out previous contig mappings and compare them one by one with contig
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
-# add the previous contig ID to the contig list of the Project
+# add (re-assign) the previous contig ID to the contig list of the Project
             if ($project) {
-                $this->assignContigToProject($previous,$project);
+                $this->assignContigToProject($previous,$project); # ADBProject.pm
                 $project->addContigID($previous->getContigID());
             }
             return $previous->getContigID(),"Contig $contigname is ".
@@ -346,6 +346,7 @@ $previous=0 if $TEST;
                 $contig_id = $linked; 
             }
             $project = $this->getProject(contig_id => $contig_id);
+# keep track of the project(s) of previous generation, flag project changes
         }
 
 # to be removed after testing
@@ -648,6 +649,14 @@ sub deleteContig {
     $success = $this->cleanupSegmentTables(0) if $success;
 
     return $success;
+}
+
+# internal consistency test
+
+sub readback {
+# checks mappings against
+    my $this = shift;
+    my $contig = shift; 
 }
 
 #---------------------------------------------------------------------------------

@@ -621,14 +621,16 @@ sub linkToContig {
 
 # make an inventory hash of (identical) alignments from $compare to $this
 
-    my $alignment;
+    my $alignment = 0;
     my $inventory = {};
     my $deallocated = 0;
     $mappings = $compare->getMappings();
     foreach my $mapping (@$mappings) {
         my $key = $mapping->getSequenceID();
-print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
-        return undef unless defined($key); # incomplete Mapping
+        unless (defined($key)) {
+            print STDERR "Incomplete Mapping ".$mapping->getMappingName."\n";
+            return undef; # abort: incomplete Mapping; should never occur
+        }
         my $match = $sequence->{$key};
         unless (defined($match)) {
             $deallocated++;
@@ -636,6 +638,11 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
         }
 # this mapping/sequence in $compare also figures in the current Contig
         my ($identical,$aligned,$offset) = $match->compare($mapping,$relaxed);
+# printing mode
+        if ($relaxed > 1) {
+            print "mapping: id=$identical  align=$aligned  ";
+            print "offset=$offset  ".$mapping->getMappingName."\n";
+        } 
 # keep the first encountered (contig-to-contig) alignment value != 0 
         $alignment = $aligned unless $alignment;
         next unless ($identical && $aligned == $alignment);
@@ -670,7 +677,10 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
 # accept only alignments with a minimum number of reads 
-    my $guillotine = 1 + log(scalar(@$mappings));
+    my $guillotine = 1 + log(scalar(@$mappings)); 
+# adjust for small numbers (2 and 3)
+    $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
+    $guillotine = 2  if ($guillotine < 2); # minimum required
 
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
@@ -686,7 +696,7 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
 # break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
-                if ($nreads > $guillotine) {
+                if ($nreads >= $guillotine) {
                     my $start = ($segmentstart + $offset) * $alignment;
                     my $finis = ($segmentfinis + $offset) * $alignment;
                     $mapping->addAssembledFrom($start,$finis,$segmentstart,
@@ -703,7 +713,7 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
             $nreads++; 
         }
 # add segmentstart - segmentfinis as (last) mapping segment
-        next unless ($nreads > $guillotine);
+        next unless ($nreads >= $guillotine);
         my $start = ($segmentstart + $offset) * $alignment;
         my $finis = ($segmentfinis + $offset) * $alignment;
         $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);

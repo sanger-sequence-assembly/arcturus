@@ -144,11 +144,12 @@ sub compare {
 # return 0 on first encountered mismatch of direction, offset (or 
 # segment size); otherwise return true and alignment direction & offset 
 
-    my ($identical,$align,$shift);
+    my ($align,$shift);
     for (my $i = 0 ; $i < scalar(@$tmaps) ; $i++) {
 	my $tsegment = $tmaps->[$i];
 	my $csegment = $cmaps->[$i] || next; # can occur when relaxed
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
+# in relaxed mode we allow !$identical and test only alignment and offset
         return 0 unless ($identical || $relaxed);
 # on first one register shift and alignment direction
         if (!defined($align) && !defined($shift)) {
