@@ -58,6 +58,12 @@ sub getTags {
     return $this->{Tags};
 }
 
+sub hasTags {
+# returns true if this Read has tags
+    my $this = shift;
+    return $this->getTags() ? 1 : 0;
+}
+
 #-------------------------------------------------------------------
 # lazy instantiation of DNA and quality data 
 #-------------------------------------------------------------------

@@ -49,6 +49,19 @@ sub getDNA {
     return $this->{DNA} || '';
 }
 
+sub setName {
+# tag type, 4 char abbreviation
+    my $this = shift;
+
+    $this->{name} = shift;
+}
+
+sub getName {
+    my $this = shift;
+
+    return $this->{name} || '';
+}
+
 sub setPosition {
 # begin and end position in read or contig sequence
     my $this = shift;
@@ -134,7 +147,7 @@ sub writeToCaf {
     my @pos  = $this->getPosition();
     my $comment = $this->getComment();
 
-    print $FILE "Tag ($this->{label}) @pos ";
+    print $FILE "Tag ($this->{label}) $type @pos ";
     print $FILE "\"$comment\"" if $comment;
     print $FILE "\n";
 }

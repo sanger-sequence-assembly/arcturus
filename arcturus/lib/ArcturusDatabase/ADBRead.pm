@@ -603,7 +603,7 @@ sub getSequenceIDForRead {
     my $query;
 
     if ($idtype eq 'readname') {
-	$query = "select seq_id from READS left join SEQ2READ using(read_id) " .
+	$query = "select seq_id from READS left join SEQ2READ using (read_id) " .
                  "where READS.readname=? " .
 	         "and version=?";
     } else {
@@ -901,6 +901,8 @@ sub getSequenceForReads {
     $sth->finish();
 
 # NOTE : test if all objects have been completed to be done outside this method
+
+    return 1;
 }
 
 #-----------------------------------------------------------------------------
@@ -1772,23 +1774,33 @@ sub deleteRead {
     return (1,"Records for read $readid removed from $delete tables");
 }
 
-# REPLACED by getSequenceIDForAssembledReads in ADBContig
-sub OLDgetSequenceIDforReads {
+sub getSequenceIDsForReads {
 # put sequenceID, version and read_id into Read instances given their 
-# readname (for unedited reads) or their sequence (edited reads) 
+# readname (for unedited reads) or their sequence (edited reads)
+# NOTE: this method may insert new read sequence
+# (see also getSequenceIDForAssembledReads in ADBContig)
     my $this = shift;
     my $reads = shift;
+    my $noload = shift; # flag inhibiting insertion of new read sequence
 
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
 # version(s) already in the database with method addNewSequenceForRead
 # for unedited reads pull the data out in bulk with a left join
 
+    my $success = 1;
+
     my $unedited = {};
     foreach my $read (@$reads) {
-        if ($read->isEdited) {
-            my ($success,$errmsg) = $this->putNewSequenceForRead($read);
-	    print STDERR "$errmsg\n" unless $success;
+        next if $read->getSequenceID(); # already exists
+        if ($read->isEdited && $noload) {
+            my $readname = $read->getReadName();
+            print STDERR "New (edited) sequence for read $readname ignored\n";
+        }
+        elsif ($read->isEdited) {
+            my ($added,$errmsg) = $this->putNewSequenceForRead($read);
+	    print STDERR "$errmsg\n" unless $added;
+            $success = 0 unless $added;
         }
         else {
             my $readname = $read->getReadName();
@@ -1796,39 +1808,48 @@ sub OLDgetSequenceIDforReads {
         }
     }
 
-# get the sequence IDs for the unedited reads (version = 0)
+# get the sequence IDs for the unedited reads (sequence version = 0)
 
-    my $range = join "','",sort keys(%$unedited);
-    my $query = "select READS.read_id,readname,seq_id" .
-                "  from READS left join SEQ2READ using(read_id) " .
-                " where readname in ('$range')" .
-	        "   and version = 0";
+    my @readnames = sort keys(%$unedited);
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $blocksize = 10000;
+    while (my $block = scalar(@readnames)) {
 
-    $sth->execute() || &queryFailed($query);
+        $block = $blocksize if ($block > $blocksize);
 
-    while (my @ary = $sth->fetchrow_array()) {
-        my ($read_id,$readname,$seq_id) = @ary;
-        my $read = $unedited->{$readname};
-        delete $unedited->{$readname};
-        $read->setReadID($read_id);
-        $read->setSequenceID($seq_id);
-        $read->setVersion(0);
+        my @names = splice @readnames, 0, $block;
+#print "getSequenceIDsForReads: NEXT BLOCK $block (".scalar(@names).")\n";
+
+        my $query = "select READS.read_id,readname,seq_id" .
+                    "  from READS left join SEQ2READ using (read_id) " .
+                    " where readname in ('".join("','",@names)."')" .
+	            "   and version = 0";
+
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        while (my @ary = $sth->fetchrow_array()) {
+            my ($read_id,$readname,$seq_id) = @ary;
+            my $read = $unedited->{$readname};
+            delete $unedited->{$readname};
+            $read->setReadID($read_id);
+            $read->setSequenceID($seq_id);
+            $read->setVersion(0);
+        }
+        $sth->finish();
     }
-
-    $sth->finish();
 
 # have we collected all of them? then %unedited should be empty
 
-    my $success = 1;
     if (keys %$unedited) {
         print STDERR "Sequence ID not found for reads: " .
 	              join(',',sort keys %$unedited) . "\n";
         $success = 0;
     }
+
     return $success;
 }
 
@@ -1837,22 +1858,22 @@ sub OLDgetSequenceIDforReads {
 #----------------------------------------------------------------------------- 
 
 sub getTagsForReads {
-# bulk mode extraction
+# bulk mode extraction; use as private method only
     my $this = shift;
     my $reads = shift; # array of Read instances
 
     if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
-        print STDERR "getSequenceForReads expects an array of Read objects\n";
+        print STDERR "getTagsForReads expects an array of Read objects\n";
         return undef;
     }
 
 # build a list of sequence IDs (all sequence IDs must be defined)
 
-    my $sids = {};
+    my $readlist = {};
     foreach my $read (@$reads) {
 # test if sequence ID is defined
         if (my $seq_id = $read->getSequenceID()) {
-            $sids->{$seq_id} = $read;
+            $readlist->{$seq_id} = $read;
         }
         else {
 # warning message
@@ -1861,50 +1882,268 @@ sub getTagsForReads {
         }
     }
 
-    my @sids = sort {$a <=> $b} keys(%$sids);
+    my @sids = sort {$a <=> $b} keys(%$readlist);
 
     return unless @sids;
 
-    my $items = "seq_id,readtag,pstart,pfinal,strand,comment";
-#             . ",sequence";
-#    my $query = "select * from READTAG left join TAGSEQUENCE"
-    my $query = "select * from READTAG"
-#              . " using tag_id"
-	      . " where seq_id = (".join (',',@sids) .")"
-              . "   and deprecated != 'Y'";
-print "getReadTags query: $query\n";
-
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $tags = &getReadTagsForSequenceIDs($dbh,\@sids);
 
-    $sth->execute() || &queryFailed($query);
+# add tag(s) to each read (use sequence ID as identifier)
 
-    while (my @ary = $sth->fetchrow_array()) {
-        my ($seq_id,$type,$pstart,$pfinal,$strand,$comment,$sequence) = @ary;
-# create a new Tag instance
-        my $tag = new Tag('readtag');
-        $tag->setSequenceID($seq_id);
-        $tag->setType($type);
-        $tag->setPosition($pstart,$pfinal);
-        $tag->setStrand($strand);
-        $tag->setComment($comment);
-        $tag->setDNA($sequence);
-# add to read
-        my $read = $sids->{$seq_id};
+    foreach my $tag (@$tags) {
+        my $seq_id = $tag->getSequenceID();
+        my $read = $readlist->{$seq_id};
         $read->addTag($tag);
     }
 
 }
 
 sub putTagsForReads {
-# bulk insertion
+# bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
+print "ENTER putTagsForReads\n";
 
-# a: get all tags for these reads already in the database
-# b: check which ones have to be added; link to DNASNIPPET if applicable
-# c: insert in bulkmode (READTAG table, DNASNIPPET table [oligos, ststags etc])
+    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
+        print STDERR "putTagsForReads expects an array of Read objects\n";
+        return undef;
+    }
+
+print "ENTER getSequenceIDsForReads \n";
+    my $success = $this->getSequenceIDsForReads($reads,1); # noload flag set
+print "AFTER getSequenceIDsForReads \n";
+
+# build a list of sequence IDs in tags (all sequence IDs must be defined)
+
+    my $readlist = {};
+    foreach my $read (@$reads) {
+        next unless $read->hasTags();
+        if (my $seq_id = $read->getSequenceID()) {
+            $readlist->{$seq_id} = $read;
+        }         
+        else {
+            print STDERR "Missing sequence identifier in read ".
+                          $read->getReadName."\n";
+        }
+    }
+
+# get all tags for these reads already in the database
+
+    my @sids = sort {$a <=> $b} keys(%$readlist);
+
+    return unless @sids; # tags to be stored
+
+    my $dbh = $this->getConnection();
+
+print "ENTER getReadTagsForSequenceIDs \n";
+    my $tags = &getReadTagsForSequenceIDs($dbh,\@sids);
+print "AFTER getReadTagsForSequenceIDs \n"; exit;
+
+# test which tags have already been stored previously
+
+    my $taglist = {};
+    foreach my $tag (@$tags) {
+        my $seq_id = $tag->getSequenceID();
+    }
+
+# the logic of then next one is invalid ... CHANGE!
+    my @tags;
+    foreach my $tag (@$tags) {
+        my $seq_id = $tag->getSequenceID();
+        my $read = $readlist->{$seq_id};
+        my $readtags = $read->getTags();
+        my $isEqual = 0;
+        foreach my $readtag (@$readtags) {
+            $isEqual = 1 if $readtag->isEqual($tag);
+        }
+        push @tags, $tag unless $isEqual;
+    }
+
+# here we have a list of new tags which have to be loaded
+
+print "ENTER putReadTags\n";
+    return &putReadTags($dbh,@tags,1000); # blocks of 1000
+}
+
+sub getReadTagsForSequenceIDs {
+# use as private method only; blocked retrieval of read tags
+    my $dbh = shift;
+    my $seqIDs = shift;
+    my $blocksize = shift || 1000;
+
+    my @tags;
+    while (my $block = scalar(@$seqIDs)) {
+
+        $block = $blocksize if ($block > $blocksize);
+#print "getReadTagsForSequenceIDs: next block $block\n";
+
+        my @sids = splice @$seqIDs, 0, $block;
+
+        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,'READ');
+
+        push @tags, @$tags;
+    }
+
+    return [@tags];
+}
+
+sub getTagsForSequenceIDs {
+# use as private method only
+    my $dbh = shift;
+    my $sequenceIDs = shift; # array of seq IDs
+    my $datatype = shift;
+
+#print "getTagsForSequenceIDs $datatype\n";
+
+    my $items = "seq_id,tagtype,pstart,pfinal,strand,comment,tagname,sequence";
+    my $query = "select $items from ${datatype}TAG left join TAGSEQUENCE"
+              . " using (tag_id)"
+	      . " where seq_id = (".join (',',@$sequenceIDs) .")"
+              . "   and deprecated != 'Y'";
+# and readtag not in ()?
+#print "getTagsForSequenceIDs query: $query\n";
+
+    my @tag;
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    while (my @ary = $sth->fetchrow_array()) {
+        my ($seq_id,$type,$pstart,$pfinal,$strand,$comment,$name,$sequence) = @ary;
+# create a new Tag instance
+        my $tag = new Tag("${datatype}tag");
+        $tag->setSequenceID($seq_id);
+        $tag->setType($type);
+        $tag->setName($name) if $name;
+        $tag->setPosition($pstart,$pfinal);
+        $tag->setStrand($strand);
+        $tag->setComment($comment);
+        $tag->setDNA($sequence) if $sequence;
+# add to output array
+        push @tag, $tag;
+    }
+
+    return [@tag];
+}
+
+sub putReadTags {
+# use as private method only; 
+    my $dbh = shift;
+    my $tags = shift;
+    my $block = shift || 1000;
+
+    while (@$tags) {
+print "putReadTags : next block (".scalar(@$tags)." left)\n";
+        my @block;
+        my $count = 0;
+        while ($count < $block) {
+            last unless @$tags;
+            push @block, (shift @$tags);
+        }
+        &putTags($dbh,\@block,'READ');
+    }
+}
+
+sub putTags {
+# use as private method only
+    my $dbh = shift;
+    my $tags = shift;
+    my $type = shift;
+
+print "ENTER putTags $type\n";
+
+    return undef unless ($tags && @$tags);
+
+# get tag_id for (possible) link with TAGSEQUENCE
+
+    my %tagdata;
+    foreach my $tag (@$tags) {
+        my $tagname = $tag->getTagName();
+        $tagdata{$tagname}++ if $tagname;
+    }
+
+# build the tag ID hash keyed on tag name
+
+    my $tagID = {};
+
+    if (my @tagnames = keys %tagdata) {
+# get tag_id, tagsequence for tagnames
+        my $query = "select tag_id,tagname,sequence from TAGSEQUENCE"
+	          . " where tagname in (".join(',',@tagnames).")";
+print "putTags query: $query\n";
+
+#my $TEST = 0; if($TEST) {
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        my $tagSQ = {};
+
+        while (my ($tag_id,$tagname,$sequence) = $sth->fetchrow_array()) {
+            $tagID->{$tagname} = $tag_id;
+            $tagSQ->{$tagname} = $sequence;
+        }
+
+        $sth->finish();
+#}
+
+# test the sequence against the one specified in the tags
+
+        foreach my $tag (@$tags) {
+            my $tagname = $tag->getTagName();
+            next unless $tagname;
+            if (my $sequence = $tag->getSequence()) {
+                unless ($sequence eq $tagSQ->{$tagname}) {
+                    print STDERR "Tag sequence mismatch for tag $tagname : ".
+                             "(tag) $sequence  (taglist) $tagSQ->{$tagname}\n";
+		}
+	    }
+            else {
+                print STDERR "Missing sequence for tag $tagname\n";
+	    }
+        }
+    }
+   
+# insert in bulkmode
+
+    my $query = "insert into ${type}TAGS ".
+                "(seq_id,tagtype,tag_id,pstart,pfinal,strand,comment) values ";
+
+    my $block = 100;
+    my $success = 1;
+
+    my $accumulated = 0;
+    my $accumulatedQuery = $query;
+    my $lastTag = $tags->[@$tags-1];
+
+    foreach my $tag (@$tags) {
+
+        my $seq_id           = $tag->getSequenceID();
+        my $tagtype          = $tag->getType();
+        my $tagname          = $tag->getName() || '';
+        my ($pstart,$pfinal) = $tag->getPosition();
+        my $tag_id           = $tagID->{$tagname} || 0;
+        my $strand           = $tag->getStrand();
+        my $comment          = $tag->getComment() || 'null';
+
+        $accumulatedQuery .= ',' if $accumulated++;
+        $accumulatedQuery .= "($seq_id,$tagtype,$tag_id,$pstart,$pfinal,$strand,$comment)";
+
+        if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
+
+print "accumulated query: $accumulatedQuery \n"; next;
+
+            my $sth = $dbh->prepare($accumulatedQuery);        
+            my $rc = $sth->execute() || &queryFailed($query);
+
+            $success = 0 unless $rc;
+            $accumulatedQuery = $query;
+            $accumulated = 0;
+        }
+    }
 }
 
 #-----------------------------------------------------------------------------
