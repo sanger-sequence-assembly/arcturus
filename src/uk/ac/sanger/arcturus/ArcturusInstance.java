@@ -121,5 +121,22 @@ public class ArcturusInstance implements Iterator {
 	return null;
     }
 
+    public void putArcturusDatabase(ArcturusDatabase adb, String name) throws NamingException {
+	String cn = "cn=" + name;
+
+	String description = adb.getDescription();
+
+	BasicAttributes attrs = (description == null) ? null : new BasicAttributes("description", description);
+
+	DataSource ds = adb.getDataSource();
+
+	try {
+	    context.bind(cn, ds, attrs);
+	}
+	catch (NameAlreadyBoundException nabe) {
+	    context.rebind(cn, ds, attrs);
+	}
+    }
+
     public String toString() { return "ArcturusInstance[name=" + name + "]"; }
 }
