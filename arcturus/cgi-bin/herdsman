@@ -72,6 +72,10 @@ else {
     $page->add($text,0,0,"size=+1");
     $page->space;
 
+# because the database can have been changed in GUI get it again
+
+    $database   = $cgi->parameter('database') || 'arcturus';
+
     if ($database ne 'arcturus') {
         my %options = (mask=>'011000001111000001',
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');

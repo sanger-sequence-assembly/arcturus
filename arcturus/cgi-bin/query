@@ -351,19 +351,19 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 
     undef my $mask;
     $page->partition(1);    
-    $mask = '111111100'         if ($tablename =~ /PEOPLE/);
-    $mask = '01110001111102'    if ($tablename =~ /ORG/);
-    $mask = '03101111'          if ($tablename =~ /STSTAG/);
+    $mask = '111111100'           if ($tablename =~ /PEOPLE/);
+    $mask = '01110001111102'      if ($tablename =~ /ORG/);
+    $mask = '03101111'            if ($tablename =~ /STSTAG/);
     $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
-    $mask = '0111111100'        if ($tablename =~ /USER/);
-    $mask = '011111111000112'   if ($tablename =~ /PROJ/);
+    $mask = '011111000000002'     if ($tablename =~ /USER/);
+    $mask = '011111111000112'     if ($tablename =~ /PROJ/);
     my $table = $dbtable->htmlTable($mask);
     $table =~ s/\<TABLE/<TABLE WIDTH=60%/;
 # fill in placeholders, if any
     $table =~ s?TABLELINK?$arc_cgi_dir/query/dictionary/?g;
     $table =~ s/TABLETARGET/target="arcturustable"/g;
     $table =~ s?ITEMLINK?$arc_cgi_dir/query/listentry/$tablename?g;
-    $table =~ s/ITEMTARGET/target="arcturustable"/g;
+    $table =~ s/LINKTARGET/target="arcturustable"/g;
     $table =~ s/LINKTEXT/more/g;
 
     $page->add($table,0,0);

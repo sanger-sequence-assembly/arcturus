@@ -1,7 +1,10 @@
 #!/usr/local/bin/perl -w
 
 #############################################################################
-# get assembly data for  Cyclops from ARCTURUS database
+# Housekeeping script to equalize contents of ORGANISMS, USERS and VECTORS
+#
+# This script can be run under backticks after an update on ane of the
+# servers. Should also be run of the GUI
 #############################################################################
 
 use strict; # Constraint variables declaration before using them
@@ -25,9 +28,28 @@ my $GateKeeper = GateKeeper->new('mysql');
 
 my $config     = $GateKeeper->configHandle();
 
-my $cgi        = $GateKeeper->cgiHandle();
+my $cgi        = $GateKeeper->cgiHandle(1);
 
-$GateKeeper->cgiHeader(1); # return string plain
+# this script may be run:
+# (1) from the arcturus GUI under CGI
+# (2) spawned from a script running under CGI
+# (3) from the command line (at the moment no id check)
+
+my $subject = '';
+my $action  = '';
+
+my $origin = $GateKeeper->origin(2) || '';
+(my $void, $subject, $action) = split '/',$origin if $origin;
+   
+$GateKeeper->cgiHeader(1) if ($cgi && !@ARGV); # return string plain
+#print "CGI: ARGV: @ARGV \n" if ($cgi && @ARGV);
+#print "not CGI: ARGV: @ARGV \n" if !$cgi;
+#print "origin  $origin \n";
+#$GateKeeper->environment;
+
+##############################################################################
+# MAIN
+##############################################################################
 
 my $instances  = $config->get('mysql_ports');
 my $port_maps  = $config->get('port_maps');
@@ -47,74 +69,150 @@ my $currentPort = $GateKeeper->currentPort;
 
 my $report;
 foreach my $instance (@$instances) {
-
+print "instance  $instance \n";
     $instance =~ s/\.sanger\.ac\.uk//;
     my ($host,$port) = split ':',$instance;
-    next if ($maps{$port} != $currentPort);
+    next if ($maps{$port} != $currentPort && (!$subject || $subject !~ /\bvectors|chemtypes\b/));
     $report .= "Opening $instance ... ";
     if ($GateKeeper->ping_MySQL($host,$port)) {
         my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,{dieOnError => 0});
-        print "MySQL instance $instance cannot be opened\n" if !$handle;
+        $report .= "MySQL instance $instance cannot be opened\n" if !$handle;
         $instance =~ s/$port/$maps{$port}/; # replace TCP port by apache port
         $handles{$instance} = $handle if $handle;
         $report .= "($instance) ... handle $handle ... done \n";
     }
     else {
-        print "MySQL instance $instance is not available\n";
+        $report .= "MySQL instance $instance is not available\n";
     }
 }
-
-print "$report\n";
-
-$report = $GateKeeper->whereAmI();
-print "Where Am I ? $report \n";
 
 ##############################################################################
 # MAIN
 ##############################################################################
 
-undef my %organisms;
-foreach my $instance (keys %handles) {
-    my $handle = $handles{$instance};
-    my $organism = ArcturusTable->new($handle,'ORGANISMS','arcturus',1);
-    $organisms{$instance} = $organism if $organism;
-}
+my $doCopy = 0;
+$doCopy = 1 if ($action && $action =~ /\bcopy\b/i);
+print "subject=$subject  action=$action  doCopy=$doCopy \n";
 
-undef my %servers;
-foreach my $instance (keys %organisms) {
-    my $organism = $organisms{$instance};
-    print "\n\n$instance ($organism)\n";
-    my $list = $organism->list('1111111111111111110');
-    print $list;
-    my $hashrefs = $organism->associate('hashrefs');
-    foreach my $hash (@$hashrefs) {
-        my $residence = $hash->{residence};
-        $residence =~ s/\.sanger\.ac\.uk//;
-        $servers{$residence}++;
+if ($subject && $subject =~ /\borganisms\b/i) {
+
+    undef my %organisms;
+    foreach my $instance (keys %handles) {
+        my $handle = $handles{$instance};
+        my $organism = ArcturusTable->new($handle,'ORGANISMS','arcturus',1);
+        $organisms{$instance} = $organism if $organism;
+    }
+
+    undef my %servers;
+    foreach my $instance (keys %organisms) {
+        my $organism = $organisms{$instance};
+        $report .= "\n\n$instance ($organism)\n";
+        $report .= $organism->list('1111111111111111110');
+        my $hashrefs = $organism->associate('hashrefs');
+        foreach my $hash (@$hashrefs) {
+            my $residence = $hash->{residence};
+            $residence =~ s/\.sanger\.ac\.uk//;
+            $servers{$residence}++;
+        }
+    }
+    $report .= "\nHarmonizing ORGANISMS data ..... \n\n";
+
+    my @columns = ('attributes','last-backup');
+    foreach my $oresidence (keys %servers) {
+        my ($ohost, $oport) = split ':',$oresidence;
+        foreach my $nresidence (keys %organisms) {
+            my ($nhost, $nport) = split ':',$nresidence;
+            if ($ohost ne $nhost  && $oport eq $nport) {
+# copy from instance ohost:oport to instance nhost:nport, those data where residence = ohost:oport
+                $report .= "copy from instance $ohost:$oport to instance $nhost:$nport, ";
+                $report .= "data where residence = $ohost:$oport\n\n";
+                my $othandle = $organisms{$oresidence};
+                my $nthandle = $organisms{$nresidence};
+                my $where = "residence like '$ohost%$oport'";
+                $report .= $othandle->copy($nthandle,'where',$where,$doCopy) if ($othandle && $nthandle); 
+            }
+        }    
     }
 }
 
-print "\nHarmonizing ..... \n\n";
+elsif ($subject && $subject =~ /\busers\b/i) {
 
-my $doCopy = 0;
+    undef my %userdata;
+    foreach my $instance (keys %handles) {
+        my $handle = $handles{$instance};
+        my $users = ArcturusTable->new($handle,'USERS','arcturus',1);
+        $userdata{$instance} = $users if $users;
+    }
 
-my @columns = ('attributes','last-backup');
-foreach my $oresidence (keys %servers) {
-    my ($ohost, $oport) = split ':',$oresidence;
-# print "oresidence $ohost : $oport \n";
-    foreach my $nresidence (keys %organisms) {
-        my ($nhost, $nport) = split ':',$nresidence;
-# print "   nresidence $nhost : $nport \n";
-        if ($ohost ne $nhost  && $oport eq $nport) {
-# copy from instance ohost:oport to instance nhost:nport, those data where residence = ohost:oport
-print "copy from instance $ohost:$oport to instance $nhost:$nport, data where residence = $ohost:$oport\n\n";
-            my $othandle = $organisms{$oresidence};
-            my $nthandle = $organisms{$nresidence};
-            my $where = "residence like '$ohost%$oport'";
-            $othandle->copy($nthandle,'where',$where,$doCopy) if ($othandle && $nthandle); 
-        }
-    }    
+# copy the data from the user table on the current server to all others
+
+    my $whereAmI = $GateKeeper->{server};
+    $whereAmI =~ s/\.sanger\.ac\.uk//;
+    
+    foreach my $server (keys %userdata) {
+        my $ouhandle = $userdata{$whereAmI};
+        if ($server ne $whereAmI) {
+            my $nuhandle = $userdata{$server};
+	    print "copy from $whereAmI to $server: $ouhandle to $nuhandle\n";
+            $report .= $ouhandle->copy($nuhandle,'where',1,$doCopy) if ($ouhandle && $nuhandle); 
+        }   
+    }
 }
+
+elsif ($subject && $subject =~ /\bvectors\b/i) {
+
+    undef my %vectordata;
+    foreach my $instance (keys %handles) {
+        my $handle = $handles{$instance};
+        my $vectors = ArcturusTable->new($handle,'VECTORS','arcturus',1);
+        $vectordata{$instance} = $vectors if $vectors;
+    }
+
+# copy the data from the user table on the current server to all others
+
+    my $whereAmI = $GateKeeper->{server};
+    $whereAmI =~ s/\.sanger\.ac\.uk//;
+    
+    foreach my $server (keys %vectordata) {
+        my $ovhandle = $vectordata{$whereAmI};
+        if ($server ne $whereAmI) {
+            my $nvhandle = $vectordata{$server};
+	    print "copy from $whereAmI to $server: $ovhandle to $nvhandle\n";
+            $report .= $ovhandle->copy($nvhandle,'where',1,$doCopy,{keyColumn=>'template'}) if ($ovhandle && $nvhandle); 
+        }
+    }
+}
+
+elsif ($subject && $subject =~ /\bchemtypes\b/i) {
+
+    undef my %chemdata;
+    foreach my $instance (keys %handles) {
+        my $handle = $handles{$instance};
+        my $chemtypes = ArcturusTable->new($handle,'CHEMTYPES','arcturus',1);
+        $chemdata{$instance} = $chemtypes if $chemtypes;
+    }
+
+# copy the data from the user table on the current server to all others
+
+    my $whereAmI = $GateKeeper->{server};
+    $whereAmI =~ s/\.sanger\.ac\.uk//;
+    
+    foreach my $server (keys %chemdata) {
+        my $ovhandle = $chemdata{$whereAmI};
+        if ($server ne $whereAmI) {
+            my $nvhandle = $chemdata{$server};
+	    print "copy from $whereAmI to $server: $ovhandle to $nvhandle\n";
+            $report .= $ovhandle->copy($nvhandle,'where',1,$doCopy,{keyColumn=>'chemtype'}) if ($ovhandle && $nvhandle); 
+        }
+    }
+}
+
+else {
+    my $script = $GateKeeper->currentScript;
+    $report .= "! Invalid subject '$subject' for script $script\n";
+}
+
+print "$report\n";
 
 ##############################################################################
 # EXIT

@@ -30,11 +30,24 @@ my $database   = $cgi->parameter('database') || 'arcturus';
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-$GateKeeper->cgiHeader(2);
+$GateKeeper->cgiHeader(1);
+
+my $session = $GateKeeper->newSessionNumber ('ejz');
+
+print "session: $session \n";
+
+#$GateKeeper->
+
+$GateKeeper->disconnect();
+
+exit 0;
+
 
 ##############################################################################
 # MAIN
 ##############################################################################
+
+$GateKeeper->cgiHeader(2);
 
 my $status = $GateKeeper->authorize(0,{'nosession'=>0, silently=>1, ageWindow=>300});
 
@@ -42,7 +55,7 @@ my $page = $GateKeeper->GUI("Keeper TEST setup");
     $page->form(0);
     $page->flush;
     $GateKeeper->disconnect;
-exit 0;
+# exit 0;
 
 if (!$status) {
     my $error = $GateKeeper->{error};
@@ -69,3 +82,5 @@ else {
 $GateKeeper->disconnect();
 
 exit 0;
+
+
