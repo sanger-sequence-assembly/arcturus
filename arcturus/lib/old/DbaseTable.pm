@@ -1008,8 +1008,11 @@ sub newrow {
     elsif (ref($cname) eq 'ARRAY' && ref($value) eq 'ARRAY') {
         @cinserts = @$cname;
         @vinserts = @$value;
-        $inputStatus = 0 if (@cinserts != @vinserts);
-        $error = "unequal array sizes" if !$inputStatus;
+        if (@cinserts != @vinserts) {
+            my $nc = @cinserts; my $nv = @vinserts;
+            $error = "unequal array sizes (cname $nc, value $nv)";
+            $inputStatus = 0;
+        }
     }
     elsif (ref($cname) eq 'ARRAY' || ref($value) eq 'ARRAY') {
         $inputStatus = 0; # one array missing
@@ -1029,8 +1032,13 @@ sub newrow {
         if (ref($Cname) eq 'ARRAY' && ref($Value) eq 'ARRAY') {
             push @cinserts, @$Cname;
             push @vinserts, @$Value;
-            $inputStatus = 0 if (@cinserts != @vinserts);
-            $error = "unequal array sizes" if !$inputStatus;
+            if (@cinserts != @vinserts) {
+                my $nc = @cinserts; my $nv = @vinserts;
+                $error = "unequal array sizes (Cname $nc, Value $nv)";
+                $inputStatus = 0;
+            }
+#            $inputStatus = 0 if (@cinserts != @vinserts);
+#            $error = "unequal array sizes" if !$inputStatus;
         }
         elsif (ref($Cname) eq 'ARRAY' || ref($Value) eq 'ARRAY') {
             $inputStatus = 0;
