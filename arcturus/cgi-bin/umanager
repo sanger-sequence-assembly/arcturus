@@ -175,6 +175,7 @@ elsif ($option eq "register") {
             next if ($item eq 'ustatus');
             next if ($item eq 'seniority');
             next if ($item eq 'attributes');
+            next if ($item eq 'projects');
             push @useritems, $item;
             my $input = $cgi->parameter($item);
             if (!defined($input) || !$input || $input =~ /\-\-/ || !($input =~ /\w/)) {
