@@ -281,17 +281,19 @@ sub putContig {
 
     $contig->getStatistics(2);
 
+    my $contigname = $contig->getContigName();
+
 # test the Contig reads and mappings for completeness (using readname)
 
     if (!$this->testContigForImport($contig)) {
-        print STDERR "Contig ".$contig->getContigName." NOT loaded\n";
-        return 0;
+        return 0,"Contig $contigname failed completeness test";
     }
 
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
  
     my $reads = $contig->getReads();
-    return 0 unless $this->getSequenceIDForAssembledReads($reads);
+    return 0, "Missing sequence IDs for contig $contigname" 
+       unless $this->getSequenceIDForAssembledReads($reads);
 
 # get the sequenceIDs (from Read); also build the readnames array 
 
@@ -306,7 +308,7 @@ sub putContig {
 # and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
     foreach my $mapping (@$mappings) {
-        my $readname = $mapping->getReadName();
+        my $readname = $mapping->getMappingName();
         $mapping->setSequenceID($seqids{$readname});
     }
 
@@ -320,14 +322,12 @@ sub putContig {
     $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
     if ($previous) {
-# the read name hash or the sequence IDs hash do match
+# the read name hash or the sequence IDs hash does match
 # pull out previous contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous,type=>'read');
         if ($contig->isSameAs($previous)) {
-            print STDERR "Contig ".$contig->getContigName.
-                         " is identical to contig ".
-                         $previous->getContigName."\n" if $list;
-            return $previous->getContigID();
+            return $previous->getContigID(),"Contig $contigname is ".
+                   "identical to contig ".$previous->getContigName();
         }
     }
 
@@ -351,6 +351,7 @@ print "linked contigs: @$contigids for contig ".$contig->getContigName."\n";
                              $previous->getContigName().
                              " detected in contig ".
 			     $contig->getContigName()."\n" if $list;
+                
             }
         }
 # to be removed after testing
@@ -360,16 +361,16 @@ print STDOUT "Contig ".$contig->getContigName." ".
 }
 # until here
     }
-    elsif ($list) {
+    else {
 # the contig has no precursor, is completely new
-        print STDERR "Contig ".$contig->getContigName." has no parents\n";
+        print STDERR "Contig ".$contig->getContigName." has no parents\n" if $list;
 # add a dummy mapping to the contig (without segments)
-        my $mapping = new Mapping();
-        $mapping->setSequenceID(0); # parent 0
-        $contig->addMapping($mapping);
+#        my $mapping = new Mapping();
+#        $mapping->setSequenceID(0); # parent 0
+#        $contig->addMapping($mapping);
     }
 
-return 0; # testing
+# return 0,"NO LOADING"; # testing
 
 # now load the contig into the database
 
@@ -379,17 +380,19 @@ return 0; # testing
 
     $this->{lastinsertedcontigid} = $contigid;
 
-    return 0 unless $contigid;
+    return 0, "Failed to insert metadata for $contigname" unless $contigid;
 
     $contig->setContigID($contigid);
 
 # then load the overall mappings (and put the mapping ID's in the instances)
 
-    return 0 unless &putMappingsForContig($dbh,$contig,type=>'read');
+    return 0, "Failed to insert read-to-contig mappings for $contigname"
+    unless &putMappingsForContig($dbh,$contig,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
-    return 0 unless &putMappingsForContig($dbh,$contig,type=>'contig');
+    return 0, "Failed to insert contig-to-contig mappings for $contigname"
+    unless &putMappingsForContig($dbh,$contig,type=>'contig');
 
 # and contig tags?
 
@@ -397,7 +400,7 @@ return 0; # testing
 
 # $this->ageByOne($contigid);
 
-    return $contigid;
+    return $contigid, "OK";
    
 # 2) lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
@@ -553,18 +556,18 @@ sub testContig {
         foreach my $mapping (@$mappings) {
 # get the identifier: for export sequence ID; for import readname
             if ($mapping->hasSegments) {
-                $ID = $mapping->getReadName()    if $level;
+                $ID = $mapping->getMappingName()    if $level;
 	        $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
                 if (!$identifier{$ID}) {
                     print STDERR "Missing Read for Mapping ".
-                            $mapping->getReadName." ($ID)\n";
+                            $mapping->getMappingName." ($ID)\n";
                     $success = 0;
                 }
                 delete $identifier{$ID}; # delete the key
             }
 	    else {
-                print STDERR "Mapping ".$mapping->getReadName().
+                print STDERR "Mapping ".$mapping->getMappingName().
                          " for Contig ".$contig->getContigName().
                          " has no Segments\n";
                 $success = 0;
@@ -610,7 +613,7 @@ sub deleteContig {
 
     return unless $contigid;
 
-    my @tables = ('CONTIG','MAPPING','SEGMENT','C2CMAPPING','C2CSEGMENT');
+    my @tables = ('CONTIG','MAPPING','SEGMENT','C2CMAPPING','C2CSEGMENT','CONSENSUS');
 
 # to be completed
 }
@@ -646,10 +649,10 @@ sub getMappingsForContig {
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
-    while(my ($rn, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
+    while(my ($nm, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
 # intialise and add readname and sequence ID
-        my $mapping = new Mapping();
-        $mapping->setReadName($rn);
+        my $mapping = new Mapping($nm);
+#        $mapping->setMappingName($rn);
         $mapping->setSequenceID($sid);
         $mapping->setAlignmentDirection($dir);
 # add Mapping instance to output list and hash list keyed on mapping ID
@@ -791,7 +794,7 @@ my $test = 0; # to removed later
             }
         }
         else {
-            print STDERR "Mapping ".$mapping->getReadName().
+            print STDERR "Mapping ".$mapping->getMappingName().
 		" has no mapping_id\n";
             $success = 0;
         }
