@@ -74,8 +74,8 @@ if (defined($sequence)) {
 	    my $middle = substr($sequence, $qleft, $qright - $qleft + 1);
 	    my $right = substr($sequence, $qright);
 
-	    $left =~ tr/[ACGTacgt]/X/;
-	    $right =~ tr/[ACGTacgt]/X/;
+	    $left =~ tr/[ACGTNacgtn]/X/;
+	    $right =~ tr/[ACGTNacgtn]/X/;
 
 	    $sequence = $left . $middle . $right;
 	}
@@ -94,7 +94,7 @@ if (defined($sequence)) {
 	    my $middle = substr($sequence, $svleft, $svright - $svleft + 1);
 	    my $right = substr($sequence, $svright);
 
-	    $middle =~ tr/[ACGTacgt]/X/;
+	    $middle =~ tr/[ACGTNacgtn]/X/;
 
 	    $sequence = $left . $middle . $right;
 	}
