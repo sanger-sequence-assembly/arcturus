@@ -14,7 +14,7 @@ BEGIN {
    $ENV{TWO_TASK}    = 'sids';
    $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
    $ENV{PATH}       .= ':/usr/local/badger/bin';
-   use lib '/nfs/pathsoft/arcturus/dev/lib';
+#   use lib '/nfs/pathsoft/arcturus/dev/lib';
 }
 
 use GateKeeper; 
