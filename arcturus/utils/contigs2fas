@@ -120,7 +120,6 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance [default: prod]\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
-    print STDERR "    -quality\t\tName of output quality file\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
 }
