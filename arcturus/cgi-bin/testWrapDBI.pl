@@ -2,7 +2,7 @@
 
 use WrapMySQL;
 
-WrapMySQL->initFromFile('wrapmysql.ini');
+WrapMySQL->initFromFile('wrapmysql.ini') unless defined($ENV{'WRAPMYSQL_INI'});
 
 @dbs = ('pcs3.prod', 'pcs3.dev', 'pcs3.test', 'babel.prod', 'babel.dev', 'babel.test');
 
