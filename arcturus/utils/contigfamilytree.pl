@@ -112,6 +112,8 @@ sub displayParents {
 
     $stmt->finish();
 
+    return unless (scalar(@parents) > 0);
+
     foreach my $parent (@parents) {
 	my ($parentid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$parent};
 
