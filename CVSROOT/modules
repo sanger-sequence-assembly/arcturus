@@ -31,9 +31,21 @@ powmap_etc powmap/etc
 powmap_lib powmap/lib
 powmap_META-INF powmap/META-INF
 powmap_corba powmap/corba
+
 flatserve flatimpl &diana &corba &etc &uk &collections
 agct agctimpl &uk &diana &etc &collections
 flatserve_control flatserve_control_impl &powmap_lib &powmap_corba &powmap_diana &powmap_etc &powmap_uk &powmap_collections
 artemis_applet artemis_applet_impl &powmap_diana &powmap_etc &powmap_uk &powmap_collections &powmap_META-INF
+
 AnT zoo/modules/AnT
 public_modules public_modules_impl &AnT
+
+zoo_art_config psu/config/art
+zoo_data psu/data
+zoo_app psu/src/perl/app
+zoo_general psu/src/perl/general
+zoo_modules psu/src/perl/modules
+zoo_pombe psu/src/perl/pombe
+zoo_strepc psu/src/perl/strepc
+
+zoo zoo_impl &zoo_config
