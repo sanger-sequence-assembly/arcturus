@@ -528,7 +528,7 @@ sub alignToContig {
     my $counts   = $self->{counts};
     my $status   = $self->{status};
 
-my $DEBUG = 0;
+my $DEBUG = 1;
 print "enter new alignToContig for $self->{names}->[0]$break" if $DEBUG;
 
     my $alignToCaf = scalar(keys %$read2pad); # number of align_to_caf maps
@@ -618,6 +618,7 @@ undef @{ $self->{padtocon}} if $DEBUG; # test option
 # incompatible mappings
         $status->{diagnosis} .= "! Incompatible mappings: cannot decide ";
         $status->{diagnosis} .= "between padded and unpadded status$break"; 
+        $status->{diagnosis} .= "assembled: $assembled aligned: $alignToCaf$break";
         $status->{errors}++;
     }
 
