@@ -1313,7 +1313,7 @@ $self->logger(" ... identified (type = $readItems->{CHT})$break");
 # try to recover using Chemtype description
         if ($chemistry = $CHEMTYPES->associate('description',$readItems->{CHT},'chemtype')) {
             $readItems->{CH} = $chemistry;
-#            $CHEMISTRY->newrow('identifier', $chemistry);
+            $CHEMISTRY->counter('identifier',$chemistry,0); # the row could exist
 $self->logger("... recovered: = $readItems->{CH})$break");
             $CHEMISTRY->update('chemtype', $readItems->{CHT},'identifier', $chemistry);
             $CHEMISTRY->build(1); # rebuild internal table
