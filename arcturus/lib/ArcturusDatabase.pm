@@ -31,7 +31,7 @@ sub new {
 	$this->{DataSource} = new DataSource(@_);
     }
 
-    $this->init();
+    $this->init(); 
 
     return $this;
 }
@@ -41,9 +41,11 @@ sub init {
 
     return if defined($this->{inited});
 
-    my $ds = $this->{DataSource};
+    my $ds = $this->{DataSource} || return; 
 
     $this->{Connection} = $ds->getConnection();
+
+    return unless $this->{Connection};
 
     $this->populateDictionaries();
 
@@ -78,11 +80,22 @@ sub getURL {
 
 sub dataBaseError {
 # local function error message on STDERR
-    my $msg = shift;
+    my $msg  = shift;
 
     print STDERR "$msg\n" if $msg;
 
     print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
+
+    return $DBI::err;
+}
+
+sub errorStatus {
+# return 0 for correctly opened database
+    my $this = shift;
+
+    return 1 unless $this->getConnection();
+
+    return &dataBaseError();
 }
 
 sub disconnect {
@@ -563,7 +576,7 @@ sub getListOfReadNames {
     return \@reads;
 }
 
-sub isReadInDatabase {
+sub hasRead {
 # test presence of read with specified readname; return (first) read_id
     my $this      = shift;
     my $readname  = shift || return; # readname to be tested

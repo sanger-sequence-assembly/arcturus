@@ -134,6 +134,8 @@ sub getAssemblyDirectory {
 
     confess "getAssemblyDirectory requires an argument" unless defined($name);
 
+    $name = &nameMap($name);
+
     my $asmdir = $this->{AssemblyMap};
     return $asmdir->{uc($name)};
 }
@@ -141,8 +143,6 @@ sub getAssemblyDirectory {
 sub getDefaultAssemblyCafFile {
     my $this = shift;
     my $name = shift;
-
-    $name = &nameMap($name);
 
     my $AD = $this->getAssemblyDirectory($name);
 
@@ -176,12 +176,15 @@ sub nameMap {
 # translate Arturus name to Oracle name
     my $name = shift;
 
-    $name =~ s /SCH/SH/; # fix for SCHISTO
+    $name =~ s /SCH/SH/ if $name; # fix for SCHISTO
 
     return $name;
 }
 
 1;
+
+
+
 
 
 
