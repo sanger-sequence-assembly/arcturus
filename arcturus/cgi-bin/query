@@ -732,7 +732,7 @@ my $hashes = $ReadsRecall->spawnReads(\@number,'scompress,sequence,slength');
 elsif ($action eq "selectcontig") {
 
     my $CONTIGS = $organisms->spawn("CONTIGS",$database,0,0);
-    my $creader = ContigRecall->init($CONTIGS,1);
+    my $creader = ContigRecall->init($CONTIGS,0);
 
     my $contigitem = $GateKeeper->lookup('contigitem');
     my $contignmbr = $GateKeeper->lookup('contignmbr');
