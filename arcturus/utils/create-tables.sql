@@ -452,7 +452,7 @@ CREATE TABLE QUALITYCLIP (
 CREATE TABLE ALIGN2SCF (
   seq_id mediumint unsigned NOT NULL,
   startinseq smallint unsigned NOT NULL,
-  startinscf  smallint unsigned NOT NULL,
+  startinscf smallint unsigned NOT NULL,
   length smallint unsigned NOT NULL,
   KEY (seq_id)
 ) TYPE=MyISAM;

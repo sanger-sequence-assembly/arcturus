@@ -20,11 +20,13 @@ my $seq_id;
 my $version;
 my $contig_id;
 my $SCFchem;
+my $caf;
+my $fasta;
 my $fofn;
 my $html;
 my $verbose;
 
-my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|html|verbose|help";
+my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|html|caf|fasta|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -50,6 +52,10 @@ while (my $nextword = shift @ARGV) {
     $SCFchem   = 1            if ($nextword eq '-chemistry');
 
     $html      = 1            if ($nextword eq '-html');
+
+    $fasta     = 1            if ($nextword eq '-fasta');
+
+    $caf       = 1            if ($nextword eq '-caf');
 
     $verbose   = 1            if ($nextword eq '-verbose');
 
@@ -96,7 +102,7 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-my $rdir; 
+my $rdir;
 my $read;
 my @reads;
 
@@ -107,13 +113,19 @@ $read = $adb->getRead(read_id=>$read_id, version=>$version) if $read_id;
 push @reads, $read if $read;
 
 undef $read;
-$read = $adb->getRead(readname=>$readname, version=>$version) if $readname;
-#$read = $adb->getReadByName($readname, $version) if $readname;
+$read = $adb->getReadByName($readname, $version) if $readname;
 push @reads, $read if $read;
 
 undef $read;
 $read = $adb->getReadBySequenceID($seq_id) if $seq_id;
 push @reads, $read if $read;
+
+if ($fofn) {
+    foreach my $name (@$fofn) {
+        $read = $adb->getReadByName($name,0);
+        push @reads, $read if $read;
+    }
+}
 
 
 if ($contig_id) {
@@ -134,12 +146,38 @@ my @items = ('read_id','readname','seq_id','version',
              'template','ligation','insertsize','clone',
              'chemistry','SCFchemistry','strand','primer','aspeddate',
              'basecaller','lqleft','lqright','slength','sequence',
-             'quality','pstatus');
+             'quality','align-to-SCF','pstatus');
 
 $logger->warning("No reads selected") if !@reads;
 
 foreach my $read (@reads) {
     print STDERR "$break";
+
+    $read->writeToCaf(*STDOUT) if $caf;
+
+    $read->writeToFasta(*STDOUT,*STDOUT) if $fasta;
+
+    next if ($caf || $fasta);
+
+    if ($SCFchem && !defined($rdir)) {
+        my $PR = new PathogenRepository();
+        $rdir = $PR->getAssemblyDirectory($organism);
+        $rdir =~ s?/assembly??;
+	print "rdir: $rdir \n";
+    }
+
+    &list($read,$rdir);
+ 
+}
+
+exit;
+
+#--------------------------------------------------------------------------
+
+sub list {
+    my $read = shift;
+    my $rdir = shift; # if rdir defined, do full chemistry
+
     undef my %L;
 
     $L{read_id}    = $read->getReadID;
@@ -153,13 +191,9 @@ foreach my $read (@reads) {
     $L{clone}      = $read->getClone || '';
    
     $L{chemistry}  = $read->getChemistry;
-    if ($SCFchem && (my $ta = $read->getTraceArchiveIdentifier)) {
+    if ($rdir && (my $ta = $read->getTraceArchiveIdentifier)) {
 # get full chemistry from SCF file, if present
-        if (!defined($rdir)) {
-            my $PR = new PathogenRepository();
-            $rdir = $PR->getAssemblyDirectory($organism);
-            $rdir =~ s?/assembly??;
-        }
+        $ta =~ s/\~\w+\///; # remove possibly added ~name
         $L{SCFchemistry} = &SCFchemistry($rdir,$ta);
     }
     $L{strand}     = $read->getStrand;
@@ -242,9 +276,17 @@ foreach my $read (@reads) {
         print $value.$break;
     }
 
+# align to scf records
+
+    my $aligns = $read->getAlignToTrace();
+    if ($aligns && scalar(@$aligns) > 1) {
+        foreach my $align (@$aligns) {
+            printf ("%12s  %4d - %4d     %4d - %4d $break",@$aligns);
+        }
+    }
+
 # finally, comments, if any
 
-    undef my $comment;
     if (my $comments = $read->getComment()) {
         foreach my $comment (@$comments) {
             printf ("%12s  %-20s  ",'comment',$comment);
@@ -252,8 +294,6 @@ foreach my $read (@reads) {
         }
     }
 }
-
-exit;
 
 #------------------------------------------------------------------------
 # parse trace file information for full chemistry information
@@ -272,9 +312,10 @@ sub SCFchemistry {
     my $command = "/usr/local/badger/distrib-1999.0/alpha-bin/get_scf_field $SCFfile";
 
     my $chemistry = `$command`;
-print "chemistry: recovery activated$break" unless $chemistry;
+#print "chemistry: recovery activated$break" unless $chemistry;
     $chemistry = `/nfs/pathsoft/arcturus/dev/cgi-bin/orecover.sh $command` unless $chemistry;
 
+#print "Chemistry $chemistry\n";
     if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
         $chemistry = $1;
         if ($chemistry =~ /Tag/) {
@@ -335,15 +376,3 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
-
-
-
-
-
-
-
-
-
-
-
-

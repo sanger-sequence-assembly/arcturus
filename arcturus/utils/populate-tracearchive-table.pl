@@ -21,8 +21,9 @@ my $verbose;
 my $subdir;
 my $filter;
 my $limit;
+my $inspect;
 
-my $validKeys  = "organism|instance|limit|subdir|filter|verbose|help";
+my $validKeys  = "organism|instance|limit|subdir|filter|verbose|inspect|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -40,6 +41,8 @@ while (my $nextword = shift @ARGV) {
     $limit     = shift @ARGV  if ($nextword eq '-limit');
  
     $verbose   = 1            if ($nextword eq '-verbose');
+ 
+    $inspect   = 1            if ($nextword eq '-inspect');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -92,9 +95,12 @@ else {
   
 # get all readids without tracearchive reference (and sanger style name)
 
-my $names = $adb->getListOfReadNames(noTraceRef=>1, onlySanger=>1);
+my $ntr = $inspect ? 0 : 1;
+my $names = $adb->getListOfReadNames(noTraceRef=>$ntr, onlySanger=>1);
 my $nr = scalar(@$names);
-$logger->warning("$nr readnames found in database $organism"); 
+$logger->warning("$nr readnames to be processed found in database $organism");
+
+exit unless $nr; 
  
 my %include;
 foreach my $name (@$names) {
@@ -112,6 +118,7 @@ foreach my $scffile (sort keys %$accepted) {
     $logger->info("adding $readname $accepted->{$scffile}");
     if (my $read = $adb->getReadByName($readname)) {
         $read->setTraceArchiveIdentifier($accepted->{$scffile});
+        next if $inspect; # no loading
         my ($s,$t) = $adb->putTraceArchiveIdentifierForRead($read);
         $logger->severe($t) unless $s;
         $added++ if $s;
@@ -120,7 +127,7 @@ foreach my $scffile (sort keys %$accepted) {
         $logger->severe("Could not retrieve read $readname");
     }
 }
-        
+
 $logger->warning("$added trace file references added");
 
 exit;
@@ -211,19 +218,12 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
+    print STDERR "-subdir\t\tsubdirectory filter\n";
+    print STDERR "-filter\t\tfilename filter\n";
+    print STDERR "-limit\t\tmaximum number of entries to be processed\n";
+    print STDERR "-inspect\t(no value) test mode\n";
+    print STDERR "-verbose\t(no value)\n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
 }
-
-
-
-
-
-
-
-
-
-
-
-
