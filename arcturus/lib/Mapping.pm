@@ -117,13 +117,14 @@ sub compare {
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
-print "compare mapping $this and $compare , sort\n";
+#print "compare mapping $this and $compare , sort\n";
 
     my $tmaps = $this->orderSegments();
     my $cmaps = $compare->orderSegments();
 
     return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
     return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
+#print "tmaps $tmaps cmaps $cmaps ".scalar(@$tmaps)."\n";
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
@@ -135,6 +136,10 @@ print "compare mapping $this and $compare , sort\n";
 	my $csegment = $cmaps->[$i];
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
 print "segment comparison: $identical,$aligned,$offset \n" unless $identical;
+        if (!defined($offset)) {
+print "t ".$tsegment->toString;
+print "c ".$csegment->toString;
+        }
         return 0 unless $identical;
 # on first one register shift and alignment direction
         if (!defined($align) && !defined($shift)) {
@@ -159,25 +164,24 @@ sub orderSegments {
 
     my $segments = $this->getSegments() || return;
 
-# ensure all segments are normalised on the read domain
+# ensure all segments are normalised on the read domain and sort on Ystart
 
     foreach my $segment (@$segments) {
         $segment->normaliseOnY();
     }
 
-#    if (!$this->{nolist}) {
-#        print $this->assembledFromToString();
-#       @$segments = sort { $b->normaliseOnY <=> $a->normaliseOnY } @$segments; 
-#        print $this->assembledFromToString();
-#    }
+    @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
-# all segments are normalised on the read domain and sorted
+# deal with unit-length intervals (if the read and contig are counter aligned)
 
-    @$segments = sort { $a->normaliseOnY <=> $b->normaliseOnY } @$segments; 
-#    @$segments = sort { $a->getYstart <=> $b->getYstart } @$segments; 
+    my $n = scalar(@$segments) - 1;
 
-#    print $this->assembledFromToString() unless $this->{nolist};
-#    $this->{nolist} = 1 if (@$segments > 3);
+    if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
+# the counter align method only works for unit length intervals
+        foreach my $segment (@$segments) {
+            $segment->counterAlignUnitLengthInterval();
+        }
+    }
 
     return $segments;
 }

@@ -492,7 +492,7 @@ sub isSameAs {
 # mappings are identified using their sequence IDs or their readnames
 # this assumes that both sets of mappings have the same type of data
 
-print "getting inventory for mappings\n";
+#print "getting inventory for mappings\n";
     my $sequence = {};
     my $numberofmappings = 0;
     if (my $mappings = $this->getMappings()) {
@@ -520,7 +520,7 @@ print "cannot find mapping for key $key \n" unless $match;
             return 0 unless defined($match); # there is no counterpart in $this
 # compare the two maps
             my ($identical,$aligned,$offset) = $match->compare($mapping);
-print "mapping comparison: $identical,$aligned,$offset \n";
+# print "mapping comparison: $identical,$aligned,$offset \n";
 print "match   : ".$match->assembledFromToString unless $identical;
 print "mapping : ".$mapping->assembledFromToString unless $identical;
             return 0 unless $identical;
@@ -536,7 +536,8 @@ print "mapping : ".$mapping->assembledFromToString unless $identical;
 # returns undef if no or invalid mappings found in the $compare Contig instance
 # returns false (but defined = 0) if any mismatch found between mappings
 
- print "Output Contig->isSameAs : $align\n";
+print "Contig ".$this->getContigName()." isSameAs ($align) ".
+                $compare->getContigName()."\n";
     return $align; # 1 for identical, -1 for identical but inverted
 }   
 

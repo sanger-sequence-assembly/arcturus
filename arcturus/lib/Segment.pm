@@ -34,6 +34,9 @@ sub new {
 
     my $direction = (($yf-$ys) == ($xf-$xs)) ? 1 : -1;
 
+# NOTE: unit-length intervals get direction = 1 by default. If direction -1
+#       is required use method counterAlignUnitLengthInterval to invert
+
     my $offset = $xs - $direction * $ys;
 
     @{$this} = ($direction,$offset,$ys,$yf); # copy to local array
@@ -56,7 +59,7 @@ sub normaliseOnY {
 
     $this->invert() if ($this->[2] > $this->[3]);
 
-    return $this->getYstart();
+    return $this->getYstart(); # (re: Mapping->orederSegments)
 }
 
 sub normaliseOnX {
@@ -85,7 +88,6 @@ sub applyShiftToX {
 sub getXstart {
     my $this = shift;
 # transform ystart via X = d * Y + o
-#print "getXstart coefs: @$this \n";
     my $xstart = $this->[2]; # ystart
     $xstart = -$xstart if ($this->[0] < 0); # alignment
     $xstart += $this->[1]; # offset
@@ -137,9 +139,6 @@ sub compare {
 # the two segments should be normalized on Y and have identical Y (read) range
 # the method will return the alignment and offset for the X (contig) ranges
 
-#    $this->normalizeOnY();
-#    $segment->normalizeOnY();
-
     return unless ($this->getYstart() == $segment->getYstart());
     return unless ($this->getYfinis() == $segment->getYfinis());
 
@@ -154,6 +153,23 @@ sub compare {
     $offset -= $segment->getOffset();
 
     return (1, $alignment, $offset);
+}
+
+sub counterAlignUnitLengthInterval {
+# change the alignment direction for a unit-length interval
+    my $this = shift;
+
+    return if ($this->getAlignment() < 0); # already done
+
+    my $ystart = $this->getYstart();
+
+    return if ($ystart != $this->getYfinis()); # not a unit interval
+
+# calculate new offset from current value and invert direction
+
+    $this->[1] = $ystart + $ystart + $this->getOffset();
+
+    $this->[0] = -1;
 }
 
 #----------------------------------------------------------------------
@@ -199,7 +215,7 @@ sub getYforX {
 }
 
 sub toString {
-# write segment to string as is (no normalisation done)
+# write segment to string as is
     my $this = shift;
 
     my $xstart = $this->getXstart();
