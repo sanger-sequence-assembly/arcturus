@@ -30,4 +30,4 @@ collections powmap/collections
 powmap_etc powmap/etc
 powmap_corba powmap/corba
 flatserve flatimpl &powmap_corba &powmap_etc &uk &collections
-agct agctimpl &uk &diana &powmap_etc &collections
+agct agctimpl &uk &diana &powmap_etc &powmap_corba &collections
