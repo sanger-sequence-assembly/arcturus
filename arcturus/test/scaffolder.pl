@@ -13,6 +13,8 @@ my $minbacbridges = 2;
 my $minlen = 0;
 my $puclimit = 8000;
 my $usesilow = 0;
+my $updateproject = 0;
+my $minprojectsize = 5000;
 
 ###
 ### Parse arguments
@@ -25,11 +27,14 @@ while (my $nextword = shift @ARGV) {
     $minbacbridges = shift @ARGV if ($nextword eq '-minbacbridges');
     $minlen = shift @ARGV if ($nextword eq '-minlen');
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
+    $minprojectsize = shift @ARGV if ($nextword eq '-minprojectsize');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
 
     $verbose = 1 if ($nextword eq '-verbose');
     $progress = 1 if ($nextword eq '-progress');
+
+    $updateproject = 1 if ($nextword eq '-updateproject');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -70,13 +75,15 @@ my $statements = &CreateStatements($dbh);
 
 my $contiglength = {};
 my @contiglist;
+my $project = {};
 
 my $sth = $statements->{'currentcontigs'};
 
 $sth->execute($minlen);
 
-while (my ($ctgid, $ctglen) = $sth->fetchrow_array()) {
+while (my ($ctgid, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
+    $project->{$ctgid} = $ctgproject;
     push @contiglist, $ctgid;
 }
 
@@ -94,22 +101,6 @@ foreach my $ctgid (@contiglist) {
     $sth->execute($ctgid);
     my ($ctgname) = $sth->fetchrow_array();
     $contigname->{$ctgid} = $ctgname;
-}
-
-$sth->finish();
-
-###
-### Make a contig-to-project mapping
-###
-
-my $project = {};
-
-$sth = $statements->{'projectforcontig'};
-
-$sth->execute();
-
-while (my ($ctgid, $projid) = $sth->fetchrow_array()) {
-    $project->{$ctgid} = $projid if defined($contiglength->{$ctgid});
 }
 
 $sth->finish();
@@ -138,12 +129,18 @@ if ($progress) {
     printf STDERR $format, $done, $alldone;
 }
 
+my $sth_setproject = $statements->{'setproject'};
+
 foreach my $contigid (@contiglist) {
     $done++;
 
     if ($progress && (($done % 10) == 0)) {
 	print STDERR $bs;
 	printf STDERR $format, $done, $alldone;
+    }
+
+    if ($updateproject) {
+	$sth_setproject->execute(0, $contigid);
     }
 
     ###
@@ -167,6 +164,10 @@ foreach my $contigid (@contiglist) {
     push @scaffoldlist, $scaffold;
 
     my $seedcontigid = $contigid;
+
+    my $contiglist = [];
+
+    push @{$contiglist}, $contigid;
 
     $scaffoldid++;
 
@@ -192,6 +193,8 @@ foreach my $contigid (@contiglist) {
 
 	push @{$scaffold}, $nextgap, [$nextcontigid, $nextdir];
 
+	push @{$contiglist}, $nextcontigid;
+
 	$lastcontigid = $nextcontigid;
 
 	$lastend = ($linkend eq 'L') ? 'R' : 'L';
@@ -215,6 +218,8 @@ foreach my $contigid (@contiglist) {
 	$contigtoscaffold->{$nextcontigid} = $scaffold;
 
 	unshift @{$scaffold}, [$nextcontigid, $nextdir], $nextgap;
+
+	push @{$contiglist}, $nextcontigid;
 
 	$lastcontigid = $nextcontigid;
 
@@ -252,7 +257,7 @@ foreach my $contigid (@contiglist) {
     }
 
     $scaffoldlength{$scaffold} = $totlen + $totgap;
-    $scaffoldcontigs{$scaffold} = $totctg;
+    $scaffoldcontigs{$scaffold} = $contiglist;
 
     ###
     ### Display the scaffold
@@ -419,15 +424,19 @@ print "SUPER-SCAFFOLDS\n\n";
 
 my $scaffoldtosuperscaffold = {};
 
+my $project = 0;
+
 for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
     next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
 
     my $scaffold = $scaffoldfromid{$seedscaffoldid};
     my $bp = $scaffoldlength{$scaffold};
-    my $ctg = $scaffoldcontigs{$scaffold};
+    my $ctglist = $scaffoldcontigs{$scaffold};
+    my $ctg = scalar(@{$ctglist});
 
     my $totbp = $bp;
-    my $totctg = $ctg;
+    my $totctg = [];
+    push @{$totctg}, @{$ctglist};
     my $totscaff = 1;
 
     print "\n\n++++++++++          ++++++++++          ++++++++++          ++++++++++\n\n";
@@ -454,10 +463,11 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	$scaffold = $scaffoldfromid{$nextscaffoldid};
 
 	$bp = $scaffoldlength{$scaffold};
-	$ctg = $scaffoldcontigs{$scaffold};
+	$ctglist = $scaffoldcontigs{$scaffold};
+	$ctg = scalar(@{$ctglist});
 
 	$totbp += $bp;
-	$totctg += $ctg;
+	push @{$totctg}, @{$ctglist};
 	$totscaff++;
 
 	my $nextdir = ($nextend eq 'L') ? 'F' : 'R';
@@ -490,10 +500,11 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	$scaffold = $scaffoldfromid{$nextscaffoldid};
 
 	$bp = $scaffoldlength{$scaffold};
-	$ctg = $scaffoldcontigs{$scaffold};
+	$ctglist = $scaffoldcontigs{$scaffold};
+	$ctg = scalar(@{$ctglist});
 
 	$totbp += $bp;
-	$totctg += $ctg;
+	push @{$totctg}, @{$ctglist};
 	$totscaff++;
 
 	my $nextdir = ($nextend eq 'R') ? 'F' : 'R';
@@ -509,8 +520,18 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	$lastend = ($nextend eq 'L') ? 'R' : 'L';
     }
 
+    my $contigcount = scalar(@{$totctg});
+
     if ($totscaff > 1) {
-	print "\n\nSEED: $seedscaffoldid, $totscaff scaffolds, $totctg contigs, $totbp bp\n\n";
+	print "\n\nSEED: $seedscaffoldid, $totscaff scaffolds, $contigcount contigs, $totbp bp\n\n";
+    }
+
+    if ($updateproject && $contigcount > 1 && $totbp >= $minprojectsize) {
+	$project++;
+
+	foreach my $ctgid (@{$totctg}) {
+	    $sth_setproject->execute($project, $ctgid);
+	}
     }
 }
 
@@ -557,7 +578,7 @@ sub CreateStatements {
     my $dbh = shift;
 
     my %queries = ("currentcontigs",
-		   "select CONTIG.contig_id,CONTIG.length" .
+		   "select CONTIG.contig_id,CONTIG.length,CONTIG.project" .
 		   "  from CONTIG left join C2CMAPPING" .
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
@@ -567,10 +588,6 @@ sub CreateStatements {
 		   "select readname from MAPPING,SEQ2READ,READS" .
 		   " where cstart = 1 and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id" .
 		   " and contig_id = ? limit 1",
-
-		   "projectforcontig",
-		   "select CONTIG.contig_id,project" .
-		   "  from CONTIG left join CONTIG2PROJECT using(contig_id)",
 
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
@@ -602,7 +619,10 @@ sub CreateStatements {
 
 		   "readsfortemplate",
 		   "select READS.read_id,readname,strand,seq_id from READS left join SEQ2READ" .
-		   " using(read_id) where template_id = ? order by strand asc, READS.read_id asc"
+		   " using(read_id) where template_id = ? order by strand asc, READS.read_id asc",
+
+		   "setproject",
+		   "update CONTIG set project = ? where contig_id = ?"
 		   );
 
     my $statements = {};
@@ -815,4 +835,6 @@ sub showUsage {
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
     print STDERR "-progress\tDisplay progress info on STDERR (default: false)\n";
     print STDERR "-usesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
+    print STDERR "-updateproject\tUpdate each contig's project\n";
+    print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
 }
