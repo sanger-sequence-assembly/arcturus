@@ -126,8 +126,7 @@ sub populateDictionaries {
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
     $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
-# a place holder for template dictionary which will be built on the fly
-#    $this->{Dictionary}->{template} = {};
+# template name will be loaded in individual read extraction queries
 }
 
 sub populateLoadingDictionaries {
@@ -249,7 +248,7 @@ sub dictionaryInsert {
 }
 
 sub processReadData {
-# dictionary lookup (recall)
+# dictionary lookup (recall mode: IDs to values)
     my $this = shift;
     my $hashref = shift;
 
@@ -257,16 +256,11 @@ sub processReadData {
 
     foreach my $key (keys %{$hashref}) {
 	my $dict = $this->{Dictionary}->{$key};
-	my $value = $hashref->{$key};
+	my $k_id = $hashref->{$key};
 
-# template is a special case for which the dictionary is built on the fly
-        if ($key eq 'template') {
-#	    $value = &dictionaryLookup($dict, $value);                        
-        }
-
-	elsif (defined($dict)) {
+	if (defined($dict)) {
             
-	    $value = &dictionaryLookup($dict, $value);
+	    my $value = &dictionaryLookup($dict, $k_id);
 	    if (ref($value) && ref($value) eq 'ARRAY') {
 		$value = join(' ', @{$value});
 	    }
@@ -284,8 +278,20 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached("select * from READS where read_id=?");
-# or ?: "select READS.*,TEMPLATE.name as template from READS join TEMPLATE using (template_id) where read_id = ?"
+    my $query =  "select READS.*,
+                         TEMPLATE.name as template,
+                         TEMPLATE.ligation_id as ligation,
+                         LIGATION.clone_id as clone,
+                         SEQVEC.svector_id,SEQVEC.svleft,SEQVEC.svright,
+                         CLONEVEC.cvector_id,CLONEVEC.cvleft,CLONEVEC.cvright,
+                  from READS, TEMPLATE, LIGATION,SEQVEC,CLONEVEC
+                  where READS.template_id = TEMPLATE.template_id
+                    and TEMPLATE.ligation_id = LIGATION.ligation_id
+                    and SEQVEC.read_id = READS.read_id,
+                    and CLONEVEC.read_id = READS.read_id,
+                  and READS.read_id = ?";
+
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($readid);
 
@@ -297,9 +303,9 @@ sub getReadByID {
 
 	my $read = new Read();
 
-	$this->processReadData($hashref);
-
-	$read->importData($hashref);
+#	$this->processReadData($hashref);
+#
+#	$read->importData($hashref);
 
 	$read->setArcturusDatabase($this);
 
@@ -317,8 +323,8 @@ sub getReadByName {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select READS.*,TEMPLATE.name as template
-                 from READS leftjoin TEMPLATE using (template_id) 
+    my $query = "select READS.*,TEMPLATE.name as template,TEMPLATE.ligation_id 
+                 from READS left join TEMPLATE using (template_id) 
                  where readname = ?";
 
     my $sth = $dbh->prepare_cached($query);
@@ -332,9 +338,9 @@ sub getReadByName {
     if (defined($hashref)) {
 	my $read = new Read();
 
-	$this->processReadData($hashref);
+#	$this->processReadData($hashref);
 
-	$read->importData($hashref);
+#	$read->importData($hashref);
 
 	$read->setArcturusDatabase($this);
 
@@ -350,6 +356,10 @@ sub getReadsByID {
     my $this    = shift;
     my $readids = shift; # array ref
 
+    if (ref($readids) ne 'ARRAY') {
+        die "'getReadsByID' method expects an array of readIDs";
+    }
+
 # prepare the range list
 
     my $range = join ',',@$readids;
@@ -357,7 +367,7 @@ sub getReadsByID {
     my $dbh = $this->getConnection();
 
     my $query = "select READS.*,TEMPLATE.name as template
-                 from READS join TEMPLATE using (template_id) 
+                 from READS left join TEMPLATE using (template_id) 
                  where read_id in ($range)";
     my $sth = $dbh->prepare("select * from READS where read_id in ($range)");
 
@@ -369,9 +379,9 @@ sub getReadsByID {
 
 	my $read = new Read();
 
-	$this->processReadData($hashref);
+#	$this->processReadData($hashref);
 
-	$read->importData($hashref);
+#	$read->importData($hashref);
 
 	$read->setArcturusDatabase($this);
 
@@ -586,7 +596,7 @@ sub getTraceArchiveIdentifier {
 sub setTraceArchiveIdentifier {
 # enters the trace archive reference for the specifed read
     my $this = shift;
-    my ($key,$value,$junk) = @_;
+    my ($read_id,$tracearchiveref,$junk) = @_;
 
 
 # TO BE COMPLETED
@@ -837,7 +847,7 @@ sub putRead {
     my $seqveclist = $read->getSequencingVector();
 
     if (defined($seqveclist)) {
-	$query = "insert into SEQVEC(read_id,svector_id,begin,end) VALUES(?,?,?,?)";
+	$query = "insert into SEQVEC (read_id,svector_id,svleft,svright) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
@@ -846,13 +856,13 @@ sub putRead {
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
 	    my $seqvecid = &getReadAttributeID($seqvec,
-					       $this->{LoadingDictionary}->{'svector'},
-					       $this->{SelectStatement}->{'svector'},
-					       $this->{InsertStatement}->{'svector'}) || 0;
+				               $this->{LoadingDictionary}->{'svector'},
+				               $this->{SelectStatement}->{'svector'},
+				               $this->{InsertStatement}->{'svector'}) || 0;
 
 	    $rc = $sth->execute($readid, $seqvecid, $svleft, $svright);
 
-	    return (0, "failed to insert read_id,seqvec_id,begin,end into SEQVEC for $readname ($readid);" .
+	    return (0, "failed to insert read_id,svector_id,cvleft,cvright into SEQVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
@@ -864,7 +874,7 @@ sub putRead {
     my $cloneveclist = $read->getCloningVector();
 
     if (defined($cloneveclist)) {
-	$query = "insert into CLONEVEC(read_id,cvector_id,begin,end) VALUES(?,?,?,?)";
+	$query = "insert into CLONEVEC (read_id,cvector_id,cvleft,cvright) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
@@ -872,13 +882,13 @@ sub putRead {
 	    my ($clonevec, $cvleft, $cvright) = @{$entry};
 
 	    my $clonevecid = &getReadAttributeID($clonevec,
-						 $this->{LoadingDictionary}->{'cvector'},
-						 $this->{SelectStatement}->{'cvector'},
-						 $this->{InsertStatement}->{'cvector'}) || 0;
+				                 $this->{LoadingDictionary}->{'cvector'},
+				                 $this->{SelectStatement}->{'cvector'},
+				                 $this->{InsertStatement}->{'cvector'}) || 0;
 
-	    $rc = $sth->execute($clonevecid, $cvleft, $cvright, $readid);
+	    $rc = $sth->execute($readid,$clonevecid, $cvleft, $cvright);
 
-	    return (0, "failed to insert read_id,cvector_id,begin,end into CLONEVEC for $readname ($readid);" .
+	    return (0, "failed to insert read_id,cvector_id,cvleft,cvright into CLONEVEC for $readname ($readid);" .
 		    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 	}
 
@@ -963,9 +973,13 @@ sub getReadAttributeID {
 
     return undef unless defined($identifier);
 
+# try to find the dictionary item in the current dictionary
+
     my $id = &dictionaryLookup($dict, $identifier);
 
     return $id if defined($id);
+
+# not found, try the database table
 
     my $rc = $select_sth->execute($identifier);
 
@@ -976,6 +990,8 @@ sub getReadAttributeID {
 
     return $id if defined($id);
 
+# not found, add new dictionary item to datbase table
+
     if (defined($extra_data)) {
 	$rc = $insert_sth->execute($identifier, @{$extra_data});
     } else {
@@ -983,6 +999,7 @@ sub getReadAttributeID {
     }
 
     if (defined($rc)) {
+# successfully added, now do a read-back (to handle the case $rc=0)
 	$rc = $select_sth->execute($identifier);
 
 	if (defined($rc)) {

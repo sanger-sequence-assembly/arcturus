@@ -417,6 +417,59 @@ sub getTraceArchiveIdentifier {
 }
 
 #----------------------------------------------------------------------
+# check for completeness
+#----------------------------------------------------------------------
+
+sub checkReadForCompleteness {
+    my $this = shift;
+    my $options = shift;
+
+    my $skipAspedCheck = 0;
+
+    if (defined($options) && ref($options) && ref($options) eq 'HASH') {
+	$skipAspedCheck = $options->{skipaspedcheck} || 0;
+    }
+
+    return (0, "undefined asped-date")
+	unless (defined($this->getAspedDate()) || $skipAspedCheck);
+
+    return (0, "undefined base-quality")
+	unless defined($this->getQuality());
+
+    return (0, "undefined chemistry")
+	unless defined($this->getChemistry());
+
+    return (0, "undefined insert-size")
+	unless defined($this->getInsertSize());
+
+    return (0, "undefined ligation")
+	unless defined($this->getLigation());
+
+    return (0, "undefined low-quality-left")
+	unless defined($this->getLowQualityLeft());
+
+    return (0, "undefined low-quality-right")
+	unless defined($this->getLowQualityRight());
+
+    return (0, "undefined primer")
+	unless defined($this->getPrimer());
+
+    return (0, "undefined readname")
+	unless defined($this->getReadName());
+
+    return (0, "undefined sequence")
+	unless defined($this->getSequence());
+
+    return (0, "undefined strand")
+	unless defined($this->getStrand());
+
+    return (0, "undefined template")
+	unless defined($this->getTemplate());
+
+    return (1, "OK");
+}
+
+#----------------------------------------------------------------------
 # dumping data
 #----------------------------------------------------------------------
 
