@@ -6,7 +6,7 @@
 
 CREATE TABLE ASSEMBLY (
   assembly smallint(5) unsigned NOT NULL auto_increment,
-  assemblyname varchar(16) NOT NULL default '',
+  name varchar(16) NOT NULL default '',
   organism smallint(5) unsigned NOT NULL default '0',
   chromosome tinyint(3) unsigned default '0',
   origin varchar(32) NOT NULL default 'The Sanger Institute',
