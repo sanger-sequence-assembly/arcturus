@@ -390,7 +390,7 @@ sub getTemplate {
 # dumping data
 #----------------------------------------------------------------------
 
-sub writeReadToCaf {
+sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $self    = shift;
     my $FILE    = shift; # obligatory
@@ -401,10 +401,10 @@ sub writeReadToCaf {
 # first write the Sequence, then DNA, then BaseQuality
 
     print $FILE "\n\n";
-    print $FILE "Sequence : $data->{readname}\n";
+    print $FILE "Sequence : $self->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
-    print $FILE "SCF_File $data->{readname}SCF\n";
+    print $FILE "SCF_File $self->{readname}SCF\n";
     print $FILE "Template $data->{template}\n";
     print $FILE "Insert_size $data->{insertsize}\n";
     print $FILE "Ligation_no $data->{ligation}\n";
@@ -419,7 +419,7 @@ sub writeReadToCaf {
 #    $self->writeMapToCaf($FILE,1) if shift; # see below
 # process read tags ?
 
-    print $FILE "\nDNA : $data->{readname}\n";
+    print $FILE "\nDNA : $self->{readname}\n";
 
     my $dna = $self->{Sequence};
 
@@ -433,7 +433,7 @@ sub writeReadToCaf {
 
 # the quality data
 
-    print $FILE "\nBaseQuality : $data->{readname}\n";
+    print $FILE "\nBaseQuality : $self->{readname}\n";
 
     my $quality = $self->{BaseQuality} || [];
 
