@@ -456,6 +456,7 @@ my $datamodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
 my $readmodel = $organisms->spawn('READMODEL','arcturus',0,1);
 my $READS     = $organisms->spawn('READS',$database,0,0);
 $READS->autoVivify($database,2); # initialize all dictionary tables in database
+#$READS->setMultiLineInsert(100);
 
 # get an inventory of all open database tables
 
@@ -770,7 +771,7 @@ $LOADPERRUN =~ s/\W/x/g;
             }
             $scm = 1; # standard triplet encoding for DNA
             $qcm = 1; # number substitution on quality data
-            $qcm = 3; # Huffman compression on quality difference data
+#            $qcm = 3; # Huffman compression on quality difference data
         }
 
 # skip this file on error
@@ -911,7 +912,8 @@ print $reader->list($origin,1);
         }
     }
 
-    $RRS2ASS->flush();
+    print STDOUT "${brtag}Flushing tables$brtag";
+    $READS->flush(1); # flush all
 
 # closing down: timestamps on altered tables
 
