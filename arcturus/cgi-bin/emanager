@@ -1,0 +1,239 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+#
+# ARCTURUS test scripts manager
+#
+#############################################################################
+
+use strict;
+
+use GateKeeper; 
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
+
+my $cgi        = $GateKeeper->cgiHandle();
+
+my ($void,$action,$option) = split '/',$GateKeeper->origin;
+
+my $database   = $GateKeeper->lookup('database') || 'arcturus';
+
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
+
+##############################################################################
+# MAIN
+##############################################################################
+
+my $arc_cgi_dir = $GateKeeper->lookup("ARC_CGI_DIR");
+my $arc_tmp_dir = $GateKeeper->lookup("ARC_TMP_DIR");
+
+$GateKeeper->focus({useDatabase => 'arcturus', dieOnError => 1});
+
+my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates",{doTransport => 0});
+my $font = "size=4 face='sans-serif'";
+
+my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+
+my $hcolour = "bgcolor=$options{headColor}";
+my $ccolour = "bgcolor=$options{cellColor}";
+my $lcolour = "bgcolor=$options{linkColor}";
+
+my $thisScript = $GateKeeper->currentScript;
+
+my $fnt = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
+
+if ($action eq 'pairstest') {
+# display in standard Arcturus GUI
+    $page->space(2);
+    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->space(4);
+    my $session = $cgi->postToGet(1,'session','database');
+
+    my $form = "<table border=0 cellpadding=2>";
+    $form .= "<tr><td $hcolour width=10\%>Option</td><td $hcolour width=30\%>Description</td></tr>";
+
+    my $link = "$arc_cgi_dir/cyclops/find-complement/getform$session";
+    $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">PAIRS find</A></td>";
+    $form .= "<td $ccolour>Find Pairs</td></tr>";
+
+    $link = "$arc_cgi_dir/cyclops/test-complement$session";
+    $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">PAIRS test</A></td>";
+    $form .= "<td $ccolour>Test Pairs</td></tr>";
+
+    $link = "$arc_cgi_dir/cyclops/find-complement$session&noGUI=0&start=1";
+    $form .= "<tr><td $lcolour><a href=\"$link\" target=\"workframe\">PAIRS find</A></td>";
+    $form .= "<td $ccolour>Find Pairs ab initio</td></tr>";
+
+    $form .= "</table>";
+
+    $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
+    $page->add($form);
+}
+
+elsif ($action eq 'harmonize') {
+
+    $page->space(2);
+    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->space(2);
+    $page->add('Synchronising tables of common databases',0,0,'size=+1');
+    $page->space(2);
+
+    if (!$option || $option eq 'getform') {
+         
+        my $field = "size=+1 color='FFCA88'"; # 'FFCA88'
+        $page->add('Select table(s) and an operation; be careful with deletes!',0,0,$field);
+        my $message = "The current contents of the ORGANISMS and USERS common tables<br>";
+        $message .= "will be ported to the other Arcturus instances of this group   <br><br>";
+        $message .= "If the 'delete' option is activated, excess contents at the REMOTE <br>";
+        $message .= "instance(s) will be removed";
+        $message = "<table><tr><td>$message</td></tr></table>";
+        $page->add($message);
+        $page->add("Be sure this is what you really want!",0,0,$field);
+        $page->form("$thisScript/harmonize/prepare");
+        my $form = "<table border=0 cellpadding=2>";
+        $form .= "<tr><td> <input type=checkbox name=target value='org'> </td><th> ORGANISMS </th>";
+        $form .= "<td> <input type=radio name=ocd value=copy checked> </td><td> copy </td>";
+        $form .= "<td> <input type=radio name=ocd value='copy:delete'> </td><td> copy & delete </td>";
+        $form .= "<td> <input type=radio name=ocd value='delete'> </td> <td> delete </td>";
+
+        $form .= "<tr><td> <input type=checkbox name=target value='use'> </td><th> USERS </th>";
+        $form .= "<td> <input type=radio name=ucd value=copy checked> </td><td> copy </td>";
+        $form .= "<td> <input type=radio name=ucd value='copy:delete'> </td><td> copy & delete </td>";
+        $form .= "<td> <input type=radio name=ucd value='delete'> </td> <td> delete </td>";
+
+        $form .= "</table>";
+
+        my $fnt = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
+        $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
+        $page->add($form);
+        $page->space(1);
+        $page->submitbuttonbar();
+        $page->ingestCGI(0,'database');
+    }
+
+    elsif ($option eq 'prepare') { 
+ 
+        if (!$GateKeeper->authorize(2048)) {
+            $page->errorbox($GateKeeper->{error});         
+        }
+        elsif (my $target = $GateKeeper->lookup('target')) {
+            my $ocd = $GateKeeper->lookup('ocd');
+            my $ucd = $GateKeeper->lookup('ucd');
+            my $report = '';
+            if ($target =~ /\borg\b/) {
+                $report .= "The ORGANISM tables will be synchronised<br>" if ($ocd =~ /c/); 
+		$report .= "Excess contents of the remote ORGANISM tables will be removed<br>" if ($ocd =~ /d/);
+                $report .= "<br>";
+            }
+            if ($target =~ /\buse\b/) {
+                $report .= "The USERS tables will be synchronised<br>" if ($ucd =~ /c/);
+		$report .= "Excess contents of the remote USERS tables will be removed<br>" if ($ucd =~ /d/);
+            }
+            $report = "<table><tr><td><font size=+1 color='blue'>$report</font></td></tr></table>";
+
+            $page->form("$thisScript/harmonize/process");
+            $page->add($report,0,0,'size=+1');
+            my $field = "size=+1 color='FF6544'"; # 'FFCA88'
+            $page->add("Be sure this is what you really want!",0,0,$field) if ($ocd =~ /d/ || $ucd =~ /d/);
+            $page->space(1);
+            my $reject = "$thisScript/harmonize/getform";
+            $page->confirmbuttonbar($reject,0);
+            $page->ingestCGI();
+        }
+        else {
+            $page->errorbox("Please define a target (ORGANISM or USERS)");
+        }
+    }
+
+    elsif ($option eq 'process') {
+
+        my $confirm = $GateKeeper->lookup('confirm');
+
+        if (!$confirm || $confirm ne 'CONFIRM') {
+            $page->errorbox("This function is invoked in an incorrect manner");
+        }
+        elsif (!$GateKeeper->authorize(2048)) {
+            $page->errorbox($GateKeeper->{error});
+        }
+        elsif (my $target = $GateKeeper->lookup('target')) {
+
+            my $ocd = $GateKeeper->lookup('ocd');
+            my $ucd = $GateKeeper->lookup('ucd');
+
+            unlink "$arc_tmp_dir/harmonize.log" if (-e "$arc_tmp_dir/harmonize.log");
+            my $csroot = $GateKeeper->prepareFork('harmonize');
+            my $report = '';
+            if ($target =~ /\borg\b/ && $confirm eq 'CONFIRM') {
+                $report .= "Synchronising ORGANISMS tables ..";
+                system ("$csroot/harmonize organisms $ocd > $arc_tmp_dir/harmonize.log");
+                $report .= ".. DONE<br>";
+            }
+            if ($target =~ /\buse\b/ && $confirm eq 'CONFIRM') {
+                $report .= "Synchronising USERS tables ..";
+                system ("$csroot/harmonize users     $ucd > $arc_tmp_dir/harmonize.log");
+                $report .= ".. DONE<br>";
+            }
+            $report = "<table><tr><td><font size=+1 >$report</font></td></tr></table>";
+            $page->add($report,0,1);
+            $page->space(2);
+            if (open (LOG,"$arc_tmp_dir/harmonize.log")) {
+                $report = '';
+                while (my $line = <LOG>) {
+                    next if ($line =~ /\b(marker|identical)\b/);
+                    $report .= "$line<br>" if ($line =~ /\b(be updated|copy|creating|deleting|Harm)/i);
+                }
+                close (LOG);
+                $page->center(0);
+                $page->add($report,0,1);
+            }
+            else {
+                $page->error("Sorry! couldn't access the log file $arc_tmp_dir/harmonize.log ...");
+            }
+        }
+    }
+}
+
+elsif ($action eq 'editor') {
+
+    $page->space(2);
+    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->space(2);
+    $page->add('Select an Editor option',0,0,'size=+1 color="lightsteelblue"');
+    $page->space(2);
+
+    my $session = $cgi->postToGet(1,'session','database');
+
+    my $form = "<table border=0 cellpadding=2>";
+
+    $lcolour .= " align=center";
+    my $target = 'target="workframe"';
+    my $link = "$arc_cgi_dir/create/editor/".$session;
+    $form .= "<tr><td $lcolour><a href=\"$link\" $target> Database Description </A></td></tr>";
+
+    $link = "$arc_cgi_dir/amanager/editor/agetform".$session;
+    $form .= "<tr><td $lcolour><a href=\"$link\" $target> Assembly Description </A></td></tr>";
+
+    $link = "$arc_cgi_dir/amanager/editor/pgetform".$session;
+    $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Project Description </A></td></tr>";
+
+    $session = $cgi->postToGet(1,'session');
+    $link = "$arc_cgi_dir/new/newupdate/arcturus/vectors".$session;
+    $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
+    $form .= "</table>";
+
+    $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
+    $page->add($form);
+      
+}
+
+# $organisms->historyUpdate($userid,0,0);
+
+$page->form(0);
+$page->flush();
+$GateKeeper->disconnect;
+
+exit 0;
