@@ -110,18 +110,6 @@ CREATE TABLE CONTIG (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'GAP4TAG'
-#
-
-CREATE TABLE GAP4TAG (
-  tag_id mediumint(8) unsigned NOT NULL auto_increment,
-  tagname varchar(4) NOT NULL default '',
-  taglabel varchar(255) NOT NULL default '',
-  deprecated enum('N','Y','X') default 'N',
-  PRIMARY KEY  (tag_id)
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'LIGATION'
 #
 
@@ -222,6 +210,7 @@ CREATE TABLE READTAG (
 CREATE TABLE CONTIGTAG (
   seq_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
+  tagname VARCHAR(32) binary NULL,
   tag_id mediumint(8) unsigned NOT NULL default '0',
   pstart int(11) unsigned NOT NULL default '0',
   pfinal int(11) unsigned NOT NULL default '0',
@@ -237,9 +226,10 @@ CREATE TABLE CONTIGTAG (
 
 CREATE TABLE TAGSEQUENCE (
   tag_id mediumint(8) unsigned NOT NULL auto_increment,
-  tagname varchar(32) binary NOT NULL default '',
+  tagseqname varchar(32) binary NOT NULL default '',
   sequence blob NULL,
-  KEY tag_index (tag_id)
+  PRIMARY KEY tag_index (tag_id),
+  UNIQUE KEY tagname (tagname)
 ) TYPE=MyISAM;
 
 #
@@ -331,17 +321,6 @@ CREATE TABLE STSTAG (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'TAG2CONTIG'
-#
-
-CREATE TABLE TAG2CONTIG (
-  tag_id mediumint(8) unsigned NOT NULL default '0',
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  tcp_start int(10) unsigned NOT NULL default '0',
-  tcp_final int(10) unsigned NOT NULL default '0'
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'TEMPLATE'
 #
 
@@ -426,9 +405,3 @@ CREATE TABLE C2CSEGMENT (
   length int(10) unsigned NOT NULL default '1',
   KEY mapping_id (mapping_id)
 ) TYPE=MyISAM;
-
-
-
-
-
-
