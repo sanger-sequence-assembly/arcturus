@@ -4,6 +4,7 @@ use strict;
 
 use DBI;
 use Compress::Zlib;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 use DataSource;
 use Read;
@@ -1741,6 +1742,111 @@ sub deleteRead {
 # methods dealing with CONTIGs
 #----------------------------------------------------------------------------------------
 
+sub getContigNEW {
+# return a Contig object  (under development)
+# options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
+# additional : metaDataOnly=>0 or 1 (default 1) age=>A default 0, or absent
+    my $this = shift;
+
+# decode input parameters and compose the query
+
+    my $query  = "select CONTIG.contig_id,$this->{contig_attributes} "; 
+
+    my $nextword;
+    my $metadataonly = 0;
+    my $value;
+    while ($nextword = shift) {
+	if ($nextword eq 'ID' || $nextword eq 'contig_id') {
+            $query .= "from CONTIG where contig_id = ?";
+            $value = shift;
+        }
+        elsif ($nextword eq 'withChecksum') {
+# should include age specification?
+            $query .= "from CONTIG where readnamehash = ? ";
+            $value = shift;
+        }
+        elsif ($nextword eq 'withRead') {
+# should include age specification?
+            $query .= " from CONTIG2CONTIG, CONTIG, MAPPING, READS
+                       where CONTIG2CONTIG.newcontig = CONTIG.contig_id
+                         and CONTIG.contig_id = MAPPING.contig_id
+                         and MAPPING.read_id = READS.read_id
+                         and READS.readname = ?";
+print STDERR "new getContig: $query\n";
+             $value = shift;
+       }
+        elsif ($nextword eq 'withTag') {
+# should include age specification?
+            $query .= " from CONTIG join TAG2CONTIG using (contig_id)
+                        where tag_id in 
+                             (select tag_id from TAG where tagname = ?)";
+print STDERR "new getContig: $query\n";
+            $value = shift;
+        }
+        elsif ($nextword eq 'metaDataOnly') {
+            $metadataonly = shift;
+        }
+        else {
+            print STDERR "Invalid parameter in getContig : $nextword\n";
+            $this->disconnect();
+            exit 0;
+        }
+    }
+
+    my $dbh = $this->getConnection();
+        
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($value) || &queryFailed($query);
+
+# get the metadata
+
+    undef my $contig;
+
+    if (my @attributes = $sth->fetchrow_array()) {
+
+	$contig = new Contig();
+
+        my $contig_id = shift @attributes;
+
+        $contig->setContigID($contig_id);
+
+        $this->addMetaDataForContig($contig,@attributes);
+
+	$contig->setArcturusDatabase($this);
+    }
+
+    $sth->finish();
+
+    return undef unless defined($contig);
+
+    return $contig if $metadataonly;
+
+# get the reads for this contig with their DNA sequences and tags
+
+print STDERR "enter getReadsForContig\n";
+    $this->getReadsForContig($contig);
+
+# get mappings (and implicit segments)
+
+print STDERR "enter getMappingsForContig\n";
+    $this->getMappingsForContig($contig);
+
+# get contig tags
+
+print STDERR "enter getTagsForContig\n";
+    $this->getTagsForContig($contig);
+
+# for consensus sequence we use lazy instantiation in the Contig class
+
+print STDERR "enter testContigForExport\n";
+    return $contig if ($this->testContigForExport($contig));
+
+    return undef; # invalid Contig instance
+}
+
+# getContigByID, getContigWithChecksum, getContigWithRead, getContigWithTag
+# are surplus to requirement with the above method
 sub getContigByID {
 # return a Contig object with the meta data only for the specified contig ID
     my $this       = shift;
@@ -1781,8 +1887,6 @@ sub addMetaDataForContig {
     my ($length,$ncntgs,$nreads,$newreads,$cover,$readnamehash) = @_;
 print STDERR "Contig attributes: $length,$ncntgs,$nreads,$newreads,$cover\n";
 
-    $contig->setReadNameHash($readnamehash);    
-
     $contig->setConsensusLength($length);
 
     $contig->setPreviousContigs($ncntgs);
@@ -1792,6 +1896,8 @@ print STDERR "Contig attributes: $length,$ncntgs,$nreads,$newreads,$cover\n";
     $contig->setNumberOfNewReads($newreads);
 
     $contig->setAverageCover($cover);
+
+    $contig->setReadNameHash($readnamehash); 
 }
 
 sub getContigWithChecksum {
@@ -2010,6 +2116,8 @@ sub hasContig {
         $query .= " readnamehash=?";
         push @params, $hash->{readnamehash};
     }
+    $query .= " limit 1";
+print STDERR "has Contig: $query \n";
 
     die "hasContig expects a contig_id or readnamehash value" unless @params;
 
@@ -2037,26 +2145,30 @@ sub putContig {
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
 
-    print STDERR "Contig ".$contig->getContigName." to be added\n";
+print STDERR "Contig ".$contig->getContigName." to be added\n";
 
 # test the Contig reads and mappings for completeness (using readname)
 
     if (!$this->testContigForImport($contig)) {
         print STDERR "Contig ".$contig->getContigName." NOT loaded\n";
+        return 0;
     }
 
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
  
     my $reads = $contig->getReads();
-    $this->getSequenceIDforReads($reads);
+    return 0 unless $this->getSequenceIDforReads($reads);
 
-# get the sequenceIDs (from Read) and build a hash keys on readname
+# get the sequenceIDs (from Read); also build the readnames array 
 
+    my @readnames;
     my $seqids = {};
     foreach my $read (@$reads) {
-        $seqids->{$read->getReadName()} = $read->getSequenceID();
+        my $readname = $read->getReadName();
+        $seqids->{$readname} = $read->getSequenceID();
+        push @readnames, $readname;
     }
-# and put them into the Mapping instances
+# and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
     foreach my $mapping (@$mappings) {
         my $readname = $mapping->getReadName();
@@ -2067,7 +2179,18 @@ sub putContig {
 # find out if the contig has been loaded before i.e. do a query on 
 # CONTIG.readnamehash join CONTIG2CONTIG.age = 0 or not existing
 
-   # return 0 if ($identical);
+    my $readnamehash = md5(sort @readnames);
+    if (my $previous = $this->getContigNEW(withChecksum=>$readnamehash,
+                                           metaDataOnly=>1)) {
+        print STDERR "Contig ".$contig->getContigName.
+                     " may be identical to contig ".
+                      $previous->getContigName."\n";
+# pull out the contig mappings and compare them one by one with contig
+        $this->getMappingsForContig($previous);
+        return $previous->getContigID() if $contig->isSameAs($previous);
+        return 0;
+    }
+return 0; # testing
 
 # okay, the contig is new; find out if it is connected to existing
 # contigs (i.e. build the CONTIG2CONTIG links)
@@ -2077,7 +2200,6 @@ sub putContig {
 # first the meta data
 
     my $contigid = $this->putMetaDataForContig($contig);
-#$contigid =9999; # testing purpose
 
     return 0 unless $contigid;
 
@@ -2118,7 +2240,7 @@ sub putMetaDataForContig {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($contig->getConsensusLength(),
+    my $rc = $sth->execute($contig->getConsensusLength() || 0,
                            $contig->hasPreviousContigs(),
                            $contig->getNumberOfReads(),
                            $contig->getNumberOfNewReads(),
@@ -2265,10 +2387,13 @@ sub getSequenceIDforReads {
 
 # have we collected all of them? then %unedited should be empty
 
+    my $success = 1;
     if (keys %$unedited) {
         print STDERR "Sequence ID not found for reads: " .
 	              join(',',sort keys %$unedited) . "\n";
+        $success = 0;
     }
+    return $success;
 }
 
 sub testContigForExport {
@@ -2375,6 +2500,13 @@ sub testContig {
         print STDERR "Missing metadata for ".contig->getContigName."\n";
     }
     return 1;
+}
+
+sub deleteContig {
+# remove data for a given contig_id from all tables
+    my $this = shift;
+    my $contigid = shift;
+
 }
 
 #----------------------------------------------------------------------------------------- 

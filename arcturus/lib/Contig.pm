@@ -2,6 +2,8 @@ package Contig;
 
 use strict;
 
+use Digest::MD5 qw(md5 md5_hex md5_base64);
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -119,8 +121,8 @@ sub getNumberOfReads {
 # if number of reads not defined get it from the Read array
     if (!defined($this->{data}->{numberofreads}) && $this->hasReads()) {
         $this->{data}->{numberofreads} = scalar(@{$this->getReads});
-    }    
-    return $this->{data}->{numberofreads} || 0;   
+    }
+    return $this->{data}->{numberofreads} || 0;
 }
   
 sub setNumberOfReads {
@@ -200,14 +202,26 @@ sub getQuality {
 
 #-------------------------------------------------------------------   
 
-sub getReadNameHash {
+sub getReadOnLeft {
     my $this = shift;
-    return $this->{readnamehash} || ' ';
+    return $this->{data}->{readonleft};
 }
 
-sub setReadNameHash {
+sub setReadOnLeft {
     my $this = shift;
-    $this->{readnamehash} = shift;
+    $this->{data}->{readonleft} = shift;
+}
+
+#-------------------------------------------------------------------   
+
+sub getReadOnRight {
+    my $this = shift;
+    return $this->{data}->{readonright};
+}
+
+sub setReadOnRight {
+    my $this = shift;
+    $this->{data}->{readonrigt} = shift;
 }
 
 #-------------------------------------------------------------------   
@@ -338,21 +352,176 @@ sub importer {
 }
 
 #-------------------------------------------------------------------    
-# calculate consensus length, readnamehash, cover, etc
+# calculate consensus length, cover, etc
 #-------------------------------------------------------------------
 
-sub statistics {
+sub getStatistics {
+# collect a number of contig statistics
     my $this = shift;
+my $list = shift;
 
+    my $success = 1;
 
-    if (my $reads = $this->getReads()) {
-        my @readnames;
-        foreach my $read (@$reads) {
-            push @readnames, $read->getReadName();
+# determine the range on the contig and the first and last read
+
+    my $averagecover = 0;
+    my $totalreadcover = 0;
+
+    my $cstart = 0;
+    my $cfinal = 0;
+    my ($readonleft, $readonright);
+    while ($cstart != 1) {
+# go through the mappings to find begin, end of contig
+# and to determine the reads at either end
+        my ($minspanonleft, $minspanonright);
+        my $name = $this->getContigName();
+print STDOUT "Statistics for contig $name\n" if $list;
+        if (my $mappings = $this->getMappings()) {
+            my $init = 0;
+            $totalreadcover = 0;
+            foreach my $mapping (@$mappings) {
+                my $readname = $mapping->getReadName();
+# find begin/end of contig range cover by this mapping
+                my ($cs, $cf) = $mapping->getContigRange();
+# total read cover = sum of contigspan length
+                my $contigspan = $cf - $cs + 1;
+                $totalreadcover += $contigspan;
+#print STDOUT "Mapping $readname contig range : $cs $cf \n";
+
+# find the leftmost readname
+
+                if (!$init || $cs <= $cstart) {
+# this read(map) aligns with the begin of the contig (as found until now)
+#print STDOUT "Mapping $readname aligns at begin\n";
+                    if (!$init || $cs < $cstart || $contigspan < $minspanonleft) {
+                        $minspanonleft = $contigspan;
+                        $readonleft = $readname;
+                    }
+                    elsif ($contigspan == $minspanonleft) {
+# if several reads line up at left, choose the alphabetically lowest 
+                        $readonleft = (sort($readonleft,$readname))[0];
+                    }
+                    $cstart = $cs;
+#print STDOUT "readonleft $readonleft\n";
+                }
+
+# find the rightmost readname
+
+                if (!$init || $cf >= $cfinal) {
+# this read(map) aligns with the end of the contig (as found until now)
+#print STDOUT "Mapping $readname aligns at end\n";
+                    if (!$init || $cf > $cfinal || $contigspan < $minspanonright) {
+                        $minspanonright = $contigspan;
+                        $readonright = $readname;
+                    }
+                    elsif ($contigspan == $minspanonright) {
+# if several reads line up at right, choose the alphabetically lowest (again!) 
+                        $readonright = (sort($readonright,$readname))[0];
+                    }
+                    $cfinal = $cf;
+#print STDOUT "readonright $readonright\n";
+                }
+                $init = 1;
+            }
+
+            if ($cstart != 1) {
+# this is an unusual lower boundary, apply shift to the Mappings 
+# (and Segments) to get the contig starting at position 1
+                my $shift = $cstart - 1;
+                print STDERR "Contig $name requires shift by $shift\n";
+                foreach my $mapping (@$mappings) {
+                    $mapping->applyShiftToContigPosition($shift);
+                }
+# and redo the loop (as $cstart != 1)
+            }
         }
-        $this->putReadNameHash( md5(sort @readnames) );
+        else {
+            print STDOUT "Contig $name has no mappings\n";
+            $success = 0;
+            last;
+        }
     }
-}    
+
+# okay, now we can calculate some overall properties
+
+    my $clength = $cfinal-$cstart+1;
+    $this->setConsensusLength($clength);
+print STDOUT "Consensuslength $clength\n" if $list;
+    $averagecover = $totalreadcover/$clength;
+    $this->setAverageCover( sprintf("%.2f", $averagecover) );
+print "Average cover $averagecover\n" if $list;   
+    $this->setReadOnLeft($readonleft);
+    $this->setReadOnRight($readonright);
+print "End reads : left $readonleft  right $readonright\n" if $list;
+
+    return $success;
+}
+
+#-------------------------------------------------------------------    
+# compare mappings with an array of reference mappings
+#-------------------------------------------------------------------
+
+sub isSameAs {
+    my $this = shift;
+    my $compare = shift || return 0;
+
+    die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
+
+# compare some of the metadata
+
+    $compare->getStatistics();
+# test the length
+    return 0 unless ($this->getConsensusLength() == $compare->getConsensusLength());
+# test the end reads
+    my %endreads = ($this->getReadOnLeft()=>1,$this->getReadOnRight()=>1);
+    return 0 unless $endreads{$compare->getReadOnLeft()};
+    return 0 unless $endreads{$compare->getReadOnRight()};
+
+# compare the mappings in this contig to the one in the reference
+# mappings are identified using their sequence IDs or their readnames
+# this assumes that both sets of mappings have the same type of data
+
+    my $sequence = {};
+    if (my $mappings = $this->getMappings()) {
+        foreach my $mapping (@$mappings) {
+            my $key = $mapping->getSequenceID() || $mapping->getReadName();
+            $sequence->{$key} = $mapping;
+        }
+    }
+
+    my ($align,$shift);
+    if (my $mappings = $compare->getMappings()) {
+# check number of mappings
+        return 0 if (scalar(keys %$sequence) != scalar(@$mappings));
+# compare each individual mapping
+        foreach my $mapping (@$mappings) {
+            my $key = $mapping->getSequenceID();
+            my $match = $sequence->{$key};
+            if (!defined($match)) {
+                $key = $mapping->getReadName();
+                $match = $sequence->{$key};
+            }
+            return 0 unless defined($match);
+# now compare the maps
+            my ($identical,$aligned,$offset) = $mapping->compare($match);
+            return 0 unless $identical;
+            if (!defined($align) && !defined($shift)) {
+                $align = $aligned;
+                $shift = $offset;
+            }
+# the alignment and offsets between the mappings must all be identical 
+            elsif ($align != $aligned || $shift != $offset) {
+                return 0;
+            }
+        }
+    }
+
+# okay, the mappings are all identical
+
+    return 1 if $align;
+
+    return -1; # but inverted
+}   
 
 #-------------------------------------------------------------------    
 # exporting to CAF

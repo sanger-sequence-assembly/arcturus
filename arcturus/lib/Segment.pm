@@ -70,6 +70,16 @@ sub normaliseOnX {
     return abs($length) + 1;
 }
 
+sub applyShiftToX {
+# apply a linear shift to X domain
+    my $this = shift;
+    my $shift = shift || return;
+
+    $shift = -$shift unless ($this->[0] < 0);
+
+    $this->[1] += $shift;
+}
+
 #----------------------------------------------------------------------
 
 sub getXstart {

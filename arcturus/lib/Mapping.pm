@@ -102,7 +102,7 @@ sub getAlignment {
 #-------------------------------------------------------------------
 
 sub compare {
-# compare this Mapping instance with input Mapping
+# compare this Mapping instance with input Mapping, returns 1 if identical
     my $this = shift;
     my $mapping = shift;
 
@@ -113,13 +113,27 @@ sub compare {
     my $lmaps = $this->getSegments();
     my $fmaps = $mapping->getSegments();
 
-    return 0 unless (scalar(@$lmaps) == scalar(@$fmaps));
+    return (0,0,0) unless (scalar(@$lmaps) == scalar(@$fmaps));
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
-# return values of of alignment and offset will be identical
+# return values of alignment and offset will be identical
 
     
+}
+
+sub applyShiftToContigPosition {
+# apply a linear contig shift to each segment
+    my $this = shift;
+    my $shift = shift;
+
+    return 0 unless ($shift && $this->hasSegments());
+
+    my $segments = $this->getSegments();
+    foreach my $segment (@$segments) {
+        $segment->applyShiftToX($shift);
+    }
+    return 1;
 }
  
 #-------------------------------------------------------------------
