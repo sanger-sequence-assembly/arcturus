@@ -514,9 +514,16 @@ if ($logON || !$origin) {
         my $querystring = "SELECT readname FROM $database.PENDING order by record ";
     # get files in Pending
         my $sth = $dbh->prepare ($querystring);
-        $sth->execute();
-        while (my $dbfile = $sth->fetchrow_array()) {
-            $dbfiles{$dbfile}++;
+        if ($sth->execute()) {
+            while (my $dbfile = $sth->fetchrow_array()) {
+                $dbfiles{$dbfile}++;
+            }
+        }
+        else {
+            print "query failed: '$querystring' $brtag $brtag";
+            $page->flush;
+            $GateKeeper->disconnect;
+            exit;
         }
         $nr = keys %dbfiles;
         print "($nr Pending reads found) ... ";
@@ -528,10 +535,17 @@ if ($logON || !$origin) {
         }
 
         $sth = $dbh->prepare ($querystring);
-        $sth->execute();
-        while (my $dbfile = $sth->fetchrow_array()) {
-            print "! Double file name $dbfile $brtag" if  $dbfiles{$dbfile};
-            $dbfiles{$dbfile}++;
+        if ($sth->execute()) {
+            while (my $dbfile = $sth->fetchrow_array()) {
+                print "! Double file name $dbfile $brtag" if  $dbfiles{$dbfile};
+                $dbfiles{$dbfile}++;
+            }
+        }
+        else {
+            print "query failed: '$querystring' $brtag $brtag";
+            $page->flush;
+            $GateKeeper->disconnect;
+            exit;
         }
         $sth->finish();
         $nr = keys %dbfiles;
