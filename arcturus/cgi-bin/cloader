@@ -6,6 +6,10 @@
 
 use strict; # Constraint variables declaration before using them
 
+BEGIN { 
+   use lib '/nfs/pathsoft/arcturus/dev/lib';
+}
+
 use GateKeeper; 
 use ContigBuilder;
 
