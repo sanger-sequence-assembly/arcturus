@@ -863,10 +863,9 @@ sub putMappingsForContig {
 
     my $mapping;
     foreach $mapping (@$mappings) {
+	#print STDERR $mapping->toString(),"\n";
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
-
-	#print STDERR $mapping->toString(),"\n";
 
         my $rc = $sth->execute($contigid,
                                $mapping->getSequenceID(),
