@@ -2,7 +2,7 @@
 
 use strict;
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBRead;
 
 use FileHandle;
 use Logging;
@@ -18,7 +18,7 @@ my $readname;
 my $read_id;
 my $seq_id;
 my $version;
-my $contig_id;
+my $unassembled;
 my $SCFchem;
 my $caf;
 my $fasta;
@@ -26,41 +26,45 @@ my $mask;
 my $fofn;
 my $verbose;
 
-my $validKeys  = "organism|instance|readname|read_id|seq_id|contig_id|fofn|chemistry|caf|fasta|mask|verbose|help";
+my $validKeys  = "organism|instance|readname|read_id|seq_id|".
+                 "unassembled|fofn|chemistry|caf|fasta|".
+                 "mask|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage(0,"Invalid keyword '$nextword'");
     }                                                                           
-    $instance  = shift @ARGV  if ($nextword eq '-instance');
+    $instance    = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism  = shift @ARGV  if ($nextword eq '-organism');
+    $organism    = shift @ARGV  if ($nextword eq '-organism');
  
-    $readname  = shift @ARGV  if ($nextword eq '-readname');
+    $readname    = shift @ARGV  if ($nextword eq '-readname');
 
-    $read_id   = shift @ARGV  if ($nextword eq '-read_id');
+    $read_id     = shift @ARGV  if ($nextword eq '-read_id');
 
-    $seq_id    = shift @ARGV  if ($nextword eq '-seq_id');
+    $seq_id      = shift @ARGV  if ($nextword eq '-seq_id');
 
-    $version   = shift @ARGV  if ($nextword eq '-version');
+    $version     = shift @ARGV  if ($nextword eq '-version');
 
-    $contig_id = shift @ARGV  if ($nextword eq '-contig_id');
+    $unassembled = 1            if ($nextword eq '-unassembled');
 
-    $fofn      = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn        = shift @ARGV  if ($nextword eq '-fofn');
 
-    $SCFchem   = 1            if ($nextword eq '-chemistry');
+    $SCFchem     = 1            if ($nextword eq '-chemistry');
 
-    $mask      = shift @ARGV  if ($nextword eq '-mask');
+    $mask        = shift @ARGV  if ($nextword eq '-mask');
 
-    $fasta     = 1            if ($nextword eq '-fasta');
+    $fasta       = 1            if ($nextword eq '-fasta');
 
-    $caf       = 1            if ($nextword eq '-caf');
+    $caf         = 1            if ($nextword eq '-caf');
 
-    $verbose   = 1            if ($nextword eq '-verbose');
+    $verbose     = 1            if ($nextword eq '-verbose');
 
     &showUsage(0) if ($nextword eq '-help');
 }
+
+$SCFchem = 0 if ($fasta || $caf);
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -80,8 +84,8 @@ $instance = 'prod' unless defined($instance);
 
 &showUsage(0,"Missing organism database") unless $organism;
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb = new ADBRead(-instance => $instance,
+		      -organism => $organism);
 
 if ($adb->errorStatus()) {
 # abort with error message
@@ -109,7 +113,6 @@ my @reads;
 $version = 0 unless defined($version);
 
 $read = $adb->getRead(read_id=>$read_id, version=>$version) if $read_id;
-#$read = $adb->getReadByID($read_id,$version) if $read_id;
 push @reads, $read if $read;
 
 undef $read;
@@ -128,18 +131,20 @@ if ($fofn) {
 }
 
 
-if ($contig_id) {
-#test mode construction to be changed
-#    my @rids = (1099,1100,1102,1103);
-    my @rids = (1099,1100);
-    print "get reads @rids\n";
-    my $reads = $adb->getReadsBySequenceID(\@rids);
-#    my $reads = $adb->getReadsByReadID(\@rids);
-    $adb->getSequenceForReads($reads);
-    push @reads, @$reads;
-    print "Reads: @reads\n";
+if ($unassembled) {
 
-#    $adb->getReadsForContigID($contig_id);
+    my $readids = $adb->getUnassembledReads();
+
+    if ($caf || $fasta) {
+        my $reads = $adb->getReadsByReadID($readids);
+        $adb->getSequenceForReads($reads);
+        push @reads, @$reads;
+    }
+    else {
+# list read IDs only
+        print "Reads: @$readids\n";
+#        exit 0;
+    }
 }
 
 
@@ -172,6 +177,8 @@ foreach my $read (@reads) {
     &list($read,$rdir,%option);
  
 }
+
+$adb->disconnect();
 
 exit;
 
@@ -371,14 +378,17 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
-#    print STDERR "-assembly\tassembly name\n";
     print STDERR "-readname\tRead name\n";
     print STDERR "-fofn\t\tfilename with list of readnames\n";
-    print STDERR "-read_id\t\tRead ID\n";
+    print STDERR "-read_id\tRead ID\n";
     print STDERR "-seq_id\t\tSequence ID\n";
-    print STDERR "-chemistry\tExtended chemistry information (slow)";
-    print STDERR "-caf\t\tOutput in caf format\n";
-    print STDERR "-fasta\t\tOutput in fasta format\n";
+    print STDERR "-unassembled\t(no value) Specify -caf or -fasta,".
+                 " else only list reads\n";
+    print STDERR "-mask\t\tMask low quality data with the symbol provided\n";
+    print STDERR "-chemistry\t(no value) Extended chemistry information".
+                 " (slow, not with -caf or -fasta)\n";
+    print STDERR "-caf\t\t(no value) Output in caf format\n";
+    print STDERR "-fasta\t\t(no value) Output in fasta format\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 

@@ -2,7 +2,7 @@
 
 use strict;
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBContig;
 
 use FileHandle;
 use Digest::MD5 qw(md5 md5_hex md5_base64);
@@ -30,8 +30,8 @@ unless (defined($organism) && defined($cafname)) {
     exit(1);
 }
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb = new ADBContig(-instance => $instance,
+		        -organism => $organism);
 
 die "Failed to create ArcturusDatabase" if $adb->errorStatus();
 

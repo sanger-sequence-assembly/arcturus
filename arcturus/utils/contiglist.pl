@@ -2,7 +2,7 @@
 
 use strict;
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBContig;
 
 use FileHandle;
 use Logging;
@@ -55,7 +55,7 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging(*STDERR);
+my $logger = new Logging();
  
 $logger->setFilter(0) if $verbose; # set reporting level
  
@@ -67,8 +67,8 @@ $instance = 'dev' unless defined($instance);
 
 &showUsage(0,"Missing organism database") unless $organism;
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb = new ADBContig (-instance => $instance,
+		         -organism => $organism);
 
 if ($adb->errorStatus()) {
 # abort with error message
@@ -147,7 +147,6 @@ foreach my $contig (@contigs) {
         $contig->writeToCaf(*STDOUT); 
     }
 }
-
 
 #------------------------------------------------------------------------
 # read a list of names from a file and return an array

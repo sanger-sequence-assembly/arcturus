@@ -2,7 +2,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBRead;
 
 use FileHandle;
 use Logging;
@@ -22,7 +22,7 @@ my $nosingleton;
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
-                 "nosingleton|info|help";
+                 "nosingleton|info|verbose|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -66,8 +66,8 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 $instance = 'prod' unless defined($instance);
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb = new ADBRead (-instance => $instance,
+		       -organism => $organism);
 
 &showUsage("Unknown organism '$organism'") unless $adb;
 

@@ -2,7 +2,7 @@
 
 use strict;
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBRead;
 
 use CAFReadFactory;
 use OracleReadFactory;
@@ -125,8 +125,8 @@ $instance = 'prod' unless defined($instance);
 
 &showUsage(0,"Missing organism database") unless $organism;
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb = new ADBRead (-instance => $instance,
+		       -organism => $organism);
 
 if ($adb->errorStatus()) {
 # abort with error message

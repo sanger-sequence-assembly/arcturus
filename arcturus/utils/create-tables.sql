@@ -451,6 +451,8 @@ CREATE TABLE C2CMAPPING (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   linked_id mediumint(8) unsigned NOT NULL default '0',
   mapping_id mediumint(8) unsigned NOT NULL auto_increment,
+  cstart int(10) unsigned NULL,
+  cfinish int(10) unsigned NULL,
   direction enum('Forward','Reverse') NOT NULL default 'Forward',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
