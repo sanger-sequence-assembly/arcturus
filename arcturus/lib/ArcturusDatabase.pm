@@ -156,6 +156,49 @@ sub getReadByID {
     }
 }
 
+sub getReadsByID {
+    my $this = shift;
+
+    my $readids = shift;
+
+# in case a single read ID is passed as parameter, cast it as a one element array
+
+    my @reads;
+
+    $reads[0] = $readids;
+
+    $readids = \@reads if (ref($readids) ne 'ARRAY');
+
+# prepare the range list
+
+    my $range = join ',',@$readids;
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare("select * from READS where read_id in ($range)");
+
+    $sth->execute();
+
+    my @Reads;
+
+    while (my $hashref = $sth->fetchrow_hashref()) {
+
+	my $Read = new Read();
+
+	$this->processReadData($hashref);
+
+	$Read->importData($hashref);
+
+	$Read->setArcturusDatabase($this);
+
+        push @Reads, $Read;
+    }
+
+    $sth->finish();
+
+    return \@Reads;
+}
+
 sub processReadData {
     my $this = shift;
     my $hashref = shift;
@@ -224,4 +267,54 @@ sub getSequenceAndBaseQualityForRead {
     return ($sequence, $quality);
 }
 
+sub putSequenceAndBaseQualityForReads {
+    my $this = shift;
+
+    my $Reads = shift; # array of Reads objects
+
+# build a list of read IDs
+
+    my %rids;
+    foreach my $Read (@$Reads) {
+        $rids{$Read->getReadID} = $Read;
+    }
+
+    my $range = join ',',keys(%rids);
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select read_id,sequence,quality from SEQUENCE where read_id in ($range)";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    while(my @ary = $sth->fetchrow_array()) {
+
+	my ($read_id, $sequence, $quality) = @ary;
+
+        if (my $Read = $rids{$read_id}) {
+
+            $sequence = uncompress($sequence) if defined($sequence);
+
+            if (defined($quality)) {
+	        $quality = uncompress($quality);
+	        my @qualarray = unpack("c*", $quality);
+	        $quality = [@qualarray];
+            }
+            $Read->setSequence($sequence);
+            $Read->setQuality($quality);
+        }
+
+    }
+
+    $sth->finish();
+}
+
+ 
 1;
+
+
+
+
+
