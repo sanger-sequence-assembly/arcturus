@@ -771,7 +771,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             $page->space(2);
             $options{noConfirm} = 'ALTER';
             my $return = "$script/existing/getform";
-            $return .= $cgi->postToGet();
+            $return .= $cgi->postToGet(0,'tablename','password','identify');
             if (!$confirm || $confirm ne 'ALTER') {
                 $page->form("$script/existing/process");
                 $page->confirmbuttonbar($return); # include reject button
