@@ -9,6 +9,7 @@ my $organism;
 my $verbose = 0;
 my $progress = 0;
 my $minbridges = 1;
+my $minbacbridges = 1;
 my $minlen = 0;
 my $puclimit = 8000;
 my $usesilow = 0;
@@ -21,6 +22,7 @@ while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
     $minbridges = shift @ARGV if ($nextword eq '-minbridges');
+    $minbacbridges = shift @ARGV if ($nextword eq '-minbacbridges');
     $minlen = shift @ARGV if ($nextword eq '-minlen');
     $puclimit = shift @ARGV if ($nextword eq '-puclimit');
 
@@ -426,6 +428,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
     print "Extending to right ...\n";
 
     while (my $nextbridge = &FindNextSuperBridge($baclinks->{"$lastscaffoldid.$lastend"},
+						 $minbacbridges,
 						 $scaffoldtosuperscaffold)) {
 	my ($nextscaffoldid, $nextend) = @{$nextbridge};
 
@@ -461,6 +464,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
     print "Extending to left ...\n";
 
     while (my $nextbridge = &FindNextSuperBridge($baclinks->{"$lastscaffoldid.$lastend"},
+						 $minbacbridges,
 						 $scaffoldtosuperscaffold)) {
 	my ($nextscaffoldid, $nextend) = @{$nextbridge};
 
@@ -487,7 +491,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
     }
 
     if ($totscaff > 1) {
-	print "\n\nTOTAL: $totscaff scaffolds, $totctg contigs, $totbp bp\n\n";
+	print "\n\nSEED: $seedscaffoldid, $totscaff scaffolds, $totctg contigs, $totbp bp\n\n";
     }
 }
 
@@ -498,7 +502,7 @@ $dbh->disconnect();
 exit(0);
 
 sub FindNextSuperBridge {
-    my ($bridges, $usedscaffolds, $junk) = @_;
+    my ($bridges, $minscore, $usedscaffolds, $junk) = @_;
 
     my $bestid = -1;
     my $bestend;
@@ -510,6 +514,8 @@ sub FindNextSuperBridge {
 	next if defined($usedscaffolds->{$scaffoldid});
 
 	my $score = scalar(@{$bridges->{$keyb}});
+
+	next if ($score < $minscore);
 
 	# Look for better score, or same score from a lower-numbered scaffold
 	if (($score > $bestscore) || ($score == $bestscore && $scaffoldid < $bestid)) {
@@ -779,6 +785,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-minbridges\tMinimum number of pUC bridges (default: 1)\n";
+    print STDERR "-minbacbridges\tMinimum number of BAC bridges (default: 1)\n";
     print STDERR "-minlen\t\tMinimum contig length (default: all contigs)\n";
     print STDERR "-puclimit\tMaximum insert size for pUC subclones (default: 8000)\n";
     print STDERR "-verbose\tShow lots of detail (default: false)\n";
