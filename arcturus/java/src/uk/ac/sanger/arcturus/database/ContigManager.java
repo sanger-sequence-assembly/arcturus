@@ -14,7 +14,7 @@ public class ContigManager {
     private Connection conn;
     private HashMap hashByID;
     private PreparedStatement pstmtByID;
-    private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByMappingID;
+    private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByContigID;
     private PreparedStatement pstmtReadDataByContigID,pstmtFullReadDataByContigID;
 
     /**
@@ -34,14 +34,17 @@ public class ContigManager {
 	pstmtCountMappingsByContigID = conn.prepareStatement(query);
 
 	query = "select seq_id,MAPPING.mapping_id,MAPPING.cstart,cfinish,direction,count(*)" +
-	    " from MAPPING left join SEGMENT using(mapping_id) " +
+	    " from MAPPING left join SEGMENT using(mapping_id)" +
 	    " where contig_id = ?" +
 	    " group by MAPPING.mapping_id" +
 	    " order by MAPPING.cstart asc, cfinish asc";
 	pstmtMappingsByContigID = conn.prepareStatement(query);
 
-	query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by cstart asc";
-	pstmtSegmentsByMappingID = conn.prepareStatement(query);
+	query = "select MAPPING.mapping_id,SEGMENT.cstart,rstart,length" +
+	    " from MAPPING left join SEGMENT using(mapping_id)"+
+	    " where contig_id = ?" +
+	    " order by MAPPING.cstart asc, MAPPING.cfinish asc, SEGMENT.cstart asc";
+	pstmtSegmentsByContigID = conn.prepareStatement(query);
 
 	query = "select READS.read_id,READS.readname,asped,strand,primer,chemistry," +
 	    "           TEMPLATE.template_id,TEMPLATE.name,TEMPLATE.ligation_id,SEQ2READ.seq_id,SEQ2READ.version" +
@@ -214,9 +217,9 @@ public class ContigManager {
      }
 
     private void bulkLoadMappings(Contig contig) throws SQLException {
-	int id = contig.getID();
+	int contig_id = contig.getID();
 	
-	pstmtCountMappingsByContigID.setInt(1, id);
+	pstmtCountMappingsByContigID.setInt(1, contig_id);
 	ResultSet rs = pstmtCountMappingsByContigID.executeQuery();
 
 	int nmaps = 0;
@@ -230,10 +233,12 @@ public class ContigManager {
 
 	rs.close();
 
-	pstmtMappingsByContigID.setInt(1, id);
+	pstmtMappingsByContigID.setInt(1, contig_id);
 	rs = pstmtMappingsByContigID.executeQuery();
 
 	int kmap = 0;
+
+	HashMap hash = new HashMap(nmaps);
 
 	while (rs.next()) {
 	    int seq_id = rs.getInt(1);
@@ -249,24 +254,38 @@ public class ContigManager {
 
 	    System.err.print('M');
 
-	    pstmtSegmentsByMappingID.setInt(1, mapping_id);
-	    ResultSet seg_rs = pstmtSegmentsByMappingID.executeQuery();
-
-	    while (seg_rs.next()) {
-		int seg_cstart = seg_rs.getInt(1);
-		int seg_rstart = seg_rs.getInt(2);
-		int seg_length = seg_rs.getInt(3);
-
-		Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
-
-		System.err.print('s');
-
-		mapping.addSegment(segment);
-	    }
-
-	    seg_rs.close();
-
 	    mappings[kmap++] = mapping;
+
+	    hash.put(new Integer(mapping_id), mapping);
+	}
+
+	System.err.println();
+
+	rs.close();
+
+	pstmtSegmentsByContigID.setInt(1, contig_id);
+	rs = pstmtSegmentsByContigID.executeQuery();
+
+	int last_mapping_id = -1;
+	Mapping last_mapping = null;
+
+	while (rs.next()) {
+	    int mapping_id = rs.getInt(1);
+	    int seg_cstart = rs.getInt(2);
+	    int seg_rstart = rs.getInt(3);
+	    int seg_length = rs.getInt(4);
+
+	    Mapping mapping = (mapping_id == last_mapping_id) ?
+		last_mapping : (Mapping)hash.get(new Integer(mapping_id));
+	    
+	    Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
+
+	    System.err.print('s');
+	    
+	    mapping.addSegment(segment);
+
+	    last_mapping = mapping;
+	    last_mapping_id = mapping_id;
 	}
 
 	System.err.println();
