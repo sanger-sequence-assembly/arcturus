@@ -2,7 +2,7 @@
 
 use strict;
 
-use ArcturusDatabase::ADBContig;
+use ArcturusDatabase;
 
 use FileHandle;
 use Logging;
@@ -15,15 +15,11 @@ use PathogenRepository;
 my $organism;
 my $instance;
 my $contig_id;
-my $readname;
-my $tagname;
-my $fasta;
-my $fofn;
 my $verbose;
-my $metadataonly = 0;
+my $confirm;
+my $fofn;
 
-my $validKeys  = "organism|instance|contig|fofn|read|tag|short|".
-                 "fasta|verbose|help";
+my $validKeys  = "organism|instance|contig|verbose|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -36,20 +32,14 @@ while (my $nextword = shift @ARGV) {
 
     $contig_id    = shift @ARGV  if ($nextword eq '-contig');
 
-    $readname     = shift @ARGV  if ($nextword eq '-read');
-
-    $tagname      = shift @ARGV  if ($nextword eq '-tag');
-
-    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
-
-    $fasta        = 1            if ($nextword eq '-fasta');
-
     $verbose      = 1            if ($nextword eq '-verbose');
 
-    $metadataonly = 1            if ($nextword eq '-short');
+    $confirm      = 1            if ($nextword eq '-confirm');
 
     &showUsage(0) if ($nextword eq '-help');
 }
+
+&showUsage(0,"Missing contig ID") unless $contig_id;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -67,10 +57,10 @@ $instance = 'dev' unless defined($instance);
 
 &showUsage(0,"Missing organism database") unless $organism;
 
-my $adb = new ADBContig (-instance => $instance,
-		         -organism => $organism);
+my $adb = new ArcturusDatabase (-instance => $instance,
+		                -organism => $organism);
 
-if ($adb->errorStatus()) {
+if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
@@ -91,61 +81,21 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 
 my @contigs;
 
-if ($contig_id) {
-    $logger->info("Contig $contig_id to be processed");
-    my $contig = $adb->getContig(contig_id=>$contig_id,
-                                 metaDataOnly=>$metadataonly);
-    $logger->info("Contig $contig constructed");
-    push @contigs, $contig if $contig;
-}
+push @contigs, $contig_id if $contig_id;
 
-if ($readname) {
-    $logger->info("Contig with read $readname to be processed");
-    my $contig = $adb->getContig(withRead=>$readname,
-                                 metaDataOnly=>$metadataonly);
-    $logger->info("Contig $contig constructed");
-    push @contigs, $contig if $contig;
-}
-
-if ($tagname) {
-    $logger->info("Contig with tag $tagname to be processed");
-    my $contig = $adb->getContig(withTag=>$tagname,
-                       metaDataOnly=>$metadataonly);
-    $logger->info("Contig $contig constructed");
-    push @contigs, $contig if $contig;
-}
 
 if ($fofn) {
     foreach my $contig_id (@$fofn) {
-        my $contig = $adb->getContig(id=>$contig_id,
-                                     metaDataOnly=>$metadataonly);
-        push @contigs, $contig if $contig;
+        push @contigs, $contig_id;
     }
 }
 
-foreach my $contig (@contigs) {
-    if ($metadataonly) {
-        print STDOUT "\n";
-        print STDOUT "Contig name = ".$contig->getContigName.
-	             " (".$contig->getContigID.")\n";
-        print STDOUT "Number of reads = ".$contig->getNumberOfReads.
-                     " (new reads = ".$contig->getNumberOfNewReads.")\n";
-        print STDOUT "Number of contigs = ".$contig->getNumberOfContigs."\n";
-        print STDOUT "Consensus length = ".$contig->getConsensusLength."\n";
-        print STDOUT "Average cover = ".$contig->getAverageCover."\n";
-        print STDOUT "Origin = ".$contig->getOrigin."\n";
-        if (my $pc = $contig->hasPreviousContigs) {
-	    my $cs = $contig->getPreviousContigs;
-            print STDOUT "Previous Contigs : ",$pc, " (@$cs)\n";
-        }
-        print STDOUT "\n";
-    }
-    elsif ($fasta) {
-        $contig->writeToFasta(*STDOUT,*STDOUT);
-    } 
-    else {
-        $contig->writeToCaf(*STDOUT); 
-    }
+foreach my $contig_id (@contigs) {
+    $logger->warning("Contig $contig_id to be deleted");
+    $logger->warning("Repeat and specify -confirm") unless $confirm;
+    next unless $confirm;
+    my ($success,$msg) = $adb->deleteContig($contig_id);
+    print STDERR "$msg\n" unless $success;
 }
 
 #------------------------------------------------------------------------
@@ -183,14 +133,13 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
+    print STDERR "-contig\t\tContig ID\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-instance\teither 'prod' or 'dev' (default)\n";
-#    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-contig\t\tContig ID\n";
-    print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
-    print STDERR "-fasta\t\tOutput in fasta format\n";
+#    print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
+    print STDERR "-confirm\t(no value) to actually do the delete\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 

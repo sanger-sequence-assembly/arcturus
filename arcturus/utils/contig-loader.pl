@@ -2,10 +2,11 @@
 
 use strict; # Constraint variables declaration before using them
 
-use ArcturusDatabase::ADBContig;
+use ArcturusDatabase;
 use Read;
 use Contig;
 use Mapping;
+use Project;
 use Tag;
 
 use FileHandle;
@@ -18,7 +19,6 @@ use PathogenRepository;
 
 my $instance;
 my $organism;
-my $assembly;
 my $cafFileName;
 
 my $lineLimit;             # specifying a line limit implies test mode 
@@ -28,6 +28,10 @@ my $minOfReads = 2;        # default require at least 2 reads per contig
 my $readTags;              # default ignore read contents and tags, only mapping
 my $origin;
 
+my $assembly;              # ?? not really necessary
+my $projectname;           # projectname for which the data are to be loaded
+my $projectID;             # alternatively the project ID
+
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded;             # allow a padded assembly
 my $consensus;             # load consensus sequence
@@ -35,8 +39,9 @@ my $consensus;             # load consensus sequence
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|";
-   $validKeys .= "test|minimum|filter|ignore|frugal|padded|verbose|info|help";
+my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|" .
+                 "projectname|project_id|test|minimum|filter|ignore|" .
+                 "frugal|padded|verbose|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -50,6 +55,10 @@ while (my $nextword = shift @ARGV) {
     $organism         = shift @ARGV  if ($nextword eq '-organism');
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
+
+    $projectname      = shift @ARGV  if ($nextword eq '-projectname');
+
+    $projectID        = shift @ARGV  if ($nextword eq '-project_id');
 
     $lineLimit        = shift @ARGV  if ($nextword eq '-test');
 
@@ -96,8 +105,8 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 $instance = 'prod' unless defined($instance);
 
-my $adb = new ADBContig (-instance => $instance,
-		         -organism => $organism);
+my $adb = new ArcturusDatabase (-instance => $instance,
+		                -organism => $organism);
 
 &showUsage("Unknown organism '$organism'") unless $adb;
 
@@ -119,15 +128,24 @@ if ($cafFileName eq 'default') {
 &showUsage("CAF file $cafFileName does not exist") unless (-e $cafFileName);
 
 #----------------------------------------------------------------
-# if assembly not defined, use default assembly
+# if no project is defined, the loader allocates by inheritance
 #----------------------------------------------------------------
 
-if (!$assembly) {
+my $project;
+
+if ($projectname || $projectID) {
 # to be completed: get info for a name from the assembly
+    $project = $adb->getProject(projectname=>$projectname) if $projectname;
+    $project = $adb->getProject(project_id=>$projectID) if (!$project && $projectID);
 # return an Assembly object from the database, which must have a default
 # project name
-# what if an assembly is defined?
+# what if an assembly is defined? and no project, get the default project
+# TO BE TESTED
+    
+    &showUsage("Unknown project ".($projectname || $projectID) ) unless $project;
+    $logger->info("Project ".$project->getProjectName." identified") if $project;
 }
+#exit;
 
 #----------------------------------------------------------------
 # open file handle for input CAF file
@@ -569,13 +587,11 @@ foreach my $identifier (keys %contigs) {
         next;
     }         
     $contig->setOrigin($origin);
-#    $contig->getStatistics(1);
 
-    my ($added,$msg) = $adb->putContig($contig,1); # return 0 fail
-#    my ($added,$msg) = $adb->putContigForAssembly($contig,$assembly);
+    my ($added,$msg) = $adb->putContig($contig,$project); # return 0 fail
 print "$identifier with ".$contig->getNumberOfReads.
       " reads : status $added, $msg\n\n";
-#    $adb->clearLastContig() unless $added;
+# $adb->clearLastContig() unless $added;
 
     delete $contigs{$identifier} if $added;
 }
@@ -654,7 +670,9 @@ sub showUsage {
     print STDERR "\n";
 #    print STDERR "-NULL\t\t(no value) to direct output to /dev/null\n";
     print STDERR "-instance\teither prod (default) or 'dev'\n";
-    print STDERR "-assembly\tassembly name\n";
+#    print STDERR "-assembly\tassembly name\n";
+    print STDERR "-projectname\tproject name\n";
+    print STDERR "-project_id\tproject ID (alternative to above)\n";
     print STDERR "-minimum\tnumber of reads per contig\n";
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
