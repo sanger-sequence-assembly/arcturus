@@ -11,6 +11,13 @@ public class ArcturusDatabase {
     public static final int MYSQL = 1;
     public static final int ORACLE = 2;
 
+    public static final int CONTIG_NO_CONSENSUS = 0;
+    public static final int CONTIG_CONSENSUS = 1;
+
+    public static final int CONTIG_NO_MAPPING = 0;
+    public static final int CONTIG_BASIC_MAPPING = 1;
+    public static final int CONTIG_FULL_MAPPING = 2;
+
     protected DataSource ds;
     protected String description;
     protected String name;
@@ -521,26 +528,22 @@ public class ArcturusDatabase {
 
     public ContigManager getContigManager() { return contigManager; }
 
-    public Contig getContigByID(int id) throws SQLException {
+    public Contig getContigByID(int id, int consensusOption, int mappingOption) throws SQLException {
 	if (logger != null)
-	    logger.println("getContigByID(" + id + ")");
+	    logger.println("getContigByID(" + id + ", consensusOption = " + consensusOption +
+			   ", mapingOption = " + mappingOption + ")");
 
-	return contigManager.getContigByID(id);
+	return contigManager.getContigByID(id, consensusOption, mappingOption);
     }
 
-     public Contig getFullContigByID(int id) throws SQLException {
+
+    public Contig getContigByID(int id, int consensusOption, int mappingOption,
+				    boolean autoload) throws SQLException {
 	if (logger != null)
-	    logger.println("getFullContigByID(" + id + ")");
+	    logger.println("getContigByID(" + id + ", consensusOption = " + consensusOption +
+			   ", mapingOption = " + mappingOption + ", autoload=" + autoload + ")");
 
-	return contigManager.getFullContigByID(id);
-    }
-
-    public Contig getFullContigByID(int id, boolean autoload, boolean loadsequence) throws SQLException {
-	if (logger != null)
-	    logger.println("getFullContigByID(" + id + ", autoload=" + autoload + ", loadsequence=" +
-			   loadsequence + ")");
-
-	return contigManager.getFullContigByID(id, autoload, loadsequence);
+	return contigManager.getContigByID(id, consensusOption, mappingOption, autoload);
     }
 
     /**

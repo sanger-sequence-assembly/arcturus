@@ -4,6 +4,8 @@ import uk.ac.sanger.arcturus.data.*;
 
 import java.sql.*;
 import java.util.*;
+import java.util.zip.Inflater;
+import java.util.zip.DataFormatException;
 
 /**
  * This class manages Contig objects.
@@ -16,6 +18,8 @@ public class ContigManager {
     private PreparedStatement pstmtByID;
     private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByContigID;
     private PreparedStatement pstmtReadDataByContigID,pstmtFullReadDataByContigID;
+    private PreparedStatement pstmtConsensusByID;
+    private Inflater decompresser = new Inflater();
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -32,6 +36,9 @@ public class ContigManager {
 
 	query = "select count(*) from MAPPING where contig_id = ?";
 	pstmtCountMappingsByContigID = conn.prepareStatement(query);
+
+	query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
+	pstmtConsensusByID = conn.prepareStatement(query);
 
 	query = "select seq_id,MAPPING.mapping_id,MAPPING.cstart,cfinish,direction,count(*)" +
 	    " from MAPPING left join SEGMENT using(mapping_id)" +
@@ -65,17 +72,29 @@ public class ContigManager {
 	hashByID = new HashMap();
     }
 
-    public Contig getContigByID(int id) throws SQLException {
-	return getContigByID(id, true);
+    public Contig getContigByID(int id, int consensusOption, int mappingOption) throws SQLException {
+	return getContigByID(id, consensusOption, mappingOption, true);
     }
 
-    public Contig getContigByID(int id, boolean autoload) throws SQLException {
+    public Contig getContigByID(int id, int consensusOption, int mappingOption,
+				boolean autoload) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
-	return (obj == null && autoload) ? loadContigByID(id) : (Contig)obj;
+	if (obj == null)
+	    return autoload ? loadContigByID(id, consensusOption, mappingOption) : null;
+
+	Contig contig = (Contig)obj;
+
+	if (contig.getMappings() == null && mappingOption != ArcturusDatabase.CONTIG_NO_MAPPING)
+	    loadMappingsForContig(contig, mappingOption);
+
+	if (contig.getConsensus() == null && consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
+	    loadConsensusForContig(contig, consensusOption);
+
+	return contig;
     }
 
-    private Contig loadContigByID(int id) throws SQLException {
+    private Contig loadContigByID(int id, int consensusOption, int mappingOption) throws SQLException {
 	pstmtByID.setInt(1, id);
 	ResultSet rs = pstmtByID.executeQuery();
 
@@ -91,34 +110,14 @@ public class ContigManager {
 
 	rs.close();
 
-	return contig;
-    }
+	if (mappingOption != ArcturusDatabase.CONTIG_NO_MAPPING)
+	    loadMappingsForContig(contig, mappingOption);
 
-    public Contig getFullContigByID(int id) throws SQLException {
-	return getFullContigByID(id, true, true);
-    }
-
-    public Contig getFullContigByID(int id, boolean autoload, boolean loadsequence) throws SQLException {
-	Object obj = hashByID.get(new Integer(id));
-
-	if (obj == null)
-	    return autoload ? loadFullContigByID(id, loadsequence) : null;
-
-	Contig contig = (Contig)obj;
-
-	if (contig.getMappings() == null)
-	    loadMappingsForContig(contig, loadsequence);
+	if (consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
+	    loadConsensusForContig(contig, consensusOption);
 
 	return contig;
     }
-
-    private Contig loadFullContigByID(int id, boolean loadsequence) throws SQLException {
-	Contig contig = loadContigByID(id);
-
-	loadMappingsForContig(contig, loadsequence);
-
-	return contig;
-   }
 
     private Contig createAndRegisterNewContig(int id, int length, int nreads, java.sql.Date updated) {
 	Contig contig = new Contig(id, length, nreads, updated, adb);
@@ -141,18 +140,18 @@ public class ContigManager {
 	hashByID.put(new Integer(contig.getID()), contig);
     }
 
-    private void loadMappingsForContig(Contig contig, boolean loadsequence) throws SQLException {
-	bulkLoadReadData(contig, loadsequence);
+    private void loadMappingsForContig(Contig contig, int mappingOption) throws SQLException {
+	bulkLoadReadData(contig, mappingOption);
 
 	bulkLoadMappings(contig);
     }
 
-    private void bulkLoadReadData(Contig contig, boolean loadsequence) throws SQLException {
+    private void bulkLoadReadData(Contig contig, int mappingOption) throws SQLException {
 	int id = contig.getID();
 	
 	ResultSet rs;
 
-	if (loadsequence) {
+	if (mappingOption == ArcturusDatabase.CONTIG_FULL_MAPPING) {
 	    pstmtFullReadDataByContigID.setInt(1, id);
 	    rs = pstmtFullReadDataByContigID.executeQuery();
 	} else {
@@ -193,7 +192,7 @@ public class ContigManager {
 		sequence = new Sequence(seq_id, read, null, null, version);
 		adb.registerNewSequence(sequence);
 
-		if (loadsequence) {
+		if (mappingOption == ArcturusDatabase.CONTIG_FULL_MAPPING) {
 		    int seqlen = rs.getInt(12);
 		    byte[] dna = adb.decodeCompressedData(rs.getBytes(13), seqlen);
 		    byte[] quality = adb.decodeCompressedData(rs.getBytes(14), seqlen);
@@ -218,8 +217,10 @@ public class ContigManager {
 	if (rs.next()) {
 	    nmaps = rs.getInt(1);
 	    mappings = new Mapping[nmaps];
-	} else
+	} else {
+	    rs.close();
 	    return;
+	}
 
 	rs.close();
 
@@ -275,5 +276,46 @@ public class ContigManager {
 	rs.close();
 
 	contig.setMappings(mappings);
+    }
+
+    private void loadConsensusForContig(Contig contig, int consensusOption) throws SQLException {
+	int contig_id = contig.getID();
+	
+	pstmtConsensusByID.setInt(1, contig_id);
+	ResultSet rs = pstmtConsensusByID.executeQuery();
+
+	if (rs.next()) {
+	    int seqlen = rs.getInt(1);
+
+	    byte[] cdna = rs.getBytes(2);
+
+	    byte[] dna = new byte[seqlen];
+
+	    try {
+		decompresser.setInput(cdna, 0, cdna.length);
+		int dnalen = decompresser.inflate(dna, 0, dna.length);
+		decompresser.reset();
+	    }
+	    catch (DataFormatException dfe) {
+		dna = null;
+	    }
+
+	    byte[] cqual = rs.getBytes(3);
+
+	    byte[] qual = new byte[seqlen];
+
+	    try {
+		decompresser.setInput(cqual, 0, cqual.length);
+		int dnalen = decompresser.inflate(qual, 0, qual.length);
+		decompresser.reset();
+	    }
+	    catch (DataFormatException dfe) {
+		qual = null;
+	    }
+
+	    contig.setConsensus(dna, qual);
+	}
+
+	rs.close();
     }
 }
