@@ -584,7 +584,6 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
     my $FILE = shift;        # obligatory output file handle
-    my $forAssembly = shift; # optional
 
     die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
