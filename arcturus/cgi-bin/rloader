@@ -44,7 +44,9 @@ my ($void, $database, $option, $origin, $session);
 
 if ($cgi) {
    ($void, $database, $option) = split ('/',$GateKeeper->origin());
-   $database = $cgi->parameter('database') || $cgi->parameter('organism') || 'arcturus';
+#   $database = $cgi->parameter('database') if !$database;
+#   $database = $cgi->parameter('organism') if !$database;
+#   $database = 'arcturus if !$database';
    $option = 'getform' if !$option;
 }
 else {
@@ -127,7 +129,7 @@ if ($cgi) {
             my $table = $organisms->htmlTable(\%options);
             $page->add($table,0,0,"size=-1");
             $page->sectionheader("Select a Database and Read specification",4,0);
-            $page->add($organisms->htmlOptions('dbasename','database',20,0,$database),0,0);
+            $page->add($organisms->htmlOptions('dbasename','database',20,0),0,0);
         }
         else {
             my %options = (mask=>'011000001111000001',
