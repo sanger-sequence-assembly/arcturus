@@ -10,7 +10,7 @@ print "PID is $pid\nParent PID is $ppid\nGroup PID is $pgrp\n\n";
 
 print "Preparing to send TERM signal to $pgrp\n\n";
 
-#kill('TERM', $pgrp);
+kill('TERM', $pgrp);
 
 print "Signal sent.\n";
 
