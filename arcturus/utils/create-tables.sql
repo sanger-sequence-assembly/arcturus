@@ -92,11 +92,11 @@ CREATE TABLE CLONES2PROJECT (
 #
 
 CREATE TABLE CLONEVEC (
-  read_id mediumint(8) unsigned NOT NULL,
+  seq_id mediumint(8) unsigned NOT NULL,
   cvector_id tinyint(3) unsigned NOT NULL,
   cvleft smallint unsigned NOT NULL,
   cvright smallint unsigned NOT NULL,
-  KEY read_id (read_id)
+  KEY seq_id (seq_id)
 ) TYPE=MyISAM;
 
 #
@@ -201,12 +201,12 @@ CREATE TABLE LIGATIONS (
 
 CREATE TABLE MAPPING (
   contig_id mediumint(8) unsigned NOT NULL default '0',
-  read_id mediumint(8) unsigned NOT NULL default '0',
+  seq_id mediumint(8) unsigned NOT NULL default '0',
   mapping_id mediumint(8) unsigned NOT NULL auto_increment,
   revision smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
-  KEY read_id (read_id)
+  KEY seq_id (seq_id)
 ) TYPE=MyISAM;
 
 #
@@ -246,11 +246,11 @@ CREATE TABLE READCOMMENT (
 #
 
 CREATE TABLE READEDITS (
-  read_id mediumint(8) unsigned NOT NULL default '0',
+  seq_id mediumint(8) unsigned NOT NULL default '0',
   base smallint(5) unsigned NOT NULL default '0',
   edit char(4) default NULL,
   deprecated enum('N','Y','X') default 'N',
-  KEY reads_index (read_id)
+  KEY reads_index (seq_id)
 ) TYPE=MyISAM;
 
 #
@@ -266,9 +266,6 @@ CREATE TABLE READS (
   primer enum('Universal_primer', 'Custom', 'Unknown_primer') default NULL,
   chemistry enum('Dye_terminator', 'Dye_primer') default NULL,
   basecaller tinyint(3) unsigned default NULL,
-  slength smallint(5) unsigned NOT NULL default '0',
-  lqleft smallint(5) unsigned NOT NULL default '0',
-  lqright smallint(5) unsigned NOT NULL default '0',
   status tinyint(3) unsigned default '0',
   PRIMARY KEY  (read_id),
   UNIQUE KEY readname (readname),
@@ -294,14 +291,14 @@ CREATE TABLE READS2ASSEMBLY (
 #
 
 CREATE TABLE READTAGS (
-  read_id mediumint(8) unsigned NOT NULL default '0',
+  seq_id mediumint(8) unsigned NOT NULL default '0',
   readtag varchar(4) binary NOT NULL default '',
   pstart smallint(5) unsigned NOT NULL default '0',
   pfinal smallint(5) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
   comment varchar(128) default NULL,
   deprecated enum('N','Y','X') default 'N',
-  KEY reads_index (read_id)
+  KEY reads_index (seq_id)
 ) TYPE=MyISAM;
 
 #
@@ -337,10 +334,11 @@ CREATE TABLE SEGMENT (
 #
 
 CREATE TABLE SEQUENCE (
-  read_id mediumint(8) unsigned NOT NULL default '0',
+  seq_id mediumint(8) unsigned NOT NULL default '0',
   sequence blob NOT NULL,
   quality blob NOT NULL,
-  PRIMARY KEY  (read_id)
+  seqlen smallint unsigned NOT NULL,
+  PRIMARY KEY  (seq_id)
 ) TYPE=MyISAM MAX_ROWS=8000000 AVG_ROW_LENGTH=900;
 
 #
@@ -348,11 +346,11 @@ CREATE TABLE SEQUENCE (
 #
 
 CREATE TABLE SEQVEC (
-  read_id mediumint(8) unsigned NOT NULL,
+  seq_id mediumint(8) unsigned NOT NULL,
   svector_id tinyint(3) unsigned NOT NULL,
   svleft smallint unsigned NOT NULL,
   svright smallint unsigned NOT NULL,
-  KEY read_id (read_id)
+  KEY seq_id (seq_id)
 ) TYPE=MyISAM;
 
 #
@@ -435,6 +433,29 @@ CREATE TABLE USERS2PROJECTS (
   project smallint(5) unsigned NOT NULL default '0',
   date_from date default NULL,
   date_end date default NULL
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'SEQ2READ'
+#
+
+CREATE TABLE SEQ2READ (
+  seq_id mediumint unsigned NOT NULL auto_increment,
+  read_id mediumint unsigned NOT NULL,
+  version mediumint unsigned NOT NULL default '0',
+  primary key (seq_id),
+  unique key (read_id, version)
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'QUALITYCLIP'
+#
+
+CREATE TABLE QUALITYCLIP (
+  seq_id mediumint unsigned NOT NULL,
+  qleft smallint unsigned NOT NULL,
+  qright smallint unsigned NOT NULL,
+  primary key (seq_id)
 ) TYPE=MyISAM;
 
 
