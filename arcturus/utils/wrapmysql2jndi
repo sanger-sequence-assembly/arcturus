@@ -1,0 +1,49 @@
+#!/usr/local/bin/perl
+
+use WrapMySQL;
+
+$inifile = shift;
+
+$instance = shift;
+
+die "You must specify a WrapMySQL configuration file" unless defined($inifile);
+
+die "Configuration file $inifile does not exist" unless -f $inifile;
+
+die "You must specify an Arcturus instance name" unless defined($instance);
+
+$registerdatasource = $ENV{'REGISTERDATASOURCE'};
+
+die "REGISTERDATASOURCE not defined" unless defined($registerdatasource);
+
+WrapMySQL->initFromFile($inifile);
+
+@organisms = WrapMySQL->listInstances();
+
+foreach $organism (@organisms) {
+    $database = WrapMySQL->getDatabase($organism);
+    $hostname = WrapMySQL->getHostname($organism);
+    $port = WrapMySQL->getPort($organism);
+
+    ($username, $password) = WrapMySQL->getRole($organism, 'write');
+
+    if (defined($hostname) && defined($port) && defined($username) && defined($password) &&
+	defined($database)) {
+	$cmd = "$registerdatasource -organism $organism -instance $instance -host $hostname " .
+	    "-port $port -username $username -password $password -database $database";
+
+	print STDERR "$cmd\n";
+
+	$rc = system($cmd);
+
+	print STDERR "rc=$rc\n" if ($rc != 0);
+
+	exit($rc) if ($rc != 0);
+    } else {
+	print STDERR "Some information is missing for $organism\n";
+    }
+}
+
+
+
+exit(0);
