@@ -457,9 +457,9 @@ print "after seqDec chop <br>sstring: '$sstring' <br>" if ($dc == 2);
 
 # apply masking (counted from 1, not 0!)
 
-    $range->[0] = $hash->{lqleft}  + 1  if ($hash->{lqleft});
-    $range->[1] = $hash->{lqright} - 1  if ($hash->{lqright});
-    $range->[0] = 1 if ($range->[0] <= 0); # protection just in case
+    $range->[0] = $hash->{lqleft}  + 1  if defined($hash->{lqleft});
+    $range->[1] = $hash->{lqright} - 1  if defined($hash->{lqright});
+    $range->[0] = 1 if (!$range->[0] || $range->[0] < 0); # protection just in case
     $range->[1] = $length if (!$range->[1] || $range->[1] > $length); # ibid
 
 #    print "window: $range->[0]  $range->[1]\n";
