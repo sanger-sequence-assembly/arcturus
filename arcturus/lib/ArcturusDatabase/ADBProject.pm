@@ -225,17 +225,17 @@ sub linkContigIDToProjectID {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id,$contig_id) || &queryFailed($query) && return undef;
+    my $success = $sth->execute($project_id,$contig_id) || &queryFailed($query);
 
     $sth->finish();
     
     $pidtoupdate{$project_id}++;
 
     foreach $project_id (keys %pidtoupdate) {
-        &updateMetaDataForProject($dbh,$project_id);
+#        &updateMetaDataForProject($this,$project_id);
     }
 
-    return 1;
+    return $success;
 }
 
 #--------------------------------------------------------------------------------
@@ -251,7 +251,7 @@ sub unlinkContigID {
 
     return unless ($checked eq 'in');
 
-    my $dbh->getConnection();
+    my $dbh = $this->getConnection();
 
     my $query = "delete from CONTIG2PROJECT where checked='in' and contig_id=?";
 
@@ -261,7 +261,7 @@ sub unlinkContigID {
 
     $sth->finish();
 
-    &updateMetaDataForProject($dbh,$project_id);
+#    &updateMetaDataForProject($this,$project_id);
 
     return $success;
 }
@@ -351,10 +351,34 @@ sub getProjectIDforContigID {
 # update meta data
 #------------------------------------------------------------------------------
 
+sub getCountsForProject {
+    my $this = shift;
+    my $project_id = shift || return undef;
+
+    my $dbh = $this->getConnection();
+
+# get the number of contigs and reads in this project
+
+    my $query = "select count(distinct CONTIG2PROJECT.contig_id) as contigs," .
+                "       count(distinct seq_id) as reads" .
+                "  from CONTIG2PROJECT join MAPPING using (contig_id)" .
+                " where project=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($project_id) || &queryFailed($query) && return 0;
+
+    my ($cnr, $rnr) = $sth->fetchrow_array(); # number of contigs, reads
+
+    $sth->finish();
+
+    return ($cnr, $rnr);
+}
+
 sub updateMetaDataForProject {
 # private method: determine & update number of reads and contogs for project
 # returns true for updated, false but 0 for failure, undef for invalid input
-    my $dbh = shift;
+    my $this = shift;
     my $project_id = shift;
     my ($key,$value) = @_;
 
@@ -370,23 +394,20 @@ sub updateMetaDataForProject {
 
 # get the number of contigs and reads in this project
 
-    my $query = "select count(distinct CONTIG2PROJECT.contig_id) as contigs," .
-                "       count(distinct seq_id) as reads" .
-                "  from CONTIG2PROJECT join MAPPING using (contig_id)" .
+    my ($cnr, $rnr) = $this->getCountsForProject(); # number of contigs, reads
+
+    my $dbh = $this->getConnection();
+
+    my $query = "update PROJECT set contigs=?,reads=?,updated=now(),userid=?".
                 " where project=?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query) && return 0;
+    my $success = $sth->execute($cnr,$rnr,$project_id,$user) || &queryFailed($query);
 
-    my ($cnr, $rnr) = $sth->fetchrow_array(); # number of contigs, reads
+    $sth->finish();
 
-    $query = "update PROJECT set contigs=?,reads=?,updated=now(),userid=?".
-             " where project=?";
-
-    $sth = $dbh->prepare_cached($query);
-
-    return $sth->execute($cnr,$rnr,$project_id,$user) || &queryFailed($query);
+    return $success;
 }
 
 sub addCommentForProject {
