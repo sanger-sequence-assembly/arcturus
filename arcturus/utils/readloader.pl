@@ -25,7 +25,7 @@ my $verbose = 0;
 my $source; # name of factory type
 # my $limit;
 
-my $exclude = 1;
+my $exclude = 0;
 
 my $skipaspedcheck = 0;
 
@@ -33,7 +33,7 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
-   $validKeys .= "limit|filter|source|noexclude|info|help|asped|";
+   $validKeys .= "limit|filter|source|exclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
    $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
    $validKeys .= "minreadid|maxreadid|skipaspedcheck";
@@ -56,7 +56,7 @@ while (my $nextword = shift @ARGV) {
 
 # exclude defines if reads already loaded are to be ignored (default = Y) 
 
-    $exclude          = 0            if ($nextword eq '-noexclude');
+    $exclude          = 1            if ($nextword eq '-exclude');
 
 # Do not check Read objects for the presence of an Asped date. This allows
 # us to load external reads, which lack this information.
