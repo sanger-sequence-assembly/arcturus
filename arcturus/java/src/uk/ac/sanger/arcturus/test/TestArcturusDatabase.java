@@ -49,10 +49,61 @@ public class TestArcturusDatabase {
 	    System.out.println("TEST 2: Iterating over the entries");
 	    System.out.println();
 
+	    listEntries(ai);
+
+	    System.out.println();
+	    System.out.println(separator);
+	    System.out.println();
+
+	    System.out.println("TEST 3: Creating and binding a new ArcturusDatabase");
+	    System.out.println();
+
+	    setLDAPCredentials(props);
+
+	    ai = new ArcturusInstance(props, "test");
+		    
+	    System.out.println("Created " + ai);
+
+	    System.out.println();
+	    System.out.println();
+
+	    System.out.println("Listing:");
+	    System.out.println();
+
+	    listEntries(ai);
+
+	    String description = "Streptomyces scabies";
+	    String name = "SCAB";
+
+	    System.out.println();
+
+	    DataSource ds = ArcturusDatabase.createMysqlDataSource("pcs3", 14642, "SCAB", "arcturus", "***REMOVED***");
+
+	    adb = new ArcturusDatabase(ds, description, name);
+
+	    System.out.println("Testing new ArcturusDatabase object");
+
+	    testArcturusDatabase(adb);
+
+	    System.out.println();
+
+	    ai.putArcturusDatabase(adb, name);
+
+	    System.out.println("Listing:");
+	    System.out.println();
+
+	    listEntries(ai);
+	}
+	catch (Exception e) {
+	    e.printStackTrace();
+	}
+    }
+
+    public static void listEntries(ArcturusInstance ai) {
 	    Iterator iter = ai.iterator();
 
 	    while (iter.hasNext()) {
-		adb = (ArcturusDatabase)iter.next();
+		ArcturusDatabase adb = (ArcturusDatabase)iter.next();
 
 		try {
 		    testArcturusDatabase(adb);
@@ -63,10 +114,6 @@ public class TestArcturusDatabase {
 
 		System.out.println();
 	    }
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	}
     }
 
     public static void setLDAPCredentials(Properties props) {
@@ -79,7 +126,7 @@ public class TestArcturusDatabase {
     }
 
     public static void testArcturusDatabase(ArcturusDatabase adb)
-	throws NamingException, SQLException {
+	throws SQLException {
 	System.out.println(adb);
 	Connection conn = adb.getConnection();
 	DatabaseMetaData dmd = conn.getMetaData();
