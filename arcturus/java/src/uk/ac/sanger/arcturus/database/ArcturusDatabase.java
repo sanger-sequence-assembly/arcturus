@@ -230,6 +230,7 @@ public class ArcturusDatabase {
     protected TemplateManager templateManager;
     protected ReadManager readManager;
     protected SequenceManager sequenceManager;
+    protected ContigManager contigManager;
 
     private void createManagers() throws SQLException {
 	cloneManager = new CloneManager(this);
@@ -237,6 +238,7 @@ public class ArcturusDatabase {
 	templateManager = new TemplateManager(this);
 	readManager = new ReadManager(this);
 	sequenceManager = new SequenceManager(this);
+	contigManager = new ContigManager(this);
     }
 
     /**
@@ -349,6 +351,22 @@ public class ArcturusDatabase {
 
     public void getDNAAndQualityForSequence(Sequence sequence) throws SQLException {
 	sequenceManager.getDNAAndQualityForSequence(sequence);
+    }
+
+    /**
+     * Returns the ContigManager belonging to this ArcturusDatabase.
+     *
+     * @return the ContigManager belonging to this ArcturusDatabase.
+     */
+
+    public ContigManager getContigManager() { return contigManager; }
+
+    public Contig getContigByID(int id) throws SQLException {
+	return contigManager.getContigByID(id);
+    }
+
+     public Contig getFullContigByID(int id) throws SQLException {
+	return contigManager.getFullContigByID(id);
     }
 
     /**
