@@ -75,6 +75,17 @@ while (my ($seq_id, $read_id, $version) = $seqid_stmt->fetchrow_array()) {
 $seqid_stmt->finish();
 $delete_stmt->finish();
 
+$query = "DELETE FROM SEQ2READ WHERE version != 0";
+
+$delete_stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+my $nrows = $delete_stmt->execute();
+
+print STDERR "$nrows deleted from table SEQ2READ.\n";
+
+$delete_stmt->finish();
+
 $dbh->disconnect();
 
 exit(0);
