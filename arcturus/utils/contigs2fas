@@ -25,6 +25,7 @@ my $padtox;
 my $depad;
 my $fastafh;
 my $contigids;
+my $allcontigs = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -39,6 +40,8 @@ while (my $nextword = shift @ARGV) {
     $destdir = shift @ARGV if ($nextword eq '-destdir');
 
     $contigids = shift @ARGV if ($nextword eq '-contigs');
+
+    $allcontigs = 1 if ($nextword eq '-allcontigs');
 
     $padton = 1 if ($nextword eq '-padton');
     $padtox = 1 if ($nextword eq '-padtox');
@@ -87,13 +90,23 @@ if (defined($fastafile)) {
     }
 }
 
+my $query;
+
 $minlen = 1000 unless (defined($minlen) || defined($contigids));
 
-my $condition = defined($contigids) ? "CONTIG.contig_id IN ($contigids)" : "CONTIG.length >= $minlen";
+if (defined($contigids)) {
+    $query = "select contig_id,length from CONTIG where contig_id in ($contigids)";
+} elsif ($allcontigs) {
+    $query = "select contig_id,length from CONTIG";
+    $query .= " where length > $minlen" if defined($minlen);
+} else {
+    $query = "select CONTIG.contig_id,length from CONTIG left join C2CMAPPING" .
+	" on CONTIG.contig_id = C2CMAPPING.parent_id" .
+	    " where C2CMAPPING.parent_id is null";
 
-my $query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence " .
-    "from CONTIG left join CONSENSUS using(contig_id) ".
-    "where CONSENSUS.contig_id is not null and $condition";
+    $query .= " and length > $minlen" if defined($minlen);
+
+}
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -101,8 +114,21 @@ my $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("execute($query) failed");
 
+$query = "select sequence from CONSENSUS where contig_id = ?";
+
+my $sth_sequence = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
 while(my @ary = $sth->fetchrow_array()) {
-    my ($contigid, $contiglength, $compressedsequence) = @ary;
+    my ($contigid, $contiglength) = @ary;
+
+    $sth_sequence->execute($contigid);
+
+    my ($compressedsequence) = $sth_sequence->fetchrow_array();
+
+    $sth_sequence->finish();
+
+    next unless defined($compressedsequence);
 
     my $sequence = uncompress($compressedsequence);
 
@@ -168,6 +194,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
     print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
+    print STDERR "    -allcontigs\tSelect all contigs, not just from current set\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";

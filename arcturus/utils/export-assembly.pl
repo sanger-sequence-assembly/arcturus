@@ -16,17 +16,19 @@ my $instance;
 my $organism;
 my $assembly;
 my $cafFileName ='';
+my $contiglist;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys  = "organism|instance|assembly|caf|verbose|info|help";
+my $validKeys  = "organism|instance|assembly|caf|contigs|verbose|info|help";
 
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage("Invalid keyword '$nextword'");
+        &showUsage();
+	exit(1);
     }
 
     $instance         = shift @ARGV  if ($nextword eq '-instance');
@@ -35,13 +37,24 @@ while (my $nextword = shift @ARGV) {
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
+    $contiglist       = shift @ARGV  if ($nextword eq '-contigs');
+
     $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
 
     $logLevel         = 0            if ($nextword eq '-verbose'); 
 
     $logLevel         = 2            if ($nextword eq '-info'); 
 
-    &showUsage(0) if ($nextword eq '-help');
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($instance) && defined($organism)) {
+    print STDERR "Both instance and organism must be defined.\n\n";
+    &showUsage(0);
+    exit(1);
 }
 
 #----------------------------------------------------------------
@@ -56,12 +69,10 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
-
 my $adb = new ArcturusDatabase (-instance => $instance,
 			        -organism => $organism);
 
-&showUsage("Unknown organism '$organism'") unless $adb;
+die "Failed to create ArcturusDatabase(-instance => $instance, -organism => $organism)" unless $adb;
 
 
 #----------------------------------------------------------------
@@ -73,10 +84,16 @@ $CAF = new FileHandle($cafFileName,"w") if $cafFileName;
 $CAF = *STDOUT unless $CAF;
 
 # allocate basic objects
+my $contigids;
 
-$logger->info("Getting contig IDs for generation 0");
+if (defined($contiglist)) {
+    my @ctgs = split(',',$contiglist);
+    $contigids = \@ctgs;
+} else {
+    $logger->info("Getting contig IDs for generation 0");
 
-my $contigids = $adb->getCurrentContigIDs(); # exclude singleton
+    $contigids = $adb->getCurrentContigIDs(); # exclude singleton
+}
 
 $logger->info("Retrieving ".scalar(@$contigids)." Contigs");
 
@@ -105,24 +122,18 @@ exit 0;
 #------------------------------------------------------------------------
 
 sub showUsage {
-
-    my $code = shift || 0;
-
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
-    print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "-instance\tArcturus instance\n";
     print STDERR "-organism\tArcturus database name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\teither prod (default) or 'dev'\n";
-    print STDERR "-caf\t\tcaf file name for output\n";
+    print STDERR "-caf\t\tCAF file name for output\n";
+    print STDERR "-contigs\tComma-separated list of contig IDs\n";
 #    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-info\t\t(no value) for some progress info\n";
+    print STDERR "-info\t\tDisplay progress info [boolean]\n";
     print STDERR "\n";
-
-    $code ? exit(1) : exit(0);
 }
 
 
