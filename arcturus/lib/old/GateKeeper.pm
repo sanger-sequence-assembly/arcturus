@@ -2200,7 +2200,8 @@ sub report {
 
     my $tag = "\n";
     if ($self->{cgi} && $self->{cgi}->{status}) {
-        $self->{cgi}->PrintHeader(1) if !$self->{cgi}->{'header'}; # plain text
+        my $plain = shift; $plain = 1 unless defined($plain);
+        $self->{cgi}->PrintHeader(0) if !$self->{cgi}->{'header'}; # plain text
         $tag = "<br>" if ($self->{cgi}->{'header'} == 1);
         $text = $self->{report} if ! $text;
         $text =~ s/\n/$tag/g if $text;

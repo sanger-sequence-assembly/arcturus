@@ -35,7 +35,7 @@ sub new {
     $self->{status} = {};
     $self->clearErrorStatus; # initalise
 
-print "TableRow completed<br>";
+# print "TableRow completed $self->{table} $self->{protect} $tblhandle->{database} $tblhandle->{tablename}<br>";
     return $self;
 }
 
@@ -51,7 +51,8 @@ sub loadRecord {
 
     my $status = $self->clearErrorStatus;
 
-print "Loading record $item $value<br>";
+my $TEST = 1;
+print "Loading record $item $value<br>" if $TEST;
 
     if (!defined($item) || !defined($value)) {
         $status->{diagnosis} = "loadRecord: incomplete parameter list";
@@ -64,8 +65,8 @@ print "Loading record $item $value<br>";
    
 # test error status on the data table reader
 
-print "$item $hash->{$item}  $value<br>";
-    if (defined($hash->{$item}) && $hash->{$item} eq $value) {
+print "$item $hash->{$item}  $value<br>" if ($hash && $TEST);
+    if (ref($hash) eq 'HASH' && defined($hash->{$item}) && $hash->{$item} eq $value) {
 # the record exists and data are in $hash
         $self->{contents} = $hash; # or copy?
 # register the current column name
@@ -79,8 +80,8 @@ print "$item $hash->{$item}  $value<br>";
         else {
             delete $hash->{attributes}; # remove from 'contents'
             my $attributes = $table->unpackAttributes($value,$item); # a reference to a hash
-print "unpacked attributes $attributes <br>";
-my @keys = keys %$attributes; print "keys @keys<br>";
+print "unpacked attributes $attributes <br>" if $TEST;
+my @keys = keys %$attributes; print "keys @keys<br>" if $TEST;
             $self->{attributes} = $attributes;
         }
     }
@@ -88,11 +89,13 @@ my @keys = keys %$attributes; print "keys @keys<br>";
         $status->{diagnosis} = "query error on table $table->{tablename}";
         $status->{qerrors} = $table->qstatus();
         $status->{errors}++;
-        return 0; 
+print "END loadRecord (qerrors) <br>" if $TEST;
+        return 0;
     }
-    elsif (!keys (%$hash)) {
+    elsif (!$hash || !keys (%$hash)) {
         $status->{diagnosis} = "$table->{tablename} entry $item = $value does not exist";
         $status->{errors}++;
+print "END loadRecord <br>" if $TEST;
         return 0; 
     }
 
@@ -154,6 +157,17 @@ sub loadLastRecord {
 
 #####################################################################
 
+sub count {
+# count the number of rows in the master table
+    my $self  = shift;
+
+    my $table = $self->{table};
+
+    return $table->count(shift);
+}
+
+#####################################################################
+
 sub put {
 # put an item to the internal hash; returns 1 for success, else 0 
     my $self  = shift;
@@ -202,9 +216,13 @@ sub get {
 
     my $value = $self->{contents}->{$item};
 
-# not found, try the attributes
+# if not found, try the attributes
 
     $value = $self->{attributes}->{$item} unless defined($value);
+
+# finally, try the self hash 
+
+    $value = $self->{$item} unless defined($value);
 
     return $value;
 }
@@ -215,7 +233,7 @@ sub tableHandle {
 # return the table handle
     my $self = shift;
 
-    return $self->get('table');
+    return $self->{table};
 }
 
 #############################################################################
@@ -226,7 +244,7 @@ sub inventory {
     my $part = shift;
 
     my $list;
-
+# to be completed
     return $list;
 }
 
@@ -273,7 +291,7 @@ print "RM enter commit<br>";
         next if ($changes->{$key} eq $content->{$key});
 
 print "update $table->{tablename} $key, $changes->{$key}, $protect, $prvalue<br>";
-#        $table->update($key, $changes->{$key}, $protect, $prvalue);
+        $table->update($key, $changes->{$key}, $protect, $prvalue);
 
         if ($table->qerrors()) {
             my $qstatus = $table->qstatus;
@@ -295,6 +313,8 @@ sub newRow {
 # add a new row with the current 'changes' buffer contents
     my $self = shift;
 
+    my $status = $self->clearErrorStatus;
+
     my @column;
     my @values;
 
@@ -305,16 +325,23 @@ sub newRow {
         push @values, $changes->{$key};
     }
 
+    if (!@column) {
+        $status->{diagnosis} = "There is no data to insert";
+        $status->{warnings}++;
+        return 0;
+    }
+
     my $table = $self->{table};
 
-    my $status = $self->clearErrorStatus;
-print "new row<br>@column<br>@values<br>";
+    my $insert = $table->newrow(\@column,\@values);
 
-#    my $insert = $table->newrow(\@column,\@values); # returns true or 0
-#    if (!$insert) {
+    if (!$insert) {
+# inserting a new row failed
         $status->{diagnosis} = $table->{qerror};
         $status->{errors}++;
-#    }
+    }
+
+    return $insert;
 }
 
 #############################################################################
@@ -345,10 +372,10 @@ sub status {
 
     my $output;
 
-    if ($status->{errors} || ($full && $self->{warnings}++)) {
-        $output .= "$status->{errors} ERRORs on $self:\n";
-        $output .= "$status->{warnings} WARNINGSs on $self:\n" if $self->{warnings}; 
-        $output .= "$self->{diagnosis}";
+    if ($status->{errors} || ($full && $self->{warnings})) {
+        $output .= "$status->{errors} ERRORs on ".ref($self).":\n";
+        $output .= "$status->{warnings} WARNINGSs on ".ref($self).":\n" if $self->{warnings}; 
+        $output .= "$status->{diagnosis}";
     }
 
     return $output; # returns undef for NO error status
