@@ -81,6 +81,22 @@ sub importData {
     return $copied;
 }
 
+sub exportData {
+# export of meta data of this instance with a hash
+    my $self = shift;
+
+    my %export;
+    my $data = $self->{data};
+
+    $export{readname} = $self->{readname} if $self->{readname};
+
+    foreach my $key (%$data) {
+        $export{$key} = $data->{$key} if defined $data->{$key};
+    }
+
+    return \%export;
+}
+
 #-------------------------------------------------------------------    
 
 sub setBaseCaller {
