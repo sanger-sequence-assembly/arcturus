@@ -2,8 +2,10 @@ package ArcturusDatabase;
 
 use strict;
 
-use DataSource;
 use DBI;
+use Compress::Zlib;
+
+use DataSource;
 use Read;
 
 sub new {
@@ -145,6 +147,8 @@ sub getReadByID {
 
 	$read->importData($hashref);
 
+	$read->setArcturusDatabase($this);
+
 	return $read;
     } else {
 	return undef;
@@ -180,6 +184,43 @@ sub dictionaryLookup {
     } else {
 	return undef;
     }
+}
+
+sub getSequenceAndBaseQualityForRead {
+    my $this = shift;
+    my ($key, $value, $junk) = @_;
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select sequence,quality from ";
+
+    if ($key eq 'id') {
+	$query .= "SEQUENCE where read_id=?";
+    } elsif ($key eq 'name' || $key eq 'readname') {
+	$query .= "READS left join SEQUENCE using(read_id) where readname=?";
+    }
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute($value);
+
+    my ($sequence, $quality);
+
+    while(my @ary = $sth->fetchrow_array()) {
+	($sequence, $quality) = @ary;
+    }
+
+    $sth->finish();
+
+    $sequence = uncompress($sequence) if defined($sequence);
+
+    if (defined($quality)) {
+	$quality = uncompress($quality);
+	my @qualarray = unpack("c*", $quality);
+	$quality = [@qualarray];
+    }
+
+    return ($sequence, $quality);
 }
 
 1;

@@ -28,7 +28,7 @@ sub setArcturusDatabase {
 # import the parent Arcturus database handle
     my $self = shift;
 
-    my $self->{ADB} = shift;
+    $self->{ADB} = shift;
 }
 
 sub getArcturusDatabase {
@@ -47,10 +47,10 @@ sub importSequence {
 
     my $ADB = $self->{ADB} || return; # the parent database
 
-    my ($S, $Q) = $ADB->getSequenceAndBaseQualityForRead (id=>$self->getReadID);
+    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForRead(id => $self->getReadID());
 
-    $self->{Sequence}    = $S; # a string
-    $self->{BaseQuality} = $Q; # reference to an array of integers
+    $self->setSequence($sequence); # a string
+    $self->setQuality($quality);   # reference to an array of integers
 }
 
 #-------------------------------------------------------------------    
@@ -254,13 +254,18 @@ sub getPrimer {
 sub setQuality {
 # import the reference to an array with base qualities
     my $self = shift;
-    $self->{BaseQuality} = shift;
+
+    my $quality = shift;
+
+    if (defined($quality)) {
+	$self->{BaseQuality} = $quality;
+    }
 }
 
 sub getQuality {
 # return the quality data (possibly) using lazy instatiation
     my $self = shift;
-    $self->importSequence(@_) unless $self->{BaseQuality};
+    $self->importSequence(@_) unless defined($self->{BaseQuality});
     return $self->{BaseQuality}; # returns an array reference
 }
 
@@ -292,13 +297,19 @@ sub getReadName {
 
 sub setSequence {
     my $self = shift;
-    $self->{Sequence} = shift;
+
+    my $sequence = shift;
+
+    if (defined($sequence)) {
+	$self->{Sequence} = $sequence;
+	$self->{data}->{slength} = length($sequence);
+    }
 }
 
 sub getSequence {
 # return the DNA (possibly) using lazy instatiation
     my $self = shift;
-    $self->importSequence(@_) unless $self->{Sequence};
+    $self->importSequence(@_) unless defined($self->{Sequence});
     return $self->{Sequence};
 }
 
@@ -419,32 +430,36 @@ sub writeToCaf {
 #    $self->writeMapToCaf($FILE,1) if shift; # see below
 # process read tags ?
 
-    print $FILE "\nDNA : $self->{readname}\n";
 
-    my $dna = $self->{Sequence};
+    my $dna = $self->getSequence();
 
-    my $offset = 0;
-    my $length = length($dna);
+    if (defined($dna)) {
+	print $FILE "\nDNA : $self->{readname}\n";
+
+	my $offset = 0;
+	my $length = length($dna);
 # replace by loop using substr
-    while ($offset < $length) {    
-        print $FILE substr($dna,$offset,60)."\n";
-        $offset += 60;
+	while ($offset < $length) {    
+	    print $FILE substr($dna,$offset,60)."\n";
+	    $offset += 60;
+	}
     }
 
 # the quality data
 
-    print $FILE "\nBaseQuality : $self->{readname}\n";
+    my $quality = $self->getQuality();
 
-    my $quality = $self->{BaseQuality} || [];
+    if (defined($quality)) {
+	print $FILE "\nBaseQuality : $self->{readname}\n";
+	my $line;
+	my $next = 0;
 
-    my $line;
-    my $next = 0;
-    while (my $qvalue = shift @$quality) {
-        $line .= sprintf "%3d", $qvalue;
-        if ($blocked && (++$next%60)==0) {
-            print $FILE $line."\n";
-            $line = '';
-        }
+	my @bq = @{$quality};
+
+	while (my $n = scalar(@bq)) {
+	    print join(' ',@bq[0..24]),"\n";
+	    @bq = @bq[25..$n];
+	}
     }
 }
 
