@@ -94,8 +94,8 @@ CREATE TABLE CLONES2PROJECT (
 CREATE TABLE CLONEVEC (
   read_id mediumint(8) unsigned NOT NULL,
   cvector_id tinyint(3) unsigned NOT NULL,
-  cvleft smallint unsigned NULL,
-  cvright smallint unsigned NULL,
+  cvleft smallint unsigned NOT NULL,
+  cvright smallint unsigned NOT NULL,
   KEY read_id (read_id)
 ) TYPE=MyISAM;
 
@@ -350,8 +350,8 @@ CREATE TABLE SEQUENCE (
 CREATE TABLE SEQVEC (
   read_id mediumint(8) unsigned NOT NULL,
   svector_id tinyint(3) unsigned NOT NULL,
-  svleft smallint unsigned NULL,
-  svright smallint unsigned NULL,
+  svleft smallint unsigned NOT NULL,
+  svright smallint unsigned NOT NULL,
   KEY read_id (read_id)
 ) TYPE=MyISAM;
 
