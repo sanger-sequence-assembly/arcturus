@@ -24,6 +24,8 @@ sub new {
 	$this->{DataSource} = new DataSource(@_);
     }
 
+    return undef unless $this->{DataSource};
+
     $this->init(); 
 
     return $this;
@@ -76,6 +78,12 @@ sub dataBaseError {
     print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
 
     return $DBI::err;
+}
+
+sub queryfailed {
+# stop gap for sub classes
+    my $this = shift;
+    &queryFailed(shift);
 }
 
 sub queryFailed {

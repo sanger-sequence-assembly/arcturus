@@ -122,19 +122,20 @@ sub setContigName {
 
 #------------------------------------------------------------------- 
   
-sub getNumberOfContigs {
+sub getNumberOfParentContigs {
     my $this = shift;
-# if number of contigs not defined get it from the Read array
-    if (!defined($this->{data}->{numberofcontigs})) {
-        my $npc = $this->hasPreviousContigs();
-        $this->{data}->{numberofcontigs} = $npc;
+# if number of contigs not defined get it from the Parent Contigs array
+    if (!defined($this->{data}->{numberofparentcontigs})) {
+#?
+        my $npc = $this->hasParentContigs();
+        $this->{data}->{numberofparentcontigs} = $npc;
     }
-    return $this->{data}->{numberofcontigs};
+    return $this->{data}->{numberofparentcontigs};
 }
 
-sub setNumberOfContigs {
+sub setNumberOfParentContigs {
     my $this = shift;
-    $this->{data}->{numberofcontigs} = shift;   
+    $this->{data}->{numberofparentcontigs} = shift;   
 }
 
 #------------------------------------------------------------------- 
@@ -175,28 +176,6 @@ sub getOrigin {
 sub setOrigin {
     my $this = shift;
     $this->{data}->{origin} = shift;
-}
-
-#-------------------------------------------------------------------   
-
-sub getPreviousContigs {
-# returns array of previous contigs
-    my $this = shift;
-    return $this->{previouscontigs};   
-}
-
-sub setPreviousContigs {
-# add previous contig (ID or object or whatever) to array
-    my $this = shift;
-    $this->{previouscontigs} = [] unless $this->{previouscontigs};
-    push @{$this->{previouscontigs}}, shift;   
-}
-
-sub hasPreviousContigs {
-# returns number of previous contigs
-    my $this = shift;
-    my $cpre = $this->getPreviousContigs();
-    return $cpre ? scalar(@$cpre) : 0;
 }
 
 #-------------------------------------------------------------------   
@@ -269,14 +248,14 @@ sub getSequence {
 }
 
 #-------------------------------------------------------------------    
-# importing/exporting Read(s), Mapping(s) & Tag(s) (or others)
+# importing/exporting Read(s), Mapping(s) & Tag(s) etcetera
 #-------------------------------------------------------------------    
 
 sub getReads {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
     return $this->{Read};
-} 
+}
 
 sub addRead {
 # add Read object or an array of Read objects to the internal buffer
@@ -292,18 +271,24 @@ sub hasReads {
     return $this->getReads() ? 1 : 0;
 }
 
+# read-to-contig mappings
+
 sub getMappings {
 # return a reference to the array of Mapping instances (can be empty)
     my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{Mapping} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getReadMappingsForContig($this);
+    }
     return $this->{Mapping};
 } 
 
 sub addMapping {
 # add (read) Mapping object (or an array) to the internal buffer
     my $this = shift;
-    my $Mapping = shift;
-
-    $this->importer($Mapping,'Mapping');
+#    my $Mapping = shift;
+    $this->importer(shift,'Mapping');
 }
 
 sub hasMappings {
@@ -312,18 +297,23 @@ sub hasMappings {
     return $this->getMappings() ? 1 : 0;
 }
 
+# contig tags
+
 sub getTag {
 # return a reference to the array of Tag instances (can be empty)
     my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{Tag} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getTagsForContig($this);
+    }
     return $this->{Tag};
 } 
 
 sub addTag {
 # add Tag object or an array of Tag objects to the internal buffer
     my $this = shift;
-    my $Tag  = shift;
-
-    $this->importer($Tag,'Tag');
+    $this->importer(shift,'Tag');
 }
 
 sub hasTags {
@@ -332,24 +322,53 @@ sub hasTags {
     return $this->getTag() ? 1 : 0;
 }
 
+# contig-to-parent mappings
+
 sub getContigToContigMapping {
 # add (contig) Mapping object (or an array) to the internal buffer
     my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{ContigMapping} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getContigMappingsForContig($this);
+    }
     return $this->{ContigMapping};
 }
 
 sub addContigToContigMapping {
     my $this = shift;
-    my $ContigMapping = shift;
-
-    $this->importer($ContigMapping,'Mapping','ContigMapping');
-    my $pc = scalar(@{$this->getContigToContigMapping});
-    $this->setPreviousContigs($pc);
+    $this->importer(shift,'Mapping','ContigMapping');
 }
 
 sub hasContigToContigMappings {
 # returns true if this Contig has contig-to-contig mappings
     return &getContigToContigMapping(shift) ? 1 : 0;
+}
+
+# parent contig instances
+
+sub getParentContig {
+# returns array of parent Contig instances
+    my $this = shift;
+    my $load = shift; # set 1 for loading by delayed instantiation
+
+    if (!$this->{ParentContig} && $load && (my $ADB = $this->{ADB})) {
+        $ADB->getParentContigsForContig($this);
+    }
+    return $this->{ParentContig};
+}
+
+sub addParentContig {
+# add parent Contig instance
+    my $this = shift;
+    $this->importer(shift,'Contig','ParentContig');
+}
+
+sub hasParentContigs {
+# returns number of previous contigs
+    my $this = shift;
+    my $parents = $this->getParentContig();
+    return $parents ? scalar(@$parents) : 0;
 }
 
 #-------------------------------------------------------------------    
@@ -368,7 +387,7 @@ sub importer {
     if (ref($Component) eq 'ARRAY') {
 # recursive use with scalar parameter
         while (scalar(@$Component)) {
-            $this->importer(shift @$Component,$class);
+            $this->importer(shift @$Component,$class,$buffername);
         }
     }
     else {
@@ -554,13 +573,10 @@ sub isSameAs {
             my $key = $mapping->getSequenceID() || $mapping->getMappingName();
             return undef unless defined($key); # incomplete Mapping
             my $match = $sequence->{$key};
-print "cannot find mapping for key $key \n" unless $match;
+print STDERR "cannot find mapping for key $key \n" unless $match;
             return 0 unless defined($match); # there is no counterpart in $this
 # compare the two maps
             my ($identical,$aligned,$offset) = $match->compare($mapping);
-# print "mapping comparison: $identical,$aligned,$offset \n";
-#print "match   : ".$match->assembledFromToString unless $identical;
-#print "mapping : ".$mapping->assembledFromToString unless $identical;
             return 0 unless $identical;
 # on first one register shift
             $shift = $offset unless defined($shift);
@@ -574,8 +590,6 @@ print "cannot find mapping for key $key \n" unless $match;
 # returns undef if no or invalid mappings found in the $compare Contig instance
 # returns false (but defined = 0) if any mismatch found between mappings
 
-#print "Contig ".$this->getContigName()." isSameAs ($align) ".
-#                $compare->getContigName()."\n";
     return $align; # 1 for identical, -1 for identical but inverted
 }   
 
@@ -590,9 +604,6 @@ sub linkToContig {
     my $relaxed = shift; # set True for relaxed comparison of mappings
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
-
-my $list = 0; # $list = 1 if ($compare->getContigID == 1167);
-print "ENTER linkToContig ".($relaxed || 0)." ".$compare->getContigName."\n" if $list;
 
     return undef unless $this->hasMappings();
     return undef unless $compare->hasMappings();
@@ -625,27 +636,24 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
         my ($identical,$aligned,$offset) = $match->compare($mapping,$relaxed);
 # keep the first encountered (contig-to-contig) alignment value != 0 
         $alignment = $aligned unless $alignment;
- 
         next unless ($identical && $aligned == $alignment);
 # the mappings are identical (alignment and, if !relaxed, segment size)
-# build a hash key based on offset and alignment direction
-        my $hashkey = sprintf("%08d",$offset);
-        $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
         my @segment = $mapping->getContigRange();
 # in relaxed mode we have (possibly) to prune the boundaries of the interval
         if ($relaxed) {
             my @match = $match->getContigRange();
 # transform the range to this contig
-#print "relax: '@segment' '@match' ";
             $match[0] = $alignment * $match[0] - $offset;
             $match[1] = $alignment * $match[1] - $offset;
             @match = sort { $a <=> $b} @match;
-#print "'@match'  a=$alignment 0=$offset\n";
 # and determine the minimum overlapping range 
             $segment[0] = $match[0] if ($match[0] > $segment[0]);
             $segment[1] = $match[1] if ($match[1] < $segment[1]);
             next unless ($match[0] < $match[1]);
         }
+# build a hash key based on offset and alignment direction and add segment
+        my $hashkey = sprintf("%08d",$offset);
+        $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
         push @{$inventory->{$hashkey}},[@segment];
     }
 
@@ -659,7 +667,7 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
 
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
-# accept only allignments with a minimum number of reads 
+# accept only alignments with a minimum number of reads 
     my $guillotine = 1 + log(scalar(@$mappings));
 
     foreach my $offset (sort keys %$inventory) {
@@ -671,11 +679,12 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
         foreach my $interval (@mappings) {
             my $intervalstart = $interval->[0];
             my $intervalfinis = $interval->[1];
+            next unless defined($intervalstart);
+            next unless defined($segmentfinis);
 # break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
                 if ($nreads > $guillotine) {
-#                if (defined($segmentstart) && defined($segmentfinis)) {
                     my $start = ($segmentstart + $offset) * $alignment;
                     my $finis = ($segmentfinis + $offset) * $alignment;
                     $mapping->addAssembledFrom($start,$finis,$segmentstart,
@@ -692,11 +701,8 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
             $nreads++; 
         }
 # add segmentstart - segmentfinis as (last) mapping segment
-print "$nreads reads guillotine $guillotine\n";
         next unless ($nreads > $guillotine);
-#        next unless defined($segmentstart);
         my $start = ($segmentstart + $offset) * $alignment;
-#        next unless defined($segmentfinis);
         my $finis = ($segmentfinis + $offset) * $alignment;
         $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
     }
@@ -712,7 +718,7 @@ print "$nreads reads guillotine $guillotine\n";
 
 # the mapping has no segments: no mapping range(s) could be determined
 # by the algorithm above. A more refined analysis is required based
-# on analysis of the individual segments: try again with detail on
+# on analysis of the individual segments: try again with 'relaxed' on
 
     return $this->linkToContig($compare,1);
 }
@@ -730,25 +736,25 @@ sub writeToCaf {
 
 # dump all reads
 
-print STDERR "Dumping Reads\n"; my $nr = 0;
+#print STDERR "Dumping Reads\n"; my $nr = 0;
 
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
         $read->writeToCafForAssembly($FILE);
-print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
+#print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
     }
 
 # write the overall maps for for the contig ("assembled from")
 
 
-print STDERR "Dumping Contig\n";
+#print STDERR "Dumping Contig\n";
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
-print STDERR "Dumping Mappings\n"; my $mr = 0;
+#print STDERR "Dumping Mappings\n"; my $mr = 0;
     my $mappings = $this->getMappings();
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
-print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 == 0);    
+#print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 == 0);    
     }
 
 # write tags, if any
@@ -762,11 +768,11 @@ print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 
 
 # to write the DNA and BaseQuality we use the two private methods
 
-print STDERR "Dumping DNA\n";
+#print STDERR "Dumping DNA\n";
 
     $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
 
-print STDERR "Dumping BaseQuality\n";
+#print STDERR "Dumping BaseQuality\n";
 
     $this->writeBaseQuality($FILE,"BaseQuality : ");
 
@@ -779,12 +785,12 @@ sub writeToFasta {
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
 
-print STDERR "Dumping Reads\n"; my $nr = 0;
+#print STDERR "Dumping Reads\n"; my $nr = 0;
 
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
         $read->writeToFasta($DFILE,$QFILE);
-print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
+#print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
     }
 
     $this->writeDNA($DFILE);
