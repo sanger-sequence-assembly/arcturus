@@ -1456,7 +1456,6 @@ sub insert {
 sub readback {
 # read last inserted record back and test against readItem
     my $self = shift;
-$readbackOnServer=1;
 
     undef my $error;
 
