@@ -385,10 +385,11 @@ sub getSequence {
 
     return $this->{Sequence} unless $symbol;
 
-# quality masking 
+# quality masking
 
     my $ql = $this->getLowQualityLeft();
     my $qr = $this->getLowQualityRight();
+# what about masking sequencing and cloning vector?
 
     return $this->{Sequence} unless (defined($ql) && defined($qr));
 
@@ -576,7 +577,6 @@ sub compareSequence {
     for (my $i=0 ; $i<@$thisBQD ; $i++) {
         return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
-#print "Identical sequences\n";
 
     return 1; # identical sequences 
 }
@@ -585,16 +585,11 @@ sub compareSequence {
 # dumping data
 #----------------------------------------------------------------------
 
-sub writeToCafForAssembly {
-# write this read in caf format (unpadded)
-# include align-to-trace file information and possible tags
-    &writeToCaf(shift,shift,1);
-}
-
 sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
-    my $FILE = shift;        # obligatory output file handle
+    my $FILE = shift; # obligatory output file handle
+# optionally takes 'qualitymask=>'N' to mask out low quality data
 
     die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
@@ -602,7 +597,8 @@ sub writeToCaf {
 
 # first write the Sequence, then DNA, then BaseQuality
 
-    print $FILE "\nSequence : $this->{readname}\n";
+    print $FILE "\n";
+    print $FILE "Sequence : $this->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
     print $FILE "SCF_File $this->{readname}SCF\n";
@@ -640,7 +636,7 @@ sub writeToCaf {
     if (my $seqvec = $this->getSequencingVector()) {
         foreach my $vector (@$seqvec) {
             my $name = $vector->[0];
-            print $FILE "Seq_vec SVEC $vector->[1] $vector->[2] \"$name\"";
+            print $FILE "Seq_vec SVEC $vector->[1] $vector->[2] \"$name\"\n";
         }
     }
 
@@ -649,7 +645,7 @@ sub writeToCaf {
     if (my $clonevec = $this->getCloningVector()) {
         foreach my $vector (@$clonevec) {
             my $name = $vector->[0];
-            print $FILE "Clone_vec CVEC $vector->[1] $vector->[2] \"$name\"";
+            print $FILE "Clone_vec CVEC $vector->[1] $vector->[2] \"$name\"\n";
         }
     }
 
@@ -660,9 +656,6 @@ sub writeToCaf {
 #?          $tag->writeTagToCaf($FILE);
         }
     }
-
-    # The CAF format requires a blank line between sections
-    print $FILE "\n";
 
 # to write the DNA and BaseQuality we use the two private methods
 
@@ -676,6 +669,7 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+# optionally takes 'qualitymask=>'N' to mask out low quality data
 
     $this->writeDNA($DFILE,">",@_);
 
@@ -689,6 +683,7 @@ sub writeDNA {
     my $this   = shift;
     my $FILE   = shift; # obligatory
     my $marker = shift;
+# optionally takes 'qualitymask=>'N' to mask out low quality data
 
     $marker = ">" unless defined($marker); # default FASTA format
 

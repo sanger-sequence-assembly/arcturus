@@ -45,6 +45,7 @@ sub setArcturusDatabase {
 #-------------------------------------------------------------------
 
 sub importSequence {
+# private method for delayed loading
     my $this = shift;
 
     my $ADB = $this->{ADB} || return 0; # the parent database
@@ -54,7 +55,7 @@ sub importSequence {
     my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForContigID($cid);
 
     $this->setSequence($sequence); # a string
-    $this->setQuality($quality);   # reference to an array of integers
+    $this->setBaseQuality($quality);   # reference to an array of integers
 
     return 1;
 }
@@ -179,7 +180,7 @@ sub setOrigin {
 
 #-------------------------------------------------------------------   
 
-sub setQuality {
+sub setBaseQuality {
 # import base quality as an array with base quality values
     my $this    = shift;
     my $quality = shift;
@@ -193,7 +194,7 @@ sub setQuality {
     }
 }
 
-sub getQuality {
+sub getBaseQuality {
 # return the quality data (possibly) using delayed loading
     my $this = shift;
 
@@ -209,6 +210,7 @@ sub getReadOnLeft {
 }
 
 sub setReadOnLeft {
+# private method
     my $this = shift;
     $this->{data}->{readonleft} = shift;
 }
@@ -221,6 +223,7 @@ sub getReadOnRight {
 }
 
 sub setReadOnRight {
+# private method
     my $this = shift;
     $this->{data}->{readonright} = shift;
 }
@@ -737,7 +740,8 @@ sub writeToCaf {
 
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
-        $read->writeToCafForAssembly($FILE); 
+#        $read->writeToCafForAssembly($FILE); 
+        $read->writeToCaf($FILE); 
     }
 
 # write the overall maps for for the contig ("assembled from")
@@ -820,7 +824,7 @@ sub writeBaseQuality {
 
     my $identifier = $this->getContigName();
 
-    if (my $quality = $this->getQuality()) {
+    if (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
 	print $FILE "\n$marker$identifier\n";
 	my $n = scalar(@$quality) - 1;

@@ -326,7 +326,12 @@ sub assembledFromToString {
     my $string = '';
     foreach my $segment (@{$this->{assembledFrom}}) {
         $segment->normaliseOnY(); # ensure rstart <= rfinish
-        $string .= $assembledFrom.$segment->toString()."\n";
+        my $xstart = $segment->getXstart();
+        my $xfinis = $segment->getXfinis();
+        my $ystart = $segment->getYstart();
+        my $yfinis = $segment->getYfinis();
+        $string .= $assembledFrom." $xstart $xfinis $ystart $yfinis\n";
+#        $string .= $assembledFrom.$segment->toString()."\n";
     }
 
     $string = "$assembledFrom"."is undefined\n" if (!$string && shift); 

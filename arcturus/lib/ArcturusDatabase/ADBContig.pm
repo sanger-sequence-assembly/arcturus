@@ -217,7 +217,7 @@ sub getParentContigsForContig {
 }
 
 sub hasContig {
-# test presence of contig with given contig_id;
+# test presence of contig with given contig_id; (REDUNDENT?)
 # if so, return Contig instance with metadata only
     my $this = shift;
     my $contig_id = shift;
@@ -403,7 +403,7 @@ return 0,$message if $TEST; # testing
 
     return $contigid, $message;
    
-# 2) lock MAPPING and SEGMENT tables
+# 2) ?? lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
 # 4) enter segments for each mapping (bulk loading)
 # 5) enter record in CONTIG with meta data, gets contig_id
