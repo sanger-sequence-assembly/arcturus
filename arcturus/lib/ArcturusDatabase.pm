@@ -115,18 +115,32 @@ sub disconnect {
 sub populateDictionaries {
     my $this = shift;
 
-    my $dbh = $this->getConnection;
+    my $dbh = $this->getConnection();
 
     $this->{Dictionary} = {};
 
-    $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
-    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'name');
-#    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone_id', 'name');
-    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'LIGATIONS left join CLONES using (clone_id)', 'ligation_id', 'CLONES.name');
-    $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status_id', 'name');
-    $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
-    $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
-    $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
+    $this->{Dictionary}->{insertsize} =
+	&createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
+
+    $this->{Dictionary}->{ligation} =
+	&createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'name');
+
+    $this->{Dictionary}->{clone} =
+	&createDictionary($dbh, 'LIGATIONS left join CLONES using (clone_id)',
+			  'ligation_id', 'CLONES.name');
+
+    $this->{Dictionary}->{status} =
+	&createDictionary($dbh, 'STATUS', 'status_id', 'name');
+
+    $this->{Dictionary}->{basecaller} =
+	&createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
+
+    $this->{Dictionary}->{svector} =
+	&createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
+
+    $this->{Dictionary}->{cvector} =
+	&createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
+
 # template name will be loaded in individual read extraction queries
 }
 
@@ -189,8 +203,6 @@ sub populateLoadingDictionaries {
 
 sub createDictionary {
     my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
-
-print STDERR "createDictionary($table, $pkey, $vals)\n";
 
     my $query = "SELECT $pkey,$vals FROM $table";
 
@@ -280,33 +292,57 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select READS.*,TEMPLATE.name as template,TEMPLATE.ligation_id 
+    my $read_attributes = "readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
+
+    my $query = "select $read_attributes,TEMPLATE.name as template,TEMPLATE.ligation_id 
                  from READS left join TEMPLATE using (template_id) 
                  where read_id = ?";
-
-# SEQVEC.svector_id,SEQVEC.svleft,SEQVEC.svright,
-# CLONEVEC.cvector_id,CLONEVEC.cvleft,CLONEVEC.cvright,
 
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($readid);
 
-    my $hashref = $sth->fetchrow_hashref();
+    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,
+	$template,$ligation_id) = $sth->fetchrow_array();
 
     $sth->finish();
-print "read_id: $readid \n $query \n hashref $hashref\n";
 
-    if (defined($hashref)) {
-
-#        $read_id = $hashref->{read_id};
-
+    if (defined($readname)) {
 	my $read = new Read();
 
-	$this->translateDictionaryReadItems($hashref);
+	$read->setReadName($readname);
 
-#	$read->importData($hashref);
+	$read->setAspedDate($asped);
+	$read->setStrand($strand);
+	$read->setPrimer($primer);
+	$read->setChemistry($chemistry);
 
+	my $basecaller = &dictionaryLookup($this->{Dictionary}->{basecaller},
+					   $basecaller_id);
+
+	$read->setBaseCaller($basecaller);
+
+	my $status = &dictionaryLookup($this->{Dictionary}->{status},
+				       $status_id);
+
+	$read->setProcessStatus($status);
+
+	$read->setTemplate($template);
+
+	my $ligation = &dictionaryLookup($this->{Dictionary}->{ligation},
+					 $ligation_id);
+
+	$read->setLigation($ligation);
+
+	my $insertsize = &dictionaryLookup($this->{Dictionary}->{insertsize},
+					   $ligation_id);
+
+	$read->setInsertSize($insertsize);
+
+	
 	$read->setArcturusDatabase($this);
+
+	$read->importSequence();
 
 	return $read;
     } 
