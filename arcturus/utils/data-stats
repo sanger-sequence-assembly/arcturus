@@ -29,32 +29,39 @@ sub dataStats {
 	my $fullname = "$rootdir/$instance";
 	next unless -d $fullname;
 
-	die "Unable to opendir($fullname)" unless opendir(SUBDIR, $fullname);
-	my @alldatabases = readdir(SUBDIR);
-	closedir(SUBDIR);
+	if (opendir(SUBDIR, $fullname)) {
+	    my @alldatabases = readdir(SUBDIR);
+	    closedir(SUBDIR);
 
-	foreach $database (sort @alldatabases) {
-	    my $databasedir = "$fullname/$database";
-	    next unless -d $databasedir;
-	    next if ($database =~ /^\./);
+	    foreach $database (sort @alldatabases) {
+		my $databasedir = "$fullname/$database";
+		next unless -d $databasedir;
+		next if ($database =~ /^\./);
 
-	    die "Unable to opendir($databasedir)" unless opendir(DBDIR, $databasedir);
-	    my @allfiles = readdir(DBDIR);
-	    closedir(DBDIR);
+		if (opendir(DBDIR, $databasedir)) {
+		    my @allfiles = readdir(DBDIR);
+		    closedir(DBDIR);
 
-	    my $nfiles = 0;
-	    my $nbytes = 0;
+		    my $nfiles = 0;
+		    my $nbytes = 0;
 	    
-	    my $subfile;
+		    my $subfile;
 
-	    foreach $subfile (@allfiles) {
-		next unless ($subfile =~ /^\w+\.\w{3}/);
-		my @statdata = stat("$databasedir/$subfile");
-		$nfiles += 1;
-		$nbytes += $statdata[7];
+		    foreach $subfile (@allfiles) {
+			next unless ($subfile =~ /^\w+\.\w{3}/);
+			my @statdata = stat("$databasedir/$subfile");
+			$nfiles += 1;
+			$nbytes += $statdata[7];
+		    }
+
+		    printf "%-10s %-16s %-16s  %4d files  %10d bytes\n",
+		    $cluster, $instance, $database, $nfiles, $nbytes;
+		} else {
+		    print STDERR "+++ Unable to open database directory $databasedir ... skipping.\n";
+		}
 	    }
-
-	    printf "%-10s %-16s %-16s  %4d files  %10d bytes\n", $cluster, $instance, $database, $nfiles, $nbytes;
+	} else {
+	    print STDERR "*** Unable to open instance directory $fullname ... skipping.\n";
 	}
     }
 }
