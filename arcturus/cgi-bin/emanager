@@ -231,6 +231,8 @@ elsif ($action eq 'editor') {
     $page->space(2);
 
     my $session = $cgi->postToGet(1,'session','database');
+    my $preturn = "/editor/assembly".$session;
+    my %GKoptions = (noGUI => 1, returnPath => $preturn);
 
     my $form = "<table border=0 cellpadding=2>";
 
@@ -254,7 +256,7 @@ elsif ($action eq 'editor') {
         $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
     }
 # actions on an assembly 
-    elsif ($database ne 'arcturus' && $GateKeeper->authorize(896,{noGUI => 1})) { # require bit 7,8,9
+    elsif ($database ne 'arcturus' && $GateKeeper->authorize(896,\%GKoptions)) { # require bit 7,8,9
 
         $session = $cgi->postToGet(1,'session','database');
         $session .= "\&noGUI=1";

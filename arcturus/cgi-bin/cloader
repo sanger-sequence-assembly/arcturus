@@ -535,6 +535,7 @@ print STDOUT "preloading set to $nopreload\n";
     $ContigBuilder->setTestMode('TESTMODE',$TEST);
     $ContigBuilder->setTestMode('REPAIR',$REPAIR);
     $ContigBuilder->setTestMode('READSCAN',1) if $rdscan;
+    $ContigBuilder->setTestMode('TIMER',1);
 
     if (my $estatus = $ContigBuilder->testAssembly($assemblynmbr)) {
 
