@@ -19,7 +19,7 @@ my $cafFileName ='';
 my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
-my $blocksize = 10000;
+my $blocksize = 5000;
 
 
 my $outputFile;            # default STDOUT
