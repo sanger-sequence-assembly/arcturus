@@ -35,8 +35,6 @@ if (defined($queue) && defined($scriptname)) {
     $bsub = "bsub -q $queue";
 
     $bsub .= " -R '$resources'" if defined($resources);
-
-    $bsub .= " -N -o '/pathdb2/arcturus/%J.out'";
 }
 
 $increment = 10000 unless defined($increment);
@@ -48,7 +46,7 @@ die "Failed to create ArcturusDatabase" unless $adb;
 
 my $dbh = $adb->getConnection();
 
-my $query = "select asped,count(*) from READS group by asped order by asped asc";
+my $query = "select date_add(asped, interval 1 day) as thedate,count(*) from READS group by thedate order by thedate asc";
 
 my $stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -61,6 +59,7 @@ my $cumulative = 0;
 my $asped;
 my $count;
 my $lastasped;
+my $jobname;
 
 while (($asped, $count) = $stmt->fetchrow_array()) {
     $sum += $count;
@@ -68,8 +67,9 @@ while (($asped, $count) = $stmt->fetchrow_array()) {
 
     if ($cumulative > $increment) {
 	if ($bsub) {
+	    $jobname = "$organism-$asped";
 	    my $prejob = defined($lastasped) ? "-w $organism-$lastasped" : "";
-	    print "$bsub -J $organism-$asped $prejob $scriptname $asped\n";
+	    print "$bsub -J $jobname -N -o '/pathdb2/arcturus/$jobname.out' $prejob $scriptname $organism $asped\n";
 	} else {
 	    printf "%10s %8d %8d\n", $asped, $cumulative, $sum;
 	}
@@ -81,8 +81,9 @@ while (($asped, $count) = $stmt->fetchrow_array()) {
 $asped = &today();
 
 if ($bsub) {
+    $jobname = "$organism-$asped";
     my $prejob = defined($lastasped) ? "-w $organism-$lastasped" : "";
-    print "$bsub -J $organism-$asped $prejob $scriptname $asped\n";
+    print "$bsub -J $jobname -N -o '/pathdb2/arcturus/$jobname.out' $prejob $scriptname $organism $asped\n";
 } else {
     printf "%10s %8d %8d\n", $asped, $cumulative, $sum;
 }
