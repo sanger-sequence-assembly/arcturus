@@ -1147,7 +1147,7 @@ sub chemistry {
         $diagnosis .= "($SCFREADDIR/get_scf_field ${readFileName}SCF)\n";
         $readItem{RPS} += 32768*16 ; # bit 20 
 # try to recover using Chemtype description
-        if ($chemistry = $CHEMTYPES->associate('description',$readItem{CH},'chemtype')) {
+        if ($chemistry = $CHEMTYPES->associate('description',$readItem{CHT},'chemtype')) {
             $readItem{CH} = $chemistry;
 &logger("... recovered: = $readItem{CH})");
         }
