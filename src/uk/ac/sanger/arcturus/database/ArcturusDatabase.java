@@ -11,15 +11,49 @@ public class ArcturusDatabase {
     protected String description;
     protected String name;
 
-    public ArcturusDatabase(DataSource ds, String description, String name) {
+    /**
+     * Creates a new ArcturusDatabase object from a DataSource, a description
+     * and a name.
+     *
+     * @param ds the DataSource which will be used to obtain JDBC Connection
+     * objects.
+     *
+     * @param description a text description of the species which this database
+     * contains.
+     *
+     * @param name the short name for this database.
+     */
+
+    public ArcturusDatabase(DataSource ds, String description, String name) 
+	throws SQLException {
 	this.ds = ds;
 	this.description = description;
 	this.name = name;
+
+	createManagers();
     }
+
+    /**
+     * Returns the DataSource which was used to create this object.
+     *
+     * @return the DataSource which was used to create this object.
+     */
 
     public DataSource getDataSource() { return ds; }
 
+    /**
+     * Returns the description which was used to create this object.
+     *
+     * @return the description which was used to create this object.
+     */
+
     public String getDescription() { return description; }
+
+    /**
+     * Returns the name which was used to create this object.
+     *
+     * @return the name which was used to create this object.
+     */
 
     public String getName() { return name; }
 
@@ -165,6 +199,61 @@ public class ArcturusDatabase {
 	    return null;
 	}
     }
+
+    /*
+     * This section of code is concerned with the manager objects which
+     * provide services to the ArcturusDatabase.
+     */
+
+    protected CloneManager cloneManager;
+    protected LigationManager ligationManager;
+    protected TemplateManager templateManager;
+    protected ReadManager readManager;
+
+    private void createManagers() throws SQLException {
+	cloneManager = new CloneManager(this);
+	ligationManager = new LigationManager(this);
+	templateManager = new TemplateManager(this);
+	readManager = new ReadManager(this);
+    }
+
+    /**
+     * Returns the CloneManager belonging to this ArcturusDatabase.
+     *
+     * @return the CloneManager belonging to this ArcturusDatabase.
+     */
+
+    public CloneManager getCloneManager() { return cloneManager; }
+
+    /**
+     * Returns the LigationManager belonging to this ArcturusDatabase.
+     *
+     * @return the LigationManager belonging to this ArcturusDatabase.
+     */
+
+    public LigationManager getLigationManager() { return ligationManager; }
+
+    /**
+     * Returns the TemplateManager belonging to this ArcturusDatabase.
+     *
+     * @return the TemplateManager belonging to this ArcturusDatabase.
+     */
+
+    public TemplateManager getTemplateManager() { return templateManager; }
+
+    /**
+     * Returns the ReadManager belonging to this ArcturusDatabase.
+     *
+     * @return the ReadManager belonging to this ArcturusDatabase.
+     */
+
+    public ReadManager getReadManager() { return readManager; }
+
+    /**
+     * Returns a text representation of this object.
+     *
+     * @return a text representation of this object.
+     */
 
     public String toString() {
 	String text = "ArcturusDatabase[name=" + name;
