@@ -1149,7 +1149,10 @@ sub chemistry {
 # try to recover using Chemtype description
         if ($chemistry = $CHEMTYPES->associate('description',$readItem{CHT},'chemtype')) {
             $readItem{CH} = $chemistry;
+#            $CHEMISTRY->newrow('identifier', $chemistry);
 &logger("... recovered: = $readItem{CH})");
+            $CHEMISTRY->update('chemtype'  , $readItem{CHT});
+            $CHEMISTRY->build(1); # rebuild internal table
         }
         else {
 &logger("... NOT recovered: = $readItem{CH})");
