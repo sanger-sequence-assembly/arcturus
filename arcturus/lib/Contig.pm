@@ -4,6 +4,8 @@ use strict;
 
 use Mapping;
 
+use PaddedRead;
+
 my $DEBUG = 0;
 
 # ----------------------------------------------------------------------------
@@ -870,6 +872,34 @@ sub linkToContig {
 
 }
 
+sub reverse {
+# inverts all read alignments
+    my $this = shift;
+
+    my $length = $this->getContigLength();
+ 
+    my $mappings = $this->getMappings();
+    foreach my $mapping (@$mappings) {
+        $mapping->applyMirrorTransform($length+1);
+    }
+# and sort the mappings according to increasing contig position
+    @$mappings = sort {$a->getContigStart <=> $b->getContigStart} @$mappings;
+}
+
+sub findMapping {
+    my $this = shift;
+    my $readname = shift;
+
+    return undef unless $this->hasMappings();
+
+    my $mappings = $this->getMappings();
+    foreach my $mapping (@$mappings) {
+        return $mapping if ($mapping->getMappingName() eq '$readname');
+    }
+
+    return undef;
+}
+
 #-------------------------------------------------------------------    
 # Tags
 #-------------------------------------------------------------------    
@@ -1045,11 +1075,11 @@ print "new tag added\n";
 }
 
 #-------------------------------------------------------------------    
-# exporting to CAF
+# exporting to CAF (standard Arcturus)
 #-------------------------------------------------------------------    
 
 sub writeToCaf {
-# write reads and contig to CAF
+# write reads and contig to CAF (unpadded)
     my $this = shift;
     my $FILE = shift; # obligatory file handle
 
@@ -1059,8 +1089,7 @@ sub writeToCaf {
 
     my $reads = $this->getReads();
     foreach my $read (@$reads) {
-#        $read->writeToCafForAssembly($FILE); 
-        $read->writeToCaf($FILE); 
+        $read->writeToCaf($FILE);
     }
 
 # write the overall maps for for the contig ("assembled from")
@@ -1083,11 +1112,11 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
-    $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
+    $this->writeDNA($FILE,"\nDNA : "); # specifying the CAF marker
 
-    $this->writeBaseQuality($FILE,"BaseQuality : ");
+    $this->writeBaseQuality($FILE,"\nBaseQuality : ");
 
-    print $FILE "\n\n";
+    print $FILE "\n";
 }
 
 sub writeToFasta {
@@ -1096,9 +1125,12 @@ sub writeToFasta {
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
 
-    my $reads = $this->getReads();
-    foreach my $read (@$reads) {
-        $read->writeToFasta($DFILE,$QFILE);
+    unless (shift) {
+# suppress dumping read data with extra paramater 
+        my $reads = $this->getReads();
+        foreach my $read (@$reads) {
+            $read->writeToFasta($DFILE,$QFILE);
+        }
     }
 
     $this->writeDNA($DFILE);
@@ -1120,7 +1152,7 @@ sub writeDNA {
 
     if (my $dna = $this->getSequence()) {
 # output in blocks of 60 characters
-	print $FILE "\n$marker$identifier\n";
+	print $FILE "$marker$identifier\n";
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
@@ -1145,7 +1177,7 @@ sub writeBaseQuality {
 
     if (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
-	print $FILE "\n$marker$identifier\n";
+	print $FILE "$marker$identifier\n";
 	my $n = scalar(@$quality) - 1;
         for (my $i = 0; $i <= $n; $i += 25) {
             my $m = $i + 24;
@@ -1204,7 +1236,121 @@ sub metaDataToString {
     return $string;
 }
 
+#-------------------------------------------------------------------    
+# non-standard output for interaction with Phusion and Gap4
+#-------------------------------------------------------------------    
+
+sub writeToMaf {
+# write the "reads.placed" read-contig mappings in Mullikin format
+    my $this = shift;
+    my $FILE = shift; # obligatory file handle
+# extra outside info to be passed as parameters: supercontig name &
+# approximate start of contig on supercontig
+
+    my $contigname = $this->getContigName();
+
+    my $supercontigname = $_[0] || $contigname;
+    my $contigzeropoint = $_[1] || 0;
+
+# get the reads and build a hash list for identification
+
+    my %reads;
+    my $reads = $this->getReads();
+    foreach my $read (@$reads) {
+        $reads{$read->getReadName()} = $read;
+    }
+
+# write the individual read info
+
+    my $mappings = $this->getMappings();
+    foreach my $mapping (@$mappings) {
+        my @range = $mapping->getContigRange();
+        my $readname = $mapping->getMappingName();
+        unless ($readname) {
+            print STDERR "Missing readname in mapping ".$mapping->getMappingID()."\n";
+            next;
+        }
+        my $read = $reads{$readname};
+        unless ($read) {
+	    print STDERR "Missing read $readname\n";
+	    next;
+	}
+        my $lqleft = $read->getLowQualityLeft();
+        my $length = $read->getLowQualityRight() - $lqleft + 1;
+        my $alignment = ($mapping->getAlignment() > 0) ? 0 : 1;
+        my $supercontigstart  = $contigzeropoint + $range[0];
+        print $FILE "* $readname $lqleft $length $alignment " .
+                    "$contigname $supercontigname $range[0] " .
+                    "$supercontigstart\n"; 
+    }
+
+#    print $FILE "\n\n";
+}
+
 sub writeToCafPadded {
+
+# write reads and contig to CAF (padded but leaving consensus unchanged)
+# this is an ad hoc method to make Arcturus conversant with GAP4
+# it uses the PaddedRead class for conversion of read mappings
+
+    my $this = shift;
+    my $FILE = shift; # obligatory file handle
+
+    my $contigname = $this->getContigName();
+print "\n\n$this output padded contig $contigname\n";
+
+# get a read name hash and copy the (unpadded) reads into a PaddedRead
+
+    my $readnamehash = {};
+    my $reads = $this->getReads();
+    foreach my $read (@$reads) {
+        my $readname = $read->getReadName();
+        my $paddedread = new PaddedRead($read);
+        $readnamehash->{$readname} = $paddedread;
+print "$readname $paddedread \n";
+    }
+
+# find the corresponding mappings and pad each read  
+
+print "\n\npadding mappings \n";
+    my @assembledfrommap;
+    my $mappings = $this->getMappings();
+    foreach my $mapping (@$mappings) {
+        my $readname = $mapping->getMappingName();
+        my $paddedread = $readnamehash->{$readname};
+print "$readname $paddedread \n";
+        unless ($paddedread) {
+            print STDERR "Missing padded read $readname\n"; 
+        }
+        my $afm = $paddedread->toPadded($mapping); # out: one segment mapping
+        $paddedread->writeToCaf($FILE); # write the read to file
+        push @assembledfrommap, $afm;
+    }
+
+# write the overall mappings to the contig ("assembled from")
+
+    print $FILE "\nSequence : $contigname\nIs_contig\nPadded\n";
+
+    foreach my $mapping (@assembledfrommap) {
+        print $FILE $mapping->assembledFromToString();
+    }
+
+# write tags, if any (consensus has not changed)
+
+    if ($this->hasTags) {
+        my $tags = $this->getTags();
+        foreach my $tag (@$tags) {
+            $tag->writeToCaf($FILE);
+        }
+    }
+
+# to write the DNA and BaseQuality we use the two private methods
+
+    $this->writeDNA($FILE,"\nDNA : "); # specifying the CAF marker
+
+    $this->writeBaseQuality($FILE,"\nBaseQuality : ");
+
+    print $FILE "\n";
 }
 
 #-------------------------------------------------------------------    
