@@ -6,7 +6,6 @@ use ArcturusDatabase;
 
 use FileHandle;
 use Logging;
-use PathogenRepository;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -20,8 +19,7 @@ my $aspedbefore;
 my $aspedafter;
 my $withsingleton;
 
-
-my $outputFile;            # default STDOUT
+#my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|aspedafter|".
@@ -59,7 +57,8 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
 
-my $logger = new Logging($outputFile);
+#my $logger = new Logging($outputFile);
+my $logger = new Logging();
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
@@ -78,8 +77,6 @@ my $adb = new ArcturusDatabase(-instance => $instance,
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
-
-# allocate basic objects
 
 $logger->info("Getting read IDs for unassembled reads");
 
@@ -114,11 +111,6 @@ $adb->disconnect();
 exit 0;
 
 #------------------------------------------------------------------------
-# subroutines
-#------------------------------------------------------------------------
-
-
-#------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
 
@@ -145,5 +137,3 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
-
-
