@@ -590,12 +590,14 @@ sub htmlTable {
 
     my $more = 0;
     undef my %mask;
+    my %morefields;
     if (defined($mask)) {
         $more = 1 if ($mask =~ /2/);
         my @mask = split //,$mask;
         foreach my $column (@{$self->{columns}}) {
             $mask{$column} = 0 if (!@mask);
             $mask{$column} = shift(@mask) if (@mask);
+            $morefields{$column}++ if ($mask{$column} == 2);
         }
     }
 
@@ -661,6 +663,7 @@ sub htmlTable {
 	    if ($include) {
                 $lines++;
                 $list .= "<TR>";
+                undef my $morefields;
                 foreach my $column (@{$self->{columns}}) {
                     if (!defined($mask) || $mask{$column}) {
                         my $field = '&nbsp';
@@ -685,13 +688,21 @@ sub htmlTable {
                                 $colour = $options{linkColor};
                             }
                         }
+                        if (defined($mask) && $mask{$column} == 2) {
+                            my $value = $field; # process e.g. quote, blanks?
+                            $value = $self->quoteColValue($column,$value);
+                            $morefields .= "\&extra=$column%3D$value";
+                        }
                         $list .= "<TD ALIGN=$align BGCOLOR='$colour' NOWRAP> $field </TD>";
                     }
                 }
-     # add a link field for details
+# add a link field for details
                 if ($more) {
-                    my $link = "href = \"ITEMLINK\?column=$keyColumn\&";
-                    $link .= "value=$hash->{$keyColumn}\" LINKTARGET";
+                     my $blank = "%20";
+                     $morefields =~ s/\s/$blank/g;
+                     my $link = "href = \"ITEMLINK\?column=$keyColumn";
+                    $link .= "\&value=$hash->{$keyColumn}$morefields\" LINKTARGET";
+# extra qualifiers?
                     $list .= "<TD BGCOLOR='lightblue'><A $link>LINKTEXT</A></TD>";
                 }
                 $list .= "</TR>";
@@ -902,12 +913,13 @@ sub htmlMaskedOptions {
 
 sub htmlEditRecord {
 # generate an HTML formatted table with input/value fields for one table record
-    my $self = shift;
-    my $skey = shift; # value, use 0 for form with all field empty
-    my $ckey = shift; # item
-    my $tick = shift; # yes/no for checkbox tickmarks
-    my $mask = shift; # masking info
-    my $null = shift; # option e.g. NULL, 0 or 'preset' for possible enum field
+    my $self  = shift;
+    my $skey  = shift; # value, use 0 for form with all field empty
+    my $ckey  = shift; # item
+    my $tick  = shift; # yes/no for checkbox tickmarks
+    my $mask  = shift; # masking info
+    my $null  = shift; # option e.g. NULL, 0 or 'preset' for possible enum field
+    my $where = shift; # possible additional condition on selected record
 
     my $primeKey = $self->{prime_key};
 
@@ -915,7 +927,13 @@ sub htmlEditRecord {
 
     undef my $hash;
 # the next statement tests if the hash for the requested entry already exists
-    if ($skey && (!($hash=$self->{hashref}) || $self->{hashref}->{$ckey} ne $skey)) {
+    if ($skey && $where) {
+        $skey = $self->quoteColValue($ckey,$skey);
+        $where = "$ckey=$skey and $where"; 
+        $hash = $self->associate('hashref', 'where', $where);
+# print "last query $self->{lastQuery} <br>";
+    }
+    elsif ($skey && (!($hash=$self->{hashref}) || $self->{hashref}->{$ckey} ne $skey)) {
         $hash = $self->associate('hashref', $skey, $ckey); # get the hash
     }
 
@@ -1038,7 +1056,7 @@ sub htmlListRecord {
 # this will setup the hashref if hashresf does not exist
 
     $self->htmlEditRecord(@_); # sets up {hashref} for one record
-    $self->expandSequence();   # expands the sequence 
+    $self->expandSequence();   # expands the sequence (if any)
     return $self->htmlEditRecord(@_); # returns the list
 }
 
@@ -1258,13 +1276,15 @@ sub isASCII {
 
     my @ascii = unpack('c*',$string);
     foreach my $ascii (@ascii) {
-    # ASCII symbols are in range 32 - 126
-        if ($ascii < 32 || $ascii > 127) {
+# ASCII symbols are in range 0 - 126 (printable >= 32)
+        if ($ascii > 127) {
+#	    print "Non-ASCII symbol found  $ascii<br>"; $ascii = '%'; next; # test
             return 0;
         }
     }
     return 1;
 # alternative: if (quotemeta($string) eq $string) {return 1;} else {return 0;}
+# (quotemeta($string) eq $string) ? return 1 : return 0;
 }
 
 #############################################################################

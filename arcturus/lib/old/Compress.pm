@@ -521,6 +521,8 @@ sub huffmanDecoder {
 
    ($count, $output) = &decodeHuffman (\%tree,substr($string,$number));
 
+    $output =~ s/\s*$//; # chop off any trailing blanks
+
     $count, $output;
 }
 

@@ -194,8 +194,8 @@ Retrieve read ID for named read
 =cut
 #############################################################################
 #############################################################################
-
-sub getUnassembledReads {
+#TO BE DEPRECATED
+sub getUnassembledReadsOLD {
 # short way using READS2ASSEMBLY; long way with a left join READS, R2CR2
     my $self = shift;
     my $hash = shift || 0; # default "short" & no date selection
@@ -367,18 +367,22 @@ sub cafUnassembledReads {
 # fetch all unassembled reads and write data to a CAF file
     my $self = shift;
     my $FILE = shift;
-    my $hash = shift;
+    my $opts = shift;
+
+    my $ReadsRecall = $self->{ReadsRecall}->new(); # get the class handle
 
     my $count = 0;
     undef my @missed;
 
-print "Finding unassembled reads ($hash)\n" if $DEBUG;
-    my $readnames = $self->getUnassembledReads($hash);
+$DEBUG=1;
+print "Finding unassembled reads ($opts)\n" if $DEBUG;
+#    my $readnames = $self->getUnassembledReads($opts);
+    my $readnames = $ReadsRecall->getUnassembledReads($opts);
 print "readnames $readnames \n" if $DEBUG;
     if (ref($readnames) eq 'ARRAY' && @$readnames) {
 # NOTE: bulk processing does not require separate cacheing (see spawnReads)
         my $start = 0;
-        my $block = 1000;
+        my $block = 10000;
         while (@$readnames) {
             $block = @$readnames if ($block > @$readnames);
 print "processing block $start $block\n" if $DEBUG;
@@ -388,18 +392,38 @@ print "processing block $start $block\n" if $DEBUG;
             }
             $start += $block;
 print "reads to be built: @test \n" if ($DEBUG > 1);
-            my $readinstances = $self->getRead(\@test,'hashrefs','readname');
-            foreach my $instance (@$readinstances) {
-                if ($instance->writeReadToCaf($FILE)) {
-                    $count++;
-                }
-                else {
-                    push @missed,$instance->{readhash}->{readname};
+# to be replaced by on-the-fly
+            my $onTheFly = 0;
+            if ($onTheFly) {
+print "testing onTheFly method\n";
+                my $query = "select * from READS where read_id in ".join(',',@test).")";
+#                $self->{READS}->cacheBuild($query,{indexKey=>'read_id'});
+                foreach my $read (@test) {
+#                    $ReadsRecall->newReadHash($read);
+                    $ReadsRecall->newReadHash($read, 1); # no cache
+                    if ($ReadsRecall->writeReadToCaf($FILE)) {
+                        $count++;
+                    }
+                    else {
+                        push @missed,$read;
+                    }       
                 }
             }
-            undef $readinstances;           
+            else {
+# build read instances
+                my $readinstances = $self->getRead(\@test,'hashrefs','readname');
+                foreach my $instance (@$readinstances) {
+                    if ($instance->writeReadToCaf($FILE)) {
+                        $count++;
+                    }
+                    else {
+                        push @missed,$instance->{readhash}->{readname};
+                    }
+                }
+                undef $readinstances;
+            }          
+
         }
-        undef $readnames;
     }
 
 print "$count reads output \n" if $DEBUG;
@@ -449,7 +473,7 @@ Is written onto the file handle (about 3-5 Kbyte per read)
 =cut
 #############################################################################
 
-sub getContig {
+sub buildContig {
 # return a ContigRecall object(s) for named contig(s)
     my $self = shift;
     my $name = shift;
@@ -465,8 +489,8 @@ $DEBUG = 1;
         $contigrecall = \@contigrecall;
 print "building contig " if $DEBUG;
         foreach my $contig (@$name) {
-            my $getContig = $self->getContig($contig);
-            push @contigrecall, $getContig  if $getContig;
+            my $buildContig = $self->buildContig($contig);
+            push @contigrecall, $buildContig  if $buildContig;
 my $nr = @contigrecall; print "$nr .. " if ($DEBUG && ($nr == 1 || !($nr%50)));
         }
 print "\n" if $DEBUG;
@@ -481,11 +505,11 @@ print "\n" if $DEBUG;
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 method getContig
+=head1 method buildContig
 
 =head2 Synopsis
 
-Return a reference to a ContigRecall object 
+Build a ContigRecall object and its ReadsRecall objects
 
 =head2 Parameters
 
@@ -500,10 +524,14 @@ contig attribute (e.g. Tag) (and then a value must be defined)
 
 value of attribute to identify a contig
 
+=head2 Output
+
+Return the reference the ContigRecall object
+
 =cut
 #############################################################################
 
-sub cafContig {
+sub cafDumpContig {
 # write mappings of named contig(s) and its reads onto a filehandle in caf format
     my $self = shift;
     my $FILE = shift; # reference to file handle
@@ -514,8 +542,8 @@ print "cafContig $name \n";
 
     if (ref($name) ne 'ARRAY') { 
 print "get contig $name \n";
-        my $contig = $self->getContig($name);
-        $ccaf++ if $contig->writeToCaf($FILE);
+        my $contig = $self->buildContig($name);
+        $ccaf++ if $contig->dumpToCaf($FILE);
     }
 
     else { 
@@ -530,10 +558,10 @@ print "processing block $start $block\n" if $DEBUG;
             }
             $start += $block;
 print "contigs to be built: @test \n" if ($DEBUG > 1);
-            my $contiginstances = $self->getContig(\@test);
+            my $contiginstances = $self->buildContig(\@test);
 #undef @$contiginstances;
             foreach my $instance (@$contiginstances) {
-                if ($instance->writeToCaf($FILE)) {
+                if ($instance->dumpToCaf($FILE)) {
                     $ccaf++;
                 }
                 else {
@@ -550,6 +578,49 @@ print "contigs to be built: @test \n" if ($DEBUG > 1);
 }
 
 #############################################################################
+sub cafTestContig {
+# test generate contig
+    my $self = shift;
+    my $FILE = shift; # reference to file handle
+    my $nmbr = shift;
+
+    my $ContigRecall = $self->{ContigRecall} || return 0;
+
+    my $READS   = $self->{READS};
+    my $CONTIGS = $READS->spawn('CONTIGS');
+    my $RTAGS   = $READS->spawn('READTAGS');
+    my $R2C     = $READS->spawn('READS2CONTIG');
+
+# build cached data
+
+    my $query = "select * from <self> where read_id=? and deprecated in ('N','M') and generation = 1";
+    $R2C->prepareQuery($query,'mapQuery');
+    
+    $query = "select distinct read_id,contig_id from <self> where label>=10 and generation=1";
+# $query .= "and assembly=$assembly "; ?
+$query .= " and contig_id=$nmbr"; # to speed up
+    print "building R2C names cache with '$query') \n";
+    $R2C->cacheBuild($query,{indexKey=>'contig_id', indexName=>'names', list=>1});
+    print "DONE \n";
+
+
+    $query = "select * from <self> where contig_id=$nmbr and generation=1 ";
+    $query .= "and deprecated in ('N','M')";
+    print "building R2C mappings cache ($query) \n";
+    $R2C->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings',list=>1});  
+    print "DONE \n\n";
+
+
+    my $reads = $R2C->cacheRecall($nmbr,{indexName=>'names'});
+    foreach my $hash (@$reads) {
+        $hash = $hash->{read_id};
+    }
+    $query = "select * from <self> where read_id in (". join(',',@$reads) .")";
+    $READS->cacheBuild($query,{indexKey=>'read_id', list=>1});
+
+
+    $ContigRecall->writeToCaf($FILE,$nmbr);
+}
 
 sub cafAssembly {
 # write all contigs (and mappings) in generation 1 to file in CAF format
@@ -563,7 +634,7 @@ print "cafAssembly entered \n";
     my $READS   = $self->{READS};
     my $CONTIGS = $READS->spawn('CONTIGS');
     my $RTAGS   = $READS->spawn('READTAGS');
-    my $R2C     = $READS->spawn('READS2CONTIGS');
+    my $R2C     = $READS->spawn('READS2CONTIG');
 # contig tags
     $CONTIGS->autoVivify($self->{database},0.5);
 
@@ -579,13 +650,13 @@ print "output R2C search: $cids @$cids \n";
 print "READS cache being built \n";
 my $tstart = time;
         my $query = "select * from <self>";
-        $READS->cacheBuild($query,'read_id',{list => 1});
+#        $READS->cacheBuild($query,'read_id',{list => 1});
 my $tfinal = time;
 my $elapsed = $tfinal - $tstart;
 print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
 print "READTAGS cache being built \n";
 $tstart = $tfinal;
-        $RTAGS->cacheBuild($query,'read_id',{list => 1});
+#        $RTAGS->cacheBuild($query,'read_id',{list => 1});
 $tfinal = time;
 $elapsed = $tfinal - $tstart;
 print "load  time $tstart $tfinal, elapsed $elapsed seconds\n\n";
@@ -625,7 +696,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "17 Jan 2003",
-        updated =>    "12 Sep 2003",
+        updated =>    "26 Sep 2003",
     };
 }
 

@@ -438,9 +438,13 @@ sub getHostAndPort {
 # from apache-set environment
     my $servername = $ENV{'SERVER_NAME'};
     my $serverport = $ENV{'SERVER_PORT'};
+    my $http_host  = $ENV{'HTTP_HOST'};
 
     if (defined($servername) && defined($serverport)) {
 	return "$servername:$serverport";
+    }
+    elsif ($http_host) {
+        return $http_host;
     }
     else {
 	return 0;
@@ -836,7 +840,7 @@ print "GateKeeper enter dbHandle $database $hash $debug" if $debug;
     } 
     elsif ($database && $residence{$database} !~ /$serverstring/) {
 # to be removed later:  redirection diagnostics
-$debug = "\n";
+#$debug = "\n";
         if ($options{redirectTest}) {
             &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
         }
@@ -857,7 +861,7 @@ $debug = "\n";
 # remove the current instance if it was the last one registered
             my $residence = $self->currentResidence;
             delete $instances{$residence} if ($instances{$residence} eq $self);
-# open the new connection and repaet the setting up of the database/table handle
+# open the new connection and repeat the setting up of the database/table handle
 &report($self,"Opening new connection on $host:$port") if $debug;
             $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1}); # no write access
             delete $options{defaultRedirect};
@@ -2245,7 +2249,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>              81 ,
         version =>             1.0 ,
-        updated =>    "12 Feb 2003",
+        updated =>    "23 Sep 2003",
         date    =>    "26 Jun 2002",
     };
 }

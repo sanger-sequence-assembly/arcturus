@@ -82,6 +82,7 @@ sub init {
 
     $ReadMapper->preload(0,'1100') if !$nopreload;  # build table handle caches (READS and PENDING)
 
+    $self->{preload}     = 1 if !$nopreload;
     $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
     $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
     $self->{nameChange}  = 0; # default name change only for generation 0
@@ -152,6 +153,9 @@ sub new {
         $self->{nameChange}  = $prototype->{nameChange}  || 0;     
         $self->{TESTMODE}    = $prototype->{TESTMODE}    || 0;
         $self->{REPAIR}      = $prototype->{REPAIR}      || 0;
+        $self->{READSCAN}    = $prototype->{READSCAN}    || 0;
+# test only for presence of assembled reads in database
+        $self->{preload}     = $prototype->{preload}     || 0;
 #print STDOUT "new ContigBuilder inherits from prototype $prototype  (class $class)$break";
 #print STDOUT "$self->{minOfReads},$self->{ignoreEmpty},$self->{TESTMODE},$self->{REPAIR} $break";
     }
@@ -163,6 +167,8 @@ print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
         $self->{nameChange}  = 0; # default name change only for generation 0
         $self->{TESTMODE}    = 0; # test mode for caf file parser
         $self->{REPAIR}      = 0; # test/repair mode for read attributes
+        $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
+        $self->{preload}     = 0;
     }
 
 #my $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
@@ -1239,11 +1245,15 @@ sub readAlias {
 # replace the readname by read_id as long hexadecimal number 
     my $readname = shift;
 
-    if (my $array = $READS->cacheRecall($readname)) {
+    if (my $array = $READS->cacheRecall($readname,{indexName=>'readname'})) {
 #print "readAlias: $readname => ";
         my $read_id = $array->[0]->{read_id};
         $readname = sprintf "%lx", $read_id;
 #print " read_id $read_id  => alias $readname $break";
+    }
+
+    elsif (my $read_id = $READS->associate('read_id',$readname,'readname',{returnScalar=>1})) {
+        $readname = sprintf "%lx", $read_id;
     }
 
     else {
@@ -1487,7 +1497,7 @@ my $errlist = 0;
         }        
 
 
-        if (defined($object) && $object =~ /contig/i && $record =~ /assemble/i && abs($type) != 2) {
+        if (defined($object) && $object =~ /contig/i && $record =~ /assemble/i && abs($type) != 2 && !$READSCAN) {
 # thisblock handles a special case where 'Is_contig' is defined after 'assembled'
             $type = 2 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
             $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
@@ -1519,7 +1529,8 @@ my $errlist = 0;
 
         elsif ($record =~ /Is_read/ && $READSCAN) {
 # test presence of required read in database
-            $ReadMapper->inDataBase($object,1,1,0);
+            my $dblookup = 1; $dblookup = 0 if $self->{preload};
+            $ReadMapper->inDataBase($object,$dblookup,1,0,1000);
         }
 
         elsif ($record =~ /Is_read/) {
@@ -1531,7 +1542,8 @@ my $errlist = 0;
                 $currentread = $ReadMapper->new($object);
             }           
         }
-        elsif ($record =~ /DNA/) {
+
+        elsif ($record =~ /DNA/ && !$READSCAN) {
 # only act on DNA consensus sequence
             if ($record =~ /\bcontig\d+\b(.*)$/i) {
 # contig initialisation
@@ -1648,6 +1660,7 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
         }
     }
     close (CAF);
+    $ReadMapper->flush if $READSCAN; # flush PENDING table
     print STDOUT "$break$line Lines processed on file $filename $break" if $list;
     print STDOUT "Scanning the file was truncated $break" if ($list && $truncated);
     my $nr = keys %{$ReadMapper->lookup(0)}; my $nc = keys %ContigBuilder;
@@ -1788,24 +1801,37 @@ sub unbuild {
 
 # okay, now remove (this is not the fastest implementation!)
 
-#        my $DBVERSION = $CONTIGS_>dbVersion;
+#        my $DBVERSION = $CONTIGS->dbVersion;
 
         my $where = "assembly = $assembly and generation = 0";
         my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
         my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
 
-        $where = "contig_id in (".join(',',@$contigs).")";
+# should be blocked
 
-print "query $where $break"; return "Test abort";
+ return "Test abort";
 
-        $CCTOSS->delete('where',$where); # to scaffold
-        $TTTOCCS->delete('where',$where); # tags
-        $SEQUENCE->delete('where',$where); # consensus
+        $RRTOCC->delete('where',$where);
+
+        my $block = 500;
+        while (@$contigs) {
+            $block = @$contigs if ($block > @$contigs);
+print "processing next block $block $break";
+            undef my @block;
+            for (my $i = 0 ; $i < $block ; $i++) {
+                push @block, (shift @$contigs);
+            }
+            $where = "contig_id in (".join(',',@block).")";
+#print "query $where $break";
+            $CCTOSS->delete('where',$where);   # to scaffold
+            $TTTOCCS->delete('where',$where);  # tags
 # missing here GENE2CONTIG & CLONES2CONTIG
-        $CONTIGS->delete('where',$where);
-        $RRTOCC->delete('where',$where); 
-	$where =~ s/contig_id/newcontig/;
-        $CCTOCC->delete('where',$where); # contig to contig
+            $CONTIGS->delete('where',$where);  # contigs
+	    $where =~ s/contig_id/newcontig/;
+            $CCTOCC->delete('where',$where);   # contig to contig
+            $where =~ s/newcontig/contig_uid/;
+            $SEQUENCE->delete('where',$where); # consensus
+	}
 
 # restore the status of the assembly for generation 1
 
@@ -1831,6 +1857,7 @@ sub updateAssembly {
 # test if the generation provided is legal
 
     my $accept = -1;
+
     if ($ASSEMBLY->associate('status',$assembly,'assembly') eq 'error') {
         print "Error status on assembly $assembly $break" if $list;
         return 0;
@@ -1958,8 +1985,8 @@ sub colophon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             1.1 ,
-        date    =>    "08 Mar 2002",
-        history =>    "05 Mar 2001",
+        updated =>    "24 Sep 2003",
+        date    =>    "05 Mar 2001",
     };
 }
 

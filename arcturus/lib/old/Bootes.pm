@@ -246,12 +246,17 @@ sub putPendingReads {
 
         foreach my $name (@$names) {
 
-#	    $success++; print "name to be added $name \n";
             $success++ if $self->{PENDS}->newrow('readname',$name);
         }
     }
 
     $self->{PENDS}->flush();
+
+    if ($success) {
+ 
+        $self->{mother}->update('reads_pending',$success,'dbasename',$self->{database});
+
+    }
 
     return $success;
 }

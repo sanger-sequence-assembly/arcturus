@@ -62,6 +62,7 @@ sub new {
     $self->{sublinks}  = {}; # hash with links to other tables
     $self->{timestamp} = ''; # timestamp if database contents changed
     $self->{alternate} = []; # array for alternate column names (re: tracing)
+    $self->{queries}   = {}; # hash for prepared queries
 
 # multi line and counter insert mode
 
@@ -143,7 +144,7 @@ sub build {
 
     my $exists = 0;
     my $query = "SHOW TABLES";
-    $query .= " from  $self->{database}" if ($self->{database});
+    $query .= " from $self->{database}" if ($self->{database});
     my $sth = $dbh->prepare($query);
     my $status = $sth->execute();
     if ($status && $status > 0) {
@@ -158,7 +159,7 @@ sub build {
         }
     }
     else {
-        $self->{errors} = "! Database $self->{database} is empty or does not exist";
+        $self->{errors} = "! Database $self->{database} is empty or does not exist ('$query' $status)";
         die "$self->{errors}" if $dieOE;
         return 0;
     }
@@ -227,7 +228,9 @@ sub build {
 }
 
 #############################################################################
-# buildhash only to be used as private method (locked!)
+# buildhash can only be used as private method; this method can only be used
+# inside this module: calling it in the object-oriented way will set $lock to
+# true, which results in 'die'; for internal use, first parameter is set to 0
 #############################################################################
 
 sub buildhash {
@@ -239,7 +242,6 @@ sub buildhash {
 # protect against unintended usage
 
     die "! Y're not supposed to use private method 'buildhash'\n" if ($lock);
-print "BUILDHASH method invoked (build=$self->{'build'}) on table $self->{tablename}\n" if ($self->{tablename} eq 'READS2CONTIG');
 
 # get every row from the database as an array of hash references
 
@@ -275,18 +277,27 @@ sub cacheBuild {
     my $query  = shift; # select query 
     my $option = shift;
 
-    my %options = (queryTrace => 0, indexKey => 0, extend => 0,
-                   sortBy     => 0, noIndex  => 0, list   => 0);
+    my %options = (queryTrace => 0, indexKey  => 0, extend => 0,
+                   sortBy     => 0, indexName => 0, list   => 0);
     $self->importOptions(\%options, $option);
     $options{indexKey} = $self->{prime_key} if !$options{indexKey}; # if any !
 
+# get the name of the index from indexKey or indexName, default to 'index'
+
+    my $indexname = $options{indexName} || $options{indexKey} || 'index';
+    my $nhashrefs = "hashrefs$indexname";
+print "cacheBuild indexname $indexname   hashrefs $nhashrefs \n";
+
     my $report = "cache building query $query \n";
 
-    my $storedhashrefs = $self->{hashrefs};
+    $self->{$nhashrefs} = [] if !$self->{$nhashrefs}; # auto vivify the array of hashes
+
+    my $storedhashrefs = $self->{$nhashrefs};
     my $hashrefs = $self->query($query,0,$options{queryTrace});
+    $report .= "query: '$self->{lastQuery} \n";
     if ($hashrefs && ref($hashrefs) eq 'ARRAY') {
         undef @$storedhashrefs if !$options{extend};
-        push  @$storedhashrefs, @$hashrefs;   
+        push  @$storedhashrefs, @$hashrefs; 
 
 if ($self->{tablename} eq 'READS2CONTIG') {
 #     my $n = @$storedhashrefs; print "$report: $n hashes stored \n";
@@ -303,6 +314,7 @@ if ($self->{tablename} eq 'READS2CONTIG') {
     
 # build an index if a key is specified
 
+    my $indexlength = 0;
     my $coltype = $self->{coltype};
     if (my $indexKey = $options{indexKey}) {
 # first test if the key is unique
@@ -312,11 +324,12 @@ if ($self->{tablename} eq 'READS2CONTIG') {
         }
         $report .= "indexKey = $indexKey   isUnique=$isUnique \n";
 
-        $self->{'index'} = {};
-        my $index = $self->{'index'};
+        $self->{$indexname} = {};
+        my $index = $self->{$indexname};
 
         if (!$coltype->{$indexKey}) {
             $report .= "Unknown column: $indexKey\n";
+            $report .= "Invalid index key defined\n";
         }
         elsif ($isUnique) {
 # in case of a unique key, we can build a hash table
@@ -338,6 +351,7 @@ if ($self->{tablename} eq 'READS2CONTIG') {
                 my $cmp = 'cmp';
                 if (!$coltype->{$sort}) {
                     $report .= "Unknown column $sort \n";
+                    $report .= "Invalid sorting key defined\n";
                 }
                 elsif ($coltype->{$sort} =~ /int|float/i) {
 		    $cmp = '<=>';
@@ -358,6 +372,7 @@ if ($self->{tablename} eq 'READS2CONTIG') {
                 $index->{$key}->[1] = $i - 1 if !$nmr;
             }
         }
+        $indexlength = scalar(keys %$index);
 #        $self->{'build'} = $query; # or sortKey? ! this will destroy the index on any update/delete
     }
     else {
@@ -370,7 +385,7 @@ if ($self->{tablename} eq 'READS2CONTIG') {
 
     if ($options{list} >= 2) {
         print STDOUT $report;
-        my $index = $self->{'index'};
+        my $index = $self->{$indexname};
         foreach my $key (sort keys %$index) {
             my $result = $self->cacheRecall($key);
             next if (!$result || $options{list} <= 1);
@@ -383,6 +398,8 @@ if ($self->{tablename} eq 'READS2CONTIG') {
             } 
         }
     }
+
+    return $indexlength; # 0 for failure
 }
 
 #############################################################################
@@ -391,11 +408,23 @@ sub cacheRecall {
 # returns a ref to array with 1 or more hashes or 0
     my $self = shift;
     my $ikey = shift; # the index key
+    my $opts = shift;
 
-    my $hashrefs = $self->{hashrefs};
-    my $index    = $self->{'index'};
+    my %options = (indexName => 'index', returnHash => 0, list => 0);
+    $self->importOptions(\%options, $opts);
 
-my $LIST = 0; # $LIST = 1 if ($self->{tablename} eq 'READS2CONTIG');
+    my $LIST = $options{list};
+
+# get the name of the index and its associated hash table
+    
+    my $indexname = $options{indexName};
+    my $nhashrefs = "hashrefs$indexname";
+print "$self->{tablename}: cacheRecall indexname $indexname   hashrefs $nhashrefs \n" if $LIST;
+
+# get the hashes themselves
+
+    my $index    = $self->{$indexname};
+    my $hashrefs = $self->{$nhashrefs};
 
     my $result = 0; # default no data
     if (my $hash = $index->{$ikey}) {
@@ -414,10 +443,15 @@ print STDOUT "s:$is  f:$if " if $LIST;
             push @result, $hash;
         }
 print STDOUT "\n" if $LIST;
-        $result = \@result if @result;
+        if ($options{returnHash} && @result <= 1) {
+            $result = $result[0] || 0;
+        }
+        elsif (@result) {
+            $result = \@result;
+        }
     }
     else {
-print STDOUT "recall: $ikey NOT FOUND \n" if $LIST;
+print STDOUT "recall: index entry $ikey NOT FOUND \n" if $LIST;
     }
 
     return $result; 
@@ -870,7 +904,7 @@ print "$self->{tablename}: input query = '$query'\n" if  $option{debug};
             $self->{lastQuery} = $query;
             $query = &traceQuery($self,$query) if ($useQueryTracer);
             undef my @result; 
-# if (my $array = $dbh->traceQuery(selectcol_arrayref ($query)) {
+# if (my $array = $dbh->selectcol_arrayref ($query)) {
 #     $result = $array;
             my $sth = $dbh->prepare($query); # return array of hashrefs
             if ($sth->execute()) {
@@ -1010,7 +1044,7 @@ sub quoteColValue {
             foreach my $choice (@$value) {
                 $output .= ',' if $count++;
                 if ($quote) {
-                    $choice =~ s/^([\'\"])(.*)\1$/$2/; # chop off any existing quotes
+                    $choice =~ s/^([\'\"])(.*)\1$/$2/ if ($columntype !~ /blob/i); # chop off any existing quotes
                     $choice = $dbh->quote($choice) unless ($choice =~ /^null$/i);
                 }
                 $output .= $choice;
@@ -1018,7 +1052,8 @@ sub quoteColValue {
             $output = '('.$output.')' if ($count > 1); # better than rely on ','
         }
         elsif ($quote) {
-            $value =~ s/^([\'\"])(.*)\1$/$2/; # chop off any existing quotes
+# chop off any existing quotes, except for blobs (binary)
+            $value =~ s/^([\'\"])(.*)\1$/$2/ if ($columntype !~ /blob/i);
             $output = $dbh->quote($value) unless ($value =~ /^null$/i);
         }
         else {
@@ -1866,6 +1901,68 @@ print "UNDO: $undocommand\n";
 
 #############################################################################
 
+sub prepareQuery {
+# prepare a statement and return the statement handle for later execution
+    my $self = shift;
+    my $prep = shift || return 0; # the query to be prepared
+    my $name = shift || return 0; # its internal name
+
+# returns 1 for success, 0 for failure or invalid input
+
+    my ($dbh, $tablename) = whoAmI($self,0,0);
+
+    $prep =~ s/[\<|\b]self[\>|\b]/$tablename/i; # if placeholder <SELF> given
+
+    $self->{queries}->{$name} = $dbh->prepare($prep) || return 0;
+
+    return 1; 
+}
+
+#############################################################################
+
+sub usePreparedQuery {
+# execute the prepared statement passed with $sth
+    my $self = shift;
+    my $name = shift; # the internal query name
+    my $data = shift; # any data required (undef allowed)
+    my $hash = shift; 
+
+# returns undefined for failure, or reference to array of hashes (which can be empty)
+# if $hash is set true, return a hash if only one result found, or 0 if none  
+
+    my $sth = $self->{queries}->{$name} || return; # get the query handle
+
+    my $status = 0;
+    if (ref($data) eq 'ARRAY') {
+print "USE prepared Query read @$data \n";
+        $status = $sth->execute(@$data);
+    }
+    else {
+# print "USE prepared Query read $data \n";
+	$status = $sth->execute($data);
+    }
+
+    $self->{querytotalresult} = 0;
+
+    undef my @hashrefs;
+    undef my $hashrefs;
+
+    if ($status) {
+# return reference to an array of hashrefs
+        $hashrefs = $sth->fetchall_arrayref({});
+# if none returned ensure it's a ref to an empty array
+        $hashrefs = \@hashrefs if !$hashrefs; 
+        $self->{querytotalresult} = @$hashrefs;
+        if ($hash && @$hashrefs <= 1) {
+            $hashrefs = $hashrefs->[0] || 0;
+        }
+    }
+
+    return $hashrefs; 
+}
+
+#############################################################################
+
 sub do {
 # do with return of number of lines affected
     my $self = shift;
@@ -1876,20 +1973,6 @@ sub do {
     $todo =~ s/\<self\>/$tablename/i; # if placeholder <SELF> given
 
     return $dbh->do($todo); 
-}
-
-#############################################################################
-
-sub prepare {
-# prepare a query and return sth handle
-    my $self = shift;
-    my $prep = shift;
-
-    my ($dbh, $tablename) = whoAmI($self);
-
-    $prep =~ s/\<self\>/$tablename/i; # if placeholder <SELF> given
-
-    return $dbh->prepare($prep); 
 }
 
 #############################################################################
@@ -1971,6 +2054,7 @@ sub query {
     $self->{lastQuery} .= $query;
     my $sth = $dbh->prepare($query); 
     my $status = $sth->execute();
+print "<br>failed query $query <br>" if !$status;
     $status = 0 if !defined($status);
 # beware: $status:0 (false) indicates an error; 0E0 indicates no data returned
     if ($status > 0 && $query =~ /select|show/i) {
@@ -2074,10 +2158,20 @@ print "query \"$query\" to be traced <br>\n" if ($list);
                 my $query = "select $distnct $targets from $tables where $clause";
                 $tracedQuery .= $self->traceQuery($query);               
             }
-print "tracedquery: $tracedQuery <br>";
-            $tracedQuery =~ s/UNION.*?where/OR/g if ($DBVERSION =~ /^3\./); # stop gap
+print "tracedquery: $tracedQuery <br>\n" if $list;
+            if ($DBVERSION =~ /^3\./) {
+# this is a stop gap, which can  muck up multi-table queries
+print "tracedquery: $tracedQuery <br>\n";
+                if ($tracedQuery =~ s/\bUNION\b.*?\bfrom\b(.*?)\bwhere\b/OR/i) {
+                    my $tables = $1; # the tables 
+		    print "tables: $tables \n";
+                    $tracedQuery =~ s/\bfrom\b.*?\bwhere\b/from $tables where/;
+                    $order = "limit 1";
+		}
+print "restored tracedquery: $tracedQuery <br>\n";
+	    }
             $tracedQuery .= ' '.$order if $order;
-print "tracedquery: $tracedQuery <br>";
+print "tracedquery: $tracedQuery <br>\n" if $list;
         }
 
         else {

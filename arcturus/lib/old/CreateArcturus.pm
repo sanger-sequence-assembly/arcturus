@@ -2075,11 +2075,11 @@ sub create_DATAMODEL {
 
     my @input = ('READEDITS          read_id             READS     read_id',
                  'READTAGS           read_id             READS     read_id',
+                 'READS2CONTIG         clone            CLONES       clone',
+                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
                  'READS2CONTIG       read_id             READS     read_id',
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
                  'READS2CONTIG     contig_id  CONTIGS2SCAFFOLD   contig_id',
-                 'READS2CONTIG         clone            CLONES       clone',
-                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
                  'READS2ASSEMBLY     read_id             READS     read_id',
 #                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
 #                 'USERS               userid    USERS2PROJECTS      userid',

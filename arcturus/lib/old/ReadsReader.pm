@@ -24,7 +24,7 @@ my $SCFREADLIB = '/usr/local/badger/distrib-1999.0/lib/alpha-binaries';
 my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
 my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
-my $readbackOnServer = 0;
+my $readbackOnServer = 1;
 
 my $break;
 
@@ -396,6 +396,7 @@ sub newConsensusRead {
         close READ;
     # create a dummy quality sequence of 1 throughout
        ($readItems->{AV} = $readItems->{SQ}) =~ s/(.)/ 1/g;
+        $readItems->{AV} =~ s/^\s+//; # remove the leading blank
     # test number of fields read
         if (keys(%$readItems) <= 0) {
             $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
@@ -1356,7 +1357,7 @@ sub encode {
 
     undef my $error;
     undef my $scount;
-    if ($scm && ($scm == 1 || $scm == 2)) {
+    if ($scm && ($scm == 1 || $scm == 2 || $scm == 99)) {
         $readItems->{sequence} = $readItems->{SQ};
        ($scount,$readItems->{SQ}) = $Compress->sequenceEncoder($readItems->{SQ},$scm);
         $error .= $self->enter('SCM',$scm);
@@ -1367,7 +1368,7 @@ sub encode {
     my $sqcstatus = $Compress->status;
 
     undef my $qcount;
-    if ($qcm && $qcm >= 1 && $qcm <= 3 ) {
+    if ($qcm && ($qcm >= 1 && $qcm <= 3) || $qcm == 99) {
         $readItems->{quality} = $readItems->{AV};
        ($qcount,$readItems->{AV}) = $Compress->qualityEncoder($readItems->{AV},$qcm);
         $error .= $self->enter('QCM',$qcm);
@@ -1531,6 +1532,7 @@ sub readback {
         if ($hash->{readname} && $hash->{readname} ne $readItems->{ID}) {
             print "LAST INSERT select failed ..";
             $hash = $READS->associate('hashref',$readItems->{ID},'readname',\%options);
+            $error = "Cannot test against server: LAST INSERT select failed$break";
         }
     }
     else {
@@ -1546,13 +1548,14 @@ sub readback {
 
     my $scm = $hash->{scompress};
     my $sequence = $hash->{sequence};
-    if ($scm && ($scm == 1 || $scm == 2)) {
+    if ($scm && ($scm == 1 || $scm == 2 || $scm == 99)) {
        ($count, $string) = $Compress->sequenceDecoder($sequence,$scm,1);
     }
     elsif (!defined($scm) || $scm) {
         $scm = 0 if !$scm; $count = 0; # just to have them defined
         $error .= "Invalid sequence encoding method readback: $scm$break";
     }
+    $readItems->{sequence} =~ s/\s+//g if ($scm == 99);
     if ($string !~ /\S/ || $string !~ /^$readItems->{sequence}\s*$/) {
         my $slength = length($sequence); # encoded sequence
         $error .= "Error in readback of DNA sequence (length = $count / $slength):$break";
@@ -1561,13 +1564,13 @@ sub readback {
 
     my $qcm = $hash->{qcompress};
     my $quality = $hash->{quality};
-    if ($qcm && $qcm >= 1 && $qcm <= 3) {
+    if ($qcm && ($qcm >= 1 && $qcm <= 3 || $qcm == 99)) {
        ($count, $string) = $Compress->qualityDecoder($quality,$qcm);
         $string =~ s/^\s*(.*?)\s*$/$1/; # remove leading and trailing blanks
     }
     elsif (!defined($qcm) || $qcm) {
         $qcm = 0 if !$qcm; $count = 0; # just to have them defined
-        $error .= "Invalid sequence encoding method readback: $qcm$break";
+        $error .= "Invalid quality encoding method readback: $qcm$break";
     }
 #    if ($string !~ /\S/ || ($string !~ /^\s*$readItems->{quality}\s*$/ && $readItems->{quality} !~ /^\s*$string\s*$/)) {
     if ($string !~ /\S/ || $readItems->{quality} !~ /^\s*$string\s*$/) {
@@ -1576,7 +1579,7 @@ sub readback {
         my $qlength = length($quality); # encode quality data
 	$readItems->{quality} =~ s/ /-/g; $string =~ s/ /-/g;
         $error .= "Error in readback of quality data (lengthes = $count/$qlength/$rlength/$slength):$break";
-        $error .= "Original-: '$readItems->{quality}'${break}Retrieved: '$string'$break$break"; 
+        $error .= "Original : '$readItems->{quality}'${break}Retrieved: '$string'$break$break"; 
     }
 
     if ($error) {

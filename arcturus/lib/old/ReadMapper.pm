@@ -549,7 +549,7 @@ sub etest {
         #$MyTimer->timer('etest',0) if $TIMER; 
 
         $counts->[5] = 0;
-        my $edits = $EDITS->cacheRecall($read_id); # look in cached data first
+        my $edits = $EDITS->cacheRecall($read_id,{indexName=>'read_id'}); # look in cached data first
         $edits = $EDITS->associate ('hashrefs',$read_id,'read_id') if ($DBS && !$edits);
 # edits is now a reference to an array of hashes with edit information
         if (ref($edits) eq 'ARRAY' && @$edits) {
@@ -659,7 +659,7 @@ sub mtest {
 
 # find any existing mappings for this read in the database (first try cached data)
 
-        my $dbmaps = $RR2CC->cacheRecall($read_id);
+        my $dbmaps = $RR2CC->cacheRecall($read_id,{indexName=>'mappings'});
         $dbmaps = $RR2CC->associate ('hashrefs',$read_id,'read_id',-1,'deprecated,label') if ($DBS && !$dbmaps); 
 # dbmaps is a reference to an array of hashes with existing mapping info in the database
         if (ref($dbmaps) eq 'ARRAY' && @$dbmaps > 0) {
@@ -1624,7 +1624,7 @@ sub inDataBase {
     my $dbsearch = shift || 0; # set true to search database if not found in cache
     my $append   = shift || 1; # set true if a missing read is to be added to PENDING
     my $assembly = shift || 0; # the assembly number 
-#    my $list = shift || 0;
+    my $list     = shift || 0;
 
 # print "inDataBase called from ContigBuilder for read $readname, pen $append $break" if $list;
 
@@ -1642,13 +1642,13 @@ sub inDataBase {
         return 0, 0;
     }
 # first look in the READS cache
-    elsif ($hashes = $READS->cacheRecall($readname)) {
+    elsif ($hashes = $READS->cacheRecall($readname,{indexName=>'readname'})) {
         $dbrref = $hashes->[0]->{read_id} || 0;
         $self->{clone} = $hashes->[0]->{clone};
 #print "Read $readname found in READS $dbrref $break";
     }
 # then look in the PENDING cache
-    elsif ($hashes = $PENDS->cacheRecall($readname)) {
+    elsif ($hashes = $PENDS->cacheRecall($readname,{indexName=>'readname'})) {
         $dbpref = $hashes->[0]->{record}  || 0;
 #print "Read $readname found in PENDING $dbpref $break";
     }
@@ -1674,7 +1674,7 @@ sub inDataBase {
         }
         #$MyTimer->timer('inDataBase newrow',1) if $TIMER;
 # error status checking
-print "Adding to PENDING: $readname (as $dbpref)$break";
+        print "Adding to PENDING: $readname (as $dbpref)$break" if ($list && !($dbpref%($list)));
         if (!$dbpref) {
             my $status = $self->{'status'};
             $status->{diagnosis} .= "! Failed to add entry $readname ";
@@ -1739,7 +1739,7 @@ print "PENDS $break";
 # get the read_id's from the readnames, using the cached data
                 my @readids;
                 foreach my $read (@block) {
-                    my $hash = $READS->cacheRecall($read);
+                    my $hash = $READS->cacheRecall($read,{indexName=>'readname'});
                     push @readids,$hash->[0]->{read_id} if $hash;
                 }
 
@@ -1750,10 +1750,11 @@ print "PENDS $break";
 print "RR2CC $break";
 # print "$query $break";
                     my %options = (indexKey=>'read_id',extend=>$extend);
-                    $options{sortBy} = 'deprecated,label';
-                    $RR2CC->cacheBuild($query,\%options) if $mask[2];
                     $options{sortBy} = 'edit,base';
                     $EDITS->cacheBuild($query,\%options) if $mask[3];
+                    $options{sortBy} = 'deprecated,label';
+                    $options{indexName} = 'mappings';
+                    $RR2CC->cacheBuild($query,\%options) if $mask[2];
                 }
             }
             $extend = 1;
@@ -1772,7 +1773,7 @@ print "$query $break" if $mask[1];
 
         $query = "select *  from <self>";
 print "$query $break" if $mask[2];
-        $RR2CC->cacheBuild($query,{indexKey=>'read_id', sortBy=>'deprecated, label'}) if $mask[2];
+        $RR2CC->cacheBuild($query,{indexKey=>'read_id', indexName=>'mappings', sortBy=>'deprecated, label'}) if $mask[2];
 print "$query $break" if $mask[3];
         $EDITS->cacheBuild($query,{indexKey=>'read_id', sortBy=>'edit,base'}) if $mask[3];
     }
@@ -1886,7 +1887,7 @@ sub colophon {
         group   =>       "group 81",
         version =>             0.9 ,
         date    =>    "16 Mar 2002",
-        update  =>    "31 Mar 2003",
+        update  =>    "01 Oct 2003",
     };
 }
 
