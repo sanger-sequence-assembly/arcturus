@@ -7,79 +7,88 @@ package ContigBuilder;
 #############################################################################
 
 use strict;
-use vars qw($VERSION @ISA);
+
+use ReadMapper;
+use Compress;
 
 #############################################################################
 # Global variables
 #############################################################################
 
-my %contigs;
-my %forward;
+my %ContigBuilder;
+my %forward; # ?
 
-my $ReadMapper; # handle to ReadMapper module: ReadMapper.pm
+my $ReadMapper; # handle to ReadMapper module
+my $Compress;   # handle to Compress   module
+
 my $CONTIGS;    # database table handle to CONTIGS
-my $CCSTOCC;    # database table handle to CEVENTS
+my $CCSTOCC;    # database table handle to CONTIGS2CONTIG
 my $CCTOSS;     # database table handle to CONTIGS2SCAFFOLD
+my $READS;      # database table handle to READS 
 my $RRTOCC;     # database table handle to READS2CONTIG 
 my $GAP4TAGS;   # database table handle to GAP4TAGS
-my $READTAGS;   # database table handle to READTAGS table
-my $TTTOCCS;    # database table handle to TAGS2CONTIG 
+# my $READTAGS;   # database table handle to READTAGS table
+my $TTTOCCS;    # database table handle to TAGS2CONTIG
+my $ASSEMBLY;   # database table handle to ASSEMBLY
+my $SEQUENCE;   # database table handle to CONSENSUS
 
-my $ASSEMBLY;   # assembly number for which the instance is created 
-my $USERID;     # the user under who's auspices the instance is created
-my $TESTMODE;   # test mode for caf file parser
-my $REPAIR = 0; # test/repair mode for read attributes 
-
-my $minOfReads  = 0; # accept contigs having at least this number of reads 
-my $ignoreEmpty = 1; # default ignore empty reads; else treat as error status 
-
-my $brtag = "\n";
-my $bfont = "<FONT COLOR=blue>";
-my $ofont = "<FONT COLOR=orange>";
-my $gfont = "<FONT COLOR=lightgreen>";
-my $yfont = "<FONT COLOR=yellow>";
-my $efont = "</FONT>";
-
-my $FTAGS = "FINL|FINR|ANNO|COMP|FICM|RCMP|POLY|REPT|OLIG|COMM|RP20|TELO|REPC|WARN|CONF|DRPT|LEFT|RGHT|TLCM|UNCL|VARI"; # Finishers tags
-my $STAGS = "ADDI|AFOL|AMBG|CVEC|SVEC|FEAT|REPT|MALX|MALI|SILR"; # software TAGS
-my $ITAGS = "CpGI|CLIP|MISS"; # tags to be ignored
+my $break;
 
 #############################################################################
 # constructor init: initialise the global (class) variables
 #############################################################################
 
 sub init {
+# initialise module by setting class variables
     my $prototype = shift;
-
-    my $mapper    = shift;
-    my $contigs   = shift;
-    my $htmlmode  = shift;
+    my $tblhandle = shift; # handle to any table in the database
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
-    my $exist = keys %contigs; # does a contig buffer exist?
+    $break = &break;
 
-    if (!$exist) {
+# if $CONTIGS was defined previously, check if same database
 
-        $CONTIGS    = $contigs;
-        $CCSTOCC    = $CONTIGS->findInstanceOf('<self>.CONTIGS2CONTIG');
-        $CCTOSS     = $CONTIGS->findInstanceOf('<self>.CONTIGS2SCAFFOLD');
-        $RRTOCC     = $CONTIGS->findInstanceOf('<self>.READS2CONTIG');
-        $GAP4TAGS   = $CONTIGS->findInstanceOf('<self>.GAP4TAGS');
-        $TTTOCCS    = $CONTIGS->findInstanceOf('<self>.TAGS2CONTIG');
-
-        $ReadMapper = $mapper;
-
-        my $reads   = $CONTIGS->findInstanceOf('<self>.READS');
-#        $ReadMapper = ReadMapper->init($reads,$htmlmode) if $reads;
-
-        bless ($self, $class);
+    if (!$tblhandle) {
+        return 0; # missing table handle
+    }
+    elsif ($CONTIGS && $tblhandle->{database} ne $CONTIGS->{database}) {
+        print "! Inconsistent databases in ContigBuilder: ";
+        print "$tblhandle->{database} vs $CONTIGS->{database} $break";
+        return 0;
     }
 
-#    &buildForwardMap;
+# get table handles (class variables, so work on one database only)
 
-    $brtag = "<br>" if $htmlmode;
+    $CONTIGS    = $tblhandle->spawn('CONTIGS'         ,'<self>');
+    $CCSTOCC    = $tblhandle->spawn('CONTIGS2CONTIG'  ,'<self>');
+    $CCTOSS     = $tblhandle->spawn('CONTIGS2SCAFFOLD','<self>');
+    $READS      = $tblhandle->spawn('READS'           ,'<self>');
+    $RRTOCC     = $tblhandle->spawn('READS2CONTIG'    ,'<self>');
+    $GAP4TAGS   = $tblhandle->spawn('GAP4TAGS'        ,'<self>');
+    $TTTOCCS    = $tblhandle->spawn('TAGS2CONTIG'     ,'<self>');
+    $ASSEMBLY   = $tblhandle->spawn('ASSEMBLY'        ,'<self>');
+    $SEQUENCE   = $tblhandle->spawn('CONSENSUS'       ,'<self>');
+
+# get the ReadMapper handle (class variable)
+
+    $ReadMapper = ReadMapper->init($tblhandle);
+
+    $ReadMapper->preload('1100');  # build table handle caches (READS and PENDING)
+
+    $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
+    $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
+    $self->{TESTMODE}    = 0; # test mode for caf file parser
+    $self->{REPAIR}      = 0; # test/repair mode for read attributes
+
+    bless ($self, $class);
+
+# get the Compress handle
+
+    $Compress = new Compress('ACGTN ');
+
+#    &buildForwardMap;
 
     return $self;
 }
@@ -92,15 +101,19 @@ sub new {
 # create instance for new contig
     my $prototype  = shift;
     my $contigname = shift;
-    my $assembly   = shift; # optional: assembly number 
-    my $user       = shift; # optional: user_id
+    my $assembly   = shift || 0; # the assembly number
+    my $userid     = shift || 'arcturus';
 
     my $class = ref($prototype) || $prototype;
+    return $ContigBuilder{$contigname} if $ContigBuilder{$contigname};
+
     my $self  = {};
 
     $self->{cnames}  = []; # array for name of this contig (and parents)
     $self->{readmap} = {}; # hash for read names and mapping data
     $self->{cntgmap} = {}; # hash for contig id's and mapping data
+    $self->{DNA}     = ''; # consensus sequence 
+    $self->{length}  =  0; # consensus sequence length (from caf)
     $self->{status}  = {}; # error status report
     $self->{counts}  = []; # counters
     $self->{tags}    = []; # array of tag hashes 
@@ -121,16 +134,35 @@ sub new {
     $status->{inerrors} = 0; # reading errors
     $status->{errors}   = 0; # dumping errors
 
+# if new instance is spawned of an existing instance, inherit some variables
+
+    if ($class eq ref($prototype)) {
+        $self->{minOfReads}  = $prototype->{minOfReads}  || 1; 
+        $self->{ignoreEmpty} = $prototype->{ignoreEmpty} || 1;     
+        $self->{TESTMODE}    = $prototype->{TESTMODE}    || 0;
+        $self->{REPAIR}      = $prototype->{REPAIR}      || 0;
+print STDOUT "new ContigBuilder inherits from prototype $prototype  (class $class)$break";
+print STDOUT "$self->{minOfReads},$self->{ignoreEmpty},$self->{TESTMODE},$self->{REPAIR} $break";
+    }
+    else {  
+# use defaults
+print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
+        $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
+        $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
+        $self->{TESTMODE}    = 0; # test mode for caf file parser
+        $self->{REPAIR}      = 0; # test/repair mode for read attributes
+    }
+
+#my $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
+
 # get assembly and user id if defined
 
-    $USERID   = $user      if $user;
-    $USERID   = 'arcturus' if !$USERID; # default
-    $ASSEMBLY = $assembly  if $assembly;
-    $ASSEMBLY = 0          if !$ASSEMBLY; # have it defined
+    $self->{ASSEMBLY} = $assembly;
+    $self->{USERID}   = $userid;
 
-# add the name of this contig to the class variable %contigs
+# add the name of this contig to the class variable %ContigBuilder
 
-    $contigs{$contigname} = $self;
+    $ContigBuilder{$contigname} = $self;
 
     bless ($self, $class);
     return $self;
@@ -144,8 +176,8 @@ sub setOwnership {
     my $assembly = shift;
     my $userid   = shift;
 
-    $ASSEMBLY = $assembly if defined($assembly);
-    $USERID   = $userid   if defined($userid);
+    $self->{ASSEMBLY} = $assembly if defined($assembly);
+    $self->{USERID}   = $userid   if defined($userid);
 }
 
 #############################################################################
@@ -155,8 +187,8 @@ sub setMinOfReads {
     my $self  = shift;
     my $value = shift;
 
-    $minOfReads = $value;
-    $minOfReads = 1 if !defined($value);
+    $self->{minOfReads} = $value;
+    $self->{minOfReads} = 1 if !defined($value);
 }
 
 
@@ -167,8 +199,8 @@ sub ignoreEmptyReads {
     my $self  = shift;
     my $value = shift;
 
-    $ignoreEmpty = $value;
-    $ignoreEmpty = 1 if !defined($value);
+    $self->{ignoreEmpty} = $value;
+    $self->{ignoreEmpty} = 1 if !defined($value);
 }
 
 #############################################################################
@@ -200,14 +232,12 @@ sub buildForwardMap {
 sub setTestModes {
 # (re)define class variables;
     my $self   = shift;
-    my $test   = shift; # test option for ContigBuilder
-    my $repair = shift; # repair mode for Reads
+    my $test   = shift || 0; # test option for ContigBuilder
+    my $repair = shift || 0; # repair mode for Reads
 
-    $TESTMODE = $test;
-    $TESTMODE = 0 if !defined($test);
+    $self->{TESTMODE} = $test;
 
-    $REPAIR   = $repair;
-    $REPAIR   = 0 if !defined($repair);
+    $self->{REPAIR}   = $repair;
 }
 
 #############################################################################
@@ -232,7 +262,7 @@ sub addRead {
         $readmap->{$read} = 0;
         $status->{inerrors}++;
         $status->{diagnosis} .= "! Invalid or missing data for read $entry:";
-        $status->{diagnosis} .= " \"$read\" \"$map\"${brtag}";
+        $status->{diagnosis} .= " \"$read\" \"$map\"$break";
     }
 }
 
@@ -260,13 +290,84 @@ sub addTag {
 
 #############################################################################
 
-sub setTag {
+sub tagList {
+# e.g. list = tagList('FTAGS')
     my $self = shift;
-    my $name = shift; # either 'FTAGS', 'STAGS', or 'ITAGS'
-    my $tags = shift; # array ref
+    my $name = shift;
 
-    my $value = join '|',@$tags;
-    eval "\$$name = $value";
+# Finishers tags
+
+    my @FTAGS = ('FINL','FINR','ANNO','COMP','FICM','RCMP','POLY',
+                 'REPT','OLIG','COMM','RP20','TELO','REPC','WARN',
+                 'CONF','DRPT','LEFT','RGHT','TLCM','UNCL','VARI');
+
+# software TAGS
+
+    my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
+                 'MALX','MALI','SILR');
+
+# tags to be ignored (read tags)
+
+    my @ITAGS = ('CpGI','CLIP','MISS','XMAT','CONS');
+
+    my $list  = eval "join '|',\@$name";
+}
+
+#############################################################################
+
+sub addDNA {
+# enter the DNA consensus sequence
+    my $self = shift;
+    my $dna  = shift;
+    my $lgt  = shift;
+
+    $dna =~ s/^\s*|\s*$//; # chop leading and trailing blanks
+
+    $self->{DNA} .= $dna;
+
+    $self->{length} = $lgt if $lgt;
+}
+
+#############################################################################
+
+sub dumpDNA {
+# enter the DNA consensus sequence
+    my $self = shift;
+    my $c_id = shift;
+    my $size = shift;
+
+    return 0 if (!$self->{DNA} || !length($self->{DNA}));
+
+# there are three sizes which should all be the same
+# 1) the size of the DNA string
+# 2) size specified in caf file (may be missing)
+# 3) size from the readmaps ($size) 
+
+    my $length = length($self->{DNA});
+    $self->{length} = $length if !$self->{length}; # to have it defined
+
+    if ($self->{length} != $length || $size != $length) {
+        print "Warning: consensus sequence mismatch ($length $self->{length} $size)$break";
+    }
+
+# massage the data (uppercase, anything not ACTG replace by -)
+
+    $self->{DNA} =~ tr/a-z/A-Z/;
+    $self->{DNA} =~ s/[^ACGT]/-/g;
+
+# compress the string
+
+    my $scompress = 2; # Huffman
+
+    my ($count, $sequence) = $Compress->sequenceEncoder($self->{DNA},$scompress);
+
+# enter 
+
+    my @columns = ('contig_id','sequence','scompress','length');
+    my @cvalues = ($c_id      ,$sequence ,$scompress ,$length );
+#    if (!$SEQUENCE->newrow(\@columns, \@cvalues)) {
+#        print STDOUT "$SEQUENCE->{qerror} $break";
+#    }
 }
 
 #############################################################################
@@ -280,8 +381,10 @@ sub dump {
 
 # get the assembly and user name (input values override defaults)
 
-    $userid      = $USERID   if !$userid;
-    $assembly    = $ASSEMBLY if !$assembly;
+    $userid      = $self->{USERID}   if !$userid;
+    $assembly    = $self->{ASSEMBLY} if !$assembly;
+
+    my $fonts = &fonts; 
 
 # we keep track of error conditions with the variable $complete
 
@@ -294,7 +397,7 @@ sub dump {
     undef my $report;
     my $complete = 1;
 
-    print "${brtag}Attempting to dump contig $cnames->[0] ....$brtag";
+    print "${break}Attempting to dump contig $cnames->[0] ....$break";
 
 #############################################################################
 # (I) first test: any input errors on this contig?
@@ -314,11 +417,11 @@ sub dump {
 #############################################################################
 # (II) second test: are ReadMapper objects listed in 'readmap' all built?
 # test if all reads are found in the READS table (we need the read_id's)
-# by using the ->inDataBase  method of the ReadMapper objects
+# by using the ->isInDataBase  method of the ReadMapper objects
 #############################################################################
 
     my @reads = sort keys %$readmap; # all reads specified for this contig
-    $ReadMapper->preload(\@reads,1); # preload data into ReadMapper buffer
+    $ReadMapper->preload(\@reads,'0011'); # preload data into ReadMapper buffer (R2C + EDITS) 
 
     undef my %readmapper; # hash for readmapper objects for reads in this contig
     undef my $nrOfReads;
@@ -327,28 +430,32 @@ sub dump {
     my $tested = 0;
     if ($complete) {
         foreach my $readname (keys (%$readmap)) {
-            print "Testing read $readname (nr $tested)$brtag" if (!((++$tested)%50));
+            print "Testing read $readname (nr $tested)$break" if (!((++$tested)%50));
             my $readobject = $ReadMapper->lookup($readname);
             if (defined($readobject)) {
 # add pointer to table
                 $readmapper{$readname} = $readobject;
 # now test if the read is in the database using ReadMapper
-                my ($dbrref, $dbpref) = $readobject->inDataBase($readname,1);
-                if (!$dbrref && $dbpref && !$forced) {
-                    $missed++;
-                    $report .= "Read $readname added to PENDING${brtag}";
+                if (my $dbrref = $readobject->isInDataBase(0,1,$assembly)) {
+                    $report .= "Read $readname found in ARCTURUS database$break";
                 }
-                elsif (!$dbrref && !$dbpref && !$forced) {
+                elsif (!$forced) {
+                    $report .= "Read $readname not in ARCTURUS database$break";
                     $missed++;
-                    $report .= "Read $readname could not be added to PENDING${brtag}";
                 }
-                elsif ($dbrref) {
-                    $report .= "Read $readname found in ARCTURUS database${brtag}";
-		}
+#                my ($dbrref, $dbpref) = $readobject->inDataBase($readname,1);
+#                if (!$dbrref && $dbpref && !$forced) {
+#                    $missed++;
+#                    $report .= "Read $readname added to PENDING$break";
+#                }
+#                elsif (!$dbrref && !$dbpref && !$forced) {
+#                    $missed++;
+#                    $report .= "Read $readname could not be added to PENDING$break";
+#                }
                 else {
                     $status->{warnings}++;
                     $status->{diagnosis} .= "Read $readname not in ARCTURUS database: ";
-                    $status->{diagnosis} .= "FORCED to ignore its absence $brtag";
+                    $status->{diagnosis} .= "FORCED to ignore its absence $break";
                     delete $readmap->{$readname};
                     delete $readmapper{$readname};
                     $readobject->delete();
@@ -356,8 +463,9 @@ sub dump {
                 }
 	    } 
             else {
-                $report .= "ReadMapper $readname missing $brtag";
-                $ReadMapper->inDataBase($readname,1); # will add read to PENDING
+# no ReadMapper, but still test if read in database; will add read to PENDING if missing
+                $report .= "ReadMapper $readname missing $break";
+                $ReadMapper->inDataBase($readname,0,1,$assembly);
                 $missed++;
             }
         }
@@ -368,10 +476,10 @@ sub dump {
         $complete = 0 if (($nrOfReads+$missed) != $ntotal);
         $complete = 0 if ($ntotal != $counts->[0]);
         $report .= "$nrOfReads ReadMappers defined, $missed missed or incomplete out ";
-        $report .= "of $ntotal ($counts->[0]) for contig $cnames->[0]${brtag}";
+        $report .= "of $ntotal ($counts->[0]) for contig $cnames->[0]$break";
 # complete 0 forces skip to exit
     }
-    print "number of reads: $nrOfReads complete $complete $brtag";
+    print "number of reads: $nrOfReads complete $complete $break";
 
 #############################################################################
 # (III) third test: are the mappings defined, complete and do they make sense
@@ -390,13 +498,13 @@ my $LIST=0;
         undef my @names; # of first and last reads
         foreach my $readname (keys (%$readmap)) {
 # get the mapping of this read to the contig and test the range
-#            print "Testing readmapping $readname (nr $tested)$brtag" if (!((++$tested)%50));
+#            print "Testing readmapping $readname (nr $tested)$break" if (!((++$tested)%50));
             if (@{$readmap->{$readname}} == 4) {
                 my $pcstart = $readmap->{$readname}->[0];
                 my $pcfinal = $readmap->{$readname}->[1];
                 my $prstart = $readmap->{$readname}->[2];
                 my $prfinal = $readmap->{$readname}->[3];
-print "read $readname: $pcstart $pcfinal $prstart  $prfinal $brtag" if $LIST;
+print "read $readname: $pcstart $pcfinal $prstart  $prfinal $break" if $LIST;
                 my $lastmin = $cmin;
 	        $cmin = $pcstart if (!defined($cmin) || $pcstart<$cmin);
 	        $cmin = $pcfinal if (!defined($cmin) || $pcfinal<$cmin);
@@ -408,10 +516,10 @@ print "read $readname: $pcstart $pcfinal $prstart  $prfinal $brtag" if $LIST;
                 $counts->[2] += $readspan; # total length of reads
 # keep track of first and last reads
                 $names[0] = $readname; 
-print "read $readname: $pcstart $pcfinal $cmin  $cmax $brtag" if $LIST;
+print "read $readname: $pcstart $pcfinal $cmin  $cmax $break" if $LIST;
                 if ($pcstart == $cmin || $pcfinal == $cmin) {
 # this read aligns with start of the contig
-print "read: $readname, minread=$minread readspan=$readspan cmin=$cmin$brtag" if $LIST;
+print "read: $readname, minread=$minread readspan=$readspan cmin=$cmin$break" if $LIST;
                     if (!defined($minspan) || $readspan < $minspan || $cmin != $lastmin) {
                         $minread = $readname;
                         $minspan = $readspan;
@@ -424,7 +532,7 @@ print "read: $readname, minread=$minread readspan=$readspan cmin=$cmin$brtag" if
                 }
                 if ($pcfinal == $cmax || $pcstart == $cmax) {
 # this read aligns with end of the contig
-print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if $LIST;
+print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$break" if $LIST;
                     if (!defined($maxspan) || $readspan < $maxspan || $cmax != $lastmax) {
                         $maxread = $readname;
                         $maxspan = $readspan;
@@ -439,7 +547,7 @@ print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if
 	    }
             else {
                 $status->{diagnosis} .= "! Invalid mapping for read $readname in contig ";
-                $status->{diagnosis} .= "cnames->[0]: @{$readmap->{$readname}}${brtag}";
+                $status->{diagnosis} .= "cnames->[0]: @{$readmap->{$readname}}$break";
                 $status->{errors}++;
                 $complete = 0;
             }
@@ -447,13 +555,13 @@ print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if
 # test contig cover
 	if ($cmin != 1) {
             $status->{diagnosis} .= "! unusual lower bound $cmin of mapping";
-            $status->{diagnosis} .= " range for contig $cnames->[0]${brtag}";
+            $status->{diagnosis} .= " range for contig $cnames->[0]$break";
             $status->{warnings}++;
         }
 # test current read count against input tally (addRead)
         if ($nreads != $counts->[0]) {
             $status->{diagnosis} .= "! Read count error on contig $cnames->[0]: ";
-            $status->{diagnosis} .= "$nreads against $counts->[0]${brtag}";
+            $status->{diagnosis} .= "$nreads against $counts->[0]$break";
             $status->{errors}++;
             $complete = 0;
         }
@@ -469,7 +577,7 @@ print "read: $readname, maxread=$maxread readspan=$readspan cmax=$cmax$brtag" if
         my $uniquenumber = sqrt($cover*$cover + 1) * $counts->[2] * 1.75;
         my $uniquestring = sprintf("%012d",$uniquenumber);
 # cleanup the readnames
-print "minread $minread    maxread $maxread $brtag" if $LIST;
+print "minread $minread    maxread $maxread $break" if $LIST;
         my @endreads;
 	push @endreads, &readAlias($minread);
 	push @endreads, &readAlias($maxread);
@@ -477,13 +585,13 @@ print "minread $minread    maxread $maxread $brtag" if $LIST;
         $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
     }
 
-    print "Full Arcturus contigname: $cnames->[1] (complete=$complete)$brtag";
+    print "Full Arcturus contigname: $cnames->[1] (complete=$complete)$break";
 
 #############################################################################
 # (IV) apply mapping to reads, test them and collect contig links
 #############################################################################
 
-$LIST = 1; print "IV $brtag";
+$LIST = 1; print "IV $break";
 
     my $isConnected = 0;  
     my $isIdentical = 0;
@@ -509,7 +617,7 @@ $LIST = 1; print "IV $brtag";
         $counts->[0] = 0;
         my $emptyReads = 0;
         foreach my $read (keys (%$readmap)) {
-            print "Building map for read $read (nr $tested)$brtag" if (!((++$tested)%50));
+            print "Building map for read $read (nr $tested)$break" if (!((++$tested)%50));
             my $readobject = $readmapper{$read};
             my $contocon = $readobject->{contocon};
 
@@ -523,24 +631,24 @@ $LIST = 1; print "IV $brtag";
 
 #$readobject->reporter(2) if $LIST; # test version
 #$LIST = 0; $LIST = 1 if (!$tested || !((++$tested)%50));
-#print "Testing read $read (nr $tested)  con-to-con @$contocon$brtag" if $LIST;
+#print "Testing read $read (nr $tested)  con-to-con @$contocon$break" if $LIST;
 
 # if it's a healthy read (no error status), build history info
 
             my $previous = $readobject->{dbrefs}->[3]; # the previous contig, if any
-#print "previous contig info: $previous $brtag" if $LIST;
+#print "previous contig info: $previous $break" if $LIST;
 
-            if ($readobject->status(0) && $contocon->[4] < 0 && $ignoreEmpty) {
-                $report .= "Empty read $read wil be ignored $brtag";
+            if ($readobject->status(0) && $contocon->[4] < 0 && $self->{ignoreEmpty}) {
+                $report .= "Empty read $read wil be ignored $break";
                 $status->{warnings}++;
                 delete $readmap->{$read};
                 delete $readmapper{$read};
-                print "$ofont Empty read $read wil be ignored $efont $brtag";
+                print "$fonts->{o} Empty read $read wil be ignored $fonts->{e} $break";
                 $emptyReads++;
             }
 
             elsif ($readobject->status(0)) {
-	        $report .= "! Error condition reported in ReadMapper $read${brtag}";
+	        $report .= "! Error condition reported in ReadMapper $read$break";
                 $status->{errors}++;
                 $complete = 0;
             }
@@ -558,13 +666,13 @@ $LIST = 1; print "IV $brtag";
 
                 if (!defined($cntgmap->{$hash})) {
                     my @linkdata = @$contocon;
-#print "initial alignment read $readobject->{dbrefs}->[0] to contig $previous range: @linkdata${brtag}" if $LIST;
+#print "initial alignment read $readobject->{dbrefs}->[0] to contig $previous range: @linkdata$break" if $LIST;
                     $cntgmap->{$hash} = \@linkdata;
                     $cntgmap->{$hash}->[4] = 0;
                     $cntgmap->{$hash}->[5] = 0;
                 }
                 my $linkdata = $cntgmap->{$hash};
-#print "contig shift data: '@{$contocon}' shift=$shift${brtag}" if ($LIST);
+#print "contig shift data: '@{$contocon}' shift=$shift$break" if ($LIST);
                 $linkdata->[0] = $contocon->[0] if ($contocon->[0] < $linkdata->[0]); # previous contig
                 $linkdata->[1] = $contocon->[1] if ($contocon->[1] > $linkdata->[1]);
                 $linkdata->[2] = $contocon->[2] if ($contocon->[2] < $linkdata->[2]); # this contig
@@ -585,7 +693,7 @@ $LIST = 1;
 
         my @contigLinkHash = sort keys %$cntgmap;
         foreach my $hash (@contigLinkHash) {
-#print "linked contig $hash $brtag" if $LIST;
+#print "linked contig $hash $break" if $LIST;
             push @priorContigHash, $hash if ($hash ne $newContigHash);
         }
 
@@ -598,14 +706,14 @@ $LIST = 1;
 #** one linked previous contig, but no new or deprecated mappings at all
 #** the current contig may be identical to the previous one (but not necessarily!)
             my @olinkdata = split ':',$contigLinkHash[0];
-#print "olinkdata @olinkdata $brtag" if $LIST;
+#print "olinkdata @olinkdata $break" if $LIST;
             $oldContig = $olinkdata[0];
             $isConnected = 1;
             my $newReads = $cntgmap->{$contigLinkHash[0]}->[4];
 # now test for reads appearing in the previous version but not in the new one
 	    my $hashrefs = $CONTIGS->associate('nreads,contigname',$oldContig,'contig_id');
 	    my $hashref = $hashrefs->[0];
-print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contigname}  cnames:$cnames->[1] $brtag" if $LIST;
+print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contigname}  cnames:$cnames->[1] $break" if $LIST;
 	    if ($cnames->[1] ne $hashref->{contigname}) {
 # the contig hash names differ, test if perhaps the checksums and nr of reads match
                 my $oldCheckSum = &checksum($hashref->{contigname});
@@ -708,13 +816,13 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
 # at this point, we have collected all the contigs referenced and possibly new reads
 
 $LIST = 1;
-print "$isConnected connecting contig(s) found,  Identical=$isIdentical weeded=$isWeeded $brtag" if $LIST;
+print "$isConnected connecting contig(s) found,  Identical=$isIdentical weeded=$isWeeded $break" if $LIST;
 
         foreach my $hash (sort @contigLinkHash) {
             my ($contig,$order,$shift) = split ':', $hash;
             my  $map = $cntgmap->{$hash};
 	    printf ("%6d %1d %8d  %8d-%8d %8d-%8d  %6d %5d",$contig,$order,$shift,@$map) if $LIST;
-            print "$brtag";
+            print "$break";
         }
     }
 
@@ -725,17 +833,17 @@ $LIST = 0;
 #############################################################################
 
 $LIST = 1;
-$LIST = 1; print "V $brtag";
+$LIST = 1; print "V $break";
 
     my $accepted = 0;
-    $accepted = 1 if (!$minOfReads || $counts->[0] >= $minOfReads); 
+    $accepted = 1 if (!$self->{minOfReads} || $counts->[0] >= $self->{minOfReads}); 
 
     $counts->[3] = @priorContigHash;
-    my $newContigData = $cntgmap->{$newContigHash};
-print "newContigData=$newContigData   cnts priorContigs: @$counts $brtag" if $LIST;
+    my $newContigData = $cntgmap->{$newContigHash} || 0;
+print "newContigData=$newContigData   cnts priorContigs: @$counts $break" if $LIST;
     if ($newContigData && @$newContigData) {
         $counts->[4] = $newContigData->[4] - $newContigData->[5];
-print "newContigData=$newContigData  @$newContigData  cnts: @$counts $brtag" if $LIST;
+print "newContigData=$newContigData  @$newContigData  cnts: @$counts $break" if $LIST;
     }
     else {
         $counts->[4] = 0;
@@ -744,7 +852,7 @@ print "newContigData=$newContigData  @$newContigData  cnts: @$counts $brtag" if 
     undef my $contig;
     if ($complete && $accepted) {
 
-print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
+print "Processing contig $cnames->[1] ($cnames->[0])$break" if $LIST;
 
         my (@columns, @cvalues);
         push @columns, 'aliasname'; push @cvalues, $cnames->[0]; 
@@ -761,13 +869,13 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
             if ($CONTIGS->{qerror} =~ /already\sexists/) {
                 $contig =  $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
                 $status->{warnings}++;
-                $status->{diagnosis} .= "contig $cnames->[1] is already present as number $contig$brtag";
+                $status->{diagnosis} .= "contig $cnames->[1] is already present as number $contig$break";
                 $CONTIGS->status(1); # clear the error status
 print "SKIPPED: $status->{diagnosis} ";
             }
             else {
                 $status->{errors}++;
-                $status->{diagnosis} .= "Failed to add contig $cnames->[1]: $CONTIGS->{qerror}${brtag}";
+                $status->{diagnosis} .= "Failed to add contig $cnames->[1]: $CONTIGS->{qerror}$break";
                 $complete = 0;
 print "FAILED: $status->{diagnosis} ";
             }
@@ -776,12 +884,12 @@ print "FAILED: $status->{diagnosis} ";
 # it's a new contig: get its number
             $contig = $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
             $CONTIGS->signature($userid,'contig_id',$contig);
-print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($counts->[0] reads)$brtag";
-#  print "$bfont nreads $nreads $efont $brtag";
+print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($counts->[0] reads)$break";
+#  print "$fonts->{b} nreads $nreads $fonts->{e} $break";
         }
     }
     elsif ($complete) {
-        print STDOUT "Contig $cnames->[1] with $counts->[0] reads is ignored$brtag";
+        print STDOUT "Contig $cnames->[1] with $counts->[0] reads is ignored$break";
     }
 
 # print "$report "; 
@@ -792,14 +900,14 @@ print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($count
 # (VI) dump all readmaps onto the database (and test if done successfully)
 #############################################################################
 
-$LIST = 1; print "VI $brtag";
+$LIST = 1; print "VI $break";
 
     if ($complete && $accepted) {
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
         foreach my $readname (keys (%readmapper)) {
             my $readobject = $readmapper{$readname};
-            print "Processing read $readname (nr $dumped)$brtag" if (!((++$dumped)%50));
+            print "Processing read $readname (nr $dumped)$break" if (!((++$dumped)%50));
             if ($readobject) {
                 $complete = 0 if (!$readobject->dump($contig,$assembly));
             }
@@ -812,7 +920,7 @@ $LIST = 1; print "VI $brtag";
 #############################################################################
 # (VII) here contig and map dumps are done (and successful if $complete)
 #############################################################################
-$LIST = 1; print "VII $brtag";
+$LIST = 1; print "VII $break";
 
     undef my @priorContigList;
     foreach my $hash (@priorContigHash) {
@@ -825,13 +933,13 @@ $LIST = 1; print "VII $brtag";
         $CCTOSS->newrow('contig_id',$contig,'assembly',$assembly); # astatus N by default
 # inherit the project from connecting contig(s), if any
         if (@priorContigHash) {
-print "prior contigs=@priorContigList $brtag" if $LIST;
+print "prior contigs=@priorContigList $break" if $LIST;
             my $project = $CCTOSS->associate('distinct project',\@priorContigList,'contig_id');
             if (ref($project) eq 'ARRAY') {
-                $self->{warning} .= "! Multiple project references in connected contigs: @priorContigList$brtag";
+                $self->{warning} .= "! Multiple project references in connected contigs: @priorContigList$break";
             }
             elsif (!$project) {
-                $self->{warning} .= "! No Scaffold references in connected contigs: @priorContigList$brtag";
+                $self->{warning} .= "! No Scaffold references in connected contigs: @priorContigList$break";
             }
             else {
                 $CCTOSS->update('project',$project,'contig_id',$contig);
@@ -852,7 +960,7 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
                 if (!$CCSTOCC->newrow('oldcontig',$priorContig,'newcontig',$contig)) {
 
 
-                    $report .= "! Failed to add entry to CONTIGS2CONTIG table${brtag}";
+                    $report .= "! Failed to add entry to CONTIGS2CONTIG table$break";
                     $complete = 0;
                     last;
                 } 
@@ -874,7 +982,9 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
         }
 
         if ($complete) {
-    # remove the ReadMappers and this contigbuilder to free memory
+# if there is a consensus sequence, dump it using this contig_id
+            $self->dumpDNA($contig,$counts->[1]) if ($self->{DNA});
+# remove the ReadMappers and this contigbuilder to free memory
             foreach my $readname (keys (%readmapper)) {
                 my $readobject = $readmapper{$readname};
                 $readobject->status(2); # dump warnings
@@ -883,7 +993,7 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
             undef %readmapper;
             my $result = &status($self,2);
             print STDOUT "Contig $cnames->[1] entered successfully into CONTIGS table ";
-            print STDOUT "($counts->[4] new reads; $counts->[3] parent contigs)${brtag}";
+            print STDOUT "($counts->[4] new reads; $counts->[3] parent contigs)$break";
             $CONTIGS->rollback(0); # clear rollback stack 
             $CCSTOCC->rollback(0); # clear rollback stack
             &delete($self);
@@ -898,7 +1008,7 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
         my $dumped = 0;
         foreach my $readname (keys (%readmapper)) {
             my $readobject = $readmapper{$readname};
-            print "Removing read $readname (nr $dumped)$brtag" if (!((++$dumped)%50));
+            print "Removing read $readname (nr $dumped)$break" if (!((++$dumped)%50));
             $readobject->status(2); # dump warnings
             $readobject->delete();
         }
@@ -906,12 +1016,12 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
 # undo the addition to CONTIGS, if any
         $CONTIGS->rollback(1);  
         $status->{warnings}++;
-        $status->{diagnosis} .= "Contig $cnames->[0] ${yfont}not added${efont}: is identical to contig $oldContig$brtag";
+        $status->{diagnosis} .= "Contig $cnames->[0] $fonts->{y} not added$fonts->{e}: is identical to contig $oldContig$break";
 # if the contig is part of generation 1 or higher, amend its assembly status (from N) to C (current)
         my $generation = $RRTOCC->associate('distinct generation',$oldContig,'contig_id');
         if (ref($generation) eq 'ARRAY') {
             $status->{diagnosis} .= "Multiple generations @$generation for contig ";
-            $status->{diagnosis} .= "$cnames->[1] ($contig), NO FURTHER TESTS DONE$brtag";
+            $status->{diagnosis} .= "$cnames->[1] ($contig), NO FURTHER TESTS DONE$break";
         }
         else {
 # add the assembly info to the CONTIGS2SCAFFOLD table, if not done before 
@@ -923,7 +1033,7 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
         if (ref($generation) ne 'ARRAY' && $generation == 0 && $hashrefs->[0]->{aliasname} eq $cnames->[0]) {
            if ($hashrefs->[0]->{contigname} ne $cnames->[1] && $nameChange) {
                $status->{diagnosis} .= "Old contigname $hashrefs->[0]->{contigname} ";
-               $status->{diagnosis} .= "is replaced by new $cnames->[1] $brtag";
+               $status->{diagnosis} .= "is replaced by new $cnames->[1] $break";
                $CONTIGS->update('contigname',$cnames->[1],'contig_id',$oldContig);
            }
         }
@@ -935,7 +1045,7 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
 
     if (!$complete) {
 # the contig cannot be dumped because of errors in itself or any of its reads
-        $status->{diagnosis} .= "! Contig $cnames->[0] NOT added because of errors:${brtag}";
+        $status->{diagnosis} .= "! Contig $cnames->[0] NOT added because of errors:$break";
         $status->{diagnosis} .= $report;
         $status->{errors} += $missed;
         $status->{errors}++ if (!$status->{errors});
@@ -949,11 +1059,11 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
             my $readobject = $readmapper{$readname};
             $readobject->status(2); # full error/warnings list 
         }
-    # possibly add the reads to PENDING (via class method inDataBase, if not done earlier)
+    # possibly add the reads to PENDING (via class method isInDataBase, if not done earlier)
         if (!$tested) {
             foreach my $readname (keys (%$readmap)) {
-                print "Pinging read $readname (nr $tested)$brtag" if (!((++$tested)%50));
-                my ($dbrref, $dbpref) = $ReadMapper->inDataBase($readname,1);
+                print "Pinging read $readname (nr $tested)$break" if (!((++$tested)%50));
+                $ReadMapper->isInDataBase(0,1,$assembly);
             }
         }
         return status($self,1);
@@ -965,9 +1075,11 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
 sub checksum {
     my $checksum = shift;
 
+    my $fonts = &fonts;
+
 #    $checksum =~ s/^[^\:]+\:(\d+)\:\S+$/$1/;
     $checksum =~ s/^\S+\W(\d+)\W\S+$/$1/;
-print "$ofont BAD SPLIT $efont on checksum $checksum $brtag" if ($checksum =~ /\D/);
+print "$fonts->{o} BAD SPLIT $fonts->{e} on checksum $checksum $break" if ($checksum =~ /\D/);
 
     return $checksum
 }
@@ -995,6 +1107,18 @@ sub readAlias {
     return $readname;
 }
 
+
+sub newreadAlias {
+# replace the readname by read_id as long hexadecimal number 
+    my $readname = shift;
+
+    my $read_id = $READS->cacheRecall($readname);
+
+    $readname = sprintf "%lx", $read_id;
+
+    return $readname;
+}
+
 #############################################################################
 
 sub list {
@@ -1005,12 +1129,13 @@ sub list {
     my $cnames  = $self->{cnames};
     my $readmap = $self->{readmap};
 
+    my $fonts = &fonts;
 
-    print "${brtag}$$counts[0] Reads for Contig $cnames->[0]${brtag}";
+    print "${break}$counts->[0] Reads for Contig $cnames->[0]$break";
 
     foreach my $read (sort keys (%$readmap)) {
-        print STDOUT "$read   @{$readmap->{$read}}${brtag}" if ($readmap->{$read});
-        print STDOUT "$read   NO or INVALID data${brtag}"  if (!$readmap->{$read});
+        print STDOUT "$read   @{$readmap->{$read}}$break" if ($readmap->{$read});
+        print STDOUT "$read   NO or INVALID data$break"  if (!$readmap->{$read});
     }
 
     if (@$cnames > 1) {
@@ -1036,15 +1161,16 @@ sub status {
     my $diagnosis = $status->{diagnosis};
 
     if (defined($list) && $list > 0) {
+        my $fonts = &fonts;
         if ($errors || $warnings) {
-            my $font = $bfont; $font = $ofont if $errors;
+            my $font = $fonts->{b}; $font = $fonts->{o} if $errors;
             print STDOUT "Status of ContigBuilder $cnames->[0]: ";
-            print STDOUT "$font $errors errors $efont, $warnings warnings${brtag}";
-            print STDOUT "$diagnosis${brtag}";
+            print STDOUT "$font $errors errors $fonts->{e}, $warnings warnings$break";
+            print STDOUT "$diagnosis$break";
         } else {
-            print STDOUT "Status of ContigBuilder $cnames->[0]: $gfont pass $efont $brtag";
+            print STDOUT "Status of ContigBuilder $cnames->[0]: $fonts->{g} pass $fonts->{e}$break";
         }
-#        print STDOUT "${brtag}";
+#        print STDOUT "$break";
     }
 
     return $errors;
@@ -1053,7 +1179,7 @@ sub status {
 #############################################################################
 
 sub delete {
-# delete the hashes of this contig (irreversible) and remove from %contigs
+# delete the hashes of this contig (irreversible) and remove from %ContigBuilder
     my $self = shift;
 
     my $contig = $self->{cnames}->[0];
@@ -1066,9 +1192,9 @@ sub delete {
 
     undef %$self;
 
-    delete $contigs{$contig};
+    delete $ContigBuilder{$contig};
 
-    print STDOUT "ContigBuilder object $contig destroyed${brtag}${brtag}";
+    print STDOUT "ContigBuilder object $contig destroyed$break$break";
 }
 
 ###############################################################################
@@ -1085,17 +1211,17 @@ sub lookup {
     my $result;
 
     if (!$contig) {
-        $result = \%contigs;
+        $result = \%ContigBuilder;
     }
-    elsif (my $object = $contigs{$contig}) {
+    elsif (my $object = $ContigBuilder{$contig}) {
 
         $result = $object;
     }
     elsif ($contig !~ /[a-z]/i && $contig =~ /\d+/) {
 
-        foreach my $name (sort keys (%contigs)) {
+        foreach my $name (sort keys (%ContigBuilder)) {
             if (--$contig == 0) {
-                $result = $contigs{$name};
+                $result = $ContigBuilder{$name};
                 last;
             }
         }
@@ -1113,17 +1239,21 @@ sub flush {
     my $assembly = shift; # optional
     my $forced   = shift; # optional
 
-    my $pending = keys %contigs;
+    my $pending = keys %ContigBuilder;
     if (!defined($minimum) || $pending >= $minimum) {
-        foreach my $contig (keys %contigs) {
-            $contigs{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
+        foreach my $contig (keys %ContigBuilder) {
+            $ContigBuilder{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
         }
-        foreach my $contig (keys %contigs) {
-	    print STDOUT "Not Dumped: $contig$brtag" if $contigs{$contig};
+        foreach my $contig (keys %ContigBuilder) {
+	    print STDOUT "Not Dumped: $contig$break" if $ContigBuilder{$contig};
         }
     }
 
-    return keys %contigs; # return number of leftover ContigBuilders
+# finally flush the remaining (i.e. unallocated) ReadMappers (and tables)
+
+    $ReadMapper->flush;
+
+    return keys %ContigBuilder; # return number of leftover ContigBuilders
 }
 
 #############################################################################
@@ -1138,15 +1268,20 @@ sub cafFileParser {
     my $list     = shift || 0; # listing 
 
 my $taglist = 3;
-    print "enter CAF file parser $brtag list=$list $brtag";
+    print "enter CAF file parser $break";
 my $errlist = 0;
 
+    my $FTAGS = $self->tagList('FTAGS');
+    my $STAGS = $self->tagList('STAGS');
+    my $ITAGS = $self->tagList('ITAGS');# print STDOUT "itags=$ITAGS<br>";
+
+    my $minOfReads = $self->{minOfReads}; print "minOfReads = $minOfReads $break";
     print STDOUT "file to be opened: $filename ..." if $list;
-    open (CAF,"$filename") || die "cannot open $filename";
-    print STDOUT "... DONE $brtag" if $list;
-    print STDOUT "Read a maximum of $maxLines lines $brtag" if ($list && $maxLines);
-    print STDOUT "Contig (or alias) name filter $cnfilter $brtag" if ($list && $cnfilter);
-    print STDOUT "Contigs with fewer than $minOfReads reads are tested ??? $brtag" if ($list && $minOfReads > 1);
+    open (CAF,"$filename") || return 2; # die "cannot open $filename";
+    print STDOUT "... DONE $break" if $list;
+    print STDOUT "Read a maximum of $maxLines lines $break" if ($list && $maxLines);
+    print STDOUT "Contig (or alias) name filter $cnfilter $break" if ($list && $cnfilter);
+    print STDOUT "Contigs with fewer than $minOfReads reads are tested ??? $break" if ($list && $minOfReads > 1);
 
     my $line = 0;
     my $status = 0;
@@ -1155,6 +1290,7 @@ my $errlist = 0;
     $exactmatch = 1 if ($cnfilter =~ s/^exact\s+//i);
 
     undef my $object;
+    undef my $length;
     my $type = 0;
     undef my $record;
     my $currentread;
@@ -1164,29 +1300,34 @@ my $errlist = 0;
     my $plist = int(log($maxLines)/log(10));
     $plist = $plist - 1 if ($plist > 1);
     $plist = int(exp($plist*log(10))+0.5);
+    my $TESTMODE = $self->{TESTMODE};
+
     while (defined($record = <CAF>)) {
-        chomp $record;
         $line++; 
-        print STDOUT "Processing line $line$brtag" if ($list && ($line == 1 || !($line%$plist)));
+        chomp $record;
+        print STDOUT "Processing line $line$break" if ($list && ($line == 1 || !($line%$plist)));
+        next if ($record !~ /\S/);
+# print "$record $break";
         if ($maxLines && $line > $maxLines) {
-            print STDOUT "Scanning terminated because of line limit $maxLines$brtag";
+            print STDOUT "Scanning terminated because of line limit $maxLines$break";
             $truncated = 1;
             $line--;
             last;
         }
+# $plist = 100 if ($line == 680000);
 
-        if ($record =~ /Sequence\s*\:\s*(\S+)/) {
-    # new object detected, close the existing object
-            $object = $1;
-            if ($type == 2) {
-                print "END Contig $object$brtag" if $list;
+        if ($record =~ /^\s*(Sequence|DNA)\s*\:?\s*(\S+)/) {
+# new object detected, close the existing object
+            if ($type == 2 || $type == 3) {
+                print "END Contig $object$break" if $list;
                 $currentcontig->list() if ($list > 1);
             }
             elsif ($type == 1) {
-#$REPAIR=0; # temporary
-                $currentread->onCompletion($TESTMODE,$REPAIR);
+#$self->{REPAIR}=0; # temporary
+                $currentread->onCompletion($self->{TESTMODE},$self->{REPAIR});
                 $currentread->list() if ($list > 2);
             }
+            $object = $2; # name of new object
             $type = 0; # preset type unknown
         }        
 
@@ -1197,11 +1338,11 @@ my $errlist = 0;
             $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
             $type = 0 if ($exactmatch && $object ne $cnfilter); 
             if ($type) {
-                print "NEW contig $object opened (triggered by line $line: $record)$brtag" if $list;
+                print "NEW contig $object opened (triggered by line $line: $record)$break" if $list;
                 $currentcontig = $self->new($object);
             }
             else {
-                print "    contig = $object SKIPPED$brtag" if ($list > 1);
+                print "    contig = $object SKIPPED$break" if ($list > 1);
             }
         }
 
@@ -1211,11 +1352,11 @@ my $errlist = 0;
             $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
             $type = 0 if ($exactmatch && $object ne $cnfilter); 
             if ($type) {
-                print "NEW contig $object opened (triggered by line $line: $record)$brtag" if $list;
+                print "NEW contig $object opened (triggered by line $line: $record)$break" if $list;
                 $currentcontig = $self->new($object);
 	    }
             else {
-                print "    contig = $object SKIPPED$brtag" if ($list > 1);
+                print "    contig = $object SKIPPED$break" if ($list > 1);
             }
         } 
         elsif ($record =~ /Is_read/) {
@@ -1223,22 +1364,42 @@ my $errlist = 0;
             $type = 1;
             $type = 0 if ($rblocker && defined($rblocker->{$object})); # ignore reads already mapped
             if ($type) {
-                print "NEW  read  $object opened (triggered by line $line: $record)$brtag" if ($list > 1);
+                print "NEW  read  $object opened (triggered by line $line: $record)$break" if ($list > 1);
                 $currentread = $ReadMapper->new($object);
             }           
         }
+        elsif ($record =~ /DNA/) {
+# only act on DNA consensus sequence
+            if ($record =~ /\bcontig\d+\b(.*)$/i) {
+# contig initialisation
+                $type = 3 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
+                $type = 0 if (!$cnfilter && $cblocker && defined($cblocker->{$object})); # skip processed contigs
+                $type = 0 if ($exactmatch && $object ne $cnfilter); 
+                if ($type) {
+                    print "Contig $object opened for DNA (triggered by line $line: $record)$break" if $list;
+                    $currentcontig = $self->new($object);
+                    $length = $1; # print "length=$length $break" if $length;
+	        }
+                else {
+                    print "    contig = $object SKIPPED$break" if ($list > 1);
+                }
+            }
+            else {
+                $type = 4; # will cause DNA for reads to be ignored
+            }
+        }
         elsif ($type == 1) {
-    # processing a read, test for Alignments Quality specification and EDITs
+# processing a read, test for Alignments Quality specification and EDITs
 	    if ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
-print "error in: $record |$1|$2|$3|$4|$5|$brtag" if ($1 != $2 && $errlist); # || $2 != $5); 
+print "error in: $record |$1|$2|$3|$4|$5|$break" if ($1 != $2 && $errlist); # || $2 != $5); 
 		$currentread->edit ($5,$3.$4);
 	    }
             elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
-print "error in: $record$brtag |$1|$2|$3|$4|" if ($1 != $2 && $errlist); 
+print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist); 
 		$currentread->edit ($4,$3); # delete signalled by uc ATCG    
             }
             elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
-print "error in: $record$brtag |$1|$2|$3|$4|" if ($1 != $2 && $errlist); 
+print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist); 
 		$currentread->edit ($4,$3); # insert signalled by lc atcg    
             }
             elsif ($record =~ /Align\w+\s+((\d+)\s+(\d+)\s+(\d+)\s+(\d+))\s*$/) {
@@ -1275,14 +1436,14 @@ print "error in: $record$brtag |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
             elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
                 my $name = $1; my $trps = $2; my $trpf = $3; 
                 my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-	        print STDOUT "READ tag: $name $trps $trpf $info $brtag" if ($taglist == ($taglist&1));
+	        print STDOUT "READ tag: $name $trps $trpf $info $break" if ($taglist == ($taglist&1));
                 $currentread->addTag($name,$trps,$trpf,$info);
             }
             elsif ($record =~ /Tag/ && $record !~ /$ITAGS/) {
-                print STDOUT "READ tag not recognized: $record$brtag" if ($taglist || $list);
+                print STDOUT "READ tag not recognized: $record$break" if ($taglist || $list);
             }
             else {
-                print STDOUT "not recognized: $record$brtag" if ($list > 1);
+                print STDOUT "not recognized: $record$break" if ($list > 1);
             }
         }
         elsif ($type == 2) {
@@ -1293,21 +1454,95 @@ print "error in: $record$brtag |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
             elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
                 my $name = $1; my $trps = $2; my $trpf = $3; 
                 my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-#		print STDOUT "CONTIG tag: $record $brtag $name $trps $trpf $info $brtag" if ($taglist == ($taglist&2));
+#		print STDOUT "CONTIG tag: $record $break $name $trps $trpf $info $break" if ($taglist == ($taglist&2));
                 $currentcontig->addTag($name,$trps,$trpf,$info);
             }
             elsif ($record =~ /Tag/) {
-                print STDOUT "CONTIG tag not recognized: $record$brtag" if ($taglist || $list);
+                print STDOUT "CONTIG tag not recognized: $record$break" if ($taglist || $list);
             }
             else {
-                print "ignored: $record$brtag" if $list;
+                print "$line ignored: $record$break" if $list;
             }
+        }
+        elsif ($type == 3) {
+# add DNA consensus sequence 
+            $currentcontig->addDNA($record, $length);
+        }
+        elsif ($type != 4) {
+	    print "$line ignored: $record (t=$type)$break" if ($record !~ /sequence/i);
         }
     }
     close (CAF);
-    print STDOUT "$brtag$line Lines processed on file $filename $brtag" if $list;
-    print STDOUT "Scanning the file was truncated $brtag" if ($list && $truncated);
+    print STDOUT "$break$line Lines processed on file $filename $break" if $list;
+    print STDOUT "Scanning the file was truncated $break" if ($list && $truncated);
+    my $nr = keys %{$ReadMapper->lookup(0)}; my $nc = keys %ContigBuilder;
+    print STDOUT "$nc ContigBuilder(s), $nr ReadMapper(s) still active $break";
     return $truncated;
+}
+
+#############################################################################
+
+sub promote {
+# call this method after a CAF file has been processed completely
+    my $self     = shift;
+    my $assembly = shift;
+
+    $assembly    = $self->{ASSEMBLY} if !$assembly;
+
+# update counters length and l2000 for the current assembly
+      
+    my $query = "select sum(distinct CONTIGS.length) from CONTIGS,READS2CONTIG where ";
+    $query   .= "CONTIGS.contig_id=READS2CONTIG.contig_id and READS2CONTIG.generation=0";
+    my $length = $CONTIGS->query($query,0,0);
+    $ASSEMBLY->update('length',$length,'assembly',$assembly);
+
+# l2000
+
+    $query   .= " and CONTIGS.length>=2000";
+    $length = $CONTIGS->query($query);
+    $ASSEMBLY->update('l2000',$length,'assembly',$assembly);
+
+# process reads in generation 1 but not in 0
+
+    $ReadMapper->endOfLine();
+
+# now update the generation counter and cleanup the older generations
+
+print "UPDATE and cleanup of mapped generations $break\n";
+    $ReadMapper->ageByOne($assembly);
+}
+
+#############################################################################
+
+sub break {
+
+# return the line break appropriate for the environment
+
+    my $break = "\n";
+
+    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
+
+    return $break;
+}
+
+#############################################################################
+
+sub fonts {
+
+# return a hash with font specifications
+
+    my %font = (b=>'blue', o=>'orange', g=>'lightgreen', y=>'yellow', e=>'</FONT>');
+
+    foreach my $colour (keys %font) {
+        if ($ENV{REQUEST_METHOD}) {
+            $font{$colour} = "<FONT COLOR=$font{$colour}>" if ($colour ne 'e');
+       }
+        else {
+            $font{$colour} = " ";
+        }
+    }
+
+    return \%font;
 }
 
 #############################################################################
@@ -1326,14 +1561,3 @@ sub colophon {
 #############################################################################
 
 1;
-
-
-
-
-
-
-
-
-
-
-

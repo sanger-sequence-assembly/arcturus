@@ -197,6 +197,12 @@ sub create_organism {
         &record ($historyTable,$userid,'CONTIGS');
     }
 
+    if (!$target || $target eq 'CONSENSUS') {    
+        push @tables, 'CONSENSUS';
+        &create_CONSENSUS ($dbh, $list);
+        &record ($historyTable,$userid,'CONSENSUS');
+    }
+
     if (!$target || $target eq 'CONTIGS2CONTIG') {    
         push @tables, 'CONTIGS2CONTIG';
         &create_CONTIGS2CONTIG ($dbh, $list);
@@ -1946,7 +1952,7 @@ sub create_DATAMODEL {
     my @input = ('READEDITS          read_id            READS     read_id',
                  'READTAGS           read_id            READS     read_id',
                  'READS2CONTIG       read_id            READS     read_id',
-                 'READS2CONTIG     contig_id          CONTIGS   contig_id',
+                 'READS2CONTIG     contig_id          CONTIGS   contig_id', # ? /contigname/aliasname',
                  'READS2CONTIG     contig_id CONTIGS2SCAFFOLD   contig_id',
                  'READS2CONTIG         clone           CLONES       clone',
                  'READS2ASSEMBLY     read_id            READS     read_id',
@@ -1954,10 +1960,11 @@ sub create_DATAMODEL {
                  'USERS               userid   USERS2PROJECTS      userid',
                  'USERS2PROJECTS      userid            USERS      userid',
                  'USERS2PROJECTS     project         PROJECTS     project',
-                 'CONTIGS          contig_id     READS2CONTIG   contig_id', # ? /contigname/aliasname',
+                 'CONTIGS          contig_id     READS2CONTIG   contig_id',
                  'CONTIGS             userid            USERS      userid',
                  'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
                  'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
+                 'CONTIGS          contig_id        CONSENSUS   contig_id',
                  'TAGS2CONTIG      contig_id          CONTIGS   contig_id',
                  'GENE2CONTIG      contig_id          CONTIGS   contig_id',
                  'TAGS2CONTIG         tag_id          STSTAGS      tag_id',
@@ -2079,7 +2086,7 @@ sub create_INVENTORY {
                  'CONTIGS           o  p  0  0',
                  'CONTIGS2SCAFFOLD  o  l  3  0',
                  'CONTIGS2CONTIG    o  m  0  0',
-#                 'CONSENSUS         o  d  1  1',
+                 'CONSENSUS         o  d  1  1',
                  'CHEMISTRY         o  d  1  1',
                  'STRANDS           o  d  1  1',
                  'PRIMERTYPES       o  d  1  1',

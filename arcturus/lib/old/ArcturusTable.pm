@@ -741,7 +741,7 @@ sub htmlTableColumn {
 
     my %option = (maxColumns => 8       , maxAspect => 3, noHeader => 0,
                   cellColor => 'CCCCCC' , itemLink => 0 , cellWidth => 50,
-                  useLocate => 0        , returnScalar => 0);
+                  useCache => 0         , returnScalar => 0);
     &importOptions(\%option,$hash);
 
     my $colour = "bgcolor='$option{cellColor}'";

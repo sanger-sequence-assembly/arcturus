@@ -1522,8 +1522,8 @@ sub GUI {
     my $tablelayout = "cellpadding=2 border=0 cellspacing=0 width=$width align=center";
     my $table = "<table $tablelayout>";
     if (@alternates) {
-        $table .= "<tr><th colspan=2 bgcolor='$purp' width=100%> Servers </th></tr>";
-        my @aliases = ('VENUS','MARS','PLUTO','CHARON','LUNA','TIC'); my $demo =1;
+        $table .= "<tr><th colspan=2 bgcolor='$purp' width=100%> SERVERS </th></tr>";
+        my @aliases = ('WATSON','CRICK','VENUS','MARS','PLUTO','CHARON','LUNA','TIC'); my $demo =1;
         foreach my $i (0 .. $#alternates) {
             my $server = $alternates[$i];
             my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
@@ -1552,7 +1552,7 @@ sub GUI {
 
     $page->partition(5);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> DATABASE </th></tr>";
     if (@databases) {
         my $current = $cgi->parameter('database',0);
         foreach my $database (sort @databases) {

@@ -49,6 +49,7 @@ sub new {
     $self->{hashref}   = ''; # hash reference of last accessed table row 
     $self->{'build'}   =  0; # build hash status; true if table is loaded
     $self->{'index'}   = {}; # hash for a possible index on cached data
+    $self->{'count'}   =  0; # length of table in database
     $self->{errors}    = ''; # build/instantiate error status
     $self->{warnings}  = ''; # build warning
 
@@ -198,6 +199,9 @@ sub build {
 # order will be undefined if no primary key or column named after table
         $count = buildhash(0, $self, $order);
     }
+    else {
+        $self->count(0); # stores length of table in $self->{'count'}
+    }
 
 # finally, add the table to the 'instances' inventory of the DbaseTable class
 
@@ -231,12 +235,14 @@ sub buildhash {
     my $count = 0;
     my $query = "select * from <SELF> $orderby";
     my $hashrefs = query($self,$query,0,0);
-    if ($hashrefs && $hashrefs != 0) {
+    if (ref ($hashrefs) eq 'ARRAY' && @$hashrefs) {
         $self->{hashrefs} = $hashrefs;
         $count = @{$self->{hashrefs}};
-        $self->{'build'} = 1;
+        $self->{'count'} = $count;
+        $self->{'build'} =  1;
+        $self->{'index'} = {}; # remove index for partial cache
     }
-    else {
+    elsif ($hashrefs) {
         $self->{warnings} = "! Table $self->{tablename} is empty";
     }
 
@@ -329,9 +335,10 @@ sub cacheBuild {
                 $index->{$key}->[1] = $i - 1 if !$nmr;
             }
         }
+        $self->{'build'} = $query; # or sortKey?
     }
     else {
-        $report .= "No sorting key defined \n";
+        $report .= "No index key or sorting key defined \n";
     } 
 
 # list the index 
@@ -520,13 +527,13 @@ sub makeFullTableName {
 
 #############################################################################
 # old, to be deprecated
-sub findInstanceOf {
+#sub findInstanceOf {
 # find the instance of the named table in the DbaseTable class %instances
-    my $self          = shift;
-    my $fullTableName = shift;
-
-    return $self->getInstanceOf($fullTableName);
-
+#    my $self          = shift;
+#    my $fullTableName = shift;
+#
+#    return $self->getInstanceOf($fullTableName);
+#
 #    if ($fullTableName) {
 #        $fullTableName =~ s/\<self\>/$self->{database}/i;
 #        return $instances{$fullTableName};
@@ -534,7 +541,7 @@ sub findInstanceOf {
 #    else {
 #        return \%instances;
 #    }  
-}
+#}
 
 #############################################################################
 
@@ -712,12 +719,13 @@ sub associate {
 
     my %option = (traceQuery   => 1, # default query expansion activated
                   compareExact => 0, # default use 'like' in string comparisons, else '='
-                  useLocate    => 1, # default test table image hash, if it exists
+                  useCache     => 1, # default test table image hash, if it exists
                   returnScalar => 1, # default return scalar if query returns single column value
                   orderBy      => 0, # override with column name if ordering required
                   limit        => 0, # default no maximum specification
                   debug        => 0);
-    $option{useLocate} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
+    $option{useCache} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
+    $option{useCache} = 0 if (keys %{$self->{'index'}}); # don't allow with partial cache (temporary)
     &importOptions(\%option, $multi);
 
 # the next lot redefines options using $multi, $order, $exact input in old applications
@@ -725,13 +733,13 @@ sub associate {
     if (!$multi || (ref($multi) ne 'HASH')) {
         $option{traceQuery}   = 0 if ($multi < 0);
         $option{compareExact} = 1 if $exact;
-        $option{useLocate}    = 0 if ($multi != 0 || (defined($wval) && $wval =~ /[\%\_]/));
-        $option{useLocate}    = 1 if $exact; # overrides above; used for values containing '%' or '_'
+        $option{useCache}     = 0 if ($multi != 0 || (defined($wval) && $wval =~ /[\%\_]/));
+        $option{useCache}     = 1 if $exact; # overrides above; used for values containing '%' or '_'
         $option{orderBy} = $order if $order;
         $option{limit} = abs($multi) if (abs($multi) > 1); 
     }
     else {
-        $option{useLocate} = 1 if ($option{compareExact} > 1); # for values containing '%' or '_'
+        $option{useCache} = 1 if ($option{compareExact} > 1); # for values containing '%' or '_'
     }
 
     undef my $hash;
@@ -740,7 +748,7 @@ sub associate {
 
 # if one only exact match is required (no wildcards) test possible stored table hash
 
-   ($hash, $result) = &locate($self,$wval,$wcol) if $option{useLocate};
+   ($hash, $result) = &locate($self,$wval,$wcol) if $option{useCache};
 
 # the next two branches relate to internally stored tables and only return 
 # data of the first encountered record matching the query; use for unique items
@@ -1006,9 +1014,9 @@ sub locate {
     my $self = shift;
     my $wval = shift;
     my $item = shift;
-# update an associated column with a ne value in the internal hash
+# update an associated column with a new value in the internal hash ??
     my $column = shift;
-    my $nvalue = shift;
+    my $nvalue = shift; 
 
 # return hash reference to a row where:
 # (1) the value of column  item equals "wval" (if $item defined) ; return hash reference and item value
@@ -1018,13 +1026,16 @@ sub locate {
     undef my $rvalue;
 
     if (defined($wval) && defined($self->{hashrefs})) {           
+# what to do if partially cached data ? ($self->{'index'} exists)
   
         foreach my $hash (@{$self->{hashrefs}}) {
 
             if (defined($item) && defined($hash->{$item}) && $hash->{$item} eq $wval) {
                 $result = $hash;
                 $rvalue = $hash->{$item};
+# what does this do and why?
                 if (defined($column) && defined($nvalue)) {
+print "$self->{tablename}: new value $nvalue for column $column \n";
                     $hash->{$column} = $nvalue;
                 }
             } 
@@ -1049,7 +1060,7 @@ sub find {
     my $self  = shift;
     my $query = shift; # the hash reference to input query value pairs
     my $sitem = shift; # the item to be returned; can be 'hash'
-    my $exact = shift; # on for exact matching values
+    my $exact = shift; # set true for exact matching values
 
     undef my @output;
     my $hashrefs = $self->{hashrefs};
@@ -1057,11 +1068,10 @@ sub find {
 
     undef my $whereclause;
     foreach my $column (@{$self->{columns}}) {
+# is this column is in the search specification?
         if (my $value = $query->{$column}) {
-    # this column is in the search specification
-
-    # test if item and value correspond
-    # replace item by linked column if appropriate?
+# test if item and value correspond
+# replace item by linked column if appropriate?
             if ($hashrefs && @$hashrefs) {
          # go through all hashes and test the catalogue item
                 for (my $i=0 ; $i<@output ; $i++) {
@@ -1077,7 +1087,7 @@ sub find {
                 }
 
             } else {
-        #accumulate query
+# accumulate query
                 $whereclause .= ' and ' if ($whereclause);
                 $whereclause .= "$column = '$value'" if ($exact);
                 $whereclause .= "$column like '\%$value\%'" if (!$exact);
@@ -1119,6 +1129,8 @@ sub nextrow {
     my $self = shift;
     my $line = shift;
 
+print "sub $self->{tablename}->nextrow to be deprcated \n";
+
     my $nrow;
 
     $nrow = $self->{lastrow} if (defined($self->{lastrow}));
@@ -1140,13 +1152,18 @@ sub count {
     my $where = shift;
     my $trace = shift;
 
-# where undefined: if a hash exists with table entries, return size of hash
-# where = 0      : return full length of database table
-# where = query  : return number of database table entries which satisfy the query
+# where = undefined: if a hash exists with table entries, return size of hash
+# where = defined 0: return full length of database table
+
+# return number of database table entries which satisfy the query
+
+# if the count is on the whole table, store as 'count' in the $self hash
 
     undef my $count;
     if (defined($self->{hashrefs}) && @{$self->{hashrefs}} && !defined($where)) {
         $count = @{$self->{hashrefs}};
+# store in $self hash
+        $self->{'count'} = $count;
 # note: the curent hash could be different from the actual table; if you want
 # to be sure to count on the actual database table, force a query on the database
 # by defining $where, e.g. &count(1)
@@ -1168,6 +1185,8 @@ sub count {
             $self->{qerror} = 1;
         }
         $sth->finish();
+# store in $self hash, if count on whole table
+        $self->{'count'} = $count if !$where;
     }
     return $count;
 }
@@ -1470,11 +1489,11 @@ sub newrow {
 
         if (!$multiLine || $multiLine <= 1) {
 
-            my $nextrow = count($self,0) + 1; # number of the next row, force query on table
+            my $nextrow = $self->count(0) + 1; # number of the next row, force query on table
             my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-            my $status = &query($self,$query,1,0);       
+            my $status = $self->query($query,1,0);       
 # on successful completion: store the WHERE string for further updates or rollback
-            if ($status && &count($self,0) == $nextrow) {
+            if ($status && $self->count(0) == $nextrow) {
                 $self->{whereclause} = "($wstring)";
                 my $undoclause = "DELETE FROM <self> WHERE $self->{whereclause}";
                 push @{$self->{undoclause}}, $undoclause;
@@ -1496,19 +1515,23 @@ sub newrow {
             push @{$self->{stack}->{$cstring}}, $vstring;
             $inputStatus = @{$self->{stack}->{$cstring}};
             if ($inputStatus >= $multiLine) {
-                my $nextrow = count($self,0) + $multiLine;
+                my $nextrow = $self->count(0) + $multiLine;
                 $vstring = join '),(',@{$self->{stack}->{$cstring}};
                 my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
 #print "NEWROW: nextrow=$nextrow\n" if $list;
-                my $status = &query($self,$query,1,0);      
-                if ($status && &count($self,0) == $nextrow) {
+                my $status = $self->query($query,1,0);      
+                if ($status && $self->count(0) == $nextrow) {
                     $inputStatus = $nextrow;
                 }
                 else {
-                    $error = "unspecified error (multiline = $multiLine, query =  $query)";
+                    $error  = "nextrow counts don't match ($self->{'count'} vs $nextrow ";
+                    $error .= "(multiline = $multiLine, query =  $query)";
                     $inputStatus = 0;
                 }
                 undef $self->{stack}->{$cstring};
+            }
+            else {
+                $inputStatus += $self->{'count'};
             }
         }
     }
@@ -1633,7 +1656,7 @@ sub update {
     } 
     else {
         my $error = "missing or invalid WHERE clause: cname=$cname value=$value wkey=$wkey wval=$wval";
-        $self->{qerror} = "! Failed to update table <self>: $error";
+        $self->{qerror} = "! Failed to update table <self>: $error"; print "$self->{qerror}<br>";
         return 0;
     }
 

@@ -108,10 +108,11 @@ sub ReDirect {
     my $self = shift;
     my $link = shift;
 
-#$self->PrintHeader(1);
-#print "redirecting to url $link \n";
+#$self->PrintHeader(1); print "redirecting to url $link \n";
 
     $link .= $self->postToGet if ($link !~ /\?/); # if &MethodPost; # add (possible) parameters
+
+# $link .= "\&EJZREDIRECT=1"; $link =~ s/\&/?/ if ($link !~ /\?/); # test for redirection
 
     print redirect(-location=>$link);
 
@@ -347,7 +348,7 @@ sub PrintEnvironment {
 
         foreach my $key (sort keys (%ENV)) {
             my $value = "&nbsp";
-            $value = $ENV->{$key} if ($ENV->{$key}  && $ENV->{$key} =~ /\S/);
+            $value = $ENV{$key} if ($ENV{$key}  && $ENV{$key} =~ /\S/);
             $output .= "<TR><TD>$key</TD><TD>$value</TD></TR>";
         }
         $output .= "</TABLE>";

@@ -202,7 +202,7 @@ sub whereIs {
     }
 
     else { 
-        $output = $mother->associate('residence',$database,'dbasename',{useLocate=>1}); # host:port of instance
+        $output = $mother->associate('residence',$database,'dbasename',{useCache=>1}); # host:port of instance
 #        print "output:  $output  $mother->{query}\n";
         print "Database $database is on server $output\n" if $output;
         print "Unknown database: $database\n" if !$output;

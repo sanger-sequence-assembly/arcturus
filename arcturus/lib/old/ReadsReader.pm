@@ -13,7 +13,7 @@ use LigationReader;
 use Compress;
 use OracleReader;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 my %timehash;
 
 #############################################################################
@@ -25,6 +25,8 @@ my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
 my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
 my $readbackOnServer = 0;
+
+my $break;
 
 #############################################################################
 
@@ -85,11 +87,15 @@ sub new {
 
     $self->{fatal} = 1; # default errors treated as fatal 
 
+# environment
+
     $self->{CGI} = $ENV{PATH_INFO} || 0; # true for CGI mode
 
     my $library = $ENV{LD_LIBRARY_PATH} || '';
     $ENV{LD_LIBRARY_PATH} = $SCFREADLIB;
     $ENV{LD_LIBRARY_PATH} .= ':'.$library if ($library !~ /$SCFREADLIB/);
+
+    $break = &break;
 
     bless ($self, $class);
     return $self;
@@ -221,13 +227,13 @@ sub readReadData {
             }
         # concatenate comments (including tags)
             elsif ($record =~ /^[CC|TG]\s+(\S.*?)\s?$/) {
-                $readItems->{CC} .= "\n" if ($readItems->{CC});
+                $readItems->{CC} .= "$break" if ($readItems->{CC});
                 $readItems->{CC} .= $1;
                 $readItems->{CC} =~ s/\s+/ /; # remove redundant blanks
             }
             elsif ($record =~ /^[TG]\s+(\S.*?)\s?$/) {
 # tags have to be stored in separate table READTAGS
-#                $readItems->{CC} .= "\n" if ($readItems->{CC});
+#                $readItems->{CC} .= "$break" if ($readItems->{CC});
 #                $readItems->{CC} .= $1;
 #                $readItems->{CC} =~ s/\s+/ /; # remove redundant blanks
             }
@@ -240,8 +246,8 @@ sub readReadData {
 # print "item $item  value $value <br>";
             }
             elsif ($record =~ /\S/) {
-                $status->{diagnosis} .= "! unrecognized input in file $file\n" if (!$status->{diagnosis});
-                $status->{diagnosis} .= "  l.$line:  \"$record\"\n";
+                $status->{diagnosis} .= "! unrecognized input in file $file$break" if (!$status->{diagnosis});
+                $status->{diagnosis} .= "  l.$line:  \"$record\"$break";
                 $status->{warnings}++;
             }
 #          &logger($self,"input line $line: $record");
@@ -249,14 +255,14 @@ sub readReadData {
         close READ;
     # test number of fields read
         if (keys(%$readItems) <= 0) {
-            $status->{diagnosis} .= "! file $file contains no intelligible data\n\n";
+            $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
             $status->{errors}++;
         }
 
     }
     elsif (!$self->{OracleReader}) {
 # the file presumably is not present or is corrupted
-        $status->{diagnosis} .= "! file $file cannot be opened: $!\n"; 
+        $status->{diagnosis} .= "! file $file cannot be opened: $!$break"; 
         $status->{errors}++;
     }
     else {
@@ -290,7 +296,7 @@ sub getOracleRead {
             $readItems->{RPS} = 0; # read-parsing error code
             my @fields = split /\n/,$hash->{Sequence};
             foreach my $field (@fields) {
-# print "$field  <br>\n";
+# print "$field $break";
                 my @items = split /\s/,$field;
                 if ($items[0] =~ /Temp/i) {
                     $readItems->{TN} = $items[1];
@@ -342,7 +348,7 @@ sub getOracleRead {
             $self->{dataSource} = 2;
         }
         else {
-            $status->{diagnosis} .= "! No data found in Oracle hash\n";
+            $status->{diagnosis} .= "! No data found in Oracle hash$break";
             $status->{errors}++;
         }
 #	print &list(0,1,1);
@@ -387,9 +393,9 @@ sub newConsensusRead {
        ($readItems->{AV} = $readItems->{SQ}) =~ s/(.)/ 1/g;
     # test number of fields read
         if (keys(%$readItems) <= 0) {
-            $status->{diagnosis} .= "! file $file contains no intelligible data\n\n";
+            $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
             $status->{errors}++;
-            $status->{diagnosis} .= "! file $file contains no intelligible data\n\n";
+            $status->{diagnosis} .= "! file $file contains no intelligible data$break$break";
             $status->{errors}++;
         }
         else {
@@ -445,7 +451,7 @@ sub makeLinks {
 # initialize the correspondence between tags and column names
         my $READMODEL = $self->{READS}->getInstanceOf('arcturus.READMODEL');
         if (!$READMODEL) {
-            $status->{diagnosis} = "READMODEL handle NOT found\n";
+            $status->{diagnosis} = "READMODEL handle NOT found$break";
             $status->{errors}++;
         }
         else {
@@ -458,7 +464,7 @@ sub makeLinks {
                 }
             }
             else {
-                $status->{diagnosis} .= "READMODEL cannot be read\n";
+                $status->{diagnosis} .= "READMODEL cannot be read$break";
                 $status->{errors}++;
             }
         }
@@ -500,7 +506,7 @@ sub enter {
             $status->{diagnosis} .= $self->enter($item,$entry->{$item});
         }
         $self->{dataSource} = $value || 0;
-print "data source: $self->{dataSource} \n";
+print "data source: $self->{dataSource} $break";
         $status->{errors}++ if $status->{diagnosis};
         $estatus = $status->{diagnosis};
     }
@@ -511,9 +517,9 @@ print "data source: $self->{dataSource} \n";
         delete $readItems->{$entry};
     }
     else {
-        $estatus = "Attempt to enter invalid read item $entry \n";
+        $estatus = "Attempt to enter invalid read item $entry $break";
     }
-# print "enter $entry $value status = $estatus \n" if (ref($entry) ne 'HASH');
+# print "enter $entry $value status = $estatus $break" if (ref($entry) ne 'HASH');
     return $estatus;
 }
 
@@ -566,7 +572,7 @@ sub format {
 
         if ($self->{fileName} !~ /$readItems->{ID}/) {
             $status->{diagnosis} .= "!Mismatch between filename $self->{fileName} and ";
-            $status->{diagnosis} .= "read name $readItems->{ID}\n";
+            $status->{diagnosis} .= "read name $readItems->{ID}$break";
 # recover if mismatch is a 1 replaced by 'l' in suffix 
             foreach my $key (keys %$readItems) {
                 $readItems->{$key} =~ s/(\.\w)l(\w)/${1}1$2/;
@@ -576,12 +582,12 @@ sub format {
             $status->{errors}++   if  ($self->{fatal});
         }
         elsif ($readItems->{ID} ne $readItems->{EN}) {
-            $status->{diagnosis} .= "! ID and EN mismatch in $readItems->{ID}\n";
+            $status->{diagnosis} .= "! ID and EN mismatch in $readItems->{ID}$break";
             $readItems->{RPS} += 1; # flag mismatch            
             $status->{warnings}++; # what about outside data ?
         }
         elsif ($readItems->{ID} !~ /$readItems->{TN}/) {
-            $status->{diagnosis} .= "! ID and TN mismatch in $readItems->{ID}\n";
+            $status->{diagnosis} .= "! ID and TN mismatch in $readItems->{ID}$break";
             $readItems->{RPS} += 1; # flag mismatch
             $status->{warnings}++;
         }
@@ -592,18 +598,18 @@ sub format {
     }
 # missing read ID
     else {
-        $status->{diagnosis} .= "! Missing Read Name\n";
+        $status->{diagnosis} .= "! Missing Read Name$break";
         $status->{errors}++; 
     }
 
 # test presence of sequence and quality data
 
     if (!$readItems->{SQ}) {
-        $status->{diagnosis} .= "! Missing Sequence data in $self->{fileName}\n";
+        $status->{diagnosis} .= "! Missing Sequence data in $self->{fileName}$break";
         $status->{errors}++;
     }    
     if (!$readItems->{AV}) {
-        $status->{diagnosis} .= "! Missing Quality data in $self->{fileName}\n";
+        $status->{diagnosis} .= "! Missing Quality data in $self->{fileName}$break";
         $status->{errors}++;
     }    
 }
@@ -642,13 +648,13 @@ sub ligation {
             $readItems->{SIL} = $vl;
             $readItems->{SIH} = $vu;   
         } else {
-            $status->{diagnosis} .= "! Invalid Sequence Vector insertion length (SI = $rdsi)\n";
+            $status->{diagnosis} .= "! Invalid Sequence Vector insertion length (SI = $rdsi)$break";
             $readItems->{RPS} += 4; # bit 3
             $status->{warnings}++ if (!$self->{fatal});
             $status->{errors}++   if  ($self->{fatal});
         }
     } else {
-        $status->{diagnosis} .= "! No Sequencing Vector insertion length (SI) specified\n";
+        $status->{diagnosis} .= "! No Sequencing Vector insertion length (SI) specified$break";
         $readItems->{RPS} += 8; # bit 4
         $status->{warnings}++;
     }
@@ -656,15 +662,16 @@ sub ligation {
 # test and possibly update (sequence) vector table (tblv)
 
     undef my $svector;
-    if ($readItems->{SV} && $readItems->{SV} !~ /none/i) {
+    if ($readItems->{SV} && $readItems->{SV} !~ /\bnone\b/i) {
         if (!$SQVECTORS->counter('name',$readItems->{SV},0)) {
-            $status->{diagnosis} .= "! Error in update of SEQUENCEVECTORS.name (read: $readItems->{SV})\n";
+            $status->{diagnosis} .= "! Error in update of SEQUENCEVECTORS.name (read: $readItems->{SV})$break";
             $status->{errors}++;
         }
         $svector = $SQVECTORS->associate('svector',$readItems->{SV},'name'); # get id number           
     }
     else {
-        $status->{diagnosis} .= "! No Sequencing Vector (SV) specified\n";
+        $readItems->{SV} = 0; # just to have it defined (re: ligation check)
+        $status->{diagnosis} .= "! No Sequencing Vector (SV) specified$break";
         $readItems->{RPS} += 32; # bit 6
         $status->{warnings}++;
     }
@@ -673,13 +680,13 @@ sub ligation {
 
     if ($readItems->{CV} && $readItems->{CV} !~ /none/i) {
         if (!$CLVECTORS->counter('name',$readItems->{CV},0)) {
-            $status->{diagnosis} .= "! Error in update of CLONINGVECTORS.name (read: $readItems->{CV})\n";
+            $status->{diagnosis} .= "! Error in update of CLONINGVECTORS.name (read: $readItems->{CV})$break";
             $status->{errors}++;
         }
     }
     else {
         delete $readItems->{CV} if ($readItems->{CV}); # delete 'none'
-        $status->{diagnosis} .= "! No Cloning Vector (CV) specified\n";
+        $status->{diagnosis} .= "! No Cloning Vector (CV) specified$break";
         $readItems->{RPS} += 128; # bit 8
         $status->{warnings}++;
     }
@@ -693,7 +700,7 @@ sub ligation {
             $cl = 1;
             $cu++;
         } else {
-            $status->{diagnosis} .= "! Failed to decode Cloning Vector cover $cvsi\n";
+            $status->{diagnosis} .= "! Failed to decode Cloning Vector cover $cvsi$break";
             $readItems->{RPS} += 64; # bit 7
             $status->{warnings}++ if (!$self->{fatal});
             $status->{errors}++   if  ($self->{fatal});
@@ -703,7 +710,7 @@ sub ligation {
 # if ligation not specified or equals '99999', try recovery via clone
 
     if (!$readItems->{LG} && $readItems->{CN}) {
-print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
+print "Try to recover undefined ligation data for clone $readItems->{CN}<br>$break";
 #        if ($self->{LigationReader}->newClone($readItems->{CN},1)) {
 #            my $list = $self->{LigationReader}->list(1);
 #            print "output Ligationreader: $list";
@@ -741,28 +748,28 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
                         $readItems->{SV} = $litem;
                         if (!$SQVECTORS->counter('name',$readItems->{SV},0)) {
                             $status->{diagnosis} .= "! Error in update of SEQUENCEVECTORS.name ";
-                            $status->{diagnosis} .= "(ligation: $readItems->{SV})\n";
+                            $status->{diagnosis} .= "(ligation: $readItems->{SV})$break";
                             $status->{errors}++;
                         }
                         $svector = $SQVECTORS->associate('svector',$readItems->{SV},'name'); # get id            
                     }
                     if (!$readItems->{$item} || $litem ne $readItems->{$item}) {
                         $status->{diagnosis} .= "! Inconsistent data for ligation $readItems->{LG} : $item ";
-                        $status->{diagnosis} .= ": Oracle says \"$litem\", READ says:\"$readItems->{$item}\"\n";
+                        $status->{diagnosis} .= ": Oracle says \"$litem\", READ says:\"$readItems->{$item}\"$break";
                         $readItems->{RPS} += 256; # bit 9
                     # try to see if the indication matches the plate names
                         if ($item eq 'CN' && $ligation->get('cn') =~ /$readItems->{CN}/) {
-                            $status->{diagnosis} .= " ($readItems->{CN} corresponds to $litem)\n";
+                            $status->{diagnosis} .= " ($readItems->{CN} corresponds to $litem)$break";
                             $readItems->{CN} = $litem; # replace by Oracle value
                             $status->{warnings}++;
                         }
                         elsif ($item =~ /SIH|SIL/ && ($litem>30000 || $readItems->{$item}>30000)) {
                             $readItems->{RPS} += 16; # bit 5
-                            $status->{diagnosis} .= " (Overblown insert value(s) ignored)\n";
+                            $status->{diagnosis} .= " (Overblown insert value(s) ignored)$break";
                             $status->{warnings}++; # flag, but ignore the range data
                         }
                         elsif ($litem && $litem =~ /$readItems->{$item}/i) {
-                            $status->{diagnosis} .= "Ligation accepted\n";
+                            $status->{diagnosis} .= "Ligation accepted$break";
                             $status->{warnings}++;
 	 	        }
                         else {
@@ -778,7 +785,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
                 $origin = 'R'; # Defined in the Read itself
                 $status->{diagnosis} .= "! Warning" if (!$self->{fatal});
                 $status->{diagnosis} .= "! CGI access Error" if ($self->{fatal});
-                $status->{diagnosis} .= ": ligation $readItems->{LG} not found in Oracle database\n";
+                $status->{diagnosis} .= ": ligation $readItems->{LG} not found in Oracle database$break";
                 $readItems->{RPS} += 512; # bit 10
                 $status->{warnings}++ if (!$self->{fatal});
                 $status->{errors}++   if  ($self->{fatal});
@@ -786,7 +793,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
             }
         # update CLONES database table
             if (!$status->{errors} && !$CLONES->counter('clonename',$readItems->{CN},0)) {
-                $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})\n";
+                $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})$break";
                 $status->{errors}++;
             }
         # if no errors detected, add to LIGATIONS table
@@ -802,13 +809,13 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
                 $self->logger(" ... Found and stored in LIGATIONS!");
             }
             else {
-                $status->{diagnosis} .= "! No new ligation added because of $status->{errors} error(s)\n";
+                $status->{diagnosis} .= "! No new ligation added because of $status->{errors} error(s)$break";
             }
             $LIGATIONS->build(1,'ligation'); # rebuild the table
         } 
         elsif ($column ne 'identifier') {
 # the ligation string is identified in table LIGATION but in the wrong column
-            $status->{diagnosis} .= "! Invalid column name for ligation identifier $readItems->{LG}: $column\n";
+            $status->{diagnosis} .= "! Invalid column name for ligation identifier $readItems->{LG}: $column$break";
             $status->{errors}++;
 
         }
@@ -826,9 +833,9 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
             foreach my $item (keys %itest) {
                 if (defined($itest{$item}) && $itest{$item} ne $readItems->{$item}) {
                     $status->{diagnosis} .= "! Inconsistent data for ligation $readItems->{LG} : ";
-                    $status->{diagnosis} .= "$item ARCTURUS table:$itest{$item} Read:$readItems->{$item}\n";
+                    $status->{diagnosis} .= "$item ARCTURUS table:$itest{$item} Read:$readItems->{$item}$break";
                     if ($itest{$item} =~ /$readItems->{$item}/i) {
-             #   $status->{diagnosis} .= " ($readItems->{$item} replaced by $itest{$item}\n";
+             #   $status->{diagnosis} .= " ($readItems->{$item} replaced by $itest{$item}$break";
              #   $readItems->{$item} = $itest{$item};
                         $status->{warnings}++; # matching, but incomplete
                     }
@@ -837,12 +844,12 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
                     }
                     elsif ($item eq 'SIH' && ($itest{$item}>30000 || $readItems->{$item}>30000)) {
                         $readItems->{RPS} += 16; # bit 5
-                        $status->{diagnosis} .= " (Overblown insert value(s) ignored)\n";
+                        $status->{diagnosis} .= " (Overblown insert value(s) ignored)$break";
                         $status->{warnings}++; # flag, but ignore the range data
                     }
                     elsif ($item eq 'CN' && $readItems->{ID} =~ /$readItems->{CN}/) {
                         $status->{diagnosis} .= " ($readItems->{CN} corresponds to file name:";
-                        $status->{diagnosis} .= " $itest{$item} replaces $readItems->{CN})\n";
+                        $status->{diagnosis} .= " $itest{$item} replaces $readItems->{CN})$break";
                         $readItems->{CN} = $itest{$item};
                         $status->{warnings}++;
                     }
@@ -855,7 +862,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
                 elsif (!defined($itest{$item})) {
                 # the ligation table item is undefined
                     $status->{diagnosis} .= "! Ligation item $item undefined;";
-                    $status->{diagnosis} .= "  value $readItems->{$item} used\n";
+                    $status->{diagnosis} .= "  value $readItems->{$item} used$break";
                     $status->{warnings}++; 
                 }
             }
@@ -868,7 +875,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
     # check if clone present in / or update CLONES database table
         $readItems->{RPS} += 2048; # bit 12
         if (!$CLONES->counter('clonename',$readItems->{CN},0)) {
-            $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})\n";
+            $status->{diagnosis} .= "!Error in update of CLONES.clonename ($readItems->{CN})$break";
             $status->{errors}++;
         }
         my $clone = $CLONES->associate('clone',$readItems->{CN},'clonename', 0, 0, 1); # exact match
@@ -895,7 +902,7 @@ print "Try to recover undefined ligation data for clone $readItems->{CN}<br>\n";
         if (!$readItems->{LG} && $clone) {
         # add a new ligation number to the table
             $readItems->{LG} = sprintf ("U%05d",++$lastligation);
-            print STDOUT "Add new ligation $readItems->{LG} to ligation table\n";
+            print STDOUT "Add new ligation $readItems->{LG} to ligation table$break";
             $LIGATIONS->newrow('identifier' , $readItems->{LG});
 # new           $LIGATIONS->update('clone'      , $clone);
             $LIGATIONS->update('clone'      , $readItems->{CN});
@@ -968,7 +975,7 @@ sub strands {
         }
         else {
             $status->{diagnosis} .= "! Mismatch of strands identifier: \"$suffixes[0]\"";
-            $status->{diagnosis} .= " and number of strands $readItems->{ST} given in read\n";
+            $status->{diagnosis} .= " and number of strands $readItems->{ST} given in read$break";
         # prepare for possible strand redefinition
             my $newstrand = 'z'; # completely unknown
             $newstrand = 'x' if ($readItems->{ST} == 1);
@@ -986,27 +993,27 @@ sub strands {
                  if ($accept) {
                  # the file suffix seems to be correct
                      $status->{diagnosis} .= " ($readItems->{SV} matches description";
-                     $status->{diagnosis} .= " \"$string\": suffix $suffixes[0] accepted)\n";
+                     $status->{diagnosis} .= " \"$string\": suffix $suffixes[0] accepted)$break";
                      $readItems->{ST} = $suffixes[0];
                  }
                  else {
                  # the file suffix appears to be incorrect
                      $status->{diagnosis} .= " ($readItems->{SV} conficts with description";
-                     $status->{diagnosis} .= " \"$string\")\n";
+                     $status->{diagnosis} .= " \"$string\")$break";
                      $status->{diagnosis} .= "  suspect suffix $suffixes[0]: experiment file";
-                     $status->{diagnosis} .= " value $readItems->{ST} encoded as $newstrand\n";
+                     $status->{diagnosis} .= " value $readItems->{ST} encoded as $newstrand$break";
                      $readItems->{ST} = $newstrand;
                      $readItems->{RPS} += 4096; # bit 13
                  }
             }
             elsif ($suffixes[0] =~ /\d/) { # no valid code available in suffix
-                $status->{diagnosis} .= " (Invalid code in experiment file suffix)\n";
+                $status->{diagnosis} .= " (Invalid code in experiment file suffix)$break";
                 $readItems->{ST} = $newstrand;           
                 $readItems->{RPS} += 4096; # bit 13
             }
             else {
                 $readItems->{RPS} += 8192; # bit 14
-                $status->{diagnosis} .= "! Invalid file extension \"$suffix\"\n";
+                $status->{diagnosis} .= "! Invalid file extension \"$suffix\"$break";
                 $status->{errors}++; # considered fatal
             }
         # the suffix is a number
@@ -1020,14 +1027,14 @@ sub strands {
             $readItems->{ST} = $suffixes[0]; # replace original by identifier 
         } else {
             $status->{diagnosis} .= "! Mismatch of strands direction: \"$readItems->{ST}\"";
-            $status->{diagnosis} .= " for suffix type \"$suffixes[0]\"\n";
+            $status->{diagnosis} .= " for suffix type \"$suffixes[0]\"$break";
             if ($suffixes[0] =~ /[a-z]/) {
                 $readItems->{ST} = $suffixes[0]; # accept file extention code
                 $readItems->{RPS} += 4096; # bit 13
                 $status->{warnings}++;
             } else {
                 $readItems->{RPS} += 8192; # bit 14
-                $status->{diagnosis} .= "! Invalid file extension \"$suffix\"\n";
+                $status->{diagnosis} .= "! Invalid file extension \"$suffix\"$break";
                 $status->{errors}++; # considered fatal
             }
         }
@@ -1046,13 +1053,13 @@ sub strands {
 # PR value should match extension information
         if (defined($readItems->{PR}) && $readItems->{PR} != $primertype) {
             $status->{diagnosis} .= "! Mismatch of Primer type: \"$readItems->{PR}\" (read)";
-            $status->{diagnosis} .= " vs. \"$suffixes[0]$suffixes[1]\" (suffix)\n";
+            $status->{diagnosis} .= " vs. \"$suffixes[0]$suffixes[1]\" (suffix)$break";
             if ($readItems->{PR} == 3) {
-                $status->{diagnosis} .= " (Probable XGap value replaced by Gap4 value $primertype)\n";
+                $status->{diagnosis} .= " (Probable XGap value replaced by Gap4 value $primertype)$break";
                 $readItems->{PR} = $primertype;
             } 
             else {
-                $status->{diagnosis} .= " (Experiment file value $readItems->{PR} accepted)\n";
+                $status->{diagnosis} .= " (Experiment file value $readItems->{PR} accepted)$break";
 	    }
             $status->{warnings}++;
             $readItems->{RPS} += 16384; # bit 15
@@ -1105,113 +1112,113 @@ sub chemistry {
 
 # get description from SCF file
 
-$self->logger("Default Chemistry Type: $readItems->{CHT} ..\n");
-$self->logger("Test chemistry in file $self->{fileName}SCF\n");
+$self->logger("Default Chemistry Type: $readItems->{CHT} ..$break");
+$self->logger("Test chemistry in file $self->{fileName}SCF$break");
 
     my $scffile = $readItems->{SCF} || "$self->{fileName}SCF";
     if ($scffile !~ /\//) { 
 # no directory indicated: try to find directory using SCHEMA (temp fix for ORACLE data)
         if (!$self->{READATADIR}) {
-# print "Chemistry test schema $self->{SCHEMA} \n";
+# print "Chemistry test schema $self->{SCHEMA} $break";
             my $dirdata = `$BADGERDIR/pfind $self->{SCHEMA}`;
             my @dirdata = split /\s+/,$dirdata;
             $self->{READATADIR} = $dirdata[4];
         }
         $scffile = "$self->{READATADIR}/*/$scffile";
     }
-$self->logger("SCF file full name: $scffile\n");
+$self->logger("SCF file full name: $scffile$break");
 
     my $test = 0;
     my $chemistry;
     my $command = "$SCFREADDIR/get_scf_field $scffile";
     if (!$self->{CGI}) {
         $chemistry = `$command`;
-$self->logger("non-CGI SCF: $command => chemistry: '$chemistry'\n");
+$self->logger("non-CGI SCF: $command => chemistry: '$chemistry'$break");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
         }
         else {
             undef $chemistry;
 	}
-$self->logger("chemistry=$chemistry\n");
+$self->logger("chemistry=$chemistry$break");
     }
     elsif (!$test) {
 #print "test recover $RECOVERDIR <br>";
         $chemistry = `$RECOVERDIR/recover.sh $command`;
-$self->logger("test recover chemistry: '$chemistry'\n");
+$self->logger("test recover chemistry: '$chemistry'$break");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
             $chemistry = $1;
         }
         else {
             undef $chemistry;
 	}
-$self->logger("chemistry=$chemistry\n");
+$self->logger("chemistry=$chemistry$break");
     }
     else {
         $chemistry = `$RECOVERDIR/orecover.sh $command`;
         chomp $chemistry;
         undef $chemistry if ($chemistry =~ /load.+disabled/i);
         $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
-$self->logger("SCF chemistry: '$chemistry'\n");
+$self->logger("SCF chemistry: '$chemistry'$break");
     }
 
 # test against entries in the CHEMISTRY table (exact matches because $chemistry may contain wildcard symbols)
 
-    my %choptions = (traceQuery => 0, compareExact => 1, useLocate => 1);
+    my %choptions = (traceQuery => 0, compareExact => 1, useCache => 1);
     if ($chemistry && $CHEMISTRY->associate('chemistry',$chemistry,'identifier',\%choptions)) {
 #    if ($chemistry && $CHEMISTRY->associate('chemistry',$chemistry,'identifier',-1,0,1)) {
-$self->logger("chemistry $chemistry found in ARCTURUS database table\n");
-        $status->{diagnosis} .= "chemistry $chemistry found in ARCTURUS database table\n";
+$self->logger("chemistry $chemistry found in ARCTURUS database table$break");
+        $status->{diagnosis} .= "chemistry $chemistry found in ARCTURUS database table$break";
 # the chemistry is already in the table; check CHT
         my $chtype = $CHEMISTRY->associate('chemtype',$chemistry,'identifier',\%choptions); # exact match
 #        my $chtype = $CHEMISTRY->associate('chemtype',$chemistry,'identifier',-1,0,1); # exact match
         if (ref($chtype) eq 'ARRAY') {
-            $status->{diagnosis} .= "! Multiple hits on chemistry identifier $chemistry: @$chtype\n";
+            $status->{diagnosis} .= "! Multiple hits on chemistry identifier $chemistry: @$chtype$break";
 # print "REPORT $self->{status}->{report}<br>";
             $status->{errors}++;
         }
         elsif ($readItems->{CHT} eq 'u' && $chtype ne 'u') {
-            $status->{diagnosis} .= "! Undefined chemistry type for $chemistry replaced by \"$chtype\"\n";
+            $status->{diagnosis} .= "! Undefined chemistry type for $chemistry replaced by \"$chtype\"$break";
             $readItems->{CHT} = $chtype;
             $readItems->{RPS} += 32768*2 ; # bit 17 
             $status->{warnings}++;
         }
         elsif ($chtype ne $readItems->{CHT}) {
             $status->{diagnosis} .= "! Warning: inconsistent chemistry identifier for $chemistry ";
-            $status->{diagnosis} .= ": \"$readItems->{CHT}\" (file) vs. \"$chtype\" (database table)\n";
+            $status->{diagnosis} .= ": \"$readItems->{CHT}\" (file) vs. \"$chtype\" (database table)$break";
             $readItems->{CHT} = $chtype unless ($chtype eq 'u' || !$chtype); # use table value
-            $status->{diagnosis} .= "  ARCTURUS data base table value $chtype adopted\n" if ($readItems->{CHT} eq $chtype);
+            $status->{diagnosis} .= "  ARCTURUS data base table value $chtype adopted$break" if ($readItems->{CHT} eq $chtype);
             $readItems->{RPS} += 32768*4 ; # bit 18 
             $status->{warnings}++;
 # if chemtype is not defined in the table, here is an opportunity to update
             if (!$chtype) {
                 $CHEMISTRY->update('chemtype',$readItems->{CHT},'identifier',$chemistry, 0, 1);
-                $status->{diagnosis} .= "CHEMISTRY.chemtype is inserted for chemistry $chemistry\n";
+                $status->{diagnosis} .= "CHEMISTRY.chemtype is inserted for chemistry $chemistry$break";
             }
         } 
         $readItems->{CH} = $chemistry;
 
     }
     elsif ($chemistry) {
-        $status->{diagnosis} .= "chemistry \"$chemistry\" NOT found in ARCTURUS database\n";
+        $status->{diagnosis} .= "chemistry \"$chemistry\" NOT found in ARCTURUS database$break";
 # the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
         my $field = `grep '\"$chemistry\"' $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
         $field    = `grep '\"$chemistry\"' $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
         chomp $field;
-$self->logger("Gelminder chemistry data fields: \"$field\"\n");
+$self->logger("Gelminder chemistry data fields: \"$field\"$break");
         $field =~ s/[\'\"]?\s*$chemistry\s*[[\'\"]?/x /g; # remove chemistry and any quotations
         $field =~ s/\-/./; # replace hyphens by any symbol match
         my @fields = split /\s+/,$field;
         if ($readItems->{CHT} ne 'u') {
 # get description from chemistry type
             my $description = $CHEMTYPES->associate('description',$readItems->{CHT},'chemtype');
-$self->logger("test Gelminder description against type $readItems->{CHT}\n");
+$self->logger("test Gelminder description against type $readItems->{CHT}$break");
             if (@fields) {
-$self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
+$self->logger("@{fields}$break$fields[1]$break$fields[2]$break");
         # require both to match
                 if (!($description =~ /$fields[1]/i) || !($description =~ /$fields[2]/i)) {
                     $status->{diagnosis} .= "! Mismatch between Gelminder: '$field' and description: ";
-                    $status->{diagnosis} .= "'$description' for chemtype $readItems->{CHT}\n";
+                    $status->{diagnosis} .= "'$description' for chemtype $readItems->{CHT}$break";
         # try to recover by re-assembling and testing the description field
                     $field = $fields[1].' '.$fields[2];
                     $field =~ s/^\s*(primer|terminator)\s*(\S*.)$/$2 $1/;
@@ -1220,7 +1227,7 @@ $self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
                     $field =~ s/\s+|\./%/g;
                     my $chtype = $CHEMTYPES->associate('chemtype',$field,'description');
                     if ($chtype && ref($chtype) ne 'ARRAY') {
-                        $status->{diagnosis} .= "Chemistry type recovered as: $chtype\n";
+                        $status->{diagnosis} .= "Chemistry type recovered as: $chtype$break";
                         $readItems->{CHT} = $chtype;
                         $status->{warnings}++;
                     }
@@ -1229,31 +1236,31 @@ $self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
                         $status->{warnings}++ if (!$self->{fatal} || $readItems->{CHT} eq 'l' && $description =~ /Licor/i);
                     } 
                     $readItems->{RPS} += 32768*4 ; # bit 18
-#$self->{status}->{report} =~ s/\n/<br>/g; print STDOUT "report: $self->{status}->{report}";
+#$self->{status}->{report} =~ s/$break/<br>/g; print STDOUT "report: $self->{status}->{report}";
                 }
             }
             else {
         # assume CHT is correct
-                $status->{diagnosis} .= "! Warning: incomplete Chemistry data in phredpar.dat\n";
+                $status->{diagnosis} .= "! Warning: incomplete Chemistry data in phredpar.dat$break";
                 $readItems->{RPS} += 32768*2 ; # bit 17 
                 $status->{warnings}++;
             }
         }
         else {
     # CHT not defined; find matching description for fields 1 and 2
-$self->logger(" CHT not defined: test Gelminder description against ARTURUS chemistry data\n");
+$self->logger(" CHT not defined: test Gelminder description against ARTURUS chemistry data$break");
             if (@fields) {
                 for (my $n=1 ; $n<=10 ; $n++) {
                     my $description = $CHEMTYPES->associate('description',$n,'number');
-$self->logger("description = $description\n");
+$self->logger("description = $description$break");
                     if ($description =~ /$fields[1]/i && $description =~ /$fields[2]/i) {
                         $readItems->{CHT} = $CHEMTYPES->associate('chemtype',$n,'number');
-$self->logger(" ... identified (type = $readItems->{CHT})\n");
+$self->logger(" ... identified (type = $readItems->{CHT})$break");
                     }
                 }
             }
             if ($readItems->{CHT} eq 'u') {
-                $status->{diagnosis} .= "Unrecognized Gelminder chemistry type\n";
+                $status->{diagnosis} .= "Unrecognized Gelminder chemistry type$break";
                 $readItems->{RPS} += 32768*8 ; # bit 19 
                 $status->{warnings}++; 
             }
@@ -1261,13 +1268,13 @@ $self->logger(" ... identified (type = $readItems->{CHT})\n");
         $readItems->{CH} = $chemistry;
 
         if (!$status->{errors}) {
-            $status->{diagnosis} .= "New chemistry $chemistry added to Arcturus database\n";
+            $status->{diagnosis} .= "New chemistry $chemistry added to Arcturus database$break";
             $CHEMISTRY->newrow('identifier', $chemistry);
             $CHEMISTRY->update('chemtype'  , $readItems->{CHT});
             $CHEMISTRY->build(1); # rebuild internal table
         }
         else {
-            $status->{diagnosis} .= "! Chemistry $chemistry NOT added because of $status->{errors} error(s)\n";
+            $status->{diagnosis} .= "! Chemistry $chemistry NOT added because of $status->{errors} error(s)$break";
         }
     }
     else {
@@ -1284,18 +1291,18 @@ $self->logger(" ... identified (type = $readItems->{CHT})\n");
             $status->{diagnosis} .= "! Unspecified (CH=$readItems->{CH}) ";
         }
         $status->{diagnosis} .= "chemistry: no SCF info available ";
-        $status->{diagnosis} .= "($SCFREADDIR/get_scf_field $self->{fileName}SCF)\n";
+        $status->{diagnosis} .= "($SCFREADDIR/get_scf_field $self->{fileName}SCF)$break";
         $readItems->{RPS} += 32768*16 ; # bit 20 
 # try to recover using Chemtype description
         if ($chemistry = $CHEMTYPES->associate('description',$readItems->{CHT},'chemtype')) {
             $readItems->{CH} = $chemistry;
 #            $CHEMISTRY->newrow('identifier', $chemistry);
-$self->logger("... recovered: = $readItems->{CH})\n");
+$self->logger("... recovered: = $readItems->{CH})$break");
             $CHEMISTRY->update('chemtype', $readItems->{CHT},'identifier', $chemistry);
             $CHEMISTRY->build(1); # rebuild internal table
         }
         else {
-$self->logger("... NOT recovered: = $readItems->{CH})\n");
+$self->logger("... NOT recovered: = $readItems->{CH})$break");
             delete $readItems->{CH}; # remove meaningless info
         }
 print "REPORT $self->{status}->{report}<br>";
@@ -1330,7 +1337,7 @@ sub encode {
         $error .= $self->enter('SCM',$scm);
     }
     elsif ($scm) {
-        $error .= "Invalid Sequence Encoding option=$scm\n";
+        $error .= "Invalid Sequence Encoding option=$scm$break";
     }
     my $sqcstatus = $Compress->status;
 
@@ -1341,21 +1348,21 @@ sub encode {
         $error .= $self->enter('QCM',$qcm);
     }
     elsif ($qcm) {
-        $error .= "Invalid Quality Encoding option=$qcm\n";
+        $error .= "Invalid Quality Encoding option=$qcm$break";
     }
     my $qdcstatus = $Compress->status;
 
 # further status checking
 
     if (!$qcount || !$scount || $qcount != $scount) {
-        $error .= "Mismatch of sequence ($scount) and quality data ($qcount)\n";
+        $error .= "Mismatch of sequence ($scount) and quality data ($qcount)$break";
     }
     else {
         $error .= $self->enter('SLN',$scount);
     }
 
-    $error .= "Sequence encoding error $sqcstatus\n" if $sqcstatus;
-    $error .= "Quality  encoding error $qdcstatus\n" if $qdcstatus;
+    $error .= "Sequence encoding error $sqcstatus$break" if $sqcstatus;
+    $error .= "Quality  encoding error $qdcstatus$break" if $qdcstatus;
 
     if ($error) {
         $self->{status}->{errors}++;
@@ -1424,7 +1431,7 @@ sub insert {
                 my %lkoptions = (compareExact => 1, useLoacte => 1);
                 my $reference = $linkhandle->associate($linkcolumn,$readItems->{$tag},$columns[0],\%lkoptions);
 #                my $reference = $linkhandle->associate($linkcolumn,$readItems->{$tag},$columns[0], 0, 0, 1);
-		$status->{diagnosis} .= "insert: $linkcolumn $readItems->{$tag},$reference\n";
+		$status->{diagnosis} .= "insert: $linkcolumn $readItems->{$tag},$reference$break";
                 $readItems->{$tag} = $reference;
             }
             elsif (!@columns) {
@@ -1433,7 +1440,7 @@ sub insert {
             }
             else {
                 $status->{diagnosis} .= "No unambiguous name/identifier column found ";
-                $status->{diagnosis} .= "(@columns) in linked table $linktable\n";
+                $status->{diagnosis} .= "(@columns) in linked table $linktable$break";
                 $status->{warnings}++;
             }
         }
@@ -1443,7 +1450,7 @@ sub insert {
 
     my $counted = 0;
     if (!defined($readItems->{ID}) || $readItems->{ID} !~ /\w/) {
-        $status->{diagnosis} .= "! Undefined or Invalid Read Name\n";
+        $status->{diagnosis} .= "! Undefined or Invalid Read Name$break";
         $status->{errors}++;
     } 
     else {
@@ -1465,7 +1472,7 @@ sub insert {
 # here develop update of previously loaded reads
             $status->{diagnosis}  = "Failed to create new entry for read $readItems->{ID}";
             $status->{diagnosis} .= ": $READS->{qerror}" if $READS->{qerror};
-            $status->{diagnosis} .= "\n";
+            $status->{diagnosis} .= "$break";
             $counted = 0;
             $status->{errors}++;
         } 
@@ -1519,12 +1526,12 @@ sub readback {
     }
     elsif (!defined($scm) || $scm) {
         $scm = 0 if !$scm; $count = 0; # just to have them defined
-        $error .= "Invalid sequence encoding method readback: $scm\n";
+        $error .= "Invalid sequence encoding method readback: $scm$break";
     }
     if ($string !~ /\S/ || $string !~ /^$readItems->{sequence}\s*$/) {
         my $slength = length($sequence); # encoded sequence
-        $error .= "Error in readback of DNA sequence (length = $count / $slength):\n";
-        $error .= "Original : $readItems->{sequence}\nRetrieved: $string\n\n"; 
+        $error .= "Error in readback of DNA sequence (length = $count / $slength):$break";
+        $error .= "Original : $readItems->{sequence}${break}Retrieved: $string$break$break"; 
     } 
 
     my $qcm = $hash->{qcompress};
@@ -1535,7 +1542,7 @@ sub readback {
     }
     elsif (!defined($qcm) || $qcm) {
         $qcm = 0 if !$qcm; $count = 0; # just to have them defined
-        $error .= "Invalid sequence encoding method readback: $qcm\n";
+        $error .= "Invalid sequence encoding method readback: $qcm$break";
     }
 #    if ($string !~ /\S/ || ($string !~ /^\s*$readItems->{quality}\s*$/ && $readItems->{quality} !~ /^\s*$string\s*$/)) {
     if ($string !~ /\S/ || $readItems->{quality} !~ /^\s*$string\s*$/) {
@@ -1543,8 +1550,8 @@ sub readback {
         my $rlength = length($readItems->{quality});
         my $qlength = length($quality); # encode quality data
 	$readItems->{quality} =~ s/ /-/g; $string =~ s/ /-/g;
-        $error .= "Error in readback of quality data (lengthes = $count/$qlength/$rlength/$slength):\n";
-        $error .= "Original-: '$readItems->{quality}'\nRetrieved: '$string'\n\n"; 
+        $error .= "Error in readback of quality data (lengthes = $count/$qlength/$rlength/$slength):$break";
+        $error .= "Original-: '$readItems->{quality}'${break}Retrieved: '$string'$break$break"; 
     }
 
     if ($error) {
@@ -1590,6 +1597,19 @@ sub logger {
 
 #############################################################################
 
+sub break {
+
+# return the line break appropriate for the environment
+
+    my $break = "\n";
+
+    $break = "<br>" if $ENV{REQUEST_METHOD}; # cosmetics
+
+    return $break;
+}
+
+#############################################################################
+
 sub timer {
 # ad hoc timing routine
     my $marker = shift;
@@ -1606,12 +1626,14 @@ sub timer {
 sub DESTROY {
 
     if ($DEBUG) {
-        print "\n\n\nbreakdown of time usage:\n";
+        my $list = "$break$break${break}breakdown of time usage:$break";
         foreach my $key (keys %timehash) {
 	    my $cptime = $timehash{$key}->[1]->[0] - $timehash{$key}->[0]->[0];
 	    my $iotime = $timehash{$key}->[1]->[1] - $timehash{$key}->[0]->[1];
-            printf ("%16s  CPU:%8.2f  IO:%8.2f\n",$key,$cptime,$iotime);
-        }
+            $list .= sprintf ("%16s  CPU:%8.2f  IO:%8.2f$break",$key,$cptime,$iotime);
+        } 
+        $list =~ s/\n/<br>/ if ($ENV{REQUEST_METHOD});
+        print STDOUT $list;
     }
 
 }

@@ -737,7 +737,7 @@ sub frameborder {
     $layout .= "<TR><TD WIDTH=$side\% BGCOLOR=$bgcolor>CON2</TD>";
     $layout .= "<TD VALIGN=TOP>CON0</TD>";
     $layout .= "<TD WIDTH=$side\%  BGCOLOR=$bgcolor>CON3</TD></TR>";
-    $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mbot BGCOLOR=$bgcolor>CON4</TD></TR>";
+    $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mbot BGCOLOR=$bgcolor align=center>CON4</TD></TR>";
     $layout .= "</TABLE>";
 
     $self->{layout} = $layout;
@@ -758,7 +758,7 @@ sub quartetborder {
     my $quartet = "<CENTER><TABLE CELLPADDING=5 WIDTH=100%><TR>";
     $quartet   .= "<TD WIDTH=50% VALIGN=TOP NOWRAP>CON0</TD>";
     $quartet   .= "<TD WIDTH=50% VALIGN=TOP NOWRAP>CON5</TD>";
-    $quartet   .= "</TR><TR>";
+    $quartet   .= "</TR><TR VALIGN=TOP>";
     $quartet   .= "<TD WIDTH=50% VALIGN=TOP NOWRAP>CON6</TD>";
     $quartet   .= "<TD WIDTH=50% VALIGN=TOP NOWRAP>CON7</TD>";
     $quartet   .= "</TR></TABLE><CENTER>";
@@ -787,7 +787,7 @@ sub address {
     my $self = shift;
     my $mail = shift;
     my $name = shift;
-    my $lout = shift; # 0 for nocenter; 1 for center; 2 for no center & line; 3 for center & line
+    my $lout = shift || 0; # 0 for nocenter; 1 for center; 2 for no center & line; 3 for center & line
     my $part = shift;
 
     my $address;
