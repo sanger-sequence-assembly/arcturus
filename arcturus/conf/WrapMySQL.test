@@ -62,14 +62,6 @@ role.admin=arcturus,***REMOVED***
 role.write=arcturus,***REMOVED***
 role.read=analysedb,dbviewer
 
-[DYS]
-database=DYS
-host=babel
-port=14651
-role.admin=arcturus,***REMOVED***
-role.write=arcturus,***REMOVED***
-role.read=analysedb,dbviewer
-
 [EQUI]
 database=EQUI
 host=babel
@@ -81,14 +73,6 @@ role.read=analysedb,dbviewer
 [QUOD]
 database=QUOD
 host=babel
-port=14651
-role.admin=arcturus,***REMOVED***
-role.write=arcturus,***REMOVED***
-role.read=analysedb,dbviewer
-
-[AF]
-database=AF
-host=pcs3
 port=14651
 role.admin=arcturus,***REMOVED***
 role.write=arcturus,***REMOVED***
