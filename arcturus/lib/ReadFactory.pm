@@ -17,35 +17,6 @@ sub new {
 }
 
 #----------------------------------------------------------------
-# handling reads to be excluded
-#----------------------------------------------------------------
-
-sub excludeList {
-# import a list of readnames to be excluded
-    my $this = shift;
-    my $readnames = shift;
-
-    if (ref($readnames) ne 'ARRAY') {
-        print STDERR "excludeList expects an array of readnames\n";
-        return undef;
-    }
-
-    my $list = $this->{excludeList};
-
-    foreach my $readname (@$readnames) {
-        $list->{$readname}++;
-    }
-}
-
-sub isThisReadExcluded {
-# test if a readname should be ignored
-    my $this = shift;
-    my $readname = shift;
-
-    return $this->{excludeList}->{$readname};
-}
-
-#----------------------------------------------------------------
 # handling (error) logging
 #----------------------------------------------------------------
 
@@ -103,7 +74,7 @@ sub addReadToList {
     my $this = shift;
     my ($readname, $object) = @_;
 
-    if (!defined($object)) {
+    if (!defined($object) or ref($object) ne 'Read') {
         print STDERR "addReadNameToList requires a readname and an object reference\n";
         return undef;
     }
@@ -150,6 +121,16 @@ sub getNextReadAuxiliaryData {
 #----------------------------------------------------------------
 
 1;
+
+
+
+
+
+
+
+
+
+
 
 
 

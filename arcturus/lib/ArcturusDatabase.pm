@@ -504,7 +504,7 @@ sub getCommentForRead {
     return \@comment;
 }
 
-sub getTraceArchiveReference {
+sub getTraceArchiveIdentifier {
 # returns the trace archive reference, if any, for the specifed read
 # this method is called from the Read class when using delayed data loading
     my $this = shift;
@@ -534,6 +534,12 @@ sub getTraceArchiveReference {
     $sth->finish();
 
     return $traceref;
+}
+
+sub setTraceArchiveIdentifier {
+# enters the trace archive reference for the specifed read
+    my $this = shift;
+    my ($key,$value,$junk) = @_;
 }
 
 #-----------------------------------------------------------------------------
