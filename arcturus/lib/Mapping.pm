@@ -117,14 +117,12 @@ sub compare {
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
-#print "compare mapping $this and $compare , sort\n";
 
     my $tmaps = $this->orderSegments();
     my $cmaps = $compare->orderSegments();
 
     return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
     return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
-#print "tmaps $tmaps cmaps $cmaps ".scalar(@$tmaps)."\n";
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
@@ -135,11 +133,6 @@ sub compare {
 	my $tsegment = $tmaps->[$i];
 	my $csegment = $cmaps->[$i];
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
-print "segment comparison: $identical,$aligned,$offset \n" unless $identical;
-        if (!defined($offset)) {
-print "t ".$tsegment->toString;
-print "c ".$csegment->toString;
-        }
         return 0 unless $identical;
 # on first one register shift and alignment direction
         if (!defined($align) && !defined($shift)) {
@@ -148,9 +141,6 @@ print "c ".$csegment->toString;
         }
 # the alignment and offsets between the mappings must all be identical 
         elsif ($align != $aligned || $shift != $offset) {
-print "segment comparison: $identical,$aligned,$offset \n";
-print $tsegment->toString;
-print $csegment->toString;
             return 0;
         }
     }
@@ -175,7 +165,6 @@ sub orderSegments {
 # deal with unit-length intervals (if the read and contig are counter aligned)
 
     my $n = scalar(@$segments) - 1;
-
     if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
 # the counter align method only works for unit length intervals
         foreach my $segment (@$segments) {

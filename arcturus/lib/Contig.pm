@@ -72,7 +72,7 @@ sub getAverageCover {
 sub getConsensusLength {
     my $this = shift;
     $this->importSequence() unless defined($this->{data}->{clength});
-    return $this->{data}->{clength};
+    return $this->{data}->{clength} || 0;
 }
 
 sub setConsensusLength {
@@ -84,7 +84,7 @@ sub setConsensusLength {
 
 sub getContigID {
     my $this = shift;
-    return $this->{data}->{contig_id};
+    return $this->{data}->{contig_id} || 0;
 }
 
 sub setContigID {
@@ -112,6 +112,23 @@ sub getContigName {
 sub setContigName {
     my $this = shift;
     $this->{contigname} = shift;
+}
+
+#------------------------------------------------------------------- 
+  
+sub getNumberOfContigs {
+    my $this = shift;
+# if number of contigs not defined get it from the Read array
+    if (!defined($this->{data}->{numberofcontigs})) {
+        my $npc = $this->hasPreviousContigs();
+        $this->{data}->{numberofcontigs} = $npc;
+    }
+    return $this->{data}->{numberofcontigs};
+}
+
+sub setNumberOfContigs {
+    my $this = shift;
+    $this->{data}->{numberofcontigs} = shift;   
 }
 
 #------------------------------------------------------------------- 
@@ -146,7 +163,7 @@ sub setNumberOfNewReads {
 
 sub getOrigin {
     my $this = shift;
-    return $this->{data}->{origin};   
+    return $this->{data}->{origin} || '';   
 }
 
 sub setOrigin {
@@ -173,7 +190,7 @@ sub hasPreviousContigs {
 # returns number of previous contigs
     my $this = shift;
     my $cpre = $this->getPreviousContigs();
-    return $cpre ? scalar($cpre) : 0;
+    return $cpre ? scalar(@$cpre) : 0;
 }
 
 #-------------------------------------------------------------------   

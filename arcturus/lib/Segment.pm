@@ -175,7 +175,7 @@ sub counterAlignUnitLengthInterval {
 #----------------------------------------------------------------------
 
 sub getXforY { 
-# mapYvalueToXdomain
+# mapYvalueToXdomain (inside this mapping segment)
     my $this = shift;
     my $ypos = shift;
 
@@ -184,7 +184,7 @@ sub getXforY {
     my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
 
     if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
-        return undef;
+        return undef; # out of range
     }
     else {
         $ypos = -$ypos if ($this->[0] < 0);
@@ -193,7 +193,7 @@ sub getXforY {
 }
 
 sub getYforX {
-# mapXvalueToYdomain
+# mapXvalueToYdomain (inside this mapping segment)
     my $this = shift;
     my $xpos = shift;
 

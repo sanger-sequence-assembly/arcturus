@@ -449,6 +449,8 @@ sub getRead {
     }
 }
 
+# aliases
+
 sub getReadBySequenceID {
     my $this = shift;
     $this->getRead(seq_id=>shift);
@@ -463,6 +465,8 @@ sub getReadByName {
     my $this = shift;
     $this->getRead(readname=>shift,version=>shift);
 }
+
+# populate a Read
 
 sub addMetaDataForRead {
 # private method: set meta data for input Read 
@@ -821,6 +825,122 @@ sub getReadsForContig {
     $contig->addRead([@reads]);
 }
 
+sub getUnassembledReads {
+# returns a list of readids of reads not figuring in any contig
+    my $this = shift;
+
+# process possible date selection option(s)
+
+    my $nextword;
+
+    my @dateselect;
+    my $nosingleton = 1;    
+    while ($nextword = shift) {
+	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
+	    my $date = shift;
+	    push @dateselect, "asped > '$date'";
+	}
+	elsif ($nextword eq '-aspedbefore' || $nextword eq '-before') {
+	    my $date = shift;
+	    push @dateselect, "asped < '$date'";
+	}
+        elsif ($nextword eq '-withsingleton') {
+            $nosingleton = 0;
+        }
+        else {
+            print STDERR "Invalid option for getUnassembledReads : ".
+		         "$nextword\n";
+            return undef;
+        }
+    }
+
+    my $dbh = $this->getConnection();
+
+# step 1: get a list of contigs of age 0
+
+    my $query = "select contig_id from C2CMAPPING where age=0 ".
+                "union ".
+                "select contig_id from CONTIG left join C2CMAPPING ".
+		"using (contig_id) where C2CMAPPING.contig_id is null";
+#print STDOUT "step 1 query $query\n"; NEW QUERY TO BE TESTED
+# this is the query for the old system
+$query = "select newcontig as contig_id from CONTIG2CONTIG where genofo=0".
+         " union ".
+         "select contig_id from CONTIG left join CONTIG2CONTIG".
+         "    on CONTIG.contig_id = CONTIG2CONTIG.newcontig".
+	 "   and CONTIG2CONTIG.newcontig is null";
+
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my $contigids = [];
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+	push @{$contigids}, $contig_id;
+    }
+
+# step 2: (optionally) filter for nreads > 1
+
+    if  ($nosingleton) {
+# remove singletons from list of contig_ids
+        $query = "select contig_id from CONTIG".
+                 " where contig_id in (".join(",",@$contigids).")".
+		 "   and nreads > 1";
+
+        $sth = $dbh->prepare($query);
+        $sth->execute() || &queryFailed($query);
+
+        $contigids = [];
+        while (my ($contig_id) = $sth->fetchrow_array()) {
+	    push @{$contigids}, $contig_id;
+        }
+    }
+
+# now find all reads which do not occur in these contigs
+
+# this is the query using subselects which should replace steps 3 & 4
+    $query  = "select READS.read_id from READS where ";
+    $query .=  join(" and ", @dateselect)." and " if @dateselect;
+    $query .= "read_id not in (select distinct SEQ2READ.read_id ".
+              "  from SEQ2READ join MAPPING on (seq_id)".
+	      " where MAPPING.contig_id in (".join(",",@$contigids)."))";
+#print STDOUT "subselect query $query\n"; NEW QUERY TO BE TESTED
+# end query using subselects
+
+# step 3: find the read_ids in the contigs
+
+    $query = "select distinct SEQ2READ.read_id ".
+             "  from SEQ2READ join MAPPING using (seq_id)".
+	     " where MAPPING.contig_id in (".join(",",@$contigids).")";
+
+    $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+        
+    my $readids = [];
+    while (my ($read_id) = $sth->fetchrow_array()) {
+        push @{$readids}, $read_id;
+    }
+
+# step 4 : get the complementary reads from READS
+
+    $query  = "select READS.read_id from READS where ";
+    $query .=  join(" and ", @dateselect)." and " if @dateselect;
+    $query .= "read_id not in (".join(",",@$readids).")";
+ 
+    $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    $readids = [];
+    while (my ($read_id) = $sth->fetchrow_array()) {
+	push @{$readids}, $read_id;
+    }
+
+    return $readids;
+}
+
 sub getSequenceForReads {
 # takes an array of Read instances and adds the DNA and BaseQuality (in bulk)
     my $this  = shift;
@@ -883,7 +1003,6 @@ sub getSequenceForReads {
     $sth->finish();
 
 # NOTE : test if all objects have been completed to be done outside this method
-#        see getUnassembledReads and testContig
 }
 
 #-----------------------------------------------------------------------------
@@ -1134,29 +1253,6 @@ sub areReadsNotInDatabase {
     my @notPresent = keys %namehash; # the left over
 
     return \@notPresent;
-}
-
-sub getUnassembledReads {
-# return an array of Read instances with unassembled reads
-    my $this = shift;
-
-# to be  completed
-
-    my @reads;
-
-# add the sequence (in bulk)
-
-    $this->getSequenceForReads([@reads]);
-
-    my $complete = 1;
-    foreach my $read (@reads) {
-        next if $read->hasSequence();
-        print STDERR "Missing sequence for Read ".$read->getReadName()."\n";
-        $complete = 0;
-    }
-
-    return $complete;
-
 }
 
 #------------------------------------------------------------------------------
@@ -1742,7 +1838,7 @@ sub deleteRead {
 # methods dealing with CONTIGs
 #----------------------------------------------------------------------------------------
 
-sub getContigNEW {
+sub getContig {
 # return a Contig object  (under development)
 # options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
 # additional : metaDataOnly=>0 or 1 (default 1) age=>A default 0, or absent
@@ -1753,12 +1849,14 @@ sub getContigNEW {
     my $query  = "select CONTIG.contig_id,$this->{contig_attributes} "; 
 
     my $nextword;
-    my $metadataonly = 0;
+    my $metadataonly = 0; # default the lot
     my $value;
+
     while ($nextword = shift) {
 	if ($nextword eq 'ID' || $nextword eq 'contig_id') {
             $query .= "from CONTIG where contig_id = ?";
             $value = shift;
+print STDERR "new getContig: $query\n";
         }
         elsif ($nextword eq 'withChecksum') {
 # should include age specification?
@@ -1767,10 +1865,10 @@ sub getContigNEW {
         }
         elsif ($nextword eq 'withRead') {
 # should include age specification?
-            $query .= " from CONTIG2CONTIG, CONTIG, MAPPING, READS
-                       where CONTIG2CONTIG.newcontig = CONTIG.contig_id
-                         and CONTIG.contig_id = MAPPING.contig_id
-                         and MAPPING.read_id = READS.read_id
+            $query .= " from CONTIG, MAPPING, SEQ2READ, READS
+                       where CONTIG.contig_id = MAPPING.contig_id
+                         and MAPPING.seq_id = SEQ2READ.seq_id
+                         and SEQ2READ.read_id = READS.read_id
                          and READS.readname = ?";
 print STDERR "new getContig: $query\n";
              $value = shift;
@@ -1799,7 +1897,7 @@ print STDERR "new getContig: $query\n";
 
     $sth->execute($value) || &queryFailed($query);
 
-# get the metadata
+# get the metadataonly
 
     undef my $contig;
 
@@ -1808,10 +1906,24 @@ print STDERR "new getContig: $query\n";
 	$contig = new Contig();
 
         my $contig_id = shift @attributes;
-
         $contig->setContigID($contig_id);
 
-        $this->addMetaDataForContig($contig,@attributes);
+        my $length = shift @attributes;
+        $contig->setConsensusLength($length);
+
+        my $ncntgs= shift @attributes;
+        $contig->setNumberOfContigs($ncntgs);
+
+        my $nreads = shift @attributes;
+        $contig->setNumberOfReads($nreads);
+
+        my $newreads = shift @attributes;
+        $contig->setNumberOfNewReads($newreads);
+
+        my $cover = shift @attributes;
+        $contig->setAverageCover($cover);
+
+# ?    $contig->setReadNameHash($readnamehash); 
 
 	$contig->setArcturusDatabase($this);
     }
@@ -1821,225 +1933,6 @@ print STDERR "new getContig: $query\n";
     return undef unless defined($contig);
 
     return $contig if $metadataonly;
-
-# get the reads for this contig with their DNA sequences and tags
-
-print STDERR "enter getReadsForContig\n";
-    $this->getReadsForContig($contig);
-
-# get mappings (and implicit segments)
-
-print STDERR "enter getMappingsForContig\n";
-    $this->getMappingsForContig($contig);
-
-# get contig tags
-
-print STDERR "enter getTagsForContig\n";
-    $this->getTagsForContig($contig);
-
-# for consensus sequence we use lazy instantiation in the Contig class
-
-print STDERR "enter testContigForExport\n";
-    return $contig if ($this->testContigForExport($contig));
-
-    return undef; # invalid Contig instance
-}
-
-# getContigByID, getContigWithChecksum, getContigWithRead, getContigWithTag
-# are surplus to requirement with the above method
-sub getContigByID {
-# return a Contig object with the meta data only for the specified contig ID
-    my $this       = shift;
-    my $contig_id  = shift;
-
-    my $dbh = $this->getConnection();
-
-    my $query = "select $this->{contig_attributes} from CONTIG where contig_id = ?";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($contig_id) || &queryFailed($query);
-
-    undef my $contig;
-
-    if (my @attributes = $sth->fetchrow_array()) {
-
-	$contig = new Contig();
-
-        $contig->setContigID($contig_id);
-
-        $this->addMetaDataForContig($contig,@attributes);
-
-# if connecting contigs, add linked contig IDs and maps?
-
-	$contig->setArcturusDatabase($this);
-    }
-
-    $sth->finish();
-
-    return $contig; # returns undef if no such contig found
-}
-
-sub addMetaDataForContig {
-# private method: insert meta data into input Contig object
-    my $this = shift;
-    my $contig = shift; # instyance of Contig class
-    my ($length,$ncntgs,$nreads,$newreads,$cover,$readnamehash) = @_;
-print STDERR "Contig attributes: $length,$ncntgs,$nreads,$newreads,$cover\n";
-
-    $contig->setConsensusLength($length);
-
-    $contig->setPreviousContigs($ncntgs);
-
-    $contig->setNumberOfReads($nreads);
-
-    $contig->setNumberOfNewReads($newreads);
-
-    $contig->setAverageCover($cover);
-
-#    $contig->setReadNameHash($readnamehash); 
-}
-
-sub getContigWithChecksum {
-# returns a Contig object with the meta data only which contains the specified read
-    my $this = shift;
-    my $checksum = shift;
-
-    my $dbh = $this->getConnection();
-
-    my $query = "select contig_id,$this->{contig_attributes} from CONTIG 
-                 where readnamehash = ? ";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($checksum) || &queryFailed($query);
-
-    undef my $contig;
-
-    if (my @attributes = $sth->fetchrow_array()) {
-
-	$contig = new Contig();
-
-        my $contig_id = shift @attributes;
-
-        $contig->setContigID($contig_id);
-
-        $this->addMetaDataForContig($contig,@attributes);
-
-	$contig->setArcturusDatabase($this);
-    }
-
-    $sth->finish();
-
-    return $contig; # returns undef if no such contig found
-}
-
-# NOTE: the next two method can return several contig_ids. Better return ids and call 
-# getContigByID for each of them
-
-sub getContigWithRead {
-# returns a Contig object (meta data only) which contains the read specified by name
-    my $this = shift;
-    my $name = shift;
-
-    my $dbh = $this->getConnection();
-
-    my $query  = "select CONTIG.contig_id,$this->{contig_attributes} 
-                    from CONTIG2CONTIG, CONTIG, MAPPING, READS
-                   where CONTIG2CONTIG.newcontig = CONTIG.contig_id
-                     and CONTIG.contig_id = MAPPING.contig_id
-                     and MAPPING.read_id = READS.read_id
-                     and READS.readname = ?";
-# and CONTIG2CONTIG.age = 0"; NO could be missing
-# INSTEAD, if more than one entry found then do a query on CONTIG2CONTIG
-        
-    my $sth = $dbh->prepare_cache($query);
-
-    $sth->execute($name) || &queryFailed($query);
-
-    undef my $contig;
-
-    if (my @attributes = $sth->fetchrow_array()) {
-
-	$contig = new Contig();
-
-        my $contig_id = shift @attributes;
-
-        $contig->setContigID($contig_id);
-
-        $this->addMetaDataForContig($contig,@attributes);
-
-	$contig->setArcturusDatabase($this);
-    }
-
-    $sth->finish();
-
-    return $contig; # returns undef if no such contig found
-}
-
-sub getContigWithTag {
-# returns a Contig object with the meta data only which contains the specified read
-    my $this = shift;
-    my $name = shift;
-
-    my $dbh = $this->getConnection();
-
-    my $query = "select CONTIG.contig_id,$this->{contig_attributes}
-                 from CONTIG join TAG2CONTIG using (contig_id)
-                 where tag_id = (select tag_id from TAG where tagname = ?)";
-# NOTE: uses subquery ; use age = 0 ? NO, see above
-# NOTE: use the merge table concept for tag table, else query should be several UNIONs
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($name) || &queryFailed($query);
-
-    undef my $contig;
-
-    if (my @attributes = $sth->fetchrow_array()) {
-
-	$contig = new Contig();
-
-        my $contig_id = shift @attributes;
-
-        $contig->setContigID($contig_id);
-
-        $this->addMetaDataForContig($contig,@attributes);
-
-	$contig->setArcturusDatabase($this);
-    }
-
-    $sth->finish();
-
-    return $contig; # returns undef if no such contig found
-}
-
-sub getContig {
-# return a Contig instance with its Reads, Mappings and Tags for the given identification
-    my $this  = shift;
-    my $key   = shift;
-    my $value = shift;
-
-# create a new Contig instance and load the meta data
-
-    my $contig;
-
-    if ($key eq 'id' || $key eq 'contig_id') {
-print STDERR "getContigByID $value\n";
-	$contig = $this->getContigByID($value);
-    }
-    elsif ($key eq 'withChecksum') {
-	$contig = $this->getContigWithChecksum($value);
-    }
-# the next two options may give more than one contig
-    elsif ($key eq 'withRead') {
-	$contig = $this->getContigWithRead($value); # should be latest version
-    }
-    elsif ($key eq 'withTag') {
-	$contig = $this->getContigWithTag($value); # should be latest version
-    }
-
-    return undef unless $contig;
 
 # get the reads for this contig with their DNA sequences and tags
 
@@ -2161,47 +2054,46 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
 
 # get the sequenceIDs (from Read); also build the readnames array 
 
-    my @readnames;
-    my $seqids = {};
+    my @seqids;
+    my %seqids;
     foreach my $read (@$reads) {
+        my $seqid = $read->getSequenceID();
         my $readname = $read->getReadName();
-        $seqids->{$readname} = $read->getSequenceID();
-        push @readnames, $readname;
-# my $seqid = $read->getSequenceID();
-# $seqids->{$read->getReadName()} = $seqid;
-# push @seqnames,$seqid;
+        $seqids{$readname} = $seqid;
+        push @seqids,$seqid;
     }
 # and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
     foreach my $mapping (@$mappings) {
         my $readname = $mapping->getReadName();
-        $mapping->setSequenceID($seqids->{$readname});
+        $mapping->setSequenceID($seqids{$readname});
     }
 
 # determine the readnamehash and other tests of uniqueness of the contig
-# find out if the contig has been loaded before i.e. do a query on 
-# CONTIG.readnamehash join CONTIG2CONTIG.age = 0 or not existing
+# find out if the contig has been loaded before
 
-    my $readhash = md5(sort @readnames);
+    my $readnamehash = md5(sort keys %seqids);
 # my $readhash = md5(sort @seqnames);
-    if (my $previous = $this->getContigNEW(withChecksum=>$readhash,
-                                           metaDataOnly=>1)) {
-        print STDERR "Contig ".$contig->getContigName.
-                     " may be identical to contig ".
-                      $previous->getContigName."\n";
+    if (my $previous = $this->getContig(withChecksum=>$readnamehash,
+                                        metaDataOnly=>1) 
+                    || $this->getContig(withChecksum=>md5(sort @seqids),
+                                        metaDataOnly=>1) ) {
+# the read name hash or the seqids hash matches
+print STDERR "Contig ".$contig->getContigName.
+             " may be identical to contig ".
+             $previous->getContigName."\n";
 # pull out the contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous);
         my $identical = $contig->isSameAs($previous);
-print $contig->metaDataToString;
-print $previous->metaDataToString;
-        return $previous->getContigID() if $identical;
-print "comparison passed\n";
+#        return $previous->getContigID() if $identical;
+print STDERR "comparison passed identical=$identical\n";
     }
-return 0; # testing
 
 # okay, the contig is new; find out if it is connected to existing
-# contigs (i.e. build the CONTIG2CONTIG links)
+# contigs (i.e. build the C2CMAPPING CONTIG2CONTIG links)
 
+    $this->getLinkedContigsForContig($contig);
+return 0; # testing
 
 # now load it into the database
 # first the meta data
@@ -2403,6 +2295,53 @@ sub getSequenceIDforReads {
     return $success;
 }
 
+sub getLinkedContigsForContig {
+# 
+    my $this = shift;
+    my $contig = shift;
+
+    return 0 unless $contig->hasReads();
+
+    my $reads = $contig->getReads();
+
+# get the sequenceIDs (from Read); also build the readnames array 
+
+    my @seqids;
+    foreach my $read (@$reads) {
+        push @seqids,$read->getSequenceID();
+    }
+
+# the short version
+    my $query1 = "select distinct(contig_id) from MAPPING ".
+	        " where seq_id in (".join(',',@seqids).")";
+# the long version
+    my $query = "select contig_id,seq_id,cstart,cfinish".
+                "  from MAPPING ".
+	        " where seq_id in (".join(',',sort @seqids).
+                ") order by contig_id,cstart";
+    
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my %cstart;
+    my %cfinal;
+    while (my @ary = $sth->fetchrow_array()) {
+        my ($cid, $sid, $cstart, $cfinis) = @ary;
+        $cstart{$cid} = $cstart unless defined($cstart{$cid});
+        $cstart{$cid} = $cstart if ($cstart < $cstart{$cid});
+        $cfinal{$cid} = $cfinis unless defined($cfinal{$cid});
+        $cfinal{$cid} = $cfinis if ($cfinis > $cfinal{$cid});
+    }
+    foreach my $linked (keys %cstart) {
+        print STDOUT "linked contig $linked range $cstart{$linked} - $cfinal{$linked}\n";
+    }
+
+    $sth->finish();
+}
+
 sub testContigForExport {
     &testContig(shift,shift,0);
 }
@@ -2514,6 +2453,7 @@ sub deleteContig {
     my $this = shift;
     my $contigid = shift;
 
+    my @tables = ('CONTIG','MAPPING','SEGMENT','C2CMAPPING','C2CSEGMENT');
 }
 
 #----------------------------------------------------------------------------------------- 
