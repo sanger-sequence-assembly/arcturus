@@ -3,10 +3,11 @@ package ArcturusDatabase;
 use strict;
 
 use DBI;
+use DataSource;
+
 use Compress::Zlib;
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
-use DataSource;
 use Read;
 use Contig;
 use Mapping;
@@ -631,6 +632,10 @@ sub getReadsByReadID {
         die "'getReadsByReadID' method expects an array of readIDs";
     }
 
+    my @reads;
+
+    return \@reads unless scalar(@$readids); # return ref to empty array
+
 # prepare the range list
 
     my $range = join ',',sort @$readids;
@@ -649,8 +654,6 @@ sub getReadsByReadID {
     my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
-
-    my @reads;
 
     while (my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array()) {
 
@@ -883,52 +886,56 @@ $query = "select newcontig as contig_id from CONTIG2CONTIG where genofo=0".
 
 # step 2: (optionally) filter for nreads > 1
 
-    if (!$withsingleton) {
+    if (@$contigids && !$withsingleton) {
 # remove singletons from list of contig_ids
         $query = "select contig_id from CONTIG".
                  " where contig_id in (".join(",",@$contigids).")".
-		 "   and nreads > 1";
-
+	         "   and nreads > 1";
+ 
         $sth = $dbh->prepare($query);
         $sth->execute() || &queryFailed($query);
 
-        $contigids = [];
+        $contigids = []; # replace contig IDs
         while (my ($contig_id) = $sth->fetchrow_array()) {
 	    push @{$contigids}, $contig_id;
         }
     }
 
-# now find all reads which do not occur in these contigs
+# step 3: find the read_id-s in the contigs
 
-# this is the query using subselects which should replace steps 3 & 4
+    my $readids = [];
+
+    if (@$contigids) {
+# get read_id-s with a join on SEQ2READ and MAPPING
+        $query  = "select distinct SEQ2READ.read_id " .
+	          "  from SEQ2READ join MAPPING using (seq_id)" .
+                  " where MAPPING.contig_id in (".join(",",@$contigids).")";
+
+        $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+        
+        while (my ($read_id) = $sth->fetchrow_array()) {
+            push @{$readids}, $read_id;
+        }
+    }
+
+#*** this is the query using subselects which should replace steps 3 & 4
     $query  = "select READS.read_id from READS where ";
-    $query .=  join(" and ", @dateselect)." and " if @dateselect;
+    $query .=  join(" and ", @dateselect) if @dateselect;
+    $query .= " and " if (@dateselect && @$contigids);
     $query .= "read_id not in (select distinct SEQ2READ.read_id ".
               "  from SEQ2READ join MAPPING on (seq_id)".
 	      " where MAPPING.contig_id in (".join(",",@$contigids)."))";
 #print STDOUT "subselect query $query\n"; NEW QUERY TO BE TESTED
-# end query using subselects
+#*** end query using subselects
 
-# step 3: find the read_ids in the contigs
-
-    $query = "select distinct SEQ2READ.read_id ".
-             "  from SEQ2READ join MAPPING using (seq_id)".
-	     " where MAPPING.contig_id in (".join(",",@$contigids).")";
-
-    $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-        
-    my $readids = [];
-    while (my ($read_id) = $sth->fetchrow_array()) {
-        push @{$readids}, $read_id;
-    }
-
-# step 4 : get the complementary reads from READS
+# step 4 : get the read_id-s NOT found in the contigs
 
     $query  = "select READS.read_id from READS where ";
-    $query .=  join(" and ", @dateselect)." and " if @dateselect;
-    $query .= "read_id not in (".join(",",@$readids).")";
+    $query .=  join(" and ", @dateselect) if @dateselect;
+    $query .= " and " if (@dateselect && @$readids);
+    $query .= "read_id not in (".join(",",@$readids).")" if @$readids;
  
     $sth = $dbh->prepare_cached($query);
 
@@ -2039,8 +2046,6 @@ sub putContig {
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
 
-print STDERR "Contig ".$contig->getContigName." to be added\n";
-
 # test the Contig reads and mappings for completeness (using readname)
 
     if (!$this->testContigForImport($contig)) {
@@ -2074,19 +2079,18 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
 # find out if the contig has been loaded before
 
     my $readnamehash = md5(sort keys %seqids);
-# my $readhash = md5(sort @seqnames);
     if (my $previous = $this->getContig(withChecksum=>$readnamehash,
-                                        metaDataOnly=>1) 
+                                        metaDataOnly=>1)
                     || $this->getContig(withChecksum=>md5(sort @seqids),
                                         metaDataOnly=>1) ) {
-# the read name hash or the seqids hash matches
+# the read name hash or the sequence IDs hash matches
 print STDERR "Contig ".$contig->getContigName.
              " may be identical to contig ".
              $previous->getContigName."\n";
-# pull out the contig mappings and compare them one by one with contig
+# pull out previous contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous);
         my $identical = $contig->isSameAs($previous);
-#        return $previous->getContigID() if $identical;
+        return $previous->getContigID() if $identical;
 print STDERR "comparison passed identical=$identical\n";
     }
 
@@ -2305,7 +2309,7 @@ sub getLinkedContigsForContig {
 
     my $reads = $contig->getReads();
 
-# get the sequenceIDs (from Read); also build the readnames array 
+# get the sequenceIDs (from Read)
 
     my @seqids;
     foreach my $read (@$reads) {
@@ -2466,9 +2470,10 @@ sub getMappingsForContig {
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    die "getMappingsForContig expects a Contig instance" unless (ref($contig) eq 'Contig');
+    die "getMappingsForContig expects a Contig instance" 
+         unless (ref($contig) eq 'Contig');
 
-    return if $contig->hasMappings(); # only 'empty' instance allowed
+    return if $contig->hasMappings(); # already has its mappings
 
     my $dbh = $this->getConnection();
 
@@ -2488,7 +2493,6 @@ sub getMappingsForContig {
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
     while(my ($rn, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
-#print STDERR "mapping:  $rn, $sid, $mid, $cs, $cf, $dir \n";
 # intialise and add readname and sequence ID
         my $mapping = new Mapping();
         $mapping->setReadName($rn);
@@ -2497,7 +2501,7 @@ sub getMappingsForContig {
 # add Mapping instance to output list and hash list keyed on mapping ID
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;
-# add remainder of data (cstart, cfinish) ?
+# ? add remainder of data (cstart, cfinish) ?
     }
     $sth->finish();
 

@@ -603,7 +603,7 @@ sub writeToCaf {
     print $FILE "Dye Dye_$data->{chemistry}\n"          if defined $data->{chemistry};
     print $FILE "Clone $data->{clone}\n"                if defined $data->{clone};
     print $FILE "ProcessStatus PASS\n";
-    print $FILE "Asped $data->{date}\n"                 if defined $data->{date} ;
+    print $FILE "Asped $data->{asped}\n"                if defined $data->{asped} ;
     print $FILE "Base_caller $data->{basecaller}\n"     if defined $data->{basecaller};
 
 # quality clipping
