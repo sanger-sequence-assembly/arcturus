@@ -550,6 +550,10 @@ public class ArcturusDatabase {
 	return contigManager.getCurrentContigIDList();
     }
 
+    public int[] getUnassembledReadIDList() throws SQLException {
+	return contigManager.getUnassembledReadIDList();
+    }
+
     /**
      * Returns a text representation of this object.
      *

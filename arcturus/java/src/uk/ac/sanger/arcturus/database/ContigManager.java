@@ -357,4 +357,61 @@ public class ContigManager {
 
 	return ids;
     }
+
+    public int[] getUnassembledReadIDList() throws SQLException {
+	Statement stmt = conn.createStatement();
+
+	String[] queries = {
+	    "create temporary table CURCTG as" +
+	    " select CONTIG.contig_id from CONTIG left join C2CMAPPING" +
+	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null",
+
+	    "create temporary table CURSEQ as" +
+	    " select seq_id from CURCTG left join MAPPING using(contig_id)",
+
+	    "create temporary table CURREAD" +
+	    " (read_id integer not null, seq_id integer not null, key (read_id)) as" +
+	    " select read_id,SEQ2READ.seq_id from CURSEQ left join SEQ2READ using(seq_id)",
+
+	    "create temporary table FREEREAD as" +
+	    " select READS.read_id from READS left join CURREAD using(read_id)" +
+	    " where seq_id is null"
+	};
+
+	for (int i = 0; i < queries.length; i++) {
+	    int rows = stmt.executeUpdate(queries[i]);
+	}
+
+	String query = "select count(*) from FREEREAD";
+
+	ResultSet rs = stmt.executeQuery(query);
+
+	int nreads = 0;
+
+	if (rs.next())
+	    nreads = rs.getInt(1);
+
+	rs.close();
+
+	if (nreads == 0)
+	    return null;
+
+	query = "select read_id from FREEREAD";
+
+	rs = stmt.executeQuery(query);
+
+	int[] ids = new int[nreads];
+
+	int j = 0;
+
+	while (rs.next() && j < nreads)
+	    ids[j++] = rs.getInt(1);
+
+	rs.close();
+
+	stmt.close();
+
+	return ids;
+    }
 }
