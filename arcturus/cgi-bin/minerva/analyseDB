@@ -91,11 +91,13 @@ if(defined($database) && defined($table)) {
 
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
-	print "<TR>\n";
+	print "<TR BGCOLOR=\"#FFCC00\">\n";
 
 	while ($hdr = shift @colnames) {
 	    print "<TH ALIGN=\"LEFT\">$hdr</TH>\n";
 	}
+
+	print "</TR>\n";
 
 	while (@ary = $sth->fetchrow_array()) {
 	    print "<TR>\n";
