@@ -20,8 +20,6 @@ use ContigBuilder;
 # print "content-type: text/plain\n\n";
 my $GateKeeper = GateKeeper->new('mysql',{writeAccess => 1});
 
-$GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
-
 # how is this script invoked?
 
 my ($void, $database, $option, $cgi);
@@ -35,6 +33,8 @@ else {
 }
 
 my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
+
+$GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
 my $users     = $organisms->spawn('USERS','arcturus',0,1);
 
@@ -59,7 +59,7 @@ $config{CLF} = "$arc_log_dir/cloader.$database.log"; # default logfile
 
 my ($userid, $caffile, $page);
 my ($list, $limit, $exactmatch);
-my ($TEST, $REPAIR, $logON, $reload, $update, $forced);
+my ($TEST, $REPAIR, $logON, $reload, $update, $forced, $rdscan);
 my ($CDD, $CFN, $CNF, $CGN, $CLF, $CPR, $SRC);
 my ($ASSEMBLY, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
@@ -122,6 +122,7 @@ if (!$cgi) {
     }
    
     $CNF = $ARGV[1] || ''; # contig name filter
+    $rdscan = 1 if ($CNF =~ /\breadscan\b/);
 
 # get file name filter and global (directory) filter 
 
@@ -177,6 +178,7 @@ else {
         $page->sectionheader("There are $count Organism databases",3,0);
         $page->add($organisms->htmlTable('0310000011100000')); # list them
         my $database = $GateKeeper->lookup('database') || $GateKeeper->lookup('organism');
+        undef $database if ($database eq 'arcturus');
         my $select = $organisms->htmlOptions('dbasename','database',20,0,$database);
         $page->sectionheader("Select a Database : $select",4,0);
         $page->partition(5);
@@ -283,6 +285,7 @@ else {
         $reload = 1 if $GateKeeper->lookup('reload' ,0);
         $update = 1 if $GateKeeper->lookup('update' ,0);
         $forced = 1 if $GateKeeper->lookup('forced' ,0);
+        $rdscan = 1 if $GateKeeper->lookup('readscan',0);
 
 # error test and authorization check
       
@@ -345,7 +348,7 @@ else {
     if ($GateKeeper->lookup('anew')) {
 # test if any previous generation 0 has been cleared to start a new assembly
         $error ='';
-        if ($status ne 'completed') {
+        if ($status ne 'complete') {
             $error .= "Assembly $assemblyname is not cleared for a new generation: ";
             $error .= "status = $status $brtag";
         }
@@ -387,7 +390,7 @@ else {
     my $READS    = $organisms->spawn("READS",$database,0);
     my $CONTIGS  = $organisms->spawn("CONTIGS",$database,0);
     my $PENDING  = $organisms->spawn("PENDING",$database,0);
-    $PENDING->setMultiLineInsert(100);
+    $PENDING->setMultiLineInsert(1000);
 
     my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
  
@@ -440,7 +443,7 @@ else {
 
     my $dbreads = 0;
     undef my %dbreads;
-    if ($rblocker) { 
+    if ($rblocker && !$rdscan) { 
 #        $READS->autoVivify($database,0.5); # install links on opened tables only
         print "Scanning database $database for Reads with existing mappings ...";       
         my $where = 'label > 9';
@@ -467,7 +470,7 @@ else {
 ###############################################################################
 
     my $contigcount = 0;
-    if ($contigcount && !$CNF) {
+    if ($contigcount && !$CNF && !$rdscan) {
 # test if all contigs in the CONTIG table have indeed been mapped in the READS2CONTIG table
         print "Scanning database $database (again) for Contigs with existing mappings ..."; 
 #        $CONTIGS->autoVivify($database,0.5,1); # install links on already opened tables     
@@ -511,11 +514,13 @@ else {
 #
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-    my $ContigBuilder = ContigBuilder->init($CONTIGS);
+    my $ContigBuilder = ContigBuilder->init($CONTIGS,$rdscan);
 
     $ContigBuilder->setMinOfReads($SRC) if ($SRC > 1);
     $ContigBuilder->setOwnership($assemblynmbr,$userid);
-    $ContigBuilder->setTestModes($TEST,$REPAIR);
+    $ContigBuilder->setTestMode('TESTMODE',$TEST);
+    $ContigBuilder->setTestMode('REPAIR',$REPAIR);
+    $ContigBuilder->setTestMode('READSCAN',1) if $rdscan;
 
     if (my $estatus = $ContigBuilder->testAssembly($assemblynmbr)) {
 
@@ -660,9 +665,10 @@ sub form {
 
     $form .= "</TR><TR>";
 
+    $form .= "<TH ALIGN=RIGHT> Read Name Check <INPUT type=checkbox name=readscan checked> </TH>";
     $form .= "<TH>&nbsp</TH>";
     $form .= "<TH ALIGN=RIGHT> FORCED load <INPUT type=checkbox name=forced> </TH>";
-    $form .= "<TH>&nbsp</TH>";
+#    $form .= "<TH>&nbsp</TH>";
 
     $form .= "</TR></TABLE>";
 

@@ -1206,6 +1206,8 @@ sub updateCounters {
 
     my $column = $hash->[0]->{tcolumn};
     my $linker = $hash->[0]->{lcolumn};
+    $linker =~ s/([^\/]+)\/.*$/$1/; # if several columns specified, use first
+# print "column $column  linker $linker <br>";
 
 # get the frequency distribution of 'tcolumn' values in the master table 
 
@@ -1266,6 +1268,7 @@ sub updateCounters {
                 $changes++;
             }
             else {
+#print "update $stable->{tablename} counted $mc $linker $key<br>";
                 $tc = $mc if $stable->update('counted',$mc,$linker,$key);
                 $report .= "<TR><TD>$column</TD><TD>$key</TD><TD bgcolor=yellow>updated</TD>";
                 $report .= "<TD>$tc</TD><TD ALIGN=RIGHT>($mc)</TD></TR>";

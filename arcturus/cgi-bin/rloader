@@ -389,11 +389,11 @@ else { # invoked from the command line (ejz/adh/pathdb only)
             $SCHEMA  = $organisms->associate('schema',$database,'dbasename');
             $assembly_id =  shift @ARGV || 'BLOB';
         }
-        elsif ($gbfilter && $gbfilter =~ /\D/) {
+#        elsif ($gbfilter && $gbfilter =~ /\D/) {
 # test if gbfilter is a project name; find its root directory ? 
-print "testing II project $gbfilter \n";
-            $config{PDD} = `$BADGERDIR/pfind -q $gbfilter > /dev/null 2>&1`;
-        }
+#print "testing II project $gbfilter \n";
+#            $config{PDD} = `$BADGERDIR/pfind -q $gbfilter > /dev/null 2>&1`;
+#        }
         elsif (!defined($gbfilter)) {
             $gbfilter = '';
         }
@@ -419,7 +419,7 @@ print "testing II project $gbfilter \n";
     if ($database && $organisms->associate('dbasename',$database,'dbasename')) {
 # get the default attributes
         if ($attributes = $organisms->unpackAttributes($database,'dbasename')) {
-            print STDOUT "Database $database found; attributes retrieved\n";
+            print STDOUT "Attributes retrieved for database $database\n";
             foreach my $item (keys %$attributes) {
 # print STDOUT "item=$item attribute=$attributes->{$item}\n";
                 $config{$item} = $attributes->{$item}; # overrides defaults
@@ -445,7 +445,8 @@ print "testing II project $gbfilter \n";
         $assemblynmbr = $assembly_id;
     }
     else {
-        $GateKeeper->dropDead("Command line invocation aborted: Unknown assembly $gbfilter");
+        print "last query on $assembly->{tablename} $assembly->{lastQuery} $assembly->{errors}\n";
+        $GateKeeper->dropDead("Command line invocation aborted: Unknown assembly $assembly_id");
     }
 
     $PROJECT = $assembly->associate('oracleproject',$assemblynmbr,'assembly') if ($source == 2);
@@ -486,7 +487,7 @@ print "testing II project $gbfilter \n";
     }
 
 #    print "ROOTDATADIR = $ROOTDATADIR\nlog file $arc_logfile \n";
-#$GateKeeper->dropDead("Test run exit: $fnfilter $gbfilter $LOADPERRUN") if ($source == 2);
+#$GateKeeper->dropDead("Test run exit: $fnfilter $gbfilter $LOADPERRUN");
 }
 
 #*********************************** HERE WE GO ********************************
@@ -820,7 +821,9 @@ $LOADPERRUN =~ s/\W/x/g;
 
 # treat a consensus file differently from a standard read
 
-        my ($scm, $qcm);
+        my $scm = 99;
+        my $qcm = 99;
+
         my $entry;
         my $isStdRead;
 
@@ -833,8 +836,8 @@ $LOADPERRUN =~ s/\W/x/g;
           
             $entry = $reader->newRead($file,1); # 1 for consensus file
 
-            $scm = 2; # switch to Huffman encoding
-            $qcm = 2; # Huffman encoding
+#            $scm = 2; # switch to Huffman encoding
+#            $qcm = 2; # Huffman encoding
  
 	}
         else {
@@ -849,8 +852,8 @@ $LOADPERRUN =~ s/\W/x/g;
                 $reader->strands();
                 $reader->chemistry();
             }
-            $scm = 1; # standard triplet encoding for DNA
-            $qcm = 1; # number substitution on quality data
+#            $scm = 1; # standard triplet encoding for DNA
+#            $qcm = 1; # number substitution on quality data
 #            $qcm = 3; # Huffman compression on quality difference data
         }
 

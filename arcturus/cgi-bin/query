@@ -428,6 +428,7 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 #    $mask = '0101011111111000002' if ($tablename =~ /ASSEM/);
     $mask = '011111000000002'     if ($tablename =~ /USER/);
     $mask = '011111111000112'     if ($tablename =~ /PROJ/);
+    $mask = '12110' if ($tablename =~ /\bHISTORY\b/);
     my $table = $dbtable->htmlTable($mask);
     $table =~ s/\<TABLE/<TABLE WIDTH=60%/;
     $table =~ s/chromosome/chr/   if ($tablename =~ /ASSEM/);
@@ -574,19 +575,21 @@ elsif ($action eq "tagselect") {
 
 elsif ($action eq "selectread") {
 
-    my $dbread  = $organisms->spawn("READS",$database,0,0);
-    my $initial = ReadsRecall->init($dbread);
-    my $reader  = ReadsRecall->new();
+    my $READS  = $organisms->spawn("READS",$database,0,0);
+    my $initial = ReadsRecall->init($READS);
+    my $ReadsRecall = ReadsRecall->new();
 
 # build various other tables 
 
-    $dbread->autoVivify($database,2);
+    $READS->autoVivify($database,2);
 
     my $readitem = $cgi->parameter('readitem');
     my $readnmbr = $cgi->parameter('readnmbr');
     my $readname = $cgi->parameter('readname');
     my $wildcard = $cgi->parameter('wildcard');
     my $limit = $cgi->parameter('maxrows') || 100;
+
+    $readname =~ s/^\s*|\s*$//g if $readname; # remove possible leading or trailing blanks
 
     undef my $querystring;
     undef my $constraints;
@@ -598,7 +601,7 @@ elsif ($action eq "selectread") {
     if ($readitem == 2) {
         $constraints = $GateKeeper->lookup('querytxt');
         $error = "please define a query" if (!$constraints);
-        $dbread->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
+        $READS->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
     }
     elsif ($readitem && $readnmbr) {
         if ($readnmbr =~ /\blast\b\s*(\d*)/i) {
@@ -606,16 +609,18 @@ elsif ($action eq "selectread") {
             $limit = $1 || 1; # overrides input 'maxrows'
         }
         elsif ($readnmbr !~ /\,|\-|\./) {
-            my $status = $reader->getNumberedRead($readnmbr);
+            my $status = $ReadsRecall->getNumberedRead($readnmbr);
             $number = 1 if ($status <= 1);
         }
         elsif ($readnmbr =~ /\,/) {
             $constraints = "read_id in ($readnmbr)";
+#print "constraints $constraints <br>";
 # test setup for spawning new reads in a series
 my @number = split /\,/,$readnmbr; # test mode
-my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
+my $hashes = $ReadsRecall->spawnReads(\@number,'scompress,sequence,slength');
         }  
         else {
+            $readnmbr =~ s/^\s+//; # remove any leading blanks
             my ($first,$last) = split /[\s\,\.\:\-]+/,$readnmbr;
             $constraints = "(read_id >= $first and read_id <= $last)";
 # print "constraints: $constraints<br>\n";
@@ -628,7 +633,7 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
         $error = "please provide a Read Name";
     }
     elsif (!$wildcard) {
-        my $status = $reader->getNamedRead($readname);
+        my $status = $ReadsRecall->getNamedRead($readname);
         $number = 1 if ($status <= 1);  
     }
     else {
@@ -646,7 +651,7 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
 #print "key $key  input value $cgi->parameter($key}<br>\n";
                 my $keyname   = $2;
 #print "table=$1  key=$keyname value=$cgi->parameter($key) ";
-                my $keyvalue  = $dbread->quoteColValue ($keyname, $cgi->parameter($key));
+                my $keyvalue  = $READS->quoteColValue ($keyname, $cgi->parameter($key));
                 if (defined($keyvalue)) {
                     $constraints .= " and " if ($constraints);
                     $constraints .= "$keyname = $keyvalue";
@@ -674,13 +679,13 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
         $querystring .= " limit $limit";
 # print "query: $querystring<br>";
 # now query the database
-        $hashrefs = $dbread->query($querystring);
+        $hashrefs = $READS->query($querystring);
 # determine output depending on number of reads selected
         $number = @$hashrefs if ($hashrefs && $hashrefs > 0);
         if ($number == 1) {
             my $readhash = $hashrefs->[0];
             my $read_id  = $readhash->{'read_id'};
-            $reader->getNumberedRead($read_id,'read_id');
+            $ReadsRecall->getNumberedRead($read_id,'read_id');
         }
         elsif (!$number) {
             $error = "! No reads found "; 
@@ -699,8 +704,8 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
         $page->errorbox($error);
     } 
     elsif ($number == 1) {
-#        $reader->touch();
-        $page->add($reader->list(1),0,0);
+#        $ReadsRecall->touch();
+        $page->add($ReadsRecall->list(1),0,0);
     } 
     else {
     # compose selection table
@@ -866,12 +871,13 @@ elsif ($action eq "listentry") {
 
     my $column = $GateKeeper->lookup('column');
     my $cvalue = $GateKeeper->lookup('value');
+    my $extra  = $GateKeeper->lookup('extra') || 0;
     $page->sectionheader("$name entry for $column = $cvalue",4,0);
 
     my $mask = '1'; #default
     $mask = '11101111'      if ($tablename =~ /STSTAG/);
     $mask = '01111111101011' if ($tablename =~ /USERS/); 
-    my $list = $dbtable->htmlListRecord($cvalue,$column,0,$mask);
+    my $list = $dbtable->htmlListRecord($cvalue,$column,0,$mask,0,$extra);
     $page->add($list,0,0);
 
 #    my $link = "$arc_cgi_dir/query/overview\?database=$database";
@@ -901,9 +907,9 @@ sub READS_form {
     $queryform .=  "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='readname' value='' width=24>$sm</TD>";
     $queryform .= "</TR><TR>";
     $queryform .= "<TD>&nbsp</TD><TH>type of match :</TH>";
-    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='0'></TD>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='0' checked></TD>";
     $queryform .= "<TD> exact </TD>";
-    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='1' checked></TD>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='1'></TD>";
     $queryform .= "<TD> begin </TD>";
     $queryform .= "<TD><INPUT type='radio' name='wildcard' value='2'></TD>";
     $queryform .= "<TD> substring </TD>";
