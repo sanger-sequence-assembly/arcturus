@@ -7,6 +7,7 @@ package Compress;
 #############################################################################
 
 use strict;
+use FileHandle;
 
 my $status;
 
@@ -62,6 +63,33 @@ sub buildCodeTables {
                 $i++;
             }
         }
+    }
+}
+
+#############################################################################
+
+sub dumpCodeTable {
+    my $self = shift;
+    my $outfh = shift;
+
+    die "No FileHandle specified in dumpDecodeTable" unless defined($outfh);
+
+    my $decodeTable = $self->{decode};
+
+    my $i = 0;
+    my ($i0, $i1, $i2, $i3);
+
+    foreach my $item (@{$decodeTable}) {
+	$i0 = $i;
+	$i1 = $i0%6;
+	$i0 -= $i1;
+	$i0 /= 6;
+	$i2 = $i0%6;
+	$i0 -= $i2;
+	$i3 = $i0/6;
+
+	$outfh->printf("%4d %d%d%d \'%s\'\n", $i, $i3, $i2, $i1, $item);
+	$i++;
     }
 }
 
