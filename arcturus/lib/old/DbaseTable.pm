@@ -208,7 +208,7 @@ sub build {
             foreach my $definition (@description) {
                 if ($definition =~ /\WTYPE\=(\w+)\s*/i) {
 #print "type $tablename $1 \n";
-                    $self->{tabletype} = $1;
+                    $self->{tabletype} = uc($1);
                 }
             }
         }
@@ -513,6 +513,16 @@ sub doesExist {
 
 #############################################################################
 
+sub doesColumnExist {
+# returns 1 if the table column exists, else 0
+    my $self   = shift;
+    my $column = shift || return 0;
+
+    return $self->{coldata}->{$column} ? 1 : 0;
+}
+
+#############################################################################
+
 sub getColumnInfo {
 # return description of specified column 
     my $self   = shift;
@@ -567,6 +577,15 @@ sub getTableType {
     $self->build(0) if !$self->{tabletype};
 
     return $self->{tabletype} || undef;
+}
+
+#############################################################################
+
+sub getPrimaryKey {
+# return name of the auto-incremented column or other unique key; 0 if none
+    my $self = shift;
+
+    return $self->{autoinc} || $self->{prime_key} || 0;
 }
 
 #############################################################################
@@ -1695,25 +1714,40 @@ sub newrow {
 #############################################################################
 
 sub lastInsertId {
-# returns the last occurring value of an auto incremented column
+    my $self = shift;
+
+# returns the last inserted value of an auto incremented column during the
+# current session. Beware! This can be different from the last id in the 
+# column if several users are writing to the table concurrently and in any 
+# case it may even not exist or relate to an insert in another table 
+# altogether.
+
+# If you need the largest occurring value in the column use 'lastId'
+
+     my $item = "last_insert_id()";
+     my $query = "select $item";
+     my $qhash = $self->query($query,{traceQuery=>0});
+print "lastInsertId: $qhash \n";
+     return $qhash->[0]->{$item} || 0;
+}
+
+#############################################################################
+
+sub lastId {
+# returns the largest value value of an auto incremented column
+# NOTE: this is not necessarily the same as the last_insert_id, which
+# may or may not be defined and in any case may relate to another table
+# altogether (see lastInsertId)
+
     my $self = shift;
 
     return if !$self->{autoinc}; # undefined, cannot be determined
 
-# test if there is any last insert in the current server session
-
-    my $query = "select last_insert_id()";
-    return if !$self->query($query,{traceQuery=>0}); 
-
-# I return the highest autoincremented value on THIS table, which is NOT
-# necessarily the same as the last_insert_id(), which could be in another table
-
     my $item = $self->{autoinc};
-    $query = "select $item from <self> order by $item desc limit 1";
+    my $query = "select $item from <self> order by $item desc limit 1";
     my $hashes = $self->query($query,{traceQuery=>0});
-print "lastInsertId: hashes $hashes \n";
-
-    return $hashes->[0]->{$item};
+print "lastId: hashes $hashes \n";
+    return $hashes->[0]->{$item} || 0;
 }
 
 #############################################################################
@@ -1979,7 +2013,23 @@ sub prepareQuery {
 
     $prep =~ s/[\<|\b]self[\>|\b]/$tablename/i; # if placeholder <SELF> given
 
-    $self->{queries}->{$name} = $dbh->prepare($prep) || return 0;
+# here we do a test that in the case of modification the table being 
+# modified is actually the current table; if not return status 0
+
+    my $modify = ($prep =~ /\b(update|delete|insert|replace)\b/i) ? 1 : 0;
+
+    return 0 if ($modify && $prep !~ /\b$tablename\b/); # tablename error
+
+# store the query handle and the modification status an array on key '$name'
+
+    my @preps;
+
+    $preps[0] = $dbh->prepare($prep) || return 0;
+
+    $preps[1] = $1 if ($prep =~ /\b(update|delete|insert|replace)\b/i);
+#print "prepare query $prep  '$preps[0]' '$preps[1]'";
+
+    $self->{queries}->{$name} = \@preps;
 
     return 1; 
 }
@@ -2033,10 +2083,16 @@ sub usePreparedQuery {
     my $data = shift; # any data required (undef allowed)
     my $hash = shift; 
 
-# returns undefined for failure, or reference to array of hashes (which can be empty)
+    my %options = (doStamp => 1, doBuild => 1, returnHash => 0);
+    $self->importOptions(\%options, $hash);
+
+    $options{returnHash} = 1 if ($hash && ref($hash) ne 'HASH'); # to be deprecated
+
 # if $hash is set true, return a hash if only one result found, or 0 if none  
 
-    my $sth = $self->{queries}->{$name} || return; # get the query handle
+    my $preps = $self->{queries}->{$name} || return; # get the query handle
+
+    my $sth = $preps->[0]; # the query handle
 
     my $status = 0;
     if (ref($data) eq 'ARRAY') {
@@ -2044,7 +2100,7 @@ print "USE prepared Query read @$data \n";
         $status = $sth->execute(@$data);
     }
     else {
-# print "USE prepared Query read $data \n";
+# print "USE prepared Query data $data @$preps \n";
 	$status = $sth->execute($data);
     }
 
@@ -2059,10 +2115,19 @@ print "USE prepared Query read @$data \n";
 # if none returned ensure it's a ref to an empty array
         $hashrefs = \@hashrefs if !$hashrefs; 
         $self->{querytotalresult} = @$hashrefs;
-        if ($hash && @$hashrefs <= 1) {
+        if ($options{returnHash} && @$hashrefs <= 1) {
             $hashrefs = $hashrefs->[0] || 0;
         }
     }
+
+    if ($hashrefs && $preps->[1]) {
+# the table has been modified
+        &timestamp(0, $self, $preps->[1]) if $options{doStamp};
+        &buildhash(0, $self) if ($options{reBuild} && $self->{'build'});
+    }
+
+# returns undef for a failed query, 0 for an empty query, a hashref for
+# a single row returned, or an array of hashrefs (which can be empty)
 
     return $hashrefs; 
 }
@@ -2074,8 +2139,11 @@ sub do {
     my $self = shift;
     my $todo = shift || return;
 
-    if (uc($self->{tabletype}) eq 'INNODB' && $todo =~ /\b(update|delete|insert)\b/i) {
-        $self->{qerror} = "DO construct not transaction safe on this table; use 'query' method";
+    if ($self->{tabletype} eq 'INNODB' && $todo =~ /\b(update|delete|insert|replace)\b/i) {
+        $self->{qerror}  = "'DO $todo' construct not transaction safe on ";
+        $self->{qerror} .= "this (INNODB) table; use the 'query' method";
+# or invoke the query method ?
+#       $self->query($todo,1,0);
         return 0;
     }
 
@@ -2197,7 +2265,8 @@ sub query {
 #***************************************************************************************
 # TO BE TESTED
 #***************************************************************************************
-    if (uc($self->{tabletype}) eq 'INNODB' && $query =~ /(insert|update|delete|replace)/i) {
+# Transaction protocol taken from the MySQL Cookbook, chapter 15.4
+    if ($self->{tabletype} eq 'INNODB' && $query =~ /(insert|update|delete|replace)/i) {
 # modifications to a InnoDB table go via a transaction protocol on THIS table handle
         my $operation = $1;
         if ($query !~ /$operation\s.*\b$tablename\b/) {
@@ -2295,6 +2364,15 @@ sub qstatus {
     $report .= "warnings: $self->{warnings}\n" if $self->{warnings};
 
     return $report;
+}
+
+#############################################################################
+
+sub qerrors {
+# return 1 for an erro in the last query
+    my $self = shift;
+
+    return $self->{qerror} ? 1 : 0;
 }
 
 #############################################################################

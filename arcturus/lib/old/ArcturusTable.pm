@@ -444,6 +444,16 @@ sub signature {
             my $datetime = $self->timestamp();
             $self->update($update,$datetime,$tcname,$tvalue);
         }
+# alternative, probably faster, but even faster would be a prepared query
+#        my $query = "update <self> set ";
+#        if (defined($user) && $user && defined($self->{coltype}->{$userid})) {
+#            $query .= "$userid = '$user' ";
+#        }
+#        if (defined($self->{coltype}->{$update})){
+#            $query .= ", $update = NOW() ";
+#        }
+#         $query .= "where $tcname = $tvalue"; # quoting?
+#         $self->query($query);
     }
 }
 

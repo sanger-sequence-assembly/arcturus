@@ -101,7 +101,7 @@ sub new {
 
     $self->{biology}  = {}; # hash for bio-info
     $self->{quality}  = []; # various quality boundaries
-    $self->{clone}    =  0; # clone-id (re: contig map)
+#    $self->{clone}    =  0; # clone-id (re: contig map)
 
     $self->{report}   = ''; # extended reporting
 
@@ -1350,7 +1350,7 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
 		    push @read2conKeys, '999999';
                 }
 
-                my $clone_id = $self->{clone} || 0;
+#                my $clone_id = $self->{clone} || 0;
 
 #$self->list(1) if $DEBUG;
                 &timer('RM newline(s)',0) if $TIMER;
@@ -1376,9 +1376,9 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         push @columns, 'read_id'   ; push @cvalues, $read_id;
                         push @columns, 'prstart'   ; push @cvalues, $block[0];
                         push @columns, 'prfinal'   ; push @cvalues, $block[1];
-                        push @columns, 'assembly'  ; push @cvalues, $assembly; # ?
-                        push @columns, 'clone'     ; push @cvalues, $clone_id; # ?
                         push @columns, 'label'     ; push @cvalues, $label;
+                        push @columns, 'assembly'  ; push @cvalues, $assembly; # ?
+#                        push @columns, 'clone'     ; push @cvalues, $clone_id; # ?
                         push @columns, 'generation'; push @cvalues, 0;
                         push @columns, 'deprecated'; push @cvalues, $marker;
 
@@ -1396,7 +1396,7 @@ print "$status->{diagnosis} $break $RR2CC->{lastquery} $break $RR2CC->{qerror} $
                             $status->{errors}++;
                         } 
                         $counts->[6]++;
-    # and finally update assembly in READS2ASSEMBLY
+# and finally update assembly in READS2ASSEMBLY ??? insert 
                         $RR2AA->update('assembly',$assembly,'read_id',$read_id);
                     }
                 } 
@@ -1945,7 +1945,7 @@ sub inDataBase {
 # first look in the READS cache
     elsif ($hashes = $READS->cacheRecall($readname,{indexName=>'readname'})) {
         $dbrref = $hashes->[0]->{read_id} || 0;
-        $self->{clone} = $hashes->[0]->{clone};
+#        $self->{clone} = $hashes->[0]->{clone};
 #print "Read $readname found in READS $dbrref $break";
     }
 # then look in the PENDING cache
@@ -2025,7 +2025,8 @@ print "block ns=$ns  nf=$nf  nr=$nr $break";
 
             if ($mask[0]) {
 print "READS $break";
-                $query = "select read_id,readname,clone from <self> $where";    
+                $query = "select read_id,readname from <self> $where";    
+#                $query = "select read_id,readname,clone from <self> $where";    
                 $READS->cacheBuild($query,{indexKey=>'readname',extend=>$extend});
 # get the read_id's from the readnames, using the cached data
             }
@@ -2065,7 +2066,8 @@ print "RR2CC $break";
     else {
 print "enter ReadMapper preload whole table $reads $break";
 
-        my $query = "select read_id,readname,clone from <self>";
+        my $query = "select read_id,readname from <self>";
+#        my $query = "select read_id,readname,clone from <self>";
 print "$query $break" if $mask[0];
         $READS->cacheBuild($query,{indexKey=>'readname'}) if $mask[0];
         $query = "select record,readname from <self>";

@@ -249,10 +249,10 @@ sub create_organism {
         &record ($historyTable,$userid,'CONTIGS2CONTIG');
     }
 
-    if (!$target || $target eq 'CONTIGS2SCAFFOLD') {    
-        push @tables, 'CONTIGS2SCAFFOLD';
-        &create_CONTIGS2SCAFFOLD ($dbh, $list);
-        &record ($historyTable,$userid,'CONTIGS2SCAFFOLD');
+    if (!$target || $target eq 'SCAFFOLDS') {    
+        push @tables, 'SCAFFOLDS';
+        &create_SCAFFOLDS ($dbh, $list);
+        &record ($historyTable,$userid,'SCAFFOLDS');
     }
 
     if (!$target || $target eq 'CONTIGS2PROJECT') {    
@@ -1133,7 +1133,7 @@ sub create_READS2CONTIG {
 #                = 1 for a read aligned against the contigs direction
 #              e.g: cyclops searches label >= 10; others label < 20
 
-# clone      : reference to CLONES table (duplicates info in READS, but 
+# // clone      : reference to CLONES table (duplicates info in READS, but 
 #              is included for fast access by Cyclops in mapping context
 # assembly   : assembly number reference to ASSEMBLY.assembly; duplicates
 #              info in CONTIGS2PROJECT, PROJECT2ASSEMBLY but required for 
@@ -1155,12 +1155,12 @@ sub create_READS2CONTIG {
              prstart          SMALLINT UNSIGNED        NOT NULL,
              prfinal          SMALLINT UNSIGNED        NOT NULL,
              label            TINYINT  UNSIGNED        NOT NULL,
-             clone            SMALLINT UNSIGNED        NOT NULL,
              assembly         SMALLINT UNSIGNED        NOT NULL,
              generation       SMALLINT UNSIGNED        NOT NULL,
              deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
 	 ) type = INNODB]);
     print STDOUT "... DONE!\n" if ($list);
+#             clone            SMALLINT UNSIGNED        NOT NULL,
 #             blocked          ENUM('0','1')         DEFAULT '0' to be left out with INNODB tables
 # NOTE item clone and assembly to be taken out
 
@@ -1264,7 +1264,7 @@ fast access by Cyclops to derive clone maps)
 
 number of assembly in ASSEMBLY table
 
-(duplicates info in CONTIGS2SCAFFOLD but required for generations update)
+(duplicates info in SCAFFOLDS but required for generations update)
 
 =item generation
 
@@ -1688,7 +1688,7 @@ end position of the mapping on the old contig
 sub create_CONTIGS2PROJECT {
     my ($dbh, $list) = @_;
 
-# assign scaffolds (groups of one or more contigs) to projects and assemblies
+# assign contigs to projects and assemblies
 
 # contig_id
 # project   : reference to PROJECT.project number
@@ -1720,7 +1720,7 @@ sub create_CONTIGS2PROJECT {
 #--------------------------------------------------------------------
 #*********************************************************************************************************
 
-sub create_CONTIGS2SCAFFOLD {
+sub create_SCAFFOLDS {
     my ($dbh, $list) = @_;
 
 # assign contigs to scaffolds
@@ -1728,26 +1728,26 @@ sub create_CONTIGS2SCAFFOLD {
 # scaffold    : scaffold id  number
 # orientation : Forward, Reverse or Unknown
 # ordering    : ordering sequence of contig in scaffold
-# assembly    : reference to ASSEMBLY.assembly number (replicates info in project)
+# assembly    : reference to ASSEMBLY.assembly number (replicates info in project) redundent: find via C2P
 # astatus     : assembly status: 
-#               N not allocated (should not occur except as transitory status)
+#               N not allocated (can occur as transitory status or after deallocation)
 #               C current generation (origin in CONTIGS.origin)
-#               S contig is superseded by later one (i.e previous generation)
+#               S contig is superceded by later one (i.e previous generation)
 #               X locked status (includes transport status); locked by last
 #                 user to access in CONTIGS.userid
 
-    &dropTable ($dbh,"CONTIGS2SCAFFOLD", $list);
-    print STDOUT "Creating table CONTIGS2SCAFFOLD ..." if ($list);
-    $dbh->do(qq[CREATE TABLE CONTIGS2SCAFFOLD(
+    &dropTable ($dbh,"SCAFFOLDS", $list);
+    print STDOUT "Creating table SCAFFOLDS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE SCAFFOLDS(
              contig_id        MEDIUMINT          UNSIGNED NOT NULL PRIMARY KEY,
              scaffold         SMALLINT           UNSIGNED NOT NULL,
              orientation      ENUM ('F','R','U')       DEFAULT 'U',
              ordering         SMALLINT           UNSIGNED NOT NULL,
              zeropoint        INT                        DEFAULT 0,
-             assembly         SMALLINT           UNSIGNED NOT NULL,
              astatus          ENUM ('N','C','S','X')   DEFAULT 'N'
          )]);
     print STDOUT "... DONE!\n" if ($list);
+#             assembly         SMALLINT           UNSIGNED NOT NULL,
 }
 #--------------------------- documentation --------------------------
 =pod
@@ -1818,7 +1818,7 @@ sub create_ASSEMBLY {
              userid           CHAR(8)                   NULL,
              status           ENUM ('loading','complete','error','virgin','unknown') DEFAULT 'virgin', 
              created          DATETIME              NOT NULL,
-	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
+	     creator          CHAR(8)               NOT NULL DEFAULT "arcturus",
              attributes       BLOB                      NULL,
              comment          VARCHAR(255)              NULL,             
              CONSTRAINT ASSEMBLYNAMEUNIQUE UNIQUE (ASSEMBLYNAME)  
@@ -1871,7 +1871,7 @@ sub create_PROJECTS {
              updated        DATETIME                  NULL,
              userid         CHAR(8)                   NULL,
              created        DATETIME                  NULL,
-	     creator        CHAR(8)               NOT NULL DEFAULT "oper",
+	     creator        CHAR(8)               NOT NULL DEFAULT "arcturus",
              attributes     BLOB                      NULL,
              comment        VARCHAR(255)              NULL,             
              status         ENUM ("Dormant","Active","Completed","Merged") DEFAULT "Dormant",
@@ -2700,11 +2700,10 @@ sub create_DATAMODEL {
 
     my @input = ('READEDITS          read_id             READS     read_id',
                  'READTAGS           read_id             READS     read_id',
-                 'READS2CONTIG         clone            CLONES       clone',
-                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
+#                 'READS2CONTIG      assembly          ASSEMBLY    assembly',
                  'READS2CONTIG       read_id             READS     read_id',
                  'READS2CONTIG     contig_id           CONTIGS   contig_id', # ? /contigname/aliasname',
-                 'READS2CONTIG     contig_id  CONTIGS2SCAFFOLD   contig_id',
+                 'READS2CONTIG     contig_id  CONTIGS2PROJECTS   contig_id',
                  'READS2ASSEMBLY     read_id             READS     read_id',
 #                 'READS2ASSEMBLY    assembly          ASSEMBLY    assembly',
 #                 'USERS               userid    USERS2PROJECTS      userid',
@@ -2725,17 +2724,17 @@ sub create_DATAMODEL {
                  'TAGS2CONTIG         tag_id          GAP4TAGS      tag_id',
                  'GAP4TAGS            tag_id       TAGS2CONTIG      tag_id',
                  'ASSEMBLY          assembly          CLONEMAP    assembly',
-                 'CLONES               clone      READS2CONTIG       clone',
                  'CLONEMAP          assembly          ASSEMBLY    assembly',
                  'CONTIGS2CONTIG   oldcontig           CONTIGS   contig_id',
                  'CONTIGS2CONTIG   newcontig           CONTIGS   contig_id',
-#                 'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
-                 'CONTIGS2SCAFFOLD contig_id           CONTIGS   contig_id',
-                 'CONTIGS          contig_id  CONTIGS2SCAFFOLD   contig_id',
+#                 'CONTIGS2CONTIG   oldcontig  SCAFFOLDS   contig_id',
+                 'SCAFFOLDS contig_id           CONTIGS   contig_id',
+                 'CONTIGS          contig_id  SCAFFOLDS   contig_id',
                  'CONTIGS2PROJECT  contig_id           CONTIGS   contig_id',
                  'CONTIGS          contig_id   CONTIGS2PROJECT   contig_id',
                  'LIGATIONS          svector   SEQUENCEVECTORS     svector',
                  'CHEMISTRY         chemtype         CHEMTYPES    chemtype/description',
+                 'CLONES               clone             READS       clone',
                  'SEQUENCEVECTORS     vector           VECTORS      vector',
                  'CLONINGVECTORS      vector           VECTORS      vector',
                  'CLONES2PROJECT       clone            CLONES       clone',
@@ -2890,7 +2889,7 @@ sub create_INVENTORY {
                  'CLONES2CONTIG     o  m  3  0',
                  'READS2ASSEMBLY    o  l  0  0',
                  'CONTIGS           o  p  0  0',
-                 'CONTIGS2SCAFFOLD  o  l  3  0',
+                 'SCAFFOLDS         o  l  3  0',
                  'CONTIGS2CONTIG    o  m  0  0',
                  'CONSENSUS         o  d  1  1',
                  'CONTIGS2PROJECT   o  l  3  0',
@@ -3683,6 +3682,7 @@ sub diagnose {
     open (SOURCE,"$source") || return -1; # can't open source file
 
     undef my $alterTable;
+    undef my $alterTableType;
 
     undef my $record;
     undef my %columns;
@@ -3719,7 +3719,7 @@ sub diagnose {
                 if ($info && uc($info) ne uc($tabletype)) {
 #print "NEW tabletype read from source: $tabletype<br>\n";
                     if ($info !~ /heap|merge/i && $tabletype !~ /heap|merge/i) {
-                        $alterTable = "ALTER table $tablename type=$tabletype" if !$alterTable;
+                        $alterTableType = "ALTER table $tablename type=$tabletype";
                     }
                     else {
                         print "Conversion of $testname from $info to $tabletype is ignored <br>";
@@ -3775,7 +3775,6 @@ sub diagnose {
         }
     }
 
-
 # if all columns have been tested and passed for conformity, test for deleted columns 
 # NOTE: this section will probably not handle multiple column changes correctly
 
@@ -3815,7 +3814,8 @@ sub diagnose {
             }
         }
     }
-# print "diagnose $table->{tablename}: alterTable=$alterTable<br>\n" if ($alterTable && $tablename =~ /hist/i);
+
+    $alterTable = $alterTableType if !$alterTable; # column definition takes precedence
 
     return $alterTable || 0;
 }

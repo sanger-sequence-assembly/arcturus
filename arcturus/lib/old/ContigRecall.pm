@@ -19,7 +19,7 @@ use Compress;
 my $CONTIGS;  # database table handle to CONTIGS table
 my $R2C;      # database table handle to READS2CONTIG table
 my $C2C;      # database table handle to CONTIGS2CONTIG table
-# my $READS;   # database table handle to READS table
+my $READS;   # database table handle to READS table
 my $C2S;      # database table handle to CONTIGS2SCAFFOLD table
 my $DNA;      # database table handle to CONSENSUS table
 #my $TAGS;     # database table handle to TAGS
@@ -65,7 +65,6 @@ sub init {
 # now initialise the table handles: default init is for building contig(s) and
 # read maps, e.g. for display or caf output; non default for output as hash
 
-$DEBUG = 0;
     if (!$initmode ) {
 	print "standard initialisation $tblhandle\n" if $DEBUG;
 
@@ -74,7 +73,7 @@ $DEBUG = 0;
         $CONTIGS = $tblhandle->spawn('CONTIGS');
         $C2C = $tblhandle->spawn('CONTIGS2CONTIG');
         $R2C = $tblhandle->spawn('READS2CONTIG');
-# $READS = $tblhandle->spawn('READS');
+        $READS = $tblhandle->spawn('READS');
         $C2S = $tblhandle->spawn('CONTIGS2SCAFFOLD');
 #        $DNA = $tblhandle->spawn('CONSENSUS');
 #    $T2C = $tblhandle->spawn('TAGS2CONTIG');
@@ -146,7 +145,7 @@ sub new {
         }
         else {
 # build a series of objects
-print "ContigRecall::new building a series of contig @$cids \n";
+#print "ContigRecall::new building a series of contig @$cids \n";
             return $self->buildContig($cids);
         }        
     }
@@ -200,7 +199,7 @@ print "internal initialisation \n" if $DEBUG;
     $CONTIGS->setAlternates('contigname','aliasname');
     $self->{CONTIGS} = $CONTIGS;
 
-    $self->{CLONES}->autoVivify('<self>',1.5);
+    $self->{CLONES}->autoVivify('<self>',3.5);
 
     $self->{ASSEMBLY} = $CONTIGS->spawn('ASSEMBLY');
     $self->{ASSEMBLY}->autoVivify('<self>',2.5,0); # rebuild links of tables involved
@@ -211,12 +210,13 @@ print "internal initialisation \n" if $DEBUG;
     $self->{C2S} = $CONTIGS->spawn('CONTIGS2SCAFFOLD');
     $self->{C2S}->autoVivify('<self>',1.5);
 
-#my $snapshot = $CONTIGS->snapshot; print $snapshot;
     $self->{SEQUENCE} = $CONTIGS->spawn('CONSENSUS');
 
     $self->{C2C} = $CONTIGS->spawn('CONTIGS2CONTIG');
 
     $self->{Compress} = new Compress($dna);
+
+#my $snapshot = $CONTIGS->snapshot; print $snapshot;
 print "DONE $self \n" if $DEBUG;
 }
 

@@ -10,6 +10,7 @@ use strict;
 
 use ReadMapper;
 use Compress;
+#use Assembly;
 
 #############################################################################
 # Global variables
@@ -21,20 +22,25 @@ my %testAssembly;  # hash for registering completed tests on an assembly
 
 my $ReadMapper; # handle to ReadMapper module
 my $Compress;   # handle to Compress   module
-my $MyTimer;    # handle to the timer module
+my $Assembly;   # handle to Assembly   module
+my $MyTimer;    # handle to the timer  module; to be deprecated
 
 my $CONTIGS;    # database table handle to CONTIGS
-my $CCTOCC;     # database table handle to CONTIGS2CONTIG
-my $CCTOSS;     # database table handle to CONTIGS2SCAFFOLD
+my $C2C;        # database table handle to CONTIGS2CONTIG
+my $C2P;        # database table handle to CONTIGS2PROJECTS
 my $READS;      # database table handle to READS 
-my $RRTOCC;     # database table handle to READS2CONTIG 
+my $R2C;        # database table handle to READS2CONTIG 
 my $GAP4TAGS;   # database table handle to GAP4TAGS
-my $TTTOCCS;    # database table handle to TAGS2CONTIG
+my $T2C;        # database table handle to TAGS2CONTIG
 my $ASSEMBLY;   # database table handle to ASSEMBLY
 my $SEQUENCE;   # database table handle to CONSENSUS
 
+# environment
+
+my %font;
 my $break;
 my $CGI;
+
 my $TIMER;
 
 #############################################################################
@@ -45,14 +51,16 @@ sub init {
 # initialise module by setting class variables
     my $prototype = shift;
     my $tblhandle = shift; # handle to any table in the database
-    my $nopreload = shift; # set True if no caching should be used
+    my $nopreload = shift; # set 1 or 2 for partial or no caching
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
-    &setEnvironment; # define $break and $CGI
+    bless ($self, $class);
 
-# if $CONTIGS was defined previously, check if same database
+    &setEnvironment; # define $break, %font and $CGI
+
+# if $CONTIGS was defined previously, check if the same database is used
 
     if (!$tblhandle) {
         return 0; # missing table handle
@@ -66,12 +74,12 @@ sub init {
 # get table handles (class variables, so work on one database only)
 
     $CONTIGS    = $tblhandle->spawn('CONTIGS');
-    $CCTOCC     = $tblhandle->spawn('CONTIGS2CONTIG');
-    $CCTOSS     = $tblhandle->spawn('CONTIGS2SCAFFOLD');
+    $C2C        = $tblhandle->spawn('CONTIGS2CONTIG');
+    $C2P        = $tblhandle->spawn('CONTIGS2PROJECTS');
     $READS      = $tblhandle->spawn('READS');
-    $RRTOCC     = $tblhandle->spawn('READS2CONTIG');
+    $R2C        = $tblhandle->spawn('READS2CONTIG');
     $GAP4TAGS   = $tblhandle->spawn('GAP4TAGS');
-    $TTTOCCS    = $tblhandle->spawn('TAGS2CONTIG');
+    $T2C        = $tblhandle->spawn('TAGS2CONTIG');
     $ASSEMBLY   = $tblhandle->spawn('ASSEMBLY');
     $SEQUENCE   = $tblhandle->spawn('CONSENSUS');
 
@@ -84,23 +92,31 @@ sub init {
 #                         = 2 for no preloading at all
 
     $self->{nopreload}   = $nopreload || 0;
-    $ReadMapper->preload(0,'1100') if ($self->{nopreload} < 2); # build table handle caches (READS and PENDING)
+# build table handle caches (READS and PENDING reads), but only for nopreload 0, 1
+    $ReadMapper->preload(0,'1100') if ($self->{nopreload} < 2); 
 
-    $self->{cleanup}     = 0; # default no clearing of memory
+# default settings of instance parameters
+
+    $self->{cleanup}     = 1; # default clearing of memory
     $self->{minOfReads}  = 2; # accept contigs having at least this number of reads 
     $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
-    $self->{nameChange}  = 0; # default name change only for generation 0
+    $self->{nameChange}  = 0; # default (identical) contig name change only for generation 0
+
+# default execution options
+
     $self->{TESTMODE}    = 0; # test mode for caf file parser
     $self->{REPAIR}      = 0; # test/repair mode for read attributes
     $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
     $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
-#$self->{nameChange}  = 1; # TEST override
 
-    bless ($self, $class);
+# set default projects and users
 
-# get the Compress handle
+    $self->{origin}      = 'Arcturus CAF parser'; # default
+    $self->{ASSEMBLY}    = 1; # default assembly number
+    $self->{PROJECT}     = 1; # default project  number
+    $self->{USERID}      = 'arcturus'; # default user
 
-    $Compress = new Compress('ACGTN ');
+    $self->prepareQueries;
 
 #    &buildForwardMap;
 
@@ -115,8 +131,8 @@ sub new {
 # create instance for new contig
     my $prototype  = shift;
     my $contigname = shift;
-    my $assembly   = shift || 0; # the assembly number
-    my $userid     = shift || 'arcturus';
+#    my $assembly   = shift || 0; # the assembly number
+#    my $userid     = shift || 'arcturus';
 
     my $class = ref($prototype) || $prototype;
     return $ContigBuilder{$contigname} if $ContigBuilder{$contigname};
@@ -144,25 +160,30 @@ sub new {
     $counts->[3] = 0; # nr of linked contigs
     $counts->[4] = 0; # newly added read 
     my $status   = $self->{status};
-    $status->{warnings} = 0;
-    $status->{inerrors} = 0; # reading errors
-    $status->{errors}   = 0; # dumping errors
+    $status->{warnings} = 0; # warning count
+    $status->{inerrors} = 0; # reading error count
+    $status->{errors}   = 0; # dumping error count
 
 # if new instance is spawned of an existing instance, inherit some variables
 
     if ($class eq ref($prototype)) {
+# inherit instance parameters
         $self->{minOfReads}  = $prototype->{minOfReads}  || 1; 
         $self->{ignoreEmpty} = $prototype->{ignoreEmpty} || 1;     
         $self->{nameChange}  = $prototype->{nameChange}  || 0;     
         $self->{cleanup}     = $prototype->{cleanup}     || 0;
+        $self->{nopreload}   = $prototype->{nopreload}   || 0;
+
         $self->{TESTMODE}    = $prototype->{TESTMODE}    || 0;
         $self->{REPAIR}      = $prototype->{REPAIR}      || 0;
         $self->{READSCAN}    = $prototype->{READSCAN}    || 0;
         $self->{WRITEDNA}    = $prototype->{WRITEDNA}    || 0;
-# test only for presence of assembled reads in database
-        $self->{nopreload}   = $prototype->{nopreload}   || 0;
+
+        $self->{origin}      = $prototype->{origin}      || 0;
+        $self->{ASSEMBLY}    = $prototype->{ASSEMBLY}    || 1;
+        $self->{PROJECT}     = $prototype->{PROJECT}     || 1;
+        $self->{USERID}      = $prototype->{USERID}      || 'arcturus';
 #print STDOUT "new ContigBuilder inherits from prototype $prototype  (class $class)$break";
-#print STDOUT "$self->{minOfReads},$self->{ignoreEmpty},$self->{TESTMODE},$self->{REPAIR} $break";
     }
     else {  
 # use defaults
@@ -170,20 +191,19 @@ print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
         $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
         $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
         $self->{nameChange}  = 0; # default name change only for generation 0
-        $self->{cleanup}     = 0; # default no clearing of memory
+        $self->{cleanup}     = 1; # default clearing of memory
+        $self->{nopreload}   = 0;
+
         $self->{TESTMODE}    = 0; # test mode for caf file parser
         $self->{REPAIR}      = 0; # test/repair mode for read attributes
         $self->{READSCAN}    = 0; # test only for presence of assembled reads in database
         $self->{WRITEDNA}    = 0; # test only for presence of assembled reads in database
-        $self->{nopreload}   = 0;
+
+        $self->{origin}      = 'Arcturus CAF parser';
+        $self->{ASSEMBLY}    = 1; # default assembly number
+        $self->{PROJECT}     = 1; # default project  number
+        $self->{USERID}      = 'arcturus'; # default user
     }
-
-#my $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
-
-# get assembly and user id if defined
-
-    $self->{ASSEMBLY} = $assembly;
-    $self->{USERID}   = $userid;
 
 # add the name of this contig to the class variable %ContigBuilder
 
@@ -191,6 +211,21 @@ print STDOUT "new ContigBuilder (from scratch) $class $prototype $break";
 
     bless ($self, $class);
     return $self;
+}
+
+#############################################################################
+
+sub setParameter {
+# (re)define object parameters 
+    my $self  = shift;
+    my $name  = shift;
+    my $value = shift;
+
+# parameters are stored in the $self hash; test if the key exists
+
+    die "Unknown parameter : '$name'" unless defined($self->{$name});
+
+    $self->{$name} = $value || 0;
 }
 
 #############################################################################
@@ -203,31 +238,6 @@ sub setOwnership {
 
     $self->{ASSEMBLY} = $assembly if defined($assembly);
     $self->{USERID}   = $userid   if defined($userid);
-}
-
-#############################################################################
-
-sub testAssembly {
-    my $self     = shift;
-    my $assembly = shift;
-
-# test assembly status and blocked status on READS2CONTIG table
-print STDOUT "**** Testing assembly $assembly **** $break$break";
-
-    my $hashref = $ASSEMBLY->associate('hashref',$assembly,'assembly',{traceQuery=>0});
-    
-    my $report = 0;
-    if (!$hashref || $hashref->{status} eq 'error') {
-        $report = "Error status detected on assembly $assembly: $hashref->{comment}";
-    }
-
-# now test if any blocked entries found
-
-    elsif ($RRTOCC->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
-        $report = "Blocked entries detected in assembly $assembly";
-    }
-
-    return $report;
 }
 
 #############################################################################
@@ -265,7 +275,7 @@ sub buildForwardMap {
     $query .= "CONTIGS2CONTIG,READS2CONTIG where CONTIGS2CONTIG.oldcontig ";
     $query .= "= READS2CONTIG.contig_id and READS2CONTIG.generation=1";
 
-    my $hashes = $CCTOCC->query($query,{traceQuery=>0});
+    my $hashes = $C2C->query($query,{traceQuery=>0});
 
     return if (ref($hashes) ne 'ARRAY');
 
@@ -428,11 +438,11 @@ sub dumpDNA {
         print "Warning: consensus sequence mismatch ($length $size)$break";
     }
 
-# compress the string
+# compress the string (zlib)
 
-    my $compress = 99; # Huffman
+    $Compress = new Compress() unless $Compress; # build the module on first encounter
 
-    my ($count, $sequence) = $Compress->sequenceEncoder($self->{DNA},$compress);
+    my ($count, $sequence) = $Compress->sequenceEncoder($self->{DNA},99);
 
     $length = length($sequence); print "Consensus sequence count $count length $length $break";
 
@@ -453,26 +463,18 @@ sub dumpDNA {
 sub dump {
 # write the contig to database after tests
     my $self     = shift;
-    my $assembly = shift;
-    my $userid   = shift;
     my $forced   = shift;
 
 # process parameter input
 
-    my %options = (forcedLoad   => 0,  # override fatal errors
+    my %options = (quickTest    => 0,  # use checksum to compare contigs 
+                   forcedLoad   => 0,  # override fatal errors
                    showWarnings => 0); # print warnings                  
 
 # get the assembly and user name (input values override defaults)
 
-    $userid      = $self->{USERID}   if !$userid;
-    $assembly    = $self->{ASSEMBLY} if !$assembly;
-    $assembly    = 1 if !$assembly; # default BLOB
-
-# output format
-
-    my $fonts = &fonts;
-
-# we keep track of error conditions with the variable $complete
+    my $userid   = $self->{USERID};
+    my $assembly = $self->{ASSEMBLY} || 1;
 
     my $cnames   = $self->{cnames};
     my $readmap  = $self->{readmap}; # hash of the maps read e.g. from caf file 
@@ -480,7 +482,12 @@ sub dump {
     my $status   = $self->{status};
     my $counts   = $self->{counts};
 
+# we keep track of error conditions with the variable $complete and $accepted
+
     my $complete = 1;
+    my $accepted = 1;
+
+    my $minOfReads = $self->{minOfReads} || 0;
 
     my $report = "${break}Attempting to dump contig $cnames->[0] ....$break";
 
@@ -491,10 +498,16 @@ sub dump {
 #############################################################################
 
     my $estatus = 0;
-    $estatus = $self->testAssembly($assembly) if !$testAssembly{$assembly};
+    if (!$testAssembly{$assembly}) {
+#        $Assembly = new Assembly($assembly) unless $Assembly;
+#        if ($estatus = $Assembly->testAssembly($assembly)) {
+        if ($estatus = $self->testAssembly($assembly)) {
+ # returns 0 for all clear
+        }
+        $testAssembly{$assembly} = 1;
+    }
 # block the dump if error (protect against corrupting READS2CONTIG table)
     return $estatus if $estatus;
-    $testAssembly{$assembly} = 1;
 
 #############################################################################
 # (I) first test: any input errors on this contig?
@@ -517,8 +530,9 @@ sub dump {
 # by using the ->isInDataBase  method of the ReadMapper objects
 #############################################################################
 
-    my @reads = sort keys %$readmap; # all reads specified for this contig
-    $ReadMapper->preload(\@reads,'0011') if !$self->{nopreload}; # preload data in ReadMapper buffer (R2C + EDITS) 
+    my @reads = sort keys %$readmap; # all reads specified for this contig 
+# preload data in ReadMapper buffer (R2C/EDITS), but only if nopreload flag is set to 0 
+    $ReadMapper->preload(\@reads,'0011') unless $self->{nopreload}; 
 
 # NOTE: we use keys %$readmap (instead of @reads) throughout because readmap keys may be deleted
 
@@ -531,7 +545,7 @@ sub dump {
     if ($complete) {
         &timer('ContigBuilder dump part II',0) if $TIMER;
         foreach my $readname (keys (%$readmap)) {
-            print "Testing read $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
+            print "Testing read $readname (nr $tested)$break" if (!((++$tested)%50) && $CGI);
             my $readobject = $ReadMapper->lookup($readname);
             if (defined($readobject)) {
 # add pointer to ReadMapper to internal list
@@ -578,6 +592,7 @@ sub dump {
 #############################################################################
 # (III) third test: are the mappings defined, complete and do they make sense
 #############################################################################
+print "III c=$complete a=$accepted$break";
 
     $tested = 0;
     my $cover = 0;
@@ -595,7 +610,7 @@ sub dump {
         undef my @names; # of first and last reads
         foreach my $readname (keys (%$readmap)) {
 # get the mapping of this read to the contig and test the range
-            print "Testing readmapper $readname (nr $tested)$break" if ($CGI && !((++$tested)%50));
+            print "Testing readmapper $readname (nr $tested)$break" if (!((++$tested)%50) && $CGI);
 
 # my $readMap = $readmap->{$readname} if $PADDED; # to be SUPERceded
 # the assemble method will organise the mapping information stored in the ReadMapper instance
@@ -672,6 +687,8 @@ sub dump {
         else {
             $complete = $nreads if $complete;
             $counts->[1] = $cmax-$cmin+1; # the length of the contig
+            $accepted = 0 if ($nreads < $minOfReads); 
+            $counts->[0] = $nreads;
         }
 
         if ($counts->[1]) {
@@ -688,6 +705,7 @@ sub dump {
             $minread = &readAlias($minread);
             $maxread = &readAlias($maxread);
             $cnames->[1] = $minread.'-'.$uniquestring.'-'.$maxread;
+            $cnames->[2] = $maxread.'-'.$uniquestring.'-'.$minread; # the inverted one
 	}
         else {
             $cnames->[1] = 'cannot be determined';
@@ -698,20 +716,44 @@ sub dump {
         $report .= "III : Full Arcturus contigname: $cnames->[1] (complete=$complete)$break";
     }
 
-
 #############################################################################
-# (IV) apply mapping to reads, test them and collect contig links
+# INTERMEZZO quickTest : compare contig against existing ones in the database
 #############################################################################
 
-    my $isConnected = 0;  
+    my $isWeeded = 0;
     my $isIdentical = 0;
-    my $nameChange  = 0;
     my $oldContig   = 0;
+
+    if ($options{quickTest}) {
+# test full contig name and its reverse name against the database
+        my @names = @$cnames; shift @names;
+        my %qoptions = (queryTrace=>0, returnScalar=>0);
+# the search should be in generation 0 or 1; if in one the reads should be dumped
+        my $anames = $CONTIGS->associate('contig_id',\@names,'contigname',\%options);
+# there should be only one?
+        if (@$anames) {
+            $status->{diagnosis} .= "Contig $cnames->[0] ($cnames->[1])$font{'y'} ";
+            $status->{diagnosis} .= "$font{e} is already loaded $break";
+            $status->{warnings}++;
+# set flags to skip sections further down
+            $oldContig = $anames->[0];
+            $isIdentical = 1;
+            $isWeeded = 1;
+return 0;
+        }
+    }
+
+#############################################################################
+# (IV) test mappings against possible existing ones and collect-contig links
+#############################################################################
+
+print "IV c=$complete a=$accepted i=$isIdentical$break";
+    my $isConnected = 0;  
+    my $nameChange  = 0;
     my $newContigHash = '000000:0:00000000';
     undef my @priorContigHash;
 
-    my $isWeeded = 0;
-    while ($complete && !$isWeeded) {
+    while ($complete && $accepted && !$isWeeded) {
 
         &timer('ContigBuilder dump part IV',0) if $TIMER;
 
@@ -730,17 +772,9 @@ sub dump {
         $counts->[0] = 0;
         my $emptyReads = 0;
         foreach my $read (keys %$readmap) {
-            print "Building map for read $read (nr $tested)$break" if ($CGI && !((++$tested)%50));
+            print "Building map for read $read (nr $tested)$break" if (!((++$tested)%50) && $CGI);
             my $readobject = $readmapper{$read};
             my $contocon = $readobject->{contocon};
-
-# transfer the read-to-contig alignment to the ReadMapper instance REDUNDENT when calculations done in Mapper
-
-# $readobject->alignToContig(\@{$readmap->{$read}}) if $PADDED;
-
-# test the ReadMapper alignment specification and status for this read
-
-# $readobject->align() if $PADDED; # already done with getAssembledFrom
 
 # test previous alignments of this read in the database
 
@@ -758,7 +792,7 @@ sub dump {
                 $status->{warnings}++;
                 delete  $readmap->{$read};
                 delete $readmapper{$read};
-                print "$fonts->{o} Empty read $read wil be ignored $fonts->{e} $break" if $CGI;
+                print "$font{o} Empty read $read wil be ignored $font{e} $break" if $CGI;
                 $emptyReads++;
             }
 
@@ -804,7 +838,7 @@ sub dump {
             }
         }
 
-# okay, here we have a complete list of all connecting contigs (and the new one as '00.... 00')
+# okay, here we have a complete list of all connecting contigs (and the new one as '00....00')
 
         my @contigLinkHash = sort keys %$cntgmap;
         $progress .= "contigLinkHash(es): @contigLinkHash $break";
@@ -968,10 +1002,9 @@ print "read $read is deprecated because of overlap$break";
 # (V) Add the contig to the CONTIGS table (we must have contig_id)
 #############################################################################
 
-print "V $break";
+print "V c=$complete a=$accepted i=$isIdentical$break";
 
-    my $accepted = 0;
-    $accepted = 1 if (!$self->{minOfReads} || $counts->[0] >= $self->{minOfReads}); 
+    $accepted = 0 if ($counts->[0] < $minOfReads);
 
     $counts->[3] = @priorContigHash;
     my $newContigData = $cntgmap->{$newContigHash} || 0;
@@ -989,7 +1022,8 @@ print "V $break";
     undef my $contig;
     if (!$accepted) {
 # insufficient number of reads
-        $status->{diagnosis} = "Contig $cnames->[1] with $counts->[0] reads is ignored$break";
+        $status->{diagnosis} .= "Contig $cnames->[1] with $counts->[0] reads is ignored$break";
+        $status->{warnings}++;
     }
     elsif ($isIdentical) {
 # use the previous contig ID
@@ -1002,39 +1036,46 @@ print "V $break";
 
         $report .= "Adding new contig $cnames->[1] ($cnames->[0]) to CONTIGS table$break";
 
-        undef my @columns;
-        undef my @cvalues;
-        push @columns, 'aliasname'; push @cvalues, $cnames->[0]; 
-        push @columns, 'length';    push @cvalues, $counts->[1]; 
-        push @columns, 'ncntgs';    push @cvalues, $counts->[3]; 
-        push @columns, 'nreads';    push @cvalues, $counts->[0]; 
-        push @columns, 'newreads';  push @cvalues, $counts->[4];
-        push @columns, 'cover' ;    push @cvalues, $cover; 
-        push @columns, 'origin';    push @cvalues, 'Arcturus CAF parser';
-# SHOULDN'T WE ACQUIRE A LOCK HERE ????
+        my @columns = ('aliasname' , 'length'    , 'ncntgs'    , 'nreads'    ,
+                       'newreads'  , 'cover'     , 'origin');
+        my @cvalues = ($cnames->[0], $counts->[1], $counts->[3], $counts->[0],
+                       $counts->[4], $cover      , $self->{origin});
+#        undef my @columns;
+#        undef my @cvalues;
+#        push @columns, 'aliasname'; push @cvalues, $cnames->[0]; 
+#        push @columns, 'length';    push @cvalues, $counts->[1]; 
+#        push @columns, 'ncntgs';    push @cvalues, $counts->[3]; 
+#        push @columns, 'nreads';    push @cvalues, $counts->[0]; 
+#        push @columns, 'newreads';  push @cvalues, $counts->[4];
+#        push @columns, 'cover' ;    push @cvalues, $cover; 
+#        push @columns, 'origin';    push @cvalues, $self->{origin};
+
 # add new record using the compound name as contigname
         if (!$CONTIGS->newrow('contigname',$cnames->[1],\@columns,\@cvalues)) {
-# if contig(name) already exists get contig number (NOTE: should never occur with non-unique contigname)
+# if contig(name) already exists get the contig number 
             if ($CONTIGS->{qerror} =~ /already\sexists/) {
+# NOTE: this status should never occur with non-unique contigname
                 $contig =  $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
+                $status->{diagnosis} .= "contig $cnames->[1] is already present ";
+                $status->{diagnosis} .= "as number $contig$break";
                 $status->{warnings}++;
-                $status->{diagnosis} .= "contig $cnames->[1] is already present as number $contig$break";
-                $CONTIGS->status(1); # clear the error status
+                $CONTIGS->status(1); # clears the error status
             }
             else {
-                $status->{errors}++;
                 $status->{diagnosis} .= "Failed to add contig $cnames->[1]: $CONTIGS->{qerror}$break";
+                $status->{errors}++;
                 $complete = 0;
             }
         }
         else {
 # new contig added: get its contig_id number
+            &timer('ContigBuilder dump part V recall',0) if $TIMER;
 	    $contig = $CONTIGS->lastInsertId; 
             $CONTIGS->signature($userid,'contig_id',$contig);
-            $report .= "V   : Contig $cnames->[1] ($cnames->[0]) added as nr $contig ";
+            &timer('ContigBuilder dump part V recall',1) if $TIMER;
+            $report .= "Contig $cnames->[1] ($cnames->[0]) added as nr $contig ";
             $report .= "to CONTIGS ($counts->[0] reads)$break";
         }
-# RELEASE THE LOCK HERE ????
 
         &timer('ContigBuilder dump part V',1) if $TIMER;
 
@@ -1044,7 +1085,7 @@ print "V $break";
 # (VI) dump all readmaps onto the database (and test if done successfully)
 #############################################################################
 
-print "VI $break";
+print "VI $complete $accepted $isIdentical $break";
 
     if ($complete && $accepted) {
 
@@ -1053,10 +1094,10 @@ print "VI $break";
         $report .= "VI  : Writing read maps to database $break";
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
-# SHOULDN'T WE ACQUIRE A LOCK HERE on READS2CONTIG ????
+
         foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
-            print "Processing read $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
+            print "Processing read $readname (nr $dumped)$break" if (!((++$dumped)%50) && $CGI);
             if ($readobject) {
                 $complete = 0 if (!$readobject->dump($contig,$assembly));
             }
@@ -1064,7 +1105,10 @@ print "VI $break";
                 $complete = 0; # something weirdly wrong
             }
         }
-# RELEASE THE LOCK HERE ????
+
+# flush the READS2CONTIG table handle to dump all pending records to be written
+
+        $R2C->flush;
 
 # if complete, dumps are done okay; remove the ReadMappers at the very end
 
@@ -1090,58 +1134,65 @@ print "VII $break";
         &timer('ContigBuilder dump part VII',0) if $TIMER;
 
 # link the new contig to a scaffold and add assembly status 
-        $CCTOSS->newrow('contig_id',$contig,'assembly',$assembly); # astatus N by default
+        $C2P->newrow('contig_id',$contig,'assembly',$assembly); # astatus N by default
 # inherit the project from connecting contig(s), if any
         if (@priorContigHash) {
             $report .= "prior contigs=@priorContigList $break";
-            my $project = $CCTOSS->associate('distinct project',\@priorContigList,'contig_id');
+            my $project = $C2P->associate('distinct project',\@priorContigList,'contig_id');
             if (ref($project) eq 'ARRAY') {
                 $self->{warning} .= "! Multiple project references in connected contigs: @priorContigList$break";
             }
             elsif (!$project) {
-                $self->{warning} .= "! No Scaffold references in connected contigs: @priorContigList$break";
+                $self->{warning} .= "! No project references in connected contigs: @priorContigList$break";
+# USE DEFAULT
             }
             else {
-                $CCTOSS->update('project',$project,'contig_id',$contig);
+                $C2P->update('project',$project,'contig_id',$contig);
             }
 # amend the assembly status on connecting contigs
             foreach my $priorcontig (@priorContigList) {           
-                $CCTOSS->update('astatus','S','contig_id',$priorcontig);
+                $C2P->update('astatus','S','contig_id',$priorcontig);
             }
         }
 
-        $CCTOCC->rollback(0);
+        $C2C->rollback(0);
         foreach my $hash (@priorContigHash) {
             my ($priorContig,$order,$shift) = split ':',$hash;
             my $alignment = $cntgmap->{$hash};
             $report .= "priorContigHash: $hash,  alignment: @$alignment $break";
             if ($alignment->[4] >= 0) {
 # this should be on a complete definition basis
-                undef my @columns;
-                undef my @cvalues;
-                push @columns, 'newcontig'; push @cvalues, $contig;
-                push @columns, 'oldcontig'; push @cvalues, $priorContig;
+                $order = 1 if !$order; # to ensure either 0 or 1
+                my @columns = ('newcontig','nranges'       ,'nrangef'       ,
+                               'oldcontig','oranges'       ,'orangef');
+                my @cvalues = ( $contig   , $alignment->[2], $alignment->[3],
+                                $priorContig, $alignment->[$order], 
+                                $alignment->[1-$order]);
+#                undef my @columns;
+#                undef my @cvalues;
+#                push @columns, 'newcontig'; push @cvalues, $contig;
+#                push @columns, 'oldcontig'; push @cvalues, $priorContig;
 # the new range is always aligned
-                push @columns, 'nranges'; push @cvalues, $alignment->[2];
-                push @columns, 'nrangef'; push @cvalues, $alignment->[3];
+#                push @columns, 'nranges'; push @cvalues, $alignment->[2];
+#                push @columns, 'nrangef'; push @cvalues, $alignment->[3];
 # the old range is aligned or counter aligned
-                if ($order == 0) {
-                    push @columns, 'oranges'; push @cvalues, $alignment->[0];
-                    push @columns, 'orangef'; push @cvalues, $alignment->[1];
-                }
-                else { # reverse alignment
-                    push @columns, 'oranges'; push @cvalues, $alignment->[1];
-                    push @columns, 'orangef'; push @cvalues, $alignment->[0];
-                }
+#                if ($order == 0) {
+#                    push @columns, 'oranges'; push @cvalues, $alignment->[0];
+#                    push @columns, 'orangef'; push @cvalues, $alignment->[1];
+#                }
+#                else { # reverse alignment
+#                    push @columns, 'oranges'; push @cvalues, $alignment->[1];
+#                    push @columns, 'orangef'; push @cvalues, $alignment->[0];
+#                }
 #CHANGE
-                if (!$CCTOCC->newrow(\@columns, \@cvalues)) {
+                if (!$C2C->newrow(\@columns, \@cvalues)) {
                     $status->{diagnosis} .= "! Failed to add entry to CONTIGS2CONTIG table$break";
                     $complete = 0;
                     last;
                 } 
             }
 # update the contig status for the previous contig
-            $CCTOSS->update('astatus','S','contig_id',$priorContig);
+            $C2P->update('astatus','S','contig_id',$priorContig);
         }
 
         &timer('ContigBuilder dump part VII',1) if $TIMER;
@@ -1153,7 +1204,7 @@ print "VII $break";
             my $dumped = 0;
             foreach my $readname (keys %readmapper) {
                 my $readobject = $readmapper{$readname};
-                print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
+                print "Removing readmap $readname (nr $dumped)$break" if (!((++$dumped)%50) && $CGI);
                 $readobject->status(2); # dump warnings
 # delete could be an option?
                 $readobject->delete() if $self->{cleanup};
@@ -1164,7 +1215,7 @@ print "VII $break";
             $report .= "($counts->[4] new reads; $counts->[3] parent contigs)$break";
 print $report;
             $CONTIGS->rollback(0); # clear rollback stack on CONTIGS table
-            $CCTOCC->rollback(0); # clear rollback stack on CONTIGS2CONTIG table
+            $C2C->rollback(0); # clear rollback stack on CONTIGS2CONTIG table
             $ASSEMBLY->update('status','loading','assembly',$assembly);
 # delete could be an option
             $self->delete() if $self->{cleanup};
@@ -1180,7 +1231,7 @@ print $report;
         my $dumped = 0;
         foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
-            print "Removing readmap $readname (nr $dumped)$break" if ($CGI && !((++$dumped)%50));
+            print "Removing readmap $readname (nr $dumped)$break" if (!((++$dumped)%50) && $CGI);
             $readobject->status(2); # dump warnings
 # delete could be an option
             $readobject->delete() if $self->{cleanup};
@@ -1189,10 +1240,10 @@ print $report;
 # undo the addition to CONTIGS, if any
         $CONTIGS->rollback(1); 
         $status->{warnings}++;
-        $status->{diagnosis} .= "Contig $cnames->[0] ($cnames->[1])$fonts->{'y'} not added";
-        $status->{diagnosis} .= "$fonts->{e}: is identical to contig $oldContig$break";
+        $status->{diagnosis} .= "Contig $cnames->[0] ($cnames->[1])$font{'y'} not added";
+        $status->{diagnosis} .= "$font{e}: is identical to contig $oldContig$break";
 # if the previous contig is part of generation 1, amend its assembly status (from N) to C (current)
-        my $generation = $RRTOCC->associate('distinct generation',$oldContig,'contig_id');
+        my $generation = $R2C->associate('distinct generation',$oldContig,'contig_id');
         if (ref($generation) eq 'ARRAY') {
             $status->{warnings}++; # or error? 
             $status->{diagnosis} .= "Multiple generations @$generation for contig ";
@@ -1200,8 +1251,8 @@ print $report;
         }
         else {
 # add the assembly info to the CONTIGS2SCAFFOLD table, if not done before 
-            $CCTOSS->newrow('contig_id',$oldContig,'assembly',$assembly); # default N
-            $CCTOSS->update('astatus','C','contig_id',$oldContig) if ($generation > 0);
+            $C2P->newrow('contig_id',$oldContig,'assembly',$assembly); # default N
+            $C2P->update('astatus','C','contig_id',$oldContig) if ($generation > 0);
 # update the contig name (active after name redefinition)
             my $hashrefs = $CONTIGS->associate('contigname,aliasname',$oldContig,'contig_id');
             if ($nameChange && ($generation == 0 || $self->{nameChange})) {
@@ -1235,10 +1286,10 @@ print $report;
         $status->{errors}++ if (!$status->{errors});
 # cleanup any additions to the various tables        
         $CONTIGS->rollback(1); # undo, i.e. remove the last added record from CONTIGS
-        $CCTOCC->delete('newcontig',$contig);
+        $C2C->delete('newcontig',$contig);
 # remove any dumped readmaps
-        $RRTOCC->delete('contig_id',$contig);
-        $CCTOSS->delete('contig_id',$contig);
+        $R2C->delete('contig_id',$contig);
+        $C2P->delete('contig_id',$contig);
 # and list the status of the individual readobjects
         foreach my $readname (keys %readmapper) {
             my $readobject = $readmapper{$readname};
@@ -1258,13 +1309,12 @@ print $report;
 #############################################################################
 
 sub checksum {
+# extract the checksum from the full contig name
     my $checksum = shift;
 
-    my $fonts = &fonts;
-
-#    $checksum =~ s/^[^\:]+\:(\d+)\:\S+$/$1/;
     $checksum =~ s/^\S+\W(\d+)\W\S+$/$1/;
-print "$fonts->{o} BAD SPLIT $fonts->{e} on checksum $checksum $break" if ($checksum =~ /\D/);
+
+print "$font{o} BAD SPLIT $font{e} on checksum $checksum $break" if ($checksum =~ /\D/);
 
     return $checksum
 }
@@ -1272,6 +1322,7 @@ print "$fonts->{o} BAD SPLIT $fonts->{e} on checksum $checksum $break" if ($chec
 #############################################################################
 
 sub truncate {
+# truncate a float value to a number of decimals
     my $float    = shift;
     my $decimals = shift;
 
@@ -1294,10 +1345,8 @@ sub readAlias {
     my $readname = shift;
 
     if (my $array = $READS->cacheRecall($readname,{indexName=>'readname'})) {
-#print "readAlias: $readname => ";
         my $read_id = $array->[0]->{read_id};
         $readname = sprintf "%lx", $read_id;
-#print " read_id $read_id  => alias $readname $break";
     }
 
     elsif (my $read_id = $READS->associate('read_id',$readname,'readname',{returnScalar=>1})) {
@@ -1330,8 +1379,6 @@ sub list {
     my $cnames  = $self->{cnames};
     my $readmap = $self->{readmap};
 
-    my $fonts = &fonts;
-
     print "${break}$counts->[0] Reads for Contig $cnames->[0]$break";
 
     foreach my $read (sort keys %$readmap) {
@@ -1362,14 +1409,15 @@ sub status {
     my $diagnosis = $status->{diagnosis};
 
     if (defined($list) && $list > 0) {
-        my $fonts = &fonts;
+
         if ($errors || $warnings) {
-            my $font = $fonts->{b}; $font = $fonts->{o} if $errors;
+            my $font = $font{b}; $font = $font{o} if $errors;
             print STDOUT "Status of ContigBuilder $cnames->[0]: ";
-            print STDOUT "$font $errors errors $fonts->{e}, $warnings warnings$break";
+            print STDOUT "$font $errors errors $font{e}, $warnings warnings$break";
             print STDOUT "$diagnosis$break";
-        } else {
-            print STDOUT "Status of ContigBuilder $cnames->[0]: $fonts->{g} pass $fonts->{e}$break";
+        }
+        else {
+            print STDOUT "Status of ContigBuilder $cnames->[0]: $font{g} pass $font{e}$break";
         }
 #        print STDOUT "$break";
     }
@@ -1382,20 +1430,21 @@ sub status {
 sub delete {
 # delete the hashes of this contig (irreversible) and remove from %ContigBuilder
     my $self = shift;
+    my $list = shift;
 
     my $contig = $self->{cnames}->[0];
    
-    foreach my $key (keys (%$self)) {
-        my $hash = $self->{$key};
-        undef %$hash if (ref($hash) eq "HASH");
-        undef @$hash if (ref($hash) eq "ARRAY");
-    }
+#    foreach my $key (keys (%$self)) {
+#        my $hash = $self->{$key};
+#        undef %$hash if (ref($hash) eq "HASH");
+#        undef @$hash if (ref($hash) eq "ARRAY");
+#    }
 
     undef %$self;
 
     delete $ContigBuilder{$contig};
 
-    print STDOUT "ContigBuilder object $contig destroyed$break$break";
+    print STDOUT "ContigBuilder object $contig destroyed$break$break" if $list;
 }
 
 ###############################################################################
@@ -1436,16 +1485,18 @@ sub lookup {
 sub flush {
 # dump all remaining completed ContigBuilder objects
     my $self     = shift;
-    my $minimum  = shift;
-    my $assembly = shift; # optional
+    my $minimum  = shift; # flush only if a minimum of Contigs is built
     my $forced   = shift; # optional
 
     my $pending = keys %ContigBuilder;
-    if (!defined($minimum) || $pending >= $minimum) {
+    if (!$minimum || $pending >= $minimum) {
+
         foreach my $contig (keys %ContigBuilder) {
-            $ContigBuilder{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
-#            $ContigBuilder{$contig}->dump($assembly,undef,$forced); # is after successful dump removed
+            my $ContigBuilder = $ContigBuilder{$contig};
+            $ContigBuilder->dump($forced); 
+# after successful dump the ContigBuilder instance is deleted
         }
+
         foreach my $contig (keys %ContigBuilder) {
 	    print STDOUT "Not Dumped: $contig$break" if $ContigBuilder{$contig};
         }
@@ -1454,8 +1505,6 @@ sub flush {
 # finally flush the remaining (i.e. unallocated) ReadMappers (and tables)
 
     $ReadMapper->flush(@_);
-
-    #$MyTimer->summary;
 
     return keys %ContigBuilder; # return number of leftover ContigBuilders
 }
@@ -1522,7 +1571,7 @@ print "minOfReads = $minOfReads $break";
     my $isPadded = 1; # set default padded caf file
 
     while (defined($record = <CAF>)) {
-        $line++; 
+        $line++;
         chomp $record;
         print STDOUT "Processing line $line$break" if ($list && ($line == 1 || !($line%$plist)));
         next if ($record !~ /\S/);
@@ -1735,10 +1784,11 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
         }
 
         elsif ($type == -2) {
-# processing a contig
+# processing a contig which has to be ignored: inhibit its reads to save memory
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
                 $rblocker->{$1}++; # add read in this contig to the read blocker list
 #                print "read $1 marked as blocked $break" if (!((keys %$rblocker)%100));
+# what about removing existing readmappers ?
             }
         }
 
@@ -1830,7 +1880,7 @@ sub ageByOne {
     my $comment;
 
     my $where = "generation=0 AND assembly=$assembly";
-    if ($assembly > 0 && $RRTOCC->probe('contig_id',undef,$where)) {
+    if ($assembly > 0 && $R2C->probe('contig_id',undef,$where)) {
 
 # OKAY, there is a 0 generation to be processed, now test the current assembly status
 
@@ -1839,7 +1889,7 @@ sub ageByOne {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
-        elsif ($RRTOCC->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
             return "Blocked entries detected in assembly $assembly";
         }
 
@@ -1849,20 +1899,20 @@ sub ageByOne {
 # we increase generation and set the blocked item
         my $query = "UPDATE <self> set generation=generation+1 WHERE assembly=$assembly"; # blocked taken out
 #$query .= " limit 10000"; # test (partial) failure
-        $RRTOCC->query($query,{traceQuery=>0,timeStamp=>1}); # time stamp & no trace
-#        $RRTOCC->increment('generation','assembly',$assembly,1); # with allow query trace
+        $R2C->query($query,{traceQuery=>0,timeStamp=>1}); # time stamp & no trace
+#        $R2C->increment('generation','assembly',$assembly,1); # with allow query trace
 
 # now test if any unblocked entries or generation 0 entries remain; if so, something has gone wrong
 
         $where = "assembly = $assembly and (generation = 0 or blocked = '0')";
-        if ($RRTOCC->probe('contig_id',undef,$where)) {
+        if ($R2C->probe('contig_id',undef,$where)) {
             $comment = "Last generation update attempt FAILED (partially)";
             $ASSEMBLY->update('comment',$comment,'assembly',$assembly);
         }
 	else {
 # the ageing was successful: remove the blocking flag and reset assembly status
-            $RRTOCC->update('blocked','0','assembly',$assembly); # remove the flag (replace by script afterwards)
-#?           $CCTOCC->update('generation','generation+1');
+            $R2C->update('blocked','0','assembly',$assembly); # remove the flag (replace by script afterwards)
+#?           $C2C->update('generation','generation+1');
             $ASSEMBLY->update('status','complete','assembly',$assembly);
             my $completed = "Last generation update successfully completed";
             $ASSEMBLY->update('comment',$completed,'assembly',$assembly);
@@ -1887,7 +1937,7 @@ sub unbuild {
     my $comment;
 
     my $where = "generation=0 AND assembly=$assembly";
-    if ($assembly > 0 && $RRTOCC->probe('contig_id',undef,$where)) {
+    if ($assembly > 0 && $R2C->probe('contig_id',undef,$where)) {
 
 # OKAY, there is a 0 generation to be processed, now test the current assembly status
 
@@ -1896,7 +1946,7 @@ sub unbuild {
             return "Invalid assembly status: $astatus";
         }
 # test if any blocked entries exist as leftover of previous operations (there shouldn't)
-        elsif ($RRTOCC->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
             return "Blocked entries detected in assembly $assembly";
         }
 
@@ -1906,13 +1956,13 @@ sub unbuild {
 
         my $where = "assembly = $assembly and generation = 0";
         my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
-        my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
+        my $contigs = $R2C->associate('distinct contig_id','where',$where,\%qoptions);
 
 # should be blocked
 
  return "Test abort";
 
-        $RRTOCC->delete('where',$where);
+        $R2C->delete('where',$where);
 
         my $block = 500;
         while (@$contigs) {
@@ -1924,12 +1974,12 @@ print "processing next block $block $break";
             }
             $where = "contig_id in (".join(',',@block).")";
 #print "query $where $break";
-            $CCTOSS->delete('where',$where);   # to scaffold
-            $TTTOCCS->delete('where',$where);  # tags
+            $C2P->delete('where',$where);   # to scaffold
+            $T2C->delete('where',$where);  # tags
 # missing here GENE2CONTIG & CLONES2CONTIG
             $CONTIGS->delete('where',$where);  # contigs
 	    $where =~ s/contig_id/newcontig/;
-            $CCTOCC->delete('where',$where);   # contig to contig
+            $C2C->delete('where',$where);   # contig to contig
             $where =~ s/newcontig/contig_uid/;
             $SEQUENCE->delete('where',$where); # consensus
 	}
@@ -1963,14 +2013,14 @@ sub updateAssembly {
         print "Error status on assembly $assembly $break" if $list;
         return 0;
     }
-    elsif ($RRTOCC->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
         print "Blocked status on assembly $assembly $break" if $list;
         return 0;
     }
-    elsif ($RRTOCC->probe('contig_id',undef,"generation=0 AND assembly=$assembly")) {
+    elsif ($R2C->probe('contig_id',undef,"generation=0 AND assembly=$assembly")) {
         $accept = 0;
     }
-    elsif ($RRTOCC->probe('contig_id',undef,"generation=1 AND assembly=$assembly")) {
+    elsif ($R2C->probe('contig_id',undef,"generation=1 AND assembly=$assembly")) {
         $accept = 1;
     }
 
@@ -2004,7 +2054,7 @@ print "l2000 = $length & " if $list;
         my $where = "assembly = $assembly and generation = $generation";
         $where .= " and label>=10 and deprecated in ('N','M')";
         my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
-        my $contigs = $RRTOCC->associate('distinct contig_id','where',$where,\%qoptions);
+        my $contigs = $R2C->associate('distinct contig_id','where',$where,\%qoptions);
         my $query = "select sum(length) as sum from <self> where contig_id in (".join(',',@$contigs).")";
         my $length = $CONTIGS->query($query,{traceQuery=>0});
         $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
@@ -2021,20 +2071,20 @@ print "l2000 = $length->[0]->{sum}  $break" if $list;
     print "Update counters for assembly $assembly ... " if $list;
     my $where = "assembly = $assembly and label>=10 and deprecated in ('N','M')";
     print "all contigs in assembly $assembly ... $break" if $list;
-    my $ncontig = $RRTOCC->count($where,'distinct contig_id');
+    my $ncontig = $R2C->count($where,'distinct contig_id');
     $ASSEMBLY->update('allcontigs',$ncontig,'assembly',$assembly);
     print "all reads in assembly $assembly ... $break" if $list;
-    my $nreads  = $RRTOCC->count($where,'distinct read_id');
+    my $nreads  = $R2C->count($where,'distinct read_id');
     $ASSEMBLY->update('reads',$nreads,'assembly',$assembly);
 
 # contig count and read count for the assembly of generation
 
     $where .= " and generation = $generation";
     print "contigs in assembly $assembly and generation $generation$break" if $list;
-    $ncontig = $RRTOCC->count($where,'distinct contig_id');
+    $ncontig = $R2C->count($where,'distinct contig_id');
     $ASSEMBLY->update('contigs',$ncontig,'assembly',$assembly);
     print "assembled reads in assembly $assembly and generation $generation$break" if $list;
-    $nreads  = $RRTOCC->count($where,'distinct read_id');
+    $nreads  = $R2C->count($where,'distinct read_id');
     $ASSEMBLY->update('assembled',$nreads,'assembly',$assembly);
 
 # finally set the loading status
@@ -2047,6 +2097,48 @@ print "l2000 = $length->[0]->{sum}  $break" if $list;
 
 #############################################################################
 
+sub testAssembly {
+    my $self     = shift;
+    my $assembly = shift;
+
+# test assembly status and blocked status on READS2CONTIG table
+print STDOUT "**** Testing assembly $assembly **** $break$break";
+
+    my $hashref = $ASSEMBLY->associate('hashref',$assembly,'assembly',{traceQuery=>0});
+    
+    my $report = 0;
+    if (!$hashref || $hashref->{status} eq 'error') {
+        $report = "Error status detected on assembly $assembly: $hashref->{comment}";
+    }
+
+# now test if any blocked entries found
+
+    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
+        $report = "Blocked entries detected in assembly $assembly";
+    }
+
+    return $report;
+}
+
+#############################################################################
+
+sub prepareQueries {
+# set up queries on the R2C table handle
+    my $self = shift;
+
+    my $query = "insert into <self> ";
+    $query   .= "(contigname,aliasname,length,ncntgs,nreads,newreads,cover,origin)";
+    $query   .= " values (?,?,?,?,?,?,?,?)";
+    $CONTIGS->prepareQuery($query,'newContig');
+
+    $query  = "insert into <self> ";
+    $query .= "(newcontig,nranges,nrangef,oldcontig,oranges,orangef) ";
+    $query .= " values (?,?,?,?,?,?)";
+    $C2C->prepareQuery($query,'newContigLink'); 
+}
+
+#############################################################################
+
 sub setEnvironment {
 
 # return the line break appropriate for the environment
@@ -2054,15 +2146,10 @@ sub setEnvironment {
     $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
 
     $break = $CGI ? "<br>" : "\n";
-}
-
-#############################################################################
-
-sub fonts {
 
 # return a hash with font specifications
 
-    my %font = (b=>'blue', o=>'orange', g=>'lightgreen', 'y'=>'yellow', e=>'</FONT>');
+    %font = (b=>'blue', o=>'orange', g=>'lightgreen', 'y'=>'yellow', e=>'</FONT>');
 
     foreach my $colour (keys %font) {
 # replace colour by the full HTML tag
@@ -2073,8 +2160,6 @@ sub fonts {
             $font{$colour} = " ";
         }
     }
-
-    return \%font;
 }
 
 #############################################################################
