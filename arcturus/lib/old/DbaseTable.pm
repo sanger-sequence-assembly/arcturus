@@ -48,6 +48,7 @@ sub new {
     $self->{hashrefs}  = []; # array with hashrefs for table rows
     $self->{hashref}   = ''; # hash reference of last accessed table row 
     $self->{'build'}   =  0; # build hash status; true if table is loaded
+    $self->{'index'}   = {}; # hash for a possible index on cached data
     $self->{errors}    = ''; # build/instantiate error status
     $self->{warnings}  = ''; # build warning
 
@@ -242,6 +243,147 @@ sub buildhash {
 # return the number of table lines
 
     return $count;
+}
+
+#############################################################################
+# selective build: array of hashes for subset of the data 
+#############################################################################
+
+sub cacheBuild {
+# partial build of internal hash
+    my $self   = shift;
+    my $query  = shift; # select query 
+    my $option = shift;
+
+    my %options = (queryTrace => 0, indexKey => 0, extend => 0,
+                   sortBy     => 0, noIndex  => 0, list   => 0);
+    &importOptions(\%options, $option);
+    $options{indexKey} = $self->{prime_key} if !$options{indexKey}; # if any !
+
+    my $report = "cache building query $query \n";
+
+    my $storedhashrefs = $self->{hashrefs};
+    my $hashrefs = $self->query($query,0,$options{queryTrace});
+    if ($hashrefs && ref($hashrefs) eq 'ARRAY') {
+        undef @$storedhashrefs if !$options{extend};
+        push  @$storedhashrefs, @$hashrefs;   
+    }
+    else {
+        $report .= "! No data found \n";
+    }
+    
+# build an index if a key is specified
+
+    my $coltype = $self->{coltype};
+    if (my $indexKey = $options{indexKey}) {
+# first test if the key is unique
+        my $isUnique = 0;
+        foreach my $unique (@{$self->{unique}}) {
+            $isUnique = 1 if ($indexKey eq $unique);
+        }
+        $report .= "indexKey = $indexKey   isUnique=$isUnique \n";
+
+        $self->{'index'} = {};
+        my $index = $self->{'index'};
+
+        if (!$coltype->{$indexKey}) {
+            $report .= "Unknown column: $indexKey\n";
+        }
+        elsif ($isUnique) {
+# in case of a unique key, we can build a hash table
+            my $nh = @$storedhashrefs;
+            $report .= "$nh entries found \n";
+            foreach my $i (1 .. $nh) {
+                my $key = $storedhashrefs->[$i-1]->{$indexKey};
+                $index->{$key} = $storedhashrefs->[$i - 1];
+            }
+        }
+        else {
+# in case of a non-unique key, we build a two dimensional table
+            my $sort = $options{sortBy};
+	    $sort = $indexKey if !$sort;
+            $sort = "$indexKey,$sort" if ($sort !~ /\b$indexKey\b/);
+# build a sort string from the input specification
+            my @sort = split /\s*\,\s*/, $sort;
+            foreach my $sort (@sort) {
+                my $cmp = 'cmp';
+                if (!$coltype->{$sort}) {
+                    $report .= "Unknown column $sort \n";
+                }
+                elsif ($coltype->{$sort} =~ /int|float/i) {
+		    $cmp = '<=>';
+                }
+                $sort = '$a->{'.$sort.'} '.$cmp.' $b->{'.$sort.'}';
+            }
+            my $sortstring = join ' or ',@sort; $sortstring .= ';';
+            my $sorter = '@$storedhashrefs = sort {'.$sortstring.'} @$storedhashrefs';
+            $report .= "sorting by: $sorter \n";
+            eval $sorter;
+# now set up the index by going through the hashes now ordered with index key
+            my $nh = @$storedhashrefs;
+            $report .= "$nh entries found \n";
+            foreach my $i (1 .. $nh) {
+                my $key = $storedhashrefs->[$i-1]->{$indexKey};
+                my $nmr = 0; $nmr = 1 if $index->{$key};
+                $index->{$key}->[$nmr] = $i - 1;
+                $index->{$key}->[1] = $i - 1 if !$nmr;
+            }
+        }
+    }
+    else {
+        $report .= "No sorting key defined \n";
+    } 
+
+# list the index 
+
+    if ($options{list}) {
+        print STDOUT $report;
+        my $index = $self->{'index'};
+        foreach my $key (sort keys %$index) {
+            my $result = $self->cacheRecall($key);
+            next if (!$result || $options{list} <= 1);
+            foreach my $hash (@$result) {
+                print STDOUT "$hash: ";
+                foreach my $key (sort keys %$hash) {
+                    print STDOUT "$key $hash->{$key}  ";
+		}
+                print STDOUT "\n";
+            } 
+        }
+    }
+}
+
+#############################################################################
+
+sub cacheRecall {
+# returns a ref to array with 1 or more hashes, 0
+    my $self = shift;
+    my $ikey = shift; # the index key
+
+    my $hashrefs = $self->{hashrefs};
+    my $index    = $self->{'index'};
+
+    my $result = 0; # default no data
+#print STDOUT "recall: $ikey $index->{$ikey} \n";
+    if (my $hash = $index->{$ikey}) {
+        my @result;
+#print STDOUT "recall: $ikey  hash $hash  ";
+        if (ref($hash) eq 'ARRAY') {
+            my $is = $hash->[0];
+            my $if = $hash->[1];
+#print STDOUT "s:$is  f:$if ";
+            foreach my $i ($is .. $if) {
+                push @result, $hashrefs->[$i];
+            }
+        }
+        else {
+            push @result, $hash;
+        }
+#print STDOUT "\n";
+        $result = \@result if @result;
+    }
+
+    return $result; 
 }
 
 #############################################################################
@@ -700,11 +842,15 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
 #     $result = $array;
             my $sth = $dbh->prepare($query); # return array of hashrefs
             if ($sth->execute()) {
+                $result = \@result if !$option{returnScalar}; # valid query but may be empty
                 $queryStatus = 1; # signal valid query
                 while (my $hash = $sth->fetchrow_hashref()) {
                     push @result, $hash->{$item};
                     $result = \@result;
                 }
+            }
+            else {
+                print "failed query: $query <br>"; # result=UNDEF
             }
 
             $self->{querytotalresult} = @result + 0;
@@ -716,7 +862,7 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
 
         elsif ($item =~ /\bcount\b/i) {
 # no query tracing provided in count, nor 'count(item)'
-            $result = count($self,$whereclause);
+            $result = &count($self,$whereclause);
             $queryStatus = 1 if (defined($result));
             $self->{querytotalresult} = $result || 0;
         }
@@ -777,8 +923,9 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
 
     elsif (defined($item) && (!@{$self->{hashrefs}} || $multi)) {
 # print "$self->{tablename} associate item=$item  wval=$wval wcol=$wcol multi=$multi \n"; # TO BE TESTED
-        $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
-#        $result = $self->associate($item,'where',1,{orderBy => $item}); # returns an ordered array or undefined
+# $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
+        $option{orderBy} = $item;
+        $result = $self->associate($item,'where',1,\%option); # returns an ordered array or undefined
     }
 
     elsif (defined($item)) {
@@ -991,13 +1138,14 @@ sub count {
 # returns the number of rows in the table
     my $self  = shift;
     my $where = shift;
+    my $trace = shift;
 
 # where undefined: if a hash exists with table entries, return size of hash
 # where = 0      : return full length of database table
 # where = query  : return number of database table entries which satisfy the query
 
     undef my $count;
-    if (defined($self->{hashrefs}) && !defined($where) && @{$self->{hashrefs}}) {
+    if (defined($self->{hashrefs}) && @{$self->{hashrefs}} && !defined($where)) {
         $count = @{$self->{hashrefs}};
 # note: the curent hash could be different from the actual table; if you want
 # to be sure to count on the actual database table, force a query on the database
@@ -1009,6 +1157,7 @@ sub count {
         $whereclause = 'WHERE '.$whereclause if ($whereclause && $whereclause !~ /where/i);
         my ($dbh, $tablename) = whoAmI($self);
         my $query = "SELECT COUNT(*) FROM $tablename $whereclause";
+        $query = &traceQuery($self,$query) if $trace;
         undef $self->{qerror};
         $self->{lastQuery} = $query;
         my $sth = $dbh->prepare ($query);
@@ -1055,8 +1204,9 @@ sub counter {
         $counter = $alter  if ($alter && $column eq $alter); # overrides, be sure $alter exists
         if (defined($cname) && $cname eq $column && defined($value)) {
             $iden = 2;
-            if ($self->{hashrefs} && @{$self->{hashrefs}}) {
-                foreach my $hash (@{$self->{hashrefs}}) {
+            my $hashrefs = $self->{hashrefs}; # should be a HASH ref
+            if ($hashrefs && @$hashrefs) {
+                foreach my $hash (@$hashrefs) {
                     $iden = 1 if ($value eq $hash->{$column});
                 }
             }
@@ -1324,7 +1474,7 @@ sub newrow {
             my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
             my $status = &query($self,$query,1,0);       
 # on successful completion: store the WHERE string for further updates or rollback
-            if ($status && count($self,0) == $nextrow) {
+            if ($status && &count($self,0) == $nextrow) {
                 $self->{whereclause} = "($wstring)";
                 my $undoclause = "DELETE FROM <self> WHERE $self->{whereclause}";
                 push @{$self->{undoclause}}, $undoclause;
@@ -1333,7 +1483,7 @@ sub newrow {
             else {
 # the insert failed
                 undef $self->{whereclause};
-                $error = "unspecified error";
+                $error = "unspecified error (query =  $query)";
                 $inputStatus = 0;
             }
         }
@@ -1344,17 +1494,18 @@ sub newrow {
                 $self->{stack}->{$cstring} = \@vstack;
             }
             push @{$self->{stack}->{$cstring}}, $vstring;
-            if (@{$self->{stack}->{$cstring}} >= $multiLine) {
+            $inputStatus = @{$self->{stack}->{$cstring}};
+            if ($inputStatus >= $multiLine) {
                 my $nextrow = count($self,0) + $multiLine;
                 $vstring = join '),(',@{$self->{stack}->{$cstring}};
                 my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
 #print "NEWROW: nextrow=$nextrow\n" if $list;
                 my $status = &query($self,$query,1,0);      
-                if ($status && count($self,0) == $nextrow) {
+                if ($status && &count($self,0) == $nextrow) {
                     $inputStatus = $nextrow;
                 }
                 else {
-                    $error = "unspecified error"; # what about rollback?
+                    $error = "unspecified error (multiline = $multiLine, query =  $query)";
                     $inputStatus = 0;
                 }
                 undef $self->{stack}->{$cstring};
@@ -1768,7 +1919,7 @@ sub traceQuery {
 # consider queries of type SELECT what FROM table(s) WHERE 
 
 my $list = 0;
-$list = 2 if ($self->{tablename} =~ /CONTIGS/);
+#$list = 2 if ($self->{tablename} =~ /CONTIGS/);
     if ($query =~ /^\s*select(\s+distinct)?\s+(.*)\sfrom\s(.*)\swhere\s(.*)$/i) {
 print "query \"$query\" to be traced <br>\n" if ($list>1);
         my $targets = $2;
