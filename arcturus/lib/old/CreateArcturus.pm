@@ -756,25 +756,22 @@ sub create_NEWREADS {
 }
 
 #---
-# scompress, qcompress redundent, laways Z compression used
 
-sub create_DNA {
+sub create_SEQUENCE {
     my ($dbh, $list) = @_;
 
-    &dropTable ($dbh,"DNA", $list);
-    print STDOUT "Creating table DNA ..." if ($list);
-    $dbh->do(qq[CREATE TABLE DNA(
+    &dropTable ($dbh,"SEQUENCE", $list);
+    print STDOUT "Creating table SEQUENCE ..." if ($list);
+    $dbh->do(qq[CREATE TABLE SEQUENCE(
              read_id          MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY,
-             scompress        TINYINT  UNSIGNED   DEFAULT 0,     
              sequence         BLOB                 NOT NULL,
-             qcompress        TINYINT  UNSIGNED   DEFAULT 0,     
              quality          BLOB                 NOT NULL
          )]);
 			     
     print STDOUT "... DONE!\n" if ($list);
 }
 
-#---
+#-----------------------------------------------------------------------------------------------
 
 sub create_TEMPLATE {
     my ($dbh, $list) = @_;
@@ -782,29 +779,25 @@ sub create_TEMPLATE {
     &dropTable ($dbh,"TEMPLATE", $list);
     print STDOUT "Creating table TEMPLATE ..." if ($list);
     $dbh->do(qq[CREATE TABLE TEMPLATE(
-             template        MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
-             templatename    CHAR(24) BINARY      NOT NULL, 
-             ligation        SMALLINT UNSIGNED    NOT NULL,
-             counted         INT UNSIGNED         DEFAULT 0
+             template_id     MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
+             name            CHAR(24)  BINARY         NULL 
          )]);
-    print STDOUT "Building indexes ...\n" if ($list);
-    $dbh->do(qq[CREATE UNIQUE INDEX TEMPLATE_INDEX ON TEMPLATE (template)]);
-
-    print STDOUT "... DONE!\n" if ($list);
+#             ligation        SMALLINT UNSIGNED    NOT NULL, later to be added?
 }
 
-#--- dictionary table
+#-------------------------------------------------------------------------------------------------
 
-sub create_COMMENT {
+sub create_READCOMMENT {
     my ($dbh, $list) = @_;
 
-    &dropTable ($dbh,"COMMENT", $list);
-    print STDOUT "Creating table COMMENT ..." if ($list);
-    $dbh->do(qq[CREATE TABLE COMMENT(
-             comment         MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
-             commenttext     TEXT                 NOT NULL,
-             counted         INT UNSIGNED         DEFAULT 0
+    &dropTable ($dbh,"READCOMMENT", $list);
+    print STDOUT "Creating table READCOMMENT ..." if ($list);
+    $dbh->do(qq[CREATE TABLE READCOMMENT(
+             read_id         MEDIUMINT UNSIGNED   NOT NULL PRIMARY KEY, 
+             comment         VARCHAR(255)         NOT NULL
         )]);
+
+#    $dbh->do(qq[CREATE INDEX RCR ON READCOMMENT (read_id)]);
 			     
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1158,7 +1151,7 @@ sub create_READS2CONTIG {
              assembly         SMALLINT UNSIGNED        NOT NULL,
              generation       SMALLINT UNSIGNED        NOT NULL,
              deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
-	 ) type = INNODB]);
+	 ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 #             clone            SMALLINT UNSIGNED        NOT NULL,
 #             blocked          ENUM('0','1')         DEFAULT '0' to be left out with INNODB tables
@@ -1302,34 +1295,28 @@ flag used in full-proof upgrade generation counters
 sub create_NREADS2CONTIG {
     my ($dbh, $list) = @_;
 
-# readnr     : number of read in READS table
-# contig     : number of contig in CONTIGS table 
-#             (or should we use a combined number for index purposes)
+# read_id    : number of read in READS table
+# contig_id  : number of contig in CONTIGS table
+# mapping    : auto incremented foreign key to R2CMAPPINGS
+# deprecated : flag for mapping status:  new (N),  final (X) or no longer 
+#              current (Y), or marked for deletion (M) 
 
-# generation : incremented after each completed assembly with:
-#              "update READS2CONTIG set generation=generation+1 where assembly=N"
-#    $list = 1;
-    &dropTable ($dbh,"READS2CONTIG", $list);
-    print STDOUT "Creating table READS2CONTIG ..." if ($list);
-    $dbh->do(qq[CREATE TABLE READS2CONTIG(
-             mapping          MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT,  
+    &dropTable ($dbh,"NREADS2CONTIG", $list);
+    print STDOUT "Creating table NREADS2CONTIG ..." if ($list);
+    $dbh->do(qq[CREATE TABLE NREADS2CONTIG(
+             mapping          INT UNSIGNED             NOT NULL AUTO_INCREMENT,  
              contig_id        MEDIUMINT UNSIGNED       NOT NULL,
              read_id          MEDIUMINT UNSIGNED       NOT NULL,
-             generation       SMALLINT UNSIGNED        NOT NULL
-	 ) type = INNODB]);
-#??             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+	 ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 
-# Make (separate) indexes on read_id and contig_id
-#    print STDOUT "Building indexes on read_id, contig_id...\n" if ($list);
-#    $dbh->do(qq[CREATE INDEX reads_index ON READS2CONTIG (read_id)]);
-#    $dbh->do(qq[CREATE INDEX cntgs_index ON READS2CONTIG (contig_id)]);
-#    print STDOUT "Indexes READS_INDEX and CNTGS_INDEX  ON READS2CONTIG ... DONE\n" if ($list);
-# OR create a joint index on contig_id and read_id
-    print STDOUT "Building index on contig_id, read_id ...\n" if ($list);
-    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CINDEX (contig_id, read_id)]);
-# OR ?    $dbh->do(qq[ALTER READS2CONTIG ADD PRIMARY KEY (contig_id, read_id)]);
-    print STDOUT "Index R2CINDEX  ON READS2CONTIG ... DONE\n" if ($list);
+# create a joint index on contig_id and read_id and one on read_id
+
+    print STDOUT "Building index R2CINDEX on contig_id, read_id ...\n" if ($list);
+    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CCR (contig_id, read_id)]);
+    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CR (read_id)]);
+    print STDOUT "Index R2CCR and R2CR ON READS2CONTIG ... DONE\n"     if ($list);
 }
 
 #--------------------------- documentation --------------------------
@@ -1367,10 +1354,9 @@ number of contig in CONTIGS table
 
 number of read in READS table
 
-=
-=item generation
+=item mapping
 
-generation counter, incremented after each completed assembly
+auto-incremented foreign key to MAPPINGS table
 
 =item deprecated
 
@@ -1393,6 +1379,8 @@ flag to mark the status of the mapping
 =head2 Linked Tables
 
 =over 4
+
+=item R2CMAPPINGS on key mapping
 
 =item CONTIGS on key contig_id
 
@@ -1421,13 +1409,12 @@ sub create_R2CMAPPING {
     &dropTable ($dbh,"R2CMAPPING", $list);
     print STDOUT "Creating table R2CMAPPING ..." if ($list);
     $dbh->do(qq[CREATE TABLE R2CMAPPING(
-             mapping          MEDIUMINT UNSIGNED       NOT NULL PRIMARY KEY, 
+             mapping          INT UNSIGNED             NOT NULL PRIMARY KEY, 
              pcstart          INT UNSIGNED             NOT NULL,
              pcfinal          INT UNSIGNED             NOT NULL,
              prstart          SMALLINT UNSIGNED        NOT NULL,
              prfinal          SMALLINT UNSIGNED        NOT NULL,
-             label            TINYINT  UNSIGNED        NOT NULL,
-             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+             label            TINYINT  UNSIGNED        NOT NULL
 	 ) type = MYISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1503,24 +1490,6 @@ To access the individual mappings select on label < 20
 To access the overall mapping of a read to the contig select on label >= 10
 
 (Alignment information is also in the order of pcstart & pcfinal)
-
-=item deprecated
-
-flag to mark the status of the mapping=over 16
-
-=item N for a new mapping
-
-=item M for a mapping marked for deletion after a generation update
-
-=item Y for a mapping no longer current, i.e. superseeded by a later mapping
-
-=item X for a final mapping, i.e. the read disappears from the assembly
-
-=back
-
-=item blocked
-
-flag used in full-proof upgrade generation counters
 
 =back
 
@@ -2004,7 +1973,7 @@ sub create_ASSEMBLY {
 # Alias name (e.g. for projects from outside)
 ## to be removed # Organism: REFerence to organism table (refered to in amanager and create)
 # chromosome: 0 for blob; 1-99 nr of a chromosome; 100 for other; > 100 e.g. plasmid
-# Origin of DNA sequences (Sanger for in-house; any other name for outside sources)
+# Origin of SEQUENCE sequences (Sanger for in-house; any other name for outside sources)
 # oracle project: the oracle project number of this assembly, if any
 # size    : approxinmate length (kBase) of assembly, estimated e.g. from physical maps
 # length  : actual length (base) measured from contigs
@@ -2977,8 +2946,10 @@ sub create_DATAMODEL {
 #                 'SESSIONS            userid            USERS      userid',
                  'READS              read_id     READS2CONTIG      read_id',
                  'READS              read_id   READS2ASSEMBLY      read_id',
+                 'READS              read_id      READCOMMENT      read_id',
                  'READS              read_id        READEDITS      read_id',
-#                 'READS              read_id              DNA      read_id',
+                 'READS              read_id         SEQUENCE      read_id',
+                 'READS             template         TEMPLATE  template_id',
                  'READS             ligation        LIGATIONS    ligation/identifier ',
                  'READS                clone           CLONES       clone/clonename  ',
                  'READS               strand          STRANDS      strand/description',
@@ -3095,11 +3066,9 @@ sub create_INVENTORY {
                  'VECTORS           c  r  0  1',
                  'CHEMTYPES         c  r  2  1',
                  'READS             o  p  0  0',
-
-#                 'DNA               o  p  0  0',
-#                 'COMMENT           o  d  1  0',
-#                 'TEMPLATE          o  d  1  0',
-
+                 'SEQUENCE          o  p  0  0',
+                 'READCOMMENT       o  d  1  0',
+                 'TEMPLATE          o  d  1  0',
                  'READEDITS         o  a  0  0',
                  'READTAGS          o  t  0  0',
                  'READPAIRS         o  l  3  0',
@@ -3940,10 +3909,9 @@ sub diagnose {
 # table options, for the moment only table type is being processed
             if ($record =~ /\Wtype\s*\=\s*(bdb|heap|innodb|isam|merge|myisam)/i) {
                 $tabletype = $1; # the required table type
-#print "table type test triggered by $record <br>";
                 my $info = $table->getTableType(); # the current table type
                 if ($info && uc($info) ne uc($tabletype)) {
-#print "NEW tabletype read from source: $tabletype<br>\n";
+# new tabletype read from source file
                     if ($info !~ /heap|merge/i && $tabletype !~ /heap|merge/i) {
                         $alterTableType = "ALTER table $tablename type=$tabletype";
                     }
@@ -3982,11 +3950,12 @@ sub diagnose {
             if (my $info = $table->getColumnInfo($column,1)) {
 # some massaging in order to align table info and script definitions
                 $fields{$column} =~ s/\bchar/varchar/ if ($info =~ /\bvarchar\b/);
+            $fields{$column} =~ s/\sbinary//    if ($info =~ /char\b/); # fix until getColumnInfo fixed
                 $fields{$column} =~ s/\bNOT\sNULL/default 0/i if ($info =~ /default\s0/i);
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
 # keep the first encountered mismatch of a column definition
                 if ($info ne $fields{$column}) {
-#print "info: $info <br>fields: $fields{$column}<br>";
+print "info: '$info'<br>fields: '$fields{$column}'<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
 #print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }

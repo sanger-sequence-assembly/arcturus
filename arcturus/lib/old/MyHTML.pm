@@ -80,6 +80,8 @@ sub patience {
     my $string = "Please be patient .... this can take some time!";
     $string = "<font size=+$font color='white'> $string </font>" if $font;
     print STDOUT "<TABLE align=center><TR><TD>$string</TD></TR></TABLE>\n";
+
+    return 1;
 }
 
 ###############################################################################

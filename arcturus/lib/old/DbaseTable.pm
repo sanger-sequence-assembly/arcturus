@@ -25,6 +25,7 @@ sub new {
     my $database   = shift; # the database of the table
     my $build      = shift; # define 0 for descriptors only, 1 for hashrefs; undef for no build   
     my $order      = shift; # if build defined as 1, order by column 'order'
+    my $count      = shift || 0; # default no count set
     my $dieOnError = shift || 0; # die if build fails
 
     my $class = ref($prototype) || $prototype;
@@ -76,7 +77,7 @@ sub new {
 # initialize the table only if build is defined (preset error status for build)
 
     $self->{errors} = "Initialisation pending for table $database.$tablename";
-    $self->build($build,$order,$dieOnError) if defined($build); # overrides errors 
+    $self->build($build,$order,$count,$dieOnError) if defined($build); # overrides errors 
 
 # get the database version
 
@@ -121,10 +122,12 @@ sub spawn {
 
 sub build {
 # set switch "on" for full build including hash, else only table columns
-    my $self   = shift;
-    my $switch = shift;
-    my $order  = shift;
-    my $dieOE  = shift; # die if build fails
+    my $self    = shift;
+    my $switch  = shift;
+    my $order   = shift;
+    my $doCount = shift;
+    my $dieOE   = shift; # die if build fails
+
 #print "build $self->{tablename}  switch $switch order $order <br>\n" if ($self->{tablename} ne 'ORGANISMS');
     my $count = 0;
     $self->{errors} = ''; # clear error flag
@@ -182,6 +185,7 @@ sub build {
     $sth = $dbh->prepare("SHOW COLUMNS from $tablename");
     if ($sth->execute()) {
         while (my @description = $sth->fetchrow_array()) {
+#print "description: @description <br>\n" if ($tablename =~ /USERS/);
             push @{$self->{columns}}, $description[0];   # keeps the order of entries
             $columns{$description[0]} = $description[1]; # hash for type information
             $coldata{$description[0]} = \@description;   # full description
@@ -204,7 +208,7 @@ sub build {
     $sth = $dbh->prepare("SHOW CREATE TABLE $tablename");
     if ($sth->execute()) {
         while (my @description = $sth->fetchrow_array()) {
-#print "description: @description \n";
+#print "description: @description  <br>\n" if ($tablename =~ /USERS/);
             foreach my $definition (@description) {
                 if ($definition =~ /\WTYPE\=(\w+)\s*/i) {
 #print "type $tablename $1 \n";
@@ -232,8 +236,8 @@ sub build {
 # order will be undefined if no primary key or column named after table
         $count = &buildhash(0, $self, $order);
     }
-    else {
-        $self->count(0); # stores length of table in $self->{'count'}
+    elsif ($doCount) {
+        $count = $self->count(0); # stores length of table in $self->{'count'}
     }
 
 # finally, add the table to the 'instances' inventory of the DbaseTable class
@@ -1182,6 +1186,8 @@ sub probe {
     my $value      = shift;
     my $constraint = shift;
 
+    $item = $self->{columns}->[0] unless $item; # print "probe item $item<br>";
+
     my $where = '';
     $where .= "$item = $value" if defined($value);
     $where .= " and " if ($where && $constraint);
@@ -1241,12 +1247,14 @@ sub find {
         $hashrefs = query($self,$query);
         @output = @$hashrefs if (@$hashrefs);
 
-    } else { # cleanup @output
+    } 
+    else { # cleanup @output
         foreach (my $i=0 ; $i < @output ;) {
             if (my $hash = $output[$i]) {
                 $output[$i] = $hash->{$sitem} if (defined($hash->{$sitem}));
                 $i++;
-            } else {
+            } 
+            else {
                 splice (@output,$i,1);
             }
         }
@@ -1256,7 +1264,8 @@ sub find {
 
     if (@output) {
         return \@output;
-    } else {
+    } 
+    else {
         return 0;
     }
 }
@@ -1269,7 +1278,8 @@ sub nextrow {
     my $self = shift;
     my $line = shift;
 
-print "sub $self->{tablename}->nextrow (to be deprcated) \n";
+print "sub $self->{tablename}->nextrow (to be deprecated) \n";
+# last row nowhere used, nextrow used in ReadsReader
 
     my $nrow;
 

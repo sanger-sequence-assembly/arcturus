@@ -614,6 +614,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         elsif ($tablecount{$table} < 0) {
             $contents .= "<TD bgcolor=$purple>FOREIGN</TD>";
             push @extras, $table;
+            $redefined{$table} = "drop table $table";
         }
         elsif ($redefined{$table}) {
             $contents .= "<TD bgcolor=$yellow nowrap>CHANGED FORMAT</TD>";
@@ -624,6 +625,18 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         $contents .= "</TR>";
     }
     $contents .= "</TABLE> </TD></TR></TABLE>";
+
+# signal extra tables
+
+    if (@extras) {
+        $page->message("! There are foreign tables found in database $database",'orange',$font);
+        if (@missed >= 5) {
+            $page->space(1);
+            $page->message("! The database may have been corrupted",$yellow,$font);
+            $page->space(1);
+            $page->message("Please contact $db_manager",'white',$font);
+        }
+    }
 
 # signal anything unusual
 
@@ -637,16 +650,6 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         $page->space(1);
         $page->message("Please contact $db_manager",$purple,$font);
     }
-# signal extra tables
-    elsif (@extras) {
-        $page->message("! There are foreign tables found in database $database",'orange',$font);
-        $page->space(1);
-        $page->message("! The database may have been corrupted",$yellow,$font);
-        $page->space(1);
-        $page->add($contents);
-        $page->space(1);
-        $page->message("Please contact $db_manager",'white',$font);
-    }
     elsif ($option eq 'overview' || $option eq 'getform' || (@missed && $option ne 'process')) {
         $page->space(1);
         $page->message("Overview of database $database",$purple,$font);
@@ -655,7 +658,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         $page->space(1);
 # generate a prompt to create or rebuild a table
 # consider rebuilding a table only if all tables are present and there are no anomalies 
-        if (@missed || $option eq 'getform') {
+        if (@missed || @extras || $option eq 'getform') {
             $page->form("$script/existing/process");
             $page->ingestCGI;
             if (@missed == 1) {
@@ -666,10 +669,23 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             }
             elsif (@missed) {
                 my $choices = $page->choicelist('tablename',\@missed,0,-1);
-                $page->message("Select a table to create and continue: ",$purple,'size = +1',0,0,'CC');
+                $page->message("Select a table to be created: ",$purple,'size = +1',0,0,'CC');
                 $page->substitute('CC',$choices);
                 $page->confirmbuttonbar(0,0,'white');
                 $page->substitute('CONFIRM',"CREATE");
+            }
+            elsif (@extras == 1) {
+                $page->hidden('tablename',$extras[0]);
+                $page->message("Continue to drop table $extras[0]",$purple,'size = +1');
+                $page->confirmbuttonbar(0,0,'white');
+                $page->substitute('CONFIRM',"DROP $extras[0]");
+            }
+            elsif (@extras) {
+                my $choices = $page->choicelist('tablename',\@extras,0,-1);
+                $page->message("Select a table to be dropped: ",$purple,'size = +1',0,0,'CC');
+                $page->substitute('CC',$choices);
+                $page->confirmbuttonbar(0,0,'white');
+                $page->substitute('CONFIRM',"CONTINUE");
             }
             else {
                 undef my $preset;
@@ -681,7 +697,8 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                 $where .= "and tablename not like '%HISTORY'" if ($user ne 'oper');
                 my $choices = $inventory->htmlMaskedOptions('tablename','where',$where,'tablename',0,0,$preset);
                 $choices =~ s/DBHISTORY/$historytable/g;
-                $page->message("Select a table to rebuild: ",$purple,'size = +1',0,0,'CC');
+                my $message = "Select a table to rebuild: ";
+                $page->message($message,$purple,'size = +1',0,0,'CC');
                 $page->substitute('CC',$choices);
                 my $enforce = "<TABLE><TR><TD>Check <INPUT type=checkbox name='reinitialize'>";
                 $enforce .= " to reinitialize protected tables</TD></TR></TABLE>";
@@ -740,7 +757,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 # here all tables exist in the database; only now consider to rebuild a table
 
     elsif ($option eq 'process') {
-# rebuild a table in the database; get rebuild status from inventory table
+# drop or rebuild a table; get rebuild status from inventory table
         my $tablename = $GateKeeper->lookup('tablename');
         my $rebuild = $inventory->associate('rebuild',$tablename,'tablename');
         
@@ -753,7 +770,9 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         my $reinitialize = $GateKeeper->lookup('reinitialize',0);
         if ($rebuild != 2 && $tablename) {
             my $table = $inventory->spawn($tablename,$database,0,0);
-            $count = $table->counted if $table; # nr of lines or counts in counter table
+# nr of lines or counts in e.g. counter tables
+            $count = $table->counted if ($table && $table->getTableType ne 'INNODB'); 
+            $count = $table->probe   if ($table && $table->getTableType eq 'INNODB');
             $rebuild = 0 if $reinitialize;
         }
 
@@ -770,31 +789,34 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
         }
 # either alter the table
         elsif ($redefined{$tablename} && !$reinitialize) {
-            $page->space(2);            
+            $page->space(2);
             my $message = "Table $tablename will be altered to conform to the current template";
+            $message =~ s/altered.*/dropped/ if ($redefined{$tablename} =~ /\bdrop\s+table\b/); 
             $page->message($message,$yellow,"size = +1",1);
             $page->space(2);
             $page->message($redefined{$tablename},$purple,0,1);
             $page->space(2);
-            $options{noConfirm} = 'ALTER';
+            my $change = ($redefined{$tablename} =~ /\bdrop\b/) ? 'DROP' : 'ALTER';
+            $options{noConfirm} = $change;
             my $return = "$script/existing/getform";
             $return .= $cgi->postToGet(0,'tablename','password','identify');
-            if (!$confirm || $confirm ne 'ALTER') {
+#            $page->patience(3) if ($confirm && $confirm eq $change);
+            if (!$confirm || $confirm ne $change) {
                 $page->form("$script/existing/process");
                 $page->confirmbuttonbar($return); # include reject button
-                $page->substitute('CONFIRM',"ALTER");
+                $page->substitute('CONFIRM',$change);
                 $page->ingestCGI;
             }
             elsif (!$GateKeeper->authorize(8192,\%options)) {
                 $error = $GateKeeper->{error};
             }
-            elsif ($organisms->query($redefined{$tablename})) {
+            elsif ($page->patience(3) && $organisms->query($redefined{$tablename})) {
 # add timestamp to HISTORY table
                 my $user = $GateKeeper->{USER};
                 my $timestamp = $organisms->timestamp(0);
                 my $history   = $organisms->spawn('HISTORY',$database);
                 my @items  = ('tablename', 'date'    , 'user', 'action', 'command');
-                my @values = ($tablename , $timestamp,  $user,  'ALTER', $redefined{$tablename});
+                my @values = ($tablename , $timestamp,  $user,  $change, $redefined{$tablename});
                 my $success = $history->newrow(\@items,\@values);
                 $page->message('DONE','yellow',"size = +1",1);
                 $page->errorbox("<p>Time stamp FAILED on HISTORY table") if !$success;
