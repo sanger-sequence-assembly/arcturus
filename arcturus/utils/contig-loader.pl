@@ -27,6 +27,7 @@ my $cnBlocker;             # contig name blocker, ignore contig names of age 0
 my $rnBlocker;             # ignore reads like pattern
 my $minOfReads = 2;        # default require at least 2 reads per contig
 my $readTags;              # default ignore read contents and tags, only mapping
+my $contigtag = 2;         # contig tag processing
 my $origin;
 
 my $assembly;              # ?? not really necessary
@@ -45,7 +46,7 @@ my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "projectname|project_id|test|minimum|filter|ignore|list|"
-               . "ignorereadnamelike|"
+               . "ignorereadnamelike|irnl|contigtagprocessing|ctp|"
                . "frugal|padded|readtags|noload|verbose|batch|info|help";
 
 
@@ -92,6 +93,10 @@ while (my $nextword = shift @ARGV) {
     $cnBlocker        = 1            if ($nextword eq '-ignore');
 
     $rnBlocker        = shift @ARGV  if ($nextword eq '-ignorereadnamelike');
+    $rnBlocker        = shift @ARGV  if ($nextword eq '-irnl');
+
+    $contigtag        = shift @ARGV  if ($nextword eq '-ctp');
+    $contigtag        = shift @ARGV  if ($nextword eq '-contigtagprocessing');
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
@@ -517,7 +522,7 @@ while (defined($record = <$CAF>)) {
             }
             elsif ($type eq 'REPT') {
 # pickup the repeat name
-		if ($info =~ /^\s*([\w\-]+)\s/i) {
+		if ($info =~ /^\s*(\S+)\s/i) {
                     $tag->setTagSequenceName($1);
 		}
                 else {
@@ -618,7 +623,7 @@ $logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $nol
             }
 # pickup repeat name
             if ($type eq 'REPT') {
-		if ($info =~ /^\s*([\w\-]+)\s+from/i) {
+		if ($info =~ /^\s*(\S+)\s+from/i) {
 $logger->warning("TagSequenceName $1") if $noload;
                     $tag->setTagSequenceName($1);
 		}
@@ -730,7 +735,9 @@ foreach my $identifier (keys %contigs) {
 	$contig->writeToCaf(*STDOUT) if $list;
     }
 
-    my ($added,$msg) = $adb->putContig($contig,$project,$noload); # return 0 fail
+    my ($added,$msg) = $adb->putContig($contig, project => $project,
+                                                noload  => $noload, 
+                                                dotags  => $contigtag);
 
     $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
                   " reads : status $added, $msg") if $added;
@@ -761,11 +768,11 @@ if ($readTags) {
         my $read = $reads{$identifier};
         push @reads, $read;
 #        if ($noload) {
-        my $tags = $read->getTags();
-        next unless ($tags && @$tags);
-        foreach my $tag (@$tags) {
+#        my $tags = $read->getTags();
+#        next unless ($tags && @$tags);
+#        foreach my $tag (@$tags) {
 #            $tag->writeToCaf(*STDOUT) if $noload;
-        }
+#        }
     }
     my $autoload = 1;
     my $success = $adb->putTagsForReads(\@reads,$autoload); # unless $noload;
@@ -792,13 +799,13 @@ sub tagList {
                  'STSF','STSX','STSG','COMM','RP20','TELO','REPC',
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SILR','IRPT','LINE','REPA','REPY',
-                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON','TEST');
+                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON');
 
 # software TAGS
 
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
                  'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
-                 'LOW' ,'MOSC','STOL');
+                 'LOW' ,'MOSC','STOL','TEST');
 
 # edit tags
 

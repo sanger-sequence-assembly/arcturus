@@ -212,8 +212,8 @@ CREATE TABLE READTAG (
 CREATE TABLE CONTIGTAG (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
-  systematic_id VARCHAR(32) binary NULL,
-  tag_id mediumint(8) unsigned NOT NULL default '0',
+   systematic_id VARCHAR(32) binary NULL,
+   tag_seq_id mediumint(8) unsigned NOT NULL default '0',
   pstart int(11) unsigned NOT NULL default '0',
   pfinal int(11) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
@@ -221,16 +221,30 @@ CREATE TABLE CONTIGTAG (
   comment tinytext default NULL,
   KEY contigtag_index (contig_id)
 ) TYPE=MyISAM;
+#  tag_id mediumint(8) unsigned NOT NULL,
+ 
+
+#
+# Table structure for table 'CONTIGTAGINFO'
+#
+
+CREATE TABLE CONTIGTAGINFO (
+  tag_id mediumint(8) unsigned NOT NULL auto_increment,
+  systematic_id VARCHAR(32) binary NULL,
+  tag_seq_id mediumint(8) unsigned NOT NULL,
+  KEY contigtaginfo_index (tag_id)
+) TYPE=MyISAM;
+
 
 #
 # Table structure for table 'TAGSEQUENCE'
 #
 
 CREATE TABLE TAGSEQUENCE (
-  tag_id mediumint(8) unsigned NOT NULL auto_increment,
+  tag_seq_id mediumint(8) unsigned NOT NULL auto_increment,
   tagseqname varchar(32) binary NOT NULL default '',
   sequence blob NULL,
-  PRIMARY KEY tag_index (tag_id),
+  PRIMARY KEY tag_index (tag_seq_id),
   UNIQUE KEY tagseqname (tagseqname)
 ) TYPE=MyISAM;
 

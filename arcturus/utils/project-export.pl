@@ -2,6 +2,8 @@
 
 use strict;
 
+use FileHandle;
+
 use ArcturusDatabase;
 
 use Logging;
@@ -13,25 +15,28 @@ use Logging;
 my $organism;
 my $instance;
 my $verbose;
-my $contig_id; # = 20884;
+my $project; # = 20884;
 my $batch;
+my $nolock; # default export only unlocked projects (acquirelock = 1)
 my $padded;
-my $blocked = 0;
+my $fasta;
 my $fofn;
+my $FileDNA;
+my $FileQTY;
 
-my $validKeys  = "organism|instance|contig_id|fofn|blocked|"
-               . "padded|batch|verbose|debug|help";
+my $validKeys  = "organism|instance|project|fofn|padded|fasta|"
+               . "FDNA|FQTY|nolock|batch|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage(1,"Invalid keyword '$nextword'");
     }                                                                           
     $instance  = shift @ARGV  if ($nextword eq '-instance');
       
     $organism  = shift @ARGV  if ($nextword eq '-organism');
 
-    $contig_id = shift @ARGV  if ($nextword eq '-contig_id');
+    $project   = shift @ARGV  if ($nextword eq '-project');
 
     $fofn      = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -41,13 +46,19 @@ while (my $nextword = shift @ARGV) {
 
     $padded    = 1            if ($nextword eq '-padded');
 
-    $blocked   = 1            if ($nextword eq '-blocked');
+    $fasta     = 1            if ($nextword eq '-fasta');
+
+    $FileDNA   = shift @ARGV  if ($nextword eq '-FDNA');
+
+    $FileQTY   = shift @ARGV  if ($nextword eq '-FQTY');
+
+    $nolock    = 1            if ($nextword eq '-nolock');
 
     $batch     = 1            if ($nextword eq '-batch');
 
     &showUsage(0) if ($nextword eq '-help');
 }
- 
+
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
@@ -64,7 +75,7 @@ $instance = 'prod' unless defined($instance);
 
 &showUsage("Missing organism database") unless $organism;
 
-&showUsage("Missing contig ID") unless ($contig_id || $fofn);
+&showUsage("Missing project ID or name") unless ($project || $fofn);
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -88,32 +99,56 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-my @contigids;
+$logger->warning("Redundant '-padded' key ignored") if ($padded && $fasta);
 
-push @contigids, $contig_id if $contig_id;
+# get file handles
+
+$FileDNA = new FileHandle($FileDNA,"w") if $FileDNA;
+$FileDNA = *STDOUT unless $FileDNA;
+
+$FileQTY = new FileHandle($FileQTY,"w") if $FileQTY;
+
+# get project(s) to be exported
+
+my @projects;
+
+push @projects, $project if $project;
  
 if ($fofn) {
-    foreach my $contig_id (@$fofn) {
-        push @contigids, $contig_id if $contig_id;
+    foreach my $project (@$fofn) {
+        push @projects, $project if $project;
     }
 }
 
-foreach my $contig_id (@contigids) {
+my %exportoptions;
+$exportoptions{padded} = 1 if $padded;
+$exportoptions{nolock} = 1 if $nolock;
 
-    my $contig = $adb->getContig(contig_id=>$contig_id,
-                                 andblocked=>$blocked) || 0;
+foreach my $project (@projects) {
 
-    $logger->info("Contig returned: $contig");
+    my $Project;
 
-    next if (!$contig && $batch); # re: contig-padded-tester
+    $Project = $adb->getProject(project_id=>$project) if ($project !~ /\D/);
 
-    $logger->warning ("Blocked or unknown contig $contig_id") unless $contig;
+    $Project = $adb->getProject(projectname=>$project) if ($project =~ /\D/);
 
-    next unless $contig;
+    $logger->info("Project returned: $Project");
 
-    $contig->writeToCaf(*STDOUT)   unless $padded;
+    next if (!$Project && $batch); # skip error (possible) message
 
-    $contig->writeToCafPadded(*STDOUT) if $padded;
+    $logger->warning("Unknown project $project") unless $Project;
+
+    next unless $Project;
+
+    my ($s,$m);
+
+    ($s,$m) = $Project->writeContigsToCaf($FileDNA,\%exportoptions) unless $fasta;
+
+    ($s,$m) = $project->writeToFasta($FileDNA,$FileQTY,\%exportoptions) if $fasta;
+
+    $logger->warning($m) unless $s; # no contigs exported
+
+    $logger->info("$s contigs exported for project $project") if $s;
 }
 
 exit;
@@ -125,20 +160,30 @@ exit;
 sub showUsage {
     my $code = shift || 0;
 
-    print STDERR "\n\nExport contig(s) by ID or using a fofn with IDs\n";
+    print STDERR "\n\nExport (contigs in) project(s) by ID/name or using a fofn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n\n";
     print STDERR "either -contig_id or -fofn :\n\n";
-    print STDERR "-contig_id\tContig ID\n";
-    print STDERR "-fofn \t\tname of file with list of Contig IDs\n\n";
+    print STDERR "-project\tProject ID or name\n";
+    print STDERR "-fofn \t\tname of file with list of project IDs or names\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
+    print STDERR "The default export is in CAF on STDOUT\n";
+    print STDERR "\n";
     print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
-    print STDERR "-padded\t\t(no value) export contig in padded format\n";
-    print STDERR "-blocked\t\t(no value) include contigs from blocked projects\n";
+    print STDERR "-padded\t\t(no value) export contigs in padded format\n";
+    print STDERR "-fasta\t\t(no value) export contigs in fasta format\n";
+    print STDERR "-FDNA\t\tfile name for output (overrides default; DNA if fasta)\n";
+    print STDERR "-FQTY\t\tfile name for quality data (with fasta only)\n";
+    print STDERR "\n";
+    print STDERR "Default setting exports only projects which either have\n";
+    print STDERR "the unlocked status or are owned by the user\n";
+    print STDERR "\n";
+    print STDERR "-nolock\t\t(no value) export all contigs\n";
+    print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
 

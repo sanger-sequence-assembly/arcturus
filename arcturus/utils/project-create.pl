@@ -4,9 +4,7 @@ use strict;
 
 use ArcturusDatabase;
 
-use FileHandle;
 use Logging;
-use PathogenRepository;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -14,12 +12,12 @@ use PathogenRepository;
 
 my $organism;
 my $instance;
-my $projectname;
+my $project_id;
 my $comment;
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|instance|project|comment|verbose|help";
+my $validKeys  = "organism|instance|project_id|projectname|comment|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -30,18 +28,18 @@ while (my $nextword = shift @ARGV) {
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
-    $projectname  = shift @ARGV  if ($nextword eq '-project');
+    $project_id   = shift @ARGV  if ($nextword eq '-project_id');
 
     $comment      = shift @ARGV  if ($nextword eq '-comment');
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    $comment      = shift @ARGV  if ($nextword eq '-projectname');
 
-    $confirm      = 1            if ($nextword eq '-confirm');
+    $verbose      = 1            if ($nextword eq '-verbose');
 
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage(0,"Missing project name") unless $projectname;
+#&showUsage(0,"Missing project description") unless $comment;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -75,15 +73,15 @@ $logger->info("Database $URL opened succesfully");
 # MAIN
 #----------------------------------------------------------------
 
-my $project = new Project($projectname);
+my $project = new Project();
+
+$project->setProjectID($project_id) if $project_id;
 
 $project->setComment($comment) if $comment;
 
-$project->setUserName('ejz');
-
 my $pid = $adb->putProject($project);
 
-$logger->info("Project $projectname added with ID = $pid");
+$logger->warning("New project added with ID = $pid");
 
 #------------------------------------------------------------------------
 # HELP
@@ -98,7 +96,7 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-project\tProject name\n";
+    print STDERR "-projectname\tProject name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
