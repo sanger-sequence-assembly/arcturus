@@ -47,6 +47,13 @@ sub getProject {
                  " using (project)" .
                  " where CONTIG2PROJECT.contig_id = ?";
     }
+    elsif ($key eq "contigIDs") {
+# determine the project ID from a number of contig_ids
+        return $this->getProject(contig_id=>$value) unless (ref($value) eq 'ARRAY');
+        return undef unless @$value; # empty array
+
+        
+    }
     else {
         print STDERR "Invalid keyword $key for ->getProject";
         return undef;
@@ -73,9 +80,11 @@ sub getProject {
         $project->setCreator(shift @ary);
         $project->setComment(shift @ary);
         $project->setProjectStatus(shift @ary);
+# assign ADB reference
+        $project->setArcturusDatabase($this);
     }
 
-    $project->setArcturusDatabase($this);
+    $sth->finish();
 
     return $project;
 }
@@ -98,6 +107,8 @@ sub putProject {
     my $rc = $sth->execute($project->getProjectName(),
                            $project->getUserName() || 'arcturus',
                            $project->getComment()) || &queryFailed($query);
+
+    $sth->finish();
 
     return 0 unless ($rc == 1);
     
@@ -210,9 +221,13 @@ sub linkContigIDToProjectID {
         $query = "insert into CONTIG2PROJECT (project,contig_id) values (?,?)";
     }
 
+    $sth->finish();
+
     $sth = $dbh->prepare_cached($query);
 
     $sth->execute($project_id,$contig_id) || &queryFailed($query) && return undef;
+
+    $sth->finish();
     
     $pidtoupdate{$project_id}++;
 
@@ -243,6 +258,8 @@ sub unlinkContigID {
     my $sth = $dbh->prepare_cached($query);
 
     my $success = $sth->execute($contig_id) || &queryFailed($query);
+
+    $sth->finish();
 
     &updateMetaDataForProject($dbh,$project_id);
 
@@ -289,6 +306,8 @@ sub fetchContigIDsForProjectID {
         push @contigids, $contig_id;
     }
 
+    $sth->finish();
+
 # set the checkout status to 'out'; this affect some subsequent queries; for
 # inverse operation (setting checked to 'in') use checkInContigIDforProjectID
 
@@ -297,6 +316,7 @@ sub fetchContigIDsForProjectID {
                  " where contig_id in (".join (',',@contigids).")";
         $sth = $dbh->prepare_cached($query);
         $sth->execute($project_id) || &queryFailed($query);
+        $sth->finish();
     }
 
     return \@contigids, $checkoutstatus;
@@ -341,7 +361,7 @@ sub updateMetaDataForProject {
 # check on user ID specification
 
     my $user = 'arcturus';
-    if ($key eq 'user' && $value) {
+    if ($key && $key eq 'user' && $value) {
         $user = $value;
     }
     elsif ($key) {

@@ -304,7 +304,7 @@ $previous=0 if $TEST;
 
 # okay, the contig is new; find out if it is connected to existing contigs
 
-    my $contigids = $this->getParentsIDsForContig($contig);
+    my $contigids = $this->getParentIDsForContig($contig);
 
 # pull out mappings for those previous contigs, if any
 
@@ -312,6 +312,7 @@ $previous=0 if $TEST;
     if ($contigids && @$contigids) {
 # compare with each previous contig and return/store mapings/segments
         my @linked;
+        my %readsinlinked;
         $message .= "has parent(s) : @$contigids";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
@@ -324,20 +325,27 @@ $previous=0 if $TEST;
             }
             $this->getReadMappingsForContig($previous);
             my ($linked,$deallocated) = $contig->linkToContig($previous);
-            push @linked, $previous->getContigID() if $linked;
+            if ($linked) {
+                my $contig_id = $previous->getContigID();
+                push @linked, $contig_id;
+                $readsinlinked{$contig_id} = $previous->getNumberOfReads();
+            }
             $previous = $previous->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
-            if ($deallocated) {
-                $message .= "; $deallocated reads deallocated from $previous".
-  		            "  (possibly split contig?)";
-            }
+            $message .= "; $deallocated reads deallocated from $previous".
+  		        "  (possibly split contig?)" if $deallocated;
         }
 # determine the default project_id unless it's already specified
-
-$project = 1; # test
-$project = $this->getProject(contigIDs => \@linked) unless $project;
-$project = $this->getProject(contigIDs => $contigids) unless $project;
-undef $project; #test
+        unless ($project) {
+# find the contig_id (for the moment use largest nr of reads) 
+            my $contig_id;
+            foreach my $linked (@linked) {
+                $contig_id = $linked unless defined($contig_id);
+                next if ($readsinlinked{$linked} < $readsinlinked{$contig_id});
+                $contig_id = $linked; 
+            }
+            $project = $this->getProject(contig_id => $contig_id);
+        }
 
 # to be removed after testing
 print STDOUT "Contig ".$contig->getContigName."\n" if $TEST;
@@ -944,7 +952,7 @@ sub cleanupSegmentTables {
 # methods dealing with generations and age tree
 #-----------------------------------------------------------------------------
 
-sub getParentsIDsForContig {
+sub getParentIDsForContig {
 # returns a list contig IDs of parents for input Contig based on 
 # its reads sequence IDs and the sequence-to-contig MAPPING data
     my $this = shift;
