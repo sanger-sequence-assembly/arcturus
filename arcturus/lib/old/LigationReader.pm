@@ -83,13 +83,12 @@ sub build {
    my $count = 0;
 
    print "Polling the ORACLE database ... be patient, please ....\n";
-   $ENV{PATH} .= ':/usr/local/badger/bin' if ($ENV{PATH} !~ /badger\/bin/);
-#   my @fields = `$PEEKDIR/peek ligation $ligation`; # execute Oracle query
-   my @fields = `$PEEKDIR/oracle_peek ligation $ligation`; # execute Oracle query
+#   $ENV{PATH} .= ':/usr/local/badger/bin' if ($ENV{PATH} !~ /badger\/bin/);
+   my @fields = `$PEEKDIR/peek ligation $ligation`; # execute Oracle query
    print "<br>" if $ENV{'PATH_INFO'}; # CGI mode
    if (!@fields) {
 # try a recovery by going to another machine
-       @fields = `/usr/bin/rsh babel "$PEEKDIR/peek ligation $ligation"`; # execute Oracle query
+       @fields = `/usr/bin/rsh babel "$PEEKDIR/oracle_peek ligation $ligation"`; # execute Oracle query
  print "recovered peek: @{fields}<br>\n";
    }
 
