@@ -613,30 +613,25 @@ sub writeToCaf {
         print $FILE "Clipping QUAL $data->{lqleft} $data->{lqright}\n";
     }
 
-# for reads written to an assembly CAF file add align-to-trace information
+    if (my $alignToTrace = $this->getAlignToTrace()) {
+        foreach my $alignment (@$alignToTrace) {
+            print $FILE "Align_to_SCF @$alignment\n";
+        }
+    }
+    else {
+        my $length = $this->getSequenceLength();
+        print $FILE "Align_to_SCF 1 $length  1 $length\n";  
+    }
 
-    if ($forAssembly) {
-# get the align to trace mapping(s)
-        if (my $alignToTrace = $this->getAlignToTrace()) {
-            foreach my $alignment (@$alignToTrace) {
-                print $FILE "Align_to_SCF @$alignment\n";
-            }
-        }
-        else {
-            my $length = $this->getSequenceLength();
-            print $FILE "Align_to_SCF 1 $length  1 $length\n";  
-        }
-# process read tags
-        if (my $tags = $this->getTags()) {
-            foreach my $tag (@$tags) {
-#?              $tag->writeTagToCaf($FILE);
-            }
+    if (my $tags = $this->getTags()) {
+        foreach my $tag (@$tags) {
+#?          $tag->writeTagToCaf($FILE);
         }
     }
 
 # to write the DNA and BaseQuality we use the two private methods
 
-    $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
+    $this->writeDNA($FILE,"DNA : ",@_); # specifying the CAF marker
 
     $this->writeBaseQuality($FILE,"BaseQuality : ");
 }
@@ -647,9 +642,9 @@ sub writeToFasta {
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
 
-    $this->writeDNA($DFILE);
+    $this->writeDNA($DFILE,">",@_);
 
-    $this->writeBaseQuality($QFILE) if defined $QFILE;
+    $this->writeBaseQuality($QFILE,">") if defined $QFILE;
 }
 
 # private methods
@@ -660,9 +655,9 @@ sub writeDNA {
     my $FILE   = shift; # obligatory
     my $marker = shift;
 
-    $marker = '>' unless defined($marker); # default FASTA format
+    $marker = ">" unless defined($marker); # default FASTA format
 
-    if (my $dna = $this->getSequence()) {
+    if (my $dna = $this->getSequence(@_)) {
 # output in blocks of 60 characters
 	print $FILE "\n$marker$this->{readname}\n";
 	my $offset = 0;
