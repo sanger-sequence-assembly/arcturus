@@ -2,29 +2,18 @@
 #
 # Author: David Harper <adh@sanger.ac.uk>
 #
-select '[1] Move the DNA sequence data to a separate table' as COMMENT;
+select '[1] Move the DNA sequence and base quality data to a separate table' as COMMENT;
 
 select 'Create the new table' as COMMENT;
-create table DNA select read_id, sequence from READS;
+create table SEQUENCE select read_id, sequence, quality from READS;
 
 select 'Make read_id the primary key' as COMMENT;
-alter table DNA add primary key(read_id);
+alter table SEQUENCE add primary key(read_id);
 
-select 'Remove the corresponding column from READS' as COMMENT;
-alter table READS drop column sequence;
+select 'Remove the corresponding columns from READS' as COMMENT;
+alter table READS drop column sequence, drop column quality;
 
-select '[2] Move the base quality data to a separate table' as COMMENT;
-
-select 'Create the new table' as COMMENT;
-create table QUALITY select read_id, quality from READS;
-
-select 'Make read_id the primary key' as COMMENT;
-alter table QUALITY add primary key(read_id);
-
-select 'Remove the corresponding column from READS' as COMMENT;
-alter table READS drop column quality;
-
-select '[3] Move the comment to a separate table' as COMMENT;
+select '[2] Move the comments to a separate table' as COMMENT;
 
 select 'Create the new table' as COMMENT;
 create table READCOMMENT select read_id, comment from READS where comment is not null;
@@ -35,7 +24,7 @@ alter table READCOMMENT add primary key(read_id);
 select 'Remove the corresponding column from READS' as COMMENT;
 alter table READS drop column comment;
 
-select '[4] Create a new dictionary table for the templates' as COMMENT;
+select '[3] Create a new dictionary table for the templates' as COMMENT;
 
 select 'Create the new table' as COMMENT;
 create table TEMPLATE select distinct template from READS;
