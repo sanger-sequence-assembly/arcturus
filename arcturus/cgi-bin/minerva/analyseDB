@@ -17,6 +17,8 @@ $scriptname = $cgi->script_name;
 $debug = $cgi->param('debug');
 $instance = $cgi->param('instance');
 
+$instance = $ENV{'MYSQL_INSTANCE'} unless defined($instance);
+
 $database = $cgi->param('database');
 $table = $cgi->param('table');
 
