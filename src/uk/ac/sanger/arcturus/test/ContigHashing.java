@@ -121,6 +121,12 @@ public class ContigHashing {
 	    }
 
 	    report();
+
+	    int[] readIdList = adb.getUnassembledReadIDList();
+
+	    System.out.println("There are " + readIdList.length + " unassembled reads");
+
+	    report();
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
