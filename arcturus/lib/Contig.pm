@@ -4,6 +4,8 @@ use strict;
 
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
+use Mapping;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -477,8 +479,9 @@ sub getStatistics {
 
 sub isSameAs {
 # compare the $compare and $this Contig instances
+# return 0 if different; return +1 or -1 if identical, -1 if inverted
     my $this = shift;
-    my $compare = shift || return 0;
+    my $compare = shift;
 
     die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
 
@@ -557,6 +560,87 @@ print "Contig ".$this->getContigName()." isSameAs ($align) ".
                 $compare->getContigName()."\n";
     return $align; # 1 for identical, -1 for identical but inverted
 }   
+
+sub compare {
+# compare two contigs; return a list of mapping segments, if any, to this contig
+# return undef if incomplete Contig instances or missing sequence IDs in mappings
+    my $this = shift;
+    my $compare = shift;
+
+    die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
+
+    return undef unless $this->hasMappings();
+    return undef unless $compare->hasMappings();
+
+# make the comparison using sequence ID; start by getting an inventory of $this
+#print "getting inventory for mappings\n";
+
+    my $sequence = {};
+    my $mappings = $this->getMappings();
+    foreach my $mapping (@$mappings) {
+        my $key = $mapping->getSequenceID();
+        $sequence->{$key} = $mapping if $key;
+    }
+
+# make an inventory of (identical) alignments from $compare to $this: build a hash list
+
+    my $alignment;
+    my $inventory = {};
+    $mappings = $compare->getMappings();
+    foreach my $mapping (@$mappings) {
+        my $key = $mapping->getSequenceID();
+        return undef unless defined($key); # incomplete Mapping
+        my $match = $sequence->{$key};
+        next unless defined($match); # there is no counterpart in $compare
+# compare the two maps
+        my ($identical,$aligned,$offset) = $match->compare($mapping);
+        $alignment = $aligned unless defined($alignment);
+        next unless ($identical && $aligned == $alignment); # the mappings are different
+# build a hash key based on offset and alignment direction
+        my $hashkey = sprintf("%08d",$offset);
+        $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+        my @segment = $mapping->getContigRange();
+        push @{$inventory->{$hashkey}},[@segment];  
+    }
+
+# OK, here we have an inventory: the number of keys equals the number of 
+# different alignments between $this and $compare. On each key we have an
+# array of arrays with the individual mappings data. For each alignment we
+# determine if the covered interval is contiguous. For each such interval
+# we add a (contig) Segment alignment to the output mapping
+
+    my $mapping = new Mapping();
+#    $mapping->setAlignment($alignment);
+    $mapping->setSequenceID($compare->getSequenceID());
+    foreach my $offset (%$inventory) {
+        my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
+        my $segmentstart = $mappings[0]->[0];
+        my $segmentfinis = $mappings[0]->[1];
+        foreach my $interval (@mappings) {
+            my $intervalstart = $interval->[0];
+            my $intervalfinis = $interval->[1];
+# a break of coverage is indicated by a begin of interval beyond the end of previous
+            if ($intervalstart > $segmentfinis) {
+# add segmentstart - segmentfinis as mapping segment
+                my $start = $segmentstart*$alignment + $offset;
+                my $finis = $segmentfinis*$alignment + $offset;
+                $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
+# initialize the new mapping interval
+                $segmentstart = $intervalstart;
+                $segmentfinis = $intervalfinis;
+            }
+            elsif ($intervalfinis > $segmentfinis) {
+                $segmentfinis = $intervalfinis;
+            }
+        }
+# add segmentstart - segmentfinis as (last) mapping segment
+        my $start = $segmentstart*$alignment + $offset;
+        my $finis = $segmentfinis*$alignment + $offset;
+        $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
+    }
+
+    return $mapping;
+}
 
 #-------------------------------------------------------------------    
 # exporting to CAF

@@ -63,7 +63,7 @@ sub setReadName {
     $this->{readname} = shift;
 }
 
-sub setAlignment {
+sub setAlignmentDirection {
 # must be defined when creating Mapping instance from database
     my $this = shift;
     my $direction = shift;
@@ -89,6 +89,14 @@ sub getAlignmentDirection {
         return 'Reverse';
     }
     return undef;
+}
+
+sub setAlignment {
+# define alignment direction as +1 or -1
+    my $this = shift;
+    my $adir = shift;
+    return unless (abs($adir) == 1);
+    $this->{direction} = $adir;
 }
 
 sub getAlignment {

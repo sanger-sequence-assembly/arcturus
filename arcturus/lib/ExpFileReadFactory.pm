@@ -334,6 +334,8 @@ sub expFileParser {
     if (defined($item{SQ})) {
 # sequence, remove all blanks
         $item{SQ} =~ s/\s+//g;
+# replace dashes by N to conform to CAF convention
+        $item{SQ}  =~ s/\-/N/g;
         $read->setSequence($item{SQ});
     }
 

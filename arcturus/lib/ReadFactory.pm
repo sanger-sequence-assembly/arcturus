@@ -98,12 +98,6 @@ sub getNextReadName {
 # return readname or undef if no next readname found
 
     return $this->getCurrentReadName();
-
-#    return undef unless $this->{readname}; 
-
-# else return the readname 
-
-#    return $this->{readname}->[0];
 }
 
 sub getCurrentReadName {

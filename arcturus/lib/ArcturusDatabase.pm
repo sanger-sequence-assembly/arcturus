@@ -584,6 +584,7 @@ sub addSequenceMetaDataForRead {
 }
 
 sub getReadsByAspedDate {
+# OBSOLETE
     my $this = shift;
 
     my @conditions;
@@ -624,7 +625,7 @@ sub getReadsByAspedDate {
 }
 	
 sub getReadsByReadID {
-# returns array of Read instances with (meta data only) for input array of read IDs 
+# returns array of Read instances (meta data only) for input array of read IDs 
     my $this    = shift;
     my $readids = shift; # array ref
 
@@ -1003,6 +1004,8 @@ sub getSequenceForReads {
 	        my @qualarray = unpack("c*", $quality);
 	        $quality = [@qualarray];
             }
+#? replace dashes by N if it's the original read
+#?            $sequence =~ s/\-/N/g unless $read->getVersion();
             $read->setSequence($sequence);
             $read->setQuality($quality);
         }
@@ -1521,7 +1524,7 @@ sub putNewSequenceForRead {
 # a) test if the readname already occurs in the database
 
     my $readname = $read->getReadName();
-    return (0,"incomplete Read instance: missing raedname") unless $readname; 
+    return (0,"incomplete Read instance: missing readname") unless $readname; 
 
 # get and/or test readname against read_id (we don't know how $read was made)
 
@@ -1560,6 +1563,7 @@ return;
 
 # d) load this new version of the sequence
 
+return (0,"loading test aborted for version $version of read ".$read->getReadName);
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
 
@@ -2083,21 +2087,35 @@ sub putContig {
                                         metaDataOnly=>1)
                     || $this->getContig(withChecksum=>md5(sort @seqids),
                                         metaDataOnly=>1) ) {
-# the read name hash or the sequence IDs hash matches
-print STDERR "Contig ".$contig->getContigName.
-             " may be identical to contig ".
-             $previous->getContigName."\n";
+# the read name hash or the sequence IDs hash do match
+print STDOUT "Contig ".$contig->getContigName.
+" may be identical to contig ".$previous->getContigName."\n";
 # pull out previous contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous);
         my $identical = $contig->isSameAs($previous);
+print STDOUT "comparison result identical=$identical\n";
         return $previous->getContigID() if $identical;
-print STDERR "comparison passed identical=$identical\n";
     }
 
 # okay, the contig is new; find out if it is connected to existing
 # contigs (i.e. build the C2CMAPPING CONTIG2CONTIG links)
 
-    $this->getLinkedContigsForContig($contig);
+    my $contigids = $this->getLinkedContigsForContig($contig);
+print "output getLinkedContigsForContig: $contigids\n";
+# pull out mappings for those previous contigs
+    my @linkmappings;
+    if ($contigids && @$contigids) {
+# compare each contig and return/store mapings/segments
+        foreach my $contigid (@$contigids) {
+            my $previous = $this->getContig(withContigID=>$contigid,
+                                            metaDataOnly=>1);
+            $this->getMappingsForContig($previous);
+            my $mapping = $contig->compare($previous);
+            push @linkmappings,$mapping if $mapping;
+print "previous $previous : ".$mapping->assembledFromToString."\n";
+        }
+    }
+
 return 0; # testing
 
 # now load it into the database
@@ -2301,29 +2319,23 @@ sub getSequenceIDforReads {
 }
 
 sub getLinkedContigsForContig {
-# 
+# private function: returns a list of IDs of connected contig(s) for contig
     my $this = shift;
     my $contig = shift;
 
-    return 0 unless $contig->hasReads();
+    return undef unless $contig->hasReads();
 
     my $reads = $contig->getReads();
 
-# get the sequenceIDs (from Read)
+# get the sequenceIDs (from Read instances)
 
     my @seqids;
     foreach my $read (@$reads) {
         push @seqids,$read->getSequenceID();
     }
 
-# the short version
-    my $query1 = "select distinct(contig_id) from MAPPING ".
+    my $query = "select distinct(contig_id) from MAPPING ".
 	        " where seq_id in (".join(',',@seqids).")";
-# the long version
-    my $query = "select contig_id,seq_id,cstart,cfinish".
-                "  from MAPPING ".
-	        " where seq_id in (".join(',',sort @seqids).
-                ") order by contig_id,cstart";
     
     my $dbh = $this->getConnection();
 
@@ -2331,20 +2343,14 @@ sub getLinkedContigsForContig {
 
     $sth->execute() || &queryFailed($query);
 
-    my %cstart;
-    my %cfinal;
-    while (my @ary = $sth->fetchrow_array()) {
-        my ($cid, $sid, $cstart, $cfinis) = @ary;
-        $cstart{$cid} = $cstart unless defined($cstart{$cid});
-        $cstart{$cid} = $cstart if ($cstart < $cstart{$cid});
-        $cfinal{$cid} = $cfinis unless defined($cfinal{$cid});
-        $cfinal{$cid} = $cfinis if ($cfinis > $cfinal{$cid});
-    }
-    foreach my $linked (keys %cstart) {
-        print STDOUT "linked contig $linked range $cstart{$linked} - $cfinal{$linked}\n";
+    my @contigids;
+    while (my ($contigid) = $sth->fetchrow_array()) {
+        push @contigids, $contigid;
     }
 
     $sth->finish();
+
+    return [@contigids];
 }
 
 sub testContigForExport {
@@ -2497,7 +2503,7 @@ sub getMappingsForContig {
         my $mapping = new Mapping();
         $mapping->setReadName($rn);
         $mapping->setSequenceID($sid);
-        $mapping->setAlignment($dir);
+        $mapping->setAlignmentDirection($dir);
 # add Mapping instance to output list and hash list keyed on mapping ID
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;

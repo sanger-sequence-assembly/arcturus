@@ -600,7 +600,7 @@ sub writeToCaf {
     print $FILE "Ligation_no $data->{ligation}\n"       if defined $data->{ligation};
     print $FILE "Primer ".ucfirst($data->{primer})."\n" if defined $data->{primer};
     print $FILE "Strand $data->{strand}\n"              if defined $data->{strand};
-    print $FILE "Dye Dye_$data->{chemistry}\n"          if defined $data->{chemistry};
+    print $FILE "Dye $data->{chemistry}\n"              if defined $data->{chemistry};
     print $FILE "Clone $data->{clone}\n"                if defined $data->{clone};
     print $FILE "ProcessStatus PASS\n";
     print $FILE "Asped $data->{asped}\n"                if defined $data->{asped} ;
@@ -657,6 +657,8 @@ sub writeDNA {
     $marker = ">" unless defined($marker); # default FASTA format
 
     if (my $dna = $this->getSequence(@_)) {
+# replace dashes by N if it's the original read
+# $dna =~ s/\-/N/g unless $this->getVersion();
 # output in blocks of 60 characters
 	print $FILE "\n$marker$this->{readname}\n";
 	my $offset = 0;
