@@ -14,6 +14,8 @@ public class Contig extends Core {
     protected int nreads;
     protected java.sql.Date updated;
     protected Mapping[] mappings;
+    protected byte[] dna;
+    protected byte[] quality;
 
     /**
      * Constructs a Contig which does not yet have an ID.
@@ -89,5 +91,14 @@ public class Contig extends Core {
     public void setMappings(Mapping[] mappings) {
 	this.mappings = mappings;
 	this.nreads = mappings.length;
+    }
+
+    public byte[] getConsensus() { return dna; }
+
+    public byte[] getQuality() { return quality; }
+
+    public void setConsensus(byte[] dna, byte[] quality) {
+	this.dna = dna;
+	this.quality = quality;
     }
 }
