@@ -2,8 +2,8 @@
 
 use DBI;
 
-$dbhost = ('babel', 'pcs3')[int(rand(2))];
-$dbport = (14641, 14642, 14643, 14644)[int(rand(4))];
+$dbhost = shift || ('babel', 'pcs3')[int(rand(2))];
+$dbport = shift || (14641, 14642, 14643, 14644)[int(rand(4))];
 
 $dsn = 'DBI:mysql:arcturus;host=' . $dbhost . ';port=' . $dbport;
 
