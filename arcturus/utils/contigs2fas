@@ -85,6 +85,9 @@ while(@ary = $sth->fetchrow_array()) {
 	length($sequence),"\n";
     }
 
+    # Get rid of any junk
+    $sequence =~ s/[^\w\-]//g;
+
     printf ">CONTIG%04d\n", $contigid;
 
     while (length($sequence) > 0) {
