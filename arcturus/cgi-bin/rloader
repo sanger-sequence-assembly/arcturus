@@ -735,6 +735,8 @@ $LOADPERRUN =~ s/\W/x/g;
     my $timestamp = $organisms->timestamp(0);
     print LOG "\nNEW SESSION $timestamp\n" if ($logON);
 
+    my $consensus = $cgi->parameter('consensus');
+
     undef my %assemblycount;
 
     foreach my $file (@{$newfiles}) {
@@ -755,7 +757,7 @@ $LOADPERRUN =~ s/\W/x/g;
         my $isStdRead;
 
         $tested++;
-        if ($file =~ /split/i && $file =~ /con|repeat|exon/i) {
+        if ($file =~ /split/i && ($file =~ /con|repeat|exon/i || $consensus)) {
 
             $isStdRead = 0; # it's a consensus file
 
@@ -1116,8 +1118,7 @@ sub form2 {
     }
 
     $form .= "<TR><TH ALIGN=LEFT>DATABASE Assembly Name</TH><TD>SELECTTAG</TD>";
-    $form .= "<TD><A href=\"ASSEMBLYLINK\">ADD NEW ASSEMBLY</A></TD></TR>";
-#    $form .= "<TD><b>Check</b> <INPUT type=checkbox name=testrun> for TEST run </TD></TR>";
+    $form .= "<TD><b>Check</b> <INPUT type=checkbox name=consensus> for CONSENSUS data </TD></TR>";
     $form .= "<TR><TH ALIGN=LEFT>Load a maximum of </TH>";
     $form .= "<TD><INPUT VALUE='1' SIZE=5 NAME='LPR'> reads</TD>";
     $form .= "<TD><b>Check</b> <INPUT type=checkbox name=forceload> for FORCED load </TD></TR>";
