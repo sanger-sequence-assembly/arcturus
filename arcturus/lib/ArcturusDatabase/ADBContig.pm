@@ -1021,40 +1021,44 @@ sub getParentIDsForContig {
 
     my @contigids = keys %contigids;
 
-    print STDERR "Linked contigs found : @contigids\n" if $debug;
+    if (scalar(@contigids)) {
+
+        print STDERR "Linked contigs found : @contigids\n" if $debug;
 
 # step 2 : remove the parents of the contigs found in step 1 from the list
 
-    $query = "select age,contig_id, parent_id from C2CMAPPING"
-	   . " where contig_id in (".join(',',@contigids).")";
+        $query = "select age,contig_id, parent_id from C2CMAPPING"
+	       . " where contig_id in (".join(',',@contigids).")";
 
 
-    $sth = $dbh->prepare($query);
+        $sth = $dbh->prepare($query);
 
-    $sth->execute() || &queryFailed($query);
+        $sth->execute() || &queryFailed($query);
 
-    my %ageprofile;
-    while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
+        my %ageprofile;
+        while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
 # the parent_id is removed because it is not the last in the chain
-        delete $contigids{$parent_id};
-        $ageprofile{$contig_id} = $age; 
-    }
+            delete $contigids{$parent_id};
+            $ageprofile{$contig_id} = $age; 
+        }
 
-    $sth->finish();
+        $sth->finish();
 
 # ok, the keys of %contigids are the IDs of the possible parents
 
-    @contigids = keys %contigids;
+        @contigids = keys %contigids;
 
-    print STDERR "Possible parents found : @contigids\n" if $debug;
+        print STDERR "Possible parents found : @contigids\n" if $debug;
 
 # However, this list still may contain spurious parents due to 
 # misassembled reads in early contigs which are picked up in the
 # first step of the search; these are weeded out by selecting on
 # the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
 
-    foreach my $contig_id (keys %contigids) {
-        delete $contigids{$contig_id} if (defined($ageprofile{$contig_id}) && ($ageprofile{$contig_id}) > 1);
+        foreach my $contig_id (keys %contigids) {
+            next unless defined($ageprofile{$contig_id});
+            delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
+        }
     }
 
 # those keys left are the true parent(s)
