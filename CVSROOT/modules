@@ -27,7 +27,7 @@
 uk powmap/uk
 diana powmap/diana
 collections powmap/collections
-powmap_etc powmap/etc
-powmap_corba powmap/corba
-flatserve flatimpl &powmap_corba &powmap_etc &uk &collections
-agct agctimpl &uk &diana &powmap_etc &powmap_corba &collections
+etc powmap/etc
+corba powmap/corba
+flatserve flatimpl &corba &etc &uk &collections
+agct agctimpl &uk &diana &etc &corba &collections
