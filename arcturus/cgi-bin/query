@@ -522,6 +522,7 @@ elsif ($action eq "selectread") {
     my $readnmbr = $cgi->parameter('readnmbr');
     my $readname = $cgi->parameter('readname');
     my $wildcard = $cgi->parameter('wildcard');
+    my $limit = $cgi->parameter('maxrows') || 100;
 
     undef my $querystring;
     undef my $constraints;
@@ -535,10 +536,10 @@ elsif ($action eq "selectread") {
         $dbread->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
     }
     elsif ($readitem && $readnmbr) {
-        if ($readnmbr =~ /\blast\b/i) {
-            $constraints = "read_id = LAST_INSERT_ID()";
-# print "constraints: $constraints<br>\n";
-         }
+        if ($readnmbr =~ /\blast\b\s*(\d*)/i) {
+            $constraints = "order by read_id desc";
+            $limit = $1 || 1; # overrides input 'maxrows'
+        }
         elsif ($readnmbr !~ /\,|\-|\./) {
             my $status = $reader->getNumberedRead($readnmbr);
             $number = 1 if ($status <= 1);
@@ -603,9 +604,8 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
             else {
                 $querystring .= $constraints;
             }
+            $querystring =~ s/where order/order/;
         }
-        my $limit = $cgi->parameter('maxrows');
-        $limit = 100 if (!$limit);
         $querystring .= " limit $limit";
 # print "query: $querystring<br>";
 # now query the database

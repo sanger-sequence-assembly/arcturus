@@ -1219,7 +1219,12 @@ sub updateCounters {
         my $changes = 0;        
         $report .= "<TABLE CELLPADDING=1 BORDER=0>";
         $report .= "<TR><TD COLSPAN=5 bgcolor=yellow ALIGN=CENTER>$warning</TD></TR>" if ($warning);
-        foreach my $key (sort keys %inventory) {
+        my @keys = sort keys %inventory;
+        my $teststring = join '',@keys;
+#print "keys @keys   teststring $teststring <br>";
+        @keys = sort {$a <=> $b} @keys if ($teststring !~ /\D/);
+#        foreach my $key (sort keys %inventory) {
+        foreach my $key (@keys) {
             my $tc = $inventory{$key}->[0] || 0; # the  table count
             my $mc = $inventory{$key}->[1] || 0; # the master count
             if ($tc == $mc) {

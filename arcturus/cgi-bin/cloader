@@ -50,8 +50,7 @@ my $arc_log_dir = $GateKeeper->lookup('ARC_LOG_DIR');
 my $arc_tmp_dir = $GateKeeper->lookup('ARC_TMP_DIR');
 my $db_manager  = $GateKeeper->lookup('db_manager');
 
-$config{CLF} = "$arc_log_dir/cloader.DATABASE.log"; # default logfile
-
+$config{CLF} = "$arc_log_dir/cloader.$database.log"; # default logfile
 
 my ($userid, $caffile, $page);
 my ($list, $limit, $exactmatch);
@@ -61,7 +60,7 @@ my ($ASSEMBLY, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
 
 my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu";
-my $session = $cgi->parameter('session',0);
+my $session = $GateKeeper->lookup('session',0);
 $lreturn .= "\?session=$session" if $session;
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
@@ -88,39 +87,60 @@ if (!$cgi) {
 # uses: current generation number
 
     $brtag = "\n";
-    if ($#ARGV < 2) {
-        $GateKeeper->dropDead("specify a database name, caf file and contig "
-                             ."name filter\nSyntax : arc_cloader.pl <file> "
-                             ."<file-name-filter+GF> <limit>");
+    if (@ARGV < 1) {
+        $GateKeeper->dropDead("specify a database name, assembly and contig "
+                             ."name filter\nSyntax : arc_cloader <db> <assemblyname> "
+                             ."<contg-name-filter> <limit> <\"list\">");
     }
 
-# get file name filter and global (directory) filter 
+# get caffile
 
-    $database = $ARGV[0];
-    $caffile  = $ARGV[1]; 
-    $CNF = $ARGV[2];
+    $assemblyname = $ARGV[0]; # assembly name
+# open assembly database; abort if no assemblies defined
+    $ASSEMBLY = $organisms->spawn('ASSEMBLY',$database,0,1);
+    if ($ASSEMBLY && $ASSEMBLY->count() > 0) {
+        $assemblynmbr = $ASSEMBLY->associate('assembly',$assemblyname,'assemblyname');
+        if ($assemblynmbr) {
+            my $attributes = $ASSEMBLY->unpackAttributes($assemblyname,'assemblyname');
+            $CFN = $attributes->{CFN};
+        }
+        elsif ($ASSEMBLY->count() > 1) {
+            $GateKeeper->dropDead("specify an assemblyname");
+        }
+        else {
+            $CFN  = $ARGV[0];
+            $assemblynmbr = 1;
+        }
+    }
+    else {
+        $GateKeeper->dropDead("no assemblies found for database $database");
+    }
+   
+    $CNF = $ARGV[1] || ''; # contig name filter
+
+# get file name filter and global (directory) filter 
 
     $CGN = $CNF;
     $CGN =~ s/contig//i;
     $CGN =~ s/[\d\.\*]//g;
     $CGN = 0 if !$CGN;
-print "Generation = $CGN\n";
+#print "Generation = $CGN\n";
     $exactmatch = 1;
     $exactmatch = 0 if ($CNF =~ s/\*//g); 
-print "exactmatch: $exactmatch\n";
-
+#print "exactmatch: $exactmatch\n";
     undef $CNF if ($CNF eq "ALL");
-# $CFN = "/nfs/disk222/malaria/assembly/MAL4/$caffile"; # temporary  
-    $CFN = "$ENV{'HOME'}/arcturus/$caffile"; # temporary  
-    $CPR = 10000; # number of lines
+#    $CFN = "$ENV{'HOME'}/arcturus/$caffile"; # temporary 
+ 
+    $CPR = $ARGV[2] || 10000; # number of lines
     $list = 0;
     $list = 1 if (defined($ARGV[3]) && $ARGV[3] =~ /^list$/i);
-$TEST = 1;
+$TEST = 0;
     $CLF = $config{CLF};
-    $cblocker = 1;
+    $cblocker = 0;
     $rblocker = 0;
-print "CNF $CNF  CGN $CGN  CFN $CFN  CPR $CPR  CLF $CLF  \n";
-    exit;
+    $SRC = 1;
+print "\n\n CNF $CNF \n CGN $CGN \n CFN $CFN \n CPR $CPR \n CLF $CLF  \n\n";
+#    exit;
 }
 
 ###############################################################################
@@ -135,7 +155,7 @@ else {
     $rfont = "<FONT COLOR=red>";
     $efont = "</FONT>";
 
-    $option = 'process' if ($option eq 'specify' && $cgi->parameter('process',0));
+    $option = 'process' if ($option eq 'specify' && $GateKeeper->lookup('process',0));
 
     $page = $cgi->openPage('ARCTURUS CONTIGs loader');    
     $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
@@ -151,7 +171,7 @@ else {
         my $count = $organisms->count();
         $page->sectionheader("There are $count Organism databases",3,0);
         $page->add($organisms->htmlTable('0310000011100000')); # list them
-        my $database = $cgi->parameter('database') || $cgi->parameter('organism');
+        my $database = $GateKeeper->lookup('database') || $GateKeeper->lookup('organism');
         my $select = $organisms->htmlOptions('dbasename','database',20,0,$database);
         $page->sectionheader("Select a Database : $select",4,0);
         $page->partition(5);
@@ -166,8 +186,8 @@ else {
 
     elsif ($option eq 'specify') {
 # list all assemblies
-        $database  = $cgi->parameter('database'); # compulsory
-        my $asname = $cgi->parameter('assemblyname',0); # no test
+        $database  = $GateKeeper->lookup('database'); # compulsory
+        my $asname = $GateKeeper->lookup('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
 
         $page->form("$arc_cgi_dir/cloader/arcturus/specify");
@@ -247,18 +267,18 @@ else {
 
     elsif ($option eq 'process') {
 # get assembly 
-        $database = $cgi->parameter('database'); # redefine database
+        $database = $GateKeeper->lookup('database'); # redefine database
         $ASSEMBLY = $organisms->spawn('ASSEMBLY',$database,0,1);
-        $assemblyname = $cgi->parameter('assemblyname'); # translate into number
+        $assemblyname = $GateKeeper->lookup('assemblyname'); # translate into number
         $assemblynmbr = $ASSEMBLY->associate('assembly',$assemblyname,'assemblyname');
 
 # test mode
-        $TEST   = 1 if $cgi->parameter('testrun',0);
-        $REPAIR = 1 if $cgi->parameter('repair' ,0);
-        $logON  = 1 if $cgi->parameter('logON'  ,0);
-        $reload = 1 if $cgi->parameter('reload' ,0);
-        $update = 1 if $cgi->parameter('update' ,0);
-        $forced = 1 if $cgi->parameter('forced' ,0);
+        $TEST   = 1 if $GateKeeper->lookup('testrun',0);
+        $REPAIR = 1 if $GateKeeper->lookup('repair' ,0);
+        $logON  = 1 if $GateKeeper->lookup('logON'  ,0);
+        $reload = 1 if $GateKeeper->lookup('reload' ,0);
+        $update = 1 if $GateKeeper->lookup('update' ,0);
+        $forced = 1 if $GateKeeper->lookup('forced' ,0);
 
 # error test and authorization check
       
@@ -271,17 +291,17 @@ else {
         }
 # okay, now get specifications
         else {
-            $CDD = $cgi->parameter('CDD');         # root data directory
-            $CFN = $cgi->parameter('CFN') || '';   # caf file name
-            $CNF = $cgi->parameter('CNF');         # contig name filter
-            $CLF = $cgi->parameter('CLF');         # log file name
-            $CPR = $cgi->parameter('CPR');         # number of lines to process
-            $SRC = $cgi->parameter('SRC');         # reads per contig
+            $CDD = $GateKeeper->lookup('CDD');         # root data directory
+            $CFN = $GateKeeper->lookup('CFN') || '';   # caf file name
+            $CNF = $GateKeeper->lookup('CNF');         # contig name filter
+            $CLF = $GateKeeper->lookup('CLF');         # log file name
+            $CPR = $GateKeeper->lookup('CPR');         # number of lines to process
+            $SRC = $GateKeeper->lookup('SRC');         # reads per contig
             $CFN = $CDD.$CFN if ($CDD && $CFN && $CFN !~ ?^$CDD?);
 
-            $cblocker = $cgi->parameter('cblocker');
-            $rblocker = $cgi->parameter('rblocker');
-            $list     = $cgi->parameter('listing');
+            $cblocker = $GateKeeper->lookup('cblocker');
+            $rblocker = $GateKeeper->lookup('rblocker');
+            $list     = $GateKeeper->lookup('listing');
         }
     }
     else {
@@ -331,9 +351,9 @@ die "No assembly defined" if !$assemblynmbr;
     $PENDING->setMultiLineInsert(100);
 
     my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
-    $R2A->setMultiLineInsert(100);
+    $R2A->setMultiLineInsert(1000);
     my $R2C = $organisms->spawn("READS2CONTIG",$database,0,0);
-    $R2C->setMultiLineInsert(100);
+    $R2C->setMultiLineInsert(5000);
   
     $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
     $READS->autoVivify($database,0.5); # install links on opened tables only
@@ -367,6 +387,7 @@ die "No assembly defined" if !$assemblynmbr;
         my $nrc = keys %dbcontigs;
         print "... DONE$brtag$nrc contigs found which have previously been processed$brtag$brtag";
         $dbcontigs = \%dbcontigs;
+        print "query: $CONTIGS->{lastQuery} $brtag";
     }
     else {
         print "contig blocker OFF $brtag";
@@ -478,15 +499,22 @@ die "No assembly defined" if !$assemblynmbr;
         my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced);
         print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
-        if (!$CNF && !$left && !$truncated && $cgi->parameter('promote')) {
+        my $promote = $GateKeeper->lookup('promote');
+        if (!$CNF && !$left && !$truncated && $promote) {
 # okay, we have had all contigs in this assembly
             $ContigBuilder->promote;
         }
-        elsif ($cgi->parameter('promote')) {
+        elsif ($promote) {
             print "There remain data to be processed on caf file $CFN$brtag";
         }
 
 # my $snapshot = $organisms->snapshot($database); print "$snapshot <br>";
+
+# flush the insert buffered tables
+
+#        $R2A->flush;
+#        $R2C->flush;
+#        $PENDING->flush;
 
 # update counters in ASSEMBLY & ORGANISMS table
 
@@ -502,11 +530,11 @@ die "No assembly defined" if !$assemblynmbr;
         my $npending = $PENDING->count(1);  
         $organisms->update('reads_pending',$npending,'dbasename',$database);
 
-        $organisms->historyUpdate($userid,0,2);
+        print STDOUT "Time stamping modified table $brtag";
+        $organisms->historyUpdate($userid,0,0);
     }
 
 # to be added: update of defaults (which ones)
-
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
@@ -527,7 +555,9 @@ die "No assembly defined" if !$assemblynmbr;
 # harmonize the ORGANISMS table
 
     my $csroot = $GateKeeper->prepareFork('harmonize');
-    system ("$csroot/harmonize organisms copy >> $arc_tmp_dir/harmonize.log");  
+    my $harmonize = "$csroot/harmonize organisms copy";
+    $harmonize .= " >> $arc_tmp_dir/harmonize.log" if $cgi;
+    system ($harmonize) if $cgi;  
 
     exit 0;
 
