@@ -76,7 +76,7 @@ $CAF = *STDOUT unless $CAF;
 
 $logger->info("Getting contig IDs for generation 0");
 
-my $contigids = $adb->getCurrentContigs(); # exclude singleton
+my $contigids = $adb->getCurrentContigIDs(); # exclude singleton
 
 $logger->info("Retrieving ".scalar(@$contigids)." Contigs");
 

@@ -265,20 +265,20 @@ while (defined($record = <$CAF>)) {
 # base quality data. Get the object, given the object name
             $BaseQuality =~ s/\s+/ /g; # clear redundent blank space
             $BaseQuality =~ s/^\s|\s$//g; # remove leading/trailing
-#print "loading BaseQuality\n'$BaseQuality'\n\n";
+            my @BaseQuality = split /\s/,$BaseQuality;
             if ($read = $reads{$objectName}) {
-                $read->setQuality ($BaseQuality);
+                $read->setQuality ([@BaseQuality]);
             }
             elsif ($contig = $contigs{$objectName}) {
-                $contig->setQuality ($BaseQuality);
+                $contig->setQuality ([@BaseQuality]);
             }
             elsif ($objectName =~ /contig/i) {
                 $contig = new Contig($objectName);
-                $contig->setQuality ($BaseQuality);
+                $contig->setQuality ([@BaseQuality]);
             }
             else {
                 $read = new Read($objectName);
-                $read->setQuality ($BaseQuality);
+                $read->setQuality ([@BaseQuality]);
             }
         }
 # prepare for the new object
