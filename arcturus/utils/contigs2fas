@@ -1,8 +1,8 @@
 #!/usr/local/bin/perl
 #
-# readscheck
+# contigs2fas
 #
-# This script extracts one or more reads and generates a CAF file
+# This script extracts one or more contigs and generates a FASTA file
 
 use DBI;
 use Term::ReadKey;
@@ -24,6 +24,8 @@ while ($nextword = shift @ARGV) {
 
     $minlen = shift @ARGV if ($nextword eq '-minlen');
 
+    $depad = 1 if ($nextword eq '-depad');
+
     $verbose = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
@@ -40,6 +42,8 @@ unless (defined($host) &&
     &showUsage();
     exit(1);
 }
+
+$depad = 0 unless defined($depad);
 
 $dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
 
@@ -68,10 +72,10 @@ $query = "select CONTIGS.contig_id,CONTIGS.length,CONSENSUS.sequence,CONSENSUS.q
     "where CONSENSUS.contig_id is not null and CONTIGS.length >= $minlen";
 
 $sth = $dbh->prepare($query);
-&db_die("createDictionary: prepare($query) failed");
+&db_die("prepare($query) failed");
 
 $sth->execute();
-&db_die("createDictionary: execute($query) failed");
+&db_die("execute($query) failed");
 
 while(@ary = $sth->fetchrow_array()) {
     ($contigid, $contiglength, $compressedsequence, $compressedquality) = @ary;
@@ -86,7 +90,7 @@ while(@ary = $sth->fetchrow_array()) {
     }
 
     # Get rid of any junk
-    $sequence =~ s/[^\w\-]//g;
+    $sequence =~ s/[^\w\-]//g if $depad;
 
     printf ">CONTIG%04d\n", $contigid;
 
@@ -124,4 +128,5 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+    print STDERR "    -depad\t\tRemove pad characters from sequence\n";
 }

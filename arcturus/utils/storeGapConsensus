@@ -1,0 +1,294 @@
+#!/usr/local/bin/perl
+#
+# storeGapConsensus
+#
+# This script stores contig consensus sequence from a Gap4 database
+
+use DBI;
+use Term::ReadKey;
+use Compress::Zlib;
+use FileHandle;
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $dbname = shift @ARGV if ($nextword eq '-database');
+
+    $droptable = 1 if ($nextword eq '-droptable');
+
+    $createtable = 1 if ($nextword eq '-createtable');
+
+    $fastafilename = shift @ARGV if ($nextword eq '-fasta');
+
+    $qualityfilename = shift @ARGV if ($nextword eq '-quality');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	defined($dbname) &&
+	defined($fastafilename)) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+unless (-f $fastafilename) {
+    print STDERR "Input FASTA file \"$fastafilename\" does not exist.\n";
+    exit(1);
+}
+
+$fastafh = new FileHandle($fastafilename, "r");
+
+unless ($fastafh) {
+    print STDERR "Unable to open file \"$fastafilename\" for reading.\n";
+    exit(1);
+}
+
+print STDERR "Reading FASTA file ...";
+
+$dna = &ReadFasta($fastafh);
+
+$nseqs = scalar(keys(%{$dna}));
+
+print STDERR " Done. Found $nseqs sequences.\n";
+
+$fastafh->close();
+
+if (defined($qualityfilename)) {
+    unless (-f $qualityfilename) {
+	print STDERR "Input quality file \"$qualityfilename\" does not exist.\n";
+	exit(1);
+    }
+
+    $qualityfh = new FileHandle($qualityfilename, "r");
+
+    unless ($qualityfh) {
+	print STDERR "Unable to open file \"$qualityfilename\" for reading.\n";
+	exit(1);
+    }
+
+    print STDERR "Reading quality file ...";
+
+    $quality = &ReadQuality($qualityfh);
+
+    $numqual = scalar(keys(%{$quality}));
+
+    print STDERR " Done. Found $numqual quality arrays.\n";
+
+    $qualityfh->close();
+
+    foreach $seqname (keys %{$dna}) {
+	$sequence = $dna->{$seqname};
+	$qualdata = $quality->{$seqname};
+	$seqlen = length($sequence);
+	$qlen = length($qualdata);
+	print STDERR "LENGTH MISMATCH: $seqlen vs $qlen for $seqname\n" if ($seqlen != $qlen);
+    }
+} else {
+    $quality = {};
+}
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$query = "USE $dbname";
+print STDERR "Switching to database $dbname\n";
+$dbh->do($query);
+&db_die("$query failed");
+
+if ($droptable) {
+    $query = 'drop table if exists GAPCONSENSUS';
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+    
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    print STDERR "Dropped table GAPCONSENSUS\n";
+
+    # We've succeeded in dropping the table, so we'd better re-create it!
+    $createtable = 1;
+}
+
+if ($createtable) {
+    $query = qq/CREATE TABLE IF NOT EXISTS 
+	`GAPCONSENSUS` (
+			`contig_id` mediumint(8) unsigned NOT NULL default '0',
+			`sequence` longblob,
+			`length` int(11) default NULL,
+			`quality` longblob,
+			PRIMARY KEY  (`contig_id`)
+			) TYPE=MyISAM/;
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+    
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    print STDERR "Created table GAPCONSENSUS\n";
+}
+
+$findquery = "select distinct READS2CONTIG.contig_id from READS left join READS2CONTIG" .
+    " using(read_id) where READS.readname=? and READS2CONTIG.label>9";
+
+$find = $dbh->prepare($findquery);
+&db_die("prepare($findquery) failed");
+
+$insertquery = "insert into GAPCONSENSUS(contig_id,sequence,length,quality) values(?,?,?,?)";
+
+$insert = $dbh->prepare($insertquery);
+&db_die("prepare($insertquery) failed");
+
+foreach $seqname (keys %{$dna}) {
+    $sequence = $dna->{$seqname};
+
+    $find->execute($seqname);
+
+    $contigid = 0;
+
+    while (@ary = $find->fetchrow_array()) {
+	$contigid = shift @ary;
+    }
+
+    $seqlen = length($sequence);
+
+    $qualdata = $quality->{$seqname};
+
+    if ($contigid > 0) {
+	if (defined($qualityfilename) && !defined($qualdta)) {
+	    #print STDERR "Could not find quality data for $seqname ($contigid)\n";
+	}
+	$insert->execute($contigid, compress($sequence), $seqlen, compress($qualdata));
+    } else {
+	print STDERR "FAILED TO FIND \"$seqname\" ($seqlen bp)\n";
+    }
+}
+
+$find->finish();
+$insert->finish();
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -fasta\t\tName of input FASTA file\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -quality\t\tName of input base quality file\n";
+}
+
+sub ReadFasta {
+    my $fh = shift;
+    my $dnahash = {};
+
+    my ($dna, $seqname);
+
+    undef $dna;
+    undef $seqname;
+
+    while (my $line = <$fh>) {
+	chop($line);
+
+	if ($line =~ /^>/) {
+	    if (defined($seqname)) {
+		$dnahash->{$seqname} = $dna;
+		undef $seqname;
+		undef $dna;
+	    }
+	    ($seqname) = $line =~ /^>(\S+)/;
+	} else {
+	    $dna .= $line;
+	}
+    }
+    
+    if (defined($seqname)) {
+	$dnahash->{$seqname} = $dna;
+	undef $seqname;
+	undef $dna;
+    }
+
+    return $dnahash;
+}
+
+sub ReadQuality {
+    my $fh = shift;
+    my $qualityhash = {};
+
+    my ($quality, $seqname);
+
+    undef $quality;
+    undef $seqname;
+
+    while (my $line = <$fh>) {
+	chop($line);
+
+	if ($line =~ /^>/) {
+	    if (defined($seqname)) {
+		$qualityhash->{$seqname} = &ProcessQuality($quality);
+		undef $seqname;
+		undef $quality;
+	    }
+	    ($seqname) = $line =~ /^>(\S+)/;
+	} else {
+	    $quality .= " " . $line;
+	}
+    }
+    
+    if (defined($seqname)) {
+	$qualityhash->{$seqname} = &ProcessQuality($quality);
+	undef $seqname;
+	undef $quality;
+    }
+
+    return $qualityhash;
+}
+
+sub ProcessQuality {
+    my $rawquality = shift;
+
+    $rawquality =~ s/^\s+//;
+    $rawquality =~ s/\s+$//;
+
+    my @quality = split(/\s+/, $rawquality);
+
+    my $qualdata = pack("c*", @quality);
+
+    return $qualdata;
+}
