@@ -22,9 +22,10 @@ sub new {
 
 # define basic elements of the data hash
 
-    $self->{table}   = $tblhandle;
-    $self->{protect} = $tblhandle->getPrimaryKey;
-    $self->{select}  = ''; # column name actually used for record selection
+    $self->{table}     = $tblhandle;
+    $self->{tablename} = $tblhandle->{tablename};
+    $self->{protect}   = $tblhandle->getPrimaryKey;
+    $self->{select}    = ''; # column name actually used for record selection
 
     $self->{contents}   = {}; # for the data of one table record
     $self->{attributes} = {}; # for possible attributes
@@ -35,7 +36,6 @@ sub new {
     $self->{status} = {};
     $self->clearErrorStatus; # initalise
 
-# print "TableRow completed $self->{table} $self->{protect} $tblhandle->{database} $tblhandle->{tablename}<br>";
     return $self;
 }
 
@@ -49,14 +49,13 @@ sub loadRecord {
     my $item  = shift;
     my $value = shift;
 
-    my $status = $self->clearErrorStatus;
+    $self->clearErrorStatus;
 
-my $TEST = 1;
+my $TEST = 0;
 print "Loading record $item $value<br>" if $TEST;
 
     if (!defined($item) || !defined($value)) {
-        $status->{diagnosis} = "loadRecord: incomplete parameter list";
-        $status->{errors}++;
+        $self->putErrorStatus(1,"loadRecord: incomplete parameter list");
         return 0;
     }
 
@@ -73,11 +72,10 @@ print "$item $hash->{$item}  $value<br>" if ($hash && $TEST);
         $self->{select} = $item;
 # process possible attributes (only ArcturusTable objects
         if ($hash->{attributes} && ref($table) ne 'ArcturusTable') {
-            $status->{diagnosis} = "attributes can't be unpacked because ";
-            $status->{diagnosis} = " of wrong table type ",ref($table);
-            $status->{warnings}++;
+            my $text = "attributes can't be unpacked because of wrong table type ".ref($table);
+            $self->putErrorStatus(1,$text);
         }
-        else {
+        elsif ($hash->{attributes}) {
             delete $hash->{attributes}; # remove from 'contents'
             my $attributes = $table->unpackAttributes($value,$item); # a reference to a hash
 print "unpacked attributes $attributes <br>" if $TEST;
@@ -85,16 +83,12 @@ my @keys = keys %$attributes; print "keys @keys<br>" if $TEST;
             $self->{attributes} = $attributes;
         }
     }
-    elsif ($table->qerrors()) {
-        $status->{diagnosis} = "query error on table $table->{tablename}";
-        $status->{qerrors} = $table->qstatus();
-        $status->{errors}++;
+    elsif ($self->putQueryStatus) {
 print "END loadRecord (qerrors) <br>" if $TEST;
         return 0;
     }
     elsif (!$hash || !keys (%$hash)) {
-        $status->{diagnosis} = "$table->{tablename} entry $item = $value does not exist";
-        $status->{errors}++;
+        $self->putErrorStatus(1,"$self->{tablename} entry $item = $value does not exist");
 print "END loadRecord <br>" if $TEST;
         return 0; 
     }
@@ -109,7 +103,7 @@ sub loadFirstRecord {
     my $self   = shift;
     my $column = shift; # optional, default primary key
 
-    my $status = $self->clearErrorStatus;
+    $self->clearErrorStatus;
 
 print "loadFirstRecord<br>";
     my $table = $self->{table};
@@ -120,8 +114,7 @@ print "loadFirstRecord<br>";
     if (!$column) {
 # there is no primary key; in this case a column name has to be specified
 # (just loading any record with 'select *' as the first one serves no purpose)
-        $status->{diagnosis} = "Cannot load first record: missing column name";
-        $status->{errors}++;
+        $self->putErrorStatus(1,"Cannot load first record: missing column name");
         return 0;
     }
 
@@ -135,8 +128,8 @@ print "loadFirstRecord<br>";
 print "load first record hashes $hashes <br>\n";
 
     if (!defined($hashes->[0]->{$column})) {
-        $status->{diagnosis} = "Table $table->{tablename} is empty";
-        $status->{errors}++;
+        $self->putErrorStatus(1,"Table $self->{tablename} is empty");
+        $self->putQueryStatus;
         return 0;
     }
         
@@ -169,7 +162,7 @@ sub count {
 #####################################################################
 
 sub put {
-# put an item to the internal hash; returns 1 for success, else 0 
+# put an item to the internal 'changes' hash; returns 1 for success, else 0 
     my $self  = shift;
     my $item  = shift;
     my $value = shift;
@@ -177,7 +170,7 @@ sub put {
 
 # first try if the item is among the regular table columns
 
-print "RM put: $item $value<br>";
+#print "RM put: $item $value<br>";
     my $table = $self->{table};
 
     my $protect = $self->{protect} || $self->{select};
@@ -193,14 +186,18 @@ print "RM put: $item $value<br>";
         my $status = $self->{status};
         my $prvalue = $self->{contents}->{$protect};
         $table->packAttribute($prvalue,$protect,'attributes',$item,$value);
-        if ($table->qerrors()) {
-            $status->{diagnosis} = "query error on table $table->{tablename}";
-            $status->{qerrors} = $table->qstatus();
-            $status->{errors}++;
-            return 0; 
-        }
+        return 0 if $self->putQueryStatus; # previous operation failed
     }
     return 1;
+}
+
+#############################################################################
+
+sub setDefaultColumn {
+# specify a default column
+    my $self = shift;
+
+    $self->{defaultColumn} = shift;
 }
 
 #############################################################################
@@ -238,13 +235,38 @@ sub tableHandle {
 
 #############################################################################
 
+sub data {
+# return the reference to the data hash
+    my $self = shift;
+
+    return $self->{contents};
+}
+
+#############################################################################
+
+sub getDefaultColumn {
+# select the default item from the table, if wanted with a "where" clause
+    my $self  = shift;
+    my $where = shift || 1;
+
+    my $column = $self->{defaultColumn} || die "No default column name specified";
+
+    my $table = $self->{table};
+
+# always return an array reference
+
+    return $table->associate($column,'where',$where,{returnScalar=>0});
+}
+
+#############################################################################
+
 sub inventory {
 # return a table with the current content of this object
     my $self = shift;
     my $part = shift;
 
     my $list;
-# to be completed
+# to be completed ...
     return $list;
 }
 
@@ -256,7 +278,7 @@ sub commit {
 
 # write all changes to parameters to the database table
 
-    my $status = $self->clearErrorStatus;
+    $self->clearErrorStatus;
 
     my $content = $self->{contents};
     my $changes = $self->{changes};
@@ -273,9 +295,8 @@ print "RM enter commit<br>";
     foreach my $key (keys %$changes) {
         
         if ($key eq $protect && $changes->{$key} ne $prvalue) {
-            $status->{diagnosis}  = "Attempt to change column $key ";
-            $status->{diagnosis} .= "from $prvalue to $changes->{$key}";
-            $status->{errors}++;
+            my $text = "Attempt to change column $key from $prvalue to $changes->{$key}";
+            $self->putErrorStatus(1,$text);
             return 0;
         }
     }
@@ -290,16 +311,10 @@ print "RM enter commit<br>";
 
         next if ($changes->{$key} eq $content->{$key});
 
-print "update $table->{tablename} $key, $changes->{$key}, $protect, $prvalue<br>";
+print "update $self->{tablename} $key, $changes->{$key}, $protect, $prvalue<br>";
         $table->update($key, $changes->{$key}, $protect, $prvalue);
 
-        if ($table->qerrors()) {
-            my $qstatus = $table->qstatus;
-            $status->{diagnosis} = "query error(s) on table $table->{tablename}";
-            $status->{qerrors}  .= "$qstatus\n";
-            $status->{errors}++;
-            return 0; 
-        }
+        return 0 if $self->putQueryStatus;
     }
 
 # reload the record from the database (to be sure it is current)
@@ -313,7 +328,7 @@ sub newRow {
 # add a new row with the current 'changes' buffer contents
     my $self = shift;
 
-    my $status = $self->clearErrorStatus;
+    $self->clearErrorStatus;
 
     my @column;
     my @values;
@@ -326,8 +341,7 @@ sub newRow {
     }
 
     if (!@column) {
-        $status->{diagnosis} = "There is no data to insert";
-        $status->{warnings}++;
+        $self->putErrorStatus(0,"There is no data to insert");
         return 0;
     }
 
@@ -335,11 +349,7 @@ sub newRow {
 
     my $insert = $table->newrow(\@column,\@values);
 
-    if (!$insert) {
-# inserting a new row failed
-        $status->{diagnosis} = $table->{qerror};
-        $status->{errors}++;
-    }
+    $self->putQueryStatus unless $insert;
 
     return $insert;
 }
@@ -363,6 +373,48 @@ sub clearErrorStatus {
 
 #####################################################################
 
+sub putErrorStatus {
+# enter error information
+    my $self = shift;
+    my $type = shift; # 0 for warning, else error
+    my $text = shift; # add to diagnosis
+
+    my $status = $self->{status};
+
+    my $kind = $type ? 'warnings' : 'errors';
+    $status->{$kind}++;
+
+    return unless $text;
+
+    $status->{diagnosis} .= "\n" if $status->{diagnosis};
+    $status->{diagnosis} .= $text;
+}
+
+#####################################################################
+
+sub putQueryStatus {
+# enter (possible) query error information (return 0 if NO error)
+    my $self = shift;
+
+    my $table = $self->{table};
+
+# if there is a query error, add it to the status hash and return true
+
+    if ($table->qerrors()) {
+# put a standard error message
+        $self->putErrorStatus(1,"query error on table $self->{tablename}");
+# and add the query error to qerrors 
+        my $status = $self->{status};
+        $status->{qerrors} .= "\n" if $status->{qerrors};
+        $status->{qerrors} .= $table->qstatus;
+        return 1; # there is an error
+    }
+
+    return 0; # there is no error
+}
+
+#####################################################################
+
 sub status {
 # return the error count
     my $self = shift;
@@ -371,16 +423,18 @@ sub status {
     my $status = $self->{status};
 
     my $output;
-
-    if ($status->{errors} || ($full && $self->{warnings})) {
+    if ($status->{errors} || ($full && $status->{warnings})) {
         $output .= "$status->{errors} ERRORs on ".ref($self).":\n";
-        $output .= "$status->{warnings} WARNINGSs on ".ref($self).":\n" if $self->{warnings}; 
-        $output .= "$status->{diagnosis}";
+        $output .= "$status->{warnings} WARNINGs on ".ref($self).":\n" if $status->{warnings}; 
+        $output .= "$status->{diagnosis}\n";
     }
+
+    $output .= "$status->{qerrors}\n" if $status->{qerrors};
 
     return $output; # returns undef for NO error status
 }
 
+#############################################################################
 #############################################################################
 
 sub colophon {
@@ -388,8 +442,8 @@ sub colophon {
         author  => "E J Zuiderwijk",
         id      =>            "ejz",
         group   =>       "group 81",
-        version =>             0.1 ,
-        updated =>    "13 Feb 2004",
+        version =>             0.8 ,
+        updated =>    "19 Feb 2004",
         date    =>    "11 Feb 2004",
     };
 }

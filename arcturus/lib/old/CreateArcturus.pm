@@ -1253,19 +1253,6 @@ To access the overall mapping of a read to the contig select on label >= 10
 
 (Alignment information is also in the order of pcstart & pcfinal)
 
-=item clone
-
-number of clone in CLONES table
-
-(duplicates info in READS table, but is included to facilitate
-fast access by Cyclops to derive clone maps)
-
-=item assembly
-
-number of assembly in ASSEMBLY table
-
-(duplicates info in SCAFFOLDS but required for generations update)
-
 =item generation
 
 generation counter, incremented after each completed assembly
@@ -1307,7 +1294,246 @@ flag used in full-proof upgrade generation counters
 =back
 
 =cut
-#--------------------------------------------------------------------
+
+#######################################################################
+# NEW SETUP
+#######################################################################
+
+sub create_NREADS2CONTIG {
+    my ($dbh, $list) = @_;
+
+# readnr     : number of read in READS table
+# contig     : number of contig in CONTIGS table 
+#             (or should we use a combined number for index purposes)
+
+# generation : incremented after each completed assembly with:
+#              "update READS2CONTIG set generation=generation+1 where assembly=N"
+#    $list = 1;
+    &dropTable ($dbh,"READS2CONTIG", $list);
+    print STDOUT "Creating table READS2CONTIG ..." if ($list);
+    $dbh->do(qq[CREATE TABLE READS2CONTIG(
+             mapping          MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT,  
+             contig_id        MEDIUMINT UNSIGNED       NOT NULL,
+             read_id          MEDIUMINT UNSIGNED       NOT NULL,
+             generation       SMALLINT UNSIGNED        NOT NULL
+	 ) type = INNODB]);
+#??             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+    print STDOUT "... DONE!\n" if ($list);
+
+# Make (separate) indexes on read_id and contig_id
+#    print STDOUT "Building indexes on read_id, contig_id...\n" if ($list);
+#    $dbh->do(qq[CREATE INDEX reads_index ON READS2CONTIG (read_id)]);
+#    $dbh->do(qq[CREATE INDEX cntgs_index ON READS2CONTIG (contig_id)]);
+#    print STDOUT "Indexes READS_INDEX and CNTGS_INDEX  ON READS2CONTIG ... DONE\n" if ($list);
+# OR create a joint index on contig_id and read_id
+    print STDOUT "Building index on contig_id, read_id ...\n" if ($list);
+    $dbh->do(qq[ALTER READS2CONTIG ADD INDEX R2CINDEX (contig_id, read_id)]);
+# OR ?    $dbh->do(qq[ALTER READS2CONTIG ADD PRIMARY KEY (contig_id, read_id)]);
+    print STDOUT "Index R2CINDEX  ON READS2CONTIG ... DONE\n" if ($list);
+}
+
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table READS2CONTIG
+
+=head2 Synopsis
+
+Table for individual and overall reads-to-contig mappings in an assembly. 
+
+This table is populated by the assembly loader script.
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item cloader (I<script>)
+
+=item ReadMapper.pm
+
+=item ContigBuilder.pm
+
+=back
+
+=head2 Description of columns:
+
+=over 8
+
+=item contig_id
+
+number of contig in CONTIGS table 
+
+=item read_id
+
+number of read in READS table
+
+=
+=item generation
+
+generation counter, incremented after each completed assembly
+
+=item deprecated
+
+flag to mark the status of the mapping
+
+=over 16
+
+=item N for a new mapping
+
+=item M for a mapping marked for deletion after a generation update
+
+=item Y for a mapping no longer current, i.e. superseeded by a later mapping
+
+=item X for a final mapping, i.e. the read disappears from the assembly
+
+=back
+
+=back
+
+=head2 Linked Tables
+
+=over 4
+
+=item CONTIGS on key contig_id
+
+=item READS on key read_id
+
+=back
+
+=cut
+
+#*********************************************************************************************************
+
+sub create_R2CMAPPING {
+    my ($dbh, $list) = @_;
+
+# alignment    information in prstart, prfinal, pcstart, pcfinal
+# label      : encodes mapping type (T) and alignment (A) as: 10T + A
+#              T = 0 for one of several mapped read sections
+#              T = 1 this mapped section is the only one
+#              T = 2 the map is the overal map of all read sections
+#              A = 0 for a read aligned with the contig,
+#                = 1 for a read aligned against the contigs direction
+#              e.g: cyclops searches label >= 10; others label < 20
+# deprecated : on for mappings final (X) or no longer current (Y)
+#              or marked for deletion (M)
+
+    &dropTable ($dbh,"R2CMAPPING", $list);
+    print STDOUT "Creating table R2CMAPPING ..." if ($list);
+    $dbh->do(qq[CREATE TABLE R2CMAPPING(
+             mapping          MEDIUMINT UNSIGNED       NOT NULL PRIMARY KEY, 
+             pcstart          INT UNSIGNED             NOT NULL,
+             pcfinal          INT UNSIGNED             NOT NULL,
+             prstart          SMALLINT UNSIGNED        NOT NULL,
+             prfinal          SMALLINT UNSIGNED        NOT NULL,
+             label            TINYINT  UNSIGNED        NOT NULL,
+             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+	 ) type = MYISAM]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table R2CMAPPING
+
+=head2 Synopsis
+
+Table for individual and overall reads-to-contig mappings in an assembly. 
+
+This table is populated by the assembly loader script.
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item cloader (I<script>)
+
+=item ReadMapper.pm
+
+=item ContigBuilder.pm
+
+=back
+
+=head2 Description of columns:
+
+=over 8
+
+=item mapping
+
+number of the mapping; "foreign" key linking to READS2CONTIG table
+
+=item pcstart
+
+begin position of mapping on the contig
+
+=item pcfinal
+
+end position of mapping on the contig 
+
+=item prstart
+
+begin position of mapping on the read
+
+=item prfinal
+
+end position of mapping on the read 
+
+=item label
+
+encodes mapping type (T) and alignment (A) as: 10T + A
+
+=over 16
+
+=item  T = 0 for one of a series of mapped read sections
+
+=item  T = 1 this mapped section is the only mapping for this read
+
+=item  T = 2 the maping is the overal map of all read sections
+
+=item  A = 0 for a read aligned with the contig,
+
+=item  A = 1 for a counter-aligned read against the contigs direction
+
+=back
+
+Valid values are: 0, 1, 10, 11, 20, 21 
+
+To access the individual mappings select on label < 20
+
+To access the overall mapping of a read to the contig select on label >= 10
+
+(Alignment information is also in the order of pcstart & pcfinal)
+
+=item deprecated
+
+flag to mark the status of the mapping=over 16
+
+=item N for a new mapping
+
+=item M for a mapping marked for deletion after a generation update
+
+=item Y for a mapping no longer current, i.e. superseeded by a later mapping
+
+=item X for a final mapping, i.e. the read disappears from the assembly
+
+=back
+
+=item blocked
+
+flag used in full-proof upgrade generation counters
+
+=back
+
+=head2 Linked Tables
+
+=over 4
+
+=item READS2CONTIG on key mapping
+
+=back
+
+=cut
+
 
 #*********************************************************************************************************
 

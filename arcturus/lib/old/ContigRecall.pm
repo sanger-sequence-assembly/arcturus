@@ -12,6 +12,8 @@ use ReadsRecall;
 
 use Compress;
 
+use Consensus;
+
 #############################################################################
 # Global variables
 #############################################################################
@@ -19,10 +21,10 @@ use Compress;
 my $CONTIGS;  # database table handle to CONTIGS table
 my $R2C;      # database table handle to READS2CONTIG table
 my $C2C;      # database table handle to CONTIGS2CONTIG table
-my $READS;   # database table handle to READS table
+my $READS;    # database table handle to READS table
 my $C2S;      # database table handle to CONTIGS2SCAFFOLD table
-my $DNA;      # database table handle to CONSENSUS table
-#my $TAGS;     # database table handle to TAGS
+my $SEQUENCE; # database table handle to CONSENSUS table
+#my $TAGS;    # database table handle to TAGS
 
 my $ReadsRecall; # handle to ReadsRecall module
 my $MyTimer;
@@ -75,7 +77,7 @@ sub init {
         $R2C = $tblhandle->spawn('READS2CONTIG');
         $READS = $tblhandle->spawn('READS');
         $C2S = $tblhandle->spawn('CONTIGS2SCAFFOLD');
-#        $DNA = $tblhandle->spawn('CONSENSUS');
+        $SEQUENCE = $tblhandle->spawn('CONSENSUS');
 #    $T2C = $tblhandle->spawn('TAGS2CONTIG');
 
 #    $CONTIGS->autoVivify('<self>',1.5);
@@ -253,7 +255,6 @@ sub buildContig {
     $self->{readids} = []; # for read names
     $self->{rhashes} = []; # for ReadsRecall hashes
     $self->{markers} = []; # re: speeding up consensus builder
-    $self->{sensus}  = ''; # consensus sequence
 #    $self->{forward} = {};
 #    $self->{reverse} = {};
 
@@ -334,6 +335,13 @@ print "$status->{report}\n";
 # load the (overall) read to contig alignment
         $recall->readToContig($hash) if ($hash->{label} >= 10);
     }
+
+# load the consensus sequence for this contig
+
+    my $Consensus = new Consensus($contig,$SEQUENCE);
+    my $cs = $Consensus->status; print $cs if $cs;
+    $Consensus->putContigName($self->{contig});
+    $self->{Consensus} = $Consensus;
 
 # what about READTAGS, CONSENSUS, and Contig TAGS ??
 
@@ -1168,7 +1176,12 @@ $self->timer('dumpThisToCaf',0);
     }
     print $FILE "\n\n";
     
-
+    my $Consensus = $self->{Consensus};
+    if (!$Consensus->writeToCaf) {
+        my $status = $Consensus->status(1);
+        print "Consensus sequence not dumped: $status$break";
+    }
+    
 # write the consensus sequence / or all the reads ?
 
 $self->timer('dumpThisToCaf',1);

@@ -32,8 +32,6 @@ sub new {
     my $project  = shift || 0; # optional, a number or name
     my $Assembly = shift;      # optional, pass it an assembly object
 
-print "Projects.pm new for project $project<br>\n";
-
     return $Projects{$project} if $Projects{$project};
 
     my $class = ref($caller) || $caller;
@@ -77,12 +75,14 @@ print "Projects.pm new for project $project<br>\n";
 # decide if it is a name or a number
         my $column = ($project =~ /\D/) ? 'projectname' : 'project';
         $loaded = $self->loadRecord($column,$project);
-my $status = $self->status; print "$column $project status: $status $break"; 
+#my $status = $self->status; print "$column $project status: $status $break"; 
     }
 
 # add this project to inventory of instances
 
     if ($loaded) {
+# define the deault column
+        $self->setDefaultColumn('projectname');
 # perhaps include organism as wel?
         my $contents = $self->{contents};
         $Projects{$contents->{project}}     = $self;
@@ -93,11 +93,13 @@ my $status = $self->status; print "$column $project status: $status $break";
 }
 
 #############################################################################
+# these methods can be used as instance methods and as class methods
+#############################################################################
 
 sub getDefaultProject {
 # get/add the BIN project to the PROJECTS table for a give assembly
     my $self     = shift;
-    my $Assembly = shift; # pass it an Assembly object
+    my $Assembly = shift; # optional, pass it an Assembly object
     my $new      = shift;
 
     $Assembly = $self->{Assembly} unless $Assembly;
@@ -108,11 +110,12 @@ sub getDefaultProject {
 
     my $default = $aname.'BIN'; # default project for the given assembly
 
+    return $Projects{$default} if $Projects{$default};
+
     my $tableHandle = $self->tableHandle; # = $self->{table}
 
     my $project = $tableHandle->associate('project',$default,'projectname');
 
-print "default project $project <br>";
 # if the default project already exists for this assembly, spawn/return its Project instance
 
     return $self->new($project) if $project; # returns a new instance
@@ -137,7 +140,7 @@ print "default project $project <br>";
 # project added okay; update the row in the ASSEMBLY table
         my $count = $self->count("assembly=$anmbr") || 'projects+1'; # print "count $count $break";
         $Assembly->put('projects',$count,1);
-# either spawn a new instance 
+# either spawn a new instance (forced with $new)
         return $self->new($project) if $new;
 # or (re)load the date into this instance
         $self->loadRecord('projectname',$project);
@@ -148,15 +151,23 @@ print "default project $project <br>";
 
 #############################################################################
 
-sub setEnvironment {
+sub getProjects {
+# return a list of all project names, or those for a given assembly
+    my $self     = shift;
+    my $Assembly = shift; # optional, pass an Assembly object
 
-# return the line break appropriate for the environment
+    $Assembly = $self->{Assembly} if ($Assembly =~ /self/i);
 
-#    my $CGI = $ENV{REQUEST_METHOD} ? 1 : 0;
+    return $self->getDefaultColumn() unless $Assembly; # return ALL projects
 
-    $break = $ENV{REQUEST_METHOD} ? "<br>" : "\n";
+# return projects for the specified assembly only
+
+    my $where = "assembly=".$Assembly->get('assembly');
+       
+    return $self->getDefaultColumn($where);
 }
 
+#############################################################################
 #############################################################################
 
 sub colophon {
@@ -165,7 +176,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.9 ,
-        updated =>    "13 Feb 2004",
+        updated =>    "18 Feb 2004",
         date    =>    "10 Feb 2004",
     };
 }

@@ -58,7 +58,7 @@ sub new {
         $ASSEMBLY = $tableHandle->spawn('ASSEMBLY',$database);
     }
 
-# okay, we seem to have everything to build a new instance
+# okay, we seem to have everything to build a new Assembly instance
 
     my $self = $class->SUPER::new($ASSEMBLY);
 
@@ -66,23 +66,27 @@ sub new {
 
     $self->{Organisms} = $Organisms;
 
+# allocate key for projects of this assembly
+
+    $self->{ProjectNames} = []; # array ref
+
 # identify the assembly, either by number or by name and get the data
 
     my $loaded;
     my $column;
 
     if (!$assembly) {
-# get the default assembly
+# no assembly specified: get the default assembly
         $self = $self->getDefaultAssembly(0,$Organisms);
         $loaded = 1 unless $self->status(1);
     }
     else {
-# decide if it is a name or a number
+# decide if a name or a number is given
         $column = ($assembly =~ /\D/) ? 'assemblyname' : 'assembly';
         $loaded = $self->loadRecord($column,$assembly);
     }
 
-# if assemblyname not identified it could be a project name: try to do a project name 
+# if assemblyname is not identified (!$loaded) it could be a project name
 
     if (!$loaded && $column && ($column =~ /name/)) {
 # the name was not identified; try if it is a project name
@@ -90,16 +94,24 @@ sub new {
         if (!$Projects->status()) {
 # the name is identfied as a projectname; get its assembly number
             my $assembly = $Projects->get('assembly');
-# replace $self by a new object spawned for the now known assembly number
+# load the data for the now known assembly number
             $loaded = $self->loadRecord('assembly',$assembly);
         }
     }
 
 
     if ($loaded) {
-# instantiate the default project for this assembly
-        $self->{defaultProject} = new Projects(0,$self);
-# add this instance to the inventory
+# define the default column for (possible) queries
+        $self->setDefaultColumn('assemblyname');
+# instantiate the default project for this assembly as current project
+        my $Projects = new Projects(0,$self);
+        $self->{currentProject} = $Projects;
+# test if the default project lookup or creation has been successfull
+        if (my $pstatus = $Projects->status()) {
+# not really, add error status from Projects instance as warning to this assembly
+            $self->putErrorStatus(0,$pstatus);
+        }       
+# add this assembly instance to the inventory
         my $contents = $self->{contents};
         $Assembly{$contents->{assembly}}     = $self;
         $Assembly{$contents->{assemblyname}} = $self;
@@ -115,7 +127,7 @@ sub new {
 sub getDefaultAssembly {
 # get/add the default BLOB assembly from/to the ASSEMBLY table
     my $self      = shift;
-    my $Organisms = shift; # pass it an Organisms instance
+    my $Organisms = shift; # pass it an Organisms instance (for database info)
     my $new       = shift;
 
     $Organisms = $self->{Organisms} unless $Organisms;
@@ -146,7 +158,7 @@ sub getDefaultAssembly {
 
     if ($self->newRow()) {
 # assembly added okay; update the row in the ORGANISMS table
-        my $count = $self->count || 'assemblies+1'; print "count $count $break";
+        my $count = $self->count || 'assemblies+1'; # print "count $count $break";
         $Organisms->put('assemblies',$count,1);        
 # either spawn a new instance 
         return $self->new('BLOB') if $new;
@@ -158,77 +170,164 @@ sub getDefaultAssembly {
 }
 
 #############################################################################
+# projects of this assembly
+#############################################################################
 
 sub getProjects {
-# return Projects instances for all projects of this assembly
+# returns array of project names for all projects of this assembly
     my $self = shift;
+    my $load = shift;
 
+    $load = 1 unless @{$self->{ProjectNames}}; # force loading
+
+    my $Projects = $self->{currentProject}; # a Projects instance
+
+    $self->{ProjectNames} = $Projects->getProjects($self) if $load;
+
+    return $self->{ProjectNames}; # retruns array reference
 }
 
+#############################################################################
+
+sub putCurrentProject {
+# (re)defines the default project and returns Project reference 
+    my $self = shift;
+    my $name = shift; # optional, a project name
+
+    $self->clearErrorStatus;
+
+    my $Projects = $self->{currentProject}; # instance of Projects class
+
+    if (!$name) {
+# restore the original default
+        $self->{currentProject} = $Projects->getDefaultProject($self);
+    }
+    elsif (my $projects = $self->getProjects) {
+# define a new default, but only if the project is among assembly projects
+        my $found = 0;
+        foreach my $project (@$projects) {
+
+            if ($name eq $project) {
+# create a new Projects instance
+                my $Projects = new Projects($name);
+                if (my $pstatus = $Projects->status) {
+                    $self->putErrorStatus(0,$pstatus);
+                }
+                else {
+# put the project as default project
+                    $self->{currentProject} = $Projects;
+                    $found = 1;
+                }
+                last;
+            }
+	}
+
+# if the project cannot be found put a warning on this assembly
+
+        $self->putErrorStatus(0,"Project $name does not exist") unless $found;
+    }
+
+    return $self->{currentProject};
+}
+
+#############################################################################
+
+sub getCurrentProject {
+# returns the default project (either database default or > putCurrentProject)
+    my $self = shift;
+
+    return $self->{currentProject}; # there always is one
+}
+
+#############################################################################
+#
 #############################################################################
 
 #DEVELOPMENT
 
 
-sub testAssembly {
+sub testAccessStatus {
 # test the access status the current or the named assembly
+# correct assembly status returns 0; an error status returns its description
     my $self     = shift;
-    my $ginclude = shift; # include test on generations of mappings 
-    my $assembly = shift; # optional
+    my $gtest    = shift; # optional, include test on generations of mappings 
+    my $assembly = shift; # optional, assembly number or name
 
     if ($assembly) {
 # spawn a new assembly object for this assembly
         my $Assembly = $self->new($assembly);
 # and call this method again
-        return $Assembly->testAssembly($ginclude);        
+        return $Assembly->testAssembly($gtest);
     }
 
-# signal any error status on this module
+# signal any error status on THIS Assembly
 
-    return $self->{status}->{diagnosis} if ($self->{status}->{errors});
+    my $status = $self->status(0); # errors only, no warnings tested
  
-#    my $R2C = $ASSEMBLY->spawn('READS2CONTIG');
-    my $R2C = $self->{table}->spawn('READS2CONTIG');
+    return $status if $status; 
 
 # we test the 'status' value of the assembly; this should be either
-# 'virgin' or 'complete' with no data in generation 0 for this assembly'
+# 'virgin' or 'complete' with no data in generation 0 for this assembly
 # or 'loading' with data in generation 0;
+
+# including the generation test redefines $self->{G0} and $self->{G1} 
+
+    $assembly   = $self->get('assembly');
+    my $aname   = $self->get('assemblyname');
+
+    my $astatus = $self->get('status')  || 'invalid';
+    my $comment = $self->get('comment') || '';
+
+my $TEST = 0;
+print STDOUT "**** Testing assembly $assembly (astatus = $astatus) **** $break$break" if $TEST;
    
     my $report = 0;
 
-    my $content = $self->{contents}; 
-
-    my $astatus = $content->{status} || 'invalid';
-
-print STDOUT "**** Testing assembly $assembly **** $break$break";
-
     if ($astatus !~ /\b(virgen|complete|loading)\b/) {
 # invalid assembly status flag
-        $report = "Error status $astatus detected on assembly ";
-        $report = "$content->{assemblyname}: $content->{comment}$break";
+        $report = "Error status $astatus detected on assembly $aname: $comment";
     }
 
-    elsif ($ginclude) {
-# test the presence of entries (in generation 0) of this assembly
-        my $where = "assembly = $content->{assembly}";
+    elsif ($gtest) {
+
+# test the presence of entries in generation 0 and 1 of this assembly
+
+# astatus = 'virgen'  requires no entries at all for this assembly
+#         = 'loading' is consistent with entries at generation 0
+#         = 'complete is consistent with entries at generation 1 only
+
+        my $tableHandle = $self->tableHandle;
+
+        my $R2C = $tableHandle->spawn('READS2CONTIG');
+
+        my $where = "assembly = $assembly";
         $where = "generation = 0 and ".$where if ($astatus ne 'virgin');
 
-        my $gzero = $R2C->probe('contig_id',undef,$where);
+        $self->{G0} = $R2C->probe('contig_id',undef,$where);
 
-        if ($gzero && $astatus ne 'loading') {
-            $report = "Inconsistent assembly status '$astatus' : generation 0 entries$break";
+        if ($self->{G0} && $astatus ne 'loading') {
+            $report = "Inconsistent assembly status '$astatus' : generation 0 entries";
         }
-        elsif (!$gzero && $astatus eq 'loading') {
-            $report = "Inconsistent assembly status '$astatus' : no generation 0 entries$break";
+        elsif (!$self->{G0} && $astatus eq 'loading') {
+            $report = "Inconsistent assembly status '$astatus' : no generation 0 entries";
         }
-#        $report = '' unless $ginclude;
+
+# if the assembly is labeled as complete, test if there is indeed data in generation 1
+
+        $where =~ s/0/1/; # replace '= 0' by '= 1'
+
+        $self->{G1} = $R2C->probe('contig_id',undef,$where);
+
+        if ($astatus eq 'complete' && !$self->{G1}) {
+            $report = "Inconsistent assembly status '$astatus' : no generation 1 entries";
+        }
+print "G0 $self->{G0} ($where) $break" if $TEST;
+print "last query on R2C: $R2C->{lastQuery}$break" if $TEST;
     }
 
-# WHAT about projects? If no project available, auto create the bin project?
-
+    print "report $report $break" if $TEST;
     return $report;
 }
-
 
 #############################################################################
 # actions on the whole of an assembly
@@ -504,39 +603,37 @@ print "processing next block $block $break";
 
 #############################################################################
 
-sub updateAssembly {
+sub updateMetaData {
 # update counters and length for the current assembly
     my $self       = shift;
-    my $assembly   = shift || 1;
-    my $generation = shift || 0;
-    my $list       = shift;
+    my $generation = shift;
+    my $assembly   = shift;
 
-# test if the generation provided is legal
+    $generation = 1 unless defined($generation);
 
-    my $ASSEMBLY = $self->{table};
+    if ($assembly) {
+# spawn a new assembly object for this assembly
+        my $Assembly = $self->new($assembly);
+# and call this method again
+        return $Assembly->testAssembly($generation);
+    }
+
+    my $status = $self->testAccessStatus(1); # include generations test
+
+    return $status if $status; # exit with error report
+
+# test if the generation provided is populated
+
+    my $G = "G$generation";
+
+    return "Generation $generation contains no data" if !$self->{$G};
+
+# 
+
+    my $list = 1;
+    my $ASSEMBLY = $self->tableHandle;
     my $CONTIGS  = $ASSEMBLY->spawn('CONTIGS');
     my $R2C      = $ASSEMBLY->spawn('READS2CONTIG');
-
-    my $accept = -1;
-
-    if ($ASSEMBLY->associate('status',$assembly,'assembly') eq 'error') {
-        print "Error status on assembly $assembly $break" if $list;
-        return 0;
-    }
-    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly and blocked='1'")) {
-        print "Blocked status on assembly $assembly $break" if $list;
-        return 0;
-    }
-    elsif ($R2C->probe('contig_id',undef,"generation=0 AND assembly=$assembly")) {
-        $accept = 0;
-    }
-    elsif ($R2C->probe('contig_id',undef,"generation=1 AND assembly=$assembly")) {
-        $accept = 1;
-    }
-
-    print "update assembly $assembly cleared for generation $accept\n" if $list;
-
-    return 0 if ($accept < 0 || $accept != $generation);
 
     my $DBVERSION = $ASSEMBLY->dbVersion;
 
@@ -548,61 +645,74 @@ print "$DBVERSION getting length and L2000 ... " if $list;
         $query .= "(select distinct contig_id from READS2CONTIG where ";
         $query   .= "assembly = $assembly and generation = 1)";
         my $length = $CONTIGS->query($query,{traceQuery=>0});
-        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+#        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+
+        $self->put('length',$length->[0]->{sum});
 print "total = $length & " if $list;
 
         $query =~ s/where/where length>=2000 and/; # only the irst one
         $length = $CONTIGS->query($query,{traceQuery=>0});
-        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
+#        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
+        
+        $self->put('l2000',$length->[0]->{sum});
+        
 print "l2000 = $length & " if $list;
     }
 
 # for MySQL versions below 4.1 fall back on indirect method 
 
     else {
-        print "VERSION $DBVERSION ${break}getting length and L2000 ... " if $list;
+print "VERSION $DBVERSION ${break}getting length and L2000 ... " if $list;
         my $where = "assembly = $assembly and generation = $generation";
         $where .= " and label>=10 and deprecated in ('N','M')";
         my %qoptions = (returnScalar => 0, traceQuery => 0, orderBy => 'contig_id');
         my $contigs = $R2C->associate('distinct contig_id','where',$where,\%qoptions);
         my $query = "select sum(length) as sum from <self> where contig_id in (".join(',',@$contigs).")";
         my $length = $CONTIGS->query($query,{traceQuery=>0});
-        $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+#       $ASSEMBLY->update('length',$length->[0]->{sum},'assembly',$assembly);
+        $self->put('length',$length->[0]->{sum});
+
 print "total $length->[0]->{sum}   $break" if $list;
         $query =~ s/where/where length>=2000 and/; # only once
         $length = $CONTIGS->query($query,{traceQuery=>0});
 print "l2000 query: $CONTIGS->{lastQuery} \n" if $list;
-        $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
+#       $ASSEMBLY->update('l2000',$length->[0]->{sum},'assembly',$assembly);
 print "l2000 = $length->[0]->{sum}  $break" if $list;
+
+        $self->put('l2000',$length->[0]->{sum});
     }
 
 # get the total counts for this assembly
 
-    print "Update counters for assembly $assembly ... " if $list;
+print "Update counters for assembly $assembly ... " if $list;
     my $where = "assembly = $assembly and label>=10 and deprecated in ('N','M')";
-    print "all contigs in assembly $assembly ... $break" if $list;
+print "all contigs in assembly $assembly ... $break" if $list;
     my $ncontig = $R2C->count($where,'distinct contig_id');
-    $ASSEMBLY->update('allcontigs',$ncontig,'assembly',$assembly);
-    print "all reads in assembly $assembly ... $break" if $list;
+#    $ASSEMBLY->update('allcontigs',$ncontig,'assembly',$assembly);
+    $self->put('allcontigs',$ncontig);
+print "all reads in assembly $assembly ... $break" if $list;
     my $nreads  = $R2C->count($where,'distinct read_id');
-    $ASSEMBLY->update('reads',$nreads,'assembly',$assembly);
+#    $ASSEMBLY->update('reads',$nreads,'assembly',$assembly);
+    $self->put('reads',$nreads);
 
 # contig count and read count for the assembly of generation
 
     $where .= " and generation = $generation";
-    print "contigs in assembly $assembly and generation $generation$break" if $list;
+print "contigs in assembly $assembly and generation $generation$break" if $list;
     $ncontig = $R2C->count($where,'distinct contig_id');
-    $ASSEMBLY->update('contigs',$ncontig,'assembly',$assembly);
-    print "assembled reads in assembly $assembly and generation $generation$break" if $list;
+#    $ASSEMBLY->update('contigs',$ncontig,'assembly',$assembly);
+    $self->put('contigs',$ncontig);
+print "assembled reads in assembly $assembly and generation $generation$break" if $list;
     $nreads  = $R2C->count($where,'distinct read_id');
-    $ASSEMBLY->update('assembled',$nreads,'assembly',$assembly);
+#    $ASSEMBLY->update('assembled',$nreads,'assembly',$assembly);
+    $self->put('assembled',$nreads);
 
 # finally set the loading status
 
-    $ASSEMBLY->update('status', 'loading','assembly',$assembly) if ($generation == 0);
-    $ASSEMBLY->update('status','complete','assembly',$assembly) if ($generation == 1);
+    $self->put('status', 'loading') if ($generation == 0);
+    $self->put('status','complete') if ($generation == 1);
 
-    return 1;
+    return 0;
 }
 
 #############################################################################
@@ -624,7 +734,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             0.9 ,
-        updated =>    "17 Feb 2004",
+        updated =>    "18 Feb 2004",
         date    =>    "10 Feb 2004",
     };
 }

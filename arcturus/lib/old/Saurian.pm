@@ -452,7 +452,7 @@ print "get contig $name \n";
         $ccaf++ if $contig->dumpThisToCaf($FILE,$padd);
     }
 
-    else { 
+    else {
 $DEBUG=1;
         my $start = 0;
         my $block = 10;

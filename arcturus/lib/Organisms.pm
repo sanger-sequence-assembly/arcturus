@@ -55,9 +55,7 @@ sub new {
 
     my $self = $class->SUPER::new($ORGANISMS,'arcturus');
 
-
 # now fill the instance with data and add to inventory
-
 
     if ($self->loadRecord('dbasename',$database)) {
 
@@ -71,6 +69,10 @@ sub new {
     if (my $status = $self->status(1)) {
         die "Failed to locate database $database: $status";
     }
+
+# define the default column
+
+    $self->setDefaultColumn('dbasename');
 
     return $self;
 }
