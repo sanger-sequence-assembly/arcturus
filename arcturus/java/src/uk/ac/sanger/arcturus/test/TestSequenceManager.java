@@ -54,59 +54,33 @@ public class TestSequenceManager {
 
 	    report();
 
-	    System.out.println("Finding a CloneManager");
-	    System.out.println();
-
-	    CloneManager cmgr = adb.getCloneManager();
-
-
 	    if (Boolean.getBoolean("preloadClones")) {
 		System.out.println("Pre-loading all clones");
 		System.out.println();
-		cmgr.preloadAllClones();
+		adb.preloadAllClones();
 		report();
 	    }
-
-	    System.out.println("Finding a LigationManager");
-	    System.out.println();
-
-	    LigationManager lmgr = adb.getLigationManager();
 
 	    if (Boolean.getBoolean("preloadLigations")) {
 		System.out.println("Pre-loading all ligations");
 		System.out.println();
-		lmgr.preloadAllLigations();
+		adb.preloadAllLigations();
 		report();
 	    }
-
-	    System.out.println("Finding a TemplateManager");
-	    System.out.println();
-
-	    TemplateManager tmgr = adb.getTemplateManager();
 
 	    if (Boolean.getBoolean("preloadTemplates")) {
 		System.out.println("Pre-loading all templates");
 		System.out.println();
-		tmgr.preloadAllTemplates();
+		adb.preloadAllTemplates();
 		report();
 	    }
-
-	    System.out.println("Finding a ReadManager");
-	    System.out.println();
-
-	    ReadManager rmgr = adb.getReadManager();
 
 	    if (Boolean.getBoolean("preloadReads")) {
 		System.out.println("Pre-loading all reads");
 		System.out.println();
-		rmgr.preloadAllReads();
+		adb.preloadAllReads();
 		report();
 	    }
-
-	    System.out.println("Finding a SequenceManager");
-	    System.out.println();
-
-	    SequenceManager smgr = adb.getSequenceManager();
 
 	    System.out.println("Looking up reads and sequences by ID");
 	    System.out.println();
@@ -124,7 +98,7 @@ public class TestSequenceManager {
 			    System.out.println("LOOKING UP READ[" + id + "]");
 			}
 
-			Read read = rmgr.getReadByID(id);
+			Read read = adb.getReadByID(id);
 
 			if (verbose) {
 			    if (read == null)
@@ -142,8 +116,8 @@ public class TestSequenceManager {
 			}
 
 			Sequence sequence = fullSequence ?
-			    smgr.getFullSequenceBySequenceID(id) :
-			    smgr.getSequenceBySequenceID(id);
+			    adb.getFullSequenceBySequenceID(id) :
+			    adb.getSequenceBySequenceID(id);
 
 			if (verbose) {
 			    if (sequence == null)
@@ -162,6 +136,8 @@ public class TestSequenceManager {
 		    System.err.println("Error parsing \"" + args[i] + "\" as an integer.");
 		}
 	    }
+
+	    report();
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
