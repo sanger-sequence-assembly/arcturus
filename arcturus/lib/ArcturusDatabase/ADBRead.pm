@@ -18,7 +18,7 @@ our (@ISA);
 sub new {
     my $class = shift;
 
-    my $this = $class->SUPER::new(@_);
+    my $this = $class->SUPER::new(@_) || return undef;
 
     $this->populateDictionaries();
 

@@ -32,7 +32,7 @@ sub new {
 sub getContig {
 # return a Contig object  (under development)
 # options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
-# additional : metaDataOnly=>0 or 1 (default 1) age=>A default 0, or absent
+# additional : metaDataOnly=>0 or 1 (default 0), noReads=>0 or 1 (default 0)
     my $this = shift;
 
 # decode input parameters and compose the query
@@ -42,33 +42,36 @@ sub getContig {
 
     my $nextword;
     my $metadataonly = 0; # default export the lot
-    my $value;
 
+    my $value;
     while ($nextword = shift) {
 	if ($nextword eq 'ID' || $nextword eq 'contig_id') {
             $query .= "from CONTIG where contig_id = ?";
             $value = shift;
         }
         elsif ($nextword eq 'withChecksum') {
-# should include age specification?
-            $query .= "from CONTIG where readnamehash = ? ";
+# returns the highest contig_id, i.e. most recent contig with this checksum
+            $query .= " from CONTIG where readnamehash = ? ".
+		      "order by contig_id desc limit 1";
             $value = shift;
         }
         elsif ($nextword eq 'withRead') {
-# should include age specification?
-            $query .= " from CONTIG, MAPPING, SEQ2READ, READS
-                       where CONTIG.contig_id = MAPPING.contig_id
-                         and MAPPING.seq_id = SEQ2READ.seq_id
-                         and SEQ2READ.read_id = READS.read_id
-                         and READS.readname = ?";
+# returns the highest contig_id, i.e. most recent contig with this read
+            $query .= " from CONTIG, MAPPING, SEQ2READ, READS ".
+                      "where CONTIG.contig_id = MAPPING.contig_id".
+                      "  and MAPPING.seq_id = SEQ2READ.seq_id".
+                      "  and SEQ2READ.read_id = READS.read_id".
+                      "  and READS.readname = ? ".
+		      "order by contig_id desc limit 1";
 print STDERR "new getContig: $query\n";
              $value = shift;
        }
         elsif ($nextword eq 'withTag') {
-# should include age specification?
-            $query .= " from CONTIG join TAG2CONTIG using (contig_id)
-                        where tag_id in 
-                             (select tag_id from TAG where tagname = ?)";
+# returns the highest contig_id, i.e. most recent contig with this tag
+            $query .= " from CONTIG join TAG2CONTIG using (contig_id)".
+                      "where tag_id in". 
+                      "      (select tag_id from TAG where tagname = ?) ".
+		      "order by contig_id desc limit 1";
 print STDERR "new getContig: $query\n";
             $value = shift;
         }
@@ -88,7 +91,7 @@ print STDERR "new getContig: $query\n";
 
     $sth->execute($value) || &queryFailed($query);
 
-# get the metadataonly
+# get the metadata
 
     undef my $contig;
 
@@ -103,7 +106,7 @@ print STDERR "new getContig: $query\n";
         $contig->setConsensusLength($length);
 
         my $ncntgs= shift @attributes;
-        $contig->setNumberOfContigs($ncntgs);
+        $contig->setNumberOfParentContigs($ncntgs);
 
         my $nreads = shift @attributes;
         $contig->setNumberOfReads($nreads);
@@ -129,11 +132,11 @@ print STDERR "new getContig: $query\n";
 
 # get read-to-contig mappings (and implicit segments)
 
-    $this->getMappingsForContig($contig,type=>'read');
+    $this->getReadMappingsForContig($contig);
 
 # get contig-to-contig mappings (and implicit segments)
 
-#    $this->getMappingsForContig($contig,type=>'contig');
+    $this->getContigMappingsForContig($contig);
 
 # get contig tags
 
@@ -147,7 +150,7 @@ print STDERR "new getContig: $query\n";
 }
 
 sub getSequenceAndBaseQualityForContigID {
-# returns DNA sequence (string) and quality (array reference) for the specified contig
+# returns DNA sequence (string) and quality (array) for the specified contig
 # this method is called from the Contig class when using delayed data loading
     my $this = shift;
     my $contig_id = shift;
@@ -179,6 +182,38 @@ sub getSequenceAndBaseQualityForContigID {
     $sequence =~ s/\*/N/g if $sequence; # temporary fix 
 
     return ($sequence, $quality);
+}
+
+sub getParentContigsForContig {
+# adds the parent contigs, if any, to the input Contig instance 
+# this method is called from the Contig class when using delayed data loading
+    my $this = shift;
+    my $contig = shift;
+
+    return if $contig->hasParentContigs(); # already done
+
+# get the parent IDs; try ContigToContig mappings first
+
+    my @parentids;
+    if ($contig->hasContigToContigMappings()) {
+        my $contigmappings = $contig->getContigToContigMapping();
+        foreach my $mapping (@$contigmappings) {
+            push @parentids, $mapping->getSequenceID();
+        }
+print "parents via C2C mappings : @parentids\n";
+    }
+# alternatively, get the IDs directly from the database
+    elsif (my $contigid = $contig->getContigID()) {
+        my $parents = $this->getParentIDsForContigID($contigid);
+print "contigID $contigid, parents $parents  @$parents\n";
+        @parentids = @$parents if $parents;
+print "parents via getParentIDsForContigID : @parentids\n";
+    }
+# and pull them out (metadata only)
+    foreach my $parentid (@parentids) {
+        my $parent = $this->getContig(ID=>$parentid, metaDataOnly=>1);
+        $contig->addParentContig($parent) if $parent;
+    }
 }
 
 sub hasContig {
@@ -320,11 +355,13 @@ sub putContig {
 # if not found try the readname hash
     $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
-#$previous=0;
+my $TEST = 0;
+$previous=0 if $TEST;
     if ($previous) {
 # the read name hash or the sequence IDs hash does match
 # pull out previous contig mappings and compare them one by one with contig
-        $this->getMappingsForContig($previous,type=>'read');
+print "pos I previous $previous\n" if (ref($previous) ne 'Contig');
+        $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
             return $previous->getContigID(),"Contig $contigname is ".
                    "identical to contig ".$previous->getContigName();
@@ -333,9 +370,7 @@ sub putContig {
 
 # okay, the contig is new; find out if it is connected to existing contigs
 
-    my $contigids = $this->getLinkedContigsForContig($contig);
-# to be replaced later by this method using sub-queries:
-#    my $contigids = $this->getLinkedContigsForContigID($contigid);
+    my $contigids = $this->getParentsForContig($contig);
 
 # pull out mappings for those previous contigs, if any
 
@@ -343,11 +378,16 @@ sub putContig {
     if ($contigids && @$contigids) {
 # compare with each previous contig and return/store mapings/segments
         $message .= "has parent(s) : @$contigids";
-#print "$message \n";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
                                             metaDataOnly=>1);
-            $this->getMappingsForContig($previous,type=>'read');
+            unless ($previous) {
+# protection against missing parent contig from CONTIG table
+                print STDERR "Parent $contigid for $contigname not found ".
+		             "(possibly corrupted MAPPING table?)\n";
+                next;
+            }
+            $this->getReadMappingsForContig($previous);
             my ($linked,$deallocated) = $contig->linkToContig($previous);
             $previous = $previous->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
@@ -372,7 +412,7 @@ print STDOUT ($mapping->assembledFromToString || "empty link\n");
 #        $contig->addMapping($mapping);
     }
 
-#return 0,$message; # testing
+return 0,$message if $TEST; # testing
 
 # now load the contig into the database
 
@@ -620,41 +660,47 @@ sub deleteContig {
 # to be completed
 }
 
-#----------------------------------------------------------------------------------------- 
+#---------------------------------------------------------------------------------
 # methods dealing with Mappings and links between Contigs
-#----------------------------------------------------------------------------------------- 
+#---------------------------------------------------------------------------------
 
-sub getMappingsForContig {
+sub getReadMappingsForContig {
 # adds an array of read-to-read MAPPINGS to the input Contig instance
     my $this = shift;
     my $contig = shift;
 
-    die "getMappingsForContig expects a Contig instance" 
-         unless (ref($contig) eq 'Contig');
+    unless (ref($contig) eq 'Contig') {
+        die "getReadMappingsForContig expects a Contig instance as parameter";
+    } 
 
     return if $contig->hasMappings(); # already has its mappings
 
+    my $mquery = "select readname,SEQ2READ.seq_id,mapping_id,".
+                 "       cstart,cfinish,direction" .
+                 "  from MAPPING, SEQ2READ, READS" .
+                 " where contig_id = ?" .
+                 "   and MAPPING.seq_id = SEQ2READ.seq_id" .
+                 "   and SEQ2READ.read_id = READS.read_id" .
+                 " order by cstart";
+
+    my $squery = "select SEGMENT.mapping_id,SEGMENT.cstart," .
+                 "       rstart,length" .
+                 "  from MAPPING join SEGMENT using (mapping_id)" .
+                 " where MAPPING.contig_id = ?";
+
     my $dbh = $this->getConnection();
 
-# first pull out the mapping_ids
+# first pull out the mapping IDs
 
-    my $query = "select readname,SEQ2READ.seq_id,mapping_id,cstart,cfinish,direction" .
-                "  from MAPPING, SEQ2READ, READS" .
-                " where contig_id = ?" .
-                "   and MAPPING.seq_id = SEQ2READ.seq_id" .
-                "   and SEQ2READ.read_id = READS.read_id" .
-                " order by cstart";
+    my $sth = $dbh->prepare_cached($mquery);
 
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($contig->getContigID) || &queryFailed($query);
+    $sth->execute($contig->getContigID) || $this->queryfailed($mquery);
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
     while(my ($nm, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
 # intialise and add readname and sequence ID
         my $mapping = new Mapping($nm);
-#        $mapping->setMappingName($nm);
         $mapping->setSequenceID($sid);
         $mapping->setAlignmentDirection($dir);
 # add Mapping instance to output list and hash list keyed on mapping ID
@@ -666,21 +712,17 @@ sub getMappingsForContig {
 
 # second, pull out the segments
 
-    $query = "select SEGMENT.mapping_id,SEGMENT.cstart,rstart,length" .
-             "  from MAPPING join SEGMENT using (mapping_id)" .
-             " where MAPPING.contig_id = ?";
+    $sth = $dbh->prepare($squery);
 
-    $sth = $dbh->prepare($query);
-
-    $sth->execute($contig->getContigID()) || &queryFailed($query);
+    $sth->execute($contig->getContigID()) || $this->queryfailed($squery);
 
     while(my @ary = $sth->fetchrow_array()) {
-        my ($mappingid, $cstart, $rstart, $length) = @ary;
+        my ($mappingid, $cstart, $rpstart, $length) = @ary;
         if (my $mapping = $mappings->{$mappingid}) {
-            $mapping->addAlignmentFromDatabase($cstart, $rstart, $length);
+            $mapping->addAlignmentFromDatabase($cstart, $rpstart, $length);
         }
         else {
-# what if not? should not occur at all
+# what if not? (should not occur at all)
             print STDERR "Missing Mapping instance for ID $mappingid\n";
         }
     }
@@ -688,6 +730,76 @@ sub getMappingsForContig {
     $sth->finish();
 
     $contig->addMapping([@mappings]);
+}
+
+sub getContigMappingsForContig {
+# adds an array of read-to-read MAPPINGS to the input Contig instance
+    my $this = shift;
+    my $contig = shift;
+
+    unless (ref($contig) eq 'Contig') {
+        die "getContigMappingsForContig expects a Contig instance";
+    }
+                
+    return if $contig->hasContigToContigMappings(); # already done
+
+    my $mquery = "select parent_id,mapping_id," .
+                 "       cstart,cfinish,direction" .
+                 "  from C2CMAPPING" .
+                 " where contig_id = ?" .
+                 " order by cstart";
+ 
+    my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
+                 "       pstart,length" .
+                 "  from C2CMAPPING join C2CSEGMENT using (mapping_id)".
+                 " where C2CMAPPING.contig_id = ?";
+
+    my $dbh = $this->getConnection();
+
+# 1) pull out the mapping_ids
+
+    my $sth = $dbh->prepare_cached($mquery);
+
+    $sth->execute($contig->getContigID) || $this->queryfailed($mquery);
+
+    my @mappings;
+    my $mappings = {}; # to identify mapping instance with mapping ID
+    while(my ($sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
+# protect against empty contig-to-contig links 
+#        next unless defined($dir);
+        $dir = 'Forward' unless defined($dir);
+# intialise and add readname and sequence ID
+        my $mapping = new Mapping($sid);
+        $mapping->setSequenceID($sid);
+        $mapping->setAlignmentDirection($dir);
+# add Mapping instance to output list and hash list keyed on mapping ID
+        push @mappings, $mapping;
+        $mappings->{$mid} = $mapping;
+# add remainder of data (cstart, cfinish) ?
+    }
+    $sth->finish();
+
+# 2) pull out the segments
+
+    $sth = $dbh->prepare($squery);
+
+    $sth->execute($contig->getContigID()) || $this->queryfailed($squery);
+
+    while(my @ary = $sth->fetchrow_array()) {
+        my ($mappingid, $cstart, $rpstart, $length) = @ary;
+        if (my $mapping = $mappings->{$mappingid}) {
+            $mapping->addAlignmentFromDatabase($cstart, $rpstart, $length);
+        }
+        else {
+# what if not? (should not occur at all)
+            print STDERR "Missing Mapping instance for ID $mappingid\n";
+        }
+    }
+
+    $sth->finish();
+
+#    $contig->addMapping([@mappings]);
+    $contig->addContigToContigMapping([@mappings]);
 }
 
 sub putMappingsForContig {
@@ -812,8 +924,9 @@ my $test = 0; # to removed later
     return $success;
 }
 
-sub getLinkedContigsForContig {
-# returns a list of connected contig(s) for input contig based on r-c mappings
+sub getParentsForContig {
+# returns a list of connected contig(s) for input Contig based on 
+# its Reads sequence IDs and the sequence-to-contig MAPPING data
     my $this = shift;
     my $contig = shift; # Contig Instance
 
@@ -828,19 +941,16 @@ sub getLinkedContigsForContig {
         push @seqids,$read->getSequenceID();
     }
 
-# we have to select linked contigs of age 0
-# this query allows for empty entries in C2CMAPPING
-# NOTE: the alternative query is getLinkedContigsForContigID using subqueries
+# we have to select linked contigs of age 0 but we allow for absence
+# of orphan contigs in the C2CMAPPING table; hence we search among
+# contig_ids which are themselves NOT parents, i.e. have no offspring 
+# this query allows for absent entries of orphans in C2CMAPPING
 
     my $query = "select distinct(MAPPING.contig_id)".
-                "  from MAPPING join C2CMAPPING using (contig_id)".
+                "  from MAPPING left join C2CMAPPING".
+                "    on MAPPING.contig_id = C2CMAPPING.parent_id".
 	        " where seq_id in (".join(',',@seqids).")".
-                "   and age = 0 ".
-                "UNION ".
-                "select distinct(MAPPING.contig_id)".
-                "  from MAPPING left join C2CMAPPING using (contig_id)".
-	        " where seq_id in (".join(',',@seqids).")".
-	        "   and age is null";
+		"   and parent_id is null";
 
     my $dbh = $this->getConnection();
 
@@ -858,30 +968,22 @@ sub getLinkedContigsForContig {
     return [@contigids];
 }
 
-sub getLinkedContigsForContigID {
-# returns a list of IDs of connected contig(s) using sub-queries
+sub getParentIDsForContigID {
+# returns a list of contig IDs of connected contig(s) based on the
+# contig ID using the C2CMAPPING table
     my $this = shift;
     my $contig_id = shift;
 
 # we have to select linked contigs of age 0 or missing from C2CMAPPING
 
-    my $query = "select distinct(MAPPING.contig_id)".
-                "  from MAPPING join C2CMAPPING using (contig_id)".
-	        " where seq_id in ".
-                "      (select seq_id from MAPPING where contig_id=$contig_id)".
-                "   and age = 0 ".
-                "UNION ".
-                "select distinct(MAPPING.contig_id)".
-                "  from MAPPING left join C2CMAPPING using (contig_id)".
-	        " where seq_id in ".
-                "      (select seq_id from MAPPING where contig_id=$contig_id)".
-	        "   and age is null";
+    my $query = "select distinct(parent_id) from C2CMAPPING".
+	        " where contig_id = ?";
     
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute() || &queryFailed($query);
+    $sth->execute($contig_id) || &queryFailed($query);
 
     my @contigids;
     while (my ($contigid) = $sth->fetchrow_array()) {
@@ -894,38 +996,50 @@ sub getLinkedContigsForContigID {
 }
 
 sub buildHistoryTreeForContigs {
-# EXPERIMENTAL cascade age increase from the top
+# update contig age (generation) from zero age upwards
     my $this = shift;
-    my @contigids = @_; # initialise with one contig_id
+    my @contigids = @_; # initialise with one contig_id or array
 
-print "\nFrom the top : @contigids\n";
+# scan the C2CMAPPING table starting at the input contig IDs and
+# collect the contig IDs in previous generation which have to be
+# updated, i.e. increased by 1. We keep track of the target age
+# in each generation and collect only those contig IDs which have
+# an age less than that target. After each generation, the collected
+# contig IDs (of that generation) are the starting point for locating 
+# the next (previous) generation until no more IDs are found.
+
+# this method updates the age by 1, which is all that's needed for
+# an incremental update for a newly loaded contig. For building the
+# tree from scractch, use rebuildHistoryTree repeatedly until no more
+# updates occur.
 
     my $dbh = $this->getConnection();
 
-# accumulate IDs of linked contigs by recursive query
+# accumulate IDs of contigs to be updated by recursively querying
 
     my @updateids;
     my $targetAge = 0;
+# the loop starts with contig_ids assumed to be at age 0, top of the tree
     while (@contigids) {
 
         $targetAge++;
-        my $query = "select parent_id, age from C2CMAPPING" .
-	            " where contig_id in (".join(',',@contigids).")".
-                    "   and age <= $targetAge".
+        my $query = "select distinct(CHILD.parent_id)" .
+                    "  from C2CMAPPING as CHILD join C2CMAPPING as PARENT" .
+                    "    on CHILD.parent_id = PARENT.contig_id" .
+	            " where CHILD.contig_id in (".join(',',@contigids).")".
+                    "   and PARENT.age < $targetAge".
                     " order by parent_id";
 
-#print "query $query\n";
         my $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
 
         undef @contigids;
-        while (my ($parent_id, $age) = $sth->fetchrow_array()) {
-            push @updateids, $parent_id if ($age < $targetAge);
+        while (my ($parent_id) = $sth->fetchrow_array()) {
             push @contigids, $parent_id;
 	}
-print "sampled contigids of previous generation ".scalar(@contigids)."\n";
-print "sampled contigids to be updated ".scalar(@updateids)."\n";
+# add the contigs of the current generation to the update list
+        push @updateids,@contigids;
     }
 
     return 0 unless @updateids;
@@ -933,21 +1047,18 @@ print "sampled contigids to be updated ".scalar(@updateids)."\n";
 # here we have accumulated all IDs of contigs linked to input contig_id
 # increase the age for these entries by 1
 
-#print "updateids @updateids\n";
-
     my $query = "update C2CMAPPING set age=age+1".
 	        " where contig_id in (".join(',',@updateids).")";
-print "$query \n"; # return 0;
     
     my $sth = $dbh->prepare($query);
 
     my $update = $sth->execute() || &queryFailed($query);
-print "updated $update\n";
+
     return $update + 0;
 }
 
-sub rebuildHistory {
-# EXPERIMENTAL build contig links from scratch
+sub rebuildHistoryTree {
+# build contig age tree from scratch
     my $this = shift;
 
 # this method rebuilds the 'age' column of C2CMAPPING from scratch
@@ -958,24 +1069,16 @@ sub rebuildHistory {
 
     my $query = "update C2CMAPPING set age=0";
 
-#    $dbh->do($query) || &queryFailed($query);
+    $dbh->do($query) || &queryFailed($query);
 
 # step 2: get all contig_ids of age 0
 
-    my $contigids = $this->getCurrentContigs(0); # long way
+    my $contigids = $this->getCurrentContigs(0);
 
 # step 3: each contig id is the starting point for tree build from the top
 
-my $count=50;
-#    foreach my $contig_id (@$contigids) {
-#        $this->buildHistoryTreeForContigs($contig_id);
-#return unless $count--;
-#    }
-
-# or?
-    my $update = 1;
-    while ($update) {
-        $update = $this->buildHistoryTreeForContigs(@$contigids);
+    while ($this->buildHistoryTreeForContigs(@$contigids)) {
+	next;
     }
 }
 
