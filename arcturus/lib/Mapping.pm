@@ -45,7 +45,7 @@ sub setReadName {
     $this->{readname} = shift;
 }
 
-sub setAlignmentDirection {
+sub setAlignment {
 # must be defined when creating from database
     my $this = shift;
     my $direction = shift;
@@ -55,7 +55,21 @@ sub setAlignmentDirection {
     }
     elsif ($direction eq 'Reverse') {
         $this->{direction} = -1;
-    }    
+    }
+}
+
+sub getAlignment {
+    my $this = shift;
+
+    my $direction = $this->{direction};
+# extra: if undefined derive from current contents (for import)
+    if ($direction == 1) {
+        return 'Forward';
+    }
+    elsif ($direction == -1) {
+        return 'Reverse';
+    }
+    return undef;
 }
  
 #-------------------------------------------------------------------
@@ -71,8 +85,8 @@ sub compare {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
-    my $lmaps = $this->export();
-    my $fmaps = $mapping->export();
+    my $lmaps = $this->getSegments();
+    my $fmaps = $mapping->getSegments();
 
     return 0 unless (scalar(@$lmaps) == scalar(@$fmaps));
 
@@ -94,20 +108,20 @@ sub addAlignmentFromDatabase {
 
     $length -= 1;
 
-    my $cfinis = $cstart + $length;
+    my $rfinis = $rstart + $length;
 
     if ($length < 0) {
-        die "Invalid length specification in Mapping $this::getReadName"; 
+        die "Invalid length specification in Mapping ".$this->getReadName; 
     }
     elsif (my $d = $this->{direction}) {
        
         $length = -$length if ($d < 0);
-        my $rfinis = $rstart + $length;
+        my $cfinis = $cstart + $length;
 
         $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
     }
     else {
-        die "Undefind alignment direction in Mapping $this::getReadName";
+        die "Undefind alignment direction in Mapping ".$this->getReadName;
     }
 }
 
@@ -140,7 +154,7 @@ sub hasAlignments {
 # export of alignments
 #-------------------------------------------------------------------
 
-sub export {
+sub getSegments {
 # export the assembledFrom mappings as array of segments
     my $this = shift;
 
@@ -152,18 +166,13 @@ sub export {
     return $this->{assembledFrom}; # array reference
 }
 
-sub getOverallAlignment {
+sub NgetOverallAlignment {
+# REDUNDENT?
     my $this = shift;
 
 # find the first and the last segment of the assembledFrom map
 
-    my ($first, $final);
-    foreach my $segment (@{$this->{assembledFrom}}) {
-# ensure the correct alignment (on read segment, it may have been changed outside after export)
-        $segment->normaliseOnY();
-        $first = $segment if (!defined($first) || $first->getYstart < $segment->getYstart);
-        $final = $segment if (!defined($final) || $final->getYfinis > $segment->getYfinis);
-    }
+    my ($first, $final) = $this->getOuterSegments();
 
 #print "OverallAlignment UNDEFINED \n" unless $first;
     return undef if !$first;
@@ -171,14 +180,54 @@ sub getOverallAlignment {
     return ($first->getXstart, $final->getXfinis, $first->getYstart, $final->getYfinis);
 }
 
-sub assembledFromToString {
+sub getContigRange {
+# find contig begin and end positions from segments of the assembledFrom map
     my $this = shift;
 
-#    my $assembledFrom = "Assembled_from $this::getReadName ";
+    my ($first, $final) = $this->getOuterSegments();
+
+    return undef if !$first;
+
+    if ($this->{direction} > 0) {
+# co-aligned contig and read segments
+	return ($first->getXstart, $final->getXfinis);
+    }
+    else {
+# counter-aligned contig and read segments
+        return ($final->getXstart, $first->getXfinis);
+    }
+}
+
+sub getOuterSegments {
+# private method
+    my $this = shift;
+
+# find contig begin and end positions from segments of the assembledFrom map
+
+    my ($first,$final);
+    foreach my $segment (@{$this->{assembledFrom}}) {
+# ensure the correct alignment (it may have been changed outside after export)
+        $segment->normaliseOnY(); # ensure rstart <= rfinish
+        $first = $segment if (!defined($first) || 
+                              $first->getYstart < $segment->getYstart);
+        $final = $segment if (!defined($final) || 
+                              $final->getYfinis > $segment->getYfinis);
+    }
+print "OverallAlignment UNDEFINED \n" unless $first;
+    return undef if !$first;
+
+    return ($first, $final);
+}
+
+sub assembledFromToString {
+# write alignments as (block of) 'Assembled_from' records
+    my $this = shift;
+
     my $assembledFrom = "Assembled_from ".$this->getReadName()." ";
 
     my $string = '';
     foreach my $segment (@{$this->{assembledFrom}}) {
+        $segment->normaliseOnY(); # ensure rstart <= rfinish
         $string .= $assembledFrom.$segment->toString()."\n";
     }
     return $string;

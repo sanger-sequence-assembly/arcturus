@@ -2029,7 +2029,6 @@ sub hasContig {
 
     return $contig_id; # returns undefined if no such contig found
 }
-#---
 
 sub putContig {
     my $this = shift;
@@ -2040,26 +2039,57 @@ sub putContig {
 
     print STDERR "Contig ".$contig->getContigName." to be added\n";
 
-# get readIDs/seqIDs for its reads, load new sequence for edited reads
- 
-    my $reads = $contig->getReads();
-    $this->getSequenceIDforReads($reads);
-
-# put the sequenceIDs in the mappings, given the readname
-
-# test the Contig, its reads and mappings for completeness and consistency
+# test the Contig reads and mappings for completeness (using readname)
 
     if (!$this->testContigForImport($contig)) {
         print STDERR "Contig ".$contig->getContigName." NOT loaded";
     }
 
-# test if contig already loaded; i.e. test against existing contigs 
-# based on a.o. readnamehash; if same test in more detail?
+# get readIDs/seqIDs for its reads, load new sequence for edited reads
+ 
+    my $reads = $contig->getReads();
+    $this->getSequenceIDforReads($reads);
+
+# get the sequenceIDs (from Read) and build a hash keys on readname
+
+    my $seqids = {};
+    foreach my $read (@$reads) {
+        $seqids->{$read->getReadName()} = $read->getSequenceID();
+    }
+# and put them into the Mapping instances
+    my $mappings = $contig->getMappings();
+    foreach my $mapping (@$mappings) {
+        my $readname = $mapping->getReadName();
+        $mapping->setSequenceID($seqids->{$readname});
+    }
+
+# determine the readnamehash and other tests of uniqueness of the contig
+# find out if the contig has been loaded before i.e. do a query on 
+# CONTIG.readnamehash join CONTIG2CONTIG.age = 0 or not existing
 
    # return 0 if ($identical);
 
-# put the sequence IDs in the mappings
+# okay, the contig is new; find out if it is connected to existing
+# contigs (i.e. build the CONTIG2CONTIG links)
 
+
+# now load it into the database
+# first the meta data
+
+    my $contigid = $this->putMetaDataForContig($contig) || return 0;
+
+    $contig->setContigID($contigid);
+
+# then load the overall mappings (and put the mapping ID's in the instances
+
+    my $success = $this->putMappingsForContigID($contig);
+
+# and finally the CONTIG2CONTIG mappings
+
+# $this_>put...
+
+    return $success;
+   
 # 2) lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
 # 4) enter segments for each mapping (bulk loading)
@@ -2070,8 +2100,71 @@ sub putContig {
 
 }
 
+sub putMetaDataForContig {
+# private method
+    my $this = shift;
+    my $contig = shift; # Contig instance
+
+    my $query = "insert into CONTIGS " .
+                "(length,nctgs,nreads,newreads,cover,origin,updated,readnamehash) ".
+                "VALUES (?,?,?,?,?,?,?,now(),?)";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($contig->getLength(),
+                           $contig->getConnectingContigs(), 
+                           $contig->getNumberOfReads(),
+                           $contig->getNumberOfNewReads(),
+                           $contig->getCover(),
+                           $contig->getOrigin(),
+                           $contig->getReadNameHash()) || &queryFailed($query);
+
+    return 0 unless ($rc == 1);
+    
+    return $dbh->{'mysql_insertid'}; # the contig_id
+}
+
+sub putMappingsForContig {
+# private method, write mapping contents to MAPPING and SEGMENT tables
+    my $this = shift;
+    my $contig = shift;
+
+    my $dbh = $this->getConnection();
+
+# 1) the overall mapping
+
+    my $query = "insert into MAPPING " .
+                "(contig_id,seq_id,cstart,cfinish,direction) ".
+		"values (?,?,?,?,?)";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $contigid = $contig->getContigID();
+    my $mappings = $contig->getMappings();
+
+    foreach my $mapping (@$mappings) {
+        my ($cstart, $cfinish) = $mapping->getContigRange();
+        my $rc = $sth->execute($contigid,
+                               $mapping->getSequenceID(),
+                               $cstart,
+                               $cfinish,
+                               $mapping->getAlignment()) || &queryFailed($query);
+        $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
+    }
+
+# 2) the individual segments (in block mode)
+
+
+    foreach my $mapping (@$mappings) {
+# test existence of mappingID
+    }
+ 
+}
+
 sub getSequenceIDforReads {
-# put sequenceID, version and read_id into Read instances given readname 
+# put sequenceID, version and read_id into Read instances given their readname 
     my $this = shift;
     my $reads = shift;
 
@@ -2080,7 +2173,7 @@ sub getSequenceIDforReads {
 # version(s) already in the database with method addNewSequenceForRead
 # for unedited reads pull the data out in bulk with a left join
 
-    my %unedited;
+    my $unedited = {};
     foreach my $read (@$reads) {
         if ($read->isEdited) {
             my ($success,$errmsg) = $this->putNewSequenceForRead($read);
@@ -2088,13 +2181,13 @@ sub getSequenceIDforReads {
         }
         else {
             my $readname = $read->getReadName();
-            $unedited{$readname} = $read;
+            $unedited->{$readname} = $read;
         }
     }
 
 # get the sequence IDs for the unedited reads (version = 0)
 
-    my $range = join ',',sort keys(%unedited);
+    my $range = join ',',sort keys(%$unedited);
     my $query = "select READS.read_id,readname,seq_id" .
                 "  from READS left join SEQ2READ using(read_id) " .
                 " where readname in ($range)" .
@@ -2108,8 +2201,8 @@ sub getSequenceIDforReads {
 
     while (my @ary = $sth->fetchrow_array()) {
         my ($read_id,$readname,$seq_id) = @ary;
-        my $read = $unedited{$readname};
-        delete $unedited{$readname};
+        my $read = $unedited->{$readname};
+        delete $unedited->{$readname};
         $read->setReadID($read_id);
         $read->setSequenceID($seq_id);
         $read->setVersion(0);
@@ -2119,9 +2212,9 @@ sub getSequenceIDforReads {
 
 # have we collected all of them? then %unedited should be empty
 
-    if (keys %unedited) {
+    if (keys %$unedited) {
         print STDERR "Sequence ID not found for reads: " .
-	              join(',',sort keys %unedited) . "\n";
+	              join(',',sort keys %$unedited) . "\n";
     }
 }
 
@@ -2183,8 +2276,8 @@ sub testContig {
     my $level = shift;
 
 # level 0 for export, test number of reads against mappings and metadata    
-# for import: all reads and mappings must have a sequence ID defined
-# for export: all reads and mappings must have a readname defined
+# for export: test reads against mappings using the sequence ID
+# for import: test reads against mappings using the readname
 # for both, the reads and mappings must correspond 1 to 1
 
     my %identifier; # hash for IDs
@@ -2197,7 +2290,7 @@ sub testContig {
         my $reads = $contig->getRead();
         foreach my $read (@$reads) {
 # test identifier: for export sequence ID; for import readname (or both? for both)
-            $ID = $read->getReadName() if $level;
+            $ID = $read->getReadName()   if  $level; # import
 	    $ID = $read->getSequenceID() if !$level;
             if (!defined($ID)) {
                 print STDERR "Missing identifier in Read ".$read->getReadName."\n";
@@ -2225,7 +2318,7 @@ sub testContig {
 	my $mappings = $contig->getMapping();
         foreach my $mapping (@$mappings) {
 # get the identifier: for export sequence ID; for import readname
-            $ID = $mapping->getReadName() if $level;
+            $ID = $mapping->getReadName()    if $level;
 	    $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
             if (!$identifier{$ID}) {
@@ -2250,7 +2343,7 @@ sub testContig {
         return 0;
     }
 
-# test the number of Reads found against the contig metadata (info only; non-fatal)
+# test the number of Reads against the contig meta data (info only; non-fatal)
 
     if (my $numberOfReads = $contig->getNumberOfReads()) {
         my $reads = $contig->getRead();
@@ -2302,7 +2395,7 @@ sub getMappingsForContig {
         my $mapping = new Mapping();
         $mapping->setReadName($rn);
         $mapping->setSequenceID($sid);
-        $mapping->setAlignmentDirection($dir);
+        $mapping->setAlignment($dir);
 # add Mapping instance to output list and hash list keyed on mapping ID
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;

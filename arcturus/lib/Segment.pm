@@ -19,7 +19,6 @@ sub new {
 # take care all 4 input parameters are defined
 
     my ($xs, $xf, $ys, $yf, $dummy) = @_;
-#print "new Segment xs $xs xf $xf  ys $ys yf $yf \n";
 
     if (!defined($yf) || !defined($ys) || !defined($xf) || !defined($xs)) {
         die "Segment constructor expects a 4 vector";
@@ -38,10 +37,8 @@ sub new {
     my $offset = $xs - $direction * $ys;
 
     @{$this} = ($direction,$offset,$ys,$yf); # copy to local array
-#print "coefs: @$this \n";
 
     $this->normaliseOnY();
-#print "coefs: @$this \n";
 
     return $this;
 }
@@ -193,3 +190,4 @@ sub toString {
 #----------------------------------------------------------------------
 
 1;
+
