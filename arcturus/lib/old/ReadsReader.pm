@@ -1120,6 +1120,7 @@ $self->logger("non-CGI SCF: $command => chemistry: '$chemistry'\n");
 $self->logger("chemistry=$chemistry\n");
     }
     elsif (!$test) {
+#print "test recover $RECOVERDIR <br>";
         $chemistry = `$RECOVERDIR/recover.sh $command`;
 $self->logger("test recover chemistry: '$chemistry'\n");
         if ($chemistry =~ /.*\sDYEP\s*\=\s*(\S+)\s/) {
@@ -1179,11 +1180,13 @@ $self->logger("chemistry $chemistry found in ARCTURUS database table\n");
 $self->logger("chemistry \"$chemistry\" NOT found in ARCTURUS database\n");
         $status->{diagnosis} .= "chemistry \"$chemistry\" NOT found in ARCTURUS database\n";
     # the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
-        my $field = `grep \"$chemistry\" $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
-        $field    = `grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
+        my $command = "grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat";
+        my $field = `$command`; # identify in phred file
+$self->logger("command: $command\n");
+#        my $field = `grep \"$chemistry\" $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
+#        $field    = `grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
         chomp $field;
 $self->logger("Gelminder chemistry data fields: \"$field\"\n");
-#$status->{diagnosis} .= "Gelminder chemistry data fields: \"$field\"";
         $field =~ s/[\'\"]?\s*$chemistry\s*[[\'\"]?/x /g; # remove chemistry and any quotations
 #        $field =~ s/\b[\'\"]|[[\'\"]\b/ /g; # remove any quotations
 #        $field =~ s/^\s*$chemistry/x/; # to ensure three words on the line
@@ -1218,8 +1221,9 @@ $self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
                         $status->{errors}++   if  ($self->{fatal} && $readItems->{CHT} ne 'l');
                         $status->{warnings}++ if (!$self->{fatal} || $readItems->{CHT} eq 'l' && $description =~ /Licor/i);
                     } 
-                    $readItems->{RPS} += 32768*4 ; # bit 18 
-               }
+                    $readItems->{RPS} += 32768*4 ; # bit 18
+$self->{status}->{report} =~ s/\n/<br>/g; print STDOUT "report: $self->{status}->{report}";
+                }
             }
             else {
         # assume CHT is correct
