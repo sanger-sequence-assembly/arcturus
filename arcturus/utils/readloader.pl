@@ -34,7 +34,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|exclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
    $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
-   $validKeys .= "minreadid|maxreadid|skipaspedcheck|noload";
+   $validKeys .= "minreadid|maxreadid|skipaspedcheck|noload|noexclude";
 
 my %PARS;
 
@@ -268,7 +268,7 @@ $loadoptions->{skipaspedcheck} = 1 if $skipaspedcheck;
 
 while (my $readname = $factory->getNextReadName()) {
 
-    next if $adb->hasRead($readname);
+    next if (!$noloading && $adb->hasRead($readname));
 
     my $read = $factory->getNextRead();
 
@@ -276,9 +276,12 @@ while (my $readname = $factory->getNextReadName()) {
 
     $logger->info("Storing $readname (".$read->getReadName.")");
 
-    $read->dump() if $noloading;
+    if ($noloading) {
 
-    next if $noloading;
+        $read->writeToCaf(*STDOUT);
+
+        next;
+    }
 
     my ($success,$errmsg) = $adb->putRead($read, $loadoptions);
 
