@@ -266,13 +266,41 @@ CREATE TABLE READ2ASSEMBLY (
 
 CREATE TABLE READTAG (
   seq_id mediumint(8) unsigned NOT NULL default '0',
-  readtag varchar(4) binary NOT NULL default '',
+  tagtype CHAR(4) binary NOT NULL default '',
+  tag_id mediumint(8) unsigned NOT NULL default '0',
   pstart smallint(5) unsigned NOT NULL default '0',
   pfinal smallint(5) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
-  comment varchar(128) default NULL,
   deprecated enum('N','Y','X') default 'N',
-  KEY reads_index (seq_id)
+  comment tinyblob default NULL,
+  KEY readtag_index (seq_id)
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'CONTIGTAG'
+#
+
+CREATE TABLE CONTIGTAG (
+  seq_id mediumint(8) unsigned NOT NULL default '0',
+  tagtype CHAR(4) binary NOT NULL default '',
+  tag_id mediumint(8) unsigned NOT NULL default '0',
+  pstart int(11) unsigned NOT NULL default '0',
+  pfinal int(11) unsigned NOT NULL default '0',
+  strand enum('F','R','U') default 'U',
+  deprecated enum('N','Y','X') default 'N',
+  comment tinyblob default NULL,
+  KEY contigtag_index (seq_id)
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'MARKER'
+#
+
+CREATE TABLE TAGSEQUENCE (
+  tag_id mediumint(8) unsigned NOT NULL auto_increment,
+  tagname varchar(32) binary NOT NULL default '',
+  sequence blob NULL,
+  KEY tag_index (tag_id)
 ) TYPE=MyISAM;
 
 #

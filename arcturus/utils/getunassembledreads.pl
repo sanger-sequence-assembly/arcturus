@@ -112,7 +112,6 @@ while (my $remainder = scalar(@$readids)) {
 
     $logger->info("$readblock[0] $readblock[$#readblock] ".scalar(@readblock));
 
-#undef @readblock; # testing
     my $reads = $adb->getReadsByReadID(\@readblock);
 
     $logger->info("Adding sequence");

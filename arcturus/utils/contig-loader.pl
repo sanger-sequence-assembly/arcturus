@@ -35,13 +35,14 @@ my $projectID;             # alternatively the project ID
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded;             # allow a padded assembly
 my $consensus;             # load consensus sequence
+my $noload = 1;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|" .
                  "projectname|project_id|test|minimum|filter|ignore|" .
-                 "frugal|padded|verbose|info|help";
+                 "frugal|padded|readtags|noload|verbose|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -87,6 +88,8 @@ while (my $nextword = shift @ARGV) {
     $cnBlocker        = 1            if ($nextword eq '-ignore');
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
+
+    $noload           = 1            if ($nextword eq '-noload');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -175,7 +178,7 @@ my (%contigs, %reads, %mappings);
 
     my $FTAGS = &tagList('FTAGS');
     my $STAGS = &tagList('STAGS');
-    my $ITAGS = &tagList('ITAGS');
+    my $ETAGS = &tagList('ETAGS');
 
 $logger->info("Read a maximum of $lineLimit lines")      if $lineLimit;
 $logger->info("Contig (or alias) name filter $cnFilter") if $cnFilter;
@@ -414,19 +417,19 @@ while (defined($record = <$CAF>)) {
             if (scalar @positions == 4) {
                 my $entry = $read->addAlignToTrace([@positions]);
                 if ($isUnpadded && $entry == 2) {
-                    $logger->warning("Edited read $objectName detected ($lineCount)");
+                    $logger->info("Edited read $objectName detected ($lineCount)");
                 }
             }
             else {
                 $logger->severe("Invalid alignment: ($lineCount) $record",2);
             }
         }
-        elsif ($record =~ /clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
+        elsif ($record =~ /Clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
 # low quality boundaries $1 $2
             $read->setLowQualityLeft($1);
             $read->setLowQualityRight($2);
         }
-        elsif ($record =~ /clipping\sphrap\s+(\d+)\s+(\d+)/i) {
+        elsif ($record =~ /Clipping\sphrap\s+(\d+)\s+(\d+)/i) {
 # should be a special testing method on Reads?, or maybe here
 #            $read->setLowQualityLeft($1); # was level 1 is not low quality!
 #            $read->setLowQualityRight($2);
@@ -439,15 +442,42 @@ while (defined($record = <$CAF>)) {
         }
 # further processing a read Read TAGS and EDITs
         elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
-            my $name = $1; my $trps = $2; my $trpf = $3; 
-            my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-#	    $logger->finest("READ tag: $name $trps $trpf $info");
-            my $tag = new Tag(type=>'readtag');
-#            $tag->readTag($name,$trps,$trpf,$info);
+            my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
+#print STDERR "read Tag ($record) \n";
+# test for a continuation mark (\n\); if so, read until final mark
+            while ($info =~ /\\n\\\s*$/) {
+#print STDERR "read Tag info ($info) \n";
+                if (defined($record = <$CAF>)) {
+                    chomp $record;
+                    $info .= "\n$record";
+                    $lineCount++;
+                }
+                else {
+                    $info .= "\""; # closing quote
+                }
+            }
+#print STDERR "TAG info: $info \n" if ($info =~ /\\n\\/); exit if ($type eq 'OLIG');
+ 
+            $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
+
+	    $logger->finest("READ tag: $type $trps $trpf $info") if $noload;
+
+            my $tag = new Tag('readtag');
+            $tag->setType($type);
+            $tag->setPosition($trps,$trpf);
+            $tag->setStrand('Forward');
+            $tag->setComment($info);
+            if ($info =~ /([ACGT]{5,})/) {
+                $logger->info("Read Tag $type DNA '$1'");
+                $tag->setDNA($1);
+            }
             $read->addTag($tag);
         }
-        elsif ($record =~ /Tag/ && $record !~ /$ITAGS/) {
-            $logger->warning("READ tag not recognized: $record");
+        elsif ($record =~ /Tag/ && $record =~ /$ETAGS/) {
+           $logger->info("READ EDIT tag detected but not processed: $record");
+        }
+        elsif ($record =~ /Tag/) {
+           $logger->warning("READ tag not recognized: $record");
         }
 # EDIT tags TO BE TESTED
 	elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
@@ -468,9 +498,12 @@ while (defined($record = <$CAF>)) {
 	    $tag->editDelete($4,$3); # insert signalled by lc atcg
             $read->addTag($tag);
         }
+        elsif ($record =~ /Note\sINFO\s(.*)$/) {
+	    $logger->warning("NOTE detected $1 but not processed");
+        }
 # finally
         elsif ($record !~ /SCF|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
-#            $logger->warning("not recognized ($lineCount): $record");
+            $logger->warning("not recognized ($lineCount): $record");
         }
     }
 
@@ -513,12 +546,18 @@ $positions[1] = invert($positions[1]);
         }
         elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
 # detected a contig TAG
-            my $name = $1; my $trps = $2; my $trpf = $3; 
+            my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-# $logger->write("CONTIG tag: $record $break $name $trps $trpf $info");
-            my $tag = new Tag(type=>'contigtag');
-            $tag->contigTag($name,$trps,$trpf,$info);
+$logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
+            my $tag = new Tag('contigtag');
             $contig->addTag($tag);
+            $tag->setType($type);
+            $tag->setPosition($tcps,$tcpf);
+            $tag->setStrand('Forward');
+            $tag->setComment($info);
+            if ($info =~ /([ACGT]{5,})/) {
+                $tag->setDNA($1);
+            }
         }
         elsif ($record =~ /Tag/) {
             $logger->warning("CONTIG tag not recognized: ($lineCount) $record");
@@ -588,14 +627,24 @@ foreach my $identifier (keys %contigs) {
     }         
     $contig->setOrigin($origin);
 
-    my ($added,$msg) = $adb->putContig($contig,$project); # return 0 fail
+    if ($noload) {
 
-print STDERR "$identifier with ".$contig->getNumberOfReads.
-             " reads : status $added, $msg\n\n";
+        my $tags = $contig->getTags();
+        next unless ($tags && @$tags);
+        foreach my $tag (@$tags) {
+            $tag->writeToCaf(*STDOUT);
+        }
+    }
+    else {
 
-# $adb->clearLastContig() unless $added;
+        my ($added,$msg) = $adb->putContig($contig,$project); # return 0 fail
 
-    delete $contigs{$identifier} if $added;
+        $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
+                      " reads : status $added, $msg");
+
+      # $adb->clearLastContig() unless $added;
+        delete $contigs{$identifier} if $added;
+    }
 }
 
 # test again
@@ -607,10 +656,19 @@ $logger->info("$nc contigs skipped") if $nc;
 
 if ($readTags) {
 
+    my @reads;
     foreach my $identifier (keys %reads) {
         my $read = $reads{$identifier};
-        $adb->addTagsForRead($read); # something like that
+        push @reads, $read;
+#        if ($noload) {
+            my $tags = $read->getTags();
+            next unless ($tags && @$tags);
+            foreach my $tag (@$tags) {
+#                $tag->writeToCaf(*STDOUT);
+            }
+#        }
     }
+    $adb->putTagsForReads(\@reads); # unless $noload;
 }
 
 # finally update the meta data for the Assembly and the Organism
@@ -636,18 +694,21 @@ sub tagList {
 
 # Finishers tags
 
-    my @FTAGS = ('FINL','FINR','ANNO','COMP','FICM','RCMP','POLY',
-                 'REPT','OLIG','COMM','RP20','TELO','REPC','WARN',
-                 'CONF','DRPT','LEFT','RGHT','TLCM','UNCL','VARI');
+    my @FTAGS = ('FINL','FINR','ANNO','FICM','RCMP','POLY','STSP',
+                 'STSF','STSX','STSG','COMM','RP20','TELO','REPC',
+                 'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
+                 'CpGI','NNNN','SILR','IRPT','LINE','REPA','REPY',
+                 'REPZ','FICM','VARD','VARS','CSED','CONS');
 
 # software TAGS
 
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
-                 'MALX','MALI','SILR');
+                 'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
+                 'LOW' ,'MOSC','STOL');
 
-# tags to be ignored (read tags)
+# edit tags
 
-    my @ITAGS = ('CpGI','CLIP','MISS','XMAT','CONS');
+    my @ETAGS = ('EDIT','DONE','MISS','MASK','UNCL','CONF','CLIP');
 
     my $list  = eval "join '|',\@$name";
 }
@@ -679,6 +740,8 @@ sub showUsage {
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
+    print STDERR "-readtags\t\tprocess read tags\n";
+    print STDERR "-noload\t\tskip loading into database (test mode)\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
     print STDERR "-frugal\t\t(no value) minimise memory usage\n";
     print STDERR "-verbose\t\t(no value) for some progress info\n";
