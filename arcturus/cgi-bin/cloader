@@ -59,7 +59,7 @@ $config{CLF} = "$arc_log_dir/cloader.$database.log"; # default logfile
 
 my ($userid, $caffile, $page);
 my ($list, $limit, $exactmatch);
-my ($TEST, $REPAIR, $logON, $reload, $update, $forced, $rdscan);
+my ($TEST, $REPAIR, $logON, $reload, $update, $forced, $rdscan,$nopreload);
 my ($CDD, $CFN, $CNF, $CGN, $CLF, $CPR, $SRC);
 my ($ASSEMBLY, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
@@ -142,10 +142,11 @@ if (!$cgi) {
     $list = 1 if (defined($ARGV[3]) && $ARGV[3] =~ /^list$/i);
 $TEST = 0;
     $CLF = $config{CLF};
-    $cblocker = 0;
+    $cblocker = 1;
     $rblocker = 0;
     $SRC = 1;
 print "\n\n CNF $CNF \n CGN $CGN \n CFN $CFN \n CPR $CPR \n CLF $CLF  \n\n";
+    $nopreload = 1; # for initial loading only
 #    exit;
 }
 
@@ -395,7 +396,7 @@ else {
     my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
  
     $R2A->setMultiLineInsert(1000);
-    $R2C->setMultiLineInsert(5000);
+    $R2C->setMultiLineInsert(1000);
   
     $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
     $READS->autoVivify($database,0.5); # install links on opened tables only
@@ -514,7 +515,9 @@ else {
 #
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-    my $ContigBuilder = ContigBuilder->init($CONTIGS,$rdscan);
+    $nopreload = 1 if $rdscan;
+    my $ContigBuilder = ContigBuilder->init($CONTIGS,$nopreload);
+print STDOUT "preloading set to $nopreload\n";
 
     $ContigBuilder->setMinOfReads($SRC) if ($SRC > 1);
     $ContigBuilder->setOwnership($assemblynmbr,$userid);
@@ -540,7 +543,7 @@ else {
 
             print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
 # flushing ContigBuilder also flushes ReadMapper and tablehandles R2A, R2C and PENDING
-            my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced);
+            my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced,1);
             print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
             my $promote = $GateKeeper->lookup('promote');
