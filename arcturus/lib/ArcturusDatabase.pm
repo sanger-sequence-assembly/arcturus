@@ -1370,9 +1370,13 @@ sub putNewSequenceForRead {
     my $this = shift;
     my $read = shift; # a Read instance
 
+    die "ArcturusDatabase->putNewSequenceForRead expects a Read instance " .
+        "as parameter" unless (ref($read) eq 'Read');
+
 # a) test if the readname already occurs in the database
 
     my $readname = $read->getReadName();
+    return (0,"incomplete Read instance: missing raedname") unless $readname; 
 
 # get and/or test readname against read_id (we don't know how $read was made)
 
@@ -1382,14 +1386,16 @@ sub putNewSequenceForRead {
         return (0,"unknown read $readname");
     } 
     elsif ($read->getReadID() && $read->getReadID() != $read_id) {
-        return (0,"incompatible read IDs ($read::getReadID vs $read_id)");
+        return (0,"incompatible read IDs (".$read->getReadID." vs $read_id)");
     }
     
 # b) test if it is an edited read by counting alignments to the trace file
 
     my $alignToSCF = $read->getAlignToTrace();
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
-        return (0,"insufficient alignment information");
+     return (0,"insufficient alignment information") unless $read->isEdited();
+print STDERR "read slipped through edited test:",$read->getReadName()."\n";
+return;
     }
 
 # c) ok, now we get the previous versions of the read and compare
@@ -1402,7 +1408,7 @@ sub putNewSequenceForRead {
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
-            return ($seq_id,"identical to version $version");
+            return ($seq_id,"is identical to version $version");
         }
         $version++;
     }
@@ -1989,25 +1995,96 @@ sub putContig {
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    print STDERR "Contig $contig::getContigName to be added\n";
+    die "ArcturusDatabase->putContig expects a Contig instance ".
+        "as parameter" unless (ref($contig) eq 'Contig');
+
+    print STDERR "Contig ".$contig->getContigName." to be added\n";
+
+# get readIDs/seqIDs for its reads, load new sequence for edited reads
+ 
+    my $reads = $contig->getReads();
+    $this->getSequenceIDforReads($reads);
+
+# put the sequenceIDs in the mappings, given the readname
+
+# test the Contig, its reads and mappings for completeness and consistency
 
     if (!$this->testContigForImport($contig)) {
-        print STDERR "Contig $contig::getContigName NOT loaded";
+        print STDERR "Contig ".$contig->getContigName." NOT loaded";
     }
-# test against existing contigs based on a.o. readnamehash; if same test in detail
-# get readIDs/seqIDs for its reads, load new sequence for edited reads 
 
-# 1) test contig for completeness (names, checksum, all Maps defined etc)
-# 1a) test if contig already loaded; if so ignore
+# test if contig already loaded; i.e. test against existing contigs 
+# based on a.o. readnamehash; if same test in more detail?
+
+   # return 0 if ($identical);
+
+# put the sequence IDs in the mappings
+
 # 2) lock MAPPING and SEGMENT tables
 # 3) enter record in MAPPING for each read and contig=0 (bulk loading)
 # 4) enter segments for each mapping (bulk loading)
 # 5) enter record in CONTIGS with meta data, gets contig_id
 # 6) replace contig_id=0 by new contig_id in MAPPING
 # 7) release lock on MAPPING 
-
+# BETTER? add a function deleteContig(contig_id) to remove contig if any error
 
 }
+
+sub getSequenceIDforReads {
+# put sequenceID, version and read_id into Read instances given readname 
+    my $this = shift;
+    my $reads = shift;
+
+# collect the readnames of unedited and of edited reads
+# for edited reads, get sequenceID by testing the sequence against
+# version(s) already in the database with method addNewSequenceForRead
+# for unedited reads pull the data out in bulk with a left join
+
+    my %unedited;
+    foreach my $read (@$reads) {
+        if ($read->isEdited) {
+            my ($success,$errmsg) = $this->putNewSequenceForRead($read);
+	    print STDERR "$errmsg\n" unless $success;
+        }
+        else {
+            my $readname = $read->getReadName();
+            $unedited{$readname} = $read;
+        }
+    }
+
+# get the sequence IDs for the unedited reads (version = 0)
+
+    my $range = join ',',sort keys(%unedited);
+    my $query = "select READS.read_id,readname,seq_id" .
+                "  from READS left join SEQ2READ using(read_id) " .
+                " where readname in ($range)" .
+	        "   and version = 0";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    while (my @ary = $sth->fetchrow_array()) {
+        my ($read_id,$readname,$seq_id) = @ary;
+        my $read = $unedited{$readname};
+        delete $unedited{$readname};
+        $read->setReadID($read_id);
+        $read->setSequenceID($seq_id);
+        $read->setVersion(0);
+    }
+
+    $sth->finish();
+
+# have we collected all of them? then %unedited should be empty
+
+    if (keys %unedited) {
+        print STDERR "Sequence ID not found for reads: " .
+	              join(',',sort keys %unedited) . "\n";
+    }
+}
+
 #****************  
 sub addReadsToPending {
 # OBSOLETE, but TEMPLATE for bulk loading  of SEGMENT and MAPPING
@@ -2066,6 +2143,9 @@ sub testContig {
     my $level = shift;
 
 # level 0 for export, test number of reads against mappings and metadata    
+# for import: all reads and mappings must have a sequence ID defined
+# for export: all reads and mappings must have a readname defined
+# for both, the reads and mappings must correspond 1 to 1
 
     my %identifier; # hash for IDs
 
@@ -2076,7 +2156,7 @@ sub testContig {
         my $success = 1;
         my $reads = $contig->getRead();
         foreach my $read (@$reads) {
-# test identifier: for export sequence ID; for import readname
+# test identifier: for export sequence ID; for import readname (or both? for both)
             $ID = $read->getReadName() if $level;
 	    $ID = $read->getSequenceID() if !$level;
             if (!defined($ID)) {
@@ -2131,7 +2211,7 @@ sub testContig {
     }
 
 # test the number of Reads found against the contig metadata (info only; non-fatal)
-    
+
     if (my $numberOfReads = $contig->getNumberOfReads()) {
         my $reads = $contig->getRead();
         my $nreads =  scalar(@$reads);
@@ -2140,7 +2220,7 @@ sub testContig {
                          " (actual $nreads, metadata $numberOfReads)\n";
         }
     }
-    else {
+    elsif (!$level) {
         print STDERR "Missing metadata for ".contig->getContigName."\n";
     }
     return 1;
