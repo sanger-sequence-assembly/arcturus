@@ -83,7 +83,7 @@ $nfound = 0;
 
 $query = "SELECT readname,date,ligation,clone,template,strand,primer,chemistry,basecaller," .
     "pstatus,lqleft,lqright,svector,svleft,svright,cvector,cvleft,cvright," .
-    "slength,sequence,scompress,quality,qcompress FROM READS WHERE read_id=?";
+    "slength,sequence,scompress,quality,qcompress FROM READS WHERE read_id=? AND pstatus=0";
 
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed on $dsn");
