@@ -9,8 +9,6 @@
 use strict;
 
 use GateKeeper; 
-use ArcturusTable;
-use MyHTML;
 
 ##############################################################################
 # unbuffered output
@@ -24,94 +22,86 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = GateKeeper->new('mysql',0,'insist on CGI');
+my $GateKeeper = GateKeeper->new('mysql',{insistOnCGI => 1});
 
 my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle();
 
-my $database   = $cgi->parameter('database');
+my ($void,$action,$option) = split '/',$GateKeeper->origin;
 
-my $dbh        = $GateKeeper->dbHandle($database,{undefinedDatabase => 1, 'override'=>'1'});
+my $database   = $cgi->parameter('database') || 'arcturus';
 
-$GateKeeper->cgiHeader(2); # return string plain
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 ##############################################################################
 # MAIN
 ##############################################################################
 
-my ($void,$action,$option) = split ('/',$GateKeeper->origin);
-
 my $USERSUPPORT = $config->get("USERSUPPORT");
 my $db_manager  = $config->get("db_manager");      
 my $arc_cgi_dir = $config->get("ARC_CGI_DIR");
 
-if (!$dbh->do("use arcturus")) {
-    print STDOUT "Failed to open database arcturus<br>";
-    exit 0;
-}
+my $userupdate = 0;
 
-my $return  = "$arc_cgi_dir/create/arcturus/getmenu";
+$GateKeeper->focus({useDatabase => 'arcturus', dieOnError => 1});
 
-###############################################################################
-    
-my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
+my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates");
+my $font = "size=4 face='sans-serif'";
 
-my $page = MyHTML->new("ARCTURUS database maintenance and updates");
-$page->frameborder(100,15,'white',15);
-$page->center(1);
+my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+my $reject = "$arc_cgi_dir/amanager/specify/$option".$cgi->postToGet(1,('session','database'));
 
 my $operation = "define a new $option";
 $operation = "allocate $option to a project" if ($option =~ /user|cont/i);
 
-if ($action eq "preselect") {
+if ($action eq "preselect" || $database eq 'arcturus') {
 # preselection of a database
+    $page->frameborder(50,10,'white') if $GateKeeper->currentSession;
     $page->form("$arc_cgi_dir/amanager/specify/$option");
-    $page->partition(2);
     $page->sectionheader("ARCTURUS assembly database: $operation",3,0);
-    $page->partition(1);
     my $count = $organisms->count();
     $page->sectionheader("There are $count Organism databases",3,0);
-    $page->add($organisms->htmlTable('0110000011100000'));
+    $options{mask} = '0110000011100000';
+    $page->add($organisms->htmlTable(\%options));
     my $select =  $organisms->htmlOptions('dbasename','database',20,0,0);
     $page->sectionheader("Select a database and submit: $select",4,1);
-    $page->partition(5);
-    $page->center(1);
-    $page->submitbuttonbar("$arc_cgi_dir/update/arcturus/getmenu",0,0,'MAIN MENU');
+    $page->ingestCGI();
+    $page->submitbuttonbar(); # only submit button
 } 
 
 elsif ($action eq "specify") {
 # list all assemblies
-#    my $database = $cgi->parameter('database');
+    $page->frameborder(10,10,'white');
     my $number   = $organisms->associate('number',$database,'dbasename');
-    my $assembly = $organisms->new($dbh,'ASSEMBLY',$database,1,'created');
+    my $assembly = $organisms->spawn('ASSEMBLY',$database,0,1,'assemblyname');
     my $hashes   = $assembly->{hashrefs};
     $page->form("$arc_cgi_dir/amanager/process/$option");
-    $page->partition(2);
     $operation =~ s/project/project of $database/; # applies to users and contigs
-    $page->sectionheader("ARCTURUS assembly database: $operation",3,0);
-    $page->partition(1);
+    $page->space(1);
+    $page->add("ARCTURUS assembly database: $operation",0,0,$font);
+    $page->space(1);
  
 # get number of assemblies
 
     my $na = 0;
     $na = @$hashes if ($hashes && @$hashes > 0);
 
-    my $identify = 1;
     if ($option ne 'assembly' && $na> 0) {
 # build form for new project selection
         undef my $form;
         my $aname = $cgi->parameter('assemblyname');
         if (!$aname && $na > 1) {
-    # an assembly has to be chosen first
+# an assembly has to be chosen first
             $page->sectionheader("There are $na assemblies defined for database $database",3,0);
-            $page->add($assembly->htmlTable('010011111111000'),0,0);
+            $options{mask} = '010101111111000';
+            $page->add($assembly->htmlTable(\%options),0,0);
             $page->form("$arc_cgi_dir/amanager/specify/$option"); # resubmit to this option
             my $select = $assembly->htmlOptions('assemblyname','assemblyname',100,0,0);
             if ($option eq 'users') {
-               $page->sectionheader("Select an assembly and users group and submit",4,0);
+                $page->sectionheader("Select an assembly and users group and submit",4,0);
                 $form = &intermediateform(1);
-                my $users = $organisms->new($dbh,'USERS','arcturus',1);
+                my $users = $organisms->spawn('USERS','arcturus',0,1);
                 my $query = "userid != 'arcturus' and userid != 'oper'";
                 my $glist = $users->htmlMaskedOptions ('division','distinct where',$query,100,5,'any');
                 $form =~ s/GSELECTION/$glist/; # replace place holder by choicelist
@@ -125,40 +115,39 @@ elsif ($action eq "specify") {
             }
             $form =~ s/ASELECTION/$select/; # replace place holder by choicelist
             $page->add($form,0,1);
-            $identify = 0;
         }
+
         elsif ($option eq 'project') {
-    # get assembly number from assembly name or vv.
+# get assembly number from assembly name or vice-versa.
             my $anmbr = 1;
             $anmbr = $assembly->associate('assembly',$aname,'assemblyname') if ($na  > 1);
             $aname = $assembly->associate('assemblyname',$anmbr,'assembly') if ($na == 1);
             $page->hidden('assemblyname',$aname) if ($na == 1);
-        # get the attributes of this assembly
             my $attributes = $assembly->unpackAttributes($aname,'assemblyname');
-        # get number of projects
-            my $projects = $organisms->new($dbh,'PROJECTS',$database,1);
             $page->sectionheader("There are $na assemblies defined for database $database",4,0);
+# get projects for this assembly
+            my $projects = $organisms->spawn('PROJECTS',$database,0,1);
             my $hashes = $projects->associate('hashrefs',$anmbr,'assembly');
             my $np = "no"; $np = @$hashes if (@$hashes > 0);
             $page->sectionheader("There are $np projects defined for assembly $aname",4,1);
             $np = 0 if ($np eq 'no');
-        # test projects against data in assembly table
+# test projects against data in assembly table
             my $nps = $assembly->associate('projects',$aname,'assemblyname');
             $page->errorbox("Inconsistent project count for assemby $aname: actual ".
                 "$np ($nps)<br>Please contact $db_manager",0,'orange') if ($nps != $np);
-            $page->add($projects->htmlTable('0100111100001','assembly',$anmbr)) if ($np);
+            $options{mask} = '0100111100001';
+            $page->add($projects->htmlTable(\%options,'assembly',$anmbr)) if ($np);
 
             $page->sectionheader("Please specify the parameters for a new Project",4,0);
             $form = &projectform();
-        # get the default project name 
             my $defaultname = "<no default name available>"; my $defaulttype = 0;
-        # if no projects defined, propose BIN as first entry (be wise and accept it!)
+# if no projects defined, propose BIN as first entry
             if (!$np) {
                 $aname = $attributes->{dflta} if ($attributes && $attributes->{dflta});
                 $defaultname = $aname.'BIN';
                 $defaulttype = 'Bin';
             }
-        # if a project exists derive next name from template or last entered project name
+# if a project exists derive next name from template or last entered project name
             elsif ($np && $hashes && (my $lastname = $hashes->[$#$hashes]->{projectname})) {
                 if ($lastname =~ /(\w+?)(\d+|BIN)$/i) {
                     $defaultname = $1;
@@ -168,47 +157,45 @@ elsif ($action eq "specify") {
                     $defaultname .= $defaultnumber;
                 }
             }
-        # from assembly template name, if it exists
+# else get it from assembly template name, if it exists
             elsif ($attributes && $attributes->{dfltp}) {    
                 $defaultname = $aname.$attributes->{dfltp};
                 $defaultname =~ s/<n>/$np/ if (++$np);
             }
-        # fallback on the next P number in the series
+# or fallback on the next P number in the series
             else {
                 $defaultname = $aname.'P'.(++$np);
             }
-        # add to form
-            $form =~ s/PNAME/$defaultname/; # substitute placeholder
-        # get the default project type
+            $form =~ s/PNAME/$defaultname/; # substitute placeholder in form
             my $dtypes = $projects->htmlOptions('projecttype','projecttype',165,0,$defaulttype);
             $form =~ s/PTYPE/$dtypes/; # substitute placeholder
             $page->add($form,0,1);
-        # if username and password already present in CGI input, override password request
-            $identify = 0 if ($cgi->parameter('identify') && $cgi->parameter('password'));
+#            $reject = '';
         }
 
         elsif ($option eq 'users') {
-        # check on password and identifier
-            $identify = 0 if ($cgi->parameter('identify') && $cgi->parameter('password'));
-        # get assembly number
+$page->add($cgi->PrintVariables());
+
             my $anmbr = $assembly->associate('assembly',$aname,'assemblyname');
-            my $projects = $organisms->new($dbh,'PROJECTS',$database,1);
-	    my $users = $organisms->new($dbh,'USERS','arcturus',1);
-        # find the project name; take the one in CGI input, or get choice list
+            my $projects = $organisms->spawn('PROJECTS',$database,0,1);
+	    my $users = $organisms->spawn('USERS','arcturus',0,1);
+# find the project name; take the one in CGI input, or get a choice list
             my $projectlist = $cgi->parameter('projectname');
 	    if (!$projectlist) {
-        # get number of projects
                  $projectlist = $projects->htmlMaskedOptions('projectname','assembly',$anmbr,0,0,0);
 	    }
-        # get choicelist of users
-            my $clause = "function like 'Fin%' or function like 'Tra%'"; # Finishers & Trainees only
+# get choicelist of users; Finishers & Trainees only or choose from all 
+            my $clause = "(function like 'Fin%' or function like 'Tra%')"; 
             $clause = "userid != 'oper' and userid != 'arcturus'" if $cgi->parameter('allusers');
+            $clause .= " and ustatus != 'retired'";
             my $team = $cgi->parameter('division'); undef $team if ($team && $team eq 'any');
             $clause = "($clause) and division = '$team'" if $team;
 	    my $userlist = $users->htmlMaskedOptions('userid','where',$clause,70,0,0);
-        # get the available users and projects in table form
-            my $ptable = $projects->htmlMaskedTable('0110000100001','assembly',$anmbr);
-            my $utable = $users->htmlMaskedTable('0110011000','where',$clause);
+# get the available users and projects in table form
+            $options{mask} = '0110000100001';
+            my $ptable = $projects->htmlMaskedTable(\%options,'assembly',$anmbr);
+            $options{mask} = '0110011000';
+            my $utable = $users->htmlMaskedTable(\%options,'where',$clause);
             $page->sectionheader("Please specify a Project and a User",4,0);
             $form = &usersform(1);
             $form =~ s/PROJECTS/$projectlist/;
@@ -217,16 +204,25 @@ elsif ($action eq "specify") {
             $form =~ s/UTABLE/$utable/;
             $page->add($form,0,1);
             $cgi->delete('division');
-            $page->ingestCGI($cgi);
+            $page->ingestCGI();
+            if ($cgi->parameter('allusers')) {
+                $reject = '';
+            }
+            else {
+                $reject = "$arc_cgi_dir/amanager/specify/$option".$cgi->postToGet();
+                $reject .= '&allusers=on';
+#                $rejecttext = 'SELECT FROM ALL USERS';
+            }
         }
 
         elsif ($option eq 'contigs') {
         # get assembly number
             my $anmbr = $assembly->associate('assembly',$aname,'assemblyname');        
-            my $projects = $organisms->new($dbh,'PROJECTS',$database,1);
-#            my $con2pros = $organisms->new($dbh,'CONTIGS2SCAFFOLD',$database,0);
+            my $projects = $organisms->spawn('PROJECTS',$database,0,1);
+# my $con2pros = $organisms->new($dbh,'CONTIGS2SCAFFOLD',$database,0);
         # get the available projects in table form
-            my $ptable = $projects->htmlMaskedTable('0110000100001','assembly',$anmbr);
+            $options{mask} = '0110000100001';
+            my $ptable = $projects->htmlMaskedTable(\%options,'assembly',$anmbr);
         # get choicelist of projects
             my $projectlist = $projects->htmlMaskedOptions('projectname','assembly',$anmbr,0,0,0);
             my @choices = ('NAME','TAG','READ','LIST');
@@ -234,15 +230,15 @@ elsif ($action eq "specify") {
 
             $page->sectionheader("Please specify a Project and a Contig selection method ",4,0);
             my $form = &usersform(2);
-            my $list = &contigslist();
+            my $list = &contigslist('FAFAD2','CCCCCC');
             $form =~ s/PROJECTS/$projectlist/;
             $form =~ s/METHOD/$choicelist/;
             $form =~ s/PTABLE/$ptable/;
             $form =~ s/UTABLE/$list/;
 
-            $page->ingestCGI($cgi);
+            $page->ingestCGI();
             $page->add($form,0,1);
-# redirect to the cmanager script
+# ! redirect to the cmanager script
             $page->form("$arc_cgi_dir/cmanager/specify");
         }
     }
@@ -250,46 +246,46 @@ elsif ($action eq "specify") {
     elsif ($option eq 'assembly') {
 # list current status
         my $txt = 'no'; $txt = $na if $na;
-        $page->sectionheader("There are $txt assemblies defined for database $database",3,$na);
-    # test the number found against the counter in ORGANISMS
+        my $font = "size=4 face='sans-serif'";
+        $page->add("There are $txt assemblies defined for database $database",0,0,$font);
+        $page->space(1);
+# test the number found against the counter in ORGANISMS
         my $nass = $organisms->associate('assemblies',$database,'dbasename');
         $page->errorbox("Inconsistent assembly count for $database: actual ".
-          "$na ($nass)<br>Please contact $db_manager",0,'orange') if ($nass != $na);
-        $page->add($assembly->htmlTable('010011111111000'),0,0) if $na;
+                        "$na ($nass)<br>Please contact $db_manager",0,'orange') if ($nass != $na);
+        $options{mask} = '010101111111000';
+        $page->add($assembly->htmlTable(\%options),0,0) if $na;
 
-    # build form for new assembly
+# build form for new assembly
 
         my $form = &assemblyform();
-    # substitute placeholders by allowed new values
         my $attributes = $organisms->unpackAttributes($database,'dbasename');
-    # get the default assembly name
         my $defaultname = "<no default name specified>";
-    # replace by the default name based on ORGANISMS attributes if it exists
+# replace by the default name based on ORGANISMS attributes if it exists
         if ($attributes && (my $default = $attributes->{dflta})) {
             $defaultname = $default.$na;
         }
-    # if no assembly defined, use blob
+# if no assembly defined, use blob
         if (!$na) {
             $defaultname = 'BLOB';
             $form =~ s/OVERRIDE/0/;
         }
-    # or try the last assembly name entered, if any 
+# or try the last assembly name entered, if any 
         elsif ($hashes && (my $lastname = $hashes->[$#$hashes]->{assemblyname})) {
-# print "last name: $lastname<br>";
             if ($lastname =~ /(\w+?)(\d+)/) {
                 my $defaultnumber = $2+1;
                 $defaultname = "$1$defaultnumber";
             }
-        # non standard format: use last name itself
+# non standard format: use last name itself
             elsif ($lastname !~ /blob/i) {
                 $defaultname = "<$lastname>";
             }          
         }
 	$form =~ s/ANAME/$defaultname/;
 
-    # build select list for chromosome
+# build select list for chromosome
 
-        $assembly->build(1,'chromosome'); # order by chromosome nr
+        $assembly->build(1,'chromosome');
         $hashes = $assembly->{hashrefs};
         my %cnumber; my $lastnmbr = 0;
         foreach my $hash (@$hashes) {
@@ -329,81 +325,61 @@ elsif ($action eq "specify") {
         $message .= "Please define an assembly first";
         $page->errorbox($message,0,0,'yellow');
         $page->form("$arc_cgi_dir/amanager/specify/assembly");
-        $identify = 0;
     }
 
-    my $error = $page->locate('Sorry'); # will be > 0 if empty table 
-    if ($identify && !$error) {
-        $page->sectionheader("Provide your ARCTURUS user ID and password and submit",4,0);
-        $page->identify('10',8,1);
-    }
-    $page->partition(5);
-    $page->center(1);
-    if (!$error) {
-        $page->ingestCGI($cgi);
-        $page->submitbuttonbar("$arc_cgi_dir/update/arcturus/getmenu",0,0,'MAIN MENU');
+    $GateKeeper->authorize(100); # if needed add the identification prompt to the page 
+
+    if (!$page->locate('Sorry')) {
+        $page->ingestCGI();
+        if ($option eq 'users' && $cgi->parameter('projectlist')) {
+            $page->submitbuttonbar($reject,0,0,'SELECT FROM ALL USERS');
+        }
+        elsif ($option eq 'users' || $option eq 'assembly') {
+            $reject =~ s/users|assembly/project/;
+            $page->submitbuttonbar($reject,0,0,'NEW PROJECT');
+        }
+        elsif ($option eq 'project') {
+            $reject =~ s/project/assembly/;
+            $page->submitbuttonbar($reject,0,0,'NEW ASSEMBLY');
+        }
+        else {
+            $page->submitbuttonbar();
+        }
     }
     else {
-        $page->linkbutton("RETURN TO MAIN","$arc_cgi_dir/update/arcturus/getmenu",0);
+        $page->linkbutton("RETURN TO MAIN",$reject,0);
     }
 }
 
 elsif ($action eq 'process') {
 
+    $page->frameborder(100,20,'white');
     $page->form("$arc_cgi_dir/amanager/process/$option");
-    $page->partition(2);
 
     undef my $error; my $projectname;
-    my $userid       = $cgi->parameter('identify');
-    my $passwd       = $cgi->parameter('password');
     my $database     = $cgi->parameter('database');
     $cgi->delete('assemblyname','test'); # remove possible bracketed entry
     my $assemblyname = $cgi->parameter('assemblyname');
     $cgi->delete('projectname','test');  # remove possible bracketed entry
     $projectname = $cgi->parameter('projectname') if ($option ne 'assembly');
-    my $confirm      = $cgi->parameter('confirm',0); 
-    $confirm = 0 if !$confirm;
+    my $confirm      = $cgi->parameter('confirm',0) || 0; 
     my $timestamp    = $organisms->timestamp(0);
-    my $pjuser; # project username
+
+    my $pjuser = ''; # project username
     $pjuser = $cgi->parameter('userid') if ($option eq 'users');
-
-# declare variables for database table handles
-
-    my $users;
-    my $projects; 
-    my $assembly;
 
 # start by checking input definition and authorisation
 
-     if ($cgi->{und_error}) {
-         $error = "Please define every input field $cgi->{und_error}";
-     }
-     elsif ($users = $organisms->new($dbh,'USERS','arcturus',1)) {
-
-# what should be the authorize string? here: targetuser= $pjuser
-#        $error = $users->authorize($userid,$passwd,'authorize string');
-
-        my $uhash = $users->associate('hashref',$userid,'userid');
-        if (!defined($uhash) || !$uhash) {
-            $error = "Unknown user: $userid";
-        }
-        elsif (!$cgi->VerifyEncrypt($passwd,$uhash->{password})) {
-            $error = "Invalid password provided for user $userid";
-#
-        }
-    # no input errors: open databases
-        else {
-            $projects = $organisms->new($dbh,'PROJECTS',$database,0);
-            $assembly = $organisms->new($dbh,'ASSEMBLY',$database,0);
-        }
+    if ($cgi->{und_error}) {
+        $error = "Please define every input field $cgi->{und_error}";
     }
-    else {
-        $error = "Can't access the USERS table in ARCTURUS database";
+    elsif (!$GateKeeper->authorize(100)) {
+        $error = $GateKeeper->{error};
     }
 
+    my $userid = $GateKeeper->currentUser;
 
     if ($error) {
-       $page->partition(1);
        $page->sectionheader("ARCTURUS assembly database: Assembly and Project definition",3,0);
        $page->errorbox($error);
        $page->add($cgi->PrintVariables());
@@ -411,6 +387,7 @@ elsif ($action eq 'process') {
 
     elsif ($option eq 'assembly') {
 
+        my $assembly = $organisms->spawn('ASSEMBLY',$database,0,0);
         $page->sectionheader("ARCTURUS assembly database: define a new $option",3,0);
         $page->partition(1);
         my $chromosome = $cgi->parameter('override');
@@ -419,7 +396,7 @@ elsif ($action eq 'process') {
         }
         $page->sectionheader("A new Assembly will be added for database $database:",4,0);
 
-        my $report = "<TABLE BORDER=0 CELLPADDING=2>";
+        my $report = "<TABLE BORDER=2 CELLPADDING=2 CELLSPACING=2>";
         my @items = ('assemblyname','chromosome','origin','directory','comment');
         my $organism = $organisms->associate('number',$database,'dbasename');
         undef my $error;
@@ -449,7 +426,6 @@ elsif ($action eq 'process') {
                         }
                     }
                     elsif ($item eq 'directory') {
-#                        $assembly->packAttribute($assemblyname,'assemblyname','attributes','dfltd',$value);
                         $assembly->packAttribute($assemblyname,'assemblyname','attributes','RDD',$value);
                     }
                     else {
@@ -465,24 +441,23 @@ elsif ($action eq 'process') {
 	    last if ($error);
         }
         $report .= "</TABLE>";
-        $page->add($report,0,1);
+        $page->add($report,0,0);
+        $page->space(1);
         
-        my $return = "$arc_cgi_dir/update/arcturus/getmenu";
         if ($error) {
-            $page->errorbox($error,$return,'GO BACK TO MAIN MENU');
+            $page->errorbox($error,$reject,'START AGAIN');
         }
         elsif (!$confirm) {
-            $page->ingestCGI($cgi);
-            $page->confirmbuttonbar($return,0);
+            $page->ingestCGI();
+            $page->confirmbuttonbar($reject,0,0,'START AGAIN');
         }
         else {
-    # update the number of assemblies in the ORGANISMS table
+# update the number of assemblies in the ORGANISMS table
             $organisms->increment('assemblies','dbasename',$database);
-    # add the default project name template to the attributes of this assembly
             my $name = $cgi->parameter('assemblyname');
             my $template = $name.'P<n>';
             $assembly->packAttribute($name,'assemblyname','attributes','dfltp',$template); 
-    # update the defaults in ORGANISMS for this database (assembly template name; Gap dir)
+# update the defaults in ORGANISMS for this database (i.p. assembly template name)
             if ($cgi->parameter('update')) {
                ($template = $name) =~ s/(\w+?)(\d+)$/$1/; # get default assembly name template
                 $organisms->packAttribute($database,'dbasename','attributes','dflta',$template);
@@ -492,19 +467,18 @@ elsif ($action eq 'process') {
                     $page->sectionheader("Attributes of database $database were updated",4,1);
                 }
             }
-#            $cgi->delete('confirm');
-            $page->ingestCGI($cgi);
+            $page->ingestCGI();
             $page->sectionheader("Submit to create the BIN project for this assembly or return to main",4,0);
             $page->form("$arc_cgi_dir/amanager/specify/project");
-            $page->submitbuttonbar($return,0,0,'MAIN MENU');
+            $page->submitbuttonbar($reject,0,0,'START AGAIN');
         }
     }
 
     elsif ($option eq 'project') {
 
-        $page->partition(1);
         $page->sectionheader("ARCTURUS assembly database: define a new $option",3,1);
-        my $projects = $organisms->new($dbh,'PROJECTS',$database,0);
+        my $assembly = $organisms->spawn('ASSEMBLY',$database,0,0);
+        my $projects = $organisms->spawn('PROJECTS',$database,0,0);
         $page->sectionheader("A new Project will be added for database $database, assembly $assemblyname",4,0);
         my $anmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
         my $projecttype = $cgi->parameter('projecttype');
@@ -514,7 +488,6 @@ elsif ($action eq 'process') {
         my $report = "<TABLE BORDER=0 CELLPADDING=2>";
         $report .= "<TR><TH ALIGN=LEFT>projectname:</TH><TD BGCOLOR='lightblue'>$projectname</TD>";
         $report .=     "<TH ALIGN=LEFT>projecttype:</TH><TD BGCOLOR='lightblue'>$projecttype</TD>";
-    # process/test project name
         if ($projects->associate('project',$projectname,'projectname')) {
             $error .= "Project $projectname already exists";
         }
@@ -535,7 +508,7 @@ elsif ($action eq 'process') {
             $report .= "<TD bgcolor='yellow'> ...... DONE </TD>"  if (!$error);
             $report .= "<TD bgcolor='orange'> ...... FAILED!</TD>" if ($error);
         }
-    # add comment
+
         if (!$error && (my $comment = $cgi->parameter('comment'))) {
             $report .= "</TR><TR><TH ALIGN=LEFT>comment</TH><TD>$comment</TD>";
             if ($confirm eq 'CONFIRM') {
@@ -548,65 +521,63 @@ elsif ($action eq 'process') {
         $report .= "</TR></TABLE>";
         $page->add($report,0,1);
 
-        my $return = "$arc_cgi_dir/update/arcturus/getmenu";
         if ($error) {
-            $page->errorbox($error,$return,'GO BACK TO MAIN MENU');
+            $page->errorbox($error,$reject,'START AGAIN');
         }
         elsif (!$confirm) {
-            $page->ingestCGI($cgi);
-            $page->confirmbuttonbar($return,0);
+            $page->ingestCGI();
+            $page->confirmbuttonbar($reject,0,0,'START AGAIN');
         }
         else {
             undef $report;
-    # update the number of projects in the assembly table
+# update the number of projects in the assembly table
             $assembly->increment('projects','assemblyname',$assemblyname);
-            $page->hidden('projectname' ,$projectname);
-            $page->hidden('assemblyname',$assemblyname);
-            $page->hidden('database'    ,$database);
             if ($cgi->parameter('update')) {
-    # add the default project name template to the attributes of this assembly
+# add the default project name template to the attributes of this assembly
                 $projectname =~ s/(\w+?)(\d+)$/$1<n>/; # get template name from current
                 $assembly->packAttribute($assemblyname,'assemblyname','attributes','dfltp',$projectname);
                 $page->sectionheader("Attributes of assembly $assemblyname were updated",4,1);
             }
-            $cgi->delete('confirm');
-            $page->ingestCGI($cgi);
+            $page->ingestCGI();
             $page->sectionheader("Submit to allocate finishers to this project or return to main",4,0);
             $page->form("$arc_cgi_dir/amanager/specify/users");
-            $page->submitbuttonbar($return,0,0,'MAIN MENU');
+            $page->submitbuttonbar($reject,0,0,'START AGAIN');
         }
     }
 
     elsif ($option eq 'users') {
 
-        my $datamodel = $organisms->new($dbh,'DATAMODEL','arcturus',1);
-        my $uutopp = $organisms->new($dbh,'USERS2PROJECTS',$database,1);
-    # get a list of projects  to which user 'pjuser' is already allocated
+        my $datamodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
+        my $users = $organisms->spawn('USERS','arcturus',0,1,'userid');
+        my $uutopp = $organisms->spawn('USERS2PROJECTS',$database,0,1);
+# get a list of projects  to which user 'pjuser' is already allocated
+        my $projects = $organisms->spawn('PROJECTS',$database,0,1,'projectname');
         $projects->autoVivify($database,1,1); # prepare links to USER2PROJECT
-        my $query = "USERS2PROJECTS.userid = '$pjuser'";
-        my $userplist = $projects->htmlMaskedTable('0110111000000','where',$query);
+        my $query = "USERS2PROJECTS.userid = '$pjuser' order by projectname";
+        $options{mask} = '0110111000000';
+        my $userplist = $projects->htmlMaskedTable(\%options,'where',$query);
         $userplist =~ s/table PROJECTS/Projects assigned to user $pjuser/i;
         $userplist =~ s/So.+ble/<b>$pjuser<\/b> is not assigned to any project/;
-    # get a list of the users working on the same assembly 'assemblyname'
+# get a list of the users working on the same assembly 'assemblyname'
         $query = "assemblyname='$assemblyname'";
         $users->autoVivify($database,4,1); # prepare the links to subtables
-        my $useralist = $users->htmlMaskedTable('01110110000','distinct where',$query);
+        $options{mask} = '01110110000';
+        my $useralist = $users->htmlMaskedTable(\%options,'distinct where',$query);
         $useralist =~ s/table USERS/Users of projects for assembly $assemblyname/i;
         $useralist =~ s/No.+ble/No users found/;
         my $form = &usersform(0);
         $form =~ s/PTABLE/$userplist/;
         $form =~ s/UTABLE/$useralist/;
-        $form =~ s/orange/lightblue/g;
-   
+        $form =~ s/orange/lightblue/g;   
         $page->sectionheader("ARCTURUS assembly database: allocate a user to a project of $assemblyname",3,0);
         $page->partition(1);
         $page->add($form);
 
-    # test if user is not already allocated to the project
+# test if user is not already allocated to the project
 
         my $project  = $projects->associate('project',$projectname,'projectname') || 0;
         my $inquiry  = "select * from <self> where project=$project AND userid='$pjuser'";
-        my $presence = $uutopp->query($inquiry,0,0); # print "result $presence<br>";
+        my $presence = $uutopp->query($inquiry,0,0);
 
         if ($presence > 0) {
             $error .= "User $pjuser is already assigned to project $projectname";
@@ -629,23 +600,19 @@ elsif ($action eq 'process') {
 
         my $return = "$arc_cgi_dir/amanager/specify/users\?database=$database";
         if ($error) {
-            $page->errorbox($error,$return,'TRY AGAIN');
-#            $page->linkbutton("TRY AGAIN",$return,0);
+            $page->errorbox($error,$reject,'START AGAIN');
         }
         elsif ($confirm && $confirm eq 'CONFIRM') {
-            $cgi->delete('projectname');
-            $cgi->delete('confirm');
-            $cgi->delete('userid');
-            $page->ingestCGI($cgi);
+            $page->ingestCGI(0,('projectname','userid'));
             $page->form("$arc_cgi_dir/amanager/specify/users");
-            $return = "$arc_cgi_dir/update/arcturus/getmenu";
             $page->sectionheader("Submit to assign another user or return",4,0);
-            $page->submitbuttonbar($return,0,0,'BACK TO MENU');
-#        $page->add($cgi->PrintVariables());
+            $page->submitbuttonbar($reject,0,0,'START AGAIN');
+#   $page->add($cgi->PrintVariables());
+            $userupdate = 1;
         }
         else {
-            $page->ingestCGI($cgi);
-            $page->confirmbuttonbar($return,0);
+            $page->ingestCGI();
+            $page->confirmbuttonbar($reject,0);
         }
     }
 
@@ -656,7 +623,14 @@ elsif ($action eq 'process') {
 
 $page->form(0);
 $page->flush();
-$dbh->disconnect;
+$GateKeeper->disconnect;
+
+if ($userupdate) {
+    my $root = $GateKeeper->currentScriptRoot;
+    my $temp = $config->get('ARC_TMP_DIR');
+    system ("$root/harmonize users copy >> $temp/harmonize.log");
+}
+
 exit 0;
 
 
@@ -745,11 +719,13 @@ sub usersform {
 }
 
 sub contigslist {
+    my $headcolor = shift || 'yellow';
+    my $namecolor = shift || 'lightblue';
     
-    my $col = 'bgcolor=lightblue';
+    my $col = "bgcolor='$namecolor'";
     my $choices = "<TABLE BORDER=1 CELLPADDING=2>";
 #    $choices .= "<CAPTION ALIGN=CENTER><H4>Options for contig selection</H4></CAPTION>";
-    $choices .=  "<TR><TH COLSPAN=2 bgcolor='yellow'>Options for contig selection</TH></TR>";
+    $choices .=  "<TR><TH COLSPAN=2 bgcolor='$headcolor'>Options for contig selection</TH></TR>";
     $choices .=  "<TR><TH $col>NAME</TH><TD> ARCTURUS or PHRAP contig name </TD></TR>";
     $choices .=  "<TR><TH $col>READ</TH><TD> The name of a read in the contig </TD></TR>";
     $choices .=  "<TR><TH $col>TAG </TH><TD> A tag identified in the contig </TD></TR>";
