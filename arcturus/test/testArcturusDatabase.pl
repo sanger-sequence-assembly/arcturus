@@ -36,10 +36,17 @@ if (defined($dbh)) {
 
 $read = $adb->getReadByID($readid);
 
-$fh = new FileHandle("/tmp/testadb.$$", "w");
+if (defined($read)) {
+    #$read->dump();
 
-$read->writeReadToCaf($fh);
+    print "---- CAF ----\n";
+    $fh = new FileHandle(">&STDOUT");
 
-$fh->close();
+    $read->writeToCaf($fh);
+
+    $fh->close();
+} else {
+    print STDERR "Read $readid does not exist.\n";
+}
 
 exit(0);
