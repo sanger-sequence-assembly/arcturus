@@ -41,6 +41,33 @@ sub init {
     $this->{inited} = 1;
 }
 
+sub getConnection {
+    my $this = shift;
+
+    if (!defined($this->{Connection})) {
+	my $ds = $this->{DataSource};
+	$this->{Connection} = $ds->getConnection() if defined($ds);
+    }
+
+    return $this->{Connection};
+}
+
+sub getURL {
+    my $this = shift;
+
+    my $ds = $this->{DataSource};
+
+    if (defined($ds)) {
+	return $ds->getURL();
+    } else {
+	return undef;
+    }
+}
+
+# ----------------------------------------------------------------------------
+# methods dealing with READs
+#-----------------------------------------------------------------------------
+
 sub populateDictionaries {
     my $this = shift;
 
@@ -57,7 +84,7 @@ sub populateDictionaries {
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
     $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
-
+# special case for CHEMISTRY/CHEMTYPES
     $this->{Dictionary}->{chemistry}    = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
 							    'chemistry', 'type', 'USING(chemtype)');
 }
@@ -103,27 +130,21 @@ sub createDictionary {
     return $dict;
 }
 
-sub getURL {
-    my $this = shift;
+sub dictionaryLookup {
+    my ($dict, $pkey, $junk) = @_;
 
-    my $ds = $this->{DataSource};
-
-    if (defined($ds)) {
-	return $ds->getURL();
+    if (defined($dict)) {
+	my $value = $dict->{$pkey};
+	return $value;
     } else {
 	return undef;
     }
 }
 
-sub getConnection {
+sub dictionaryInsert {
+# add a new line to the dictionary table
     my $this = shift;
 
-    if (!defined($this->{Connection})) {
-	my $ds = $this->{DataSource};
-	$this->{Connection} = $ds->getConnection() if defined($ds);
-    }
-
-    return $this->{Connection};
 }
 
 sub getReadByID {
@@ -219,17 +240,6 @@ sub processReadData {
     }
 }
 
-sub dictionaryLookup {
-    my ($dict, $pkey, $junk) = @_;
-
-    if (defined($dict)) {
-	my $value = $dict->{$pkey};
-	return $value;
-    } else {
-	return undef;
-    }
-}
-
 sub getSequenceAndBaseQualityForRead {
     my $this = shift;
     my ($key, $value, $junk) = @_;
@@ -311,7 +321,47 @@ sub putSequenceAndBaseQualityForReads {
     $sth->finish();
 }
 
- 
+sub putRead {
+# insert read into the database
+    my $this = shift;
+    my $Read = shift || return;
+
+# a) test consistence and completeness
+# b) encode dictionary items; specical case: TEMPLATE
+# c) insert (if not exists) 1) readname, then for read_id=last_insert_id: 2) meta data READS
+#                                             3) sequence into SEQUENCE 4) comments
+}
+
+sub updateRead {
+# update items for an existing read
+    my $this = shift;
+    my $Read = shift || return;
+}
+
+sub pingRead {
+# test if a readname is in the READS database table; return read_id, if exists
+    my $this = shift;
+    my $name = shift;
+}
+
+#----------------------------------------------------------------------------------------- 
+# methods dealing with CONTIGs
+#----------------------------------------------------------------------------------------- 
+
+sub getContigByID {
+}
+
+sub getContigByName {
+}
+
+#----------------------------------------------------------------------------------------- 
+# methods dealing with PROJECTs
+#----------------------------------------------------------------------------------------- 
+
+#----------------------------------------------------------------------------------------- 
+# methods dealing with ASSEMBLYs
+#----------------------------------------------------------------------------------------- 
+
 1;
 
 
