@@ -62,7 +62,7 @@ $dict_ligation   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, s
 $dict_clone      = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
 $dict_status     = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
 $dict_basecaller = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
-$dict_svector    = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
+$dict_svector    = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
 $dict_cvector    = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
 
 $readranges = &parseReadIDRanges($readids);
@@ -70,7 +70,7 @@ $readranges = &parseReadIDRanges($readids);
 $ndone = 0;
 $nfound = 0;
 
-$query = "SELECT readname,date,ligation,clone,strand,primer,chemistry,basecaller," .
+$query = "SELECT readname,asped,clone,strand,primer,chemistry,basecaller," .
     "pstatus,lqleft,lqright,svector,svleft,svright,cvector,cvleft,cvright," .
     "slength,sequence,quality FROM READS LEFT JOIN SEQUENCE USING (read_id) WHERE READS.read_id=? AND pstatus=0";
 

@@ -278,7 +278,7 @@ CREATE TABLE READS (
   lqright smallint(5) unsigned NOT NULL default '0',
   svcsite smallint(6) default NULL,
   svpsite smallint(6) default NULL,
-  svector tinyint(3) unsigned default '0',
+  svector_id tinyint(3) unsigned default '0',
   svleft smallint(5) unsigned default NULL,
   svright smallint(5) unsigned default NULL,
   cvector tinyint(3) unsigned default '0',
@@ -388,11 +388,11 @@ CREATE TABLE SEQUENCE (
 #
 
 CREATE TABLE SEQUENCEVECTORS (
-  svector tinyint(3) unsigned NOT NULL auto_increment,
+  svector_id tinyint(3) unsigned NOT NULL auto_increment,
   name varchar(20) NOT NULL default '',
   vector tinyint(3) unsigned default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (svector)
+  PRIMARY KEY  (svector_id)
 ) TYPE=MyISAM;
 
 #
