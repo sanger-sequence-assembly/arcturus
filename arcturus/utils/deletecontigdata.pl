@@ -46,7 +46,8 @@ die "Failed to create ArcturusDatabase" unless $adb;
 my $dbh = $adb->getConnection();
 
 my @tablesfordeletion = ('CONTIG', 'CONSENSUS', 'MAPPING',
-			 'SEGMENT', 'C2CMAPPING', 'C2CSEGMENT');
+			 'SEGMENT', 'C2CMAPPING', 'C2CSEGMENT',
+			 'CONTIGTAG');
 
 foreach my $table (@tablesfordeletion) {
     my $query = "DELETE FROM $table";
