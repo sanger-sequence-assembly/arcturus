@@ -83,6 +83,23 @@ sub applyShiftToX {
     $this->[1] += $shift;
 }
 
+sub applyLinearTransform {
+# apply a linear transformation to X domain (transform X = d * Y + o)
+    my $this = shift;
+    my $alpha = shift; # direction info
+    my $shift = shift;
+
+# multiply the local transformation (alpha considered be +1 or -1) 
+# new transform: X = D * Y + O, with  D = alpha*d and O = alpha*o+shift
+
+    if (defined($alpha) && $alpha < 0) {
+        $this->[0] = -$this->[0];
+        $this->[1] = -$this->[1];
+    }
+
+    $this->[1] += $shift if $shift;
+}
+
 #----------------------------------------------------------------------
 
 sub getXstart {
@@ -111,6 +128,12 @@ sub getYstart {
 sub getYfinis {
     my $this = shift;
     return $this->[3];
+}
+
+sub getSegment {
+    my $this = shift;
+    return $this->getXstart(), $this->getXfinis(),
+           $this->getYstart(), $this->getYfinis();
 }
 
 sub getAlignment {
@@ -188,6 +211,8 @@ sub getXforY {
 
     my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
 
+#print "ypos $ypos k $k  $this->[$k] $this->[5-$k] (@$this)\n" if ($this->[3]==$this->[2]);
+
     if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
         return undef; # out of range
     }
@@ -217,16 +242,6 @@ sub getYforX {
     else {
         return $ypos;
     }
-}
-
-sub toString {
-# write segment to string as is
-    my $this = shift;
-
-    my $xstart = $this->getXstart();
-    my $xfinis = $this->getXfinis();
-
-    return "Segment[$xstart $xfinis $this->[2] $this->[3]]";
 }
 
 #----------------------------------------------------------------------

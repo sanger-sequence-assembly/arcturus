@@ -2,6 +2,8 @@ package Read;
 
 use strict;
 
+use Mapping;
+
 #-------------------------------------------------------------------
 # Constructor (optional instantiation with readname as identifier)
 #-------------------------------------------------------------------
@@ -17,6 +19,8 @@ sub new {
     $this->{data} = {}; # metadata hash
  
     $this->setReadName($readname) if defined($readname);
+
+    $this->{padstatus} = 'Unpadded'; # default padstatus
 
     return $this;
 }
@@ -144,6 +148,27 @@ sub getAlignToTrace {
     return $this->{alignToTrace}; # undef or array of arrays
 }
 
+sub getAlignToTraceMapping {
+# export the trace-to-read mappings as a Mapping object
+    my $this = shift;
+
+    my $alignToTrace = $this->getAlignToTrace();
+
+    my $mapping = new Mapping();
+
+    if ($alignToTrace && @$alignToTrace) {
+        foreach my $segment (@$alignToTrace) {
+            $mapping->putSegment(@$segment);
+	}
+    }
+    else {
+        my $length = $this->getSequenceLength();
+        $mapping->putSegment(1,$length,1,$length) if $length;
+    }
+
+    return $mapping;
+}
+
 sub isEdited {
     my $this = shift;
 # return true if the number of alignments > 1, else false
@@ -151,7 +176,50 @@ sub isEdited {
     return ($align && scalar(@$align) > 1) ? 1 : 0;
 }
 
-#-----------------
+#--------------------------------------------------
+# alternative align-to-trace representation with mapping segments
+#--------------------------------------------------
+
+sub newaddAlignToTrace {
+    my $this = shift;
+    my $value = shift; # array reference
+
+    return unless defined($value);
+
+    unless (defined($this->{alignToTrace})) {
+        $this->{alignToTrace} = new Mapping('align-to-trace');
+    }
+
+    my $mapping = $this->{alignToTrace};
+
+    $mapping->addSegment(@$value);
+
+    return $mapping;
+}
+
+sub newgetAlignToTrace {
+# export the trace-to-read mappings as a Mapping object
+    my $this = shift;
+
+    my $mapping = $this->{alignToTrace};
+
+    return $mapping if defined($mapping);
+    
+    my $length = $this->getSequenceLength();
+
+    return undef unless $length;
+
+    return $this->newaddAlignToTrace([(1,$length,1,$length)]);
+}
+
+sub newisEdited {
+    my $this = shift;
+# return true if the number of alignments > 1, else false
+    my $mapping = newgetAlignToTrace();
+    return ($mapping->hasSegments() > 1) ? 1 : 0;
+}
+
+#-------------------------------------------------------------------
 
 sub setAspedDate {
     my $this = shift;
@@ -497,11 +565,20 @@ sub addSequencingVector {
 
     my @vector = @$value; # be sure input is array ref
 
+#print "Read.pm: Add sequencing vector @vector \n" if $this->isEdited; # test on input from CAF
+
     push @{$this->{data}->{svector}}, [@vector];
 }
 
 sub getSequencingVector {
     my $this = shift;
+
+if (defined($this->{data}->{svector}->[0])) {
+unless ($this->{data}->{svector}->[0]->[0]) {
+print STDERR "Read.pm: Get sequencing vector : 'unknown' for read ".
+              $this->getReadName."\n"; 
+$this->{data}->{svector}->[0]->[0] = "unknown";
+}}
     return $this->{data}->{svector};
 }
 
@@ -567,28 +644,70 @@ sub compareSequence {
 
 # test respectively, sequence length, DNA and quality; exit on first mismatch
 
+my $DEBUG = 0;
     if (!defined($this->getSequenceLength())) {
 # this Read instance has no sequence information
         return undef;
     }
     elsif (!defined($read->getSequenceLength())) {
-# ibid
+# read Read instance has no sequence information
         return undef;
     }
     elsif ($this->getSequenceLength() != $read->getSequenceLength()) {
-        return 0; # different lengths
+        return 0 unless ($read->getReadName eq 'eimer-3329b09.p1k'
+||$read->getReadName eq 'eimer-577f05.q1k' ); # different lengths
+$DEBUG = 1;
     }
 
-# alternative: test if an edit has been made by comparison of align-to-SCF
+# test the DNA sequences; special provision for (lossy) depadded sequence 
 
-    elsif ($this->getSequence() ne $read->getSequence()) {
-        return 0; # different DNA strings
+    my $thisDNA = $this->getSequence();
+    my $readDNA = $read->getSequence();
+
+    if ($thisDNA ne $readDNA) {
+# different DNA strings; we do extra test for depadded sequences
+        return 0 unless ($thisDNA =~ /-/);
+# compare individual alignment segments (separated by '-')
+print "testing ".$read->getReadName." version ".$read->getVersion.
+" against ".$this->getReadName."\n" if $DEBUG;
+        my @pad;
+        my $pos = -1;
+        my $thisBQD = $this->getBaseQuality();
+        my $readBQD = $read->getBaseQuality();
+        while (($pos = index($thisDNA,'-',$pos)) > -1) {
+# alter 'this' quality data at position pos to match the 'read' data
+            $thisBQD->[$pos] = $readBQD->[$pos]; # unless $thisBQD->[$pos];
+            push @pad, $pos++;
+        }
+        push @pad,length($thisDNA);
+
+        my $start = 1;
+        for (my $i = 0; $i < scalar(@pad); $i++) {
+            my $length = $pad[$i] - $start;
+print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
+            if ($length > 0) {
+                my $subthis = substr $thisDNA,$start,$length;
+                my $subread = substr $readDNA,$start,$length;
+#print "$readDNA\n\n$thisDNA\n\npadds: @pad\n" unless ($subthis eq $subread);
+#print "$subthis\n$subread\n" unless ($subthis eq $subread);
+                return 0 unless ($subthis eq $subread); # different DNA strings
+            }
+#            next unless ($length > 0);
+            $start = $pad[$i] + 1;
+	}
     }
 
     my $thisBQD = $this->getBaseQuality();
     my $readBQD = $read->getBaseQuality();
 
     for (my $i=0 ; $i<@$thisBQD ; $i++) {
+
+	if ($thisBQD->[$i] != $readBQD->[$i]) {
+	print "$readDNA\n\n$thisDNA\n\n";
+        print "@$readBQD\n\n@$thisBQD\n\n";
+        print "Quality mismatch at i=$i\n";
+        }
+
         return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
 
@@ -615,7 +734,7 @@ sub writeToCaf {
     print $FILE "\n";
     print $FILE "Sequence : $this->{readname}\n";
     print $FILE "Is_read\n";
-    print $FILE "Unpadded\n";
+    print $FILE "$this->{padstatus}\n"; # Unpadded or Padded
     print $FILE "SCF_File $this->{readname}SCF\n";
     print $FILE "Template $data->{template}\n"          if defined $data->{template};
     print $FILE "Insert_size @{$data->{insertsize}}\n"  if defined $data->{insertsize};
@@ -646,11 +765,15 @@ sub writeToCaf {
         print $FILE "Align_to_SCF 1 $length  1 $length\n";  
     }
 
+# alternative using Mapping
+#   my $alignToTtace = $this->getAlignToTraceMapping();
+#   print $FILE $alignToTrace->writeToString("Align_to_SCF");
+
 # sequencing vector
 
     if (my $seqvec = $this->getSequencingVector()) {
         foreach my $vector (@$seqvec) {
-            my $name = $vector->[0];
+            my $name = $vector->[0] || "unknown";
             print $FILE "Seq_vec SVEC $vector->[1] $vector->[2] \"$name\"\n";
         }
     }

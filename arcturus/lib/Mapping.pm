@@ -18,8 +18,6 @@ sub new {
 
     $this->setMappingName($identifier) if $identifier;
 
-    $this->{cacheContigRange} = 1;
-
     return $this;
 }
  
@@ -337,7 +335,7 @@ sub analyseSegments {
 }
 
 #-------------------------------------------------------------------
-# apply linear translation to mapping
+# apply linear transformation to mapping; access only via Contig
 #-------------------------------------------------------------------
 
 sub applyShiftToContigPosition {
@@ -349,8 +347,32 @@ sub applyShiftToContigPosition {
 
     my $segments = $this->getSegments();
     foreach my $segment (@$segments) {
-        $segment->applyShiftToX($shift);
+        $segment->applyLinearTransform(1,$shift);
+#        $segment->applyShiftToX($shift);
     }
+
+    undef $this->{contigrange}; # force re-initialisation of cache
+
+    return 1;
+}
+
+sub applyMirrorTransform {
+# apply a contig mapping inversion (i.e. mirror X) to each segment
+    my $this = shift;
+    my $mirror = shift || 0; # the mirror position (= contig_length + 1)
+
+    return 0 unless $this->hasSegments();
+
+# apply the mirror transformation (y = -x + m) all segments
+
+    my $segments = $this->getSegments();
+    foreach my $segment (@$segments) {
+        $segment->applyLinearTransform(-1,$mirror);
+    }
+
+# invert alignment status
+
+    $this->setAlignment(-$this->getAlignment());
 
     undef $this->{contigrange}; # force re-initialisation of cache
 
@@ -379,7 +401,7 @@ sub addAlignmentFromDatabase {
         $length = -$length if ($direction < 0);
         my $rfinis = $rstart + $length;
 
-        $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
+        $this->putSegment($cstart, $cfinis, $rstart, $rfinis);
     }
     else {
         die "Undefind alignment direction in Mapping ".$this->getMappingName;
@@ -387,18 +409,151 @@ sub addAlignmentFromDatabase {
 }
 
 sub addAssembledFrom {
-# input 4 array (contigstart, contigfinis, (read)seqstart, seqfinis)
+# alias of putSegment: input (contigstart, contigfinis, (read)seqstart, seqfinis)
+    return &putSegment(@_);
+}    
+
+sub putSegment {
+# input 4 array (Xstart, Xfinis, Ystart, Yfinis)
     my $this = shift;
 
 # validity input is tested in Segment constructor
 
     my $segment = new Segment(@_); 
 
-    $this->{assembledFrom} = [] if !$this->{assembledFrom};
+    $this->{mySegments} = [] if !$this->{mySegments};
 
-    push @{$this->{assembledFrom}},$segment;
+    push @{$this->{mySegments}},$segment;
 
-    return scalar(@{$this->{assembledFrom}});
+    return scalar(@{$this->{mySegments}});
+}
+ 
+#-------------------------------------------------------------------
+# inverting and multiplying mappings (re: padded - unpadded)
+#-------------------------------------------------------------------
+
+sub inverse {
+# return inverse mapping
+    my $this = shift;
+
+    my $segments = $this->getSegments();
+
+    return undef unless ($segments && @$segments);
+
+    my $name = $this->getMappingName() || $this;
+    my $mapping = new Mapping("inverse of $name");
+
+    foreach my $segment (@$segments) {
+        my @segment = $segment->getSegment();
+        $mapping->putSegment($segment[2],$segment[3],
+                             $segment[0],$segment[1]);
+    }
+
+#    @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
+
+    return $mapping;   
+}
+
+sub multiply {
+# return the product of this (mapping) and another mapping
+    my $this = shift;
+    my $mapping = shift;
+    my $repair = shift || 0;
+
+    my $rsegments = $this->getSegments();
+    my $tsegments = $mapping->getSegments();
+
+    my $rname = $this->getMappingName() || 'R';
+    my $tname = $mapping->getMappingName() || 'T';
+
+    my $product = new Mapping("$rname x $tname");
+
+    my ($rs,$ts) = (0,0);
+
+    while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
+
+	my $rsegment = $rsegments->[$rs];
+	my $tsegment = $tsegments->[$ts];
+
+        my ($rxs,$rxf,$rys,$ryf) = $rsegment->getSegment();
+        my ($txs,$txf,$tys,$tyf) = $tsegment->getSegment();
+
+        if (my $mxs = $tsegment->getYforX($rys)) {
+# begin of x window of R maps to y inside the T window
+            if (my $mxf = $tsegment->getYforX($ryf)) {
+# also end of x window of R maps to y inside the T window
+                $product->putSegment($rxs,$rxf,$mxs,$mxf);
+                $rs++;
+	    }
+# no, end of x window of R does not map to y inside the T window
+# break this segment by finding the end via backtransform of $txf
+	    elsif (my $bxf = $rsegment->getXforY($txf)) {
+                $product->putSegment($rxs,$bxf,$mxs,$tyf);
+                $ts++;
+	    }
+	    else {
+		print STDERR "Mapping->multiply: should not occur (1) !!\n";
+	    }
+	}
+# begin of x window of R does not map to y inside the T window
+# check if the end falls inside the segment
+        elsif (my $mxf = $tsegment->getYforX($ryf)) {
+# okay, the end falls inside the window, get the begin via back tranform 
+            if (my $bxs = $rsegment->getXforY($txs)) {
+                $product->putSegment($bxs,$rxf,$tys,$mxf);
+                $rs++;
+            }
+            else {
+	        print STDERR "Mapping->multiply: should not occur (2) !!\n";
+		exit;
+	    }
+	}
+# both end points fall outside the T mapping; test if T falls inside R
+        elsif (my $bxs = $rsegment->getXforY($txs)) {
+# the t segment falls inside the r segment
+            if (my $bxf = $rsegment->getXforY($txf)) {
+                $product->putSegment($bxs,$bxf,$tys,$tyf);
+                $ts++;
+            }
+            else {
+	        print STDERR "Mapping->multiply: should not occur (3) !!\n";
+            }
+        }
+        else {
+            $ts++ if ($ryf >= $txf);
+            $rs++ if ($ryf <= $txf);
+	}
+    }
+
+    $product->collate($repair);
+
+    return $product;
+}
+
+sub collate {
+# determine if consecutive segments are butted together, if so merge them
+    my $this = shift;
+    my $repair = shift || 0;
+
+    my $segments = $this->getSegments() || return;
+     
+    @$segments = sort {$a->getYstart <=> $b->getYstart} @$segments;
+
+    my $i = 1;
+    while ($i < scalar(@$segments)) {
+        my $ls = $segments->[$i-1];
+        my $ts = $segments->[$i++];
+        my $xdifference = $ts->getXstart() - $ls->getXfinis();
+        my $ydifference = $ts->getYstart() - $ls->getYfinis();
+        next unless (abs($xdifference) == abs($ydifference));
+        next if ($xdifference > $repair+1);
+# replace the two segments ($i-2 and $i-1) by a single one
+        splice @$segments, $i-2, 2;
+        $this->putSegment($ls->getXstart(), $ts->getXfinis(),
+			  $ls->getYstart(), $ts->getYfinis());
+        @$segments = sort {$a->getYstart <=> $b->getYstart} @$segments;
+        $i = 1;
+    }
 }
 
 #-------------------------------------------------------------------
@@ -416,28 +571,53 @@ sub getSegments {
 # export the assembledFrom mappings as array of segments
     my $this = shift;
 # ensure an array ref, also if no segments are defined
-    $this->{assembledFrom} = [] if !$this->{assembledFrom};
+    $this->{mySegments} = [] if !$this->{mySegments};
 
-    return $this->{assembledFrom}; # array reference
+    return $this->{mySegments}; # array reference
 }
+
+#sub oldassembledFromToString {
+# write alignments as (block of) 'Assembled_from' records
+#    my $this = shift;
+
+#    my $assembledFrom = "Assembled_from ".$this->getMappingName()." ";
+
+#    my $string = '';
+#    foreach my $segment (@{$this->{mySegments}}) {
+#        $segment->normaliseOnY(); # ensure rstart <= rfinish
+#        my @segment = $segment->getSegment();
+#        $string .= $assembledFrom." @segment\n";
+#    }
+
+#    $string = $assembledFrom." is undefined\n" if (!$string && shift); 
+
+#    return $string;
+#}
 
 sub assembledFromToString {
 # write alignments as (block of) 'Assembled_from' records
     my $this = shift;
 
-    my $assembledFrom = "Assembled_from ".$this->getMappingName()." ";
+    my $text = "Assembled_from ".$this->getMappingName()." ";
+
+    return $this->writeToString($text);
+}
+
+sub writeToString {
+# write alignments as (block of) "$text" records
+    my $this = shift;
+    my $text = shift || '';
+
+    my $segments = $this->getSegments();
 
     my $string = '';
-    foreach my $segment (@{$this->{assembledFrom}}) {
+    foreach my $segment (@$segments) {
         $segment->normaliseOnY(); # ensure rstart <= rfinish
-        my $xstart = $segment->getXstart();
-        my $xfinis = $segment->getXfinis();
-        my $ystart = $segment->getYstart();
-        my $yfinis = $segment->getYfinis();
-        $string .= $assembledFrom." $xstart $xfinis $ystart $yfinis\n";
+        my @segment = $segment->getSegment();
+        $string .= $text." @segment\n";
     }
 
-    $string = $assembledFrom." is undefined\n" if (!$string && shift); 
+    $string = $text." is undefined\n" unless $string; 
 
     return $string;
 }
@@ -447,10 +627,10 @@ sub toString {
     my $flags = shift || 0;
 
     $this->{contigrange} = undef;
-    my $mappingname = $this->getMappingName();
+    my $mappingname = $this->getMappingName() || 'undefined';
     my $direction = $this->getAlignmentDirection();
 
-    my $string = "Mapping[name=$mappingname, sense=$direction";
+    my $string = "Mapping: name=$mappingname, sense=$direction";
 
     if (!$flags) {
 	my ($cstart, $cfinish) =  $this->getContigRange();
@@ -459,11 +639,7 @@ sub toString {
 
     $string .= "\n";
 
-    foreach my $segment (@{$this->{assembledFrom}}) {
-	$string .= "    " . $segment->toString() . "\n";
-    }
-
-    $string .= "]";
+    $string .= $this->writeToString();
 
     return $string;
 }

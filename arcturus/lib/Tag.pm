@@ -72,6 +72,19 @@ sub getName {
     return $this->{name} || '';
 }
 
+sub setSystematicID {
+# tag type, up to 32 char
+    my $this = shift;
+
+    $this->{systematicid} = shift;
+}
+
+sub getSystematicID {
+    my $this = shift;
+
+    return $this->{systematicid} || '';
+}
+
 sub composeName {
 # compose a descriptive name from tag data
     my $this = shift;
@@ -84,7 +97,7 @@ sub composeName {
     $name .= sprintf ("-%11d", $pf);
     $name =~ s/\s+//g; # remove any blanks
 
-    $this->setName($name);
+    $this->setSystematicID($name);
 }
 
 sub setPosition {
@@ -223,8 +236,8 @@ sub transpose {
 
     $newtag->setComment($this->getComment());
     $newtag->setDNA($this->getDNA());
-    $this->composeName() unless $this->getName();
-    $newtag->setName($this->getName());
+    $this->composeName() unless $this->getSystematicID();
+    $newtag->setSystematicID($this->getSystematicID());
     $newtag->setTagSequenceName($this->getTagSequenceName());
     $newtag->setPosition(@tpos);
     $newtag->setStrand($strand);
@@ -232,7 +245,7 @@ sub transpose {
 
 # finally compose the imported tag history; to be printed to caf only? 
 
-    $newtag->setDescent("imported ".$this->getName);
+    $newtag->setDescent("imported ".$this->getSystematicID);
     $newtag->setDescent(" truncated") if $truncated;
     $newtag->setDescent(" frame-shifted") if ($offset->[0] != $offset->[1]);
 

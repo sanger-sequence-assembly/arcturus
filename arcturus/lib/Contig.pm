@@ -4,7 +4,7 @@ use strict;
 
 use Mapping;
 
-#use PaddedRead;
+use PaddedRead;
 
 my $DEBUG = 0;
 
@@ -1297,7 +1297,6 @@ sub writeToCafPadded {
     my $FILE = shift; # obligatory file handle
 
     my $contigname = $this->getContigName();
-print "\n\n$this output padded contig $contigname\n" if $DEBUG;
 
 # get a read name hash and copy the (unpadded) reads into a PaddedRead
 
@@ -1307,18 +1306,15 @@ print "\n\n$this output padded contig $contigname\n" if $DEBUG;
         my $readname = $read->getReadName();
         my $paddedread = new PaddedRead($read);
         $readnamehash->{$readname} = $paddedread;
-print "$readname $paddedread \n" if $DEBUG;
     }
 
 # find the corresponding mappings and pad each read  
 
-print "\n\npadding mappings \n" if $DEBUG;
     my @assembledfrommap;
     my $mappings = $this->getMappings();
     foreach my $mapping (@$mappings) {
         my $readname = $mapping->getMappingName();
         my $paddedread = $readnamehash->{$readname};
-print "$readname $paddedread \n" if $DEBUG;
         unless ($paddedread) {
             print STDERR "Missing padded read $readname\n";
             next; 
