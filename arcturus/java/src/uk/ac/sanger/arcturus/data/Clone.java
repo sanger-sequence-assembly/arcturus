@@ -1,10 +1,10 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.database.*;
+
 /**
  * This class represents a clone.
  */
-
-import uk.ac.sanger.arcturus.database.*;
 
 public class Clone extends Core {
     private Clone clone;

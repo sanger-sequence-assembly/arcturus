@@ -1,15 +1,15 @@
 package uk.ac.sanger.arcturus.data;
 
+import uk.ac.sanger.arcturus.database.*;
+
 /**
  * This class represents a basic object which has a name and an ID
  * and which can be stored in or retrieved from an Arcturus database.
  */
 
-import uk.ac.sanger.arcturus.database.*;
-
 public class Core {
     /**
-     * A constant representing an attribute wose value is unknown.
+     * A constant representing an attribute whose value is unknown.
      */
 
     public final static int UNKNOWN = 0;
