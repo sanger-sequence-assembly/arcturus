@@ -1177,38 +1177,29 @@ $self->logger("chemistry $chemistry found in ARCTURUS database table\n");
 
     }
     elsif ($chemistry) {
-$self->logger("chemistry \"$chemistry\" NOT found in ARCTURUS database\n");
         $status->{diagnosis} .= "chemistry \"$chemistry\" NOT found in ARCTURUS database\n";
-    # the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
-#        my $command = "grep '\"$chemistry\"' $GELMINDDIR/*/phredpar.dat";
-#        my $field = `$command`; # identify in phred file
-$self->logger("command: $command\n");
+# the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
         my $field = `grep '\"$chemistry\"' $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
         $field    = `grep '\"$chemistry\"' $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
         chomp $field;
 $self->logger("Gelminder chemistry data fields: \"$field\"\n");
         $field =~ s/[\'\"]?\s*$chemistry\s*[[\'\"]?/x /g; # remove chemistry and any quotations
-#        $field =~ s/\b[\'\"]|[[\'\"]\b/ /g; # remove any quotations
-#        $field =~ s/^\s*$chemistry/x/; # to ensure three words on the line
         $field =~ s/\-/./; # replace hyphens by any symbol match
         my @fields = split /\s+/,$field;
         if ($readItems->{CHT} ne 'u') {
-# $readItems->{CHT} = 'f' if ($readItems->{CHT} eq 'e'); # force read with invalid data through (1)  
-# $readItems->{CHT} = 'e' if ($readItems->{CHT} eq 't'); # force read through (2)
-    # get description from chemistry type
+# get description from chemistry type
             my $description = $CHEMTYPES->associate('description',$readItems->{CHT},'chemtype');
 $self->logger("test Gelminder description against type $readItems->{CHT}\n");
             if (@fields) {
 $self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
         # require both to match
                 if (!($description =~ /$fields[1]/i) || !($description =~ /$fields[2]/i)) {
-#$status->{diagnosis} = "fields: '$fields[0]' '$fields[1]' '$fields[2]'\n";
                     $status->{diagnosis} .= "! Mismatch between Gelminder: '$field' and description: ";
                     $status->{diagnosis} .= "'$description' for chemtype $readItems->{CHT}\n";
         # try to recover by re-assembling and testing the description field
                     $field = $fields[1].' '.$fields[2];
                     $field =~ s/^\s*(primer|terminator)\s*(\S*.)$/$2 $1/;
-      $status->{diagnosis} .= "test field: $field<br>";
+                    $status->{diagnosis} .= "test field: $field<br>";
                     $field =~ s/Rhoda/%hoda/i; # to avoid case sensitivities 
                     $field =~ s/\s+|\./%/g;
                     my $chtype = $CHEMTYPES->associate('chemtype',$field,'description');
@@ -1326,7 +1317,7 @@ sub encode {
 
     undef my $qcount;
     if ($qcm && $qcm >= 1 && $qcm <= 3 ) {
-        $readItems->{quality } = $readItems->{AV};
+        $readItems->{quality} = $readItems->{AV};
        ($qcount,$readItems->{AV}) = $Compress->qualityEncoder($readItems->{AV},$qcm);
         $error .= $self->enter('QCM',$qcm);
     }
@@ -1465,6 +1456,7 @@ sub insert {
 sub readback {
 # read last inserted record back and test against readItem
     my $self = shift;
+$readbackOnServer=1;
 
     undef my $error;
 
@@ -1512,17 +1504,19 @@ sub readback {
     my $qcm = $hash->{qcompress};
     my $quality = $hash->{quality};
     if ($qcm && $qcm >= 1 && $qcm <= 3) {
-       ($count, $string) = $Compress->qualityDecoder($quality,$qcm,1);
+       ($count, $string) = $Compress->qualityDecoder($quality,$qcm);
+        $string =~ s/^\s*(.*?)\s*$/$1/; # remove leading and trailing blanks
     }
     elsif (!defined($qcm) || $qcm) {
         $qcm = 0 if !$qcm; $count = 0; # just to have them defined
         $error .= "Invalid sequence encoding method readback: $qcm\n";
     }
-    if ($string !~ /\S/ || ($string !~ /^\s*$readItems->{quality}\s*$/ && $readItems->{quality} !~ /^\s*$string\s*$/)) {
-#    if ($string !~ /\S/ || $readItems->{quality} !~ /^\s*$string\s*$/) {
+#    if ($string !~ /\S/ || ($string !~ /^\s*$readItems->{quality}\s*$/ && $readItems->{quality} !~ /^\s*$string\s*$/)) {
+    if ($string !~ /\S/ || $readItems->{quality} !~ /^\s*$string\s*$/) {
         my $slength = length($string);
         my $rlength = length($readItems->{quality});
         my $qlength = length($quality); # encode quality data
+	$readItems->{quality} =~ s/ /-/g; $string =~ s/ /-/g;
         $error .= "Error in readback of quality data (lengthes = $count/$qlength/$rlength/$slength):\n";
         $error .= "Original-: '$readItems->{quality}'\nRetrieved: '$string'\n\n"; 
     }
