@@ -46,6 +46,13 @@ public class ContigHashing {
 	organism = args[1];
 	int kmersize = Integer.parseInt(args[2]);
 
+	boolean storeKmers = Boolean.getBoolean("storeKmers");
+
+	Connection conn = null;
+	PreparedStatement pstmt = null;
+
+	HashMap kmers = new HashMap();
+
 	try {
 	    System.out.println("Creating an ArcturusInstance for " + instance);
 	    System.out.println();
@@ -57,8 +64,10 @@ public class ContigHashing {
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-	    Connection conn = adb.getConnection();
-	    PreparedStatement pstmt = conn.prepareStatement("INSERT INTO KMER(contig_id,offset,kmer) VALUES(?,?,?)");
+	    if (storeKmers) {
+		conn = adb.getConnection();
+		pstmt = conn.prepareStatement("INSERT INTO KMER(contig_id,offset,kmer) VALUES(?,?,?)");
+	    }
 
 	    int[] contigIdList = adb.getCurrentContigIDList();
 
@@ -89,12 +98,26 @@ public class ContigHashing {
 			kmer |= val;
 		    }
 
-		    pstmt.setInt(1, id);
-		    pstmt.setInt(2, offset);
-		    pstmt.setInt(3, kmer);
+		    Integer iKmer = new Integer(kmer);
 
-		    pstmt.executeUpdate();
+		    Kmer head = (Kmer)kmers.get(iKmer);
+
+		    Kmer newHead = new Kmer(offset, kmer, head);
+
+		    kmers.put(iKmer, newHead);
+
+		    if (storeKmers) {
+			pstmt.setInt(1, id);
+			pstmt.setInt(2, offset);
+			pstmt.setInt(3, kmer);
+
+			pstmt.executeUpdate();
+		    }
 		}
+	    }
+
+	    if (storeKmers) {
+		pstmt.close();
 	    }
 
 	    report();
@@ -121,4 +144,22 @@ public class ContigHashing {
 	System.out.println();
     }
 
+}
+
+class Kmer {
+    Kmer next;
+    int contig_id;
+    int offset;
+
+    public Kmer(int contig_id, int offset, Kmer next) {
+	this.contig_id = contig_id;
+	this.offset = offset;
+	this.next = next;
+    }
+
+    public int getContigID() { return contig_id; }
+
+    public int getOffset() { return offset; }
+
+    public Kmer getNext() { return next; }
 }
