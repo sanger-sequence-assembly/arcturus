@@ -1350,7 +1350,7 @@ print " recovered $hash .. ";
         $qcm = 0 if !$qcm; $count = 0; # just to have them defined
         $error .= "Invalid sequence encoding method readback: $qcm\n";
     }
-    if ($string !~ /\S/ || $string !~ /^\s*$readItem{quality}\s*$/) {
+    if ($string !~ /\S/ || ($string !~ /^\s*$readItem{quality}\s*$/ && $readItem{quality} !~ /^\s*$string\s*$/)) {
 #    if ($string !~ /\S/ || $readItem{quality} !~ /^\s*$string\s*$/) {
         my $slength = length($string);
         my $rlength = length($readItem{quality});
