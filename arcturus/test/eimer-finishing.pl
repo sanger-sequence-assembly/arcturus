@@ -4,6 +4,34 @@ use strict;
 
 use ArcturusDatabase;
 
+use Compress::Zlib;
+
+my $smithwaterman = "/nfs/team81/adh/sw/smithwaterman.alpha";
+
+pipe(PARENT_RDR, CHILD_WTR);
+pipe(CHILD_RDR, PARENT_WTR);
+
+my $pid;
+
+if ($pid = fork) {
+    close PARENT_RDR;
+    close PARENT_WTR;
+
+    select CHILD_WTR;
+
+    $| = 1;
+} else {
+    close CHILD_RDR;
+    close CHILD_WTR;
+
+    open(STDIN, "<&PARENT_RDR");
+    open(STDOUT, ">&PARENT_WTR");
+
+    exec($smithwaterman);
+
+    exit(0);
+}
+
 my $instance = 'dev';
 my $organism = 'EIMER';
 
@@ -45,6 +73,8 @@ foreach my $query (@queries) {
     $sth->finish();
 }
 
+my $limit = $ENV{'EIMERLIMIT'};
+
 my $query =  "select READS.read_id,readname from FREEREAD left join READS using(read_id)" .
     " where readname like '%.____%'";
 
@@ -71,6 +101,11 @@ $query = "select read_id from READS where readname = ?";
 my $sth_readid = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
+$query = "select seq_id from READS left join SEQ2READ using(read_id) where readname = ?";
+
+my $sth_seqid = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
 $query = "select SEQ2READ.seq_id, contig_id, mapping_id, cstart, cfinish, direction" .
     " from SEQ2READ left join MAPPING" .
     " using(seq_id) where read_id = ? and contig_id is not null";
@@ -95,9 +130,41 @@ $query = "select length from CONTIG where contig_id = ?";
 my $sth_contig = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
+$query = "select sequence from SEQUENCE where seq_id = ?";
+
+my $sth_sequence = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$query = "select qleft,qright from QUALITYCLIP where seq_id = ?";
+
+my $sth_qualityclip = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$query = "select svleft,svright from SEQVEC where seq_id = ?";
+
+my $sth_vectorclip = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
 my $nfound = 0;
 
 foreach my $finishing_readname (keys %finishing_reads) {
+    $sth_seqid->execute($finishing_readname);
+
+    my ($finishing_seqid) = $sth_seqid->fetchrow_array();
+
+    $sth_seqid->finish();
+
+    my ($finishing_sequence,
+	$finishing_clipleft,
+	$finishing_clipright) = &getSequenceAndClipping($finishing_seqid,
+							$sth_sequence,
+							$sth_qualityclip,
+							$sth_vectorclip);
+
+    my $seqf = substr($finishing_sequence,
+		      $finishing_clipleft - 1,
+		      $finishing_clipright - $finishing_clipleft + 1);
+
     my ($stem, $suffix) = split(/\./, $finishing_readname);
 
     my $shotgun_readname = $stem . '.' . substr($suffix, 0, 3);
@@ -120,8 +187,52 @@ foreach my $finishing_readname (keys %finishing_reads) {
 	    my ($rstart, $rfinish) = $sth->fetchrow_array();
 	    $sth->finish();
 
-	    print "$finishing_readname $contigid $ctglen $direction $cstart:$cfinish $rstart:$rfinish\n";
+	    print STDOUT "$finishing_readname $contigid $ctglen $direction $cstart:$cfinish $rstart:$rfinish";
 
+	    my ($shotgun_sequence,
+		$shotgun_clipleft,
+		$shotgun_clipright) = &getSequenceAndClipping($seqid,
+							      $sth_sequence,
+							      $sth_qualityclip,
+							      $sth_vectorclip);
+	    
+	    my $seqs = substr($shotgun_sequence,
+			      $shotgun_clipleft - 1,
+			      $shotgun_clipright - $shotgun_clipleft + 1);
+
+	    print STDOUT " ", length($shotgun_sequence), ",", $shotgun_clipleft, ",", $shotgun_clipright;
+	    #print STDOUT $seqs,"\n";
+	    print STDOUT " ", length($finishing_sequence), "," , $finishing_clipleft, ",", $finishing_clipright;
+	    #print STDOUT $seqf,"\n";
+
+	    my $sequence = $finishing_sequence;
+
+	    while (length($sequence) > 0) {
+		print substr($sequence, 0, 50),"\n";
+		$sequence = substr($sequence, 50);
+	    }
+
+	    print ".\n";
+
+	    $sequence = $shotgun_sequence;
+
+	    while (length($sequence) > 0) {
+		print substr($sequence, 0, 50),"\n";
+		$sequence = substr($sequence, 50);
+	    }
+
+	    print ".\n";
+
+	    while (my $line = <CHILD_RDR>) {
+		last if ($line =~ /^\./);
+		my @words = split(';', $line);
+		my ($score, $smap, $fmap, $segs) = split(',', $words[0]);
+		#print STDOUT " // ",$line if ($segs > 0 && $score > 50);
+		print STDOUT " // $score $smap $fmap $segs" if ($segs > 0 && $score > 50);
+	    }
+
+	    print STDOUT "\n";
+	    
 	    $nfound++;
 	}
 
@@ -129,9 +240,11 @@ foreach my $finishing_readname (keys %finishing_reads) {
     }
 
     $sth_readid->finish();
+
+    last if (defined($limit) && $nfound >= $limit);
 }
 
-print "\nFound $nfound finishing read partners out of $nreads\n";
+print STDERR "\nFound $nfound finishing read partners out of $nreads\n";
 
 $dbh->disconnect();
 
@@ -142,4 +255,39 @@ sub db_die {
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
     #exit(0);
+}
+
+sub getSequenceAndClipping {
+    my ($seqid, $sth_sequence, $sth_qualityclip, $sth_vectorclip) = @_;
+
+    $sth_sequence->execute($seqid);
+
+    my ($sequence) = $sth_sequence->fetchrow_array();
+
+    $sth_sequence->finish();
+
+    return undef unless defined($sequence);
+
+    $sequence = uncompress($sequence);
+
+    $sth_qualityclip->execute($seqid);
+
+    my ($clipleft, $clipright) = $sth_qualityclip->fetchrow_array();
+
+    $sth_qualityclip->finish();
+
+    ($clipleft, $clipright) = (1, length($sequence))
+	unless (defined($clipleft) && defined($clipright));
+
+    $sth_vectorclip->execute($seqid);
+
+    while (my ($svleft, $svright) = $sth_vectorclip->fetchrow_array()) {
+	$clipleft = $svright if ($svleft == 1 && $svright > $clipleft);
+
+	$clipright = $svleft if ($svleft > 1 && $svleft < $clipright);
+    }
+
+    $sth_vectorclip->finish();
+
+    return ($sequence, $clipleft, $clipright);
 }
