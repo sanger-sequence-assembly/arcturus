@@ -405,6 +405,23 @@ $self->report("NEW GATEKEEPER on current residence $residence server:$self->{ser
 
 #*******************************************************************************
 
+# The HTTP_HOST environment variable is not to be trusted. It is set to
+# whatever the HTTP client specified in the request, and can therefore
+# be spoofed. The SERVER_NAME and SERVER_PORT variables, on the other
+# hand, are set by Apache and are the true name and port for the virtual
+# server.
+
+sub getHostAndPort {
+    my $servername = $ENV{'SERVER_NAME'};
+    my $serverport = $ENV{'SERVER_PORT'};
+
+    if (defined($servername) && defined($serverport)) {
+	return "$servername:$serverport";
+    } else {
+	return 0;
+    }
+}
+
 sub opendb_MySQL {
 # create database handle on the current server and port
     my $lock = shift;
@@ -464,8 +481,8 @@ $self->report("test combinations: @$port_maps") if $debug;
         my @url;
         my $http_port = 0;
         undef my $mysqlport;
-        if (defined($ENV{HTTP_HOST}) && !$options{HostAndPort}) {
-            my $HTTP_HOST = $ENV{HTTP_HOST};
+        if (&getHostAndPort() && !$options{HostAndPort}) {
+            my $HTTP_HOST = &getHostAndPort();
             $HTTP_HOST =~ s/internal\.//; # for connections from outside Sanger
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
             foreach my $host (@$hosts) {
@@ -555,8 +572,8 @@ $self->report("DSN : $dsn  selserver $self->{server}") if $debug;
                               or &dropDead($self,"Failed to access $db_name: (dsn: $dsn)",1); 
 # okay, here the database has been properly opened on host/port $self->{server};
         }
-        elsif ($ENV{HTTP_HOST}) {
-            &dropDead($self,"Invalid database server specified: $ENV{HTTP_HOST}");
+        elsif (&getHostAndPort()) {
+            &dropDead($self,"Invalid database server specified: " . &getHostAndPort());
         }
         else {
             &dropDead($self,"Can't determine database server host name");
