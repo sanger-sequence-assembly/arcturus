@@ -121,7 +121,8 @@ sub populateDictionaries {
 
     $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
     $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'name');
-    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone_id', 'name');
+#    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone_id', 'name');
+    $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'LIGATIONS left join CLONES using (clone_id)', 'ligation_id', 'CLONES.name');
     $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status_id', 'name');
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
@@ -189,7 +190,7 @@ sub populateLoadingDictionaries {
 sub createDictionary {
     my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
 
-    #print STDERR "createDictionary($table, $pkey, $vals)\n";
+print STDERR "createDictionary($table, $pkey, $vals)\n";
 
     my $query = "SELECT $pkey,$vals FROM $table";
 
@@ -247,12 +248,13 @@ sub dictionaryInsert {
     }
 }
 
-sub processReadData {
+sub translateDictionaryReadItems {
 # dictionary lookup (recall mode: IDs to values)
     my $this = shift;
     my $hashref = shift;
 
     $hashref->{'insertsize'} = $hashref->{'ligation'};
+    $hashref->{'clone'}      = $hashref->{'ligation'};
 
     foreach my $key (keys %{$hashref}) {
 	my $dict = $this->{Dictionary}->{$key};
@@ -278,18 +280,12 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $query =  "select READS.*,
-                         TEMPLATE.name as template,
-                         TEMPLATE.ligation_id as ligation,
-                         LIGATION.clone_id as clone,
-                         SEQVEC.svector_id,SEQVEC.svleft,SEQVEC.svright,
-                         CLONEVEC.cvector_id,CLONEVEC.cvleft,CLONEVEC.cvright,
-                  from READS, TEMPLATE, LIGATION,SEQVEC,CLONEVEC
-                  where READS.template_id = TEMPLATE.template_id
-                    and TEMPLATE.ligation_id = LIGATION.ligation_id
-                    and SEQVEC.read_id = READS.read_id,
-                    and CLONEVEC.read_id = READS.read_id,
-                  and READS.read_id = ?";
+    my $query = "select READS.*,TEMPLATE.name as template,TEMPLATE.ligation_id 
+                 from READS left join TEMPLATE using (template_id) 
+                 where read_id = ?";
+
+# SEQVEC.svector_id,SEQVEC.svleft,SEQVEC.svright,
+# CLONEVEC.cvector_id,CLONEVEC.cvleft,CLONEVEC.cvright,
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -298,13 +294,16 @@ sub getReadByID {
     my $hashref = $sth->fetchrow_hashref();
 
     $sth->finish();
+print "read_id: $readid \n $query \n hashref $hashref\n";
 
     if (defined($hashref)) {
 
+#        $read_id = $hashref->{read_id};
+
 	my $read = new Read();
 
-#	$this->processReadData($hashref);
-#
+	$this->translateDictionaryReadItems($hashref);
+
 #	$read->importData($hashref);
 
 	$read->setArcturusDatabase($this);
@@ -314,6 +313,16 @@ sub getReadByID {
     else {
 	return undef;
     }
+}
+
+sub getVectorDataForRead {
+    my $this = shift;
+    my $read = shift; # Read instance
+
+    my $read_id = $read->getReadID;
+
+    my $query = "select svector_id,svleft,svright from SEQVEC where read_id = ?
+      UNION select cvector_id,cvleft,cvright from CLONEVEC where read_id = ?"; 
 }
 
 sub getReadByName {

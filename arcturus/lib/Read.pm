@@ -575,8 +575,6 @@ sub writeBaseQuality {
 
     if (defined($quality)) {
 	print $FILE "\n$marker$this->{readname}\n";
-	my $line;
-	my $next = 0;
 # output in lines of 24 numbers
 	my @bq = @{$quality};
 	while (my $n = scalar(@bq)) {
