@@ -15,6 +15,7 @@ use ContigBuilder;
 
 my $GateKeeper = GateKeeper->new('mysql',0);
 
+$GateKeeper->cgiHeader(1); # return string HTML if in CGI mode
 $GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
 # how is this script invoked?
@@ -82,7 +83,8 @@ if (!$cgi) {
     }
 # test command line parameters
 # input: ARGV[0]: database name
-#        ARGV[1]: caf file name
+#        ARGV[1]: assemblyname
+##        ARGV[2]: caf file name
 #        ARGV[2]: contig name filter
 # uses: current generation number
 
@@ -105,7 +107,7 @@ if (!$cgi) {
             $CFN = $attributes->{CFN};
         }
         elsif ($ASSEMBLY->count() > 1) {
-            $GateKeeper->dropDead("specify an assemblyname");
+            $GateKeeper->dropDead("specify a valid assemblyname (instead of '$assemblyname')");
         }
         else {
             $CFN  = $ARGV[0];
