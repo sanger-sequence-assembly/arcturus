@@ -2,15 +2,17 @@
 
 use WrapMySQL;
 
-$inifile = shift;
+while ($nextword = shift) {
+    $inifile = shift if ($nextword eq '-inifile');
 
-$instance = shift;
+    $instance = shift if ($nextword eq '-instance');
+}
 
-die "You must specify a WrapMySQL configuration file" unless defined($inifile);
+die "You must specify a configuration file (-inifile FILENAME)" unless defined($inifile);
 
 die "Configuration file $inifile does not exist" unless -f $inifile;
 
-die "You must specify an Arcturus instance name" unless defined($instance);
+die "You must specify an Arcturus instance name (-instance NAME)" unless defined($instance);
 
 $registerdatasource = $ENV{'REGISTERDATASOURCE'};
 
