@@ -10,13 +10,18 @@ use strict;
 my $nextword;
 my $instance;
 my $organism;
-my $aspedbefore;
-my $aspedafter;
-my $qualitymask;
+my $dropcontigtable = 0;
+my $username;
+my $password;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $username = shift @ARGV if ($nextword eq '-username');
+    $password = shift @ARGV if ($nextword eq '-password');
+
+    $dropcontigtable = 1 if ($nextword eq '-dropcontigtable');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -24,8 +29,17 @@ unless (defined($instance) && defined($organism)) {
     exit(0);
 }
 
-my $adb = new ArcturusDatabase(-instance => $instance,
-			       -organism => $organism);
+my $adb;
+
+if (defined($username) && defined($password)) {
+    $adb = new ArcturusDatabase(-instance => $instance,
+				-organism => $organism,
+				-username => $username,
+				-password => $password);
+} else {
+    $adb = new ArcturusDatabase(-instance => $instance,
+				-organism => $organism);
+}
 
 die "Failed to create ArcturusDatabase" unless $adb;
 
@@ -86,6 +100,52 @@ print STDERR "$nrows deleted from table SEQ2READ.\n";
 
 $delete_stmt->finish();
 
+if ($dropcontigtable) {
+    print STDERR "Preparing to drop CONTIG table.\n";
+
+    print STDERR "Getting CREATE TABLE command.\n";
+    $query = "SHOW CREATE TABLE CONTIG";
+
+    my $stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    $stmt->execute();
+
+    my ($tablename, $createcommand) = $stmt->fetchrow_array();
+
+    $stmt->finish();
+
+    if (defined($createcommand)) {
+	print STDERR "Table will be created using the command\n\n$createcommand\n\n";
+
+	$query = "DROP TABLE CONTIG";
+
+	$stmt = $dbh->prepare($query);
+	&db_die("Failed to create query \"$query\"");
+
+	$stmt->execute();
+	&db_die("Failed to execute query \"$query\"");
+
+	$stmt->finish();
+
+	print STDERR "Dropped table CONTIG.\n";
+
+	$query = $createcommand;
+
+	$stmt = $dbh->prepare($query);
+	&db_die("Failed to create query \"$query\"");
+
+	$stmt->execute();
+	&db_die("Failed to execute query \"$query\"");
+
+	$stmt->finish();
+
+	print STDERR "Created table CONTIG.\n";
+    } else {
+	print STDERR "Unable to retrieve CREATE TABLE command. Table will not be dropped.\n";
+    }
+}
+
 $dbh->disconnect();
 
 exit(0);
@@ -99,6 +159,10 @@ sub db_die {
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\tName of instance\n";
-    print STDERR "-organism\tName of organism\n";
+    print STDERR "-instance\t\tName of instance\n";
+    print STDERR "-organism\t\tName of organism\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-dropcontigtable\tDrop the CONTIG table and re-create it\n";
 }
