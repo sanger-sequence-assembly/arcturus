@@ -4,7 +4,7 @@ package ADB_get_caf;
 #
 # Read a standard Sanger format READ from the Oracle database
 # Hacked from the ADB_get_caf script by Robert Davies
-# $Id: ADB_get_caf.pm,v 1.1.1.1 2002-05-28 12:28:14 ejz Exp $
+# $Id: ADB_get_caf.pm,v 1.2 2002-10-22 10:11:27 ejz Exp $
 #
 #############################################################################
 
@@ -55,12 +55,12 @@ sub getOracleReads {
     my $self  = shift;
     my $files = shift;
 
-#    print "schema $schema  project $project \n";
-#    print "files @{$files}\n";
+#print "schema $schema  project $project <br>\n";
+#print "files @{$files} <br>\n";
     undef my %reads;
     foreach my $file (@$files) {
         $reads{$file} = 1;
-#	print "file:$file\n";
+#print "file:$file <br>\n";
     }
     
     my $ignore = 0;
@@ -68,12 +68,14 @@ sub getOracleReads {
 # access the Oracle database
 
     my $adb = AssemblyDB->new(login => 'pathlook',schema => $schema);
+#print "adb = $adb \n";
 
 # retrieve the reads and store as hashes under the $caf handle
 
     undef my $caf;
     if ($project =~ /^\d+$/) {
 
+#print "enter caf <br>";
         $caf = $adb->get_caf({
 	    projid => $project,
 	    fofn => \%reads,
@@ -97,7 +99,7 @@ sub getOracleReads {
 
     undef my $number;
     my @reads = $caf->readsList();
-# print "test: @{reads}\n";
+#print "test: @reads<BR>\n";
     foreach my $read (@reads) {
         $readHash{$read} = $caf->getEntry($read);
         $number++;

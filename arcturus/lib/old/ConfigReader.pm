@@ -112,7 +112,7 @@ sub parse {
       if ($type == 1) { # a scalar
           $self->{config_data}{$key} = $value;
       } elsif ($type==2) { # an array
-          @{$self->{config_data}{$key}} = split /\,/,$value;
+          @{$self->{config_data}{$key}} = split /\s*\,\s*/,$value;
       } else { # invalid stuff
           print STDERR "Error on configuration file ".$self->{filename}.":\nCan't parse: \"$_\""; 
       }

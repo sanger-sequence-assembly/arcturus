@@ -8,18 +8,12 @@ package Compress;
 
 use strict;
 
-#############################################################################
-
-my %encodeTable;
-my @decodeTable;
-my $existsTable = 0;
-my $status = 0;
+my $status;
 
 #############################################################################
-
-# constructor item new ( TABLEINIT )
 
 sub new {
+# constructor
    my $prototype = shift;
    my $tableinit = shift;
 
@@ -28,29 +22,20 @@ sub new {
 
    $self->{encode} = {};
    $self->{decode} = [];
-   $self->{status} = 0;
-
-   &buildCodeTables($tableinit) if (defined($tableinit));
+   $status = 0;
 
    bless ($self, $class);
+
+   $self->buildCodeTables($tableinit) if (defined($tableinit));
+
    return $self;
-}
-
-#############################################################################
-
-# destructor
-
-sub DESTROY {
-   my $self = shift;
-
-   return 1;
 }
 
 #############################################################################
 
 sub buildCodeTables {
 # sets up hash tables for encoding/decoding DNA strings
-#    my $self = shift;
+    my $self = shift;
     my $RNA = shift;
 
     my @seqsymbols;
@@ -60,11 +45,11 @@ sub buildCodeTables {
 
 # build hash table for encoding and array for decoding
 
-#    my $encodeTable = $self->{encode};
-#    my $decodeTable = $self->{decode};
+    my $encodeTable = $self->{encode};
+    my $decodeTable = $self->{decode};
 
-    undef %encodeTable;
-    undef @decodeTable;
+    undef %$encodeTable;
+    undef @$decodeTable;
 
     my $i = 0;
     foreach my $leader (@seqsymbols) {
@@ -72,13 +57,12 @@ sub buildCodeTables {
             foreach my $trailer (@seqsymbols) {
                 my $radix = "$leader$centre$trailer";
 # avoid ' and " (34, 39, 94) ?
-                $encodeTable{$radix} = $i;
-                $decodeTable[$i] = $radix;
+                $encodeTable->{$radix} = $i;
+                $decodeTable->[$i] = $radix;
                 $i++;
             }
         }
     }
-    $existsTable = 1;
 }
 
 #############################################################################
@@ -89,9 +73,11 @@ sub sequenceEncoder {
     my $string = shift;
     my $method = shift || 0;
 
-    return &tripletEncoder($self,$string)  if ($method == 1);
+    $status = 0;
+
+    return $self->tripletEncoder($string)  if ($method == 1);
  
-    return &huffmanEncoder($self,$string)  if ($method == 2);
+    return $self->huffmanEncoder($string)  if ($method == 2);
 
     die "Invalid encoding method $method";    
 }
@@ -105,9 +91,11 @@ sub sequenceDecoder {
     my $string = shift;
     my $method = shift || 0;
 
-    return &tripletDecoder($self,$string,@_)  if ($method == 1);
+    $status = 0;
+
+    return $self->tripletDecoder($string,@_)  if ($method == 1);
  
-    return &huffmanDecoder($self,$string)     if ($method == 2);
+    return $self->huffmanDecoder($string)     if ($method == 2);
 
     die "Invalid encoding method $method";    
 }
@@ -119,13 +107,10 @@ sub tripletEncoder {
     my $self  = shift;
     my $input = shift;
 
-#    my $encodeTable = $self->{encode};
-    $self->{status} = 0;
-
     $status = 0;
 
-#    &buildCodeTables(0) if (!%$encodeTable); # default table
-    &buildCodeTables(0) if (!$existsTable); 
+    my $encodeTable = $self->{encode};
+    $self->buildCodeTables(0) if !keys(%$encodeTable); # build default table
 
     $input .= '  ';                    # add two blanks to ensure a complete triplet at end
     $input =~ s/(...)/$1:/g;           # mark every third position in input string
@@ -134,17 +119,16 @@ sub tripletEncoder {
     my $radix;
     my $number;
     undef my $output;
-    for (my $triple=0 ; $triple <= $#stradixes ; $triple++) { 
+    for (my $triple=0 ; $triple < @stradixes ; $triple++) { 
         $radix = $stradixes[$triple];
-        if (length($radix) == 3 && defined ($encodeTable{$radix})) {
-            $number = $encodeTable{$radix}; 
+        if (length($radix) == 3 && defined ($encodeTable->{$radix})) {
+            $number = $encodeTable->{$radix}; 
             $output .= chr($number);
         } elsif ($triple < $#stradixes) {
-        # flag undefined triples, except for the last one which may be incomplete
+# flag undefined triples, except for the last one which may be incomplete
             print "Serious problem in sequenceEncoder at triplet $triple: ";
             print " invalid triplet key value \"$radix\"\n";
-            $status++; # keep track of errors
-#            $self->{status}++;
+            $status++;
         }
     }
 
@@ -161,11 +145,8 @@ sub tripletDecoder {
     my $input  = shift;
     my $blanks = shift; # keep blanks, else remove blanks
 
-#    my $decodeTable = $self->{decode};
-    $status = 0;
-
-#    &buildCodeTables(0) if (!@$decodeTable)
-    &buildCodeTables(0) if (!$existsTable); 
+    my $decodeTable = $self->{decode};
+    $self->buildCodeTables(0) if (!@$decodeTable);
 
     my @chrnumbers = split //,$input; # split into individual characters (bytes)
 
@@ -173,7 +154,7 @@ sub tripletDecoder {
     undef my $output;
     foreach my $symbol (@chrnumbers) {
         my $number = unpack('C*',$symbol); # the encoding number
-        my $string = $decodeTable[$number]; # the corresponding character triplet
+        my $string = $decodeTable->[$number]; # the corresponding character triplet
         $output .= $string;
         $string =~ s/\s//g;
         $count += length($string); # count number of non-blank characters
@@ -192,13 +173,15 @@ sub qualityEncoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
-    my $method = shift;
+    my $method = shift || 0;
 
-    return &numbersEncoder($self,$string)  if ($method == 1);
+    $status = 0;
+
+    return &numbersEncoder($string)  if ($method == 1);
  
-    return &huffmanEncoder($self,$string)  if ($method == 2);
+    return $self->huffmanEncoder($string)  if ($method == 2);
  
-    return &differsEncoder($self,$string)  if ($method == 3);
+    return $self->differsEncoder($string)  if ($method == 3);
 
     die "Invalid encoding method $method for quality";    
 }
@@ -210,13 +193,15 @@ sub qualityDecoder {
 # encodes an input string
     my $self   = shift;
     my $string = shift;
-    my $method = shift;
+    my $method = shift || 0;
 
-    return &numbersDecoder($self,$string)  if ($method == 1);
+    $status = 0;
+
+    return &numbersDecoder($string)  if ($method == 1);
  
-    return &huffmanDecoder($self,$string)  if ($method == 2);
+    return $self->huffmanDecoder($string)  if ($method == 2);
  
-    return &differsDecoder($self,$string)  if ($method == 3);
+    return $self->differsDecoder($string)  if ($method == 3);
 
     die "Invalid decoding method $method for quality";    
 }
@@ -225,13 +210,9 @@ sub qualityDecoder {
 
 sub numbersEncoder {
 # encode an input string with integer numbers [0-255] using byte representation
-    my $self  = shift;
     my $input = shift;
 
-    $status = 0;
-
     $input =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
-#    $input =~ s/^\s+//; # remove leading blanks
     my @strnumbers = split /\s+/,$input; # put values in array
 
     my $count = 0;
@@ -256,10 +237,7 @@ sub differsEncoder {
     my $self  = shift;
     my $input = shift;
 
-    $status = 0;
-
     $input =~ s/^\s+|\s+$//g; # remove leading and trailing blanks
-#print "\ninput $input\n";
     my @strnumbers = split /\s+/,$input; # put values in array
 
     my $last = $strnumbers[0];
@@ -276,9 +254,8 @@ sub differsEncoder {
 
     $string =~ s/\s(\d)/+$1/g; # add '+' before positive numbers
     $string =~ s/\s+//g; # and remove all blanks
-#print "\nconverted:  $string\n";
 
-    my ($dummy, $output) = &huffmanEncoder($self,$string);
+    my ($dummy, $output) = $self->huffmanEncoder($string);
 
     my $count  = @strnumbers;
 
@@ -289,10 +266,7 @@ sub differsEncoder {
 
 sub numbersDecoder {
 # expand input into string of integer numbers separated by blanks 
-    my $self  = shift; 
     my $input = shift;
-
-    $status = 0;
     
     my @chrnumbers = split //,$input;
 
@@ -313,12 +287,10 @@ sub differsDecoder {
     my $self  = shift; 
     my $input = shift;
 
-    my ($dummy, $string) = &huffmanDecoder($self, $input);
+    my ($dummy, $string) = $self->huffmanDecoder($input);
     
-# print "differs restored: $string \n\n";
     $string =~ s/([\+\-]\d)/ $1/g;
     $string =~ s/^[\s\+]+//; # remove leading blanks
-# print "differs prepared: $string \n\n";
     my @chrnumbers = split /\s+/,$string;
 
     my $count = 1;
@@ -339,8 +311,6 @@ sub differsDecoder {
 sub huffmanEncoder {
 # encode input string using Huffman's method
     my ($self, $string) = @_;
-
-    $status = 0;
  
     undef my $seed;
     undef my $output;
@@ -388,7 +358,7 @@ sub huffmanEncoder {
 #############################################################################
 
 sub huffmanDecoder {
-# encode input string using Huffman's method
+# decode input string using Huffman's method
     my ($self, $string) = @_;
 
 #     The encoded input string consists of 4 parts:
@@ -398,7 +368,7 @@ sub huffmanDecoder {
 # (4) the hoffman encoded encoding string of token codes separated by " " 
 # (5) the hoffman encoded data string
 
-    $status = 0;
+#    $status = 0;
 
     undef my $count;
     undef my $output;
@@ -645,7 +615,6 @@ sub status {
 # returns the error status of last operation
     my $self = shift;
   
-#    return $self->{status};
     return $status;
 }
 
@@ -659,10 +628,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "18 Dec 2000",
-        update  =>    "03 Jul 2002",
+        update  =>    "03 Sep 2002",
     };
 }
 
-1;
+#############################################################################
 
-__END__
+1;

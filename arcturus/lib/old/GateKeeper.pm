@@ -88,8 +88,7 @@ sub new {
 
 # open the database
 
-    &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
-#    &opendb_MySQL(0,$self,\%options) if ($engine && $engine =~ /^mysql$/i);
+    &opendb_MySQL(0,$self,\%options) if ($engine && $engine =~ /^mysql$/i);
 
 # &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
@@ -243,7 +242,7 @@ sub ping_MySQL {
 #*******************************************************************************
 
 sub opendb_MySQL_unchecked {
-# open mysql directly with any checks
+# open mysql directly with only basic checks
     my $self = shift;
     my $host = shift; # hostname:TCPport
     my $hash = shift;
@@ -253,17 +252,22 @@ sub opendb_MySQL_unchecked {
 
 # test against default server, else open a new connection
 
+    my ($name,$port) = split ':',$host;
     if (!$options{defaultOpenNew} && $self->{handle}) {
-        &dropDead($self,"Missing TCP port specification in host $host") if ($host !~ /\:/);
-        my ($name,$port) = split ':',$host;
+        &dropDead($self,"Invalid host:TCP port specification in host $host") if ($host !~ /\:/);
         return $self->{handle} if ($self->{server} =~ /$name/ && $self->{TCPort} == $port);
     }
+
+# register server and TCP port
+
+    $self->{server} = $name;
+    $self->{TCPort} = $port;
 
 # build the data source name
 
     my $dsn = "DBI:mysql:arcturus:host=$host";
 
-# get authorization
+# get database authorization
 
     my $config = $self->{config};
 
@@ -277,14 +281,20 @@ sub opendb_MySQL_unchecked {
 
 # and open up the connection
 
-    my $handle = DBI->connect($dsn, $username, $password, $options{RaiseError});
-    if (!$handle && $options{dieOnError}) {          
-        &dropDead($self,"Failed to access arcturus on host $host",1);
+    $self->{handle} = DBI->connect($dsn, $username, $password, $options{RaiseError});
+    if (!$self->{handle}) {          
+        &dropDead($self,"Failed to access arcturus on host $host",1) if $options{dieOnError};
+        return 0;
     }
 
 # okay, here the database has been properly opened on host/port $self->{server};
 
-    return $handle;
+    $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
+    if ($self->{mother}->{errors} && $options{dieOnNoTable}) {
+        &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
+    }
+
+    return $self->{handle};
 }
 
 #*******************************************************************************
@@ -310,6 +320,8 @@ sub opendb_MySQL {
 
 # we now test if the specified database is installed on the current CGI server
 
+print "config $self->{config}\n" if $debug;
+
     if (my $config = $self->{config}) {
 # get database parameters
         my $driver    = $config->get("db_driver",'insist');
@@ -323,6 +335,7 @@ sub opendb_MySQL {
 # test configuration data input status
         my $status    = $config->probe(1);
         &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $status;
+print "test combinations: @$port_maps\n" if $debug;
 
 # The next section may be somewhat paranoid, but I want to be absolutely
 # certain that the server port (if in CGI), the MySQL port and the script
@@ -376,10 +389,13 @@ sub opendb_MySQL {
             if (my $scriptname = $ENV{SCRIPT_FILENAME}) {
 # test the MySQL port and script name combination; get cgi port
                 my $identify = 0;
+print "test combinations: @$port_maps\n" if $debug;
                 foreach my $combination (@$port_maps) {
                     my ($script, $tcp, $cgi) = split /\:/,$combination;
+print "combination $combination MSQLPORT $ENV{MYSQL_TCP_PORT} $scriptname $script\n" if $debug;
 	            if ($tcp eq $ENV{MYSQL_TCP_PORT} && $scriptname =~ /^.*\b($script)\b.*$/) {
 # MySQL port and script directory verified; finally test the cgi port (if any)
+print "http_port $http_port   cgi $cgi\n" if $debug;
                         if (!$http_port || $cgi == $http_port) {
                             $self->{TCPort} = $mysqlport;
                             $self->{Script} = $scriptname;
@@ -431,6 +447,8 @@ sub opendb_MySQL {
 # open the ORGANISMS table in the arcturus database
 
     $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
+# if !dieOnNoTable : use self->instance afterwards to test existence of instance
+print "options $options{dieOnNoTable} \n" if $debug;
     if ($self->{mother}->{errors} && $options{dieOnNoTable}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
@@ -452,6 +470,17 @@ sub importOptions {
     }
 
     $status;
+}
+
+#*******************************************************************************
+
+sub instance {
+# test the existence of an arcturus instance on the current server
+    my $self = shift;
+
+    return 0 if $self->{mother}->{errors};
+
+    return $self->{mother};
 }
 
 #*******************************************************************************
@@ -513,7 +542,6 @@ sub dbHandle {
         return $dbh;
     }
 # if database not specified, use default arcturus, or abort
-
     elsif (!$database) { 
         &dropDead($self,"Undefined database name") if !$options{undefinedDatabase};
         $self->{database} = 'arcturus';
@@ -557,8 +585,21 @@ sub dbHandle {
         }
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&cgiHandle($self,1) || !$options{defaultRedirect}) {
-#        if (!&origin || !$options{defaultRedirect}) {
-            &dropDead($self,"Database $database resides on $residence{$database}");
+# if defaultRedirect <= 1 always abort; else, i.e. in batch mode, switch to specified server
+            &report($self,"Database $database resides on $residence{$database}");
+	    &dropDead($self,"Access to $database denied") if ($options{defaultRedirect} <= 1);
+# close the current connection and open new one on the proper server 
+            &disconnect($self);
+# get the server and TCP port to redirect to
+            my ($host,$port) = split ':',$residence{$database};
+            my $pmaps = $self->{config}->get("port_maps",1);
+            foreach my $map (@$pmaps) {
+                $port = $1 if ($map =~ /\:(\d+)\:$port/);
+            }
+# open the new connection and repaet the setting up of the database/table handle
+            $self->opendb_MySQL_unchecked("$host:$port",{defaultOpenNew => 1});
+            delete $options{defaultRedirect};
+            $dbh = $self->dbHandle($database,\%options);
         }
         elsif ($available{$database} ne 'off-line') {
             $self->disconnect();
@@ -641,54 +682,64 @@ sub authorize {
     my $code = shift;
     my $hash = shift;
 
+# process possible hash input 
+
+    my %options = ( testSession => 1, # default test session number, else test username, password
+                    makeSession => 1, # default issue session number if in CGI mode (2 for always)
+                    interim     => 1, # default submit interim form if CGI and no output page active
+                    noConfirm   => 0, # default assign CONFIRM to returned submit button value 
+                    noGUI       => 0, # default standard Arcturus GUI; else contents only
+                    finalize    => 0, # default return after adding password query to existing form
+                    noprompt    => 1, # default no prompt for username and/or password if missing & !CGI 
+                    silently    => 1, # do everything quietly
+                    dieOnError  => 0, # default do not abort on error, else die, except on closed session  
+                    ageWindow  => 30, # acceptance window (minutes) for previously opened session
+                    returnPath  => 0, # default return to same script
+                    identify    => 0, # username (for possible usage in non-CGI mode)
+                    password    => 0, # password (for possible usage in non-CGI mode)
+                    session     => 0, # session ID (for possible usage in non-CGI mode)
+                    diagnosis   => 0  # default off
+		  );
+    &importOptions(\%options, $hash);
+
 # start by defining session, password, identify
 
     print "GateKeeper enter authorize $debug" if $debug;
 
     undef my ($cgi, $session, $password, $identify);
 
-    if ($cgi = $self->{cgi}) {
-# any of these parameters may be absent from cgi input
-        $session  = $cgi->parameter('session',0) || 0;
+    if ($cgi = $self->cgiHandle(1)) {
+# in CGI mode; any of these parameters may be absent from cgi input
+        $session  = $cgi->parameter('session' ,0) || 0;
         $password = $cgi->parameter('password',0);
         $cgi->transpose('password') if $password; # remove from CGI input
         $identify = $cgi->parameter('identify',0);
-# recover USER from input info, if not from 'identify', then from 'session'
-        if ($identify) {
-  $cgi->transpose('identify','USER'); # rename 'identify' to 'USER'
-            $self->{USER} = $identify;
-        }
-        elsif ($session) {
-            my @sdata = split ':',$session;
-  $cgi->addkey('USER',$sdata[0]);
-            $self->{USER} = $sdata[0];
-        }
+        $cgi->transpose('identify') if $identify; # remove from CGI input
     }
-
-# process possible hash input 
-
-    my %options = ( nosession  => 0, # default test/generate session number
-                    interim    => 1, # default submit interim form if CGI and no output page active
-                    finalize   => 0, # default return after adding password query to existing form
-                    noprompt   => 1, # default no prompt for username and/or password if missing & !CGI 
-                    silently   => 1, # do everything quietly
-                    dieOnError => 0, # do not abort on error but return error message
-                    ageWindow => 30, # acceptance window (minutes) for previously opened session
-                    returnPath => 0, # default return to same script
-                    noGUI      => 0, # default standard Arcturus GUI; else contents only
-                    diagnosis  => 0  # default off
-		  );
-
-    &importOptions(\%options, $hash);
+    else {
+        $cgi = $self->{cgi}; # the module handle
+        $identify = $options{identify};
+        $password = $options{password};
+        $session  = $options{session};
+    }
+# recover USER from input info, if any
+    if ($session) {
+        $self->{SESSION} = $session;
+        my @sdata = split ':',$session;
+        $self->{USER} = $sdata[0];
+    }
+    elsif ($identify) {
+        $self->{USER} = $identify;
+    }
 
     my $mother = $self->{mother};
     undef my ($priviledges,$seniority);
 
     undef $self->{report};
-    if ($session && !$options{nosession}) {
-# in CGI mode and a session  number is defined
+    if ($session && $options{testSession}) {
+# a session  number is defined
         $self->{report} = "Check existing sessions number $session";
-        my $sessions = $mother->spawn('SESSIONS','self',0,1);
+        my $sessions = $mother->spawn('SESSIONS','self',0,0);
         if ($self->{error} = $sessions->{errors}) {
             &dropDead($self,$sessions->{errors}) if $options{dieOnError};
 	    return 0;
@@ -701,8 +752,8 @@ sub authorize {
             $seniority   = $hashref->{seniority}   || 0;
             my $seed = &compoundName($identify,'arcturus',8);
             if (!$cgi->VerifyEncrypt($seed,$code)) { # check integrity 
-# if (!$cgi->VerifyEncrypt('arcturus',$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
+                &dropDead($self,$self->{report}) if $options{dieOnError};
                 $session = 0; # force (new) prompt for password 
             }
         }
@@ -714,6 +765,8 @@ sub authorize {
         if (my $hashref = $sessions->associate('hashref',$session,'session')) {
             if ($hashref->{timeclose}) {
                 $self->{report} .= "Arcturus session $session is already closed";
+                &dropDead($self,$self->{report}) if ($options{dieOnError} > 1);
+                return 0 if $options{dieOnError}; # "abort" option
                 $session = 0; # force prompt for password 
 	    }
             else {
@@ -721,7 +774,7 @@ sub authorize {
 	    }
         }
 # there is no such session number on the current server (e.g. after switching servers)
-        else {
+        elsif ($self->instance) {
 # try if the session is on another server
             my $found = 0;
             my $instances = $self->{config}->get("mysql_ports",'insist unique array');
@@ -749,17 +802,22 @@ sub authorize {
             }
             $session = 0 if !$found; # force prompt for password
         }
-        $cgi->delete('session') if !$session; # remove from CGI input
+        $cgi->delete('session') if (!$session && $self->cgiHandle(1)); # remove from CGI input
+#??        &dropDead($self,$self->{report}) if $options{dieOnError};
         &report($self) if !$options{silently};
         undef $self->{report};
     }
 
-    if (!$session || $options{nosession}) {
+    if (!$session || !$options{testSession}) {
 # test if a user identification and password are provided
+        my $users = $mother->spawn('USERS','self',0,1);
         if (!$password || !$identify) {
 # add request for username and  password; abort in non-CGI mode
-            if (!$self->cgiHandle(1) && $options{noprompt}) {
+            if (!$self->cgiHandle(1) && $options{noprompt} > 1) {
                 &dropDead($self,"Missing username or password");
+            }
+            elsif (!$self->cgiHandle(1) && $options{noprompt}) {
+                return 0; # authorisation failed
             }
             elsif (!$self->cgiHandle(1)) {
 # issue a prompt for password info on the command line
@@ -776,10 +834,15 @@ sub authorize {
                 $page->form($script); # return to same url
                 $page->sectionheader("ARCTURUS authorisation",3,1);
                 $page->sectionheader("The requested ARCTURUS operation requires authorisation",4,0);
-                $page->sectionheader("Please provide your User Identification and Password",4,0);
-                $page->identify('10',8,1);
-                $page->submitbuttonbar(1,0);
+                my $text = ''; my $size = 8;
+		if (!$self->instance || $users->{errors} || $identify && $identify eq 'oper') {
+                    $text = " the Database"; $size = 14; 
+	        }
+                $page->sectionheader("Please provide your User Identification and${text} Password",4,0);
+                $page->identify('10',$size,1);
+                $page->confirmbuttonbar(0,0);
                 $page->ingestCGI();
+                $page->substitute('CONFIRM',$options{noConfirm}) if $options{noConfirm};
                 $page->form(0); # end form
                 $page->PrintVariables(0) if $options{diagnosis};
                 $page->flush;
@@ -804,13 +867,38 @@ sub authorize {
 # a username and password are provided: verify identification and issue session number
 
         undef $self->{error};
-        my $users = $mother->spawn('USERS','self',0,1);
-        if (my $hash = $users->associate('hashref',$identify,'userid')) {
+        if (!$self->instance || $users->{errors}) {
+# there is no (valid) user information: default to priviledged usernames and database password
+            my $allowed = $self->{config}->get("devserver_access",'insist unique array');
+            my $string  = join ' ',@$allowed;
+            if (!$identify || !$password) {
+                $self->{error} = "Missing username or database password";
+            }
+            elsif ($string !~ /\b$identify\b/) {
+                $self->{error} = "User $identify has no database priviledges on this server";
+            }
+            elsif ($password ne $self->{config}->get('mysql_password')) {
+                $self->{error} = "Invalid database password provided for user $identify";
+            }
+            $priviledges = $code; # forces acceptance
+        }
+        elsif (my $hash = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hash->{priviledges} || 0;
             $seniority   = $hash->{seniority}   || 0;
-# special case for initialization of password of super user oper (un-encrypted in USERS) 
-            if ($hash->{password} eq 'update' && ($identify ne 'oper' || $password ne 'update')) {
-                $self->{error} = "Invalid password : initialize operations account first";
+# superuser 'oper' has a special status; accounts defined on start-up have to be initialize by 'oper'
+# print "identify '$identify'  hash '$hash->{password}'  passwd '$password' <br>";
+            if ($hash->{password} eq 'arcturus' && $identify eq 'oper') {
+# there are two possible passwords allowed: either 'arcturus' (unencrypted after startup) or the database password
+# print "passage 1 priv: $priviledges<br>";
+                if ($password ne 'arcturus' && $password ne $self->{config}->get('mysql_password')) {
+                    $self->{error}  = "Invalid password !\nInitialize the operations account ";
+                    $self->{error} .= "by\n defining a new password (MODIFY users)";
+                }
+            }
+            elsif ($hash->{password} eq 'arcturus' && $identify ne 'oper') {
+# occurs only on those accounts defined at installation of the USERS table (see 'arc_create' script)
+                $self->{error}  = "Invalid password !\n\nThe \"$identify\" account has to be initialized";
+                $self->{error} .= "by\nsuperuser \"oper\" (use MODIFY users)";
             }
             elsif (!$cgi->VerifyEncrypt($password,$hash->{password})) {
                 $self->{error} = "Invalid password provided for user $identify";
@@ -818,6 +906,7 @@ sub authorize {
             elsif (!$priviledges) {
                 $self->{error} = "User $identify has no priviledges set";
             }
+# print "passage 5  error $self->{error}<br>";
         }
         elsif (!($self->{error} = $users->{errors})) {
             $self->{error} = "Unknown user: $identify";
@@ -828,16 +917,16 @@ sub authorize {
 
 # okay, here the user has been identified: if CGI, issue a session number 
 
-        if ($self->cgiHandle(1) && !$options{nosession}) {
+        if ($options{makeSession} > 1 || $options{makeSession} && $self->cgiHandle(1)) {
             $session = 0;
-            my $sessions = $mother->spawn('SESSIONS','self',0,1);
+            my $sessions = $mother->spawn('SESSIONS','self',0,0);
             if ($sessions->{errors}) {
                 &dropDead($self,$sessions->{error}) if $options{dieOnError};
 	        return $sessions->{errors};
             }
 # cleanup the sessions table (delete after 1 month, close yesterday if still open)
             my $interval = "timebegin < DATE_SUB(CURRENT_DATE, interval 1 MONTH)";
-            $sessions->do("delete from SESSIONS where $interval");
+            $sessions->do("delete from <self> where $interval");
             $interval =~ s/MONTH/DAY/;
             $interval .= ' and (closed_by is NULL or timeclose is NULL)';
             $sessions->signature('oper','where',$interval,'closed_by','timeclose');
@@ -869,7 +958,7 @@ sub authorize {
 
 # open a new session number if no one defined
 
-            my $attempt = 5;
+            my $attempt = 9;
             while (!$session && $attempt > 0) {
                 $session = &newSessionNumber ($self,$identify);
                 if ($sessions->newrow('session',$session)) {
@@ -883,10 +972,12 @@ sub authorize {
                 }
             }
             if ($session) {
-                $cgi->replace('session',$session); # add to CGI buffer
+                $cgi->replace('session',$session) if $self->cgiHandle(1); # add to CGI buffer
+                $self->{SESSION} = $session;
             }
             else {
-                $self->{report} .= "! Failed to issue an new session number after 5 tries";
+                $self->{report} .= "! Failed to issue an new session number after 9 trials";
+                return 0 if $options{dieOnError};
 	    }
         }    
     }
@@ -909,8 +1000,9 @@ sub authorize {
                 $mask = 0; # actions on myself need no further test 
             }   
 # test the seniority of the user mentioned against the one of $identify
-            elsif ($seniority <= $users->associate('seniority',$user,'userid')) {
+            elsif ($seniority < 6 && $seniority <= $users->associate('seniority',$user,'userid')) {
                 $self->{error} = "User $identify has no priviledge for this operation";
+                $self->{error} .= ": insufficient seniority";
                 return 0;
             }        
         }
@@ -919,8 +1011,7 @@ sub authorize {
     if ($mask) {
 # &report ($self,"code $code  mask $mask priviledges $priviledges");
         if (!$priviledges || $mask != ($mask & $priviledges)) {
-            $self->{error} = "User $identify has no priviledge for this operation";
-# $self->{error} = "User $identify has no priviledge on the development servers"; if ?
+            $self->{error} = "User $identify has insufficient priviledge for this operation";
             return 0;
         }
     }
@@ -937,7 +1028,7 @@ sub allowServerAccess {
 
 # limit access to development server to names listed in 'devserver_access'
 # access ALWAYS granted on production server! 
-# use only for registration purposes
+# use ONLY for registration purposes
 
     if (!$self->whereAmI(1)) {
         my $allowed = $self->{config}->get('devserver_access','insist unique array');
@@ -959,7 +1050,6 @@ sub newSessionNumber {
 
     my $seed = &compoundName($user,'arcturus',8);
     my $encrypt = $self->{cgi}->ShortEncrypt($seed,$user);
-# my $encrypt = $self->{cgi}->ShortEncrypt('arcturus',$user);
     my $session = "$user:$encrypt"; # name folowed by some 'random' sequence
 
     return $session;
@@ -987,6 +1077,18 @@ sub compoundName {
     return $output;
 }
 
+#############################################################################
+
+sub closeSession {
+# close the current session number
+    my $self    = shift;
+    my $session = shift || $self->{SESSION} || return;
+
+    my $sessions = $self->{mother}->spawn('SESSIONS','self',0,0);
+
+    $sessions->signature('self','session',$session,'closed_by','timeclose');
+}
+
 #*******************************************************************************
 # arcturus CGI interface
 #*******************************************************************************
@@ -994,7 +1096,11 @@ sub compoundName {
 sub GUI {
 # standard Arcturus GUI form with full set of cross links between databases
     my $self  = shift;
-    my $title = shift;
+    my $title = shift || 'No Title';
+    my $modes = shift; # (optional) hash with some control parameters
+
+    my %options = (defaultScript => '/cgi-bin/arcturus', doTransport => 1);
+    &importOptions(\%options,$modes); 
 
     print "GateKeeper enter GUI $debug" if $debug;
 
@@ -1005,7 +1111,7 @@ sub GUI {
     return 0 if !$cgi;
 
     my $script = $self->currentScript;
-    $script .=  $self->currentOptions; # ? a good idea?
+    $script .=  $self->currentOptions if $options{doTransport}; # ? a good idea?
     my @exclude = ('USER','redirect');
     my $postToGet = $cgi->postToGet(0,@exclude); # include 'database' but not USER
 
@@ -1055,7 +1161,7 @@ sub GUI {
         $database = $databases[0];
         $cgi->replace('database',$database); # make it the default database
     }
-    else {
+    elsif ($self->instance) {
         $database = $cgi->parameter('database',0) || $cgi->parameter('organism',0);
     }
     $database = 'arcturus' if !$database;
@@ -1078,9 +1184,10 @@ sub GUI {
     my $sname = $config->get('signature_name');
     $page->address($smail,$sname,0,12);
 # substitute values for standard place holders
-    my $href="href=\"/icons/bootes.jpg\"";
+    my $href = "href=\"/Arcturus.html\"";
+    my $capt = "onMouseOver=\"window.status='About Arcturus'; return true\"";
     my $imageformat = "width=\"$width\" height=$height vspace=1";
-    $page->{layout} =~ s/ARCTURUSLOGO/<A $href><IMG SRC="\/icons\/bootes.jpg $imageformat"><\/A>/;
+    $page->{layout} =~ s/ARCTURUSLOGO/<A $href $capt><IMG SRC="\/icons\/bootes.jpg $imageformat"><\/A>/;
     $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
 
 # compose the top bar (partition 2)
@@ -1103,6 +1210,7 @@ sub GUI {
     push @exclude, 'database';
     push @exclude, 'organism';
     $script .= $cgi->postToGet(0,@exclude);
+    $script = $options{defaultScript} if !$options{doTransport}; # overrides
     my $tablelayout = "cellpadding=2 border=0 cellspacing=0 width=$width align=center";
     my $table = "<table $tablelayout>";
     if (@alternates) {
@@ -1110,11 +1218,18 @@ sub GUI {
         foreach my $server (@alternates) {
             my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
             my $type = uc($altertypes{$server}); $type =~ s/^(\w)\w*$/$1/;
+            my %s = (D => 'DEVELOPMENT', P => 'PRODUCTION' , C => 'CURRENT');
             my $link = "$url[0]";
-            my $title = "title=\"GO TO THE ? SERVER ON $url[0]\"";
-            $link = "<a href=\"http://$server$script\" $title> $link </a>" if ($type ne 'C');
-            $type = "&nbsp" if ($type eq 'C');
-            $table .= "<tr><td $cell width=87.5%>$link</td><td $cell width=12.5%>$type</td></tr>";
+            my $title = "GO TO THE $s{$type} SERVER ON $url[0]";
+            my $alt = "onMouseOver=\"window.status='$title'; return true\"";
+            $link = "<a href=\"http://$server$script\" $alt> $link </a>" if ($type ne 'C');
+            my $bgc = $cell; $bgc =~ s/$yell/yellow/ if ($type eq 'C');
+#            $type = "&nbsp" if ($type eq 'C');
+            $title .= " WITH DEFAULT USER INTERFACE" if ($type ne 'C');
+            $title = "RESTORE DEFAULT USER INTERFACE THIS SERVER" if ($type eq 'C');;
+             $alt = "onMouseOver=\"window.status='$title'; return true\"";
+            $type = "<a href=\"http://$server$options{defaultScript}\" $alt> $type </a>";
+            $table .= "<tr><td $bgc width=87.5%>$link</td><td $cell width=12.5%>$type</td></tr>";
         }
     }
     $table .= "<tr><td $cell colspan=2> </td></tr>";
@@ -1127,16 +1242,17 @@ sub GUI {
 
     $page->partition(5);
     $table = "<table $tablelayout>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
     if (@databases) {
         my $current = $cgi->parameter('database',0);
-        $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
         foreach my $database (sort @databases) {
             my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
-            $target .= "&database=$database" if ($target !~ /\b$database\b/);
+            $target .= "\&database=$database" if ($target !~ /\b$database\b/);
       	    $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
-            my $link = $database;
-            $link = "<a href=\"$target\"> $link </a>" if (!$current || $current ne $link);
+            my $link = $database; my $ulink = uc($link);
+            my $alt = "onMouseOver=\"window.status='SELECT THE $ulink DATABASE'; return true\""; 
+            $link = "<a href=\"$target\" $alt> $link </a>" if (!$current || $current ne $link);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
     }
@@ -1157,23 +1273,45 @@ sub GUI {
 
     $page->partition(7);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Create </th></tr>";
-    my $create = "/cgi-bin/create/newform".$cgi->postToGet(1,'session');
-    $table .= "<tr><td $cell><a href=\"$create\"> Database </a></td></tr>";
-    if ($database && $database ne 'arcturus') {
-        $create = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\" $target> Assembly </a></td></tr>";
-        $create = "/cgi-bin/amanager/specify/project" .$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\" $target> Project </a></td></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> CREATE </th></tr>";
+    my $label = "Database";
+    if ($self->instance) {
+        $title = "CREATE A NEW DATABASE";
     }
     else {
-        $create = "/cgi-bin/amanager/preselect/assembly".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\" $target> Assembly </a></td></tr>";
-        $create = "/cgi-bin/amanager/preselect/project" .$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$create\" $target> Project </a></td></tr>";
+        $title = "CREATE A NEW ARCTURUS INSTANCE";
+        $label = "arcturus";
     }
-    $create = "/cgi-bin/umanager/getform".$cgi->postToGet(1,'session');
-    $table .= "<tr><td $cell><a href=\"$create\"> User </a></td></tr>";
+    my $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+    my $create = "/cgi-bin/new/newcreate/organism/getform".$cgi->postToGet(1,'session');
+#    my $create = "/cgi-bin/create/organism/getform".$cgi->postToGet(1,'session');
+    $table .= "<tr><td $cell><a href=\"$create\" $alt> $label </a></td></tr>";
+    if ($database && $database ne 'arcturus') {
+        my $title = "CREATE A NEW ASSEMBLY FOR ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $create = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $alt $target> Assembly </a></td></tr>";
+        $title = "CREATE A NEW PROJECT FOR ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $create = "/cgi-bin/amanager/specify/project" .$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $alt $target> Project </a></td></tr>";
+    }
+    elsif ($self->instance && @databases) {
+        my $title = "CREATE A NEW ASSEMBLY";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $create = "/cgi-bin/amanager/preselect/assembly".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $alt $target> Assembly </a></td></tr>";
+        $title = "CREATE A NEW PROJECT";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $create = "/cgi-bin/amanager/preselect/project" .$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$create\" $alt $target> Project </a></td></tr>";
+    }
+    if ($self->instance) {
+        my $title = "REGISTER A NEW USER";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $create = "/cgi-bin/umanager/getform".$cgi->postToGet(1,'session');
+        $table .= "<tr><td $cell><a href=\"$create\" $alt> User </a></td></tr>";
+    }
     $table .= "<tr><td $cell>&nbsp </td></tr>";
     $table .= "</table>";
     $page->add($table);
@@ -1184,45 +1322,65 @@ sub GUI {
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
     if ($database && $database ne 'arcturus') {
+        $title = "ALLOCATE USERS TO A PROJECT OF ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $update = "/cgi-bin/amanager/specify/users".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\" target='userframe'> Users </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$update\" $alt target='userframe'> Users </a></td></tr>";
+        $title =~ s/USERS/CONTIGS/;
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         $update = "/cgi-bin/amanager/specify/contigs".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$update\" target='userframe'> Contigs </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$update\" $alt target='userframe'> Contigs </a></td></tr>";
     }
     $table .= "</table>";
     $page->add($table);   
+    $page->space(2-@databases); 
     $page->space(1);   
 # and the TEST menu on the same partion
     $page->partition(6);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> TESTS </th></tr>";
     if ($database && $database ne 'arcturus') {
-        my $update = "/cgi-bin/emanager/specify/getmenu".$cgi->postToGet(1,@include); # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Menu </a></td></tr>";
-        $update = "/cgi-bin/emanager/all".$cgi->postToGet(1,@include); # other URL
-        $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> All </a></td></tr>";
+        $title = "RUN SELECTED TEST(S) ON THE ".uc($database)." CONTENTS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        my $update = "/cgi-bin/emanager/getmenu".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> Menu </a></td></tr>";
+        $title = "DO ALL STANDARD TESTS ON THE ".uc($database)." CONTENTS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $update = "/cgi-bin/emanager/runtest/all".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" $alt target='workframe'> All </a></td></tr>";
     }
     $table .= "</table>";
     $page->add($table);
+    $page->space(2-@databases); 
     $page->space(1);   
  
 # compose the input table (direct to new window if session defined)
 
     $page->partition(4);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Input </th></tr>";
-    my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet(1,@include);
-    $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
-    $title = "title = \"Start READS reader\"";
-    $table .= "<tr><td $cell><a href=\"$input\" $target $title> READS </a></td></tr>";
-    $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet(1,@include);
-    $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
-    $table .= "<tr><td $cell><a href=\"$input\" $target> CONTIGS </a></td></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100%> INPUT </th></tr>";
+    if ($self->instance && @databases) {
+        $title = "ENTER READS"; 
+        $title .= " FOR ".uc($database) if ($database && $database ne 'arcturus');
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        my $input = "/cgi-bin/rloader/arcturus/getform".$cgi->postToGet(1,@include);
+        $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
+        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> READS </a></td></tr>";
+        $title =~ s/READS/CONTIGS/;
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $input = "/cgi-bin/cloader/arcturus/getform".$cgi->postToGet(1,@include);
+        $input =~ s/getform/specify/ if ($database && $database ne 'arcturus');
+        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> CONTIGS </a></td></tr>";
+    }
     if ($database && $database ne 'arcturus') {
+        $title = "LOAD TAG INFORMATION FOR ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        my $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> TAGS </a></td></tr>";
+        $title = "LOAD MAPPING INFORMATION FOR ".uc($database);
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$input\" $target> TAGS </a></td></tr>";
-        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$input\" $target> MAPS </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> MAPS </a></td></tr>";
     }
     else {
         $table .= $emptyrow;
@@ -1233,12 +1391,14 @@ sub GUI {
     $page->add($table);   
     $page->space;
 
-# compose the 
+# compose the links for edit scripts 
 
     $page->partition(8);
     $table = "<table $tablelayout>";
-    $table .= "<tr><th bgcolor='$purp' width=100%> Edit Info </th></tr>";
+    $table .= "<tr><th bgcolor='$purp' width=100% nowrap> MODIFY </th></tr>";
     if ($database && $database ne 'arcturus') {
+ $title = "LOAD TAG INFORMATION FOR ".uc($database);
+ $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
         $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include); # other URL
@@ -1246,14 +1406,17 @@ sub GUI {
         $update = "/cgi-bin/pmanager/specify/project".$cgi->postToGet(1,@include);  # other URL
         $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Project </a></td></tr>";
     }
-    my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
-    $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
-    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
-    $table .= "<tr><td $cell><a href=\"$update\"> Common </a></td></tr>";
-
+    if ($self->instance) {
+        my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
+        $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
+#    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
+        $update = "/cgi-bin/new/newupdate/newform".$cgi->postToGet(1,'session');
+        $table .= "<tr><td $cell><a href=\"$update\"> Common </a></td></tr>";
+    }
     $table .= "<tr><td $cell> </td></tr>";
     $table .= "</table>";
     $page->add($table);
+    $page->space(3-@databases); 
 
 # add the query options (always direct to 'querywindow')
 
@@ -1263,33 +1426,47 @@ sub GUI {
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
     if ($database && $database ne 'arcturus') {
+        $title = "QUERY THE ".uc($database)." CONTENTS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $query = "/cgi-bin/query/overview?database=$database";
-        $table .= "<tr><td $cell><a href=\"$query\" $querywindow>$database</a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>$database</a></td></tr>";
     }
-    my $query = "/cgi-bin/query/overview?database=arcturus";
-    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>arcturus</a></td></tr>";
-    my $sessioninfo = $cgi->postToGet();
-    $query = "/cgi-bin/umanager/locate$sessioninfo";
-    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>users</a></td></tr>";
+    if ($self->instance) {
+        $title = "COMMON DATABASE CONTENTS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        my $query = "/cgi-bin/query/overview?database=arcturus";
+        $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>arcturus</a></td></tr>";
+        $title = "USER INFORMATION";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $query = "/cgi-bin/umanager/locate".$cgi->postToGet();
+        $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>users</a></td></tr>";
+    }
     $table .= "</table>";
     $page->add($table); 
+    $page->space(3-@databases); 
 
 # add the help and exit buttons
 
     $page->partition(10);
     $table = "<table $tablelayout>";
-    $query = "/cgi-bin/query/help?script=$script";
+    $title = "WOT YOU ZINK??";
+    $title = ' ';
+    $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+    my $query = "/cgi-bin/query/help?script=$script";
     $cell = "bgcolor='yellow' nowrap align=center";
-    $table .= "<tr><td $cell><a href=\"$query\" $querywindow>HELP</a></td></tr>";
-    if ($cgi->parameter('session',0)) {
+    $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>HELP</a></td></tr>";
+     
+    if ($self->instance && $cgi->parameter('session',0)) {
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $query = "/cgi-bin/herdsman/signoff".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightgreen' nowrap align=center";
-        $table .= "<tr><td $cell><a href=\"$query\">SIGN OFF</a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$query\" $alt>SIGN OFF</a></td></tr>";
     }
-    else {
+    elsif ($self->instance) {
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $query = "/cgi-bin/herdsman/signon".$cgi->postToGet(1,@include);
         $cell = "bgcolor='lightblue' nowrap align=center";
-        $table .= "<tr><td $cell><a href=\"$query\">SIGN ON</a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$query\" $alt>SIGN ON</a></td></tr>";
     }
     $table .= "</table>";
     $page->add($table); 
@@ -1331,7 +1508,7 @@ sub currentScriptRoot {
 #*******************************************************************************
 
 sub currentOptions {
-# return any additional path_info fater script name
+# return any additional path_info after script name
     my $self = shift;
 
     my $options = $self->origin(@_);
@@ -1456,7 +1633,7 @@ sub report {
 
     if ((my $page = $self->{cgi}) && $self->{cgi}->pageExists) {
         $page->add($text.$tag);
-#        print STDOUT "added: $text \n" if $text;
+    print STDOUT "added: $text \n" if $text;
     }
     else {
         print STDOUT "$tag$text$tag\n" if $text;
@@ -1488,7 +1665,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>              81 ,
         version =>             1.0 ,
-        updated =>    "08 Apr 2002",
+        updated =>    "09 Sep 2002",
         date    =>    "26 Jun 2002",
     };
 }

@@ -14,63 +14,99 @@ use ReadsRecall;
 # Global variables
 #############################################################################
 
-my $CONTIGS;  # database handle to CONTIGS table
-my $R2C;      # database handle to READS2CONTIG table
-my $C2C;      # database handle to CONTIGS2CONTIG table
-my $READS;    # database handle to READS table
-# my $C2S;      # database handle to CONTIGS2SCAFFOLD table
-
+my $CCS;  # database handle to CONTIGS table
+my $R2C;  # database handle to READS2CONTIG table
+my $C2C;  # database handle to CONTIGS2CONTIG table
+my $RDS;  # database handle to READS table
+my $C2S;  # database handle to CONTIGS2SCAFFOLD table
 
 #############################################################################
-# constructor item new; serves only to create a handle to a stored read
-# subsequently ->getRead will load a (new) read
+# constructor init: serves only to create the database table handles
 #############################################################################
 
-sub new {
-# create instance for new contig
+sub init {
+# initialisation
     my $prototype  = shift;
-    my $dbasetable = shift; # handle to any table in the current database
-    my $contigname = shift; # the Contig name
+    my $dbasetable = shift; # handle to any table in the organism database
+
+    if (!$dbasetable || $$dbasetable{database} eq 'arturus') {
+        die "You must specify a database other than 'arcturus' in ContigRecall\n";
+    }
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
 # get the table handles from the input database table handle (if any)
 
-    if ($dbasetable) {
-        $CONTIGS = $dbasetable->spawn('CONTIGS'         ,'<self>',0,0);
-        $C2C     = $dbasetable->spawn('CONTIGS2CONTIG  ','<self>',0,0);
-        $R2C     = $dbasetable->spawn('READS2CONTIG'    ,'<self>',0,0);
-        $READS   = $dbasetable->spawn('READS'           ,'<self>',0,0);
-#        $C2S     = $dbasetable->spawn('CONTIGS2SCAFFOLD','<self>',0,0);
-    }
+    $CCS = $dbasetable->spawn('CONTIGS'         ,'<self>',0,0);
+    $C2C = $dbasetable->spawn('CONTIGS2CONTIG  ','<self>',0,0);
+    $R2C = $dbasetable->spawn('READS2CONTIG'    ,'<self>',0,0);
+    $RDS = $dbasetable->spawn('READS'           ,'<self>',0,0);
+    $C2S = $dbasetable->spawn('CONTIGS2SCAFFOLD','<self>',0,0);
 
-# allocate internal counters
-
-    $self->{readids} = [];
-    $self->{contig}  = $contigname;
-    $self->{status}  = {}; # error status report
-    $self->{counts}  = []; # counters
-
-    my $status = $self->{status};
-    $status->{warnings} = 0;
-    $status->{errors}   = 0;
-
+    $CCS->setAlternates('contigname','aliasname');
 
     bless ($self, $class);
     return $self;
 }
 
 #############################################################################
+# constructor new
+#############################################################################
 
-sub newContigName {
+sub new {
+# create instance for new contig
+    my $prototype  = shift;
+    my $contigitem = shift; # the Contig name or item
+    my $itsvalue   = shift;
+
+    if (!$contigitem) {
+        die "You must specify a name, number or item & value identifying the contig in ContigRecall\n";
+    }
+
+    my $class = ref($prototype) || $prototype;
+    my $self  = {};
+    bless ($self, $class);
+
+# allocate internal counters
+
+    $self->{contig}  = '';
+    $self->{readids} = []; # for read names
+    $self->{rhashes} = []; # for ReadsRecall hashes
+    $self->{markers} = []; # re: speeding up consensus builder
+    $self->{status}  = {}; # for error status report
+    $self->{sensus}  = ''; # consensus sequence
+
+    my $status = $self->{status};
+    $status->{report} = 0;
+    $status->{errors} = 0;
+
+    if (defined($itsvalue)) {
+        $self->getLabeledContig($contigitem, $itsvalue);
+    }
+    elsif ($contigitem =~ /[0-9]+/ && $contigitem !~ /[a-z]/i) {
+        $self->getNumberedContig($contigitem);
+    }
+    else {
+        $self->getNamedContig($contigitem);
+    }    
+
+    return $self;
+}
+
+#############################################################################
+
+sub getNamedContig {
 # initiate a new contig by name
     my $self = shift;
     my $name = shift;
 
+    $self->{contig} = $name.' ';
+
     my $query = "contigname = '$name' or aliasname = '$name'";
-    if (my $contig_id = $CONTIGS->associate('contig_id','where',$query)) {
-        return $self->newContigId($contig_id,@_);
+    if (my $contig_id = $CCS->associate('contig_id','where',$query)) {
+        return $self->currentContig($contig_id,@_);
+#        return $self->getNumberedContig($contig_id,@_);
     }
     else {
         return 0;
@@ -80,35 +116,120 @@ sub newContigName {
 
 #############################################################################
 
-sub newContigId {
-    my $self     = shift;
-    my $contigID = shift;
-    my $scpos    = shift;
-    my $fcpos    = shift;
+sub currentContig {
+# build an image of the current contig (generation 1)
+    my $self   = shift;
+    my $contig = shift; # number or name
+    my $scpos  = shift; # (optional) start of range on contig
+    my $fcpos  = shift; # (optional)  end  of range on contig
 
-# build reads table required for this contig
+    $self->{contig} .= $contig;
 
-    my $query = "contig_id = $contigID and label >= 10 ";
+    my $status = $self->{status};
+
+# autoVivify the links from READS2CONTIG table if not done before
+
+    $R2C->autoVivify('<self>',1.5) if !keys(%{$R2C->{sublinks}});
+
+# build read mappings required for this contig
+
+    my $query = "contig_id = $contig and label < 20 and generation = 0";
     if (defined($scpos) && defined($fcpos) && $scpos <= $fcpos) {
         $scpos *= 2; $fcpos *= 2;
         $query .= "and (pcstart+pcfinal + abs(pcfinal-pcstart) >= $scpos) "; 
         $query .= "and (pcstart+pcfinal - abs(pcfinal-pcstart) <= $fcpos) "; 
-    } 
-    if (my $readids = $R2C->associate('read_id','where',$query)) {
-        if ($readids && ref($readids) ne 'ARRAY') {
-            undef my @readids;
-            $readids[0] = $readids;
-            $readids = \@readids;
-        }
-        elsif (!$readids) {
-            return 0;
-        }
-        $self->{readids} = $readids;
-        return @$readids+0;
+print "query: where $query \n";
+    }
+
+# get hashes with mapping information to get the read_id involved
+
+
+    my $maphashes; my %reads;
+    if ($maphashes = $R2C->associate('hashrefs','where',$query)) {
+        foreach my $hash (@$maphashes) {
+            $reads{$hash->{read_id}} .= $hash.' '; # in case of multiple occurrances
+        }        
     }
     else {
+        $status->{report} = "No results found: $R2C->{qerror}\n";
+        $status->{errors}++;
         return 0;
     }
+
+    undef my @reads;
+    foreach my $read (keys %reads) {
+        push @reads, $read;
+    }
+
+    my $recall = new ReadsRecall; # get access to methods and class data
+    my $hashes = $recall->spawnReads(\@reads,'sequence,quality');
+    my $series = $recall->findInstanceOf;
+
+# store the mapping information in the read instances
+
+    foreach my $hash (@$maphashes) {
+        my $recall = $series->{$hash->{read_id}}; # the instance of read read_id
+        if ($recall->readToContig($hash)) {
+            print "WARNING: invalid mapping ranges for read $hash->{read_id}!\n";
+        }
+    }
+
+# sort the ReadRecall objects according to increasing upper contig range
+
+    @$hashes = sort { $a->{clower} <=> $b->{clower} } @$hashes;
+#    &lister($hashes);
+
+# cleanup
+
+    undef %reads;
+    undef @reads;
+    undef $maphashes;
+
+    my $result = 0;
+    if ($hashes) {
+        $self->{rhashes} = $hashes;
+        $result = @$hashes+0;
+    }
+    else {
+        $status->{errors} = $recall->{status}->{errors};
+        $status->{result} = $recall->{status}->{result};
+    }
+    return $result;
+}
+
+#############################################################################
+
+sub lister {
+# sort the hashes of the contig
+    my $hashes = shift;
+
+    print "input hashes $hashes \n";
+
+    my $lastHash = @$hashes - 1;
+    foreach my $i (0 .. $lastHash) {
+        my $read = $hashes->[$i];
+        my $range = '';
+        print "$read $read->{readhash}->{read_id} $read->{clower} $read->{cupper} $range\n";
+    }
+    return;
+}
+
+#############################################################################
+
+sub status {
+    my $self = shift;
+    my $list = shift;
+
+    my $status = $self->{status};
+    if ($list && $status->{errors}) {
+        print "Error status on contig $self->{contig}: $self->{report}\n";
+    }
+    elsif ($list) {
+        my $number = @{$self->{rhashes}};
+        print "Contig $self->{contig}: $number reads configured\n"; 
+    }
+        
+    return $status->{errors};
 }
 
 #############################################################################
@@ -130,9 +251,9 @@ sub trace {
     $contigstart{$contig} = $spos if (defined($spos));
     $contigstart{$contig} = 1 if (!$contigstart{$contig});
     $contigfinal{$contig} = $fpos if (defined($fpos));
-    $contigfinal{$contig} = $CONTIGS->associate('length',$contig,'contigname')
+    $contigfinal{$contig} = $CCS->associate('length',$contig,'contigname')
                             if (!$contigstart{$contig});
-    $contiglevel{$contig} = $CONTIGS->associate('parity',$contig,'contigname');
+    $contiglevel{$contig} = $CCS->associate('parity',$contig,'contigname');
     
 # do a traceback until contigs with parity>0
 
@@ -174,7 +295,7 @@ sub trace {
                     $contigstart{$oc} = $cstart - $onshift; # start point in the old contig
                     $contigfinal{$oc} = $cfinal - $onshift; # end   point in the old contig
                     $contigshift{$oc} = $shift  + $onshift; # shift with respect to assembly
-                    $contiglevel{$oc} = $CONTIGS->associate('parity',$oc,'contigname');
+                    $contiglevel{$oc} = $CCS->associate('parity',$oc,'contigname');
                     $number++;
                 } # else ignore
             }
@@ -200,6 +321,135 @@ sub trace {
         my $readhashes = $R2C->query($query);
     }
                     
+}
+
+#############################################################################
+
+sub window {
+# extract a contig window
+    my $self   = shift;
+    my $wstart = shift;
+    my $wfinal = shift;
+    my $mark   = shift;
+    my $list   = shift;
+
+    my $rhashes = $self->{rhashes} || return;
+
+    my $markers = $self->{markers};
+
+# collect the sequence and quality data in the specified window
+
+    undef my @SQ;
+
+#    print "test window $wstart $wfinal:\n";
+
+    for (my $i = 0; $i < @$rhashes; $i++) {
+
+        next if ($mark && $markers->[$i]);
+
+        my $read = $rhashes->[$i];
+# print "process read $read $read->{readhash}->{read_id} ($read->{clower} $read->{cupper})\n";
+        if (my $SQ = $read->inContigWindow($wstart, $wfinal)) {
+            push @SQ, $SQ; # array of arrays of references to sequence & quality and read data
+            $markers->[$i] = 1 if ($mark && $read->{cupper} <= $wfinal);
+            if ($list) {
+                my $output = $SQ->[0];            
+                my $sequence = join '',@$output;
+#                my $quality = $SQ->[1];
+                printf ("%8d:", $read->{readhash}->{read_id});
+                print "$sequence \n";
+#                print "@$quality \n";
+            }
+        }
+# disable this read once it has been found fully downwards of the window 
+        elsif ($read->{cupper} < $wstart) {
+# print "last  read below $read $read->{readhash}->{read_id} ($read->{clower} $read->{cupper}) marked to ignore \n";
+            $markers->[$i] = 1 if $mark;
+        }
+        elsif ($read->{clower} > $wfinal) {
+# the read is found upwards of the contig window; all subsequent ones will be too
+# print "first read above $read $read->{readhash}->{read_id} ($read->{clower} $read->{cupper})\n";
+            last;
+        }
+    }
+
+# get the consensus sequence
+
+    return &vote (\@SQ); # 0 if no data in window
+}
+
+#############################################################################
+
+sub vote {
+# Bayesian voting on consensus 
+    my $SQ = shift || return 0;
+
+    undef my $string;
+
+#    undef my @SQ;
+    my $length = 0;
+    foreach my $sq (@$SQ) {
+        $length = $sq->[2] if ($sq->[2] > $length);
+# print "vote input $sq : @$sq \n";
+    }
+# return;
+    my $i = 0;
+    while ($i < $length) {
+        my @sequence;
+        my @squality;
+        foreach my $sq (@$SQ) {
+            push @sequence, $sq->[0]->[$i];
+            push @squality, $sq->[1]->[$i];
+        }
+# preliminary voting on highest quality
+        my $vote = 0;
+# print "S:@sequence Q:@squality \n" if ($i == 0 || $i == $length-1); 
+        foreach my $j (1 .. $#squality) {
+            $vote = $j if ($squality[$j] > $squality[$vote]);
+        }
+#	print "vote $i: $vote $sequence[$vote] $squality[$vote] \n";
+        $string .= $sequence[$vote];
+        $i++;
+    }
+
+    return $string;
+}
+
+#############################################################################
+
+sub consensus {
+# build the consensus sequence
+    my $self  = shift;
+    my $block = shift || 500; # default
+    my $list  = shift || 0;
+
+    my $rhashes = $self->{rhashes} || return;
+
+    undef @{$self->{markers}};
+
+    $self->{sensus} = '';
+
+    my $initm = 1;
+    my $start = 0;
+    undef my $length;
+    while ($block) {
+        my $final = $start + $block;
+        $start++;
+print "block $start-$final: " if $list;
+        if (my $substring = $self->window($start, $final, 1)) {
+            $self->{sensus} .= $substring;
+            my $slength = length($substring);
+            $length += $slength;
+print "\n$substring \n" if $list;
+            $block = 0 if ($slength < $block);
+        }
+        else {
+            $block = 0;
+print "end\n" if $list;
+        }
+        $start = $final;
+    }
+    return $length;
 }
 
 #############################################################################

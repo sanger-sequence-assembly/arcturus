@@ -140,7 +140,7 @@ print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
         my ($dbasename, $thistable) = split '\.',$fullname;
         $database = $dbasename if ($dbasename ne 'arcturus');
         if (my $datamodel = $self->findInstanceOf('arcturus.DATAMODEL')) {
-    # DATAMODEL table is found among class %instances
+# DATAMODEL table is found among %instances
             my $hashrefs = $datamodel->SUPER::associate('hashrefs',$thistable,'tablename');
             foreach my $hash (@$hashrefs) {
                 my $thiscolumn = $hash->{tcolumn};
@@ -224,6 +224,9 @@ print "SUBLINKS installed for $thiscolumn<br>" if $LIST;
             print "Undefined domain or unknown link table $linktable<br>";
         }
     }
+
+    $self->setTracer(1) if keys(%{$self->{sublinks}}); # enable query tracing
+
     return 1; # signal full pass through procedure
 }
 
@@ -427,10 +430,9 @@ sub signature {
     my $userid = shift; # alternative name for identifier column
     my $update = shift; # alternative name for datetime column 
 
-    $userid = 'userid'  if !$userid; # default column name for userid
-    $update = 'updated' if !$update; # default column name for datetime
+    $userid = 'userid'  if !defined($userid); # default column name for userid
+    $update = 'updated' if !defined($update); # default column name for datetime
 
-#print "signature on $self->{tablename}: $user, $tcname, $tvalue, $userid, $update\n";
     if ($tcname && $tvalue && (defined($self->{coltype}->{$tcname}) || lc($tcname) eq 'where')) {
 # update the 'userid' if the column exists
         if (defined($user) && $user && defined($self->{coltype}->{$userid})) {
@@ -1304,7 +1306,8 @@ sub copy {
 
         foreach my $key (keys %$hash) {
 # key must be defined and not have a unique index 
-            if ($key ne $target->{autoinc} && $key ne $marker && $hash->{$key} && $hash->{$key} =~ /\S/) {
+            if ($key ne $target->{autoinc} && $key ne $marker && defined($hash->{$key}) && $hash->{$key}=~/\S/) {
+
                 if ($hash->{$key} ne $targethash->{$key}) {
                     $report .= "key $key to be updated to $hash->{$key} for $hash->{$marker}";
                     if ($option{doCopy} && $target->update($key,$hash->{$key},$marker,$hash->{$marker})) {
@@ -1321,6 +1324,9 @@ sub copy {
                     $report .= "key $key is identical in both tables\n";
                 }
 	    }
+            else {
+                $report .= "Not tested: $key ('$hash->{$key}')\n";
+            }
         }
     }
 

@@ -4,7 +4,7 @@ package DbaseTable;
 
 use strict;
 
-my $VERSION = "1.1";
+# my $VERSION = "1.1";
 
 my $DEBUG = 1;
 
@@ -14,51 +14,59 @@ my $DEBUG = 1;
 
 my %instances;
 my @alternates = ('identifier','description','name','type');
-my $qTracer = 1; # default query tracing on (or via $self->{qTracer}
 
 #############################################################################
 # new method creates an instance of DbaseTable   
 #############################################################################
 
 sub new {
-
+# constructor
     my $prototype = shift;
     my $dbhandle  = shift; # the database handle
     my $tablename = shift;
     my $database  = shift; # the database of the table
-    my $build     = shift; # define 0 for descriptors, 1 for hashrefs   
+    my $build     = shift; # define 0 for descriptors only, 1 for hashrefs; undef for no build   
     my $order     = shift; # if build defined as 1, order by column 'order'
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
+    bless ($self, $class);
+
+# table identification
+
     $self->{dbhandle}  = $dbhandle;
     $self->{tablename} = $tablename;
     $self->{database}  = $database;
 
-    $self->{columns}     = []; # array for table column names
-    $self->{coltype}     = {}; # hash with column types
-    $self->{prime_key}   = ''; # place holder for the primary key
-    $self->{unique}      = []; # place holders for a possible unique key
-    $self->{autoinc}     = ''; # for a possible autoincremental column
-    $self->{hashrefs}    = []; # array with hashrefs for table rows
-    $self->{hashref}     = ''; # hash reference of last accessed table row 
-    $self->{errors}      = ''; # build/instantiate status
-    $self->{qerror}      = ''; # query status
-    $self->{warnings}    = ''; # 
-    $self->{timestamp}   = ''; #
+# table instance attributes
 
-    $self->{qTracer}     = 1 ; # default query tracing on
-    $self->{sublinks}    = {}; # hash with links to other tables
+    $self->{columns}   = []; # array for table column names
+    $self->{coltype}   = {}; # hash with column types
+    $self->{prime_key} = ''; # place holder for the primary key
+    $self->{unique}    = []; # place holders for a possible unique key
+    $self->{autoinc}   = ''; # for a possible autoincremental column
+    $self->{hashrefs}  = []; # array with hashrefs for table rows
+    $self->{hashref}   = ''; # hash reference of last accessed table row 
+    $self->{errors}    = ''; # build/instantiate error status
+    $self->{warnings}  = ''; # build warning
+
+# query attributes
+
+    $self->{lastQuery} = ''; # the most recent query attempted 
+    $self->{qerror}    = ''; # possible query eror status
+    $self->{qTracer}   =  1; # default query tracing on
+    $self->{sublinks}  = {}; # hash with links to other tables
+    $self->{timestamp} = ''; # timestamp if database contents changed
 
 # initialize the table only if build is defined (preset error status for build)
 
     $self->{errors} = "Initialisation pending for table $database.$tablename";
-    if (defined($build) && !build($self,$build,$order)) {    
-        $self->{errors} = "Initialisation failed for table $database.$tablename";
-    }
+    &build($self,$build,$order) if defined($build); # overrides errors 
+#    if (defined($build) && !build($self,$build,$order)) {    
+#        $self->{warnings} = "Initialisation failed for table $database.$tablename";
+#    }
 
-    bless ($self, $class);
     return $self;
 }
 
@@ -110,9 +118,9 @@ sub build {
     my $exists = 0;
     my $query = "SHOW TABLES";
     $query .= " from  $self->{database}" if ($self->{database});
-    my $tst = $dbh->prepare($query);
-    if ($tst->execute()) {
-        while (my @description = $tst->fetchrow_array()) {
+    my $sth = $dbh->prepare($query);
+    if ($sth->execute()) {
+        while (my @description = $sth->fetchrow_array()) {
             $exists = 1 if ($description[0] eq $self->{tablename});
         }
         if (!$exists) {
@@ -121,18 +129,25 @@ sub build {
         }
     }
 
+# get index information
+
+    my $hashes = $self->query("show index from $tablename");
+    if ($hashes > 0) {
+        foreach my $hash (@$hashes) {
+            if (!$hash->{Non_unique} && $hash->{Key_name} !~ /INDEX/) {
+                push @{$self->{unique}},$hash->{Column_name};
+            }
+        }
+    }
 # get the column names in an array; mark the primary key, if there is one
 # if no primary key found, use a column named after table instead, if any
-
     undef my $prime_col;
-    my $sth = $dbh->prepare("SHOW COLUMNS from $tablename");
+    $sth = $dbh->prepare("SHOW COLUMNS from $tablename");
     if ($sth->execute()) {
         while (my @description = $sth->fetchrow_array()) {
             push @{$self->{columns}}, $description[0];  # keeps the order of entries
             $columns{$description[0]} = $description[1]; # hash for type information
             $self->{prime_key} = $description[0]     if ($description[3] eq 'PRI');
-            push @{$self->{unique}}, $description[0] if ($description[3] eq 'PRI');
-            push @{$self->{unique}}, $description[0] if ($description[3] eq 'UNI');
             $prime_col = $description[0] if ($tablename =~ /^\w+\.$description[0]$/i);
             $self->{autoinc} = $description[0] if ($description[5] && $description[5] =~ /auto/i);
             $count++; 
@@ -160,7 +175,6 @@ sub build {
 
 # finally, add the table to the 'instances' inventory of the DbaseTable class
 
-#print "$tablename build with switch $switch<br>\n";
     $instances{$tablename} = $self;
 
 # count is either the nr of columns (if !switch) or number of rows (if switch)
@@ -217,7 +231,10 @@ sub whoAmI {
 # test database handle, do a ping if specified
 
     my $dbh = $self->{dbhandle};
-    if (!defined($ping) || $ping) {
+    if (!$dbh) {
+        die "undefined database handle";
+    }
+    elsif (!defined($ping) || $ping) {
         $dbh->ping() or die "database handle has expired";
     }
 
@@ -394,7 +411,7 @@ sub associate {
     my $item  = shift;
     my $wval  = shift;
     my $wcol  = shift;
-    my $multi = shift; # true i.e !=0 forces search for more than one return items <0 no trace
+    my $multi = shift || 0; # true i.e !=0 forces search for more than one return items, <0 no trace
     my $order = shift;
     my $exact = shift; # use '=' and not 'like' in string comparisons (exact match)
 
@@ -409,16 +426,37 @@ sub associate {
 # multi>=0 allows activation of query tracing; multi<0 forbids
 # ibas(multi) is used as limit if > 1
 
-# column item must be defined in myself; wcol can be in a linked table
+# (obsolete?? column item must be defined in myself; wcol can be in a linked table)
+
+#print STDOUT "content-type: text/plain\n\n";
+    my %option = (traceQuery   => 1, # default query expansion activated
+                  compareExact => 0, # default use 'like' in string comparisons, else '='
+                  useLocate    => 1, # default test table image hash, if it exists
+                  returnScalar => 1, # default return scalar if query returns single column value
+                  orderBy      => 0, # override with column name if ordering required
+                  limit       => 0); # default no maximum specification
+    $option{useLocate} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
+    &importOptions(\%option, $multi);
+# the next lot redefines options using $multi, $order, $exact input in old applications
+    if (!$multi || (ref($multi) ne 'HASH')) {
+        $option{traceQuery}   = 0 if ($multi < 0);
+        $option{compareExact} = 1 if $exact;
+        $option{useLocate}    = 0 if ($multi != 0 || (defined($wval) && $wval =~ /[\%\_]/));
+        $option{useLocate}    = 1 if $exact; # overrides above; used for values containing '%' or '_'
+        $option{orderBy} = $order if $order;
+        $option{limit} = abs($multi) if (abs($multi) > 1); 
+    }
+    else {
+        $option{useLocate} = 1 if ($option{compareExact} > 1); # for values containing '%' or '_'
+    }
 
     undef my $hash;
     undef my $result;
-    undef $self->{qerror};
+    $self->qclean;
 
 # if one only exact match is required (no wildcards) test possible stored table hash
 
-    $multi = 0 if (!defined($multi));
-   ($hash, $result) = &locate ($self,$wval,$wcol) if (defined($wval) && $wval !~ /[\%\_]/ && !$multi || $exact);
+   ($hash, $result) = &locate($self,$wval,$wcol) if $option{useLocate};
 
 # the next two branches relate to internally stored tables and only return 
 # data of the first encountered record matching the query; use for unique items
@@ -432,6 +470,7 @@ sub associate {
 # return the value of the requested item in the **first** table record found by &locate
         $result = $hash->{$item};
     }
+# other dev: no hash but wval defined and wcol not ??
 
 # the following branches relate to queries with wildcards or when no table is
 # stored internally or where possibly more than one return value is expected ($multi != 0)
@@ -459,25 +498,27 @@ sub associate {
         if (my $quoted = quoteColValue($self,$wcol,$wval)) {
             $wval = $quoted;
         }
-        elsif ($multi >= 0) {
-    # the test column $wcol does not exist in myself, is composite, or wval is of wrong type
-            $useQueryTracer = $qTracer;
-#            $useQueryTracer = $self->{qTracer};
+#        elsif ($multi >= 0) {
+        elsif ($option{traceQuery}) {
+# the test column $wcol does not exist in myself, is composite, or wval is of wrong type
+            $useQueryTracer = $self->{qTracer};
+            $useQueryTracer = 0 if (!keys(%{$self->{sublinks}})); # no links available
         }
         elsif (($isComposite || $item ne 'count') && $wval !~ /\bwhere\b/i) {
-    # the test column $wcol does not exist in myself but no query tracing
-            $self->{qerror} = "Column $wcol does not exist in $self->{tablename}";
+# the test column $wcol does not exist in myself
+            $self->{qerror} = "Column $wcol does not exist in <self>";
             $item = ' '; # skips the remainder
         }
 
 # determine limit setting
 
-        my $multi = abs($multi);
-        my $limit = ''; $limit = "limit $multi" if ($multi > 1);
+#        my $multi = abs($multi);
+#        my $limit = ''; $limit = "limit $multi" if ($multi > 1);
+        my $limit = ''; $limit = "limit $option{limit}" if $option{limit};
 
 # determine possible ordering
 
-        my $orderby = ''; $orderby = "order by $order" if $order;
+        my $orderby = ''; $orderby = "order by $option{orderBy}" if $option{orderBy};
 
         my $whereclause = $wcol;
         if ($wval =~ /\bwhere\b/i) {
@@ -515,24 +556,24 @@ sub associate {
             $query = "$select $item from $tablename WHERE $whereclause $orderby $limit";
             $self->{lastQuery} = $query;
             $query = &traceQuery($self,$query) if ($useQueryTracer);
-            my $sty = $dbh->prepare($query); # return array of hashrefs
+            my $sth = $dbh->prepare($query); # return array of hashrefs
             my @result;
-            if ($sty->execute()) {
+            if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
-                while (my $hash = $sty->fetchrow_hashref()) {
+                while (my $hash = $sth->fetchrow_hashref()) {
                     push @result, $hash->{$item};
                 }
             }
-	    $sty->finish();
+	    $sth->finish();
 
             $self->{querytotalresult} = @result;
 # compose the output value: either a value or array reference
-#            if (@result == 1 && !$multi) {
-            if (@result == 1) {
+            if (@result == 1 && $option{returnScalar}) {
+#            if (@result == 1) {
                 $result = $result[0];
             }
-#            elsif (@result >= 1) {
-            elsif (@result > 1) {
+            elsif (@result >= 1) {
+#            elsif (@result > 1) {
                 $result = \@result;
             }
         }
@@ -546,13 +587,13 @@ sub associate {
             $query = "$select * from $tablename WHERE $whereclause limit 1";
             $self->{lastQuery} = $query;
             $query = &traceQuery($self,$query) if ($useQueryTracer);
-            my $sty = $dbh->prepare ($query); # return hashref to first record found
-            if ($sty->execute()) {
+            my $sth = $dbh->prepare ($query); # return hashref to first record found
+            if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
-                $result = $sty->fetchrow_hashref();
+                $result = $sth->fetchrow_hashref();
                 $self->{querytotalresult} = 1;
             }
-	    $sty->finish();
+	    $sth->finish();
         }
         elsif ($item eq 'hashrefs' || $isComposite) {
             undef my @hashrefs;
@@ -561,20 +602,20 @@ sub associate {
             $self->{lastQuery} = $query;
 # print "composite! query: $query ;  tracer $useQueryTracer<br>" if ($isComposite);
             $query = &traceQuery($self,$query) if ($useQueryTracer);
-            my $sty = $dbh->prepare ($query); # return array of hashrefs
-            if ($sty->execute()) {
+            my $sth = $dbh->prepare ($query); # return array of hashrefs
+            if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
-                while (my $hash = $sty->fetchrow_hashref()) {
+                while (my $hash = $sth->fetchrow_hashref()) {
                     push @hashrefs, $hash;
                 }
             }
-	    $sty->finish();
+	    $sth->finish();
 # print "result $queryStatus: @hashrefs <br>" if $isComposite;
             $self->{querytotalresult} = @hashrefs + 0; 
             $result = \@hashrefs; # return reference to array of hashes
         }
         elsif ($item && $item =~ /\S/) {
-            $self->{qerror} .= "Invalid column name '$item' specified. ";
+            $self->{qerror} = "Invalid column name '$item' in table $tablename\n";
         }
 
 # $result is either defined, including the numerical value '0', as query answer
@@ -585,30 +626,52 @@ sub associate {
 
         $self->{qerror} .= "Invalid query '$query' on table $tablename" if !$queryStatus;
         $result = 0 if !defined($result);
-
-        if (!$self->{querytotalresult} && !$queryStatus) {
-            print "$self->{lastQuery} <br>" if ($tablename =~ /\b(CONTIGS|USERS)\b/); # temp tests
-        }
     }
 
-    elsif ($item eq 'hashrefs') {
+    elsif (defined($wval) || defined($wcol)) {
+# one of them is undefined
+        $result = 0; # signal no data found
+    }
+
+    elsif ($item && $item eq 'hashrefs') {
         $result = $self->{hashrefs}; # if any
     }
 
-    elsif (defined($item) && (!@{$self->{hashrefs}} || $multi)) {
+    elsif (defined($item) && (!$self->{hashrefs} || $multi)) {
+# print "$self->{tablename} associate item=$item  wval=$wval wcol=$wcol multi=$multi \n"; 
         $result = $self->associate($item,'where',1,1,$item); # returns an ordered array or undefined
+#        $result = $self->associate($item,'where',1,{orderBy => $item}); # returns an ordered array or undefined
     }
 
     elsif (defined($item)) {
+# print "item $item\n";
         undef my @values;
         foreach my $hash (@{$self->{hashrefs}}) {
             push @values, $hash->{$item};
         }
         @values = sort @values;
-        $result = \@values;
+        $result = \@values if @values;
     }
 
     $result;
+}
+
+#*******************************************************************************
+
+sub importOptions {
+# private function 
+    my $options = shift; # hash with preset options
+    my $hvalues = shift; # hash with values overriding the preset options
+
+    my $status = 0;
+    if (ref($options) eq 'HASH' && ref($hvalues) eq 'HASH') {
+        foreach my $option (keys %$hvalues) {
+            $options->{$option} = $hvalues->{$option};
+        }
+        $status = 1;
+    }
+
+    $status;
 }
 
 #############################################################################
@@ -616,33 +679,28 @@ sub associate {
 sub quoteColValue {
 # determine the type of the column and quote the value
     my $self  = shift;
-    my $cname = shift;
+    my $cname = shift || 0;
     my $value = shift;
 
 # get database handle
 
-    my ($dbh, $tablename) = whoAmI($self);
+    my ($dbh, $tablename) = whoAmI($self,0,0); # no ping
 
     undef my $output;
     if (defined($value) && (my $columntype = $self->{coltype}->{$cname})) {
         my $quote = 0;
         $quote = 1 if ($columntype =~ /char|blob|date|enum/i);
         if (ref($value) =~ /ARRAY/i) {
-# print "quote array values $value<br>";
             my $count = 0;
             foreach my $choice (@$value) {
-# print "choice $choice<br>";
                 $output .= ',' if $count++;
                 if ($quote) {
                     $choice =~ s/^([\'\"])(.*)\1$/$2/; # chop off any existing quotes
-# print "  chop choice \"$choice\"<br>\n";
                     $choice = $dbh->quote($choice) unless ($choice =~ /^null$/i);
-# print "  quote choice \"$choice\"<br>\n";
                 }
                 $output .= $choice;
             }
             $output = '('.$output.')' if ($count > 1); # better than rely on ','
-# print "output $output<br>";
         }
         elsif ($quote) {
             $value =~ s/^([\'\"])(.*)\1$/$2/; # chop off any existing quotes
@@ -671,7 +729,7 @@ sub locate {
     undef my $rvalue;
 
     if (defined($wval) && defined($self->{hashrefs})) {           
-#print "find item: $item  for key $wval \n" if ($self->{tablename} =~ /INV/);
+# print "find item: $item  for key $wval \n" if ($self->{tablename} =~ /ORG/);
         foreach my $hash (@{$self->{hashrefs}}) {
             if (defined($item) && defined($hash->{$item}) && $hash->{$item} eq $wval) {
                 $result = $hash;
@@ -680,15 +738,14 @@ sub locate {
             elsif (!defined($item)) {
                 foreach my $column (@{$self->{columns}}) {
                     if (defined($hash->{$column}) && $hash->{$column} eq $wval) {
-#print "column:$column value:$hash->{$column} matches, result= $hash->{$item}\n" if ($self->{tablename} =~ /INV/); 
+# print "column:$column value:$hash->{$column} matches, result= $hash->{$item}\n" if ($self->{tablename} =~ /ORG/);
                         $result = $hash;
                         $rvalue = $column;
                         last; # accept the first match
                     }
                 }
             }
-        }
-        
+        }   
     } 
     $result, $rvalue;
 }
@@ -766,8 +823,7 @@ sub find {
 
 sub nextrow {
 # return hash reference to next row of table ($line undefined)
-# return hash reference to row nr "line" of table ($line defined)
- 
+# return hash reference to row nr "line" of table ($line defined) 
     my $self = shift;
     my $line = shift;
 
@@ -795,13 +851,12 @@ sub count {
 # where = 0      : return full length of database table
 # where = query  : return number of database table entries which satisfy the query
 
-# obsolete    die "$self->{errors}" if ((!defined($stest) || $stest) && status($self));
-
     undef my $count;
     if (defined($self->{hashrefs}) && !defined($where) && @{$self->{hashrefs}}) {
         $count = @{$self->{hashrefs}};
 # note: the curent hash could be different from the actual table; if you want
-# to be sure to count on the actual database table, force a query by defining $where
+# to be sure to count on the actual database table, force a query on the database
+# by defining $where, e.g. &count(1)
     }
     else {
         my $whereclause = '';
@@ -809,13 +864,14 @@ sub count {
         $whereclause = 'WHERE '.$whereclause if ($whereclause && $whereclause !~ /where/i);
         my ($dbh, $tablename) = whoAmI($self);
         my $query = "SELECT COUNT(*) FROM $tablename $whereclause";
+        undef $self->{qerror};
         $self->{lastQuery} = $query;
         my $sth = $dbh->prepare ($query);
         if ($sth->execute()) {
             $count = $sth->fetchrow_array();
         }
         else {
-            print "Execute failed on query: $query <br>\n";
+            $self->{qerror} = 1;
         }
         $sth->finish();
     }
@@ -843,6 +899,7 @@ sub counter {
 # (2) if so then test if $value exists (exact match)
 
     my $iden = 0;
+    my $error = '';
     undef my $counter;
     foreach my $column (@{$self->{columns}}) {
         $counter = $column if (!$counter && $column =~ /count|reads/i); # take first one encountered
@@ -888,10 +945,10 @@ print "$self->{tablename} counter: attempt to decrease counter $counter by $coun
             }
             if ($count != 0) {
                 my $command = "UPDATE <self> SET $counter=$counter+$count WHERE $whereclause";
+                $command =~ s/\+\s*\-/-/; # change +- to -
                 &query($self,$command,1,0) or $iden = 0;
-        # write the undo string into the self hash; could be called to undo this change
                 if (!$iden) {
-                    $self->{errors} = "Failed to update $counter in table <self>";
+                    $error = "failed to modify column $counter";
                 }
                 else {
                     $command =~ s/\+1\sW/-1 W/; # decrement counter
@@ -901,23 +958,26 @@ print "$self->{tablename} counter: attempt to decrease counter $counter by $coun
             &buildhash(0,$self); # reload the counter table
         } 
         elsif ($counter) {
-            $self->{errors} = "Failed to create a new row in table <self>";
+            $error = "failed to create a new row";
             $iden = 0;
         }
         else { # no counter
-            $self->{warnings} = "No counter identified in table <self>";
+            $self->{warnings} .= "table <self> has no counter column";
             $iden = 0;
         }
     }
     elsif (defined($value)) {
 
         if (defined($cname)) {
-            $self->{errors} = "Column \'$cname\' not found in table <self>";
+            $error = "column \'$cname\' not found";
         }
         else {
-            $self->{errors} = "Undefined column name presented for <self>";
+            $error = "undefined column for value $value";
         }
     }
+
+    $self->{qerror} = "Failed to update (counter) table <self>: $error" if $error;
+
     return $iden;
 }
 
@@ -939,15 +999,7 @@ sub newrow {
     my @cinserts; # columns
     my @vinserts; # values
     my $uniqueTest = 0;
-
-    undef $self->{errors};
-
-my $list = 0;
-if ($list) {
-print "<br>enter NEWROW: cname $cname value $value";
-print "   Cname $Cname Value $Value" if $Cname;
-print "<br>";
-}
+    my $error = '';
 
     if (!defined($cname) || !defined($value)) {
         $inputStatus = 0;
@@ -958,7 +1010,7 @@ print "<br>";
         $inputStatus = 0 if (@cinserts != @vinserts);
     }
     elsif (ref($cname) eq 'ARRAY' || ref($value) eq 'ARRAY') {
-        $inputStatus = 0;
+        $inputStatus = 0; # one array missing
     }
     else {
 # test input value against database if column value has to be unique
@@ -966,7 +1018,7 @@ print "<br>";
             $uniqueTest = 1 if ($cname eq $unique);
         }
         if ($uniqueTest && associate($self,$cname,$value,$cname,-1)) {
-            $self->{errors} .= "! newrow: column $cname value $value already exists\n";
+            $error = "column $cname value $value already exists";
             $inputStatus = 0;
         }
         push @cinserts, $cname;
@@ -988,12 +1040,6 @@ print "<br>";
         }
     }
 
-if ($list) {
-print "NEWROW: status $inputStatus<br>";
-print "cinserts @cinserts<br>";
-print "vinserts @vinserts<br>";
-}
-
 # check the column values for compatibility and quote where appropriate
 
     if ($inputStatus) {
@@ -1003,11 +1049,11 @@ print "vinserts @vinserts<br>";
 	    my $column = $cinserts[$i];
             my $cvalue = $vinserts[$i];
             if (!$columntype->{$column}) {
-                $self->{errors} .= "newrow: column $column does not exist\n";
+                $error = "column $column does not exist";
                 $inputStatus = 0;
             }
             elsif (!isSameType($columntype->{$column},$cvalue,1)) {
-                $self->{errors} .= "newrow: invalid value $cvalue for column $column \n";
+                $error = "invalid value $cvalue for column $column";
                 $inputStatus = 0;
             }
             else {
@@ -1016,10 +1062,6 @@ print "vinserts @vinserts<br>";
         }
     }
 
-if ($list) {
-print "NEWROW: status $inputStatus<br>";
-print "$self->{errors} <br>" if !$inputStatus;
-}
 # build the query string
 
     if ($inputStatus) {
@@ -1036,15 +1078,15 @@ print "$self->{errors} <br>" if !$inputStatus;
             }
         }
 
-print "multiline = $multiLine <br>" if $list;
+#my $list = 0;
+#print "multiline = $multiLine <br>" if $list;
 
         if (!$multiLine || $multiLine <= 1) {
 
             my $nextrow = count($self,0) + 1; # number of the next row, force query on table
             my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-print "NEWROW: nextrow=$nextrow query: $query \n wstring $wstring \n" if $list;
-            my $status = &query($self,$query,1,0); # to be       
-        # on successful completion: store the WHERE string for further updates or rollback
+            my $status = &query($self,$query,1,0);       
+# on successful completion: store the WHERE string for further updates or rollback
             if ($status && count($self,0) == $nextrow) {
                 $self->{whereclause} = "($wstring)";
                 my $undoclause = "DELETE FROM <self> WHERE $self->{whereclause}";
@@ -1052,27 +1094,30 @@ print "NEWROW: nextrow=$nextrow query: $query \n wstring $wstring \n" if $list;
                 $inputStatus = $nextrow;
             }
             else {
+# the insert failed
                 undef $self->{whereclause};
-                $inputStatus = 0; # to be sure
+                $error = "unspecified error";
+                $inputStatus = 0;
             }
         }
         else {  
-    # multi-line mode
+# multi-line mode
             if (!$self->{stack}->{$cstring}) {
                 my @vstack;
                 $self->{stack}->{$cstring} = \@vstack;
             }
             push @{$self->{stack}->{$cstring}}, $vstring;
             if (@{$self->{stack}->{$cstring}} >= $multiLine) {
-                my $nextrow = count($self,0) + $multiLine; # or leave out?
+                my $nextrow = count($self,0) + $multiLine;
                 $vstring = join '),(',@{$self->{stack}->{$cstring}};
                 my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
-# print "NEWROW: nextrow=$nextrow query: $query \n";
+# print "NEWROW: nextrow=$nextrow\n" if $list;
                 my $status = &query($self,$query,1,0);      
                 if ($status && count($self,0) == $nextrow) {
                     $inputStatus = $nextrow;
                 }
                 else {
+                    $error = "unspecified error"; # what about rollback?
                     $inputStatus = 0;
                 }
                 undef $self->{stack}->{$cstring};
@@ -1081,11 +1126,12 @@ print "NEWROW: nextrow=$nextrow query: $query \n wstring $wstring \n" if $list;
     }
 
     if (!$inputStatus) {
-#        $self->{errors}  = "! Failed to insert new row into table $tablename \n";
+        $self->{qerror} = "Failed to insert new row into table <self>: $error";
     }
 
-print "NEWROW return status: $inputStatus<br>" if $list;
-    return $inputStatus; # 0 for failure, > 0 for success with status = nr of row added
+# return value: 0 for failure, > 0 for success with status = nr of row added
+
+    return $inputStatus;
 }
 
 #############################################################################
@@ -1138,20 +1184,16 @@ sub update {
     my $limit = shift;
     my $exact = shift; # exact match of where clause subject
 
-# test database and the input
-
-    my ($dbh, $tablename) = whoAmI($self);
-
 # build the WHERE clause: only allow wkey and wval simultaneously undefined
+
+#    &qclean($self);
 
     my $doStamp = 1;
     my $whereclause;
     if (defined($wkey) && defined($wval) && defined($self->{coltype}->{$wkey})) {
-# use input parameters
-   # here test $wval for ! or 'not'
+# use input parameters; test $wval for ! or 'not'
         $wval = &quoteColValue($self,$wkey,$wval);
         $whereclause = "$wkey";
-# $whereclause =~ s/\=\s+null\s*$/IS NULL/i; 
         if ($wval =~ /^\(.*?\,.+\)/) {
             $whereclause .= ' in '; # with a list specification
         }
@@ -1166,38 +1208,36 @@ sub update {
 # print "update:$cname $value  whereclause:$whereclause<br>\n";
     }
     elsif (defined($wkey) && defined($wval) && $wkey =~ /\bwhere\b/i) {
-        $whereclause = $wval; # must be fully specified including quoting
+# use $wval in where clause; must be fully specified including quoting
+        $whereclause = $wval;
     }
     elsif (!defined($wkey) && !defined($wval) && defined($self->{whereclause})) {
-    # use previously stored string: this is an update after an insert
+# use previously stored where clause: update after an insert
         $whereclause = $self->{whereclause};
         $doStamp = 0;
     } 
     else {
-        $self->{errors} .= "! Failed to update $tablename: missing or invalid WHERE";
-        $self->{errors} .= " clause: cname=$cname value=$value wkey=$wkey wval=$wval";
+        my $error = "missing or invalid WHERE clause: cname=$cname value=$value wkey=$wkey wval=$wval";
+        $self->{qerror} = "! Failed to update table <self>: $error";
         return 0;
     }
 
 # okay, now do the update
             
     my $status = 0; # default failure
-#    $value = 'NULL' if (!defined($value) || $value != /\w/);
+#    $value = 'NULL' if (!defined($value) || $value !~ /\w/);
     if (defined($cname) && defined($value) && defined($self->{coltype}->{$cname})) {
         $value = &quoteColValue($self,$cname,$value);
-    # note: for a complete rollback one should query the current value of cname and add undoclause e.g. 
-    # (my $oldvalue) = $dbh->selectrow_array("SELECT $cname FROM $tablename WHERE $whereclause");
-    # $undoclause = "UPDATE $tablename SET $cname = $oldvalue WHERE $whereclause";
-        my $query = "UPDATE $tablename SET $cname = $value WHERE $whereclause";
+# note: for a complete rollback one should query the current value of cname and add undoclause e.g. 
+# (my $oldvalue) = $dbh->selectrow_array("SELECT $cname FROM <self> WHERE $whereclause");
+# $undoclause = "UPDATE <self> SET $cname = $oldvalue WHERE $whereclause";
+        my $query = "UPDATE <self> SET $cname = $value WHERE $whereclause";
         $query .= " limit $limit" if ($limit && $limit > 0); # if any
         $status = &query($self,$query,$doStamp);
+        $self->{qerror} = "Failed to update table <self>" if !$status;
     }
-
-    if (!$status) {
-        $self->{errors}  = "! Failed to update  table $tablename:";
-        $self->{errors} .= " $self->{qerror}" if  $self->{qerror};
-        $self->{errors} .= " Invalid or undefined column name $cname or value $value" if !$self->{qerror};
-#print "errors: $self->{errors}\n";
+    else {
+        $self->{qerror} = "Failed to update table <self>: (probably) column $cname does not exist";
     }
 
     return $status;   
@@ -1211,36 +1251,31 @@ sub increment {
     my $column = shift;
     my $cnamed = shift;
     my $cvalue = shift;
-    my $change = shift; # default +1; must be numerical
+    my $change = shift || 1; # default +1, must be numerical
 
-    my $status = 0; # default failure
-
-    $change = 1 if !$change;
-
-# test database and the input
-
-    my ($dbh, $tablename) = whoAmI($self);
+    my $status = 0; # preset failure
+    undef $self->{qerror};
 
     if (defined($column) && defined($self->{coltype}->{$column})) {
 # the target column exists
         if (defined($cnamed) && defined($self->{coltype}->{$cnamed}) && defined($cvalue)) {
-    # the named column and value exist
+# the named  column and value exist
             if ($self->{coltype}->{$column} =~ /int/i && $change !~ /\D/) {
-        # target column and the increment are of type numerical
+# target column and the increment are of type numerical
                 $cvalue = &quoteColValue($self,$cnamed,$cvalue);
-                my $query = "UPDATE $tablename SET $column = $column+$change ";
+                my $query = "UPDATE <self> SET $column = $column+$change ";
                 $query .= "WHERE $cnamed = $cvalue";
                 $status = &query($self,$query,0);
-#print "query=$query  status=$status<br>";
             }
         }
         else {
-#print "invalid column $cnamed in $tablename<br>";
+            $self->{qerror} = "invalid column $cnamed in <self>";
         }
     }
     else {
-#print "invalid target column $column in $tablename<br>";
+        $self->{qerror} = "invalid target column $column in <self>";
     }
+
     return $status;
 }
 
@@ -1253,35 +1288,35 @@ sub delete {
     my $value = shift; # a where clause or its value
     my $limit = shift;
 
-    my $status = 0; # default failure
-
-# test database and the input
-
-    my ($dbh, $tablename) = whoAmI($self,0,0); # no ping here
-
-    my $columntype = $self->{coltype}; 
+    my $status = 0;
+    &qclean($self);
+    my $error = '';
 
 # insist on a non blank value
 
     if (defined($value) && $value =~ /\w/) {
+        my $columntype = $self->{coltype}; 
         if (defined($cname) && defined($columntype->{$cname})) {
             $value = &quoteColValue($self,$cname,$value);
-    # delete the qualified row
-            my $query = "DELETE FROM $tablename WHERE $cname = $value";
+            my $query = "DELETE FROM <self> WHERE $cname = $value";
             $query .= " limit $limit" if ($limit && $limit > 0);
             $status = &query($self,$query,1,0);
         }
         elsif ($cname =~ /where/i) {
-            my $query = "DELETE FROM $tablename WHERE $value";
+            my $query = "DELETE FROM <self> WHERE $value";
             $query .= " limit $limit" if ($limit && $limit > 0);
             $status = &query($self,$query,1,0);           
         }
         else {
-            print "! Invalid column name $cname\n";
+            $error = "invalid column $cname";
         }
-    } else {
-        print "! Missing value for column $cname in delete on $tablename\n";
+    } 
+    else {
+        $error = "missing value for column $cname";
     }
+
+    $self->{qerror} = "Failed to delete from table <self>: $error";
+
     return $status;
 }
 
@@ -1295,11 +1330,11 @@ sub rollback {
 
     my $status = 0;
     if ($mode && defined($self->{undoclause})) {
-    # a rollback list exists; undo previous changes
+# a rollback list exists; undo previous changes
         my ($dbh,$tablename) = whoAmI($self);
 
         foreach my $undocommand (@{$self->{undoclause}}) {
-# print "undo: $undocommand\n";
+print "UNDO: $undocommand\n";
             query($self,$undocommand,1,0) || $status++;
 #            my $sth = $dbh->prepare ($undocommand);
 #            $sth->execute() || $status++;
@@ -1347,15 +1382,27 @@ sub prepare {
 
 #############################################################################
 
+sub qclean {
+    my $self = shift;
+
+    undef $self->{qerror};
+    undef $self->{lastQuery};
+}
+
+#############################################################################
+
 sub query {
 # general query processing
     my $self  = shift;
     my $query = shift;
     my $stamp = shift; # undefined or true for timestamp on (updates);
-    my $trace = shift; # undefined or true for query trace;
+    my $trace = shift;
 
-    $trace = $qTracer if !defined($trace); # use default value
-#    $trace = $self->{qTracer} if !defined($trace); # use default value
+    $self->qclean;
+
+    $trace = $self->{qTracer} if !defined($trace); # default
+# override any trace specification if no links have been set up
+    $trace = 0 if (!keys(%{$self->{sublinks}}));
 
     my ($dbh, $tablename) = whoAmI($self);
 
@@ -1373,20 +1420,15 @@ sub query {
     $query =~ s/\=\s+null\s/is NULL /ig;       # replace any  '= null' 
 
 # apply the query tracer to test columns referenced (select only)
-  
-    $trace = 1 if (!defined($trace)); # default is for tracing
-    $trace = 0 if (!keys(%{$self->{sublinks}})); # no links available
-    $self->{lastQuery} = "query '$query'  traced:$trace";
+
     $query = &traceQuery($self,$query) if ($query =~ /select/i && $trace);
 
 # execute the query
 
     undef my @hashrefs;
     undef $self->{qerror};
+    $self->{lastQuery} .= $query;
     my $sth = $dbh->prepare($query); 
-#print "query on $tablename: $query<br>" if ($tablename =~ /STA|PRI|STR|CHE|VECT|LIG|ASS/);
-#print "query on $tablename: $query<br>" if ($tablename =~ /STA|PRI|STR|CHE|VECT|LIG|ASS/);
-#print "query on $tablename: $query<br>" if ($tablename =~ /READS$/ && $query !~ /SET/i && $query =~ /4/);
     my $status = $sth->execute();
     $status = 0 if !defined($status);
 # beware: $status:0 (false) indicates an error; 0E0 indicates no data returned
@@ -1394,17 +1436,17 @@ sub query {
 # there is at least one returned row
         while (my $hash = $sth->fetchrow_hashref()) {
             push @hashrefs, $hash;
-
         }
+    }
+    elsif (!$status) {
+        $self->{qerror} = 1;
     } 
     elsif ($status < 0) {
-        $status = 0; # false
+        $status = 0; # just in case, false
+        $self->{qerror} = 1;
     }
     $sth->finish();
 
-# set error flag if appropriate
-
-    $self->{qerror} = "Error status returned on query: $query" if !$status;
 
 # modify timestamp if query changed the table (update, delete, insert, ..)
 
@@ -1428,10 +1470,34 @@ sub query {
 
 #############################################################################
 
+sub qstatus {
+    my $self = shift;
+
+    $self->{qerror} =~ s/\<self\>/$self->{tablename}/g;
+
+    undef my $report;
+    if (!$self->{qerror}) {
+        $report = "Query $self->{lastQuery} succeeded";
+    }
+    else {
+        $report = "Query $self->{lastQuery} FAILED";
+        $report .= ': '.$self->{qerror} if ($self->{qerror} =~ /\D/);
+    } 
+
+    $report .= "$self->{errors} \n"   if $self->{errors};
+    $report .= "$self->{warnings} \n" if $self->{warnings};
+
+    return $report;
+}
+
+#############################################################################
+
 sub traceQuery {
 # expand query to include full table names & trace query across linked columns
     my $self  = shift;
     my $query = shift;
+
+    $self->{lastQuery} = "original: ".$query."\n\ntraced  :";
 
     my $tracedQuery = $query;
 
@@ -1534,7 +1600,7 @@ print "test target $target<br>\n" if ($list>1);
 print "traced query: $tracedQuery<br>\n" if ($list>1);
     }
 
-    $self->{lastQuery} .= "<BR>\n".$tracedQuery; # add traced query to log
+    $self->{lastQuery} .= "\n".$tracedQuery; # add traced query to log
 
     return $tracedQuery;
 }
@@ -1771,8 +1837,17 @@ sub setTracer {
     my $trace = shift;
 
     $trace = 0 if !$trace;
-    $qTracer = $trace;
-#    $self->{qTracer} = $trace;
+    $self->{qTracer} = $trace;
+}
+
+
+#############################################################################
+
+sub setAlternates {
+# (re)define default alternative column names
+    my $self = shift;
+
+    @alternates = @_ if @_;
 }
 
 #############################################################################
@@ -1782,15 +1857,17 @@ sub unlink {
     my $self = shift;
 
     if (shift) {
-#print "unlink all tables<br>";
+# unlink all tables
         foreach my $table (keys %instances){
             my $tableref = $instances{$table};
-            undef $tableref->{sublinks};
-#print "unlinked: $tableref->{tablename}<br>"; 
+            $tableref->unlink();
+#            undef $tableref->{sublinks};
         }
     }
     else {
+#print "unlinked: $self->{tablename}<br>";
         undef $self->{sublinks};
+        $self->setTracer(0);
     }
 }
 
@@ -1837,7 +1914,6 @@ sub DESTROY {
 }
 
 #############################################################################
-#############################################################################
 
 sub colophon {
     return colophon => {
@@ -1846,8 +1922,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "30 Nov 2000",
-        updated =>    "08 Apr 2002",
+        updated =>    "02 Sep 2002",
     };
 }
+
+#############################################################################
 
 1;

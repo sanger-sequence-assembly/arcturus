@@ -176,6 +176,7 @@ sub postToGet {
     foreach my $key (keys (%$in)) {
         my $accept = 1;
         $accept = 0 if ($key eq 'submit'); # always
+        $accept = 0 if ($key eq 'confirm'); # always
         $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
         $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
         if ($accept && $in->{$key} =~ /\w/) {

@@ -112,6 +112,20 @@ sub form {
 
 ###############################################################################
 
+sub substitute {
+# replace a string in the current partition
+    my $self   = shift;
+    my $target = shift || return;
+    my $change = shift || '';
+ 
+    my $part = $self->{current} - 1;
+    my $content = $self->{content}; #  partition contents
+
+    $content->[$part] =~ s/$target/$change/;
+}
+
+###############################################################################
+
 sub submitbuttonbar {
 # add submit button and: a reset button or a return link below or nothing
     my $self  = shift;
@@ -121,13 +135,13 @@ sub submitbuttonbar {
     my $text  = shift;
 
     my $buttonbar = "<TABLE><TR>";
-    $buttonbar .= "<TD ALIGN=CENTER WIDTH=50%><INPUT name='submit' type=";
+    $buttonbar .= "<TD ALIGN=LEFT WIDTH=50%><INPUT type='submit' name=";
     $buttonbar .= "'submit' value='&nbsp Submit &nbsp'></TD>";
     if (defined($reset) && $reset eq '1') {
-        $buttonbar .= "<TD WIDTH=50%><INPUT name='reset'  type='reset'></TD>";
+        $buttonbar .= "<TD WIDTH=50% ALIGN=CENTER><INPUT type='reset' value='&nbsp Reset &nbsp'></TD>";
     }
     elsif (defined($reset) && $reset =~ /\w/ && $reset =~ /\D/) {
-    # require text
+# require text
         if (!defined($jump) || $jump) {
             $buttonbar .= "</TR><TR><TD ALIGN='CENTER'>or</TD></TR><TR>";
         }
@@ -225,13 +239,14 @@ sub errorbox {
     my $content = $self->{content}; #  partition contents
 
     undef my $error;
-    $colour = 'F0C0C0' if (!$colour);
+    $colour = 'FFCA88' if (!$colour); # light orange
     $text = "unspecified error" if (!$text);
+    $text =~ s/\n/<br>/g;
     $error .= "<TABLE ALIGN=CENTER><TR><TD VALIGN='center' BGCOLOR=\"$colour\">";
-    $error .= "<H3>! $text</H3></TD></TR></TABLE><HR>";
+    $error .= "<H3>$text</H3></TD></TR></TABLE>";
     if ($link) {
         $ltxt = "GO BACK" if (!$ltxt);
-        $error .= "<TABLE ALIGN=CENTER><TR>";
+        $error .= "<HR><TABLE ALIGN=CENTER><TR>";
         $error .= "<TD WIDTH=200 ALIGN=CENTER><A href=\"$link\">$ltxt</A></TD>";
         $error .= "</TR></TABLE>";
     }
@@ -253,6 +268,29 @@ sub promptbox {
     sectionheader($self,$text,4,1) if ($text);
     confirmbuttonbar($self,$reject,1);
     center($self,0);
+}
+
+###############################################################################
+
+sub message {
+# display a message in a coloured field
+    my $self   = shift;
+    my $text   = shift || 'No Message Provided';
+    my $colour = shift || 'white';
+    my $font   = shift;
+    my $center = shift || 0;
+    my $twidth = shift || 0;
+
+    my $part = $self->{current} - 1;
+    my $content = $self->{content};
+
+    $text =~ s/\n/<br>/g;
+    $text = "<font $font>$text</font>" if $font;
+    my $align = ''; $align = "align=center" if $center;
+    my $width = ''; $width = "width=$twidth" if $twidth;
+    my $message = "<TABLE $width><TR><TD BGCOLOR=\"$colour\" $align>$text</TD></TR></TABLE>";
+
+    $content->[$part] .= $message;
 }
 
 ###############################################################################
@@ -361,7 +399,7 @@ sub center {
 sub add {
 # add to the current partition
     my $self  = shift;
-    my $text  = shift;
+    my $text  = shift || '';
     my $part  = shift; # optional, default the curent part
     my $hline = shift; # optional, default no closing line
     my $font  = shift; # optional, font specification
@@ -369,9 +407,9 @@ sub add {
     $part = $self->{current} if (!defined($part) || $part <= 0);
     my $content = $self->{content}; #  partition contents
 
+    $text =~ s/\n/<br>/g;
+#    $text =~ s/banner/$self->{banner}/ if ($text && $self->{banner});
     $text = "<FONT $font>$text</FONT>" if $font;
-
-    $text =~ s/banner/$self->{banner}/ if ($text && $self->{banner});
 
     $content->[--$part] .= $text if (defined($text));
 
@@ -391,20 +429,23 @@ sub identify {
     my ($id,$rp) = split //,$repeat;
 
     $size = 8 if (!$size);
+    my $isize = $size;
+    $isize = 8 if ($isize > 8); # arcturus upper limit for user ID
+    my $psize = $size;
 
     my $password = 'PASSWORD'; # used if not replaced below
     my $query = "<TABLE ALIGN=CENTER border=0 cellpadding=2><TR>";
     if (defined($id) && $id) {
         $query .= "<TH ALIGN=RIGHT NOWRAP>User ID</TH><TD ALIGN=LEFT NOWRAP>";
-        $query .= "<INPUT NAME='identify' SIZE=$size VALUE=''></TD><TD>&nbsp</TD>";
+        $query .= "<INPUT NAME='identify' SIZE=$isize VALUE=''></TD><TD>&nbsp</TD>";
         $password = 'password'; # default for "identify, password, [pwrepeat]"
     }
     $query .= "<TH ALIGN=RIGHT NOWRAP>Password</TH><TD ALIGN=LEFT NOWRAP>";
-    $query .= "<INPUT TYPE=PASSWORD NAME='$password' SIZE=$size VALUE=''></TD>";
+    $query .= "<INPUT TYPE=PASSWORD NAME='$password' SIZE=$psize VALUE=''></TD>";
     if (defined($rp) && $rp) {
         $query .= "<TD>&nbsp</TD><TH ALIGN=RIGHT NOWRAP>Type again</TH>";
         $query .= "<TD ALIGN=LEFT NOWRAP>";
-        $query .= "<INPUT TYPE=PASSWORD NAME='pwrepeat' SIZE=$size VALUE=''></TD>";
+        $query .= "<INPUT TYPE=PASSWORD NAME='pwrepeat' SIZE=$psize VALUE=''></TD>";
     }
     $query .= "</TR></TABLE>";
 
@@ -471,22 +512,24 @@ sub preload {
         my $in = $value->{$name};
         %input = %$in; # copy to local
 # print "CGI preload<br>";
-    } else {
+    }
+    else {
         $input{$name} = $value;
 # print "single value $name preload<br>";
     }
 
 # scan the page for <INPUT tags with undefined values for the input parameters
 
+        
     foreach my $name (keys (%input)) {
 
         if ($content->[$part] =~ /\<\s*(input\s[^\<\>]*?name\s*\=\s*[\'\"]?$name[\'\"]?[^\<\>]*)\>/is) {
             my $original = $1; my $replacement = $1;
             if ($replacement =~ /radio|checkbox/i) {
-        # check the button  
+# it's a button; check it  
                 $replacement .= ' checked' if ($replacement !~ /checked/);
             }
-        # if the tag does not have a value field, add it
+# if the tag does not have a value field, add it
             elsif (!($replacement =~ /value/i)) {
                 $replacement .= " VALUE='$input{$name}'";
             }
@@ -503,9 +546,14 @@ sub preload {
         # now substitute the original string by the new one with values
             $content->[$part] =~ s/$original/$replacement/ if ($replacement ne $original);;
         }
-# else {
-#    print "NO match <br>\n" if ($list);
-#}
+        elsif ($content->[$part] =~ /\<\s*(input\s[^\<\>]*?name\s*\=\s*[\'\"]?$name[\'\"]?)(.*)/is) {
+            my $test = $2; # next match relies on quotes around values
+            if ($test =~ /.*?(value\s*\=\s*[\'\"]([^\'\"]+?)[\'\"])/is) {
+                my $original = $1; my $replacement = $1; my $target = $2;
+                $replacement =~ s/$target/$input{$name}/;
+                $content->[$part] =~ s/$original/$replacement/ if ($replacement ne $original);;
+            }
+        }
     }
 
 # here a check on all checkboxes?
@@ -563,17 +611,20 @@ sub choicelist {
     my $list = shift; # reference to array with names
     my $size = shift; # optional width of field
     my $line = shift; # continuation line
+    my $mark = shift;
 
 # compose HTML select construct
 
     my $width = ''; # default no width specification
     $width = "width=$size" if ($size && $size > 0);
 
+    my $preselect = '';
     my $select = "SELECTED";
     my $choice = "<SELECT $width name = \'$name\'>";
     foreach my $listitem (@$list) {
-       $choice .= "<OPTION value = \'$listitem\' $select>$listitem";
-       $select = '';
+       $preselect = $select if (!$mark || $mark eq $listitem); 
+       $choice .= "<OPTION value = \'$listitem\' $preselect>$listitem";
+       $select = '' if $preselect;
     }
     $choice .= "</SELECT>";
 
