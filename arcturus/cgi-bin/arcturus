@@ -43,7 +43,7 @@ my ($void, $action, $page);
 if ($action eq 'signon') {
 
     $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
-    $GateKeeper->authorize(0,{ageWindow=>180}); # bounce authorization form    
+    $GateKeeper->authorize(0,{ageWindow=>180}); # bounce authorization form
 }
 
 elsif ($action eq 'signoff') {
@@ -58,8 +58,9 @@ elsif ($action eq 'signoff') {
 
 else {
 # if the script is invoked by the identification prompt: get session number
+    my $authorized = 1;
     if ($cgi->parameter('identify')) {
-        $GateKeeper->authorize(0,{ageWindow=>180}); # (all action except access test)  
+        $authorized = $GateKeeper->authorize(0,{ageWindow=>180}); # (all action except access test)  
     }
 
     $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
@@ -68,7 +69,14 @@ else {
 
     my $font = "size=4 face='sans-serif'";
 
-    if ($GateKeeper->instance) {
+    if (!$authorized) {
+# after return from 'signon'
+            $page->space(2);
+            $page->message("! Signon failed: $GateKeeper->{error}",'FFCA88','size = +1');
+            $page->space(1);
+            $page->message("Please try again",'white','size = +1');
+    }
+    elsif ($GateKeeper->instance) {
         my $count = $organisms->count();
         my $text = "There are $count Organism databases on this server";
         $text =~ s/are/is/ if ($count <= 1);
