@@ -418,6 +418,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
     my $superscaffold = [[$seedscaffoldid, 'F']];
 
+    $scaffoldtosuperscaffold->{$seedscaffoldid} = $superscaffold;
+
     ###
     ### Extend super-scaffold to the right
     ###
