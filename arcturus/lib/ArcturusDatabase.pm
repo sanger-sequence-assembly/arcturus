@@ -751,6 +751,7 @@ sub getMappingsForContigID {
 
     my @Mappings;
 
+    my $Mapping;
     my $previousread_id = 0;
     while(my @ary = $sth->fetchrow_array()) {
 # create a new Mapping instance and define its mapping number (signal it's from the database)
@@ -758,12 +759,17 @@ sub getMappingsForContigID {
         my $read_id = shift @ary;
         if ($read_id != $previousread_id) {
 # a Mapping instance does not yet exist for this read_id
-            my $Mapping = new Mapping();
+            $Mapping = new Mapping();
             $Mapping->setReadID($read_id);
             push @Mappings, $Mapping;
         }
-        $Mapping->addUnpaddedAlignment(@ary) if ($label < 20);
-        $Mapping->addOverallAlignment(@ary) if ($label >= 10);
+        elsif ($Mapping) {
+            $Mapping->addUnpaddedAlignment(@ary) if ($label < 20);
+            $Mapping->addOverallAlignment(@ary) if ($label >= 10);
+        }
+        else {
+# something seriously wrong, error message ?
+        }
     }
 
     $sth->finish();
