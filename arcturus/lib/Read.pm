@@ -651,6 +651,9 @@ sub writeToCaf {
         }
     }
 
+    # The CAF format requires a blank line between sections
+    print $FILE "\n";
+
 # to write the DNA and BaseQuality we use the two private methods
 
     $this->writeDNA($FILE,"DNA : ",@_); # specifying the CAF marker
