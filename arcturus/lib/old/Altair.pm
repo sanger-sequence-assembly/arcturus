@@ -115,7 +115,7 @@ sub getContigById {
 
     $self->dropDead("Altair interface not correctly initialised") if !$ContigRecall;
 
-    return $ContigRecall->getContigHashById($contig,$noseq,1); # long read
+    return $ContigRecall->getContigHashById($contig, {noSequence => $noseq});
 }
 #--------------------------- documentation --------------------------
 =pod
@@ -126,7 +126,7 @@ sub getContigById {
 
 =head2 SYNOPSIS
 
-    Get contig descriptors for contig identified by id number
+    Returns hash with contig descriptors for contig identified by id number
 
 =head2 PARAMETERS
 
@@ -146,7 +146,7 @@ sub getContigById {
 
  On success returns a data hash with contig descriptors
 
- On failure returns 0 or data hash with single I< status > key
+ On failure returns 0 or data hash with single < status > key
 
 
 
@@ -228,10 +228,13 @@ sub getContigByAlias {
 
     $self->dropDead("Altair interface not correctly initialised") if !$ContigRecall;
 
-    my $cids = $ContigRecall->findContigByAlias($alias, $options);
+#    my $cids = $ContigRecall->findContigByAlias($alias, $options);
+    my $cids = $ContigRecall->getContigHashByAttribute($alias, $options);
 
     return $cids; 
 }
+
+#-----------------------------------------------------------------------------
 
 sub getContigByName {
 # special case for getContigByAlias using only contig name or alias name
@@ -245,6 +248,8 @@ sub getContigByName {
     return $self->getContigByAlias($name,$opts);
 }
 
+#-----------------------------------------------------------------------------
+
 sub getContigByRead {
 # special case for getContigByAlias using only readname
     my $self = shift;
@@ -257,6 +262,8 @@ sub getContigByRead {
     return $self->getContigByAlias($name,$opts);
 }
 
+#-----------------------------------------------------------------------------
+
 sub getContigByClone {
 # special case for getContigByAlias using only clone name
     my $self = shift;
@@ -268,6 +275,8 @@ sub getContigByClone {
 
     return $self->getContigByAlias($name,$opts);
 }
+
+#-----------------------------------------------------------------------------
 
 sub getContigByTag {
 # special case for getContigByAlias using only tag name
@@ -485,11 +494,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             0.9 ,
         date    =>    "02 Jun 2003",
-        updated =>    "13 Jun 2003",
+        updated =>    "25 Sep 2003",
     };
 }
 
 #############################################################################
 
 1;
-
