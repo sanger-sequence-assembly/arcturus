@@ -32,6 +32,8 @@ while ($nextword = shift @ARGV) {
 
     $verbose = 1 if ($nextword eq '-verbose');
 
+    $batchmode = 1 if ($nextword eq '-batchmode');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -93,8 +95,11 @@ foreach $dbname (@dblist) {
     print STDERR "Compressing";
     print STDERR " and updating" if $onepass;
     print STDERR " ...\n";
-    printf STDERR "%8d", $ndone;
-    $format = "\010\010\010\010\010\010\010\010%8d";
+
+    unless ($batchmode) {
+	printf STDERR "%8d", $ndone;
+	$format = "\010\010\010\010\010\010\010\010%8d";
+    }
 
     while(@ary = $sth->fetchrow_array()) {
 	($readid, $sequence, $scompress) = @ary;
@@ -115,22 +120,29 @@ foreach $dbname (@dblist) {
 	$newlen += length($sequence);
 
 	$ndone++;
-	printf STDERR $format, $ndone if (($ndone % 50) == 0);
+	printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
     }
 
     $sth->finish();
 
-    printf STDERR $format, $ndone;
-    print STDERR " ... compressed";
-    print STDERR " and updated" if $onepass;
-    print STDERR "\n";
+    if ($batchmode) {
+	print STDERR "$ndone reads processed\n";
+    } else {
+	printf STDERR $format, $ndone;
+	print STDERR " ... compressed";
+	print STDERR " and updated" if $onepass;
+	print STDERR "\n";
+    }
 
     unless ($onepass) {
 	$ndone = 0;
 
 	print STDERR "Updating ...\n";
-	printf STDERR "%8d", $ndone;
-	$format = "\010\010\010\010\010\010\010\010%8d";
+
+	unless ($batchmode) {
+	    printf STDERR "%8d", $ndone unless $batchmode;
+	    $format = "\010\010\010\010\010\010\010\010%8d";
+	}
 
 	foreach $read (@updates) {
 	    ($readid, $sequence) = @{$read};
@@ -139,11 +151,15 @@ foreach $dbname (@dblist) {
 	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
 
 	    $ndone++;
-	    printf STDERR $format, $ndone if (($ndone % 50) == 0);
+	    printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
 	}
 
-	printf STDERR $format, $ndone;
-	print STDERR " ... updated.\n";
+	if ($batchmode) {
+	    print STDERR "$ndone reads processed\n";
+	} else {
+	    printf STDERR $format, $ndone;
+	    print STDERR " ... updated.\n";
+	}
     }
 	
     $update->finish();
@@ -168,7 +184,11 @@ sub showUsage {
     print STDERR "    -port\t\tPort number of server\n";
     print STDERR "    -user\t\tMySQL username\n";
     print STDERR "    -databases\t\tOne or more databases to be modified\n";
-    print STDERR "\nOPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
-    print STDERR "    -verbose\t\tShow all MySQL statements\n";
+    print STDERR "    -verbose\t\tVerbose output\n";
+    print STDERR "    -batchmode\t\tDo not display progress info\n";
+    print STDERR "    -onepass\t\tUpdates will be made as reads are compressed\n";
+    print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
 }
