@@ -10,50 +10,204 @@ print $cgi->header();
 print $cgi->start_html(-title => 'Database Analyser',
 		       -bgcolor => '#FFFFFF');
 
-$scriptname = $cgi->script_name;
-
 $debug = $cgi->param('debug');
+
 $instance = $cgi->param('instance');
+$database = $cgi->param('database');
+$table = $cgi->param('table');
 
 if (defined($instance)) {
     print $cgi->h1("Database Analyser: $instance");
 } else {
-    @allinstances = ('babel.prod', 'babel.dev', 'babel.test',
-		     'pcs3.prod',  'pcs3.dev',  'pcs3.test');
-
-    print $cgi->h1("Select an instance");
-
-    print "Please select the instance that you wish to analyse:\n";
-    print "<UL>\n";
-
-    foreach $instance (@allinstances) {
-	print "<LI><A HREF=\"$scriptname?instance=$instance\">$instance</A>\n<P>\n";
-    }
-
-    print "</UL>\n";
-
-    print $cgi->end_html;
-
+    print $cgi->h1("Database Analyser");
+    &showAllInstances($cgi);
     exit(0);
-}
-
-$database = $cgi->param('database');
-$table = $cgi->param('table');
-
-if (defined($database)) {
-    push @databases, $database;
-} else {
-    $alldatabases = 1;
-    $database = 'arcturus';
 }
 
 $dbh = WrapMySQL->connect($instance, 'read');
 
 &db_die("Unable to connect to instance $instance") unless $dbh;
 
-if(defined($database) && defined($table)) {
-    $query = "USE $database";
+if (!defined($database)) {
+    &showAllDatabases($cgi, $dbh, $instance);
+    exit(0);
+}
+
+if(defined($table)) {
+    &showTable($cgi, $dbh, $instance, $database, $table);
+} else {
+    &showDatabase($cgi, $dbh, $instance, $database);
+}
+
+$dbh->disconnect();
+
+print $cgi->end_html, "\n";
+
+exit(0);
+
+sub showAllInstances {
+    my $cgi = shift;
+
+    my $scriptname = $cgi->script_name;
+
+    my @allinstances = ('babel.prod', 'babel.dev', 'babel.test',
+			'pcs3.prod',  'pcs3.dev',  'pcs3.test');
+
+    print $cgi->h2("Select an instance");
+
+    print "<UL>\n";
+
+    foreach my $instance (@allinstances) {
+	print "<LI><A HREF=\"$scriptname?instance=$instance\">$instance</A>\n<P>\n";
+    }
+
+    print "</UL>\n";
+
+    print $cgi->end_html, "\n";
+}
+
+sub showAllDatabases {
+    my ($cgi, $dbh, $instance, $junk) = @_;
+
+    my $scriptname = $cgi->script_name;
+
+    print $cgi->h2("Select a database");
+
+    print "<UL>\n";
+
+    my $query = 'SHOW DATABASES';
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    while (my @ary = $sth->fetchrow_array()) {
+	my ($database, $junk) = @ary;
+
+	my $nTables = &countTables($dbh, $database);
+
+	if (defined($nTables)) {
+	    $nTables = "($nTables table" . ($nTables > 1 ? 's' : '') . ")";
+	} else {
+	    $nTables = "(cannot query)";
+	}
+
+	print "<LI><A HREF=\"$scriptname?instance=$instance&database=$database\">$database";
+	print "</A> <EM>$nTables</EM><P>\n";
+    }
+
+    print "</UL>\n";
+
+    $sth->finish();
+    &db_die("finish($query) failed");
+}
+
+sub countTables {
+    my ($dbh, $database, $junk) = @_;
+
+    my $query = "USE $database";
+
     $dbh->do($query);
+
+    if ($DBI::err) {
+	return undef;
+    } else {
+	$query = 'SHOW TABLES';
+
+	my $sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	my $nTables = 0;
+
+	while (@ary = $sth->fetchrow_array()) {
+	    ($tablename, $junk) = @ary;
+	    $nTables++;
+	}
+
+	$sth->finish();
+	&db_die("finish($query) failed");
+
+	return $nTables;
+    }
+}
+
+sub showDatabase {
+    my ($cgi, $dbh, $instance, $database, $junk) = @_;
+
+    my $scriptname = $cgi->script_name;
+
+    my $scriptlink = "$scriptname?instance=$instance&database=$database";
+	
+    my $query = "USE $database";
+
+    $dbh->do($query);
+
+    if ($DBI::err) {
+	print "UNABLE TO USE $database: $DBI::errstr\n";
+    } else {
+	print $cgi->h2("Database: $database"), "\n";
+
+	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
+	print "<TR BGCOLOR=\"#FFCC00\">\n";
+	print "<TH ALIGN=\"LEFT\">Table</TH>\n";
+	print "<TH ALIGN=\"LEFT\">Rows</TH>\n";
+	print "</TR>\n";
+
+	$query = 'SHOW TABLES';
+
+	my $sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	my @alltables;
+
+	while (@ary = $sth->fetchrow_array()) {
+	    ($tablename, $junk) = @ary;
+	    push @alltables, $tablename;
+	}
+
+	$sth->finish();
+	&db_die("finish($query) failed");
+
+	foreach $tablename (@alltables) {
+	    $query = 'SELECT COUNT(*) FROM ' . $tablename;
+
+	    $sth = $dbh->prepare($query);
+	    &db_die("prepare($query) failed");
+
+	    $sth->execute();
+	    &db_die("execute($query) failed");
+
+	    while (@ary = $sth->fetchrow_array()) {
+		($rowcount, $junk) = @ary;
+		$scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
+		printf "<TR>\n<TD>";
+		print "<A HREF=\"$scriptlink\">$tablename</A></TD><TD>$rowcount</TD>\n</TR>\n";
+	    }
+	    
+	    $sth->finish();
+	    &db_die("finish($query) failed");
+	}
+    }
+
+    print "</TABLE>\n";
+}
+
+sub showTable {
+    my ($cgi, $dbh, $instance, $database, $table, $junk) = @_;
+
+    my $query = "USE $database";
+
+    $dbh->do($query);
+
     if ($DBI::err) {
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
@@ -61,13 +215,13 @@ if(defined($database) && defined($table)) {
 	
 	$query = "DESCRIBE $table";
 
-	$sth = $dbh->prepare($query);
+	my $sth = $dbh->prepare($query);
 	&db_die("prepare($query) failed");
 
 	$sth->execute();
 	&db_die("execute($query) failed");
 
-	@colnames = @{$sth->{NAME}};
+	my @colnames = @{$sth->{NAME}};
 
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
@@ -101,18 +255,20 @@ if(defined($database) && defined($table)) {
 	$sth->execute();
 	&db_die("execute($query) failed");
 
-	@values = $sth->fetchrow_array();
+	my @values = $sth->fetchrow_array();
 
-	@colnames = @{$sth->{NAME}};
+	my @colnames = @{$sth->{NAME}};
 
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
-	while ($colname = shift @colnames) {
-	    $colvalue = shift @values;
+	while (my $colname = shift @colnames) {
+	    my $colvalue = shift @values;
+
+	    next if ($colname eq 'Name');
 
 	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
 
-	    print "<TR", ($colname eq 'Name' ? ' BGCOLOR="#FFCC00"' : ''), ">";
+	    print "<TR", ($colname eq 'Type' ? ' BGCOLOR="#FFCC00"' : ''), ">";
 	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
 	    print "<TD>$colvalue</TD></TR>\n";
 	}
@@ -121,93 +277,7 @@ if(defined($database) && defined($table)) {
 
 	print "</TABLE>\n";
     }
-} else {
-    if ($alldatabases) {
-	$query = 'SHOW DATABASES';
-
-	$sth = $dbh->prepare($query);
-	&db_die("prepare($query) failed");
-
-	$sth->execute();
-	&db_die("execute($query) failed");
-
-	@databases = ();
-
-	while (@ary = $sth->fetchrow_array()) {
-	    ($database, $junk) = @ary;
-	    push @databases, $database;
-	    print STDERR "# DATABASE $database\n" if $debug;
-	}
-
-	$sth->finish();
-	&db_die("finish($query) failed");
-    }
-
-    print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
-
-    foreach $database (sort @databases) {
-	$scriptlink = "$scriptname?instance=$instance&database=$database";
-	$query = "USE $database";
-	$dbh->do($query);
-	if ($DBI::err) {
-	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
-	    print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
-	    next;
-	} else {
-	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FFCC00\" ALIGN=\"LEFT\">";
-	    print "<A HREF=\"$scriptlink\"><STRONG>$database</STRONG></A></TD>\n</TR>\n";
-	}
-
-	$query = 'SHOW TABLES';
-
-	print STDERR "# QUERY $query\n" if $debug;
-
-	$sth = $dbh->prepare($query);
-	&db_die("prepare($query) failed");
-
-	$sth->execute();
-	&db_die("execute($query) failed");
-
-	@alltables = ();
-
-	while (@ary = $sth->fetchrow_array()) {
-	    ($tablename, $junk) = @ary;
-	    push @alltables, $tablename;
-	    print STDERR "# TABLE $tablename\n" if $debug;
-	}
-
-	$sth->finish();
-	&db_die("finish($query) failed");
-
-	foreach $tablename (@alltables) {
-	    $query = 'SELECT COUNT(*) FROM ' . $tablename;
-
-	    $sth = $dbh->prepare($query);
-	    &db_die("prepare($query) failed");
-
-	    $sth->execute();
-	    &db_die("execute($query) failed");
-
-	    while (@ary = $sth->fetchrow_array()) {
-		($rowcount, $junk) = @ary;
-		$scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
-		printf "<TR>\n<TD>";
-		print "<A HREF=\"$scriptlink\">$tablename</A></TD><TD>$rowcount</TD>\n</TR>\n";
-	    }
-	    
-	    $sth->finish();
-	    &db_die("finish($query) failed");
-	}
-    }
-
-    print "</TABLE>\n";
 }
-
-$dbh->disconnect();
-
-print $cgi->end_html;
-
-exit(0);
 
 sub db_die {
     my $msg = shift;
