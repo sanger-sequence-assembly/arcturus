@@ -15,7 +15,7 @@ public class ContigManager {
     private HashMap hashByID;
     private PreparedStatement pstmtByID;
     private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByMappingID;
-    private PreparedStatement pstmtReadDataByContigID;
+    private PreparedStatement pstmtReadDataByContigID,pstmtFullReadDataByContigID;
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -49,6 +49,15 @@ public class ContigManager {
 	    " where READS.read_id=SEQ2READ.read_id and READS.template_id=TEMPLATE.template_id and SEQ2READ.seq_id=MAPPING.seq_id" +
 	    " and contig_id = ?";
 	pstmtReadDataByContigID = conn.prepareStatement(query);
+
+	query = "select READS.read_id,READS.readname,asped,strand,primer,chemistry," +
+	    "           TEMPLATE.template_id,TEMPLATE.name,TEMPLATE.ligation_id,SEQ2READ.seq_id,SEQ2READ.version," +
+	    "           SEQUENCE.seqlen,SEQUENCE.sequence,SEQUENCE.quality" +
+	    " from READS,TEMPLATE,SEQ2READ,MAPPING,SEQUENCE" +
+	    " where READS.read_id=SEQ2READ.read_id and READS.template_id=TEMPLATE.template_id and SEQ2READ.seq_id=MAPPING.seq_id" +
+	    " and SEQUENCE.seq_id=MAPPING.seq_id" +
+	    " and contig_id = ?";
+	pstmtFullReadDataByContigID = conn.prepareStatement(query);
 
 	hashByID = new HashMap();
     }
@@ -130,79 +139,27 @@ public class ContigManager {
     }
 
     private void loadMappingsForContig(Contig contig) throws SQLException {
-	loadMappingsForContig(contig, true);
+	fastLoadMappingsForContig(contig);
     }
 
-    private void loadMappingsForContig(Contig contig, boolean fast) throws SQLException {
-	if (fast)
-	    fastLoadMappingsForContig(contig);
-	else
-	    slowLoadMappingsForContig(contig);
+    private void fastLoadMappingsForContig(Contig contig) throws SQLException {
+	bulkLoadReadData(contig, false);
+
+	bulkLoadMappings(contig);
     }
 
-    private void slowLoadMappingsForContig(Contig contig) throws SQLException {
+    private void bulkLoadReadData(Contig contig, boolean getdna) throws SQLException {
 	int id = contig.getID();
+	
+	ResultSet rs;
 
-	pstmtCountMappingsByContigID.setInt(1, id);
-	ResultSet rs = pstmtCountMappingsByContigID.executeQuery();
-
-	int nmaps = 0;
-	Mapping[] mappings;
-
-	if (rs.next()) {
-	    nmaps = rs.getInt(1);
-	    mappings = new Mapping[nmaps];
-	} else
-	    return;
-
-	rs.close();
-
-	pstmtMappingsByContigID.setInt(1, id);
-	rs = pstmtMappingsByContigID.executeQuery();
-
-	int kmap = 0;
-
-	while (rs.next()) {
-	    int seq_id = rs.getInt(1);
-	    int mapping_id = rs.getInt(2);
-	    int cstart = rs.getInt(3);
-	    int cfinish = rs.getInt(4);
-	    int direction = rs.getString(5).equals("Forward") ? Mapping.FORWARD : Mapping.REVERSE;
-	    int nsegs = rs.getInt(6);
-
-	    Sequence sequence = adb.getSequenceBySequenceID(seq_id);
-
-	    Mapping mapping = new Mapping(sequence, cstart, cfinish, direction, nsegs);
-
-	    pstmtSegmentsByMappingID.setInt(1, mapping_id);
-	    ResultSet seg_rs = pstmtSegmentsByMappingID.executeQuery();
-
-	    while (seg_rs.next()) {
-		int seg_cstart = seg_rs.getInt(1);
-		int seg_rstart = seg_rs.getInt(2);
-		int seg_length = seg_rs.getInt(3);
-
-		Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
-
-		mapping.addSegment(segment);
-	    }
-
-	    seg_rs.close();
-
-	    mappings[kmap++] = mapping;
+	if (getdna) {
+	    pstmtFullReadDataByContigID.setInt(1, id);
+	    rs = pstmtFullReadDataByContigID.executeQuery();
+	} else {
+	    pstmtReadDataByContigID.setInt(1, id);
+	    rs = pstmtReadDataByContigID.executeQuery();
 	}
-
-	rs.close();
-
-	contig.setMappings(mappings);
-    }
-
-     private void fastLoadMappingsForContig(Contig contig) throws SQLException {
-	int id = contig.getID();
-
-	pstmtReadDataByContigID.setInt(1, id);
-
-	ResultSet rs = pstmtReadDataByContigID.executeQuery();
 
 	while (rs.next()) {
 	    int ligation_id = rs.getInt(9);
@@ -239,11 +196,83 @@ public class ContigManager {
 		int version = rs.getInt(11);
 		sequence = new Sequence(seq_id, read, null, null, version);
 		adb.registerNewSequence(sequence);
+
+		if (getdna) {
+		    int seqlen = rs.getInt(12);
+		    byte[] dna = adb.decodeCompressedData(rs.getBytes(13), seqlen);
+		    byte[] quality = adb.decodeCompressedData(rs.getBytes(14), seqlen);
+		    sequence.setDNA(dna);
+		    sequence.setQuality(quality);
+		}
 	    }
+	}
+
+	System.err.println();
+	System.err.println();
+
+	rs.close();
+     }
+
+    private void bulkLoadMappings(Contig contig) throws SQLException {
+	int id = contig.getID();
+	
+	pstmtCountMappingsByContigID.setInt(1, id);
+	ResultSet rs = pstmtCountMappingsByContigID.executeQuery();
+
+	int nmaps = 0;
+	Mapping[] mappings;
+
+	if (rs.next()) {
+	    nmaps = rs.getInt(1);
+	    mappings = new Mapping[nmaps];
+	} else
+	    return;
+
+	rs.close();
+
+	pstmtMappingsByContigID.setInt(1, id);
+	rs = pstmtMappingsByContigID.executeQuery();
+
+	int kmap = 0;
+
+	while (rs.next()) {
+	    int seq_id = rs.getInt(1);
+	    int mapping_id = rs.getInt(2);
+	    int cstart = rs.getInt(3);
+	    int cfinish = rs.getInt(4);
+	    int direction = rs.getString(5).equals("Forward") ? Mapping.FORWARD : Mapping.REVERSE;
+	    int nsegs = rs.getInt(6);
+
+	    Sequence sequence = adb.getSequenceBySequenceID(seq_id);
+
+	    Mapping mapping = new Mapping(sequence, cstart, cfinish, direction, nsegs);
+
+	    System.err.print('M');
+
+	    pstmtSegmentsByMappingID.setInt(1, mapping_id);
+	    ResultSet seg_rs = pstmtSegmentsByMappingID.executeQuery();
+
+	    while (seg_rs.next()) {
+		int seg_cstart = seg_rs.getInt(1);
+		int seg_rstart = seg_rs.getInt(2);
+		int seg_length = seg_rs.getInt(3);
+
+		Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
+
+		System.err.print('s');
+
+		mapping.addSegment(segment);
+	    }
+
+	    seg_rs.close();
+
+	    mappings[kmap++] = mapping;
 	}
 
 	System.err.println();
 
 	rs.close();
-     }
+
+	contig.setMappings(mappings);
+    }
 }

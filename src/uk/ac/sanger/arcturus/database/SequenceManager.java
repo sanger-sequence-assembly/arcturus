@@ -267,7 +267,7 @@ public class SequenceManager {
 	rs.close();
     }
 
-    private byte[] decodeCompressedData(byte[] compressed, int length) {
+    byte[] decodeCompressedData(byte[] compressed, int length) {
 	byte[] buffer = new byte[length];
 
 	try {
