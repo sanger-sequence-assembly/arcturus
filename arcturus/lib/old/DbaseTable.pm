@@ -904,10 +904,15 @@ sub counter {
     foreach my $column (@{$self->{columns}}) {
         $counter = $column if (!$counter && $column =~ /count|reads/i); # take first one encountered
         $counter = $alter  if ($alter && $column eq $alter); # overrides, be sure $alter exists
-        if (defined($cname) && $cname eq $column) {
-            $iden = 2 if (defined($value));
-            foreach my $hash (@{$self->{hashrefs}}) {
-                $iden = 1 if (defined($value) && $value eq $hash->{$column});
+        if (defined($cname) && $cname eq $column && defined($value)) {
+            $iden = 2;
+            if ($self->{hashrefs} && @{$self->{hashrefs}}) {
+                foreach my $hash (@{$self->{hashrefs}}) {
+                    $iden = 1 if ($value eq $hash->{$column});
+                }
+            }
+            elsif ($self->associate($cname,$value,$column)) {
+                $iden = 1;
             }
         }
     }
@@ -955,7 +960,7 @@ print "$self->{tablename} counter: attempt to decrease counter $counter by $coun
                     push @{$self->{undoclause}}, $command;
                 }
             }
-            &buildhash(0,$self); # reload the counter table
+            &buildhash(0,$self) if @{$self->{columns}}; # reload the counter table
         } 
         elsif ($counter) {
             $error = "failed to create a new row";
@@ -1037,8 +1042,6 @@ sub newrow {
                 $error = "unequal array sizes (Cname $nc, Value $nv)";
                 $inputStatus = 0;
             }
-#            $inputStatus = 0 if (@cinserts != @vinserts);
-#            $error = "unequal array sizes" if !$inputStatus;
         }
         elsif (ref($Cname) eq 'ARRAY' || ref($Value) eq 'ARRAY') {
             $inputStatus = 0;

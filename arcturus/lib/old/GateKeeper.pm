@@ -740,7 +740,7 @@ sub authorize {
     if ($session && $options{testSession}) {
 # a session  number is defined
         $self->{report} = "Check existing sessions number $session";
-        my $sessions = $mother->spawn('SESSIONS','self',0,0);
+        my $sessions = $mother->spawn('SESSIONS','self',0,0); # 0,0 later ?
         if ($self->{error} = $sessions->{errors}) {
             &dropDead($self,$sessions->{errors}) if $options{dieOnError};
 	    return 0;
@@ -770,7 +770,7 @@ sub authorize {
                 return 0 if $options{dieOnError}; # "abort" option
                 $session = 0; # force prompt for password 
 	    }
-            else {
+            else {		
                 $sessions->counter('session',$session,1,'access');
 	    }
         }
@@ -1210,8 +1210,14 @@ sub GUI {
     $page->partition(3);
     push @exclude, 'database';
     push @exclude, 'organism';
-    $script .= $cgi->postToGet(0,@exclude);
-    $script = $options{defaultScript} if !$options{doTransport}; # overrides
+    my $defaultScript = $options{defaultScript};
+    $defaultScript .= $cgi->postToGet(1,'session'); # if any
+    if ($options{doTransport}) {
+        $script .= $cgi->postToGet(0,@exclude);
+    }
+    else {
+        $script = $defaultScript; # overrides
+    }
     my $tablelayout = "cellpadding=2 border=0 cellspacing=0 width=$width align=center";
     my $table = "<table $tablelayout>";
     if (@alternates) {
@@ -1228,8 +1234,8 @@ sub GUI {
 #            $type = "&nbsp" if ($type eq 'C');
             $title .= " WITH DEFAULT USER INTERFACE" if ($type ne 'C');
             $title = "RESTORE DEFAULT USER INTERFACE THIS SERVER" if ($type eq 'C');;
-             $alt = "onMouseOver=\"window.status='$title'; return true\"";
-            $type = "<a href=\"http://$server$options{defaultScript}\" $alt> $type </a>";
+            $alt = "onMouseOver=\"window.status='$title'; return true\"";
+            $type = "<a href=\"http://$server$defaultScript\" $alt> $type </a>";
             $table .= "<tr><td $bgc width=87.5%>$link</td><td $cell width=12.5%>$type</td></tr>";
         }
     }
