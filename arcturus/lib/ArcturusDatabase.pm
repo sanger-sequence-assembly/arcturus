@@ -171,8 +171,8 @@ sub populateLoadingDictionaries {
     $this->{LoadingDictionary}->{cvector} =
 	&createDictionary($dbh, "CLONINGVECTORS", "name", "cvector_id");
 
-    $this->{LoadingDictionary}->{template} =
-	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
+    $this->{LoadingDictionary}->{template} = {}; # dummy dictionary
+#	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
 
     $this->{LoadingDictionary}->{basecaller} =
 	&createDictionary($dbh, "BASECALLER", "name", "basecaller_id");
@@ -905,12 +905,11 @@ sub flushReadsToPending {
 sub putRead {
 # insert read into the database
     my $this = shift;
-    my $read = shift || return;
+    my $read = shift;
     my $options = shift;
 
     if (ref($read) ne 'Read') {
-        print STDERR "putRead expects an instance of the Read class\n";
-        return undef;
+        return (0,"putRead expects an instance of the Read class");
     }
 
 # a) test consistency and completeness
@@ -1179,10 +1178,14 @@ sub getReadAttributeID {
 
     return undef unless (defined($identifier) && defined($dict));
 
+# 1
+
     my $id = &dictionaryLookup($dict, $identifier);
 
     return $id if defined($id);
 
+# 2
+   
     return undef unless defined($select_sth);
 
     my $rc = $select_sth->execute($identifier);
@@ -1193,6 +1196,8 @@ sub getReadAttributeID {
     }
 
     return $id if defined($id);
+
+# 3
 
     return undef unless defined($insert_sth);
 

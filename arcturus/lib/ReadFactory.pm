@@ -42,7 +42,7 @@ sub logerror {
 
     my $Logging = $this->{Logging} || return; # exit if absent
    
-    $Logging->error($text);
+    $Logging->severe($text);
 }
 
 sub logwarning {
@@ -66,7 +66,7 @@ sub loginfo {
 }
 
 #----------------------------------------------------------------
-# return the next readname and attribute
+# add the next readname and attribute to the internal list
 #----------------------------------------------------------------
 
 sub addReadToList {
@@ -81,8 +81,12 @@ sub addReadToList {
     return 1;
 } 
 
+#----------------------------------------------------------------
+# return the next readname and attribute
+#----------------------------------------------------------------
+
 sub getNextReadName {
-# returns the next readname
+# returns the next readname by shifting the internal list
     my $this = shift;
 
     my $list = $this->{readlist};
@@ -91,30 +95,35 @@ sub getNextReadName {
 
     $this->{readname} = shift @$list;
 
-# return undef if no next readname found
+# return readname or undef if no next readname found
 
-    return undef unless $this->{readname}; 
+    return $this->getCurrentReadName();
+
+#    return undef unless $this->{readname}; 
 
 # else return the readname 
 
-    return $this->{readname}->[0];
+#    return $this->{readname}->[0];
 }
 
 sub getCurrentReadName {
+# return the readname in the local buffer (after getNextReadName)
     my $this = shift;
+
     return undef unless $this->{readname}; 
+
     return $this->{readname}->[0];
 }
 
 sub getNextReadAuxiliaryData {
-# returns the information stored in the local buffer
+# returns the auxilliary information stored in the local buffer
     my $this = shift;
 
 # return undef if no data in local buffer found
 
     return undef unless $this->{readname}; 
 
-# else return the Read, Oracle number or File name
+# else return the Read, Oracle number or ExpFile name
 
     return $this->{readname}->[1];
 }
