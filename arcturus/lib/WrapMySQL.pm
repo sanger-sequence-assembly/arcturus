@@ -212,6 +212,50 @@ sub setKeyValue {
     return $info->{$keyword};
 }
 
+sub getDatabase {
+    my ($type, $instance, $junk) = @_;
+
+    return &getKeyValue($type, $instance, 'database');
+}
+
+sub getHostname {
+    my ($type, $instance, $junk) = @_;
+
+    return &getKeyValue($type, $instance, 'host');
+}
+
+sub getPort {
+    my ($type, $instance, $junk) = @_;
+
+    return &getKeyValue($type, $instance, 'port');
+}
+
+sub getRole {
+    my ($type, $instance, $role, $junk) = @_;
+
+    my $roles= &getKeyValue($type, $instance, 'ROLE');
+
+    return undef unless defined($roles);
+
+    my $roledata = $roles->{$role};
+
+    return undef unless defined($roledata);
+
+    return @{$roledata};
+}
+
+sub getKeyValue {
+    my ($type, $instance, $keyword, $junk) = @_;
+
+    return undef unless (defined($instance) && defined($keyword));
+
+    my $info = $users->{$instance};
+
+    return undef unless defined($info);
+
+    return $info->{$keyword};
+}
+
 sub addRoleToInstance {
     my ($type, $instance, $rolename, $username, $password, $junk) = @_;
 
