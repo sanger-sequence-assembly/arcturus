@@ -521,7 +521,13 @@ if ($logON || !$origin) {
     $reader->setFatal(0) if ($forced);
 
     my $dbh = $GateKeeper->{handle};
-    if ($fnfilter ne "PENDING") {
+
+    if (!$GateKeeper->ping) {
+        print "!! MySQL database connection has gone away $brtag";
+        $GateKeeper->environment;
+        exit 0;
+    }
+    elsif ($fnfilter ne "PENDING") {
 
         print "Scanning database $database for Previously Processed Reads ... ";
         my $querystring = "SELECT readname FROM $database.PENDING order by record ";

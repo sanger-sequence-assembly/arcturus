@@ -8,7 +8,6 @@ use strict; # Constraint variables declaration before using them
 
 use GateKeeper; 
 use ContigBuilder;
-use ReadMapper;
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -105,10 +104,10 @@ if (!$cgi) {
     $CGN =~ s/contig//i;
     $CGN =~ s/[\d\.\*]//g;
     $CGN = 0 if !$CGN;
-    print "Generation = $CGN\n";
+print "Generation = $CGN\n";
     $exactmatch = 1;
     $exactmatch = 0 if ($CNF =~ s/\*//g); 
-    print "exactmatch: $exactmatch\n";
+print "exactmatch: $exactmatch\n";
 
     undef $CNF if ($CNF eq "ALL");
 # $CFN = "/nfs/disk222/malaria/assembly/MAL4/$caffile"; # temporary  
@@ -120,6 +119,8 @@ $TEST = 1;
     $CLF = $config{CLF};
     $cblocker = 1;
     $rblocker = 0;
+print "CNF $CNF  CGN $CGN  CFN $CFN  CPR $CPR  CLF $CLF  \n";
+    exit;
 }
 
 ###############################################################################
@@ -327,6 +328,7 @@ die "No assembly defined" if !$assemblynmbr;
     my $READS    = $organisms->spawn("READS",$database,0);
     my $CONTIGS  = $organisms->spawn("CONTIGS",$database,0);
     my $PENDING  = $organisms->spawn("PENDING",$database,0);
+    $PENDING->setMultiLineInsert(100);
 
     my $R2A = $organisms->spawn("READS2ASSEMBLY",$database,0,0);
     $R2A->setMultiLineInsert(100);
@@ -455,6 +457,12 @@ die "No assembly defined" if !$assemblynmbr;
     $ContigBuilder->setOwnership($assemblynmbr,$userid);
     $ContigBuilder->setTestModes($TEST,$REPAIR);
 
+# build the READS and PENDING caches
+
+#    print "Building READS and PENDING caches $brtag";
+#    $PENDING->cacheBuild("select * from <self>",{list=>0,indexKey=>'readname'});
+#    $READS->cacheBuild("select read_id,readname,clone from <self>",{list=>0,indexKey=>'readname'});
+
 # okay, parse the specified CAF file; this builds all contigs and readmappers in memory
 
     my $truncated = $ContigBuilder->cafFileParser ($CFN,$CPR,$CNF,$dbcontigs,$dbreads,$list);
@@ -478,24 +486,15 @@ die "No assembly defined" if !$assemblynmbr;
             print "There remain data to be processed on caf file $CFN$brtag";
         }
 
+# my $snapshot = $organisms->snapshot($database); print "$snapshot <br>";
+
 # update counters in ASSEMBLY & ORGANISMS table
 
-        $R2C->flush;
-        $R2A->flush;
 
-my $snapshot = $organisms->snapshot($database);
-# print "$snapshot <br>";
-
-#print "CONTIGS<br>";
         $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
-        my $ncontiga = $CONTIGS->count("assembly=$assemblynmbr",1);
-#print "$CONTIGS->{lastQuery}<br>";
-#print "update ASSEMBLY<br>";
+        my $ncontiga = $CONTIGS->count("assembly=$assemblynmbr",1); #print "$CONTIGS->{lastQuery}<br>";
         $ASSEMBLY->update('contigs',$ncontiga,'assembly',$assemblynmbr);
-#print "READS<br>";
-#        my $R2A = $organisms->spawn('READS2ASSEMBLY',$database,0,0);
         my $nreadsa  = $R2A->count("assembly=$assemblynmbr");
-print "update ASSEMBLY<br>";
         $ASSEMBLY->update('reads',$nreadsa,'assembly',$assemblynmbr);
 
         my $ncontigs = $CONTIGS->count(1); 
@@ -508,21 +507,6 @@ print "update ASSEMBLY<br>";
 
 # to be added: update of defaults (which ones)
 
-    if ($TEST) {
-        my $ccount = $CONTIGS->count(1); 
-        print "$brtag$ccount$brtag";
-#        my $rrtocc   = $organisms->spawn("READS2CONTIG",$database,0);
-#        my $rcount = $rrtocc->count(1); 
-#        print "$brtag$rcount$brtag";
-#        my $redits   = $organisms->spawn("READEDITS",$database,0);
-#        my $ecount = $redits->count(1); 
-#        print "$brtag$ecount$brtag";
-#        my $cctocc   = $organisms->spawn("CONTIGS2CONTIG",$database,0);
-#        my $vcount = $cctocc->count(1); 
-#        print "$brtag$vcount$brtag";
-        my $pcount = $PENDING->count(1);
-        print "$brtag$pcount$brtag";
-    }
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 

@@ -610,7 +610,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             $contents .= "<TD bgcolor=$yellow nowrap>CHANGED FORMAT</TD>";
         }
         else {
-            $contents .= "<TD>Conforms</TD>";
+            $contents .= "<TD>verified</TD>";
         }
         $contents .= "</TR>";
     }
