@@ -392,9 +392,7 @@ sub loadReadData {
                     $status->{errors}++;
                 }
                 else {
-print "after seqDec <br>sstring: '$sstring' <br>" if ($dc == 2 || $dc == 99);
                     $sstring =~ s/\s+//g; # remove blanks
-print "after seqDec chop <br>sstring: '$sstring' <br>" if ($dc == 2 || $dc == 99);
                     $qcount = $scount; # preset for absent quality data
                 }
             }
@@ -445,7 +443,6 @@ print "after seqDec chop <br>sstring: '$sstring' <br>" if ($dc == 2 || $dc == 99
         $length = $hash->{slength} if (defined($hash->{slength}));
         $length = $scount if ($scount == $qcount && $length == 0); # temporary recovery
         if ($scount != $qcount || $scount != $length || $length == 0) {
-my $l = length($sstring); print "after error status <br>sstring: '$sstring' <br>";
             $status->{report} .= "! Sequence length mismatch: DNA=$scount, Q=$qcount ($length)\n";
             $status->{errors}++;    
         }
