@@ -256,7 +256,7 @@ sub showDatabase {
 }
 
 sub showTable {
-    my ($cgi, $dbh, $instance, $database, $table, $junk) = @_;
+    my ($cgi, $dbh, $instance, $database, $tablelist, $junk) = @_;
 
     my $query = "USE $database";
 
@@ -276,11 +276,15 @@ sub showTable {
 	$showdescription = 0 unless defined($showdescription);
 	$showstatus = 0 unless defined($showstatus);
 
-	&showTableDescription($cgi, $dbh, $instance, $database, $table)
-	    if $showdescription;
+	my @tables = split(/,/, $tablelist);
 
-	&showTableStatus($cgi, $dbh, $instance, $database, $table)
-	    if $showstatus;
+	foreach my $table (sort @tables) {
+	    &showTableDescription($cgi, $dbh, $instance, $database, $table)
+		if $showdescription;
+
+	    &showTableStatus($cgi, $dbh, $instance, $database, $table)
+		if $showstatus;
+	}
     }
 }
 
