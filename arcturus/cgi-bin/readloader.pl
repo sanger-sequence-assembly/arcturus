@@ -20,6 +20,8 @@ my $instance;
 my $organism;
 my $assembly;
 
+my $verbose = 0;
+
 my $source; # name of factory type
 # my $limit;
 
@@ -31,7 +33,8 @@ my $logLevel;              # default log warnings and errors only
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|noexclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
-   $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore";
+   $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
+   $validKeys .= "minreadid|maxreadid";
 
 my %PARS;
 
@@ -58,6 +61,7 @@ while (my $nextword = shift @ARGV) {
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
     $logLevel         = 0            if ($nextword eq '-verbose');
+    $verbose          = 1            if ($nextword eq '-verbose');
  
     $logLevel         = 2            if ($nextword eq '-info'); 
 
@@ -83,6 +87,9 @@ while (my $nextword = shift @ARGV) {
 
     $PARS{readnamelike} = shift @ARGV  if ($nextword eq '-filter');
     $PARS{readnamelike} = shift @ARGV  if ($nextword eq '-readnamelike');
+
+    $PARS{minreadid}    = shift @ARGV  if ($nextword eq '-minreadid');
+    $PARS{maxreadid}    = shift @ARGV  if ($nextword eq '-maxreadid');
 
     $PARS{root}         = shift @ARGV  if ($nextword eq '-rootdir');
     $PARS{sub}          = shift @ARGV  if ($nextword eq '-subdir');
@@ -199,7 +206,8 @@ elsif ($source eq 'Oracle') {
     &showUsage(2,"Missing Oracle schema") unless $PARS{schema};
 
     my @valid = ('schema','projid','aspedafter','aspedbefore',
-		 'readnamelike','include','exclude');
+		 'readnamelike','include','exclude','minreadid','maxreadid');
+
     &showUsage(2) if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new OracleReadFactory(%PARS);
@@ -235,6 +243,8 @@ while (my $readname = $factory->getNextReadName()) {
     next if $adb->hasRead($readname);
 
     my $Read = $factory->getNextRead();
+
+    print STDERR "Storing $readname\n" if $verbose;
 
     my ($success,$errmsg) = $adb->putRead($Read);
 
