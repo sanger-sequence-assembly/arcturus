@@ -520,10 +520,19 @@ sub getReads{
 	    my $date = shift;
 	    push @conditions, "asped < '$date'";
 	}
+        elsif ($nextword eq '-from' || $nextword eq '-ridbegin') {
+            my $ridstart = shift;
+            push @conditions, "read_id >= $ridstart";
+	}
+        elsif ($nextword eq '-to' || $nextword eq '-ridend') {
+            my $ridfinal = shift;
+            push @conditions, "read_id <= $ridfinal";
+	}
 	elsif ($nextword eq '-namelike') {
 	    my $namepattern = shift;
 	    push @conditions, "readname like '$namepattern'";
 	}
+
         else {
             print STDERR "Invalid keyword $nextword in getReads\n";
         }
@@ -821,7 +830,7 @@ sub getIDsForUnassembledReads {
         $query .= "read_id not in (select distinct SEQ2READ.read_id ".
                   "  from SEQ2READ join MAPPING on (seq_id)".
 	          " where MAPPING.contig_id in (".join(",",@$contigids)."))"
-                   if @$contigids;
+                                                               if @$contigids;
 
         $sth = $dbh->prepare($query);
 
@@ -832,37 +841,68 @@ sub getIDsForUnassembledReads {
         }
     }
     else {
-# get read_id-s with a join on SEQ2READ and MAPPING
+# find read IDs in contigs, using a join on SEQ2READ and MAPPING
+
+        my @tempids;
+
         $query  = "select distinct SEQ2READ.read_id " .
 	          "  from SEQ2READ join MAPPING using (seq_id)" .
-                  " where MAPPING.contig_id in (".join(",",@$contigids).")";
+                  " where MAPPING.contig_id in (".join(",",@$contigids).")" .
+                  " order by read_id";
 
         $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
         
         while (my ($read_id) = $sth->fetchrow_array()) {
-            push @{$readids}, $read_id;
+            push @tempids, $read_id;
         }
-print STDERR "reads found in the contigs: ".scalar(@$readids)."\n";
+print STDERR "reads found in the contigs: ".scalar(@tempids)."\n" if $DEBUG;
 
 # step 3 : get the read_id-s NOT found in the contigs
 
-        $query  = "select READS.read_id from READS where ";
-        $query .=  join(" and ", @dateselect) if @dateselect;
-        $query .= " and " if (@dateselect && @$readids);
-        $query .= "read_id not in (".join(",",@$readids).")" if @$readids;
+        unless (scalar(@tempids)) {
+# no reads found (should not happen)
+            $query  = "select READS.read_id from READS";
+            $query .= " where ".join(" and ", @dateselect) if @dateselect;
+  
+            $sth = $dbh->prepare_cached($query);
+            $sth->execute() || &queryFailed($query);
+
+            while (my ($read_id) = $sth->fetchrow_array()) {
+                push @{$readids}, $read_id;
+            }
+	}
+
+        my $ridstart = 0;
+        while (my $remainder = scalar(@tempids)) {
+
+            my $blocksize = 10000;
+            $blocksize = $remainder if ($blocksize > $remainder);
+            my @readblock = splice (@tempids,0,$blocksize);
+            my $ridfinal = $readblock[$#readblock];
+            $ridfinal = 0 unless @tempids; # last block no upper limit
+print STDERR "doing block $ridstart to $ridfinal ($blocksize)\n" if $DEBUG;
+
+            $query  = "select READS.read_id from READS";
+            $query .= " where read_id > $ridstart";
+            $query .= "   and read_id <= $ridfinal" if $ridfinal;
+            $query .=  join(" and ", @dateselect) if @dateselect;
+            $query .= "   and read_id not in (".join(",",@readblock).")";
+            $query .= " order by read_id";
  
-        $sth = $dbh->prepare_cached($query);
+            $sth = $dbh->prepare($query);
 
-        $sth->execute() || &queryFailed($query);
+            $sth->execute() || &queryFailed($query) && exit;
 
-        $readids = [];
-        while (my ($read_id) = $sth->fetchrow_array()) {
-	    push @{$readids}, $read_id;
-        }
-print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n";
+            while (my ($read_id) = $sth->fetchrow_array()) {
+	        push @{$readids}, $read_id;
+            }
+            $ridstart = $ridfinal;
+	}
     }
+
+print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n" if $DEBUG;
 
     return $readids; # array of readnames
 }
