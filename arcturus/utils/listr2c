@@ -26,7 +26,7 @@ while(@ary = $sth->fetchrow_array()) {
 $sth->finish();
 
 foreach $dbname (sort @databases) {
-    $query = "SELECT COUNT(*) FROM $dbname.READS2CONTIG";
+    $query = "SELECT COUNT(*) FROM $dbname.READS2CONTIG WHERE label>9";
 
     $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed on instance $instance");

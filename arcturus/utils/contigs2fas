@@ -26,6 +26,8 @@ while ($nextword = shift @ARGV) {
 
     $depad = 1 if ($nextword eq '-depad');
 
+    $padton = 1 if ($nextword eq '-padton');
+
     $verbose = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
@@ -44,6 +46,7 @@ unless (defined($host) &&
 }
 
 $depad = 0 unless defined($depad);
+$padton = 0 unless defined($depad);
 
 $dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
 
@@ -89,7 +92,10 @@ while(@ary = $sth->fetchrow_array()) {
 	length($sequence),"\n";
     }
 
-    # Get rid of any junk
+    # Convert pads to N ...
+    $sequence =~ s/[^\w\-]/N/g if $padton;
+
+    # ... or remove them completely.
     $sequence =~ s/[^\w\-]//g if $depad;
 
     printf ">CONTIG%04d\n", $contigid;
