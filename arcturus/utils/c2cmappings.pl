@@ -17,6 +17,7 @@ my $outfile;
 my $loose = 0;
 my $align = 0;
 my $terse = 0;
+my %seqdb;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -52,6 +53,11 @@ my $contig_stmt = $dbh->prepare($query);
 $query = "SELECT parent_id,cstart,cfinish,direction FROM C2CMAPPING WHERE contig_id = ? ORDER BY cstart ASC";
 
 my $parent_stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$query = "SELECT count(*) FROM C2CMAPPING WHERE contig_id = ?";
+
+my $parentcount_stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
 my $seq_stmt; 
@@ -92,15 +98,32 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
     print $logfh "PROCESSING CONTIG: $contigid\n\n";
     print $outfh "PROCESSING CONTIG: $contigid\n\n";
 
+    $parentcount_stmt->execute($contigid);
+
+    my ($nparents) = $parentcount_stmt->fetchrow_array();
+
+    $parentcount_stmt->finish();
+
+    if ($nparents < 1) {
+	print $logfh "--- NO CHILDREN ---\n\n";
+	print $outfh "--- NO CHILDREN ---\n\n";
+	next;
+    }
+
     my $mappings = &getReadToContigMappings($map_stmt, $seg_stmt, $contigid);
 
     my $masterseq;
 
     if ($align) {
-	$seq_stmt->execute($contigid);
-	($masterseq) = $seq_stmt->fetchrow_array();
-	$masterseq = uncompress($masterseq);
-	$seq_stmt->finish();
+	$masterseq = $seqdb{$contigid};
+
+	unless (defined($masterseq)) {
+	    $seq_stmt->execute($contigid);
+	    ($masterseq) = $seq_stmt->fetchrow_array();
+	    $masterseq = uncompress($masterseq);
+	    $seqdb{$contigid} = $masterseq;
+	    $seq_stmt->finish();
+	}
     }
 
     $parent_stmt->execute($contigid);
@@ -156,11 +179,16 @@ while (my ($contigid, $ctglen, $nreads, $updated) = $contig_stmt->fetchrow_array
 	&displaySegments($segments, $outfh);
 
 	if ($align) {
-	    $seq_stmt->execute($parentid);
-	    my ($parentseq) = $seq_stmt->fetchrow_array();
-	    $parentseq = uncompress($parentseq);
-	    $seq_stmt->finish();
-	    
+	    my $parentseq = $seqdb{$parentid};
+
+	    unless (defined($parentseq)) {
+		$seq_stmt->execute($parentid);
+		($parentseq) = $seq_stmt->fetchrow_array();
+		$parentseq = uncompress($parentseq);
+		$seqdb{$parentid} = $parentseq;
+		$seq_stmt->finish();
+	    }
+
 	    foreach my $segment (@{$segments}) {
 		print $outfh "\n\n";
 		&displayAlignment($segment, $masterseq, $parentseq, 50, $sense, $outfh, $terse);
@@ -461,11 +489,13 @@ sub displayAlignment {
 	$pseq =~ tr/ACGTacgt/TGCAtgca/;
     }
 
+    my $seqlen = length($cseq);
+
     if ($cseq eq $pseq) {
-	print $fh "PERFECT MATCH\n";
+	print $fh "MISMATCHES 0 $seqlen\n";
     } else {
 	my $diffcount = &countDiffs($cseq, $pseq);
-	print $fh "MISMATCHES $diffcount\n";
+	print $fh "MISMATCHES $diffcount $seqlen\n";
     }
 
     unless ($terse) {
@@ -474,7 +504,7 @@ sub displayAlignment {
 	while (length($cseq)) {
 	    printf $fh "%6d  ", $cstart;
 	    my $subseq = substr($cseq, 0, $linelen);
-	    my $seqlen = length($subseq);
+	    $seqlen = length($subseq);
 	    print $fh $subseq;
 	    $cseq = substr($cseq, $linelen);
 	    printf $fh "  %6d\n", $cstart + $seqlen - 1;
