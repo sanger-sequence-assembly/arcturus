@@ -837,7 +837,7 @@ sub getUnassembledReads {
     my $nextword;
 
     my @dateselect;
-    my $withsingleton = 0;    
+    my $withsingleton = 1;    
     while ($nextword = shift) {
 	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
 	    my $date = shift;
@@ -847,8 +847,8 @@ sub getUnassembledReads {
 	    my $date = shift;
 	    push @dateselect, "asped < '$date'";
 	}
-        elsif ($nextword eq '-withsingleton') {
-            $withsingleton = 1;
+        elsif ($nextword eq '-nosingleton') {
+            $withsingleton = 0;
             my $dummy = shift;
         }
         else {
@@ -886,7 +886,7 @@ $query = "select newcontig as contig_id from CONTIG2CONTIG where genofo=0".
 
 # step 2: (optionally) filter for nreads > 1
 
-    if (@$contigids && !$withsingleton) {
+    if (@$contigids && $withsingleton) {
 # remove singletons from list of contig_ids
         $query = "select contig_id from CONTIG".
                  " where contig_id in (".join(",",@$contigids).")".
