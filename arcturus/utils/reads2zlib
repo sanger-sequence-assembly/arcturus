@@ -22,7 +22,9 @@ while ($nextword = shift @ARGV) {
 
     $limit = shift @ARGV if ($nextword eq '-limit');
 
-    $onepass = 1 if ($nextword eq  '-onepass');
+    $dodna = 1 if ($nextword eq '-dodna');
+
+    $doquality = 1 if ($nextword eq '-doquality');
 
     if ($nextword eq '-databases') {
 	while (@ARGV && ! ($ARGV[0] =~ /^-/)) {
@@ -74,97 +76,121 @@ foreach $dbname (@dblist) {
     &db_die("$query failed");
     print STDERR "\n" if $verbose;
 
-    $query = "SELECT read_id,sequence,scompress FROM READS WHERE scompress != 99";
-    $query .= " LIMIT $limit" if defined($limit);
+    if ($dodna) {
+	$query = "SELECT read_id,sequence,scompress FROM READS WHERE scompress != 99";
+	$query .= " LIMIT $limit" if defined($limit);
 
-    $sth = $dbh->prepare($query);
-    &db_die("prepare($query) failed on $dsn");
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
 
-    $sth->execute();
-    &db_die("execute($query) failed on $dsn");
+	$sth->execute();
+	&db_die("execute($query) failed on $dsn");
 
-    $updatequery = "UPDATE READS SET scompress=99, sequence=? WHERE read_id=?";
+	$updatequery = "UPDATE READS SET scompress=99, sequence=? WHERE read_id=?";
 
-    $update = $dbh->prepare($updatequery);
-    &db_die("prepare($updatequery) failed on $dsn");
+	$update = $dbh->prepare($updatequery);
+	&db_die("prepare($updatequery) failed on $dsn");
  
-    $ndone = 0;
-    $oldlen = 0;
-    $newlen = 0;
-
-    print STDERR "Compressing";
-    print STDERR " and updating" if $onepass;
-    print STDERR " ...\n";
-
-    unless ($batchmode) {
-	printf STDERR "%8d", $ndone;
-	$format = "\010\010\010\010\010\010\010\010%8d";
-    }
-
-    while(@ary = $sth->fetchrow_array()) {
-	($readid, $sequence, $scompress) = @ary;
-
-	$oldlen += length($sequence);
-
-	$sequence = $compressor->sequenceDecoder($sequence, $scompress) if $scompress;
-
-	$sequence = $compressor->sequenceEncoder($sequence, 99);
-
-	if ($onepass) {
-	    $update->execute($sequence, $readid);
-	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
-	} else {
-	    push @updates, [$readid, $sequence];
-	}
-
-	$newlen += length($sequence);
-
-	$ndone++;
-	printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
-    }
-
-    $sth->finish();
-
-    if ($batchmode) {
-	print STDERR "$ndone reads processed\n";
-    } else {
-	printf STDERR $format, $ndone;
-	print STDERR " ... compressed";
-	print STDERR " and updated" if $onepass;
-	print STDERR "\n";
-    }
-
-    unless ($onepass) {
 	$ndone = 0;
+	$oldlen = 0;
+	$newlen = 0;
 
-	print STDERR "Updating ...\n";
+	print STDERR "Compressing and updating DNA data ...\n";
 
 	unless ($batchmode) {
-	    printf STDERR "%8d", $ndone unless $batchmode;
+	    printf STDERR "%8d", $ndone;
 	    $format = "\010\010\010\010\010\010\010\010%8d";
 	}
 
-	foreach $read (@updates) {
-	    ($readid, $sequence) = @{$read};
-	
+	while(@ary = $sth->fetchrow_array()) {
+	    ($readid, $sequence, $scompress) = @ary;
+
+	    $oldlen += length($sequence);
+
+	    $sequence = $compressor->sequenceDecoder($sequence, $scompress) if $scompress;
+
+	    $sequence = $compressor->sequenceEncoder($sequence, 99);
+
 	    $update->execute($sequence, $readid);
 	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
+
+	    $newlen += length($sequence);
 
 	    $ndone++;
 	    printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
 	}
 
+	$sth->finish();
+
 	if ($batchmode) {
 	    print STDERR "$ndone reads processed\n";
 	} else {
 	    printf STDERR $format, $ndone;
-	    print STDERR " ... updated.\n";
+	    print STDERR " ... compressed and updated\n";
 	}
-    }
 	
-    $update->finish();
+	$update->finish();
 
-    print STDERR "Total sequence length was $oldlen, now $newlen\n" if ($ndone > 0);
+	print STDERR "Total sequence length was $oldlen, now $newlen\n" if ($ndone > 0);
+    }
+
+    if ($doquality) {
+	$query = "SELECT read_id,quality,qcompress FROM READS WHERE qcompress != 99";
+	$query .= " LIMIT $limit" if defined($limit);
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed on $dsn");
+
+	$sth->execute();
+	&db_die("execute($query) failed on $dsn");
+
+	$updatequery = "UPDATE READS SET qcompress=99, quality=? WHERE read_id=?";
+
+	$update = $dbh->prepare($updatequery);
+	&db_die("prepare($updatequery) failed on $dsn");
+ 
+	$ndone = 0;
+	$oldlen = 0;
+	$newlen = 0;
+
+	print STDERR "Compressing and updating base quality data ...\n";
+
+	unless ($batchmode) {
+	    printf STDERR "%8d", $ndone;
+	    $format = "\010\010\010\010\010\010\010\010%8d";
+	}
+
+	while(@ary = $sth->fetchrow_array()) {
+	    ($readid, $quality, $qcompress) = @ary;
+
+	    $oldlen += length($quality);
+
+	    ($qlen, $quality) = $compressor->qualityDecoder($quality, $qcompress) if $qcompress;
+
+	    ($qlen, $quality) = $compressor->qualityEncoder($quality, 99);
+
+	    $update->execute($quality, $readid);
+	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
+
+	    $newlen += length($quality);
+
+	    $ndone++;
+	    printf STDERR $format, $ndone if (($ndone % 50) == 0 && !defined($batchmode));
+	}
+
+	$sth->finish();
+
+	if ($batchmode) {
+	    print STDERR "$ndone reads processed\n";
+	} else {
+	    printf STDERR $format, $ndone;
+	    print STDERR " ... compressed and updated\n";
+	}
+	
+	$update->finish();
+
+	print STDERR "Total quality length was $oldlen, now $newlen\n" if ($ndone > 0);
+    }
 }
 
 $dbh->disconnect();
@@ -185,10 +211,13 @@ sub showUsage {
     print STDERR "    -user\t\tMySQL username\n";
     print STDERR "    -databases\t\tOne or more databases to be modified\n";
     print STDERR "\n";
+    print STDERR "MODE CONTROL OPTIONS:\n";
+    print STDERR "    -dodna\t\tProcess DNA sequence data\n";
+    print STDERR "    -doquality\t\tProcess base quality data\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
     print STDERR "    -verbose\t\tVerbose output\n";
     print STDERR "    -batchmode\t\tDo not display progress info\n";
-    print STDERR "    -onepass\t\tUpdates will be made as reads are compressed\n";
     print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
 }
