@@ -1112,7 +1112,7 @@ print "VII $break";
 
         if ($complete) {
 # if there is a consensus sequence, dump it using this contig_id
-            $self->dumpDNA($contig,$counts->[1]);
+#            $self->dumpDNA($contig,$counts->[1]);
 # here remove the ReadMappers and this contigbuilder to free memory
             my $dumped = 0;
             foreach my $readname (keys (%readmapper)) {
@@ -1137,7 +1137,7 @@ print $report;
 # next block is activated if the current contig is identical to one entered earlier
 
     elsif ($complete && $accepted && $isIdentical) {
-$self->dumpDNA($contig,$counts->[1]); # for test purposes
+#$self->dumpDNA($contig,$counts->[1]); # for test purposes
 # the new contig is identical to a previous one; remove the ReadMappers and this contigbuilder
         my $dumped = 0;
         foreach my $readname (keys (%readmapper)) {
@@ -1684,8 +1684,8 @@ print "error in: $record$break |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
 
         elsif ($type == 3) {
 # add DNA consensus sequence
-print "DNA added: $record (length $length)$break";
-            $currentcontig->addDNA($record, $length);
+#print "DNA added: $record (length $length)$break";
+#            $currentcontig->addDNA($record, $length);
 #            $currentcontig->addDNA($record, 1);
         }
 
