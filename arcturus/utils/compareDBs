@@ -59,18 +59,25 @@ $stha = $dbha->prepare($query);
 $stha->execute();
 &db_die("execute($query) failed on $dsna");
 
+$nreads = 0;
+printf STDERR "%8d", $nreads;
+$format = "\010\010\010\010\010\010\010\010%8d";
+
 while(@ary = $stha->fetchrow_array()) {
     ($read_id, $readname, $slength, $sequence) = @ary;
     $readida{$readname} = $read_id;
     $hasha{$readname} = $sequence;
     $seqlena{$readname} = $slength;
+    $nreads++;
+    printf STDERR $format, $nreads if (($nreads % 50) == 0);
 }
+
+printf STDERR $format, $nreads;
+print STDERR " reads found ... done.\n";
 
 $stha->finish();
 
 $nra = scalar keys %seqlena;
-
-print STDERR "Done. Found $nra reads.\n";
 
 print STDERR "Executing $query on $dsnb ...\n";
 
@@ -80,18 +87,25 @@ $sthb = $dbhb->prepare($query);
 $sthb->execute();
 &db_die("execute($query) failed on $dsnb");
 
+$nreads = 0;
+printf STDERR "%8d", $nreads;
+$format = "\010\010\010\010\010\010\010\010%8d";
+
 while(@ary = $sthb->fetchrow_array()) {
     ($read_id, $readname, $slength, $sequence) = @ary;
     $readidb{$readname} = $read_id;
     $hashb{$readname} = $sequence;
     $seqlenb{$readname} = $slength;
+    $nreads++;
+    printf STDERR $format, $nreads if (($nreads % 50) == 0);
 }
+
+printf STDERR $format, $nreads;
+print STDERR " reads found ... done.\n";
 
 $sthb->finish();
 
 $nrb = scalar keys %seqlenb;
-
-print STDERR "Done. Found $nrb reads.\n";
 
 foreach $readname (keys %seqlena) {
     $slenb = $seqlenb{$readname};
