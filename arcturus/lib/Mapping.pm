@@ -2,54 +2,27 @@ package Mapping;
 
 use strict;
 
+use Segment;
+
 #-------------------------------------------------------------------
 # Constructor new 
 #-------------------------------------------------------------------
 
 sub new {
     my $class   = shift;
-    my $mapping = shift; # mapping number, optional
+    my $mapping = shift; # mapping number or name, optional
 
     my $this = {};
 
     bless $this, $class;
 
     $this->{MappingSegments} = [];
-    $this->{assembledFrom} = [];
+    $this->{assembledFrom}   = [];
+    $this->{alignToTrace}    = [];
 
     $this->{mapping} = $mapping if defined($mapping);
 
     return $this;
-}
-
-#-------------------------------------------------------------------
-# import handle to related objects
-#-------------------------------------------------------------------
-
-sub setArcturusDatabase {
-# import the parent Arcturus database handle
-    my $this = shift;
-    my $ADB  = shift;
-
-    if (ref($ADB) eq 'ArcturusDatabase') {
-        $this->{ADB} = $ADB;
-    }
-    else {
-        die "Invalid object passed: $ADB";
-    }
-}
-
-sub setRead {
-# import the handle to the Read instance for this mapping
-    my $this = shift;
-    my $Read = shift;
-
-    if (ref($Read) eq 'Read') {
-        $this->{Read} = $Read;
-    }
-    else {
-        die "Invalid object passed: $Read";
-    } 
 }
  
 #-------------------------------------------------------------------
@@ -72,30 +45,37 @@ sub setReadID {
 #
 #-------------------------------------------------------------------
 
-sub addAlignToCaf {
+sub addAlignToTrace {
     my $this = shift;
-    my $map  = shift;
 
-#print "addAlignToCaf: @$map\n";    
+#print "addAlignToTrace: @_\n";
+
+    my $segment = new Segment(@_);
+
+    my $added = 0;
+    if ($segment->getMapping) { 
+        push @{$this->{alignToTrace}},$segment;
+        $added = scalar(@{$this->{alignToTrace}});
+    }
+
+    return $added;
 }
 
 sub addAssembledFrom {
     my $this = shift;
-    my $map  = shift;
 
-#print "assembledFrom: @$map\n";
+#print "addAssembledFrom: @_\n";
 
-    my $assembledFrom = $this->{assembledFrom};
+    my $segment = new Segment(@_);
 
-    my @Map = @$map; # copy the array to local
+    my $added = 0;
+    if ($segment->getMapping) { 
+        push @{$this->{alignToAssembly}},$segment;
+        $added = scalar(@{$this->{alignToAssembly}});
+    }
 
-
-    push @$assembledFrom, \@Map; # add to array of maps (to be improved)
-
-    return scalar @$assembledFrom;  
+    return $added;
 }
 
 1;
-
-
 

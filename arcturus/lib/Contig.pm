@@ -171,158 +171,76 @@ sub getSequence {
 }
 
 #-------------------------------------------------------------------    
-# importing/exporting Reads
+# importing/exporting Read(s), Mapping(s) & Tag(s)
 #-------------------------------------------------------------------    
 
-sub exportReads {
+sub getRead {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
 
-    return $this->{Reads};
+    return $this->{Read};
 } 
 
-sub importReads {
-# import the reads for this contig as an array of Read instances
-    my $this  = shift;
-    my $Reads = shift;
-
-    if (ref($Reads) ne 'ARRAY') {
-        die "$this->importReads expects an array as input";
-    }
-
-    foreach my $Read (@$Reads) {
-        $this->importRead($Read);
-    }
-}
-
-sub importRead {
-# add a single Read object to the internal buffer
+sub addRead {
+# add Read object or an array of Read objects to the internal buffer
     my $this = shift;
     my $Read = shift;
 
-    if (ref($Read) ne 'Read') {
-        die "$this->importRead expects a Read instance as input";
-    }
-
-    push @{$this->{Reads}}, $Read;
+    $this->importComponent($Read,'Read');
 }
 
-#-------------------------------------------------------------------    
-# importing/exporting Mappings
-#-------------------------------------------------------------------    
-
-sub exportMappings {
+sub getMapping {
 # return a reference to the array of Mapping instances (can be empty)
     my $this = shift;
 
-    return $this->{Mappings};
+    return $this->{Mapping};
 } 
 
-sub importMappings {
-# import the r-to-c mappings for this contig as an array of Mapping instances
-    my $this = shift;
-    my $Mappings = shift;
-
-    if (ref($Mappings) ne 'ARRAY') {
-        die "$this->importMappings expects an array as input";
-    }
-
-    foreach my $Mapping (@$Mappings) {
-        $this->importMapping($Mapping);
-    }
-}
-
-sub importMapping {
-# add a single Mapping object to the internal buffer
+sub addMapping {
+# add Mapping object or an array of Mapping objects to the internal buffer
     my $this = shift;
     my $Mapping = shift;
 
-    if (ref($Mapping) ne 'Mapping') {
-        die "$this->importMapping expects a Mapping instance as input";
-    }
-
-    push @{$this->{Mappings}}, $Mapping;
+    $this->importComponent($Mapping,'Mapping');
 }
 
-#-------------------------------------------------------------------    
-# importing/exporting Tags
-#-------------------------------------------------------------------    
-
-sub exportTags {
+sub getTag {
 # return a reference to the array of Tag instances (can be empty)
     my $this = shift;
 
-    return $this->{Tags};
+    return $this->{Tag};
 } 
 
-sub importTags {
-# import the tags for this contig as an array of Tag instances
-    my $this  = shift;
-    my $Tags = shift;
-
-    if (ref($Tags) ne 'ARRAY') {
-        die "$this->importTags expects an array as input";
-    }
-
-    foreach my $Tag (@$Tags) {
-        $this->importTag($Tag);
-    }
-}
-
-sub importTag {
-# add a single Tag object to the internal buffer
+sub addTag {
+# add Tag object or an array of Tag objects to the internal buffer
     my $this = shift;
     my $Tag  = shift;
 
-    if (ref($Tag) ne 'Tag') {
-        die "$this->importTag expects a Tag instance as input";
-    }
-
-    push @{$this->{Tags}}, $Tag;
+    $this->importComponent($Tag,'Tag');
 }
 
 #-------------------------------------------------------------------    
-# exporting/importing Contig components (generic)
-#-------------------------------------------------------------------    
-
-sub exportComponents {
-# return reference to the array of instances (can be empty) of specified type
-    my $this = shift;
-    my $type = shift; # 'Read', 'Mapping' or 'Tag'
-
-    if ($type !~ /\b(Read|Mapping|Tag)\b/) {
-        die "$this->exportComponent expects type Read, Mapping or Tag";
-    }
-
-    return $this->{$type};
-} 
-
-sub importComponents {
-# import the tags for this contig as an array of Tag instances
-    my $this = shift;
-    my $Components = shift;
-
-    if (ref($Components) ne 'ARRAY') {
-        die "$this->importComponents expects an array as input";
-    }
-
-    foreach my $Component (@$Components) {
-        $this->importComponent($Component);
-    }
-}
 
 sub importComponent {
-# add a single Component object to the internal buffer
+# private generic method
     my $this = shift;
     my $Component = shift;
+    my $type = shift;
 
-    my $type = ref($Component);
-
-    if ($type !~ /\b(Read|Mapping|Tag)\b/) {
-        die "$this->importComponent expects a Read, Mapping or Tag instance as input";
+    if (ref($Component) eq 'ARRAY') {
+# recursive use with scalar parameter
+        foreach my $component (@$Component) {
+            $this->importComponent($component,$type);
+        }
     }
-
-    push @{$this->{$type}}, $Component;
+    else {
+# test type of input object against specification
+        my $inputtype = ref($Component);
+        if ($type ne $inputtype) {
+            die "Contig->import$type expects a $type instance or array of $type instances as input";
+        }
+        push @{$this->{$type}}, $Component;
+    }
 }
 
 #-------------------------------------------------------------------    
@@ -330,18 +248,3 @@ sub importComponent {
 #-------------------------------------------------------------------    
 
 1;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
