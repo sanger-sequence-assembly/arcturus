@@ -1105,7 +1105,10 @@ print "1 reject $file ($flnfilter)$break" if ($flnfilter && !($file =~ /$flnfilt
             next NEXT if ($flnfilter =~ /\S/ && $flnfilter ne 'HARVEST' && !($file =~ /$flnfilter/));
             next NEXT if ($glbfilter =~ /\S/ && !($file =~ /$glbfilter/));
         # test against allowed pattern and get shortname
-print "2 reject $file$break" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
+if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG) {
+    print "2 reject $file$break";
+    print "file |$file|  subdir |$subdir|$break";
+}
             next NEXT if (!($file =~ /^$subdir(\S+\/)?([\w\-\.]+\.(\w\d?\w*)$)/));
             my $shortname = $2;
 print "shortname = $shortname $break" if ($DEBUG);
