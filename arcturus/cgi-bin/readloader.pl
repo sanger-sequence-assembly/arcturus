@@ -31,7 +31,7 @@ my $logLevel;              # default log warnings and errors only
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|noexclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
-   $validKeys .= "subdir|verbose|schema|projid|aspedafter";
+   $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore";
 
 my %PARS;
 
@@ -71,6 +71,7 @@ while (my $nextword = shift @ARGV) {
     $PARS{include}      = shift @ARGV  if ($nextword eq '-include');
 
     $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
+    $PARS{aspedbefore}  = shift @ARGV  if ($nextword eq '-aspedbefore');
 
     $PARS{subdirFilter} = shift @ARGV  if ($nextword eq '-subdir');
 
@@ -197,8 +198,8 @@ elsif ($source eq 'Oracle') {
 
     &showUsage(2,"Missing Oracle schema") unless $PARS{schema};
 
-    my @valid = ('schema','projid','aspedafter','readnamelike',
-                 'include','exclude');
+    my @valid = ('schema','projid','aspedafter','aspedbefore',
+		 'readnamelike','include','exclude');
     &showUsage(2) if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new OracleReadFactory(%PARS);
@@ -303,7 +304,6 @@ sub readNamesFromFile {
 #------------------------------------------------------------------------
 
 sub showUsage {
-
     my $mode = shift || 0; 
     my $code = shift || 0;
 
@@ -328,23 +328,30 @@ sub showUsage {
     print STDERR "-info\t\t(no value) for some progress info\n";
     print STDERR "-verbose\t(no value)\n";
     print STDERR "\n";
-    print STDERR "Source-specific parameters for CAF input:\n";
-    print STDERR "\n";
-    print STDERR "-caf\t\tcaf file name OR as alternative\n";
-    print STDERR "-cafdefault\t use the default caf file name\n";
-    print STDERR "\n";
-    print STDERR "Source-specific parameters for Oracle input:\n";
-    print STDERR "\n";
-    print STDERR "-schema\t(MANDATORY) Oracle schema\n";
-    print STDERR "-projid\t(MANDATORY) Oracle project ID\n";
-    print STDERR "-aspedafter\tasped date guillotine\n";
-    print STDERR "\n";
-    print STDERR "Source-specific parameters for Expfiles input:\n";
-    print STDERR "\n";
-    print STDERR "-root\t\troot directory of data repository\n";
-    print STDERR "-sub\t\tsub-directory filter\n";
-    print STDERR "-limit\t\tlargest number of reads to be loaded\n";
-    print STDERR "\n";
+    if ($mode == 0 || $mode == 1) {
+	print STDERR "Source-specific parameters for CAF input:\n";
+	print STDERR "\n";
+	print STDERR "-caf\t\tcaf file name OR as alternative\n";
+	print STDERR "-cafdefault\t use the default caf file name\n";
+	print STDERR "\n";
+    }
+    if ($mode == 0 || $mode == 2) {
+	print STDERR "Source-specific parameters for Oracle input:\n";
+	print STDERR "\n";
+	print STDERR "-schema\t(MANDATORY) Oracle schema\n";
+	print STDERR "-projid\t(MANDATORY) Oracle project ID\n";
+	print STDERR "-aspedbefore\tasped date guillotine\n";
+	print STDERR "-aspedafter\tasped date guillotine\n";
+	print STDERR "\n";
+    }
+    if ($mode == 0 || $mode == 3) {
+	print STDERR "Source-specific parameters for Expfiles input:\n";
+	print STDERR "\n";
+	print STDERR "-root\t\troot directory of data repository\n";
+	print STDERR "-sub\t\tsub-directory filter\n";
+	print STDERR "-limit\t\tlargest number of reads to be loaded\n";
+	print STDERR "\n";
+    }
 
     $code ? exit(1) : exit(0);
 }
