@@ -4,6 +4,7 @@ use strict;
 
 use DataSource;
 use DBI;
+use Read;
 
 sub new {
     my $type = shift;
@@ -43,6 +44,30 @@ sub getConnection {
     }
 
     return $this->{Connection};
+}
+
+sub getReadFromID {
+    my $this = shift;
+
+    my $readid = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare("select * from READS where read_id=$readid");
+
+    $sth->execute();
+
+    my $arrayref = $sth->fetchrow_arrayref();
+
+    $sth->finish();
+
+    if (defined($arrayref)) {
+	my $read = new Read();
+	$read->importData(%{$arrayref});
+	return $read;
+    } else {
+	return undef;
+    }
 }
 
 1;

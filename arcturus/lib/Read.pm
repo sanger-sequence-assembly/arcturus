@@ -458,3 +458,5 @@ sub writeReadToCaf {
 # a section dealing with padded mappings (import / export 'writeMapToCaf')
 #
 #######################
+
+1;
