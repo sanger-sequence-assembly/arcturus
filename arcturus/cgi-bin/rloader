@@ -191,7 +191,7 @@ if ($cgi) {
         else {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
-print "testing project $database <br>";
+print "testing I project $database <br>";
                 $config{RDD} = `$BADGERDIR/pfind -q $database`;
 #              my $repository = new PathogenRepository;
 #              $config{RDD} = $repository->getAssemblyDirectory($database); 
@@ -393,7 +393,7 @@ else { # invoked from the command line (ejz/adh only)
         }
         elsif ($gbfilter) {
 # test if gbfilter is a project name; find its root directory ? 
-print "testing project $gbfilter <br>";
+print "testing II project $gbfilter <br>";
             $config{PDD} = `$BADGERDIR/pfind -q $gbfilter`;
         }
         else {
