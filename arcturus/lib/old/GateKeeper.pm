@@ -698,22 +698,23 @@ sub authorize {
 
 # process possible hash input 
 
-    my %options = ( testSession => 1, # default test session number, else test username, password
-                    makeSession => 1, # default issue session number if in CGI mode (2 for always)
-                    userSession => 'oper', # uses default testSession => 1 for this user only
-                    interim     => 1, # default submit interim form if CGI and no output page active
-                    noConfirm   => 0, # default assign CONFIRM to returned submit button value 
-                    noGUI       => 0, # default standard Arcturus GUI; else contents only
-                    finalize    => 0, # default return after adding password query to existing form
-                    noprompt    => 1, # default no prompt for username and/or password if missing & !CGI 
-                    silently    => 1, # do everything quietly
-                    dieOnError  => 0, # default do not abort on error, else die, except on closed session  
-                    ageWindow  => 30, # acceptance window (minutes) for previously opened session
-                    returnPath  => 0, # default return to same script
-                    identify    => 0, # username (for possible usage in non-CGI mode)
-                    password    => 0, # password (for possible usage in non-CGI mode)
-                    session     => 0, # session ID (for possible usage in non-CGI mode)
-                    diagnosis   => 0  # default off
+    my %options = ( testSession  => 1, # default test session number, else test username, password
+                    makeSession  => 1, # default issue session number if in CGI mode (2 for always)
+                    userSession  => 'oper', # uses default testSession => 1 for this user only
+                    closeSession => 1, # default close existing session if outside specified windows
+                    interim      => 1, # default submit interim form if CGI and no output page active
+                    noConfirm    => 0, # default assign CONFIRM to returned submit button value 
+                    noGUI        => 0, # default standard Arcturus GUI; else contents only
+                    finalize     => 0, # default return after adding password query to existing form
+                    noprompt     => 1, # default no prompt for username and/or password if missing & !CGI 
+                    silently     => 1, # do everything quietly
+                    dieOnError   => 0, # default do not abort on error, else die, except on closed session  
+                    ageWindow    => 30, # acceptance window (minutes) for previously opened session
+                    returnPath   => 0, # default return to same script
+                    identify     => 0, # username (for possible usage in non-CGI mode)
+                    password     => 0, # password (for possible usage in non-CGI mode)
+                    session      => 0, # session ID (for possible usage in non-CGI mode)
+                    diagnosis    => 0  # default off
 		  );
     &importOptions(\%options, $hash);
 
@@ -753,7 +754,8 @@ sub authorize {
     }
 
     my $mother = $self->{mother};
-    undef my ($priviledges,$seniority);
+
+    undef my ($priviledges,$seniority,$attributes);
 
     undef $self->{report};
     if ($session && $options{testSession}) {
@@ -770,6 +772,7 @@ sub authorize {
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hashref->{priviledges} || 0;
             $seniority   = $hashref->{seniority}   || 0;
+            $attributes  = $hashref->{attributes}  || 0;
             my $seed = &compoundName($identify,'arcturus',8);
             if (!$cgi->VerifyEncrypt($seed,$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
@@ -955,7 +958,7 @@ sub authorize {
             $query .= "(UNIX_TIMESTAMP(timebegin)+0) AS age from <self> where ";
             $query .= "session like '$identify%' AND closed_by is NULL";
             my $array = $sessions->query($query,0,0);
-            if ($array && ref($array) eq 'ARRAY') {
+            if ($array && ref($array) eq 'ARRAY' && $options{closeSession}) {
                 my $ageOfSession = $array->[0]->{age};
                 my $openSession = $array->[0]->{session};
                 $self->{report} = "There is an existing active session $openSession; "; 
@@ -1027,6 +1030,14 @@ sub authorize {
             }        
         }
     }
+
+# does the user have access to this database?
+
+    if ($attributes) {
+        
+    }
+
+# test if the required priviledge matches the 
 
     if ($mask) {
 # &report ($self,"code $code  mask $mask priviledges $priviledges");
@@ -1278,8 +1289,9 @@ sub GUI {
             $target .= "\&database=$database" if ($target !~ /\b$database\b/);
       	    $target =~ s/\&/?/ if ($target !~ /\?/); # replace first & by ?
             my $link = $database; my $ulink = uc($link);
-            my $alt = "onMouseOver=\"window.status='SELECT THE $ulink DATABASE'; return true\""; 
-            $link = "<a href=\"$target\" $alt> $link </a>" if (!$current || $current ne $link);
+            my $alt = "onMouseOver=\"window.status='SELECT THE $ulink DATABASE'; return true\"";
+            my $override = 0; $override = 1 if ($self->currentScript =~ /\bcreate\b/); 
+            $link = "<a href=\"$target\" $alt> $link </a>" if (!$current || $current ne $link || $override);
             $table .= "<tr><td $cell width=100%>$link</td></tr>";
         }
     }

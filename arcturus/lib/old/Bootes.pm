@@ -59,8 +59,9 @@ sub new {
     if ($options{writeAccess}) {
 # test authorisation ($options username and password, or session)
         delete $options{writeAccess};
-        $options{makeSession} = 2;
-        $options{dieOnError}  = 1;
+        $options{makeSession}  = 2;
+        $options{dieOnError}   = 1;
+        $options{closeSession} = 0;
         if ($GateKeeper->authorize(100,\%options)) {
             $self->{session} = $GateKeeper->{SESSION};
 # open modules which write to database
@@ -399,5 +400,3 @@ sub colophon {
 #############################################################################
 
 1;
-
-

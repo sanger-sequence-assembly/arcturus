@@ -4,8 +4,6 @@ package DbaseTable;
 
 use strict;
 
-# my $VERSION = "1.1";
-
 my $DEBUG = 1;
 
 #############################################################################
@@ -43,6 +41,7 @@ sub new {
 
     $self->{columns}   = []; # array for table column names
     $self->{coltype}   = {}; # hash with column types
+    $self->{coldata}   = {}; # hash with complete column description
     $self->{prime_key} = ''; # place holder for the primary key
     $self->{unique}    = []; # place holders for a possible unique key
     $self->{autoinc}   = ''; # for a possible autoincremental column
@@ -113,8 +112,11 @@ sub build {
 # prepare for column names and types and hashrefs 
 
     undef my %columns;
+    undef my %coldata;
     undef $self->{hashrefs};
     undef @{$self->{columns}};
+
+# print "content-type: text/plain\n\n";
 
 # test if the table exists
 
@@ -148,14 +150,16 @@ sub build {
     $sth = $dbh->prepare("SHOW COLUMNS from $tablename");
     if ($sth->execute()) {
         while (my @description = $sth->fetchrow_array()) {
-            push @{$self->{columns}}, $description[0];  # keeps the order of entries
+            push @{$self->{columns}}, $description[0];   # keeps the order of entries
             $columns{$description[0]} = $description[1]; # hash for type information
+            $coldata{$description[0]} = \@description;   # full description
             $self->{prime_key} = $description[0]     if ($description[3] eq 'PRI');
             $prime_col = $description[0] if ($tablename =~ /^\w+\.$description[0]$/i);
             $self->{autoinc} = $description[0] if ($description[5] && $description[5] =~ /auto/i);
             $count++; 
         }
-        $self->{coltype} = \%columns ;
+        $self->{coltype} = \%columns;
+        $self->{coldata} = \%coldata;
     } else {
         $self->{errors} = "! Could not access table $tablename";
         return 0;
@@ -254,6 +258,52 @@ sub whoAmI {
 # return the database handle and the full tablename
 
     return $dbh, $tbl;
+}
+
+#############################################################################
+
+sub getColumnInfo {
+# return description of specified column 
+    my $self   = shift;
+    my $column = shift || return '';
+    my $order  = shift || 0; # order enum values
+
+    my $description = $self->{coldata}->{$column} || return '';
+
+    my $info = $column;
+# remove size info from integer fields
+    $description->[1] =~ s/\(\d+\)//   if ($description->[1] =~ /int/i);
+# handle enumerated items
+    if ($description->[1] =~ /enum\(([^\)]+)/i && $order) {
+        my @choices = split /\,/,$1;
+        @choices = sort @choices;
+        my $choices = join ',',@choices;
+        $description->[1] = "enum($choices)";
+    }
+    $info .= ' '.$description->[1];
+# check on default
+    $description->[4] = '' if !defined($description->[4]);
+    if ($description->[4] =~ /\S/ && $description->[4] !~ /NULL|0000-00-00|00:00:00/i) {
+# there is a default defined
+        if ($description->[4] =~ /\D/ || $description->[1] =~ /char|enum/) {
+            $info .= " default '$description->[4]'";
+        }
+        else {
+            $info .= " default $description->[4]";
+        }
+    }
+    elsif ($description->[2] =~ /yes/i) {
+        $info .= ' NULL';
+    }
+    else {
+        $info .= ' NOT NULL' 
+    }
+
+    $info .= ' '.$description->[5] if ($description->[5] =~ /auto/);
+
+    $info .= ' primary key' if ($description->[3] =~ /pri/i);
+
+    return $info;
 }
 
 #############################################################################
@@ -431,7 +481,6 @@ sub associate {
 
 # (obsolete?? column item must be defined in myself; wcol can be in a linked table)
 
-#print STDOUT "content-type: text/plain\n\n";
     my %option = (traceQuery   => 1, # default query expansion activated
                   compareExact => 0, # default use 'like' in string comparisons, else '='
                   useLocate    => 1, # default test table image hash, if it exists
@@ -440,7 +489,9 @@ sub associate {
                   limit        => 0); # default no maximum specification
     $option{useLocate} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
     &importOptions(\%option, $multi);
+
 # the next lot redefines options using $multi, $order, $exact input in old applications
+
     if (!$multi || (ref($multi) ne 'HASH')) {
         $option{traceQuery}   = 0 if ($multi < 0);
         $option{compareExact} = 1 if $exact;
@@ -501,7 +552,6 @@ sub associate {
         if (my $quoted = quoteColValue($self,$wcol,$wval)) {
             $wval = $quoted;
         }
-#        elsif ($multi >= 0) {
         elsif ($option{traceQuery}) {
 # the test column $wcol does not exist in myself, is composite, or wval is of wrong type
             $useQueryTracer = $self->{qTracer};
@@ -515,8 +565,6 @@ sub associate {
 
 # determine limit setting
 
-#        my $multi = abs($multi);
-#        my $limit = ''; $limit = "limit $multi" if ($multi > 1);
         my $limit = ''; $limit = "limit $option{limit}" if $option{limit};
 
 # determine possible ordering
@@ -537,7 +585,7 @@ sub associate {
                 $whereclause .= ' not' if $not;
                 $whereclause .= ' in '; # with a list specification
             }
-            elsif ($wval =~ /[\%\_]/ && !$exact) {
+            elsif ($wval =~ /[\%\_]/ && !$option{compareExact}) {
                 $whereclause .= ' not' if $not;
                 $whereclause .= ' like '; # one value with wild cards
             }
@@ -563,20 +611,20 @@ sub associate {
             my @result;
             if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
+#my $arrayref = $sth->fetchall_arrayref({});             
+#print "test fetchall_arrayref 1 <br>";
                 while (my $hash = $sth->fetchrow_hashref()) {
                     push @result, $hash->{$item};
                 }
             }
-	    $sth->finish();
+#	    $sth->finish();
 
             $self->{querytotalresult} = @result;
 # compose the output value: either a value or array reference
             if (@result == 1 && $option{returnScalar}) {
-#            if (@result == 1) {
                 $result = $result[0];
             }
             elsif (@result >= 1) {
-#            elsif (@result > 1) {
                 $result = \@result;
             }
         }
@@ -596,26 +644,29 @@ sub associate {
                 $result = $sth->fetchrow_hashref();
                 $self->{querytotalresult} = 1;
             }
-	    $sth->finish();
+#	    $sth->finish();
         }
         elsif ($item eq 'hashrefs' || $isComposite) {
             undef my @hashrefs;
+            undef my $hashrefs;
             $item = '*' if !$isComposite;
             $query = "$select $item from $tablename WHERE $whereclause $orderby $limit";
             $self->{lastQuery} = $query;
-# print "composite! query: $query ;  tracer $useQueryTracer<br>" if ($isComposite);
             $query = &traceQuery($self,$query) if ($useQueryTracer);
-            my $sth = $dbh->prepare ($query); # return array of hashrefs
+            my $sth = $dbh->prepare ($query); 
             if ($sth->execute()) {
                 $queryStatus = 1; # signal valid query
-                while (my $hash = $sth->fetchrow_hashref()) {
-                    push @hashrefs, $hash;
-                }
+                $hashrefs = $sth->fetchall_arrayref({}); # return array of hashrefs
+                $hashrefs = \@hashrefs if !$hashrefs; # to ensure it's a ref to an empty array
+# print "test fetchall_arrayref $self->{tablename} 2 @$hashrefs<br><br>";
+# while (my $hash = $sth->fetchrow_hashref()) {
+#     push @hashrefs, $hash;
+# }
             }
-	    $sth->finish();
+# $sth->finish();
 # print "result $queryStatus: @hashrefs <br>" if $isComposite;
-            $self->{querytotalresult} = @hashrefs + 0; 
-            $result = \@hashrefs; # return reference to array of hashes
+            $self->{querytotalresult} = @$hashrefs + 0; 
+            $result = $hashrefs;
         }
         elsif ($item && $item =~ /\S/) {
             $self->{qerror} = "Invalid column name '$item' in table $tablename\n";
@@ -1180,8 +1231,7 @@ sub flush {
     my $status = 0;
     my $stack = $self->{stack};
     foreach my $cstring (keys %$stack) {
-#print "key=$cstring\n";
-#print "stack $stack->{$cstring} \n";
+#print "key=$cstring\n"; print "stack $stack->{$cstring} \n";
         if ((!$string || $cstring eq $string) && $stack->{$cstring}) {
             my $vstring = join '),(',@{$stack->{$cstring}};
             my $query = "INSERT INTO <self> ($cstring) VALUES ($vstring)";
@@ -1447,6 +1497,7 @@ sub query {
 # execute the query
 
     undef my @hashrefs;
+    my $hashrefs = \@hashrefs;
     undef $self->{qerror};
     $self->{lastQuery} .= $query;
     my $sth = $dbh->prepare($query); 
@@ -1455,9 +1506,12 @@ sub query {
 # beware: $status:0 (false) indicates an error; 0E0 indicates no data returned
     if ($status > 0) {
 # there is at least one returned row
-        while (my $hash = $sth->fetchrow_hashref()) {
-            push @hashrefs, $hash;
-        }
+        $hashrefs = $sth->fetchall_arrayref({});
+        $hashrefs = \@hashrefs if !$hashrefs;
+# print "test fetchall_arrayref $self->{tablename} 3 <br>";
+# while (my $hash = $sth->fetchrow_hashref()) {
+#     push @hashrefs, $hash;
+# }
     }
     elsif (!$status) {
         $self->{qerror} = 1;
@@ -1466,8 +1520,7 @@ sub query {
         $status = 0; # just in case, false
         $self->{qerror} = 1;
     }
-    $sth->finish();
-
+#    $sth->finish();
 
 # modify timestamp if query changed the table (update, delete, insert, ..)
 
@@ -1481,8 +1534,8 @@ sub query {
 #                      or  0E0 for an empty return table (zero but TRUE)
 #                      or  the reference to an array of row hashes (at least 1)
 
-    if (@hashrefs) {
-        return \@hashrefs; # the query returns at least one line
+    if (@$hashrefs) {
+        return $hashrefs; # the query returns at least one line
     }
     else {
         return $status; # the query is empty but true (0E0) or failed (undef)
