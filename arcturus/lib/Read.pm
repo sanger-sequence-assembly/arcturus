@@ -411,7 +411,6 @@ sub writeToCaf {
 
 # first write the Sequence, then DNA, then BaseQuality
 
-    print $FILE "\n\n";
     print $FILE "Sequence : $self->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "Unpadded\n";
