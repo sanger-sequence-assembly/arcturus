@@ -6,10 +6,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-# use lib "/nfs/pathsoft/arcturus/dev/lib";
-
 use GateKeeper; 
-use ArcturusTable;
 
 ##############################################################################
 # unbuffered output
@@ -37,7 +34,7 @@ else {
     $chromosome = shift @ARGV;
 }
 
-my $dbh = $GateKeeper->dbHandle($database);
+my $organisms = $GateKeeper->dbHandle($database, {returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
@@ -45,10 +42,9 @@ $GateKeeper->cgiHeader(1); # return string plain
 # MAIN
 ##############################################################################
 
-my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
-my $contigs   = $organisms->new($dbh,'CONTIGS',$database,0);
-my $assembly  = $organisms->new($dbh,'ASSEMBLY',$database,0);
-my $scaffold  = $organisms->new($dbh,'CONTIGS2SCAFFOLD',$database,0);
+my $contigs   = $organisms->spawn('CONTIGS',$database,0);
+my $assembly  = $organisms->spawn('ASSEMBLY',$database,0);
+my $scaffold  = $organisms->spawn('CONTIGS2SCAFFOLD',$database,0);
 
 my $assembly_hash = $assembly->associate('hashref',$chromosome,'chromosome');
 $GateKeeper->dropDead("Sorry, no data for chromosome $chromosome") if !$assembly_hash;
@@ -62,10 +58,9 @@ print STDOUT "Date and time of last assembly        : $last_assembly\n";
 print STDOUT "Number of reads                       : $nreads\n";
 print STDOUT "Number of contigs                     : $ncontig\n";
 
-my $query = "use $database";
-$organisms->query($query);
+$GateKeeper->focus(1); # make $database the default database
 
-$query = "select count(CONTIGS.contig_id) AS ccount, sum(CONTIGS.length) as lsum from ";
+my $query = "select count(CONTIGS.contig_id) AS ccount, sum(CONTIGS.length) as lsum from ";
 $query .= "CONTIGS,CONTIGS2SCAFFOLD where ";
 $query .= "CONTIGS.contig_id=CONTIGS2SCAFFOLD.contig_id and ";
 $query .= "CONTIGS.length >= 2000 and ";
@@ -94,24 +89,11 @@ $hash = $contigs->query($query);
 $hash->[0]->{lsum} = 0 if !$hash->[0]->{lsum};
 print STDOUT "Number of newly created contigs       : $hash->[0]->{ccount}, total length: $hash->[0]->{lsum}\n";
 
-
 ##############################################################################
 # Some local parameters and variables
 ##############################################################################
 
-$dbh->disconnect();
+$GateKeeper->disconnect();
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+exit 0;
 

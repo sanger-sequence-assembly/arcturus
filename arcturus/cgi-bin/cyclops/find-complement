@@ -38,9 +38,9 @@ else {
     $suffix    = shift @ARGV;
 }
 
-my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-my $status = $GateKeeper->authorize(100,{'nosession'=>1, silently=>0});
+my $status = $GateKeeper->authorize(100,{nosession => 1, silently => 0});
 
 if (!$status) {
     my $error = $GateKeeper->{error};
@@ -55,7 +55,6 @@ $GateKeeper->cgiHeader(1); # return string plain
 
 print "Okay, authorized! \n";
 
-# $start = 43001; $length=1000;
 print "database=$database blocksize=$blocksize  start=$start  length=$length ";
 print "suffix=$suffix" if $suffix;
 print "\n";
@@ -218,5 +217,4 @@ $organisms->historyUpdate($userid,'insert',1);
 
 $GateKeeper->disconnect();
 
-
-
+exit 0;

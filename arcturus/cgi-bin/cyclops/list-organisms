@@ -6,10 +6,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-# use lib "/nfs/team81/ejz/arcturus/modules";
-
 use GateKeeper; 
-use ArcturusTable;
 
 ##############################################################################
 # unbuffered output
@@ -29,15 +26,13 @@ my $config     = $GateKeeper->configHandle();
 
 my $cgi        = $GateKeeper->cgiHandle();
 
-my $dbh        = $GateKeeper->dbHandle(undef,{'override' => '1'});
+my $ORGANISMS  = $GateKeeper->dbHandle(undef,{undefinedDatabase => 1, returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
 ##############################################################################
 # MAIN enumerate organisms in arcturus
 ##############################################################################
-
-my $ORGANISMS = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
 
 my $databases = $ORGANISMS->associate('hashrefs',undef,undef,0,'dbasename');
 
@@ -47,13 +42,6 @@ $table =~ s/XXX//g;
 
 print STDOUT $table; 
 
-$dbh->disconnect();
+$GateKeeper->disconnect();
 
 exit 0;
-
-
-
-
-
-
-

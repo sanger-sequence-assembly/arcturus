@@ -26,6 +26,10 @@ sub new {
    my $class = ref($prototype) || $prototype;
    my $self  = {};
 
+   $self->{encode} = {};
+   $self->{decode} = [];
+   $self->{status} = 0;
+
    &buildCodeTables($tableinit) if (defined($tableinit));
 
    bless ($self, $class);
@@ -46,14 +50,18 @@ sub DESTROY {
 
 sub buildCodeTables {
 # sets up hash tables for encoding/decoding DNA strings
+#    my $self = shift;
     my $RNA = shift;
 
     my @seqsymbols;
-    @seqsymbols = split  //, 'ACGT- ' if (!$RNA);
-    @seqsymbols = split  //, 'ACGU- ' if  ($RNA && length($RNA) != 6);
-    @seqsymbols = split  //,   $RNA   if  ($RNA && length($RNA) == 6);
+    @seqsymbols = split  //, 'ACGT- ' if !$RNA;
+    @seqsymbols = split  //, 'ACGU- ' if ($RNA && length($RNA) != 6);
+    @seqsymbols = split  //, $RNA     if ($RNA && length($RNA) == 6);
 
 # build hash table for encoding and array for decoding
+
+#    my $encodeTable = $self->{encode};
+#    my $decodeTable = $self->{decode};
 
     undef %encodeTable;
     undef @decodeTable;
@@ -75,13 +83,48 @@ sub buildCodeTables {
 
 #############################################################################
 
+sub NsequenceEncoder {
+# encodes an input string
+    my $self   = shift;
+    my $string = shift;
+    my $method = shift;
+
+    return &tripletEncoder($self,$string)  if ($method == 1);
+ 
+    return &huffmanEncoder($self,$string)  if ($method == 2);
+
+    die "Invalid encoding method $method";    
+}
+
+
+#############################################################################
+
+sub NsequenceDecoder {
+# encodes an input string
+    my $self   = shift;
+    my $string = shift;
+    my $method = shift;
+
+    return &tripletDecoder($self,$string,@_)  if ($method == 1);
+ 
+    return &huffmanDecoder($self,$string)     if ($method == 2);
+
+    die "Invalid encoding method $method";    
+}
+
+#############################################################################
+
 sub sequenceEncoder {
 # encode input DNA (or RNA) base sequence string using encoding table
     my $self  = shift;
     my $input = shift;
 
+#    my $encodeTable = $self->{encode};
+    $self->{status} = 0;
+
     $status = 0;
 
+#    &buildCodeTables(0) if (!%$encodeTable);
     &buildCodeTables(0) if (!$existsTable); 
 
     $input .= '  ';                    # add two blanks to ensure a complete triplet at end
@@ -101,6 +144,7 @@ sub sequenceEncoder {
             print "Serious problem in sequenceEncoder at triplet $triple: ";
             print " invalid triplet key value \"$radix\"\n";
             $status++; # keep track of errors
+#            $self->{status}++;
         }
     }
 
@@ -115,10 +159,13 @@ sub sequenceDecoder {
 # decode encoded input DNA/RNA base sequence using decoding table
     my $self   = shift;
     my $input  = shift;
+    my $blanks = shift; # keep blanks, else remove blanks
 
+#    my $decodeTable = $self->{decode};
     $status = 0;
 
-   &buildCodeTables(0) if (!$existsTable); 
+#    &buildCodeTables(0) if (!@$decodeTable)
+    &buildCodeTables(0) if (!$existsTable); 
 
     my @chrnumbers = split //,$input; # split into individual characters (bytes)
 
@@ -131,13 +178,54 @@ sub sequenceDecoder {
         $string =~ s/\s//g;
         $count += length($string); # count number of non-blank characters
     }
+
+    $output =~ s/\s//g if !$blanks;
  
     $count,$output;
+}
+
+
+#############################################################################
+
+sub NqualityEncoder {
+# encodes an input string
+    my $self   = shift;
+    my $string = shift;
+    my $method = shift;
+
+#    return &numbersEncoder($self,$string)  if ($method == 1);
+    return &qualityEncoder($self,$string)  if ($method == 1);
+ 
+    return &differsEncoder($self,$string)  if ($method == 2);
+ 
+    return &huffmanEncoder($self,$string)  if ($method == 3);
+
+    die "Invalid encoding method $method for quality";    
+}
+
+
+#############################################################################
+
+sub NqualityDecoder {
+# encodes an input string
+    my $self   = shift;
+    my $string = shift;
+    my $method = shift;
+
+#    return &numbersDecoder($self,$string)  if ($method == 1);
+    return &qualityDecoder($self,$string)  if ($method == 1);
+ 
+    return &differsDecoder($self,$string)  if ($method == 2);
+ 
+    return &huffmanDecoder($self,$string)  if ($method == 3);
+
+    die "Invalid decoding method $method for quality";    
 }
 
 #############################################################################
 
 sub qualityEncoder {
+#sub numbersEncoder {
 # encode an input string with integer numbers [0-255] using byte representation
     my $self  = shift;
     my $input = shift;
@@ -164,6 +252,38 @@ sub qualityEncoder {
 
 #############################################################################
 
+sub differsEncoder {
+# encode an input string with integer numbers [0-255] using differences & huffman code
+    my $self  = shift;
+    my $input = shift;
+
+    $status = 0;
+
+    $input =~ s/^\s+//; # remove leading blanks
+#print "\ninput $input\n";
+    my @strnumbers = split /\s+/,$input; # put values in array
+
+    my $last = $strnumbers[0];
+    for (my $i = 1 ; $i < @strnumbers ; $i++) {
+	my $next = $strnumbers[$i];
+        $strnumbers[$i] -= $last;
+        $last = $next;
+    }
+
+    my $string = '';
+    foreach my $number (@strnumbers) {
+        $string .= sprintf("%4d",$number);
+    }
+
+    $string =~ s/\s(\d)/+$1/g; # add '+' before positive numbers
+    $string =~ s/\s+//g; # remove all blanks
+#print "\nconverted:  $string\n";
+
+    return &huffmanEncoder($self,$string);
+}
+
+#############################################################################
+
 sub qualityDecoder {
 # expand input into string of integer numbers separated by blanks 
     my $self  = shift; 
@@ -181,6 +301,35 @@ sub qualityDecoder {
     }
 
     $count,$output;
+}
+
+
+#############################################################################
+
+sub differsDecoder {
+# expand input into string of integer numbers separated by blanks 
+    my $self  = shift; 
+    my $input = shift;
+
+    my ($count, $string) = &huffmanDecoder($self, $input);
+    
+#print "differs restored: $string \n\n";
+    $string =~ s/([\+\-]\d)/ $1/g;
+    $string =~ s/^[\s\+]+//; # remove leading blanks
+#print "differs prepared: $string \n\n";
+    my @chrnumbers = split /\s+/,$string;
+
+    my $parity = 1;
+    for (my $i = 1 ; $i < @chrnumbers ; $i++) {
+        $chrnumbers[$i] += $chrnumbers[$i-1];
+        $parity++; 
+    }
+
+    $count = 0 if ($count != $parity);
+
+    $string = join ' ',@chrnumbers;
+
+    $count,$string;
 }
 
 #############################################################################
@@ -493,7 +642,10 @@ sub decodeHuffman {
 #############################################################################
 
 sub status {
-# returns the error status of last operation  
+# returns the error status of last operation
+    my $self = shift;
+  
+#    return $self->{status};
     return $status;
 }
 
@@ -507,8 +659,10 @@ sub colophon {
         group   =>       "group 81",
         version =>             1.1 ,
         date    =>    "18 Dec 2000",
-        update  =>    "22 Apr 2002",
+        update  =>    "03 Jul 2002",
     };
 }
 
 1;
+
+__END__

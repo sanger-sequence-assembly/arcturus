@@ -1141,21 +1141,13 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                 $clone_id = 0 if !$clone_id;
 
 #$self->list(1) if $DEBUG;
-#my $TESTNEW = 1;
                 foreach my $alignment (sort keys (%$read2con)) {
 # print "alignment key $alignment$brtag";
                     my @block = @{$read2con->{$alignment}};
-        # (NOTE: the next blocks should be replaced by one call to the database)
                     if (@block != 4) {
                         $status->{diagnosis} .=  "invalid alignment $alignment: @{block}${brtag}";
                         $status->{errors}++;           
                     }
-
-#                    elsif (!$TESTNEW && !$RRTOCC->OLDNEWROW('read_id',$read_id,'deprecated','X')) {
-#                        $status->{diagnosis} .= "! Failed to add alignment to contig";
-#                        $status->{diagnosis} .= " $contig to READS2CONTIG${brtag}";
-#                        $status->{errors}++;
-#                    }
 
                     else {
                 # define label: 0 for one in a series; 1 for a single record; 2 for end series
@@ -1163,14 +1155,6 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         $label = 2 if ($alignment eq '999999'); # last of a series 
                         $label = $label*10 + $self->{align};    # odd if aligned against contig
                 # assemble arrays
-#                        my @columns = ('contig_id', 'pcstart', 'pcfinal',
-#                                       'read_id'  , 'prstart', 'prfinal',
-#                                       'assembly' , 'clone'  , 'label  ',
-#                                       'generation', 'deprecated'       );
-#                        my @cvalues = ($contig    , $block[2], $block[3],
-#                                       $read_id   , $block[0], $block[1],
-#                                       $assembly  , $clone_id, $label   ,
-#                                       0          , $marker             );
                         undef my @columns;
                         undef my @cvalues;
                         push @columns, 'contig_id' ; push @cvalues, $contig;
@@ -1185,37 +1169,25 @@ print "++++ after MTEST for ReadMapper $self->{names}->[0]  counts: @$counts +++
                         push @columns, 'generation'; push @cvalues, 0;
                         push @columns, 'deprecated'; push @cvalues, $marker;
 
-#                        if ($TESTNEW && $RRTOCC->newrow(\@columns,\@cvalues)) {
                         if ($RRTOCC->newrow(\@columns,\@cvalues)) {
                             if ($status->{diagnosis} !~ /\badded/) {
-                                $status->{diagnosis} .= "Alignments to contig $contig added$brtag";
-                            }
+                                $status->{diagnosis} .= "Alignments to contig $contig added: ";
 print "Alignments @cvalues to contig $contig (@block) added$brtag" if $DEBUG;
+                            }
+                            $status->{diagnosis} .= "x";
                         }
-#                        elsif ($TESTNEW) {
                         else {
                             $status->{diagnosis} .= "! Failed to add alignment $alignment to contig";
                             $status->{diagnosis} .= " $contig (@block) to READS2CONTIG$brtag";
 print "$status->{diagnosis} $brtag $RRTOCC->{lastquery} $brtag $RRTOCC->{qerror} $brtag";
                             $status->{errors}++;
                         } 
-#                        else {                        
-#                            $RRTOCC->update('contig_id',$contig);
-#                            $RRTOCC->update('prstart',$block[0]);
-#                            $RRTOCC->update('prfinal',$block[1]);
-#                            $RRTOCC->update('pcstart',$block[2]);
-#                            $RRTOCC->update('pcfinal',$block[3]);
-#                            $RRTOCC->update('assembly',$assembly);
-#                            $RRTOCC->update('clone',$clone_id);
-#                            $RRTOCC->update('label',$label);
-#                # close the X handle for updates and replace by marker (either 'N' or 'M')
-#                            $RRTOCC->update('deprecated',$marker);
-#     		         }
                         $counts->[6]++;
-                # and finally update assembly in READS2ASSEMBLY
+    # and finally update assembly in READS2ASSEMBLY
                         $RRTOAA->update('assembly',$assembly,'read_id',$read_id);
                     }
                 } 
+                $status->{diagnosis} .= "$brtag";
     # here you could do the cleanup of marked mappings of previous generations
                 if ($piecemealwise) {
                     my $where = "read_id=$read_id && generation>0 && deprecated='M'";
@@ -1537,6 +1509,23 @@ sub ageByOne {
 #print "ageByOne: $query $brtag";
         $RRTOCC->query($query,1);
         &reaper($self,$assembly);
+    }
+}
+
+##################################################################################
+
+sub endOfLine {
+# to be invoked after generation 0 is completed: retire reads in G1 but not in G0
+    my $self = shift;
+
+    my $query  = "select G1.read_id from READS2CONTIG as G1 left join READS2CONTIG as G0 ";
+    $query .= "on G1.read_id = G0.read_id where G1.label >= 10 and G0.label >= 10 and ";
+    $query .= "G0.read_id = NULL";
+print "endOfLine query $query$brtag";
+    if (my $hashes = $RRTOCC->query($query,0,0)) {
+my $length=@$hashes;
+print "hashes= $hashes $length $brtag";
+        $RRTOCC->update('deprecated','X','read_id',$hashes);     
     }
 }
 

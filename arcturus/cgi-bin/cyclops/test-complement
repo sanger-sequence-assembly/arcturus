@@ -38,9 +38,9 @@ else {
     $length    = shift @ARGV || 100000;
 }
 
-my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-my $status = $GateKeeper->authorize(100,{'nosession'=>1, silently=>0});
+my $status = $GateKeeper->authorize(100,{nosession => 1, silently => 0});
 
 if (!$status) {
     my $error = $GateKeeper->{error};
@@ -177,4 +177,4 @@ $organisms->historyUpdate($userid,'paired',1);
 
 $GateKeeper->disconnect();
 
-
+exit 0;

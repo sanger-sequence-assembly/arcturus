@@ -108,7 +108,7 @@ sub build {
     my $sth = $dbh->prepare("SHOW COLUMNS from $tablename");
     if ($sth->execute()) {
         while (my @description = $sth->fetchrow_array()) {
-            push @{$self->{columns}}, $description[0]; # keeps the order of entries
+            push @{$self->{columns}}, $description[0];  # keeps the order of entries
             $columns{$description[0]} = $description[1]; # hash for type information
             $self->{prime_key} = $description[0]     if ($description[3] eq 'PRI');
             push @{$self->{unique}}, $description[0] if ($description[3] eq 'PRI');
@@ -903,99 +903,6 @@ print "$self->{tablename} counter: attempt to decrease counter $counter by $coun
 
 #############################################################################
 
-sub OLDNEWROW {
-# create a new row by putting one value in named column  
-    my $self  = shift;
-    my $cname = shift; # column name (required)
-    my $value = shift; # its value (required)
-    my $Cname = shift; # second column name (optional)
-    my $Value = shift; # its value (optional)
-
-    my ($dbh, $tablename) = whoAmI($self);
-
-# identify column and its type; test it against the value
-
-    my $columntype = $self->{coltype};
-    if (!isSameType($columntype->{$cname},$value)) {
-        $self->{errors}  = "! Failed to insert new row into table $tablename:";
-        $self->{errors} .= "newrow: invalid value $value for column $cname";
-        return 0;
-    }
-
-# check for unique value columns if the value does not exist (pre-empt error status)
-
-    undef my $columntest;
-    $columntest = 1 if ($self->{prime_key} && $cname eq $self->{prime_key});
-    foreach my $unique (@{$self->{unique}}) {
-        $columntest = 1 if ($cname eq $unique);
-    }
-    if ($columntest) {
-        my $current = associate($self,$cname,$value,$cname,-1);
-        if ($current) { # the column value already exists (column name should not be '0')
-            update($self,$cname,$value,$cname,$current) if ($value ne $current);
-            $self->{errors}  = "! Failed to insert new row into table $tablename:";
-            $self->{errors} .= "newrow: column $cname value $value already exists";
-            return 0;
-        }
-    }
-    my $nextrow = count($self,0) + 1; # number of the next row, force query on table
-
-# print "$tablename newrow: nextrow=$nextrow<br>" if ($tablename =~ /PEND/);
-
-    my $status = 1;
-    undef my $cstring; 
-    undef my $vstring;
-    undef my $wstring;
-    if (defined($cname) && defined($value) && defined($columntype->{$cname})) {
-        $cstring = $cname;
-        $vstring = quoteColValue($self,$cname,$value);
-        $wstring = $cname.'='.$vstring;
-# test for second column definition
-        if (defined($Cname) && defined($Value) && defined($columntype->{$Cname})) {
-            $cstring .= ','.$Cname;
-            $Value = quoteColValue($self,$Cname,$Value);
-            $vstring .= ','.$Value;
-            $wstring .= ') and ('.$Cname.'='.$Value;
-        }
-        elsif (defined($Cname)) {
-        # either Value not defined or invalid Cname
-            $cstring .= ','.$Cname if $Cname;
-            $vstring .= ','.$Value if $Value;
-            $status = 0;
-        }
-
-        if ($status) {               
-        # input seems okay, add new record 
-            my $query = "INSERT INTO $tablename ($cstring) VALUES ($vstring)";
-# print "$tablename newrow: $query<br>" if ($tablename =~ /CHEM|PEND/);
-            $status = &query($self,$query,1,0);       
-        # on successful completion: store the WHERE string for further updates or rollback
-            if ($status && count($self,0) == $nextrow) {
-                $self->{whereclause} = "($wstring)";
-                my $undoclause = "DELETE FROM $tablename WHERE $self->{whereclause}";
-                push @{$self->{undoclause}}, $undoclause;
-                $status = $nextrow;
-            }
-            else {
-                undef $self->{whereclause};
-                $status = 0; # to be sure
-            }
-        }
-    }
-    else {
-        $status = 0;
-    }
-
-    if (!$status) {
-        $self->{errors}  = "! Failed to insert new row into table $tablename:";
-        $self->{errors} .= "  Invalid or undefined column name(s) $cstring or value(s) $vstring\n";
-    }
-
-    return $status; # 0 for failure, > 0 for success with status = nr of rows
-}
-
-#############################################################################
-
 sub newrow {
 # create a new row by putting one value in named column  
     my $self  = shift;
@@ -1003,8 +910,6 @@ sub newrow {
     my $value = shift; # its  value  or array reference (obligatory)
     my $Cname = shift; # column name or array reference (optional)
     my $Value = shift; # its  value  or array reference (optional)
-
-#    my ($dbh, $tablename) = whoAmI($self);
 
     my $multiLine = $self->{multiLine};
 
@@ -1014,6 +919,8 @@ sub newrow {
     my @cinserts; # columns
     my @vinserts; # values
     my $uniqueTest = 0;
+
+    undef $self->{errors};
 
 my $list = 0;
 if ($list) {
@@ -1079,7 +986,7 @@ print "vinserts @vinserts<br>";
                 $self->{errors} .= "newrow: column $column does not exist\n";
                 $inputStatus = 0;
             }
-            elsif (!isSameType($columntype->{$column},$cvalue)) {
+            elsif (!isSameType($columntype->{$column},$cvalue,1)) {
                 $self->{errors} .= "newrow: invalid value $cvalue for column $column \n";
                 $inputStatus = 0;
             }
@@ -1108,6 +1015,8 @@ print "$self->{errors} <br>" if !$inputStatus;
                 $wstring .= $cinserts[$i].'='.$vinserts[$i];
             }
         }
+
+print "multiline = $multiLine <br>" if $list;
 
         if (!$multiLine || $multiLine <= 1) {
 
@@ -1394,6 +1303,20 @@ sub do {
     $todo =~ s/\<self\>/$tablename/i; # if placeholder <SELF> given
 
     return $dbh->do($todo); 
+}
+
+#############################################################################
+
+sub prepare {
+# prepare a query and return sth handle
+    my $self = shift;
+    my $prep = shift;
+
+    my ($dbh, $tablename) = whoAmI($self);
+
+    $prep =~ s/\<self\>/$tablename/i; # if placeholder <SELF> given
+
+    return $dbh->prepare($prep); 
 }
 
 #############################################################################
@@ -1755,6 +1678,7 @@ sub isSameType {
 # test a value type against a column type (private function)
     my $ctype = shift;
     my $value = shift;
+    my $input = shift; # set to 1 if testing for input (no wild cards allowed)
 
     return 0 if (!defined($ctype) || !defined($value));
 
@@ -1764,27 +1688,52 @@ sub isSameType {
 
     if (ref($value) eq 'ARRAY') {
         foreach my $trial (@$value) {
-            $same = 0 if (!isSameType($ctype,$trial));
+            $same = 0 if (!isSameType($ctype,$trial,$input));
 	}
     }
     else {
+# determine the type of the input value
+        my $vtype = 0; # default string type;
 
-        my $vtype = 1; # default integer numerical;
-        $vtype = 0 if ($value =~ /\S/ && $value =~ /[^\d\.\s]/); # contains non-numerical
-        $vtype = 2 if ($vtype && $value =~ /\d+\.\d*/); # floating specification
+        if ($value =~ /^\s*[+-]?\d+\s*$/) {
+            $vtype = 1 ;  # numerical integer
+        }
+        elsif ($value =~ /^\s*[+-]?\d+\.\d*(\D\S*)$/ || $value =~ /^\s*[+-]?\.\d+(\D\S*)$/) {
+            my $exponent = $1;
+            $vtype = 2 unless ($exponent && $exponent !~ /E[+-]?\d+/i); # floating specification
+        }
+ 
+#        my $vtype = 1; # default integer numerical;
+#        $vtype = 0 if ($value =~ /\S/ && $value =~ /[^\d\.\s]/); # contains non-numerical
+#        $vtype = 2 if ($vtype && $value =~ /\d+\.\d*/); # floating specification
 
 # numerical specifications must be matched; everything else is considered string
 
         $same = 0 if ($ctype =~ /int/i   && $vtype != 1);
-        $same = 0 if ($ctype =~ /float/i && $vtype == 0); # both integer and float
-# do a detailed analysis of character strings
-        if ($same && !$vtype) {
-            $value =~ s/\%|\?//g; # remove wildcards
+        $same = 0 if ($ctype =~ /float/i && $vtype == 0); # allow both integer and float
+
+# print "ctype $ctype, value $value, vtype $vtype, same $same <br>"; 
+# do a detailed analysis of some character strings (also for numerical types!)
+
+        if ($same && $ctype =~ /char/) {
+            $value =~ s/\%|\?//g if !$input; # remove wildcards
             $same = 0 if ($ctype =~ /char\((\d+)\)/i && length($value) > $1); # too long
-            $same = 0 if ($ctype =~ /enum/i && $ctype !~ /$value/); # no match 
+        }
+
+# note: the combination of an enumerate type value with wildcards and NOT for input, is NOT tested
+#       In MySQL this is a legal query contruct, but perhaps not a good idea to use 
+
+        if ($same && $ctype =~ /enum/ && ($input || $value !~ /\%|\?/)) {
+# note: this version uses pattern matches; alternative would be to split and test each item
+#print "Enum test: $ctype  value $value .. ";
+            $ctype =~ s/enum\(\'|\'\,\'|\'\)/  /ig; # separate enumerate items by only blanks 
+            $value =~ s/(\\|\||\(|\)|\[|\]|\{|\}|\^|\$|\*|\+|\?|\.)/\\$1/g; # backslash metacharacters
+#print "cleaned: $ctype ..  $value .. ";
+            $same = 0 if ($ctype !~ /\s$value\s/); # no match 
+#print "same $same <br>";
+# $same =0; # for test purposes 
         }
     }
-
     return $same;
 }   
 

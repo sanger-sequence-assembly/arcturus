@@ -302,12 +302,12 @@ sub create_READS {
 	     date             DATE                 NOT NULL,
              ligation         SMALLINT UNSIGNED    NOT NULL,
              clone            SMALLINT UNSIGNED        NULL,
-             template         VARCHAR(16) BINARY   NOT NULL, 
+             template         VARCHAR(24) BINARY   NOT NULL, 
              strand           CHAR(1)                  NULL, 
              primer           TINYINT  UNSIGNED   DEFAULT 0, 
              chemistry        TINYINT  UNSIGNED        NULL,
              basecaller       TINYINT  UNSIGNED        NULL,
-             direction        ENUM (' ','+','-')   NOT NULL, 
+             direction        ENUM ('?','+','-')   NOT NULL, 
              slength          SMALLINT UNSIGNED    NOT NULL,
              sequence         BLOB                 NOT NULL,
              scompress        TINYINT  UNSIGNED   DEFAULT 0,     
@@ -325,7 +325,7 @@ sub create_READS {
              cvright          SMALLINT UNSIGNED        NULL,
              pstatus          TINYINT  UNSIGNED   DEFAULT 0,
              rstatus          MEDIUMINT UNSIGNED  DEFAULT 0,
-             paired           ENUM (' ','F','R')   NOT NULL,
+             paired           ENUM ('N','F','R')   NOT NULL,
              comment          VARCHAR(255)             NULL,
              CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
          )]);
@@ -1466,7 +1466,7 @@ sub create_ORGANISMS {
     print STDOUT "Creating table ORGANISMS ..." if ($list);
     $dbh->do(qq[CREATE TABLE ORGANISMS(
              number          SMALLINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             dbasename       VARCHAR(16)         NOT NULL,
+             dbasename       VARCHAR(16) binary  NOT NULL,
              genus           VARCHAR(24)         NOT NULL,
              species         VARCHAR(24)         NOT NULL,
              serovar         VARCHAR(24)         NOT NULL,

@@ -32,7 +32,7 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my $database   = $cgi->parameter('database');
 
-my $dbh        = $GateKeeper->dbHandle($database,{'override'=>'1'});
+my $dbh        = $GateKeeper->dbHandle($database,{undefinedDatabase => 1, 'override'=>'1'});
 
 $GateKeeper->cgiHeader(2); # return string plain
 

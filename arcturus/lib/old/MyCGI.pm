@@ -157,9 +157,9 @@ sub postToGet {
     my $string = '';
     my $in = $self->{cgi_input};
     foreach my $key (keys (%$in)) {
-        if ($key ne 'submit') {
-            $string .= "\&" if $string;
-            $string .= "\?" if !$string;
+        if ($key ne 'submit' && $in->{$key} =~ /\w/) {
+            $string .= "\&" if ($string =~ /\w/);
+            $string .= "\?" if ($string !~ /\S/);
             $string .= "$key=$in->{$key}";
         } 
     }
@@ -362,7 +362,7 @@ sub ShortEncrypt {
 
 # okay, get the seed from the time and the $name
 
-    my @seedset = ('a'..'z','A'..'Z','0'..'9','.','/');
+    my @seedset = ('a'..'z','A'..'Z','0'..'9','.','_');
     my $now = time;
     my ($pert1,$pert2) = unpack("C2",$name);
     $pert1 = 0 if (!$pert1); $pert2 = 0 if (!$pert2);
@@ -417,8 +417,3 @@ sub colophon {
 ###############################################################################
 
 1;
-
-
-
-
-

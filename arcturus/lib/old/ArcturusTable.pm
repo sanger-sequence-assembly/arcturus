@@ -672,11 +672,12 @@ sub htmlTable {
     foreach my $column (@{$self->{columns}}) {
         if (!defined($mask) || $mask{$column}) {
             my $field = $column;
+            $field =~ s/\_/ /g; # allows for wrapped column headers
             if (defined($sublinks->{$column}) && $mask{$column} > 1) {
                 my $linktable = $sublinks->{$column};
                 my $linktablename = $linktable->[0];
             # put the name of the linked table in as anchor; replace outside with link
-                $field = "<A href=\"TABLELINK$linktablename\" TABLETARGET>$column</A>";
+                $field = "<A href=\"TABLELINK$linktablename\" TABLETARGET>$field</A>";
             }
             $nrcolumns++;
             $header .= "<TH bgcolor='yellow'>$field</TH>";

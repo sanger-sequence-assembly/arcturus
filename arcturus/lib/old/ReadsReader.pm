@@ -29,6 +29,7 @@ my $report;
 
 my $SCFREADDIR = '/usr/local/badger/distrib-1999.0/alpha-bin';
 my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
+my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 
 my $READS; # the database handle for the READS table
 my $fatal; # flag to switch some warnings to errors
@@ -126,8 +127,8 @@ sub status {
 # list = 0 for summary, > 0 for errors, > 1 for warnings as well
         my $n = keys %readEntry;
         $output  = "$readFileName: $n items: ";
-        $output .= "<FONT COLOR='white'>$errors errors</FONT>, ";
-        $output =~ s/white/orange/  if ($errors);
+        $output .= "<FONT COLOR='blue'>$errors errors</FONT>, ";
+        $output =~ s/blue/red/  if ($errors);
         $output .= "<FONT COLOR='WHITE'>$warnings warnings</FONT><BR>";
         $output =~ s/WHITE/yellow/  if ($warnings);
         $list-- if (!$errors); # switch off if only listing of errors
@@ -188,7 +189,11 @@ sub readReadData {
             }
         # read the other descriptors                 
             elsif ($record =~ /^(\w+)\s+(\S.*?)\s?$/) {
-                $readEntry{$1} = $2;
+                my $item = $1; my $value = $2;
+                $value = '' if ($value =~ /HASH/);
+                $value = '' if ($value =~ /^none$/i);
+                $readEntry{$item} = $value if ($value =~ /\S/);
+# print "item $item  value $value <br>";
             }
             elsif ($record =~ /\S/) {
                 $diagnosis .= "! unrecognized input in file $file\n" if (!$diagnosis);
@@ -881,22 +886,23 @@ sub chemistry {
 
 # get description from SCF file
 
-&logger("<br>** Default Chemistry Type: $readEntry{CHT}");
+&logger("<br>** Default Chemistry Type: $readEntry{CHT}<br>");
 &logger("Test chemistry in file ${readFileName}SCF<br>");
-    my $chemistry = `$SCFREADDIR/get_scf_field ${readFileName}SCF | grep -E '(dye|DYE)'`;
-&logger("first attempt chemistry=$chemistry");
+    my $command = "$SCFREADDIR/get_scf_field ${readFileName}SCF | grep -E '(dye|DYE)'";
+&logger("Command $command<br>");
+    my $chemistry = `$command`;
+&logger("first attempt chemistry='$chemistry' Estat='$?'<br>");
     undef $chemistry if ($chemistry =~ /load.+disabled/i);
     if (!$chemistry) {
 &logger("trying to recover:");
-        my $recoverscript = "/nfs/pathdb/dev/cgi-bin/arcturus/cgi-bin/recover.sh";
-        $chemistry = `$recoverscript $SCFREADDIR/get_scf_field ${readFileName}SCF`;
+        $chemistry = `$RECOVERDIR/recover.sh $SCFREADDIR/get_scf_field ${readFileName}SCF`;
 &logger("recovered chemistry=\"$chemistry\"<br>");
         undef $chemistry if ($chemistry =~ /load.+disabled/i);
     }
     chomp $chemistry;
-&logger("SCF chemistry found: $chemistry");
+&logger("SCF chemistry found: $chemistry<br>");
     $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
-&logger("SCF chemistry: $chemistry ");
+&logger("SCF chemistry: $chemistry <br>");
 
 # test against entries in the CHEMISTRY table (exact matches because $chemistry may contain wildcard symbols)
 
@@ -907,6 +913,7 @@ sub chemistry {
         my $chtype = $CHEMISTRY->associate('chemtype',$chemistry,'identifier',-1,0,1); # exact match
         if (ref($chtype) eq 'ARRAY') {
             $diagnosis .= "! Multiple hits on chemistry identifier $chemistry: @$chtype\n";
+# print "REPORT $report<br>";
             $errors++;
         }
         elsif ($readEntry{CHT} eq 'u' && $chtype ne 'u') {
@@ -1033,6 +1040,7 @@ sub chemistry {
         $diagnosis .= "chemistry: no SCF info available ";
         $diagnosis .= "($SCFREADDIR/get_scf_field ${readFileName}SCF)\n";
         $readEntry{RPS} += 32768*16 ; # bit 20 
+print "REPORT $report<br>";
     }
 }
 # error reporting coded as:
@@ -1134,32 +1142,37 @@ sub insert {
         $diagnosis .= "! Undefined or Invalid Read Name\n";
         $errors++;
     } 
-    elsif ($READS->newrow('readname',$readEntry{ID})) {
-# go through all columns, i.e. the keys of the columntags hash
-        $counted++; $parity = 1;
+    else {
+        $counted = 1;
+        undef my @columns;
+        undef my @cvalues;
 	foreach my $column (keys %linkEntry) {
             my $tag = $linkEntry{$column};
             if ($tag ne 'ID' && $tag ne 'RN' && $column ne 'readname') {
-# print "add tag $tag $column  $readEntry{$tag}<br>" if ($tag ne 'AV' && $tag ne 'SQ');
                 my $entry = $readEntry{$tag};
                 if (defined($entry) && $entry =~ /\S/) {
+# print "add tag $tag $column  $readEntry{$tag}<br>" if ($tag ne 'AV' && $tag ne 'SQ');
+# print "add tag $tag $column  <br>" if ($tag eq 'AV' || $tag eq 'SQ');
+                    push @columns,$column;
+                    push @cvalues,$entry;
                     $counted++;
-                    if ($READS->update($column,$entry)) {
-                        $parity++;
-                    }
-                    else {
-                        $diagnosis .= "! Failed to insert $readEntry{$tag} ";
-                        $diagnosis .= "into $column\n";
-                        $errors++; 
-                    }
                 }
             }
         }
+        $parity = @columns + 1;
+        if (!$READS->newrow('readname',$readEntry{ID},\@columns,\@cvalues)) {
+            $diagnosis = "Failed to create new entry for read $readEntry{ID}";
+            $diagnosis .= ": $READS->{errors}" if $READS->{errors};
+            $diagnosis .= "\n";
+            $counted = 0;
+            $errors++;
+        } 
     }
-    else {
-        $diagnosis = "Failed to create new entry for read $readEntry{ID}\n";
-        $errors++; 
-    }
+
+#    else {
+#        $diagnosis = "Failed to create new entry for read $readEntry{ID}\n";
+#        $errors++; 
+#    }
     return $counted, $parity;
 }
 
@@ -1185,7 +1198,7 @@ sub colophon {
         id      =>            "ejz",
         group   =>              81 ,
         version =>             1.1 ,
-        updated =>    "12 Feb 2002",
+        updated =>    "02 Jul 2002",
         date    =>    "15 Aug 2001",
     };
 }

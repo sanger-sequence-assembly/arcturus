@@ -9,8 +9,6 @@
 use strict; # Constraint variables declaration before using them
 
 use GateKeeper; 
-use ArcturusTable;
-use MyHTML;
 
 ##############################################################################
 # unbuffered output
@@ -32,11 +30,13 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my ($void, $database, $option, $action) = split ('/',$GateKeeper->origin);
 
-my $dbh        = $GateKeeper->dbHandle($database);
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1, dbhandle=>0});
 
 $GateKeeper->cgiHeader(2); # return string HTML
 
 my $connection = $GateKeeper->whereAmI();
+
+my $session = $cgi->parameter('session',0);
 
 ##############################################################################
 # MAIN
@@ -56,42 +56,46 @@ my $db_manager   = $config->get("db_manager");
 # - if present, test the presence of all other tables in the common database
 #   against the data specified in the INVENTORY
 
-my $page = MyHTML->new("ARCTURUS database maintenance and updates");
-$page->banner("You are connected to the $connection") if ($connection =~ /dev/);
+my $page = $cgi->openPage("ARCTURUS database maintenance and updates");
+$page->banner("You are connected to the $connection") if ($connection =~ /dev/); # ? also for production ?
 $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
-$page->frameborder(100,25); # set-up of page layout
+$page->frameborder(100,25,'white',10); # set-up of page layout
+$page->center(1);
+$page->partition(2);
 $page->center(1);
 
 my $getMenu  = "$arc_cgi_dir/update/arcturus/getmenu";
 
-my $open = $dbh->do("use arcturus");    # select the default common database
-$database = 'inaccessible' if (!$open); # results in error status and exit
+my $open = $organisms->do("use arcturus"); # select the default common database
+   $database = 'inaccessible' if (!$open); # results in error status and exit
 
 
-if ($dbh->do("SHOW TABLES FROM arcturus LIKE 'INVENTORY'") == 0) {
+if ($organisms->do("SHOW TABLES FROM arcturus LIKE 'INVENTORY'") == 0) {
 
 # the inventory table is not found or cannot be read: generate a form to create it
 
-    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+    $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
+#    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
     $page->warningbox("The INVENTORY table is missing!<p>"
                      ."It must be created before you can continue",1);
     $page->linkbutton("CONTINUE","$arc_cgi_dir/create/arcturus/reinit",0);
     $page->flush();
-    $dbh->disconnect;
+    $GateKeeper->disconnect;
     exit 0;
 } 
 elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
 
 # get the list of required common tables and test if these are present
 
-    my $inventory = ArcturusTable->new($dbh,'INVENTORY','arcturus',1);
+    my $inventory = $organisms->spawn('INVENTORY','arcturus',1);
     my $hashes    = $inventory->associate('hashrefs','c','domain');
     if (!$hashes || !@$hashes) {
-        $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+        $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
+#        $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
         $page->warningbox("The INVENTORY table cannot be read");
         $page->errorbox("<h3>Please contact $db_manager</h3>");
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 
@@ -103,7 +107,7 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
         $tables{$tablename} = 1;
     }
 
-    my $sth = $dbh->prepare("SHOW TABLES");
+    my $sth = $organisms->prepare("SHOW TABLES");
     if ($sth->execute()) {
         while (my $result = $sth->fetchrow_array()) {
             $tables{$result}--;
@@ -121,8 +125,8 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
     
 # get a list of the curent databases 
     
-    my $organisms = $inventory->new($dbh,'ORGANISMS','arcturus');
-    my $dbcount   = $organisms->build(1);
+#    my $organisms = $inventory->new($dbh,'ORGANISMS','arcturus');
+    my $dbcount   = $organisms->count();
     $hashes = $organisms->{'hashrefs'};
 # $hashes = $organisms->getTableInfo('hashrefs');
     undef my @databases;
@@ -132,12 +136,13 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
 
 # get a list of the current users
 
-    my $dbuser = $inventory->new($dbh,'USERS','arcturus');
-    my $nruser = $dbuser->build(1);
+    my $dbuser = $organisms->spawn('USERS','arcturus',1);
+    my $nruser = $dbuser->count();
 
 # ****** start the return form with an inventory list ******     
 
-    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+#    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+    $page->sectionheader("Welcome to the ARCTURUS contents manager",3,1);
 
 # flag if common tables are missing
 
@@ -152,11 +157,13 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
 # list organism databases
 
     if ($dbcount) {
-        $page->add("<h4>There are $dbcount organism databases</h4>",1,1);
+        $page->sectionheader("There are $dbcount organism databases",4,1);
     }
     else {
         $page->warningbox("There are no organism databases",1);
     }
+
+    $page->partition(1);
 
     if (@tables == 0) {
 # abort and create the form for building the common database tables
@@ -170,13 +177,13 @@ elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
 
         my $dbnr = @databases;
         $page->frameborder(100,15); # set-up of page layout
-        $page->add(&htmlMenuPage($dbnr, $arc_cgi_dir),0,1);
+        $page->add(&htmlMenuPage($dbnr, $arc_cgi_dir, $session),0,1);
         $page->linkbutton("RETURN TO MAIN","$arc_html_dir/arcturus.html",1);
 
     }
     $page->form(0);
     $page->flush();
-    $dbh->disconnect;
+    $GateKeeper->disconnect;
     exit 0;
 }
 
@@ -204,6 +211,7 @@ if ($database eq 'arcturus' && $option eq 'vectors') {
     $page->form(0);
     $page->flush();
 }
+
 elsif ($database eq 'arcturus' && $option eq 'vectortable') {
 
 # the choice made is in cgi parameter 'voption'; check username and password
@@ -216,7 +224,8 @@ elsif ($database eq 'arcturus' && $option eq 'vectortable') {
     my $identify = $cgi->parameter('identify');
     my $password = $cgi->parameter('password');
     undef my $hash; undef my $error;
-    if (my $people = ArcturusTable->new($dbh,'USERS','arcturus',1)) {
+    if (my $people = $organisms->spawn('USERS','arcturus',1)) {
+#    if (my $people = ArcturusTable->new($dbh,'USERS','arcturus',1)) {
         $hash = $people->associate('hashref',$identify,'userid');
     # test form completion
         if ($cgi->{'und_error'}) {
@@ -254,7 +263,8 @@ elsif ($database eq 'arcturus' && $option eq 'vectortable') {
     } 
     elsif ($function eq 'vtedit' && $confirm ne 'CONFIRM') {
     # prepare edit form for master VECTOR table
-        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+        my $vectors = $organisms->spawn('VECTORS','arcturus',1);
+#        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
         $page->form("$arc_cgi_dir/update/arcturus/vectortable");
         $page->add($vectors->htmlEditTable('012'),0,1);
     # submit changes under new function 'change'?
@@ -267,7 +277,8 @@ elsif ($database eq 'arcturus' && $option eq 'vectortable') {
     elsif ($function eq 'change' && $confirm ne 'CONFIRM') {
     # generate confirm form for changes
         my $cgihash = $cgi->{cgi_input};
-        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+        my $vectors = $organisms->spawn('VECTORS','arcturus',1);
+#        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
         my ($changes,$text) = $vectors->cgiEditTable($cgihash,0);
         if (!$changes) {
             $page->messagebox($text,$getMenu); # return link to menu
@@ -292,14 +303,15 @@ elsif ($database eq 'arcturus' && $option eq 'vectortable') {
         } 
         elsif ($function eq 'update') {
         # invoke subroutine  to do the cleanup
-            $report .= &cleanVectors($dbh);
+            $report .= &cleanVectors($organisms);
             my $return = "$arc_cgi_dir/update/arcturus/vectortable";
             $return .= "\?voption=vtedit\&identify=$identify\&password=$password";
             $page->messagebox($report,$return);
         } 
         elsif ($function eq 'change') {
             my $cgihash = $cgi->{cgi_input};
-            my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+#            my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+            my $vectors = $organisms->spawn('VECTORS','arcturus',1);
             $report = $vectors->cgiEditTable($cgihash,1);
             $page->messagebox($report,$getMenu);
         }
@@ -315,14 +327,14 @@ elsif ($database eq 'arcturus' && $option eq 'organisms') {
 
     $page->sectionheader("ARCTURUS contents manager");
     $page->sectionheader("Update organism database description",4,1);
-    my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
+#    my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
     $action = 'getform' if (!$action); # default
     my $nrdbases = $organisms->build(1); 
 
     if ($nrdbases <= 0) {
         $page->errorbox("There are no organism databases",$getMenu);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     } 
     elsif ($action eq 'getform' && $nrdbases > 1) {
@@ -368,7 +380,8 @@ elsif ($database eq 'arcturus' && $option eq 'organisms') {
         my $orgLink = "$arc_cgi_dir/update/arcturus/organisms"; 
 
         undef my $hash; undef my $error;
-        if (my $people = ArcturusTable->new($dbh,'USERS','arcturus')) {
+#        if (my $people = ArcturusTable->new($dbh,'USERS','arcturus')) {
+        if (my $people = $organisms->spawn('USERS','arcturus')) {
             $people->build(1);
             $hash = $people->associate('hashref',$identify,'userid');
         # test form completion
@@ -446,7 +459,7 @@ else {
 
 # $organisms->updateHistory($userid,0,2);
 
-$dbh->disconnect;
+$GateKeeper->disconnect;
 exit 0;
 
 
@@ -456,16 +469,16 @@ exit 0;
 
 
 sub cleanVectors {
-    my $dbh = shift;
+    my $organisms = shift;
 
     undef my $report;
 
-    my $vector = ArcturusTable->new($dbh,'VECTORS','arcturus');
+    my $vector = $organisms->spawn('VECTORS','arcturus');
     $vector->build(1);
-    my $dbrefs = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
-    $dbrefs->build(1);
+#    my $dbrefs = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
+#    $dbrefs->build(1);
 # my $hashes = $dbrefs->getTableInfo('hashrefs');
-    my $hashes = $dbrefs->{'hashrefs'};
+    my $hashes = $organisms->{'hashrefs'};
 
 # go through all organism databases
 
@@ -475,7 +488,7 @@ sub cleanVectors {
     # get the Sequence Vector table; go through all entries and collect the
     # vector names in lc; find reference in mastertable; 
 
-        my $svector = ArcturusTable->new($dbh,'SEQUENCEVECTORS',$database);
+        my $svector = $organisms->spawn('SEQUENCEVECTORS',$database);
         $svector->build(1);
         my $entries = $svector->{'hashrefs'};
         $report .= "<h4>Testing $database\.SEQUENCEVECTORS</h4>";
@@ -506,7 +519,7 @@ sub cleanVectors {
     # get the Cloning Vector table; go through all entries and collect the
     # vector names in lc; find reference in mastertable; 
 
-        my $cvector = ArcturusTable->new($dbh,'CLONINGVECTORS',$database);
+        my $cvector = $organisms->spawn('CLONINGVECTORS',$database);
         $cvector->build(1);
         $entries = $cvector->{'hashrefs'};
         $report .= "<h4>Testing $database\.CLONINGVECTORS</h4>";
@@ -552,7 +565,10 @@ sub authorize {
 
 sub htmlMenuPage {
 # return an html page with the main menu
-    my ($databases, $cgi_dir) = @_;
+    my ($databases, $cgi_dir, $session) = @_;
+
+    my $si = '';
+    $si = "\?session=$session" if $session;
     
     my $menu = "<TABLE border=0 cellpadding=2>";
 
@@ -566,25 +582,25 @@ sub htmlMenuPage {
 # refer to create function select database and table to update/rebuild
 
     if ($databases > 0) {
-        $menu .= "<TR><TD><A href=\"$cgi_dir/create/existing/getform\">REBUILD</A><TD>";
+        $menu .= "<TR><TD><A href=\"$cgi_dir/create/existing/getform$si\">REBUILD</A><TD>";
         $menu .= "<TD>&nbsp</TD><TD>Rebuild a table in an organism database</TD></TR>";
 
-        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform\">EDIT</A><TD>";
+        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform$si\">EDIT</A><TD>";
         $menu .= "<TD>&nbsp</TD><TD>Edit the description of an organism database</TD></TR>";
  
-#        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform\">DROP</A><TD>";
+#        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform$si\">DROP</A><TD>";
 #        $menu .= "<TD>&nbsp</TD><TD>Edit the description of an organism database</TD></TR>";
  
         $menu .= "<TR>&nbsp</TR>";
         $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Reads & Contigs</TH></TR>";
 
-        $menu .= "<TR><TD><A href=\"$cgi_dir/rloader/arcturus/getform\">READ MANAGER</A><TD>";
+        $menu .= "<TR><TD><A href=\"$cgi_dir/rloader/arcturus/getform$si\">READ MANAGER</A><TD>";
         $menu .= "<TD>&nbsp</TD><TD>Load reads into an organism database</TD></TR>";
 
-        $menu .= "<TR><TD><A href=\"$cgi_dir/cloader/arcturus/getform\">CONTIG MANAGER</A><TD>";
+        $menu .= "<TR><TD><A href=\"$cgi_dir/cloader/arcturus/getform$si\">CONTIG MANAGER</A><TD>";
         $menu .= "<TD>&nbsp</TD><TD>Load contigs into an organism database</TD></TR>";
 
-        $menu .= "<TR><TD><A href=\"$cgi_dir/cmanager/arcturus/getform\">MOVING AROUND</A><TD>";
+        $menu .= "<TR><TD><A href=\"$cgi_dir/cmanager/arcturus/getform$si\">MOVING AROUND</A><TD>";
         $menu .= "<TD>&nbsp</TD><TD>Move contigs between Assemblies</TD></TR>";
     }
 
@@ -596,34 +612,34 @@ sub htmlMenuPage {
     $menu .= "<TR><TD><A href=\"/uregister.html\">NEW USER</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Register a new user</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/modify\">UPDATE</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/modify$si\">UPDATE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Modify user information</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/pwupdate\">PASSWORD</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/pwupdate$si\">PASSWORD</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Redefine user password</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/authorize\">AUTHORIZE</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/authorize$si\">AUTHORIZE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Assign user priviledges</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/delete\">DELETE</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/delete$si\">DELETE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Delete or Retire a user</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/locate\">FIND</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/locate$si\">FIND</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Find a user</TD></TR>"; 
 
     $menu .= "<TR>&nbsp</TR>";
     $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Assemblies \& Projects</TH></TR>";
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/assembly\">NEW ASSEMBLY</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/assembly$si\">NEW ASSEMBLY</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Create a new assembly</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/project\">NEW PROJECT</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/project$si\">NEW PROJECT</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Create a new project</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/users\">ASSIGN USERS</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/users$si\">ASSIGN USERS</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Assign people to projects</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/contigs\">ALLOCATE CONTIGS</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/contigs$si\">ALLOCATE CONTIGS</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Allocate contigs to projects</TD></TR>"; 
 
 # d) maintenance of common tables
@@ -631,10 +647,10 @@ sub htmlMenuPage {
     $menu .= "<TR>&nbsp</TR>";
     $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Common tables</TH></TR>";
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/create/arcturus/reinit\">REBUILD</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/create/arcturus/reinit$si\">REBUILD</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Rebuild a selected common table</TD></TR>"; 
 
-    $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/vectors\">UPDATE</A><TD>";
+    $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/vectors$si\">UPDATE</A><TD>";
     $menu .= "<TD>&nbsp</TD><TD>Homogenize vector information</TD></TR>"; 
     $menu .= "</TABLE>";
 

@@ -559,6 +559,36 @@ sub locate {
 
 ###############################################################################
 
+sub arcturusGUI {
+# put the partition 0 inside a 
+    my $self = shift;
+    my $mtop = shift;
+    my $side = shift;
+    my $bgcolor = shift;
+
+    $mtop = 5   if (!defined($mtop));
+    $side = 25  if (!$side);
+    $bgcolor = "beige" if (!$bgcolor);
+
+    undef my $layout;
+    $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=1 CELLPADDING=0 CELLSPACING=4><TR>";
+    $layout .= "<TD HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
+    $layout .= "<TD HEIGHT=$mtop BGCOLOR=$bgcolor>CON1</TD>";
+    $layout .= "<TD HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>ARCTURUSLOGO</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor>CON2</TD>";
+    $layout .= "<TD ROWSPAN=2>CON0</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor>CON3</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor ALIGN=TOP>CON4</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor ALIGN=TOP>CON5</TD>";
+    $layout .= "</TR></TABLE>";
+
+    $self->{layout} = $layout;
+}
+
+###############################################################################
+
 sub frameborder {
 # put the partition 0 inside a 
     my $self = shift;
@@ -642,6 +672,7 @@ sub flush {
 # output the form
     my $self = shift;
     my $null = shift;
+    my $list = shift;
 
     my $title   = $self->{'title'};
     my $content = $self->{'content'} || return 0;
@@ -658,8 +689,12 @@ sub flush {
     if (defined($layout)) {
         my $blank = "&nbsp";
         foreach (my $i=0 ; $i < 9 ; $i++) {
-            $layout =~ s/CON$i/$content->[$i]/  if ($content->[$i]);
-            $layout =~ s/CON$i/$blank/g        if (!$content->[$i]);
+# test if the contents element contains any text
+	    my $fill = 0;
+            $fill = 1 if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
+# print "part $i  $content->[$i]  fill <br>";
+            $layout =~ s/CON$i/$content->[$i]/ if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
+            $layout =~ s/CON$i/$blank/g       if (!$content->[$i] || $content->[$i] !~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
         }
         $output .= $layout;
     } else {
@@ -667,6 +702,11 @@ sub flush {
     }
     $output .= $address if (defined($address));
     $output .= "</BODY></HTML>";
+
+# substitute values for standard place holders
+
+    $output =~ s/SANGERLOGO/<IMG SRC="sanger.gif">/;
+    $output =~ s/ARCTURUSLOGO/<IMG SRC="arcturus.jpg">/;
 
 # clear the contents
 
@@ -676,7 +716,7 @@ sub flush {
 
     $output =~ s/(\<[^\n]{30,}?\<\/.+?\>)/$1\n/g;
 
-    print STDOUT "$output\n";
+    print STDOUT "$output\n" if (!defined($list) || $list);
 
     return $output;
 }

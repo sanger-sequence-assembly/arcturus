@@ -46,8 +46,9 @@ foreach my $instance (@$instances) {
     $report .= "Opening $instance ...";
     my ($host,$port) = split ':',$instance;
     if ($GateKeeper->ping_MySQL($host,$port)) {
-        my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,1);
-        $handles{$instance} = $handle
+        my $handle   = $GateKeeper->opendb_MySQL_unchecked($instance,{dieOnError => 0});
+        print "MySQL instance $instance cannot be opened\n" if !$handle;
+        $handles{$instance} = $handle if $handle;
     }
     else {
         print "MySQL instance $instance is not available\n";
@@ -85,3 +86,8 @@ print "closing down\n";
 foreach my $instance (keys %handles) {
     $handles{$instance}->disconnect();
 }
+
+
+
+
+

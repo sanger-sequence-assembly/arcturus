@@ -13,15 +13,13 @@ BEGIN {
    $ENV{ORACLE_SID}  = 'inform';
    $ENV{TWO_TASK}    = 'sids';
    $ENV{PERL5LIB}   .= ':/usr/local/badger/bin';
-   use lib "/usr/local/badger/bin";
+#   use lib "/usr/local/badger/bin";
 }
 
 use GateKeeper; 
-use ArcturusTable;
 use ReadsReader;
 use ADB_get_caf;
 use Compress;
-use MyHTML;
 
 ##############################################################################
 # unbuffered output
@@ -39,22 +37,21 @@ my $GateKeeper = GateKeeper->new('mysql',1);
 
 my $config     = $GateKeeper->configHandle();
 
-my $cgi        = $GateKeeper->cgiHandle();
+my $cgi        = $GateKeeper->cgiHandle(1);
+
+my ($void, $database, $option, $origin);
 
 # how is this script invoked?
 
-my $origin = $GateKeeper->origin();
-
-my ($void, $database, $option);
-if ($origin) {
-   ($void, $database, $option) = split ('/',$origin);
-    $database = $cgi->parameter('database') if $cgi->parameter('database'); 
+if ($cgi) {
+   ($void, $database, $option) = split ('/',$GateKeeper->origin());
+   $database = $cgi->parameter('database') if $cgi->parameter('database'); 
 }
 else {
-   $database = $ARGV[0];
+   $database = shift @ARGV;
 }
 
-my $dbh = $GateKeeper->dbHandle($database);
+my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1, dbhandle=>0});
 
 $GateKeeper->cgiHeader(2); # return string HTML under CGI
 
@@ -63,8 +60,10 @@ $GateKeeper->cgiHeader(2); # return string HTML under CGI
 ##############################################################################
 
 my %config;
-$config{RDD} = $config->get("ROOTDATADIR");
-$config{SDS} = join ' ',@{$config->get("SEARCH_DIR")}; # default search sub-directories
+$config{RDD} = "<to be defined>";
+# $config{RDD} = $config->get("ROOTDATADIR");
+$config{SDS} = ''; # default search sub-directories
+# $config{SDS} = join ' ',@{$config->get("SEARCH_DIR")}; # default search sub-directories
 $config{GMD} = $config->get("GELMINDDIR");
 $config{SCF} = $config->get("SCFREADDIR");
 $config{EKS} = join ' ',@{$config->get("excludekeys")}; # default reject strings
@@ -85,26 +84,23 @@ $config{LGF} = "$arc_log_dir/rloader.DATABASE.log"; # default logfile
 my ($LOADPERRUN,$GELMINDDIR,$ROOTDATADIR,$SCFREADDIR,$SCHEMA,$PROJECT,$LOGFILE);
 my ($FNF, $GBF, @SEARCH_DIR, @excludekeys);
 
-undef my ($action, $confirm);
+undef my ($action, $page, $confirm);
 undef my ($userid  , $project , $assembly, $assemblyname, $assemblynmbr);
-undef my ($fnfilter, $gbfilter, $source, $reload, $forced, $update);
+undef my ($fnfilter, $gbfilter, $source, $rloader, $forced, $update);
 undef my ($arc_logfile, $logON, $TEST);
 
-my $return    = "$arc_cgi_dir/update/arcturus/getmenu";
+my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu"; # return link
+my $session = $cgi->parameter('session',0);
+$lreturn .= "\?session=$session" if $session; 
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont, $bfont);
-
-###############################################################################
-# open ORGANISMS table
-###############################################################################
-
-my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
 
 ###############################################################################
 # invokation via web: first "getmenu", then the "specify" and "" option
 ###############################################################################
 
-if ($ENV{PATH_INFO}) {
+if ($cgi) {
+    $origin = 1;
 # used as cgi scripts
     $brtag = "<br>";
     $gfont = "<FONT COLOR=lightgreen>";
@@ -118,7 +114,7 @@ if ($ENV{PATH_INFO}) {
 
     $option = 'process' if ($option eq 'specify' && $cgi->parameter('process',0));
 
-    my $page = MyHTML->new('ARCTURUS READS loader');
+    $page = $cgi->openPage('ARCTURUS READS loader');
     $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
     $page->frameborder(100,15,'white',10);
     $page->center(1);
@@ -126,24 +122,24 @@ if ($ENV{PATH_INFO}) {
     undef my $error;
     if ($option eq 'getform') {
         $page->form("$arc_cgi_dir/rloader/arcturus/specify");
-        $page->sectionheader("ARCTURUS READS loader specifications",3,1);
-        $page->sectionheader("Select a Database, Read specification and Source",4,0);
+        $page->partition(2);
+        $page->sectionheader("ARCTURUS READS loader specifications",3,0);
+        $page->partition(1);
+        $page->add($organisms->htmlTable('0100000111110001110'),0,0);
+        $page->sectionheader("Select a Database and Read specification",4,0);
         $page->add($organisms->htmlOptions('dbasename','database',20),0,0);
         $page->add(&form1(),0,1);
-        $page->sectionheader("Provide your User Identification and Submit",4,0);
-        $page->identify('10',8,1);
-        $page->submitbuttonbar("$arc_cgi_dir/update/arcturus/getmenu",0,0);
+        $page->submitbuttonbar($lreturn,0,0);
+        $page->ingestCGI();
         $page->form(0);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0; 
     }
     elsif ($option eq 'specify') {
     # get source, database, and whether an assembly choice exists
-        my $source = $cgi->parameter('source');   # compulsory
+        $source = $cgi->parameter('source');   # compulsory
         $database  = $cgi->parameter('database'); # compulsory
-        my $userid = $cgi->parameter('identify'); # compulsory
-        my $passwd = $cgi->parameter('password'); # compulsory
         my $asname = $cgi->parameter('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
 
@@ -167,46 +163,47 @@ if ($ENV{PATH_INFO}) {
         }
         else {
     # open assembly database; abort if no assemblies defined
-            $assembly  = $organisms->new($dbh,'ASSEMBLY',$database,1);
+            $assembly  = $organisms->spawn('ASSEMBLY',$database,1);
             if ($assembly && $assembly->count() > 0) {
-            # get the default assembly name if no assemblyname in CGI input; first try attributes
+    # get the default assembly name if no assemblyname in CGI input; first try attributes
 		my $attributes = $organisms->unpackAttributes($database,'dbasename');
                 $asname = $attributes->{anlast} if (!$asname && $attributes->{anlast});
-            # if still undefined, just take the first one
-                $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname);
-            # update the data dir name (if assembly has changed)
-                my $target = $asname; $target =~ s/\d+/\\d\+/g; # print "target '$target' $config{RDD}<br>";
+    # if still undefined, just take the first one
+                $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname); 
+    # update the data dir name (if assembly has changed)
+                my $target = $asname; $target =~ s/\d+/\\d\+/g;
                 $config{RDD} =~ s/$target/$asname/;
-            # overwrite the preset configuration data with those in ORGANISM attributes if any
+    # overwrite the preset configuration data with those in ORGANISM attributes if any
                 $config{LGF} =~ s/DATABASE/$database/; # log file
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
-# print "ORGANISM attribute $key  = $config{$key}<br>"if defined($attributes->{$key});
                 }
-            # overwrite the preset configuration data with those in ASSEMBLY attributes if any
+    # overwrite the preset configuration data with those in ASSEMBLY attributes if any
 		$attributes = $assembly->unpackAttributes($asname,'assemblyname');
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
-# print "ASSEMBLY attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
-            # open the form and replace the placeholders
+    # open the form and replace the placeholders
                 my $form = form2($source);
                 $form =~ s/DATABASE/$database/;
-            # build the select list and add to form
+    # build the select list and add to form
                 my $selectlist = $assembly->htmlOptions('assemblyname','assemblyname',100,0,$asname);
                 $form =~ s/SELECTTAG/$selectlist/ if ($selectlist); # substitute the HTML selectlist
+                my $alink = "$arc_cgi_dir/amanager/specify/assembly\?database=$database";
+		$alink .= "\&session=$session" if $session;
+                $form =~ s/ASSEMBLYLINK/$alink/;
                 $page->add($form,0,1); # add the form to the page and preload
-            # preload the remaining placeholders with data in %config 
+    # preload the remaining placeholders with data in %config 
                 foreach my $key (keys %config) {
                     $page->preload($key,$config{$key},1) if defined($config{$key});
                 }
-            # but overwrite with values in CGI input 
+    # but overwrite with values in CGI input 
                 $cgi->delete('RDD'); # could have been changed
                 $page->preload('cgi_input',$cgi,1);
-            # and add hidden fields  
-                $page->ingestCGI($cgi);
+    # and add hidden fields  
+                $page->ingestCGI();
 
-            # add a three-way button bar and a return link 
+    # add a three-way button bar and a return link 
 
                 my $text = "Repeat to update this form for a newly chosen assembly, or<br>";
                 $text   .= "Continue to start loading READS with these specified values, or<br>";
@@ -216,27 +213,27 @@ if ($ENV{PATH_INFO}) {
                                'type=submit value="Continue" name="process"',
                                'type=reset  value=" Reset "');
                 $page->buttonbartemplate(3,0,\@buttons);                 
-                $page->linkbutton('RETURN',$return,0);
+                $page->linkbutton('RETURN',$lreturn,0);
             }
             else {
                 $page->errorbox("There are no assemblies defined for $database",0,0,'yellow');
-                $page->messagebox("Please contact $db_manager or your project manager",$return);
+                $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
             }
         }
     # close form
         $page->form(0);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 
     elsif ($option eq 'process') {
+# $page->sectionheader($cgi->PrintVariables());
 
-#$cgi->ShortList(1);
         $source   = $cgi->parameter('source');
         $database = $cgi->parameter('database'); # redefine database
     # get assembly 
-        $assembly     = $organisms->new($dbh,'ASSEMBLY',$database,1);
+        $assembly     = $organisms->spawn('ASSEMBLY',$database,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
 
@@ -244,62 +241,45 @@ if ($ENV{PATH_INFO}) {
     # test mode
         $TEST   = 1 if $cgi->parameter('testrun',0);
         $logON  = 1 if $cgi->parameter('logON'  ,0);
-        $reload = 1 if $cgi->parameter('reload' ,0);
+#        $reload = 1 if $cgi->parameter('reload' ,0);
         $forced = 1 if $cgi->parameter('forceload' ,0);
         $update = 1 if $cgi->parameter('update', 0);
-    # identity check
-        $userid = $cgi->parameter('identify');
-        my $passwd = $cgi->parameter('password');
       
-        if (my $users = $organisms->new($dbh,'USERS','arcturus',1)) {
-#            my $hash = $users->associate('hashref',$userid,'userid');
-        # test form completion
-            if ($cgi->{und_error}) {
-                $error = "Please define every input field $cgi->{und_error} ";
-            }
-        # authorisation level 100 required
-            elsif (my $status = $users->authorize($userid,$passwd,100)) {
-                $error = $status; # authorisation failed
-            }
-#        # test if the user exists
-#            elsif (!defined($hash) || !$hash) {
-#                $error = "Unknown user: $userid";
-#            } 
-#        # test password 
-#            elsif (!$cgi->VerifyEncrypt($passwd,$hash->{password})) {
-#                $error = "Invalid cgi password provided for user $userid";
-#        # test authorization
-#            } 
-#            elsif (&authorize($hash->{priviledges},3) < 3) {
-#                $error = "User $userid has insufficient priviledge";
-#            }
+    # test form completion
+        if ($cgi->{und_error}) {
+            $error = "Please define every input field $cgi->{und_error} ";
+        }
+    # authorisation level 100 required
+        elsif (!$GateKeeper->authorize(100,{returnpath => "/$database/process",silently => 1})) {
+            $error = $GateKeeper->{report}; # authorisation failed
+        }
     # okay, now assign read specifications
-            elsif ($source == 2) {
-	        $gbfilter = 'ORACLE';
-	        $fnfilter = 'PENDING';
-                $SCHEMA   = $cgi->parameter('SCH');
-                $PROJECT  = $cgi->parameter('PRO');
-            }
-            else {
-                $ROOTDATADIR = $cgi->parameter('RDD');
-                $GELMINDDIR  = $cgi->parameter('GMD');
-                $SCFREADDIR  = $cgi->parameter('SCF');
-                if ($source == 0) {
-                    $fnfilter   = $cgi->parameter('FNF');
-                    $gbfilter   = $cgi->parameter('GBF');
-                    my $EXCLUDE = $config{EKS};
-                    @excludekeys = split /\s/,$EXCLUDE if ($EXCLUDE);
-                }
-                elsif ($source == 1) {
- 	            $fnfilter = 'PENDING';
-                    undef @excludekeys;
-                }
-            }
-            $arc_logfile = $cgi->parameter('LGF') if ($logON);
+        elsif ($source == 2) {
+	    $gbfilter = 'ORACLE';
+            $fnfilter = 'PENDING';
+            $SCHEMA   = $cgi->parameter('SCH');
+            $PROJECT  = $cgi->parameter('PRO');
         }
         else {
-            $error = "Can't access the USERS table in ARCTURUS database";
-        }
+            $ROOTDATADIR = $cgi->parameter('RDD');
+            $GELMINDDIR  = $cgi->parameter('GMD');
+            $SCFREADDIR  = $cgi->parameter('SCF');
+            if ($source == 0) {
+                $fnfilter   = $cgi->parameter('FNF');
+                $gbfilter   = $cgi->parameter('GBF');
+                my $EXCLUDE = $config{EKS};
+                @excludekeys = split /\s/,$EXCLUDE if ($EXCLUDE);
+            }
+            elsif ($source == 1) {
+ 	        $fnfilter = 'PENDING';
+                undef @excludekeys;
+            }
+            my $SEARCH   = $config{SDS};
+            @SEARCH_DIR  = split /\s/,$SEARCH if ($SEARCH);          
+         }
+         $session = $cgi->parameter('session');
+         $lreturn .= "\?session=$session" if ($lreturn !~ /session/ && $session); 
+         $arc_logfile = $cgi->parameter('LGF') if ($logON);
     }
     else {
         $error = "Invalid option $option for rloader";
@@ -313,9 +293,9 @@ if ($ENV{PATH_INFO}) {
         $page->partition(1);
         $page->sectionheader("Sorry, an error status aborts this loader session",3,1);
 # $page->sectionheader($cgi->PrintVariables());
-        $page->errorbox($error,$return);
+        $page->errorbox($error,$lreturn);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 }
@@ -347,13 +327,12 @@ else { # invoked from the command line (ejz/adh only)
         $GateKeeper->dropDead("specify a database and a source or directory "
                              ."name filter\n  rloader  database  PENDING "
                              ."SUBDIR [test]\n  rloader  database  PENDING "
-                             ."ORACLE [SCHEMA] [PROJECT] [test]");
+                             ."ORACLE [SCHEMA] [PROJECT] [test]\n  "
+                             ."rloader  database  HARVEST nr-of-days\n");
     }
-#    $database = shift @ARGV;
-    $fnfilter = shift @ARGV; # should be PENDING only
-#    undef $fnfilter if (defined($fnfilter) && $fnfilter eq "ALL");
-    $gbfilter = shift @ARGV;
-#    undef $gbfilter if (defined($gbfilter) && $gbfilter eq "ALL");
+    $fnfilter = shift @ARGV;
+    $gbfilter = shift @ARGV || 0;
+
     if ($fnfilter eq 'PENDING') {
         $source = 1;
         if ($gbfilter eq 'ORACLE') {
@@ -379,11 +358,15 @@ else { # invoked from the command line (ejz/adh only)
         else {
             $gbfilter = '';
         }
-        $TEST = shift @ARGV;
+    }
+    elsif ($fnfilter eq 'HARVEST') {
+        $GateKeeper->dropDead("Command line invocation HARVEST must have a number of days defined") if !$gbfilter;
     }
     else {
-        $GateKeeper->dropDead("Command line invocation only for PENDING files");
+        $GateKeeper->dropDead("Command line invocation only for PENDING files or HARVEST mode");
     }
+
+    $TEST = shift @ARGV;
 
     my $attributes;
     if ($database && $organisms->associate('dbasename',$database,'dbasename')) {
@@ -391,7 +374,7 @@ else { # invoked from the command line (ejz/adh only)
         if ($attributes = $organisms->unpackAttributes($database,'dbasename')) {
             print STDOUT "Database $database found; attributes retrieved\n";
             foreach my $item (keys %$attributes) {
-#                print STDOUT "item=$item attribute=$attributes->{$item}\n";
+                print STDOUT "item=$item attribute=$attributes->{$item}\n";
                 $config{$item} = $attributes->{$item}; # overrides defaults
             }
         }
@@ -420,18 +403,19 @@ else { # invoked from the command line (ejz/adh only)
 
 # open assembly database
 
-    $assembly = $organisms->new($dbh,'ASSEMBLY',$database,1);
-    $dbh->disconnect;
-exit;
+    $assembly = $organisms->spawn('ASSEMBLY',$database,1);
+#$GateKeeper->disconnect;
+#print "fnfilter $fnfilter  $gbfilter \n";
+#exit;
 }
 
 #*********************************** HERE WE GO ********************************
 
 # autoVivify the READS database and connecting tables
 
-my $datamodel = $organisms->new($dbh,'DATAMODEL','arcturus',1);
-my $readmodel = $organisms->new($dbh,'READMODEL','arcturus',1);
-my $READS     = $organisms->new($dbh,'READS',$database,0);
+my $datamodel = $organisms->spawn('DATAMODEL','arcturus',1);
+my $readmodel = $organisms->spawn('READMODEL','arcturus',1);
+my $READS     = $organisms->spawn('READS',$database,0);
 $READS->autoVivify($database,2); # initialize all dictionary tables in database
 
 # get an inventory of all open database tables
@@ -440,8 +424,8 @@ my $hashes = $datamodel->findInstanceOf(0);
 
 # open the PENDING table and the READS2FRAGMENTS table
 
-my $PENDING = $organisms->new($dbh,'PENDING',$database,0);
-my $RRS2ASS = $organisms->new($dbh,'READS2ASSEMBLY',$database,0);
+my $PENDING = $organisms->spawn('PENDING',$database,0);
+my $RRS2ASS = $organisms->spawn('READS2ASSEMBLY',$database,0);
 
 
 foreach my $key (keys %$hashes) {
@@ -472,6 +456,7 @@ if ($logON || !$origin) {
     $reader = ReadsReader->new($READS); # reads from flat files
     $reader->setFatal(0) if ($forced);
 
+    my $dbh = $GateKeeper->{handle};
     if ($fnfilter ne "PENDING") {
 
         print "Scanning database $database for Previously Processed Reads ... ";
@@ -486,7 +471,7 @@ if ($logON || !$origin) {
         print "($nr Pending reads found) ... ";
     # get files in READS and add to list
         $querystring = "SELECT readname FROM $database.READS ";
-        if ($fnfilter) {
+        if ($fnfilter && $fnfilter ne 'HARVEST') {
             print "(using filename filter \"$fnfilter\") ..."; 
             $querystring .= "WHERE readname LIKE \"%${fnfilter}%\" ";
         }
@@ -504,11 +489,33 @@ if ($logON || !$origin) {
         print "DONE $brtag $nr files found which have previously been processed$brtag$brtag";
         print "Polling repository $ROOTDATADIR for (new) Reads ...$brtag";
         print "... using" if ($fnfilter || $gbfilter);
-        print " name filter \"$fnfilter\""     if ($fnfilter);
-        print " global filter \"$gbfilter\""   if ($gbfilter); 
+        print " name filter \"$fnfilter\""     if ($fnfilter =~ /\S/);
+        print " global filter \"$gbfilter\""   if ($gbfilter =~ /\S/); 
         print " $brtag";
     # output in array @$newfiles with names of files in disk
         $newfiles = &getNewReadFiles (\%dbfiles,$ROOTDATADIR,\@excludekeys,$fnfilter,$gbfilter,$LOADPERRUN); 
+
+    # if in harvest mode, add files to PENDING
+
+        if ($fnfilter eq 'HARVEST') {
+            foreach my $read (@$newfiles) {
+                my @parts = split '/',$read;
+                $read = $parts[$#parts];
+                print "add to PENDING: $read <br>";
+                &addPending($read,0);
+            }
+
+            if ($page) {
+                my $rreturn = $lreturn;
+                $rreturn =~ s/update/rloader/;
+                $rreturn =~ s/getmenu/specify/;
+                $rreturn .= "\&database=$database\&source=$source\&assemblyname=$assemblyname";
+                $page->linkbutton('LOAD MORE',$rreturn,0);
+                $page->linkbutton('MAIN MENU',$lreturn,0);
+                $page->flush();
+            }
+            $GateKeeper->dropDead("Use the loader from the command line to load PENDING data");
+        }
     }
 
     else {
@@ -544,11 +551,11 @@ if ($logON || !$origin) {
         } else {
         # reads are assumed to be in project directory; we test the ROOTDATADIR and
         # if not found, its subdirectories
+# print "rdd $ROOTDATADIR SDS: @SEARCH_DIR  $brtag";
             my @subdirs = `ls -d ${ROOTDATADIR}*`;
-            @SEARCH_DIR = split /\s/,$config{SDS} if $config{SDS};          
             foreach my $key (sort keys (%dbfiles)) {
                 my $filename = $ROOTDATADIR.$key;
-# print "find $key: try $filename$brtag";                     
+# print "find 1 $key: try $filename$brtag";                     
                 if (-e $filename) {
                     push @pendingfiles, $filename;
                 } else {
@@ -557,7 +564,7 @@ if ($logON || !$origin) {
                     foreach my $subdir (@subdirs) {
                         chomp $subdir;
                         $filename = "$subdir/$key";
-# print "find $key: try $filename$brtag";                     
+# print "find 2 $key: try $filename$brtag";                     
                         if (-e $filename) {
                             push @pendingfiles, $filename;
 # print "file $key found: $filename$brtag";
@@ -569,10 +576,10 @@ if ($logON || !$origin) {
                 # still not found: try the search dirs
                     foreach my $sdir (@SEARCH_DIR) {
                         $filename = $sdir.$key;
-# print "find $key: try  $filename$brtag"; 
+# print "find 3 $key: SD '$sdir': try  $filename $brtag"; 
                         if (!(-e $filename)) {
                             my $command = "ls ${sdir}*/$key";
-# print "find $key: try $command$brtag"; 
+# print "find 4 $key: try $command$brtag"; 
                             $filename = `$command`;
                             chop $filename if ($filename);
                         }
@@ -604,7 +611,7 @@ $LOADPERRUN =~ s/\W/x/g;
         foreach my $file (@$newfiles) {
             print "$file $brtag";
         }
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         print "test mode ended $brtag";
         exit 1;
     }
@@ -616,6 +623,7 @@ $LOADPERRUN =~ s/\W/x/g;
         $organisms->packAttribute ($database,'dbasename','attributes','anlast',$assemblyname);
         $organisms->packAttribute ($database,'dbasename','attributes','GMD',$GELMINDDIR);
         $organisms->packAttribute ($database,'dbasename','attributes','SCF',$SCFREADDIR);
+        $organisms->packAttribute ($database,'dbasename','attributes','RDD',$ROOTDATADIR);
         my $overallRoot = $ROOTDATADIR; $overallRoot =~ s/\/\w+\/?$/\//; # chop off last subdir
         $organisms->packAttribute ($database,'dbasename','attributes','RUT',$overallRoot);
 
@@ -687,12 +695,12 @@ $LOADPERRUN =~ s/\W/x/g;
 
             print STDOUT "${brtag}Processing experiment file $file ($tested) ...$brtag";
 
-            $entry = $reader->newRead($file);
-
-            $reader->format(); # test conformity to Sanger format
-            $reader->ligation();
-            $reader->strands();
-            $reader->chemistry();
+            if ($entry = $reader->newRead($file)) {
+                $reader->format(); # test conformity to Sanger format
+                $reader->ligation();
+                $reader->strands();
+                $reader->chemistry();
+            }
             $cm = 1; # standard triplet encoding
         }
 
@@ -701,10 +709,10 @@ $LOADPERRUN =~ s/\W/x/g;
         print LOG "\n" if $logON;
         my ($summary, $errorstatus) = $reader->status(2,$origin);
         print STDOUT "$summary"; # either plain text or HTML
-        if ($errorstatus) {
+        if (!$entry || $errorstatus) {
             my $fulltext = $reader->list(0,1); # full list in plain text
             $ignored++;
-            next if ($TEST);
+            next if (!$entry || $TEST);
             print LOG "$fulltext\n" if ($logON && !$TEST);
     # add the entry to PENDING if not already done
             my $add = &addPending ($entry->{ID},$assemblynmbr);
@@ -808,7 +816,7 @@ $LOADPERRUN =~ s/\W/x/g;
             my $sequence = $READS->associate('sequence',$entry->{ID},'readname');
             my $slength  = length($sequence);
             if ($cm == 1) {
-               ($count, $string) = $encoder->sequenceDecoder ($sequence);
+               ($count, $string) = $encoder->sequenceDecoder ($sequence,1);
             }
             elsif ($cm == 2) {
                ($count, $string) = $encoder->huffmanDecoder ($sequence);
@@ -871,7 +879,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
         foreach my $key (keys %$hashes) {
 # reset if $errors == 0, else undo updates 
-            $hashes->{$key}->rollback($errors) unless ($errors && $key =~ /PENDING/);
+            $hashes->{$key}->rollback($errors) unless ($errors && $key =~ /PENDING|SESSION/);
         }
         if ($errors && $READS->{'errors'} !~ /already\sexists/) {
             $ignored++;
@@ -926,7 +934,7 @@ print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads<br>";
     $organisms->update('reads_pending',$npends,'dbasename',$database);
     $organisms->signature($userid,'dbasename',$database);
 
-    $dbh->disconnect;
+    $GateKeeper->disconnect;
 
 # closing line
 
@@ -934,6 +942,16 @@ print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads<br>";
     $report .= " $yfont$ignored ignored$efont because of errors" if (!$TEST);
     print STDOUT "$report$brtag";
     print LOG "$report\n" if $logON;
+
+    if ($page) {
+        my $rreturn = $lreturn;
+        $rreturn =~ s/update/rloader/;
+        $rreturn =~ s/getmenu/specify/;
+        $rreturn .= "\&database=$database\&source=$source\&assemblyname=$assemblyname";
+        $page->linkbutton('LOAD MORE',$rreturn,0);
+        $page->linkbutton('MAIN MENU',$lreturn,0);
+        $page->flush();
+    }
 
     exit 0;
 
@@ -975,9 +993,11 @@ sub getNewReadFiles {
 
     my @dirs = `ls $directory`;
 
-    $MAXREAD = 1000 if (!defined($MAXREAD)); 
-
-print "exclude: @{$excluders}${brtag}filter : $flnfilter$brtag" if ($DEBUG);
+    $MAXREAD = 1000 if (!defined($MAXREAD));
+ 
+my $nrr = keys %$dbfiles;
+print "directory $directory $brtag dbfiles $nrr $brtag" if $DEBUG;
+print "exclude: @{$excluders}${brtag}filter : $flnfilter$brtag gbfilter : $glbfilter$brtag" if ($DEBUG);
 $MAXREAD = 10 if ($DEBUG);
 
     undef my @newReads;
@@ -985,7 +1005,7 @@ DIR:foreach my $sdname (@dirs) {
     # analyse next directory name, get files and analyse file names
         chomp $sdname; # cleanup
 #print "testing dir $sdname<br>";
-        next DIR if ($glbfilter &&!($sdname =~ /$glbfilter/));
+        next DIR if ($glbfilter =~ /\S/ && $sdname !~ /$glbfilter/);
         foreach my $exclude (@{$excluders}) {
 print "rejected directory: $sdname  $brtag" if ($sdname =~ /$exclude/ && $DEBUG);
             next DIR if ($sdname =~ /$exclude/); # exact match
@@ -995,7 +1015,10 @@ print "rejected directory: $sdname  $brtag" if ($sdname =~ /$exclude/ && $DEBUG)
 
         print "... scanning directory $subdir$brtag";
 
-        if ($flnfilter) {
+        my $find = "find $subdir";
+        $find .= " -atime $glbfilter" if ($flnfilter eq "HARVEST");
+print "find: $find $brtag" if $DEBUG;
+        if ($flnfilter && $flnfilter ne 'HARVEST') {
             open (FILE,"find $subdir | grep $flnfilter |") || die "cannot open directory";
         } else {
             open (FILE,"find $subdir |") || die "cannot open directory";
@@ -1009,15 +1032,15 @@ print "test file $file$brtag" if ($DEBUG);
             $filetest++; # keep track
         # test against filters
 print "reject $file ($flnfilter)$brtag" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
-            next NEXT if ($flnfilter && !($file =~ /$flnfilter/));
-            next NEXT if ($glbfilter && !($file =~ /$glbfilter/));
+            next NEXT if ($flnfilter =~ /\S/ && $flnfilter ne 'HARVEST' && !($file =~ /$flnfilter/));
+            next NEXT if ($glbfilter =~ /\S/ && !($file =~ /$glbfilter/));
         # test against allowed pattern and get shortname
 print "reject $file$brtag" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
             next NEXT if (!($file =~ /^$subdir(\S+\/)?([\w\-\.]+\.(\w\d?\w*)$)/));
             my $shortname = $2;
 	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/));
 print "shortname = $shortname $brtag" if ($DEBUG);
-            next NEXT if (!$DEBUG && $dbfiles->{$shortname});
+            next NEXT if ($dbfiles->{$shortname} && (!$DEBUG || $DEBUG <= 1));
         # find possible directories beneath the $subdir
             my $subdirname = $file;
             $subdirname =~ s/$subdir//; # remove the top directory
@@ -1028,16 +1051,14 @@ print "rejected file: $file $exclude $brtag" if ($subdirname =~ /$exclude/i && $
             }
         
             last if ($MAXREAD-- <= 0);
-            my $read = "$file";
-            push @newReads, $read;
+            push @newReads, $file;
             $filecount++;
-print "new file: $read $brtag" if($DEBUG);
+print "new file: $file $brtag" if($DEBUG);
         }
         print "... $filetest files tested, $filecount accepted$brtag";
-#        close FILE;
+        close FILE;
         last DIR if ($MAXREAD <= 0);
     }
-#   close FILE;
     \@newReads;
 }
 
@@ -1091,7 +1112,7 @@ sub form2 {
     }
 
     $form .= "<TR><TH ALIGN=LEFT>DATABASE Assembly Name</TH><TD>SELECTTAG</TD>";
-    $form .= "<TD>&nbsp</TD></TR>";
+    $form .= "<TD><A href=\"ASSEMBLYLINK\">ADD NEW ASSEMBLY</A></TD></TR>";
 #    $form .= "<TD><b>Check</b> <INPUT type=checkbox name=testrun> for TEST run </TD></TR>";
     $form .= "<TR><TH ALIGN=LEFT>Load a maximum of </TH>";
     $form .= "<TD><INPUT VALUE='1' SIZE=5 NAME='LPR'> reads</TD>";

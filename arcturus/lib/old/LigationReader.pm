@@ -17,7 +17,6 @@ $VERSION = "0.9";
 my $DEBUG = 1;
 
 my $PEEKDIR = '/usr/local/badger/bin';
-#$PEEKDIR = '/nfs/team81/ejz/arcturus/server/cgi-bin';
 
 =head1 NAME
 

@@ -45,6 +45,7 @@ sub new {
     undef $self->{TCPort};
     undef $self->{handle};
     undef $self->{database};
+#    $self->{instances} = {};
     undef $self->{config};
     undef $self->{cgi};
 
@@ -130,7 +131,8 @@ sub cgiHandle {
     my $test = shift; # id true: test and return 0 if not in CGI mode
 
     my $cgi = $self->{cgi};
-    $cgi = 0 if ($test && $cgi && !$cgi->{status});
+#    $cgi = 0 if ($test && $cgi && !$cgi->{status});
+    $cgi = 0 if ($test && (!$cgi || !$cgi->{status}));
 
     return $cgi;
 }
@@ -141,8 +143,10 @@ sub cgiHeader {
     my $self = shift;
     my $type = shift; # 1 for plain, 2 for html, else nothing
 
-    $self->{cgi}->PrintHeader(1) if ($self->{cgi} && $type == 1);
-    $self->{cgi}->PrintHeader(0) if ($self->{cgi} && $type == 2);
+    if ($self->{cgi} && $self->cgiHandle(1)) {
+        $self->{cgi}->PrintHeader(1) if ($type == 1);
+        $self->{cgi}->PrintHeader(0) if ($type == 2);
+    }
 }
 
 #*******************************************************************************
@@ -190,11 +194,14 @@ sub opendb_MySQL_unchecked {
 # open mysql directly with any checks
     my $self = shift;
     my $host = shift; # hostname:TCPport
-    my $look = shift;
+    my $hash = shift;
 
-# test against default server, if $look; else open a new connection
+    my %options = (defaultOpenNew => 0, dieOnError => 1, RaiseError => 0);
+    &importOptions(\%options,$hash);
 
-    if ($look && $self->{handle}) {
+# test against default server, else open a new connection
+
+    if (!$options{defaultOpenNew} && $self->{handle}) {
         &dropDead($self,"Missing TCP port specification in host $host") if ($host !~ /\:/);
         my ($name,$port) = split ':',$host;
         return $self->{handle} if ($self->{server} =~ /$name/ && $self->{TCPort} == $port);
@@ -208,16 +215,20 @@ sub opendb_MySQL_unchecked {
 
     my $config = $self->{config};
 
-    my $username  = $config->get("mysql_username",'insist');
-    my $password  = $config->get("mysql_password",'insist');
+    my $username = $config->get("mysql_username",'insist');
+    my $password = $config->get("mysql_password",'insist');
 # test configuration data input status
-    my $status    = $config->probe(1);
-    &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $status;
+    if (my $status = $config->probe(1)) {
+        &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $options{dieOnError};
+        return 0;
+    }
 
 # and open up the connection
 
-    my $handle = DBI->connect($dsn, $username, $password, {RaiseError => 1}) 
-    or &dropDead($self,"Failed to access arcturus on host $host ($DBI::errstr)");           
+    my $handle = DBI->connect($dsn, $username, $password, $options{RaiseError});
+    if (!$handle && $options{dieOnError}) {          
+        &dropDead($self,"Failed to access arcturus on host $host ($DBI::errstr)");
+    }
 
 # okay, here the database has been properly opened on host/port $self->{server};
 
@@ -363,7 +374,35 @@ sub opendb_MySQL {
     if ($self->{mother}->{errors}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
-#$self->cgiHeader(1); print "master table opened: $self->{mother}";
+#    elsif (my $hashes = $self->{mother}->{hashrefs}) { # array ref
+#$self->cgiHeader(1); print "master table opened: $self->{mother}"; # collect available servers
+#        foreach my $hash (@$hashes) {
+#            my $dbasename = $hash->{dbasename};
+#            my $residence = $hash->{residence};
+#            $self->{residence}->{dbasename} = $residence if ($hash->{available} ne 'off-line');
+#        }
+#    }
+#    else {
+#        &dropDead($self,"No data in table ORGANISMS");
+#    }
+}
+
+#*******************************************************************************
+
+sub importOptions {
+# private function 
+    my $options = shift;
+    my $hash    = shift;
+
+    my $status = 0;
+    if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
+        foreach my $option (keys %$hash) {
+            $options->{$option} = $hash->{$option};
+        }
+        $status = 1;
+    }
+
+    $status;
 }
 
 #*******************************************************************************
@@ -401,16 +440,10 @@ sub whereAmI {
 sub dbHandle {
     my $self     = shift; 
     my $database = shift; # name of arcturus database to be probed
-    my $options  = shift; # hash 
+    my $hash     = shift; 
 
-    my $override = 0; # default do not allow undefined database
-    my $redirect = 1; # default allow redirection to new URL
-    my $dbhandle = 1; # default return database handle
-    if (ref($options) eq 'HASH') {
-        $override = $options->{'override'} if defined($options->{'override'}); 
-        $redirect = $options->{'redirect'} if defined($options->{'redirect'}); 
-        $dbhandle = $options->{'dbhandle'} if defined($options->{'dbhandle'}); 
-    }
+    my %options = (undefinedDatabase => 0, defaultRedirect => 1, returnTableHandle => 0);
+    &importOptions(\%options, $hash);
 
     my $dbh = $self->{handle}; # may be replace below
     &dropDead($self,"No database handle available") if !$dbh;
@@ -418,7 +451,7 @@ sub dbHandle {
 
     my $organisms = $self->{mother};
     &dropDead($self,"Inaccessible table 'ORGANISMS' on $server") if !$organisms;
-    $dbh = $organisms if !$dbhandle;
+    $dbh = $organisms if $options{returnTableHandle};
 
 # if database specified as arcturus, just return the database handle
 
@@ -426,8 +459,9 @@ sub dbHandle {
         $self->{database} = 'arcturus';
         return $dbh;
     }
+# if database not specified, use default arcturus, or abort
     elsif (!$database) { 
-        &dropDead($self,"Undefined database name") if !$override;
+        &dropDead($self,"Undefined database name") if !$options{undefinedDatabase};
         $self->{database} = 'arcturus';
         return $dbh;
     }
@@ -439,32 +473,27 @@ sub dbHandle {
 
     if (my $hashrefs  = $organisms->associate('hashrefs')) {
         foreach my $hash (@$hashrefs) {
-#print "$hash $hash->{dbasename} $hash->{residence} $hash->{available}\n";
-# TEMPORARY fix:this line is added because the pcs3 cluster is not visible as pcs3.sanger.ac.uk but as pcs3 only
+# TEMPORARY fix: pcs3 cluster is not visible as pcs3.sanger.ac.uk but as pcs3 only
             $hash->{residence} =~ s/pcs3\.sanger\.ac\.uk/pcs3/;
             $residence{$hash->{dbasename}} = $hash->{residence};
             $available{$hash->{dbasename}} = $hash->{available};
+#            $self->{instances}->{$hash->{residence}}++; # count ARCTURUS instances ?
         }
     }
     else {
         &dropDead($self,"Empty table 'ORGANISMS' on $server");
     }
 
-# if database undefined, try cgi input
-
-    my $cgi = $self->{cgi};
-    $database = $cgi->parameter('database') if ($cgi && !$database && !$override);
-    $database = $cgi->parameter('organism') if ($cgi && !$database && !$override);
-
 # see if the arcturus database is on this server, else redirect
 
+    my $cgi = $self->{cgi};
     undef $self->{database};
     if ($database && !$residence{$database}) {
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
     elsif ($database && $residence{$database} ne $server) {
-        $redirect = 1 if !defined($redirect);
-        if (!&origin || !$redirect) { # (command-line mode)
+# the requested database is somewhere else; redirect if in CGI mode
+        if (!&origin || !$options{defaultRedirect}) {
             &dropDead($self,"Database $database resides on $residence{$database}");
         }
         elsif ($available{$database} ne 'off-line') {
@@ -554,7 +583,7 @@ sub authorize {
         $password = $cgi->parameter('password',0);
         $cgi->transpose('password') if $password; # remove from CGI input
         $identify = $cgi->parameter('identify',0);
-        $cgi->transpose('identify','USER') if $identify; # remove identify from CGI input
+        $cgi->transpose('identify','USER') if $identify; # rename 'identify' to 'USER'
     }
 
 # process possible hash input 
@@ -571,7 +600,6 @@ sub authorize {
     if (ref($hash) eq 'HASH') {
         foreach my $key (keys %$hash) {
             $options{$key} = $hash->{$key};
-#  eval "\$$key = $hash->{$key}";
         }
     }
 
@@ -587,6 +615,20 @@ sub authorize {
             &dropDead($self,$sessions->{errors}) if $options{dieOnError};
 	    return 0;
         }
+# before testing the session number itself, we check the implied username 
+       ($identify, my $code) = split ':',$session;
+        my $users = $mother->spawn('USERS','self',0,1);
+        if (my $hashref = $users->associate('hashref',$identify,'userid')) {
+            $priviledges = $hashref->{priviledges} || 0;
+            if (!$cgi->VerifyEncrypt('arcturus',$code)) { # check integrity 
+                $self->{report} .= "! Corrupted session number $session";
+                $session = 0; # force (new) prompt for password 
+            }
+        }
+        else {
+            $self->{report} .= "! User $identify does not exist";
+            $session = 0;
+        }
 # test if session for this user still open; if not, force new request for password and username
         if (my $hashref = $sessions->associate('hashref',$session,'session')) {
             if ($hashref->{timeclose}) {
@@ -594,27 +636,40 @@ sub authorize {
                 $session = 0; # force prompt for password 
 	    }
             else {
-                ($identify, my $code) = split ':',$session;
                 $sessions->counter('session',$session,1,'access');
-                my $users = $mother->spawn('USERS','self',0,1);
-                if ($hashref = $users->associate('hashref',$identify,'userid')) {
-                    $priviledges = $hashref->{priviledges} || 0;
-                    if (!$cgi->VerifyEncrypt('arcturus',$code)) { # final check integrity 
-                        $self->{report} .= "! Corrupted session number $session";
-                        $session = 0;
-                    }
-                }
-                else {
-                    $self->{report} .= "! User $identify does not exist";
-                    $session = 0;
-                }
 	    }
         }
-# there is no such session number (? corrupted input)
+# there is no such session number on the current server (e.g. after switching servers)
         else {
-            $self->{report} .= "! Specified Arcturus session $session does not exist";
-            $session = 0; # force prompt for password
+#$options{silently} = 0;
+# try if the session is on another server
+            my $found = 0;
+            my $instances = $self->{config}->get("mysql_ports",'insist unique array');
+            my $this_host = $self->{server};
+            $this_host =~ s/\.sanger\.ac\.uk|\:\d+//g;
+            $this_host .= ':'.$self->{TCPort};
+            $self->{report} .= "! Specified Arcturus session $session does not ";
+            $self->{report} .= "exist on this server ($this_host)";
+            foreach my $instance (@$instances) {
+                if ($instance ne $this_host) {
+                    if (my $dbh = &opendb_MySQL_unchecked ($self,$instance)) {
+                        $self->{report} .= " .. opened ";
+                        if ($dbh->do("select * from SESSIONS where session = '$session'") > 0) {
+# the session is found on another server: copy to the current server
+                            $self->{report} = "session $session found .. ";
+                            if ($sessions->newrow('session',$session)) {
+                                $sessions->signature(0,'session',$session,0,'timebegin');
+                                $found = 1;
+                            }
+                        }
+                        $dbh->disconnect();
+                    }
+                }                
+                last if $found;
+            }
+            $session = 0 if !$found; # force prompt for password
         }
+        $cgi->delete('session') if !$session; # remove from CGI input
         &report($self,$self->{report}) if !$options{silently};
         undef $self->{report};
     }
@@ -636,6 +691,7 @@ sub authorize {
                 $self->cgiHeader(2); # if not already done
                 my $script = $self->{Script};
                 $script =~ s?^.*cgi-bin?/cgi-bin?;
+                $script .= $options{returnpath} if $options{returnpath};
                 $cgi->openPage("ARCTURUS authorisation");
                 $cgi->frameborder(100,20,'white',20);
                 $cgi->center(1);
@@ -704,19 +760,19 @@ sub authorize {
             if ($array && ref($array) eq 'ARRAY') {
                 my $ageOfSession = $array->[0]->{age};
                 my $openSession = $array->[0]->{session};
-                $self->{report} = "There is an existing active session $openSession"; 
+                $self->{report} = "There is an existing active session $openSession; "; 
                 if (defined($ageOfSession) && $ageOfSession/60 <= $options{ageWindow}) {
-                    $self->{report} .= "Previous session $openSession will be continued";
+                    $self->{report} .= "Previous session $openSession will be continued. ";
                     $sessions->counter('session',$openSession,1,'access'); # update access counter
                     $session = $openSession;
                 }
                 elsif (defined($openSession)) {
-                    $self->{report} .= "Previous session $openSession will be closed";
+                    $self->{report} .= "Previous session $openSession will be closed. ";
                     $sessions->signature(0,'session',$openSession,0,'timeclose');
                     $sessions->update('closed_by','oper','session',$openSession);
                 }
                 else {
-                    $self->{report} .= "Possibly corrupted SESSIONS table: inconsistent data for $identify";
+                    $self->{report} .= "Possibly corrupted SESSIONS table: inconsistent data for $identify. ";
                 }
             }
 
@@ -749,7 +805,7 @@ sub authorize {
 
 # here priviledges should be defined; test priviledge(s) sought
     
-    print "priviledges for user $identify: $priviledges\n";
+#    print "priviledges for user $identify: $priviledges\n";
 
     my $mask = $code;
     if (ref($code) eq 'HASH') {
@@ -764,9 +820,9 @@ sub authorize {
         }
     }
 
-    if ($code && $priviledges) {
+    if ($code) {
 # &report ($self,"code $code  mask $mask priviledges $priviledges");
-        if ($mask != ($mask & $priviledges)) {
+        if (!$priviledges || $mask != ($mask & $priviledges)) {
             $self->{error} = "User $identify has no priviledge for this operation";
             return 0;
         }
@@ -785,6 +841,145 @@ sub newSessionNumber {
     my $session = "$user:$encrypt"; # name folowed by some 'random' sequence
 
     return $session;
+}
+
+#*******************************************************************************
+# arcturus CGI interface
+#*******************************************************************************
+
+sub GUI {
+# standard Arcturus GUI form with full set of cross links between databases
+    my $self  = shift;
+    my $title = shift;
+
+    my $cgi = &cgiHandle($self,1);
+    return 0 if !$cgi;
+
+    my $script = $self->{Script};
+    $script =~ s?^.*cgi-bin?/cgi-bin?; # the current script
+    my $postToGet = $cgi->postToGet(); # include current database
+
+    my $connection = &whereAmI($self); # production or development
+
+# get other servers, either on the same host or all of them
+
+    my $full = 1; # include all servers
+    my @url = split /\:|\./,$self->{server};
+    my $hosts = $self->{config}->get('mysql_hosts','insist unique array');
+    my $pmaps = $self->{config}->get('port_maps'  ,'insist unique array');
+    undef my @alternates;
+    undef my %altertypes;
+    foreach my $server (@$hosts) {
+# find server with the same host name but different port
+        if ($full || $server =~ /\b$url[0]\b/ && $server !~ /\b$url[$#url]\b/) {
+            $server =~ s/\.sanger\.ac\.uk//;
+            push @alternates, $server;
+            foreach my $map (@$pmaps) {
+                my @ports = split ':',$map;
+                $altertypes{$server} = $ports[0] if ($server =~ /\b$ports[2]\b/); 
+            }
+            $altertypes{$server} = 'C' if ($server =~ /\b$url[0]\b\S+\b$url[$#url]\b/);
+	}
+    }
+
+# get other databases
+
+    undef my @databases;
+    undef my @offliners;
+    my $mother = $self->{mother};
+    my $hashes = $mother->associate('hashrefs');
+    foreach my $hash (@$hashes) {
+        if ($hash->{available} ne 'off-line') {
+            push @databases, $hash->{dbasename};
+        }
+        else {
+            push @offliners, $hash->{dbasename};
+        }
+    }
+
+# colour palet
+
+    my $bgalter = 'lightblue';
+    my $cell = "bgcolor=$bgalter nowrap align=center";
+
+# okay, now compose the page
+
+
+    my $page = $cgi->openPage("ARCTURUS $title");
+    my $width = '10%';
+    $page->arcturusGUI(20,$width,'beige');
+    for my $i (1 .. 6) {
+        $page->partition($i);
+        $page->center(1);
+    }
+
+    $page->partition(1);
+    $page->add("partition 1",0,1);
+    $page->add("script $self->{Script}",0,1);
+
+# compose the top bar (partition 2)
+
+    $page->partition(2);
+    $page->add("You are connected to the $connection");
+    
+# compose the left-side link table  (dev/prod database functions; partitions 3,5)
+
+    $page->partition(3);
+    $cgi->delete('database');
+    $script .= $cgi->postToGet; # without current database
+    my $table = "<table cellpadding=2 border=0 cellspacing=0>";
+    if (@alternates) {
+        $table .= "<tr><th colspan=2 bgcolor='yellow'> Servers </th></tr>";
+        foreach my $server (@alternates) {
+            my @url = split /\:|\./,$server; $url[0] = uc($url[0]);
+            my $type = uc($altertypes{$server}); $type =~ s/^(\w)\w*$/$1/;
+            my $link = "$url[0]";
+            $link = "<a href=\"http://$server$script\"> $link </a>" if ($type ne 'C');
+            $table .= "<tr><td $cell width=70>$link</td><td $cell width=10>$type</td></tr>";
+        }
+    }
+    $table .= "</table>";
+    $page->add($table);   
+
+# compose the database table
+
+    $page->partition(5);
+    $table = "<table cellpadding=2 border=0 cellspacing=0>";
+    if (@databases) {
+        $table .= "<tr><th bgcolor='yellow'> Databases </th></tr>";
+        foreach my $database (sort @databases) {
+            my $target = $self->{server}.$script;
+            $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
+            $target .= "&database=$database" if ($target !~ /\b$database\b/);
+            my $link = "<a href=\"http://$target\"> $database </a>";
+            $table .= "<tr><td $cell width=80>$link</td></tr>";
+        }
+    }
+    my $create = "$self->{server}/cgi-bin/create/newform";
+    $create .= $cgi->postToGet();
+    my $new = "<a href=\"http://$create\"> NEW </a>";
+    $table .= "<tr><td bgcolor=$bgalter nowrap align=center>$new</td></tr>";
+    $table .= "</table>";
+    $page->add($table);   
+
+
+# compose the right-side link tables (change servers,   databases; partitions 4,6)
+
+    my $link = "$self->{Script}";
+    my $text = "Development Server"; # or production
+    my $linktable = "<table width=$width><tr><td><a href=\"$link\">$text</a></td></tr></table>";
+
+    $page->partition(4);
+    $page->add("partition 4");
+#    $page->add($linktable);
+
+    $page->partition(6);
+    $page->add("partition 6");
+#    $page->add($linktable);
+
+# go back to the main section
+
+    return $page;
 }
 
 #*******************************************************************************
@@ -862,19 +1057,10 @@ sub colophon {
         group   =>              81 ,
         version =>             1.0 ,
         updated =>    "08 Apr 2002",
-        date    =>    "21 Apr 2002",
+        date    =>    "26 Jun 2002",
     };
 }
 
+#############################################################################
+
 1;
-
-
-
-
-
-
-
-
-
-
-

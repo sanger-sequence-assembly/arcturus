@@ -6,10 +6,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-use lib "/nfs/pathsoft/arcturus/dev/lib";
-
 use GateKeeper; 
-use ArcturusTable;
 
 ##############################################################################
 # unbuffered output
@@ -31,7 +28,7 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my $database   = $cgi->parameter('database') || 'arcturus';
 
-# my $dbh        = $GateKeeper->dbHandle($database);
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(2);
 
@@ -39,11 +36,13 @@ $GateKeeper->cgiHeader(2);
 # MAIN
 ##############################################################################
 
-# my $identify = 'ejz';
-# my $password = 'blbla';
-# undef $password;
+my $status = $GateKeeper->authorize(0,{'nosession'=>0, silently=>1, ageWindow=>300});
 
-my $status = $GateKeeper->authorize(100,{'nosession'=>0, silently=>0, ageWindow=>300});
+my $page = $GateKeeper->GUI("Keeper TEST setup");
+    $page->form(0);
+    $page->flush;
+    $GateKeeper->disconnect;
+exit 0;
 
 if (!$status) {
     my $error = $GateKeeper->{error};
@@ -63,11 +62,14 @@ else {
     $GateKeeper->disconnect;
 }
 
-
-
-
 ##############################################################################
 # EXIT
 ##############################################################################
 
 $GateKeeper->disconnect();
+
+exit 0;
+
+
+
+

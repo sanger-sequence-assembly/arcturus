@@ -7,8 +7,6 @@
 use strict; # Constraint variables declaration before using them
 
 use GateKeeper; 
-use ArcturusTable;
-use MyHTML;
 use ContigBuilder;
 use ReadMapper;
 
@@ -28,24 +26,23 @@ my $GateKeeper = GateKeeper->new('mysql',0);
 
 my $config     = $GateKeeper->configHandle();
 
-my $cgi        = $GateKeeper->cgiHandle();
+my $cgi        = $GateKeeper->cgiHandle(1);
 
 # how is this script invoked?
 
-my $origin = $GateKeeper->origin();
-
 my ($void, $database, $option);
-if ($origin) {
-   ($void, $database, $option) = split ('/',$origin);
+
+if ($cgi) {
+   ($void, $database, $option) = split ('/',$GateKeeper->origin());
     $database  = $cgi->parameter('database') if $cgi->parameter('database');
 }
 else {
-   $database = $ARGV[0];
+   $database = shift @ARGV;
 }
 
-my $dbh = $GateKeeper->dbHandle($database);
+my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1, dbhandle=>0});
 
-$GateKeeper->cgiHeader(2); # return string HTML
+$GateKeeper->cgiHeader(2); # return string HTML if in CGI mode
 
 ##############################################################################
 # MAIN
@@ -73,7 +70,9 @@ my ($CDD, $CFN, $CNF, $CGN, $CLF, $CPR, $SRC);
 my ($assembly, $assemblyname, $assemblynmbr);
 my ($cblocker, $rblocker);
 
-my $return    = "$arc_cgi_dir/update/arcturus/getmenu";
+my $lreturn = "$arc_cgi_dir/update/arcturus/getmenu";
+my $session = $cgi->parameter('session',0);
+$lreturn .= "\?session=$session" if $session;
 
 my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
 
@@ -81,14 +80,14 @@ my ($brtag, $gfont, $yfont, $ofont, $rfont, $efont);
 # open ORGANISMS table
 ###############################################################################
 
-my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
-my $users = $organisms->new($dbh,'USERS','arcturus',1);
+# my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
+my $users = $organisms->spawn('USERS','arcturus',1);
 
 ###############################################################################
 # input from command line
 ###############################################################################
 
-if (!$origin) {
+if (!$cgi) {
 # test user
     $userid = $ENV{USER};
     if ($userid ne 'ejz' && $userid ne 'adh') {
@@ -149,15 +148,9 @@ else {
     $rfont = "<FONT COLOR=red>";
     $efont = "</FONT>";
 
-#   (my $void,$database,my $option) = split ('/',$ENV{PATH_INFO});
-
-#    $cgi = ConfigReader::MyCgi->new(); # parse CGI
-#    $cgi->PrintHeader(1); # print the magic words 
-
     $option = 'process' if ($option eq 'specify' && $cgi->parameter('process',0));
 
-#    $page = $cgi->newPage('ARCTURUS CONTIGs loader');    
-    $page = MyHTML->new('ARCTURUS CONTIGs loader');    
+    $page = $cgi->openPage('ARCTURUS CONTIGs loader');    
     $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
     $page->frameborder(100,15,'white',10);
     $page->center(1);
@@ -172,24 +165,25 @@ else {
         my $count = $organisms->count();
         $page->sectionheader("There are $count Organism databases",3,0);
         $page->add($organisms->htmlTable('0310000011100000')); # list them
-        my $select =  $organisms->htmlOptions('dbasename','database',20);
+        my $select = $organisms->htmlOptions('dbasename','database',20);
         $page->sectionheader("Select a Database : $select",4,0);
-        $page->sectionheader("Provide your User Identification and Submit",4,0);
-        $page->identify('10',8,1);
+#        $page->sectionheader("Provide your User Identification and Submit",4,0);
+#        $page->identify('10',8,1);
         $page->partition(5);
         $page->center(1);
-        $page->submitbuttonbar("$arc_cgi_dir/update/arcturus/getmenu",0,0,'MAIN MENU');
+        $page->submitbuttonbar($lreturn,0,0,'MAIN MENU');
+        $page->ingestCGI();
         $page->form(0);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 
     elsif ($option eq 'specify') {
 # list all assemblies
         $database  = $cgi->parameter('database'); # compulsory
-        my $userid = $cgi->parameter('identify'); # compulsory
-        my $passwd = $cgi->parameter('password'); # compulsory
+#        my $userid = $cgi->parameter('identify'); # compulsory
+#        my $passwd = $cgi->parameter('password'); # compulsory
         my $asname = $cgi->parameter('assemblyname',0); # no test
         $asname = 0 if !$asname; # to have it explicitly defined
 
@@ -204,46 +198,46 @@ else {
         }
         else {
     # open assembly database; abort if no assemblies defined
-            $assembly = $organisms->new($dbh,'ASSEMBLY',$database,1);
+            $assembly = $organisms->spawn('ASSEMBLY',$database,1);
             if ($assembly && $assembly->count() > 0) {
-            # get the default assembly name if no assemblyname in CGI input; first try attributes
+    # get the default assembly name if no assemblyname in CGI input; first try attributes
                 my $attributes = $organisms->unpackAttributes($database,'dbasename');
                 $asname = $attributes->{anlast} if (!$asname && $attributes->{anlast});
-            # if still undefined, just take the first one
+    # if still undefined, just take the first one
                 $asname = $assembly->{hashrefs}->[0]->{assemblyname} if (!$asname);
-            # substitute (possible) database placeholder
+    # substitute (possible) database placeholder
                 $config{CLF} =~ s/DATABASE/$database/; # log file
-            # overwrite the preset configuration data with those in ORGANISM attributes if any
+    # overwrite the preset configuration data with those in ORGANISM attributes if any
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
 # print "ORGANISM attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
-            # overwrite the preset configuration data with those in ASSEMBLY attributes if any
+    # overwrite the preset configuration data with those in ASSEMBLY attributes if any
                 $attributes = $assembly->unpackAttributes($asname,'assemblyname');
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
 # print "ASSEMBLY attribute $key  = $config{$key}<br>" if defined($attributes->{$key});
                 }
-            # update the caf file name if it contains a place holder ?
+    # update the caf file name if it contains a place holder ?
 #                $config{CFN} =~ s/^\S+?(\<m\>)/$asname/;
-            # open the form and replace the placeholders
+    # open the form and replace the placeholders
                 my $form = form();
                 $form =~ s/DATABASE/$database/g;
-            # build the selectlist for assembly and add to form
+    # build the selectlist for assembly and add to form
                 my $selectlist = $assembly->htmlOptions('assemblyname','assemblyname',90,0,$asname);
                 $form =~ s/SELECTTAG/$selectlist/ if ($selectlist); # substitute the HTML selectlist
                 $page->add($form,0,1); # add the form to the page and preload
-            # NOTE: contigs will inherit project from earlier versions; unallocated ones are put in BIN
-            # preload the remaining placeholders with data in %config 
+    # NOTE: contigs will inherit project from earlier versions; unallocated ones are put in BIN
+    # preload the remaining placeholders with data in %config 
                 foreach my $key (keys %config) {
                     $page->preload($key,$config{$key},1) if defined($config{$key});
                 }
-            # but overwrite with values in CGI input 
+    # but overwrite with values in CGI input 
                 $page->preload('cgi_input',$cgi,1);
-            # and add hidden fields  
+    # and add hidden fields  
                 $page->ingestCGI($cgi);
 
-            # add a three-way button bar and a return link 
+    # add a three-way button bar and a return link 
 
                 my $text = "Repeat to update this form for a newly chosen assembly, or<br>";
                 $text   .= "Continue to start loading CONTIGS with these specified values, or<br>";
@@ -253,24 +247,24 @@ else {
                                'type=submit value="Continue" name="process"',
                                'type=reset  value=" Reset "');
                 $page->buttonbartemplate(3,0,\@buttons);                 
-                $page->linkbutton('RETURN',$return,0);
+                $page->linkbutton('RETURN',$lreturn,0);
             }
             else {
                 $page->errorbox("There are no assemblies defined for $database",0,0,'yellow');
-                $page->messagebox("Please contact $db_manager or your project manager",$return);
+                $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
             }
         }
     # close form
         $page->form(0);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 
     elsif ($option eq 'process') {
     # get assembly 
         $database = $cgi->parameter('database'); # redefine database
-        $assembly = $organisms->new($dbh,'ASSEMBLY',$database,1);
+        $assembly = $organisms->spawn('ASSEMBLY',$database,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
         $assemblynmbr = $assembly->associate('assembly',$assemblyname,'assemblyname');
 
@@ -282,35 +276,28 @@ else {
         $update = 1 if $cgi->parameter('update' ,0);
         $forced = 1 if $cgi->parameter('forced' ,0);
     # identity check
-        $userid = $cgi->parameter('identify');
-        my $passwd = $cgi->parameter('password');
       
         if ($cgi->{und_error}) {
             $error = "Please define every input field $cgi->{und_error} ";
         }
-        elsif (my $users = $organisms->new($dbh,'USERS','arcturus',1)) {
     # authorisation level 100 required (temp)
-            if (my $status = $users->authorize($userid,$passwd,100)) {
-                $error = $status; # authorisation failed
-            }
-    # okay, now get specifications
-            else {
-                $CDD = $cgi->parameter('CDD');
-                $CFN = $cgi->parameter('CFN') || '';
-                $CNF = $cgi->parameter('CNF');
-#                $CGN = $cgi->parameter('CGN') || 0;
-                $CLF = $cgi->parameter('CLF');
-                $CPR = $cgi->parameter('CPR');
-                $SRC = $cgi->parameter('SRC');
-                $CFN = $CDD.$CFN if ($CDD && $CFN && $CFN !~ ?^$CDD?);
-
-                $cblocker = $cgi->parameter('cblocker');
-                $rblocker = $cgi->parameter('rblocker');
-                $list     = $cgi->parameter('listing');
-            }
+        elsif (!$GateKeeper->authorize(100,{returnpath => "/$database/process"})) {
+            $error = $GateKeeper->{report};
         }
+    # okay, now get specifications
         else {
-            $error = "Can't access the USERS table in ARCTURUS database";
+            $CDD = $cgi->parameter('CDD');
+            $CFN = $cgi->parameter('CFN') || '';
+            $CNF = $cgi->parameter('CNF');
+#            $CGN = $cgi->parameter('CGN') || 0;
+            $CLF = $cgi->parameter('CLF');
+            $CPR = $cgi->parameter('CPR');
+            $SRC = $cgi->parameter('SRC');
+            $CFN = $CDD.$CFN if ($CDD && $CFN && $CFN !~ ?^$CDD?);
+
+            $cblocker = $cgi->parameter('cblocker');
+            $rblocker = $cgi->parameter('rblocker');
+            $list     = $cgi->parameter('listing');
         }
     }
     else {
@@ -324,9 +311,9 @@ else {
         $page->sectionheader("ARCTURUS CONTIGs loader specifications",3,0);
         $page->partition(1);
         $page->sectionheader("Sorry, an error status aborts this loader session",3,1);
-        $page->errorbox($error,$return);
+        $page->errorbox($error,$lreturn);
         $page->flush();
-        $dbh->disconnect;
+        $GateKeeper->disconnect;
         exit 0;
     }
 #    $page->add($cgi->PrintVariables());
@@ -354,26 +341,26 @@ die "No assembly defined" if !$assemblynmbr;
 # open all database tables required
 ###############################################################################
 
-    my $READS    = $organisms->new($dbh,"READS",$database,0);
-    my $CONTIGS  = $organisms->new($dbh,"CONTIGS",$database,0);
-    my $cctocc   = $organisms->new($dbh,"CONTIGS2CONTIG",$database,0);
-    my $cctopp   = $organisms->new($dbh,"CONTIGS2SCAFFOLD",$database,0);
-    my $rrtocc   = $organisms->new($dbh,"READS2CONTIG",$database,0);
-    my $redits   = $organisms->new($dbh,"READEDITS",$database,0);
-    my $pending  = $organisms->new($dbh,"PENDING",$database,0);
-    my $gaptags  = $organisms->new($dbh,"GAP4TAGS",$database,0);
-    my $tttocc   = $organisms->new($dbh,"TAGS2CONTIG",$database,0);
-    my $projects = $organisms->new($dbh,"PROJECTS",$database,1);
-    my $rrtoaa   = $organisms->new($dbh,"READS2ASSEMBLY",$database,0);
+    my $READS    = $organisms->spawn("READS",$database,0);
+    my $CONTIGS  = $organisms->spawn("CONTIGS",$database,0);
+    my $cctocc   = $organisms->spawn("CONTIGS2CONTIG",$database,0);
+    my $cctopp   = $organisms->spawn("CONTIGS2SCAFFOLD",$database,0);
+    my $rrtocc   = $organisms->spawn("READS2CONTIG",$database,0);
+    my $redits   = $organisms->spawn("READEDITS",$database,0);
+    my $pending  = $organisms->spawn("PENDING",$database,0);
+    my $gaptags  = $organisms->spawn("GAP4TAGS",$database,0);
+    my $tttocc   = $organisms->spawn("TAGS2CONTIG",$database,0);
+    my $projects = $organisms->spawn("PROJECTS",$database,1);
+    my $rrtoaa   = $organisms->spawn("READS2ASSEMBLY",$database,0);
   
     if ($REPAIR) {
-        $organisms->new($dbh,"LIGATIONS",$database,1);
-        $organisms->new($dbh,"SEQUENCEVECTORS",$database,1);
-        $organisms->new($dbh,"CLONINGVECTORS",$database,1);
+        $organisms->spawn("LIGATIONS",$database,1);
+        $organisms->spawn("SEQUENCEVECTORS",$database,1);
+        $organisms->spawn("CLONINGVECTORS",$database,1);
     }
 
     my $snapshot = $organisms->snapshot($database);
-#    print "$snapshot" if ($origin); # only in CGI mode
+#    print "$snapshot" if ($cgi); # only in CGI mode
 
 ###############################################################################
 # Get all contigs in the repository which pass the file name filter
@@ -489,12 +476,12 @@ die "No assembly defined" if !$assemblynmbr;
 
 # initialize global parameters in ReadMapper
 
-    my $mapper = ReadMapper->init($READS,$origin);
+    my $mapper = ReadMapper->init($READS,$cgi);
 
 # initialize global parameters in ContigBuilder
 
-    my $cbuild = ContigBuilder->init($mapper,$CONTIGS,$origin);
-#    my $cbuild = ContigBuilder->init($CONTIGS,$origin);
+    my $cbuild = ContigBuilder->init($mapper,$CONTIGS,$cgi);
+#    my $cbuild = ContigBuilder->init($CONTIGS,$cgi);
 
     $cbuild->setMinOfReads($SRC) if ($SRC > 1);
     $cbuild->setOwnership($assemblynmbr,$userid);
@@ -511,11 +498,11 @@ die "No assembly defined" if !$assemblynmbr;
     print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
     if (!$CNF && !$left && !$truncated && $cgi->parameter('promote')) {
-#TEST!!
-# okay, we have had all contigs in this assembly; update counters length and l2000
-        my $query = "select sum(distinct CONTIGS.length) from CONTIGS,READS2CONTIG where ";
-        $query   .= "CONTIGS.contig_id=READS2CONTIG.contig_id and READS2CONTIG.generation=0";
-        my $length = $CONTIGS->query($query);
+# okay, we have had all contigs in this assembly
+# update counters length and l2000
+        my $query  = "select sum(distinct CONTIGS.length) from CONTIGS,READS2CONTIG where ";
+        $query    .= "CONTIGS.contig_id=READS2CONTIG.contig_id and READS2CONTIG.generation=0";
+        my $length = $CONTIGS->query($query,0,0);
         $assembly->update('length',$length,'assembly',$assemblynmbr);
         $query   .= " and CONTIGS.length>=2000";
         $length = $CONTIGS->query($query);
@@ -523,7 +510,8 @@ die "No assembly defined" if !$assemblynmbr;
 # update contig counter in ORGANISMS
         my $ncontigs = $CONTIGS->count(1); 
         $organisms->update('contigs',$ncontigs,'dbasename',$database);    
-
+# process reads in generation 1 but not in 0
+        $mapper->endOfLine();
 # now update the generation counter and cleanup the older generations
         print "UPDATE and cleanup of mapped generations$brtag\n";
         $mapper->ageByOne($assemblynmbr);
@@ -557,8 +545,13 @@ die "No assembly defined" if !$assemblynmbr;
     $scount = 0 if !$scount;
 
     print STDOUT "Closing database$brtag$brtag";
-    $page->flush() if ($origin);
-    $dbh->disconnect;
+    $page->flush() if ($cgi);
+    $GateKeeper->disconnect;
+
+    if ($page) {
+        $page->linkbutton('RETURN',$lreturn,0);
+        $page->flush();
+    }
 
     exit 0;
 
@@ -595,8 +588,8 @@ sub form {
     $form .= "</TR></TABLE>";
 
     $form .= "<TABLE BORDER=0 CELLSPACING=2 CELLPADDING=2 WIDTH 90%><TR>";
-    $form .= "<TH ALIGN=RIGHT WIDTH=30%> Contig Name block <INPUT type=checkbox name=cblocker checked> </TH>";
-    $form .= "<TH ALIGN=RIGHT WIDTH=30%> TEST run <INPUT type=checkbox name=testrun checked> </TH>";
+    $form .= "<TH ALIGN=RIGHT WIDTH=30%> Contig Name block <INPUT type=checkbox name=cblocker> </TH>";
+    $form .= "<TH ALIGN=RIGHT WIDTH=30%> TEST run <INPUT type=checkbox name=testrun> </TH>";
     $form .= "<TH ALIGN=RIGHT WIDTH=30%> Promote <INPUT type=checkbox name=promote> </TH>";
 
     $form .= "</TR><TR>";

@@ -38,7 +38,7 @@ else {
     $since      = shift @ARGV;
 }
 
-my $organisms = $GateKeeper->dbHandle($database,{dbhandle=>0});
+my $organisms = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
@@ -46,7 +46,7 @@ $GateKeeper->cgiHeader(1); # return string plain
 # MAIN
 ##############################################################################
 
-$organisms->query("use $database");
+$GateKeeper->focus(1);
 
 print "reached contigs $organisms\n";
 my $contigs   = $organisms->spawn('CONTIGS',$database,0);
@@ -113,8 +113,4 @@ print "hashes output: $hashes  $nr \n";
 
 $GateKeeper->disconnect();
 
-
-
-
-
-
+exit 0;

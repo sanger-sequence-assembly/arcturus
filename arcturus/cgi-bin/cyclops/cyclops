@@ -28,7 +28,7 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my $database   = $cgi->parameter('database');
 
-my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
@@ -44,3 +44,5 @@ $GateKeeper->cgiHeader(1); # return string plain
 ##############################################################################
 
 $GateKeeper->disconnect();
+
+exit 0;

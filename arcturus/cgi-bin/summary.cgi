@@ -72,6 +72,19 @@ foreach $key (sort keys %ENV) {
     print "$key: <B>", $ENV{$key}, "</B><BR>\n";
 }
 
+print "<HR>\n";
+print "<H1>Perl execution environment</H1>\n";
+
+print "<H3>INC list</H3>\n";
+
+print "<OL>\n";
+
+foreach $dir (@INC) {
+    print "<LI>$dir\n";
+}
+
+print "</OL>\n";
+
 print "</BODY>", "</HTML>", "\n";
 
 exit (0);

@@ -6,10 +6,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-use lib "/nfs/pathsoft/arcturus/dev/lib";
-
 use GateKeeper; 
-use ArcturusTable;
 
 ##############################################################################
 # unbuffered output
@@ -31,7 +28,7 @@ my $cgi        = $GateKeeper->cgiHandle();
 
 my $database   = $cgi->parameter('organism');
 
-my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
 $GateKeeper->cgiHeader(1); # return string plain
 
@@ -39,7 +36,7 @@ $GateKeeper->cgiHeader(1); # return string plain
 # MAIN
 ##############################################################################
 
-$organisms->query("use $database");
+$GateKeeper->focus(1); # make $database the default database
 
 my $contig = $cgi->parameter('contig');
 
@@ -84,9 +81,10 @@ foreach my $hash (@$hashes) {
     print "$line \n";
 }
 
-
 ##############################################################################
 # EXIT
 ##############################################################################
 
 $GateKeeper->disconnect();
+
+exit 0;
