@@ -1180,11 +1180,11 @@ $self->logger("chemistry $chemistry found in ARCTURUS database table\n");
 $self->logger("chemistry \"$chemistry\" NOT found in ARCTURUS database\n");
         $status->{diagnosis} .= "chemistry \"$chemistry\" NOT found in ARCTURUS database\n";
     # the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
-        my $command = "grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat";
-        my $field = `$command`; # identify in phred file
+#        my $command = "grep '\"$chemistry\"' $GELMINDDIR/*/phredpar.dat";
+#        my $field = `$command`; # identify in phred file
 $self->logger("command: $command\n");
-#        my $field = `grep \"$chemistry\" $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
-#        $field    = `grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
+        my $field = `grep '\"$chemistry\"' $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
+        $field    = `grep '\"$chemistry\"' $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
         chomp $field;
 $self->logger("Gelminder chemistry data fields: \"$field\"\n");
         $field =~ s/[\'\"]?\s*$chemistry\s*[[\'\"]?/x /g; # remove chemistry and any quotations
@@ -1222,7 +1222,7 @@ $self->logger("@{fields}\n$fields[1]\n$fields[2]\n");
                         $status->{warnings}++ if (!$self->{fatal} || $readItems->{CHT} eq 'l' && $description =~ /Licor/i);
                     } 
                     $readItems->{RPS} += 32768*4 ; # bit 18
-$self->{status}->{report} =~ s/\n/<br>/g; print STDOUT "report: $self->{status}->{report}";
+#$self->{status}->{report} =~ s/\n/<br>/g; print STDOUT "report: $self->{status}->{report}";
                 }
             }
             else {
