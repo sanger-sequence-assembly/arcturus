@@ -87,6 +87,8 @@ if(defined($database) && defined($table)) {
 
 	@colnames = @{$sth->{NAME}};
 
+	$ncols = scalar(@colnames);
+
 	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
 	print "<TR>\n";
@@ -97,8 +99,14 @@ if(defined($database) && defined($table)) {
 
 	while (@ary = $sth->fetchrow_array()) {
 	    print "<TR>\n";
+	    $col = 0;
 	    while ($item = shift @ary) {
 		print "<TD>$item</TD>\n";
+		$col++;
+	    }
+	    while ($col < $ncols) {
+		print "<TD>&nbsp;</TD>\n";
+		$col++;
 	    }
 	    print "</TR>\n";
 	}
