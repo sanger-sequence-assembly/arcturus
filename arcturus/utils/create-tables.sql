@@ -38,7 +38,6 @@ CREATE TABLE ASSEMBLY (
 CREATE TABLE BASECALLER (
   basecaller smallint(5) unsigned NOT NULL auto_increment,
   name varchar(32) NOT NULL default '',
-  counted int(10) unsigned default '0',
   PRIMARY KEY  (basecaller)
 ) TYPE=MyISAM;
 
@@ -62,10 +61,7 @@ CREATE TABLE CLONEMAP (
 CREATE TABLE CLONES (
   clone smallint(5) unsigned NOT NULL auto_increment,
   clonename varchar(20) NOT NULL default '',
-  clonetype enum('PUC finishing','PCR product','unknown') default 'unknown',
-  library enum('transposition','small insert','unknown') default 'unknown',
   origin varchar(20) default 'The Sanger Institute',
-  counted mediumint(8) unsigned default '0',
   PRIMARY KEY  (clone)
 ) TYPE=MyISAM;
 
@@ -111,7 +107,6 @@ CREATE TABLE CLONINGVECTORS (
   cvector_id tinyint(3) unsigned NOT NULL auto_increment,
   name varchar(16) NOT NULL default '',
   vector tinyint(3) unsigned default '0',
-  counted int(10) unsigned default '0',
   PRIMARY KEY  (cvector_id),
   UNIQUE KEY name (name)
 ) TYPE=MyISAM;
@@ -193,12 +188,11 @@ CREATE TABLE GAP4TAGS (
 CREATE TABLE LIGATIONS (
   ligation_id smallint(5) unsigned NOT NULL auto_increment,
   identifier varchar(20) NOT NULL default '',
-  clone varchar(20) NOT NULL default '',
+  clone_id smallint(5) unsigned NOT NULL,
   origin char(1) default NULL,
   silow mediumint(8) unsigned default NULL,
   sihigh mediumint(8) unsigned default NULL,
-  svector smallint(6) NOT NULL default '0',
-  counted int(10) unsigned default '0',
+  svector smallint(6) NOT NULL,
   PRIMARY KEY  (ligation_id),
   UNIQUE KEY identifier (identifier)
 ) TYPE=MyISAM;
@@ -262,26 +256,14 @@ CREATE TABLE READEDITS (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'READPAIRS'
-#
-
-CREATE TABLE READPAIRS (
-  forward mediumint(8) unsigned NOT NULL default '0',
-  reverse mediumint(8) unsigned NOT NULL default '0',
-  score enum('0','1','2','-1','-2','U') NOT NULL default 'U',
-  KEY rfindex (forward),
-  KEY rrindex (reverse)
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'READS'
 #
 
 CREATE TABLE READS (
   read_id mediumint(8) unsigned NOT NULL auto_increment,
   readname char(32) binary default NULL,
+  template_id mediumint(8) unsigned default NULL,
   asped date default NULL,
-  clone smallint(5) unsigned default NULL,
   strand enum('Forward', 'Reverse') default NULL,
   primer enum('Universal_primer', 'Custom', 'Unknown_primer') default NULL,
   chemistry enum('Dye_terminator', 'Dye_primer') default NULL,
@@ -289,11 +271,7 @@ CREATE TABLE READS (
   slength smallint(5) unsigned NOT NULL default '0',
   lqleft smallint(5) unsigned NOT NULL default '0',
   lqright smallint(5) unsigned NOT NULL default '0',
-  svcsite smallint(6) default NULL,
-  svpsite smallint(6) default NULL,
-  pstatus tinyint(3) unsigned default '0',
-  tstatus enum('N','I','T') default 'N',
-  template_id mediumint(8) unsigned default NULL,
+  status tinyint(3) unsigned default '0',
   PRIMARY KEY  (read_id),
   UNIQUE KEY readname (readname),
   UNIQUE KEY RECORD_INDEX (readname),
@@ -311,27 +289,6 @@ CREATE TABLE READS2ASSEMBLY (
   astatus enum('0','1','2') default '0',
   PRIMARY KEY  (read_id),
   KEY bin_index (assembly)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'READS2CONTIG'
-#
-
-CREATE TABLE READS2CONTIG (
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  pcstart int(10) unsigned NOT NULL default '0',
-  pcfinal int(10) unsigned NOT NULL default '0',
-  read_id mediumint(8) unsigned NOT NULL default '0',
-  prstart smallint(5) unsigned NOT NULL default '0',
-  prfinal smallint(5) unsigned NOT NULL default '0',
-  label tinyint(3) unsigned NOT NULL default '0',
-  clone smallint(5) unsigned NOT NULL default '0',
-  assembly smallint(5) unsigned NOT NULL default '0',
-  generation smallint(5) unsigned NOT NULL default '0',
-  deprecated enum('N','M','Y','X') default 'X',
-  blocked enum('0','1') default '0',
-  KEY reads_index (read_id),
-  KEY cntgs_index (contig_id)
 ) TYPE=MyISAM;
 
 #
@@ -407,8 +364,6 @@ CREATE TABLE SEQVEC (
 CREATE TABLE SEQUENCEVECTORS (
   svector_id tinyint(3) unsigned NOT NULL auto_increment,
   name varchar(20) NOT NULL default '',
-  vector tinyint(3) unsigned default '0',
-  counted int(10) unsigned default '0',
   PRIMARY KEY  (svector_id),
   UNIQUE KEY name (name)
 ) TYPE=MyISAM;
@@ -421,7 +376,6 @@ CREATE TABLE STATUS (
   status smallint(5) unsigned NOT NULL auto_increment,
   identifier varchar(64) default NULL,
   comment varchar(8) default NULL,
-  counted int(10) unsigned default '0',
   PRIMARY KEY  (status)
 ) TYPE=MyISAM;
 
@@ -475,4 +429,7 @@ CREATE TABLE USERS2PROJECTS (
   date_from date default NULL,
   date_end date default NULL
 ) TYPE=MyISAM;
+
+
+
 
