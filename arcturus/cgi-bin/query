@@ -10,6 +10,7 @@ use strict;
 
 use GateKeeper; 
 use ReadsRecall;
+use ContigRecall;
 
 ##############################################################################
 
@@ -451,7 +452,6 @@ elsif ($action eq "select") {
 # open the table in build 0 mode
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
     my $dbtable = $organisms->spawn($name,$database,0);
     my $dbcount = $dbtable->count(0);
 
@@ -503,7 +503,7 @@ elsif ($action eq "select") {
     foreach my $readitem (sort keys (%rhash)) {
 # $readitem is the catalogue item in READS, $rhash is the TABLE referenced
         my $tablename = $rhash{$readitem}; 
-    # identify the table
+# identify the table
         undef my $tbl;
         foreach my $dbtable (@dbtbl) {
             $tbl = $dbtable if ($tablename eq $dbtable->{tablename});
@@ -535,15 +535,17 @@ elsif ($action eq "select") {
 print "detail: $tablename<br>";
     }
     elsif ($name eq 'CONTIGS') {
-print "detail: $tablename<br>";
 
         $page->form("$arc_cgi_dir/query/selectcontig");
 
         $page->add(&CONTIGS_form);
 
-        $page->sectionheader("Specify Additional Constraints",4,0);
-
         $page->hidden('database',$database);
+
+# add the line with the maximum number of lines to be returned
+
+        my $max = "Return a maximum of <INPUT VALUE=24 SIZE=4 NAME=maxrows> rows";
+        $page->add($max,0,0);
     }
 
     $page->submitbuttonbar(1,0,0);
@@ -563,7 +565,6 @@ elsif ($action eq "tagselect") {
 
 elsif ($action eq "selectread") {
 
-#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',0,1);
     my $dbread  = $organisms->spawn("READS",$database,0,0);
     my $initial = ReadsRecall->init($dbread);
     my $reader  = ReadsRecall->new();
@@ -581,11 +582,12 @@ elsif ($action eq "selectread") {
     undef my $querystring;
     undef my $constraints;
     undef my $nameselect;
-    my $number = 0; my $hashrefs;
+    my $number = 0;
+    my $hashrefs;
 
     undef my $error;
     if ($readitem == 2) {
-        $constraints = $cgi->parameter('querytxt');
+        $constraints = $GateKeeper->lookup('querytxt');
         $error = "please define a query" if (!$constraints);
         $dbread->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
     }
@@ -706,8 +708,138 @@ my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
         $table .= "</TABLE>";
         $page->add($table,0,0);
     }
-# $page->add($cgi->PrintVariables());
-} 
+}
+
+ 
+elsif ($action eq "selectcontig") {
+
+    my $CONTIGS = $organisms->spawn("CONTIGS",$database,0,0);
+    my $creader = ContigRecall->init($CONTIGS,1);
+
+    my $contigitem = $GateKeeper->lookup('contigitem');
+    my $contignmbr = $GateKeeper->lookup('contignmbr');
+    my $contigname = $GateKeeper->lookup('contigname');
+    my $contigmask = $GateKeeper->lookup('searchitem') || 0;
+    my $wildcard   = $GateKeeper->lookup('wildcard');
+    my $limit = $GateKeeper->lookup('maxrows') || 100;
+
+    undef my $querystring;
+    undef my $constraints;
+
+    my $mask = 0;
+    foreach my $item (split /\D+/,$contigmask) {
+        $mask += $item;
+    }
+    $mask = 1000 if !$mask;
+
+    my $contig; # for 1 returned
+    my $hashes; # for more than 1 returned
+    my $error = '';
+    my $ignore = 0;
+    if ($contigitem == 2) {
+        $constraints = $GateKeeper->lookup('querytxt');
+        $error = "please define a query" if (!$constraints);
+        $CONTIGS->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
+    }
+    elsif ($contigitem && $contignmbr) {
+# check for specification "last"
+        if ($contignmbr =~ /\blast\b\s*(\d*)/i) {
+            $constraints = "order by contig_id desc";
+            $limit = $1 || 1; # overrides input 'maxrows'
+        }
+        elsif ($contignmbr !~ /\,|\-|\./) {
+            $contig = $creader->getContigHashById($contignmbr,0,1);
+# store return value in array hashes to conform to other branches
+            my @hashes; $hashes = \@hashes;
+            push @hashes,$contig;
+            $ignore = 1;
+        }
+        elsif ($contignmbr =~ /\,/) {
+            $constraints = "contig_id in ($contignmbr)";
+        }  
+        else {
+            my ($first,$last) = split /[\s\,\.\:\-]+/,$contignmbr;
+            $constraints = "(contig_id >= $first and contig_id <= $last)";
+        }
+    }
+    elsif ($contigitem && !$contignmbr) {
+        $error = "please provide a Contig Number";
+    }
+    elsif (!$contigname) {
+        $error = "please provide a Contig Name or other identifier";
+    }
+    else {
+        $page->patience(4);
+        $contigname .= "\%" if ($wildcard == 1);
+        $contigname = "\%$contigname\%" if ($wildcard == 2);
+        $mask = sprintf("%04d",$mask) if (length($mask) < 4);
+        my %options = (mask => "$mask", returnIds => 1, limit => $limit);
+        $hashes = $creader->findContigByAlias($contigname,\%options);
+        my $long = 0; 
+        $long = 1 if (ref($hashes) eq 'ARRAY' && @$hashes == 1);
+        $hashes = $creader->getContigHashById($hashes,0,$long);
+        $ignore = 1;
+    }
+
+    if (!$error && !$ignore) {
+# search on constraints using findContigByQuery
+        $constraints .= " limit $limit" if $limit;
+        if ($hashes = $creader->findContigByQuery($constraints)) {
+# returns always an array; replace each array element by the corresponding contig hash
+            my $long = 0; 
+            $long = 1 if (ref($hashes) eq 'ARRAY' && @$hashes == 1);
+            $hashes = $creader->getContigHashById($hashes,0,$long);
+        }
+        else {
+            $error = "Invalid query : $CONTIGS->{qerror}";
+        }
+    }
+
+# get header
+
+    my $number = 0;
+    if (!$error) {
+        $number = @$hashes;
+        $error = "No contigs found" if !$number;
+    }
+    $page->frameborder(100,5,'white',10);
+    $page->partition(2);
+    $page->sectionheader("ARCTURUS assembly tracking database query on $database.CONTIGS"); 
+    $page->partition(1);
+    $page->sectionheader("$number RESULTS",4,0) if ($number != 1);
+      
+    if ($error) {
+        $page->errorbox($error);
+    } 
+    elsif ($number == 1) {
+        $page->add($creader->listContigHash($hashes->[0]),0,0);
+    } 
+    else {
+# compose selection table
+        my $table = "<TABLE CELLPADDING=1 BORDER=1>";
+        $table .= "<TR><TH>contig_id</TH><TH>contigname</TH><TH>alias</TH><TH>gen</TH>";
+        $table .= "<TH>reads</TH><TH>length</TH><TH>cover</TH></TR>";
+        foreach my $contighash (@$hashes) {
+            my $contig_id  = $contighash->{contig_id};
+            my $anchor  =  "$arc_cgi_dir/query/selectcontig";
+            $anchor .= "\?database=$database\&contigitem=1\&contignmbr=$contig_id";
+            $table .= "<TR><TD><A href=\"$anchor\" bgcolor=\"lightblue\">$contig_id</A></TD>";
+            $table .= "<TD>$contighash->{contigname}</TD>";
+            $table .= "<TD>$contighash->{aliasname}</TD>";
+            $table .= "<TD align=right>$contighash->{generation}</TD>";
+            $table .= "<TD>$contighash->{nreads}</TD>";
+            $table .= "<TD>$contighash->{length}</TD>";
+            $table .= "<TD>$contighash->{cover}</TD>";
+            $table .= "</TR>";
+        }
+        $table .= "</TABLE>";
+        $page->add($table,0,0);
+    }
+}
+
+elsif ($action eq "listpending") {
+$cgi->PrintVariables(1);
+}
 
 # list a selected table entry using htmlEditRecord in listing mode
 
@@ -723,8 +855,8 @@ elsif ($action eq "listentry") {
     $page->sectionheader("ARCTURUS assembly tracking database \"$database\"",3,0);
     $page->partition(1);
 
-    my $column = $cgi->parameter('column');
-    my $cvalue = $cgi->parameter('value');
+    my $column = $GateKeeper->lookup('column');
+    my $cvalue = $GateKeeper->lookup('value');
     $page->sectionheader("$name entry for $column = $cvalue",4,0);
 
     my $mask = '1'; #default
@@ -787,27 +919,37 @@ sub CONTIGS_form {
 
     my $SM = "<small>"; my $sm = "</small>";
 
-    my $queryform = "<H4>Specify either a name or search string or a Contig number";
+    my $queryform = "<H4>Specify either a name or search string or a Contig number ";
     $queryform .= "or define selection constraints as in: 'select contigs where &lt constraints &gt'</H4>";
     $queryform .= "<TABLE><TR>";
-    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='0' checked></TD>";
-    $queryform .=  "<TD>${SM}READ NAME$sm : </TD>";
-    $queryform .=  "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='cntgname' value='' width=24>$sm</TD>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='contigitem' value='0' checked></TD>";
+    $queryform .=  "<TD>${SM}NAME$sm </TD>";
+    $queryform .=  "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='contigname' value='' width=24>$sm</TD>";
     $queryform .= "</TR><TR>";
-    $queryform .= "<TD>&nbsp</TD><TH>type of match :</TH>";
-    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='0'></TD>";
+    $queryform .= "<TD>&nbsp</TD><TH align=left>search in </TH>";
+    $queryform .= "<TD><INPUT type='checkbox' name='searchitem' value='1000' checked></TD>";
+    $queryform .= "<TD> contigs </TD>";
+    $queryform .= "<TD><INPUT type='checkbox' name='searchitem' value='0100'></TD>";
+    $queryform .= "<TD> reads </TD>";
+    $queryform .= "<TD><INPUT type='checkbox' name='searchitem' value='0010'></TD>";
+    $queryform .= "<TD> clone </TD>";
+    $queryform .= "<TD><INPUT type='checkbox' name='searchitem' value='0001'></TD>";
+    $queryform .= "<TD> tags </TD>";
+    $queryform .= "</TR><TR>";
+    $queryform .= "<TD>&nbsp</TD><TH align=left>type of match </TH>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='0' checked></TD>";
     $queryform .= "<TD> exact </TD>";
-    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='1' checked></TD>";
+    $queryform .= "<TD><INPUT type='radio' name='wildcard' value='1'></TD>";
     $queryform .= "<TD> begin </TD>";
     $queryform .= "<TD><INPUT type='radio' name='wildcard' value='2'></TD>";
     $queryform .= "<TD> substring </TD>";
     $queryform .= "</TR><TR>";
-    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='1'></TD>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='contigitem' value='1'></TD>";
     $queryform .= "<TD>${SM}NUMBER$sm</TD>";
-    $queryform .= "<TD COLSPAN=7>${SM}<INPUT name='cntgnmbr' value='' width=24>$sm</TD>";
+    $queryform .= "<TD COLSPAN=7>${SM}<INPUT name='contignmbr' value='' width=24>$sm</TD>";
     $queryform .= "</TR><TD>&nbsp</TD><TR>";
     $queryform .= "</TR><TR>";
-    $queryform .= "<TD align=left width=20><INPUT type='radio' name='cntgitem' value='2'></TD>";
+    $queryform .= "<TD align=left width=20><INPUT type='radio' name='contigitem' value='2'></TD>";
     $queryform .= "<TD>${SM}CONSTRAINTS$sm</TD>";
     $queryform .= "<TD COLSPAN=7>${SM}<INPUT type='textfield' name='querytxt' value='' width=24 maxlength=64>$sm</TD>";
     $queryform .= "</TR><TR>";

@@ -8,7 +8,10 @@
 
 use strict;
 
-use GateKeeper; 
+use GateKeeper;
+
+use ReadMapper;
+use ContigBuilder;
 
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
@@ -46,6 +49,8 @@ my $thisScript = $GateKeeper->currentScript;
 
 my $fnt = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
 
+################################# PAIR FINDING ###############################
+
 if ($action eq 'pairstest') {
 # display in standard Arcturus GUI
     $page->space(2);
@@ -73,6 +78,8 @@ if ($action eq 'pairstest') {
     $form =~ s/\>([^\&]+)\</>$fnt$1$eft</g;
     $page->add($form);
 }
+
+################################### HARMONIZING ###############################
 
 elsif ($action eq 'harmonize') {
 
@@ -213,6 +220,8 @@ elsif ($action eq 'harmonize') {
     }
 }
 
+################################## GENERAL EDIT FORM #################################
+
 elsif ($action eq 'editor') {
 
     $page->space(2);
@@ -240,12 +249,17 @@ elsif ($action eq 'editor') {
     $link = "$arc_cgi_dir/new/newupdate/arcturus/vectors".$session;
     $form .= "<tr><td $lcolour><a href=\"$link\" $target>  Vectors  </A></td></tr>";
 
-# contigs?
+# actions on an assembly 
 
-    $session = $cgi->postToGet(1,'session','database');
-    if ($GateKeeper->authorize(896)) { # require bit 7,8,9
+    if ($database ne 'arcturus' && $GateKeeper->authorize(896,{noGUI => 1})) { # require bit 7,8,9
+
+        $session = $cgi->postToGet(1,'session','database');
+        $session .= "\&noGUI=1";
         $link = "$thisScript/undoassembly".$session;
         $form .= "<tr><td $lcolour><a href=\"$link\" $target> Delete Last Assembly </A></td></tr>";
+
+        $link = "$thisScript/upgradeassembly".$session;
+        $form .= "<tr><td $lcolour><a href=\"$link\" $target> Upgrade Last Assembly </A></td></tr>";
     }
 
     $form .= "</table>";
@@ -254,44 +268,113 @@ elsif ($action eq 'editor') {
       
 }
 
-# the following sections deal with removal of assembly or reads
+##################################### ASSEMBLY ###################################
 
-elsif ($action eq 'undoassembly') {
-# remove generation 0 only, if any
+elsif ($action eq 'upgradeassembly' || $action eq 'undoassembly') {
+# upgrade generations by 1 or delete the latest assembly, but only if a generation 0 exists;
     $page->space(2);
     $page->add('ARCTURUS database updates',0,0,'size=+2');
     $page->space(2);
-    $page->add('Delete (selected contigs from) the last generation',0,0,'size=+1');
+    $page->add('Upgrade latest assembly to generation 1',0,0,'size=+1') if ($action =~ /up/);
+    $page->add('Delete latest assembly',0,0,'size=+1') if ($action =~ /undo/);
     $page->space(2);
 
-    if (!$option || $option eq 'getform') {
-         
-        my $field = "size=+1 color='FFCA88'"; # 'FFCA88'
-    }
+    my $field = "size=+1 color='blue'";
 
-    elsif ($option eq 'prepare') { 
- 
-        if (!$GateKeeper->authorize(384)) {
-            $page->errorbox($GateKeeper->{error});         
+    my $R2C = $organisms->spawn('READS2CONTIG',$database);
+    my $ASSEMBLY = $R2C->spawn('ASSEMBLY');
+
+    if (!$option || $option eq 'prepare') {
+
+        $page->patience(3); # flush message
+        my $cids = $R2C->associate('distinct contig_id',0,'generation',{returnScalar => 0});
+        if (my $contigs = @$cids) {
+            $page->form("$thisScript/$action/process");
+            my $hashes = $R2C->associate('distinct assembly',0,'generation',{returnScalar => 0});
+# push @$hashes, 0;
+            my $assembly = @$hashes;
+            $page->message("Generation 0 contains $contigs contigs of $assembly assemblies",0,$field);
+            if ($assembly > 1) {
+                my $where = "assembly in (".join(',',@$hashes).")";
+                my $options = $ASSEMBLY->htmlMaskedOptions('assemblyname','where',$where,'assemblyname',0,0);
+                $page->space(1);
+                $page->add("Select an assembly and submit",0,0,'size=+1');
+                $page->space(1);
+                $page->add($options,0,0);              
+            }
+            else {
+                $page->hidden('assemblynmbr',$hashes->[0]);
+            }
+            $page->space(1);
+            my $message = "Be sure what you do! This operation will irreversibly change ";
+            $message .= "database $database";
+            $page->message($message,'FFCA88','size=+1');
+            $page->space(1);
+            $page->message("confirm to continue",0,'size=+1');
+            $page->space(1);
+            $page->confirmbuttonbar(0,0,'white');
+            $page->ingestCGI();
         }
-        elsif (my $target = $GateKeeper->lookup('target')) {
+        else {
+            $page->message("There is no generation 0 to act on",0,$field);
         }
     }
-
     elsif ($option eq 'process') {
+        my $assembly = $GateKeeper->lookup('assemblynmbr');
+        if (my $assemblyname = $GateKeeper->lookup('assemblyname')) {
+	    $assembly = $ASSEMBLY->associate('assembly',$assemblyname,'assemblyname',{traceQuery=>0});
+        }
 
-        my $confirm = $GateKeeper->lookup('confirm');
+        my $error = '';
+        if (!$R2C->probe('contig_id',undef,"generation=0 and assembly=$assembly")) {
+            $error = "There is no generation 0 to act on";
+        }
+        elsif ($assembly && $GateKeeper->authorize(896,{noGUI => 1})) {
+# okay, do your thing
+            $page->patience(2);
+            my $confirm = $GateKeeper->lookup('confirm');
+            if ($action eq 'undoassembly' && $confirm eq 'CONFIRM') { 
 
-        if (!$confirm || $confirm ne 'CONFIRM') {
-            $page->errorbox("This function is invoked in an incorrect manner");
+$cgi->PrintVariables(1); # either assemblyname or assemblynumber is given
+                $page->add("UNDO assembly to be developed assembly $assembly");
+                my $ContigBuilder = ContigBuilder->init($R2C,1); # no preload
+                if (my $estatus = $ContigBuilder->testAssembly($assembly)) {
+                    $page->message("BLOCKED : $estatus",'FFCA88','size=+1');
+                }
+                elsif (my $report = $ContigBuilder->unbuild($assembly)) {
+                    $page->message("FAILED : $report",'FFCA88','size=+1');
+                }
+                else {
+                    $page->message("DONE",'lightgreen','size=+1');
+		}
+            }
+            elsif ($action eq 'upgradeassembly' && $confirm eq 'CONFIRM') {
+                my $ContigBuilder = ContigBuilder->init($R2C,1); # no preload
+                if (my $estatus = $ContigBuilder->testAssembly($assembly)) {
+                    $page->message("BLOCKED : $estatus",'FFCA88','size=+1');
+                }
+                elsif (my $report = $ContigBuilder->promote($assembly)) {
+                    $page->message("FAILED : $report",'FFCA88','size=+1');
+                }
+                else {
+                    $page->message("DONE",'lightgreen','size=+1');
+		}
+            }
+            else {
+                $error = "Invalid usage of this script!";
+            }
         }
-        elsif (!$GateKeeper->authorize(2048)) {
-            $page->errorbox($GateKeeper->{error});
+        elsif ($assembly) {
+            $error = $GateKeeper->{error};
         }
-        elsif (my $target = $GateKeeper->lookup('target')) {
+        else {
+            $error = "Could not identify the assembly";
         }
+        $page->errorbox("Operation refused: $error") if $error;
     }
 }
+
+################################################################################
 
 # $organisms->historyUpdate($userid,0,0);
 
@@ -300,5 +383,15 @@ $page->flush();
 $GateKeeper->disconnect;
 
 exit 0;
+
+
+
+
+
+
+
+
+
+
 
 

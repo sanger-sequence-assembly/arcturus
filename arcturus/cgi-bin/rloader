@@ -611,7 +611,7 @@ if ($logON || !$origin) {
         if ($fnfilter eq 'HARVEST') {
             $PENDING->setMultiLineInsert(200);
             my $loaded = 0;
-            my $np = $PENDING->count(0,0);
+            my $np = $PENDING->count(0);
             foreach my $read (@$newfiles) {
                 my @parts = split '/',$read;
                 $read = $parts[$#parts];
@@ -621,7 +621,7 @@ if ($logON || !$origin) {
                 $loaded++;
             }
             $PENDING->flush();
-            my $npends = $PENDING->count(0,0);
+            my $npends = $PENDING->count(0);
             $np = $npends - $np;
             print "$break $np filenames added to PENDING ($loaded) $break";
 
@@ -990,15 +990,15 @@ $LOADPERRUN =~ s/\W/x/g;
     print STDOUT "${break}Updating counters and closing database$break$break";
 
     foreach my $assemblynumber (keys (%assemblycount)) {
-        my $areads = $RRS2ASS->count("assembly=$assemblynumber",0);
+        my $areads = $RRS2ASS->count("assembly=$assemblynumber");
         print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads $userid$break";
         $assembly->update('reads',$areads,'assemblyname',$assemblyname);
         $assembly->signature($userid,'assemblyname',$assemblyname);
     }
 
-    my $nreads = $READS->count(0,0);
+    my $nreads = $READS->count(0);
     $organisms->update('reads_loaded' ,$nreads,'dbasename',$database);
-    my $npends = $PENDING->count(0,0);
+    my $npends = $PENDING->count(0);
     $organisms->update('reads_pending',$npends,'dbasename',$database);
     $organisms->signature($userid,'dbasename',$database);
     $GateKeeper->disconnect;

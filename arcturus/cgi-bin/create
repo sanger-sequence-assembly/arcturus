@@ -738,10 +738,11 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
 #       rebuild=3 for re-loading from a data file (by special script)
 
         my $count = 0;
+        my $reinitialize = $GateKeeper->lookup('reinitialize',0);
         if ($rebuild != 2 && $tablename) {
             my $table = $inventory->spawn($tablename,$database,0,0);
             $count = $table->counted if $table; # nr of lines or counts in counter table
-            $rebuild = 0 if $GateKeeper->lookup('reinitialize',0);
+            $rebuild = 0 if $reinitialize;
         }
 
         my %options = (testSession => 0, makeSession => 0, #noConfirm => 'Continue',
@@ -756,7 +757,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             $error = "Please define all input fields: $cgi->{und_error}";
         }
 # either alter the table
-        elsif ($redefined{$tablename}) {
+        elsif ($redefined{$tablename} && !$reinitialize) {
             $page->space(2);            
             my $message = "Table $tablename will be altered to conform to the current template";
             $page->message($message,$yellow,"size = +1",1);
@@ -829,7 +830,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                     $page->message("Be very sure before you continue!",$purple,'size = +1');
                 }
                 elsif ($count == 0) {
-# an empty table can always be rebuilt
+# an empty table can always be replaced
 		    $page->message("Table $database.$tablename is empty",$yellow,'size = +1');
                 }
                 $page->space(1);
@@ -1080,7 +1081,7 @@ sub addEntry {
     if (my $number = $organisms->associate('number',$dbasename,'dbasename')) {
 # add entry to assemblies using default
         if ($assembly->newrow('assemblyname','BLOB')) {
-            $assembly->update('organism',$number);
+            $assembly->update('organism',$number); # ??
             $assembly->update('creator' ,$userid);
             $assembly->update('userid'  ,$userid);
             $assembly->update('updated' ,$timestamp);

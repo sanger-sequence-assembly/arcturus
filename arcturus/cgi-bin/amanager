@@ -420,7 +420,7 @@ elsif ($action eq 'process') {
                         else {
                             $status = $organism;
                             $error .= "Failed to get organism database number\n" if (!$organism);
-                            $status = 0 if ($status && !$assembly->update('organism',$organism));
+                            $status = 0 if ($status && !$assembly->update('organism',$organism)); # ??? required
                             $status = 0 if ($status && !$assembly->update('created',$timestamp));
                             $status = 0 if ($status && !$assembly->update('creator',$userid));
 			    $status = 0 if ($status && !$assembly->update('updated',$timestamp));

@@ -70,7 +70,7 @@ else {
     }
     elsif ($GateKeeper->instance) {
         my $count = $organisms->count();
-        my $text = "There are $count Organism databases on this server";
+        my $text = "There are $count Organism databases listed on this server";
         $text =~ s/are/is/ if ($count <= 1);
         $text =~ s/ses/se/ if ($count <= 1);
         $text =~ s/0/no/   if !$count;

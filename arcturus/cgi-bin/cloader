@@ -338,7 +338,7 @@ die "No assembly defined" if !$assemblynmbr;
 
     if ($update) {
 
-        $organisms->packAttribute ($database,,'dbasename','attributes','anlast',$assemblyname);
+        $organisms->packAttribute ($database,'dbasename','attributes','anlast',$assemblyname);
 
 	print "assembly $ASSEMBLY<br>";
         $ASSEMBLY->packAttribute ($assemblyname,'assemblyname','attributes','CDD',$CDD);
@@ -487,70 +487,66 @@ die "No assembly defined" if !$assemblynmbr;
     $ContigBuilder->setOwnership($assemblynmbr,$userid);
     $ContigBuilder->setTestModes($TEST,$REPAIR);
 
-# build the READS and PENDING caches
+    if (my $estatus = $ContigBuilder->testAssembly($assemblynmbr)) {
 
-#    print "Building READS and PENDING caches $brtag";
-#    $PENDING->cacheBuild("select * from <self>",{list=>0,indexKey=>'readname'});
-#    $READS->cacheBuild("select read_id,readname,clone from <self>",{list=>0,indexKey=>'readname'});
-
-# okay, parse the specified CAF file; this builds all contigs and readmappers in memory
-
-    my $truncated = $ContigBuilder->cafFileParser ($CFN,$CPR,$CNF,$dbcontigs,$dbreads,$list);
-
-    if ($truncated > 1) {
-        print "Can't open CAF file $CFN $brtag";
     }
     else {
 
+# okay, parse the specified CAF file; this builds all contigs and readmappers in memory
+
+        my $truncated = $ContigBuilder->cafFileParser ($CFN,$CPR,$CNF,$dbcontigs,$dbreads,$list);
+
+        if ($truncated > 1) {
+            print "Can't open CAF file $CFN $brtag";
+        }
+        else {
+
 # round up all remaining unprocessed but completed contigs
 
-        print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
-        my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced);
-        print "End scanning caf file: contigs left unprocessed=$left $brtag";
+            print "${brtag}FINAL MOPPING UP ...$brtag$brtag";
+# flushing ContigBuilder also flushes ReadMapper and tablehandles R2A, R2C and PENDING
+            my $left = $ContigBuilder->flush(0,$assemblynmbr,$forced);
+            print "End scanning caf file: contigs left unprocessed=$left $brtag";
 
-        my $promote = $GateKeeper->lookup('promote');
-        if (!$CNF && !$left && !$truncated && $promote) {
-# okay, we have had all contigs in this assembly
-            $ContigBuilder->promote;
-        }
-        elsif ($promote) {
-            print "There remain data to be processed on caf file $CFN$brtag";
-        }
+            my $promote = $GateKeeper->lookup('promote');
+            if (!$CNF && !$left && !$truncated && $promote) {
+# okay, we have had all contigs in this assembly: promote new assembly from generation 0 to 1
+                $ContigBuilder->promote($assemblynmbr);
+            }
+            elsif ($promote) {
+                print "There remain data to be processed on caf file $CFN$brtag";
+            }
 
 # my $snapshot = $organisms->snapshot($database); print "$snapshot <br>";
 
-# flush the insert buffered tables
+# update counters in ASSEMBLY table (contigs and reads in latest assembly)
 
-#        $R2A->flush;
-#        $R2C->flush;
-#        $PENDING->flush;
+            my $where = "assembly = $assemblynmbr and generation = 0";
+            if (my $ncontigs = $R2C->probe('contig_id',undef,$where)) {
+# there is a new assembly being built but not yet promoted
+                $ASSEMBLY->update('status','loading','assembly',$assemblynmbr);
+            }
 
-# update counters in ASSEMBLY & ORGANISMS table
+# update counters in ORGANISMS table (ALL contigs and pending reads in database)
 
+            my $ncontigs = $CONTIGS->count(1); 
+            $organisms->update('contigs',$ncontigs,'dbasename',$database);
+            my $npending = $PENDING->count(1);  
+            $organisms->update('reads_pending',$npending,'dbasename',$database);
 
-        $CONTIGS->autoVivify($database,0.5); # install links on opened tables only
-        my $ncontiga = $CONTIGS->count("assembly=$assemblynmbr",1); #print "$CONTIGS->{lastQuery}<br>";
-        $ASSEMBLY->update('contigs',$ncontiga,'assembly',$assemblynmbr);
-        my $nreadsa  = $R2A->count("assembly=$assemblynmbr");
-        $ASSEMBLY->update('reads',$nreadsa,'assembly',$assemblynmbr);
-
-        my $ncontigs = $CONTIGS->count(1); 
-        $organisms->update('contigs',$ncontigs,'dbasename',$database);
-        my $npending = $PENDING->count(1);  
-        $organisms->update('reads_pending',$npending,'dbasename',$database);
-
-        print STDOUT "Time stamping modified table $brtag";
-        $organisms->historyUpdate($userid,0,0);
+            print STDOUT "Time stamping modified table $brtag";
+            $organisms->historyUpdate($userid,0,0);
+	}
     }
 
-# to be added: update of defaults (which ones)
+# to be added: update of defaults (? any ?which ones)
 
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-    my $query  = "select sum(nreads) AS total from <self>";
-    my $shash  = $CONTIGS->query($query);
-    my $scount = $shash->[0]->{total};
-    $scount = 0 if !$scount;
+my $query  = "select sum(nreads) AS total from <self>";
+my $shash  = $CONTIGS->query($query);
+my $scount = $shash->[0]->{total};
+$scount = 0 if !$scount;
 
     print STDOUT "Closing database$brtag$brtag";
     $page->flush() if ($cgi);
