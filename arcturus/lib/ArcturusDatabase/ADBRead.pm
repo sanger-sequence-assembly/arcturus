@@ -1401,7 +1401,7 @@ sub putSequenceForRead {
 # insert align to SCF data , if more than one record
 
     my $alignToSCF = $read->getAlignToTrace();
-    if (scalar(@$alignToSCF) > 1) {
+    if (defined($alignToSCF) && scalar(@$alignToSCF) > 1) {
         $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
 	$sth = $dbh->prepare_cached($query);
 
