@@ -234,6 +234,8 @@ sub qualityEncoder {
 
     $status = 0;
 
+    $string =~ s/^\s+|\s+$//g;
+
     return &numbersEncoder($string)  if ($method == 1);
  
     return $self->huffmanEncoder($string)  if ($method == 2);
