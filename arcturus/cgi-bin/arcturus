@@ -74,7 +74,7 @@ else {
     }
 
     $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
-    $page->space;
+#    $page->space;
     $page->sectionheader("Welcome to the ARCTURUS assembly-tracking database",4,0);
 
     my $font = "size=4 face='sans-serif'";
@@ -92,7 +92,7 @@ else {
         $text =~ s/are/is/ if ($count <= 1);
         $text =~ s/ses/se/ if ($count <= 1);
         $text =~ s/0/no/   if !$count;
-        $page->space(1);
+        $page->space(1) if ($count <= 7);
         $page->add($text,0,0,$font);
         $page->space(1);
 
@@ -101,14 +101,17 @@ else {
         $database   = $cgi->parameter('database') || 'arcturus';
 
         if ($count && $database ne 'arcturus') {
-            my %options = (mask=>'0110000001111000001',
+            my %options = (mask=>'0310000001111000001', linkItem=>'onItemName',
                            headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
             my $table = $organisms->htmlTable(\%options,'dbasename',$database);
+            $table =~ s/LINKTARGET/target=\"querywindow\"/;
+            $table =~ s?ITEMLINK?query/listentry/arcturus.ORGANISMS?;
+            $table =~ s/dbasename\=/column=dbasename\&value=/;
             $page->add($table);
 # possibly other info
         }
         elsif ($count) {
-            my %options = (mask=>'0310000001111000001',linkItem=>'onItemName', linkTarget=>0,
+            my %options = (mask=>'0310000001111000001', linkItem=>'onItemName', linkTarget=>0,
                            headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
             my $table = $organisms->htmlTable(\%options);
 
@@ -118,7 +121,7 @@ else {
             $table =~ s/ITEMLINK/$thisScript/g; # replace placeholder
             $table =~ s/dbasename/database/g;
             $page->add($table);
-            $page->space;
+            $page->space if ($count <= 7);
             $page->sectionheader("Select a database or a function",4,0);
         }
         else {

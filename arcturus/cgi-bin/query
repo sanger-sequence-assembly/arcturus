@@ -405,6 +405,7 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     $dbtable->build(1,'cpkbstart')        if ($tablename =~ /MAP/);
     $dbtable->build(1,'assembly,tagname') if ($tablename =~ /STS/);
     $dbtable->build(1,'chemtype')         if ($tablename =~ /CHEMTYPES/);
+    $dbtable->build(1,'strands,strand')   if ($tablename =~ /STRANDS/);
     $dbtable->build(1,'timebegin DESC')   if ($tablename =~ /SESSIONS/);
     $dbtable->build(1,'chromosome')       if ($tablename =~ /ASSEM/);
     $dbtable->build(1,'tablename,date')   if ($tablename =~ /HISTORY$/);
@@ -864,15 +865,16 @@ elsif ($action eq "listentry") {
     $dbtable->compressSeed('ACGTN ') if ($name =~ /TAGS/);
 #    $dbtable->autoVivify() if ($name eq 'READS');
 
-    $page->frameborder(100,25,'white',10);
+    $page->frameborder(100,15,'white',10);
     $page->partition(2);
-    $page->sectionheader("ARCTURUS assembly tracking database \"$database\"",3,0);
+    $page->sectionheader("ARCTURUS assembly tracking database \"$database\"",4,0);
     $page->partition(1);
 
     my $column = $GateKeeper->lookup('column');
     my $cvalue = $GateKeeper->lookup('value');
     my $extra  = $GateKeeper->lookup('extra') || 0;
-    $page->sectionheader("$name entry for $column = $cvalue",4,0);
+    $page->add("$name entry for $column = $cvalue",0,0,'size=+1');
+    $page->space(1);
 
     my $mask = '1'; #default
     $mask = '11101111'      if ($tablename =~ /STSTAG/);

@@ -36,7 +36,7 @@ my $arc_tmp_dir = $GateKeeper->lookup("ARC_TMP_DIR");
 
 $GateKeeper->focus({useDatabase => 'arcturus', dieOnError => 1});
 
-my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates",{doTransport => 0});
+my $page = $GateKeeper->GUI("ARCTURUS database maintenance and updates for $database",{doTransport => 0});
 my $font = "size=4 face='sans-serif'";
 
 my %options = (headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
@@ -54,7 +54,7 @@ my $fnt = "<font size=4 face='sans-serif'>"; my $eft = "</font>";
 if ($action eq 'pairstest') {
 # display in standard Arcturus GUI
     $page->space(2);
-    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->add("ARCTURUS database consistence tests and updates for $database",0,0,'size=+1');
     $page->space(4);
     my $session = $cgi->postToGet(1,'session','database');
 
@@ -84,7 +84,7 @@ if ($action eq 'pairstest') {
 elsif ($action eq 'harmonize') {
 
     $page->space(2);
-    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+1');
     $page->space(2);
     $page->add('Synchronising tables of common databases',0,0,'size=+1');
     $page->space(2);
@@ -225,7 +225,7 @@ elsif ($action eq 'harmonize') {
 elsif ($action eq 'editor') {
 
     $page->space(2);
-    $page->add('ARCTURUS database consistence tests and updates',0,0,'size=+2');
+    $page->add("ARCTURUS database consistence tests and updates for $database",0,0,'size=+1');
     $page->space(2);
     $page->add('Select an Editor option',0,0,'size=+1 color="lightsteelblue"');
     $page->space(2);
@@ -273,7 +273,7 @@ elsif ($action eq 'editor') {
 elsif ($action eq 'upgradeassembly' || $action eq 'undoassembly') {
 # upgrade generations by 1 or delete the latest assembly, but only if a generation 0 exists;
     $page->space(2);
-    $page->add('ARCTURUS database updates',0,0,'size=+2');
+    $page->add("ARCTURUS database updates for $database",0,0,'size=+1');
     $page->space(2);
     $page->add('Upgrade latest assembly to generation 1',0,0,'size=+1') if ($action =~ /up/);
     $page->add('Delete latest assembly',0,0,'size=+1') if ($action =~ /undo/);

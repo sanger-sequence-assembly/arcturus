@@ -124,7 +124,7 @@ my $orange = 'FFCA88';
 # MAIN
 ##############################################################################
 
-my $font = "size=6 face='sans-serif'"; my $efnt = "</font>";
+my $font = "size=+1 face='sans-serif'"; my $efnt = "</font>";
 
 my $confirm = $GateKeeper->lookup('confirm',0) || '';
     
@@ -476,7 +476,8 @@ elsif ($action eq 'organism') {
                         my $report = "<table>";
                         foreach my $table (sort @$created) {
                             $report .= "<TR><TD ALIGN=LEFT>$table</TD>";
-                            if ($organisms->query("show tables from $dbasename like \"$table\"")) {
+                            my $create = $organisms->query("show tables from $dbasename like \"$table\"");
+			    if ($create && $create != 0) {
                                 $report .= "<TD BGCOLOR=$yellow>created</TD>";
                                 $diagnosis = "INCOMPLETE"; # for possible error message at end
                                 $count++;
@@ -676,7 +677,7 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
                     $preset = $altered[0];
                 }
                 my $where = "domain = 'o' ";
-                my $user = $GateKeeper->{USER};
+                my $user = $GateKeeper->{USER} || '';
                 $where .= "and tablename not like '%HISTORY'" if ($user ne 'oper');
                 my $choices = $inventory->htmlMaskedOptions('tablename','where',$where,'tablename',0,0,$preset);
                 $choices =~ s/DBHISTORY/$historytable/g;
@@ -721,12 +722,13 @@ elsif ($action eq 'existing' && $database ne 'arcturus') {
             my $user = $GateKeeper->{USER};
             my $created = &create_organism($dbh,$database,$tablename,$user,0);
             my $counted = @$created; # must equal 1
-            if ($counted = 1 && $organisms->query("show tables from $database like '$tablename'")) {
+            my $tested  = $organisms->query("show tables from $database like '$tablename'");
+            if ($counted = 1 && $tested != 0) {
                 $report .= "... DONE";
                 $page->message($report,'white','size = +1');
             }
             else {
-                $report .= "... FAILED (count = $counted)";
+                $report .= "... FAILED";
                 $page->message($report,$orange,'size = +1');
                 $page->space(1);
                 $page->message("Please contact $db_manager",'white',$font);
