@@ -22,7 +22,7 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = new GateKeeper('mysql',0,'insist on CGI');
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI=>1 , diagnosticsOn=>1});
 
 my $cgi        = $GateKeeper->cgiHandle(1);
 

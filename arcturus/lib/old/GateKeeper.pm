@@ -49,17 +49,32 @@ sub new {
 
     bless ($self, $class);
 
+# get options
+
+    my %options = (eraiseMySQL=>0 , insistOnCgi=>0, diagnosticsOn=>0);
+    if ($eraise && ref($eraise) eq 'HASH') {
+        &importOptions(\%options,$eraise);
+    }
+    else {
+        $options{eraiseMySQL} = $eraise if $eraise;
+        $options{insistOnCGI} = $usecgi if $usecgi;
+    }
+
+# open the CGI input handler if in CGI mode
+
+    &cginput(0,$self,$options{insistOnCGI});
+
+# produce return string for diagnostic purposes, if specified
+
+    &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
+
 # open and parse the configuration file
 
     &configure(0,$self);
 
-# open the CGI input handler if in CGI mode
-
-    &cginput(0,$self,$usecgi);
-
 # open the database
 
-    &opendb_MySQL(0,$self,$eraise) if ($engine && $engine =~ /^mysql$/i);
+    &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
 
 #    &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
