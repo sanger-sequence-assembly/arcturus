@@ -107,6 +107,7 @@ if (!$cgi) {
     if ($ASSEMBLY && $ASSEMBLY->count() > 0) {
         $assemblynmbr = $ASSEMBLY->associate('assembly',$assemblyname,'assemblyname');
         if ($assemblynmbr) {
+	    print "Assembly $assemblyname identified as $assemblynmbr \n";
             my $attributes = $ASSEMBLY->unpackAttributes($assemblyname,'assemblyname');
             $CFN = $attributes->{CFN};
         }
@@ -114,6 +115,8 @@ if (!$cgi) {
             $GateKeeper->dropDead("specify a valid assemblyname (instead of '$assemblyname')");
         }
         else {
+            my $qstatus = $ASSEMBLY->qstatus;
+	    print "Assembly not found: $qstatus \n";
             $CFN  = $ARGV[0];
             $assemblynmbr = 1;
         }
