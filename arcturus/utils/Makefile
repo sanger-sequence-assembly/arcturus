@@ -13,3 +13,6 @@ LDLIBS = -lXm -lXmu -lXt -lX11 -lmysqlclient -lm
 
 mysqlping: mysqlping.o
 	$(CC) -o $@ $(LIBDIRS) mysqlping.o $(LDLIBS)
+
+clean:
+	/bin/rm -f mysqlping mysqlping.o
