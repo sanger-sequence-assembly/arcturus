@@ -896,8 +896,6 @@ sub GUI {
 
 # get other servers, either on the same host or all of them
 
-    print "GateKeeper GUI stage 1 $debug" if $debug;
-
     my $full = 1; # include all servers
     my @url = split /\:|\./,$self->{server};
     my $hosts = $self->{config}->get('mysql_hosts','insist unique array');
@@ -918,8 +916,6 @@ sub GUI {
     }
 
 # get other databases
-
-    print "GateKeeper GUI stage 2 $debug" if $debug;
 
     undef my @databases;
     undef my @offliners;
@@ -943,8 +939,6 @@ sub GUI {
 
 # okay, now compose the page
 
-    print "GateKeeper GUI stage 3 partition 1 $debug" if $debug;
-
     $self->cgiHeader(2); # in case not yet done
     my $page = $cgi->openPage("ARCTURUS $title");
     my $width = '10%';
@@ -957,8 +951,6 @@ sub GUI {
     $page->{layout} =~ s/SANGERLOGO/<IMG SRC="\/icons\/helix.gif $imageformat">/;
 
 # compose the top bar (partition 2)
-
-    print "GateKeeper GUI stage 3 partition 2 $debug" if $debug;
 
     my $database=$cgi->parameter('database') || $cgi->parameter('organism') || 'arcturus';
 
@@ -975,8 +967,6 @@ sub GUI {
 
 # compose the left-side link table  (dev/prod database functions; partitions 3,5)
 # transfer to same script on different server; requires to omit database specification
-
-    print "GateKeeper GUI stage 3 partition 3 $debug" if $debug;
 
     $page->partition(3);
     push @exclude, 'database';
@@ -1004,15 +994,13 @@ sub GUI {
 
 # compose the database table for chosing a different database
 
-    print "GateKeeper GUI stage 3 partition 5 $debug" if $debug;
-
     $page->partition(5);
     $table = "<table $tablelayout>";
     if (@databases) {
         my $current = $cgi->parameter('database');
         $table .= "<tr><th bgcolor='$purp' width=100%> Databases </th></tr>";
         foreach my $database (sort @databases) {
-            my $target = $script;
+           my $target = $script;
             $target =~ s/(database|organism|dbasename)\=\w+/$1=$database/;
             $target .= "?database=$database" if ($target !~ /\b$database\b/);
             my $link = $database;
@@ -1022,15 +1010,13 @@ sub GUI {
     }
     $table .= "</table>";
     $page->add($table); 
-    $page->space(4-@databases);
+    $page->space(4-@databases); # a minimum of 4 spaces 
 
 # the other table require the input database specification  
 
     my @include = ('database','organism','dbasename','session');
 
 # compose the 'create' table: include assemblies and projects only if database is defined
-
-    print "GateKeeper GUI stage 3 partition 7 $debug" if $debug;
 
     $page->partition(7);
     $table = "<table $tablelayout>";
@@ -1051,8 +1037,6 @@ sub GUI {
 
 # compose the update table
 
-    print "GateKeeper GUI stage 3 partition 6 $debug" if $debug;
-
     $page->partition(6);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Assign </th></tr>";
@@ -1071,8 +1055,6 @@ sub GUI {
 
     my $target = &currentHost($self).&currentPort($self);
     my $target = "target=\"${target}input\"";
-
-    print "GateKeeper GUI stage 3 partition 4 $debug" if $debug;
 
     $page->partition(4);
     $table = "<table $tablelayout>";
@@ -1101,8 +1083,6 @@ sub GUI {
 
 # compose the common 
 
-     print "GateKeeper GUI stage 3 partition 8 $debug" if $debug;
-
     $page->partition(8);
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> Edit Info </th></tr>";
@@ -1124,8 +1104,6 @@ sub GUI {
     $page->add($table); 
 
 # add the query options
-  
-    print "GateKeeper GUI stage 3 partition 9 $debug" if $debug;
 
     $page->partition(9);
     $table = "<table $tablelayout>";
@@ -1140,8 +1118,6 @@ sub GUI {
     $page->add($table); 
 
 # add the help and exit buttons
-
-    print "GateKeeper GUI stage 3 partition 10 $debug" if $debug;
 
     $page->partition(10);
     $table = "<table $tablelayout>";
@@ -1161,7 +1137,6 @@ sub GUI {
 
     $page->partition(1);
     $page->center(1);
-#    $page->add("script $self->{Script}",0,0);
 
     print "GateKeeper GUI exit $debug" if $debug;
 

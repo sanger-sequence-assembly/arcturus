@@ -330,7 +330,7 @@ sub space {
     my $multi = shift;
 
     $multi = 1 if !defined($multi);
-    while ($multi--) {
+    while ($multi-- > 0) {
         add ($self,'<BR>');
     }
 }
