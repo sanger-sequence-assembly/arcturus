@@ -99,7 +99,7 @@ while (my ($parentid, $cstart, $cfinish, $direction) = $stmt->fetchrow_array()) 
 
     &displaySegments(\@sortedsegments, $logfh);
 
-    $segments = &mergeSegments(\@sortedsegments, 'Forward', $sense, $loose);
+    $segments = &mergeContigSegments(\@sortedsegments, $sense, $loose);
 
     print $logfh "\n\nMERGED\n\n";
 
@@ -282,6 +282,35 @@ sub processSegments {
     }
 
     return $segments;
+}
+
+sub mergeContigSegments {
+    my $segments = shift;
+    my $newdirection = shift;
+    my $loose = shift || 0;
+
+    my $nsegs = scalar(@{$segments});
+
+    my $curseg = 0;
+
+    for (my $nextseg = $curseg + 1; $nextseg < $nsegs; $nextseg++) {
+	if ($segments->[$curseg]->[4] == $segments->[$nextseg]->[4]) {
+	    if ($segments->[$curseg]->[1] < $segments->[$nextseg]->[1]) {
+		$segments->[$curseg] = &doMerge($segments->[$curseg], $segments->[$nextseg], 'Forward', $newdirection);
+	    }
+	} else {
+	    $curseg++;
+	    $segments->[$curseg] = $segments->[$nextseg];
+	}
+    }
+
+    my $newsegs = [];
+
+    for ($nsegs = 0; $nsegs <= $curseg; $nsegs++) {
+	push @{$newsegs}, $segments->[$nsegs];
+    }
+
+    return $newsegs;
 }
 
 sub mergeSegments {
