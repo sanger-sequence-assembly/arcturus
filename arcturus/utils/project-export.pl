@@ -15,7 +15,7 @@ use Logging;
 my $organism;
 my $instance;
 my $verbose;
-my $project; # = 20884;
+my $project;
 my $batch;
 my $lock;
 my $padded;
@@ -26,36 +26,35 @@ my $fastafile;
 my $qualityfile;
 
 my $validKeys  = "organism|instance|project|fofn|padded|fasta|"
-               . "caf|FileDNA|FileQTY|out|nolock|batch|verbose|debug|help";
+               . "caf|quality|lock|batch|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(1,"Invalid keyword '$nextword'");
-    }
-
-    $instance   = shift @ARGV  if ($nextword eq '-instance');
+        &showUsage("Invalid keyword '$nextword'");
+    }                                                                           
+    $instance    = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism   = shift @ARGV  if ($nextword eq '-organism');
+    $organism    = shift @ARGV  if ($nextword eq '-organism');
 
-    $project    = shift @ARGV  if ($nextword eq '-project');
+    $project     = shift @ARGV  if ($nextword eq '-project');
 
-    $fofn       = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn        = shift @ARGV  if ($nextword eq '-fofn');
 
-    $verbose    = 1            if ($nextword eq '-verbose');
+    $verbose     = 1            if ($nextword eq '-verbose');
 
-    $verbose    = 2            if ($nextword eq '-debug');
+    $verbose     = 2            if ($nextword eq '-debug');
 
-    $padded     = 1            if ($nextword eq '-padded');
+    $padded      = 1            if ($nextword eq '-padded');
 
-    $fastafile  = shift @ARGV  if ($nextword eq '-fasta');
-    $caffile    = shift @ARGV  if ($nextword eq '-caf');
+    $fastafile   = shift @ARGV  if ($nextword eq '-fasta');
+    $caffile     = shift @ARGV  if ($nextword eq '-caf');
 
-    $qualityfile = shift @ARGV if ($nextword eq '-quality');
+    $qualityfile = shift @ARGV  if ($nextword eq '-quality');
 
-    $lock       = 1            if ($nextword eq '-lock');
+    $lock        = 1            if ($nextword eq '-lock');
 
-    $batch      = 1            if ($nextword eq '-batch');
+    $batch       = 1            if ($nextword eq '-batch');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -78,7 +77,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing CAF or FASTA output file name") unless (defined($fastafile) || defined($caffile));
 
-&showUsage("Missing project ID or name") unless ($project || $fofn);
+&showUsage("Missing project ID or name") unless (defined($project) || $fofn);
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -127,9 +126,9 @@ if (defined($fastafile)) {
 
 # get project(s) to be exported
 
-$project = 0 if (defined($project) && $project eq 'BIN');
-
 my @projects;
+
+$project = 0 if (defined($project) && $project eq 'BIN');
 
 push @projects, $project if defined($project);
  
@@ -151,7 +150,7 @@ foreach my $project (@projects) {
 
     $Project = $adb->getProject(projectname=>$project) if ($project =~ /\D/);
 
-    $logger->info("Project returned: $Project");
+    $logger->info("Project returned: ".($Project|'undef'));
 
     next if (!$Project && $batch); # skip error (possible) message
 
@@ -179,6 +178,7 @@ exit;
 sub showUsage {
     my $code = shift || 0;
 
+    print STDERR "\n";
     print STDERR "Export contigs in project(s) by ID/name or using a fofn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
@@ -186,6 +186,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
     print STDERR "-instance\teither 'prod' or 'dev'\n\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-caf\t\tCAF output file name\n";
     print STDERR "-fasta\t\tFASTA sequence output file name\n";
     print STDERR "\n";
@@ -196,14 +197,20 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
-    print STDERR "-padded\t\t(no value) export contigs in padded format\n";
+    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
     print STDERR "\n";
-    print STDERR "Default setting exports only projects which are either unlocked\n";
-    print STDERR "or are owned by the user running this script\n";
-    print STDERR "\n";
-    print STDERR "-lock\t\t(no value) export all contigs\n";
+#    print STDERR "Default setting exports only projects which are either \n";
+#    print STDERR "unlocked or are owned by the user running this script\n";
+    print STDERR "Default setting exports all contigs in project\n";
+    print STDERR "Using a lock check, only projects which either are unlocked \n"
+               . "or are owned by the user running this script are exported, \n"
+               . "while those project(s) will have a lock status set\n\n";
+    print STDERR "-lock\t\t(no value) acquire a lock on the project and , if "
+                . "successful,\n\t\t\t   export its contigs\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
+    print STDERR "\n";
+    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
