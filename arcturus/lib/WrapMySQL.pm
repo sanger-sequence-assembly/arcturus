@@ -51,20 +51,23 @@ use DBI;
 @WrapMySQL::ISA = qw(DBI);
 
 my $users;
+my $inited;
 my $errorstring;
 
 BEGIN {
-    $users = {};
-
+    $users = undef;
+    $inited = 0;
     $errorstring = 'No error';
-
-    my $inifile = $ENV{'WRAPMYSQL_INI'};
-
-    &initFromFile($inifile) if (defined($inifile));
 }
 
 sub connect {
     my ($type, $db, $mode, $attrs) = @_;
+
+    unless ($inited) {
+	my $inifile = $ENV{'WRAPMYSQL_INI'};
+	initFromFile('WrapMySQL', $inifile) if (defined($inifile) && -f $inifile);
+	$inited = 1;
+    }
 
     $errorstring = 'No error';
 
@@ -118,8 +121,6 @@ sub getErrorString {
 }
 
 sub initFromFile {
-    return if defined($ENV{'WRAPMYSQL_INI'});
-
     my $type = shift;
     my $inifile = shift;
 
@@ -165,3 +166,5 @@ sub listRolesForInstance {
 	return undef;
     }
 }
+
+1;
