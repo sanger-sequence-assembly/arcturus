@@ -155,7 +155,8 @@ if ($cgi) {
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source = $cgi->parameter('source');   # compulsory
             my $redirect = "/cgi-bin/rloader/$database/getform";
-            $GateKeeper->transfer($redirect) if ($cgi->MethodGet && $cgi->{und_error});
+            $redirect .= $cgi->postToGet() if $cgi->MethodGet; 
+            $GateKeeper->transfer($redirect) if $cgi->{und_error};
         }
         else {
             $source = 0;
