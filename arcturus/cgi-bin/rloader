@@ -193,10 +193,10 @@ if ($cgi) {
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
 print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
                 $config{RDD} = `$BADGERDIR/pfind -q $database`; 
-print "RDD:  $config{RDD} <br>";
+print "RDD Ia:  $config{RDD} <br>";
                my $repository = new PathogenRepository;
                $config{RDD} = $repository->getAssemblyDirectory($database); 
-print "RDD:  $config{RDD} <br>";
+print "RDD Ib:  $config{RDD} <br>";
              }
     # open assembly database; abort if no assemblies defined
             $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
