@@ -70,6 +70,8 @@ $dict_primer     = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
 $dict_status     = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
 $dict_strand     = &createDictionary($dbh, 'STRANDS', 'strand', 'direction');
 $dict_basecaller = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
+$dict_svector    = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
+$dict_cvector    = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
 
 $dict_chemistry  = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
 				     'chemistry', 'type', 'USING(chemtype)');
@@ -152,11 +154,15 @@ foreach $readrange (@{$readranges}) {
 
 	    print "ProcessStatus $ps\n" if defined($ps);
 
-	    print "Seq_vec SVEC $svleft $svright \"$svector\"\n"
-		if (defined($svector) && defined($svleft) && defined($svright));
+	    if (defined($svleft) && defined($svright)) {
+		($svector) = &dictionaryLookup($dict_svector, $svector);
+		print "Seq_vec SVEC $svleft $svright \"$svector\"\n";
+	    }
 
-	    print "Clone_vec CVEC $cvleft $cvright \"$cvector\"\n"
-		if (defined($cvector) && defined($cvleft) && defined($cvright));
+	    if (defined($cvleft) && defined($cvright)) {
+		($cvector) = &dictionaryLookup($dict_cvector, $cvector);
+		print "Clone_vec CVEC $cvleft $cvright \"$cvector\"\n";
+	    }
 
 	    print "Clipping QUAL $qleft $qright\n" if (defined($qleft) && defined($qright));
 
