@@ -538,6 +538,9 @@ if ($logON || !$origin) {
 
         print "forceload ..." if ($forced);
         print "DONE $brtag $nr files found which have previously been processed$brtag$brtag";
+        if ($nr == 0 ) {
+            print "NULL result: query = '$querystring' $brtag $brtag";
+        }
         print "Polling repository $ROOTDATADIR for (new) Reads ...$brtag";
         print "... using" if ($fnfilter || $gbfilter);
         print " name filter \"$fnfilter\""     if ($fnfilter =~ /\S/);
