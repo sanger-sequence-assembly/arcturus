@@ -8,6 +8,8 @@ use Compress::Zlib;
 
 use Read;
 
+use Tag;
+
 our @ISA = qw(ArcturusDatabase::ADBRoot);
 
 #use ArcturusDatabase;
@@ -493,11 +495,13 @@ sub addSequenceMetaDataForRead {
     $sth->finish();   
 }
 
-sub getReadsByAspedDate {
-# OBSOLETE
+sub getReads{
+# all of them or with a date specification
     my $this = shift;
 
     my @conditions;
+
+    my $blocksize = 10000;
 
     my $nextword;
 
@@ -506,16 +510,17 @@ sub getReadsByAspedDate {
 	    my $date = shift;
 	    push @conditions, "asped > '$date'";
 	}
-
-	if ($nextword eq '-aspedbefore' || $nextword eq '-before') {
+	elsif ($nextword eq '-aspedbefore' || $nextword eq '-before') {
 	    my $date = shift;
 	    push @conditions, "asped < '$date'";
 	}
+        elsif ($nextword eq '-blocksize') {
+            $blocksize = shift || 1000;
+        }
     }
 
-    return undef unless scalar(@conditions);
-
-    my $query = "select read_id from READS where " . join(" and ", @conditions);
+    my $query = "select read_id from READS ";
+    $query   .= " where " . join(" and ", @conditions) if @conditions;
 
     my $dbh = $this->getConnection();
  
@@ -531,7 +536,22 @@ sub getReadsByAspedDate {
 
     $sth->finish();
 
-    return $this->getReadsByReadID($readids);
+# now retrieve the Reads in blocks
+
+    my @reads;
+
+    while (my $block = scalar(@$readids)) {
+
+        $block = $blocksize if ($block > $blocksize);
+
+        my @readids = splice @$readids, 0, $block;
+
+        my $reads = $this->getReadsByReadID([@readids]);
+
+        push @reads, @$reads if ($reads && @$reads);
+    }
+
+    return [@reads];
 }
 	
 sub getReadsByReadID {
@@ -739,7 +759,7 @@ sub getReadsForContig {
     $contig->addRead([@reads]);
 }
 
-sub getUnassembledReads {
+sub getIDsForUnassembledReads {
 # returns a list of readids of reads not figuring in any contig
     my $this = shift;
 
@@ -749,6 +769,8 @@ sub getUnassembledReads {
 
     my @dateselect;
     my $withsingletoncontigs = 0; # default INCLUDE reads in singleton contigs
+    my $selectall = 0;
+
     while ($nextword = shift) {
 	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
 	    my $date = shift;
@@ -762,6 +784,9 @@ sub getUnassembledReads {
             $withsingletoncontigs = 1; # EXCLUDE reads in singleton contigs
             my $dummy = shift;
         }
+        elsif ($nextword eq '-all') {
+            $selectall = shift;
+        }
         else {
             print STDERR "Invalid option for getUnassembledReads : ".
 		         "$nextword\n";
@@ -771,7 +796,10 @@ sub getUnassembledReads {
 
 # step 1: get a list of contigs of age 0 (long method)
 
-    my $contigids = $this->getCurrentContigIDs(singleton=>$withsingletoncontigs);
+    my $contigids = [];
+    unless ($selectall) {
+        $contigids = $this->getCurrentContigIDs(singleton=>$withsingletoncontigs);
+    }
 
 # step 2: find the read_id-s in the contigs
 
@@ -834,7 +862,7 @@ print STDERR "reads found in the contigs: ".scalar(@$readids)."\n";
 print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n";
     }
 
-    return $readids;
+    return $readids; # array of readnames
 }
 
 sub getSequenceForReads {
@@ -865,6 +893,8 @@ sub getSequenceForReads {
     }
 
     return unless keys(%$sids);
+
+print STDERR "WARNING: probably blocked version required of this method getSequenceForReads\n" if (scalar(keys %$sids) > 50000);
 
     my $range = join ',',sort keys(%$sids);
 
@@ -1898,19 +1928,19 @@ sub getTagsForReads {
         $read->addTag($tag);
     }
 
+    return $tags;
 }
 
 sub getReadTagsForSequenceIDs {
 # use as private method only; blocked retrieval of read tags
     my $dbh = shift;
-    my $seqIDs = shift;
+    my $seqIDs = shift; # array ref; array will be emptied
     my $blocksize = shift || 1000;
 
     my @tags;
     while (my $block = scalar(@$seqIDs)) {
 
         $block = $blocksize if ($block > $blocksize);
-#print "getReadTagsForSequenceIDs: next block $block\n";
 
         my @sids = splice @$seqIDs, 0, $block;
 
@@ -1928,7 +1958,7 @@ sub getTagsForSequenceIDs {
     my $sequenceIDs = shift; # array of seq IDs
     my $datatype = shift;
 
-#print "getTagsForSequenceIDs $datatype\n";
+# compose query
 
     my $items = "seq_id,tagtype,pstart,pfinal,strand,comment,tagname,sequence";
     my $query = "select $items from ${datatype}TAG left join TAGSEQUENCE"
@@ -1937,7 +1967,6 @@ sub getTagsForSequenceIDs {
               . "   and deprecated != 'Y'"
               . " order by seq_id";
 # and readtag not in ()?
-#print "getTagsForSequenceIDs query: $query\n";
 
     my @tag;
 
@@ -1960,6 +1989,7 @@ sub getTagsForSequenceIDs {
 # add to output array
         push @tag, $tag;
     }
+print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n";
 
     return [@tag];
 }
@@ -1969,6 +1999,7 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
+    my $autoload = shift; # autoload tag names and sequences if not present
 print "ENTER putTagsForReads\n";
 
     if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
@@ -2005,7 +2036,7 @@ print "AFTER getSequenceIDsForReads \n";
     my $dbh = $this->getConnection();
 
 print "ENTER getReadTagsForSequenceIDs sids: ".scalar(@sids)."\n";
-    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids);
+    my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids); # empties @sids
 print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n";
 
 # run through both reads and existing tags to weed out tags to be ignored
@@ -2014,6 +2045,8 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n";
 
     my $scounter = 0; # sequence
     my $tcounter = 0; # tag
+
+    @sids = sort {$a <=> $b} keys(%$readlist);
 
     while ($scounter < @sids && $tcounter < @$existingtags) {
  
@@ -2047,8 +2080,8 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n";
     my @tags;
     foreach my $read (@$reads) {
         next unless $read->hasTags();
+#        next unless $read->getSequenceID();
         my $rtags = $read->getTags();
-print "read ".$read->getReadName()." has ".scalar(@$rtags)." tags \n";
         foreach my $tag (@$rtags) {
             push @tags,$tag unless $ignore->{$tag};
 	}
@@ -2056,26 +2089,7 @@ print "read ".$read->getReadName()." has ".scalar(@$rtags)." tags \n";
 
 # here we have a list of new tags which have to be loaded
 
-print "ENTER putReadTags ".scalar(@tags)."\n";
-    return &putReadTags($dbh,\@tags,1000); # blocks of 1000
-}
-
-sub putReadTags {
-# use as private method only; 
-    my $dbh = shift;
-    my $tags = shift;
-    my $block = shift || 1000;
-
-    while (@$tags) {
-print "putReadTags : next block (".scalar(@$tags)." left)\n";
-        my @block;
-        my $count = 0;
-        while ($count < $block) {
-            last unless @$tags;
-            push @block, (shift @$tags);
-        }
-        &putTags($dbh,\@block,'READ');
-    }
+    return &putTags($dbh,\@tags,'READ',$autoload);
 }
 
 sub putTags {
@@ -2083,13 +2097,13 @@ sub putTags {
     my $dbh = shift;
     my $tags = shift;
     my $type = shift;
-    my $block = shift || 100;
+    my $autoload = shift; # of missing tag names and sequences
 
-print "ENTER putTags $type\n";
+print "ENTER putTags $type ".scalar(@$tags)."\n";
 
     return undef unless ($tags && @$tags);
 
-# get tag_id for (possible) link with TAGSEQUENCE (reference list)
+# get tag_id using tag name for (possible) link with TAGSEQUENCE (reference list)
 
     my %tagdata;
     foreach my $tag (@$tags) {
@@ -2104,10 +2118,8 @@ print "ENTER putTags $type\n";
     if (my @tagnames = keys %tagdata) {
 # get tag_id, tagsequence for tagnames
         my $query = "select tag_id,tagname,sequence from TAGSEQUENCE"
-	          . " where tagname in (".join(',',@tagnames).")";
-print "putTags query: $query\n";
+	          . " where tagname in ('".join("','",@tagnames)."')";
 
-#my $TEST = 0; if($TEST) {
         my $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
@@ -2117,36 +2129,46 @@ print "putTags query: $query\n";
         while (my ($tag_id,$tagname,$sequence) = $sth->fetchrow_array()) {
             $tagID->{$tagname} = $tag_id;
             $tagSQ->{$tagname} = $sequence;
-print "Tag $tagname : ID = $tag_id  seq: $sequence \n";
         }
 
         $sth->finish();
-#}
 
 # test the sequence against the one specified in the tags
 
         foreach my $tag (@$tags) {
             my $tagname = $tag->getName();
             next unless $tagname;
-            if (my $sequence = $tag->getSequence()) {
+	    my $sequence = $tag->getDNA();
+            if (!$tagID->{$tagname}) {
+                print STDERR "Missing tag name $tagname (".
+                ($sequence || 'no sequence available').
+                ") in TAGSEQUENCE list\n";
+                next unless $autoload;
+# add tag name and sequence, if any, to TAGSEQUENCE list
+	        my $tag_id = &insertTagSequence($dbh,$tagname,$sequence);
+         	if ($tag_id) {
+                    $tagID->{$tagname} = $tag_id;                
+                    $tagSQ->{$tagname} = $sequence if $sequence;
+                }
+            }
+            elsif ($sequence) {
                 unless ($sequence eq $tagSQ->{$tagname}) {
                     print STDERR "Tag sequence mismatch for tag $tagname : ".
                              "(tag) $sequence  (taglist) $tagSQ->{$tagname}\n";
+                    next;
 		}
-	    }
-            else {
-                print STDERR "Missing sequence for tag $tagname\n";
 	    }
         }
     }
    
 # insert in bulkmode
 
-    my $query = "insert into ${type}TAGS ". 
+    my $query = "insert into ${type}TAG ".
 # insert ignore ? and using a unique index on seq_id,tagtype,pstart,pfinal,strand
                 "(seq_id,tagtype,tag_id,pstart,pfinal,strand,comment) values ";
 
     my $success = 1;
+    my $block = 100; # insert block size
 
     my $accumulated = 0;
     my $accumulatedQuery = $query;
@@ -2162,26 +2184,61 @@ print "Tag $tagname : ID = $tag_id  seq: $sequence \n";
         my $tag_id           = $tagID->{$tagname} || 0;
         my $strand           = $tag->getStrand();
         my $comment          = $tag->getComment() || 'null';
+# we quote the comment string because it may contain odd characters
+        $comment = $dbh->quote($comment) if $comment; 
 
         $accumulatedQuery .= ',' if $accumulated++;
-        $accumulatedQuery .= "($seq_id,$tagtype,$tag_id,$pstart,$pfinal,$strand,$comment)";
+        $accumulatedQuery .= "($seq_id,'$tagtype',$tag_id,"
+                           . "$pstart,$pfinal,'$strand',$comment)";
 
         if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
 
-print "accumulated query: $accumulatedQuery \n";
-$accumulatedQuery = $query;
-$accumulated = 0;
-next;
-
             my $sth = $dbh->prepare($accumulatedQuery);        
-            my $rc = $sth->execute() || &queryFailed($query);
+            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
 
             $success = 0 unless $rc;
             $accumulatedQuery = $query;
             $accumulated = 0;
         }
     }
-print "EXIT putTags\n"; exit; 
+print "EXIT putTags success $success\n";
+    return $success; 
+}
+
+
+sub putTagSequence {
+# public method add tagname and sequence to TAGSEQUENCE table
+    my $this = shift;
+
+    my $dbh = $this->getConnection();
+
+    return &insertTagSequence($dbh,shift,shift);
+}
+
+sub insertTagSequence {
+# private method; populate the TAGSEQUENCE table
+    my $dbh = shift;
+    my $tagname = shift;
+    my $sequence = shift;
+
+    my $columns = "tagname";
+    my $values = "'$tagname'";
+    if ($sequence) {
+        $columns .= ",sequence";
+        $values .= ",'$sequence'";
+    }
+
+    my $query = "insert ignore into TAGSEQUENCE ($columns) values ($values)";
+
+    my $sth = $dbh->prepare($query);        
+                    
+    my $rc = $sth->execute() || &queryFailed($query);
+
+    return undef unless $rc;
+
+# return the tag_id of the inserted named tag sequence
+
+    return $dbh->{'mysql_insertid'};
 }
 
 #-----------------------------------------------------------------------------
