@@ -77,5 +77,7 @@ foreach cutoff ($*)
 
     ${minervabin}/calculateconsensus -instance cn=${instance},cn=jdbc \
                                      -organism cn=${organism}
+
+    rm -f [a-z]*
     popd
 end

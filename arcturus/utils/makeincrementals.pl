@@ -60,6 +60,7 @@ my $asped;
 my $count;
 my $lastasped;
 my $jobname;
+my $njobs = 0;
 
 while (($asped, $count) = $stmt->fetchrow_array()) {
     $sum += $count;
@@ -70,6 +71,7 @@ while (($asped, $count) = $stmt->fetchrow_array()) {
 	    $jobname = "$organism-$asped";
 	    my $prejob = defined($lastasped) ? "-w $organism-$lastasped" : "";
 	    print "$bsub -J $jobname -N -o '/pathdb2/arcturus/$jobname.out' $prejob $scriptname $organism $asped\n";
+	    $njobs++;
 	} else {
 	    printf "%10s %8d %8d\n", $asped, $cumulative, $sum;
 	}
@@ -84,6 +86,8 @@ if ($bsub) {
     $jobname = "$organism-$asped";
     my $prejob = defined($lastasped) ? "-w $organism-$lastasped" : "";
     print "$bsub -J $jobname -N -o '/pathdb2/arcturus/$jobname.out' $prejob $scriptname $organism $asped\n";
+    $njobs++;
+    print STDERR "There are $njobs jobs.\n";
 } else {
     printf "%10s %8d %8d\n", $asped, $cumulative, $sum;
 }
@@ -110,7 +114,11 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-increment\tNumber of new reads per incremental assembly\n";
- 
+    print STDERR "\n";
+    print STDERR "BATCH-JOB PARAMETERS:\n";
+    print STDERR "-q\t\tName of batch queue\n";
+    print STDERR "-R\t\tBatch job resources [optional]\n";
+    print STDERR "-script\t\tName of batch job script\n";
 }
 
 sub today {
