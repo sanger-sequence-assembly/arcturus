@@ -1501,6 +1501,17 @@ sub putSequenceForRead {
 # insert align to SCF data , if more than one record
 
     my $alignToSCF = $read->getAlignToTrace();
+#    if ($alignToSCF->hasSegments() > 1) {
+#        $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
+#	 $sth = $dbh->prepare_cached($query);
+#        my $segments = $alignToSCF->getSegments();
+#        foreach my $segment (@$segments) {
+#            my ($startinseq,$finisinseq,$startinscf,$finisinscf) = $segment->getSegment();
+#            my $slength = $finisinseq - $startinseq + 1;
+#            $sth->execute($seqid,$startinseq,$startinscf,$slength) || &queryFailed($query);
+#        } 
+#	$sth->finish();
+#    }
     if (defined($alignToSCF) && scalar(@$alignToSCF) > 1) {
         $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
 	$sth = $dbh->prepare_cached($query);
@@ -1548,6 +1559,7 @@ sub putNewSequenceForRead {
 # b) test if it is an edited read by counting alignments to the trace file
 
     my $alignToSCF = $read->getAlignToTrace();
+#    if ($alignToSCF->hasSegments() <= 1) {
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
         return (0,"insufficient alignment information") unless $read->isEdited();
         print STDERR "read slipped through edited test:",$read->getReadName()."\n";
@@ -1555,11 +1567,13 @@ sub putNewSequenceForRead {
 
 # c) ok, now we get the previous versions of the read and compare
 
+#my $DEBUG = 1;
+    my $first;
     my $prior = 1;  
     my $version = 0;
     while ($prior) {
         $prior = $this->getRead(read_id=>$read_id,version=>$version);
-        if ($prior && $prior->compareSequence($read)) {
+        if ($prior && $read->compareSequence($prior)) {
 print "prior " . $prior->toString() . " version $version\n" if $DEBUG;
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
@@ -1569,15 +1583,24 @@ print $prior->toString() . "  $seq_id, is identical to version $version\n" if $D
         }
         elsif ($prior) {
 print "prior " . $prior->toString() . " version $version\n" if $DEBUG;
+            $first = $prior unless defined $first;
             $version++;
         }
     }
 
-# d) load this new version of the sequence
+# d) compare the descriptors of $read with the original version 0
+
+    if ($first) {
+# PUT HERE: repair of depadded data with '-' on positions after lossy restoration
+        &repair($read,$first); # experimental
+print STDOUT "new version detected $version\n";
+# take care that the meta data of the first and the new version correspond 
+return (0,"loading test aborted for version $version of read ".$read->getReadName);
+    }
+
+# e) load this new version of the sequence
 
 print STDOUT "new version detected $version\n";
-
-#return (0,"loading test aborted for version $version of read ".$read->getReadName);
 
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
@@ -1588,6 +1611,52 @@ print STDOUT "new version detected $version\n";
     return ($seq_id,"OK");
 }
 
+# experimental; has to be tested
+sub repair {
+# private method with sub 'putNewSequenceForRead'; restore depadded sequence
+# restore possible pads ('-') in this sequence by comparison with read sequence
+    my $this = shift; # the possibly depadded (with loss) sequence
+    my $read = shift; # the original trace, i.e. the read version 1
+
+print STDERR "REPAIR mode activated on edited read import ".
+      $read->getReadName."\n";
+
+    my $thissequence = $this->getSequence();
+    return unless ($thissequence =~ /\-/);
+
+    my $aligntotrace = $this->getAlignToTrace();
+    $aligntotrace->collate(); # just in case and also sorts segments
+    my $segments = $aligntotrace->getSegments();
+
+    my $readsequence = $read->getSequence();
+    my $readquality = $read->getQuality();
+
+    my $i = 0; # segment counter
+    my @newquality;
+    my $newsequence = '';
+    while ($i < scalar(@$segments)) {
+        my $headsegment = $segments->[$i-1];
+        my $tailsegment = $segments->[$i++];
+        my $xstart = $headsegment->getXfinis();
+        my $ystart = $headsegment->getYfinis();
+        my $xfinis = $tailsegment->getXstart();
+        my $yfinis = $tailsegment->getYstart();
+        my $xdiff = $xfinis - $xstart - 1;
+        my $ydiff = $yfinis - $ystart - 1;
+        next unless ($xdiff > 0 && $xdiff == $ydiff);
+        while ($xstart < $xfinis) {
+            my $substring = substr $thissequence,$xstart,1;
+            my $substitut = substr $readsequence,$ystart,1;
+            if ($substring eq "-") {
+# replace this-sequence position xstart by read-sequence position ystart
+                $newsequence .= $substring;
+                  
+                
+            }
+            $xstart++;
+        } 
+    }    
+}
 
 sub putCommentForReadID {
 # add a comment for a given read_id (finishers entry of comment?)
@@ -1883,6 +1952,7 @@ sub getSequenceIDsForReads {
         if ($read->isEdited && $noload) {
             my $readname = $read->getReadName();
             print STDERR "New (edited) sequence for read $readname ignored\n";
+# note: sequence ID remains undefined
         }
         elsif ($read->isEdited) {
             my ($added,$errmsg) = $this->putNewSequenceForRead($read);
@@ -1907,7 +1977,6 @@ sub getSequenceIDsForReads {
         $block = $blocksize if ($block > $blocksize);
 
         my @names = splice @readnames, 0, $block;
-#print "getSequenceIDsForReads: NEXT BLOCK $block (".scalar(@names).")\n";
 
         my $query = "select READS.read_id,readname,seq_id" .
                     "  from READS left join SEQ2READ using (read_id) " .
@@ -2001,7 +2070,7 @@ sub getReadTagsForSequenceIDs {
 
         my @sids = splice @$seqIDs, 0, $block;
 
-        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,'READ');
+        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,'READTAG','seq_id');
 
         push @tags, @$tags;
     }
@@ -2013,21 +2082,20 @@ sub getTagsForSequenceIDs {
 # use as private (generic) method only
     my $dbh = shift;
     my $sequenceIDs = shift; # array of seq IDs
-    my $datatype = shift; # either READ or CONTIG (uc name)
+    my $table = shift; # either READTAG or CONTIGTAG
+    my $seqkeyid = shift; # sequence_id column name
 
 # compose query
 
-    my $isContig = ($datatype eq 'CONTIG') ? 1 : 0;
-
-    my $items = "seq_id,tagtype,tagname,pstart,pfinal,strand,comment,"
+    my $items = "$seqkeyid,tagtype,systematic_id,pstart,pfinal,strand,comment,"
               . "tagseqname,sequence";
-    $items =~ s/tagname\,// unless $isContig; # no tagname in READTAG
+    $items =~ s/systematic_id\,// if ($table eq 'READTAG'); # no finishing tags
 
-    my $query = "select $items from ${datatype}TAG left join TAGSEQUENCE"
+    my $query = "select $items from $table left join TAGSEQUENCE"
               . " using (tag_id)"
-	      . " where seq_id in (".join (',',@$sequenceIDs) .")"
+	      . " where $seqkeyid in (".join (',',@$sequenceIDs) .")"
               . "   and deprecated != 'Y'"
-              . " order by seq_id";
+              . " order by $seqkeyid";
 print "getTagsForSequenceID: $query \n" if $DEBUG;
 # and (read)tag not in ()?
 
@@ -2037,30 +2105,13 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
 
     $sth->execute() || &queryFailed($query) && exit;
 
-    $datatype = lc($datatype);
-#    my ($seq_id,$type,$name,$pstart,$pfinal,$strand,$comment,$tsname,$sequence);
-
     while (my @ary = $sth->fetchrow_array()) {
-#        if ($datatype eq 'contig') {
-#           ($seq_id,$type,$name,$pstart,$pfinal,$strand,$comment,$tsname,$sequence) = @ary;
-#        }
-#        else {
-#           ($seq_id,$type,$pstart,$pfinal,$strand,$comment,$tsname,$sequence) = @ary;
-#        }
 # create a new Tag instance
-        my $tag = new Tag(lc($datatype)."tag");
-#        $tag->setSequenceID($seq_id);
-#        $tag->setType($type);
-#        $tag->setName($name) if $name;
-#        $tag->setTagSequenceName($tsname);
-#        $tag->setPosition($pstart,$pfinal);
-#        $tag->setStrand($strand);
-#        $tag->setComment($comment);
-#        $tag->setDNA($sequence) if $sequence;
+        my $tag = new Tag(lc($table));
 
         $tag->setSequenceID      (shift @ary); # seq_id
         $tag->setType            (shift @ary); # tagtype
-        $tag->setName            (shift @ary) if $isContig; # tagname
+        $tag->setSystematicID    (shift @ary) if ($table eq 'CONTIGTAG'); # tagname
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
         $tag->setStrand          (shift @ary); # strand
         $tag->setComment         (shift @ary); # comment
@@ -2247,7 +2298,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
 
     my $query = "insert into $table ". # insert ignore ?
                 "($seqkeyid,tagtype,tag_id,pstart,pfinal,strand,comment) values ";
-    $query =~ s/tagtype/tagtype,tagname/ if ($table eq 'CONTIGTAG');
+    $query =~ s/tagtype/tagtype,systematic_id/ if ($table eq 'CONTIGTAG');
 
     my $success = 1;
     my $block = 100; # insert block size
@@ -2261,7 +2312,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
         my $seq_id           = $tag->getSequenceID();
         next unless $seq_id; # protect against undef seq ID
         my $tagtype          = $tag->getType();
-        my $tagname          = $tag->getName() || '';
+        my $systematic_id    = $tag->getSystematicID() || '';
         my $tagseqname       = $tag->getTagSequenceName() || '';
         my ($pstart,$pfinal) = $tag->getPosition();
         my $tag_id           = $tagID->{$tagseqname} || 0;
@@ -2273,7 +2324,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
 
         $accumulatedQuery .= ',' if $accumulated++;
         $accumulatedQuery .= "($seq_id,'$tagtype',";
-        $accumulatedQuery .=  "'$tagname'," if ($table eq 'CONTIGTAG');
+        $accumulatedQuery .=  "'$systematic_id'," if ($table eq 'CONTIGTAG');
         $accumulatedQuery .=  "$tag_id,$pstart,$pfinal,'$strand',$comment)";
 
         if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {

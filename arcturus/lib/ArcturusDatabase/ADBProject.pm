@@ -32,8 +32,11 @@ sub getProject {
 
     my $query;
 
-    my $itemlist = "PROJECT.project,projectname,projecttype," .
-                   "assembly,reads,contigs,updated,userid,created," .
+#    my $itemlist = "PROJECT.project,projectname,projecttype," .
+#                   "assembly,reads,contigs,updated,userid,created," .
+#		   "creator,comment,status";
+    my $itemlist = "PROJECT.project_id,projectname,projecttype," .
+                   "assembly_id,reads,contigs,updated,userid,created," .
 		   "creator,comment,status";
 
     if ($key eq "project_id") {

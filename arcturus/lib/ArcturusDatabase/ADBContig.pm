@@ -66,16 +66,25 @@ sub getContig {
                       "  and SEQ2READ.read_id = READS.read_id".
                       "  and READS.readname = ? ".
 		      "order by contig_id desc limit 1";
-print STDERR "new getContig: $query\n";
+print STDERR "getContig: $query\n";
              $value = shift;
-       }
-        elsif ($nextword eq 'withTag') {
+        }
+        elsif ($nextword eq 'withTagName') {
 # returns the highest contig_id, i.e. most recent contig with this tag
-            $query .= " from CONTIG join TAG2CONTIG using (contig_id)".
+# NOTE: perhaps we should cater for more than one contig returned?
+            $query .= " from CONTIG join CONTIGTAG using (contig_id)".
                       "where tag_id in". 
-                      "      (select tag_id from TAG where tagname = ?) ".
+                      "      (select tag_id from TAGSEQUENCE where tagseqname = ?) ".
 		      "order by contig_id desc limit 1";
-print STDERR "new getContig: $query\n";
+print STDERR "getContig: $query\n";
+            $value = shift;
+        }
+        elsif ($nextword eq 'withAnnotationTag') {
+# returns the highest contig_id, i.e. most recent contig with this tag
+            $query .= " from CONTIG join CONTIGTAG using (contig_id)".
+                      "where systematic_id like '?' ". 
+		      "order by contig_id desc limit 1";
+print STDERR "getContig: $query\n";
             $value = shift;
         }
         elsif ($nextword eq 'metaDataOnly') {
@@ -143,7 +152,7 @@ print STDERR "new getContig: $query\n";
 
 # get contig tags
 
-#    $this->getTagsForContig($contig);
+    $this->getTagsForContig($contig);
 
 # for consensus sequence we use lazy instantiation in the Contig class
 
@@ -271,6 +280,7 @@ sub putContig {
     my $this = shift;
     my $contig = shift; # Contig instance
     my $project = shift; # optional Project instance
+    my $noload = shift; # test/reporting option
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
@@ -294,7 +304,8 @@ sub putContig {
  
     my $reads = $contig->getReads();
     return 0, "Missing sequence IDs for contig $contigname" 
-       unless $this->getSequenceIDForAssembledReads($reads);
+        unless $this->getSequenceIDsForReads($reads); # to be tested
+# unless $this->getSequenceIDForAssembledReads($reads);
 
 # get the sequenceIDs (from Read); also build the readnames array 
 
@@ -302,6 +313,7 @@ sub putContig {
     my %seqids;
     foreach my $read (@$reads) {
         my $seqid = $read->getSequenceID();
+        die "Missing sequence IDs for contig $contigname" unless $noload; # be sure
         my $readname = $read->getReadName();
         $seqids{$readname} = $seqid;
         push @seqids,$seqid;
@@ -316,14 +328,13 @@ sub putContig {
 # test if the contig has been loaded before using the readname/sequence hash
 
     my $readhash = md5(sort @seqids);
-# first try the sequence ID hash
+# first try the sequence ID hash (returns the last entered contig, if any)
     my $previous = $this->getContig(withChecksum=>$readhash,
                                     metaDataOnly=>1);
 # if not found try the readname hash
     $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
-my $TEST = 0;
-$previous=0 if $TEST;
+
     if ($previous) {
 # the read name hash or the sequence IDs hash does match
 # pull out previous contig mappings and compare them one by one with contig
@@ -331,7 +342,7 @@ $previous=0 if $TEST;
         if ($contig->isSameAs($previous)) {
 # add (re-assign) the previous contig ID to the contig list of the Project
             if ($project) {
-                $this->assignContigToProject($previous,$project); # ADBProject.pm
+                $this->assignContigToProject($previous,$project); # ADBProject
                 $project->addContigID($previous->getContigID());
             }
             return $previous->getContigID(),"Contig $contigname is ".
@@ -376,35 +387,32 @@ $previous=0 if $TEST;
         unless ($project) {
 # find the contig_id (for the moment use largest nr of reads) 
             my $contig_id;
+
+# TO BE DEVELOPED: assign project ID to new contig 
             foreach my $linked (@linked) {
                 $contig_id = $linked unless defined($contig_id);
                 next if ($readsinlinked{$linked} < $readsinlinked{$contig_id});
                 $contig_id = $linked; 
             }
-            $project = $this->getProject(contig_id => $contig_id);
+#            $project = $this->getProject(contig_id => $contig_id);
 # keep track of the project(s) of previous generation, flag project changes
+
         }
 
-# to be removed after testing
-	if ($TEST) {
-	    print STDOUT "Contig ".$contig->getContigName."\n";
+	if ($noload) {
+	    $message .= "Contig ".$contig->getContigName."\n";
 	    foreach my $mapping (@{$contig->getContigToContigMappings}) {
-		print STDOUT ($mapping->assembledFromToString || "empty link\n");
+	        $message .= ($mapping->assembledFromToString || "empty link\n");
 	    }
 	}
-# until here
-
     }
     else {
 # the contig has no precursor, is completely new
         $message = "has no parents";
 # ? add a dummy mapping to the contig (without segments)
-#        my $mapping = new Mapping();
-#        $mapping->setSequenceID(0); # parent 0
-#        $contig->addMapping($mapping);
     }
 
-return 0,$message if $TEST; # testing
+    return 0,$message if $noload; # test option
 
 # now load the contig into the database
 
@@ -497,6 +505,7 @@ sub getSequenceIDForAssembledReads {
     foreach my $read (@$reads) {
         if ($read->isEdited) {
             my ($added,$errmsg) = $this->putNewSequenceForRead($read);
+	    print STDERR "Edited $added $errmsg\n";
 	    print STDERR "$errmsg\n" unless $added;
             $success = 0 unless $added;
         }
@@ -509,6 +518,9 @@ sub getSequenceIDForAssembledReads {
 # get the sequence IDs for the unedited reads (version = 0)
 
     my $range = join "','",sort keys(%$unedited);
+
+    return unless $range;
+
     my $query = "select READS.read_id,readname,seq_id" .
                 "  from READS left join SEQ2READ using(read_id) " .
                 " where readname in ('$range')" .
@@ -1392,7 +1404,7 @@ sub getTagsForContig {
 
     my $dbh = $this->getConnection();
 
-    my $tags = &getTagsForSequenceIDs ($dbh,[@sid],'CONTIG');
+    my $tags = &getTagsForSequenceIDs ($dbh,[@sid],'CONTIGTAG','contig_id');
 
     foreach my $tag (@$tags) {
         $contig->addTag($tag);
@@ -1445,7 +1457,7 @@ print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
 
 # delete the existing tags from the hash
 
-        my $existingtags = &getTagsForSequenceIDs ($dbh,[($cid)],'CONTIG');
+        my $existingtags = &getTagsForSequenceIDs ($dbh,[($cid)],'CONTIGTAG','contig_id');
 
         foreach my $etag (@$existingtags) {
             foreach my $ctag (@$ctags) {
@@ -1480,5 +1492,3 @@ print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 #------------------------------------------------------------------------------
 
 1;
-
-
