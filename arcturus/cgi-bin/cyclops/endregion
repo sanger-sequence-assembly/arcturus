@@ -1,0 +1,92 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+# get assembly data for  Cyclops from ARCTURUS database
+#############################################################################
+
+use strict; # Constraint variables declaration before using them
+
+use lib "/nfs/pathsoft/arcturus/dev/lib";
+
+use GateKeeper; 
+use ArcturusTable;
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',0);
+
+my $config     = $GateKeeper->configHandle();
+
+my $cgi        = $GateKeeper->cgiHandle();
+
+my $database   = $cgi->parameter('organism');
+
+my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+
+$GateKeeper->cgiHeader(1); # return string plain
+
+##############################################################################
+# MAIN
+##############################################################################
+
+$organisms->query("use $database");
+
+my $contig = $cgi->parameter('contig');
+
+my $query  = "select READS.readname,READS.template,LIGATIONS.sihigh,";
+   $query .= "READS2CONTIG.prstart,READS2CONTIG.prfinal,";
+   $query .= "READS2CONTIG.pcstart,READS2CONTIG.pcfinal,";
+   $query .= "READS2CONTIG.label ";
+   $query .= "from   READS,READS2CONTIG,CONTIGS,LIGATIONS ";
+   $query .= "where  CONTIGS.contig_id = $contig ";
+   $query .= "  and  LIGATIONS.ligation=READS.ligation ";
+   $query .= "  and  READS2CONTIG.read_id = READS.read_id ";
+   $query .= "  and  READS2CONTIG.contig_id = CONTIGS.contig_id ";
+   $query .= "  and ";
+   $query .= "  ((READS2CONTIG.label in (10,20) and ";
+   $query .= "    READS2CONTIG.pcstart >= CONTIGS.length - LIGATIONS.sihigh * 1.1) ";
+   $query .= "    or ";
+   $query .= "   (READS2CONTIG.label in (11,21) and ";
+   $query .= "    READS2CONTIG.pcfinal <= LIGATIONS.sihigh * 1.1)) ";
+   $query .= "order by  READS2CONTIG.pcstart";
+
+# print "query $query\n";
+my $hashes = $organisms->query($query);
+
+my $nr = 0; $nr = @$hashes if (ref($hashes) eq 'ARRAY');
+# print "hashes output: $hashes  $nr \n";
+
+$GateKeeper->dropDead("No data return on this query: $query") if !$nr;
+
+print "            read         template insert  prs  prf     pcs     pcf lbl \n\n";
+ 
+foreach my $hash (@$hashes) {
+    my $readname = $hash->{readname};
+    my $template = $hash->{template} || '';
+    my $insert   = $hash->{sihigh};
+    my $prstart  = $hash->{prstart};
+    my $prfinal  = $hash->{prfinal};
+    my $pcstart  = $hash->{pcstart};
+    my $pcfinal  = $hash->{pcfinal};
+    my $label    = $hash->{label};
+    my $line = sprintf ("%16s %16s %6d %4d %4d %7d %7d  %2d",$readname,$template,$insert,
+               $prstart,$prfinal,$pcstart,$pcfinal,$label);
+    print "$line \n";
+}
+
+
+##############################################################################
+# EXIT
+##############################################################################
+
+$GateKeeper->disconnect();

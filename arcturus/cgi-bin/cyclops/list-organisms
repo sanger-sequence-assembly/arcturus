@@ -1,0 +1,59 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+# get organism database names for Cyclops from ARCTURUS database
+#############################################################################
+
+use strict; # Constraint variables declaration before using them
+
+# use lib "/nfs/team81/ejz/arcturus/modules";
+
+use GateKeeper; 
+use ArcturusTable;
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',0);
+
+my $config     = $GateKeeper->configHandle();
+
+my $cgi        = $GateKeeper->cgiHandle();
+
+my $dbh        = $GateKeeper->dbHandle(undef,{'override' => '1'});
+
+$GateKeeper->cgiHeader(1); # return string plain
+
+##############################################################################
+# MAIN enumerate organisms in arcturus
+##############################################################################
+
+my $ORGANISMS = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
+
+my $databases = $ORGANISMS->associate('hashrefs',undef,undef,0,'dbasename');
+
+my $table = $ORGANISMS->list('01000001111000010100','XXX');
+
+$table =~ s/XXX//g;
+
+print STDOUT $table; 
+
+$dbh->disconnect();
+
+exit 0;
+
+
+
+
+
+
+

@@ -1,0 +1,180 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+# test READ pairs information
+# check the contents of Reads.paired against entries in READPAIRS
+# update READS where required if update parameter is set
+#############################################################################
+
+use strict;
+
+use GateKeeper;
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',0);
+
+my ($cgi, $database, $blocksize, $start, $length, $noskip);
+if ($cgi = $GateKeeper->cgiHandle(1)) {
+    $database  = $cgi->parameter('organism');
+    $blocksize = $cgi->parameter('blocksize') || 10000;
+    $start     = $cgi->parameter('start')     || 1;
+    $length    = $cgi->parameter('length')    || 100000;
+}
+else {
+    $database  = shift @ARGV;
+    $blocksize = shift @ARGV || 10000;
+    $start     = shift @ARGV || 1;
+    $length    = shift @ARGV || 100000;
+}
+
+my $organisms  = $GateKeeper->dbHandle($database,{dbhandle=>0});
+
+my $status = $GateKeeper->authorize(100,{'nosession'=>1, silently=>0});
+
+if (!$status) {
+    my $error = $GateKeeper->{error};
+    $GateKeeper->dropDead($error);
+}
+
+$GateKeeper->cgiHeader(1); # return string plain
+
+##############################################################################
+# MAIN
+##############################################################################
+
+print "Okay, authorized! \n";
+
+print "database=$database blocksize=$blocksize  start=$start  length=$length\n";
+
+$GateKeeper->focus(1);
+
+
+my $READS   = $organisms->spawn('READS',$database,0);
+my $PAIRS   = $organisms->spawn('READPAIRS',$database,0);
+
+$organisms->setTracer(0); # disable automatic query tracing
+
+my $continue = 1;
+$length = $length + $start;
+my $list = 0;
+
+while ($continue) {
+
+    my $final = $start - 1 + $blocksize;
+    print "Processing block $start - $final \n";
+    my $tested = 0;
+    my $paired = 0;
+
+# get all forward reads in READPAIRS table which are not labeled in READS 
+
+    my $fnjoin = "select READS.read_id from READS, READPAIRS ";
+    $fnjoin   .= "where READS.read_id = READPAIRS.forward ";
+    $fnjoin   .= "and READS.read_id >= $start and READS.read_id <= $final ";
+    $fnjoin   .= "and READS.paired != 'F'";
+    if (my $hashes = $organisms->query($fnjoin)) {
+        undef my @reads;
+        if (ref($hashes) eq 'ARRAY') {
+            my $nr = @$hashes;
+            print "$nr paired reads (forward) found without paired set\n";
+            foreach my $hash (@$hashes) {
+                push @reads, $hash->{read_id};
+            }
+            $READS->update('paired','F','read_id',\@reads);
+        }
+        else {
+            print "No paired reads (forward) found without paired set\n";
+        }
+    }
+
+# get all reverse reads in READPAIRS table which are not labeled in READS 
+
+    my $rnjoin = "select READS.read_id from READS, READPAIRS ";
+    $rnjoin   .= "where READS.read_id = READPAIRS.reverse ";
+    $rnjoin   .= "and READS.read_id >= $start and READS.read_id <= $final ";
+    $rnjoin   .= "and READS.paired != 'R'";
+    if (my $hashes = $organisms->query($rnjoin)) {
+        undef my @reads;
+        if (ref($hashes) eq 'ARRAY') {
+            my $nr = @$hashes;
+            print "$nr paired reads (reverse) found without paired set\n";
+            foreach my $hash (@$hashes) {
+                push @reads, $hash->{read_id};
+            }
+            $READS->update('paired','R','read_id',\@reads);
+        }
+        else {
+            print "No paired reads (reverse) found without paired set\n";
+        }
+    }
+
+# now for the complement: find reads with paired='Y' but no entry in READPAIRS
+
+    my $fyjoin = "select READS.read_id from READS left join READPAIRS ";
+    $fyjoin   .= "on    READS.read_id = READPAIRS.forward ";
+    $fyjoin   .= "where READS.read_id >= $start and READS.read_id <= $final ";
+    $fyjoin   .= "and   READS.paired = 'F'";
+    $fyjoin   .= "and   READPAIRS.forward IS NULL";
+    if (my $hashes = $organisms->query($fyjoin)) {
+        undef my @reads;
+        if (ref($hashes) eq 'ARRAY') {
+            my $nr = @$hashes;
+            print "$nr reads found with paired set to F but absent in READPAIRS\n";
+            foreach my $hash (@$hashes) {
+                push @reads, $hash->{read_id};
+            }
+            $READS->update('paired',' ','read_id',\@reads);
+        }
+        else {
+            print "No reads found with paired set to F but absent in READPAIRS\n";
+        }
+    }
+
+    my $ryjoin = "select READS.read_id from READS left join READPAIRS ";
+    $ryjoin   .= "on    READS.read_id = READPAIRS.reverse ";
+    $ryjoin   .= "where READS.read_id >= $start and READS.read_id <= $final ";
+    $ryjoin   .= "and   READS.paired = 'R'";
+    $ryjoin   .= "and   READPAIRS.reverse IS NULL";
+    if (my $hashes = $organisms->query($ryjoin)) {
+        undef my @reads;
+        if (ref($hashes) eq 'ARRAY') {
+            my $nr = @$hashes;
+            print "$nr reads (reverse) found with paired set but absent in READPAIRS\n";
+            foreach my $hash (@$hashes) {
+                push @reads, $hash->{read_id};
+            }
+            $READS->update('paired',' ','read_id',\@reads);
+        }
+        else {
+            print "No reads found with paired set to R but absent in READPAIRS\n";
+        }
+    }
+
+    $start = $final + 1; # preset next cycle
+    $continue = 0 if ($start >= $length);
+
+# add a continuation link for the next block (using a session id!)
+
+}
+
+my $userid = $cgi->parameter('USER');
+
+$organisms->historyUpdate($userid,'paired',1);
+
+##############################################################################
+# EXIT
+##############################################################################
+
+$GateKeeper->disconnect();
+
+

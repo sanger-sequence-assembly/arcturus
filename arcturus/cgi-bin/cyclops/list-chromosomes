@@ -1,0 +1,68 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+# get chromosome data for Cyclops from ARCTURUS database
+#############################################################################
+
+use strict; # Constraint variables declaration before using them
+
+# use lib "/nfs/team81/ejz/arcturus/modules";
+
+use GateKeeper; 
+use ArcturusTable;
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',0);
+
+my $config     = $GateKeeper->configHandle();
+
+my $cgi        = $GateKeeper->cgiHandle();
+
+my $dbh        = $GateKeeper->dbHandle(undef,{'override' => '1'});
+
+$GateKeeper->cgiHeader(1); # return string plain
+
+##############################################################################
+# MAIN enumerate all databases and chromosomes
+##############################################################################
+
+my $ORGANISMS = ArcturusTable->new($dbh,'ORGANISMS','arcturus',1);
+
+my $databases = $ORGANISMS->associate('hashrefs',undef,undef,0,'dbasename');
+
+my $table = $ORGANISMS->list('010000011110000100');
+
+foreach my $dbhash (@$databases) {
+    my $database = $dbhash->{dbasename};
+    my $ASSEMBLY = $ORGANISMS->new($dbh,'ASSEMBLY',$database,1,'chromosome');
+    if (my $list = $ASSEMBLY->list('0101010010011010000','XXX')) {
+        $database = sprintf ("%-16s",$database);
+        $list =~ s/XXX/$database/g; # add database name
+        print STDOUT "$list\n";
+    }
+    else {
+        print STDOUT "$dbhash->{dbasename} not accessible\n";
+    }
+}
+
+$dbh->disconnect;
+
+exit 0;
+
+
+
+
+
+
+
