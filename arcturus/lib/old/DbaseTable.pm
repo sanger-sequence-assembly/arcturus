@@ -900,14 +900,15 @@ print "useQueryTracer $useQueryTracer \n" if $option{debug};
 
         my $whereclause = $wcol;
         if ($wval =~ /\bwhere\b/i) {
-    # in this case $wcol should contain the full specification
+# in this case $wcol should contain the full specification
             $select .= ' DISTINCT' if ($wval =~ /distinct/i);
 print "item:$item  wval:$wval  whereclause:$whereclause $useQueryTracer $self->{qTracer}\n" if $option{debug};
+            $whereclause =~ s/\=\s+(([\'\"]).*[\%\_].*\2)/like $1/g; # change = ' % ' to like ' % '
         }
         else {
-    # test and strip negation prefix
+# test and strip negation prefix
             my $not = 0; $not = 1 if ($wval =~ s/\s*(\!|not)\s*//i);
-    # in this case $wcol should contain the column name and $wval a value
+# in this case $wcol should contain the column name and $wval a value
             if ($wval =~ /^\(.*?\,.+\)/) {
                 $whereclause .= ' not' if $not;
                 $whereclause .= ' in '; # with a list specification
