@@ -24,17 +24,24 @@ public class Ligation extends Core {
     }
 
     /**
-     * Constructs a Ligation which has a name and an ID.
+     * Constructs a Ligation which has a name, an ID, a clone and insert size estimates.
      * This constructor will typically be used when a Ligation
      * is retrieved from an Arcturus database.
      *
      * @param name the name of the Ligation.
      * @param ID the ID of the Ligation.
+     * @param clone the clone from which this ligation was created.
+     * @param silow the minimum insert size estimate.
+     * @param sihigh the maximum insert size estimate.
      * @param adb the Arcturus database to which this Ligation belongs.
      */
 
-    public Ligation(String name, int ID, ArcturusDatabase adb) {
+    public Ligation(String name, int ID, Clone clone, int silow, int sihigh, ArcturusDatabase adb) {
 	super(name, ID, adb);
+
+	this.clone = clone;
+	this.silow = silow;
+	this.sihigh = sihigh;
     }
 
     /**

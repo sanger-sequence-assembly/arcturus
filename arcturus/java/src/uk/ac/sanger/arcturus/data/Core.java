@@ -12,7 +12,7 @@ public class Core {
      * A constant representing an attribute whose value is unknown.
      */
 
-    public final static int UNKNOWN = 0;
+    public final static short UNKNOWN = 0;
 
     private int ID;
     private String name;

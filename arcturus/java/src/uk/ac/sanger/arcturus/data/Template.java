@@ -22,17 +22,20 @@ public class Template extends Core {
     }
 
     /**
-     * Constructs a Template which has a name and an ID.
+     * Constructs a Template which has a name, an ID and a ligation.
      * This constructor will typically be used when a Template
      * is retrieved from an Arcturus database.
      *
      * @param name the name of the Template.
      * @param ID the ID of the Template.
+     * @param ligation the ligation from which this template was created.
      * @param adb the Arcturus database to which this Template belongs.
      */
 
-    public Template(String name, int ID, ArcturusDatabase adb) {
+    public Template(String name, int ID, Ligation ligation, ArcturusDatabase adb) {
 	super(name, ID, adb);
+
+	this.ligation = ligation;
     }
 
     /**
@@ -42,7 +45,7 @@ public class Template extends Core {
      */
 
     public void setLigation(Ligation ligation) {
-	this.ligation =ligation;
+	this.ligation = ligation;
     }
 
     /**
