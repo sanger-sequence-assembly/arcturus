@@ -151,8 +151,7 @@ sub addAlignmentFromDatabase {
 }
 
 sub addAssembledFrom {
-# from contig to sequence
-# input 4 array (contigstart, contigfinis, seqstart, seqfinis) 
+# input 4 array (contigstart, contigfinis, (read)seqstart, seqfinis) 
     my $this = shift;
 
 # validity input is tested in Segment constructor
@@ -166,69 +165,44 @@ sub addAssembledFrom {
     return scalar(@{$this->{assembledFrom}});
 }
 
+#-------------------------------------------------------------------
+# export of alignment / segment info
+#-------------------------------------------------------------------
+
 sub hasSegments {
 # returns true if at least one alignment exists
     my $this = shift;
 
-    return 0 unless $this->{assembledFrom};
+    my $segments = $this->getSegments();
 
-    return scalar(@{$this->{assembledFrom}});
+    return 0 unless defined($segments);
+
+    return scalar(@$segments);
 }
-
-#-------------------------------------------------------------------
-# export of alignments
-#-------------------------------------------------------------------
 
 sub getSegments {
 # export the assembledFrom mappings as array of segments
     my $this = shift;
 
-# NOTE: the segments are internally normalised (aligned) on read data
-#       you may want to normalise on contig data if the segments are
-#       used in a consensus calculation (and e.g. need to be sorted)
-#       re: use Segment->normaliseOnX method on all segments
-
-    return $this->{assembledFrom}; # array reference
+    return $this->{assembledFrom}; # array reference or undef
 }
 
 sub getContigRange {
-# find contig begin and end positions from segments of the assembledFrom map
+# find contig begin and end positions from the mapping segments
     my $this = shift;
 
-    my ($first, $final) = $this->getOuterSegments();
-
-    return undef if !$first;
-
-    if ($this->getAlignment() > 0) {
-# co-aligned contig and read segments
-	return ($first->getXstart, $final->getXfinis);
-    }
-    else {
-# counter-aligned contig and read segments
-        return ($final->getXstart, $first->getXfinis);
-    }
-}
-
-sub getOuterSegments {
-# private method
-    my $this = shift;
-
-# find contig begin and end positions from segments of the assembledFrom map
-
-    my ($first,$final);
+    my ($cstart,$cfinal);
 
     foreach my $segment (@{$this->{assembledFrom}}) {
-# ensure the correct alignment (it may have been changed outside after export)
-        $segment->normaliseOnY(); # ensure rstart <= rfinish
-        $first = $segment if (!defined($first) || 
-                              $first->getYstart < $segment->getYstart);
-        $final = $segment if (!defined($final) || 
-                              $final->getYfinis > $segment->getYfinis);
+# ensure the correct alignment cstart <= cfinish
+        $segment->normaliseOnX();
+        my $cs = $segment->getXstart();
+        $cstart = $cs if (!defined($cstart) || $cs < $cstart);
+        my $cf = $segment->getXfinis();
+        $cfinal = $cf if (!defined($cfinal) || $cf > $cfinal);
     }
-print "OverallAlignment UNDEFINED \n" unless $first;
-    return undef if !$first;
 
-    return ($first, $final);
+    return ($cstart, $cfinal);
 }
 
 sub assembledFromToString {
@@ -248,13 +222,3 @@ sub assembledFromToString {
 #-------------------------------------------------------------------
 
 1;
-
-
-
-
-
-
-
-
-
-

@@ -2077,13 +2077,13 @@ sub putContig {
 # first the meta data
 
     my $contigid = $this->putMetaDataForContig($contig);
-$contigid =9999; # testing purpose
+#$contigid =9999; # testing purpose
 
     return 0 unless $contigid;
 
     $contig->setContigID($contigid);
 
-# then load the overall mappings (and put the mapping ID's in the instances
+# then load the overall mappings (and put the mapping ID's in the instances)
 
     my $success = $this->putMappingsForContig($contig);
 
@@ -2149,7 +2149,7 @@ sub putMappingsForContig {
     my $contigid = $contig->getContigID();
     my $mappings = $contig->getMappings();
 
-my $TEST = 1;
+my $TEST = 0;
     my $mapping;
     foreach $mapping (@$mappings) {
 #
@@ -2185,8 +2185,11 @@ next;
         if ($mappingid) {
             my $segments = $mapping->getSegments();
             foreach my $segment (@$segments) {
-                my ($cstart, $rstart, $length) = $segment->getMetaData();
-print "metaData: id $mappingid c $cstart, r $rstart, l $length \n";
+                my $length = $segment->normaliseOnX(); # order with contig range
+                my $cstart = $segment->getXstart();
+                my $rstart = $segment->getYstart();
+#my ($cstart, $rstart, $length) = $segment->getMetaData();
+#print "metaData: id $mappingid c $cstart, r $rstart, l $length \n";
                 $accumulatedQuery .= "," if $accumulated++;
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
             }
@@ -2491,6 +2494,3 @@ sub getTagsForContig {
 #----------------------------------------------------------------------------------------- 
 
 1;
-
-
-

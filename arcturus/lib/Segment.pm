@@ -38,7 +38,7 @@ sub new {
 
     @{$this} = ($direction,$offset,$ys,$yf); # copy to local array
 
-    $this->normaliseOnY();
+#    $this->normaliseOnY();
 
     return $this;
 }
@@ -60,17 +60,21 @@ sub normaliseOnY {
 }
 
 sub normaliseOnX {
-# order X interval
+# order X interval, return length of interval
     my $this = shift;
 
-    $this->invert() if ($this->getXstart > $this->getXfinis);
+    my $length = $this->getXfinis() - $this->getXstart();
+
+    $this->invert() if ($length < 0);
+
+    return abs($length) + 1;
 }
 
 #----------------------------------------------------------------------
 
 sub getXstart {
     my $this = shift;
-# transform ystart via X = dY + o
+# transform ystart via X = d * Y + o
 #print "getXstart coefs: @$this \n";
     my $xstart = $this->[2]; # ystart
     $xstart = -$xstart if ($this->[0] < 0); # alignment
@@ -80,7 +84,7 @@ sub getXstart {
 
 sub getXfinis {
     my $this = shift;
-# transform yfinis via X = dY + o
+# transform yfinis via X = d * Y + o
     my $xfinis = $this->[3]; # yfinis
     $xfinis = -$xfinis if ($this->[0] < 0);
     $xfinis += $this->[1];
@@ -149,9 +153,11 @@ sub getXforY {
     my $this = shift;
     my $ypos = shift;
 
-# apply transformation X = d*Y + o
+# apply transformation X = d * Y + o
 
-    if ($ypos < $this->[2] || $ypos > $this->[3]) {
+    my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
+
+    if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
         return undef;
     }
     else {
@@ -165,12 +171,16 @@ sub getYforX {
     my $this = shift;
     my $xpos = shift;
 
-# apply transformation Y = d*X - o
+# apply transformation Y = d * X - o
 
     $xpos = -$xpos if ($this->[0] < 0);
     my $ypos = $xpos - $this->[1];
 
-    if ($ypos < $this->[2] || $ypos > $this->[3]) {
+# this interval test is independent of the ordering
+
+    my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
+
+    if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
         return undef; # out of range
     }
     else {
@@ -179,6 +189,7 @@ sub getYforX {
 }
 
 sub toString {
+# write segment to string as is (no normalisation done)
     my $this = shift;
 
     my $xstart = $this->getXstart();
@@ -187,28 +198,6 @@ sub toString {
     return "$xstart $xfinis    $this->[2] $this->[3]";
 }
 
-sub getMetaData {
-# returns xstart, ystart, length
-    my $this = shift;
-
-    $this->normaliseOnY();
-
-    my $ystart = $this->getYstart();
-    my $length = $this->getYfinis() - $ystart + 1;
-    my $xstart;
-    if ($this->getAlignment() > 0) {
-        $xstart = $this->getXstart();
-    }
-    else {
-        $xstart = $this->getXfinis();
-    }
-
-    return ($xstart, $ystart, $length);
-}
-
 #----------------------------------------------------------------------
 
 1;
-
-
-
