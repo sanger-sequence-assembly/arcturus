@@ -24,6 +24,7 @@ my $padton;
 my $padtox;
 my $depad;
 my $fastafh;
+my $contigids;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -36,6 +37,8 @@ while (my $nextword = shift @ARGV) {
     $fastafile = shift @ARGV if ($nextword eq '-fasta');
 
     $destdir = shift @ARGV if ($nextword eq '-destdir');
+
+    $contigids = shift @ARGV if ($nextword eq '-contigs');
 
     $padton = 1 if ($nextword eq '-padton');
     $padtox = 1 if ($nextword eq '-padtox');
@@ -84,11 +87,13 @@ if (defined($fastafile)) {
     }
 }
 
-$minlen = 1000 unless defined($minlen);
+$minlen = 1000 unless (defined($minlen) || defined($contigids));
+
+my $condition = defined($contigids) ? "CONTIG.contig_id IN ($contigids)" : "CONTIG.length >= $minlen";
 
 my $query = "select CONTIG.contig_id,CONTIG.length,CONSENSUS.sequence " .
     "from CONTIG left join CONSENSUS using(contig_id) ".
-    "where CONSENSUS.contig_id is not null and CONTIG.length >= $minlen";
+    "where CONSENSUS.contig_id is not null and $condition";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -140,7 +145,7 @@ $sth->finish();
 
 $dbh->disconnect();
 
-$fastafh->close();
+$fastafh->close() if defined($fastafh);
 
 exit(0);
 
@@ -162,6 +167,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
+    print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
