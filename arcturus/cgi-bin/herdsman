@@ -64,7 +64,7 @@ if (!$action || $action eq 'signon') {
         my %options = (mask=>'031000001111000001',linkItem=>'onItemName', linkTarget=>0,
                        headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
         my $table = $organisms->htmlTable(\%options);
-        $table =~ s?ITEMLINK?/cgi-bin/herdsman/signon?; 
+        $table =~ s?ITEMLINK?/cgi-bin/herdsman/signon?g;
         $table =~ s/dbasename/database/g;
         $page->add($table);
         $page->space;

@@ -389,7 +389,7 @@ sub opendb_MySQL {
 
 # open the ORGANISMS table in the arcturus database
 
-    $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1);
+    $self->{mother} = new ArcturusTable($self->{handle},'ORGANISMS','arcturus',1,'dbasename');
     if ($self->{mother}->{errors}) {
         &dropDead($self,"Failed to access table ORGANISMS on $self->{server}");
     }
