@@ -178,7 +178,7 @@ sub getNextRead {
 
     return undef unless ($seqid);
 
-    my $read = new Read();
+    my $read = new Read($this->getCurrentReadName());
 
     $read->setClone($clone);
     $read->setAspedDate($asped);
@@ -218,7 +218,7 @@ sub getNextRead {
     my ($quality) = $this->{sth}->{qual}->fetchrow_array();
 
     $read->setSequence($dna);
-    $read->setQuality($quality);
+    $read->setQuality([unpack("c*", $quality)]);
 
     $this->{sth}->{seqvecs}->execute($seqid);
 

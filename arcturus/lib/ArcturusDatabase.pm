@@ -121,18 +121,13 @@ sub populateDictionaries {
 
     $this->{Dictionary} = {};
 
-    $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'silow, sihigh');
-    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'identifier');
+    $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
+    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'identifier');
     $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
-    $this->{Dictionary}->{primer}       = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
     $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
-    $this->{Dictionary}->{strand}       = &createDictionary($dbh, 'STRANDS', 'strand', 'direction');
     $this->{Dictionary}->{basecaller}   = &createDictionary($dbh, 'BASECALLER', 'basecaller', 'name');
     $this->{Dictionary}->{svector}      = &createDictionary($dbh, 'SEQUENCEVECTORS', 'svector', 'name');
     $this->{Dictionary}->{cvector}      = &createDictionary($dbh, 'CLONINGVECTORS', 'cvector', 'name');
-# special case for CHEMISTRY/CHEMTYPES
-    $this->{Dictionary}->{chemistry}    = &createDictionary($dbh, 'CHEMISTRY LEFT JOIN arcturus.CHEMTYPES',
-							    'chemistry', 'type', 'USING(chemtype)');
 # a place holder for template dictionary which will be built on the fly
 #    $this->{Dictionary}->{template} = {};
 }
@@ -681,19 +676,139 @@ sub flushReadsToPending {
 sub putRead {
 # insert read into the database
     my $this = shift;
-    my $Read = shift || return;
+    my $read = shift || return;
 
-    if (ref($Read) ne 'Read') {
+    if (ref($read) ne 'Read') {
         print STDERR "putRead expects an instance of the Read class\n";
         return undef;
     }
 
-    my $errorstatus = $Read->status;
+    #my $errorstatus = $read->status;
 
-# a) test consistence and completeness
-# b) encode dictionary items; specical case: TEMPLATE
+# a) test consistency and completeness
+
+    my ($rc, $errmsg) = $this->checkReadForCompleteness($read);
+    return (0, "failed completeness check: $errmsg") unless $rc;
+
+    ($rc, $errmsg) = $this->checkReadForConsistency($read);
+    return (0, "failed consistency check: $errmsg") unless $rc;
+
+# b) encode dictionary items; special case: TEMPLATE
+
+    my $template_id = $this->getTemplateID($read);
+
+    return (0, "failed to retrieve template_id") unless defined($template_id);
+
 # c) insert (if not exists) 1) readname, then for read_id=last_insert_id: 2) meta data READS
 #                                             3) sequence into SEQUENCE 4) comments
+
+    my $dbh = $this->getConnection();
+
+    return (0, "no database connection") unless defined($dbh);
+
+    my $readname = $read->getReadName();
+
+    my $query = "insert into READS(readname) VALUES(?)";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($readname);
+
+    return (0, "failed to insert readname into READS table;DBI::errstr=$DBI::errstr")
+	unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+    my $readid = $dbh->{'mysql_insertid'};
+
+    $query = "update READS set asped=?,template_id=?,strand=?,chemistry=?,primer=? where read_id=?";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($read->getAspedDate(), $template_id, $read->getStrand(),
+			$read->getChemistry(), $read->getStrand(), $readid);
+
+    return (0, "failed to set asped,template_id,strand,chemistry,primer for $readname ($readid);" .
+	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+
+    $sth->finish();
+
+    return (1, "OK");
+}
+
+sub checkReadForCompleteness {
+    my $this = shift;
+    my $read = shift;
+
+    return (0, "invalid argument") unless (defined($read) && ref($read) && ref($read) eq 'Read');
+
+    return (0, "undefined readname") unless defined($read->getReadName());
+    return (0, "undefined sequence") unless defined($read->getSequence());
+    return (0, "undefined base-quality") unless defined($read->getQuality());
+    return (0, "undefined asped-date") unless defined($read->getAspedDate());
+    return (0, "undefined template") unless defined($read->getTemplate());
+    return (0, "undefined ligation") unless defined($read->getLigation());
+    return (0, "undefined insert-size") unless defined($read->getInsertSize());
+    return (0, "undefined strand") unless defined($read->getStrand());
+    return (0, "undefined chemistry") unless defined($read->getChemistry());
+    return (0, "undefined primer") unless defined($read->getPrimer());
+    return (0, "undefined low-quality-left") unless defined($read->getLowQualityLeft());
+    return (0, "undefined low-quality-right") unless defined($read->getLowQualityRight());
+    return (0, "undefined sequencing-vector") unless defined($read->getSequencingVector());
+    return (0, "undefined sequencing-vector-left") unless defined($read->getSequencingVectorLeft());
+    return (0, "undefined sequencing-vector-right") unless defined($read->getSequencingVectorRight());
+
+    return (1, "OK");
+}
+
+sub checkReadForConsistency {
+    my $this = shift;
+    my $read = shift;
+
+    # This method should check the template, ligation and insert size to ensure
+    # that they are mutually consistent.
+    #
+    # For now, assume everything is okay and return 1.
+    return (1, "OK");
+}
+
+sub getTemplateID {
+    my $this = shift;
+    my $read = shift;
+
+    my $dbh = $this->getConnection();
+
+    return undef unless defined($dbh);
+
+    my $query = "select template_id from TEMPLATE where name=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $template = $read->getTemplate();
+
+    my $rc = $sth->execute($template);
+
+    my ($template_id) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $template_id if defined($template_id);
+
+    $query = "insert into TEMPLATE(name) VALUES(?)";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $rc = $sth->execute($template);
+
+    if ($rc == 1) {
+	$template_id = $dbh->{'mysql_insertid'};
+    } else {
+	undef $template_id;
+    }
+
+    $sth->finish();
+
+    return $template_id;
 }
 
 sub updateRead {
