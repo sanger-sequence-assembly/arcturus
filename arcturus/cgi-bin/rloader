@@ -547,18 +547,29 @@ if ($logON || !$origin) {
         $nr = keys %dbfiles;
         print "($nr Pending reads found) ... ";
     # get files in READS and add to list
-        $querystring = "SELECT readname FROM $database.READS ";
+        $querystring = "SELECT readname FROM $database.READS";
         if ($fnfilter && $fnfilter ne 'HARVEST') {
             print "(using filename filter \"$fnfilter\") ..."; 
             $querystring .= "WHERE readname LIKE \"%${fnfilter}%\" ";
         }
+#        my $aref = $dbh->selectcol_arrayref($querystring);
+#	print "aref=$aref $brtag";
+#        my $len = @$aref; print "length $len $brtag";
 
-        $sth = $dbh->prepare ($querystring);
+        $sth = $dbh->prepare ($querystring); # print "$querystring $brtag";
         if ($sth->execute()) {
+#print "executed $brtag";
+#            my $aref = $sth->fetchall_arrayref();
+#            print "aref=$aref $brtag";
+#            my $len = @$aref; print "length $len $brtag";
+#my $line = 0;
             while (my $dbfile = $sth->fetchrow_array()) {
+#$line++; print "$line $dbfile " if (!($line % 10000) || $line > 260000);
                 print "! Double file name $dbfile $brtag" if  $dbfiles{$dbfile};
                 $dbfiles{$dbfile}++;
+#print "hashed $brtag";
             }
+#print "sampled $brtag";
         }
         else {
             print "query failed: '$querystring' $brtag $brtag";
@@ -569,7 +580,6 @@ if ($logON || !$origin) {
         $sth->finish();
         $nr = keys %dbfiles;
 
-        print "forceload ..." if ($forced);
         print "DONE $brtag $nr files found which have previously been processed$brtag$brtag";
         if ($nr == 0 ) {
             print "NULL result: query = '$querystring' $brtag $brtag";
@@ -578,6 +588,7 @@ if ($logON || !$origin) {
         print "... using" if ($fnfilter || $gbfilter);
         print " name filter \"$fnfilter\""     if ($fnfilter =~ /\S/);
         print " global filter \"$gbfilter\""   if ($gbfilter =~ /\S/); 
+        print "  (forceload)" if ($forced);
         print " $brtag";
     # output in array @$newfiles with names of files in disk
 
@@ -624,9 +635,9 @@ if ($logON || !$origin) {
         $sth->finish();
         $nr = keys %dbfiles;
 
-        print "forceload ..." if ($forced);
-
-        print "DONE ... $nr pending files found$brtag$brtag";
+        print "DONE ... $nr pending files found";
+        print "  (forceload)" if ($forced);
+        print "$brtag$brtag";
 
         undef my @pendingfiles;
         if ($gbfilter && $gbfilter eq "ORACLE") {
@@ -739,7 +750,7 @@ $LOADPERRUN =~ s/\W/x/g;
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','PRO',$PROJECT);
         }
         else {
-print "update RDD LGF LPR   assemblyname $assemblyname<br>";
+#print "update RDD LGF LPR   assemblyname $assemblyname<br>";
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','RDD',$ROOTDATADIR);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LGF',$arc_logfile) if ($logON);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LPR',$LOADPERRUN);
