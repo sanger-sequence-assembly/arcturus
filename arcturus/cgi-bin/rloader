@@ -739,7 +739,7 @@ $LOADPERRUN =~ s/\W/x/g;
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','PRO',$PROJECT);
         }
         else {
-#print "update RDD LGF LPR   assemblyname $assemblyname<br>";
+print "update RDD LGF LPR   assemblyname $assemblyname<br>";
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','RDD',$ROOTDATADIR);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LGF',$arc_logfile) if ($logON);
             $assembly->packAttribute ($assemblyname,'assemblyname','attributes','LPR',$LOADPERRUN);
