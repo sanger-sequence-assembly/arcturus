@@ -1,0 +1,128 @@
+#!/usr/local/bin/perl
+
+use DBI;
+use Digest::MD5 qw(md5_hex);
+use Compress;
+
+$usage = "Usage: updateDNA host:port dbname [TABLE]";
+
+$compressor = new Compress("ACGTN ");
+
+$dba = shift;
+
+die $usage unless $dba;
+
+($hosta,$porta) = split(/:/, $dba);
+
+$dbname = shift;
+
+die $usage unless $dbname;
+
+$table= shift;
+$table = 'READS' unless defined($table);
+
+$dsna = 'DBI:mysql:' . $dbname . ';host=' . $hosta . ';port=' . $porta;
+
+$dbha = DBI->connect($dsna, 'arcturus', '***REMOVED***',
+		     {PrintError => 0, RaiseError => 0});
+
+&db_die("Unable to connect to $dsna") unless $dbha;
+
+@maketable = ("DROP TABLE IF EXISTS $table",
+	      "CREATE TABLE $table SELECT read_id,sequence FROM AF.READS",
+	      "ALTER TABLE $table ADD PRIMARY KEY(read_id)",
+	      "OPTIMIZE TABLE $table"
+	      );
+
+foreach $query (@maketable) {
+    print STDERR "Executing \"$query\" ...\n";
+    $dbha->do($query);
+    &db_die("do($query) failed on $dsna");
+    print STDERR "Done.\n";
+}
+
+$lockquery = "LOCK TABLES $table WRITE";
+
+print STDERR "Trying to lock $table table on $dsna ...\n";
+
+$dbha->do($lockquery);
+&db_die("do($lockquery) failed on $dsna");
+
+$query = "SELECT read_id, sequence from $table";
+
+print STDERR "Executing $query on $dsna ...\n";
+
+$stha = $dbha->prepare($query);
+&db_die("prepare($query) failed on $dsna");
+
+$updatequery = "UPDATE $table SET sequence=? WHERE read_id=?";
+$update = $dbha->prepare($updatequery);
+&db_die("prepare($updatequery) failed on $dsna");
+
+$stha->execute();
+&db_die("execute($query) failed on $dsna");
+
+$nreads = 0;
+$nlen = 0;
+$clen = 0;
+$rate = 0;
+
+$format = "%8d %8d %10d %10d";
+$bs1 = "\010";
+$bs8 = "\010\010\010\010\010\010\010\010";
+$bs10 = $bs8 . $bs1 . $bs1;
+$bs = $bs8 . $bs1 . $bs8 . $bs1 . $bs10 . $bs1 . $bs10;
+
+printf STDERR $format, $nreads, $rate, $nlen, $clen;
+
+$t0 = time();
+
+while(@ary = $stha->fetchrow_array()) {
+    ($readid, $sequence) = @ary;
+    ($slena, $seqa) = $compressor->sequenceDecoder($sequence, 1);
+    $seqa =~ s/\s//g;
+    $seqa =~ s/\-/N/g;
+    $nlen += length($seqa);
+    $seqa = $compressor->sequenceEncoder($seqa, 1);
+
+    $update->execute($seqa, $readid);
+    &db_die("execute($updatequery) failed on read_id $readid in $dsna");
+
+    $nreads++;
+    $clen += length($seqa);
+
+    if (($nreads%1000) == 0) {
+	print STDERR $bs;
+	$t = time();
+	$dt = $t - $t0;
+	$rate = $nreads/$dt;
+	printf STDERR $format, $nreads, $rate, $nlen, $clen;
+    }
+}
+
+print STDERR $bs;
+$t = time();
+$dt = $t - $t0;
+$rate = $nreads/$dt;
+printf STDERR $format, $nreads, $rate, $nlen, $clen;
+print STDERR "\n";
+
+$stha->finish();
+$update->finish();
+
+print STDERR "Done. Found $nreads reads totalling $nlen bp.\n";
+
+$unlockquery = 'UNLOCK TABLES';
+
+$dbha->do($unlockquery);
+
+$dbha->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
