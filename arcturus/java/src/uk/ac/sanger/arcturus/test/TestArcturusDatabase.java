@@ -1,9 +1,10 @@
-import arcturus.database.*;
+import uk.ac.sanger.arcturus.*;
+import uk.ac.sanger.arcturus.database.*;
 
 import javax.naming.*;
 import javax.sql.*;
 import java.sql.*;
-import java.util.Properties;
+import java.util.*;
 
 public class TestArcturusDatabase {
     public static void main(String args[]) {
@@ -11,85 +12,104 @@ public class TestArcturusDatabase {
 	System.out.println("====================");
 	System.out.println();
 
-	try {
-	    testExistingDatabase("cn=dev,cn=jdbc", "cn=EIMER");
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	}
+	String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
 
-	DataSource ds = null;
+	String separator = "                    --------------------                    ";
 
-	try {
-	    ds = testNewMysqlDatabase("pcs3", 14642, "EIMER", "arcturus", "***REMOVED***");
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	}
+	Properties props = new Properties();
 
-	setLDAPCredentials();
-
-	try {
-	    testBindDataSource(ds, "cn=test,cn=jdbc", "cn=EIMER");
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	}
-
-	try {
-	    testExistingDatabase("cn=test,cn=jdbc", "cn=EIMER");
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	}
-    }
-
-    public static void setLDAPCredentials() {
 	Properties env = System.getProperties();
 
-	env.put(Context.SECURITY_AUTHENTICATION,
-		"simple");
-	env.put(Context.SECURITY_PRINCIPAL,
-		"cn=Manager,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk");
-	env.put(Context.SECURITY_CREDENTIALS,
-		"murgatroyd");
+	props.put(Context.INITIAL_CONTEXT_FACTORY, env.get(Context.INITIAL_CONTEXT_FACTORY));
+	props.put(Context.PROVIDER_URL, ldapURL);
+
+	try {
+	    System.out.println("TEST 0: Creating an ArcturusInstance");
+	    System.out.println();
+
+	    ArcturusInstance ai = new ArcturusInstance(props, "dev");
+
+	    System.out.println("Created " + ai);
+
+	    System.out.println();
+	    System.out.println(separator);
+	    System.out.println();
+
+	    System.out.println("TEST 1: Looking up EIMER");
+	    System.out.println();
+
+	    ArcturusDatabase adb = ai.findArcturusDatabase("EIMER");
+
+	    testArcturusDatabase(adb);
+
+	    System.out.println();
+	    System.out.println(separator);
+	    System.out.println();
+
+	    System.out.println("TEST 2: Iterating over the entries");
+	    System.out.println();
+
+	    Iterator iter = ai.iterator();
+
+	    while (iter.hasNext()) {
+		adb = (ArcturusDatabase)iter.next();
+
+		try {
+		    testArcturusDatabase(adb);
+		}
+		catch (SQLException sqle) {
+		    System.out.println("SQLException: " + sqle.getMessage());
+		}
+
+		System.out.println();
+	    }
+	}
+	catch (Exception e) {
+	    e.printStackTrace();
+	}
     }
 
-    public static void testExistingDatabase(String instance, String organism)
+    public static void setLDAPCredentials(Properties props) {
+	props.put(Context.SECURITY_AUTHENTICATION,
+		  "simple");
+	props.put(Context.SECURITY_PRINCIPAL,
+		  "cn=Manager,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk");
+	props.put(Context.SECURITY_CREDENTIALS,
+		  "murgatroyd");
+    }
+
+    public static void testArcturusDatabase(ArcturusDatabase adb)
 	throws NamingException, SQLException {
-	System.out.println("testExistingDatabase(\"" + instance + "\", \"" + organism + "\")");
-	ArcturusDatabase adb = new ArcturusDatabase(instance, organism);
+	System.out.println(adb);
 	Connection conn = adb.getConnection();
 	DatabaseMetaData dmd = conn.getMetaData();
 	System.out.println("Connection URL = " + dmd.getURL());
-	conn.close();
-    }
 
-    public static DataSource testNewMysqlDatabase(String hostname, int port, String database,
-						  String username, String password)
-	throws SQLException {
-	System.out.println("testNewMysqlDatabase(\"" + hostname + ", " + port + ", \"" + database +
-			   "\", \"" + username + "\", \"" + password +
-			   "\")");
-	DataSource ds = ArcturusDatabase.createMysqlDataSource(hostname, port, database,
-							       username, password);
+	String query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length)" +
+	    " from CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null and length >= ?";
 
-	if (ds != null) {
-	    Connection conn = ds.getConnection();
-	    DatabaseMetaData dmd = conn.getMetaData();
-	    System.out.println("Connection URL = " + dmd.getURL());
-	    conn.close();
-	    
+	PreparedStatement pstmt = conn.prepareStatement(query);
+
+	pstmt.setInt(1, 2000);
+
+	ResultSet rs = pstmt.executeQuery();
+
+	if (rs.next()) {
+	    int nContigs = rs.getInt(1);
+	    int nReads = rs.getInt(2);
+	    int nLength = rs.getInt(3);
+	    int avgLength = rs.getInt(4);
+	    int stdLength = rs.getInt(5);
+	    int maxLength = rs.getInt(6);
+
+	    System.out.println(nContigs + " contigs, containing " + nReads + " reads and " + nLength +
+			       " bp (length stats: " + avgLength + " +/- " + stdLength + ", max " +
+			       maxLength + ")");
 	}
 
-	return ds;
-    }
-
-    public static void testBindDataSource(DataSource ds, String instance, String organism)
-	throws SQLException, NamingException {
-	System.out.println("testBindDataSource(" + ds + ", \"" + instance + "\", \"" +
-			   organism + "\")");
-	ArcturusDatabase adb = new ArcturusDatabase(ds);
-	adb.bind(instance, organism);
+	rs.close();
+	pstmt.close();
+	conn.close();
     }
 }
