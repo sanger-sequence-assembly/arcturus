@@ -648,7 +648,7 @@ if ($logON || !$origin) {
     else {
         print "Scanning database $database for PENDING Reads only ... ";
         my $querystring = "SELECT PENDING.readname FROM $database.PENDING left join ";
-        $querystring .= "$database.READS on PENDING.record=READS.readname where READS.readname is null ";
+        $querystring .= "$database.READS on PENDING.readname=READS.readname where READS.readname is null ";
         $querystring .= "order by readname ";
 #        my $querystring = "SELECT readname FROM $database.PENDING order by readname ";
         $querystring .= "limit $LOADPERRUN" if $LOADPERRUN;
