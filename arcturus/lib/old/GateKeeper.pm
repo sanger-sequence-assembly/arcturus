@@ -1290,7 +1290,7 @@ sub GUI {
         $label = "arcturus";
     }
     my $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-    my $create = "/cgi-bin/new/newcreate/organism/getform".$cgi->postToGet(1,'session');
+    my $create = "/cgi-bin/create/organism/getform".$cgi->postToGet(1,'session');
 #    my $create = "/cgi-bin/create/organism/getform".$cgi->postToGet(1,'session');
     $table .= "<tr><td $cell><a href=\"$create\" $alt> $label </a></td></tr>";
     if ($database && $database ne 'arcturus') {
@@ -1406,7 +1406,7 @@ sub GUI {
     if ($database && $database ne 'arcturus') {
 # $title = "LOAD TAG INFORMATION FOR ".uc($database);
 # $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $update = "/cgi-bin/new/newcreate/existing/getform".$cgi->postToGet(1,@include);
+        my $update = "/cgi-bin/create/existing/getform".$cgi->postToGet(1,@include);
         $table .= "<tr><td $cell><a href=\"$update\"> $database </a></td></tr>";
         $update = "/cgi-bin/amanager/specify/assembly".$cgi->postToGet(1,@include); # other URL
         $table .= "<tr><td $cell><a href=\"$update\" target='workframe'> Assembly </a></td></tr>";
@@ -1417,7 +1417,7 @@ sub GUI {
         my $update = "/cgi-bin/umanager/getmenu".$cgi->postToGet(1,'session');
         $table .= "<tr><td $cell><a href=\"$update\"> Users </a></td></tr>";
 #    $update = "/cgi-bin/update/newform".$cgi->postToGet(1,'session');
-        $update = "/cgi-bin/new/newcreate/arebuild".$cgi->postToGet(1,'session');
+        $update = "/cgi-bin/create/arebuild".$cgi->postToGet(1,'session');
         $table .= "<tr><td $cell><a href=\"$update\"> arcturus </a></td></tr>";
     }
     $table .= "<tr><td $cell> </td></tr>";
