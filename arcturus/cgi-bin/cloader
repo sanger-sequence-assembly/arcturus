@@ -13,6 +13,7 @@ use ContigBuilder;
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
+print "content-type: text/plain\n\n";
 my $GateKeeper = GateKeeper->new('mysql',0);
 
 $GateKeeper->cgiHeader(1); # return string HTML if in CGI mode
