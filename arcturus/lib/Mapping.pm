@@ -18,7 +18,7 @@ sub new {
 
     $this->setMappingName($identifier) if $identifier;
 
-    $this->{cacheContigRange} = 0;
+    $this->{cacheContigRange} = 1;
 
     return $this;
 }
@@ -238,7 +238,7 @@ print "shift $offset  counts $scounts{$offset} \n" if $list;
 print "building contig range of this mapping offset $shift \n" if $list;
         my $range = &findContigRange($segment{$shift});
 print "range $range @$range\n" if $list;
-        $this->setContigRange($range);
+        #$this->setContigRange($range);
     }
 
     return (1,$align,$shift);
@@ -406,12 +406,20 @@ sub assembledFromToString {
 
 sub toString {
     my $this = shift;
+    my $flags = shift || 0;
+
     $this->{contigrange} = undef;
-    my ($cstart, $cfinish) = $this->getContigRange();
     my $mappingname = $this->getMappingName();
     my $direction = $this->getAlignmentDirection();
 
-    my $string = "Mapping[name=$mappingname, sense=$direction, contigrange=[$cstart, $cfinish]\n";
+    my $string = "Mapping[name=$mappingname, sense=$direction";
+
+    if (!$flags) {
+	my ($cstart, $cfinish) =  $this->getContigRange();
+	$string .= ", contigrange=[$cstart, $cfinish]";
+    }
+
+    $string .= "\n";
 
     foreach my $segment (@{$this->{assembledFrom}}) {
 	$string .= "    " . $segment->toString() . "\n";
