@@ -17,7 +17,23 @@ $scriptname = $cgi->script_name;
 $debug = $cgi->param('debug');
 $instance = $cgi->param('instance');
 
-$instance = $ENV{'MYSQL_INSTANCE'} unless defined($instance);
+unless (defined($instance)) {
+    @allinstances = ('babel.prod', 'babel.dev', 'babel.test',
+		     'pcs3.prod',  'pcs3.dev',  'pcs3.test');
+
+    print "Please select the instance that you wish to analyse:\n";
+    print "<UL>\n";
+
+    foreach $instance (@allinstances) {
+	print "<LI><A HREF=\"$scriptname?instance=$instance\">$instance</A>\n";
+    }
+
+    print "</UL>\n";
+
+    print $cgi->end_html;
+
+    exit(0);
+}
 
 $database = $cgi->param('database');
 $table = $cgi->param('table');
@@ -37,7 +53,6 @@ if(defined($database) && defined($table)) {
     $query = "USE $database";
     $dbh->do($query);
     if ($DBI::err) {
-	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
 	print $cgi->h2("Table description for $database.$table on instance $instance");
