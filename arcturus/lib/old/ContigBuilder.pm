@@ -2113,9 +2113,9 @@ print STDOUT "**** Testing assembly $assembly **** $break$break";
 
 # now test if any blocked entries found
 
-    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
-        $report = "Blocked entries detected in assembly $assembly";
-    }
+#    elsif ($R2C->probe('contig_id',undef,"assembly=$assembly")) {
+#        $report = "Blocked entries detected in assembly $assembly";
+#    }
 
     return $report;
 }
