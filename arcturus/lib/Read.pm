@@ -133,7 +133,7 @@ sub addAlignToTrace {
 
 sub getAlignToTrace {
     my $this = shift;
-    return $this->{alignToTrace}; # array of arrays
+    return $this->{alignToTrace}; # undef or array of arrays
 }
 
 sub isEdited {
@@ -539,7 +539,7 @@ sub compareSequence {
 
 sub writeToCafForAssembly {
 # write this read in caf format (unpadded)
-# include align to trace file information and possible tags
+# include align-to-trace file information and possible tags
     &writeToCaf(shift,shift,1);
 }
 
@@ -619,11 +619,9 @@ sub writeDNA {
 
     $marker = '>' unless defined($marker); # default FASTA format
 
-    my $dna = $this->getSequence();
-
-    if (defined($dna)) {
-	print $FILE "\n$marker$this->{readname}\n";
+    if (my $dna = $this->getSequence()) {
 # output in blocks of 60 characters
+	print $FILE "\n$marker$this->{readname}\n";
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
@@ -643,16 +641,14 @@ sub writeBaseQuality {
 
 # the quality data go into a separt
 
-    my $quality = $this->getQuality();
-
-    if (defined($quality)) {
-	print $FILE "\n$marker$this->{readname}\n";
+    if (my $quality = $this->getQuality()) {
 # output in lines of 25 numbers
-	my @bq = @{$quality};
-	while (my $n = scalar(@bq)) {
-            my $m = ($n > 24) ? 24 : $n-1;
-	    print $FILE join(' ',@bq[0..$m]),"\n";
-	    @bq = @bq[25..($n-1)];
+	print $FILE "\n$marker$this->{readname}\n";
+	my $n = scalar(@$quality) - 1;
+        for (my $i = 0; $i <= $n; $i += 25) {
+            my $m = $i + 24;
+            $m = $n if ($m > $n);
+	    print $FILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
 }

@@ -741,13 +741,13 @@ sub getReadsForContig {
 
     my $sth = $dbh->prepare_cached($query);
 
-print STDERR "getReadsForContig ContigID: $query\n";
+# print STDERR "getReadsForContig ContigID: $query\n";
     my $nr = $sth->execute($contig->getContigID) || &queryFailed($query);
 
     my @reads;
 
     while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
-print STDERR "results: $read_id, $seq_id, $version, @attributes\n";
+# print STDERR "results: $read_id, $seq_id, $version, @attributes\n";
 	my $read = new Read();
 
         $read->setReadID($read_id);
@@ -814,7 +814,7 @@ sub getSequenceForReads {
     my $query = "select seq_id,sequence,quality from SEQUENCE " .
                 " where seq_id in ($range)";
 
-    print STDERR "getSequenceForReads : $query \n";
+#print STDERR "getSequenceForReads : $query \n";
     my $sth = $dbh->prepare($query);
 
 # pull the data from the SEQUENCE table in bulk
@@ -841,7 +841,8 @@ sub getSequenceForReads {
 
     $sth->finish();
 
-# test if all objects have been completed ?
+# NOTE : test if all objects have been completed to be done outside this method
+#        see getUnassembledReads and testContig
 }
 
 #-----------------------------------------------------------------------------
@@ -873,7 +874,7 @@ sub getSequenceForRead {
                   "  and READS.read_id = SEQ2READ.read_id" .
                   "  and READS.readname = ?";
     }
-print STDERR "getSequenceForRead: $query ($value)\n";
+# print STDERR "getSequenceForRead: $query ($value)\n";
 
     my $dbh = $this->getConnection();
 
@@ -1094,48 +1095,29 @@ sub areReadsNotInDatabase {
     return \@notPresent;
 }
 
-#****************  
-sub addReadsToPending {
-# OBSOLETE, but TEMPLATE for bulk loading add readnames to the PENDING table
-    my $this      = shift;
-    my $readnames = shift; # array reference
-    my $multiline = shift; # 
-
-    if (ref($readnames) ne 'ARRAY') {
-        print STDERR "addReadsToPending expects an array as input\n";
-        return undef;
-    }
-
-# this section deals with multiline inserts; active when multiline defined
-# a buffer is filled up until the buffer exceeds the limit set
-
-    if (defined($multiline)) {
-    }
-
-# okay
-
-    my $dbh = $this->getConnection();
-
-    my $query = "insert ignore into PENDING (readname) VALUES ('".join("'),('",@$readnames)."')";
-
-    my $sth = $dbh->prepare($query);
-
-    return 1 if $sth->execute();
-
-    &dataBaseError("addReadsToPending: failed");
-
-    return 0;
-}
-  
-sub flushReadsToPending {
-# flush any remaining entries in the buffer
+sub getUnassembledReads {
+# return an array of Read instances with unassembled reads
     my $this = shift;
 
-    my @dummy;
-    
-    $this->addReadsToPending(\@dummy, 0);
+# to be  completed
+
+    my @reads;
+
+# add the sequence (in bulk)
+
+    $this->getSequenceForReads([@reads]);
+
+    my $complete = 1;
+    foreach my $read (@reads) {
+        next if $read->hasSequence();
+        print STDERR "Missing sequence for Read ".$read->getReadName()."\n";
+        $complete = 0;
+    }
+
+    return $complete;
+
 }
-#****************
+
 #------------------------------------------------------------------------------
 
 sub putRead {
@@ -1729,7 +1711,6 @@ sub getContigByID {
     undef my $contig;
 
     if (my @attributes = $sth->fetchrow_array()) {
-print STDERR "result: @attributes\n";
 
 	$contig = new Contig();
 
@@ -1752,6 +1733,7 @@ sub addMetaDataForContig {
     my $this = shift;
     my $contig = shift; # instyance of Contig class
     my ($length,$ncntgs,$nreads,$newreads,$cover,$readnamehash) = @_;
+print STDERR "Contig attributes: $length,$ncntgs,$nreads,$newreads,$cover\n";
 
     $contig->setReadNameHash($readnamehash);    
 
@@ -2026,6 +2008,48 @@ sub putContig {
 
 
 }
+#****************  
+sub addReadsToPending {
+# OBSOLETE, but TEMPLATE for bulk loading  of SEGMENT and MAPPING
+    my $this      = shift;
+    my $readnames = shift; # array reference
+    my $multiline = shift; # 
+
+    if (ref($readnames) ne 'ARRAY') {
+        print STDERR "addReadsToPending expects an array as input\n";
+        return undef;
+    }
+
+# this section deals with multiline inserts; active when multiline defined
+# a buffer is filled up until the buffer exceeds the limit set
+
+    if (defined($multiline)) {
+    }
+
+# okay
+
+    my $dbh = $this->getConnection();
+
+    my $query = "insert ignore into PENDING (readname) VALUES ('".join("'),('",@$readnames)."')";
+
+    my $sth = $dbh->prepare($query);
+
+    return 1 if $sth->execute();
+
+    &dataBaseError("addReadsToPending: failed");
+
+    return 0;
+}
+  
+sub flushReadsToPending {
+# flush any remaining entries in the buffer
+    my $this = shift;
+
+    my @dummy;
+    
+    $this->addReadsToPending(\@dummy, 0);
+}
+#****************
 
 sub testContigForExport {
     &testContig(shift,shift,0);
@@ -2056,20 +2080,21 @@ sub testContig {
             $ID = $read->getReadName() if $level;
 	    $ID = $read->getSequenceID() if !$level;
             if (!defined($ID)) {
-                print STDERR "Missing identifier in Read $read::getReadName\n";
+                print STDERR "Missing identifier in Read ".$read->getReadName."\n";
                 $success = 0;
             }
             $identifier{$ID} = $read;
 # test presence of sequence
             if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
-                print STDERR "Missing DNA or BaseQuality in Read $read::getReadName\n";
+                print STDERR "Missing DNA or BaseQuality in Read ".
+                              $read->getReadName."\n";
                 $success = 0;
             } 
         }
         return 0 unless $success;       
     }
     else {
-        print STDERR "Contig $contig::getContigName has no Reads\n";
+        print STDERR "Contig ".$contig->getContigName." has no Reads\n";
         return 0;
     }
 
@@ -2084,7 +2109,8 @@ sub testContig {
 	    $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
             if (!$identifier{$ID}) {
-                print STDERR "Missing Read for Mapping $mapping::getReadName ($ID)\n";
+                print STDERR "Missing Read for Mapping ".$mapping->getReadName.
+                             " ($ID)\n";
                 $success = 0;
             }
             delete $identifier{$ID}; # delete the key
@@ -2092,30 +2118,30 @@ sub testContig {
         return 0 unless $success;       
     } 
     else {
-        print STDERR "Contig $contig::getContigName has no Mappings\n";
+        print STDERR "Contig ".$contig->getContigName." has no Mappings\n";
         return 0;
     }
 # now there should be no keys left (when Reads and Mappings correspond 1-1)
     if (scalar(keys %identifier)) {
         foreach my $ID (keys %identifier) {
             my $read = $identifier{$ID};
-            print STDERR "Missing Mapping for Read $read::getReadName ($ID)\n";
+            print STDERR "Missing Mapping for Read ".$read->getReadName." ($ID)\n";
         }
         return 0;
     }
 
-# test the number of Reads found against the contig metadata (export only; non-fatal)
+# test the number of Reads found against the contig metadata (info only; non-fatal)
     
     if (my $numberOfReads = $contig->getNumberOfReads()) {
         my $reads = $contig->getRead();
         my $nreads =  scalar(@$reads);
         if ($nreads != $numberOfReads) {
-	    print STDERR "Read count error for contig $contig::getContigName ";
-            print STDERR "(actual $nreads, metadata $numberOfReads)\n";
+	    print STDERR "Read count error for contig ".$contig->getContigName.
+                         " (actual $nreads, metadata $numberOfReads)\n";
         }
     }
     else {
-        print STDERR "Missing metadata for contig::getContigName\n";
+        print STDERR "Missing metadata for ".contig->getContigName."\n";
     }
     return 1;
 }
@@ -2151,7 +2177,7 @@ sub getMappingsForContig {
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
     while(my ($rn, $sid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
-print STDERR "mapping:  $rn, $sid, $mid, $cs, $cf, $dir \n";
+#print STDERR "mapping:  $rn, $sid, $mid, $cs, $cf, $dir \n";
 # intialise and add readname and sequence ID
         my $mapping = new Mapping();
         $mapping->setReadName($rn);

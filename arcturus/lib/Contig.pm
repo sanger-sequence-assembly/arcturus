@@ -324,18 +324,25 @@ sub writeToCaf {
 
 # dump all reads
 
+print STDERR "Dumping Reads\n"; my $nr = 0;
+
     my $reads = $this->getRead();
     foreach my $read (@$reads) {
         $read->writeToCafForAssembly($FILE);
+print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
     }
 
 # write the overall maps for for the contig ("assembled from")
 
+
+print STDERR "Dumping Contig\n";
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
+print STDERR "Dumping Mappings\n"; my $mr = 0;
     my $mappings = $this->getMapping();
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
+print STDERR " Map ".$mapping->getSequenceID()." ($mr) done\n" if ((++$mr)%1000 == 0);    
     }
 
 # write tags, if any
@@ -349,7 +356,11 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
+print STDERR "Dumping DNA\n";
+
     $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
+
+print STDERR "Dumping BaseQuality\n";
 
     $this->writeBaseQuality($FILE,"BaseQuality : ");
 
@@ -361,6 +372,14 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+
+print STDERR "Dumping Reads\n"; my $nr = 0;
+
+    my $reads = $this->getRead();
+    foreach my $read (@$reads) {
+        $read->writeToFasta($DFILE,$QFILE);
+print STDERR " Read ".$read->getSequenceID()." ($nr) done\n" if ((++$nr)%1000 == 0); 
+    }
 
     $this->writeDNA($DFILE);
 
@@ -380,8 +399,8 @@ sub writeDNA {
     my $identifier = $this->getContigName();
 
     if (my $dna = $this->getSequence()) {
-	print $FILE "\n$marker$identifier\n";
 # output in blocks of 60 characters
+	print $FILE "\n$marker$identifier\n";
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
@@ -405,13 +424,13 @@ sub writeBaseQuality {
     my $identifier = $this->getContigName();
 
     if (my $quality = $this->getQuality()) {
-	print $FILE "\n$marker$identifier\n";
 # output in lines of 25 numbers
-	my @bq = @{$quality};
-	while (my $n = scalar(@bq)) {
-            my $m = ($n > 24) ? 24 : $n-1;
-	    print $FILE join(' ',@bq[0..$m]),"\n";
-	    @bq = @bq[25..($n-1)];
+	print $FILE "\n$marker$identifier\n";
+	my $n = scalar(@$quality) - 1;
+        for (my $i = 0; $i <= $n; $i += 25) {
+            my $m = $i + 24;
+            $m = $n if ($m > $n);
+	    print $FILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
     else {
