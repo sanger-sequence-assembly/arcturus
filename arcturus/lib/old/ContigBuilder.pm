@@ -752,19 +752,21 @@ print "Processing contig $cnames->[1] ($cnames->[0])$brtag" if $LIST;
         $CONTIGS->rollback(0); # clear any (previous) rollbacks 
         if (!$CONTIGS->newrow('contigname',$cnames->[1],\@columns,\@cvalues)) {
 # if contig already exists get contig number
-            if ($CONTIGS->{errors} =~ /already\sexists/) {
+            if ($CONTIGS->{qerror} =~ /already\sexists/) {
                 $contig =  $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
-                print "contig $cnames->[1] is already present as number $contig$brtag";
+                $status->{warnings}++;
+                $status->{diagnosis} .= "contig $cnames->[1] is already present as number $contig$brtag";
                 $CONTIGS->status(1); # clear the error status
             }
             else {
-                $report .= "$CONTIGS->{errors}${brtag}";
+                $status->{errors}++;
+                $status->{diagnosis} .= "Failed to add contig $cnames->[1]: $CONTIGS->{qerror}${brtag}";
                 $complete = 0;
-print "report !CONTIGS : $report "; return 0;
+#print "report !CONTIGS : $report "; return 0;
             }
         }
         else {
-    # it's a new contig: get its number
+# it's a new contig: get its number
             $contig = $CONTIGS->associate('contig_id',$cnames->[1],'contigname');
             $CONTIGS->signature($userid,'contig_id',$contig);
 print "Contig $cnames->[1] ($cnames->[0]) added as nr $contig to CONTIGS ($counts->[0] reads)$brtag";
