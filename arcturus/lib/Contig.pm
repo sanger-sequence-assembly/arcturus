@@ -32,7 +32,7 @@ sub setArcturusDatabase {
     my $this = shift;
     my $ADB  = shift;
 
-    if (ref($ADB) =~ /^ADB(Contig|Assembly)$/) {
+    if (ref($ADB) eq 'ArcturusDatabase') {
         $this->{ADB} = $ADB;
     }
     else {

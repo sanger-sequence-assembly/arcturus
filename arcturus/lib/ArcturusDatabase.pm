@@ -4,12 +4,9 @@ use strict;
 
 use DBI;
 use DataSource;
+use ArcturusDatabase::ADBAssembly;
 
-use Exporter ();
-
-our @ISA = qw(Exporter);
-
-our @EXPORT = qw(queryFailed); # export to remote sub-classes
+our @ISA = qw(ArcturusDatabase::ADBAssembly);
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -18,8 +15,24 @@ our @EXPORT = qw(queryFailed); # export to remote sub-classes
 sub new {
     my $class = shift;
 
-    my $this = {};
-    bless $this, $class;
+    my $this = $class->SUPER::new(@_);
+
+    $this->open(@_); # get the data source
+
+    return undef unless $this->{DataSource}; # test it
+
+    $this->init(); # get the database connection
+
+    return undef unless $this->{Connection}; # test it
+
+    $this->populateDictionaries();
+
+    return $this;
+}
+
+sub open {
+# open the data source
+    my $this = shift;
 
     my $ds = $_[0];
 
@@ -75,34 +88,13 @@ sub getURL {
     }
 }
 
-sub dataBaseError {
-# local function error message on STDERR
-    my $msg  = shift;
-
-    print STDERR "$msg\n" if $msg;
-
-    print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
-
-    return $DBI::err;
-}
-
-sub queryFailed {
-    my $query = shift;
-
-    $query =~ s/\s+/ /g; # remove redundent white space
-
-    &dataBaseError("FAILED query: $query");
-
-    return 0;
-}
-
 sub errorStatus {
 # returns DBI::err  or 0
     my $this = shift;
 
     return "Can't get a database handle" unless $this->getConnection();
 
-    return &dataBaseError() || 0;
+    return $DBI::err || 0;
 }
 
 sub disconnect {

@@ -1,4 +1,4 @@
-package ADBContig;
+package ArcturusDatabase::ADBContig;
 
 use strict;
 
@@ -10,10 +10,9 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 use Contig;
 use Mapping;
 
-our (@ISA);
-@ISA = qw(ADBRead);
+our @ISA = qw(ArcturusDatabase::ADBRead);
 
-use ArcturusDatabase qw(queryFailed);
+use ArcturusDatabase::ADBRoot qw(queryFailed);
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
@@ -234,9 +233,12 @@ sub putContig {
 # enter a contig into the database
     my $this = shift;
     my $contig = shift; # Contig instance
+    my $project = shift; # optional Project instance
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
+    die "ArcturusDatabase->putContig expects a Project instance ".
+        "as parameter" if ($project && ref($project) ne 'Project');
 
 # do the statistics on this contig, allow zeropoint correction
 #    this method also checks and orders the mappings 
@@ -290,6 +292,11 @@ $previous=0 if $TEST;
 # pull out previous contig mappings and compare them one by one with contig
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
+# add the previous contig ID to the contig list of the Project
+            if ($project) {
+                $this->assignContigToProject($previous,$project);
+                $project->addContigID($previous->getContigID());
+            }
             return $previous->getContigID(),"Contig $contigname is ".
                    "identical to contig ".$previous->getContigName();
         }
@@ -304,6 +311,7 @@ $previous=0 if $TEST;
     my $message = "$contigname ";
     if ($contigids && @$contigids) {
 # compare with each previous contig and return/store mapings/segments
+        my @linked;
         $message .= "has parent(s) : @$contigids";
         foreach my $contigid (@$contigids) {
             my $previous = $this->getContig(ID=>$contigid,
@@ -316,6 +324,7 @@ $previous=0 if $TEST;
             }
             $this->getReadMappingsForContig($previous);
             my ($linked,$deallocated) = $contig->linkToContig($previous);
+            push @linked, $previous->getContigID() if $linked;
             $previous = $previous->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
             if ($deallocated) {
@@ -323,17 +332,25 @@ $previous=0 if $TEST;
   		            "  (possibly split contig?)";
             }
         }
+# determine the default project_id unless it's already specified
+
+$project = 1; # test
+$project = $this->getProject(contigIDs => \@linked) unless $project;
+$project = $this->getProject(contigIDs => $contigids) unless $project;
+undef $project; #test
+
 # to be removed after testing
 print STDOUT "Contig ".$contig->getContigName."\n" if $TEST;
 foreach my $mapping (@{$contig->getContigToContigMappings}) {
 print STDOUT ($mapping->assembledFromToString || "empty link\n") if $TEST;
 }
 # until here
+
     }
     else {
 # the contig has no precursor, is completely new
         $message = "has no parents";
-# add a dummy mapping to the contig (without segments)
+# ? add a dummy mapping to the contig (without segments)
 #        my $mapping = new Mapping();
 #        $mapping->setSequenceID(0); # parent 0
 #        $contig->addMapping($mapping);
@@ -371,6 +388,10 @@ return 0,$message if $TEST; # testing
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
     $this->buildHistoryTreeForContig($contigid);
+
+# and assign the contig to the specified project
+
+    $this->assignContigToProject($contig,$project) if $project;
 
     return $contigid, $message;
    
@@ -598,13 +619,17 @@ sub deleteContig {
 
     return 0,"Contig $contigid is, or may be, a parent and can't be deleted" 
         if (!$isparent || $isparent > 0); # also exits on failed query
+
+# safeguard: contig may not belong to a project and have checked 'out' status
+
+    return 0,"Contig $contigid has project checked status 'out' and can't be deleted"
+    unless $this->unlinkContigID($contigid); # deletes from CONTIG2PROJECT
     
 # delete from the primary tables
 
     my $success = 1;
     foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
-        my $query = "delete from $table where contig_id=$contigid"; 
-# print "$query\n";
+        my $query = "delete from $table where contig_id = $contigid"; 
         my $deleted = $dbh->do($query) || &queryFailed($query);
         $success = 0 unless $deleted;
     }

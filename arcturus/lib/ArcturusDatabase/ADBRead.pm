@@ -1,17 +1,16 @@
-package ADBRead;
+package ArcturusDatabase::ADBRead;
 
 use strict;
 
-use ArcturusDatabase;
+use ArcturusDatabase::ADBRoot;
 
 use Compress::Zlib;
 
 use Read;
 
-our (@ISA);
-@ISA = qw(ArcturusDatabase);
+our @ISA = qw(ArcturusDatabase::ADBRoot);
 
-# use ArcturusDatabase qw(queryFailed);
+#use ArcturusDatabase;
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -21,8 +20,6 @@ sub new {
     my $class = shift;
 
     my $this = $class->SUPER::new(@_) || return undef;
-
-    $this->populateDictionaries();
 
     $this->defineReadMetaData();
 
@@ -44,6 +41,8 @@ sub defineReadMetaData {
 
 sub populateDictionaries {
     my $this = shift;
+
+    return if defined($this->{Dictionary});
 
     my $dbh = $this->getConnection();
 
@@ -76,6 +75,8 @@ sub populateDictionaries {
 
 sub populateLoadingDictionaries {
     my $this = shift;
+
+    return if defined($this->{LoadingDictionary});
 
     my $dbh = $this->getConnection;
 
@@ -295,7 +296,7 @@ sub getRead {
                   from READS,SEQ2READ,TEMPLATE 
                  where READS.read_id = SEQ2READ.read_id
                    and READS.template_id = TEMPLATE.template_id ";
-
+#$query .= " xxx ";
     my $nextword;
     my $readitem;
     undef my $version;
@@ -1173,6 +1174,7 @@ sub putRead {
 
 # b) encode dictionary items; special case: template & ligation
 
+#    $this->populateLoadingDictionaries(); # autoload (ignored if already done)
     my $dbh = $this->getConnection();
 
     # CLONE
