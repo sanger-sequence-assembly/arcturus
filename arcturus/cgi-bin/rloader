@@ -17,8 +17,7 @@ BEGIN {
 
 use GateKeeper; 
 use ReadsReader;
-use ADB_get_caf;
-use Compress;
+#use PathogenRepository;
 
 ##############################################################################
 # unbuffered output
@@ -78,6 +77,7 @@ $config{GBF} = '';
 my $arc_cgi_dir = $config->get('ARC_CGI_DIR');
 my $arc_log_dir = $config->get('ARC_LOG_DIR');
 my $db_manager  = $config->get('db_manager'); 
+my $BADGERDIR   = $config->get('BADGERDIR');
 
 $config{LGF} = "$arc_log_dir/rloader.DATABASE.log"; # default logfile
 
@@ -120,7 +120,7 @@ if ($cgi) {
     undef my $error;
     if ($option eq 'getform') {
         $page = $GateKeeper->GUI('READS loader');
-        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+#        $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
         $page->form("$arc_cgi_dir/rloader/$database/specify");
         $page->add("<BR><BR>ARCTURUS READS loader specifications<P><P>",0,0,"size=+1");
         my %options = (mask=>'011000001111000001',
@@ -155,7 +155,8 @@ if ($cgi) {
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source = $cgi->parameter('source');   # compulsory
             my $redirect = "/cgi-bin/rloader/$database/getform";
-            $redirect .= $cgi->postToGet() if $cgi->MethodGet; 
+            $redirect .= $cgi->postToGet()   if $cgi->MethodGet; 
+            $GateKeeper->transfer($redirect) if $cgi->MethodGet;
             $GateKeeper->transfer($redirect) if $cgi->{und_error};
         }
         else {
@@ -188,6 +189,12 @@ if ($cgi) {
             $page->add($cgi->PrintVariables());
         }
         else {
+# test if the root data directory is defined
+            if (!$config{RDD} || $config{RDD} =~ /to be d/) {
+                $config{RDD} = `$BADGERDIR/pfind -q $database`;
+#              my $repository = new PathogenRepository;
+#              $config{RDD} = $repository->getAssemblyDirectory($database); 
+             }
     # open assembly database; abort if no assemblies defined
             $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
             if ($assembly && $assembly->count() > 0) {
@@ -254,20 +261,22 @@ if ($cgi) {
     }
 
     elsif ($option eq 'process') {
-# $page->sectionheader($cgi->PrintVariables());
         $GateKeeper->cgiHeader(2); # return string HTML under CGI
         $page = $cgi->openPage('ARCTURUS READS loader');
         $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
         $page->frameborder(100,15,'white',10);
         $page->center(1);
 
+        $database = $cgi->parameter('database'); # redefine database
         if ($organisms->associate('reads_pending',$database,'dbasename')) {
             $source = $cgi->parameter('source');   # compulsory
         }
         else {
             $source = 0;
         }
-        $database = $cgi->parameter('database'); # redefine database
+#print "$cgi->PrintVariables() \n";
+#$page->add($cgi->PrintVariables());
+#$page->add("source = $source");
     # get assembly 
         $assembly     = $organisms->spawn('ASSEMBLY',$database,0,1);
         $assemblyname = $cgi->parameter('assemblyname'); # translate into number
@@ -328,7 +337,7 @@ if ($cgi) {
         $page->sectionheader("ARCTURUS READS loader specifications",3,0);
         $page->partition(1);
         $page->sectionheader("Sorry, an error status aborts this loader session",3,1);
-# $page->sectionheader($cgi->PrintVariables());
+# $page->add($cgi->PrintVariables());
         $page->errorbox($error,$lreturn);
         $page->flush();
         $GateKeeper->disconnect;
@@ -383,13 +392,14 @@ else { # invoked from the command line (ejz/adh only)
         }
         elsif ($gbfilter) {
     # test if gbfilter is a project name; find its root directory ? 
-            my @rootdatadir = `pfind $gbfilter`;
-            chomp $rootdatadir[0];
-            if ($rootdatadir[0] =~ /nfs/) {
-                $config{PDD} = $rootdatadir[0] ;
-                $config{PDD} =~ s/.*(\/nfs\S*)$/$1/;
-                $config{PDD} =~ s/^(.*)$gbfilter$/$1/;
-            }
+            $config{PDD} = `$BADGERDIR/pfind -q $gbfilter`;
+#            my @rootdatadir = `pfind $gbfilter`;
+#            chomp $rootdatadir[0];
+#            if ($rootdatadir[0] =~ /nfs/) {
+#                $config{PDD} = $rootdatadir[0] ;
+#                $config{PDD} =~ s/.*(\/nfs\S*)$/$1/;
+#                $config{PDD} =~ s/^(.*)$gbfilter$/$1/;
+#            }
         }
         else {
             $gbfilter = '';
@@ -492,7 +502,8 @@ if ($logON || !$origin) {
 
     undef my %dbfiles;
     my $newfiles; my $nr;
-    my $reader; my $oracle;
+    my $reader; 
+#my $oracle;
 
 # Get all files in the repository which pass the file name filter
 
@@ -544,9 +555,13 @@ if ($logON || !$origin) {
             foreach my $read (@$newfiles) {
                 my @parts = split '/',$read;
                 $read = $parts[$#parts];
-                print "add to PENDING: $read <br>";
-                &addPending($read,0);
+                print "add to PENDING: $read for assembly nr $assemblynmbr<br>";
+                &addPending($read,$assemblynmbr);
             }
+
+            my $npends = $PENDING->count(0,0);
+            $organisms->update('reads_pending',$npends,'dbasename',$database);
+            $organisms->signature($userid,'dbasename',$database);
 
             if ($page) {
                 my $rreturn = $lreturn;
@@ -585,12 +600,17 @@ if ($logON || !$origin) {
             foreach my $key (keys (%dbfiles)) {
                 push @pendingfiles, $key;
             }
-            $oracle = ADB_get_caf->new($SCHEMA,$PROJECT); # reads from Oracle database
+print "SCHEMA $SCHEMA, PROJECT $PROJECT $brtag";
+#            $oracle = ADB_get_caf->new($SCHEMA,$PROJECT); # reads from Oracle database
         # ingest the reads (and store as hashes in ADB_get_caf reader)
-	    my $success = $oracle->getOracleReads(\@pendingfiles);
+print "pending files @pendingfiles $brtag";
+#	    my $success = $oracle->getOracleReads(\@pendingfiles);
+	    my $success = $reader->fetchOracleData($SCHEMA,$PROJECT,\@pendingfiles);
+print "success = $success $brtag";
+            undef @pendingfiles if !$success; # protection, forcing controlled exit
         # setup a link to ReadsReader in order to try Oracle if flat file not found
-            $reader->linkToOracle($oracle) if ($success);
-
+#            $reader->linkToOracle($oracle) if ($success);
+# undef @pendingfiles;
         } else {
         # reads are assumed to be in project directory; we test the ROOTDATADIR and
         # if not found, its subdirectories
@@ -633,7 +653,7 @@ if ($logON || !$origin) {
                             last; 
                         }
 		    }
-                    print "! Failed to located file $key$brtag" if !$found;
+                    print "! Failed to locate file $key$brtag" if !$found;
                 }
             }
 # print "Files:@{pendingfiles}$brtag";
@@ -689,7 +709,7 @@ $LOADPERRUN =~ s/\W/x/g;
 # (IV) go through all those new files and add the reads to the database
 #$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
 
-    my $encoder = Compress->new(); # default encoding string for DNA ('ACGT- ')
+#    my $encoder = Compress->new(); # default encoding string for DNA ('ACGT- ')
 
     my $tested = 0;
     my $loaded = 0;
@@ -751,7 +771,7 @@ $LOADPERRUN =~ s/\W/x/g;
             $qcm = 3; # Huffman compression on quality difference data
         }
 
-    # skip this file on error
+# skip this file on error
 
         print LOG "\n" if $logON;
         my ($summary, $errorstatus) = $reader->status(2,$origin);
@@ -761,7 +781,7 @@ $LOADPERRUN =~ s/\W/x/g;
             $ignored++;
             next if (!$entry || $TEST);
             print LOG "$fulltext\n" if ($logON && !$TEST);
-    # add the entry to PENDING if not already done
+# add the entry to PENDING if not already done
             my $add = &addPending ($entry->{ID},$assemblynmbr);
             print STDOUT "${rfont}$add$efont$brtag";
             next; 
@@ -775,55 +795,15 @@ $LOADPERRUN =~ s/\W/x/g;
 #  (1) Encode strings and test if coded lengths match
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-        undef my $scount; 
-        my $rawSequence = $entry->{SQ};
-        if ($scm == 1 || $scm == 2) {
-           ($scount,$entry->{SQ}) = $encoder->sequenceEncoder($entry->{SQ},$scm);
-        }
-        elsif ($scm) {
-            my $text = "!FATAL ERROR : Invalid Sequence Encoding option = $scm";
-            print STDOUT "$ofont$text$efont$brtag";
-            print LOG "$text\n" if ($logON);
-            last;
-        }
-        my $sqcstatus = $encoder->status();
-        undef my $qcount;
-        my $rawQuality  = $entry->{AV};
-        if ($qcm == 1 || $qcm == 2 || $qcm == 3) {
-           ($qcount,$entry->{AV}) = $encoder->qualityEncoder($entry->{AV}, $qcm);
-        }
-        elsif ($qcm) {
-            my $text = "!FATAL ERROR : Invalid Quality Encoding option = $qcm";
-            print STDOUT "$ofont$text$efont$brtag";
-            print LOG "$text\n" if ($logON);
-            last;
-        }
-        my $qdcstatus = $encoder->status();
-
-        if ($qcount == 0 || $qcount != $scount || $sqcstatus || $qdcstatus) {
-            print STDOUT "DNA \& Quality sequence sizes: $scount \& $qcount ";
-            print STDOUT "${ofont}FAILED$efont$brtag";
-            if ($logON) {
-                my $text = "! Error: mismatch of sequence ($scount) and quality";
-                $text .= " data ($qcount)\n  Encode status: sequence =";
-                $text .= " $sqcstatus , quality = $qdcstatus\n";
-                $text .= " Processing of $entry->{ID} ABORTED\n";
-                print LOG "$text\n";
-            }
-            $errors++;
+        if (my $error = $reader->encode($scm, $qcm)) {
+            $error =~ s/\n/$brtag/g;
+            print STDOUT "ERROR: $ofont$error$efont$brtag";
+            print LOG "$error\n" if ($logON);
+print $reader->list($origin,1);
+            last if ($error =~ /Invalid/);
             next;
         }
-        else { 
-            my $i = length($entry->{SQ}); my $j = length($entry->{AV});
-            my $text = "DNA \& Quality sequence sizes: $scount \& $qcount;";
-            $text .= " encoded: $i \& $j";
-            print STDOUT "$text$brtag";
-            print LOG "$text\n" if $logON;
-            $reader->update('SCM',$scm); # insert value
-            $reader->update('QCM',$qcm); # insert value
-            $reader->update('SLN',$scount);
-        }
- 
+
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 # 
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -839,15 +819,14 @@ $LOADPERRUN =~ s/\W/x/g;
 #++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           
         my $text = "Insert new data into READS ...";
-        my ($update, $parity) = $reader->insert();
+        my $update = $reader->insert();
         $text .= "... $update READ items entered into database";
         print STDOUT "$text$brtag\n";
         print LOG "$text\n" if $logON;
 
         undef my $readhash;
-        if ($update <= 0 || $update != $parity) {
-            print STDOUT "! Read insert $ofont FAILED on incompleteness ";
-            print STDOUT "error ($update vs. $parity)$efont$brtag";
+        if ($update <= 0) {
+            print STDOUT "! Read insert $ofont FAILED $efont$brtag";
             my $fulltext = $reader->list(1,0);
             print STDOUT "$fulltext";
             print LOG "$fulltext\n" if ($logON);
@@ -860,72 +839,16 @@ $LOADPERRUN =~ s/\W/x/g;
 
         else {
 # read back of data 
-            print STDOUT "Readback .. ";
-            $readhash = $READS->associate('hashref','where','read_id=LAST_INSERT_ID()',-1);
-            if ($readhash->{readname} ne $entry->{ID}) {
-                print "LAST INSERT select FAILED ..";
-                $readhash = $READS->associate('hashref',$entry->{ID},'readname',-1);
-                print "Recovered using readname .. "; 
+            print STDOUT "Readback of Sequence and Quality data .. ";
+            if (my $error = $reader->readback) {
+                $error =~ s/\n/$brtag/g;
+                print STDOUT "ERROR: $ofont$error$efont$brtag";
+                print LOG "$error\n" if ($logON);
+print $reader->list($origin,1);
+                $errors = 1;
             }
-
-            print STDOUT "testing DNA Sequence .. ";
-     
-            $scm = $readhash->{scompress};
-            my $sequence = $readhash->{sequence};
-
-            my ($string, $count);
-            my $slength  = length($sequence);
-            if ($scm == 1 || $scm == 2) {
-               ($count, $string) = $encoder->sequenceDecoder ($sequence,$scm,1);
-            }
-            elsif (!defined($scm) || $scm) {
-                $scm = 0 if !$scm;
-                my $text = "! Invalid sequence encoding method readback: $scm";
-                print STDOUT "$text$efont$brtag";
-                print LOG "$text\n" if $logON;
-                $count = 0; # just to define
-                $errors++;
-            }
-
-            if (!($string =~ /^$rawSequence\s*$/)) {
-                print STDOUT "$ofont FAILED! $efont$brtag";
-                if ($logON) {
-                    print LOG "! Error in read back of DNA sequence (length = $count / $slength):";
-                    print LOG "\n\n original : $rawSequence\nretrieved: $string\n\n";
-                }
-                $errors++;
-            } else {
-                print STDOUT "${gfont}PASSED$efont, ";
-            }
-
-            print STDOUT "Testing Quality Data ..";  
-     
-            $qcm = $readhash->{qcompress};
-            my $quality = $readhash->{quality};
-
-            my $qlength  = length($quality);
-            if ($qcm == 1 || $qcm == 2 || $qcm == 3) {
-               ($count, $string) = $encoder->qualityDecoder ($quality,$qcm);
-            }
-            elsif (!defined($qcm) || $qcm) {
-                $qcm = 0 if !$qcm;
-                my $text = "! Invalid quality encoding method: $qcm";
-                print STDOUT "$text$efont$brtag";
-                print LOG "$text\n" if $logON;
-                $count = 0; # just to define
-                $errors++;
-            }
-
-            $string =~ s/^\s+|\s+$//g;
-            if ($rawQuality =~ /^\s*$string\s*$/) {
+            else {
                 print STDOUT "${gfont}PASSED$efont$brtag";
-            } else {
-                print STDOUT "$ofont FAILED! $efont$brtag";
-                if ($logON) {
-                    print LOG "! Error in read back of Quality data (length = $count):\n";
-                    print LOG "original : $rawQuality\nretrieved: $string\n\n";
-	        }
-                $errors++;
             }
         }
 
@@ -937,9 +860,12 @@ $LOADPERRUN =~ s/\W/x/g;
 # reset if $errors == 0, else undo updates 
             $hashes->{$key}->rollback($errors) unless ($errors && $key =~ /PENDING|SESSION/);
         }
-        if ($errors && $READS->{'errors'} !~ /already\sexists/) {
+        if ($errors && $READS->{qerror} =~ /already\sexists/) {
+            $PENDING->delete('readname',$entry->{ID}) if $entry->{ID};
+        }
+        elsif ($errors) {
             $ignored++;
-    # add the entry to PENDING if not already done
+# add the entry to PENDING if not already done
             my $add = &addPending ($entry->{ID},$assemblynmbr);
             print STDOUT "${rfont}$add$efont$brtag" if ($add);
         }
@@ -949,7 +875,7 @@ $LOADPERRUN =~ s/\W/x/g;
     # check if the entry was in PENDING
             if (my $hashref = $PENDING->associate('hashref',$entry->{ID},'readname')) {
     # get the assemblynumber
-                $assemblynumber = $hashref->{assembly} if $hashref->{assembly};             
+                $assemblynumber = $hashref->{assembly} || 0;             
     # and clear the entry if it was in pending
                 $PENDING->delete('readname',$entry->{ID});
             }
@@ -957,7 +883,7 @@ $LOADPERRUN =~ s/\W/x/g;
 #            my $read_id = $READS->associate('read_id',$entry->{ID},'readname');
             my $read_id = $readhash->{read_id};
             if (!$RRS2ASS->newrow('read_id',$read_id,'assembly',$assemblynumber)) {
-                print "$RRS2ASS->{errors}$brtag";
+                print "$RRS2ASS->{qerror}$brtag";
                 $RRS2ASS->status(1); # reset the error status
             }
             else {
@@ -977,13 +903,14 @@ $LOADPERRUN =~ s/\W/x/g;
 # closing down: timestamps on altered tables
 
     my $list = 1; $list = 2 if $cgi;
+    $userid = $GateKeeper->{USER} if !$userid;
     $organisms->historyUpdate($userid,0,$list);
 
     print STDOUT "${brtag}Updating counters and closing database$brtag$brtag";
 
     foreach my $assemblynumber (keys (%assemblycount)) {
         my $areads = $RRS2ASS->count("assembly=$assemblynumber",0);
-        print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads$brtag";
+        print "assembly $assemblyname (nr $assemblynumber) reads counted: $areads $userid$brtag";
         $assembly->update('reads',$areads,'assemblyname',$assemblyname);
         $assembly->signature($userid,'assemblyname',$assemblyname);
     }
@@ -1007,7 +934,7 @@ $LOADPERRUN =~ s/\W/x/g;
         my $rreturn = $lreturn;
         $rreturn =~ s/update/rloader/;
         $rreturn =~ s/getmenu/specify/;
-        $rreturn .= "\&database=$database\&source=$source\&assemblyname=$assemblyname";
+        $rreturn .= "\&database=$database\&assemblyname=$assemblyname";
         $page->linkbutton('LOAD MORE',$rreturn,0);
         $page->linkbutton('MAIN MENU',$lreturn,0);
         $page->flush();

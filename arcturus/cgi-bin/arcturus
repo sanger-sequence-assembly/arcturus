@@ -22,7 +22,9 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = new GateKeeper('mysql',{insistOnCGI=>1 , diagnosticsOn=>0});
+my %options = (insistOnCGI=>1 , diagnosticsOn=>0 , dieOnNoTable=>0);
+
+my $GateKeeper = new GateKeeper('mysql',\%options);
 
 my $cgi        = $GateKeeper->cgiHandle(1);
 
@@ -57,45 +59,61 @@ elsif ($action eq 'signoff') {
 else {
 # if the script is invoked by the identification prompt: get session number
     if ($cgi->parameter('identify')) {
-        $GateKeeper->authorize(0,{ageWindow=>180}); # (no access test)  
+        $GateKeeper->authorize(0,{ageWindow=>180}); # (all action except access test)  
     }
 
     $page = $GateKeeper->GUI("Welcome to the assembly-tracking database");
     $page->space;
     $page->sectionheader("Welcome to the ARCTURUS assembly-tracking database",4,0);
 
-    my $count = $organisms->count();
-    my $text = "There are $count Organism databases on this server";
-    $text =~ s/are/is/ if ($count <= 1);
-    $text =~ s/ses/se/ if ($count <= 1);
-    $count = 'no' if !$count;  
-    $page->add($text,0,0,"size=+1");
-    $page->space;
+    my $font = "size=4 face='sans-serif'";
+
+    if ($GateKeeper->instance) {
+        my $count = $organisms->count();
+        my $text = "There are $count Organism databases on this server";
+        $text =~ s/are/is/ if ($count <= 1);
+        $text =~ s/ses/se/ if ($count <= 1);
+        $text =~ s/0/no/   if !$count;
+        $page->space(1);
+        $page->add($text,0,0,$font);
+        $page->space(1);
 
 # because the database can have been changed in GUI get it again
 
-    $database   = $cgi->parameter('database') || 'arcturus';
+        $database   = $cgi->parameter('database') || 'arcturus';
 
-    if ($database ne 'arcturus') {
-        my %options = (mask=>'011000001111000001',
-                       headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
-        my $table = $organisms->htmlTable(\%options,'dbasename',$database);
-        $page->add($table);
+        if ($count && $database ne 'arcturus') {
+            my %options = (mask=>'011000001111000001',
+                           headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+            my $table = $organisms->htmlTable(\%options,'dbasename',$database);
+            $page->add($table);
 # possibly other info
+        }
+        elsif ($count) {
+            my %options = (mask=>'031000001111000001',linkItem=>'onItemName', linkTarget=>0,
+                           headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
+            my $table = $organisms->htmlTable(\%options);
+
+            my $thisScript = $GateKeeper->currentScript;
+            my $session = $cgi->parameter('session');
+            $table =~ s/ITEMLINK\?/ITEMLINK?session=$session&/g if $session;
+            $table =~ s/ITEMLINK/$thisScript/g;
+            $table =~ s/dbasename/database/g;
+            $page->add($table);
+            $page->space;
+            $page->sectionheader("Select a database or a function",4,0);
+        }
+        else {
+            $text = "Add an Organism database with the CREATE menu";  
+            $page->add($text,0,0,$font);
+        }
     }
     else {
-        my %options = (mask=>'031000001111000001',linkItem=>'onItemName', linkTarget=>0,
-                       headColor=>'FAFAD2',cellColor=>'CCCCCC',linkColor=>'E2E2FF');
-        my $table = $organisms->htmlTable(\%options);
-
-        my $thisScript = $GateKeeper->currentScript;
-        my $session = $cgi->parameter('session');
-        $table =~ s/ITEMLINK\?/ITEMLINK?session=$session&/g if $session;
-        $table =~ s/ITEMLINK/$thisScript/g;
-        $table =~ s/dbasename/database/g;
-        $page->add($table);
-        $page->space;
-        $page->sectionheader("Select a database or a function",4,0);
+        my $server = $GateKeeper->currentServer;
+        $page->space(2);
+        $page->add("There is NO arcturus instance on this server $server",0,0,$font);
+        $page->space(1);
+        $page->add("Create a new instance from scratch using the CREATE menu",0,0,$font);
     }
 
     $page->flush();
@@ -106,6 +124,8 @@ else {
 $GateKeeper->disconnect;
 
 exit 0;
+
+
 
 
 

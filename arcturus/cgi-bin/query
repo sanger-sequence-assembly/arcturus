@@ -10,7 +10,6 @@ use strict;
 
 use GateKeeper; 
 use ReadsRecall;
-#use Compress;
 
 ##############################################################################
 # unbuffered output
@@ -333,14 +332,15 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 
     my ($database,$name) = split /\./,$tablename;
 #    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
-    my $dbtable = $organisms->spawn($name,$database,1);
-    $dbtable->build(1,'tablename')     if ($tablename =~ /INV/);
-    $dbtable->build(1,'identifier')    if ($tablename =~ /LIG/);
-    $dbtable->build(1,'projectname')   if ($tablename =~ /PRO/);
-    $dbtable->build(1,'userid')        if ($tablename =~ /USE/);
-    $dbtable->build(1,'cpkbstart')     if ($tablename =~ /MAP/);
-    $dbtable->build(1,'assembly,name') if ($tablename =~ /STS/);
-    $dbtable->build(1,'timebegin DESC') if ($tablename =~ /SESSIONS/);
+    my $dbtable = $organisms->spawn($name,$database,0,1);
+    $dbtable->build(1,'tablename')        if ($tablename =~ /INV/);
+    $dbtable->build(1,'identifier')       if ($tablename =~ /LIG/);
+    $dbtable->build(1,'projectname')      if ($tablename =~ /PRO/);
+    $dbtable->build(1,'userid')           if ($tablename =~ /USE/);
+    $dbtable->build(1,'cpkbstart')        if ($tablename =~ /MAP/);
+    $dbtable->build(1,'assembly,tagname') if ($tablename =~ /STS/);
+    $dbtable->build(1,'chemtype')         if ($tablename =~ /CHEMTYPES/);
+    $dbtable->build(1,'timebegin DESC')   if ($tablename =~ /SESSIONS/);
     $dbtable->autoVivify($database,0) if ($name ne 'INVENTORY'); # setup of possible sublinks
 # $dbtable->expandSequence('ACGTN ');
 
@@ -501,7 +501,6 @@ elsif ($action eq "selectread") {
     my $readnmbr = $cgi->parameter('readnmbr');
     my $readname = $cgi->parameter('readname');
     my $wildcard = $cgi->parameter('wildcard');
-# $page->add($cgi->PrintVariables());
 
     undef my $querystring;
     undef my $constraints;
@@ -515,9 +514,17 @@ elsif ($action eq "selectread") {
         $dbread->unlink() if ($constraints =~ s/NOQT//); # for demonstration purposes        
     }
     elsif ($readitem && $readnmbr) {
-        my $status = $reader->getNumberedRead($readnmbr);
-#print "status $reader->{status}->{diagnosis}<BR>";
-        $number = 1 if ($status <= 1);  
+        if ($readnmbr !~ /\,/) {
+            my $status = $reader->getNumberedRead($readnmbr);
+            $number = 1 if ($status <= 1);
+        }
+        else {
+            $constraints = "read_id in ($readnmbr)";
+# test setup for spawning new reads in a series
+my @number = split /\,/,$readnmbr; # test mode
+my $hashes = $reader->spawnReads(\@number,'scompress,sequence,slength');
+
+        }  
     }
     elsif ($readitem && !$readnmbr) {
         $error = "please provide a Read Number";
@@ -638,6 +645,7 @@ elsif ($action eq "listentry") {
 
     my $mask = '1'; #default
     $mask = '11101111'      if ($tablename =~ /STSTAG/);
+    $mask = '01111111101011' if ($tablename =~ /USERS/); 
     my $list = $dbtable->htmlListRecord($cvalue,$column,0,$mask);
     $page->add($list,0,0);
 

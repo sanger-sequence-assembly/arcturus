@@ -20,11 +20,14 @@ open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
+$ENV{SCRIPT_FILENAME} = '/cgi-bin/dev/harmonize';
+
 ##############################################################################
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
 my $GateKeeper = GateKeeper->new('mysql');
+$GateKeeper->environment;
 
 my $config     = $GateKeeper->configHandle();
 
@@ -39,13 +42,10 @@ my $subject = '';
 my $action  = '';
 
 my $origin = $GateKeeper->origin(2) || '';
+print "origin:  $origin \n";
 (my $void, $subject, $action) = split '/',$origin if $origin;
    
 $GateKeeper->cgiHeader(1) if ($cgi && !@ARGV); # return string plain
-#print "CGI: ARGV: @ARGV \n" if ($cgi && @ARGV);
-#print "not CGI: ARGV: @ARGV \n" if !$cgi;
-#print "origin  $origin \n";
-#$GateKeeper->environment;
 
 ##############################################################################
 # MAIN
@@ -218,6 +218,7 @@ elsif ($subject && $subject =~ /\bchemtypes\b/i) {
 else {
     my $script = $GateKeeper->currentScript;
     $report .= "! Invalid subject '$subject' for script $script\n";
+    $GateKeeper->environment;
 }
 
 print "$report\n";

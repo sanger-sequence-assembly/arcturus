@@ -30,7 +30,7 @@ sub create_common {
         $created++;
     }
 
-    if ($target eq 'all' || $target eq 'people') {
+    if ($target eq 'all' || $target eq 'users') {
 	&create_USERS($dbh, $list);
         $created++;
     }
@@ -94,8 +94,8 @@ sub create_organism {
 
 # get the "history"  table into memory
 
-    $historyTable = DbaseTable->new($dbh,$historyTable,$database);
-    $historyTable->build(1) if ($historyTable);
+    $historyTable = DbaseTable->new($dbh,$historyTable,$database,1);
+    $historyTable->setTracer(0); # no query tracing
 
     if (!$target || $target eq 'READS') {    
         push @tables, 'READS';
@@ -277,7 +277,7 @@ sub record {
 
 # test if the entry exists
 
-    if (!($history->associate('tablename',$dbtable))) {
+    if (!$history->associate('created',$dbtable,'tablename')) {
         $history->newrow('tablename',$dbtable);
     }
     $history->update('created'  ,$date      ,'tablename',$dbtable);
@@ -566,20 +566,11 @@ any (i.p. comment found in flat files)
 =back
 
 =cut
-#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
 sub create_READEDITS {
     my ($dbh, $list) = @_;
-
-# edits  : list of substitutions for individual bases in read, code: nnnGa nnnT etc.
-#         (substitute "G" at position nnn by "a", delete "T" at position nnn)
-# read  : number of read
-# base  : number of base to be changed
-# edit  : substitution value of blank for delete
-# ? user  : integer refering to user table (implicit in contig info?)
-# depre : deprecation status
 
     &dropTable ($dbh,"READEDITS", $list);
     print STDOUT "Creating table READEDITS ..." if ($list);
@@ -597,19 +588,61 @@ sub create_READEDITS {
     $dbh->do(qq[CREATE INDEX reads_index ON READEDITS (read_id)]);
     print STDOUT "Index READS_INDEX ON READEDITS ... DONE\n" if ($list);
 }
+
 #--------------------------- documentation --------------------------
-=head2 Table READEDITS
+
+=head1 Table READEDITS
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item cloader
+
+(I<script>) entering read mapping data from CAF files;
+
+=item ReadMapper.pm
+
+=back
+
+=head2 Description of columns:
+
+=over 4
+
+=item read_id
+
+number of read
+
+=item base
+
+number of base affected 
+
+=item edit
+
+char(40 encoded edit: ....
+# edits  : list of substitutions for individual bases in read, code: nnnGa nnnT etc.
+#         (substitute "G" at position nnn by "a", delete "T" at position nnn)
+# edit  : substitution value of blank for delete
+# ? user  : integer refering to user table (implicit in contig info?)
+
+=item deprecated
+
+deprecation status: 'Y' for no longer valis, 'N' for current; transient 'X'
+
+=back
+
+=head2 Linked Tables on key read_id
+
+READS
+
 =cut
-#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
 sub create_READPAIRS {
     my ($dbh, $list) = @_;
-
-# forward   : read_id of read with forward strand
-# reverse   : ibid
-# score     : see asmReadpairs.shtml documentation; U for untested added
 
     &dropTable ($dbh,"READPAIRS", $list);
     print STDOUT "Creating table READPAIRS ..." if ($list);
@@ -627,6 +660,85 @@ sub create_READPAIRS {
     $dbh->do(qq[CREATE INDEX rrindex ON READPAIRS (reverse)]);
     print STDOUT "Index RFINDEX and RRINDEX ON READPAIRS ... DONE\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table READPAIRS
+
+=head2 Synopsis
+
+Read_ids of forward and reverse memebers of a read pair; a read can 
+occur in more than one pair. This table has to be updated by running
+the find-complement script after each new addition of reads. The table
+facilitates easy location of read-pair bridges between contigs
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item find-complement
+
+(I<script>) identifying read-pairs (see column B<paired>)
+
+run from the Arcturus GUI under B<TEST> --E<gt> B<MENU> --E<gt> B<PAIRS>
+
+=item test-complement
+
+(I<script>) testing read-pair information (see column B<paired>);
+
+run from the Arcturus GUI under B<TEST> --E<gt> B<MENU> --E<gt> B<PAIRS??>
+
+=item find-bridges
+
+(I<script>) identifying read-pair bridges between contigs
+
+run from the Arcturus GUI under B<TEST> --E<gt> B<MENU> --E<gt> B<BRIDGES??>
+
+=back
+
+=head2 Description of columns:
+
+=over 4
+
+=item forward
+
+read_id of forward read in pair (indexed)
+
+=item reverse
+
+read_id of reverse read in pair (indexed)
+
+=item score
+
+see http://www.sanger.ac.uk/Software/sequencing/docs/harper/asmReadpairs.shtml documentation; U for untested
+
+=back
+
+=head2 Linked Tables on key forward
+
+=over 4
+
+=item READS
+
+=item READS2CONTIG
+
+=item READS2ASSEMBLY
+
+=back
+
+=head2 Linked Tables on key reverse
+
+=over 4
+
+=item READS
+
+=item READS2CONTIG
+
+=item READS2ASSEMBLY
+
+=back
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -644,6 +756,20 @@ sub create_PENDING {
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -694,6 +820,21 @@ sub create_READS2CONTIG {
     print STDOUT "Indexes READS_INDEX and CNTGS_INDEX  ON READS2CONTIG ... DONE\n" if ($list);
 }
 
+#--------------------------- documentation --------------------------
+
+=head1 Table READS2CONTIG
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key
+
+=cut
+#--------------------------------------------------------------------
+
 #*********************************************************************************************************
 
 sub create_READS2ASSEMBLY {
@@ -720,34 +861,26 @@ sub create_READS2ASSEMBLY {
     $dbh->do(qq[CREATE INDEX bin_index ON READS2ASSEMBLY (assembly)]);
     print STDOUT "Index BIN_INDEX ON READS2ASSEMBLY ... DONE\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
 sub create_CONTIGS {
     my ($dbh, $list) = @_;
 
-# contig_id   : unique contig identification number
-# contigname  : compound ARCTURUS contigname
-#  note: determine name from farthest lefthand/righthand reads
-#  note: find a parity test on nr of reads and total length
-# ? read_left   : read_id of read on  lefthand side
-# ? read_right  : read_id of read on righthand side
-# alias       : e.g. caf or phrap contigname
-# zeropoint   : (regularly updated) position with respect to assembly
-# length      : number of bases
-# ncntgs      : (parity check) number of previous contigs merged into it; 
-#               (=0 for first generation) re: CONTIGS2CONTIG table
-# nreads      : (parity check) number of reads referenced; re: READS2CONTIG table
-# cover       : average cover of contig by reads (=(sumtotal readlength)/length)
-# origin      : e.g. software used to build contig
-# userid      : userid  of contig creator/last user to access
-# updated     : creation date (or last modification)
-
-# pstatus     : allocation to project status: 'N' for not
-#               'D' default allocation (usually default project),
-#               'H' for alloaction by inheritance
-#               'Y' for allocation by any other means
-#               project/assembly specified in CONTIGS2SCAFFOLD
 
     &dropTable ($dbh,"CONTIGS", $list);
     print STDOUT "Creating table CONTIGS ..." if ($list);
@@ -766,10 +899,137 @@ sub create_CONTIGS {
              updated          DATETIME                 NOT NULL,
              CONSTRAINT CONTIGNAMEUNIQUE UNIQUE (CONTIGNAME)  
          )]);
-#             pstatus          ENUM ('N','D','H','Y') DEFAULT 'N'
     print STDOUT "... DONE!\n" if ($list);
 # index on contig_id implicit in PRIMARY key declaration 
 }
+
+#--------------------------- documentation --------------------------
+
+=head1 Table CONTIGS
+
+=head2 Synopsis
+
+Primary Data table.
+
+CONTIGS is a static data table: the only change made to data records after 
+data insertion is the (possible) re-definition of the B<zeropoint> column
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item cloader
+
+(I<script>) entering contig data from CAF files;
+
+run from the Arcturus GUI under B<INPUT> --E<gt> B<CONTIGS>
+
+=item ContigBuilder.pm 
+
+=back 
+
+=head2 Description of columns:
+
+=over 4
+
+=item contig_id    
+
+auto-incremented primary key (foreign key in many other tables)
+
+=item contigname 
+
+unique Arcturus contig name (indexed), build-up from first and last
+readname, length and coverage; abour 30 characters, usually 
+#  note: determine name from farthest lefthand/righthand reads
+#  note: find a parity test on nr of reads and total length
+
+=item aliasname
+
+other name to indicate the contig, for example the (not-unique) name used
+in CAF files or a phrap name
+
+=item zeropoint
+
+integer zeropoint of contig in assembly
+
+=item length
+
+number of bases
+
+=item ncntgs
+
+number of previous contigs merged into this contig (=0 for first generation)
+
+=item nreads
+
+number of assembled reads
+
+=item cover
+
+average cover of contig by reads;  = (sumtotal readlength)/length
+
+=item origin 
+
+software used to build contig
+
+=item userid
+
+userid of contig creator to or the user last to access
+
+=item updated
+
+creation date (or date of last modification)
+
+=back
+
+=head2 Linked Tables on key contig_id
+
+=over 4
+
+=item READS2CONTIG
+
+=item CONTIGS2CONTIG
+
+=item CONTIG2SCAFFOLD
+
+=item CLONES2CONTIG
+
+=item TAGS2CONTIG
+
+=back
+
+=cut
+#--------------------------------------------------------------------
+
+#*********************************************************************************************************
+
+sub create_CONSENSUS {
+
+    &dropTable ($dbh,"CONSENSUS", $list);
+    print STDOUT "Creating table CONSENSUS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE CONSENSUS(
+             contig_id        MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             sequence         BLOB                     NOT NULL,
+             scompress        TINYINT  UNSIGNED        DEFAULT 0,     
+             length           INT                      DEFAULT 0
+         )]);
+    print STDOUT "... DONE!\n" if ($list);
+# index on contig_id implicit in PRIMARY key declaration 
+}
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -798,6 +1058,20 @@ sub create_CONTIGS2CONTIG {
     print STDOUT "... DONE!\n" if ($list);
 }
 
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -825,6 +1099,20 @@ sub create_CONTIGS2SCAFFOLD {
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************
 # TAGS related tables STSTags, TAGS2CONTIG, GAP4TAGS, CLONEMAP
@@ -852,6 +1140,20 @@ sub create_GAP4TAGS {
     $dbh->do("INSERT INTO GAP4TAGS (tag_id, tagname) VALUES (2000000, \"DUMMY\")");
 }
 
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 #******************************************************************
 # tag_id    : number 
 # tagname   : sts file tag name
@@ -931,6 +1233,20 @@ sub create_CLONEMAP {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 # ocp_start : observed clone position start in base (to updated during assembly process)
@@ -954,6 +1270,21 @@ sub create_CLONES2CONTIG {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
+
 #*****************************************************************************************
 
 sub create_CHEMISTRY {
@@ -969,6 +1300,20 @@ sub create_CHEMISTRY {
      	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1006,6 +1351,20 @@ sub create_STRANDS {
     }
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1035,6 +1394,20 @@ sub create_PRIMERTYPES {
     }
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1050,6 +1423,20 @@ sub create_BASECALLER {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1066,6 +1453,20 @@ sub create_SEQUENCEVECTORS {
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1082,6 +1483,20 @@ sub create_CLONINGVECTORS {
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1100,6 +1515,20 @@ sub create_CLONES {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1114,6 +1543,20 @@ sub create_CLONES2PROJECT {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
  }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1130,6 +1573,20 @@ sub create_STATUS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1152,6 +1609,20 @@ sub create_LIGATIONS {
          )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 #*********************************************************************************************************
@@ -1405,6 +1876,7 @@ sub create_INVENTORY {
                  'CONTIGS           o  p  0  0',
                  'CONTIGS2SCAFFOLD  o  l  3  0',
                  'CONTIGS2CONTIG    o  m  0  0',
+#                 'CONSENSUS         o  d  1  1',
                  'CHEMISTRY         o  d  1  1',
                  'STRANDS           o  d  1  1',
                  'PRIMERTYPES       o  d  1  1',
@@ -1473,6 +1945,20 @@ sub create_ASSEMBLY {
 	    )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1513,6 +1999,20 @@ sub create_PROJECTS {
 	    )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1538,9 +2038,10 @@ sub create_USERS {
              givennames       VARCHAR(16)             NULL,
              affiliation      VARCHAR(32)         DEFAULT "Genomic Research Limited",
              division         VARCHAR(16)             NULL,
-	     function         ENUM ("Finisher","Project Manager","Team Leader",
-                                    "Database Manager","Visitor","Scientist",
-                                    "Research Assistent","Annotator","Trainee","Other"),
+	     function         ENUM ("Database Owner","Database Manager","Team Leader",
+                                    "Project Manager","Finisher","Trainee","Scientist",
+                                    "Annotator", "Research Assistent","Visitor",
+                                    "Other") DEFAULT "Other",
              ustatus          ENUM ("new","active","retired") DEFAULT "new",
              email            VARCHAR(32)             NULL,
              password         VARCHAR(32)             NULL,
@@ -1552,21 +2053,32 @@ sub create_USERS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
-# priviledges: 16 bits code for various access function
+# priviledges: 16 bits code for various access function (should be drawn from config file
 
-    $dbh->do("INSERT INTO USERS (userid, lastname, givennames, division, function)".
-            " VALUES (\"arcturus\",\"Anonymous\",\"User\", \"Pathogen Group\", \"Other\")");
-    $dbh->do("UPDATE USERS SET priviledges=255, password=\"update\" WHERE userid = \"arcturus\"");
-    $dbh->do("UPDATE USERS SET email=\"ejz\@sanger.ac.uk\" WHERE userid = \"arcturus\"");
-    $dbh->do("INSERT INTO USERS (userid, lastname, givennames, division, function)".
-            " VALUES (\"oper\",\"Zuiderwijk\",\"Ed J.\", \"Team 81\", \"Database Manager\")");
-    $dbh->do("UPDATE USERS SET priviledges=255, password=\"update\" WHERE userid = \"oper\"");
-    $dbh->do("UPDATE USERS SET email=\"ejz\@sanger.ac.uk\" WHERE userid = \"oper\"");
-    $dbh->do("INSERT INTO USERS (userid, lastname, givennames, division, function)".
-            " VALUES (\"ejz\",\"Zuiderwijk\",\"Ed J.\", \"Team 81\", \"Database Manager\")");
-    $dbh->do("UPDATE USERS SET priviledges=255, password=\"update\" WHERE userid = \"ejz\"");
-    $dbh->do("UPDATE USERS SET email=\"ejz\@sanger.ac.uk\" WHERE userid = \"ejz\"");
+    my $defaultusers = "INSERT INTO USERS ";
+    $defaultusers .= "(userid, lastname, givennames, division, function, seniority)";
+    $defaultusers .= " VALUES ";
+    $defaultusers .= "('arcturus','the ARCTURUS project','Supreme Fascist','Pathogen Group','Database Owner',6),";
+    $defaultusers .= "('oper','Zuiderwijk','Ed J.', 'Team 81', 'Database Manager',6),";
+    $defaultusers .= "('ejz' ,'Zuiderwijk','Ed J.', 'Team 81', 'Database Manager',5) ";
+    $dbh->do($defaultusers);
+    $dbh->do("UPDATE USERS SET priviledges=255, password='arcturus', email='ejz\@sanger.ac.uk'");
 }
+
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1592,6 +2104,20 @@ sub create_SESSIONS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1610,6 +2136,20 @@ sub create_USERS2PROJECTS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*****************************************************************************************
 
@@ -1653,6 +2193,20 @@ sub create_CHEMTYPES {
     }
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #******************************************************************************************
 
@@ -1668,6 +2222,20 @@ sub create_VECTORS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -1718,6 +2286,20 @@ sub create_ORGANISMS {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
 
 
 #*********************************************************************************************************

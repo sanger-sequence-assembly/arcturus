@@ -51,6 +51,18 @@ undef my ($userid, $page, $email, $report, $message, $doCopy, $doDelete);
 
 $page = $GateKeeper->GUI("ARCTURUS user information maintenance and updates");
 
+if ($people->{errors}) {
+    my $message = "WARNING: corrupted arcturus common database\n$people->{errors}";
+    $page->space(4);
+    $page->message($message,'orange',"size = +1",1);
+    $page->space(2);
+    $message = "Please contact $db_manager";
+    $page->message($message,'yellow');
+    $page->flush();
+    $GateKeeper->disconnect;
+    exit 0;
+}
+
 ###############################################################################
 # REGISTRATION
 ###############################################################################
@@ -109,7 +121,7 @@ if ($option eq 'getform') {
 ###############################################################################
 
 elsif ($option eq "register") {
-# degest input from registration form and add user to USERS database table
+# digest input from registration form and add user to USERS database table
     $cgi->transpose ('identify','userid');
     $userid = $cgi->parameter('userid');
     my $passwd = $cgi->parameter('password');
@@ -264,7 +276,9 @@ elsif ($option eq "modify") {
 # alternative: multi-column table of usernames and preselection of names on e.g first letter
         my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
         $page->add($users,0,1);
+        my $myself; $myself = 'myself' if $GateKeeper->{USER};
         my $dbusers = $people->htmlOptions('userid','userid',0,0,'myself');
+#        $dbusers =~ s/myself/----/g if !$GateKeeper->{USER};
         my $query = "<TABLE><TR><TH>User whose information needs updating:</th>";
         $query .= "<td>$dbusers</td></tr></table>";
         $page->add($query,0,1);
@@ -350,7 +364,7 @@ elsif ($option eq "modify") {
 
 elsif ($option eq "pwupdate") {
 # displayed in new window 'userframe' without full GUI
-    $page->frameborder(100,15); # overrides GUI
+    $page->frameborder(100,15) if !$cgi->parameter('GUI',0); # overrides GUI
 
     undef my $error;
     my $link = "$arc_cgi_dir/umanager/modify";
@@ -363,7 +377,10 @@ elsif ($option eq "pwupdate") {
         $page->sectionheader("Modify User Password",4,1);
         my $users = $people->htmlTableColumn ('userid',{itemLink => 0, noHeader => 1});
         $page->add($users,0,1);
-        my $dbusers = $people->htmlOptions('userid','userid',0,0,'myself');
+        my $myself; $myself = 'myself' if $GateKeeper->{USER};
+        my $dbusers = $people->htmlOptions('userid','userid',0,0,$myself);
+#print "G user: $GateKeeper->{USER}<br>";
+#        $dbusers =~ s/myself/----/g if !$GateKeeper->{USER};
         my $query = "<TABLE><TR><TH>User whose password needs updating:</th>";
         $query .= "<td>$dbusers</td></tr></table>";
         $page->add("$query",0,1);
@@ -375,8 +392,9 @@ elsif ($option eq "pwupdate") {
 # get the relevant data from the database and throw back an edit form
         my $userid   = $cgi->parameter('userid');
 # authorize (will define GateKeeper->currentUser)
+        my $noGui = 1; $noGui = 0 if $cgi->parameter('GUI',0); 
         my %usercodes  = (user => $userid, mask => 100);
-        my %returnpath = (returnPath => '/pwupdate/getdata', noGUI => 1); 
+        my %returnpath = (returnPath => '/pwupdate/getdata', noGUI => $noGui); 
         if (($userid eq 'myself' && !$GateKeeper->authorize(100, \%returnpath)) 
         or  ($userid ne 'myself' && !$GateKeeper->authorize(\%usercodes, \%returnpath))) {
             $error = $GateKeeper->{error};
@@ -389,7 +407,7 @@ elsif ($option eq "pwupdate") {
         if ($cgi->{'und_error'}) {
             $error = "Please define every input field";
         } 
-        else {
+        elsif (!$error) {
 # the password is found to be okay, generate form to enter new password for user
             $page->form("$arc_cgi_dir/umanager/pwupdate/confirm");
             $page->sectionheader("Enter new password for user $userid and repeat",4,1);
