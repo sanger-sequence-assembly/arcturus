@@ -5,6 +5,7 @@
 # This script extracts one or more reads and generates a CAF file
 
 use DBI;
+use FileHandle;
 use DataSource;
 use Compress::Zlib;
 
@@ -17,6 +18,8 @@ while ($nextword = shift @ARGV) {
 
     $readids = shift @ARGV if ($nextword eq '-readids');
 
+    $outfile = shift @ARGV if ($nextword eq '-caf');
+
     $verbose = 1 if ($nextword eq '-verbose');
 
     if ($nextword eq '-help') {
@@ -26,6 +29,7 @@ while ($nextword = shift @ARGV) {
 }
 
 unless (defined($organism) &&
+	defined($outfile) &&
 	defined($readids)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
@@ -38,12 +42,19 @@ $ds = new DataSource(-instance => $instance, -organism => $organism);
 
 $dbh = $ds->getConnection();
 
-unless (defined($dbh)) {
+if (defined($dbh)) {
+    if ($verbose) {
+	print STDERR "Connected to DataSource(instance=$instance, organism=$organism)\n";
+	print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+    }
+} else {
     print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
     print STDERR "DataSource URL is ", $ds->getURL(), "\n";
     print STDERR "DBI error is $DBI::errstr\n";
     die "getConnection failed";
 }
+
+$outfh = new FileHandle($outfile, "w");
 
 print STDERR "\n" if $verbose;
 
@@ -64,14 +75,19 @@ $readranges = &parseReadIDRanges($readids);
 $ndone = 0;
 $nfound = 0;
 
-$query = "SELECT readname,date,ligation,clone,template,strand,primer,chemistry,basecaller," .
+$query = "SELECT readname,date,ligation,clone,strand,primer,chemistry,basecaller," .
     "pstatus,lqleft,lqright,svector,svleft,svright,cvector,cvleft,cvright," .
     "slength,sequence,quality FROM READS LEFT JOIN SEQUENCE USING (read_id) WHERE READS.read_id=? AND pstatus=0";
 
 $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed on $dsn");
 
-printf STDERR "%8d %8d", $ndone, $nfound;
+$tmplquery = "SELECT name FROM READS LEFT JOIN TEMPLATE USING (template_id) WHERE READS.read_id=?";
+
+$tmplsth = $dbh->prepare($tmplquery);
+&db_die("prepare($tmplquery) failed on $dsn");
+
+printf STDERR "%8d %8d", $ndone, $nfound unless $verbose;
 $format = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010%8d %8d";
 
 foreach $readrange (@{$readranges}) {
@@ -80,15 +96,23 @@ foreach $readrange (@{$readranges}) {
     for ($readid = $idlow; $readid <= $idhigh; $readid++) {
 	$ndone++;
 
+	print STDERR "Read($readid)" if $verbose;
+
 	$sth->execute($readid);
 
-	while(@ary = $sth->fetchrow_array()) {
-	    ($readname, $asped, $ligation, $clone, $template, $strand, $primer, $chemistry,
+	$tmplsth->execute($readid);
+
+	($template) = $tmplsth->fetchrow_array();
+
+	@ary = $sth->fetchrow_array();
+
+	if (scalar(@ary) > 0) {
+	    ($readname, $asped, $ligation, $clone, $strand, $primer, $chemistry,
 	     $basecaller, $pstatus, $qleft, $qright, $svector, $svleft, $svright,
 	     $cvector, $cvleft, $cvright, $slength, $sequence, $quality) = @ary;
-    
-	    ($slen, $sequence) = $compressor->sequenceDecoder($sequence, $scompress)
-		if $scompress;
+
+	    print STDERR " name=$readname" if ($verbose && defined($readname));
+	    print STDERR " length=$slength" if ($verbose && defined($slength));
 
 	    $sequence = uncompress($sequence);
 
@@ -98,86 +122,95 @@ foreach $readrange (@{$readranges}) {
 
 	    @bq = unpack("c*", $quality);
 
-	    print "Sequence : $readname\n";
-	    print "Is_read\n";
-	    print "Unpadded\n";
+	    print $outfh "Sequence : $readname\n";
+	    print $outfh "Is_read\n";
+	    print $outfh "Unpadded\n";
 
-	    print "SCF_File $readname" . "SCF\n";
+	    print $outfh "SCF_File $readname" . "SCF\n";
 
-	    print "Template $template\n";
+	    print $outfh "Template $template\n";
 
-	    print "Asped $asped\n" if defined($asped);
+	    print $outfh "Asped $asped\n" if defined($asped);
 
 	    ($silow, $sihigh) = &dictionaryLookup($dict_ligation, $ligation);
 
-	    print "Insert_size $silow $sihigh\n" if (defined($silow) && defined($sihigh));
+	    print $outfh "Insert_size $silow $sihigh\n" if (defined($silow) && defined($sihigh));
 
 	    ($clonename) = &dictionaryLookup($dict_clone, $clone);
 
-	    print "Clone $clonename\n" if defined($clonename);
+	    print $outfh "Clone $clonename\n" if defined($clonename);
 
 	    ($strand) = &dictionaryLookup($dict_strand, $strand);
 
-	    print "Strand ", ucfirst($strand), "\n" if defined($strand);
+	    print $outfh "Strand ", ucfirst($strand), "\n" if defined($strand);
 
 	    ($primer) = &dictionaryLookup($dict_primer, $primer);
 
-	    print "Primer ", ucfirst($primer), "_primer\n" if defined($primer);
+	    print $outfh "Primer ", ucfirst($primer), "_primer\n" if defined($primer);
 
 	    ($dye) = &dictionaryLookup($dict_chemistry, $chemistry);
 
-	    print "Dye Dye_$dye\n" if defined($dye);
+	    print $outfh "Dye Dye_$dye\n" if defined($dye);
 
 	    ($bc) = &dictionaryLookup($dict_basecaller, $basecaller);
 
-	    print "Base_caller $bc\n"if defined($bc);
+	    print $outfh "Base_caller $bc\n"if defined($bc);
 
 	    ($ps) = &dictionaryLookup($dict_status, $pstatus);
 
-	    print "ProcessStatus $ps\n" if defined($ps);
+	    print $outfh "ProcessStatus $ps\n" if defined($ps);
 
 	    if (defined($svleft) && defined($svright)) {
 		($svector) = &dictionaryLookup($dict_svector, $svector);
-		print "Seq_vec SVEC $svleft $svright \"$svector\"\n";
+		print $outfh "Seq_vec SVEC $svleft $svright \"$svector\"\n";
 	    }
 
 	    if (defined($cvleft) && defined($cvright)) {
 		($cvector) = &dictionaryLookup($dict_cvector, $cvector);
-		print "Clone_vec CVEC $cvleft $cvright \"$cvector\"\n";
+		print $outfh "Clone_vec CVEC $cvleft $cvright \"$cvector\"\n";
 	    }
 
-	    print "Clipping QUAL $qleft $qright\n" if (defined($qleft) && defined($qright));
+	    print $outfh "Clipping QUAL $qleft $qright\n" if (defined($qleft) && defined($qright));
 
-	    print "\n";
+	    print $outfh "\n";
 
-	    print "DNA : $readname\n";
+	    print $outfh "DNA : $readname\n";
 	    while (length($sequence)) {
-		print substr($sequence, 0, 50),"\n";
+		print $outfh substr($sequence, 0, 50),"\n";
 		$sequence = substr($sequence, 50);
 	    }
 
-	    print "\n";
+	    print $outfh "\n";
 
-	    print "BaseQuality : $readname\n";
+	    print $outfh "BaseQuality : $readname\n";
 
 	    while ($n = scalar(@bq)) {
-		print join(' ',@bq[0..24]),"\n";
+		print $outfh join(' ',@bq[0..24]),"\n";
 		@bq = @bq[25..$n];
 	    }
 
-	    print "\n";
+	    print $outfh "\n";
 
 	    $nfound++;
+
+	    print STDERR "\n" if $verbose;
+	} else {
+	    print STDERR " not found.\n" if $verbose;
 	}
 
-	printf STDERR $format, $ndone, $nfound if (($ndone % 50) == 0);
+	printf STDERR $format, $ndone, $nfound if (!$verbose && ($ndone % 50) == 0);
     }
 }
 
-printf STDERR $format, $ndone, $nfound;
-print STDERR "\n";
+unless ($verbose) {
+    printf STDERR $format, $ndone, $nfound;
+    print STDERR "\n";
+}
+
+$outfh->close();
 
 $sth->finish();
+$tmplsth->finish();
 
 $dbh->disconnect();
 
@@ -255,6 +288,7 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "    -organism\t\tName of organism\n";
     print STDERR "    -readids\t\tRange of read IDs to process\n";
+    print STDERR "    -caf\t\tName of output CAF file\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance [default: prod]\n";
