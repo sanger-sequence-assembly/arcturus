@@ -1033,7 +1033,7 @@ print "shortname = $shortname $brtag" if ($DEBUG);
 print "rejected file: $file $exclude $brtag" if ($subdirname =~ /$exclude/i && $DEBUG);
                 next NEXT if ($subdirname =~ /$exclude/i);
             }
-        
+print "NEW FILE: $file  (maxread= $MAXREAD) $brtag" if $DEBUG;
             last if ($MAXREAD-- <= 0);
             push @newReads, $file;
             $filecount++;
