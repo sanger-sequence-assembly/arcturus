@@ -1370,7 +1370,7 @@ sub addNewSequenceForRead {
     my $this = shift;
     my $read = shift; # a Read instance
 
-# b) test if the readname already occurs in the database
+# a) test if the readname already occurs in the database
 
     my $readname = $read->getReadName();
 
@@ -1385,14 +1385,14 @@ sub addNewSequenceForRead {
         return (0,"incompatible read IDs ($read::getReadID vs $read_id)");
     }
     
-# c) test if it is an edited read by counting alignments to the trace file
+# b) test if it is an edited read by counting alignments to the trace file
 
     my $alignToSCF = $read->getAlignToTrace();
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
         return (0,"insufficient alignment information");
     }
 
-# d) ok, now we get the previous versions of the read and compare
+# c) ok, now we get the previous versions of the read and compare
 
     my $prior;  
     my $version = 0;
@@ -1404,7 +1404,7 @@ sub addNewSequenceForRead {
         $version++;
     }
 
-# e) load this new version of the sequence
+# d) load this new version of the sequence
 
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;

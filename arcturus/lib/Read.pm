@@ -122,7 +122,9 @@ sub addAlignToTrace {
 
     $this->{alignToTrace} = [] unless defined($this->{alignToTrace});
 
-    push @{$this->{alignToTrace}}, $value;
+    my @array = @$value; # be sure it's an array ref 
+
+    push @{$this->{alignToTrace}}, [@array];
 }
 
 sub getAlignToTrace {
@@ -182,14 +184,15 @@ sub getClone {
 
 sub addCloningVector {
     my $this = shift;
-
-    my $value = shift;
+    my $value = shift || return;
 
     return unless defined($value);
 
     $this->{data}->{cvector} = [] unless defined($this->{data}->{cvector});
 
-    push @{$this->{data}->{cvector}}, $value;
+    my @vector = @$value; # be sure input is array ref
+
+    push @{$this->{data}->{cvector}}, [@vector];
 }
 
 sub getCloningVector {
@@ -423,14 +426,15 @@ sub getSequenceVectorPrimerSite {
 
 sub addSequencingVector {
     my $this = shift;
-
-    my $value = shift;
+    my $value = shift || return;
 
     return unless defined($value);
 
     $this->{data}->{svector} = [] unless defined($this->{data}->{svector});
 
-    push @{$this->{data}->{svector}}, $value;
+    my @vector = @$value; # be sure input is array ref
+
+    push @{$this->{data}->{svector}}, [@vector];
 }
 
 sub getSequencingVector {
@@ -488,11 +492,21 @@ sub compareSequence {
     my $this = shift;
     my $read = shift || return undef;
 
-# test respectively, sequence length, DNA and quality
+# test respectively, sequence length, DNA and quality; exit on first mismatch
 
-    if ($this->getSequenceLength() != $read->getSequenceLength()) {
+    if (!defined($this->getSequenceLength())) {
+# this Read instance has no sequence information
+        return undef;
+    }
+    elsif (!defined($read->getSequenceLength())) {
+# ibid
+        return undef;
+    }
+    elsif ($this->getSequenceLength() != $read->getSequenceLength()) {
         return 1; # different lengths
     }
+
+# alternative: test if an edit has been made by comparison of align-to-SCF
 
     elsif ($this->getSequence() ne $read->getSequence()) {
         return 2; # different DNA strings
