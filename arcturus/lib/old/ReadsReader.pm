@@ -1350,11 +1350,15 @@ print " recovered $hash .. ";
         $qcm = 0 if !$qcm; $count = 0; # just to have them defined
         $error .= "Invalid sequence encoding method readback: $qcm\n";
     }
-    if ($string !~ /\S/ || $readItem{quality} !~ /^\s*$string\s*$/) {
+    if ($string !~ /\S/ || $string !~ /^\s*$readItem{quality}\s*$/) {
+#    if ($string !~ /\S/ || $readItem{quality} !~ /^\s*$string\s*$/) {
+        my $slength = length($string);
+        my $rlength = length($readItem{quality});
         my $qlength = length($quality); # encode quality data
-        $error .= "Error in readback of quality data (length = $count / $qlength):\n";
-        $error .= "Original : $readItem{sequence}\nRetrieved: $string\n\n"; 
-    } 
+        $error .= "Error in readback of quality data (lengthes = $count/$qlength/$rlength/$slength):\n";
+        $error .= "Original-: '$readItem{quality}'\nRetrieved: '$string'\n\n"; 
+    }
+#    $error = 'forced error as test' if !$error; 
 
     return $error; # undefined if none
 }
