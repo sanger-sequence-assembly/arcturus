@@ -40,15 +40,23 @@ public class ReadManager {
     }
 
     public Read getReadByName(String name) throws SQLException {
+	return getReadByName(name, true);
+    }
+
+    public Read getReadByName(String name, boolean autoload) throws SQLException {
 	Object obj = hashByName.get(name);
 
-	return (obj == null) ? loadReadByName(name) : (Read)obj;
+	return (obj == null && autoload) ? loadReadByName(name) : (Read)obj;
     }
 
     public Read getReadByID(int id) throws SQLException {
+	return getReadByID(id, true);
+    }
+
+    public Read getReadByID(int id, boolean autoload) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
-	return (obj == null) ? loadReadByID(id) : (Read)obj;
+	return (obj == null && autoload) ? loadReadByID(id) : (Read)obj;
     }
 
     private Read loadReadByName(String name) throws SQLException {
@@ -64,7 +72,7 @@ public class ReadManager {
 	    int strand = parseStrand(rs.getString(4));
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
-	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
+	    read = createAndRegisterNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
 	rs.close();
@@ -85,7 +93,7 @@ public class ReadManager {
 	    int strand = parseStrand(rs.getString(4));
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
-	    read = registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
+	    read = createAndRegisterNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
 	rs.close();
@@ -111,7 +119,7 @@ public class ReadManager {
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
 
-	    registerNewRead(name, read_id, template_id, asped, strand, primer, chemistry);
+	    createAndRegisterNewRead(name, read_id, template_id, asped, strand, primer, chemistry);
 
 	    newreads++;
 	}
@@ -121,7 +129,7 @@ public class ReadManager {
 	return newreads;
     }
 
-    private int parseStrand(String text) {
+    public static int parseStrand(String text) {
 	if (text.equals("Forward"))
 	    return Read.FORWARD;
 
@@ -131,7 +139,7 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private int parsePrimer(String text) {
+    public static int parsePrimer(String text) {
 	if (text.equals("Universal_primer"))
 	    return Read.UNIVERSAL_PRIMER;
 
@@ -141,7 +149,7 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private int parseChemistry(String text) {
+    public static int parseChemistry(String text) {
 	if (text.equals("Dye_terminator"))
 	    return Read.DYE_TERMINATOR;
 
@@ -151,16 +159,20 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private Read registerNewRead(String name, int id, int template_id, java.sql.Date asped,
+    private Read createAndRegisterNewRead(String name, int id, int template_id, java.sql.Date asped,
 					 int strand, int primer, int chemistry) throws SQLException {
 	Template template = adb.getTemplateByID(template_id);
 
 	Read read = new Read(name, id, template, asped, strand, primer, chemistry, adb);
 
-	hashByName.put(name, read);
-	hashByID.put(new Integer(id), read);
+	registerNewRead(read);
 
 	return read;
+    }
+
+    void registerNewRead(Read read) {
+	hashByName.put(read.getName(), read);
+	hashByID.put(new Integer(read.getID()), read);
     }
 
     public void preloadAllReads() throws SQLException {
@@ -178,7 +190,7 @@ public class ReadManager {
 	    int strand = parseStrand(rs.getString(5));
 	    int primer = parsePrimer(rs.getString(6));
 	    int chemistry = parseChemistry(rs.getString(7));
-	    registerNewRead(name, id, template_id, asped, strand, primer, chemistry);
+	    createAndRegisterNewRead(name, id, template_id, asped, strand, primer, chemistry);
 	}
 
 	rs.close();

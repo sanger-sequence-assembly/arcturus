@@ -37,15 +37,23 @@ public class TemplateManager {
     }
 
     public Template getTemplateByName(String name) throws SQLException {
+	return getTemplateByName(name, true);
+    }
+
+    public Template getTemplateByName(String name, boolean autoload) throws SQLException {
 	Object obj = hashByName.get(name);
 
-	return (obj == null) ? loadTemplateByName(name) : (Template)obj;
+	return (obj == null && autoload) ? loadTemplateByName(name) : (Template)obj;
     }
 
     public Template getTemplateByID(int id) throws SQLException {
+	return getTemplateByID(id, true);
+    }
+
+    public Template getTemplateByID(int id, boolean autoload) throws SQLException {
 	Object obj = hashByID.get(new Integer(id));
 
-	return (obj == null) ? loadTemplateByID(id) : (Template)obj;
+	return (obj == null && autoload) ? loadTemplateByID(id) : (Template)obj;
     }
 
     private Template loadTemplateByName(String name) throws SQLException {
@@ -57,7 +65,7 @@ public class TemplateManager {
 	if (rs.next()) {
 	    int id = rs.getInt(1);
 	    int ligation_id = rs.getInt(2);
-	    template = registerNewTemplate(name, id, ligation_id);
+	    template = createAndRegisterNewTemplate(name, id, ligation_id);
 	}
 
 	return template;
@@ -72,21 +80,25 @@ public class TemplateManager {
 	if (rs.next()) {
 	    String name = rs.getString(1);
 	    int ligation_id = rs.getInt(2);
-	    template = registerNewTemplate(name, id, ligation_id);
+	    template = createAndRegisterNewTemplate(name, id, ligation_id);
 	}
 
 	return template;
     }
 
-    private Template registerNewTemplate(String name, int id, int ligation_id) throws SQLException {
+    private Template createAndRegisterNewTemplate(String name, int id, int ligation_id) throws SQLException {
 	Ligation ligation = adb.getLigationByID(ligation_id);
 
 	Template template = new Template(name, id, ligation, adb);
 
-	hashByName.put(name, template);
-	hashByID.put(new Integer(id), template);
+	registerNewTemplate(template);
 
 	return template;
+    }
+
+    void registerNewTemplate(Template template) {
+	hashByName.put(template.getName(), template);
+	hashByID.put(new Integer(template.getID()), template);
     }
 
     public void preloadAllTemplates() throws SQLException {
@@ -100,7 +112,7 @@ public class TemplateManager {
 	    int id = rs.getInt(1);
 	    String name = rs.getString(2);
 	    int ligation_id = rs.getInt(3);
-	    registerNewTemplate(name, id, ligation_id);
+	    createAndRegisterNewTemplate(name, id, ligation_id);
 	}
 
 	rs.close();

@@ -78,9 +78,13 @@ public class SequenceManager {
      */
 
     public Sequence getSequenceByReadID(int readid) throws SQLException {
+	return getSequenceByReadID(readid, true);
+    }
+
+    public Sequence getSequenceByReadID(int readid, boolean autoload) throws SQLException {
 	Object obj = hashByReadID.get(new Integer(readid));
 
-	return (obj == null) ? loadSequenceByReadID(readid) : (Sequence)obj;
+	return (obj == null && autoload) ? loadSequenceByReadID(readid) : (Sequence)obj;
     }
 
     private Sequence loadSequenceByReadID(int readid) throws SQLException {
@@ -93,7 +97,7 @@ public class SequenceManager {
 	    Read read = adb.getReadByID(readid);
 	    int seqid = rs.getInt(1);
 	    int version = rs.getInt(2);
-	    sequence = registerNewSequence(read, seqid, version, null, null);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
 	}
 
 	rs.close();
@@ -116,10 +120,14 @@ public class SequenceManager {
      */
 
     public Sequence getFullSequenceByReadID(int readid) throws SQLException {
+	return getFullSequenceByReadID(readid, true);
+    }
+
+    public Sequence getFullSequenceByReadID(int readid, boolean autoload) throws SQLException {
 	Object obj = hashByReadID.get(new Integer(readid));
 
 	if (obj == null)
-	    return loadFullSequenceByReadID(readid);
+	    return autoload ? loadFullSequenceByReadID(readid) : null;
 
 	Sequence sequence = (Sequence)obj;
 
@@ -142,7 +150,7 @@ public class SequenceManager {
 	    int seqlen = rs.getInt(3);
 	    byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
 	    byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
-	    sequence = registerNewSequence(read, seqid, version, dna, quality);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, dna, quality);
 	}
 
 	rs.close();
@@ -160,9 +168,13 @@ public class SequenceManager {
      */
 
     public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
+	return getSequenceBySequenceID(seqid, true);
+    }
+
+    public Sequence getSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
 	Object obj = hashBySequenceID.get(new Integer(seqid));
 
-	return (obj == null) ? loadSequenceBySequenceID(seqid) : (Sequence)obj;
+	return (obj == null && autoload) ? loadSequenceBySequenceID(seqid) : (Sequence)obj;
     }
 
     private Sequence loadSequenceBySequenceID(int seqid) throws SQLException {
@@ -175,7 +187,7 @@ public class SequenceManager {
 	    int readid = rs.getInt(1);
 	    Read read = adb.getReadByID(readid);
 	    int version = rs.getInt(2);
-	    sequence = registerNewSequence(read, seqid, version, null, null);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
 	}
 
 	rs.close();
@@ -193,10 +205,14 @@ public class SequenceManager {
      */
 
     public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
+	return getFullSequenceBySequenceID(seqid, true);
+    }
+
+    public Sequence getFullSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
 	Object obj = hashBySequenceID.get(new Integer(seqid));
 
 	if (obj == null)
-	    return loadFullSequenceBySequenceID(seqid);
+	    return autoload ? loadFullSequenceBySequenceID(seqid) : null;
 
 	Sequence sequence = (Sequence)obj;
 
@@ -219,7 +235,7 @@ public class SequenceManager {
 	    int seqlen = rs.getInt(3);
 	    byte[] dna = decodeCompressedData(rs.getBytes(4), seqlen);
 	    byte[] quality = decodeCompressedData(rs.getBytes(5), seqlen);
-	    sequence = registerNewSequence(read, seqid, version, dna, quality);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, dna, quality);
 	}
 
 	rs.close();
@@ -267,11 +283,14 @@ public class SequenceManager {
 	return buffer;
     }
 
-    private Sequence registerNewSequence(Read read, int seqid, int version, byte[] dna, byte[] quality) {
-	Sequence sequence = new Sequence(read, dna, quality, version);
-	sequence.setID(seqid);
-	hashByReadID.put(new Integer(read.getID()), sequence);
-	hashBySequenceID.put(new Integer(seqid), sequence);
+    private Sequence createAndRegisterNewSequence(int seqid, Read read, int version, byte[] dna, byte[] quality) {
+	Sequence sequence = new Sequence(seqid, read, dna, quality, version);
+	registerNewSequence(sequence);
 	return sequence;
+    }
+
+    void registerNewSequence(Sequence sequence) {
+	hashByReadID.put(new Integer(sequence.getRead().getID()), sequence);
+	hashBySequenceID.put(new Integer(sequence.getID()), sequence);
     }
 }

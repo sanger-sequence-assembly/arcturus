@@ -336,11 +336,29 @@ public class ArcturusDatabase {
 	return templateManager.getTemplateByName(name);
     }
 
+    public Template getTemplateByName(String name, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getTemplateByName(" + name + ", " + autoload + ")");
+
+	return templateManager.getTemplateByName(name, autoload);
+    }
+
     public Template getTemplateByID(int id) throws SQLException {
 	if (logger != null)
 	    logger.println("getTemplateByID(" + id + ")");
 
 	return templateManager.getTemplateByID(id);
+    }
+
+    public Template getTemplateByID(int id, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getTemplateByID(" + id + ", " + autoload + ")");
+
+	return templateManager.getTemplateByID(id, autoload);
+    }
+
+    void registerNewTemplate(Template template) {
+	templateManager.registerNewTemplate(template);
     }
 
     public void preloadAllTemplates() throws SQLException {
@@ -365,11 +383,25 @@ public class ArcturusDatabase {
 	return readManager.getReadByName(name);
     }
 
+    public Read getReadByName(String name, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getReadByName(" + name + ", " + autoload + ")");
+
+	return readManager.getReadByName(name, autoload);
+    }
+
     public Read getReadByID(int id) throws SQLException {
 	if (logger != null)
 	    logger.println("getReadByID(" + id + ")");
 
 	return readManager.getReadByID(id);
+    }
+
+    public Read getReadByID(int id, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getReadByID(" + id + ", " + autoload + ")");
+
+	return readManager.getReadByID(id, autoload);
     }
 
     public int loadReadsByTemplate(int template_id) throws SQLException {
@@ -379,11 +411,27 @@ public class ArcturusDatabase {
 	return readManager.loadReadsByTemplate(template_id);
     }
 
+    void registerNewRead(Read read) {
+	readManager.registerNewRead(read);
+    }
+
     public void preloadAllReads() throws SQLException {
 	if (logger != null)
 	    logger.println("preloadAllReads()");
 
 	readManager.preloadAllReads();
+    }
+
+    public int parseStrand(String text) {
+	return ReadManager.parseStrand(text);
+    }
+
+    public int parsePrimer(String text) {
+	return ReadManager.parsePrimer(text);
+    }
+
+    public int parseChemistry(String text) {
+	return ReadManager.parseChemistry(text);
     }
 
     /**
@@ -401,11 +449,25 @@ public class ArcturusDatabase {
 	return sequenceManager.getSequenceByReadID(readid);
     }
 
+    public Sequence getSequenceByReadID(int readid, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getSequenceByReadID(" + readid + ", " + autoload + ")");
+
+	return sequenceManager.getSequenceByReadID(readid, autoload);
+    }
+
     public Sequence getFullSequenceByReadID(int readid) throws SQLException {
 	if (logger != null)
 	    logger.println("getFullSequenceByReadID(" + readid + ")");
 
 	return sequenceManager.getFullSequenceByReadID(readid);
+    }
+
+    public Sequence getFullSequenceByReadID(int readid, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullSequenceByReadID(" + readid + ", " + autoload + ")");
+
+	return sequenceManager.getFullSequenceByReadID(readid, autoload);
     }
 
     public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
@@ -415,6 +477,13 @@ public class ArcturusDatabase {
 	return sequenceManager.getSequenceBySequenceID(seqid);
     }
 
+    public Sequence getSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getSequenceBySequenceID(" + seqid + ", " + autoload + ")");
+
+	return sequenceManager.getSequenceBySequenceID(seqid, autoload);
+    }
+
     public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
 	if (logger != null)
 	    logger.println("getFullSequenceBySequenceID(" + seqid + ")");
@@ -422,11 +491,22 @@ public class ArcturusDatabase {
 	return sequenceManager.getFullSequenceBySequenceID(seqid);
     }
 
+    public Sequence getFullSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
+	if (logger != null)
+	    logger.println("getFullSequenceBySequenceID(" + seqid + ", " + autoload + ")");
+
+	return sequenceManager.getFullSequenceBySequenceID(seqid, autoload);
+    }
+
     public void getDNAAndQualityForSequence(Sequence sequence) throws SQLException {
 	if (logger != null)
 	    logger.println("getDNAAndQualityForSequence(seqid=" + sequence.getID() + ")");
 
 	sequenceManager.getDNAAndQualityForSequence(sequence);
+    }
+
+    void registerNewSequence(Sequence sequence) {
+	sequenceManager.registerNewSequence(sequence);
     }
 
     /**
