@@ -318,4 +318,43 @@ public class ContigManager {
 
 	rs.close();
     }
+
+    public int[] getCurrentContigIDList() throws SQLException {
+	String query = "select count(*) from CONTIG left join C2CMAPPING" + 
+	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null";
+
+	Statement stmt = conn.createStatement();
+
+	ResultSet rs = stmt.executeQuery(query);
+
+	int ncontigs = 0;
+
+	if (rs.next()) {
+	    ncontigs = rs.getInt(1);
+	}
+
+	rs.close();
+
+	if (ncontigs == 0)
+	    return null;
+	
+	int[] ids = new int[ncontigs];
+
+	query = "select CONTIG.contig_id from CONTIG left join C2CMAPPING" + 
+	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null";
+
+	rs = stmt.executeQuery(query);
+
+	int j = 0;
+
+	while (rs.next() && j < ncontigs)
+	    ids[j++] = rs.getInt(1);
+
+	rs.close();
+	stmt.close();
+
+	return ids;
+    }
 }
