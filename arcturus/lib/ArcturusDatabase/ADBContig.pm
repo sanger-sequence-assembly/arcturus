@@ -176,6 +176,7 @@ sub getSequenceAndBaseQualityForContigID {
 
     if (defined($quality)) {
 	$quality = uncompress($quality);
+print STDERR "undefined quality in contig_id = $contig_id\n" unless $quality;
 	my @qualarray = unpack("c*", $quality);
 	$quality = [@qualarray];
     }

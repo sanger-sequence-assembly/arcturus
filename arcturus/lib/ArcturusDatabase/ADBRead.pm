@@ -784,7 +784,8 @@ sub getUnassembledReads {
     my $SUBSELECT = 0;
     if ($SUBSELECT || !@$contigids) {
 #*** this is the query using subselects which should replace steps 2 & 3
-        $query  = "select READS.read_id from READS where ";
+        $query  = "select READS.read_id from READS ";
+        $query .= "where " if (@dateselect || @$contigids);
         $query .=  join(" and ", @dateselect) if @dateselect;
         $query .= " and " if (@dateselect && @$contigids);
         $query .= "read_id not in (select distinct SEQ2READ.read_id ".
@@ -813,7 +814,7 @@ sub getUnassembledReads {
         while (my ($read_id) = $sth->fetchrow_array()) {
             push @{$readids}, $read_id;
         }
-print "reads found in the contigs: ".scalar(@$readids)."\n";
+print STDERR "reads found in the contigs: ".scalar(@$readids)."\n";
 
 # step 3 : get the read_id-s NOT found in the contigs
 
@@ -830,7 +831,7 @@ print "reads found in the contigs: ".scalar(@$readids)."\n";
         while (my ($read_id) = $sth->fetchrow_array()) {
 	    push @{$readids}, $read_id;
         }
-print "reads found NOT in the contigs: ".scalar(@$readids)."\n";
+print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n";
     }
 
     return $readids;
