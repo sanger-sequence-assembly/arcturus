@@ -1501,18 +1501,22 @@ sub putSequenceForRead {
 # insert align to SCF data , if more than one record
 
     my $alignToSCF = $read->getAlignToTrace();
-#    if ($alignToSCF->hasSegments() > 1) {
-#        $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
-#	 $sth = $dbh->prepare_cached($query);
-#        my $segments = $alignToSCF->getSegments();
-#        foreach my $segment (@$segments) {
-#            my ($startinseq,$finisinseq,$startinscf,$finisinscf) = $segment->getSegment();
-#            my $slength = $finisinseq - $startinseq + 1;
-#            $sth->execute($seqid,$startinseq,$startinscf,$slength) || &queryFailed($query);
-#        } 
-#	$sth->finish();
-#    }
-    if (defined($alignToSCF) && scalar(@$alignToSCF) > 1) {
+    if (ref($alignToSCF) eq 'Mapping' && $alignToSCF->hasSegments() > 1) {
+# NEW version using Mapping is to be tested
+        $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) ".
+                 "VALUES(?,?,?,?)";
+	$sth = $dbh->prepare_cached($query);
+
+        my $segments = $alignToSCF->getSegments();
+        foreach my $segment (@$segments) {
+            my ($startseq,$finisseq,$startscf,$finisscf) = $segment->getSegment();
+            my $slength = $finisseq - $startseq + 1;
+            $sth->execute($seqid,$startseq,$startscf,$slength) || &queryFailed($query);
+        } 
+	$sth->finish();
+    }
+# standard method used until now
+    elsif (defined($alignToSCF) && scalar(@$alignToSCF) > 1) {
         $query = "insert into ALIGN2SCF (seq_id,startinseq,startinscf,length) VALUES(?,?,?,?)";
 	$sth = $dbh->prepare_cached($query);
 
@@ -1559,7 +1563,7 @@ sub putNewSequenceForRead {
 # b) test if it is an edited read by counting alignments to the trace file
 
     my $alignToSCF = $read->getAlignToTrace();
-#    if ($alignToSCF->hasSegments() <= 1) {
+#    if ($alignToSCF->hasSegments() <= 1) { # if returns Mapping
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
         return (0,"insufficient alignment information") unless $read->isEdited();
         print STDERR "read slipped through edited test:",$read->getReadName()."\n";
@@ -1567,22 +1571,18 @@ sub putNewSequenceForRead {
 
 # c) ok, now we get the previous versions of the read and compare
 
-#my $DEBUG = 1;
     my $first;
     my $prior = 1;  
     my $version = 0;
     while ($prior) {
         $prior = $this->getRead(read_id=>$read_id,version=>$version);
         if ($prior && $read->compareSequence($prior)) {
-print "prior " . $prior->toString() . " version $version\n" if $DEBUG;
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
-print $prior->toString() . "  $seq_id, is identical to version $version\n" if $DEBUG;
             return ($seq_id,"is identical to version $version");
         }
         elsif ($prior) {
-print "prior " . $prior->toString() . " version $version\n" if $DEBUG;
             $first = $prior unless defined $first;
             $version++;
         }
@@ -1593,14 +1593,15 @@ print "prior " . $prior->toString() . " version $version\n" if $DEBUG;
     if ($first) {
 # PUT HERE: repair of depadded data with '-' on positions after lossy restoration
         &repair($read,$first); # experimental
-print STDOUT "new version detected $version\n";
-# take care that the meta data of the first and the new version correspond 
-return (0,"loading test aborted for version $version of read ".$read->getReadName);
+
+# take care that the meta data of the first and the new version correspond ?
+#return (0,"loading test aborted for version $version of read ".$read->getReadName);
     }
 
 # e) load this new version of the sequence
 
-print STDOUT "new version detected $version\n";
+print STDOUT "new sequence version detected ($version) for read ".
+$read->getReadName."\n";
 
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
@@ -1611,25 +1612,26 @@ print STDOUT "new version detected $version\n";
     return ($seq_id,"OK");
 }
 
-# experimental; has to be tested
 sub repair {
 # private method with sub 'putNewSequenceForRead'; restore depadded sequence
 # restore possible pads ('-') in this sequence by comparison with read sequence
-    my $this = shift; # the possibly depadded (with loss) sequence
-    my $read = shift; # the original trace, i.e. the read version 1
+    my $read = shift; # the possibly depadded (with loss) sequence
+    my $trace = shift; # the original trace, i.e. the read version 0
+
+    my $sequence = $read->getSequence();
+    return unless ($sequence =~ /\-/);
 
 print STDERR "REPAIR mode activated on edited read import ".
-      $read->getReadName."\n";
+      $trace->getReadName."\n$sequence\n";
+print STDERR "This condition should not occur ...\n"; return; # abort test
 
-    my $thissequence = $this->getSequence();
-    return unless ($thissequence =~ /\-/);
-
-    my $aligntotrace = $this->getAlignToTrace();
+# experimental; has to be tested
+    my $aligntotrace = $read->getAlignToTrace();
     $aligntotrace->collate(); # just in case and also sorts segments
     my $segments = $aligntotrace->getSegments();
 
-    my $readsequence = $read->getSequence();
-    my $readquality = $read->getQuality();
+    my $tracesequence = $trace->getSequence();
+    my $tracequality = $trace->getQuality();
 
     my $i = 0; # segment counter
     my @newquality;
@@ -1645,8 +1647,8 @@ print STDERR "REPAIR mode activated on edited read import ".
         my $ydiff = $yfinis - $ystart - 1;
         next unless ($xdiff > 0 && $xdiff == $ydiff);
         while ($xstart < $xfinis) {
-            my $substring = substr $thissequence,$xstart,1;
-            my $substitut = substr $readsequence,$ystart,1;
+            my $substring = substr $sequence,$xstart,1;
+            my $substitut = substr $tracesequence,$ystart,1;
             if ($substring eq "-") {
 # replace this-sequence position xstart by read-sequence position ystart
                 $newsequence .= $substring;
@@ -1655,7 +1657,8 @@ print STDERR "REPAIR mode activated on edited read import ".
             }
             $xstart++;
         } 
-    }    
+    }
+# add restored sequence and quality to read
 }
 
 sub putCommentForReadID {
@@ -2095,9 +2098,9 @@ sub getTagsForSequenceIDs {
               . " using (tag_id)"
 	      . " where $seqkeyid in (".join (',',@$sequenceIDs) .")"
               . "   and deprecated != 'Y'"
+#             . "   and tagtype not in (.some list.) "
               . " order by $seqkeyid";
 print "getTagsForSequenceID: $query \n" if $DEBUG;
-# and (read)tag not in ()?
 
     my @tag;
 
@@ -2119,6 +2122,7 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
         $tag->setDNA             (shift @ary); # sequence
 # add to output array
         push @tag, $tag;
+#$tag->writeToCaf(*STDOUT) if ($tag->getSequenceID == 79425);
     }
 print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n" if $DEBUG;
 
@@ -2160,7 +2164,7 @@ print "AFTER getSequenceIDsForReads \n" if $DEBUG;
 
     my @sids = sort {$a <=> $b} keys(%$readlist);
 
-    return unless @sids; # no tags to be stored
+    return '0.0' unless @sids; # no tags to be stored
 
 # test against tags which have already been stored previously
 
@@ -2276,7 +2280,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
                 print STDERR "Missing tag name $tagseqname (".
                 ($sequence || 'no sequence available').
                 ") in TAGSEQUENCE list\n";
-                next unless $autoload;
+                next unless ($autoload && $sequence);
 # add tag name and sequence, if any, to TAGSEQUENCE list
 	        my $tag_id = &insertTagSequence($dbh,$tagseqname,$sequence);
          	if ($tag_id) {
@@ -2318,7 +2322,7 @@ print "TAG SEQUENCE $tagseqname, $tag_id, ".($sequence || '')."\n" if $DEBUG;
         my $tag_id           = $tagID->{$tagseqname} || 0;
         my $strand           = $tag->getStrand();
         $strand =~ s/(\w)\w*/$1/;
-        my $comment          = $tag->getComment() || 'null';
+        my $comment          = $tag->getComment() || '';
 # we quote the comment string because it may contain odd characters
         $comment = $dbh->quote($comment) if $comment; 
 

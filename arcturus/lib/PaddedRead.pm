@@ -86,8 +86,6 @@ sub toPadded {
 
     return undef if ($this->{padstatus} eq 'Padded');
 
-$this->{Read} = new PaddedRead($this); # copy for tests
-
 # get the mapping segments ordered with read position
 
     $mapping->analyseSegments();
@@ -250,7 +248,7 @@ sub dePad {
 
 # locate the positions of pads in the sequence and build the padded-to-read map
 
-    my $DEBUG = 0; # $DEBUG=1 if ($this->getReadName =~ /4504/);
+    my $DEBUG = 0; # $DEBUG=1 if ($this->getReadName =~ /577/);
 print "Read: ".$this->getReadName."\n" if $DEBUG;
 
     my $sequence = $this->getSequence();
@@ -261,6 +259,7 @@ print "Read: ".$this->getReadName."\n" if $DEBUG;
     my $lgt = length($sequence);
     $sequence .= '-'; # add pad at the end
     my $quality = $this->getBaseQuality();
+print "sequence\n$sequence\n\n" if $DEBUG;
 
 # get the padded to read inserts from '-' pads in the sequence
 
@@ -270,7 +269,8 @@ print "Read: ".$this->getReadName."\n" if $DEBUG;
     my $paddedtoread = new Mapping('padded-to-read');
     while (($pos = index($sequence,'-',$pos)) > -1) {
         my $pad = scalar(@pad);
-        unless ($start >= $pos) {
+print "pos $pos  pad $pad  start $start \n" if $DEBUG;
+        unless ($start > $pos) {
             $paddedtoread->putSegment($start,$pos,$start-$pad,$pos-$pad);
         }
         push @pad, ++$pos;

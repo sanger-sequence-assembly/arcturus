@@ -117,7 +117,7 @@ sub setNumberOfContigs {
     my $this = shift;
     $this->{data}->{numberofcontigs} = shift;
 }
-  
+
 sub getNumberOfContigs {
     my $this = shift;
     return $this->{data}->{numberofcontigs};
@@ -133,6 +133,16 @@ sub getNumberOfReads {
     return $this->{data}->{numberofreads};
 }
   
+sub setOwner {
+    my $this = shift;
+    $this->{data}->{owner} = shift;
+}
+  
+sub getOwner {
+    my $this = shift;
+    return $this->{data}->{owner};
+}
+  
 sub setProjectID {
     my $this = shift;
     $this->{data}->{project_id} = shift;
@@ -143,35 +153,15 @@ sub getProjectID {
     return $this->{data}->{project_id};
 }
   
-sub setProjectName {
-    my $this = shift;
-    $this->{data}->{projectname} = shift;
-}
+#sub setProjectName {
+#    my $this = shift;
+#    $this->{data}->{projectname} = shift;
+#}
   
-sub getProjectName {
-    my $this = shift;
-    return $this->{data}->{projectname};
-}
-  
-sub setProjectStatus {
-    my $this = shift;
-    $this->{data}->{projectstatus} = shift;
-}
-  
-sub getProjectStatus {
-    my $this = shift;
-    return $this->{data}->{projectstatus};
-}
-  
-sub setProjectType {
-    my $this = shift;
-    $this->{data}->{projecttype} = shift;
-}
-  
-sub getProjectType {
-    my $this = shift;
-    return $this->{data}->{projecttype};
-}
+#sub getProjectName {
+#    my $this = shift;
+#    return $this->{data}->{projectname};
+#}  
   
 sub setUpdated {
     my $this = shift;
@@ -241,8 +231,6 @@ sub toString {
 
     $string .= "Project name       ".$this->getProjectName()."\n";
     $string .= "Project ID         ".$this->getProjectID()."\n";
-    $string .= "Project type       ".$this->getProjectType()."\n";
-    $string .= "Project status     ".$this->getProjectStatus()."\n";
     $string .= "Allocated contigs  ".$this->getNumberOfContigs()."\n";
     $string .= "Allocated reads    ".$this->getNumberOfReads()."\n";
     $string .= "Assembly           ".$this->getAssemblyID()."\n";

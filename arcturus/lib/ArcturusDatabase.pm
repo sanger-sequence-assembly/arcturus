@@ -27,6 +27,8 @@ sub new {
 
     $this->populateDictionaries();
 
+    $this->putArcturusUser(); # establish the username
+
     return $this;
 }
 
@@ -111,4 +113,34 @@ sub disconnect {
 
 #-----------------------------------------------------------------------------
 
+sub putArcturusUser {
+# determine the username from the system data
+    my $this = shift;
+
+    $this->{ArcturusUser} = getpwuid($<);
+
+    foreach my $forbidden ('pathdb','othernames') {
+
+        if ($this->{ArcturusUser} eq $forbidden) {
+
+            $this->disconnect();
+
+	    die "You cannot access Arcturus under username $forbidden";
+	}
+    }
+}
+
+
+sub getArcturusUser {
+# determine the username from the system data
+    my $this = shift;
+
+    return $this->{ArcturusUser} || ''; 
+}
+
+#-----------------------------------------------------------------------------
+
 1;
+
+
+

@@ -313,7 +313,14 @@ sub putContig {
     my %seqids;
     foreach my $read (@$reads) {
         my $seqid = $read->getSequenceID();
-        die "Missing sequence IDs for contig $contigname" unless $noload; # be sure
+# extra check on read sequence presence, just to be sure
+        unless ($seqid) {
+            print STDERR "undefined sequence ID for read ".
+		$read->getReadName."\n";
+            unless ($noload) {
+                return (0,"Missing sequence IDs for contig $contigname");
+            }
+	}
         my $readname = $read->getReadName();
         $seqids{$readname} = $seqid;
         push @seqids,$seqid;
@@ -341,10 +348,15 @@ sub putContig {
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
 # add (re-assign) the previous contig ID to the contig list of the Project
+# (but only if a project was explicitly defined)
             if ($project) {
                 $this->assignContigToProject($previous,$project); # ADBProject
-                $project->addContigID($previous->getContigID());
+                $project->addContigID($previous->getContigID()); # ??
             }
+# add the contig ID to the contig
+            $contig->setContigID($previous->getContigID());
+# import tags? or do this outside?
+
             return $previous->getContigID(),"Contig $contigname is ".
                    "identical to contig ".$previous->getContigName();
         }
@@ -377,6 +389,8 @@ sub putContig {
                 my $contig_id = $previous->getContigID();
                 push @linked, $contig_id;
                 $readsinlinked{$contig_id} = $previous->getNumberOfReads();
+# what about tags ... ? import from parents given 
+# add previous to contig; later import tags from parents
             }
             $previous = $previous->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
@@ -1433,7 +1447,8 @@ sub putTagsForContig {
     my $contig = shift;
     my $testexistence = shift;
 
-    return 0 unless $contig->hasTags();
+    return 1 unless $contig->hasTags();
+$DEBUG=0;
 
     my $cid = $contig->getContigID();
 print STDOUT "putTagsForContig: contig ID = $cid\n" if $DEBUG;
@@ -1485,6 +1500,7 @@ print STDOUT "putTagsForContig: new tags ".scalar(@$ctags)."\n" if $DEBUG;
 print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 #exit; # temporary
     }
+$DEBUG=0;
 
     return &putTags ($dbh,$ctags,'CONTIGTAG','contig_id',1);
 }

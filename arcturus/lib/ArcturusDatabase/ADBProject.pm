@@ -32,12 +32,9 @@ sub getProject {
 
     my $query;
 
-#    my $itemlist = "PROJECT.project,projectname,projecttype," .
-#                   "assembly,reads,contigs,updated,userid,created," .
-#		   "creator,comment,status";
-    my $itemlist = "PROJECT.project_id,projectname,projecttype," .
-                   "assembly_id,reads,contigs,updated,userid,created," .
-		   "creator,comment,status";
+    my $itemlist = "PROJECT.project_id,projectname," .
+                   "assembly_id,updated,owner,locked," .
+		   "created,creator,comment";
 
     if ($key eq "project_id") {
         $query = "select $itemlist from PROJECT where project =?"; 
@@ -46,14 +43,20 @@ sub getProject {
         $query = "select $itemlist from PROJECT where projectname =?"; 
     }
     elsif ($key eq "contig_id") { 
-        $query = "select $itemlist from PROJECT join CONTIG2PROJECT" .
-                 " using (project)" .
-                 " where CONTIG2PROJECT.contig_id = ?";
+        $query = "select $itemlist from PROJECT join CONTIG" .
+                 " using (project_id)" .
+                 " where CONTIG.contig_id = ?";
     }
     elsif ($key eq "contigIDs") {
 # determine the project ID from a number of contig_ids
-        return $this->getProject(contig_id=>$value) unless (ref($value) eq 'ARRAY');
-        return undef unless @$value; # empty array
+        if (ref($value) ne 'ARRAY') {
+	    return $this->getProject(contig_id=>$value);
+        }
+        elsif (!@$value) {
+            return undef; # empty array
+        }
+# determine the project based on a number of project_ids
+# to be developed
 
         
     }
@@ -73,16 +76,13 @@ sub getProject {
         $project = new Project();
         $project->setProjectID(shift @ary);
         $project->setProjectName(shift @ary);
-        $project->setProjectType(shift @ary);
         $project->setAssemblyID(shift @ary);
-        $project->setNumberOfReads(shift @ary);
-        $project->setNumberOfContigs(shift @ary);
         $project->setUpdated(shift @ary);
+        $project->setUserName(shift @ary);
         $project->setUserName(shift @ary);
         $project->setCreated(shift @ary);
         $project->setCreator(shift @ary);
         $project->setComment(shift @ary);
-        $project->setProjectStatus(shift @ary);
 # assign ADB reference
         $project->setArcturusDatabase($this);
     }
@@ -100,16 +100,17 @@ sub putProject {
     die "putProject expects a Project instance as parameter"
 	unless (ref($project) eq 'Project');
 
-    my $query = "insert into PROJECT (projectname,created,userid,updated,comment) ".
-                "VALUES (?,now(),?,now(),?)";
+    my $query = "insert into PROJECT (projectname,updated,owner,created,creator,comment) ".
+                "VALUES (?,now(),?,now(),?,?)";
 
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($project->getProjectName(),
-                           $project->getUserName() || 'arcturus',
-                           $project->getComment()) || &queryFailed($query);
+                           $this->getArcturusUser() || 'unknown',
+                           $this->getArcturusUser() || 'arcturus',
+                           $project->getComment());
 
     $sth->finish();
 
@@ -332,7 +333,9 @@ sub getProjectIDforContigID {
     my $this = shift;
     my $contig_id = shift;
 
-    my $query = "select project,checked from CONTIG2PROJECT where contig_id=?";
+    my $query = "select project_id,locked" .
+                "  from CONTIG join PROJECT using (project_id)" .
+                " where contig_id=?";
 
     my $dbh = $this->getConnection();
 
@@ -340,18 +343,18 @@ sub getProjectIDforContigID {
 
     $sth->execute($contig_id) || &queryFailed($query);
 
-    my ($project,$checked);
+    my ($project,$locked);
     while (my @ary = $sth->fetchrow_array()) {
-        ($project,$checked) = @ary;
+        ($project,$locked) = @ary;
     }
 
     $sth->finish();
 
-    return ($project,$checked);  
+    return ($project,$locked);  
 }
 
 #------------------------------------------------------------------------------
-# update meta data
+# meta data
 #------------------------------------------------------------------------------
 
 sub getCountsForProject {
@@ -362,10 +365,10 @@ sub getCountsForProject {
 
 # get the number of contigs and reads in this project
 
-    my $query = "select count(distinct CONTIG2PROJECT.contig_id) as contigs," .
-                "       count(distinct seq_id) as reads" .
-                "  from CONTIG2PROJECT join MAPPING using (contig_id)" .
-                " where project=?";
+    my $query = "select count(distinct CONTIG.contig_id) as contigs," .
+                "       count(distinct MAPPING.seq_id) as reads" .
+                "  from MAPPING join CONTIG using (contig_id)" .
+                " where CONTIG.project_id=?";
  
     my $sth = $dbh->prepare_cached($query);
 
@@ -376,41 +379,6 @@ sub getCountsForProject {
     $sth->finish();
 
     return ($cnr, $rnr);
-}
-
-sub updateMetaDataForProject {
-# private method: determine & update number of reads and contogs for project
-# returns true for updated, false but 0 for failure, undef for invalid input
-    my $this = shift;
-    my $project_id = shift;
-    my ($key,$value) = @_;
-
-# check on user ID specification
-
-    my $user = 'arcturus';
-    if ($key && $key eq 'user' && $value) {
-        $user = $value;
-    }
-    elsif ($key) {
-        return undef; # invalid key or missing data
-    }
-
-# get the number of contigs and reads in this project
-
-    my ($cnr, $rnr) = $this->getCountsForProject($project_id); # number of contigs, reads
-
-    my $dbh = $this->getConnection();
-
-    my $query = "update PROJECT set contigs=?,reads=?,updated=now(),userid=?".
-                " where project=?";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $success = $sth->execute($cnr,$rnr,$project_id,$user) || &queryFailed($query);
-
-    $sth->finish();
-
-    return $success;
 }
 
 sub getProjectInventory {
@@ -444,20 +412,19 @@ sub getProjectInventory {
 
 # get the number of contigs and reads in this project
 
-    my $query = "select PROJECT.project,PROJECT.projectname,".
+    my $query = "select PROJECT.project_id, PROJECT.projectname,".
+                "       PROJECT.locked,".
                 "       count(CONTIG.contig_id) as contigs,".
                 "       sum(nreads) as reads,".
-                "       sum(length) as length,".
+                "       sum(length) as tlength,".
                 "       round(avg(length)) as meanlength,".
                 "       round(std(length)) as stdlength,".
-                "       max(length) as maxlength,".
-                "       PROJECT.updated".
-                "  from PROJECT, CONTIG2PROJECT, CONTIG".
-                " where PROJECT.project=CONTIG2PROJECT.project".
-                "   and CONTIG2PROJECT.contig_id=CONTIG.contig_id".
-                "   and CONTIG2PROJECT.contig_id in (".join(',',@$contigs).")".
-                " group by project".
-                " order by project asc";
+                "       max(length) as maxlength".
+                "  from PROJECT join CONTIG".
+                " using (project_id)".
+                " where CONTIG.contig_id in (".join(',',@$contigs).")".
+                " group by project_id".
+                " order by project_id asc";
  
     my $sth = $dbh->prepare_cached($query);
 
@@ -478,5 +445,3 @@ sub addCommentForProject {
 #------------------------------------------------------------------------------
 
 1;
-
-

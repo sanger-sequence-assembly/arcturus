@@ -576,24 +576,6 @@ sub getSegments {
     return $this->{mySegments}; # array reference
 }
 
-#sub oldassembledFromToString {
-# write alignments as (block of) 'Assembled_from' records
-#    my $this = shift;
-
-#    my $assembledFrom = "Assembled_from ".$this->getMappingName()." ";
-
-#    my $string = '';
-#    foreach my $segment (@{$this->{mySegments}}) {
-#        $segment->normaliseOnY(); # ensure rstart <= rfinish
-#        my @segment = $segment->getSegment();
-#        $string .= $assembledFrom." @segment\n";
-#    }
-
-#    $string = $assembledFrom." is undefined\n" if (!$string && shift); 
-
-#    return $string;
-#}
-
 sub assembledFromToString {
 # write alignments as (block of) 'Assembled_from' records
     my $this = shift;
@@ -654,7 +636,6 @@ sub findContigRange {
 
 # if no segments specified default to all
 
-#print "findContigRange invoked $segments\n";
     return undef unless (ref($segments) eq 'ARRAY');
 
     my ($cstart,$cfinal);

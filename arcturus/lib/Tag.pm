@@ -59,18 +59,18 @@ sub getDNA {
     return $this->{DNA} || '';
 }
 
-sub setName {
+#sub setName {
 # tag type, up to 32 char
-    my $this = shift;
+#    my $this = shift;
 
-    $this->{name} = shift;
-}
+#    $this->{name} = shift;
+#}
 
-sub getName {
-    my $this = shift;
+#sub getName {
+#    my $this = shift;
 
-    return $this->{name} || '';
-}
+#    return $this->{name} || '';
+#}
 
 sub setSystematicID {
 # tag type, up to 32 char
@@ -254,7 +254,7 @@ sub transpose {
 
 #----------------------------------------------------------------------
 
-my $etest=10;
+my $etest=0;
 sub isEqual {
 # compare tis tag with input tag
     my $this = shift;
@@ -262,7 +262,6 @@ sub isEqual {
 
 # compare tag type
 
-$etest-- if $etest;
 print "Tag comparison: ".$this->getType." against ".$tag->getType."\n" if $etest;
     return 0 unless ($this->getType() eq $tag->getType());
 
@@ -288,6 +287,7 @@ print "  position: @spos  against  @tpos \n" if $etest;
 
 # the tags are identical:
 print "Tags are EQUAL \n" if $etest;
+$etest-- if $etest;
 
     return 1;
 }

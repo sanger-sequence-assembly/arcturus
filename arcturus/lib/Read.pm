@@ -657,6 +657,9 @@ my $DEBUG = 0;
         return 0 unless ($read->getReadName eq 'eimer-3329b09.p1k'
 ||$read->getReadName eq 'eimer-577f05.q1k' ); # different lengths
 $DEBUG = 1;
+# let be triggered by presence of - ? or edited read?
+        my $thisDNA = $this->getSequence();
+#        return 0 unless ($thisDNA =~ /-/);
     }
 
 # test the DNA sequences; special provision for (lossy) depadded sequence 
@@ -692,7 +695,6 @@ print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
 #print "$subthis\n$subread\n" unless ($subthis eq $subread);
                 return 0 unless ($subthis eq $subread); # different DNA strings
             }
-#            next unless ($length > 0);
             $start = $pad[$i] + 1;
 	}
     }
@@ -701,13 +703,6 @@ print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
     my $readBQD = $read->getBaseQuality();
 
     for (my $i=0 ; $i<@$thisBQD ; $i++) {
-
-	if ($thisBQD->[$i] != $readBQD->[$i]) {
-	print "$readDNA\n\n$thisDNA\n\n";
-        print "@$readBQD\n\n@$thisBQD\n\n";
-        print "Quality mismatch at i=$i\n";
-        }
-
         return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
 
