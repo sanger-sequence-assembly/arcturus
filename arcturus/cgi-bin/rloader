@@ -657,6 +657,8 @@ if ($logON || !$origin) {
             $dbfiles{$dbfile}++;
         }
         $sth->finish();
+        $nr = keys %dbfiles;
+        print "... $nr pending files found$breakTesting against READS table ... ";
 
         foreach my $key (keys %dbfiles) {
 # test if read already loaded to weed out possible double entries
@@ -668,7 +670,7 @@ if ($logON || !$origin) {
 
         $nr = keys %dbfiles;
 
-        print "DONE ... $nr pending files found";
+        print "DONE ... $nr (new) pending reads found";
         print "  (forceload)" if ($forced);
         print "$break$break";
 
