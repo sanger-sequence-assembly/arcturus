@@ -64,7 +64,7 @@ sub setAverageCover {
 
 sub getAverageCover {
     my $this = shift;
-    return $this->{data}->{averagecover} || 0;
+    return $this->{data}->{averagecover};
 }
 
 #-------------------------------------------------------------------   
@@ -221,7 +221,7 @@ sub getReadOnRight {
 
 sub setReadOnRight {
     my $this = shift;
-    $this->{data}->{readonrigt} = shift;
+    $this->{data}->{readonright} = shift;
 }
 
 #-------------------------------------------------------------------   
@@ -386,7 +386,7 @@ print STDOUT "Statistics for contig $name\n" if $list;
 # total read cover = sum of contigspan length
                 my $contigspan = $cf - $cs + 1;
                 $totalreadcover += $contigspan;
-#print STDOUT "Mapping $readname contig range : $cs $cf \n";
+#print STDOUT "Mapping $readname contig range : $cs $cf \n"; exit 0 if ($cf < $cs);
 
 # find the leftmost readname
 
@@ -429,6 +429,7 @@ print STDOUT "Statistics for contig $name\n" if $list;
 # (and Segments) to get the contig starting at position 1
                 my $shift = $cstart - 1;
                 print STDERR "Contig $name requires shift by $shift\n";
+exit 0;
                 foreach my $mapping (@$mappings) {
                     $mapping->applyShiftToContigPosition($shift);
                 }
@@ -436,7 +437,7 @@ print STDOUT "Statistics for contig $name\n" if $list;
             }
         }
         else {
-            print STDOUT "Contig $name has no mappings\n";
+            print STDERR "Contig $name has no mappings\n";
             $success = 0;
             last;
         }
@@ -449,19 +450,20 @@ print STDOUT "Statistics for contig $name\n" if $list;
 print STDOUT "Consensuslength $clength\n" if $list;
     $averagecover = $totalreadcover/$clength;
     $this->setAverageCover( sprintf("%.2f", $averagecover) );
-print "Average cover $averagecover\n" if $list;   
+print STDOUT "Average cover $averagecover\n" if $list;   
     $this->setReadOnLeft($readonleft);
     $this->setReadOnRight($readonright);
-print "End reads : left $readonleft  right $readonright\n" if $list;
+print STDOUT "End reads : left $readonleft  right $readonright\n" if $list;
 
     return $success;
 }
 
 #-------------------------------------------------------------------    
-# compare mappings with an array of reference mappings
+# compare Contigs on metadata and mappings
 #-------------------------------------------------------------------
 
 sub isSameAs {
+# compare the $compare and $this Contig instances
     my $this = shift;
     my $compare = shift || return 0;
 
@@ -469,58 +471,70 @@ sub isSameAs {
 
 # compare some of the metadata
 
-    $compare->getStatistics();
+    $this->getStatistics(1)    unless $this->getReadOnLeft();
+    $compare->getStatistics(1) unless $compare->getReadOnLeft();
 # test the length
     return 0 unless ($this->getConsensusLength() == $compare->getConsensusLength());
-# test the end reads
-    my %endreads = ($this->getReadOnLeft()=>1,$this->getReadOnRight()=>1);
+# test the end reads (allow for inversion)
+    my $rl = $this->getReadOnLeft();
+    my $rr = $this->getReadOnRight();
+print STDERR "reads left $rl  right $rr\n";
+    my %endreads = ($rl=>1, $rr=>1);
     return 0 unless $endreads{$compare->getReadOnLeft()};
     return 0 unless $endreads{$compare->getReadOnRight()};
 
-# compare the mappings in this contig to the one in the reference
+# compare the mappings one by one
 # mappings are identified using their sequence IDs or their readnames
 # this assumes that both sets of mappings have the same type of data
 
+print "getting inventory for mappings\n";
     my $sequence = {};
+    my $numberofmappings = 0;
     if (my $mappings = $this->getMappings()) {
+        $numberofmappings = scalar(@$mappings);
         foreach my $mapping (@$mappings) {
-            my $key = $mapping->getSequenceID() || $mapping->getReadName();
-            $sequence->{$key} = $mapping;
+            my $key = $mapping->getSequenceID();
+            $sequence->{$key} = $mapping if $key;
+            $key =  $mapping->getReadName();
+            $sequence->{$key} = $mapping if $key;
         }
     }
+print "number of mappings $numberofmappings\n";
 
     my ($align,$shift);
     if (my $mappings = $compare->getMappings()) {
 # check number of mappings
-        return 0 if (scalar(keys %$sequence) != scalar(@$mappings));
-# compare each individual mapping
+        return 0 if ($numberofmappings != scalar(@$mappings));
+
         foreach my $mapping (@$mappings) {
-            my $key = $mapping->getSequenceID();
+# find the corresponding mapping in $this Contig instance
+            my $key = $mapping->getSequenceID() || $mapping->getReadName();
+            return undef unless defined($key); # incomplete Mapping
             my $match = $sequence->{$key};
-            if (!defined($match)) {
-                $key = $mapping->getReadName();
-                $match = $sequence->{$key};
-            }
-            return 0 unless defined($match);
-# now compare the maps
-            my ($identical,$aligned,$offset) = $mapping->compare($match);
+            return 0 unless defined($match); # there is no counterpart in $this
+# compare the two maps
+            my ($identical,$aligned,$offset) = $match->compare($mapping);
+print "mapping comparison: $identical,$aligned,$offset \n";
             return 0 unless $identical;
+# on first one register shift and alignment direction
             if (!defined($align) && !defined($shift)) {
-                $align = $aligned;
+                $align = $aligned; # either +1 or -1
                 $shift = $offset;
             }
-# the alignment and offsets between the mappings must all be identical 
+# the alignment and offsets between the mappings must all be identical
+# i.e.: for the same contig: 1,0; for the same contig inverted: -1, some value 
             elsif ($align != $aligned || $shift != $offset) {
                 return 0;
             }
         }
     }
 
-# okay, the mappings are all identical
+# returns true  if the mappings are all identical
+# returns undef if no or invalid mappings found in the $compare Contig instance
+# returns false (but defined = 0) if any mismatch found between mappings
 
-    return 1 if $align;
-
-    return -1; # but inverted
+ print "Output Contig->isSameAs : $align\n";
+    return $align; # 1 for identical, -1 for identical but inverted
 }   
 
 #-------------------------------------------------------------------    

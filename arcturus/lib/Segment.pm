@@ -53,21 +53,23 @@ sub invert {
 }
 
 sub normaliseOnY {
-# order Y interval (default)
+# order Y interval, return Y start position
     my $this = shift;
 
     $this->invert() if ($this->[2] > $this->[3]);
+
+    return $this->getYstart();
 }
 
 sub normaliseOnX {
-# order X interval, return length of interval
+# order X interval, return length of interval 
     my $this = shift;
 
     my $length = $this->getXfinis() - $this->getXstart();
 
     $this->invert() if ($length < 0);
 
-    return abs($length) + 1;
+    return abs($length) + 1; # (re: ArcturusDatabase->putMappingsForContig)
 }
 
 sub applyShiftToX {
@@ -137,23 +139,23 @@ sub compare {
 # the two segments should be normalized on Y and have identical Y (read) range
 # the method will return the alignment and offset for the X (contig) ranges
 
-    $this->normalizeOnY();
-    $segment->normalizeOnY();
+#    $this->normalizeOnY();
+#    $segment->normalizeOnY();
 
-    return 0 unless ($this->getYstart() == $segment->getYstart());
-    return 0 unless ($this->getYfinis() == $segment->getYfinis());
+    return unless ($this->getYstart() == $segment->getYstart());
+    return unless ($this->getYfinis() == $segment->getYfinis());
 
 # the transformation between X (this) and X (segment) is given by
-# X(segment) = align * X(this) + (offset(segment) - align * offset(this))
+# X(segment) = align * X(this) + (offset(segment) - align * offset(this)) ?
 
     my $alignment = $this->getAlignment();
     $alignment = -$alignment if ($segment->getAlignment() < 0);
 
     my $offset = $this->getOffset();
     $offset = -$offset if ($alignment < 0);
-    $offset += $segment->getOffset();
+    $offset -= $segment->getOffset();
 
-    return (1, $offset, $alignment);
+    return (1, $alignment, $offset);
 }
 
 #----------------------------------------------------------------------

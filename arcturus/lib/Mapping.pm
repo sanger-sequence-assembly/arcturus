@@ -25,6 +25,14 @@ sub new {
 # mapping metadata (readname, sequence ID, mapping ID and alignment)
 #-------------------------------------------------------------------
 
+sub setContigRange {
+    my $this = shift;
+    my $range = shift || return;
+
+    my @range = @$range; # copy
+    $this->{contigrange} = [@range];
+}
+
 sub getMappingID {
     my $this = shift;
     return $this->{mapping_id};
@@ -102,25 +110,78 @@ sub getAlignment {
 #-------------------------------------------------------------------
 
 sub compare {
-# compare this Mapping instance with input Mapping, returns 1 if identical
+# compare this Mapping instance with input Mapping
     my $this = shift;
-    my $mapping = shift;
+    my $compare = shift;
 
-    if (ref($mapping) ne 'Mapping') {
+    if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
+print "compare mapping $this and $compare , sort\n";
 
-    my $lmaps = $this->getSegments();
-    my $fmaps = $mapping->getSegments();
+    my $tmaps = $this->orderSegments();
+    my $cmaps = $compare->orderSegments();
 
-    return (0,0,0) unless (scalar(@$lmaps) == scalar(@$fmaps));
+    return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
+    return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
 # return values of alignment and offset will be identical
 
-    
+    my ($identical,$align,$shift);
+    for (my $i = 0 ; $i < scalar(@$tmaps) ; $i++) {
+	my $tsegment = $tmaps->[$i];
+	my $csegment = $cmaps->[$i];
+        my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
+#print "segment comparison: $identical,$aligned,$offset \n";
+        return 0 unless $identical;
+# on first one register shift and alignment direction
+        if (!defined($align) && !defined($shift)) {
+            $align = $aligned; # either +1 or -1
+            $shift = $offset;
+        }
+# the alignment and offsets between the mappings must all be identical 
+        elsif ($align != $aligned || $shift != $offset) {
+            return 0;
+        }
+    }
+
+    return (1,$align,$shift);
 }
+
+sub orderSegments {
+# sort the segments according to increasing read position
+    my $this = shift;
+
+    my $segments = $this->getSegments() || return;
+
+# ensure all segments are normalised on the read domain
+
+    foreach my $segment (@$segments) {
+        $segment->normaliseOnY();
+    }
+
+#    if (!$this->{nolist}) {
+#        print $this->assembledFromToString();
+#       @$segments = sort { $b->normaliseOnY <=> $a->normaliseOnY } @$segments; 
+#        print $this->assembledFromToString();
+#    }
+
+# all segments are normalised on the read domain and sorted
+
+    @$segments = sort { $a->normaliseOnY <=> $b->normaliseOnY } @$segments; 
+#    @$segments = sort { $a->getYstart <=> $b->getYstart } @$segments; 
+
+#    print $this->assembledFromToString() unless $this->{nolist};
+#    $this->{nolist} = 1 if (@$segments > 3);
+
+    return $segments;
+}
+
+#-------------------------------------------------------------------
+# apply linear translation to mapping
+#-------------------------------------------------------------------
 
 sub applyShiftToContigPosition {
 # apply a linear contig shift to each segment
@@ -147,7 +208,7 @@ sub addAlignmentFromDatabase {
 
     $length -= 1;
 
-    my $rfinis = $rstart + $length;
+    my $cfinis = $cstart + $length;
 
     if ($length < 0) {
         die "Invalid length specification in Mapping ".$this->getReadName; 
@@ -155,7 +216,7 @@ sub addAlignmentFromDatabase {
     elsif (my $direction = $this->{direction}) {
        
         $length = -$length if ($direction < 0);
-        my $cfinis = $cstart + $length;
+        my $rfinis = $rstart + $length;
 
         $this->addAssembledFrom($cstart, $cfinis, $rstart, $rfinis);
     }

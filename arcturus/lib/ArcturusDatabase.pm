@@ -1897,7 +1897,7 @@ print STDERR "Contig attributes: $length,$ncntgs,$nreads,$newreads,$cover\n";
 
     $contig->setAverageCover($cover);
 
-    $contig->setReadNameHash($readnamehash); 
+#    $contig->setReadNameHash($readnamehash); 
 }
 
 sub getContigWithChecksum {
@@ -2167,6 +2167,9 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
         my $readname = $read->getReadName();
         $seqids->{$readname} = $read->getSequenceID();
         push @readnames, $readname;
+# my $seqid = $read->getSequenceID();
+# $seqids->{$read->getReadName()} = $seqid;
+# push @seqnames,$seqid;
     }
 # and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
@@ -2179,8 +2182,9 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
 # find out if the contig has been loaded before i.e. do a query on 
 # CONTIG.readnamehash join CONTIG2CONTIG.age = 0 or not existing
 
-    my $readnamehash = md5(sort @readnames);
-    if (my $previous = $this->getContigNEW(withChecksum=>$readnamehash,
+    my $readhash = md5(sort @readnames);
+# my $readhash = md5(sort @seqnames);
+    if (my $previous = $this->getContigNEW(withChecksum=>$readhash,
                                            metaDataOnly=>1)) {
         print STDERR "Contig ".$contig->getContigName.
                      " may be identical to contig ".
@@ -2188,7 +2192,7 @@ print STDERR "Contig ".$contig->getContigName." to be added\n";
 # pull out the contig mappings and compare them one by one with contig
         $this->getMappingsForContig($previous);
         return $previous->getContigID() if $contig->isSameAs($previous);
-        return 0;
+print "comparison passed\n";
     }
 return 0; # testing
 
@@ -2307,7 +2311,7 @@ next;
         if ($mappingid) {
             my $segments = $mapping->getSegments();
             foreach my $segment (@$segments) {
-                my $length = $segment->normaliseOnX(); # order with contig range
+                my $length = $segment->normaliseOnX(); # order contig range
                 my $cstart = $segment->getXstart();
                 my $rstart = $segment->getYstart();
 #my ($cstart, $rstart, $length) = $segment->getMetaData();
