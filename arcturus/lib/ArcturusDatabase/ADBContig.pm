@@ -1335,6 +1335,26 @@ sub putTagsForContig {
     return 1;
 }
 
+
+sub putContigTags {
+# use as private method only; 
+    my $dbh = shift;
+    my $tags = shift;
+    my $block = shift || 1000;
+
+    while (@$tags) {
+print "putContigTags : next block (".scalar(@$tags)." left)\n";
+        my @block;
+        my $count = 0;
+        while ($count < $block) {
+            last unless @$tags;
+            push @block, (shift @$tags);
+        }
+        &putTags($dbh,\@block,'READ');
+    }
+}
+
+
 sub getTagsForContig {
     my $this = shift;
     my $contig = shift; # Contig instance
@@ -1345,6 +1365,29 @@ sub getTagsForContig {
     return if $contig->hasTags(); # only 'empty' instance allowed
 
 # to be completed
+}
+
+
+sub getContigTagsForSequenceIDs {
+# use as private method only; blocked retrieval of read tags
+    my $dbh = shift;
+    my $seqIDs = shift;
+    my $blocksize = shift || 1000;
+
+    my @tags;
+    while (my $block = scalar(@$seqIDs)) {
+
+        $block = $blocksize if ($block > $blocksize);
+#print "getContigTagsForSequenceIDs: next block $block\n";
+
+        my @sids = splice @$seqIDs, 0, $block;
+
+        my $tags = &getTagsForSequenceIDs ($dbh,\@sids,'READ');
+
+        push @tags, @$tags;
+    }
+
+    return [@tags];
 }
 
 #------------------------------------------------------------------------------

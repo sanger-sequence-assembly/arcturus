@@ -41,15 +41,15 @@ sub setArcturusDatabase {
 sub addTag {
 # import a Tag instance and add to the Tag list
     my $this = shift;
-    my $Tag  = shift;
+    my $tag  = shift;
 
-    die "Read->addTag expects a Tag instance as parameter" if (ref($Tag) ne 'Tag');
+    die "Read->addTag expects a Tag instance as parameter" if (ref($tag) ne 'Tag');
 
     $this->{Tags} = [] unless defined $this->{Tags};
 
-    $Tag->setSequenceID($this->getSequenceID()); # transfer seq_id, if any
+    $tag->setSequenceID($this->getSequenceID()); # transfer seq_id, if any
 
-    push @{$this->{Tags}}, $Tag;
+    push @{$this->{Tags}}, $tag;
 }
 
 sub getTags {
