@@ -22,14 +22,13 @@ select(STDOUT); $| = 1; # Make unbuffered.
 # get configuration data, open CGI and MySQL Database
 ##############################################################################
 
-my $GateKeeper = new GateKeeper('mysql',{insistOnCGI=>1 , diagnosticsOn=>1});
+my $GateKeeper = new GateKeeper('mysql',{insistOnCGI=>1 , diagnosticsOn=>0});
 
 my $cgi        = $GateKeeper->cgiHandle(1);
 
 my $database   = $cgi->parameter('database') || 'arcturus';
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
-print "organisms $organisms\n";
 
 ##############################################################################
 # MAIN
