@@ -1,4 +1,3 @@
-/*  Last edited: Jul  9 09:10 2002 (adh) */
 /*
 #######################################################################
 # This software has been created by Genome Research Limited (GRL).    # 
@@ -51,13 +50,17 @@
 # RUNNING THIS PROGRAM
 # --------------------
 #
-#   mysqlclient host1:port1 [host2:port2 ...]
+#   mysqlping host1:port1 [host2:port2 ...]
 #
 # Note that there is no default i.e. at least one host:port argument must
 # be given. The program does not assume port 3306. You must specify this
 # explicitly.
 #
 # Your servers must all be listening for connections on TCP ports.
+#
+# Your servers must also have a user named 'ping' which has been granted
+# the process privilege without a password from all hosts on which this
+# program will be run.
 #
 # WHO WROTE THIS PROGRAM
 # ----------------------
