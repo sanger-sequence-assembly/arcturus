@@ -259,7 +259,7 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 
 	    $found++;
 
-	    print "BAC_CLONE $template_id ($template_name) $sihigh\n\n" if ($found == 1);
+	    print "BAC_CLONE $template_id ($template_name) $silow $sihigh\n\n" if ($found == 1);
 
 	    print "    READ $read_id ($readname) STRAND $strand SEQ $seq_id\n";
 	    print "        IN CONTIG $contig_id $cstart..$cfinish $direction\n";
