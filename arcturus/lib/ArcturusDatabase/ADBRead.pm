@@ -893,7 +893,7 @@ sub getSequenceForReads {
 #? replace dashes by N if it's the original read
 #?            $sequence =~ s/\-/N/g unless $read->getVersion();
             $read->setSequence($sequence);
-            $read->setQuality($quality);
+            $read->setBaseQuality($quality);
         }
     }
 
@@ -1314,7 +1314,7 @@ sub putSequenceForRead {
 
     my $sequence = compress($read->getSequence());
 
-    my $basequality = compress(pack("c*", @{$read->getQuality()}));
+    my $basequality = compress(pack("c*", @{$read->getBaseQuality()}));
 
     $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
 
@@ -1537,7 +1537,7 @@ sub checkReadForCompleteness {
 	unless defined($read->getSequence());
 
     return (0, "undefined base-quality")
-	unless defined($read->getQuality());
+	unless defined($read->getBaseQuality());
 
     return (0, "undefined asped-date")
 	unless (defined($read->getAspedDate()) || $skipAspedCheck);

@@ -87,8 +87,8 @@ sub importSequence {
     }
   
     $this->setSequence($sequence); # a string
-    $this->setQuality($quality);   # reference to an array of integers
-#    $this->setQuality([@$quality]); # alternative ? copy array, pass ref
+    $this->setBaseQuality($quality);   # reference to an array of integers
+#    $this->setBaseQuality([@$quality]); # alternative ? copy array, pass ref
     return 1;
 }
 
@@ -314,7 +314,7 @@ sub getProcessStatus {
 
 #-----------------
 
-sub setQuality {
+sub setBaseQuality {
 # import the reference to an array with base qualities
     my $this = shift;
 
@@ -325,7 +325,7 @@ sub setQuality {
     }
 }
 
-sub getQuality {
+sub getBaseQuality {
 # return the quality data (possibly) using lazy instatiation
     my $this = shift;
     $this->importSequence() unless defined($this->{BaseQuality});
@@ -560,13 +560,13 @@ sub compareSequence {
         return 0; # different DNA strings
     }
 
-    my $thisBQD = $this->getQuality();
-    my $readBQD = $read->getQuality();
+    my $thisBQD = $this->getBaseQuality();
+    my $readBQD = $read->getBaseQuality();
 
     for (my $i=0 ; $i<@$thisBQD ; $i++) {
         return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
-print "Identical sequences\n";
+#print "Identical sequences\n";
 
     return 1; # identical sequences 
 }
@@ -701,7 +701,7 @@ sub writeBaseQuality {
 
 # the quality data go into a separt
 
-    if (my $quality = $this->getQuality()) {
+    if (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
 	print $FILE "\n$marker$this->{readname}\n";
 	my $n = scalar(@$quality) - 1;

@@ -259,21 +259,24 @@ sub getContigIDsForProjectID {
 }
 
 sub checkOutContigIDsForProjectID {
-# public method, retrieve contig IDs, current checked status and set check status
+# public method, get contig IDs & current checked status & checked status 'out'
     my $this = shift;
     my $dbh = $this->getConnection();
     return &fetchContigIDsForProjectID(shift,1); # pass project_id
 }
 
 sub fetchContigIDsForProjectID {
-# return contig IDs of contigs allocated to project with given project ID 
-# used in delayed loading mode from Project
+# private function: return contig IDs of contigs allocated to project with
+# given project ID (age zero only) used in delayed loading mode from Project
     my $dbh = shift || return undef;
     my $project_id = shift;
     my $setcheckstatus = shift; # optional, set checkout status to 'out'
 
-    my $query = "select contig_id, checked from CONTIG2PROJECT" .
-	        " where project = ?";
+    my $query = "select CONTIG2PROJECT.contig_id,checked".
+                "  from CONTIG2PROJECT left join C2CMAPPING".
+                "    on CONTIG2PROJECT.contig_id = C2CMAPPING.parent_id".
+                " where C2CMAPPING.parent_id is null".
+	        "   and CONTIG2PROJECT.project_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -286,10 +289,12 @@ sub fetchContigIDsForProjectID {
         push @contigids, $contig_id;
     }
 
-# set the checkout status
+# set the checkout status to 'out'; this affect some subsequent queries; for
+# inverse operation (setting checked to 'in') use checkInContigIDforProjectID
 
-    if ($setcheckstatus) {
-        $query = "update CONTIG2PROJECT set checked='out' where project=?";
+    if ($setcheckstatus && @contigids) {
+        $query = "update CONTIG2PROJECT set checked='out'".
+                 " where contig_id in (".join (',',@contigids).")";
         $sth = $dbh->prepare_cached($query);
         $sth->execute($project_id) || &queryFailed($query);
     }
@@ -327,9 +332,21 @@ sub getProjectIDforContigID {
 #------------------------------------------------------------------------------
 
 sub updateMetaDataForProject {
-# private method
+# private method: determine & update number of reads and contogs for project
+# returns true for updated, false but 0 for failure, undef for invalid input
     my $dbh = shift;
     my $project_id = shift;
+    my ($key,$value) = @_;
+
+# check on user ID specification
+
+    my $user = 'arcturus';
+    if ($key eq 'user' && $value) {
+        $user = $value;
+    }
+    elsif ($key) {
+        return undef; # invalid key or missing data
+    }
 
 # get the number of contigs and reads in this project
 
@@ -340,16 +357,16 @@ sub updateMetaDataForProject {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query);
+    $sth->execute($project_id) || &queryFailed($query) && return 0;
 
-    my ($contigs, $reads) = $sth->fetchrow_array();
+    my ($cnr, $rnr) = $sth->fetchrow_array(); # number of contigs, reads
 
-    $query = "update PROJECT set contigs=?,reads=?,updated=now(),userid='arcturus'".
+    $query = "update PROJECT set contigs=?,reads=?,updated=now(),userid=?".
              " where project=?";
 
     $sth = $dbh->prepare_cached($query);
 
-    return $sth->execute($contigs, $reads, $project_id) || &queryFailed($query);
+    return $sth->execute($cnr,$rnr,$project_id,$user) || &queryFailed($query);
 }
 
 sub addCommentForProject {
