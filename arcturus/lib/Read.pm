@@ -400,7 +400,6 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $self    = shift;
     my $FILE    = shift; # obligatory
-    my $blocked = shift; # optional 
 
     my $data = $self->{data};
 
