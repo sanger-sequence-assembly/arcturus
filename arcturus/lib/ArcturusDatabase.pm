@@ -139,14 +139,14 @@ sub populateDictionaries {
     $this->{Dictionary} = {};
 
     $this->{Dictionary}->{insertsize} =
-	&createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'silow, sihigh');
+	&createDictionary($dbh, 'LIGATION', 'ligation_id', 'silow, sihigh');
 
     $this->{Dictionary}->{ligation} =
-	&createDictionary($dbh, 'LIGATIONS', 'ligation_id', 'name');
+	&createDictionary($dbh, 'LIGATION', 'ligation_id', 'name');
 
     $this->{Dictionary}->{clone} =
-	&createDictionary($dbh, 'LIGATIONS left join CLONES using (clone_id)',
-			  'ligation_id', 'CLONES.name');
+	&createDictionary($dbh, 'LIGATION left join CLONE using (clone_id)',
+			  'ligation_id', 'CLONE.name');
 
     $this->{Dictionary}->{status} =
 	&createDictionary($dbh, 'STATUS', 'status_id', 'name');
@@ -155,10 +155,10 @@ sub populateDictionaries {
 	&createDictionary($dbh, 'BASECALLER', 'basecaller_id', 'name');
 
     $this->{Dictionary}->{svector} =
-	&createDictionary($dbh, 'SEQUENCEVECTORS', 'svector_id', 'name');
+	&createDictionary($dbh, 'SEQUENCEVECTOR', 'svector_id', 'name');
 
     $this->{Dictionary}->{cvector} =
-	&createDictionary($dbh, 'CLONINGVECTORS', 'cvector_id', 'name');
+	&createDictionary($dbh, 'CLONINGVECTOR', 'cvector_id', 'name');
 
 # template name will be loaded in individual read extraction queries
 }
@@ -171,13 +171,13 @@ sub populateLoadingDictionaries {
     $this->{LoadingDictionary} = {};
 
     $this->{LoadingDictionary}->{ligation} =
-	&createDictionary($dbh, "LIGATIONS", "name", "ligation_id");
+	&createDictionary($dbh, "LIGATION", "name", "ligation_id");
 
     $this->{LoadingDictionary}->{svector} =
-	&createDictionary($dbh, "SEQUENCEVECTORS", "name", "svector_id");
+	&createDictionary($dbh, "SEQUENCEVECTOR", "name", "svector_id");
 
     $this->{LoadingDictionary}->{cvector} =
-	&createDictionary($dbh, "CLONINGVECTORS", "name", "cvector_id");
+	&createDictionary($dbh, "CLONINGVECTOR", "name", "cvector_id");
 
     $this->{LoadingDictionary}->{template} = {}; # dummy dictionary
 #	&createDictionary($dbh, "TEMPLATE", "name", "template_id");
@@ -186,7 +186,7 @@ sub populateLoadingDictionaries {
 	&createDictionary($dbh, "BASECALLER", "name", "basecaller_id");
 
     $this->{LoadingDictionary}->{clone} =
-	&createDictionary($dbh, "CLONES", "name", "clone_id");
+	&createDictionary($dbh, "CLONE", "name", "clone_id");
 
     $this->{LoadingDictionary}->{status} =
 	&createDictionary($dbh, "STATUS", "name", "status_id");
@@ -195,20 +195,20 @@ sub populateLoadingDictionaries {
     $this->{InsertStatement} = {};
 
     my %attributeQueries =
-	('ligation',   ["select ligation_id from LIGATIONS where name=?",
-			"insert ignore into LIGATIONS(name,silow,sihigh,clone_id) VALUES(?,?,?,?)"],
+	('ligation',   ["select ligation_id from LIGATION where name=?",
+			"insert ignore into LIGATION(name,silow,sihigh,clone_id) VALUES(?,?,?,?)"],
 	 'template',   ["select template_id from TEMPLATE where name=?",
 			"insert ignore into TEMPLATE(name, ligation_id) VALUES(?,?)"],
 	 'basecaller', ["select basecaller_id from BASECALLER where name=?",
 			"insert ignore into BASECALLER(name) VALUES(?)"],
 	 'status',     ["select status_id from STATUS where name=?",
 			"insert ignore into STATUS(name) VALUES(?)"],
-	 'clone',      ["select clone_id from CLONES where name=?",
-			"insert ignore into CLONES(name) VALUES(?)"],
-	 'svector',    ["select svector_id from SEQUENCEVECTORS where name=?",
-			"insert ignore into SEQUENCEVECTORS(name) VALUES(?)"],
-	 'cvector',    ["select cvector_id from CLONINGVECTORS where name=?",
-			"insert ignore into CLONINGVECTORS(name) VALUES(?)"]
+	 'clone',      ["select clone_id from CLONE where name=?",
+			"insert ignore into CLONE(name) VALUES(?)"],
+	 'svector',    ["select svector_id from SEQUENCEVECTOR where name=?",
+			"insert ignore into SEQUENCEVECTOR(name) VALUES(?)"],
+	 'cvector',    ["select cvector_id from CLONINGVECTOR where name=?",
+			"insert ignore into CLONINGVECTOR(name) VALUES(?)"]
 	 );
 
     foreach my $key (keys %attributeQueries) {
@@ -321,10 +321,10 @@ sub countReadDictionaryItem {
     elsif ($item eq 'clone') {
 # build the clone names dictionary on clone_id (different from the one on ligation_id)
         $this->{Dictionary}->{clonename} =
-	       &createDictionary($dbh, 'CLONES','clone_id', 'name');
-        $query .= "LIGATIONS.clone_id from READS,TEMPLATE,LIGATIONS 
+	       &createDictionary($dbh, 'CLONE','clone_id', 'name');
+        $query .= "LIGATION.clone_id from READS,TEMPLATE,LIGATIONS 
                    where READS.template_id=TEMPLATE.template_id 
-                     and TEMPLATE.ligation_id=LIGATIONS.ligation_id 
+                     and TEMPLATE.ligation_id=LIGATION.ligation_id 
                    group by clone_id";
         $item = 'clonename';
     }
@@ -767,7 +767,7 @@ $query =~ s/\s+/ /g; print "ContigID: $query\n";
 
 # test the number of Reads found against the number of reads in the CONTIGS record
 
-    $query = "select nreads from CONTIGS where contig_id = ?";
+    $query = "select nreads from CONTIG where contig_id = ?";
    
     $sth = $dbh->prepare_cached($query);
 
@@ -1312,7 +1312,7 @@ sub putSequenceForRead {
     my $seqveclist = $read->getSequencingVector();
 
     if (defined($seqveclist)) {
-	$query = "insert into SEQVEC (seq_id,svector_id,svleft,svright) VALUES(?,?,?,?)";
+	$query = "insert into SEQVEC(seq_id,svector_id,svleft,svright) VALUES(?,?,?,?)";
 
 	$sth = $dbh->prepare_cached($query);
 
@@ -1369,14 +1369,6 @@ sub addNewSequenceForRead {
 # add the sequence of this read as a new (edited) sequence for existing read
     my $this = shift;
     my $read = shift; # a Read instance
-
-# a) test consistency and completeness  (? NOT NECESSARY ?)
-
-    my ($rc, $errmsg) = $this->checkReadForCompleteness($read);
-    return (0, "failed completeness check ($errmsg)") unless $rc;
-
-    ($rc, $errmsg) = $this->checkReadForConsistency($read);
-    return (0, "failed consistency check ($errmsg)") unless $rc;
 
 # b) test if the readname already occurs in the database
 
@@ -1633,7 +1625,7 @@ sub putTraceArchiveIdentifierForRead {
 
     my $dbh = $this->getConnection();
 
-    my $query = "insert into TRACEARCHIVE (read_id,traceref) VALUES (?,?)";
+    my $query = "insert into TRACEARCHIVE(read_id,traceref) VALUES (?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1682,7 +1674,7 @@ sub deleteRead {
 # remove for readid from all tables it could be in
 
     my @tables = ('READCOMMENT','SEQVEC','CLONEVEC','TRACEARCHIVE',
-                  'READTAGS','READS','SEQUENCE');
+                  'READTAG','READS','SEQUENCE');
 
     my $delete = 0;
     foreach my $table (@tables) {
@@ -1704,7 +1696,7 @@ sub getContigByID {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select $this->{contig_attributes} from CONTIGS where contig_id = ?";
+    my $query = "select $this->{contig_attributes} from CONTIG where contig_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1764,7 +1756,7 @@ sub getContigByName {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select contig_id,$this->{contig_attributes} from CONTIGS where contigname = ? or aliasname = ? ";
+    my $query = "select contig_id,$this->{contig_attributes} from CONTIG where contigname = ? or aliasname = ? ";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1797,7 +1789,7 @@ sub getContigWithReadChecksum {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select contig_id,$this->{contig_attributes} from CONTIGS 
+    my $query = "select contig_id,$this->{contig_attributes} from CONTIG 
                  where readnamehash = ? ";
 
     my $sth = $dbh->prepare_cached($query);
@@ -1831,8 +1823,8 @@ sub getContigWithRead {
 
     my $dbh = $this->getConnection();
 
-    my $query  = "select CONTIGS.contig_id,$this->{contig_attributes} 
-                  from CONTIGS join MAPPING using (contig_id) 
+    my $query  = "select CONTIG.contig_id,$this->{contig_attributes} 
+                  from CONTIG join MAPPING using (contig_id) 
                   where read_id = (select read_id from READS where readname = ?)";
 # NOTES: uses subqueries;  ensure the latest contig (age = 0 in CONTIGS2CONTIG)?
         
@@ -1867,9 +1859,9 @@ sub getContigWithTag {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select CONTIGS.contig_id,$this->{contig_attributes}
-                 from CONTIGS join TAGS2CONTIG using (contig_id)
-                 where tag_id = (select tag_id from TAGS where tagname = ?)";
+    my $query = "select CONTIG.contig_id,$this->{contig_attributes}
+                 from CONTIG join TAG2CONTIG using (contig_id)
+                 where tag_id = (select tag_id from TAG where tagname = ?)";
 # NOTE: uses subquery ; use age = 0 ?
 # NOTE: use the merge table concept for tag table, else query should be several UNIONs
 
@@ -1983,7 +1975,7 @@ sub getSequenceAndBaseQualityForContig {
 	$query .= "SEQUENCE where contig_id = ?";
     }
     elsif ($key eq 'name' || $key eq 'contigname') {
-	$query .= "CONTIGS left join SEQUENCE using(contig_id) where ";
+	$query .= "CONTIG left join SEQUENCE using(contig_id) where ";
         $query .= "contigname = ? or aliasname = ?";
     }
 
@@ -2017,7 +2009,7 @@ sub hasContig {
 
 # compose the query
 
-    my $query = "select contig_id from CONTIGS where";
+    my $query = "select contig_id from CONTIG where";
 
     my @params;
     if ($hash->{contigname}) {
@@ -2063,7 +2055,7 @@ sub getMappingsForContigID {
 # pull maps out in one step
 
     my $query = "select read_id, pcstart, pcfinal, prstart, prfinal, label ";
-    $query   .= "from READS2CONTIG join R2CMAPPING using (mapping) ";
+    $query   .= "from READ2CONTIG join R2CMAPPING using (mapping) ";
     $query   .= "where contig_id = ? and deprecated in ('M','N')";
     $query   .= "order by read_id,pcstart";
 
@@ -2105,7 +2097,7 @@ sub getMappingsOfReadsInLinkedContigs {
     my $rids = shift || return; # array reference
 
     my $query = "select read_id, contig_id ";
-    $query   .= "from READS2CONTIG as R2C, CONTIGS2CONTIG as C2C where ";
+    $query   .= "from READ2CONTIG as R2C, CONTIG2CONTIG as C2C where ";
     $query   .= "C2C.newcontig = R2C.contig_id and age = 1 and ";
     $query   .= "R2C.read_id in (".join(',',@$rids).") and";
     $query   .= "R2C.deprecated in ('M','N')";
