@@ -17,7 +17,7 @@ BEGIN {
 
 use GateKeeper; 
 use ReadsReader;
-use PathogenRepository;
+# use PathogenRepository;
 
 ##############################################################################
 # unbuffered output
@@ -191,13 +191,14 @@ if ($cgi) {
         else {
 # test if the root data directory is defined
             if (!$config{RDD} || $config{RDD} =~ /to be d/) {
-print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
-                $config{RDD} = `$BADGERDIR/pfind -q $database`; 
+#print "testing I project $database: $BADGERDIR/pfind -q $database<br>";
+                $config{RDD} = `$BADGERDIR/pfind -q $database`;
+		$config{RDD} =~ /\n/ BR /g;
 print "RDD Ia:  $config{RDD} <br>";
-               my $repository = new PathogenRepository;
-               $config{RDD} = $repository->getAssemblyDirectory($database); 
-print "RDD Ib:  $config{RDD} <br>";
-             }
+#               my $repository = new PathogenRepository;
+#               $config{RDD} = $repository->getAssemblyDirectory($database); 
+#print "RDD Ib:  $config{RDD} <br>";
+            }
     # open assembly database; abort if no assemblies defined
             $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
             if ($assembly && $assembly->count() > 0) {
