@@ -484,16 +484,15 @@ sub dbHandle {
         &dropDead($self,"Unknown arcturus database $database at server $server");
     } 
     elsif ($database && $residence{$database} !~ /$server/) {
+# to be removed later:  redirection diagnostics
+        if ($options{redirectTest}) {
+            &dropDead($self,"redirecting $database ($residence{$database}) server:$server");
+        }
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&origin || !$options{defaultRedirect}) {
             &dropDead($self,"Database $database resides on $residence{$database}");
         }
         elsif ($available{$database} ne 'off-line') {
-my $TEST = 1;
-if ($TEST) {
-    $self->cgiHeader(1);
-    print "redirecting: database: $database residence: $residence{$database} server:$server\n";
-}
             $self->disconnect();
             my $redirect = "http://$residence{$database}$ENV{REQUEST_URI}";
             $redirect .= $cgi->postToGet if $cgi->MethodPost;
