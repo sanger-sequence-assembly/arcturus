@@ -81,7 +81,7 @@ sub init {
     $ReadMapper->preload(0,'1100') if !$nopreload;  # build table handle caches (READS and PENDING)
 
     $self->{preload}     = 1 if !$nopreload;
-    $self->{minOfReads}  = 1; # accept contigs having at least this number of reads 
+    $self->{minOfReads}  = 2; # accept contigs having at least this number of reads 
     $self->{ignoreEmpty} = 1; # default ignore empty reads; else treat as error status 
     $self->{nameChange}  = 0; # default name change only for generation 0
     $self->{TESTMODE}    = 0; # test mode for caf file parser
@@ -287,7 +287,7 @@ sub setTestMode {
     my $item = shift || 0; # either TESTMODE, REPAIR or READSCAN have meaning
     my $mode = shift || 0;
 
-    if ($item =~ /\b(TESTMODE|REPAIR|READSCAN)\b/i) {
+    if ($item =~ /\b(TESTMODE|REPAIR|READSCAN|WRITEDNA)\b/i) {
         $self->{$item} = $mode;
     }
     elsif ($item =~ /\bTIMER\b/i) {
@@ -1112,7 +1112,7 @@ print "VII $break";
 
         if ($complete) {
 # if there is a consensus sequence, dump it using this contig_id
-#            $self->dumpDNA($contig,$counts->[1]);
+#            $self->dumpDNA($contig,$counts->[1]) if $self->{WRITEDNA};
 # here remove the ReadMappers and this contigbuilder to free memory
             my $dumped = 0;
             foreach my $readname (keys (%readmapper)) {
@@ -1471,6 +1471,7 @@ print "minOfReads = $minOfReads $break";
     $plist = int(exp($plist*log(10))+0.5);
     my $TESTMODE = $self->{TESTMODE};
     my $READSCAN = $self->{READSCAN};
+    my $WRITEDNA = $self->{WRITEDNA} || 0;
 
 # setup a buffer for rejected reads
 
@@ -1554,7 +1555,7 @@ print "minOfReads = $minOfReads $break";
             }           
         }
 
-        elsif ($record =~ /DNA/ && !$READSCAN) {
+        elsif ($record =~ /DNA/ && !$READSCAN && $WRITEDNA) {
 # only act on DNA consensus sequence
             if ($record =~ /\bcontig\d+\b(.*)$/i) {
 # register possible extra information
@@ -1577,7 +1578,7 @@ print "minOfReads = $minOfReads $break";
             }
         }
 
-        elsif ($record =~ /BaseQuality/ && !$READSCAN) {
+        elsif ($record =~ /BaseQuality/ && !$READSCAN && $WRITEDNA) {
 # only act on consensus quality sequence
             if ($record =~ /\bcontig\d+\b(.*)$/i) {
                 $type = 4 if (!defined($cnfilter) || $cnfilter !~ /\S/ || $object =~ /$cnfilter/);
