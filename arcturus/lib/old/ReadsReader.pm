@@ -624,6 +624,7 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
 # instead of the ligation name or number, the clone name is used
             $hash = $LIGATIONS->associate('hashref',$readItem{LG},'identifier');
             $column = 'identifier' if $hash;
+  print "recovery hashref $hash column $column <br>";
         }
 
         if (!defined($hash)) {
