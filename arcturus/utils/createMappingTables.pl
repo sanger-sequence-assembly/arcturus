@@ -5,12 +5,16 @@ use DBI;
 use Compress::Zlib;
 
 $debug = 0;
+$quiet = 0;
+$batchmode = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
 
     $debug = 1 if ($nextword eq '-debug');
+    $quiet = 1 if ($nextword eq '-quiet');
+    $batchmode = 1 if ($nextword eq '-batchmode');
 }
 
 die "You must specify the organism" unless defined($organism);
@@ -48,7 +52,7 @@ $query = "insert into MAPPING(contig_id,read_id) values(?,?)";
 
 $sth_new_mapping = $dbh->prepare($query);
 
-$query = "insert into MAPPINGSEGMENT(mapping_id,pcstart,pcfinal,prstart,prfinal,label)" .
+$query = "insert into SEGMENT(mapping_id,pcstart,pcfinal,prstart,prfinal,label)" .
     " values(?,?,?,?,?,?)";
 
 $sth_new_segment = $dbh->prepare($query);
@@ -63,15 +67,19 @@ $eight = "\010\010\010\010\010\010\010\010";
 $bs = "\010";
 $format = $eight . $bs . $eight . $bs . $eight . $fmt;
 
-printf STDERR $fmt, $ncontigs, $nreads, $nmappings;
+printf STDERR $fmt, $ncontigs, $nreads, $nmappings unless $batchmode;
 
 while (($contigid) = $sth_contigs->fetchrow_array()) {
     $ncontigs++;
 
     $sth_reads->execute($contigid);
 
+    $creads = 0;
+    $cmappings = 0;
+
     while (($readid) = $sth_reads->fetchrow_array()) {
 	$nreads++;
+	$creads++;
 
 	$nrows = $sth_new_mapping->execute($contigid, $readid);
 
@@ -83,16 +91,20 @@ while (($contigid) = $sth_contigs->fetchrow_array()) {
 	       $sth_segments->fetchrow_array()) {
 	    $sth_new_segment->execute($mappingid,$pcstart,$pcfinal,$prstart,$prfinal,$label);
 	    $nmappings++;
+	    $cmappings++;
 	}
 
 	printf STDERR $format, $ncontigs, $nreads, $nmappings
-	    if (($nreads % 50) == 0);
+	    if (!$batchmode && ($nreads % 50) == 0);
+
+	printf STDERR "%8d  %8d  %8d\n",$contigid,$creads,$cmappings
+	    if $batchmode;
     }
 }
 
-printf STDERR $format, $ncontigs, $nreads, $nmappings;
+printf STDERR $format, $ncontigs, $nreads, $nmappings unless $batchmode;
 
-print STDERR "\n";
+print STDERR "\n" unless $batchmode;
 
 $sth_contigs->finish();
 $sth_reads->finish();

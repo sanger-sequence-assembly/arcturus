@@ -4,13 +4,15 @@ CREATE TABLE `MAPPING` (
   `contig_id` mediumint(8) unsigned NOT NULL default '0',
   `read_id` mediumint(8) unsigned NOT NULL default '0',
   `mapping_id` mediumint(8) unsigned NOT NULL auto_increment,
-  PRIMARY KEY  (`contig_id`,`read_id`),
-  KEY `mapping_id` (`mapping_id`)
+  `revision` mediumint(8) unsigned NOT NULL default '0',
+  INDEX (`contig_id`),
+  INDEX (`read_id`),
+  PRIMARY KEY `mapping_id` (`mapping_id`)
 );
 
-DROP TABLE IF EXISTS `MAPPINGSEGMENT`;
+DROP TABLE IF EXISTS `SEGMENT`;
 
-CREATE TABLE `MAPPINGSEGMENT` (
+CREATE TABLE `SEGMENT` (
   `mapping_id` mediumint(8) unsigned NOT NULL default '0',
   `pcstart` int(10) unsigned NOT NULL default '0',
   `pcfinal` int(10) unsigned NOT NULL default '0',
