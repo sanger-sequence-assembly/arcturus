@@ -281,7 +281,9 @@ sub addRoleToInstance {
 sub saveToFile {
     my ($type, $filename, $junk) = @_;
 
-    return 0 unless open(INIFILE, "> $filename");
+    $filename = $ENV{'WRAPMYSQL_INI'} unless defined($filename);
+
+    return 0 unless (defined($filename) && open(INIFILE, "> $filename"));
 
     my $instance;
 
