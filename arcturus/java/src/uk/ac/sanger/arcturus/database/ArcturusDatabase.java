@@ -509,6 +509,10 @@ public class ArcturusDatabase {
 	sequenceManager.registerNewSequence(sequence);
     }
 
+    byte[] decodeCompressedData(byte[] compressed, int length) {
+	return sequenceManager.decodeCompressedData(compressed, length);
+    }
+
     /**
      * Returns the ContigManager belonging to this ArcturusDatabase.
      *
