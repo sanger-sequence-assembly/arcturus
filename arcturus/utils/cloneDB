@@ -100,14 +100,14 @@ print STDERR "Creating database $newdbname\n";
 print STDERR "\n$query\n" if $verbose;
 $dbh->do($query);
 &db_die("$query failed");
-print STDERR "\n";
+print STDERR "\n" if $verbose;
 
 $query = "USE $newdbname";
 print STDERR "Switching to database $newdbname\n";
 print STDERR "\n$query\n" if $verbose;
 $dbh->do($query);
 &db_die("$query failed");
-print STDERR "\n";
+print STDERR "\n" if $verbose;
 
 if ($createhistory) {
     $query = qq/CREATE TABLE `HISTORY` (`tablename` varchar(20) not null,
@@ -120,7 +120,7 @@ if ($createhistory) {
     print STDERR "\n$query\n" if $verbose;
     $dbh->do($query);
     &db_die("$query failed");
-    print STDERR "\n";
+    print STDERR "\n" if $verbose;
 
     $query = "INSERT INTO HISTORY(tablename, date, user, action) VALUES(?, NOW(), '$user', ?)";
     $sth = $dbh->prepare($query);
@@ -139,7 +139,7 @@ foreach $tablename (sort keys %create) {
 	&db_die("Update of HISTORY failed");
     }
 
-    print STDERR "\n";
+    print STDERR "\n" if $verbose;
 }
 
 $dbh->disconnect();
