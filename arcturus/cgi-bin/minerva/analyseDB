@@ -43,7 +43,7 @@ if(defined($database) && defined($table)) {
 	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print $cgi->h2("Table description for $database.$table");
+	print $cgi->h2("Table description for $database.$table on $dbhost:$dbport");
 	
 	$query = "DESCRIBE $table";
 
@@ -77,7 +77,7 @@ if(defined($database) && defined($table)) {
 
 	print "</TABLE>\n";
 
-	print $cgi->h2("Table status for $database.$table");
+	print $cgi->h2("Table status for $database.$table on $dbhost:$dbport");
 
 	$query = "SHOW TABLE STATUS LIKE '$table'";
 
