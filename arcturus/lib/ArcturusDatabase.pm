@@ -49,6 +49,7 @@ sub populateDictionaries {
     $this->{Dictionary} = {};
 
     $this->{Dictionary}->{insertsize}   = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'silow, sihigh');
+    $this->{Dictionary}->{ligation}     = &createDictionary($dbh, 'LIGATIONS', 'ligation', 'identifier');
     $this->{Dictionary}->{clone}        = &createDictionary($dbh, 'CLONES', 'clone', 'clonename');
     $this->{Dictionary}->{primer}       = &createDictionary($dbh, 'PRIMERTYPES', 'primer', 'type');
     $this->{Dictionary}->{status}       = &createDictionary($dbh, 'STATUS', 'status', 'identifier');
