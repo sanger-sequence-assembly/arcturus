@@ -136,14 +136,10 @@ sub compare {
         die "Segment->compare expects an instance of the Segment class";
     }
 
-# the two segments should be normalized on Y and have identical Y (read) range
-# the method will return the alignment and offset for the X (contig) ranges
-
-    return unless ($this->getYstart() == $segment->getYstart());
-    return unless ($this->getYfinis() == $segment->getYfinis());
+# 1: determine the offset and alignment between the X ranges of the segments
 
 # the transformation between X (this) and X (segment) is given by
-# X(segment) = align * X(this) + (offset(segment) - align * offset(this)) ?
+# X(segment) = align * X(this) + (offset(segment) - align * offset(this)) 
 
     my $alignment = $this->getAlignment();
     $alignment = -$alignment if ($segment->getAlignment() < 0);
@@ -152,7 +148,16 @@ sub compare {
     $offset = -$offset if ($alignment < 0);
     $offset -= $segment->getOffset();
 
-    return (1, $alignment, $offset);
+# 2: test the size and Y position of the segments
+
+    my $equalsize = 1;
+
+# both segments should be normalized on Y and have identical Y (read) range
+
+    $equalsize = 0 if ($this->getYstart() != $segment->getYstart());
+    $equalsize = 0 if ($this->getYfinis() != $segment->getYfinis());
+
+    return ($equalsize, $alignment, $offset);
 }
 
 sub counterAlignUnitLengthInterval {

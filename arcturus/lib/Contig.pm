@@ -587,10 +587,12 @@ sub linkToContig {
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
-    my $detail = shift; # set True for fine scan
+    my $relaxed = shift; # set True for relaxed comparison of mappings
 
-print "ENTER linkToContig ".($detail || 0)."\n";
-    die "Contig->compare takes a Contig instance" unless (ref($compare) eq 'Contig');
+    die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
+
+my $list = 0; # $list = 1 if ($compare->getContigID == 1167);
+print "ENTER linkToContig ".($relaxed || 0)." ".$compare->getContigName."\n" if $list;
 
     return undef unless $this->hasMappings();
     return undef unless $compare->hasMappings();
@@ -604,8 +606,7 @@ print "ENTER linkToContig ".($detail || 0)."\n";
         $sequence->{$key} = $mapping if $key;
     }
 
-# make an inventory of (identical) alignments from $compare to $this: build a hash list
- my $list = 0; # $list = 1 if ($compare->getContigID == 1167);
+# make an inventory hash of (identical) alignments from $compare to $this
 
     my $alignment;
     my $inventory = {};
@@ -617,26 +618,35 @@ print "Incomplete Mapping ".$mapping->getMappingName."\n" unless defined($key);
         return undef unless defined($key); # incomplete Mapping
         my $match = $sequence->{$key};
         unless (defined($match)) {
-# this mapping/sequence in $compare does not occur in the current Contig
-print "Mapping in previous ".$mapping->getMappingName." has no counterpart in current\n";
             $deallocated++;
             next;
         }
 # this mapping/sequence in $compare also figures in the current Contig
-        my ($identical,$aligned,$offset) = $match->compare($mapping,$detail);
-        $alignment = $aligned unless $alignment; # keep the first encountered value != 0
-print "identical=$identical  aligned=$aligned ($alignment) offset=$offset\n" if $list; 
-        next unless ($identical && $aligned == $alignment); # the mappings are different
+        my ($identical,$aligned,$offset) = $match->compare($mapping,$relaxed);
+# keep the first encountered (contig-to-contig) alignment value != 0 
+        $alignment = $aligned unless $alignment;
+ 
+        next unless ($identical && $aligned == $alignment);
+# the mappings are identical (alignment and, if !relaxed, segment size)
 # build a hash key based on offset and alignment direction
         my $hashkey = sprintf("%08d",$offset);
         $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
         my @segment = $mapping->getContigRange();
+# in relaxed mode we have (possibly) to prune the boundaries of the interval
+        if ($relaxed) {
+            my @match = $match->getContigRange();
+# transform the range to this contig
+#print "relax: '@segment' '@match' ";
+            $match[0] = $alignment * $match[0] - $offset;
+            $match[1] = $alignment * $match[1] - $offset;
+            @match = sort { $a <=> $b} @match;
+#print "'@match'  a=$alignment 0=$offset\n";
+# and determine the minimum overlapping range 
+            $segment[0] = $match[0] if ($match[0] > $segment[0]);
+            $segment[1] = $match[1] if ($match[1] < $segment[1]);
+            next unless ($match[0] < $match[1]);
+        }
         push @{$inventory->{$hashkey}},[@segment];
-#if ($list) {
-#my @matchsegment = $match->getContigRange();
-#@matchsegment = sort {$b <=> $a} @matchsegment if ($alignment < 0);
-#print "current range @matchsegment   previous range @segment\n";
-#}
     }
 
 # OK, here we have an inventory: the number of keys equals the number of 
@@ -649,46 +659,55 @@ print "identical=$identical  aligned=$aligned ($alignment) offset=$offset\n" if 
 
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
+# accept only allignments with a minimum number of reads 
+    my $guillotine = 1 + log(scalar(@$mappings));
+
     foreach my $offset (sort keys %$inventory) {
 # sort mappings according to increasing contig start position
         my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
+        my $nreads = 0; # counter of reads in current segment
         my $segmentstart = $mappings[0]->[0];
         my $segmentfinis = $mappings[0]->[1];
         foreach my $interval (@mappings) {
             my $intervalstart = $interval->[0];
             my $intervalfinis = $interval->[1];
-print "Interval range $intervalstart $intervalfinis\n" if $list;
-# a break of coverage is indicated by a begin of interval beyond the end of previous
+# break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
-                my $start = ($segmentstart + $offset) * $alignment;
-                my $finis = ($segmentfinis + $offset) * $alignment;
-print "Segment (p2) range  $start $finis (current) ->  $segmentstart $segmentfinis (previous)\n" if $list;
-                $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
+                if ($nreads > $guillotine) {
+#                if (defined($segmentstart) && defined($segmentfinis)) {
+                    my $start = ($segmentstart + $offset) * $alignment;
+                    my $finis = ($segmentfinis + $offset) * $alignment;
+                    $mapping->addAssembledFrom($start,$finis,$segmentstart,
+                                                            $segmentfinis);
+                }
 # initialize the new mapping interval
+                $nreads = 0;
                 $segmentstart = $intervalstart;
                 $segmentfinis = $intervalfinis;
             }
             elsif ($intervalfinis > $segmentfinis) {
                 $segmentfinis = $intervalfinis;
             }
+            $nreads++; 
         }
 # add segmentstart - segmentfinis as (last) mapping segment
+print "$nreads reads guillotine $guillotine\n";
+        next unless ($nreads > $guillotine);
+#        next unless defined($segmentstart);
         my $start = ($segmentstart + $offset) * $alignment;
+#        next unless defined($segmentfinis);
         my $finis = ($segmentfinis + $offset) * $alignment;
-print "Segment (p2) range  $start $finis (current) ->  $segmentstart $segmentfinis (previous)\n" if $list;
         $mapping->addAssembledFrom($start,$finis,$segmentstart,$segmentfinis);
     }
-print "mapping has ".$mapping->hasSegments." segments\n";
-print "contig has $deallocated deallocated reads from previous contig\n";
 
 # if mapping has segments, or if a finescan has been done, return 
 
-    if ($mapping->hasSegments() || $detail) {
+    if ($mapping->hasSegments() || $relaxed) {
 # store the Mapping as a contig-to-contig mapping
         $this->addContigToContigMapping($mapping);
 # and return the number of segments, which could be 0
-        return $mapping->hasSegments();
+        return $mapping->hasSegments(),$deallocated;
     }
 
 # the mapping has no segments: no mapping range(s) could be determined

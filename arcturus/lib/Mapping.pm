@@ -120,6 +120,7 @@ sub compare {
 # compare this Mapping instance with input Mapping
     my $this = shift;
     my $compare = shift;
+    my $relaxed = shift; # optional
 
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
@@ -128,19 +129,27 @@ sub compare {
     my $tmaps = $this->analyseSegments();
     my $cmaps = $compare->analyseSegments();
 
+# test presence of mappings
+
     return (0,0,0) unless ($tmaps && $cmaps && scalar(@$tmaps));
-    return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps));
 
 # compare each segment individually; if the mappings are identical
 # apart from a linear shift and possibly counter alignment, all
-# return values of alignment and offset will be identical
+# return values of alignment and offset will be identical.
+# if relaxed mode active, ignore differences of segment size (and number)
+# but only consider the alignment direction and offset.
+
+    return (0,0,0) unless (scalar(@$tmaps) == scalar(@$cmaps) || $relaxed);
+
+# return 0 on first encountered mismatch of direction, offset (or 
+# segment size); otherwise return true and alignment direction & offset 
 
     my ($identical,$align,$shift);
     for (my $i = 0 ; $i < scalar(@$tmaps) ; $i++) {
 	my $tsegment = $tmaps->[$i];
-	my $csegment = $cmaps->[$i];
+	my $csegment = $cmaps->[$i] || next; # can occur when relaxed
         my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
-        return 0 unless $identical;
+        return 0 unless ($identical || $relaxed);
 # on first one register shift and alignment direction
         if (!defined($align) && !defined($shift)) {
             $align = $aligned; # either +1 or -1
