@@ -457,7 +457,7 @@ sub writeToCaf {
 	my @bq = @{$quality};
 
 	while (my $n = scalar(@bq)) {
-	    print join(' ',@bq[0..24]),"\n";
+	    print $FILE join(' ',@bq[0..24]),"\n";
 	    @bq = @bq[25..$n];
 	}
     }
