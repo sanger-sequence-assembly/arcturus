@@ -437,7 +437,7 @@ sub associate {
                   useLocate    => 1, # default test table image hash, if it exists
                   returnScalar => 1, # default return scalar if query returns single column value
                   orderBy      => 0, # override with column name if ordering required
-                  limit       => 0); # default no maximum specification
+                  limit        => 0); # default no maximum specification
     $option{useLocate} = 0 if ($item =~ /\,|\(.+\)/); # override default for composite $item
     &importOptions(\%option, $multi);
 # the next lot redefines options using $multi, $order, $exact input in old applications

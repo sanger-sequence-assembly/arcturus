@@ -7,9 +7,12 @@ package MyHTML;
 #############################################################################
 
 use strict;
+
+use MyCGI;
+
 use vars qw($VERSION @ISA);
 
-#@ISA = qw(MyCGI);
+@ISA = qw(MyCGI);
 
 $VERSION = 1.0;
 
@@ -23,11 +26,9 @@ sub new {
     my $title  = shift;
 
     my $class = ref($caller) || $caller;
-    my $self  = {};
-#    my $self  = $class->SUPER::new();
-    bless ($self, $class);
+    my $self  = $class->SUPER::new();
 
-    &openPage ($self,$title) if $title;
+    &openPage($self,$title) if $title;
 
     return $self;
 }
@@ -47,12 +48,12 @@ sub openPage {
 
     $self->{content}->[0] = ''; # initialize base partition
 
-    
+    return $self;
 }
 
 ###############################################################################
 
-sub pageExist {
+sub pageExists {
 # return true if a page has been opened
     my $self = shift;
 
@@ -83,9 +84,10 @@ sub title {
 
 sub form {
 # add form instruction and submit link
-    my $self = shift;
-    my $link = shift;
-    my $post = shift;
+    my $self   = shift;
+    my $link   = shift;
+    my $post   = shift;
+    my $target = shift;
 
     my $part = $self->{current} - 1;
     my $content = $self->{content}; #  partition contents
@@ -99,12 +101,27 @@ sub form {
 
     if ($link) {
         my $formtag = "<FORM action=\"$link\" method=\"$post\">";
+        $formtag =~ s/\>/ target="$target">/ if $target;
         if (!($content->[$part] =~ s/\<FORM[^\>]+\>/$formtag/)) {
             $content->[$part] .= "$formtag";
         }
     } else {
         $content->[$part] .= "</FORM>" if ($content->[$part] =~ /\<FORM/);
     }
+}
+
+###############################################################################
+
+sub substitute {
+# replace a string in the current partition
+    my $self   = shift;
+    my $target = shift || return;
+    my $change = shift || '';
+ 
+    my $part = $self->{current} - 1;
+    my $content = $self->{content}; #  partition contents
+
+    $content->[$part] =~ s/$target/$change/;
 }
 
 ###############################################################################
@@ -118,12 +135,13 @@ sub submitbuttonbar {
     my $text  = shift;
 
     my $buttonbar = "<TABLE><TR>";
-    $buttonbar .= "<TD ALIGN=CENTER WIDTH=50%><INPUT name='submit' type=";
+    $buttonbar .= "<TD ALIGN=LEFT WIDTH=50%><INPUT type='submit' name=";
     $buttonbar .= "'submit' value='&nbsp Submit &nbsp'></TD>";
     if (defined($reset) && $reset eq '1') {
-        $buttonbar .= "<TD WIDTH=50%><INPUT name='reset'  type='reset'></TD>";
-    } elsif (defined($reset) && $reset =~ /\w/ && $reset =~ /\D/) {
-    # require text
+        $buttonbar .= "<TD WIDTH=50% ALIGN=CENTER><INPUT type='reset' value='&nbsp Reset &nbsp'></TD>";
+    }
+    elsif (defined($reset) && $reset =~ /\w/ && $reset =~ /\D/) {
+# require text
         if (!defined($jump) || $jump) {
             $buttonbar .= "</TR><TR><TD ALIGN='CENTER'>or</TD></TR><TR>";
         }
@@ -221,19 +239,19 @@ sub errorbox {
     my $content = $self->{content}; #  partition contents
 
     undef my $error;
-    $colour = "orange" if (!$colour);
-    $error .= "<TABLE ALIGN=CENTER><TR><TD BGCOLOR=\"$colour\" WRAP><H3>";
-    $error .= $text if ($text);
-    $error .= "unspecified error" if (!$text);
-    $error .= "</H3></TD></TR></TABLE><HR>";
+    $colour = 'FFCA88' if (!$colour); # light orange
+    $text = "unspecified error" if (!$text);
+    $text =~ s/\n/<br>/g;
+    $error .= "<TABLE ALIGN=CENTER><TR><TD VALIGN='center' BGCOLOR=\"$colour\">";
+    $error .= "<H3>$text</H3></TD></TR></TABLE>";
     if ($link) {
         $ltxt = "GO BACK" if (!$ltxt);
-        $error .= "<TABLE ALIGN=CENTER><TR>";
+        $error .= "<HR><TABLE ALIGN=CENTER><TR>";
         $error .= "<TD WIDTH=200 ALIGN=CENTER><A href=\"$link\">$ltxt</A></TD>";
         $error .= "</TR></TABLE>";
     }
  
-    $$content[$part] .= $error;
+    $content->[$part] .= $error;
 }
 
 ###############################################################################
@@ -250,6 +268,31 @@ sub promptbox {
     sectionheader($self,$text,4,1) if ($text);
     confirmbuttonbar($self,$reject,1);
     center($self,0);
+}
+
+###############################################################################
+
+sub message {
+# display a message in a coloured field
+    my $self   = shift;
+    my $text   = shift || 'No Message Provided';
+    my $colour = shift || 'white';
+    my $font   = shift;
+    my $center = shift || 0;
+    my $twidth = shift || 0;
+    my $extra  = shift || '';
+
+    my $part = $self->{current} - 1;
+    my $content = $self->{content};
+
+    $text =~ s/\n/<br>/g;
+    $text = "<font $font>$text</font>" if $font;
+    my $align = ''; $align = "align=center" if $center;
+    my $width = ''; $width = "width=$twidth" if $twidth;
+    $extra = "<td>$extra</td>" if $extra;
+    my $message = "<TABLE $width><TR><TD BGCOLOR=\"$colour\" $align>$text</TD>$extra</TR></TABLE>";
+
+    $content->[$part] .= $message;
 }
 
 ###############################################################################
@@ -321,6 +364,19 @@ sub sectionheader {
 
 ###############################################################################
 
+sub space {
+# add vertical space
+    my $self  = shift;
+    my $multi = shift;
+
+    $multi = 1 if !defined($multi);
+    while ($multi-- > 0) {
+        add ($self,'<BR>');
+    }
+}
+
+###############################################################################
+
 sub hline {
 # add a horizontal line
     my $self = shift;
@@ -345,14 +401,17 @@ sub center {
 sub add {
 # add to the current partition
     my $self  = shift;
-    my $text  = shift;
-    my $part  = shift;
-    my $hline = shift;
+    my $text  = shift || '';
+    my $part  = shift; # optional, default the curent part
+    my $hline = shift; # optional, default no closing line
+    my $font  = shift; # optional, font specification
 
     $part = $self->{current} if (!defined($part) || $part <= 0);
     my $content = $self->{content}; #  partition contents
 
-    $text =~ s/banner/$self->{banner}/ if ($text && $self->{banner});
+    $text =~ s/\n/<br>/g;
+#    $text =~ s/banner/$self->{banner}/ if ($text && $self->{banner});
+    $text = "<FONT $font>$text</FONT>" if $font;
 
     $content->[--$part] .= $text if (defined($text));
 
@@ -372,20 +431,23 @@ sub identify {
     my ($id,$rp) = split //,$repeat;
 
     $size = 8 if (!$size);
+    my $isize = $size;
+    $isize = 8 if ($isize > 8); # arcturus upper limit for user ID
+    my $psize = $size;
 
     my $password = 'PASSWORD'; # used if not replaced below
     my $query = "<TABLE ALIGN=CENTER border=0 cellpadding=2><TR>";
     if (defined($id) && $id) {
         $query .= "<TH ALIGN=RIGHT NOWRAP>User ID</TH><TD ALIGN=LEFT NOWRAP>";
-        $query .= "<INPUT NAME='identify' SIZE=$size VALUE=''></TD><TD>&nbsp</TD>";
+        $query .= "<INPUT NAME='identify' SIZE=$isize VALUE=''></TD><TD>&nbsp</TD>";
         $password = 'password'; # default for "identify, password, [pwrepeat]"
     }
     $query .= "<TH ALIGN=RIGHT NOWRAP>Password</TH><TD ALIGN=LEFT NOWRAP>";
-    $query .= "<INPUT TYPE=PASSWORD NAME='$password' SIZE=$size VALUE=''></TD>";
+    $query .= "<INPUT TYPE=PASSWORD NAME='$password' SIZE=$psize VALUE=''></TD>";
     if (defined($rp) && $rp) {
         $query .= "<TD>&nbsp</TD><TH ALIGN=RIGHT NOWRAP>Type again</TH>";
         $query .= "<TD ALIGN=LEFT NOWRAP>";
-        $query .= "<INPUT TYPE=PASSWORD NAME='pwrepeat' SIZE=$size VALUE=''></TD>";
+        $query .= "<INPUT TYPE=PASSWORD NAME='pwrepeat' SIZE=$psize VALUE=''></TD>";
     }
     $query .= "</TR></TABLE>";
 
@@ -396,23 +458,51 @@ sub identify {
 
 sub ingestCGI {
 # transfer CGI input values as hidden values to current page (see MyCGI.pm)
-    my $self  = shift;
-    my $cgi   = shift; # handle to instance of the MyCGI class
+    my $self = shift;
+    my $type = shift;
 
-    my $in = $cgi->{cgi_input};
+# a list of parameter/values to be excluded can be provided as array
+
+    if (!defined($type)) {
+        $type = -1;
+    }
+    elsif ($type !~ /\d/) {
+        $type = -1; # deal with deprecated usage with non-numeric parameter
+    }
+    elsif ($type != 0 && $type != 1) {
+        return "Invalid type specification in postToGet";
+    }
+
+    my %inexclude;
+    while (@_) {
+        my $name = shift;
+        $inexclude{$name}++;
+    }
+
+# import CGI parameters as hidden variables
+
+    my $in = $self->{cgi_input};
+    return if (ref($in) ne 'HASH');
+
     foreach my $key (keys (%$in)) {
-        hidden($self,$key,$in->{$key}) if ($key ne 'submit' and $key ne 'confirm');
+        my $accept = 1;
+        $accept = 0 if ($key =~ /^(submit|confirm|action|USER)$/i); # always
+        $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
+        $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
+        hidden($self,$key,$in->{$key}) if $accept;
+# print "CGI key $key  $in->{$key}  accept:$accept  type=$type<br>"; 
     }
 }
 
 ###############################################################################
 
 sub preload {
-# preset variables in <INPUT NAME='$name' VALUE='$value'> if VALUE undefined 
+# preset variables in <INPUT NAME='$name' VALUE='$value'> if VALUE undefined
+# this method relies critically on the single or double quotes being used  
     my $self  = shift;
     my $name  = shift;
     my $value = shift;
-    my $over  = shift; # 0 to ignore existing values; else replace
+    my $over  = shift; # True to replace existing values; else ignore
 
     my $part = $self->{current} - 1;
     my $content = $self->{content};
@@ -424,41 +514,51 @@ sub preload {
         my $in = $value->{$name};
         %input = %$in; # copy to local
 # print "CGI preload<br>";
-    } else {
+    }
+    else {
         $input{$name} = $value;
 # print "single value $name preload<br>";
     }
 
 # scan the page for <INPUT tags with undefined values for the input parameters
 
+        
     foreach my $name (keys (%input)) {
 
         if ($content->[$part] =~ /\<\s*(input\s[^\<\>]*?name\s*\=\s*[\'\"]?$name[\'\"]?[^\<\>]*)\>/is) {
             my $original = $1; my $replacement = $1;
             if ($replacement =~ /radio|checkbox/i) {
-        # check the button  
+# it's a button; check it  
                 $replacement .= ' checked' if ($replacement !~ /checked/);
             }
-        # if the tag does not have a value field, add it
+# if the tag does not have a value field, add it
             elsif (!($replacement =~ /value/i)) {
                 $replacement .= " VALUE='$input{$name}'";
             }
-            else {
+            elsif ($input{$name}) {
         # fill the space after the value field with the preload value
                 my $pattern = '[\'\"]\s*[\'\"]|[\'\"]?([^\'\"]+)[\'\"]?';
                 $pattern =~ s/\'/\\'/g; # '
                 $replacement =~ s/value\s*\=\s*($pattern)/VALUE='$input{$name}' /i;
                 my $valuefield = $1;
                 $valuefield =~ s/[\'\"]//g; # remove quotes, if any
-# print "the replacement: $replacement<br>"; # if ($list);
+# print "the replacement: $replacement<br>\n"; # if ($list);
                 $replacement = $original if ($valuefield && !$over);
+            }
+            else {
+#		print "undefined value for key $name ($original) <br>\n";
             }
         # now substitute the original string by the new one with values
             $content->[$part] =~ s/$original/$replacement/ if ($replacement ne $original);;
         }
-# else {
-#    print "NO match <br>\n" if ($list);
-#}
+        elsif ($content->[$part] =~ /\<\s*(input\s[^\<\>]*?name\s*\=\s*[\'\"]?$name[\'\"]?)(.*)/is) {
+            my $test = $2; # next match relies on quotes around values
+            if ($test =~ /.*?(value\s*\=\s*[\'\"]([^\'\"]+?)[\'\"])/is) {
+                my $original = $1; my $replacement = $1; my $target = $2;
+                $replacement =~ s/$target/$input{$name}/;
+                $content->[$part] =~ s/$original/$replacement/ if ($replacement ne $original);;
+            }
+        }
     }
 
 # here a check on all checkboxes?
@@ -516,17 +616,20 @@ sub choicelist {
     my $list = shift; # reference to array with names
     my $size = shift; # optional width of field
     my $line = shift; # continuation line
+    my $mark = shift;
 
 # compose HTML select construct
 
     my $width = ''; # default no width specification
     $width = "width=$size" if ($size && $size > 0);
 
+    my $preselect = '';
     my $select = "SELECTED";
     my $choice = "<SELECT $width name = \'$name\'>";
     foreach my $listitem (@$list) {
-       $choice .= "<OPTION value = \'$listitem\' $select>$listitem";
-       $select = '';
+       $preselect = $select if (!$mark || $mark eq $listitem); 
+       $choice .= "<OPTION value = \'$listitem\' $preselect > $listitem";
+       $select = '' if $preselect;
     }
     $choice .= "</SELECT>";
 
@@ -548,11 +651,54 @@ sub locate {
         my $counter = 0;
         foreach my $part (@{$self->{content}}) {
             $counter++;
-            $output = $counter if ($part =~ /$tracer/);
+            $output = $counter if ($part && $part =~ /$tracer/);
             last if ($output);
         }
     }
     return $output;
+}
+
+###############################################################################
+
+sub arcturusGUI {
+# put the partition 0 inside a 
+    my $self = shift;
+    my $mtop = shift;
+    my $side = shift;
+    my $bgcolor = shift;
+
+    $mtop = 5   if (!defined($mtop));
+    $side = 25  if (!$side);
+    $bgcolor = "beige" if (!$bgcolor);
+
+    undef my $layout;
+    $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=0 CELLPADDING=1 CELLSPACING=3><TR>";
+    $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>ARCTURUSLOGO</TD>";
+    $layout .= "<TD HEIGHT=$mtop BGCOLOR=$bgcolor>CON1</TD>";
+    $layout .= "<TD ALIGN=CENTER HEIGHT=$mtop WIDTH=$side BGCOLOR=$bgcolor>SANGERLOGO</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON2</TD>";
+    $layout .= "<TD ROWSPAN=5 VALIGN=TOP>CON0</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON3</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON4</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON5</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON6</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON7</TD>";
+    $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON8</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor VALIGN=TOP>CON9</TD>";
+    $layout .= "</TR><TR>";
+   $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor HEIGHT=0>&nbsp</TD>";
+   $layout .= "<TD WIDTH=$side BGCOLOR=$bgcolor HEIGHT=0>&nbsp</TD>";
+   $layout .= "</TR><TR>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON10</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON11</TD>";
+    $layout .= "<TD WIDTH=$side BGCOLOR=white VALIGN=TOP>CON12</TD>";
+    $layout .= "</TR></TABLE>";
+
+    $self->{layout} = $layout;
 }
 
 ###############################################################################
@@ -565,6 +711,12 @@ sub frameborder {
     my $bgcolor = shift;
     my $mbot = shift;
 
+# clear any existing layout
+
+    my $content = $self->{content};
+    undef @$content;
+    $content->[0] = '';
+
     $mtop = 5   if (!defined($mtop));
     $side = 25  if (!$side);
     $bgcolor = "beige" if (!$bgcolor);
@@ -574,12 +726,17 @@ sub frameborder {
     $layout .= "<TABLE ALIGN=CENTER WIDTH=100% BORDER=0 CELLPADDING=0 CELLSPACING=0>";
     $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mtop BGCOLOR=$bgcolor>CON1</TD></TR>";
     $layout .= "<TR><TD WIDTH=$side\% BGCOLOR=$bgcolor>CON2</TD>";
-    $layout .= "<TD>CON0</TD>";
+    $layout .= "<TD VALIGN=TOP>CON0</TD>";
     $layout .= "<TD WIDTH=$side\%  BGCOLOR=$bgcolor>CON3</TD></TR>";
     $layout .= "<TR><TD COLSPAN=3 HEIGHT=$mbot BGCOLOR=$bgcolor>CON4</TD></TR>";
     $layout .= "</TABLE>";
 
     $self->{layout} = $layout;
+
+# make partition 1 (CON0) the default
+
+    $self->{current} = 1;
+    $self->center(1);
 }
 
 ###############################################################################
@@ -622,16 +779,17 @@ sub address {
     my $mail = shift;
     my $name = shift;
     my $lout = shift; # 0 for nocenter; 1 for center; 2 for no center & line; 3 for center & line
+    my $part = shift;
 
     my $address;
-    $address .= "<center>"  if ($lout == 1 || $lout == 3);
-    $address .= "</center>" if ($lout == 0 || $lout == 2);
     $address .= "<hr>" if ($lout >= 2);
-
+    $address .= "<center>"  if ($lout == 1 || $lout == 3);
     $address .= "<address>Please send suggestions or problem reports ";
     $address .= "to <a href=\"mailto:$mail\">$name</a></address>";
+    $address .= "</center>" if ($lout == 1 || $lout == 3);
 
-    $self->{address} = $address;
+    $self->add($address,$part)  if  $part;
+    $self->{address} = $address if !$part;
 }
 
 ###############################################################################
@@ -640,6 +798,7 @@ sub flush {
 # output the form
     my $self = shift;
     my $null = shift;
+    my $list = shift;
 
     my $title   = $self->{'title'};
     my $content = $self->{'content'} || return 0;
@@ -655,9 +814,12 @@ sub flush {
 
     if (defined($layout)) {
         my $blank = "&nbsp";
-        foreach (my $i=0 ; $i < 9 ; $i++) {
-            $layout =~ s/CON$i/$content->[$i]/  if ($content->[$i]);
-            $layout =~ s/CON$i/$blank/g        if (!$content->[$i]);
+        foreach (my $i=0 ; $i <= 12 ; $i++) {
+# test if the contents element contains any text
+            my $hasContent = 0;
+            $hasContent = 1 if ($content->[$i] && $content->[$i] =~ /\>[^\<\>\s]+\<|[^\<\>\s]+/);
+            $layout =~ s/CON$i/$content->[$i]/ if  $hasContent;
+            $layout =~ s/CON$i/$blank/g        if !$hasContent;
         }
         $output .= $layout;
     } else {
@@ -668,13 +830,14 @@ sub flush {
 
 # clear the contents
 
+    $null = 1 if !defined($null);
     undef $self->{content} if ($null);
 
 # finally, chop the output string into lines 
 
     $output =~ s/(\<[^\n]{30,}?\<\/.+?\>)/$1\n/g;
 
-    print STDOUT "$output\n";
+    print STDOUT "$output\n" if (!defined($list) || $list);
 
     return $output;
 }
@@ -694,11 +857,3 @@ sub colophon {
 ###############################################################################
 
 1;
-
-
-
-
-
-
-
-

@@ -4,7 +4,7 @@ use strict;
 
 use DBI;
 use CGI qw(:standard);
-use NewHTML;
+use MyHTML;
 use ArcturusTable;
 use ConfigReader;
 
@@ -140,7 +140,7 @@ sub cginput {
 
     &dropDead($self,"You're not supposed to access this method") if $lock;
 
-    $self->{cgi} = NewHTML->new(0);
+    $self->{cgi} = MyHTML->new(0);
 
     if (!$self->{cgi}) {
         &dropDead($self,"Cannot open the MyCGI module");
@@ -220,7 +220,7 @@ sub origin {
 #*******************************************************************************
 
 sub ping_MySQL {
-# test if the required database is alive
+# test if a specified database is alive
     my $self = shift;
     my $host = shift;
     my $port = shift;
@@ -475,6 +475,19 @@ sub importOptions {
 
 #*******************************************************************************
 
+sub ping {
+# test if the current database is alive
+    my $self = shift;
+
+    my $alive = 1;
+
+    $alive = 0 if (!$self->{handle} || !$self->{handle}->ping);
+
+    return $alive;
+}
+
+#*******************************************************************************
+
 sub instance {
 # test the existence of an arcturus instance on the current server
     my $self = shift;
@@ -687,6 +700,7 @@ sub authorize {
 
     my %options = ( testSession => 1, # default test session number, else test username, password
                     makeSession => 1, # default issue session number if in CGI mode (2 for always)
+                    userSession => 'oper', # uses default testSession => 1 for this user only
                     interim     => 1, # default submit interim form if CGI and no output page active
                     noConfirm   => 0, # default assign CONFIRM to returned submit button value 
                     noGUI       => 0, # default standard Arcturus GUI; else contents only
@@ -731,6 +745,11 @@ sub authorize {
         $self->{SESSION} = $session;
         my @sdata = split ':',$session;
         $self->{USER} = $sdata[0];
+# here we put an override for a specific user on 'testSession' and 'makeSession'
+# this allows a different behaviour for the specified user from all others
+        if ($options{userSession} && $self->{USER} eq $options{userSession}) {
+            $options{testSession} = 1; # overrides input definition
+        }
     }
 
     my $mother = $self->{mother};
@@ -1013,6 +1032,7 @@ sub authorize {
 # &report ($self,"code $code  mask $mask priviledges $priviledges");
         if (!$priviledges || $mask != ($mask & $priviledges)) {
             $self->{error} = "User $identify has insufficient priviledge for this operation";
+	    $self->{error} .= "(pr: $priviledges mask $mask)";
             return 0;
         }
     }
@@ -1382,12 +1402,11 @@ sub GUI {
     if ($database && $database ne 'arcturus') {
         $title = "LOAD TAG INFORMATION FOR ".uc($database);
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        my $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> TAGS </a></td></tr>";
+        my $input = "/cgi-bin/create/existing/process".$cgi->postToGet(1,@include);
+        $table .= "<tr><td $cell><a href=\"$input\&tablename=STSTAGS\" $alt $target> TAGS </a></td></tr>";
         $title = "LOAD MAPPING INFORMATION FOR ".uc($database);
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-        $input = "/cgi-bin/tloader/arcturus/specify".$cgi->postToGet(1,@include);
-        $table .= "<tr><td $cell><a href=\"$input\" $alt $target> MAPS </a></td></tr>";
+        $table .= "<tr><td $cell><a href=\"$input\&tablename=CLONEMAP\" $alt $target> MAPS </a></td></tr>";
     }
     else {
         $table .= $emptyrow;
@@ -1640,7 +1659,6 @@ sub report {
 
     if ((my $page = $self->{cgi}) && $self->{cgi}->pageExists) {
         $page->add($text.$tag);
-    print STDOUT "added: $text \n" if $text;
     }
     else {
         print STDOUT "$tag$text$tag\n" if $text;

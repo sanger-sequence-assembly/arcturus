@@ -1361,6 +1361,23 @@ print " recovered $hash .. ";
 
 #############################################################################
 
+sub rollBack {
+# reset if level == 0, else undo updates of last changes to tables 
+    my $self    = shift;
+    my $level   = shift;
+    my $exclude = shift || ''; # optional array of tables to ignore
+
+    my $instances = $READS->findInstanceOf(0);
+
+    $exclude = join ' ',@$exclude if (ref($exclude) eq 'ARRAY');
+
+    foreach my $key (keys %$instances) {
+        $instances->{$key}->rollback($level) if (!$exclude || $exclude !~ /\b$key\b/i);
+    }
+}
+
+#############################################################################
+
 sub logger {
     my $line = shift;
 
