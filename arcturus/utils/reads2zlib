@@ -107,9 +107,10 @@ foreach $dbname (@dblist) {
 
 	    $oldlen += length($sequence);
 
-	    $sequence = $compressor->sequenceDecoder($sequence, $scompress) if $scompress;
+	    ($slen, $sequence) = $compressor->sequenceDecoder($sequence, $scompress)
+		if $scompress;
 
-	    $sequence = $compressor->sequenceEncoder($sequence, 99);
+	    ($slen, $sequence) = $compressor->sequenceEncoder($sequence, 99);
 
 	    $update->execute($sequence, $readid);
 	    &db_die("execute($updatequery) failed on $dsn for readid $readid");
