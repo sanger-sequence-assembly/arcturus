@@ -8,12 +8,9 @@ use strict;
 use DbaseTable;
 use Compress;
 
-use vars qw($VERSION @ISA);
-#our ($VERSION, @ISA);
+use vars qw($VERSION @ISA); #our ($VERSION, @ISA);
 
 @ISA = qw(DbaseTable);
-
-$VERSION = 0.9;
 
 #############################################################################
 # data common to all objects of the ArcturusTable class
@@ -22,8 +19,6 @@ $VERSION = 0.9;
 my $SEED;
 my $EXPAND = '/nfs/repository/'; # expansion for '~' in file names
 my $SPLIT  = '\:|\,'; # the default split string
-
-my $BLOCK  = 0; # block set to suppress looping on INVENTORY
 
 #############################################################################
 
@@ -37,10 +32,11 @@ sub new {
     my $self   = $class->SUPER::new(@_);
 
 # check on the build (test columns); if not done, look in INVENTORY for guidance
+# if the columns hash exists the build was done by the constructor of the superclass
 
     if (!defined($self->{columns}) || !@{$self->{columns}}) {
-# try to open the INVENTORY table
-        if (my $inventory = testArcturusInventory ($self,1)) {
+# try to open the INVENTORY table (specifying dieOnError prevents looping)
+        if (my $inventory = $self->spawn('INVENTORY','arcturus',0,1,0,1)) {
             my $build = 0;
             $build = 1 if ($inventory->associate('onRead',$self->{tablename}));
             $self->build($build); #  bad table flagged with $self->{errors}
@@ -66,25 +62,27 @@ sub default {
 
 #############################################################################
 
-sub testArcturusInventory {
-    my $self = shift;
-    my $init = shift;
+#sub testArcturusInventory {
+#    my $self = shift;
+#    my $init = shift;
 
 # test if an instance if the INVENTORY table exists; if not, build it
 
-    my $inventory = $self->findInstanceOf('arcturus.INVENTORY');
+#print "sub testArcturusInventory:<br>\n";
+#    my $inventory = $self->findInstanceOf('arcturus.INVENTORY') || 0;
+#print "inventory = '$inventory'<br>\n";
 
-    if (!$BLOCK && !$inventory && $init--) {
-        $BLOCK = 1; # prevent looping
-        my $dbh = $self->{dbhandle};
-        $inventory = $self->new($dbh,'INVENTORY','arcturus',1);
-        die "Could not get at INVENTORY table" if (!$inventory);
-    }
-    elsif ($inventory && !$inventory->{hashrefs}) {
-        $inventory->build(1);
-    }
-    return $inventory;
-}
+#    if (!$BLOCK && !$inventory && $init--) {
+#        $BLOCK = 1; # prevent looping
+#        my $dbh = $self->{dbhandle};
+#        $inventory = $self->new($dbh,'INVENTORY','arcturus',1);
+#        die "Could not get at INVENTORY table" if (!$inventory);
+#    }
+#    elsif ($inventory && !$inventory->{hashrefs}) {
+#        $inventory->build(1);
+#    }
+#    return $inventory;
+#}
 
 #############################################################################
 
@@ -116,7 +114,10 @@ print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
 
 # test if an instance of the INVENTORY table exists; if not, build it
 
-    my $inventory = testArcturusInventory ($self, 1);
+#print "testArcturusInventory on self $self $self->{tablename}<br>\n";
+#my $inventory = testArcturusInventory ($self, 1);
+    my $inventory = $self->spawn('INVENTORY','arcturus',0,1);
+#print "testArcturusInventory  $inventory <br>\n";
 
 # now get the list of other tables linking to this table
 
@@ -137,18 +138,18 @@ print "Integer depth detected: $depth<br>"    if (!$existOnly && $LIST);
         $database = $dbasename if ($dbasename ne 'arcturus');
 # test existence of datamodel
 #        if (my $datamodel = $self->spawn('DATAMODEL','arcturus',0,0)) {
-        if (!$self->findInstanceOf('arcturus.DATAMODEL')) {
+        if (!$self->getInstanceOf('arcturus.DATAMODEL')) {
             $self->new($dbh,'DATAMODEL','arcturus',0);
         }
-        if (my $datamodel = $self->findInstanceOf('arcturus.DATAMODEL')) {
+        if (my $datamodel = $self->getInstanceOf('arcturus.DATAMODEL')) {
 # DATAMODEL table is found among %instances
             my $hashrefs = $datamodel->associate('hashrefs',$thistable,'tablename');
             foreach my $hash (@$hashrefs) {
                 my $thiscolumn = $hash->{tcolumn};
                 my $linktable = $hash->{linktable};
 # test possible existence of the linktable
-                my $doesExist = $self->findInstanceOf('arcturus.'.$linktable);
-                $doesExist  = $self->findInstanceOf($database.'.'.$linktable) if !$doesExist;
+                my $doesExist = $self->getInstanceOf('arcturus.'.$linktable);
+                $doesExist  = $self->getInstanceOf($database.'.'.$linktable) if !$doesExist;
 print "table $linktable: exist status=$doesExist<br>" if $LIST;
 # add the table to the list of tables to be vivified
                 if (!$existOnly || $doesExist) {
@@ -167,6 +168,7 @@ print "sublinks $thiscolumn @{$self->{sublinks}->{$thiscolumn}} <br>\n" if $LIST
             }
         }
         else {
+print $self->listInstances('<br>');
             die "Could not get at the DATAMODEL table\n";
         }    
     }
@@ -187,7 +189,7 @@ print "  tabledomain=$domain<br>" if $LIST;
             $dbasename = $database  if ($domain eq 'o');
             die "Undefined or invalid domain identifier\n" if (!$dbasename);
 print "inventory link database $dbasename $linktable $domain<br>" if $LIST;
-            my $newtable = $self->findInstanceOf($dbasename.'.'.$linktable);
+            my $newtable = $self->getInstanceOf($dbasename.'.'.$linktable);
             if (!$newtable) {
 print "AUTOVIVIFY table $linktable<br>" if $LIST;
                 $newtable = $self->new($dbh,$linktable,$dbasename);
@@ -336,7 +338,7 @@ sub historyUpdate {
     my $brtag = "\n";
     $brtag = "<br>" if ($list && $list > 1);
 
-    my $instances = $self->findInstanceOf(0);
+    my $instances = $self->getInstanceOf(0);
 # print "historyUpdate: instances=$instances\n";
     return 0 if (!$instances);
 
@@ -392,7 +394,7 @@ sub historyLogger {
         my $historyTableName = $database.'.HISTORY'.uc($database);
     # test if the history table reference exist; if not, open 
         my $history;
-        if (!($history = $self->findInstanceOf($historyTableName))) {
+        if (!($history = $self->getInstanceOf($historyTableName))) {
             $history = $self->new($dbh,'HISTORY'.uc($database),$database,0);
             undef $history if $history->status();
         }
@@ -472,8 +474,9 @@ sub unpackAttributes {
     if (defined($self->{coltype}->{$field}) && $self->{coltype}->{$field} =~ /blob/i) {
 # get the field value
         if ($attributes = $self->SUPER::associate($field,$tvalue,$target)) {
-    # supposedly the field value is a hash image; values my contain a '~' (files)
+# supposedly the field value is a hash image; values may contain a '~' (e.g. for files)
             $attributes =~ s?\~?$EXPAND?g; # replace possible '~' by full file name
+# print "attributes $attributes <br>";
             %attributes = split /$SPLIT/ , $attributes  if ($attributes);
         }
     }
@@ -547,7 +550,7 @@ sub snapshot {
     my $self     = shift;
     my $database = shift;
 
-    my $instances = $self->findInstanceOf(0);
+    my $instances = $self->getInstanceOf(0);
     return if (!$instances); # may not occur!
 
     my $table = '<TABLE BORDER=1 CELLPADDING=2>';
@@ -580,7 +583,8 @@ sub htmlTable {
 
     my %options = (headColor=>'yellow'      , cellColor=>'lightblue',
                    linkColor=>'lightblue'   , mask=>$mask           ,
-                   linkItem =>'onPrimaryKey', linkTarget=>'1');
+                   linkItem =>'onPrimaryKey', linkTarget=>'1'       ,
+                   noHeader => 0);
     &importOptions (\%options,$mask); # if mask is a HASH
 
     undef my $list;
@@ -635,8 +639,10 @@ sub htmlTable {
         }
     }
     $header .= "<TH bgcolor='white'>&nbsp</TH>" if ($more);
-    $list .= "<THEAD><TR><TH COLSPAN=$nrcolumns>Table $tablename</TH></TR></THEAD>";
-    $list .= "<TR>$header</TR><TR><TD COLSPAN=$nrcolumns>&nbsp</TD></TR>";
+    unless ($options{noHeader}) {
+        $list .= "<THEAD><TR><TH COLSPAN=$nrcolumns>Table $tablename</TH></TR></THEAD>";
+        $list .= "<TR>$header</TR><TR><TD COLSPAN=$nrcolumns>&nbsp</TD></TR>";
+    }
 
 # analyse column qualifiers
 
@@ -746,15 +752,18 @@ sub htmlTableColumn {
     my $self   = shift;
     my $column = shift || '';
     my $hash   = shift; # control data
+    my $Column = shift; # optional, undef allowed; column name  for masking or 'where'
+    my $Cvalue = shift; # optional, undef allowed; Value for masking column or 'clause'
 
     my %option = (maxColumns => 8       , maxAspect => 3, noHeader => 0,
-                  cellColor => 'CCCCCC' , itemLink => 0 , cellWidth => 50);
+                  cellColor => 'CCCCCC' , itemLink => 0 , cellWidth => 50,
+                  useLocate => 0        , returnScalar => 0);
     &importOptions(\%option,$hash);
 
     my $colour = "bgcolor='$option{cellColor}'";
     my $table = "<TABLE BORDFER=1 CELLPADDING=2>";
     if (defined($column) && $self->{coltype}->{$column}) {
-        my $values = $self->associate($column); # returns array ref
+        my $values = $self->associate($column,$Cvalue,$Column,\%option); # returns array ref
 # determine number of rows and columns to be used
         my $nrcols = int(sqrt(@$values*$option{maxAspect})+0.5);
         $nrcols = $option{maxColumns} if ($nrcols > $option{maxColumns});

@@ -23,7 +23,7 @@ my %readItem;
 my %linkItem;
 my $linkItems;
 my $OracleData;
-my $isExperimentFile;
+my $dataSource;
 
 my $errors;    # counter
 my $warnings;  # counter
@@ -37,6 +37,8 @@ my $GELMINDDIR = '/nfs/disk54/badger/src/gelminder';
 my $RECOVERDIR = '/nfs/pathsoft/arcturus/dev/cgi-bin';
 my $READATADIR;
 
+my $SCHEMA; # Oracle name of organism 
+
 my $READS; # the database handle for the READS table
 my $fatal; # flag to switch some warnings to errors
 
@@ -45,29 +47,56 @@ my $fatal; # flag to switch some warnings to errors
 # constructor item new
 
 sub new {
-   my $prototype = shift;
-   my $readtable = shift; # the reference to the READS database table
-   my $DNA       = shift;
+    my $prototype = shift;
+    my $readtable = shift; # the reference to the READS database table
+    my $DNA       = shift;
+    my $schema    = shift;
 
-   my $class = ref($prototype) || $prototype;
-   my $self  = {};
+    my $class = ref($prototype) || $prototype;
+    my $self  = {};
 
 # transfer Arcturus Table handle to the class variables
 
-   $READS = $readtable or die "Missing database handle for READS table";
+    $READS = $readtable or die "Missing database handle for READS table";
+
+# spawn the required dictionary tables, if not done earlier
+
+    my $database = $READS->{database}; 
+    $READS->autoVivify($database,2);
+
+    $READS->spawn('READMODEL','arcturus',0,1);
+    $READS->spawn('DATAMODEL','arcturus',0,1);
+
+#   $READS->spawn('LIGATIONS'      ,'<self>',0,1);
+#   $READS->spawn('SEQUENCEVECTORS','<self>',0,1);
+#   $READS->spawn('CLONINGVECTORS' ,'<self>',0,1);
+#   $READS->spawn('BASECALLER'     ,'<self>',0,1);
+#   $READS->spawn('PRIMERTYPES'    ,'<self>',0,1);
+#   $READS->spawn('CLONES'         ,'<self>',0,1);
+#   $READS->spawn('STRANDS'        ,'<self>',0,1);
+#   $READS->spawn('CHEMISTRY'      ,'<self>',0,1);
+#   $READS->spawn('STATUS'         ,'<self>',0,1);
+#   $READS->spawn('CHEMTYPES','arcturus',0,1);
+# set up the links from READS
+#   $READS->autoVivify($READS->{database},2.5);
+
+# decide what the organism is
+
+    $SCHEMA = $schema || $database || die 'Unknown Oracle SCHEMA\n';
+# print "oracle schema $schema     schema $SCHEMA \n";
 
 # create a handle to the data compression module
 
-   $Compress = new Compress($DNA); # default encoding string for DNA: 'ACGT- '
+    $Compress = new Compress($DNA); # default encoding string for DNA: 'ACGT- '
 
 # create a handle to the ligation reader
 
-   $LigationReader = Ligationreader->new();
+    $LigationReader = Ligationreader->new();
 
-   $fatal = 1; # default errors treated as fatal 
+    $fatal = 1; # default errors treated as fatal 
 
-   bless ($self, $class);
-   return $self;
+    bless ($self, $class);
+    return $self;
 }
 
 #############################################################################
@@ -89,7 +118,7 @@ sub newRead {
 
 # type 0 for standard read; else consensus file
 
-    $isExperimentFile = 0;
+    $dataSource = 0; # default unknown
 
     &erase; # clear any existing read items
 
@@ -146,7 +175,7 @@ sub status {
             $output =~ s/(\<br\>){2,}/<br>/ig;
         }
         else {
-            $output =~ s/<br>/\n/ig;
+            $output =~ s/\<br\>/\n/ig;
             $output =~ s/\<[^\>]*\>//g; # remove tags
         }
     }
@@ -166,7 +195,8 @@ sub readReadData {
     my $record;
     if (open(READ,"$file")) {
         $readFileName = $file;
-        $isExperimentFile = 1;
+        $dataSource = 1; # source experiment file
+print "data source: $dataSource \n";
 # decode data in data file and test
         my $line = 0;
         undef my $sequence;
@@ -193,6 +223,12 @@ sub readReadData {
                 $readItem{CC} .= "\n" if ($readItem{CC});
                 $readItem{CC} .= $1;
                 $readItem{CC} =~ s/\s+/ /; # remove redundant blanks
+            }
+            elsif ($record =~ /^[TG]\s+(\S.*?)\s?$/) {
+# tags have to be stored in separate table READTAGS
+#                $readItem{CC} .= "\n" if ($readItem{CC});
+#                $readItem{CC} .= $1;
+#                $readItem{CC} =~ s/\s+/ /; # remove redundant blanks
             }
         # read the other descriptors                 
             elsif ($record =~ /^(\w+)\s+(\S.*?)\s?$/) {
@@ -298,6 +334,7 @@ sub getOracleRead {
                     $readItem{SCF} = $items[1];
                 }
             }
+            $dataSource = 2;
         }
         else {
             $diagnosis .= "! No data found in Oracle hash\n";
@@ -383,7 +420,7 @@ sub makeLinks {
         $errors = 0;
         $diagnosis = '';
 # initialize the correspondence between tags and column names
-        my $READMODEL = $READS->findInstanceOf('arcturus.READMODEL');
+        my $READMODEL = $READS->getInstanceOf('arcturus.READMODEL');
         if (!$READMODEL) {
             $diagnosis = "READMODEL handle NOT found\n";
             $errors++;
@@ -410,6 +447,8 @@ sub makeLinks {
         $linkItems .= '|' if $linkItems;
         $linkItems .= $linkItem{$key};
     }
+# add some miscellaneous ones
+    $linkItems .= '|SI|SCF';
 }
 
 #############################################################################
@@ -430,18 +469,21 @@ sub enter {
         foreach my $item (keys %$entry) {
             $diagnosis .= $self->enter($item,$entry->{$item});
         }
+        $dataSource = $value || 0;
+print "data source: $dataSource \n";
         $errors++ if $diagnosis;
         $status = $diagnosis;
     }
-    elsif ($entry =~ /^($linkItems)$/ && defined($value)) {
+    elsif ($entry =~ /^\b$linkItems\b/ && defined($value)) {
         $readItem{$entry} = $value;
     }
-    elsif ($entry =~ /^($linkItems)$/) {
+    elsif ($entry =~ /^\b$linkItems\b/) {
         delete $readItem{$entry};
     }
     else {
         $status = "Attempt to enter invalid read item $entry \n";
     }
+# print "enter $entry $value status = $status \n" if (ref($entry) ne 'HASH');
     return $status;
 }
 
@@ -483,7 +525,8 @@ sub format {
 
 # only test if data originate from a flat file
 
-    if ($isExperimentFile) {
+    if ($dataSource == 1 && $readFileName) {
+
         if ($readFileName !~ /$readItem{ID}/) {
             $diagnosis .= "!Mismatch between filename $readFileName and ";
             $diagnosis .= "read name $readItem{ID}\n";
@@ -500,11 +543,20 @@ sub format {
             $readItem{RPS} += 1; # flag mismatch            
             $warnings++; # what about outside data ?
         }
-        elsif (!($readItem{ID} =~ /$readItem{TN}/)) {
+        elsif ($readItem{ID} !~ /$readItem{TN}/) {
             $diagnosis .= "! ID and TN mismatch in $readItem{ID}\n";
             $readItem{RPS} += 1; # flag mismatch
             $warnings++;
         }
+    }
+# for other input, define a readFileName
+    elsif ($readItem{ID}) {
+        $readFileName = $readItem{ID};
+    }
+# missing read ID
+    else {
+        $diagnosis .= "! Missing Read Name\n";
+        $errors++; 
     }
 
 # test presence of sequence and quality data
@@ -531,10 +583,10 @@ sub ligation {
 
 # get the database handle to the LIGATIONS and SEQUENCEVECTOR tables
 
-    my $LIGATIONS = $READS->findInstanceOf('<self>.LIGATIONS')       or die "undefined LIGATIONS";
-    my $SQVECTORS = $READS->findInstanceOf('<self>.SEQUENCEVECTORS') or die "undefined SEQUENCEVECTORS";
-    my $CLVECTORS = $READS->findInstanceOf('<self>.CLONINGVECTORS')  or die "undefined CLONINGVECTORS";
-    my $CLONES    = $READS->findInstanceOf('<self>.CLONES')          or die "undefined CLONES";
+    my $LIGATIONS = $READS->getInstanceOf('<self>.LIGATIONS')       or die "undefined LIGATIONS";
+    my $SQVECTORS = $READS->getInstanceOf('<self>.SEQUENCEVECTORS') or die "undefined SEQUENCEVECTORS";
+    my $CLVECTORS = $READS->getInstanceOf('<self>.CLONINGVECTORS')  or die "undefined CLONINGVECTORS";
+    my $CLONES    = $READS->getInstanceOf('<self>.CLONES')          or die "undefined CLONES";
 
    &logger ("** Test or find Ligation Data"); 
 
@@ -640,8 +692,8 @@ print "Try to recover undefined ligation data for clone $readItem{CN}<br>\n";
 #                   my $litem = $LigationReader->get($item);
 
                     &logger("ligation: $item $litem");
-                    if ($item eq 'SV' && !$readItem{$item} && !$isExperimentFile) {
-                # pick the Sequence Vector information from the Ligation
+                    if ($item eq 'SV' && !$readItem{SV} && $litem) {
+# pick the Sequence Vector information from the Ligation
                         $readItem{SV} = $litem;
                         if (!$SQVECTORS->counter('name',$readItem{SV},0)) {
                             $diagnosis .= "! Error in update of SEQUENCEVECTORS.name ";
@@ -832,7 +884,7 @@ sub strands {
 
 # get the database handle to the STRANDS table
 
-    my $STRANDS = $READS->findInstanceOf('<self>.STRANDS') or die "undefined STRANDS";
+    my $STRANDS = $READS->getInstanceOf('<self>.STRANDS') or die "undefined STRANDS";
 
 # analyse the filename suffix
 
@@ -856,8 +908,8 @@ sub strands {
 
     my $oldwarnings = $warnings;
 
-    if ($isExperimentFile) {
-    # the ST value is the number of strands
+    if ($dataSource == 1) {
+# experiment file (like): the ST value is the number of strands
         my $strands = $STRANDS->associate('strands',$suffixes[0],'strand');
         if (defined($strands) && $readItem{ST} == $strands) {
             $readItem{ST} = $suffixes[0]; # replace original by identifier 
@@ -909,8 +961,8 @@ sub strands {
             $warnings++;
         }
     }
-    else {
-    # from Oracle: either "forward or "reverse"
+    elsif ($dataSource == 2) {
+# from Oracle: either "forward or "reverse"
         my $strands = $STRANDS->associate('description',$suffixes[0],'strand');
         if (defined($strands) && $strands =~ /$readItem{ST}/i) {
             $readItem{ST} = $suffixes[0]; # replace original by identifier 
@@ -938,7 +990,7 @@ sub strands {
     $primertype  = 2 if ($suffixes[0] =~ /[qru]/i);   # reverse
     $primertype += 2 if ($primertype <= 2 && $suffixes[1] > 1); # custom primers
 
-    if ($isExperimentFile) {
+    if ($dataSource == 1) {
 # PR value should match extension information
         if (defined($readItem{PR}) && $readItem{PR} != $primertype) {
             $diagnosis .= "! Mismatch of Primer type: \"$readItem{PR}\" (read)";
@@ -954,7 +1006,7 @@ sub strands {
             $readItem{RPS} += 16384; # bit 15
         } 
     }
-    else {
+    elsif ($dataSource == 2) {
 # for Oracle data: accept the suffix value
         if ($primertype) {
             $readItem{PR} = $primertype;
@@ -987,35 +1039,39 @@ sub chemistry {
 
 # get the database handle to the CHEMISTRY and CHEMTYPES tables
 
-    my $CHEMISTRY = $READS->findInstanceOf('<self>.CHEMISTRY')   or die "undefined CHEMISTRY";
-    my $CHEMTYPES = $READS->findInstanceOf('arcturus.CHEMTYPES') or die "undefined CHEMTYPES";
+    my $CHEMISTRY = $READS->getInstanceOf('<self>.CHEMISTRY')   or die "undefined CHEMISTRY";
+    my $CHEMTYPES = $READS->getInstanceOf('arcturus.CHEMTYPES') or die "undefined CHEMTYPES";
 
 # get description from SCF file
 
-&logger("<br>Default Chemistry Type: $readItem{CHT} ..");
-&logger("Test chemistry in file ${readFileName}SCF<br>");
+&logger("Default Chemistry Type: $readItem{CHT} ..\n");
+&logger("Test chemistry in file ${readFileName}SCF\n");
 
     my $scffile = $readItem{SCF} || "${readFileName}SCF";
     if ($scffile !~ /\//) { # no directory indicated: try to find directory (temp fix for ORACLE data)
         if (!$READATADIR) {
-            my $dirdata = `$BADGERDIR/pfind $READS->{database}`;
+# print "Chemistry test schema $SCHEMA \n";
+            my $dirdata = `$BADGERDIR/pfind $SCHEMA`;
             my @dirdata = split /\s+/,$dirdata;
             $READATADIR = $dirdata[4];
         }
         $scffile = "$READATADIR/*/$scffile";
+&logger("SCF file full name: $scffile\n");
     }
 
 #                                           $SCFREADDIR/get_scf_field $scffile | grep -E '(dye|DYE)'
-    my $chemistry = `$RECOVERDIR/recover.sh $SCFREADDIR/get_scf_field $scffile`;
+    my $command = "$SCFREADDIR/get_scf_field $scffile";
+&logger("command: $command \n");
+    my $chemistry = `$RECOVERDIR/recover.sh $command`;
     chomp $chemistry;
     undef $chemistry if ($chemistry =~ /load.+disabled/i);
     $chemistry =~ s/dye.*\=\s*//ig; # remove clutter from SCF data
-&logger("SCF chemistry: '$chemistry' ");
+&logger("SCF chemistry: '$chemistry'\n");
 
 # test against entries in the CHEMISTRY table (exact matches because $chemistry may contain wildcard symbols)
 
     if ($chemistry && $CHEMISTRY->associate('chemistry',$chemistry,'identifier',-1,0,1)) {
-&logger("chemistry $chemistry found in ARCTURUS database table");
+&logger("chemistry $chemistry found in ARCTURUS database table\n");
         $diagnosis .= "chemistry $chemistry found in ARCTURUS database table\n";
 # the chemistry is already in the table; check CHT
         my $chtype = $CHEMISTRY->associate('chemtype',$chemistry,'identifier',-1,0,1); # exact match
@@ -1047,13 +1103,13 @@ sub chemistry {
 
     }
     elsif ($chemistry) {
-&logger("chemistry \"$chemistry\" NOT found in ARCTURUS database");
+&logger("chemistry \"$chemistry\" NOT found in ARCTURUS database\n");
         $diagnosis .= "chemistry \"$chemistry\" NOT found in ARCTURUS database\n";
     # the chemistry is not yet in the CHEMISTRY table; before adding, test against CHT
         my $field = `grep \"$chemistry\" $GELMINDDIR/phred/phredpar.dat`; # identify in phred file
         $field    = `grep \"$chemistry\" $GELMINDDIR/*/phredpar.dat` if (!$field); # try other places
         chomp $field;
-&logger("Gelminder chemistry data fields: \"$field\"");
+&logger("Gelminder chemistry data fields: \"$field\"\n");
 #$diagnosis .= "Gelminder chemistry data fields: \"$field\"";
         $field =~ s/[\'\"]?\s*$chemistry\s*[[\'\"]?/x /g; # remove chemistry and any quotations
 #        $field =~ s/\b[\'\"]|[[\'\"]\b/ /g; # remove any quotations
@@ -1065,9 +1121,9 @@ sub chemistry {
 # $readItem{CHT} = 'e' if ($readItem{CHT} eq 't'); # force read through (2)
     # get description from chemistry type
             my $description = $CHEMTYPES->associate('description',$readItem{CHT},'chemtype');
-&logger("test Gelminder description against type $readItem{CHT}");
+&logger("test Gelminder description against type $readItem{CHT}\n");
             if (@fields) {
-&logger("@{fields}\n$fields[1]\n$fields[2]");
+&logger("@{fields}\n$fields[1]\n$fields[2]\n");
         # require both to match
                 if (!($description =~ /$fields[1]/i) || !($description =~ /$fields[2]/i)) {
 #$diagnosis = "fields: '$fields[0]' '$fields[1]' '$fields[2]'\n";
@@ -1101,14 +1157,14 @@ sub chemistry {
         }
         else {
     # CHT not defined; find matching description for fields 1 and 2
-&logger(" CHT not defined: test Gelminder description against ARTURUS chemistry data");
+&logger(" CHT not defined: test Gelminder description against ARTURUS chemistry data\n");
             if (@fields) {
                 for (my $n=1 ; $n<=10 ; $n++) {
                     my $description = $CHEMTYPES->associate('description',$n,'number');
-&logger("description = $description");
+&logger("description = $description\n");
                     if ($description =~ /$fields[1]/i && $description =~ /$fields[2]/i) {
                         $readItem{CHT} = $CHEMTYPES->associate('chemtype',$n,'number');
-&logger(" ... identified (type = $readItem{CHT})");
+&logger(" ... identified (type = $readItem{CHT})\n");
                     }
                 }
             }
@@ -1121,6 +1177,7 @@ sub chemistry {
         $readItem{CH} = $chemistry;
 
         if (!$errors) {
+            $diagnosis .= "New chemistry $chemistry added to Arcturus database\n";
             $CHEMISTRY->newrow('identifier', $chemistry);
             $CHEMISTRY->update('chemtype'  , $readItem{CHT});
             $CHEMISTRY->build(1); # rebuild internal table
@@ -1149,12 +1206,12 @@ sub chemistry {
         if ($chemistry = $CHEMTYPES->associate('description',$readItem{CHT},'chemtype')) {
             $readItem{CH} = $chemistry;
 #            $CHEMISTRY->newrow('identifier', $chemistry);
-&logger("... recovered: = $readItem{CH})");
+&logger("... recovered: = $readItem{CH})\n");
             $CHEMISTRY->update('chemtype', $readItem{CHT},'identifier', $chemistry);
             $CHEMISTRY->build(1); # rebuild internal table
         }
         else {
-&logger("... NOT recovered: = $readItem{CH})");
+&logger("... NOT recovered: = $readItem{CH})\n");
             delete $readItem{CH}; # remove meaningless info
         }
 print "REPORT $report<br>";
@@ -1215,8 +1272,9 @@ sub encode {
 #############################################################################
 
 sub insert {
-# insert a new record in the READS database table
+# insert a new record into the READS database table
     my $self = shift;
+    my $list = shift;
 
 # get the columns of the READS table (all of them) and find the reads key
 
@@ -1226,12 +1284,15 @@ sub insert {
 # get the links to the dictionary tables
 
     my $linkhash = $READS->traceTable();
+print "link hash $linkhash \n" if $list;
 
     undef my %columntags;
     foreach my $key (keys %$linkhash) {
-# get the flat file item correspondiong to the column name in $1
+# get the flat file item corresponding to the column name in $1
+print "link hash key $key \n" if $list;
         if ($key =~ /\.READS\.(\S+)$/) {
             $columntags{$key} = $linkItem{$1};
+print "link hash $key  $columntags{$key} \n" if $list;
         }
     }
 
@@ -1245,7 +1306,7 @@ sub insert {
 # it's a linked column; find the link table, column and table handle
             my ($database,$linktable,$linkcolumn) = split /\./,$link;
             $linktable = $database.'.'.$linktable;
-            my $linkhandle = $READS->findInstanceOf($linktable);
+            my $linkhandle = $READS->getInstanceOf($linktable);
 # find the proper column name in the dictionary table
             undef my @columns;
             my $pattern = "name|identifier";
@@ -1258,6 +1319,7 @@ sub insert {
             if (@columns == 1) {
                 $linkhandle->counter($columns[0],$readItem{$tag});
                 my $reference = $linkhandle->associate($linkcolumn,$readItem{$tag},$columns[0], 0, 0, 1);
+		$diagnosis .= "insert: $linkcolumn $readItem{$tag},$reference\n";
                 $readItem{$tag} = $reference;
             }
             elsif (!@columns) {
@@ -1370,7 +1432,7 @@ sub rollBack {
     my $level   = shift;
     my $exclude = shift || ''; # optional array of tables to ignore
 
-    my $instances = $READS->findInstanceOf(0);
+    my $instances = $READS->getInstanceOf(0);
 
     $exclude = join ' ',@$exclude if (ref($exclude) eq 'ARRAY');
 

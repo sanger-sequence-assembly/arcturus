@@ -12,7 +12,8 @@ use strict;
 # Global variables
 #############################################################################
 
-my %reads;
+my %readmapper; # all readmapper instances on key readname
+my %readstatus; # database status of reads on key readname
 
 # declare database handles to READS, READS2CONTIG, READEDITS and PENDING table
 
@@ -56,7 +57,7 @@ sub init {
     my $class = ref($prototype) || $prototype;
     my $self  = {};
 
-    my $exist = keys %reads; # does a reads buffer exist?
+    my $exist = keys %readmapper; # does a reads buffer exist?
 
     if (!$exist && !defined($READS)) {
 
@@ -130,9 +131,9 @@ sub new {
     $status->{warnings} = 0;
     $status->{inputlog} = '';
 
-# add the name of this read to the class variable %reads
+# add the name of this read to the class variable %readmapper
 
-    $reads{$readname} = $self;
+    $readmapper{$readname} = $self;
 
     bless ($self, $class);
     return $self;
@@ -678,14 +679,15 @@ sub mtest {
         @$con2con = (0,0,0,0,0,0); # have all elements defined
         my $previous = ''; # for string list of earlier contigs
         my $isDifferent = 0;
-        my $dbmaps = $RRTOCC->associate ('hashrefs',$read_id,'read_id',-1,'deprecated,label');
-    # maps is a reference to an array of hashes with existing mapping info in the database
+        my $dbmaps = &preloadedmap($read_id); # returns array of hashes
+        $dbmaps = $RRTOCC->associate ('hashrefs',$read_id,'read_id',-1,'deprecated,label') if !@$dbmaps;
+# dbmaps is a reference to an array of hashes with existing mapping info in the database
         my %generations;
         my %deprecation;
         my %cgeneration;
         my $notDeprecated; # protect against case of only deprecated alignments
         if ($dbmaps && @$dbmaps > 0) {
-    # there are mappings of this read in the database; make an inventory for each generation
+# there are mappings of this read in the database; make an inventory for each generation
             $notDeprecated = 0;
             foreach my $map (@$dbmaps) {
                 my $generation = $map->{generation};
@@ -1449,7 +1451,7 @@ sub delete {
 
     undef %$self;
 
-    delete $reads{$read};
+    delete $readmapper{$read};
 }
 
 ###############################################################################
@@ -1466,13 +1468,13 @@ sub lookup {
 
     $read = 1 if (!defined($read));
 
-    my $result = $reads{$read};
+    my $result = $readmapper{$read};
 
     if (!$result && !($read =~ /[a-z]/i) && $read =~ /\d+/) {
 
-        foreach my $name (sort keys (%reads)) {
+        foreach my $name (sort keys (%readmapper)) {
             if (--$read == 0) {
-                $result = $reads{$name};
+                $result = $readmapper{$name};
                 last;
             }
         }
@@ -1539,9 +1541,10 @@ sub inDataBase {
 
 # if the read is not in the READS database test for it in PENDING table
 
-    my $dbrref = 0;
     my $dbpref = 0;
-    if (defined($read) && !($dbrref=$READS->associate('read_id',$read,'readname'))) {
+    my $dbrref = $readstatus{$read} || 0;
+    
+    if (!$dbrref && defined($read) && !($dbrref=$READS->associate('read_id',$read,'readname'))) {
         $dbrref = 0; # read not found in READS
         if (!($dbpref = $PENDING->associate('record',$read,'readname'))) {
             $dbpref = 0; # read not found in PENDING either
@@ -1554,6 +1557,52 @@ sub inDataBase {
     return ($dbrref, $dbpref);
 }
 
+#############################################################################
+
+sub preload {
+# get database id (level=1) or mapping data (level=2) into hash %readstatus
+    my $reads = shift || return 0; # ref to ARRAY with readnames
+    my $level = shift || 0;
+
+    undef %readstatus;
+
+    my $nblock = 1000;
+
+    while (@$reads) {
+# go through the list in blocks of $nblock
+        my $n = @$reads; 
+        $n = $nblock if ($nblock > 1000);
+        undef my @block;
+        while ($n) {
+            push @block,(shift @$reads);
+        }
+
+        if ($level == 1) {
+            my $hashes = $READS->associate('read_id,readname',\@block,'readname');
+            if ($hashes) {
+                foreach my $hash (@$hashes) {
+                    my $readname = $hash->{readname};
+                    $readstatus{$readname} = $hash->{read_id};
+print "readstatus $readname  $hash->{read_id} \n";
+                }
+            }
+        }
+
+        elsif ($level == 2) {
+        }
+    }
+}
+
+#############################################################################
+
+sub preloadedmap {
+# retrieve a preloaded R2C mapping, if any
+    my $read = shift;
+
+    my @maps; # for output of map hashes
+
+    return \@maps;
+}
 
 #############################################################################
 #############################################################################

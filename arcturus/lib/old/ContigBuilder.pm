@@ -16,12 +16,13 @@ use vars qw($VERSION @ISA);
 my %contigs;
 my %forward;
 
-my $readmapper; # handle to ReadMapper module:=> TableReader::ReadMapper.pm
+my $ReadMapper; # handle to ReadMapper module: ReadMapper.pm
 my $CONTIGS;    # database table handle to CONTIGS
 my $CCSTOCC;    # database table handle to CEVENTS
 my $CCTOSS;     # database table handle to CONTIGS2SCAFFOLD
 my $RRTOCC;     # database table handle to READS2CONTIG 
 my $GAP4TAGS;   # database table handle to GAP4TAGS
+my $READTAGS;   # database table handle to READTAGS table
 my $TTTOCCS;    # database table handle to TAGS2CONTIG 
 
 my $ASSEMBLY;   # assembly number for which the instance is created 
@@ -68,10 +69,10 @@ sub init {
         $GAP4TAGS   = $CONTIGS->findInstanceOf('<self>.GAP4TAGS');
         $TTTOCCS    = $CONTIGS->findInstanceOf('<self>.TAGS2CONTIG');
 
-        $readmapper = $mapper;
+        $ReadMapper = $mapper;
 
         my $reads   = $CONTIGS->findInstanceOf('<self>.READS');
-#        $readmapper = ReadMapper->init($reads,$htmlmode) if $reads;
+#        $ReadMapper = ReadMapper->init($reads,$htmlmode) if $reads;
 
         bless ($self, $class);
     }
@@ -285,7 +286,7 @@ sub dump {
 # we keep track of error conditions with the variable $complete
 
     my $cnames   = $self->{cnames};
-    my $readmap  = $self->{readmap};
+    my $readmap  = $self->{readmap}; # hash of the maps read e.g. from caf file 
     my $cntgmap  = $self->{cntgmap};
     my $status   = $self->{status};
     my $counts   = $self->{counts};
@@ -311,12 +312,15 @@ sub dump {
     }
 
 #############################################################################
-# (II) second test: are readmapper objects listed in 'readmap' all built?
+# (II) second test: are ReadMapper objects listed in 'readmap' all built?
 # test if all reads are found in the READS table (we need the read_id's)
-# by using the ->inDataBase  method of the readmapper objects
+# by using the ->inDataBase  method of the ReadMapper objects
 #############################################################################
 
-    undef my %reads; # clear any previous data
+    my @reads = sort keys %$readmap; # all reads specified for this contig
+    $ReadMapper->preload(\@reads,1); # preload data into ReadMapper buffer
+
+    undef my %readmapper; # hash for readmapper objects for reads in this contig
     undef my $nrOfReads;
 
     my $missed = 0;
@@ -324,11 +328,11 @@ sub dump {
     if ($complete) {
         foreach my $readname (keys (%$readmap)) {
             print "Testing read $readname (nr $tested)$brtag" if (!((++$tested)%50));
-            my $readobject = $readmapper->lookup($readname);
+            my $readobject = $ReadMapper->lookup($readname);
             if (defined($readobject)) {
 # add pointer to table
-                $reads{$readname} = $readobject;
-# now test if the read is in the database using readmapper
+                $readmapper{$readname} = $readobject;
+# now test if the read is in the database using ReadMapper
                 my ($dbrref, $dbpref) = $readobject->inDataBase($readname,1);
                 if (!$dbrref && $dbpref && !$forced) {
                     $missed++;
@@ -346,24 +350,24 @@ sub dump {
                     $status->{diagnosis} .= "Read $readname not in ARCTURUS database: ";
                     $status->{diagnosis} .= "FORCED to ignore its absence $brtag";
                     delete $readmap->{$readname};
-                    delete $reads{$readname};
+                    delete $readmapper{$readname};
                     $readobject->delete();
                     $counts->[0] -= 1;
                 }
 	    } 
             else {
                 $report .= "ReadMapper $readname missing $brtag";
-                $readmapper->inDataBase($readname,1); # will add read to PENDING
+                $ReadMapper->inDataBase($readname,1); # will add read to PENDING
                 $missed++;
             }
         }
-# test number of readmapper instances found or missed
+# test number of ReadMapper instances found or missed
         my $ntotal = keys %$readmap;
-        $nrOfReads = keys %reads; # get number of readmappers found
+        $nrOfReads = keys %readmapper; # get number of ReadMappers found
         $complete = 0 if (!$nrOfReads || $missed);
         $complete = 0 if (($nrOfReads+$missed) != $ntotal);
         $complete = 0 if ($ntotal != $counts->[0]);
-        $report .= "$nrOfReads readmappers defined, $missed missed or incomplete out ";
+        $report .= "$nrOfReads ReadMappers defined, $missed missed or incomplete out ";
         $report .= "of $ntotal ($counts->[0]) for contig $cnames->[0]${brtag}";
 # complete 0 forces skip to exit
     }
@@ -380,8 +384,10 @@ my $LIST=0;
     if ($complete) {
         my $nreads = 0;
         $counts->[2] = 0; # for total read length
-        undef my ($cmin, $cmax);
-        undef my ($minread, $maxread, $minspan, $maxspan, @names); # first and last reads
+        undef my $cmin; undef my $cmax;
+        undef my $minread; undef my $maxread;
+        undef my $minspan; undef my $maxspan;
+        undef my @names; # of first and last reads
         foreach my $readname (keys (%$readmap)) {
 # get the mapping of this read to the contig and test the range
 #            print "Testing readmapping $readname (nr $tested)$brtag" if (!((++$tested)%50));
@@ -497,20 +503,20 @@ $LIST = 1; print "IV $brtag";
             delete $cntgmap->{$cntg};
         }
 
-# build the mappings for each readmapper; test connections to earlier contigs
+# build the mappings for each ReadMapper; test connections to earlier contigs
 
         $tested = 0;
         $counts->[0] = 0;
         my $emptyReads = 0;
         foreach my $read (keys (%$readmap)) {
             print "Building map for read $read (nr $tested)$brtag" if (!((++$tested)%50));
-            my $readobject = $reads{$read};
+            my $readobject = $readmapper{$read};
             my $contocon = $readobject->{contocon};
 
 # transfer the read-to-contig alignment to the ReadMapper instance 
 
             $readobject->alignToContig(\@{$readmap->{$read}});
-# test the readmapper alignment specification and status for this read
+# test the ReadMapper alignment specification and status for this read
             $readobject->align();
 # test previous alignments of this read in the database
             $readobject->mtest();
@@ -528,7 +534,7 @@ $LIST = 1; print "IV $brtag";
                 $report .= "Empty read $read wil be ignored $brtag";
                 $status->{warnings}++;
                 delete $readmap->{$read};
-                delete $reads{$read};
+                delete $readmapper{$read};
                 print "$ofont Empty read $read wil be ignored $efont $brtag";
                 $emptyReads++;
             }
@@ -672,7 +678,7 @@ print "hashrefs $hashrefs, hashref $hashref $hashref->{nreads} $hashref->{contig
 # deprecate the reads which fall inside the window on the previous contig
                             my $deprecated = 0;
                             foreach my $read (keys %$readmap) {
-                                my $readobject = $reads{$read};
+                                my $readobject = $readmapper{$read};
                                 my $contocon = $readobject->{contocon};
                                 if (($contocon->[0] >= $ws && $contocon->[0] <= $wf)
 		         	 || ($contocon->[1] >= $ws && $contocon->[1] <= $wf)) {
@@ -791,8 +797,8 @@ $LIST = 1; print "VI $brtag";
     if ($complete && $accepted) {
 # write the read mappings and edits to database tables for this contig and assembly
         my $dumped = 0;
-        foreach my $readname (keys (%reads)) {
-            my $readobject = $reads{$readname};
+        foreach my $readname (keys (%readmapper)) {
+            my $readobject = $readmapper{$readname};
             print "Processing read $readname (nr $dumped)$brtag" if (!((++$dumped)%50));
             if ($readobject) {
                 $complete = 0 if (!$readobject->dump($contig,$assembly));
@@ -868,13 +874,13 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
         }
 
         if ($complete) {
-    # remove the readmappers and this contigbuilder to free memory
-            foreach my $readname (keys (%reads)) {
-                my $readobject = $reads{$readname};
+    # remove the ReadMappers and this contigbuilder to free memory
+            foreach my $readname (keys (%readmapper)) {
+                my $readobject = $readmapper{$readname};
                 $readobject->status(2); # dump warnings
                 $readobject->delete();
             }
-            undef %reads;
+            undef %readmapper;
             my $result = &status($self,2);
             print STDOUT "Contig $cnames->[1] entered successfully into CONTIGS table ";
             print STDOUT "($counts->[4] new reads; $counts->[3] parent contigs)${brtag}";
@@ -888,15 +894,15 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
 # next block is activated if the current contig is identical to one entered earlier
 
     elsif ($complete && $accepted && $isIdentical) {
-# remove the readmappers and this contigbuilder to free memory
+# remove the ReadMappers and this contigbuilder to free memory
         my $dumped = 0;
-        foreach my $readname (keys (%reads)) {
-            my $readobject = $reads{$readname};
+        foreach my $readname (keys (%readmapper)) {
+            my $readobject = $readmapper{$readname};
             print "Removing read $readname (nr $dumped)$brtag" if (!((++$dumped)%50));
             $readobject->status(2); # dump warnings
             $readobject->delete();
         }
-        undef %reads;
+        undef %readmapper;
 # undo the addition to CONTIGS, if any
         $CONTIGS->rollback(1);  
         $status->{warnings}++;
@@ -939,15 +945,15 @@ print "prior contigs=@priorContigList $brtag" if $LIST;
         $RRTOCC->delete('contig_id',$contig);
         $CCTOSS->delete('contig_id',$contig);
     # and list the status of the individual readobjects
-        foreach my $readname (keys (%reads)) {
-            my $readobject = $reads{$readname};
+        foreach my $readname (keys (%readmapper)) {
+            my $readobject = $readmapper{$readname};
             $readobject->status(2); # full error/warnings list 
         }
     # possibly add the reads to PENDING (via class method inDataBase, if not done earlier)
         if (!$tested) {
             foreach my $readname (keys (%$readmap)) {
                 print "Pinging read $readname (nr $tested)$brtag" if (!((++$tested)%50));
-                my ($dbrref, $dbpref) = $readmapper->inDataBase($readname,1);
+                my ($dbrref, $dbpref) = $ReadMapper->inDataBase($readname,1);
             }
         }
         return status($self,1);
@@ -1218,7 +1224,7 @@ my $errlist = 0;
             $type = 0 if ($rblocker && defined($rblocker->{$object})); # ignore reads already mapped
             if ($type) {
                 print "NEW  read  $object opened (triggered by line $line: $record)$brtag" if ($list > 1);
-                $currentread = $readmapper->new($object);
+                $currentread = $ReadMapper->new($object);
             }           
         }
         elsif ($type == 1) {
@@ -1280,7 +1286,7 @@ print "error in: $record$brtag |$1|$2|$3|$4|" if ($1 != $2 && $errlist);
             }
         }
         elsif ($type == 2) {
-    # processing a contig, get constituent reads and mapping
+# processing a contig, get constituent reads and mapping
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
                 $currentcontig->addRead($1,$2);
             }
@@ -1320,8 +1326,6 @@ sub colophon {
 #############################################################################
 
 1;
-
-
 
 
 

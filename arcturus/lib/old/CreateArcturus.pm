@@ -119,6 +119,12 @@ sub create_organism {
         &record ($historyTable,$userid,'READEDITS');
     }
 
+    if (!$target || $target eq 'READTAGS') {    
+        push @tables, 'READTAGS';
+        &create_READTAGS ($dbh, $list);
+        &record ($historyTable,$userid,'READTAGS');
+    }
+
     if (!$target || $target eq 'PENDING') {    
         push @tables, 'PENDING';
         &create_PENDING ($dbh, $list);
@@ -147,6 +153,12 @@ sub create_organism {
         push @tables, 'TAGS2CONTIG';
         &create_TAGS2CONTIG ($dbh, $list);
         &record ($historyTable,$userid,'TAGS2CONTIG');
+    }
+
+    if (!$target || $target eq 'GENE2CONTIG') {    
+        push @tables, 'GENE2CONTIG';
+        &create_GENE2CONTIG ($dbh, $list);
+        &record ($historyTable,$userid,'GENE2CONTIG');
     }
 
     if (!$target || $target eq 'CLONEMAP') {    
@@ -328,10 +340,10 @@ sub create_READS {
              pstatus          TINYINT  UNSIGNED   DEFAULT 0,
              rstatus          MEDIUMINT UNSIGNED  DEFAULT 0,
              paired           ENUM ('N','F','R')  DEFAULT 'N',
-             comment          VARCHAR(255)             NULL,
+             tstatus          ENUM ('N','I','T')  DEFAULT 'N',
+             comment          VARCHAR(255)               NULL,
              CONSTRAINT READNAMEUNIQUE UNIQUE (READNAME)  
          )]);
-#             tstatus          ENUM ('N','I','T')  DEFAULT 'N',
 
     print STDOUT "... DONE!\n" if ($list);
 
@@ -744,7 +756,78 @@ see http://www.sanger.ac.uk/Software/sequencing/docs/harper/asmReadpairs.shtml d
 =back
 
 =cut
-#--------------------------------------------------------------------
+#*********************************************************************************************************
+
+sub create_READTAGS {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"READTAGS", $list);
+    print STDOUT "Creating table READTAGS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE READTAGS(
+             read_id           MEDIUMINT UNSIGNED    NOT NULL,
+             readtag           CHAR(4) BINARY        NOT NULL,
+             pstart            SMALLINT  UNSIGNED    NOT NULL,
+             pfinal            SMALLINT  UNSIGNED    NOT NULL,
+             strand            ENUM ('F','R','U') DEFAULT 'U',
+             comment           VARCHAR(128)              NULL,
+             deprecated        ENUM ('N','Y','X') DEFAULT 'N'
+	 )]);
+    print STDOUT "... DONE!\n" if ($list);
+
+# Make index on read_id
+
+    print STDOUT "Building index on read_id ...\n" if ($list);
+    $dbh->do(qq[CREATE INDEX reads_index ON READTAGS (read_id)]);
+    print STDOUT "Index RTAGS_INDEX ON READTAGS ... DONE\n" if ($list);
+}
+
+#--------------------------- documentation --------------------------
+
+=head1 Table READTAGS
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=over 4
+
+=item read_id
+
+number of read
+
+=item readtag
+
+name of tag 
+
+=item pstart
+
+begin of tag in read
+
+=item pfinal
+
+end of tag in read
+
+=item strand
+
+On forward (F) or reverse (R) strand, or unknown (U)
+
+=item comment
+
+Description of the tag, e.g. "Jumping library 50839"
+
+=item deprecated
+
+deprecation status: 'Y' for no longer valid, 'N' for current; transient 'X'
+
+=back
+
+=head2 Linked Tables on key read_id
+
+READS
+
+=cut
 
 #*********************************************************************************************************
 
@@ -1002,6 +1085,8 @@ creation date (or date of last modification)
 
 =item TAGS2CONTIG
 
+=item GENE2CONTIG
+
 =back
 
 =cut
@@ -1142,9 +1227,8 @@ sub create_GAP4TAGS {
              tagname          CHAR(4)              NOT NULL,
              taglabel         VARCHAR(255)         NOT NULL,
              deprecated       ENUM ('N','Y','X') DEFAULT 'N'
-	 )]);
+          ) AUTO_INCREMENT = 20000001 ]);
     print STDOUT "... DONE!\n" if ($list);
-    $dbh->do("INSERT INTO GAP4TAGS (tag_id, tagname) VALUES (2000000, \"DUMMY\")");
 }
 
 #--------------------------- documentation --------------------------
@@ -1192,13 +1276,13 @@ sub create_STSTAGS {
              linkage          SMALLINT UNSIGNED    NOT NULL,
              assembly         TINYINT  UNSIGNED    NOT NULL,
              CONSTRAINT TAGNAMEUNIQUE UNIQUE (TAGNAME)  
-	 )]);
+	  ) AUTO_INCREMENT = 10000001 ]);
     print STDOUT "... DONE!\n" if ($list);
-    $dbh->do("INSERT INTO STSTAGS (tag_id, tagname) VALUES (1000000, \"DUMMY\")");
 }
 
 #******************************************************************
-# tag_id    : reference to a TAGS table; tag type implicit in tag_id
+# tag_id    : reference to a TAGS table;
+#? tag_type  :
 # contig_id : reference to CONTIGS table
 # tcp_start : tag contig start position
 # tcp_final : tag contig final position (could be < tcp_start)
@@ -1213,6 +1297,37 @@ sub create_TAGS2CONTIG {
              contig_id        MEDIUMINT UNSIGNED   NOT NULL,
              tcp_start        INT UNSIGNED         NOT NULL,
              tcp_final        INT UNSIGNED         NOT NULL
+	 )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+
+#******************************************************************
+# tagname     : unique tag identifier 
+# tagstatus   : Fluid (preliminary allocation) Permanent (set by annotators) 
+# contig_id   : reference to CONTIGS table, contig of current generation (updated)
+# tcp_start   : tag contig start position                                (updated)
+# tcp_final   : tag contig final position                                (updated)
+# orientation : Forward, Reverse or Unknown                              (updated)
+# cid_first   : contig_id in which tag was first allocated
+# updated     : flag set to signal change by non-GeneDB user (True,False) or deprecated (D)
+# attributes  : allows e.g. comments or history info 
+# 'updated' items are to be updated after each new assembly
+
+sub create_GENE2CONTIG {
+    my ($dbh, $list) = @_;
+
+    &dropTable ($dbh,"GENE2CONTIG", $list);
+    print STDOUT "Creating table GENE2CONTIG ..." if ($list);
+    $dbh->do(qq[CREATE TABLE GENE2CONTIG(
+             tagname          VARCHAR(24) BINARY   NOT NULL PRIMARY KEY,
+             tagstatus        ENUM('F','P','U')    DEFAULT 'U',
+             contig_id        MEDIUMINT UNSIGNED   NOT NULL,
+             tcp_start        INT UNSIGNED         NOT NULL,
+             tcp_final        INT UNSIGNED         NOT NULL,
+             orientation      ENUM('F','R','U')    DEFAULT 'U',
+             cid_first        MEDIUMINT UNSIGNED   NOT NULL,
+             updated          ENUM('T','F','D')    DEFAULT 'T',             
+             attributes       BLOB                     NULL
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
@@ -1454,7 +1569,7 @@ sub create_SEQUENCEVECTORS {
     print STDOUT "Creating table SEQUENCEVECTORS ..." if ($list);
     $dbh->do(qq[CREATE TABLE SEQUENCEVECTORS(
              svector          TINYINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             name             VARCHAR(16)        NOT NULL,
+             name             VARCHAR(20)        NOT NULL,
              vector           TINYINT UNSIGNED  DEFAULT 0,
              counted          INT UNSIGNED      DEFAULT 0
          )]);
@@ -1750,11 +1865,12 @@ sub create_DATAMODEL {
              tablename     VARCHAR(16)           NOT NULL,
              tcolumn       VARCHAR(16)           NOT NULL,
              linktable     VARCHAR(16)           NOT NULL, 
-             lcolumn       VARCHAR(16)           NOT NULL
+             lcolumn       VARCHAR(24)           NOT NULL
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
     my @input = ('READEDITS          read_id            READS     read_id',
+                 'READTAGS           read_id            READS     read_id',
                  'READS2CONTIG       read_id            READS     read_id',
                  'READS2CONTIG     contig_id          CONTIGS   contig_id',
                  'READS2CONTIG     contig_id CONTIGS2SCAFFOLD   contig_id',
@@ -1764,11 +1880,12 @@ sub create_DATAMODEL {
                  'USERS               userid   USERS2PROJECTS      userid',
                  'USERS2PROJECTS      userid            USERS      userid',
                  'USERS2PROJECTS     project         PROJECTS     project',
-                 'CONTIGS          contig_id     READS2CONTIG   contig_id', # ?
+                 'CONTIGS          contig_id     READS2CONTIG   contig_id', # ? /contigname/aliasname',
                  'CONTIGS             userid            USERS      userid',
                  'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
                  'CONTIGS          contig_id      TAGS2CONTIG   contig_id',
                  'TAGS2CONTIG      contig_id          CONTIGS   contig_id',
+                 'GENE2CONTIG      contig_id          CONTIGS   contig_id',
                  'TAGS2CONTIG         tag_id          STSTAGS      tag_id',
                  'STSTAGS             tag_id      TAGS2CONTIG      tag_id',
                  'TAGS2CONTIG         tag_id         GAP4TAGS      tag_id',
@@ -1784,7 +1901,7 @@ sub create_DATAMODEL {
                  'CONTIGS          contig_id CONTIGS2SCAFFOLD   contig_id',
                  'CONTIGS2SCAFFOLD   project         PROJECTS     project',
                  'LIGATIONS          svector  SEQUENCEVECTORS     svector',
-                 'CHEMISTRY         chemtype        CHEMTYPES    chemtype',
+                 'CHEMISTRY         chemtype        CHEMTYPES    chemtype/description',
                  'SEQUENCEVECTORS     vector          VECTORS      vector',
                  'CLONINGVECTORS      vector          VECTORS      vector',
                  'CLONES2PROJECT       clone           CLONES       clone',
@@ -1801,15 +1918,15 @@ sub create_DATAMODEL {
                  'READS              read_id     READS2CONTIG     read_id',
                  'READS              read_id   READS2ASSEMBLY     read_id',
                  'READS              read_id        READEDITS     read_id',
-                 'READS             ligation        LIGATIONS    ligation',
-                 'READS                clone           CLONES       clone',
-                 'READS               strand          STRANDS      strand',
-                 'READS               primer      PRIMERTYPES      primer',
-                 'READS            chemistry        CHEMISTRY   chemistry',
-                 'READS           basecaller       BASECALLER  basecaller',
-                 'READS              svector  SEQUENCEVECTORS     svector',
-                 'READS              cvector   CLONINGVECTORS     cvector',
-                 'READS              pstatus           STATUS      status');
+                 'READS             ligation        LIGATIONS    ligation/identifier ',
+                 'READS                clone           CLONES       clone/clonename  ',
+                 'READS               strand          STRANDS      strand/description',
+                 'READS               primer      PRIMERTYPES      primer/description',
+                 'READS            chemistry        CHEMISTRY   chemistry/identifier ',
+                 'READS           basecaller       BASECALLER  basecaller/name       ',
+                 'READS              svector  SEQUENCEVECTORS     svector/name       ',
+                 'READS              cvector   CLONINGVECTORS     cvector/name       ',
+                 'READS              pstatus           STATUS      status/identifier');
 
     foreach my $line (@input) {
         my ($f1, $f2, $f3, $f4) = split /\s+/,$line;
@@ -1869,12 +1986,14 @@ sub create_INVENTORY {
                  'CHEMTYPES         c  r  2  1',
                  'READS             o  p  0  0',
                  'READEDITS         o  a  0  0',
+                 'READTAGS          o  t  0  0',
                  'READPAIRS         o  l  3  0',
                  'PENDING           o  p  0  0',
                  'READS2CONTIG      o  m  0  0',
                  'GAP4TAGS          o  t  0  0',
                  'STSTAGS           o  t  3  1',
                  'TAGS2CONTIG       o  m  3  0',
+                 'GENE2CONTIG       o  m  3  0',
                  'CLONEMAP          o  t  3  1',
                  'CLONES2CONTIG     o  m  3  0',
                  'READS2ASSEMBLY    o  l  0  0',
@@ -2044,7 +2163,7 @@ sub create_USERS {
              affiliation      VARCHAR(32)         DEFAULT "Genomic Research Limited",
              division         VARCHAR(16)             NULL,
 	     function         ENUM ("Database Owner","Database Manager","Team Leader","Project Manager","Finisher","Trainee","Scientist","Annotator", "Research Assistent","Visitor","Other") DEFAULT "Other",
-             ustatus          ENUM ("new","active","retired") DEFAULT "new",
+             ustatus          ENUM ("new","active","retired","other") DEFAULT "new",
              email            VARCHAR(32)             NULL,
              password         VARCHAR(32)             NULL,
              seniority        TINYINT  UNSIGNED   NOT NULL,
@@ -2339,6 +2458,13 @@ sub dropTable {
 
 
 #*********************************************************************************************************
+# method diagnose scans this source file and compares the definition of tables with
+# the definition returned by the MYSQL 'describe table' command. Possible differences will
+# be translated and formatted as an ALTER TABLE instruction.
+# In order to work correctly, it assumes that the table definition in this script follow
+# a few rules: put one column on one line (starting of course with 'do .. create table')
+# putthe closing parenthesis of the table definition on a separate line; possible 
+# table_options are ignored in this version.
 #*********************************************************************************************************
 
 sub diagnose {
@@ -2381,7 +2507,11 @@ sub diagnose {
             $collect = 0; # end of scanning
         }
         elsif ($collect && $record =~ /constraint/i) {
-# process index information
+# here process table other column definition information (not required yet)
+        } 
+        elsif ($collect && $record =~ /[avg_row_length|checksum|auto_increment]\s*\=/i) {
+# ignore table_options information
+            $collect = 0;
         }
         else {
             $record =~ s/^\s+(\S)/$1/; # clip leading blanks

@@ -38,6 +38,7 @@ sub init {
 # test if input table handle is of the READS table
 
     $READS = $tblhandle->spawn('READS','self');
+#    $READS->autoVivify(2); # build all connections
 
     $Compress = Compress->new(@_); # build decoding table
 
@@ -103,9 +104,9 @@ sub new {
 
     elsif (defined($readitem)) {
 # select read as number or as name
-print "get read $readitem \n";
+#print "get read $readitem \n";
         if ($readitem =~ /[0-9]+/  && !($readitem =~ /[a-z]/i)) {
-print "numbered read \n";
+#print "numbered read \n";
             $self->getNumberedRead($readitem);
         }
         else {
@@ -123,8 +124,11 @@ print "numbered read \n";
 sub spawnReads {
 # spawn a number of read objects for the given read-IDs
     my $self    = shift;
-    my $readids = shift; # reference to array of read_ids
+    my $readids = shift; # reference to array of read_ids or names
     my $items   = shift || 'hashrefs'; # (optional) selected readitems
+    my $keyword = shift || 'read_id';
+
+    return 0 if ($keyword ne 'read_id' && $keyword ne 'readname');
 
     my $status = $self->{status};
     $status->{errors} =  0;
@@ -145,14 +149,15 @@ sub spawnReads {
     if (ref($readids) ne 'ARRAY') {
         push @reads,$self->new($readids);
     }
-    elsif (my $hashrefs = $READS->associate($items,$readids,'read_id',{returnScalar => 0})) {
+    elsif (my $hashrefs = $READS->associate($items,$readids,$keyword,{returnScalar => 0,debug => 0})) {
         undef my %reads;
         foreach my $read (@$readids) {
+            $read =~ s/^\'|\'$//g if ($keyword eq 'readname'); # remove quoting
             $reads{$read}++;
         }
         foreach my $hash (@$hashrefs) {
             push @reads,$self->new($hash);
-            delete $reads{$hash->{read_id}}; # remove from list
+            delete $reads{$hash->{$keyword}}; # remove from list
         }
 # test number of read instances against input
         if (my $leftover = keys(%reads)) {
@@ -739,6 +744,34 @@ sub list {
     $report .= "</CENTER>" if ($html);
     
     return $report;
+}
+
+#############################################################################
+
+sub writeToCAF {
+# write this read in caf format to $FILE
+    my $self = shift;
+    my $FILE = shift;
+
+    my $hash   = $self->{readhash};
+    my $status = $self->{status};
+    my $links  = $self->{links};
+
+# first write the Sequence, then DNA, then BaseQuality
+
+    print $FILE "\n\n";
+    print $FILE "Sequence : $hash->{readname}\n";
+    print $FILE "Is_read\nPadded\nSCF_File $hash->{readname}SCF\n";
+    print $FILE "Template $hash->{template}\n";
+
+    print $FILE "ProcessStatus PASS\nAsped $hash->{date}\n";
+
+    print $FILE "\n";
+    print $FILE "DNA : $hash->{readname}\n";
+    print $FILE "$self->{sstring}\n";
+    print $FILE "\n";
+    print $FILE "BaseQuality : $hash->{readname}\n";
+    print $FILE "$self->{qstring}\n";
 }
 
 #############################################################################

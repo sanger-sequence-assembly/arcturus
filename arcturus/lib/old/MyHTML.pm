@@ -487,8 +487,9 @@ sub ingestCGI {
     foreach my $key (keys (%$in)) {
         my $accept = 1;
         $accept = 0 if ($key =~ /^(submit|confirm|action|USER)$/i); # always
-        $accept = 0 if ($type == 0 && $inexclude{$key}) ; # key in exclude list
+        $accept = 0 if ($type == 0 &&  $inexclude{$key}); # key in exclude list
         $accept = 0 if ($type == 1 && !$inexclude{$key}); # key not in include list
+        $in->{$key} =~ s/\0/ & /g; # replace any '\0' separator by ampersand in blanks 
         hidden($self,$key,$in->{$key}) if $accept;
 # print "CGI key $key  $in->{$key}  accept:$accept  type=$type<br>"; 
     }
@@ -613,8 +614,8 @@ sub choicelist {
 # add a SELECT choice list
     my $self = shift;
     my $name = shift; # name of form item
-    my $list = shift; # reference to array with names
-    my $size = shift; # optional width of field
+    my $list = shift; # reference to array with values/names
+    my $size = shift; # optional width of field                  # ?? non-std HTML ??
     my $line = shift; # continuation line
     my $mark = shift;
 
@@ -623,15 +624,23 @@ sub choicelist {
     my $width = ''; # default no width specification
     $width = "width=$size" if ($size && $size > 0);
 
-    my $preselect = '';
-    my $select = "SELECTED";
-    my $choice = "<SELECT $width name = \'$name\'>";
-    foreach my $listitem (@$list) {
-       $preselect = $select if (!$mark || $mark eq $listitem); 
-       $choice .= "<OPTION value = \'$listitem\' $preselect > $listitem";
-       $select = '' if $preselect;
+    my $choice;
+    if (ref($list) ne 'ARRAY' || @$list <= 1) {
+        $choice = 'No Value Provided';
+        $choice = $list if (ref($list) ne 'ARRAY' && defined($list));
+        $choice = $list->[0] if (ref($list) eq 'ARRAY' && @$list);
     }
-    $choice .= "</SELECT>";
+    else {
+        my $preselect = '';
+        my $select = "SELECTED";
+        $choice = "<SELECT $width name = \'$name\'>";
+        foreach my $listitem (@$list) {
+            $preselect = $select if (!$mark || $mark =~ /\b$listitem\b/); 
+            $choice .= "<OPTION value = \'$listitem\' $preselect > $listitem";
+            $select = '' if $preselect;
+        }
+        $choice .= "</SELECT>";
+    }
 
     add ($self,$choice,0,$line) if (!defined($line) || $line >=0) ;
 

@@ -2,11 +2,11 @@ package GateKeeper;
 
 use strict;
 
-use DBI;
-use CGI qw(:standard);
-use MyHTML;
-use ArcturusTable;
-use ConfigReader;
+use DBI;               # database interface
+use CGI qw(:standard); # import from standard CGI.pm 
+use MyHTML;            # my CGI input and HTML output formatter
+use ArcturusTable;     # ARCTURUS database table interface
+use ConfigReader;      # confuration data input
 
 my $debug = 0;
 
@@ -50,25 +50,33 @@ sub new {
     undef $self->{cgi};
     $self->{ARGV} = [];
     undef $self->{USER};
+    undef $self->{taccess};
 
     bless ($self, $class);
 
 # get options
 
-    my %options = (eraiseMySQL   => 0,  # open (MySQL) with RaiseError =0 
-                   dieOnNoTable  => 1,  # die if ORGANISMS table not found/ opened
-                   insistOnCgi   => 0,  # default alow command-line access
-                   diagnosticsOn => 0); # set to 1 for some progress information
+    my %options = (eraiseMySQL    => 0,  # open (MySQL) with RaiseError =0 
+                   dieOnNoTable   => 1,  # die if ORGANISMS table not found/ opened
+                   insistOnCgi    => 0,  # default alow command-line access
+                   bufferedOutput => 0,  # default use unbuffered output
+                   HostAndPort    => '', # (H:P) default use current server; define e.g. in non-CGI mode
+                   errorToNull    => 0,  # default redirect STDERR to STDOUT
+                   diagnosticsOn  => 0); # set to 1 for some progress information
 
     if ($eraise && ref($eraise) eq 'HASH') {
         &importOptions(\%options,$eraise);
         $debug =  "\n"  if ($options{diagnosticsOn} == 1);
         $debug = "<br>" if ($options{diagnosticsOn} == 2);
     }
-    else {
+    else { # accommodate deprecated older usage
         $options{eraiseMySQL} = $eraise if $eraise;
         $options{insistOnCGI} = $usecgi if $usecgi;
     }
+
+# buffering
+
+    &setUnbufferedOutput($self,$options{errorToNull}) if !$options{bufferedOutput};
 
 # check on command-line input
 
@@ -95,6 +103,25 @@ sub new {
     &dropDead($self,"Invalid database engine $engine") if ($engine && !$self->{handle});
 
     return $self;
+}
+
+#*******************************************************************************
+# unbuffered output
+#*******************************************************************************
+
+sub setUnbufferedOutput {
+# redirect errors to standard output and make unbuffered
+    my $self = shift; # &report($self,"Set Unbuffered");
+    my $null = shift; # if true, redirect STDERR to NULL
+
+    if ($null) {
+        open(STDERR,">&/dev/null");
+    }
+    else {
+        open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+    }
+    select(STDERR); $| = 1; # Make unbuffered.
+    select(STDOUT); $| = 1; # Make unbuffered.
 }
 
 #*******************************************************************************
@@ -216,6 +243,30 @@ sub origin {
 }
 
 #*******************************************************************************
+
+sub lookup {
+# find the value of a named item
+    my $self = shift;
+    my $name = shift;
+
+# scan the GateKeeper first, then if not found the Config data and then CGI input
+
+    my $value = $self->{$name};
+    return $value if defined($value);
+
+    if (my $cfh = $self->configHandle) {
+        $value = $cfh->get("$name");
+        return $value if defined($value);
+    }
+
+    if (my $cgi = $self->cgiHandle(1)) {
+        $value = $cgi->parameter("$name",shift); # note possible additional input
+    }
+        
+    return $value;
+}
+
+#*******************************************************************************
 # open the MySQL database on the current host
 #*******************************************************************************
 
@@ -306,8 +357,9 @@ sub opendb_MySQL {
     my $self = shift;
     my $hash = shift;
 
-    my %options = (RaiseError   => 0,  # default do NOT die on error
-                   dieOnNoTable => 1); # default die on ORGANISMS table error
+    my %options = (RaiseError   => 0,   # default do NOT die on error
+                   dieOnNoTable => 1,   # default die on ORGANISMS table error
+                   HostAndPort  => ''); # define e.g. in non-CGI mode
 
     &importOptions(\%options,$hash);
     my $eraise = $options{RaiseError} || 0;
@@ -336,6 +388,7 @@ print "config $self->{config}\n" if $debug;
 # test configuration data input status
         my $status    = $config->probe(1);
         &dropDead($self,"Missing or Invalid information on configuration file:\n$status") if $status;
+
 print "test combinations: @$port_maps\n" if $debug;
 
 # The next section may be somewhat paranoid, but I want to be absolutely
@@ -354,7 +407,9 @@ print "test combinations: @$port_maps\n" if $debug;
 
 # check if the current server host is among the allowed hosts
 
-        my @url; my $http_port = 0;
+        my @url;
+        my $http_port = 0;
+        undef my $mysqlport;
         if (defined($ENV{HTTP_HOST})) {
             my $HTTP_HOST = $ENV{HTTP_HOST};
             $HTTP_HOST =~ s/\:/.${base_url}:/ if ($base_url && $HTTP_HOST !~ /\.|$base_url/);
@@ -367,15 +422,25 @@ print "test combinations: @$port_maps\n" if $debug;
                 }
             }
         }
-# try local host or default if HTTP_POST not defined
+# HTTP_POST not defined, i.e. no CGI: test if the host/port combination option is defined
+        elsif ($options{HostAndPort}) {
+           ($self->{server}, $mysqlport) = split /\:/,$options{HostAndPort};
+print "NON CGI HostAndPort host:$self->{server}, port: $mysqlport\n" if $debug;
+            $self->{TCPort} = $mysqlport;
+            delete $ENV{MYSQL_TCP_PORT}; # override
+	    $url[0] = $self->{server};
+        }
+# try local host or default
         else {
             my $name = `echo \$HOST`;
-            chomp $name; # print "host $name\n";
+            chomp $name;
+print "host from echo HOST: $name\n" if $debug;
             foreach my $host (@$hosts) {
                 @url = split /\.|\:/,$host;
                 $self->{server} = $url[0] if ($name eq $url[0]);
             }
             $self->{server} = $config->get("default_host") if !$self->{server}; # default
+#print "server $self->{server}\n";
         }
 
 # TEMPORARY fix:this line is added because the pcs3 cluster is not visible as pcs3.sanger.ac.uk
@@ -383,7 +448,6 @@ print "test combinations: @$port_maps\n" if $debug;
 
 # check the MySQL port against the CGI port and/or the scriptname
 
-        my $mysqlport;
         if (defined($ENV{MYSQL_TCP_PORT})) {
 # get the port and script names
             $mysqlport = $ENV{MYSQL_TCP_PORT}; 
@@ -408,11 +472,10 @@ print "http_port $http_port   cgi $cgi\n" if $debug;
                 &dropDead($self,"Invalid port combination:\n$scriptname:$mysqlport:$http_port") if !$identify;
             }
             else {
-# $self->environment;  possibly test PWD here   
                 &dropDead($self,"Missing script identifier: can't verify production or development use");
             }
         }
-	else {
+	elsif (!$mysqlport) {
             &dropDead($self,"Undefined MySQL port number");
 	}
 
@@ -429,6 +492,8 @@ print "http_port $http_port   cgi $cgi\n" if $debug;
             &dropDead($self,"Driver syntax incorrect or Driver $driver is not installed") if ($i >= @drivers);
 # build the data source name
             my $dsn = "DBI:".$driver.":".$db_name.":".$url[0];
+            $dsn .= ":$mysqlport" if $mysqlport;
+print "DSN : $dsn  selserver $self->{server}\n" if $debug;
 # and open up the connection
             $eraise = 1 if !defined($eraise);
             $self->{handle} = DBI->connect($dsn, $username, $password, {RaiseError => $eraise}) 
@@ -462,14 +527,18 @@ sub importOptions {
 # private function 
     my $options = shift;
     my $hash    = shift;
+    my $list    = shift;
 
     my $status = 0;
     if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
         foreach my $option (keys %$hash) {
             $options->{$option} = $hash->{$option};
+print "option $option : $options->{$option} \n" if $list;
         }
         $status = 1;
     }
+
+print "\n" if $list;
 
     $status;
 }
@@ -537,7 +606,7 @@ sub dbHandle {
     my $database = shift; # name of arcturus database to be probed
     my $hash     = shift; 
 
-    print "GateKeeper enter dbHandle $debug" if $debug;
+print "GateKeeper enter dbHandle $debug" if $debug;
 
     my %options = (undefinedDatabase => 0, defaultRedirect => 1, returnTableHandle => 0);
     &importOptions(\%options, $hash);
@@ -601,7 +670,7 @@ sub dbHandle {
 # the requested database is somewhere else; redirect if in CGI mode
         if (!&cgiHandle($self,1) || !$options{defaultRedirect}) {
 # if defaultRedirect <= 1 always abort; else, i.e. in batch mode, switch to specified server
-            &report($self,"Database $database resides on $residence{$database}");
+&report($self,"Redirecting: database $database resides on $residence{$database}") if $debug;
 	    &dropDead($self,"Access to $database denied") if ($options{defaultRedirect} <= 1);
 # close the current connection and open new one on the proper server 
             &disconnect($self);
@@ -620,6 +689,7 @@ sub dbHandle {
             $self->disconnect();
             my $redirect = "http://$residence{$database}$ENV{REQUEST_URI}";
             $redirect .= $cgi->postToGet if $cgi->MethodPost;
+#my $packet = $self->{cgi}->redirect(-location=>$redirect); print $packet;
             print redirect(-location=>$redirect);
             exit 0;
         }
@@ -654,13 +724,16 @@ sub tableHandle {
 
 sub focus {
     my $self = shift;
-    my $fail = shift;
+    my $fail = shift; # either 1 for dieOnError or 0, or HASH with parameters
 
     my %options = (dieOnError => 0, useDatabase => $self->{database});
     $options{dieOnError} = $fail if (ref($fail) ne 'HASH');
     &importOptions(\%options, $fail); # if $fail's a hash
 
     if ((my $mother = $self->{mother}) && $options{useDatabase}) {
+#my $test = $mother->htmlTableColumn('dbasename');
+#print "test $test \n";
+#print "use $options{useDatabase}\n";
         $mother->query("use $options{useDatabase}");
     }
     elsif ($options{dieOnError}) {
@@ -697,6 +770,9 @@ sub authorize {
     my $code = shift;
     my $hash = shift;
 
+# $debug=1;
+print "GateKeeper: enter authorize $debug\n" if $debug;
+
 # process possible hash input 
 
     my %options = ( testSession  => 1, # default test session number, else test username, password
@@ -714,16 +790,15 @@ sub authorize {
                     returnPath   => 0, # default return to same script
                     identify     => 0, # username (for possible usage in non-CGI mode)
                     password     => 0, # password (for possible usage in non-CGI mode)
+                    tableAccess  => '', # require access to named table(s); default ALL
                     session      => 0, # session ID (for possible usage in non-CGI mode)
                     diagnosis    => 0  # default off
 		  );
-    &importOptions(\%options, $hash);
+    &importOptions(\%options, $hash, $debug);
 
 # start by defining session, password, identify
 
-    print "GateKeeper enter authorize $debug" if $debug;
-
-    undef my ($cgi, $session, $password, $identify);
+    undef my $cgi; undef my $session; undef my $password; undef my $identify;
 
     if ($cgi = $self->cgiHandle(1)) {
 # in CGI mode; any of these parameters may be absent from cgi input
@@ -754,9 +829,13 @@ sub authorize {
         }
     }
 
+print "GateKeeper authorize: $identify $password session $session \n" if $debug;
+
     my $mother = $self->{mother};
 
-    undef my ($priviledges,$seniority,$attributes);
+    undef my $priviledges; 
+    undef my $seniority; 
+    undef my $attributes;
 
     undef $self->{report};
     if ($session && $options{testSession}) {
@@ -773,7 +852,7 @@ sub authorize {
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hashref->{priviledges} || 0;
             $seniority   = $hashref->{seniority}   || 0;
-            $attributes  = $hashref->{attributes}  || 0;
+            $attributes  = $users->unpackAttributes($identify,'userid');
             my $seed = &compoundName($identify,'arcturus',8);
             if (!$cgi->VerifyEncrypt($seed,$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
@@ -835,6 +914,8 @@ sub authorize {
         undef $self->{report};
     }
 
+print "GateKeeper authorize 1 report $self->{report} \n" if $debug;
+
     if (!$session || !$options{testSession}) {
 # test if a user identification and password are provided
         my $users = $mother->spawn('USERS','self',0,1);
@@ -844,6 +925,7 @@ sub authorize {
                 &dropDead($self,"Missing username or password");
             }
             elsif (!$self->cgiHandle(1) && $options{noprompt}) {
+                $self->{error} = "Missing username or password";
                 return 0; # authorisation failed
             }
             elsif (!$self->cgiHandle(1)) {
@@ -891,9 +973,12 @@ sub authorize {
 	    }
         }
 
+print "GateKeeper authorize 2 report $self->{report} \n" if $debug;
+
 # a username and password are provided: verify identification and issue session number
 
         undef $self->{error};
+        $self->{seniority} = 0;
         if (!$self->instance || $users->{errors}) {
 # there is no (valid) user information: default to priviledged usernames and database password
             my $allowed = $self->{config}->get("devserver_access",'insist unique array');
@@ -912,8 +997,9 @@ sub authorize {
         elsif (my $hash = $users->associate('hashref',$identify,'userid')) {
             $priviledges = $hash->{priviledges} || 0;
             $seniority   = $hash->{seniority}   || 0;
+            $self->{seniority} = $seniority; # for use outside the GateKeeper
 # superuser 'oper' has a special status; accounts defined on start-up have to be initialize by 'oper'
-# print "identify '$identify'  hash '$hash->{password}'  passwd '$password' <br>";
+print "identify '$identify'  hash '$hash->{password}'  passwd '$password' \n" if $debug;
             if ($hash->{password} eq 'arcturus' && $identify eq 'oper') {
 # there are two possible passwords allowed: either 'arcturus' (unencrypted after startup) or the database password
 # print "passage 1 priv: $priviledges<br>";
@@ -933,11 +1019,13 @@ sub authorize {
             elsif (!$priviledges) {
                 $self->{error} = "User $identify has no priviledges set";
             }
-# print "passage 5  error $self->{error}<br>";
+print "passage 5  error $self->{error} \n" if $debug;
         }
         elsif (!($self->{error} = $users->{errors})) {
             $self->{error} = "Unknown user: $identify";
         }
+
+print "GateKeeper authorize Test Error\n" if $debug;
 
         &dropDead($self,$self->{error}) if ($self->{error} && ($options{dieOnError} || !$self->cgiHandle(1)));
         return 0 if $self->{error};
@@ -1019,7 +1107,7 @@ sub authorize {
         $mask = $code->{mask};
         if (my $user = $code->{user}) {
             my $users = $mother->spawn('USERS','self',0,1);
-            if ($user eq $identify && $code->{notOnSelf}) {
+            if ($user eq $identify && $code->{notOnSelf} && $seniority < 6) {
                 $self->{error} = "You can't <do this to> yourself"; # note the place holder
                 return 0;
             }
@@ -1035,10 +1123,29 @@ sub authorize {
         }
     }
 
-# does the user have access to this database?
+# does the user have (write) access to this database/table?
 
-    if ($attributes) {
-        
+    if (ref($attributes) eq 'HASH') {
+# if database mentioned, access is restricted to these
+        my $database = $self->{database} || 'arcturus';
+        if ($attributes->{databases} && $attributes->{databases} !~ /\b$database\b/) {
+            $self->{error} = "User $identify has no access priviledge for $database";
+            return 0;
+        }
+# if tables are mentioned, set-up the $self->{taccess} parameter for processing elsewhere
+        $self->{taccess} = $attributes->{tablename};
+# test for specific table access
+        if (my $tables = $options{allowTable}) {
+            my @tables; $tables[0] = $tables;
+            $tables = \@tables if (ref($tables) ne 'ARRAY');
+            foreach my $table (@$tables) {
+                if (!$self->allowTableAccesss($table)) {
+                    $self->{error} .= "User $identify has no access priviledge for ";
+                    $self->{error} .= "database table $table\n";
+	        }
+            }
+            return 0 if $self->{error};
+        }
     }
 
 # test if the required priviledge matches the 
@@ -1076,6 +1183,32 @@ sub allowServerAccess {
     }
 
     return 1; # authorization granted
+}
+
+
+#############################################################################
+
+sub allowTableAccess {
+# authorize access for a specific table
+    my $self  = shift;
+    my $table = shift;
+
+# current version rather crude: 
+# ALL for all tables in database except HISTORY and GENE2CONTIG
+# USERS and ORGANISMS or COMMON for all tables
+# if you want to protect a table, put a call to this method just before accessing it 
+
+
+    my $allowed = $self->{taccess} || 'ALL'; # defaults to be changed later 
+
+    my $access = 1;
+    $access = 0 if ($table =~ /GENE2CONTIG/i && $allowed !~ /\bGENE2CONTIG\b/);
+    $access = 0 if ($allowed !~ /ALL/i && $allowed !~ /\b$table\b/i); 
+    
+    my $user = $self->{USER} || 'unidentified';
+    $self->{error} .= "User '$user' has no access to table $table\n" if !$access;
+
+    return $access;  
 }
 
 #############################################################################
@@ -1467,6 +1600,7 @@ sub GUI {
 
     $table = "<table $tablelayout>";
     $table .= "<tr><th bgcolor='$purp' width=100%> QUERY </th></tr>";
+    my $session = $self->currentSession;
     if ($database && $database ne 'arcturus') {
         $title = "QUERY THE ".uc($database)." CONTENTS";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
@@ -1477,6 +1611,7 @@ sub GUI {
         $title = "COMMON DATABASE CONTENTS";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
         my $query = "/cgi-bin/query/overview?database=arcturus";
+        $query .= "\&session=$session" if ($session =~ /\boper|ejz\b/);
         $table .= "<tr><td $cell><a href=\"$query\" $alt $querywindow>arcturus</a></td></tr>";
         $title = "USER INFORMATION";
         $alt = "onMouseOver=\"window.status='$title'; return true\""; 
@@ -1709,6 +1844,7 @@ sub prepareFork {
     my $csroot = $self->currentScriptRoot;
     $ENV{SCRIPT_FILENAME} = "$csroot/$name"; # absolute
     $ENV{SCRIPT_NAME}    = "/cgi-bin/$name"; # relative to cgi-bin
+#    delete $ENV{GATEWAY_INTERFACE};
     delete $ENV{PATH_INFO};
 
     return $csroot;

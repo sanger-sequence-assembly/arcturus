@@ -4,13 +4,13 @@ package OracleReader;
 #
 # Read a standard Sanger format READ from the Oracle database
 # Hacked from the ADB_get_caf script by Robert Davies
-# $Id: OracleReader.pm,v 1.2 2002-11-25 15:17:29 ejz Exp $
+# $Id: OracleReader.pm,v 1.3 2003-01-24 15:38:17 ejz Exp $
 #
 #############################################################################
 
 use strict;
 
-use lib '/usr/local/badger/bin','/nfs/disk100/pubseq/PerlModules/Modules';
+#use lib '/usr/local/badger/bin','/nfs/disk100/pubseq/PerlModules/Modules';
 
 use Caftools;
 use AssemblyDB2;

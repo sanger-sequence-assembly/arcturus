@@ -7,6 +7,10 @@ package MyCGI;
 use strict;
 use vars qw($VERSION);
 
+#use MyCGI;
+#use vars qw($VERSION @ISA);
+#@ISA = qw(CGI);
+
 $VERSION = 1.0;
 
 ###############################################################################
@@ -289,7 +293,8 @@ sub PrintVariables {
         foreach my $key (sort keys (%$in)) {
             my $value = "&nbsp";
             $value = $in->{$key} if (defined($in->{$key}) && $in->{$key} =~ /\S/);
-            $value =~ s/\<|\>//g; # remove HTML tag boundaries to avoid confusion 
+            $value =~ s/\<|\>//g; # remove HTML tag boundaries to avoid confusion
+            $value =~ s/\0/ & /g; # allow multiple definitions 
             $output .= "<TR><TD>$key</TD><TD>$value</TD></TR>";
         }
         $output .= "</TABLE>";

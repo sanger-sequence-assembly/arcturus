@@ -7,11 +7,10 @@ use strict;
 my $DEBUG = 1;
 
 #############################################################################
-# data common to all objects of the DbaseTable class
+# common to all instances of the DbaseTable class
 #############################################################################
 
 my %instances;
-my @alternates = ('identifier','description','name','type');
 
 #############################################################################
 # new method creates an instance of DbaseTable   
@@ -19,12 +18,13 @@ my @alternates = ('identifier','description','name','type');
 
 sub new {
 # constructor
-    my $prototype = shift;
-    my $dbhandle  = shift; # the database handle
-    my $tablename = shift;
-    my $database  = shift; # the database of the table
-    my $build     = shift; # define 0 for descriptors only, 1 for hashrefs; undef for no build   
-    my $order     = shift; # if build defined as 1, order by column 'order'
+    my $prototype  = shift;
+    my $dbhandle   = shift; # the database handle
+    my $tablename  = shift;
+    my $database   = shift; # the database of the table
+    my $build      = shift; # define 0 for descriptors only, 1 for hashrefs; undef for no build   
+    my $order      = shift; # if build defined as 1, order by column 'order'
+    my $dieOnError = shift || 0; # die if build fails
 
     my $class = ref($prototype) || $prototype;
     my $self  = {};
@@ -62,7 +62,7 @@ sub new {
 # initialize the table only if build is defined (preset error status for build)
 
     $self->{errors} = "Initialisation pending for table $database.$tablename";
-    &build($self,$build,$order) if defined($build); # overrides errors 
+    &build($self,$build,$order,$dieOnError) if defined($build); # overrides errors 
 
     return $self;
 }
@@ -81,9 +81,11 @@ sub spawn {
     my $dbhandle = $self->{dbhandle};
     $database = $self->{database} if ($database =~ /\bself\b/);
 
-    my $handle = $self->findInstanceOf($database.'.'.$tablename) || '';
+    my $handle = $self->getInstanceOf($database.'.'.$tablename) || '';
+
+    $handle->build(1) if ($handle && !$forced && $build && !$handle->{hashrefs});
 # force creation of a new instance if build is specified but the existing instance has no build 
-    $handle = 0 if ($handle && $build && !$handle->{hashrefs});
+#    $handle = 0 if ($handle && $build && !$handle->{hashrefs});
 
     $handle = $self->new($dbhandle,$tablename,$database,$build,@_) if (!$handle || $forced);
 
@@ -99,6 +101,7 @@ sub build {
     my $self   = shift;
     my $switch = shift;
     my $order  = shift;
+    my $dieOE  = shift; # die if build fails
 
     my $count = 0;
     $self->{errors} = ''; # clear error flag
@@ -128,6 +131,7 @@ sub build {
         }
         if (!$exists) {
             $self->{errors} = "! Table $tablename does not exist";
+            die "$self->{errors}" if $dieOE;
             return 0;
         }
     }
@@ -158,8 +162,10 @@ sub build {
         }
         $self->{coltype} = \%columns;
         $self->{coldata} = \%coldata;
-    } else {
+    }
+    else {
         $self->{errors} = "! Could not access table $tablename";
+        die "$self->{errors}" if $dieOE;
         return 0;
     }
     $sth->finish();
@@ -170,7 +176,8 @@ sub build {
     $switch = 0 if (!defined($switch));
     if ($switch && $order) {
         $count = buildhash(0, $self, $order);
-    } elsif ($switch) {
+    }
+    elsif ($switch) {
 # determine the default column to use for order
         $order = $prime_col if (defined($prime_col));
         $order = $self->{prime_key} if (!$order && $self->{prime_key});
@@ -180,6 +187,7 @@ sub build {
 
 # finally, add the table to the 'instances' inventory of the DbaseTable class
 
+    $tablename = $self->makeFullTableName($tablename);
     $instances{$tablename} = $self;
 
 # count is either the nr of columns (if !switch) or number of rows (if switch)
@@ -306,28 +314,81 @@ sub getColumnInfo {
 
 #############################################################################
 
+sub getInstanceOf {
+# find the instance of the named table in the DbaseTable class %instances
+    my $self = shift;
+    my $name = shift;
+
+# if no input name given, return reference to the instances hash
+
+    return \%instances if !$name;
+
+# else, return the table instance keyed on its full name
+
+    $name = $self->makeFullTableName($name);
+    return $instances{$name};
+}
+
+#############################################################################
+
+sub makeFullTableName {
+# build the full tablename using server and database info
+    my $self = shift;
+    my $name = shift;
+
+# full tablename "DB-handlestring.database.tablename"
+
+    my $database = $self->{database};
+    my $dbhandle = $self->{dbhandle};
+    $dbhandle =~ s/.*\((\w+)\).*/$1/; # strip out clutter
+    my $prefix = $dbhandle.'.'.$database;
+
+# test format of input name and add appropriately 
+
+    my $fullTableName = $name;
+    if ($fullTableName !~ /\./) {
+# database nor server specified
+        $fullTableName = $prefix.'.'.$name;
+    }
+# test substitution of place holder '<self>'
+    elsif ($fullTableName !~ s/\<self\>/$prefix/i) {
+# database is specified in input name; add handlestring (assumed to be never specified in input name)
+        $fullTableName = $dbhandle.'.'.$name;
+    }
+
+#print "makeFullTableName: input: $name  handle: '$dbhandle' full name: $fullTableName<br>\n";
+
+    return $fullTableName;
+}
+
+#############################################################################
+# old, to be deprecated
 sub findInstanceOf {
 # find the instance of the named table in the DbaseTable class %instances
     my $self          = shift;
     my $fullTableName = shift;
 
-    if ($fullTableName) {
-        $fullTableName =~ s/\<self\>/$self->{database}/i;
-        return $instances{$fullTableName};
-    }
-    else {
-        return \%instances;
-    }  
+    return $self->getInstanceOf($fullTableName);
+
+#    if ($fullTableName) {
+#        $fullTableName =~ s/\<self\>/$self->{database}/i;
+#        return $instances{$fullTableName};
+#    }
+#    else {
+#        return \%instances;
+#    }  
 }
 
 #############################################################################
 
 sub listInstances {
 # produce a list of all current instances of DbaseTable
+    my $self = shift;
+    my $line = shift || '\n';
     
     undef my $list;
     foreach my $instance (sort keys (%instances)) {
-        $list .= "$instance  $instances{$instance} \n";  
+        $list .= "$instance  $instances{$instance} $line";  
     }
 
     $list;
@@ -352,12 +413,12 @@ sub traceTable {
             my $linktable  = $self->{sublinks}->{$column}->[0];
             my $linkcolumn = $self->{sublinks}->{$column}->[1];
         # get the linked table reference
-            my $tableref = $instances{$linktable};
+            my $tablehandle = $self->getInstanceOf($linktable);
             my $destination = $linktable.'.'.$linkcolumn;
             if (!defined($href->{$key}) || $href->{$key} ne $destination) {
                 $href->{$key} = $destination; # prevent looping
-# print "<br>TRACETABLE $self->{tablename} linktable=$linktable tableref=$tableref <br>";
-                $tableref->traceTable($href);
+# print "<br>TRACETABLE $self->{tablename} linktable=$linktable tableref=$tablehandle <br>\n";
+                $tablehandle->traceTable($href);
             }
         }
         else {
@@ -631,7 +692,7 @@ print "item:$item  wval:$wval  whereclause:$whereclause   not=$not<br>\n" if $op
                 }
             }
 
-            $self->{querytotalresult} = @result;
+            $self->{querytotalresult} = @result + 0;
 # compose the output value: either a value or array reference
             if (@result == 1 && $option{returnScalar}) {
                 $result = $result->[0];
@@ -1145,7 +1206,9 @@ sub newrow {
 
     if ($inputStatus) {
 
-        undef my ($cstring, $vstring, $wstring);
+        undef my $cstring;
+        undef my $vstring;
+        undef my $wstring;
 	for (my $i=0 ; $i < @cinserts ; $i++) {
 	    $cstring .= ',' if $cstring;
             $cstring .= $cinserts[$i];
@@ -1508,6 +1571,7 @@ sub query {
     my $hashrefs = \@hashrefs;
     undef $self->{qerror};
     $self->{lastQuery} .= $query;
+#print "query $query \n";
     my $sth = $dbh->prepare($query); 
     my $status = $sth->execute();
     $status = 0 if !defined($status);
@@ -1645,12 +1709,13 @@ print "$fullname (sub)whereclause = $and->{$fullname}<br>\n" if ($list>1);
 # and merge the where clauses
 #        my $newclause = $wheres[0]; # temporary (should be complete parser, also for select items)
         my $newclause = join ' AND ',@wheres;
+$list=0;
 print "OLD query: <h3>$query</h3><br>\n" if ($list);
         $clauses = quotemeta($clauses);
         $tracedQuery =~ s/$clauses/$newclause/ if $newclause;
         $tracedQuery =~ s/$tables/$newtables/  if $newtables;
 print "NEW query: <h3> $tracedQuery</h3><br><br>\n" if ($list);
-
+$list=0;
 
 # further development from here on
 
@@ -1734,10 +1799,10 @@ print "after column test: count=$count status=$status<br>\n" if $list;
         }
 # if no match was found OR no count in the target column, try alternate column names
         if (!$count) {
-print "No column or match found: status=$status.  Try alternates @{alternates}<br>\n" if ($list);
             my $alternates = $self->{alternate};
-#            foreach my $column (@$alternates) {
-            foreach my $column (@alternates) {
+print "No column or match found: status=$status.  Try alternates @$alternates<br>\n" if ($list);
+            foreach my $column (@$alternates) {
+#            foreach my $column (@alternates) {
 		my $coltype = $self->{coltype}->{$column};
                 if ($column ne $colname && $coltype && &isSameType($coltype,$cvalue)) {
 print "column $column tested<br>\n" if ($list);
@@ -1919,11 +1984,11 @@ sub setAlternates {
 
 # has to be developed ....
 
-    @alternates = @_ if @_;
+    my @alternates = @_ if @_;
 
     $self->{alternate} = \@alternates;
 
-print "setAlternates for $self->{tablename}: @alternates \n<br>"; 
+#print "setAlternates for $self->{tablename}: @alternates \n<br>"; 
 }
 
 #############################################################################

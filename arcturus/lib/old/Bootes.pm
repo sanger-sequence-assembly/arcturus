@@ -1,159 +1,130 @@
 package Bootes;
 
-# interface to Arcturus database
+# ASP interface to Arcturus database
 
 use strict;
 
-use GateKeeper;
+use Bootean;
+
+use vars qw($VERSION @ISA); #our ($VERSION, @ISA);
+
+@ISA = qw(Bootean);
+
 use ReadsReader;
-use ReadsRecall;
-use ContigBuilder;
-use ContigRecall;
 
 #############################################################################
-# class variables
+my $DEBUG = 1;
 #############################################################################
-
-my $GateKeeper;
-my $ReadsRecall;
-my $ReadsReader;
-my $ContigRecall;
-
-#############################################################################
-
 sub new {
-# constructor
-    my $prototype = shift;
-    my $dbasename = shift;
-    my $options   = shift; # hash image with options (open reading, writing, with authorization)
+# constructor invoking the constructor of Bootean class
+    my $caller   = shift;
+    my $database = shift;
+    my $options  = shift;
 
-    my $class = ref($prototype) || $prototype;
-    my $self  = {};
+# import options specified in $options hash
 
-    bless ($self, $class);
+    undef my %options;
+    $options = \%options if (!$options || ref($options) ne 'HASH');
+    $options->{writeAccess}   = 'READS' if $options->{writeAccess};
+    $options->{oracle_schema} = '' if !$options->{oracle_schema};
+    $options->{DNA}           = '' if !$options{DNA};
 
-# get options
+# determine the class and invoke the class variable
 
-    my %options = (writeAccess => 0, username => 0, password => 0, readsOnly => 0, DNA => '');
-    &importOptions (\%options,$options); # override with input options, if any
+    my $class  = ref($caller) || $caller;
+    my $self   = $class->SUPER::new($database,$options) || return 0;
 
-# initialize gate keeper and get ArcturusTable handle
+print "Bootes: $self \n" if $DEBUG;
 
-    $GateKeeper = new GateKeeper('mysql',$options) if !$GateKeeper;
+    $self->{READS} = $self->{mother}->spawn('READS',$database); 
 
-    $self->{mother} = $GateKeeper->dbHandle($dbasename,{returnTableHandle => 1, defaultRedirect => 2});
+    $self->{ReadsReader} = new ReadsReader($self->{READS}, $options->{DNA}, $options->{oracle_schema});
 
-# make $dbasename default
-
-    $GateKeeper->focus({dieOnError => 1}); 
-    $self->{database} = $dbasename;
-
-# open ReadsReader and ContigReader modules
-
-    $self->{READS} = $self->{mother}->spawn('READS',$dbasename); 
-    $ReadsRecall  = ReadsRecall->init($self->{READS});
-    $ContigRecall = ContigRecall->init($self->{READS}) if !$options{readsOnly};
-
-# prepare for write access
-
-    if ($options{writeAccess}) {
-# test authorisation ($options username and password, or session)
-        delete $options{writeAccess};
-        $options{makeSession}  = 2;
-        $options{dieOnError}   = 1;
-        $options{closeSession} = 0;
-        if ($GateKeeper->authorize(100,\%options)) {
-            $self->{session} = $GateKeeper->{SESSION};
-# open modules which write to database
-            $ReadsReader = new ReadsReader($self->{READS}, $options{DNA});
-#          $ContigBuilder
-        }
-        else {
-	    print "authorization FAILED: $GateKeeper->{report} \n";
-        }
-        print "session $self->{session} \n";
-    }
+print "ReadsReader module $self->{ReadsReader} \n" if $DEBUG;
 
     return $self;
-}
-
-#*******************************************************************************
-
-sub importOptions {
-# private function 
-    my $options = shift;
-    my $hash    = shift;
-
-    my $status = 0;
-    if (ref($options) eq 'HASH' && ref($hash) eq 'HASH') {
-        foreach my $option (keys %$hash) {
-            $options->{$option} = $hash->{$option};
-        }
-        $status = 1;
-    }
-
-    $status;
-}
-
-#############################################################################
-
-sub whereIs {
-# find the server and port of the database
-    my $self     = shift;
-    my $database = shift;
-
-    my $mother = $self->{mother};
-
-    if (my $residence = $mother->associate('residence',$database)) {
-        print "Database $database is on server $residence\n";
-    }
-    else {
-        print "Unkown database $database\n";
-    }
-}
-
-#############################################################################
-
-sub getRead {
-# return hash or array of hashes with read items
-    my $self = shift;
-    my $name = shift;
-
-    undef my $read;
-    if (ref($name) eq 'ARRAY') {
-        $read = $ReadsRecall->spawnReads($name, @_); # returns array of hashes 
-    }
-    else {
-        $read = $ReadsRecall->new($name); # returns (single) hash
-    }
-
-    return $read;
 }
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 method getRead
+=head1 new (constructor)
 
 =head2 Synopsis
 
-Retrieve read(s) from the current database as hash image(s)
+ASP interface to Arcturus database; this interface allows
+any query on the database, but restricts writing access to the
+READS table (and its dictionary tables)
 
-=head2 Parameters: 
+=head2 Parameters:
 
-=over 1
+=over 2
 
-=item name: the read name
+=item database
 
-Returns a single hash with read data
+The name of the Arcturus database to be used
 
-=item name: reference to array of readnames
+=item options
 
-Returns a reference to an array of hashes for the retrieved reads
+Options communicated as a hash with the option names as keys:
+
+=over 5
+
+=item HostAndPort:
+
+format "host:port"; if not specified a default host and port will be
+used, if any is available.
+
+=item writeAccess:
+
+Specify as true if write access is needed. Write access requires a 
+username and password to be specified as well.
+
+=item username (or, as alternative, 'identify')
+
+Your Arcturus username
+
+=item password
+
+Password for the given username
+
+=item oracle_scheme
+
+Possibly required when loading new reads to locate SCF files; in its 
+absence chemistry info will be labeled as undefined and a read will
+not be loaded
+
+=item DNA
+
+6 character encoding string for reads DNA sequence; default 'ATCG- '
+
+=back
 
 =back
 
 =cut
+#############################################################################
 
+sub probeRead {
+# return hash or array of hashes with read items
+    my $self = shift;
+    my $name = shift;
+
+    my $READS = $self->{READS} | return 0;
+
+    return $READS->associate('read_id',$name,'readname');
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 method probeRead
+
+=head2 Synopsis
+
+Retrieve read_id for named read
+
+=head2 Parameter: the read name
+
+=cut
 #############################################################################
 
 sub putRead {
@@ -162,48 +133,59 @@ sub putRead {
     my $hash = shift;
     my $opts = shift;
 
-    die "No write access granted\n" if !$ReadsReader;
+    my $ReadsReader = $self->{ReadsReader};
 
-    my %options = (sencode => 1, qencode => 3, readback => 1);
-    &importOptions(\%options, $opts);
+    $self->dropDead("No write access granted") if !$ReadsReader;
+
+    my %options = (sencode => 1, qencode => 3, readback => 1, dataSource => 1);
+    $self->importOptions(\%options, $opts);
 
     my $inserted = 0;
 
-    $ReadsReader->erase;
-    $ReadsReader->enter($hash);
+    if ($self->allowTableAccess('READS')) {
+
+
+        $ReadsReader->erase;
+        $ReadsReader->enter($hash, $options{dataSource});
 
 # test the contents
 
-    $ReadsReader->format;
-    $ReadsReader->ligation;
-    $ReadsReader->strands;
-    $ReadsReader->chemistry;
+        $ReadsReader->format;
+        $ReadsReader->ligation;
+        $ReadsReader->strands;
+        $ReadsReader->chemistry;
 
 # check possible error status ...
 
-    my ($summary, $errors) = $ReadsReader->status(2,0);
+        my ($summary, $errors) = $ReadsReader->status(2,0);
 
-    if ($errors) {
-        $errors = "Contents error(s) for putRead: $summary\n";
-    }
+print "summary $summary \nerrors $errors \n" if $DEBUG;
+
+        if ($errors) {
+            $errors = "Contents error(s) for putRead: $summary\n";
+        }
 
 # encode and dump the data
 
-    elsif ($errors = $ReadsReader->encode($options{sencode}, $options{qencode})) {
-        $errors = "Encode error status in putRead: $errors\n";
-    }
+        elsif ($errors = $ReadsReader->encode($options{sencode}, $options{qencode})) {
+            $errors = "Encode error status in putRead: $errors\n";
+        }
 
-    elsif (!($inserted = $ReadsReader->insert)) {
+        elsif (!($inserted = $ReadsReader->insert(1))) {
 # get error information
-       ($summary, $errors) =  $ReadsReader->status(2,0);
-        $errors = "Failed to insert read in putRead: $summary\n";
-    }
+           ($summary, $errors) =  $ReadsReader->status(2,0);
+            $errors = "Failed to insert read; $summary, $errors\n";
+        }
 
-    elsif ($options{readback} && ($errors = $ReadsReader->readback)) {
-        $errors = "Readback error status in putRead: $errors\n";
-    }
+        elsif ($options{readback} && ($errors = $ReadsReader->readback)) {
+            $errors = "Readback error status in putRead: $errors\n";
+        }
 
-    $ReadsReader->rollBack($errors); # undo any changes to dictionary tables if errors
+print "putRead errors: $errors \n" if $DEBUG;
+# note rollback in multi mode inserts is not applicable
+        $ReadsReader->rollBack($errors,'SESSIONS'); # undo any changes to dictionary tables if errors
+
+    }
 
     return $inserted; # e.g. number of read items inserted
 }
@@ -217,7 +199,7 @@ sub putRead {
 
 Enter a read into the current arcturus organism database
 
-use as:  ->putRead($hash, {sencode=>1, ...}
+use as:  ->putRead($hash, $optionshash)
 
 =head2 Parameters: 
 
@@ -229,13 +211,15 @@ hash table with read data keyed on standard Sanger items (e.g. RN, SQ, etc)
 
 =item options (optional)
 
-hash image with options presented as data key on the option name:
+hash image with options presented as data keyed on the option name:
 
-sencode : (default 1) Sequence compression code [0 - 2]
+sencode    : (default 1) Sequence compression code [0 - 2]
 
-qencode : (default 3) Quality data compression code [0 - 3]
+qencode    : (default 3) Quality data compression code [0 - 3]
 
-readback : (default 1) After writing to database table, verify by readback 
+readback   : (default 1) After writing to database table, verify by readback 
+
+dataSource : 0 = undefined; 1 = experiment file (default); 2 = Oracle;
 
 =back
 
@@ -244,13 +228,20 @@ readback : (default 1) After writing to database table, verify by readback
 =cut
 #############################################################################
 
-sub putInTrace {
+sub setTraceStatus {
 # confirm that the read is entered into the trace archive by setting 'tstatus'
-    my $self = shift;
-    my $name = shift; # read name, compulsory
+    my $self   = shift;
+    my $name   = shift; # read name, compulsory
+    my $status = shift || 'T'; 
 
-    my $READS = $self->{READS};
-    my $success = $READS->update('astatus','A','readname',$name);
+    my $success = 0;
+
+# will fail if status not one of 'N', 'I' or 'T'
+
+    if ($self->allowTableAccess('READS')) {
+
+        $success = $self->{READS}->update('tstatus',$status,'readname',$name);
+    }
 
     return $success;   
 }
@@ -258,11 +249,12 @@ sub putInTrace {
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 method putInTrace
+=head1 method setTraceStatus
 
 =head2 Synopsis
 
-Signal that a read has been entered into the trace archive
+Set tstatus flag in READS table to signal that a read has been entered into the 
+trace archive
 
 =head2 Parameters: 
 
@@ -272,7 +264,7 @@ Signal that a read has been entered into the trace archive
 
 =back
 
-=head2 Returns: reference to array of readnames
+=head2 Returns true if successful
 
 =cut
 #############################################################################
@@ -281,12 +273,12 @@ sub getNotInTrace {
 # return a list of reads which are labeled as not yet entered into the trace archive
     my $self = shift;
 
-    my $READS = $self->{READS};
+    my $READS = $self->{READS} || return 0;
 
     my %options = (orderBy => 'readname', returnScalar => 0);
     my $reads = $READS->associate('readname','N','tstatus',\%options);
 
-    return $reads;
+    return $reads; # always array reference
 }
 
 #--------------------------- documentation --------------------------
@@ -296,93 +288,14 @@ sub getNotInTrace {
 
 =head2 Synopsis
 
-Find reads in current database which are labeled as not yet entered into the trace archive 
+Find reads in current database which are labeled as not yet entered into the 
+trace archive 
 
 =head2 Parameters: none
 
 =head2 Returns: reference to array of readnames
 
 =cut
-#############################################################################
-
-sub getContig {
-    my $self = shift;
-    my $name = shift;
-
-    my $contig = $ContigRecall->new($name,@_);
-
-    return $contig; # handle to ? 
-}
-
-#--------------------------- documentation --------------------------
-=pod
-
-=head1 method getContig
-
-=head2 Synopsis
-
-Return a reference to a ContigRecall object 
-
-=head2 Parameters
-
-=over 4
-
-=item name
-
-name of contig OR contig id  (both if no value is given) OR name of 
-contig attribute (e.g. Tag) (and a value is defined)
-
-=item value
-
-value of attribute to identify a contig
-
-=cut
-#############################################################################
-
-sub testAccess {
-    my $self = shift;
-
-    my $session = $self->{session};
-    my $author = $GateKeeper->authorize(100,{session => $session});
-    print "authorization: $author \n";
-}
-
-#############################################################################
-
-sub ping {
-# test if the database is alive
-    my $self = shift;
-
-    my $alive = 1;
-
-    $alive = 0 if (!$self->{database} || !$GateKeeper->ping);
-
-    return $alive;
-}
-
-#############################################################################
-
-sub DESTROY {
-# force disconnect and close session, if not done previously
-    my $self = shift;
-
-    $self->disconnect if $self->{database};
-}
-
-#############################################################################
-
-sub disconnect {
-    my $self = shift;
-
-    my $session = $self->{session};
-
-    $GateKeeper->closeSession($session) if $session;
-
-    $GateKeeper->disconnect;
-
-    delete $self->{database};
-}
-
 #############################################################################
 #############################################################################
 
@@ -392,11 +305,13 @@ sub colophon {
         id      =>            "ejz",
         group   =>       "group 81",
         version =>             1.1 ,
-        date    =>    "07 Sep 2002",
-        updated =>    "11 Sep 2002",
+        date    =>    "17 Jan 2003",
+        updated =>    "20 Jan 2003",
     };
 }
 
 #############################################################################
 
 1;
+
+
