@@ -38,10 +38,11 @@ public class ContigManager {
 	query = "select seq_id,MAPPING.mapping_id,MAPPING.cstart,cfinish,direction,count(*)" +
 	    " from MAPPING left join SEGMENT using(mapping_id) " +
 	    " where contig_id = ?" +
+	    " group by MAPPING.mapping_id" +
 	    " order by MAPPING.cstart asc, cfinish asc";
 	pstmtMappingsByContigID = conn.prepareStatement(query);
 
-	query = "select cstart,pstart,length from MAPPING where mapping_id = ? order by cstart asc";
+	query = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by cstart asc";
 	pstmtSegmentsByMappingID = conn.prepareStatement(query);
 
 	hashByID = new HashMap();
@@ -150,10 +151,10 @@ public class ContigManager {
 
 	    while (seg_rs.next()) {
 		int seg_cstart = seg_rs.getInt(1);
-		int seg_pstart = seg_rs.getInt(2);
+		int seg_rstart = seg_rs.getInt(2);
 		int seg_length = seg_rs.getInt(3);
 
-		Segment segment= new Segment(seg_cstart, seg_pstart, seg_length);
+		Segment segment= new Segment(seg_cstart, seg_rstart, seg_length);
 
 		mapping.addSegment(segment);
 	    }
