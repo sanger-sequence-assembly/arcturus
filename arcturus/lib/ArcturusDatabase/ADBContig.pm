@@ -857,7 +857,7 @@ sub putMappingsForContig {
 
     my $contigid = $contig->getContigID();
 
-    print STDERR "--> putMappingsForContig($contigid)\n";
+    #print STDERR "--> putMappingsForContig($contigid)\n";
 
 # 1) the overall mapping
 
@@ -866,7 +866,7 @@ sub putMappingsForContig {
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
 
-	print STDERR $mapping->toString(),"\n";
+	#print STDERR $mapping->toString(),"\n";
 
         my $rc = $sth->execute($contigid,
                                $mapping->getSequenceID(),
@@ -877,7 +877,7 @@ sub putMappingsForContig {
         $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
     }
 
-    print STDERR "<--\n\n";
+    #print STDERR "<--\n\n";
 
 # 2) the individual segments (in block mode)
 
