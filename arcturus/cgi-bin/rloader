@@ -432,6 +432,13 @@ print "testing II project $gbfilter \n";
     $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
     if (my $number = $assembly->associate('assemblynmbr',$gbfilter,'assemblyname')) {
         $assemblynmbr = $number;
+        $assemblyname = $gbfilter;
+    }
+    elsif ($assemblyname = $assembly->associate('assemblyname',$gbfilter,'assemblynmbr')) {
+        $assemblynmbr = $gbfilter;
+    }
+    else {
+        $GateKeeper->dropDead("Command line invocation aborted: Unknown assembly $gbfilter");
     }
 
     if ($attributes = $assembly->unpackAttributes($assemblynmbr,'assembly')) {
@@ -1001,7 +1008,7 @@ $LOADPERRUN =~ s/\W/x/g;
 
     my $report = "END of SESSION: $tested reads processed, $loaded loaded, ";
     $report .= " $yfont$ignored ignored$efont" if (!$TEST);
-    print STDOUT "$report$brtag";
+    print STDOUT "$report$brtag$brtag";
     print LOG "$report\n" if $logON;
 
     if ($page) {
