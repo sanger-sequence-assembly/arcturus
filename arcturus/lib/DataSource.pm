@@ -134,13 +134,18 @@ sub getConnection {
 
     my $username = shift;
     my $password = shift;
+    my $options = shift;
 
     unless (defined($username) && defined($password)) {
 	$username = $this->{Username};
 	$password = $this->{Password};
     }
 
-    my $dbh = DBI->connect($url, $username, $password, {RaiseError => 0, PrintError => 0});
+    unless (defined($options) && ref($options) && ref($options) eq 'HASH') {
+	$options = {RaiseError => 0, PrintError => 0};
+    }
+
+    my $dbh = DBI->connect($url, $username, $password, $options);
 
     return $dbh;
 }
