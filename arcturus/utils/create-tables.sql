@@ -94,8 +94,8 @@ CREATE TABLE CLONES2PROJECT (
 CREATE TABLE CLONEVEC (
   read_id mediumint(8) unsigned NOT NULL,
   cvector_id tinyint(3) unsigned NOT NULL,
-  begin smallint unsigned NOT NULL,
-  end smallint unsigned NOT NULL,
+  cvleft smallint unsigned NOT NULL,
+  cvright smallint unsigned NOT NULL,
   KEY read_id (read_id)
 ) TYPE=MyISAM;
 
@@ -188,7 +188,6 @@ CREATE TABLE LIGATIONS (
   ligation_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(20) NOT NULL default '',
   clone_id smallint(5) unsigned NOT NULL,
-  origin char(1) default NULL,
   silow mediumint(8) unsigned default NULL,
   sihigh mediumint(8) unsigned default NULL,
   svector_id smallint(5) NOT NULL,
@@ -351,8 +350,8 @@ CREATE TABLE SEQUENCE (
 CREATE TABLE SEQVEC (
   read_id mediumint(8) unsigned NOT NULL,
   svector_id tinyint(3) unsigned NOT NULL,
-  begin smallint unsigned NOT NULL,
-  end smallint unsigned NOT NULL,
+  svleft smallint unsigned NOT NULL,
+  svright smallint unsigned NOT NULL,
   KEY read_id (read_id)
 ) TYPE=MyISAM;
 
@@ -374,7 +373,7 @@ CREATE TABLE SEQUENCEVECTORS (
 CREATE TABLE STATUS (
   status_id smallint(5) unsigned NOT NULL auto_increment,
   name varchar(64) default NULL,
-  PRIMARY KEY  (status_id)
+  PRIMARY KEY (status_id)
 ) TYPE=MyISAM;
 
 #
@@ -413,8 +412,18 @@ CREATE TABLE TEMPLATE (
   template_id mediumint(8) unsigned NOT NULL auto_increment,
   name char(24) binary default NULL,
   ligation_id smallint unsigned NOT NULL,
-  PRIMARY KEY  (template_id),
+  PRIMARY KEY (template_id),
   UNIQUE KEY name (name)
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'TRACEARCHIVE'
+#
+
+CREATE TABLE TRACEARCHIVE (
+  read_id MEDIUMINT UNSIGNED NOT NULL, 
+  traceref VARCHAR(255) NOT NULL,
+  PRIMARY KEY (read_id)
 ) TYPE=MyISAM;
 
 #
@@ -427,6 +436,10 @@ CREATE TABLE USERS2PROJECTS (
   date_from date default NULL,
   date_end date default NULL
 ) TYPE=MyISAM;
+
+
+
+
 
 
 

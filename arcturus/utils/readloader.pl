@@ -20,10 +20,7 @@ my $instance;
 my $organism;
 my $assembly;
 
-my $verbose = 0;
-
 my $source; # name of factory type
-# my $limit;
 
 my $exclude = 0;
 
@@ -61,14 +58,13 @@ while (my $nextword = shift @ARGV) {
 # Do not check Read objects for the presence of an Asped date. This allows
 # us to load external reads, which lack this information.
 
-    $skipaspedcheck = 1 if ($nextword eq '-skipaspedcheck');
+    $skipaspedcheck   = 1 if ($nextword eq '-skipaspedcheck');
 
 # logging
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
     $logLevel         = 0            if ($nextword eq '-verbose');
-    $verbose          = 1            if ($nextword eq '-verbose');
  
     $logLevel         = 2            if ($nextword eq '-info'); 
 
@@ -89,7 +85,6 @@ while (my $nextword = shift @ARGV) {
     $PARS{limit}        = shift @ARGV  if ($nextword eq '-limit');
 
     $PARS{schema}       = shift @ARGV  if ($nextword eq '-schema');
-
     $PARS{projid}       = shift @ARGV  if ($nextword eq '-projid');
 
     $PARS{readnamelike} = shift @ARGV  if ($nextword eq '-filter');
@@ -260,13 +255,14 @@ while (my $readname = $factory->getNextReadName()) {
 
     my $Read = $factory->getNextRead();
 
-    print STDERR "Storing $readname\n" if $verbose;
+    $logger->info("Storing $readname");
 
     my ($success,$errmsg) = $adb->putRead($Read, $loadoptions);
 
-    print STDERR "Unable to put read $readname: $errmsg\n"
-	unless $success;
+    $logger->severe("Unable to put read $readname: $errmsg") unless $success;
 }
+
+exit;
 
 #------------------------------------------------------------------------
 # test routine to signal excess or incomplete input
