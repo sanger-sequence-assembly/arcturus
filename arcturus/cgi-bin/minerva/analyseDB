@@ -5,10 +5,18 @@ use CGI;
 
 $cgi = new CGI;
 
-print $cgi->header(-type => 'text/plain');
+print $cgi->header();
+
+print $cgi->start_html(-title => 'Database Analyser',
+		       -bgcolor => '#FFFFFF');
+
+print $cgi->h1('Database Analyser');
+
+$scriptname = $cgi->script_name;
 
 $debug = $cgi->param('debug');
 $database = $cgi->param('database');
+$table = $cgi->param('table');
 
 $dbhost = $cgi->param('dbhost') || $cgi->server_name();
 $dbport = $cgi->param('dbport') || $ENV{'MYSQL_TCP_PORT'};
@@ -22,66 +30,22 @@ if (defined($database)) {
 
 $dsn = 'DBI:mysql:' . $database . ';host=' . $dbhost . ';port=' . $dbport;
 
+print STDERR "# DSN=$dsn\n" if $debug;
+
 $dbh = DBI->connect($dsn, 'arcturus', '***REMOVED***');
 
 &db_die('Unable to connect to ' . $dsn) unless $dbh;
 
-print "# DSN $dsn\n" if $debug;
+print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
-if ($alldatabases) {
-    $query = 'SHOW DATABASES';
-
-    $sth = $dbh->prepare($query);
-    &db_die("prepare($query) failed");
-
-    $sth->execute();
-    &db_die("execute($query) failed");
-
-    @databases = ();
-
-    while (@ary = $sth->fetchrow_array()) {
-	($database, $junk) = @ary;
-	push @databases, $database;
-	print "# DATABASE $database\n" if $debug;
-    }
-
-    $sth->finish();
-    &db_die("finish($query) failed");
-}
-
-foreach $database (sort @databases) {
+if(defined($database) && defined($table)) {
     $query = "USE $database";
     $dbh->do($query);
     if ($DBI::err) {
-	print "*** UNABLE TO USE $database: $DBI::errstr ***\n";
-	next;
+	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
+	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print "DATABASE: $database\n\n";
-    }
-
-    $query = 'SHOW TABLES';
-
-    print "# QUERY $query\n" if $debug;
-
-    $sth = $dbh->prepare($query);
-    &db_die("prepare($query) failed");
-
-    $sth->execute();
-    &db_die("execute($query) failed");
-
-    @alltables = ();
-
-    while (@ary = $sth->fetchrow_array()) {
-	($tablename, $junk) = @ary;
-	push @alltables, $tablename;
-	print "# TABLE $tablename\n" if $debug;
-    }
-
-    $sth->finish();
-    &db_die("finish($query) failed");
-
-    foreach $tablename (@alltables) {
-	$query = 'SELECT COUNT(*) FROM ' . $tablename;
+	$query = "SHOW TABLE STATUS LIKE '$table'";
 
 	$sth = $dbh->prepare($query);
 	&db_die("prepare($query) failed");
@@ -89,25 +53,109 @@ foreach $database (sort @databases) {
 	$sth->execute();
 	&db_die("execute($query) failed");
 
+	@values = $sth->fetchrow_array();
+
+	@colnames = @{$sth->{NAME}};
+
+	while ($colname = shift @colnames) {
+	    $colvalue = shift @values;
+
+	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
+
+	    print "<TR", ($colname eq 'Name' ? ' BGCOLOR="#FFCC00"' : ''), ">";
+	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
+	    print "<TD>$colvalue</TD></TR>\n";
+	}
+
+	$sth->finish();
+    }
+} else {
+    if ($alldatabases) {
+	$query = 'SHOW DATABASES';
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	@databases = ();
+
 	while (@ary = $sth->fetchrow_array()) {
-	    ($rowcount, $junk) = @ary;
-	    printf "%-30s  %10d\n", $tablename, $rowcount;
+	    ($database, $junk) = @ary;
+	    push @databases, $database;
+	    print STDERR "# DATABASE $database\n" if $debug;
 	}
 
 	$sth->finish();
 	&db_die("finish($query) failed");
     }
 
-    print "\n++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n";
+    foreach $database (sort @databases) {
+	$query = "USE $database";
+	$dbh->do($query);
+	if ($DBI::err) {
+	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
+	    print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
+	    next;
+	} else {
+	    print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FFCC00\" ALIGN=\"LEFT\">$database</TD>\n</TR>\n";
+	}
+
+	$query = 'SHOW TABLES';
+
+	print STDERR "# QUERY $query\n" if $debug;
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	@alltables = ();
+
+	while (@ary = $sth->fetchrow_array()) {
+	    ($tablename, $junk) = @ary;
+	    push @alltables, $tablename;
+	    print STDERR "# TABLE $tablename\n" if $debug;
+	}
+
+	$sth->finish();
+	&db_die("finish($query) failed");
+
+	foreach $tablename (@alltables) {
+	    $query = 'SELECT COUNT(*) FROM ' . $tablename;
+
+	    $sth = $dbh->prepare($query);
+	    &db_die("prepare($query) failed");
+
+	    $sth->execute();
+	    &db_die("execute($query) failed");
+
+	    while (@ary = $sth->fetchrow_array()) {
+		($rowcount, $junk) = @ary;
+		$scriptlink = "$scriptname?dbport=$dbport&dbhost=$dbhost&database=$database&table=$tablename";
+		printf "<TR>\n<TD>";
+		print "<A HREF=\"$scriptlink\">$tablename</A></TD><TD>$rowcount</TD>\n</TR>\n";
+	    }
+	    
+	    $sth->finish();
+	    &db_die("finish($query) failed");
+	}
+    }
 }
 
+print "</TABLE>\n";
+
 $dbh->disconnect();
+
+print $cgi->end_html;
 
 exit(0);
 
 sub db_die {
     my $msg = shift;
     return unless $DBI::err;
-    print "MySQL error: $msg: $DBI::err ($DBI::errstr)\n\n";
+    print STDERR "MySQL error: $msg: $DBI::err ($DBI::errstr)\n\n";
     exit(0);
 }
