@@ -31,9 +31,10 @@ etc powmap/etc
 lib powmap/lib
 META-INF powmap/META-INF
 corba powmap/corba
+lib powmap/lib
 
 flatserve flatimpl &diana &corba &etc &uk &collections
-agct agctimpl &uk &diana &etc &collections
+agct agctimpl &diana &corba &etc &uk &lib &collections
 flatserve_control flatserve_control_impl &lib &corba &diana &etc &uk &collections
 artemis_applet artemis_applet_impl &diana &etc &uk &collections &META-INF
 
