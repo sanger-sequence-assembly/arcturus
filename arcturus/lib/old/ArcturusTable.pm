@@ -317,11 +317,12 @@ sub historyUpdate {
 # get current node
 
     my $fullTableName = $self->makeFullTableName('<self>');
+    return 0 if !$fullTableName; # protection
     my @thisNameSections = split '\.',$fullTableName;
 
     my $instances = $self->getInstanceOf(0);
 # print "historyUpdate: instances=$instances\n";
-    return 0 if (!$instances);
+    return 0 if !$instances; # protection
 
 print "${brtag}Time stamping modified tables${brtag}" if $list;
 #print "full table name = $fullTableName \n\n";
@@ -335,7 +336,7 @@ print "${brtag}Time stamping modified tables${brtag}" if $list;
         next if ($node ne $thisNameSections[0]);
         my $tablereference = $instances->{$instance};
 #print "instance $instance ref: $tablereference$brtag\n";
-        next if ($tablereference !~ /ArcturusTable/);
+        next if (!$tablereference || $tablereference !~ /ArcturusTable/);
         $organisms = $tablereference if ($tname =~ /ORGANISMS/);
         if ($tablereference->historyLogger($user, $text, $list)) {
             $databases{$dbase}++;
