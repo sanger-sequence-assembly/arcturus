@@ -109,36 +109,40 @@ sub create_organism {
         push @tables, 'HISTORY';
     }
 
-    if (!$target || $target eq 'READS') {    
+    my $NEWREADS = 0;
+    if (!$NEWREADS) {
+# old structure for READS table: 
+      if (!$target || $target eq 'READS') {    
         push @tables, 'READS';
         &create_READS ($dbh, $list);
         &record ($historyTable,$userid,'READS');
+      }
     }
-
 # new structure for READS table: 
-
-    if (!$target || $target eq 'NEWREADS') {    
+    else {
+      if (!$target || $target eq 'NEWREADS') {    
         push @tables, 'NEWREADS';
         &create_NEWREADS ($dbh, $list);
-        &record ($historyTable,$userid,'NEWREADS');
-    }
+        &record ($historyTable,$userid,'READS');
+      }
 
-    if (!$target || $target eq 'DNA') {    
+      if (!$target || $target eq 'DNA') {    
         push @tables, 'DNA';
         &create_DNA ($dbh, $list);
         &record ($historyTable,$userid,'DNA');
-    }
+      }
 
-    if (!$target || $target eq 'TEMPLATE') {    
+      if (!$target || $target eq 'TEMPLATE') {    
         push @tables, 'TEMPLATE';
         &create_TEMPLATE ($dbh, $list);
         &record ($historyTable,$userid,'TEMPLATE');
-    }
+      }
 
-    if (!$target || $target eq 'COMMENT') {    
+      if (!$target || $target eq 'COMMENT') {    
         push @tables, 'COMMENT';
         &create_COMMENT ($dbh, $list);
         &record ($historyTable,$userid,'COMMENT');
+      }
     }
 
 # end new structure
@@ -251,10 +255,10 @@ sub create_organism {
         &record ($historyTable,$userid,'CONTIGS2SCAFFOLD');
     }
 
-    if (!$target || $target eq 'SCAFFOLD2PROJECT') {    
-        push @tables, 'SCAFFOLD2PROJECT';
-        &create_SCAFFOLD2PROJECT ($dbh, $list);
-        &record ($historyTable,$userid,'SCAFFOLD2PROJECT');
+    if (!$target || $target eq 'CONTIGS2PROJECT') {    
+        push @tables, 'CONTIGS2PROJECT';
+        &create_CONTIGS2PROJECT ($dbh, $list);
+        &record ($historyTable,$userid,'CONTIGS2PROJECT');
     }
 
     if (!$target || $target eq 'CHEMISTRY') {    
@@ -707,9 +711,9 @@ any (i.p. comment found in flat files)
 sub create_NEWREADS {
     my ($dbh, $list) = @_;
 
-    &dropTable ($dbh,"NEWREADS", $list);
-    print STDOUT "Creating table NEWREADS ..." if ($list);
-    $dbh->do(qq[CREATE TABLE NEWREADS(
+    &dropTable ($dbh,"READS", $list);
+    print STDOUT "Creating table READS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE READS(
              read_id          MEDIUMINT UNSIGNED   NOT NULL AUTO_INCREMENT PRIMARY KEY, 
              readname         CHAR(32) BINARY      NOT NULL, 
 	     date             DATE                 NOT NULL,
@@ -1128,14 +1132,18 @@ sub create_READS2CONTIG {
 #              A = 0 for a read aligned with the contig,
 #                = 1 for a read aligned against the contigs direction
 #              e.g: cyclops searches label >= 10; others label < 20
+
 # clone      : reference to CLONES table (duplicates info in READS, but 
 #              is included for fast access by Cyclops in mapping context
 # assembly   : assembly number reference to ASSEMBLY.assembly; duplicates
-#              info in CONTIGS2SCAFFOLD but required for delete actions
-# generation : incremented after each completed assembly
+#              info in CONTIGS2PROJECT, PROJECT2ASSEMBLY but required for 
+#              delete actions
+
+# generation : incremented after each completed assembly with:
+#              "update READS2CONTIG set generation=generation+1 where assembly=N"
 # deprecated : on for mappings final (X) or no longer current (Y)
 #              or marked for deletion (M) 
-# blocked    : re: full-proof upgrade generation counters
+# //blocked    : re: full-proof upgrade generation counters//
 #    $list = 1;
     &dropTable ($dbh,"READS2CONTIG", $list);
     print STDOUT "Creating table READS2CONTIG ..." if ($list);
@@ -1150,10 +1158,11 @@ sub create_READS2CONTIG {
              clone            SMALLINT UNSIGNED        NOT NULL,
              assembly         SMALLINT UNSIGNED        NOT NULL,
              generation       SMALLINT UNSIGNED        NOT NULL,
-             deprecated       ENUM('N','M','Y','X') DEFAULT 'X',
-             blocked          ENUM('0','1')         DEFAULT '0'
-	 )]);
+             deprecated       ENUM('N','M','Y','X')  DEFAULT 'X'
+	 ) type = INNODB]);
     print STDOUT "... DONE!\n" if ($list);
+#             blocked          ENUM('0','1')         DEFAULT '0' to be left out with INNODB tables
+# NOTE item clone and assembly to be taken out
 
 # Make (separate) indexes on read_id and contig_id
 
@@ -1516,12 +1525,14 @@ sub create_CONSENSUS {
     &dropTable ($dbh,"CONSENSUS", $list);
     print STDOUT "Creating table CONSENSUS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONSENSUS(
-             contig_id       MEDIUMINT UNSIGNED        NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             sequence        BLOB                      NOT NULL,
-             reverse_id      MEDIUMINT UNSIGNED        DEFAULT 0
-         )]);
+             contig_id       MEDIUMINT UNSIGNED        NOT NULL PRIMARY KEY,
+             sequence        LONGBLOB                  NOT NULL,
+             quality         LONGBLOB                  NOT NULL,
+             length          INT                       DEFAULT 0
+         ) type = MyISAM ]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#?             reverse_id      MEDIUMINT UNSIGNED        DEFAULT 0
 #--------------------------- documentation --------------------------
 =pod
 
@@ -1557,9 +1568,11 @@ number of contig in CONTIGS table
 
 =item sequence
 
-consensus sequence, Z-compressed
+consensus sequence (Z-compressed)
 
-=item reverse_id (??)
+=item quality
+
+consensus quality (Z-compressed)
 
 =back
 
@@ -1567,7 +1580,7 @@ consensus sequence, Z-compressed
 
 =over 4
 
-=item CONTIGS on keys contig_id & reverse_id
+=item CONTIGS on keys contig_id
 
 =back
 
@@ -1581,8 +1594,8 @@ sub create_CONTIGS2CONTIG {
 
 # contig to contig mapping implicitly contains the history
 
-# generation : of the newly added contig / generation of first occurance gofo
-#       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade
+# generation : of the newly added contig / generation of first occurance gofo REPLACE by genofo
+#       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade No, not so
 # newcontig  : contig id
 # nranges    : starting point in new contig
 # nrangef    : implicit in the above
@@ -1593,7 +1606,7 @@ sub create_CONTIGS2CONTIG {
     &dropTable ($dbh,"CONTIGS2CONTIG", $list);
     print STDOUT "Creating table CONTIGS2CONTIG ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONTIGS2CONTIG(
-             generation       SMALLINT  UNSIGNED DEFAULT 0,
+             genofo           SMALLINT  UNSIGNED DEFAULT 0,
              newcontig        MEDIUMINT UNSIGNED  NOT NULL,
              nranges          INT                DEFAULT 0,
              nrangef          INT                DEFAULT 0,
@@ -1629,7 +1642,7 @@ populated by assembly-loading scripts
 
 =over 8
 
-=item gofo
+=item genofo
 
 assembly generation of first occurrence, incremented after each new assembly
 
@@ -1672,21 +1685,20 @@ end position of the mapping on the old contig
 
 #*********************************************************************************************************
 
-sub create_SCAFFOLD2PROJECT {
+sub create_CONTIGS2PROJECT {
     my ($dbh, $list) = @_;
 
 # assign scaffolds (groups of one or more contigs) to projects and assemblies
 
-# scaffold  : (unique) scaffold number
+# contig_id
 # project   : reference to PROJECT.project number
-# history info? see READS2CONTIG structure
-# generation
-# deprecated
+# check flag for blocking
 
-    &dropTable ($dbh,"SCAFFOLD2PROJECT", $list);
-    print STDOUT "Creating table SCAFFOLD2PROJECT ..." if ($list);
-    $dbh->do(qq[CREATE TABLE SCAFFOLD2PROJECT(
-             scaffold         SMALLINT           UNSIGNED NOT NULL PRIMARY KEY,
+    &dropTable ($dbh,"CONTIGS2PROJECT", $list);
+    print STDOUT "Creating table CONTIGS2PROJECT ..." if ($list);
+    $dbh->do(qq[CREATE TABLE CONTIGS2PROJECT(
+             contig_id        MEDIUMINT          UNSIGNED NOT NULL PRIMARY KEY,
+             checked          ENUM ('in','out')  DEFAULT 'in',
              project          SMALLINT           UNSIGNED NOT NULL
          )]);
     print STDOUT "... DONE!\n" if ($list);
@@ -1804,7 +1816,7 @@ sub create_ASSEMBLY {
              progress         ENUM ('in shotgun','in finishing','finished','other') DEFAULT 'other', 
              updated          DATETIME                  NULL,
              userid           CHAR(8)                   NULL,
-             status           ENUM ('loading','complete','error','unknown') DEFAULT 'unknown', 
+             status           ENUM ('loading','complete','error','virgin','unknown') DEFAULT 'virgin', 
              created          DATETIME              NOT NULL,
 	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
              attributes       BLOB                      NULL,
@@ -2652,15 +2664,19 @@ sub create_READMODEL {
 #--------------------------- documentation --------------------------
 =pod
 
-=head1 Table ..
+=head1 Table READMODEL
 
 =head2 Synopsis
 
 =head2 Scripts & Modules
 
-=head2 Description of columns:
+=over 4
 
-=head2 Linked Tables on key ..
+=item ReadsReader.pm
+
+=back
+
+=head2 Description of columns:
 
 =cut
 
@@ -2711,17 +2727,13 @@ sub create_DATAMODEL {
                  'ASSEMBLY          assembly          CLONEMAP    assembly',
                  'CLONES               clone      READS2CONTIG       clone',
                  'CLONEMAP          assembly          ASSEMBLY    assembly',
-#                 'CONTIGS          contig_id    CONTIGS2CONTIG   oldcontig',
                  'CONTIGS2CONTIG   oldcontig           CONTIGS   contig_id',
                  'CONTIGS2CONTIG   newcontig           CONTIGS   contig_id',
-                 'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
-#                 'CONTIGS2SCAFFOLD contig_id    CONTIGS2CONTIG   oldcontig',
+#                 'CONTIGS2CONTIG   oldcontig  CONTIGS2SCAFFOLD   contig_id',
                  'CONTIGS2SCAFFOLD contig_id           CONTIGS   contig_id',
-                 'CONTIGS2SCAFFOLD  assembly          ASSEMBLY    assembly',
+                 'CONTIGS2PROJECT  contig_id           CONTIGS   contig_id',
+                 'CONTIGS          contig_id   CONTIGS2PROJECT   contig_id',
                  'CONTIGS          contig_id  CONTIGS2SCAFFOLD   contig_id',
-                 'CONTIGS2SCAFFOLD  scaffold  SCAFFOLD2PROJECT    scaffold',
-                 'SCAFFOLD2PROJECT  scaffold  CONTIGS2SCAFFOLD    scaffold',
-                 'SCAFFOLD2PROJECT   project          PROJECTS     project',
                  'LIGATIONS          svector   SEQUENCEVECTORS     svector',
                  'CHEMISTRY         chemtype         CHEMTYPES    chemtype/description',
                  'SEQUENCEVECTORS     vector           VECTORS      vector',
@@ -2730,11 +2742,10 @@ sub create_DATAMODEL {
                  'CLONES2PROJECT     project          PROJECTS     project',
                  'PROJECTS           project    CLONES2PROJECT     project',
                  'PROJECTS           project    USERS2PROJECTS     project',
-                 'PROJECTS           project  SCAFFOLD2PROJECT     project',
                  'PROJECTS          assembly          ASSEMBLY    assembly',
                  'PROJECTS            userid             USERS      userid',
                  'PROJECTS           creator             USERS      userid',
-#                 'ASSEMBLY          organism         ORGANISMS    organism',
+                 'ASSEMBLY          organism         ORGANISMS    organism',
                  'ASSEMBLY            userid             USERS      userid',
                  'ASSEMBLY           creator             USERS      userid',
                  'ASSEMBLY          assembly    READS2CONTIG      assembly',
@@ -2782,6 +2793,30 @@ dynamically generate SQL query joins over several tables
 =back
 
 =head2 Description of columns:
+
+=over 8
+
+=item tablename
+
+the parent table
+
+=item tcolumn
+
+column of table I<tablename> acting as target key
+
+=item linktable
+
+table linked to table I<tablename> on foreign key I<lcolumn>                                                                                                             
+=item lcolumn
+
+the foreign key
+
+more than one column can be specified as: lcolumn1/lcolumn2/lcolumn3;
+in that case, the first column must be the foreign key proper, while the
+other entries act as alternate column names for possible use in a join
+(re: DbaseTable traceQuery method)
+
+=back
 
 =cut
 
@@ -2836,7 +2871,6 @@ sub create_INVENTORY {
                  'CHEMTYPES         c  r  2  1',
                  'READS             o  p  0  0',
 
-#                 'NEWREADS          o  p  0  0',
 #                 'DNA               o  p  0  0',
 #                 'COMMENT           o  d  1  0',
 #                 'TEMPLATE          o  d  1  0',
@@ -2859,7 +2893,7 @@ sub create_INVENTORY {
                  'CONTIGS2SCAFFOLD  o  l  3  0',
                  'CONTIGS2CONTIG    o  m  0  0',
                  'CONSENSUS         o  d  1  1',
-                 'SCAFFOLD2PROJECT  o  l  3  0',
+                 'CONTIGS2PROJECT   o  l  3  0',
                  'CHEMISTRY         o  d  1  1',
                  'STRANDS           o  d  1  1',
                  'PRIMERTYPES       o  d  1  1',
@@ -3655,6 +3689,7 @@ sub diagnose {
     undef my $previous;
     my $testname = $tablename;
     $testname = 'DBHISTORY' if ($testname =~ /history\w+/i);
+    my $tabletype = "MyISAM"; # default if not specified
     while (defined ($record = <SOURCE>)) {
 
         if (!$collect && $record !~ /\bdo\b/  || $record !~ /\S/) {
@@ -3675,11 +3710,27 @@ sub diagnose {
         elsif ($collect && $record =~ /constraint/i) {
 # here process table other column definition information (not required yet)
         } 
-        elsif ($collect && $record =~ /[avg_row_length|checksum|auto_increment]\s*\=/i) {
-# ignore table_options information
+        elsif ($collect && $record =~ /\W(avg_row_length|checksum|auto_increment|type)\s*\=/i) {
+# table options, for the moment only table type is being processed
+            if ($record =~ /\Wtype\s*\=\s*(bdb|heap|innodb|isam|merge|myisam)/i) {
+                $tabletype = $1; # the required table type
+#print "table type test triggered by $record <br>";
+                my $info = $table->getTableType(); # the current table type
+                if ($info && uc($info) ne uc($tabletype)) {
+#print "NEW tabletype read from source: $tabletype<br>\n";
+                    if ($info !~ /heap|merge/i && $tabletype !~ /heap|merge/i) {
+                        $alterTable = "ALTER table $tablename type=$tabletype" if !$alterTable;
+                    }
+                    else {
+                        print "Conversion of $testname from $info to $tabletype is ignored <br>";
+                    }
+                }
+            }
+# ignore other_options information for the moment
             $collect = 0;
         }
         else {
+# analyse column definitions
             $record =~ s/^\s+(\S)/$1/; # clip leading blanks
             $record =~ s/\s*\,?\s*$//; # chop trailing blanks/comma
             $record =~ s/\"/\'/g; # replace " by ' throughout
@@ -3707,7 +3758,7 @@ sub diagnose {
                 $fields{$column} =~ s/\bchar/varchar/ if ($info =~ /\bvarchar\b/);
                 $fields{$column} =~ s/\bNOT\sNULL/default 0/i if ($info =~ /default\s0/i);
                 $info =~ s/default/NOT NULL default/i if ($fields{$column} =~ /\bNOT\sNULL\b/);
-# keep the first encountered mismatch
+# keep the first encountered mismatch of a column definition
                 if ($info ne $fields{$column}) {
 #print "info: $info <br>fields: $fields{$column}<br>";
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
@@ -3726,17 +3777,38 @@ sub diagnose {
 
 
 # if all columns have been tested and passed for conformity, test for deleted columns 
+# NOTE: this section will probably not handle multiple column changes correctly
 
     if (!$alterTable || $alterTable =~ /\badd\scolumn/) {
 # compare $table->{columns} with keys %columns
-        my $count = $table->count;
         foreach my $column (@{$table->{columns}}) {
-#print "testing column $column <br>" if ($table->{tablename} =~ /HIST/);
-#print "fields: $fields{$column} count $count <br>" if ($table->{tablename} =~ /HIST/);
 # there is a deleted column; if there is a missing column as well, perhaps it was renamed?
 # if the table is empty, simply do the add and drop in two passes, else apply rename 
-            if (!$fields{$column} && $alterTable && $count) {
+# if (!$fields{$column} && $alterTable && $table->count) {
+            if (!$fields{$column} && $alterTable) {
+print "there is an added column $alterTable and a column $column to be dropped <br>";
 # to be completed (tricky)
+# get the definition for the column to be dropped
+                my $info = $table->getColumnInfo($column,1);
+                $info =~ s/$column\s+//; # remove column name; left is specification
+                $info =~ s/\s+//g; # remove all blanks
+print "$info <br>";
+# split the add column instruction into the add column ... specification 
+                my $changeTable = $alterTable;
+                $changeTable =~ s/first|after\s+\w+//; # remove position info 
+                if ($changeTable =~ /(add\s+column\s+(\w+))\s+(\w.*)/) {
+                    my $namepart = $1;
+                    my $newname  = $2;
+                    my $colspecs = $3;
+                    $colspecs =~ s/first|after\s+\w+//; # remove position info
+                    $colspecs =~ s/\s+//g; # remove all blanks
+print "specs: '$colspecs'  '$info' <br>";
+                    if (uc($colspecs) eq uc($info)) {
+# specs are identical, hence the add / drop can be replaced by a change construct
+                        $changeTable =~ s/$namepart/change column $column $newname/;
+                        $alterTable = $changeTable; 
+                    }
+                }
             }
             elsif (!$fields{$column} && !$alterTable) {
                 $alterTable = "ALTER table $tablename drop column $column";
@@ -3790,3 +3862,6 @@ Ed Zuiderwijk, E<lt>ejz@sanger.ac.ukE<gt>.
 #--------------------------------------------------------------------
 
 1;
+
+
+
