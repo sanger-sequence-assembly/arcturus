@@ -112,7 +112,7 @@ public class TestContigManager {
 			}
 
 			Contig contig = fullContig ?
-			    adb.getFullContigByID(id) :
+			    adb.getFullContigByID(id, true, fullSequence) :
 			    adb.getContigByID(id);
 
 			if (verbose) {
@@ -212,6 +212,9 @@ public class TestContigManager {
 		boolean forward = mapping.isForward();
 
 		ps.println("#" + imap + ": seqid=" + sequence.getID() + ", readid=" + read.getID() + ", readname=" + read.getName());
+		byte[] dna = sequence.getDNA();
+		if (dna != null)
+		    ps.println("  Length: " + dna.length);
 		ps.println("  Extent: " + mapping.getContigStart() + " to " + mapping.getContigFinish());
 		ps.println("  Sense:  " + (forward ? "Forward" : "Reverse"));
 
