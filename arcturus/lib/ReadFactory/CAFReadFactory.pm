@@ -298,7 +298,7 @@ sub CAFFileParser {
 # transfer quality data as an array of integers
             $readhash->{AV} =~ s/^\s+|\s+$//; # remove leading/trailing blanks
             my @quality = split /\s+/, $readhash->{AV};
-            $Read->setQuality([@quality]);
+            $Read->setBaseQuality([@quality]);
 # add the readname and Read object to the buffer of the super class
             if ($this->addReadToList($object,$Read)) {
                 $count++;

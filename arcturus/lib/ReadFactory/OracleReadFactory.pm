@@ -235,7 +235,7 @@ sub getNextRead {
     $dna =~ s/\-/N/g;
 
     $read->setSequence($dna);
-    $read->setQuality([unpack("c*", $quality)]);
+    $read->setBaseQuality([unpack("c*", $quality)]);
 
     $this->{sth}->{seqvecs}->execute($seqid);
 

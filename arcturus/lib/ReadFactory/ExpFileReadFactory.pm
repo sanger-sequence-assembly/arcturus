@@ -343,7 +343,7 @@ sub expFileParser {
 # quality data, split into an array and pass its reference
         $item{AV} =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
         my @quality = split /\s+/,$item{AV};
-        $read->setQuality([@quality]);
+        $read->setBaseQuality([@quality]);
     }
 
     if (defined($item{SV}) || defined($item{SL}) || defined($item{SR})) {

@@ -410,20 +410,6 @@ sub updateMetaDataForProject {
     return $success;
 }
 
-sub getProjectInventoryToString {
-    my $this = shift;
-
-    my $output = $this->getProjectInventory(@_);
-
-    my $string = " nr Project      Contigs   Reads  ".
-                 "Total lgt  Average     Mean   Maximum \n";
-    foreach my $line (@$output) {
-        $string .= sprintf ("%3d %-12s %7d %7d  %9d %8d %8d %9d\n",@$line);
-    }
-
-    return $string;
-}
-
 sub getProjectInventory {
     my $this = shift;
     my ($key,$value) = @_;
@@ -433,7 +419,7 @@ sub getProjectInventory {
     if ($key eq 'generation') {
         if ($value eq 'parent') {
             $contigs = $this->getCurrentParentIDs();
-        } 
+        }
         elsif ($value eq 'current') {
             $contigs = $this->getCurrentContigIDs();
         }
@@ -447,6 +433,9 @@ sub getProjectInventory {
     else {
         $contigs = $this->getCurrentContigIDS();
     }
+
+    my @output;
+    return [@output] unless @$contigs; # empty query
 
     my $dbh = $this->getConnection();
 
@@ -471,7 +460,6 @@ sub getProjectInventory {
 
     $sth->execute() || &queryFailed($query);
 
-    my @output;
     while (my @ary = $sth->fetchrow_array()) {
         push @output,[@ary];
     }
@@ -487,4 +475,5 @@ sub addCommentForProject {
 #------------------------------------------------------------------------------
 
 1;
+
 

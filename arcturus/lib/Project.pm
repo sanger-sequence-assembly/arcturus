@@ -247,10 +247,10 @@ sub toString {
     $string .= "Allocated reads    ".$this->getNumberOfReads()."\n";
     $string .= "Assembly           ".$this->getAssemblyID()."\n";
     $string .= "Last update        ".$this->getUpdated().
-                           "  by   ".$this->getUserName()."\n";
+                           "  by   ".($this->getUserName() || '')."\n";
     $string .= "Created on         ".$this->getUpdated().
                            "  by   ".$this->getCreator()."\n";
-    $string .= "Comment            ".$this->getComment()."\n";
+    $string .= "Comment            ".($this->getComment() || '')."\n";
 
     return $string;
 }
