@@ -8,6 +8,7 @@ package Compress;
 
 use strict;
 use FileHandle;
+use Compress::Zlib;
 
 my $status;
 
@@ -107,6 +108,8 @@ sub sequenceEncoder {
  
     return $self->huffmanEncoder($string)  if ($method == 2);
 
+    return $self->zlibEncoder($string) if ($method == 99);
+
     die "Invalid encoding method $method";    
 }
 
@@ -124,6 +127,8 @@ sub sequenceDecoder {
     return $self->tripletDecoder($string,@_)  if ($method == 1);
  
     return $self->huffmanDecoder($string)     if ($method == 2);
+
+    return $self->zlibDecoder($string)        if ($method == 99);
 
     die "Invalid encoding method $method";    
 }
@@ -192,6 +197,25 @@ sub tripletDecoder {
  
     $count,$output;
 }
+
+############################################################################
+
+sub zlibEncoder {
+# encode input DNA (or RNA) base sequence string using Zlib compression
+    my $self  = shift;
+    my $input = shift;
+
+    return compress($input);
+}
+
+sub zlibDecoder {
+# decode input DNA (or RNA) base sequence string using Zlib compression
+    my $self  = shift;
+    my $input = shift;
+
+    return uncompress($input);
+}
+
 
 #############################################################################
 # encoding/decoding Quality data
