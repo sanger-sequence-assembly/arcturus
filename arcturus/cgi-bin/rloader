@@ -978,7 +978,7 @@ sub getNewReadFiles {
 
     $MAXREAD = 1000 if (!defined($MAXREAD));
  
-$DEBUG = 2 if ($directory =~ /LEISH32/);
+$DEBUG = 0 if ($directory =~ /LEISH32/);
 my $nrr = keys %$dbfiles;
 print "directory $directory $brtag dbfiles $nrr $brtag" if $DEBUG;
 print "exclude: @{$excluders}${brtag}filter : $flnfilter$brtag gbfilter : $glbfilter$brtag" if ($DEBUG);
