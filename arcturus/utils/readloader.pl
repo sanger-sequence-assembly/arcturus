@@ -22,7 +22,8 @@ my $assembly;
 
 my $source; # name of factory type
 
-my $exclude = 0;
+my $noexclude = 0; # re: suppresses chack against already loaded reads
+my $noloading = 0; # re: test mode without read loading
 
 my $skipaspedcheck = 0;
 
@@ -33,7 +34,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
    $validKeys .= "limit|filter|source|exclude|info|help|asped|";
    $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
    $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
-   $validKeys .= "minreadid|maxreadid|skipaspedcheck";
+   $validKeys .= "minreadid|maxreadid|skipaspedcheck|noload";
 
 my %PARS;
 
@@ -53,7 +54,9 @@ while (my $nextword = shift @ARGV) {
 
 # exclude defines if reads already loaded are to be ignored (default = Y) 
 
-    $exclude          = 1            if ($nextword eq '-exclude');
+    $noexclude        = 1            if ($nextword eq '-noexclude');
+
+    $noloading        = 1            if ($nextword eq '-noload');
 
 # Do not check Read objects for the presence of an Asped date. This allows
 # us to load external reads, which lack this information.
@@ -80,10 +83,6 @@ while (my $nextword = shift @ARGV) {
     $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
     $PARS{aspedbefore}  = shift @ARGV  if ($nextword eq '-aspedbefore');
 
-    $PARS{subdirFilter} = shift @ARGV  if ($nextword eq '-subdir');
-
-    $PARS{limit}        = shift @ARGV  if ($nextword eq '-limit');
-
     $PARS{schema}       = shift @ARGV  if ($nextword eq '-schema');
     $PARS{projid}       = shift @ARGV  if ($nextword eq '-projid');
 
@@ -94,7 +93,7 @@ while (my $nextword = shift @ARGV) {
     $PARS{maxreadid}    = shift @ARGV  if ($nextword eq '-maxreadid');
 
     $PARS{root}         = shift @ARGV  if ($nextword eq '-rootdir');
-    $PARS{sub}          = shift @ARGV  if ($nextword eq '-subdir');
+    $PARS{subdir}       = shift @ARGV  if ($nextword eq '-subdir');
     $PARS{limit}        = shift @ARGV  if ($nextword eq '-limit');    
 
     &showUsage(0) if ($nextword eq '-help');
@@ -142,6 +141,8 @@ $logger->info("Database $URL opened succesfully");
 # Populate the dictionaries and statement handles for loading reads
 #----------------------------------------------------------------
 
+$logger->info("building dictionaries");
+
 $adb->populateLoadingDictionaries();
 
 #----------------------------------------------------------------
@@ -158,17 +159,21 @@ if (!$assembly) {
 # to be completed: get info for a name from the assembly
 # return an Assembly object from the database, which must have a default
 # project name
-# what if an assembly is defined?
+# what if an assembly is defined? what if not?
 }
 
 #----------------------------------------------------------------
 # ignore already loaded reads? then get them from the database
 #----------------------------------------------------------------
 
-$PARS{exclude} = $adb->getListOfReadNames if $exclude;
+if (!$noexclude) {
 
-if (my $list = $PARS{exclude}) {
-    my $nr = scalar(@$list);
+    $logger->info("Collecting existing readnames");
+
+    $PARS{exclude} = $adb->getListOfReadNames; # array reference
+
+    my $nr = scalar(@{$PARS{exclude}});
+
     $logger->info("$nr readnames found in database $organism");
 }
 
@@ -224,17 +229,28 @@ elsif ($source eq 'Oracle') {
 elsif ($source eq 'Expfiles') {
 # takes the root directory and optionally a subdir filter
     if (!$PARS{root}) {
+        $logger->info("Finding repository root directory");
         my $PR = new PathogenRepository();
         $PARS{root} = $PR->getAssemblyDirectory($organism);
-        $PARS{root} =~ s?/assembly?? if $PARS{root};
-        $logger->info("Repository root-dir: $PARS{root}") if $PARS{root};
+        if ($PARS{root}) {
+            $PARS{root} =~ s?/assembly??;
+            $logger->info("Repository found at: $PARS{root}");
+        }
+        else {
+            $logger->severe("Failed to determine root directory .. ");
+        }
     }
-    &showUsage(3,"Can't find the repository for $organism") unless $PARS{root};
+    &showUsage(3,"No repository defined for $organism") unless $PARS{root};
+# add logger to input PARS
+    $PARS{log} = $logger;
 
-    my @valid = ('readnamelike','root','sub','include','exclude');
+    my @valid = ('readnamelike','root','subdir','limit','include','exclude','log');
     &showUsage(3) if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new ExpFileReadFactory(%PARS);
+
+    my $rejects = $factory->getRejectedFiles();
+    print "REJECTED files: @$rejects\n\n" if $rejects;
 }
 
 &showUsage(0,"Unable to build a ReadFactory instance") unless $factory;
@@ -251,16 +267,29 @@ my $loadoptions = {};
 $loadoptions->{skipaspedcheck} = 1 if $skipaspedcheck;
 
 while (my $readname = $factory->getNextReadName()) {
+
     next if $adb->hasRead($readname);
 
-    my $Read = $factory->getNextRead();
+    my $read = $factory->getNextRead();
 
-    $logger->info("Storing $readname");
+    next if !defined($read); # do error listing inside factory
 
-    my ($success,$errmsg) = $adb->putRead($Read, $loadoptions);
+    $logger->info("Storing $readname (".$read->getReadName.")");
+
+    $read->dump() if $noloading;
+
+    next if $noloading;
+
+    my ($success,$errmsg) = $adb->putRead($read, $loadoptions);
 
     $logger->severe("Unable to put read $readname: $errmsg") unless $success;
+
+    $adb->putTraceArchiveIdentifierForRead($read) if $success;
 }
+
+$adb->disconnect();
+
+$logger->close();
 
 exit;
 
@@ -340,6 +369,7 @@ sub showUsage {
     print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-readnamelike\t  idem\n";
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
+    print STDERR "-noload\t(no value) do not load the read(s) found (test mode)\n";    
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
