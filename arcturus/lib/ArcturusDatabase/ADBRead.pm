@@ -11,6 +11,8 @@ use Read;
 our (@ISA);
 @ISA = qw(ArcturusDatabase);
 
+# use ArcturusDatabase qw(queryFailed);
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------

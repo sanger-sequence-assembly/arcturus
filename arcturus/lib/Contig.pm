@@ -126,7 +126,6 @@ sub getNumberOfParentContigs {
     my $this = shift;
 # if number of contigs not defined get it from the Parent Contigs array
     if (!defined($this->{data}->{numberofparentcontigs})) {
-#?
         my $npc = $this->hasParentContigs();
         $this->{data}->{numberofparentcontigs} = $npc;
     }
@@ -299,7 +298,7 @@ sub hasMappings {
 
 # contig tags
 
-sub getTag {
+sub getTags {
 # return a reference to the array of Tag instances (can be empty)
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
@@ -319,12 +318,12 @@ sub addTag {
 sub hasTags {
 # returns true if this Contig has tags
     my $this = shift;
-    return $this->getTag() ? 1 : 0;
+    return $this->getTags() ? 1 : 0;
 }
 
 # contig-to-parent mappings
 
-sub getContigToContigMapping {
+sub getContigToContigMappings {
 # add (contig) Mapping object (or an array) to the internal buffer
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
@@ -342,12 +341,12 @@ sub addContigToContigMapping {
 
 sub hasContigToContigMappings {
 # returns true if this Contig has contig-to-contig mappings
-    return &getContigToContigMapping(shift) ? 1 : 0;
+    return &getContigToContigMappings(shift) ? 1 : 0;
 }
 
 # parent contig instances
 
-sub getParentContig {
+sub getParentContigs {
 # returns array of parent Contig instances
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
@@ -367,7 +366,7 @@ sub addParentContig {
 sub hasParentContigs {
 # returns number of previous contigs
     my $this = shift;
-    my $parents = $this->getParentContig();
+    my $parents = $this->getParentContigs();
     return $parents ? scalar(@$parents) : 0;
 }
 
@@ -491,7 +490,7 @@ sub getStatistics {
             }
         }
         else {
-            print STDERR "Contig $name has no mappings\n";
+            print STDERR "$name has no read-to-contig mappings\n";
             return 0;
         }
     }
@@ -768,11 +767,7 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
-#print STDERR "Dumping DNA\n";
-
     $this->writeDNA($FILE,"DNA : "); # specifying the CAF marker
-
-#print STDERR "Dumping BaseQuality\n";
 
     $this->writeBaseQuality($FILE,"BaseQuality : ");
 
@@ -853,12 +848,41 @@ sub writeBaseQuality {
 sub metaDataToString {
 # list the contig meta data
     my $this = shift;
+    my $full = shift;
 
-    my $string = "Statistics for contig ".$this->getContigName."\n";
-    $string .= "Consensuslength ".$this->getConsensusLength."\n";
-    $string .= "Average cover ".$this->getAverageCover."\n";   
-    $string .=  "End reads : left ".$this->getReadOnLeft.
-                          " right ".$this->getReadOnRight."\n";
+    $this->getMappings(1) if $full; # load the read-to-contig maps
+
+    if (!$this->getReadOnLeft() && $this->hasMappings()) {
+        $this->getStatistics(1);
+    }
+
+    my $name   = $this->getContigName()            || "undefined";
+    my $length = $this->getConsensusLength()       ||   "unknown";
+    my $cover  = $this->getAverageCover()          ||   "unknown";
+    my $rleft  = $this->getReadOnLeft()            ||   "unknown";
+    my $right  = $this->getReadOnRight()           ||   "unknown";
+    my $nreads = $this->getNumberOfReads()         || "undefined";
+    my $nwread = $this->getNumberOfNewReads()      ||           0;
+    my $pcntgs = $this->getNumberOfParentContigs() ||           0;
+
+# if the contig has parents, get their names by testing/loading the mappings
+
+    my $parentlist = '';
+    if ($pcntgs && (my $mappings = $this->getContigToContigMappings(1))) {
+        my @parents;
+        foreach my $mapping (@$mappings) {
+            push @parents, $mapping->getMappingName();
+        }
+        $parentlist = "(".join(',',sort @parents).")" if @parents;
+    }
+
+    my $string = "Contig name     = $name\n" .
+                 "Number of reads = $nreads  (new reads = $nwread)\n" .
+                 "Parent contigs  = $pcntgs $parentlist\n" .
+                 "Consensuslength = $length\n" .
+                 "Average cover   = $cover\n" .   
+                 "End reads       : left $rleft  right $right\n";
+
     return $string;
 }
 

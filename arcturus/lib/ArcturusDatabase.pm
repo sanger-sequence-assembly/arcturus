@@ -5,6 +5,12 @@ use strict;
 use DBI;
 use DataSource;
 
+use Exporter ();
+
+our @ISA = qw(Exporter);
+
+our @EXPORT = qw(queryFailed); # export to remote sub-classes
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -80,18 +86,14 @@ sub dataBaseError {
     return $DBI::err;
 }
 
-sub queryfailed {
-# stop gap for sub classes
-    my $this = shift;
-    &queryFailed(shift);
-}
-
 sub queryFailed {
     my $query = shift;
 
     $query =~ s/\s+/ /g; # remove redundent white space
 
     &dataBaseError("FAILED query: $query");
+
+    return 0;
 }
 
 sub errorStatus {
