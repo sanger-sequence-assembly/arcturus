@@ -104,8 +104,10 @@ my $contigtoscaffold = {};
 my @scaffoldlist;
 my %contigref;
 my %scaffoldtoid;
+my %scaffoldfromid;
 my $scaffoldid = 0;
 my %scaffoldlength;
+my %scaffoldcontigs;
 
 my $alldone = scalar(@contiglist);
 my $done = 0;
@@ -151,6 +153,7 @@ foreach my $contigid (@contiglist) {
     $scaffoldid++;
 
     $scaffoldtoid{$scaffold} = $scaffoldid;
+    $scaffoldfromid{$scaffoldid} = $scaffold;
 
     ###
     ### Extend scaffold to the right
@@ -230,6 +233,7 @@ foreach my $contigid (@contiglist) {
     }
 
     $scaffoldlength{$scaffold} = $totlen + $totgap;
+    $scaffoldcontigs{$scaffold} = $totctg;
 
     ###
     ### Display the scaffold
@@ -243,6 +247,8 @@ foreach my $contigid (@contiglist) {
 
     print "\n";
 }
+
+my $maxscaffoldid = $scaffoldid;
 
 if ($progress) {
     print STDERR $bs;
@@ -259,12 +265,17 @@ my $sth_mappings = $statements->{'mappings'};
 
 $sth_templates->execute($puclimit);
 
+my $baclinks = {};
+
 while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetchrow_array()) {
     my $found = 0;
 
     my $baclen = $usesilow ? $silow : $sihigh;
 
     $sth_bacreads->execute($template_id);
+
+    my @forwardlist = ();
+    my @reverselist = ();
 
     while (my ($read_id, $readname, $strand, $seq_id) = $sth_bacreads->fetchrow_array()) {
 	$sth_mappings->execute($seq_id);
@@ -309,9 +320,18 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 		    $overhang = $baclen - $ctgoffset;
 		}
 
-		$sense .= " OVERHANG $overhang" if ($overhang > 0);
+		my $ovh= ($overhang > 0) ? " OVERHANG $overhang" : "";
 
-		print "            IN SCAFFOLD $scaffoldid ($scaflen bp) AT $ctgoffset $sense\n\n";
+		print "            IN SCAFFOLD $scaffoldid ($scaflen bp) AT $ctgoffset $sense$ovh\n\n";
+
+		if ($overhang > 0) {
+		    my $entry = [$scaffoldid, $sense, $contig_id, $projid];
+		    if ($strand eq 'Forward') {
+			push @forwardlist, $entry;
+		    } else {
+			push @reverselist, $entry;
+		    }
+		}
 	    } else {
 		print "\n";
 	    }
@@ -323,6 +343,152 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
     $sth_bacreads->finish();
 
     print "\n\n" if $found;
+
+    if (scalar(@forwardlist) > 0 && scalar(@reverselist) > 0) {
+	foreach my $fwditem (@forwardlist) {
+	    my ($fwdscaffoldid, $fwdsense, $fwdcontigid, $fwdprojid) = @{$fwditem};
+
+	    $fwdsense = ($fwdsense eq 'Forward') ? 'R' : 'L';
+
+	    foreach my $revitem (@reverselist) {
+		my ($revscaffoldid, $revsense, $revcontigid, $revprojid) = @{$revitem};
+		next if ($fwdscaffoldid == $revscaffoldid);
+
+		$revsense = ($revsense eq 'Forward') ? 'R' : 'L';
+
+		my ($keya, $keyb, $entry);
+
+		if ($fwdscaffoldid < $revscaffoldid) {
+		    $keya = "$fwdscaffoldid.$fwdsense";
+		    $keyb = "$revscaffoldid.$revsense";
+		    $entry = [$fwditem, $revitem, $template_id];
+		} else {
+		    $keya = "$revscaffoldid.$revsense";
+		    $keyb = "$fwdscaffoldid.$fwdsense";
+		    $entry = [$revitem, $fwditem, $template_id];
+		}
+
+		$baclinks->{$keya} = {} unless defined($baclinks->{$keya});
+
+		$baclinks->{$keya}->{$keyb} = [] unless defined($baclinks->{$keya}->{$keyb});
+
+		$baclinks->{$keyb} = {} unless defined($baclinks->{$keyb});
+
+		$baclinks->{$keyb}->{$keya} = [] unless defined($baclinks->{$keyb}->{$keya});
+
+		push @{$baclinks->{$keya}->{$keyb}}, $entry;
+		push @{$baclinks->{$keyb}->{$keya}}, $entry;
+	    }
+	}
+    }
+}
+
+print "\n\n----------------------------------------------------------------------\n\n";
+print "SUPER-BRIDGES\n\n";
+
+foreach my $keya (sort keys %{$baclinks}) {
+    my ($sida, $enda) = split(/\./, $keya);
+
+    foreach my $keyb (sort keys %{$baclinks->{$keya}}) {
+	my ($sidb, $endb) = split(/\./, $keyb);
+	printf "%6d %1s    %6d %1s    %4d\n", $sida, $enda, $sidb, $endb, scalar(@{$baclinks->{$keya}->{$keyb}});
+    }
+}
+	
+print "\n\n----------------------------------------------------------------------\n\n";
+print "SUPER-SCAFFOLDS\n\n";
+
+my $scaffoldtosuperscaffold = {};
+
+for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
+    next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
+
+    my $scaffold = $scaffoldfromid{$seedscaffoldid};
+    my $bp = $scaffoldlength{$scaffold};
+    my $ctg = $scaffoldcontigs{$scaffold};
+
+    my $totbp = $bp;
+    my $totctg = $ctg;
+    my $totscaff = 1;
+
+    print "\n\n++++++++++          ++++++++++          ++++++++++          ++++++++++\n\n";
+    print "Seeding from scaffold $seedscaffoldid [$bp, $ctg]\n";
+
+    my $superscaffold = [[$seedscaffoldid, 'F']];
+
+    ###
+    ### Extend super-scaffold to the right
+    ###
+
+    my $lastscaffoldid = $seedscaffoldid;
+    my $lastend = 'R';
+
+    print "Extending to right ...\n";
+
+    while (my $nextbridge = &FindNextSuperBridge($baclinks->{"$lastscaffoldid.$lastend"},
+						 $scaffoldtosuperscaffold)) {
+	my ($nextscaffoldid, $nextend) = @{$nextbridge};
+
+	$scaffold = $scaffoldfromid{$nextscaffoldid};
+
+	$bp = $scaffoldlength{$scaffold};
+	$ctg = $scaffoldcontigs{$scaffold};
+
+	$totbp += $bp;
+	$totctg += $ctg;
+	$totscaff++;
+
+	my $nextdir = ($nextend eq 'L') ? 'F' : 'R';
+
+	$scaffoldtosuperscaffold->{$nextscaffoldid} = $superscaffold;
+
+	push @{$superscaffold}, [$nextscaffoldid, $nextdir];
+
+	print "  Scaffold $nextscaffoldid [$bp $ctg] $nextdir\n";
+
+	$lastscaffoldid = $nextscaffoldid;
+
+	$lastend = ($nextend eq 'L') ? 'R' : 'L';
+    }
+   
+    ###
+    ### Extend super-scaffold to the left
+    ###
+
+    my $lastscaffoldid = $seedscaffoldid;
+    my $lastend = 'L';
+
+    print "Extending to left ...\n";
+
+    while (my $nextbridge = &FindNextSuperBridge($baclinks->{"$lastscaffoldid.$lastend"},
+						 $scaffoldtosuperscaffold)) {
+	my ($nextscaffoldid, $nextend) = @{$nextbridge};
+
+	$scaffold = $scaffoldfromid{$nextscaffoldid};
+
+	$bp = $scaffoldlength{$scaffold};
+	$ctg = $scaffoldcontigs{$scaffold};
+
+	$totbp += $bp;
+	$totctg += $ctg;
+	$totscaff++;
+
+	my $nextdir = ($nextend eq 'R') ? 'F' : 'R';
+
+	$scaffoldtosuperscaffold->{$nextscaffoldid} = $superscaffold;
+
+	unshift @{$superscaffold}, [$nextscaffoldid, $nextdir];
+
+	print "  Scaffold $nextscaffoldid [$bp $ctg] $nextdir\n";
+
+	$lastscaffoldid = $nextscaffoldid;
+
+	$lastend = ($nextend eq 'L') ? 'R' : 'L';
+    }
+
+    if ($totscaff > 1) {
+	print "\n\nTOTAL: $totscaff scaffolds, $totctg contigs, $totbp bp\n\n";
+    }
 }
 
 $sth_templates->finish();
@@ -330,6 +496,31 @@ $sth_templates->finish();
 $dbh->disconnect();
 
 exit(0);
+
+sub FindNextSuperBridge {
+    my ($bridges, $usedscaffolds, $junk) = @_;
+
+    my $bestid = -1;
+    my $bestend;
+    my $bestscore = 0;
+
+    foreach my $keyb (keys %{$bridges}) {
+	my ($scaffoldid, $end) = split(/\./, $keyb);
+
+	next if defined($usedscaffolds->{$scaffoldid});
+
+	my $score = scalar(@{$bridges->{$keyb}});
+
+	# Look for better score, or same score from a lower-numbered scaffold
+	if (($score > $bestscore) || ($score == $bestscore && $scaffoldid < $bestid)) {
+	    $bestid = $scaffoldid;
+	    $bestend = $end;
+	    $bestscore = $score;
+	}
+    }
+
+    return ($bestscore == 0) ? 0 : [$bestid, $bestend];
+}
 
 sub db_die {
     my $msg = shift;
