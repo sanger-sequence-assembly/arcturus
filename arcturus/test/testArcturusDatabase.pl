@@ -1,15 +1,22 @@
 #!/usr/local/bin/perl
 
 use ArcturusDatabase;
+use Read;
 use DBI;
+use FileHandle;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
 
     $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $readid = shift @ARGV if ($nextword eq '-readid');
 }
 
-die "You must specify the instance" unless defined($instance);
+$instance = 'prod' unless defined($instance);
+
+$readid = 1 unless defined($readid);
+
 die "You must specify the organism" unless defined($organism);
 
 $adb = new ArcturusDatabase(-instance => $instance,
@@ -27,6 +34,12 @@ if (defined($dbh)) {
     print "        CONNECT FAILED: : $DBI::errstr\n";
 }
 
-$dbh->disconnect if defined($dbh);
+$read = $adb->getReadByID($readid);
+
+$fh = new FileHandle("/tmp/testadb.$$", "w");
+
+$read->writeReadToCaf($fh);
+
+$fh->close();
 
 exit(0);
