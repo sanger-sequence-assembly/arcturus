@@ -2413,14 +2413,14 @@ sub diagnose {
 # keep the first encountered mismatch
                 if ($info ne $fields{$column}) {
                     $alterTable = "ALTER table $tablename change column $column $original" if !$alterTable;
-print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
+# print "sourcefile '$fields{$column}' <br>tabledata  '$info' <br>proposed ALTER: $alterTable <br><br>";
                 }
 	    }
 # if the column is missing, generate an add column instruction
 	    elsif (!$alterTable) {
                 $previous = "after $previous" if $previous;
                 $previous = "first" if !$previous;
-                $alterTable = "ALTER table $tablename add column $column $original $previous";
+                $alterTable = "ALTER table $tablename add column $original $previous";
             }
             $previous = $column;
         }
