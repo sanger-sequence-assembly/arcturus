@@ -191,45 +191,45 @@ sub CAFFileParser {
             if ($items[0] =~ /Temp/i) {
                 $Read->setTemplate($items[1]);
             }
-            elsif ($items[0] =~ /Ins/i) {
+            elsif ($items[0] =~ /^Ins/i) {
                 $Read->setInsertSize([$items[1],$items[2]]);
             }
-            elsif ($items[0] =~ /Liga/i) {
+            elsif ($items[0] =~ /^Liga/i) {
                 $Read->setLigation($items[1]);
             }
-            elsif ($items[0] =~ /Seq/i) {
+            elsif ($items[0] =~ /^Seq_vec/i) {
 		#my ($svleft, $svright, $svname) = $record =~ /^Seq_vec\s+\S+\s+(\d+)\s+(\d+)\s+(\"\S+\")?/;
 		my ($svleft, $svright, $svname) = @items[2,3,4];
 		$svname =~ s/\"//g if defined($svname);
 		$Read->addSequencingVector([$svname, $svleft, $svright]);
             }
-            elsif ($items[0] =~ /Pri/i) {
+            elsif ($items[0] =~ /^Pri/i) {
                 $Read->setPrimer($items[1]);
             }
-            elsif ($items[0] =~ /Str/i) {
+            elsif ($items[0] =~ /^Str/i) {
                 $Read->setStrand($items[1]);
             }
-            elsif ($items[0] =~ /Dye/i) {
+            elsif ($items[0] =~ /^Dye/i) {
                 $Read->setChemistry($items[1]);
             }
-            elsif ($items[0] =~ /Clone_vec/i) {
+            elsif ($items[0] =~ /^Clone_vec/i) {
 		my ($cvleft, $cvright, $cvname) = $record =~ /^Clone_vec\s+\S+\s+(\d+)\s+(\d+)\s+(\"\S+\")?/;
 		$cvname =~ s/\"//g if defined($cvname);
 		$Read->addCloningVector([$cvname, $cvleft, $cvright]);
             }
-            elsif ($items[0] =~ /Clo/i) {
+            elsif ($items[0] =~ /^Clo/i) {
                 $Read->setClone($items[1]);
             }
-            elsif ($items[0] =~ /Pro/i) {
+            elsif ($items[0] =~ /^Pro/i) {
                 $Read->setProcessStatus($items[1]) if ($record !~ /PASS/);
             }
-            elsif ($items[0] =~ /Asp/i) {
+            elsif ($items[0] =~ /^Asp/i) {
                 $Read->setAspedDate($items[1]);
             }
-            elsif ($items[0] =~ /Bas/i) {
+            elsif ($items[0] =~ /^Bas/i) {
                 $Read->setBaseCaller($items[1]);
             }
-            elsif ($items[0] =~ /Cli/i) {
+            elsif ($items[0] =~ /^Cli/i) {
                 $Read->setLowQualityLeft($items[2]);
                 $Read->setLowQualityRight($items[3]);
             }
