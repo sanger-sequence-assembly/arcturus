@@ -279,8 +279,25 @@ sub putContig {
 # enter a contig into the database
     my $this = shift;
     my $contig = shift; # Contig instance
-    my $project = shift; # optional Project instance
-    my $noload = shift; # test/reporting option
+
+# decode input parameters
+
+    my $project; # optional Project instance
+    my $dotags = 2;  # check tags level (1,2)/ import tags from parents (2)
+    my $noload; # test/reporting option
+
+    while (my $nextword = shift) {
+        $nextword =~ s/^\s*\-//;
+        if ($nextword eq 'project') {
+            $project = shift;
+        }
+        elsif ($nextword eq 'noload') {
+            $noload = shift;
+        }
+        elsif ($nextword eq 'dotags') {
+            $dotags = shift;
+        }
+    }
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
@@ -288,7 +305,7 @@ sub putContig {
         "as parameter" if ($project && ref($project) ne 'Project');
 
 # do the statistics on this contig, allow zeropoint correction
-#    this method also checks and orders the mappings 
+# the getStatistics method also checks and orders the mappings 
 
     $contig->getStatistics(2);
 
@@ -348,56 +365,76 @@ sub putContig {
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
 # add (re-assign) the previous contig ID to the contig list of the Project
-# (but only if a project was explicitly defined)
-            if ($project) {
-                $this->assignContigToProject($previous,$project); # ADBProject
-                $project->addContigID($previous->getContigID()); # ??
-            }
+            my $message = "Contig $contigname is identical to contig ".
+                           $previous->getContigName();
 # add the contig ID to the contig
-            $contig->setContigID($previous->getContigID());
-# import tags? or do this outside?
+            my $contigid = $previous->getContigID();
+            $contig->setContigID($contigid);
 
-            return $previous->getContigID(),"Contig $contigname is ".
-                   "identical to contig ".$previous->getContigName();
+# (re-)assign project, if a project is explicitly defined
+
+            if ($project) {
+# TO BE DEVELOPED 
+                $this->assignContigToProject($previous,$project); # ADBProject
+#                $project->addContigID($contigid); # ??
+                $message .= " project ?? ";
+# TO BE DEVELOPED
+            }
+
+# check / import tags
+
+            if ($contig->hasTags() && $dotags) {
+                my $dbh = $this->getConnection();
+                $message .= "Warning: failed to insert tags for $contigname"
+                unless &putTagsForContig($dbh,$contig,1);
+            }
+
+            return $contigid,$message;
         }
     }
 
 # okay, the contig is new; find out if it is connected to existing contigs
 
-    my $contigids = $this->getParentIDsForContig($contig);
+    my $parentids = $this->getParentIDsForContig($contig);
 
 # pull out mappings for those previous contigs, if any
 
     my $message = "$contigname ";
-    if ($contigids && @$contigids) {
+    if ($parentids && @$parentids) {
 # compare with each previous contig and return/store mapings/segments
         my @linked;
         my %readsinlinked;
-        $message .= "has parent(s) : @$contigids";
-        foreach my $contigid (@$contigids) {
-            my $previous = $this->getContig(ID=>$contigid,
+        $message .= "has parent(s) : @$parentids";
+        foreach my $parentid (@$parentids) {
+            my $parent = $this->getContig(ID=>$parentid,
                                             metaDataOnly=>1);
-            unless ($previous) {
+            unless ($parent) {
 # protection against missing parent contig from CONTIG table
-                print STDERR "Parent $contigid for $contigname not found ".
+                print STDERR "Parent $parentid for $contigname not found ".
 		             "(possibly corrupted MAPPING table?)\n";
                 next;
             }
-            $this->getReadMappingsForContig($previous);
-            my ($linked,$deallocated) = $contig->linkToContig($previous);
+            $this->getReadMappingsForContig($parent);
+            my ($linked,$deallocated) = $contig->linkToContig($parent);
             if ($linked) {
-                my $contig_id = $previous->getContigID();
+                my $contig_id = $parent->getContigID();
                 push @linked, $contig_id;
-                $readsinlinked{$contig_id} = $previous->getNumberOfReads();
-# what about tags ... ? import from parents given 
-# add previous to contig; later import tags from parents
+                $readsinlinked{$contig_id} = $parent->getNumberOfReads();
+# add parent to contig, later import tags from parent(s)
+                $contig->addParentContig($parent); 
             }
-            $previous = $previous->getContigName();
+            $previous = $parent->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
             $message .= "; $deallocated reads deallocated from $previous".
   		        "  (possibly split contig?)" if $deallocated;
         }
+
+# inherit the tags
+
+        $contig->inheritTags() if $dotags;
+
 # determine the default project_id unless it's already specified
+
         unless ($project) {
 # find the contig_id (for the moment use largest nr of reads) 
             my $contig_id;

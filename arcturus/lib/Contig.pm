@@ -989,7 +989,7 @@ print "mapping found: ".($mapping || 'not found')."\n" if $DEBUG;
     unless ($mapping) {
 print "Finding mappings from scratch \n";
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
-print "number of mapping segments : ",($nrofsegments || 0)."\n";
+print "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
         return 0 unless $nrofsegments;
 # identify the mapping using contig and mapping names
         my $c2cmappings = $target->getContigToContigMappings();
@@ -1000,7 +1000,7 @@ print "number of mapping segments : ",($nrofsegments || 0)."\n";
             }
         }
 # protect against the mapping still not found, but this should not occur
-print "mapping identified: ".($mapping || 'not found')."\n";
+print "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
         return 0 unless $mapping;
     }
 print $mapping->assembledFromToString() if $DEBUG;
@@ -1028,11 +1028,11 @@ print "Target contig length : $tlength \n" if $DEBUG;
     foreach my $ptag (@$ptags) {
 
 # determine the segment(s) of the mapping with the tag's position
-print "processing tag $ptag (align $alignment) \n"; 
+print "processing tag $ptag (align $alignment) \n" if $DEBUG;
 
         undef my @offset;
         my @position = $ptag->getPosition();
-print "tag position (on parent) @position \n";
+print "tag position (on parent) @position \n" if $DEBUG;
         foreach my $segment (@$c2csegments) {
 # for the correct segment, getXforY returns true
             for my $i (0,1) {
@@ -1047,13 +1047,15 @@ print "offset to be applied : $offset[$i] \n" if $DEBUG;
             }
         }
 # accept the new tag only if the position offsets are defined
-print "offsets: @offset \n";
+print "offsets: @offset \n" if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the old tag
         my $newtag = $ptag->transpose($alignment,\@offset,$tlength);
 
+if ($DEBUG) {
 print "tag on parent : "; $ptag->writeToCaf(*STDOUT);
 print "tag on target : "; $newtag->writeToCaf(*STDOUT);
+}
 
 # test if the new tag is not already present in the child
 
@@ -1069,7 +1071,7 @@ print "tag on target : "; $newtag->writeToCaf(*STDOUT);
 
 # it's a new tag       
 
-print "new tag added\n";
+print "new tag added\n" if $DEBUG;
         $target->addTag($newtag);
     }
 }

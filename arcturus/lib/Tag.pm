@@ -199,7 +199,7 @@ sub transpose {
         $tpos[$i] += $offset->[$i];
     }
 
-    if ($tpos[0] > $window && $tpos[1] > $window or $tpos[0] < 0 && $tpos[1] < 0) {
+    if ($tpos[0] > $window && $tpos[1] > $window or $tpos[0] < 1 && $tpos[1] < 1) {
 # the transposed tag is completely out of range
         return undef;
     }
