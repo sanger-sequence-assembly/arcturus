@@ -1098,25 +1098,25 @@ print "find: $find $break" if $DEBUG;
         my $filecount = 0;
 NEXT:   while (defined($file=<FILE>)) {
             chomp $file; # cleanup
-print "test file $file$break" if ($DEBUG);
+print "1 test file $file$break" if ($DEBUG);
             $filetest++; # keep track
         # test against filters
-print "reject $file ($flnfilter)$break" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
+print "1 reject $file ($flnfilter)$break" if ($flnfilter && !($file =~ /$flnfilter/) && $DEBUG);
             next NEXT if ($flnfilter =~ /\S/ && $flnfilter ne 'HARVEST' && !($file =~ /$flnfilter/));
             next NEXT if ($glbfilter =~ /\S/ && !($file =~ /$glbfilter/));
         # test against allowed pattern and get shortname
-print "reject $file$break" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
+print "2 reject $file$break" if (!($file =~ /^$subdir(\S+\/)?[\w\-\.]+\.\w\d?\w*$/) && $DEBUG);
             next NEXT if (!($file =~ /^$subdir(\S+\/)?([\w\-\.]+\.(\w\d?\w*)$)/));
             my $shortname = $2;
-	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/));
 print "shortname = $shortname $break" if ($DEBUG);
+	    next NEXT if (!($shortname =~ /\.\w\d?$/ || $shortname =~ /\.\w\d\w*$/));
             next NEXT if ($dbfiles->{$shortname} && (!$DEBUG || $DEBUG <= 1));
         # find possible directories beneath the $subdir
             my $subdirname = $file;
             $subdirname =~ s/$subdir//; # remove the top directory
         # test against rejection strings
             foreach my $exclude (@{$excluders}) {
-print "rejected file: $file $exclude $break" if ($subdirname =~ /$exclude/i && $DEBUG);
+print "rejected file: $file (exclude $exclude) $break" if ($subdirname =~ /$exclude/i && $DEBUG);
                 next NEXT if ($subdirname =~ /$exclude/i);
             }
 print "NEW FILE: $file  (maxread= $MAXREAD) $break" if $DEBUG;
