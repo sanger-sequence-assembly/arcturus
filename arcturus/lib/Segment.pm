@@ -226,7 +226,7 @@ sub toString {
     my $xstart = $this->getXstart();
     my $xfinis = $this->getXfinis();
 
-    return "$xstart $xfinis    $this->[2] $this->[3]";
+    return "Segment[$xstart $xfinis $this->[2] $this->[3]]";
 }
 
 #----------------------------------------------------------------------

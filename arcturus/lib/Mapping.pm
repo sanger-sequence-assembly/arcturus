@@ -18,6 +18,8 @@ sub new {
 
     $this->setMappingName($identifier) if $identifier;
 
+    $this->{cacheContigRange} = 0;
+
     return $this;
 }
  
@@ -36,14 +38,21 @@ sub setContigRange {
 sub getContigRange {
     my $this = shift;
 
-    my $range = $this->{contigrange};
+    my $range;
 
-    unless ($range && @$range) {
+    if ($this->{cacheContigRange}) {
+	$range = $this->{contigrange};
+
+	unless ($range && @$range) {
 # no contig range defined, use (all) segments to find it
-        my $segments = $this->getSegments();
-        $range = &findContigRange($segments); # arrayref
-        return undef unless defined($range);
-        $this->{contigrange} = $range;
+	    my $segments = $this->getSegments();
+	    $range = &findContigRange($segments); # arrayref
+	    return undef unless defined($range);
+	    $this->{contigrange} = $range;
+	}
+    } else {
+	my $segments = $this->getSegments();
+	$range = &findContigRange($segments);
     }
 
     return @$range;
@@ -384,6 +393,24 @@ sub assembledFromToString {
     }
 
     $string = "$assembledFrom"."is undefined\n" if (!$string && shift); 
+
+    return $string;
+}
+
+sub toString {
+    my $this = shift;
+    $this->{contigrange} = undef;
+    my ($cstart, $cfinish) = $this->getContigRange();
+    my $mappingname = $this->getMappingName();
+    my $direction = $this->getAlignmentDirection();
+
+    my $string = "Mapping[name=$mappingname, sense=$direction, contigrange=[$cstart, $cfinish]\n";
+
+    foreach my $segment (@{$this->{assembledFrom}}) {
+	$string .= "    " . $segment->toString() . "\n";
+    }
+
+    $string .= "]";
 
     return $string;
 }
