@@ -2,40 +2,54 @@
 
 use DBI;
 use Digest::MD5 qw(md5_hex);
+use Compress;
 
-$dba = shift;
+$compressor = new Compress('ACGT- ');
 
-die "Usage: compareDBs host:port host:port dbname" unless $dba;
+while ($nextword = shift @ARGV) {
+    $dba = shift @ARGV if ($nextword eq '-dba');
+    $dbb = shift @ARGV if ($nextword eq '-dbb');
 
-($hosta,$porta) = split(/:/, $dba);
+    $dodna = 1 if ($nextword eq '-dodna');
 
-die "Usage: compareDBs host:port host:port dbname" unless (defined($hosta) && defined($porta));
+    $doquality = 1 if ($nextword eq '-doquality');
 
-$dbb = shift;
+    $limit = shift @ARGV if ($nextword eq '-limit');
+}
 
-die "Usage: compareDBs host:port host:port dbname" unless $dbb;
+$dodna = 0 unless defined($dodna);
+$doquality = 0 unless defined($doquality);
 
-($hostb,$portb) = split(/:/, $dbb);
+die "You must supply -dba and -dbb parameters" unless (defined($dba) && defined($dbb));
 
-die "Usage: compareDBs host:port host:port dbname" unless (defined($hostb) && defined($portb));
+die "You must specify at least one of -dodna or -doquality" unless ($dodna || $doquality);
 
-$dbname = shift;
+($hosta,$porta,$dbnamea) = $dba =~ /(\w+):(\w+)\/(\w+)/;
 
-die "Usage: compareDBs host:port host:port dbname" unless $dbname;
+die "-dba parameter is not in correct format"
+    unless (defined($hosta) && defined($porta) && defined($dbnamea));
 
-$dsna = 'DBI:mysql:' . $dbname . ';host=' . $hosta . ';port=' . $porta;
+($hostb,$portb,$dbnameb) = $dbb =~ /(\w+):(\w+)\/(\w+)/;
+
+die "-dbb parameter is not in correct format"
+    unless (defined($hostb) && defined($portb) && defined($dbnameb));
+
+$dsna = 'DBI:mysql:' . $dbnamea . ';host=' . $hosta . ';port=' . $porta;
 
 $dbha = DBI->connect($dsna, 'arcturus', '***REMOVED***',
 		     {PrintError => 0, RaiseError => 0});
 
 &db_die("Unable to connect to $dsna") unless $dbha;
 
-$dsnb = 'DBI:mysql:' . $dbname . ';host=' . $hostb . ';port=' . $portb;
+$dsnb = 'DBI:mysql:' . $dbnameb . ';host=' . $hostb . ';port=' . $portb;
 
 $dbhb = DBI->connect($dsnb, 'arcturus', '***REMOVED***',
 		     {PrintError => 0, RaiseError => 0});
 
 &db_die("Unable to connect to $dsnb") unless $dbhb;
+
+$dnaselect = $dodna ? ', sequence, scompress' : '';
+$qualityselect = $doquality ? ', quality, qcompress' : '';
 
 $lockquery = 'LOCK TABLES READS READ';
 
@@ -49,25 +63,82 @@ print STDERR "Trying to lock READS table on $dsnb ...\n";
 $dbhb->do($lockquery);
 &db_die("do($lockquery) failed on $dsnb");
 
-$query = 'SELECT read_id, readname, slength, md5(sequence) from READS';
+$querya = "SELECT read_id, readname, slength $dnaselect $qualityselect from READS";
 
-print STDERR "Executing $query on $dsna ...\n";
+$querya .= " LIMIT $limit" if defined($limit);
 
-$stha = $dbha->prepare($query);
-&db_die("prepare($query) failed on $dsna");
+print STDERR "Preparing \"$querya\" on $dsna ...\n";
 
-$stha->execute();
-&db_die("execute($query) failed on $dsna");
+$stha = $dbha->prepare($querya);
+&db_die("prepare($querya) failed on $dsna");
+
+$queryb = "SELECT readname, slength $dnaselect $qualityselect from READS where read_id=?";
+
+print STDERR "Preparing \"$queryb\" on $dsnb ...\n";
+
+$sthb = $dbhb->prepare($queryb);
+&db_die("prepare($queryb) failed on $dsnb");
 
 $nreads = 0;
 printf STDERR "%8d", $nreads;
 $format = "\010\010\010\010\010\010\010\010%8d";
 
-while(@ary = $stha->fetchrow_array()) {
-    ($read_id, $readname, $slength, $sequence) = @ary;
-    $readida{$readname} = $read_id;
-    $hasha{$readname} = $sequence;
-    $seqlena{$readname} = $slength;
+$stha->execute();
+&db_die("execute($querya) failed on $dsna");
+
+while (@arya = $stha->fetchrow_array()) {
+    $read_id = shift @arya;
+    $readnamea = shift @arya;
+    $slengtha = shift @arya;
+
+    if ($dodna) {
+	$seqa = shift @arya;
+	$method = shift @arya;
+	$seqa = $compressor->sequenceDecoder($seqa, $method) if ($method > 0);
+    }
+
+    if ($doquality) {
+	$quala = shift @arya;
+	$method = shift @arya;
+	($qlen, $quala) = $compressor->qualityDecoder($quala, $method) if ($method > 0);
+	$quala =~ s/^\s+|\s+$//;
+	$quala = pack("c*", split(/\s+/, $quala));
+	$qualahash = md5_hex($quala);
+    }
+
+    $sthb->execute($read_id);
+
+    while (@aryb = $sthb->fetchrow_array()) {
+	$readnameb = shift @aryb;
+
+	print "$read_id: readname mismatch: $readnamea vs $readnameb\n"
+	    if ($readnamea ne $readnameb);
+
+	$slengthb = shift @aryb;
+
+	print "$read_id: slength mismatch: $slengtha vs $slengthb\n"
+	    if ($slengtha != $slengthb);
+
+	if ($dodna) {
+	    $seqb = shift @aryb;
+	    $method = shift @aryb;
+	    $seqb = $compressor->sequenceDecoder($seqb, $method) if ($method > 0);
+
+	    print "$read_id: sequence mismatch\n" if ($seqa != $seqb);
+	}
+
+	if ($doquality) {
+	    $qualb = shift @aryb;
+	    $method = shift @aryb;
+	    ($qlen, $qualb) = $compressor->qualityDecoder($qualb, $method) if ($method > 0);
+	    $qualb =~ s/^\s+|\s+$//;
+	    $qualb = pack("c*", split(/\s+/, $qualb));
+	    $qualbhash = md5_hex($qualb);
+
+	    print "$read_id: base quality mismatch\n" if ($qualahash ne $qualbhash);
+	}
+    }
+
     $nreads++;
     printf STDERR $format, $nreads if (($nreads % 50) == 0);
 }
@@ -76,60 +147,7 @@ printf STDERR $format, $nreads;
 print STDERR " reads found ... done.\n";
 
 $stha->finish();
-
-$nra = scalar keys %seqlena;
-
-print STDERR "Executing $query on $dsnb ...\n";
-
-$sthb = $dbhb->prepare($query);
-&db_die("prepare($query) failed on $dsnb");
-
-$sthb->execute();
-&db_die("execute($query) failed on $dsnb");
-
-$nreads = 0;
-printf STDERR "%8d", $nreads;
-$format = "\010\010\010\010\010\010\010\010%8d";
-
-while(@ary = $sthb->fetchrow_array()) {
-    ($read_id, $readname, $slength, $sequence) = @ary;
-    $readidb{$readname} = $read_id;
-    $hashb{$readname} = $sequence;
-    $seqlenb{$readname} = $slength;
-    $nreads++;
-    printf STDERR $format, $nreads if (($nreads % 50) == 0);
-}
-
-printf STDERR $format, $nreads;
-print STDERR " reads found ... done.\n";
-
 $sthb->finish();
-
-$nrb = scalar keys %seqlenb;
-
-foreach $readname (keys %seqlena) {
-    $slenb = $seqlenb{$readname};
-    if (defined($slenb)) {
-	$slena = $seqlena{$readname};
-	if ($slena != $slenb) {
-	    print "$readname length mismatch $slena versus $slenb\n";
-	}
-	if ($hasha{$readname} ne $hashb{$readname}) {
-	    print "$readname sequence hash mismatch\n";
-	}
-	if ($readida{$readname} != $readidb{$readname}) {
-	    print "$readname ID mismatch: ",$readida{$readname}," ",$readidb{$readname},"\n";
-	}
-    } else {
-	print "$readname in first DB but not in second\n";
-    }
-}
-
-foreach $readname (keys %seqlenb) {
-    if (!defined($seqlena{$readname})) {
-  	print "$readname in second DB but not in first\n";
-    }
-}
 
 $unlockquery = 'UNLOCK TABLES';
 
