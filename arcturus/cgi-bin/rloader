@@ -1058,13 +1058,15 @@ sub getNewReadFiles {
 
     my $DEBUG = 0;
 
+    $directory =~ s/^\s+|\s+$//; # chop leading blanks, trailing blanks
+
     my $file;
 
     my @dirs = `ls $directory`;
 
     $MAXREAD = 1000 if (!defined($MAXREAD));
  
-$DEBUG = 1 if ($directory =~ /MUST/);
+#$DEBUG = 1 if ($directory =~ /MUST/);
 my $nrr = keys %$dbfiles;
 print "directory $directory $break dbfiles $nrr $break" if $DEBUG;
 print "exclude: @{$excluders}${break}filter : $flnfilter$break gbfilter : $glbfilter$break" if ($DEBUG);
