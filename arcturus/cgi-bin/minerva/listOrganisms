@@ -1,0 +1,43 @@
+#!/usr/local/bin/perl
+
+use DBI;
+use CGI;
+
+$cgi = new CGI;
+
+print $cgi->header(-type => 'text/plain');
+
+$dbhost = $cgi->server_name();
+$dbport = $ENV{'MYSQL_TCP_PORT'};
+
+$dsn = 'DBI:mysql:minerva;host=' . $dbhost . ';port=' . $dbport;
+
+$dbh = DBI->connect($dsn, 'minerva', 'daughter of Jupiter');
+
+if ($dbh) {
+    print "# DSN=$dsn\n";
+    $query = 'SELECT organism,assemblydir,splitdir FROM repository ORDER BY organism ASC';
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    while (@ary = $sth->fetchrow_array()) {
+	($organism, $asmdir, $splitdir) = @ary;
+	print "$organism\t$asmdir\t$splitdir\n";
+    }
+
+    $dbh->disconnect();
+} else {
+    &db_die('Unable to connect to ' . $dsn);
+}
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print "MySQL error: $msg: $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}

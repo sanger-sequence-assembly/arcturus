@@ -1,0 +1,120 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+# get assembly data for Cyclops from ARCTURUS database
+#############################################################################
+
+use strict; # Constraint variables declaration before using them
+
+use GateKeeper; 
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',1);
+
+my ($cgi, $database, $chromosome, $minlen, $project, $since);
+if ($cgi = $GateKeeper->cgiHandle(1)) {
+    $database   = $cgi->parameter('organism');
+    $chromosome = $cgi->parameter('chromosome');
+    $minlen  = $cgi->parameter('minlen');
+    $project = $cgi->parameter('project');
+    $since   = $cgi->parameter('since');
+}
+else {
+    $database   = shift @ARGV;
+    $chromosome = shift @ARGV;
+    $minlen     = shift @ARGV;
+    $project    = shift @ARGV;
+    $since      = shift @ARGV;
+}
+
+my $organisms = $GateKeeper->dbHandle($database,{dbhandle=>0});
+
+$GateKeeper->cgiHeader(1); # return string plain
+
+##############################################################################
+# MAIN
+##############################################################################
+
+$organisms->query("use $database");
+
+print "reached contigs $organisms\n";
+my $contigs   = $organisms->spawn('CONTIGS',$database,0);
+my $assembly  = $organisms->spawn('ASSEMBLY',$database,0);
+my $scaffold  = $organisms->spawn('CONTIGS2SCAFFOLD',$database,0);
+
+my $assemblynr = $assembly->associate('assembly',$chromosome,'chromosome');
+
+my $contigconstraint = '';
+$contigconstraint .= " CONTIGS.length >= $minlen and" if $minlen;
+$contigconstraint .= " CONTIGS.updated >= $since and" if $since;
+
+my $query = "select CONTIGS.contig_id from CONTIGS,CONTIGS2SCAFFOLD where ";
+$query   .= "$contigconstraint CONTIGS.contig_id=CONTIGS2SCAFFOLD.contig_id ";
+$query   .= " and CONTIGS2SCAFFOLD.assembly=$assemblynr ";
+
+$query   .= " and CONTIGS2SCAFFOLD.project=$project" if $project;
+
+print "query $query\n";
+my $hashes = $contigs->query($query);
+
+my $nr = 0; $nr = @$hashes if (ref($hashes) eq 'ARRAY');
+print "hashes output: $hashes  $nr \n";
+
+$GateKeeper->dropDead("Terminated as specified for CGI mode") if $cgi;
+
+print "TRACE TESTS\n";
+
+my $snapshot = $contigs->snapshot();
+$snapshot =~ s/\<tr\>/\n/ig;
+$snapshot =~ s/\<[^\<\>]+\>/ /g;
+print "before Vivify: $snapshot\n";
+$contigs->autoVivify($database,1.5);
+$snapshot = $contigs->snapshot();
+$snapshot =~ s/\<tr\>/\n/ig;
+$snapshot =~ s/\<[^\<\>]+\>/ /g;
+print "after Vivify $snapshot\n\n\n";
+
+$hashes = $contigs->associate('contig_id','where',"assembly=$assemblynr");
+$query = $contigs->{lastQuery};
+print "query: $query\n";
+print "$contigs->{qerror}\n" if !$hashes;
+$nr = @$hashes if (ref($hashes) eq 'ARRAY');
+print "hashes output: $hashes  $nr \n\n";
+
+$hashes = $contigs->associate('contig_id','where',"assembly=$assemblynr AND project=$project");
+$query = $contigs->{lastQuery};
+print "query: $query\n";
+print "$contigs->{qerror}\n" if !$hashes;
+$nr = @$hashes if (ref($hashes) eq 'ARRAY');
+print "hashes output: $hashes  $nr \n\n";
+
+$hashes = $contigs->associate('contig_id','where',"chromosome=$chromosome AND project=$project");
+$query = $contigs->{lastQuery};
+print "query: $query\n";
+print "$contigs->{qerror}\n" if !$hashes;
+$nr = @$hashes if (ref($hashes) eq 'ARRAY');
+print "hashes output: $hashes  $nr \n";
+
+
+##############################################################################
+# EXIT
+##############################################################################
+
+$GateKeeper->disconnect();
+
+
+
+
+
+

@@ -1,0 +1,642 @@
+#!/usr/local/bin/perl -w
+
+#############################################################################
+#
+# Create ARCTURUS Assembly Database (for organism or common)
+#
+#############################################################################
+
+use strict; # Constraint variables declaration before using them
+
+use GateKeeper; 
+use ArcturusTable;
+use MyHTML;
+
+##############################################################################
+# unbuffered output
+##############################################################################
+
+open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+select(STDERR); $| = 1; # Make unbuffered.
+select(STDOUT); $| = 1; # Make unbuffered.
+
+##############################################################################
+# get configuration data, open CGI and MySQL Database
+##############################################################################
+
+my $GateKeeper = GateKeeper->new('mysql',0,'Insist on CGI');
+
+my $config     = $GateKeeper->configHandle();
+
+my $cgi        = $GateKeeper->cgiHandle();
+
+my ($void, $database, $option, $action) = split ('/',$GateKeeper->origin);
+
+my $dbh        = $GateKeeper->dbHandle($database);
+
+$GateKeeper->cgiHeader(2); # return string HTML
+
+my $connection = $GateKeeper->whereAmI();
+
+##############################################################################
+# MAIN
+##############################################################################
+
+my $arc_cgi_dir  = $config->get("ARC_CGI_DIR");
+my $arc_html_dir = $config->get("ARC_HTML_DIR");
+my $db_manager   = $config->get("db_manager");
+
+###############################################################################
+# initial form on entry via web and "getmenu" option
+###############################################################################
+
+# select the common database as default
+# test the presence of the INVENTORY table in the common database "arcturus"
+# - if not present, force its installation via the "create" script
+# - if present, test the presence of all other tables in the common database
+#   against the data specified in the INVENTORY
+
+my $page = MyHTML->new("ARCTURUS database maintenance and updates");
+$page->banner("You are connected to the $connection") if ($connection =~ /dev/);
+$page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
+$page->frameborder(100,25); # set-up of page layout
+$page->center(1);
+
+my $getMenu  = "$arc_cgi_dir/update/arcturus/getmenu";
+
+my $open = $dbh->do("use arcturus");    # select the default common database
+$database = 'inaccessible' if (!$open); # results in error status and exit
+
+
+if ($dbh->do("SHOW TABLES FROM arcturus LIKE 'INVENTORY'") == 0) {
+
+# the inventory table is not found or cannot be read: generate a form to create it
+
+    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+    $page->warningbox("The INVENTORY table is missing!<p>"
+                     ."It must be created before you can continue",1);
+    $page->linkbutton("CONTINUE","$arc_cgi_dir/create/arcturus/reinit",0);
+    $page->flush();
+    $dbh->disconnect;
+    exit 0;
+} 
+elsif ($database eq 'arcturus' && (!$option || $option eq "getmenu")) {
+
+# get the list of required common tables and test if these are present
+
+    my $inventory = ArcturusTable->new($dbh,'INVENTORY','arcturus',1);
+    my $hashes    = $inventory->associate('hashrefs','c','domain');
+    if (!$hashes || !@$hashes) {
+        $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+        $page->warningbox("The INVENTORY table cannot be read");
+        $page->errorbox("<h3>Please contact $db_manager</h3>");
+        $page->flush();
+        $dbh->disconnect;
+        exit 0;
+    }
+
+# okay, now collect the tables specified in the inventory and those in arcturus 
+
+    undef my %tables;
+    foreach my $hash (@$hashes) {
+        my $tablename = $hash->{'tablename'};
+        $tables{$tablename} = 1;
+    }
+
+    my $sth = $dbh->prepare("SHOW TABLES");
+    if ($sth->execute()) {
+        while (my $result = $sth->fetchrow_array()) {
+            $tables{$result}--;
+        }
+    }
+
+    undef my @tables;
+    undef my @mtables; # missing tables
+    undef my @etables; # tables in common which should not be there
+    foreach my $tablename (keys (%tables)) {
+        push @tables, $tablename if ($tables{$tablename} == 0);
+        push @mtables, $tablename if ($tables{$tablename} > 0);
+        push @etables, $tablename if ($tables{$tablename} < 0);
+    }        
+    
+# get a list of the curent databases 
+    
+    my $organisms = $inventory->new($dbh,'ORGANISMS','arcturus');
+    my $dbcount   = $organisms->build(1);
+    $hashes = $organisms->{'hashrefs'};
+# $hashes = $organisms->getTableInfo('hashrefs');
+    undef my @databases;
+    foreach my $hash (@$hashes) {
+        push @databases,$hash->{'dbasename'};
+    }
+
+# get a list of the current users
+
+    my $dbuser = $inventory->new($dbh,'USERS','arcturus');
+    my $nruser = $dbuser->build(1);
+
+# ****** start the return form with an inventory list ******     
+
+    $page->add("<br><h3>Welcome to the ARCTURUS contents manager</h3>",0,1);
+
+# flag if common tables are missing
+
+    if (@mtables) {
+        my $missing = @mtables;
+        $page->warningbox("There are $missing missing common tables!",0);
+        $page->tablelist(\@mtables);
+    }
+
+    $page->add('banner');
+
+# list organism databases
+
+    if ($dbcount) {
+        $page->add("<h4>There are $dbcount organism databases</h4>",1,1);
+    }
+    else {
+        $page->warningbox("There are no organism databases",1);
+    }
+
+    if (@tables == 0) {
+# abort and create the form for building the common database tables
+        $page->add("<h4>Create the ARCTURUS common database and tables</h4>");
+        $page->hline();
+        $page->linkbutton("CONTINUE","$arc_cgi_dir/create/arcturus/create",1);
+        $page->hline();
+        $page->flush();
+    } 
+    elsif (@databases >= 0) {
+
+        my $dbnr = @databases;
+        $page->frameborder(100,15); # set-up of page layout
+        $page->add(&htmlMenuPage($dbnr, $arc_cgi_dir),0,1);
+        $page->linkbutton("RETURN TO MAIN","$arc_html_dir/arcturus.html",1);
+
+    }
+    $page->form(0);
+    $page->flush();
+    $dbh->disconnect;
+    exit 0;
+}
+
+###############################################################################
+# actions on the sequence and cloning vector tables
+###############################################################################
+
+if ($database eq 'arcturus' && $option eq 'vectors') {
+
+# generate a choicebox
+
+    my $bgcolor = "bgcolor='lightblue'";
+    $page->form("$arc_cgi_dir/update/arcturus/vectortable");
+    $page->sectionheader("ARCTURUS contents manager");
+    $page->sectionheader("Sequence and Cloning Vector data update",3,1);
+    $page->add("<TABLE CELLPADDING=5>");
+    $page->add("<tr><td><INPUT type='radio' name='voption' value='update'></td>");
+    $page->add("<td $bgcolor>CHECK</td><td> Do a cross-check of all "); 
+    $page->add("vector data tables</td></tr>");
+    $page->add("<tr><td><INPUT type='radio' name='voption' value='vtedit' checked></td>");
+    $page->add("<td $bgcolor>MASTER</td><td> Edit the master table </td></tr>");
+    $page->add("</TD></TR></TABLE>",0,1);
+    $page->identify('10',8,1);
+    $page->submitbuttonbar($getMenu,1,0);
+    $page->form(0);
+    $page->flush();
+}
+elsif ($database eq 'arcturus' && $option eq 'vectortable') {
+
+# the choice made is in cgi parameter 'voption'; check username and password
+
+    my $function = $cgi->parameter('voption');
+    $page->sectionheader("ARCTURUS contents manager");
+    $page->sectionheader("Sequence and Cloning Vector data update",4,1);
+    my $confirm = $cgi->parameter('confirm',0); # no check on presence
+    $confirm = 0 if (!$confirm); # to avoid "undefined" messages
+    my $identify = $cgi->parameter('identify');
+    my $password = $cgi->parameter('password');
+    undef my $hash; undef my $error;
+    if (my $people = ArcturusTable->new($dbh,'USERS','arcturus',1)) {
+        $hash = $people->associate('hashref',$identify,'userid');
+    # test form completion
+        if ($cgi->{'und_error'}) {
+            $error = "Please define every input field";
+    # test if the user exists
+        }
+        elsif (!defined($hash) || !$hash) {
+            $error = "Unknown user: $identify";
+    # test password 
+        }
+        elsif (!$cgi->VerifyEncrypt($password,$hash->{'password'})) {
+            $error = "Invalid password provided for user $identify";
+        }
+    }
+    else {
+        $error = "Can't access the USERS table in ARCTURUS database";
+    }
+
+    if ($error) {
+    # error status aborts
+        my $return = "$arc_cgi_dir/update/arcturus/vectors";
+        $page->errorbox("Operation Refused!<br>$error",$return);
+    }
+    elsif ($function eq 'update' && $confirm ne 'CONFIRM') {
+    #  compose confirm form
+        my $action = "$arc_cgi_dir/update/arcturus/vectortable"; # "form" in promptbox
+        my $text = "A comprehensive cross-check of the Sequence Vector and Cloning ";
+        $text .= "Vector tables across all Organism databases will be done<p><p>";
+        $text .= "The master table will be updated as required";
+        $page->promptbox($text,$action,$getMenu);
+        $page->hidden('voption',$function);
+        $page->hidden('identify',$cgi->parameter('identify'));
+        $page->hidden('password',$cgi->parameter('password'));
+        $page->form(0);
+    } 
+    elsif ($function eq 'vtedit' && $confirm ne 'CONFIRM') {
+    # prepare edit form for master VECTOR table
+        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+        $page->form("$arc_cgi_dir/update/arcturus/vectortable");
+        $page->add($vectors->htmlEditTable('012'),0,1);
+    # submit changes under new function 'change'?
+        $page->hidden('voption','change');
+        $page->hidden('identify',$cgi->parameter('identify'));
+        $page->hidden('password',$cgi->parameter('password'));
+        $page->submitbuttonbar($getMenu,1,0); # return link to menu
+        $page->form(0);
+    } 
+    elsif ($function eq 'change' && $confirm ne 'CONFIRM') {
+    # generate confirm form for changes
+        my $cgihash = $cgi->{cgi_input};
+        my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+        my ($changes,$text) = $vectors->cgiEditTable($cgihash,0);
+        if (!$changes) {
+            $page->messagebox($text,$getMenu); # return link to menu
+        }
+        else {
+            $page->form("$arc_cgi_dir/update/arcturus/vectortable");
+            $page->promptbox($text,$action,$getMenu);
+            $cgi->delete('submit');
+            $page->ingestCGI($cgi); # transport current cgi input
+            $page->form(0);
+        }
+    } 
+    elsif ($confirm eq 'CONFIRM') {
+    # here a section to do the cross checking across the databases
+        undef my $report;
+        my $priviledge = &authorize($hash->{'priviledges'},3);
+        if ($priviledge < 2) {
+            $report .= "Operation Refused!<br>";
+            $report .= "User $identify has insufficient priviledge for this operation";
+            my $return = "$arc_cgi_dir/update/arcturus/vectors";
+            $page->errorbox($report,$return);
+        } 
+        elsif ($function eq 'update') {
+        # invoke subroutine  to do the cleanup
+            $report .= &cleanVectors($dbh);
+            my $return = "$arc_cgi_dir/update/arcturus/vectortable";
+            $return .= "\?voption=vtedit\&identify=$identify\&password=$password";
+            $page->messagebox($report,$return);
+        } 
+        elsif ($function eq 'change') {
+            my $cgihash = $cgi->{cgi_input};
+            my $vectors = ArcturusTable->new($dbh,'VECTORS','arcturus',1);
+            $report = $vectors->cgiEditTable($cgihash,1);
+            $page->messagebox($report,$getMenu);
+        }
+    }
+    $page->flush();
+}
+   
+###############################################################################
+# actions on the organism database table
+###############################################################################
+
+elsif ($database eq 'arcturus' && $option eq 'organisms') {
+
+    $page->sectionheader("ARCTURUS contents manager");
+    $page->sectionheader("Update organism database description",4,1);
+    my $organisms = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
+    $action = 'getform' if (!$action); # default
+    my $nrdbases = $organisms->build(1); 
+
+    if ($nrdbases <= 0) {
+        $page->errorbox("There are no organism databases",$getMenu);
+        $page->flush();
+        $dbh->disconnect;
+        exit 0;
+    } 
+    elsif ($action eq 'getform' && $nrdbases > 1) {
+        $page->form("$arc_cgi_dir/update/arcturus/organisms/editform");
+        my $list = "<TABLE><TR><TH>Select a database</TH><TD>:</TD>";
+        my $dbaselist = $organisms->htmlOptions('dbasename','dbasename',0,0,0);
+        $list .= "<TD>$dbaselist</TD></TR></TABLE>";
+        $page->add($list,0,1);
+        $page->submitbuttonbar($getMenu,1,0);
+    }
+    elsif (($action eq 'getform' && $nrdbases == 1) || $action eq 'editform') {
+        if ($action eq 'editform') {
+            $database = $cgi->parameter('dbasename');
+        }
+        else {
+            my $hash = $organisms->{'hashrefs'}->[0]; # the first entry 
+	    $database = $hash->{'dbasename'};
+        }            
+        $page->form("$arc_cgi_dir/update/arcturus/organisms/confirm");
+        my $editlist = $organisms->htmlEditRecord($database,'dbasename',0,'0122222000002000220');
+        if (!defined($editlist) || !$editlist) {
+            $page->errorbox("No such Organism database: $database",$getMenu);
+
+        }
+        else {  
+            $page->add($editlist,0,1);
+            $page->hidden('dbasename',$database);
+            $page->sectionheader("Complete changes and user identification and submit",4,0);
+            $page->identify('10',8,1);
+            $page->submitbuttonbar($getMenu,0,0);
+        }
+    }
+    elsif ($action eq 'confirm') {
+
+# the form is submitted for confirmation; test the user and password
+
+        $database = $cgi->parameter('dbasename',0);
+        my $identify = $cgi->parameter('identify');
+        my $password = $cgi->parameter('password');
+        my $confirm = $cgi->parameter('confirm',0);
+        $confirm = 0 if (!$confirm);
+
+        my $orgLink = "$arc_cgi_dir/update/arcturus/organisms"; 
+
+        undef my $hash; undef my $error;
+        if (my $people = ArcturusTable->new($dbh,'USERS','arcturus')) {
+            $people->build(1);
+            $hash = $people->associate('hashref',$identify,'userid');
+        # test form completion
+            if ($cgi->{'und_error'}) {
+                $error = "Please define every input field $cgi->{'und_error'} ";
+        # test if the user exists
+            } 
+            elsif (!defined($hash) || !$hash) {
+                $error = "Unknown user: $identify";
+        # test password 
+            } 
+            elsif (!$cgi->VerifyEncrypt($password,$hash->{'password'})) {
+                $error = "Invalid password provided for user $identify";
+        # test authorization
+            } 
+            elsif (&authorize($hash->{'priviledges'},3) < 3) {
+                $error = "User $identify has insufficient priviledge";
+            }
+        }
+        else {
+            $error = "Can't access the USERS table in ARCTURUS database";
+        }
+ 
+        if ($error) {
+    # error status aborts
+            $page->errorbox("Operation Refused!<br>$error",$getMenu);
+        }
+        elsif (!$confirm) {
+    # generate a confirm form for changes
+            my $cgihash = $cgi->{cgi_input};
+            my ($changes,$report) = $organisms->cgiEditTable($cgihash,0);
+            if (!$changes) {
+                $page->messagebox($report,$orgLink);
+            }
+            else {
+                my $action = "$orgLink/confirm";
+                $page->promptbox($report,$action,$orgLink);
+                $cgi->delete('submit');
+                $page->ingestCGI($cgi); # transport current cgi input
+                $page->form(0);
+            }
+	}
+	elsif ($confirm eq 'CONFIRM') {
+            undef my $report;
+            my $priviledge = &authorize($hash->{'priviledges'},3);
+            my $return = $orgLink; # may be redirected below
+            if ($priviledge < 2) {
+                $report .= "Operation Refused!<br>";
+                $report .= "User $identify has insufficient priviledge for this operation";
+                $return = "$arc_cgi_dir/update/arcturus/vectors"; # redirected
+                $page->errorbox($report,$return);
+            } 
+            else {
+                my $cgihash = $cgi->{cgi_input};
+                $report = $organisms->cgiEditTable($cgihash,1);
+            }
+            $page->messagebox($report,$return);
+	}
+    }
+    $page->form(0);
+    $page->flush();
+}
+
+###############################################################################
+
+else {
+
+   $page->errorbox("Invalid database '$database' or option '$option' for 'update'");
+   $page->add($cgi->PrintVariables());
+   $page->form(0);
+   $page->flush();
+}
+
+#******************************************************************************
+
+# $organisms->updateHistory($userid,0,2);
+
+$dbh->disconnect;
+exit 0;
+
+
+#******************************************************************************
+# script to update vector tables
+#******************************************************************************
+
+
+sub cleanVectors {
+    my $dbh = shift;
+
+    undef my $report;
+
+    my $vector = ArcturusTable->new($dbh,'VECTORS','arcturus');
+    $vector->build(1);
+    my $dbrefs = ArcturusTable->new($dbh,'ORGANISMS','arcturus');
+    $dbrefs->build(1);
+# my $hashes = $dbrefs->getTableInfo('hashrefs');
+    my $hashes = $dbrefs->{'hashrefs'};
+
+# go through all organism databases
+
+    foreach my $hash (@$hashes) {
+        my $database = $hash->{'dbasename'};
+
+    # get the Sequence Vector table; go through all entries and collect the
+    # vector names in lc; find reference in mastertable; 
+
+        my $svector = ArcturusTable->new($dbh,'SEQUENCEVECTORS',$database);
+        $svector->build(1);
+        my $entries = $svector->{'hashrefs'};
+        $report .= "<h4>Testing $database\.SEQUENCEVECTORS</h4>";
+        foreach my $entry (@$entries) {
+            my $name = $entry->{name};
+            my $lcname = lc($name);
+        # find name in master vector table
+            my $number = $vector->associate('vector',$lcname,'template');
+            if (!$number) {
+                $vector->counter('template',$lcname); # add new entry to VECTORS
+                $report .= "Vector template $lcname added to VECTORS<br>";   
+                $number = $vector->associate('vector',$lcname,'template'); # get new number
+            }
+            if (!$entry->{vector}) {
+                $svector->update('vector',$number,'name',$name);
+                $report .= "$name in SEQUENCEVECTORS associated ";
+                $report .= "with VECTOR nr. $number ($lcname)<br>"; 
+            } 
+            elsif ($entry->{vector} != $number) {
+                $report .= "WARNING! mis-match of existing SEQUENCEVECTORS ";
+                $report .= "vector nr. $entry->{vector} and template nr. $number<br>";
+            }
+            else {
+                $report .= "$name associated with VECTOR $lcname<BR>";
+            }
+        } # next table entry
+ 
+    # get the Cloning Vector table; go through all entries and collect the
+    # vector names in lc; find reference in mastertable; 
+
+        my $cvector = ArcturusTable->new($dbh,'CLONINGVECTORS',$database);
+        $cvector->build(1);
+        $entries = $cvector->{'hashrefs'};
+        $report .= "<h4>Testing $database\.CLONINGVECTORS</h4>";
+        foreach my $entry (@$entries) {
+            my $name = $entry->{name};
+            my $lcname = lc($name);
+        # find name in master vector table
+            my $number = $vector->associate('vector',$lcname,'template');
+            if (!$number) {
+                $vector->counter('template',$lcname); # add new entry to VECTORS
+                $report .= "Vector template $lcname added to VECTORS<br>";   
+                $number = $vector->associate('vector',$lcname,'template'); # get new number
+            }
+            if (!$entry->{vector}) {
+                $cvector->update('vector',$number,'name',$name);
+                $report .= "$name in CLONINGVECTORS associated ";
+                $report .= "with VECTOR nr. $number ($lcname)<br>"; 
+            }
+            elsif ($entry->{vector} != $number) {
+                $report .= "WARNING! mis-match of existing LONINGVECTORS ";
+                $report .= "vector nr. $entry->{vector} and template nr. $number<br>";
+            }
+            else {
+                $report .= "$name associated with VECTOR $lcname<BR>";
+            }
+        } # next table entry
+    } # next database
+    return $report; 
+}
+
+##############################################################################
+
+sub authorize {
+
+    my ($priviledge,$level) = @_;
+
+# print "authorize: priviledge=$priviledge<br>";    
+    return $priviledge;
+
+}
+
+##############################################################################
+
+sub htmlMenuPage {
+# return an html page with the main menu
+    my ($databases, $cgi_dir) = @_;
+    
+    my $menu = "<TABLE border=0 cellpadding=2>";
+
+# a) creation and edit of databases
+
+    $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Organism Databases</TH></TR>";
+    $menu .= "<TR><TD><A href=\"/dregister.html\">CREATE</A><TD>"; 
+    $menu .= "<TD>&nbsp</TD><TD>Create a new organism database</TD></TR>"; 
+
+# update and delete apply only when there are any databases
+# refer to create function select database and table to update/rebuild
+
+    if ($databases > 0) {
+        $menu .= "<TR><TD><A href=\"$cgi_dir/create/existing/getform\">REBUILD</A><TD>";
+        $menu .= "<TD>&nbsp</TD><TD>Rebuild a table in an organism database</TD></TR>";
+
+        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform\">EDIT</A><TD>";
+        $menu .= "<TD>&nbsp</TD><TD>Edit the description of an organism database</TD></TR>";
+ 
+#        $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/organisms/getform\">DROP</A><TD>";
+#        $menu .= "<TD>&nbsp</TD><TD>Edit the description of an organism database</TD></TR>";
+ 
+        $menu .= "<TR>&nbsp</TR>";
+        $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Reads & Contigs</TH></TR>";
+
+        $menu .= "<TR><TD><A href=\"$cgi_dir/rloader/arcturus/getform\">READ MANAGER</A><TD>";
+        $menu .= "<TD>&nbsp</TD><TD>Load reads into an organism database</TD></TR>";
+
+        $menu .= "<TR><TD><A href=\"$cgi_dir/cloader/arcturus/getform\">CONTIG MANAGER</A><TD>";
+        $menu .= "<TD>&nbsp</TD><TD>Load contigs into an organism database</TD></TR>";
+
+        $menu .= "<TR><TD><A href=\"$cgi_dir/cmanager/arcturus/getform\">MOVING AROUND</A><TD>";
+        $menu .= "<TD>&nbsp</TD><TD>Move contigs between Assemblies</TD></TR>";
+    }
+
+# c) users and projects
+
+    $menu .= "<TR>&nbsp</TR>";
+    $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>ARCTURUS Users</TH></TR>";
+
+    $menu .= "<TR><TD><A href=\"/uregister.html\">NEW USER</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Register a new user</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/modify\">UPDATE</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Modify user information</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/pwupdate\">PASSWORD</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Redefine user password</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/authorize\">AUTHORIZE</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Assign user priviledges</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/delete\">DELETE</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Delete or Retire a user</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/umanager/locate\">FIND</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Find a user</TD></TR>"; 
+
+    $menu .= "<TR>&nbsp</TR>";
+    $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Assemblies \& Projects</TH></TR>";
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/assembly\">NEW ASSEMBLY</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Create a new assembly</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/project\">NEW PROJECT</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Create a new project</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/users\">ASSIGN USERS</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Assign people to projects</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/amanager/preselect/contigs\">ALLOCATE CONTIGS</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Allocate contigs to projects</TD></TR>"; 
+
+# d) maintenance of common tables
+
+    $menu .= "<TR>&nbsp</TR>";
+    $menu .= "<TR><TH COLSPAN=1 ALIGN=LEFT BGCOLOR='yellow'>Common tables</TH></TR>";
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/create/arcturus/reinit\">REBUILD</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Rebuild a selected common table</TD></TR>"; 
+
+    $menu .= "<TR><TD><A href=\"$cgi_dir/update/arcturus/vectors\">UPDATE</A><TD>";
+    $menu .= "<TD>&nbsp</TD><TD>Homogenize vector information</TD></TR>"; 
+    $menu .= "</TABLE>";
+
+    return $menu;
+}
