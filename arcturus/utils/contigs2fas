@@ -5,7 +5,7 @@
 # This script extracts one or more contigs and generates a FASTA file
 
 use DBI;
-use Term::ReadKey;
+use DataSource;
 use Compress::Zlib;
 use FileHandle;
 
@@ -13,15 +13,8 @@ $verbose = 0;
 @dblist = ();
 
 while ($nextword = shift @ARGV) {
-    $host = shift @ARGV if ($nextword eq '-host');
-
-    $port = shift @ARGV if ($nextword eq '-port');
-
-    $mysqluser = shift @ARGV if ($nextword eq '-user');
-
-    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
-
-    $dbname = shift @ARGV if ($nextword eq '-database');
+    $instance = shift @ARGV if ($nextword eq '-instance');
+    $organism = shift @ARGV if ($nextword eq '-organism');
 
     $minlen = shift @ARGV if ($nextword eq '-minlen');
 
@@ -36,14 +29,24 @@ while ($nextword = shift @ARGV) {
     }
 }
 
-unless (defined($host) &&
-	defined($port) &&
-	defined($mysqluser) &&
-	defined($dbname) &&
+unless (defined($organism) &&
 	defined($fastafile)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
+}
+
+$instance = 'prod' unless defined($instance);
+
+$ds = new DataSource(-instance => $instance, -organism => $organism);
+
+$dbh = $ds->getConnection();
+
+unless (defined($dbh)) {
+    print STDERR "Failed to connect to DataSource(instance=$instance, organism=$organism)\n";
+    print STDERR "DataSource URL is ", $ds->getURL(), "\n";
+    print STDERR "DBI error is $DBI::errstr\n";
+    die "getConnection failed";
 }
 
 $fastafh = new FileHandle($fastafile, "w");
@@ -56,27 +59,7 @@ $qualityfh = new FileHandle($qualfile, "w");
 
 die "Unable to open quality file \"$qualfile\" for writing" unless $qualityfh;
 
-$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
-
-unless (defined($mysqlpass)) {
-    print STDERR "Enter MySQL password for $mysqluser\n";
-    ReadMode 'noecho';
-    $mysqlpass = ReadLine 0;
-    ReadMode 'normal';
-    chop $mysqlpass;
-}
-
-$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
-		    {PrintError => 1, RaiseError => 1});
-
 $minlen = 1000 unless defined($minlen);
-
-$query = "USE $dbname";
-print STDERR "Switching to database $dbname\n";
-$dbh->do($query);
-&db_die("$query failed");
-
-print STDERR "\n" if $verbose;
 
 $query = "select CONTIGS.contig_id,CONTIGS.length,CONSENSUS.sequence,CONSENSUS.quality " .
     "from CONTIGS left join CONSENSUS using(contig_id) ".
@@ -146,13 +129,11 @@ sub db_die {
 
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "    -host\t\tHostname of server\n";
-    print STDERR "    -port\t\tPort number of server\n";
-    print STDERR "    -user\t\tMySQL username\n";
-    print STDERR "    -database\t\tDatabase for reads\n";
+    print STDERR "    -organism\t\tName of organism\n";
     print STDERR "    -fasta\t\tName of output FASTA file\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -instance\t\tName of instance [default: prod]\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
     print STDERR "    -quality\t\tName of output quality file\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
