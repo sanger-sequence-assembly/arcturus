@@ -43,36 +43,6 @@ if(defined($database) && defined($table)) {
 	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print $cgi->h2("Table status for $database.$table");
-
-	$query = "SHOW TABLE STATUS LIKE '$table'";
-
-	$sth = $dbh->prepare($query);
-	&db_die("prepare($query) failed");
-
-	$sth->execute();
-	&db_die("execute($query) failed");
-
-	@values = $sth->fetchrow_array();
-
-	@colnames = @{$sth->{NAME}};
-
-	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
-
-	while ($colname = shift @colnames) {
-	    $colvalue = shift @values;
-
-	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
-
-	    print "<TR", ($colname eq 'Name' ? ' BGCOLOR="#FFCC00"' : ''), ">";
-	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
-	    print "<TD>$colvalue</TD></TR>\n";
-	}
-
-	$sth->finish();
-
-	print "</TABLE>\n";
-
 	print $cgi->h2("Table description for $database.$table");
 	
 	$query = "DESCRIBE $table";
@@ -101,6 +71,36 @@ if(defined($database) && defined($table)) {
 		print "<TD>", ((defined($item) && $item ne "") ? $item : "&nbsp;"), "</TD>\n";
 	    }
 	    print "</TR>\n";
+	}
+
+	$sth->finish();
+
+	print "</TABLE>\n";
+
+	print $cgi->h2("Table status for $database.$table");
+
+	$query = "SHOW TABLE STATUS LIKE '$table'";
+
+	$sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("execute($query) failed");
+
+	@values = $sth->fetchrow_array();
+
+	@colnames = @{$sth->{NAME}};
+
+	print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
+
+	while ($colname = shift @colnames) {
+	    $colvalue = shift @values;
+
+	    $colvalue = "&nbsp;" if (!defined($colvalue) || $colvalue =~ /^\s*$/);
+
+	    print "<TR", ($colname eq 'Name' ? ' BGCOLOR="#FFCC00"' : ''), ">";
+	    print "\n<TD><STRONG>$colname</STRONG></TD>\n";
+	    print "<TD>$colvalue</TD></TR>\n";
 	}
 
 	$sth->finish();
