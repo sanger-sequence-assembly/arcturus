@@ -165,4 +165,6 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-dropcontigtable\tDrop the CONTIG table and re-create it\n";
+    print STDERR "-username\t\tMySQL username with DROP TABLE privileges\n";
+    print STDERR "-password\t\tMySQL password for user with DROP TABLE privileges\n";
 }
