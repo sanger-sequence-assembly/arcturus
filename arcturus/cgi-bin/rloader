@@ -200,13 +200,6 @@ if ($cgi) {
     # update the data dir name (if assembly has changed)
                 my $target = $asname; $target =~ s/\d+/\\d\+/g;
                 $config{RDD} =~ s/$target/$asname/ if $config{RDD};
-    # next handles the case where RDD is not yet defined
-                if (!$config{RDD} || $config{RDD} =~ /to be d/) {
-                    my $repository = new PathogenRepository;
-                    $config{RDD} = $repository->getAssemblyDirectory($asname);
-                    $config{RDD} =~ s/\/assembly//; 
-print "RDD Ib:  $config{RDD} <br>";
-                }
     # overwrite the preset configuration data with those in ORGANISM attributes if any
                 $config{LGF} =~ s/DATABASE/$database/; # log file
                 foreach my $key (keys %config) {
@@ -216,6 +209,13 @@ print "RDD Ib:  $config{RDD} <br>";
 		$attributes = $assembly->unpackAttributes($asname,'assemblyname');
                 foreach my $key (keys %config) {
                     $config{$key} = $attributes->{$key} if defined($attributes->{$key});
+                }
+    # next handles the case where RDD remained defined
+                if (!$config{RDD} || $config{RDD} =~ /to be d/) {
+                    my $repository = new PathogenRepository;
+                    $config{RDD} = $repository->getAssemblyDirectory($asname);
+                    $config{RDD} =~ s/\/assembly//; 
+print "RDD taken from Repository:  $config{RDD} <br>";
                 }
     # open the form and replace the placeholders
                 my $form = form2($source);
