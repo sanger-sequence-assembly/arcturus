@@ -159,7 +159,7 @@ sub countContigs {
     if ($DBI::err) {
 	return undef;
     } else {
-	$query = 'select count(*) from CONTIGS';
+	$query = 'select count(*) from CONTIG';
 
 	my $sth = $dbh->prepare($query);
 	&db_die("prepare($query) failed");
