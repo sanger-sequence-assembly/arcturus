@@ -190,7 +190,7 @@ if ($cgi) {
         }
         else {
     # open assembly database; abort if no assemblies defined
-            $assembly  = $organisms->spawn('ASSEMBLY',$database,0,1);
+            $assembly = $organisms->spawn('ASSEMBLY',$database,0,1);
             if ($assembly && $assembly->count() > 0) {
     # get the default assembly name if no assemblyname in CGI input; first try attributes
 		my $attributes = $organisms->unpackAttributes($database,'dbasename');
@@ -251,6 +251,8 @@ print "RDD taken from Repository:  $config{RDD} <br>";
             }
             else {
                 $page->errorbox("There are no assemblies defined for $database",0,0,'yellow');
+                my $count = $assembly->count() || 0;
+                $page->messagebox("assembly $assembly $count");
                 $page->messagebox("Please contact $db_manager or your project manager",$lreturn);
             }
         }
@@ -858,6 +860,7 @@ print $reader->list($origin,1);
         }
         if ($errors && $READS->{qerror} =~ /already\sexists/) {
             $PENDING->delete('readname',$entry->{ID}) if $entry->{ID};
+            $ignored++;
         }
         elsif ($errors) {
             $ignored++;
