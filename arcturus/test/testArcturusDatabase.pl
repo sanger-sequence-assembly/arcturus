@@ -53,7 +53,7 @@ foreach $readrange (@{$readranges}) {
 	$read = $adb->getReadByID($readid);
 
 	if (defined($read)) {
-
+	    print $fh "\n" if ($ndone > 1);
 	    $read->writeToCaf($fh);
 	} else {
 	    print STDERR "Read $readid does not exist.\n";
