@@ -603,7 +603,7 @@ sub linkToContig {
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
-    my $relaxed = shift; # set True for relaxed comparison of mappings
+    my $relaxed = shift || 0; # set True for relaxed comparison of mappings
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
 
