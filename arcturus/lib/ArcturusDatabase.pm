@@ -1204,7 +1204,7 @@ sub getDictionaryItemID {
         $placeholders .= ",?";
     } 
 
-    my $insert = "insert into $tablename ($insertkeys) VALUES ($placeholders)";
+    my $insert = "insert ignore into $tablename ($insertkeys) VALUES ($placeholders)";
 
     $sth = $dbh->prepare_cached($insert);
 
