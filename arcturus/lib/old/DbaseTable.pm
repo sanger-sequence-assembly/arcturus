@@ -504,6 +504,7 @@ sub makeFullTableName {
 
     my $database = $self->{database};
     my $dbhandle = $self->{dbhandle};
+print "makeFullTableName: no table handle" if !$self->{dbhandle};
     $dbhandle =~ s/.*\((\w+)\).*/$1/; # strip out clutter
     my $prefix = $dbhandle.'.'.$database;
 
