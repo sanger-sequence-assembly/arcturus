@@ -203,7 +203,8 @@ if ($cgi) {
     # next handles the case where RDD is not yet defined
                 if (!$config{RDD} || $config{RDD} =~ /to be d/) {
                     my $repository = new PathogenRepository;
-                    $config{RDD} = $repository->getSplitDirectory($asname); 
+                    $config{RDD} = $repository->getAssemblyDirectory($asname);
+                    $config{RDD} =~ s/\/assembly//; 
 print "RDD Ib:  $config{RDD} <br>";
                 }
     # overwrite the preset configuration data with those in ORGANISM attributes if any
