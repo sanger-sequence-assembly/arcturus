@@ -26,7 +26,7 @@ my $GateKeeper = GateKeeper->new('mysql',0);
 
 my ($cgi, $database, $blocksize, $start, $length, $noskip);
 if ($cgi = $GateKeeper->cgiHandle(1)) {
-    $database  = $cgi->parameter('organism');
+    $database  = $cgi->parameter('organism')  || $cgi->parameter('database');
     $blocksize = $cgi->parameter('blocksize') || 10000;
     $start     = $cgi->parameter('start')     || 1;
     $length    = $cgi->parameter('length')    || 100000;
@@ -40,7 +40,7 @@ else {
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-my $status = $GateKeeper->authorize(100,{nosession => 1, silently => 0});
+my $status = $GateKeeper->authorize(100,{silently => 1});
 
 if (!$status) {
     my $error = $GateKeeper->{error};
@@ -62,16 +62,19 @@ $GateKeeper->focus(1);
 
 my $READS   = $organisms->spawn('READS',$database,0);
 my $PAIRS   = $organisms->spawn('READPAIRS',$database,0);
+my $maximum = $READS->count;
 
 $organisms->setTracer(0); # disable automatic query tracing
 
 my $continue = 1;
 $length = $length + $start;
+$length = $maximum if ($length > $maximum);
 my $list = 0;
 
 while ($continue) {
 
     my $final = $start - 1 + $blocksize;
+    $final = $maximum if ($final > $maximum);
     print "Processing block $start - $final \n";
     my $tested = 0;
     my $paired = 0;

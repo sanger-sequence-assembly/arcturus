@@ -24,15 +24,14 @@ select(STDOUT); $| = 1; # Make unbuffered.
 
 my $GateKeeper = GateKeeper->new('mysql',0);
 
-my ($cgi, $database, $blocksize, $start, $length, $suffix, $nosession);
+my ($cgi, $database, $blocksize, $start, $length, $suffix, $mksession);
 if ($cgi = $GateKeeper->cgiHandle(1)) {
-    $database  = $cgi->parameter('organism')  || 'arcturus';
+    $database  = $cgi->parameter('organism')  || $cgi->parameter('database') || 'arcturus';
     $blocksize = $cgi->parameter('blocksize') || 1000;
     $start     = $cgi->parameter('start')     || 1;
     $length    = $cgi->parameter('length')    || 100000;
     $suffix    = $cgi->parameter('suffix');
-    $nosession = $cgi->MethodGet || 0;
-    $nosession = 0 if ($cgi->parameter('session'));   
+    $mksession = !$cgi->MethodGet || 0;
 }
 else {
     $database  = shift @ARGV;
@@ -40,12 +39,13 @@ else {
     $start     = shift @ARGV || 1;
     $length    = shift @ARGV || 10000;
     $suffix    = shift @ARGV;
-    $nosession = 1;
+    $mksession = 0;
 }
 
 my $organisms  = $GateKeeper->dbHandle($database,{returnTableHandle => 1});
 
-if (!$GateKeeper->authorize(100,{nosession => $nosession, silently => 1, diagnosis => 1, ageWindow => 25})) {
+my %options = (makeSession => $mksession, silently => 1, diagnosis => 1, ageWindow => 25);
+if (!$GateKeeper->authorize(100,\%options)) {
     my $error = $GateKeeper->{error};
     $GateKeeper->dropDead($error);
 }
@@ -58,6 +58,7 @@ undef my $redirect;
 
 if ($cgi && $database ne 'arcturus' && $noGUI) {
     $GateKeeper->cgiHeader(1); # return string plain
+# what about defaults?
 }
 elsif ($cgi && $noGUI) {
     $GateKeeper->dropDead("Please define a database");
@@ -96,7 +97,7 @@ elsif ($cgi) {
         $page->preload('start',$start,1);
         $page->preload('length',$length,1);
         $page->preload('suffix',$suffix,1) if $suffix;
-        $cgi->delete('USER');
+#   $cgi->delete('USER');
         $page->ingestCGI;
         my @buttons;
 #        push @buttons, 'type=submit value="Redirect" name="redirect"' if !$redirect;
@@ -138,16 +139,19 @@ my $STRANDS = $organisms->spawn('STRANDS',$database,0,1);
 
 $READS->setTracer(0); # switch off query tracing
 $PAIRS->setMultiLineInsert(10); # block inserts
+my $maximum = $READS->count;
 
 # $GateKeeper->disconnect; exit 0; # test mode
 
 my $continue = 1;
 my $tlength = $length + $start;
+$tlength = $maximum if ($tlength > $maximum);
 my $list = 0;
 
 while ($continue) {
 
     my $final = $start - 1 + $blocksize;
+    $final = $tlength if ($final > $tlength);
     print "Processing block $start - $final : ";
     my $tested = 0;
     my $paired = 0;
@@ -175,7 +179,7 @@ while ($continue) {
     my @hashes = sort {$a <=> $b;} keys (%$hashes);
 
     if (!@hashes) {
-        print "No data found in block $start -  $final$brtag";
+        print "No (unallocated) data found in block $start -  $final$brtag";
     }
     else {
         my $nr = @hashes;
