@@ -1147,11 +1147,12 @@ sub chemistry {
         $diagnosis .= "($SCFREADDIR/get_scf_field ${readFileName}SCF)\n";
         $readItem{RPS} += 32768*16 ; # bit 20 
 # try to recover using Chemtype description
-        if ($chemistry = $CHEMTYPES->associate('identifier',$readItem{CH},'chemtype')) {
+        if ($chemistry = $CHEMTYPES->associate('description',$readItem{CH},'chemtype')) {
             $readItem{CH} = $chemistry;
 &logger("... recovered: = $readItem{CH})");
         }
         else {
+&logger("... NOT recovered: = $readItem{CH})");
             delete $readItem{CH}; # remove meaningless info
         }
 print "REPORT $report<br>";
