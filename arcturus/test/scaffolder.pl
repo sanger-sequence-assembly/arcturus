@@ -81,6 +81,22 @@ while (my ($ctgid, $ctglen) = $sth->fetchrow_array()) {
 $sth->finish();
 
 ###
+### Make a contig-to-project mapping
+###
+
+my $project = {};
+
+$sth = $statements->{'projectforcontig'};
+
+$sth->execute();
+
+while (my ($ctgid, $projid) = $sth->fetchrow_array()) {
+    $project->{$ctgid} = $projid if defined($contiglength->{$ctgid});
+}
+
+$sth->finish();
+
+###
 ### Process each contig in turn
 ###
 
@@ -196,7 +212,8 @@ foreach my $contigid (@contiglist) {
 	if ($isContig) {
 	    my ($contigid, $contigdir) = @{$item};
 	    my $contiglen = $contiglength->{$contigid};
-	    $report .= "  CONTIG $contigid ($contiglen) $contigdir\n";
+	    my $projid = $project->{$contigid};
+	    $report .= "  CONTIG $contigid/$projid ($contiglen) $contigdir\n";
 	    push @{$item}, ($contigdir eq 'F') ? $curpos : $curpos + $contiglen;
 	    $contigref{$contigid} = $item;
 	    $totlen += $contiglen;
@@ -257,12 +274,14 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 	    my $scaffold = $contigtoscaffold->{$contig_id};
 	    next unless defined($scaffold);
 
+	    my $projid = $project->{$contig_id};
+
 	    $found++;
 
 	    print "BAC_CLONE $template_id ($template_name) $silow $sihigh\n\n" if ($found == 1);
 
 	    print "    READ $read_id ($readname) STRAND $strand SEQ $seq_id\n";
-	    print "        IN CONTIG $contig_id $cstart..$cfinish $direction\n";
+	    print "        IN CONTIG $contig_id/$projid $cstart..$cfinish $direction\n";
 
 	    my $scaffoldid = $scaffoldtoid{$scaffold};
 
@@ -327,6 +346,10 @@ sub CreateStatements {
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
 		   " order by CONTIG.length desc",
+
+		   "projectforcontig",
+		   "select CONTIG.contig_id,project" .
+		   "  from CONTIG left join CONTIG2PROJECT using(contig_id)",
 
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
