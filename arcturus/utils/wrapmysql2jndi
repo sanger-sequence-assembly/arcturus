@@ -8,7 +8,11 @@ while ($nextword = shift) {
     $instance = shift if ($nextword eq '-instance');
 
     $registercommand = shift if ($nextword eq '-registercommand');
+
+    $ldap = 1 if ($nextword eq '-ldap');
 }
+
+$ldap = 0 unless defined($ldap);
 
 die "You must specify a configuration file (-inifile FILENAME)" unless defined($inifile);
 
@@ -32,6 +36,8 @@ foreach $organism (@organisms) {
 
     if (defined($hostname) && defined($port) && defined($username) && defined($password) &&
 	defined($database)) {
+	$organism = "cn=$organism" if ($ldap);
+
 	$cmd = "$registercommand -organism $organism -instance $instance -host $hostname " .
 	    "-port $port -username $username -password $password -database $database";
 
