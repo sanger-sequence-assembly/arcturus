@@ -1923,7 +1923,7 @@ sub newencode {
 sub insert {
 # insert a new record into the READS database table
     my $self = shift;
-    my $atop = shift; # add to pending
+    my $atop = shift; # add to pending on failure
 
     &timer('insert',0) if $DEBUG; 
 
@@ -2019,7 +2019,11 @@ sub insert {
 
 # how to insert into READS and DNA? What about the template?
         if (!$READS->newrow('readname',$readItems->{ID},\@columns,\@cvalues)) {
-# here develop update of previously loaded reads
+# add the DNA, Quality data to the other table
+# insert into DNA (read_id=last_insert_id() etc)
+#        } 
+#        else {
+# entry failed
             $status->{diagnosis}  = "Failed to create new entry for read $readItems->{ID}";
             $status->{diagnosis} .= ": $READS->{qerror}" if $READS->{qerror};
             $status->{diagnosis} .= "$break";
@@ -2037,7 +2041,7 @@ sub insert {
 		    }
 		}
             }
-        } 
+        }
     }
 
     &timer('insert',1) if $DEBUG; 

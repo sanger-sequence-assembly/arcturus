@@ -1066,7 +1066,7 @@ print "GateKeeper authorize: $identify $password session $session \n" if $debug;
 
     my $mother = $self->{mother};
 
-    undef my $priviledges; 
+    undef my $privileges; 
     undef my $seniority; 
     undef my $attributes;
 
@@ -1083,9 +1083,9 @@ print "GateKeeper authorize: $identify $password session $session \n" if $debug;
        ($identify, my $code) = split ':',substr($session,0,-2);
         my $users = $mother->spawn('USERS','self',0,1);
         if (my $hashref = $users->associate('hashref',$identify,'userid')) {
-            $priviledges = $hashref->{priviledges} || 0;
-            $seniority   = $hashref->{seniority}   || 0;
-            $attributes  = $users->unpackAttributes($identify,'userid');
+            $privileges = $hashref->{privilegea} || 0;
+            $seniority  = $hashref->{seniority}  || 0;
+            $attributes = $users->unpackAttributes($identify,'userid');
             my $seed = &compoundName($identify,'arcturus',8);
             if (!$cgi->VerifyEncrypt($seed,$code)) { # check integrity 
                 $self->{report} .= "! Corrupted session number $session";
@@ -1215,30 +1215,30 @@ print "GateKeeper authorize 2 report $self->{report} \n" if $debug;
         undef $self->{error};
         $self->{seniority} = 0;
         if (!$self->instance || $users->{errors}) {
-# there is no (valid) user information: default to priviledged usernames and database password
+# there is no (valid) user information: default to privileged usernames and database password
             my $allowed = $self->{config}->get("devserver_access",'insist unique array');
             my $string  = join ' ',@$allowed;
             if (!$identify || !$password) {
                 $self->{error} = "Missing username or database password";
             }
             elsif ($string !~ /\b$identify\b/) {
-                $self->{error} = "User $identify has no database priviledges on this server";
+                $self->{error} = "User $identify has no database privileges on this server";
             }
             elsif ($password ne $self->{config}->get('mysql_password')) {
                 $self->{error} = "Invalid database password provided for user $identify";
             }
-            $priviledges = $code; # forces acceptance
+            $privileges = $code; # forces acceptance
         }
         elsif (my $hash = $users->associate('hashref',$identify,'userid')) {
-            $priviledges = $hash->{priviledges} || 0;
-            $seniority   = $hash->{seniority}   || 0;
-            $attributes  = $users->unpackAttributes($identify,'userid');
+            $privileges = $hash->{privilegea} || 0;
+            $seniority  = $hash->{seniority}  || 0;
+            $attributes = $users->unpackAttributes($identify,'userid');
             $self->{seniority} = $seniority; # for use outside the GateKeeper
 # superuser 'oper' has a special status; accounts defined on start-up have to be initialize by 'oper'
 print "identify '$identify'  hash '$hash->{password}'  passwd '$password' \n" if $debug;
             if ($hash->{password} eq 'arcturus' && $identify eq 'oper') {
 # there are two possible passwords allowed: either 'arcturus' (unencrypted after startup) or the database password
-# print "passage 1 priv: $priviledges<br>";
+# print "passage 1 priv: $privileges<br>";
                 if ($password ne 'arcturus' && $password ne $self->{config}->get('mysql_password')) {
                     $self->{error}  = "Invalid password !\nInitialize the operations account ";
                     $self->{error} .= "by\n defining a new password (MODIFY users)";
@@ -1252,8 +1252,8 @@ print "identify '$identify'  hash '$hash->{password}'  passwd '$password' \n" if
             elsif (!$cgi->VerifyEncrypt($password,$hash->{password})) {
                 $self->{error} = "Invalid password provided for user $identify";
             }
-            elsif (!$priviledges) {
-                $self->{error} = "User $identify has no priviledges set";
+            elsif (!$privileges) {
+                $self->{error} = "User $identify has no privileges set";
             }
 print "passage 5  error $self->{error} \n" if $debug;
         }
@@ -1336,7 +1336,7 @@ print "GateKeeper authorize Test Error\n" if $debug;
     &report($self) if !$options{silently};
     undef $self->{report};
 
-# here priviledges should be defined; test priviledge(s) sought
+# here privileges should be defined; test privilege(s) sought
 
     my $mask = $code;
     if (ref($code) eq 'HASH') {
@@ -1354,14 +1354,14 @@ print "GateKeeper authorize Test Error\n" if $debug;
             }   
 # test the seniority of the user mentioned against the one of $identify
             elsif ($seniority < 6 && $seniority <= $users->associate('seniority',$user,'userid')) {
-                $self->{error} = "User $identify has no priviledge for this operation";
+                $self->{error} = "User $identify has no privilege for this operation";
                 $self->{error} .= ": insufficient seniority";
                 return 0;
             }        
         }
 # test seniority
         if ($code->{seniority} && $seniority < $code->{seniority}) {
-            $self->{error} = "User $identify has no priviledge for this operation: ";
+            $self->{error} = "User $identify has no privilege for this operation: ";
             $self->{error} .= "insufficient seniority ($code->{seniority} required)";
             return 0;
         }
@@ -1373,7 +1373,7 @@ print "GateKeeper authorize Test Error\n" if $debug;
 # if database mentioned, access is restricted to these
         my $database = $self->{database} || 'arcturus';
         if ($attributes->{databases} && $attributes->{databases} !~ /\b$database\b/) {
-            $self->{error} = "User $identify has no access priviledge for $database";
+            $self->{error} = "User $identify has no access privilege for $database";
             return 0;
         }
 # if tables are mentioned, set-up the $self->{taccess} parameter for processing elsewhere
@@ -1384,7 +1384,7 @@ print "GateKeeper authorize Test Error\n" if $debug;
             $tables = \@tables if (ref($tables) ne 'ARRAY');
             foreach my $table (@$tables) {
                 if (!$self->allowTableAccesss($table)) {
-                    $self->{error} .= "User $identify has no access priviledge for ";
+                    $self->{error} .= "User $identify has no access privilege for ";
                     $self->{error} .= "database table $table\n";
 	        }
             }
@@ -1392,13 +1392,13 @@ print "GateKeeper authorize Test Error\n" if $debug;
         }
     }
 
-# test if the required priviledge matches the 
+# test if the required privilege matches the 
 
     if ($mask) {
-# &report ($self,"code $code  mask $mask priviledges $priviledges");
-        if (!$priviledges || $mask != ($mask & $priviledges)) {
-            $self->{error} = "User $identify has insufficient priviledge for this operation";
-	    $self->{error} .= "(pr: $priviledges mask $mask)";
+# &report ($self,"code $code  mask $mask privileges $privileges");
+        if (!$privileges || $mask != ($mask & $privileges)) {
+            $self->{error} = "User $identify has insufficient privileges for this operation";
+	    $self->{error} .= "(pr: $privileges mask $mask)";
             return 0;
         }
     }
@@ -1421,7 +1421,7 @@ sub allowServerAccess {
         my $allowed = $self->{config}->get('devserver_access','insist unique array');
         my $string = join ' ',@$allowed;
         if ($string !~ /\b$user\b/) {
-            $self->{error} = "User '$user' has no priviledges on the development servers";
+            $self->{error} = "User '$user' has no privileges on the development servers";
             return 0;
         }
     }
@@ -1825,15 +1825,16 @@ sub GUI {
         $update = "/cgi-bin/emanager/pairstest".$cgi->postToGet(1,@include); # other URL
         $table .= "<tr><td $cell><a href=\"$update\" $alt> Pairs </a></td></tr>";
 
-#        $title = "TEST DATABASE ".uc($database)." STRUCTURE";
-#        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-#        $update = "/cgi-bin/create/existing/overview".$cgi->postToGet(1,@include); # other URL
-#        $table .= "<tr><td $cell><a href=\"$update\" $alt> $database </a></td></tr>";
+        $title = "CHANGE DESCRIPTIONS OF ".uc($database)." OR ITS ASSEMBLIES, PROJECTS OR VECTORS";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $update = "/cgi-bin/emanager/editor/editmenu".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> Edits </a></td></tr>";
+
+        $title = "UPDATE OF ".uc($database)." OR ITS ASSEMBLY";
+        $alt = "onMouseOver=\"window.status='$title'; return true\""; 
+        $update = "/cgi-bin/emanager/editor/assembly".$cgi->postToGet(1,@include); # other URL
+        $table .= "<tr><td $cell><a href=\"$update\" $alt> Assembly </a></td></tr>";
     }
-    $title = "CHANGE DESCRIPTIONS OF ".uc($database)." OR ITS ASSEMBLIES, PROJECTS OR VECTORS";
-    $alt = "onMouseOver=\"window.status='$title'; return true\""; 
-    $update = "/cgi-bin/emanager/editor/getmenu".$cgi->postToGet(1,@include); # other URL
-    $table .= "<tr><td $cell><a href=\"$update\" $alt> Edits </a></td></tr>";
 
     $table .= "</table>";
     $page->add($table);

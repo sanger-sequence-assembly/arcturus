@@ -6,7 +6,6 @@ use strict;
 
 use Bootean;
 
-#use vars qw($VERSION @ISA); 
 our ($VERSION, @ISA);
 
 @ISA = qw(Bootean);

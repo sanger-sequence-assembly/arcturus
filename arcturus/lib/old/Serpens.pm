@@ -54,7 +54,7 @@ print "SERPENS: $self \n" if $DEBUG;
 =cut
 
 #############################################################################
-# GeneDB Interface; functions require access priviledge to GENE2CONTIGS table
+# GeneDB Interface; functions require access privilege to GENE2CONTIGS table
 #############################################################################
 
 sub query {

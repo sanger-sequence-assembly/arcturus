@@ -500,7 +500,6 @@ run from the Arcturus GUI under B<TEST> --E<gt> B<MENU> --E<gt> B<PAIRS>
 
 =item ReadsReader.pm 
 
-
 =item Compress.pm
 
 =back 
@@ -563,7 +562,7 @@ DNA sequence data
 
 =item scompress    
 
-Sequence compression code:
+Sequence compression code: (obsolete in next release)
 
 =over 8
 
@@ -573,6 +572,8 @@ Sequence compression code:
 
 =item 2 for Huffman compression
 
+=item 99 for Z compression
+
 =back
 
 =item quality      
@@ -581,7 +582,7 @@ Basecaller Quality data
 
 =item qcompress    
 
-Quality data compression code
+Quality data compression code: (obsolete in next release)
 
 =over 8
 
@@ -592,6 +593,8 @@ Quality data compression code
 =item 2 for Huffman compression on text string
 
 =item 3 for Huffman compression on difference data
+
+=item 99 for Z compression
 
 =back
 
@@ -697,6 +700,8 @@ any (i.p. comment found in flat files)
 =back
 
 =cut
+#=item COMMENT
+#---------------------------------------------------------------------------------
 # new readstable structure to be implemented
 
 sub create_NEWREADS {
@@ -747,6 +752,7 @@ sub create_NEWREADS {
 }
 
 #---
+# scompress, qcompress redundent, laways Z compression used
 
 sub create_DNA {
     my ($dbh, $list) = @_;
@@ -783,7 +789,7 @@ sub create_TEMPLATE {
     print STDOUT "... DONE!\n" if ($list);
 }
 
-#---
+#--- dictionary table
 
 sub create_COMMENT {
     my ($dbh, $list) = @_;
@@ -823,6 +829,7 @@ sub create_READEDITS {
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table READEDITS
 
@@ -854,7 +861,7 @@ number of base affected
 
 =item edit
 
-char(40 encoded edit: ....
+char(4) encoded edit: ....
 # edits  : list of substitutions for individual bases in read, code: nnnGa nnnT etc.
 #         (substitute "G" at position nnn by "a", delete "T" at position nnn)
 # edit  : substitution value of blank for delete
@@ -868,7 +875,11 @@ deprecation status: 'Y' for no longer valis, 'N' for current; transient 'X'
 
 =head2 Linked Tables on key read_id
 
-READS
+=over 4
+
+=item READS
+
+=back
 
 =cut
 
@@ -894,14 +905,17 @@ sub create_READPAIRS {
     print STDOUT "Index RFINDEX and RRINDEX ON READPAIRS ... DONE\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table READPAIRS
 
 =head2 Synopsis
 
-Read_ids of forward and reverse memebers of a read pair; a read can 
+Read IDs of forward and reverse members of a read pair; a read can 
 occur in more than one pair. This table has to be updated by running
-the find-complement script after each new addition of reads. The table
+the find-complement script after each new addition of reads. 
+
+The table
 facilitates easy location of read-pair bridges between contigs
 
 =head2 Scripts & Modules
@@ -946,27 +960,11 @@ see http://www.sanger.ac.uk/Software/sequencing/docs/harper/asmReadpairs.shtml d
 
 =back
 
-=head2 Linked Tables on key forward
+=head2 Linked Tables on keys forward & reverse
 
 =over 4
 
 =item READS
-
-=item READS2CONTIG
-
-=item READS2ASSEMBLY
-
-=back
-
-=head2 Linked Tables on key reverse
-
-=over 4
-
-=item READS
-
-=item READS2CONTIG
-
-=item READS2ASSEMBLY
 
 =back
 
@@ -997,6 +995,7 @@ sub create_READTAGS {
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table READTAGS
 
@@ -1040,7 +1039,11 @@ deprecation status: 'Y' for no longer valid, 'N' for current; transient 'X'
 
 =head2 Linked Tables on key read_id
 
-READS
+=over 4
+
+=item READS
+
+=back
 
 =cut
 
@@ -1061,16 +1064,50 @@ sub create_PENDING {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table PENDING
 
 =head2 Synopsis
 
+Temporary storage of read(name)s to be loaded. This table is populated
+by the r(eads)loader script with reads which failed to load, or by the
+assembly loading script (cloader) in read-check mode.
+
+The table is de-populated by the reads loader script once a read is 
+successfully loaded, e.g. by using the forced-load option
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item rloader
+
+=item cloader
+
+=item cafloader
+
+=item ReadsReader.pm
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 4
+
+=item record
+
+Auto-incremented counter 
+
+=item readname
+
+Full read name 
+
+=item assembly
+
+Assembly number 
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -1127,16 +1164,138 @@ sub create_READS2CONTIG {
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table READS2CONTIG
 
 =head2 Synopsis
 
+Table for individual and overall reads-to-contig mappings in an assembly. 
+
+This table is populated by the assembly loader script.
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item cloader (I<script>)
+
+=item ReadMapper.pm
+
+=item ContigBuilder.pm
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key
+=over 8
+
+=item contig_id
+
+number of contig in CONTIGS table 
+
+=item read_id
+
+number of read in READS table
+
+=item pcstart
+
+begin position of mapping on the contig
+
+=item pcfinal
+
+end position of mapping on the contig 
+
+=item read_id
+
+number of read in READS table
+
+=item prstart
+
+begin position of mapping on the read
+
+=item prfinal
+
+end position of mapping on the read 
+
+=item label
+
+encodes mapping type (T) and alignment (A) as: 10T + A
+
+=over 16
+
+=item  T = 0 for one of a series of mapped read sections
+
+=item  T = 1 this mapped section is the only mapping for this read
+
+=item  T = 2 the maping is the overal map of all read sections
+
+=item  A = 0 for a read aligned with the contig,
+
+=item  A = 1 for a counter-aligned read against the contigs direction
+
+=back
+
+Valid values are: 0, 1, 10, 11, 20, 21 
+
+To access the individual mappings select on label < 20
+
+To access the overall mapping of a read to the contig select on label >= 10
+
+(Alignment information is also in the order of pcstart & pcfinal)
+
+=item clone
+
+number of clone in CLONES table
+
+(duplicates info in READS table, but is included to facilitate
+fast access by Cyclops to derive clone maps)
+
+=item assembly
+
+number of assembly in ASSEMBLY table
+
+(duplicates info in CONTIGS2SCAFFOLD but required for generations update)
+
+=item generation
+
+generation counter, incremented after each completed assembly
+
+=item deprecated
+
+flag to mark the status of the mapping
+
+=over 16
+
+=item N for a new mapping
+
+=item M for a mapping marked for deletion after a generation update
+
+=item Y for a mapping no longer current, i.e. superseeded by a later mapping
+
+=item X for a final mapping, i.e. the read disappears from the assembly
+
+=back
+
+=item blocked
+
+flag used in full-proof upgrade generation counters
+
+=back
+
+=head2 Linked Tables
+
+=over 4
+
+=item CONTIGS on key contig_id
+
+=item READS on key read_id
+
+=item ASSEMBLY on key assembly
+
+=item CLONES on key clones
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -1148,7 +1307,6 @@ sub create_READS2ASSEMBLY {
 
 # reads to assembly (e.g. chromosome, blob)
 # assembly REF to assembly id number
-# locked : reference to USER table; 0 if not locked by anyone
 # astatus: assembly status: 0 for read in  bin of the assembly (not allocated) 
 #                           1 for soft allocation e.g. temporarilly by finisher
 #                           2 for firm allocation in a contig 
@@ -1168,16 +1326,63 @@ sub create_READS2ASSEMBLY {
     print STDOUT "Index BIN_INDEX ON READS2ASSEMBLY ... DONE\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table READS2ASSEMBLY 
 
 =head2 Synopsis
 
+Allocation of reads to an assembly (by number)
+
+Table is populated/updated by both reads-loading and assembly-loading scripts
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item rloader (I<script>)
+
+=item cloader (I<script>)
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item read_id
+
+number of read in READS table
+
+=item assembly 
+
+number of assembly in ASSEMBLY table
+
+=item astatus 
+
+flag for the status of a read in the assembly
+
+=over 16
+
+=item  0 for read in bin of the assembly (unallocated read) 
+
+=item  1 for soft allocation,  e.g. temporarilly by finisher
+
+=item  2 for firm (permanent) allocation in a contig 
+
+=back
+
+astatus > 0 for a locked read
+
+=head2 Linked Tables
+
+=over 4
+
+=item READS on key read_id
+
+=item ASSEMBLY on key assembly
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -1204,19 +1409,18 @@ sub create_CONTIGS {
              updated          DATETIME                 NOT NULL
          )]);
     print STDOUT "... DONE!\n" if ($list);
-# index on contig_id implicit in PRIMARY key declaration 
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table CONTIGS
 
 =head2 Synopsis
 
-Primary Data table.
+Primary Data table, static
 
-CONTIGS is a static data table: the only change made to data records after 
-data insertion is the (possible) re-definition of the B<zeropoint> column
+Populated by the assembly loading script
 
 =head2 Scripts & Modules
 
@@ -1225,8 +1429,6 @@ data insertion is the (possible) re-definition of the B<zeropoint> column
 =item cloader
 
 (I<script>) entering contig data from CAF files;
-
-run from the Arcturus GUI under B<INPUT> --E<gt> B<CONTIGS>
 
 =item ContigBuilder.pm 
 
@@ -1244,12 +1446,10 @@ auto-incremented primary key (foreign key in many other tables)
 
 unique Arcturus contig name, built-up from first and last
 readname, length and coverage; about 30 characters (usually) 
-#  note: determine name from farthest lefthand/righthand reads
-#  note: find a parity test on nr of reads and total length
 
 =item aliasname
 
-other name to indicate the contig, for example the (not-unique) name used
+other name to indicate the contig, for example the (non-unique) name used
 in CAF files or a phrap name
 
 =item length
@@ -1264,14 +1464,14 @@ number of previous contigs merged into this contig (=0 for first generation)
 
 number of assembled reads
 
-
 =item newreads
 
-number of reads appearing for the first time in the assembly (can be negative)
+number of reads appearing for the first time in the assembly (can be negative
+for deallocated reads)
 
 =item cover
 
-average cover of contig by reads;  = (sumtotal readlength)/length
+average cover of contig by reads, equals (sumtotal readlength)/length
 
 =item origin 
 
@@ -1316,27 +1516,60 @@ sub create_CONSENSUS {
     &dropTable ($dbh,"CONSENSUS", $list);
     print STDOUT "Creating table CONSENSUS ..." if ($list);
     $dbh->do(qq[CREATE TABLE CONSENSUS(
-             contig_uid       MEDIUMINT UNSIGNED       NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             contigname       VARCHAR(32)              NOT NULL,
-             sequence         BLOB                     NOT NULL,
-             scompress        TINYINT  UNSIGNED        DEFAULT 0,     
-             reverse_id       MEDIUMINT UNSIGNED       DEFAULT 0,
-             CONSTRAINT CONTIGNAMEUNIQUE UNIQUE (CONTIGNAME)  
+             contig_id       MEDIUMINT UNSIGNED        NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             sequence        BLOB                      NOT NULL,
+             reverse_id      MEDIUMINT UNSIGNED        DEFAULT 0
          )]);
     print STDOUT "... DONE!\n" if ($list);
-# index on contig_id implicit in PRIMARY key declaration 
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table CONSENSUS
 
 =head2 Synopsis
 
+Dictionary table to CONTIGS with consensus sequence
+
+Populated by the assembly loading software
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item cloader
+
+(I<script>) entering contig data from CAF files;
+
+=item (DH java script)
+
+=item ContigBuilder.pm
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item contig_id
+
+number of contig in CONTIGS table
+
+=item sequence
+
+consensus sequence, Z-compressed
+
+=item reverse_id (??)
+
+=back
+
+=head2 Linked Tables
+
+=over 4
+
+=item CONTIGS on keys contig_id & reverse_id
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -1348,7 +1581,7 @@ sub create_CONTIGS2CONTIG {
 
 # contig to contig mapping implicitly contains the history
 
-# generation : of the newly added contig
+# generation : of the newly added contig / generation of first occurance gofo
 #       NOTE : duplicates READS2CONTIG info, but facilitates various shortcuts in generation upgrade
 # newcontig  : contig id
 # nranges    : starting point in new contig
@@ -1372,16 +1605,67 @@ sub create_CONTIGS2CONTIG {
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table CONTIGS2CONTIG
 
 =head2 Synopsis
 
+contig to contig mapping, which implicitly contains the history of the assembly
+
+populated by assembly-loading scripts
+
 =head2 Scripts & Modules
 
-=head2 Description of columns:
+=over 4
 
-=head2 Linked Tables on key ..
+=item cloader
+
+=item ContigBuilder.pm
+
+=back
+
+=head2 Description of columns
+
+=over 8
+
+=item gofo
+
+assembly generation of first occurrence, incremented after each new assembly
+
+=item newcontig
+
+contig ID of the new generation
+
+=item nranges
+
+begin position of the mapping on the new contig
+
+=item nrangef
+
+end position of the mapping on the new contig
+
+=item oldcontig
+
+contig ID of the old, i.e. previous generation
+
+=item oranges
+
+begin position of the mapping on the old contig
+
+=item orangef
+
+end position of the mapping on the old contig
+
+=back
+
+=head2 Linked Tables
+
+=over 4
+
+=item CONTIGS on keys oldcontig & newcontig
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -1408,6 +1692,7 @@ sub create_SCAFFOLD2PROJECT {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1453,6 +1738,7 @@ sub create_CONTIGS2SCAFFOLD {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1471,6 +1757,165 @@ integer zeropoint of contig in assembly
 
 =cut
 #--------------------------------------------------------------------
+
+sub create_ASSEMBLY {
+    my ($dbh, $list) = @_;
+
+# Assembly Number
+# Assembly Name (possibly standardized, taken from Oracle?)
+# Alias name (e.g. for projects from outside)
+## to be removed # Organism: REFerence to organism table (refered to in amanager and create)
+# chromosome: 0 for blob; 1-99 nr of a chromosome; 100 for other; > 100 e.g. plasmid
+# Origin of DNA sequences (Sanger for in-house; any other name for outside sources)
+# oracle project: the oracle project number of this assembly, if any
+# size    : approxinmate length (kBase) of assembly, estimated e.g. from physical maps
+# length  : actual length (base) measured from contigs
+# Number of Reads stored
+# Number of Reads assembled in latest assembly
+# Number of Contigs stored  in latest assembly
+# Number of all Contigs (in assembly history) 
+# Number of Projects
+# progress: status of data collection
+# updated : date of last modification (time of last assembly)
+# userid  : user (authorized or from USERS2PROJECT list last accessed/modified the project
+# status  : status of assembly ('loading' if generation 0 in progress, 'completed' if generation
+#           1 is the lowest generation; changes through each loading cycle)
+# created : date of creation
+# creator : reference to nr in USERS table
+# attributes : any info (maybe used by ARCTURS scripts)
+
+    &dropTable ($dbh,"ASSEMBLY", $list);
+    print STDOUT "Creating table ASSEMBLY ..." if ($list);
+    $dbh->do(qq[CREATE TABLE ASSEMBLY(
+             assembly         SMALLINT UNSIGNED     NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             assemblyname     VARCHAR(16)           NOT NULL,
+             organism         SMALLINT UNSIGNED     NOT NULL,
+             chromosome       TINYINT  UNSIGNED  DEFAULT   0,
+             origin           VARCHAR(32)           NOT NULL DEFAULT "The Sanger Institute",
+             oracleproject    TINYINT  UNSIGNED  DEFAULT   0,
+             size             MEDIUMINT UNSIGNED   DEFAULT 0,
+             length           INT UNSIGNED         DEFAULT 0,
+             l2000            INT UNSIGNED         DEFAULT 0,
+             reads            INT UNSIGNED         DEFAULT 0,
+             assembled        INT UNSIGNED         DEFAULT 0,
+             contigs          INT UNSIGNED         DEFAULT 0,
+             allcontigs       INT UNSIGNED         DEFAULT 0,
+             projects         SMALLINT             DEFAULT 0,
+             progress         ENUM ('in shotgun','in finishing','finished','other') DEFAULT 'other', 
+             updated          DATETIME                  NULL,
+             userid           CHAR(8)                   NULL,
+             status           ENUM ('loading','complete','error','unknown') DEFAULT 'unknown', 
+             created          DATETIME              NOT NULL,
+	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
+             attributes       BLOB                      NULL,
+             comment          VARCHAR(255)              NULL,             
+             CONSTRAINT ASSEMBLYNAMEUNIQUE UNIQUE (ASSEMBLYNAME)  
+	    )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
+#*********************************************************************************************************
+
+sub create_PROJECTS {
+    my ($dbh, $list) = @_;
+
+# Project Number
+# Project Name (possibly standardized, taken from Oracle?)
+# Assembly: reference to assembly
+# Number of Reads
+# Number of Contigs 
+# userid  user (authorized or from USERS2PROJECT list last accessed/modified the project
+# creator or Principal Investigator: reference to nr in USERS table
+# Date/Time of last modification
+# status (last status or action on the project)
+# attributes (e.g. GAP databases for contigs etc.)
+# comment
+# note : to be added ? 'access' 0,1 for read-only or read and write
+# Note : privileges also dealt via 'assembly' and peopletoproject 
+
+    &dropTable ($dbh,"PROJECTS", $list);
+    print STDOUT "Creating table PROJECTS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE PROJECTS(
+             project        SMALLINT UNSIGNED     NOT NULL AUTO_INCREMENT PRIMARY KEY,
+             projectname    VARCHAR(24)           NOT NULL,
+             projecttype    ENUM ("Finishing","Annotation","Comparative Sequencing","Bin","Other") DEFAULT "Bin",
+             assembly       TINYINT  UNSIGNED    DEFAULT 0,
+             reads          INT UNSIGNED         DEFAULT 0,
+             contigs        INT UNSIGNED         DEFAULT 0,
+             updated        DATETIME                  NULL,
+             userid         CHAR(8)                   NULL,
+             created        DATETIME                  NULL,
+	     creator        CHAR(8)               NOT NULL DEFAULT "oper",
+             attributes     BLOB                      NULL,
+             comment        VARCHAR(255)              NULL,             
+             status         ENUM ("Dormant","Active","Completed","Merged") DEFAULT "Dormant",
+             CONSTRAINT PROJECTNAMEUNIQUE UNIQUE (PROJECTNAME)  
+	    )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
+
+#*********************************************************************************************************
+
+sub create_USERS2PROJECTS {
+    my ($dbh, $list) = @_;
+ 
+#
+
+    &dropTable ($dbh,"USERS2PROJECTS", $list);
+    print STDOUT "Creating table USERS2PROJECTS ..." if ($list);
+    $dbh->do(qq[CREATE TABLE USERS2PROJECTS(
+             userid           CHAR(8)              NOT NULL,
+             project          SMALLINT UNSIGNED    NOT NULL,
+             date_from        DATE                     NULL,
+             date_end         DATE                     NULL
+	 )]);
+    print STDOUT "... DONE!\n" if ($list);
+}
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
+#--------------------------------------------------------------------
+
 
 #******************************************************************
 # TAGS related tables STSTags, TAGS2CONTIG, GAP4TAGS, CLONEMAP
@@ -1498,6 +1943,7 @@ sub create_GAP4TAGS {
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1721,6 +2167,7 @@ sub create_CLONES2CONTIG {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1733,9 +2180,14 @@ sub create_CLONES2CONTIG {
 =head2 Linked Tables on key ..
 
 =cut
-#--------------------------------------------------------------------
 
-#*****************************************************************************************
+##########################################################################################
+##########################################################################################
+#
+# DICTIONARY TABLES
+#
+##########################################################################################
+##########################################################################################
 
 sub create_CHEMISTRY {
     my ($dbh, $list) = @_;
@@ -1751,6 +2203,7 @@ sub create_CHEMISTRY {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1807,6 +2260,7 @@ sub create_STRANDS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1853,6 +2307,7 @@ sub create_PRIMERTYPES {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1882,6 +2337,7 @@ sub create_BASECALLER {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1912,6 +2368,7 @@ sub create_SEQUENCEVECTORS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1942,6 +2399,7 @@ sub create_CLONINGVECTORS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -1974,6 +2432,7 @@ sub create_CLONES {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -2002,6 +2461,7 @@ sub create_CLONES2PROJECT {
     print STDOUT "... DONE!\n" if ($list);
  }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -2032,6 +2492,7 @@ sub create_STATUS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -2044,7 +2505,6 @@ sub create_STATUS {
 =head2 Linked Tables on key ..
 
 =cut
-#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -2069,6 +2529,7 @@ sub create_LIGATIONS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 Table ..
 
@@ -2081,13 +2542,14 @@ sub create_LIGATIONS {
 =head2 Linked Tables on key ..
 
 =cut
-#--------------------------------------------------------------------
 
-#*********************************************************************************************************
-#*********************************************************************************************************
-# in common by all databases
-#*********************************************************************************************************
-#*********************************************************************************************************
+#################################################################################################
+#################################################################################################
+#
+# TABLES OF THE COMMON DATABASE
+#
+#################################################################################################
+#################################################################################################
 
 sub create_READMODEL {
     my ($dbh, $list) = @_;
@@ -2187,6 +2649,20 @@ sub create_READMODEL {
 
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table ..
+
+=head2 Synopsis
+
+=head2 Scripts & Modules
+
+=head2 Description of columns:
+
+=head2 Linked Tables on key ..
+
+=cut
 
 #*********************************************************************************************************
 
@@ -2285,6 +2761,29 @@ sub create_DATAMODEL {
                  "values (\"$f1\", \"$f2\", \"$f3\", \"$f4\")");
     }
 }
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table DATAMODEL
+
+=head2 Synopsis
+
+representation of database schema I<in lieu> of foreign keys
+
+used by ArcturusTable module to autoVivify linked tables and
+dynamically generate SQL query joins over several tables
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item ArcturusTable
+
+=back
+
+=head2 Description of columns:
+
+=cut
 
 #*********************************************************************************************************
 
@@ -2312,7 +2811,7 @@ sub create_INVENTORY {
 #                          with other tables for consistance and completeness
 #                          Only level 2 allows recreation of the table (with loss of
 #                          previous contents)
-# onRead      = '1' for build the table as an object on opening (see module DbaseTable)
+# onRead      = '1' for build the table as an object on opening in autoVivify mode (see module DbaseTable)
 
     &dropTable ($dbh,"INVENTORY", $list);
     print STDOUT "Creating table INVENTORY ..." if ($list);
@@ -2381,131 +2880,97 @@ sub create_INVENTORY {
                  "values (\"$f1\", \"$f2\", \"$f3\", \"$f4\", \"$f5\")");
     }
 }
-#*********************************************************************************************************
-
-sub create_ASSEMBLY {
-    my ($dbh, $list) = @_;
-
-# Assembly Number
-# Assembly Name (possibly standardized, taken from Oracle?)
-# Alias name (e.g. for projects from outside)
-## to be removed # Organism: REFerence to organism table (refered to in amanager and create)
-# chromosome: 0 for blob; 1-99 nr of a chromosome; 100 for other; > 100 e.g. plasmid
-# Origin of DNA sequences (Sanger for in-house; any other name for outside sources)
-# oracle project: the oracle project number of this assembly, if any
-# size    : approxinmate length (kBase) of assembly, estimated e.g. from physical maps
-# length  : actual length (base) measured from contigs
-# Number of Reads stored
-# Number of Reads assembled in latest assembly
-# Number of Contigs stored  in latest assembly
-# Number of all Contigs (in assembly history) 
-# Number of Projects
-# progress: status of data collection
-# updated : date of last modification (time of last assembly)
-# userid  : user (authorized or from USERS2PROJECT list last accessed/modified the project
-# status  : status of assembly ('loading' if generation 0 in progress, 'completed' if generation
-#           1 is the lowest generation; changes through each loading cycle)
-# created : date of creation
-# creator : reference to nr in USERS table
-# attributes : any info (maybe used by ARCTURS scripts)
-
-    &dropTable ($dbh,"ASSEMBLY", $list);
-    print STDOUT "Creating table ASSEMBLY ..." if ($list);
-    $dbh->do(qq[CREATE TABLE ASSEMBLY(
-             assembly         SMALLINT UNSIGNED     NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             assemblyname     VARCHAR(16)           NOT NULL,
-             organism         SMALLINT UNSIGNED     NOT NULL,
-             chromosome       TINYINT  UNSIGNED  DEFAULT   0,
-             origin           VARCHAR(32)           NOT NULL DEFAULT "The Sanger Institute",
-             oracleproject    TINYINT  UNSIGNED  DEFAULT   0,
-             size             MEDIUMINT UNSIGNED   DEFAULT 0,
-             length           INT UNSIGNED         DEFAULT 0,
-             l2000            INT UNSIGNED         DEFAULT 0,
-             reads            INT UNSIGNED         DEFAULT 0,
-             assembled        INT UNSIGNED         DEFAULT 0,
-             contigs          INT UNSIGNED         DEFAULT 0,
-             allcontigs       INT UNSIGNED         DEFAULT 0,
-             projects         SMALLINT             DEFAULT 0,
-             progress         ENUM ('in shotgun','in finishing','finished','other') DEFAULT 'other', 
-             updated          DATETIME                  NULL,
-             userid           CHAR(8)                   NULL,
-             status           ENUM ('loading','complete','error','unknown') DEFAULT 'unknown', 
-             created          DATETIME              NOT NULL,
-	     creator          CHAR(8)               NOT NULL DEFAULT "oper",
-             attributes       BLOB                      NULL,
-             comment          VARCHAR(255)              NULL,             
-             CONSTRAINT ASSEMBLYNAMEUNIQUE UNIQUE (ASSEMBLYNAME)  
-	    )]);
-    print STDOUT "... DONE!\n" if ($list);
-}
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table INVENTORY
 
 =head2 Synopsis
 
-=head2 Scripts & Modules
+maintenance aspects of tables in ARCTURUS database
 
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#*********************************************************************************************************
-
-sub create_PROJECTS {
-    my ($dbh, $list) = @_;
-
-# Project Number
-# Project Name (possibly standardized, taken from Oracle?)
-# Assembly: reference to assembly
-# Number of Reads
-# Number of Contigs 
-# userid  user (authorized or from USERS2PROJECT list last accessed/modified the project
-# creator or Principal Investigator: reference to nr in USERS table
-# Date/Time of last modification
-# status (last status or action on the project)
-# attributes (e.g. GAP databases for contigs etc.)
-# comment
-# note : to be added ? 'access' 0,1 for read-only or read and write
-# Note : priviledges also dealt via 'assembly' and peopletoproject 
-
-    &dropTable ($dbh,"PROJECTS", $list);
-    print STDOUT "Creating table PROJECTS ..." if ($list);
-    $dbh->do(qq[CREATE TABLE PROJECTS(
-             project        SMALLINT UNSIGNED     NOT NULL AUTO_INCREMENT PRIMARY KEY,
-             projectname    VARCHAR(24)           NOT NULL,
-             projecttype    ENUM ("Finishing","Annotation","Comparative Sequencing","Bin","Other") DEFAULT "Bin",
-             assembly       TINYINT  UNSIGNED    DEFAULT 0,
-             reads          INT UNSIGNED         DEFAULT 0,
-             contigs        INT UNSIGNED         DEFAULT 0,
-             updated        DATETIME                  NULL,
-             userid         CHAR(8)                   NULL,
-             created        DATETIME                  NULL,
-	     creator        CHAR(8)               NOT NULL DEFAULT "oper",
-             attributes     BLOB                      NULL,
-             comment        VARCHAR(255)              NULL,             
-             status         ENUM ("Dormant","Active","Completed","Merged") DEFAULT "Dormant",
-             CONSTRAINT PROJECTNAMEUNIQUE UNIQUE (PROJECTNAME)  
-	    )]);
-    print STDOUT "... DONE!\n" if ($list);
-}
-#--------------------------- documentation --------------------------
-
-=head1 Table ..
-
-=head2 Synopsis
+control of building, rebuilding or modifying operations
 
 =head2 Scripts & Modules
 
+=over 4
+
+=item create/update (I<script>)
+
+=item ArcturusTable.pm
+
+=back
+
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item tablename
+
+=item domain
+
+location of database table
+
+=over 16
+
+=item 'c' for common table
+
+=item 'o' for table in organism database
+
+=back
+
+=item status
+
+type of the data in the table
+
+=over 16
+
+=item  'a' for auxilliary table (unspecified)
+
+=item  'd' for dictionary table (e.g. chemistry)
+
+=item  'l' for linktable (e.g. contigs to projects)
+
+=item  'm' for mapping table (e.g. reads to contig, tags to contig)
+
+=item  'p' for principal/main/primary data table
+
+=item  'r' for reference table (static dictionary table)
+
+=item  's' for status table (a kind of global tag)
+
+=item  't' for tag table
+
+=item  'o' any type not mentioned above
+
+=back
+
+=item rebuild
+
+protection flag controlling re-initialisation of a database table (by the
+I<create> script)
+
+=over 16
+
+=item  '0' by default prohibited if not empty 
+
+(rebuild can be forced by user with special privilege)
+
+=item  '1' table can be rebuilt from data in READS table (using the I<create> script under CGI)
+
+=item  '2' always allowed to re-initialise the table (with loss of contents)
+
+=item  '3' allows rebuild from a I<data file> or files using a special script only (e.g. tags)
+
+=back
+
+=item onRead
+
+set to '1' for caching the table on opening in autoVivify mode (see module ArcturusTable)
+
+=back
 
 =cut
-#--------------------------------------------------------------------
 
 #*********************************************************************************************************
 
@@ -2536,14 +3001,14 @@ sub create_USERS {
              email            VARCHAR(32)             NULL,
              password         VARCHAR(32)             NULL,
              seniority        TINYINT  UNSIGNED   NOT NULL,
-             priviledges      SMALLINT UNSIGNED   NOT NULL,
+             privilegea       SMALLINT UNSIGNED   NOT NULL,
              projects         TINYINT  UNSIGNED   NOT NULL,
              attributes       BLOB                    NULL,
              CONSTRAINT USERIDUNIQUE UNIQUE (USERID)  
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 
-# priviledges: 16 bits code for various access function (should be drawn from config file
+# privileges: 16 bits code for various access function (should be drawn from config file
 
     my $defaultusers = "INSERT INTO USERS ";
     $defaultusers .= "(userid, lastname, givennames, division, function, seniority)";
@@ -2552,20 +3017,86 @@ sub create_USERS {
     $defaultusers .= "('oper','Zuiderwijk','Ed J.', 'Team 81', 'Database Manager',6),";
     $defaultusers .= "('ejz' ,'Zuiderwijk','Ed J.', 'Team 81', 'Database Manager',5) ";
     $dbh->do($defaultusers);
-    $dbh->do("UPDATE USERS SET priviledges=255, password='arcturus', email='ejz\@sanger.ac.uk'");
+    $dbh->do("UPDATE USERS SET privilegea=255, password='arcturus', email='ejz\@sanger.ac.uk'");
 }
 
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table USERS
 
 =head2 Synopsis
 
+arcturus user administration
+
+each user has a userid and password defined by the user on registration
+
+each user has a seniority and privileges set by an authorised other user.
+both seniority and privileges determine which arcturus operations can be
+executed
+
+the superuser is called 'oper' and has seniority level 6
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item umanager (I<script>)
+
+=item GateKeeper.pm
+
+=item ArcturusTable.pm
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item user
+
+=item userid
+
+user identifier (unique); up to 8 characters (but at least 3)
+
+=item lastname
+
+=item givennames
+
+=item affiliation
+
+=item division
+
+Sanger Institute team number
+
+=item function
+
+whatever the user thinks of him or herself
+
+=item ustatus
+
+=item email
+
+=item password
+
+encrypted user password
+
+=item seniority
+
+=item privileges
+
+=item projects
+
+number of projects to which the user is assigned
+
+=item attributes
+
+a blob field for storage of any kind of fluid data as a hash image
+but i.p. additional information about access privileges
+
+the attributes field is accessed via purpose made methods of ArcturusTable.pm
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -2595,46 +3126,54 @@ sub create_SESSIONS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
-
-=head2 Synopsis
-
-=head2 Scripts & Modules
-
-=head2 Description of columns:
-
-=head2 Linked Tables on key ..
-
-=cut
-#--------------------------------------------------------------------
-
-#*********************************************************************************************************
-
-sub create_USERS2PROJECTS {
-    my ($dbh, $list) = @_;
- 
-#
-
-    &dropTable ($dbh,"USERS2PROJECTS", $list);
-    print STDOUT "Creating table USERS2PROJECTS ..." if ($list);
-    $dbh->do(qq[CREATE TABLE USERS2PROJECTS(
-             userid           CHAR(8)              NOT NULL,
-             project          SMALLINT UNSIGNED    NOT NULL,
-             date_from        DATE                     NULL,
-             date_end         DATE                     NULL
-	 )]);
-    print STDOUT "... DONE!\n" if ($list);
-}
-#--------------------------- documentation --------------------------
-
-=head1 Table ..
+=head1 Table SESSION
 
 =head2 Synopsis
 
+record of user sessions
+
+a session number is issued on log-on via the GateKeeper.pm module
+
+sessions are closed on log-off or when they have otherwise expired
+
+curently sessions are kept for 30 days
+
+
 =head2 Scripts & Modules
 
+=over 4
+
+=item GateKeeper.pm
+
+=back
+
 =head2 Description of columns:
+
+=over 8
+
+=item session
+
+arcturus session ID consists of a string of form [userid]:[random-string]
+
+=item timebegin
+
+date and time of log-on
+
+=item timeclose
+
+date and time of either log-off or expiry
+
+=item access
+
+number of access to arcturus under this this session
+
+=item closed_by
+
+user ID effectuating log-off or expiry
+
+=back
 
 =head2 Linked Tables on key ..
 
@@ -2687,16 +3226,33 @@ sub create_CHEMTYPES {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table CHEMTYPES
 
 =head2 Synopsis
 
-=head2 Scripts & Modules
+dictionary table of standard Sanger chemistry types
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 4
+
+=item number
+
+=item chemtype
+
+Sanger chemistry type code
+
+=item description
+
+=item type
+
+either 'primer', 'terminator' or 'unknown'
+
+=item origin
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -2716,16 +3272,39 @@ sub create_VECTORS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table VECTORS
 
 =head2 Synopsis
 
+master vector table of cloning and sequence vectors
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item create/update (I<script>)
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item vector
+
+autoincremented vector number
+
+=item template
+
+generic vector name
+
+=item type
+
+vector type, e.g. cosmid, plasmid
+
+=back
 
 =cut
 #--------------------------------------------------------------------
@@ -2782,20 +3361,119 @@ sub create_ORGANISMS {
     print STDOUT "... DONE!\n" if ($list);
 }
 #--------------------------- documentation --------------------------
+=pod
 
-=head1 Table ..
+=head1 Table ORGANISMS
 
 =head2 Synopsis
 
+Meta data of all organism databases on all arcturus instances of the current server
+
+Is populated by a variety of scripts
+
 =head2 Scripts & Modules
+
+=over 4
+
+=item create (I<script>)
+
+=item rloader (I<script>)
+
+=item cloader (I<script>)
+
+=item GateKeeper.pm
+
+=back
 
 =head2 Description of columns:
 
-=head2 Linked Tables on key ..
+=over 8
+
+=item dbasename
+
+name (unique) of the database (up to 16 characters, use IBM name convention)
+
+=item genus
+
+=item species
+
+=item strain 
+
+=item isolate 
+
+=item schema 
+
+organism-related Oracle Schema
+
+=item updated
+
+date time of last update of contents
+
+=item assemblies
+
+number of assemblies
+
+=item contigs
+
+number of contigs (in all assemblies)
+
+=item reads_loaded
+
+total number of reads loaded (for all assemblies)
+
+=item reads_pending
+
+number of pending reads (known to be missing)
+
+=item comment
+
+any text, up to 255 caharacters
+
+=item date_created
+
+date of creation of the organism database
+
+=item creator
+
+user ID of creator of the database
+
+=item last_backup
+
+date and time of last backup
+
+=item residence
+
+server host, MySQL port and CGI port of the arcturus node, if on-line available, 
+or off line storage information
+
+=item available
+
+flag for access status
+
+=over 12
+
+=item on-line  : database appears healthy
+
+=item blocked  : e.g. when maintenance issues have to be resolved
+
+=item copied   : after a successful copy to another arcturus node
+
+=item off-line : e.g. when backed-up on CDROM and archived
+
+=back
+
+=item attributes
+
+a blob field for storage of any kind of fluid data as a hash image, e.g.
+most recently accessed data source (experiment file directory), last
+accessed assembly, etc ..
+
+the attributes field is accessed via purpose made methods of the ArcturusTable
+module
+
+=back
 
 =cut
-#--------------------------------------------------------------------
-
 
 #*********************************************************************************************************
 
@@ -2817,6 +3495,58 @@ sub create_DBHISTORY {
 	 )]);
     print STDOUT "... DONE!\n" if ($list);
 }
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table DBHISTORY
+
+=head2 Synopsis
+
+Record most recent type of change to the I<contents> of tables in the database
+
+After creation of this table in the database, its name is changed to HISTORY[dbname];
+this is done to create a unique table in each arcturus database, the presence of which
+can be tested and used to protect against inadverted operations (see create script)  
+
+Is populated by any script altering the database contents, by using a purpose made method
+of the ArcturusTable module.
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item create (I<script>)
+
+=item ArcturusTable.pm
+
+=back
+
+=head2 Description of columns:
+
+=over 8
+
+=item tablename
+
+=item created
+
+date of creation of the table
+
+=item lastuser
+
+most recent user to access the table for alteration of contents
+
+=item lastouch
+
+date and time of last alteration
+
+=item action
+
+the most recent operation (e.g. update, delete etc)
+
+=back
+
+=cut
+
 #*********************************************************************************************************
 
 # history table to record changes to the structure of tables in the database
@@ -2826,7 +3556,7 @@ sub create_DBHISTORY {
 sub create_HISTORY {
     my ($dbh, $list, $user) = @_;
 
-    &dropTable ($dbh,"HISTORY", $list) if ($user eq 'oper'); # only this user
+    &dropTable ($dbh,"HISTORY", $list) if ($user eq 'oper'); # only this user 'oper'
     print STDOUT "Creating table HISTORY ..." if $list;
     $dbh->do(qq[CREATE TABLE HISTORY(
              tablename      VARCHAR(20)         NOT NULL,
@@ -2837,6 +3567,48 @@ sub create_HISTORY {
 	 ) TYPE = MyISAM]);
     print STDOUT "... DONE!\n" if ($list);
 }
+
+#--------------------------- documentation --------------------------
+=pod
+
+=head1 Table HISTORY
+
+=head2 Synopsis
+
+Record changes to the I<structure> of tables in the database in order to 
+keep track of table format updates
+
+Is populated by create script only
+
+=head2 Scripts & Modules
+
+=over 4
+
+=item create (I<script>)
+
+=back
+
+=head2 Description of columns:
+
+=over 8
+
+=item tablename
+
+=item user
+
+=item date
+
+=item action
+
+last operation on the table format (CREATE, ALTER, etc ..)
+
+=item command
+
+the full SQL command last executed
+
+=back
+
+=cut
 
 #*********************************************************************************************************
 
@@ -3008,6 +3780,7 @@ sub enumorder {
 #*********************************************************************************************************
 
 #--------------------------- documentation --------------------------
+=pod
 
 =head1 AUTHOR
 
