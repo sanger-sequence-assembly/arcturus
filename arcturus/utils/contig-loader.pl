@@ -589,7 +589,7 @@ foreach my $identifier (keys %contigs) {
     $contig->setOrigin($origin);
 
     my ($added,$msg) = $adb->putContig($contig,$project); # return 0 fail
-print "$identifier with ".$contig->getNumberOfReads.
+print STDERR "$identifier with ".$contig->getNumberOfReads.
       " reads : status $added, $msg\n\n";
 # $adb->clearLastContig() unless $added;
 
