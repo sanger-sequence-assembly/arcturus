@@ -1,0 +1,146 @@
+#!/usr/local/bin/perl
+#
+# readscheck
+#
+# This script checks the sequence and base quality data in oneor more
+# Arcturus databases
+
+use DBI;
+use Term::ReadKey;
+use Compress;
+
+$verbose = 0;
+@dblist = ();
+
+while ($nextword = shift @ARGV) {
+    $host = shift @ARGV if ($nextword eq '-host');
+
+    $port = shift @ARGV if ($nextword eq '-port');
+
+    $mysqluser = shift @ARGV if ($nextword eq '-user');
+
+    $mysqlpass = shift @ARGV if ($nextword eq '-pass');
+
+    $limit = shift @ARGV if ($nextword eq '-limit');
+
+    if ($nextword eq '-databases') {
+	while (@ARGV && ! ($ARGV[0] =~ /^-/)) {
+	    push @dblist, shift @ARGV;
+	}
+    }
+
+    $verbose = 1 if ($nextword eq '-verbose');
+
+    if ($nextword eq '-help') {
+	&showUsage();
+	exit(0);
+    }
+}
+
+unless (defined($host) &&
+	defined($port) &&
+	defined($mysqluser) &&
+	scalar(@dblist) > 0) {
+    print STDERR "One or more mandatory parameters are missing.\n\n";
+    &showUsage();
+    exit(1);
+}
+
+$dbname = $dblist[0];
+
+$dsn = 'DBI:mysql:' . $dbname . ';host=' . $host . ';port=' . $port;
+
+unless (defined($mysqlpass)) {
+    print STDERR "Enter MySQL password for $mysqluser\n";
+    ReadMode 'noecho';
+    $mysqlpass = ReadLine 0;
+    ReadMode 'normal';
+    chop $mysqlpass;
+}
+
+$dbh = DBI->connect($dsn, $mysqluser, $mysqlpass,
+		    {PrintError => 1, RaiseError => 1});
+
+$compressor = new Compress('ACGT- ');
+
+foreach $dbname (@dblist) {
+    $query = "USE $dbname";
+    print STDERR "Switching to database $dbname\n";
+    print STDERR "\n$query\n" if $verbose;
+    $dbh->do($query);
+    &db_die("$query failed");
+    print STDERR "\n" if $verbose;
+
+    $ndone = 0;
+    $nbad = 0;
+
+    $query = "SELECT read_id,readname,slength,sequence,scompress,quality,qcompress FROM READS";
+    $query .= " LIMIT $limit" if defined($limit);
+    
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed on $dsn");
+
+    $sth->execute();
+    &db_die("execute($query) failed on $dsn");
+
+    printf STDERR "%8d %8d", $ndone, $nbad;
+    $format = "\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010\010%8d %8d";
+
+    while(@ary = $sth->fetchrow_array()) {
+	($readid, $readname, $slength, $sequence, $scompress, $quality, $qcompress) = @ary;
+
+	($slen, $sequence) = $compressor->sequenceDecoder($sequence, $scompress)
+	    if $scompress;
+
+	$slen = length($sequence);
+
+	($qlen, $quality) = $compressor->qualityDecoder($quality, $qcompress)
+	    if $qcompress;
+
+	$quality =~ s/^\s+|\s+$//g;
+
+	@quals = split(/\s+/, $quality);
+
+	$qlen = scalar(@quals);
+
+	if ($slength != $slen ||  $slength != $qlen) {
+	    printf "%-10s %-20s %4d %4d [%2d] %4d [%2d]\n", $dbname, $readname, $slength,
+	    $slen, $scompress, $qlen, $qcompress;
+
+	    $nbad++;
+	    printf STDERR $format, $ndone, $nbad;
+	}
+
+	$ndone++;
+	printf STDERR $format, $ndone, $nbad if (($ndone % 50) == 0);
+    }
+
+    printf STDERR $format, $ndone, $nbad;
+    print STDERR "\n";
+
+    $sth->finish();
+}
+
+$dbh->disconnect();
+
+exit(0);
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
+}
+
+sub showUsage {
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "    -host\t\tHostname of server\n";
+    print STDERR "    -port\t\tPort number of server\n";
+    print STDERR "    -user\t\tMySQL username\n";
+    print STDERR "    -databases\t\tOne or more databases to be modified\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -pass\t\tMySQL password (you will be prompted for one if absent)\n";
+    print STDERR "    -verbose\t\tVerbose output\n";
+    print STDERR "    -limit\t\tSpecify the maximum number of reads to process\n";
+}
