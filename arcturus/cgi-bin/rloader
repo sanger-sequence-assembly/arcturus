@@ -286,7 +286,7 @@ if ($cgi) {
             $error = "Please define every input field $cgi->{und_error} ";
         }
     # authorisation level 100 required
-        elsif (!$GateKeeper->authorize(100,{returnpath => "/$database/process",silently => 1})) {
+        elsif (!$GateKeeper->authorize(100,{returnPath => "/$database/process",silently => 1})) {
             $error = $GateKeeper->{report}; # authorisation failed
         }
     # okay, now assign read specifications

@@ -180,7 +180,7 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 # if full test is to be done, expand the DNA data here, if they are compressed
         my $sequence = $tagnamehash{$name}->{sequence};
         if ($tagnamehash{$name}->{scompress}) {
-           (my $length,$sequence) = $encoder->sequenceDecoder($sequence);
+           (my $length,$sequence) = $encoder->sequenceDecoder($sequence,1);
 	    $sequence =~ s/\s+$//; # remove trailing blanks
             $tagnamehash{$name}->{sequence} = $sequence; # expanded DNA 
 #	   print "$name $sequence<br>\n";
@@ -269,7 +269,7 @@ elsif ($action eq 'compare' && $tablename eq 'STSTAGS') {
 # print "newrow name=$name ";
             if (my $sequence = $hash->{sequence}) {
                 $hash->{scompress} = 0; # default no compression
-               (my $length,$sequence) = $encoder->sequenceEncoder($sequence);
+               (my $length,$sequence) = $encoder->sequenceEncoder($sequence,1);
                 $hash->{sequence} = $sequence if ($sequence); # encoded DNA 
                 $hash->{scompress} = 1 if ($sequence);
             }

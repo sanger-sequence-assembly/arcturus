@@ -47,8 +47,9 @@ if ($action eq 'signon') {
 elsif ($action eq 'signoff') {
 
     $page = $GateKeeper->GUI("Sign off");
-    $GateKeeper->cgiHeader(2);
-    $page->add("Your current session will be closed"); 
+    my ($dummy, $session) = split ':',$cgi->parameter('session');
+    $page->add("Your current session $session will be closed"); 
+    $page->add("TO BE DEVELOPED",0,0,'size=+2'); 
     $page->flush();
 
 }
@@ -88,7 +89,6 @@ else {
         $table =~ s/ITEMLINK\?/ITEMLINK?session=$session&/g if $session;
         $table =~ s/ITEMLINK/$thisScript/g;
         $table =~ s/dbasename/database/g;
-
         $page->add($table);
         $page->space;
         $page->sectionheader("Select a database or a function",4,0);

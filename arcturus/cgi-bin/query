@@ -6,19 +6,17 @@
 #
 #############################################################################
 
-use strict; # Constraint variables declaration before using them
+use strict;
 
 use GateKeeper; 
-use ArcturusTable;
 use ReadsRecall;
-use Compress;
-use MyHTML;
+#use Compress;
 
 ##############################################################################
 # unbuffered output
 ##############################################################################
 
-open(STDERR,">&STDOUT") || die "Can't dump to STDOUT: $!\n";
+open(STDERR,">&STDOUT") || die "content-type:text/plain\nCan't dump to STDOUT: $!\n";
 select(STDERR); $| = 1; # Make unbuffered.
 select(STDOUT); $| = 1; # Make unbuffered.
 
@@ -33,9 +31,12 @@ my $cgi        = $GateKeeper->cgiHandle();
 my $database   = $cgi->parameter('database');
 
 my ($void,$action,$tablename) = split ('/',$GateKeeper->origin);
+
 $database = 'arcturus' if ($action =~ /select|empty|dictionary|listentry/ && !$database);
 
-my $dbh = $GateKeeper->dbHandle($database);
+my $organisms = $GateKeeper->dbHandle($database, {returnTableHandle => 1});
+
+my $inventory = $organisms->spawn('INVENTORY','arcturus',1);
 
 $GateKeeper->cgiHeader(2); # return string plain
 
@@ -48,19 +49,14 @@ my $db_manager  = $config->get("db_manager");
 my $arc_cgi_dir = $config->get("ARC_CGI_DIR");  
 my $arc_htm_dir = $config->get("ARC_HTML_DIR");  
 
-my $page = MyHTML->new('ARCTURUS ASSEMBLY-TRACKING DATABASE');
+my $page = $cgi->openPage('ARCTURUS assembly-tracking database $database');
 $page->address('ejz@sanger.ac.uk','Ed Zuiderwijk',2);
 $page->frameborder(100,15,'white',15);
 $page->center(1);
 
 my $SM = "<small>"; my $sm = "</small>";
 
-#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-# open the ORGANISMS table in arcturus
-#$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
-
-my $inventory = ArcturusTable->new($dbh,'INVENTORY','arcturus',1);
-my $organisms = $inventory->new($dbh,'ORGANISMS','arcturus',1);
+##############################################################################
 
 if ($inventory->{errors} || $organisms->{errors}) {
     $page->errorbox("ARCTURUS database cannot be accessed<BR>$inventory->{errors}");
@@ -101,7 +97,6 @@ elsif ($action eq 'overview' && $database eq 'arcturus') {
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
-# print "$name domain $domain status $status<br>";
         if ($domain eq 'c' && $status ne 'l') {
             undef my $entry;
             my $count = $dbase->count(0);
@@ -131,10 +126,10 @@ elsif ($action eq 'overview') {
 
     $page->partition(2);
     $page->sectionheader("ARCTURUS assembly tracking database $database",3,0);
-    my $DMODEL  = $inventory->new($dbh,"DATAMODEL",'arcturus',0);
-    my $READS   = $inventory->new($dbh,"READS"  ,$database,0);
-    my $PENDING = $inventory->new($dbh,"PENDING",$database,0);
-    my $CONTIGS = $inventory->new($dbh,"CONTIGS",$database,0);
+    my $DMODEL  = $organisms->spawn("DATAMODEL",'arcturus',0);
+    my $READS   = $organisms->spawn("READS"  ,$database,0);
+    my $PENDING = $organisms->spawn("PENDING",$database,0);
+    my $CONTIGS = $organisms->spawn("CONTIGS",$database,0);
     my $instances = $DMODEL->findInstanceOf(0);
 
     undef my $target;
@@ -142,7 +137,6 @@ elsif ($action eq 'overview') {
     my %tables;
     $inventory->autoVivify($database,1,0);    
     foreach my $table (keys %$instances) {
-# print STDOUT "$table  $instances->{$table} <br>";      
         $tables{$table}++;
     }
 
@@ -159,7 +153,6 @@ elsif ($action eq 'overview') {
         my $name   = $table; $name =~ s/($database|arcturus)\.//;
         my $domain = $inventory->associate ('domain',$name,'tablename');
         my $status = $inventory->associate ('status',$name,'tablename');
-# print "$name domain $domain status $status<br>";
         if ($domain eq 'o' && $status eq 'p') {
             undef my $entry;
             my $count = $dbase->count(0);
@@ -186,7 +179,7 @@ elsif ($action eq 'overview') {
             $entry .= "<TR><TD $w1>$name</TD><TD $w2>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
             $anchor =~ s/dictionary/empty/ if (!$count); my $text = 'list';
-            $target = "target=\"dictionary\""; 
+            $target = "target=\"arcturustable\""; 
             $entry .= "<TD ALIGN=CENTER $w3><A href=\"$anchor\" $target> $text </a></td>";
             $list .= "$entry</tr>";
         }
@@ -211,7 +204,7 @@ elsif ($action eq 'overview') {
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
             $anchor =~ s/dictionary/tagselect/ if ($table =~ /TAG/);
-            $target = "target=\"dictionary\""; 
+            $target = "target=\"arcturustable\""; 
             $target = ' ' if ($table =~ /TAG/);
             $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
             $list .= "$entry</tr>\n";
@@ -236,7 +229,7 @@ elsif ($action eq 'overview') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
-            $target = "target=\"dictionary\""; 
+            $target = "target=\"arcturustable\""; 
             $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
             $list .= "$entry</tr>";
         }
@@ -327,7 +320,7 @@ elsif ($action eq 'overview') {
             my $count = $dbase->count(0);
             $entry .= "<TR><TD>$name</TD><TD>$count</TD>";
             my $anchor = "$arc_cgi_dir/query/dictionary/$table";
-            $target = "target=\"common\""; 
+            $target = "target=\"arcturustable\""; 
             $entry .= "<TD ALIGN=CENTER><A href=\"$anchor\" $target> list </a></td>";
             $list .= "$entry</tr>";
         }
@@ -339,14 +332,15 @@ elsif ($action eq 'overview') {
 elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $inventory->new($dbh,'DATAMODEL','arcturus',1);
-    my $dbtable = $inventory->new($dbh,$name,$database,1);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
+    my $dbtable = $organisms->spawn($name,$database,1);
     $dbtable->build(1,'tablename')     if ($tablename =~ /INV/);
     $dbtable->build(1,'identifier')    if ($tablename =~ /LIG/);
     $dbtable->build(1,'projectname')   if ($tablename =~ /PRO/);
-#    $dbtable->build(1,'userid')        if ($tablename =~ /USE/);
+    $dbtable->build(1,'userid')        if ($tablename =~ /USE/);
     $dbtable->build(1,'cpkbstart')     if ($tablename =~ /MAP/);
     $dbtable->build(1,'assembly,name') if ($tablename =~ /STS/);
+    $dbtable->build(1,'timebegin DESC') if ($tablename =~ /SESSIONS/);
     $dbtable->autoVivify($database,0) if ($name ne 'INVENTORY'); # setup of possible sublinks
 # $dbtable->expandSequence('ACGTN ');
 
@@ -367,9 +361,9 @@ elsif (($action eq "dictionary" || $action eq "tagselect") && $tablename) {
     $table =~ s/\<TABLE/<TABLE WIDTH=60%/;
 # fill in placeholders, if any
     $table =~ s?TABLELINK?$arc_cgi_dir/query/dictionary/?g;
-    $table =~ s/TABLETARGET/target="dictionary"/g;
+    $table =~ s/TABLETARGET/target="arcturustable"/g;
     $table =~ s?ITEMLINK?$arc_cgi_dir/query/listentry/$tablename?g;
-    $table =~ s/ITEMTARGET/target="new"/g;
+    $table =~ s/ITEMTARGET/target="arcturustable"/g;
     $table =~ s/LINKTEXT/more/g;
 
     $page->add($table,0,0);
@@ -393,8 +387,8 @@ elsif ($action eq "select") {
 # open the table in build 0 mode
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $inventory->new($dbh,'DATAMODEL','arcturus',1);
-    my $dbtable = $inventory->new($dbh,$name,$database,0);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
+    my $dbtable = $organisms->spawn($name,$database,0);
     my $dbcount = $dbtable->count(0);
 
     $page->frameborder(100,25,'white',10);
@@ -494,8 +488,8 @@ elsif ($action eq "tagselect") {
 
 elsif ($action eq "selectread") {
 
-#    my $dbmodel = $inventory->new($dbh,'DATAMODEL','arcturus',1);
-    my $dbread  = $inventory->new($dbh,"READS",$database,0);
+#    my $dbmodel = $organisms->spawn('DATAMODEL','arcturus',1);
+    my $dbread  = $organisms->spawn("READS",$database,0);
     my $initial = ReadsRecall->init($dbread);
     my $reader  = ReadsRecall->new();
 
@@ -629,8 +623,7 @@ print "constraints: $constraints<br>\n";
 elsif ($action eq "listentry") {
 
     my ($database,$name) = split /\./,$tablename;
-#    my $dbmodel = $inventory->new($dbh,'DATAMODEL','arcturus',1);
-    my $dbtable = $inventory->new($dbh,$name,$database,0);
+    my $dbtable = $organisms->spawn($name,$database,0);
     $dbtable->compressSeed('ACGTN ') if ($name =~ /TAGS/);
 #    $dbtable->autoVivify() if ($name eq 'READS');
 
@@ -658,7 +651,7 @@ else {
  
 $page->form(0);
 $page->flush();
-$dbh->disconnect;
+$GateKeeper->disconnect;
 exit 0;
 
 ##############################################################################
@@ -695,4 +688,5 @@ sub READS_form {
 
     return $queryform;
 }
+
 
