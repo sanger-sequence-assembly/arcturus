@@ -51,6 +51,8 @@ sub new {
 			  );
 
     $mesg->code && die $mesg->error;
+
+    my $found = 0;
  
     foreach my $entry ($mesg->all_entries) {
 	my $dn = $entry->dn;
@@ -73,15 +75,19 @@ sub new {
 	
 	my ($url, $username, $password) = &buildUrl($datasourcetype, $datasource);
 
-	$this->{URL} = $url;
-	$this->{Username} = $username;
-	$this->{Password} = $password;
+	if (defined($url)) {
+	    $this->{URL} = $url;
+	    $this->{Username} = $username;
+	    $this->{Password} = $password;
+	    $found = 1;
+	    last;
+	}
     }
 
     # Close LDAP session
     $mesg = $ldap->unbind;
 
-    return $this;
+    return $found ? $this : undef;
 }
 
 # Private function for use in the constructor
