@@ -31,3 +31,4 @@ etc powmap/etc
 corba powmap/corba
 flatserve flatimpl &corba &etc &uk &collections
 agct agctimpl &uk &diana &etc &corba &collections
+flatserve_control flatserve_control_impl &corba &diana &etc &uk &collections
