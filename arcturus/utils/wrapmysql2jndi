@@ -6,6 +6,8 @@ while ($nextword = shift) {
     $inifile = shift if ($nextword eq '-inifile');
 
     $instance = shift if ($nextword eq '-instance');
+
+    $registercommand = shift if ($nextword eq '-registercommand');
 }
 
 die "You must specify a configuration file (-inifile FILENAME)" unless defined($inifile);
@@ -14,9 +16,8 @@ die "Configuration file $inifile does not exist" unless -f $inifile;
 
 die "You must specify an Arcturus instance name (-instance NAME)" unless defined($instance);
 
-$registerdatasource = $ENV{'REGISTERDATASOURCE'};
-
-die "REGISTERDATASOURCE not defined" unless defined($registerdatasource);
+die "You must specify a command to register the JNDI datasource (-registercommand COMMAND)"
+    unless defined($registercommand);
 
 WrapMySQL->initFromFile($inifile);
 
@@ -31,7 +32,7 @@ foreach $organism (@organisms) {
 
     if (defined($hostname) && defined($port) && defined($username) && defined($password) &&
 	defined($database)) {
-	$cmd = "$registerdatasource -organism $organism -instance $instance -host $hostname " .
+	$cmd = "$registercommand -organism $organism -instance $instance -host $hostname " .
 	    "-port $port -username $username -password $password -database $database";
 
 	print STDERR "$cmd\n";
