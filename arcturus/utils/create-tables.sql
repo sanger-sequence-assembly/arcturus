@@ -92,15 +92,27 @@ CREATE TABLE CLONES2PROJECT (
 ) TYPE=MyISAM;
 
 #
+# Table structure for table 'CLONEVEC'
+#
+
+CREATE TABLE CLONEVEC (
+  read_id mediumint(8) unsigned NOT NULL,
+  cvector_id tinyint(3) unsigned NOT NULL,
+  begin smallint unsigned NOT NULL,
+  end smallint unsigned NOT NULL,
+  KEY read_id (read_id)
+) TYPE=MyISAM;
+
+#
 # Table structure for table 'CLONINGVECTORS'
 #
 
 CREATE TABLE CLONINGVECTORS (
-  cvector tinyint(3) unsigned NOT NULL auto_increment,
+  cvector_id tinyint(3) unsigned NOT NULL auto_increment,
   name varchar(16) NOT NULL default '',
   vector tinyint(3) unsigned default '0',
   counted int(10) unsigned default '0',
-  PRIMARY KEY  (cvector)
+  PRIMARY KEY  (cvector_id)
 ) TYPE=MyISAM;
 
 #
@@ -272,21 +284,12 @@ CREATE TABLE READS (
   primer enum('Universal_primer', 'Custom', 'Unknown_primer') default NULL,
   chemistry enum('Dye_terminator', 'Dye_primer') default NULL,
   basecaller tinyint(3) unsigned default NULL,
-  direction enum('?','+','-') default '?',
   slength smallint(5) unsigned NOT NULL default '0',
   lqleft smallint(5) unsigned NOT NULL default '0',
   lqright smallint(5) unsigned NOT NULL default '0',
   svcsite smallint(6) default NULL,
   svpsite smallint(6) default NULL,
-  svector_id tinyint(3) unsigned default '0',
-  svleft smallint(5) unsigned default NULL,
-  svright smallint(5) unsigned default NULL,
-  cvector tinyint(3) unsigned default '0',
-  cvleft smallint(5) unsigned default NULL,
-  cvright smallint(5) unsigned default NULL,
   pstatus tinyint(3) unsigned default '0',
-  rstatus mediumint(8) unsigned default '0',
-  paired enum('N','F','R') default 'N',
   tstatus enum('N','I','T') default 'N',
   template_id mediumint(8) unsigned default NULL,
   PRIMARY KEY  (read_id),
@@ -382,6 +385,18 @@ CREATE TABLE SEQUENCE (
   quality blob NOT NULL,
   PRIMARY KEY  (read_id)
 ) TYPE=MyISAM MAX_ROWS=8000000 AVG_ROW_LENGTH=900;
+
+#
+# Table structure for table 'SEQVEC'
+#
+
+CREATE TABLE SEQVEC (
+  read_id mediumint(8) unsigned NOT NULL,
+  svector_id tinyint(3) unsigned NOT NULL,
+  begin smallint unsigned NOT NULL,
+  end smallint unsigned NOT NULL,
+  KEY read_id (read_id)
+) TYPE=MyISAM;
 
 #
 # Table structure for table 'SEQUENCEVECTORS'
