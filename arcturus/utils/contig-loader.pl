@@ -24,6 +24,7 @@ my $cafFileName;
 my $lineLimit;             # specifying a line limit implies test mode 
 my $cnFilter = '';         # test contig names for this substring or RE
 my $cnBlocker;             # contig name blocker, ignore contig names of age 0
+my $rnBlocker;             # ignore reads like pattern
 my $minOfReads = 2;        # default require at least 2 reads per contig
 my $readTags;              # default ignore read contents and tags, only mapping
 my $origin;
@@ -35,16 +36,17 @@ my $projectID;             # alternatively the project ID
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
 my $consensus;             # load consensus sequence
-my $noload = 1; # CHANGE to 0
+my $noload = 0; # CHANGE to 0
 my $list = 0;
 my $batch = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|" .
-                 "projectname|project_id|test|minimum|filter|ignore|list|" .
-                 "frugal|padded|readtags|noload|verbose|batch|info|help";
+my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
+               . "projectname|project_id|test|minimum|filter|ignore|list|"
+               . "ignorereadnamelike|"
+               . "frugal|padded|readtags|noload|verbose|batch|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -88,6 +90,8 @@ while (my $nextword = shift @ARGV) {
     $cafFileName      = 'default'    if ($nextword eq '-cafdefault');
 
     $cnBlocker        = 1            if ($nextword eq '-ignore');
+
+    $rnBlocker        = shift @ARGV  if ($nextword eq '-ignorereadnamelike');
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
@@ -157,6 +161,7 @@ if ($projectname || $projectID) {
     $logger->info("Project ".$project->getProjectName." identified") if $project;
 }
 #exit;
+print "readnameblocker $rnBlocker\n" if $rnBlocker;
 
 #----------------------------------------------------------------
 # open file handle for input CAF file
@@ -201,7 +206,7 @@ $logger->info("Contigs with fewer than $minOfReads reads are NOT dumped") if ($m
 
 # setup a buffer for read(name)s to be ignored
 
-undef my %rnBlocker;
+undef my %rnBlocked;
 
 # objectType = 0 : no object is being scanned currently
 #            = 1 : a read    is being parsed currently
@@ -254,7 +259,7 @@ while (defined($record = <$CAF>)) {
         my $unpadded = $1 || 0;
         if ($isUnpadded <= 1) {
             $isUnpadded = ($unpadded ? 2 : 0); # on first entry
-            $logger->info("is not Padded set to $isUnpadded ");
+#            $logger->info("is not Padded set to $isUnpadded ");
             if (!$isUnpadded && !$usePadded) {
                 $logger->severe("Padded assembly not accepted");
                 last;
@@ -347,7 +352,7 @@ while (defined($record = <$CAF>)) {
 #                                && ($aligntotracemapping->hasSegments() == 1));
             }
 # for DNA and Quality 
-            elsif ($rnBlocker{$objectName}) {
+            elsif ($rnBlocked{$objectName}) {
                 $objectType = 0;
 	    }
         }
@@ -399,7 +404,7 @@ while (defined($record = <$CAF>)) {
 
     elsif ($record =~ /Is_read/) {
 # decide if this read is to be included
-        if ($rnBlocker{$objectName}) {
+        if ($rnBlocked{$objectName}) {
 # no, don't want it; does the read already exist?
             $read = $reads{$objectName};
             if ($read && $lowMemory) {
@@ -548,7 +553,8 @@ while (defined($record = <$CAF>)) {
             $read->addTag($tag);
         }
         elsif ($record =~ /Note\sINFO\s(.*)$/) {
-	    $logger->warning("NOTE detected $1 but not processed");
+	    $logger->warning("NOTE detected $1 but not processed") if $noload;
+	    $logger->info("NOTE detected $1 but not processed") unless $noload;
         }
 # finally
         elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
@@ -574,13 +580,15 @@ while (defined($record = <$CAF>)) {
 # add the alignment to the Mapping 
             my @positions = split /\s+/,$2;
             if (scalar @positions == 4) {
-$positions[0] = invert($positions[0]);
-$positions[1] = invert($positions[1]);
+#$positions[0] = 50000 - $positions[0];
+#$positions[1] = 21000 + $positions[1];
                 my $entry = $mapping->addAssembledFrom(@positions); 
 # $entry returns number of alignments: add Mapping and Read for first
                 if ($entry == 1) {
-                    $contig->addMapping($mapping);
-                    $contig->addRead($read);
+                    unless ($rnBlocker && $read->getReadName =~ /$rnBlocker/) {
+                        $contig->addMapping($mapping);
+                        $contig->addRead($read);
+                    }
                 }
 # test number of alignments: padded allows only one record per read, unpadded multiple records
                 if (!$isUnpadded && $entry > 1) {
@@ -610,13 +618,13 @@ $logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $nol
             }
 # pickup repeat name
             if ($type eq 'REPT') {
-		if ($info =~ /^\s*(r[\w\-]+)\s/i) {
+		if ($info =~ /^\s*([\w\-]+)\s+from/i) {
 $logger->warning("TagSequenceName $1") if $noload;
                     $tag->setTagSequenceName($1);
 		}
                 else {
-		    $logger->info("Missing repeat name in contig tag for ".
-                            $contig->getContigName());
+		    $logger->warning("Missing repeat name in contig tag for ".
+                            $contig->getContigName().": ($lineCount) $record");
                 }
             }
         }
@@ -631,8 +639,8 @@ $logger->warning("TagSequenceName $1") if $noload;
     elsif ($objectType == -2) {
 # processing a contig which has to be ignored: inhibit its reads to save memory
         if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
-            $rnBlocker{$1}++; # add read in this contig to the read blocker list
-            $logger->fine("read $1 blocked") unless (keys %rnBlocker)%100;
+            $rnBlocked{$1}++; # add read in this contig to the read blocker list
+            $logger->fine("read $1 blocked") unless (keys %rnBlocked)%100;
 # remove existing Read instance
             $read = $reads{$1};
             if ($read && $lowMemory) {
@@ -720,16 +728,23 @@ foreach my $identifier (keys %contigs) {
             next;
 	}
 	$contig->writeToCaf(*STDOUT) if $list;
-exit; # test
     }
 
     my ($added,$msg) = $adb->putContig($contig,$project,$noload); # return 0 fail
 
     $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
-                  " reads : status $added, $msg");
+                  " reads : status $added, $msg") if $added;
+    $logger->warning("Contig $identifier with ".$contig->getNumberOfReads.
+                     " reads not added, $msg \nContig id =".
+                     ($contig->getContigID || 0)) unless $added;
 
-      # $adb->clearLastContig() unless $added;
-    delete $contigs{$identifier} if $added;
+    if ($added) {
+# what about tags? better in ADBContig
+        delete $contigs{$identifier};
+    }
+    else {
+#        $adb->clearLastContig();
+    }
 }
 
 # test again
@@ -767,13 +782,6 @@ exit(0);
 # subroutines
 #------------------------------------------------------------------------
 
-sub invert {
-    my $value = shift;
-#    $value = 50000 - $value;
-#    $value = 21000 + $value;
-    return $value;
-}
-
 sub tagList {
 # e.g. list = tagList('FTAGS')
     my $name = shift;
@@ -784,7 +792,7 @@ sub tagList {
                  'STSF','STSX','STSG','COMM','RP20','TELO','REPC',
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SILR','IRPT','LINE','REPA','REPY',
-                 'REPZ','FICM','VARD','VARS','CSED','CONS');
+                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON');
 
 # software TAGS
 
@@ -828,6 +836,7 @@ sub showUsage {
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
     print STDERR "-readtags\t\tprocess read tags\n";
     print STDERR "-noload\t\tskip loading into database (test mode)\n";
+    print STDERR "-ignorereadnamelike\tpatter\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
     print STDERR "-frugal\t\t(no value) minimise memory usage\n";
     print STDERR "-verbose\t\t(no value) for some progress info\n";
@@ -835,5 +844,3 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
-
-
