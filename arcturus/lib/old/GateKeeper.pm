@@ -67,14 +67,17 @@ sub new {
 # produce return string for diagnostic purposes, if specified
 
     &cgiHeader($self,$options{diagnosticsOn}) if $options{diagnosticsOn};
+    print "CGI opened \n" if $options{diagnosticsOn};
 
 # open and parse the configuration file
 
     &configure(0,$self);
+    print "Config opened \n" if $options{diagnosticsOn};
 
 # open the database
 
     &opendb_MySQL(0,$self,$options{eraiseMySQL}) if ($engine && $engine =~ /^mysql$/i);
+    print "MySQL opened \n" if $options{diagnosticsOn};
 
 #    &opendb_Oracle(0,$self,$eraise) if ($engine && $engine =~ /^oracle$/i); # or similar later
 
