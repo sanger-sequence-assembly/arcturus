@@ -1,6 +1,6 @@
 #!/usr/local/bin/perl
 
-use DBI;
+use WrapMySQL;
 use CGI;
 
 $cgi = new CGI;
@@ -15,11 +15,10 @@ print $cgi->h1('Database Analyser');
 $scriptname = $cgi->script_name;
 
 $debug = $cgi->param('debug');
+$instance = $cgi->param('instance');
+
 $database = $cgi->param('database');
 $table = $cgi->param('table');
-
-$dbhost = $cgi->param('dbhost') || $cgi->server_name();
-$dbport = $cgi->param('dbport') || $ENV{'MYSQL_TCP_PORT'};
 
 if (defined($database)) {
     push @databases, $database;
@@ -28,13 +27,9 @@ if (defined($database)) {
     $database = 'arcturus';
 }
 
-$dsn = 'DBI:mysql:' . $database . ';host=' . $dbhost . ';port=' . $dbport;
+$dbh = WrapMySQL->connect($instance, 'read');
 
-print STDERR "# DSN=$dsn\n" if $debug;
-
-$dbh = DBI->connect($dsn, 'analysedb', 'dbviewer');
-
-&db_die('Unable to connect to ' . $dsn) unless $dbh;
+&db_die("Unable to connect to instance $instance") unless $dbh;
 
 if(defined($database) && defined($table)) {
     $query = "USE $database";
@@ -43,7 +38,7 @@ if(defined($database) && defined($table)) {
 	print "<TR>\n  <TD COLSPAN=2 BGCOLOR=\"#FF0000\" ALIGN=\"LEFT\">";
 	print "UNABLE TO USE $database: $DBI::errstr</TD>\n</TR>\n";
     } else {
-	print $cgi->h2("Table description for $database.$table on $dbhost:$dbport");
+	print $cgi->h2("Table description for $database.$table on instance $instance");
 	
 	$query = "DESCRIBE $table";
 
@@ -77,7 +72,7 @@ if(defined($database) && defined($table)) {
 
 	print "</TABLE>\n";
 
-	print $cgi->h2("Table status for $database.$table on $dbhost:$dbport");
+	print $cgi->h2("Table status for $database.$table on instance $instance");
 
 	$query = "SHOW TABLE STATUS LIKE '$table'";
 
@@ -132,7 +127,7 @@ if(defined($database) && defined($table)) {
     print "<TABLE BORDER=3 CELLPADDING=2 WIDTH=\"100%\">\n";
 
     foreach $database (sort @databases) {
-	$scriptlink = "$scriptname?dbport=$dbport&dbhost=$dbhost&database=$database";
+	$scriptlink = "$scriptname?instance=$instance&database=$database";
 	$query = "USE $database";
 	$dbh->do($query);
 	if ($DBI::err) {
@@ -176,7 +171,7 @@ if(defined($database) && defined($table)) {
 
 	    while (@ary = $sth->fetchrow_array()) {
 		($rowcount, $junk) = @ary;
-		$scriptlink = "$scriptname?dbport=$dbport&dbhost=$dbhost&database=$database&table=$tablename";
+		$scriptlink = "$scriptname?instance=$instance&database=$database&table=$tablename";
 		printf "<TR>\n<TD>";
 		print "<A HREF=\"$scriptlink\">$tablename</A></TD><TD>$rowcount</TD>\n</TR>\n";
 	    }
