@@ -49,6 +49,8 @@ sub init {
 
     $this->populateDictionaries();
 
+    $this->defineMetaData();
+
     $this->{inited} = 1;
 }
 
@@ -111,6 +113,15 @@ sub disconnect {
 # ----------------------------------------------------------------------------
 # methods dealing with READs
 #-----------------------------------------------------------------------------
+
+sub defineMetaData {
+    my $this = shift;
+
+    $this->{read_attributes} = "readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
+    $this->{template_addons} = "TEMPLATE.name as template,TEMPLATE.ligation_id";
+
+    $this->{contig_attributes} = "contigname,aliasname,length,ncntgs,nreads,newreads,cover,origin,updated,userid,readnamehash";
+}
 
 sub populateDictionaries {
     my $this = shift;
@@ -283,6 +294,55 @@ sub translateDictionaryReadItems {
     }
 }
 
+sub countReadDictionaryItem {
+# return list with number of occurences for read dictionary items 
+    my $this = shift;
+    my $item = shift;
+
+    my $dbh = $this->getConnection();
+
+# compose the counting query
+
+    my $query = "select count(*) as count,";
+
+    if ($item eq 'ligation') {
+        $query .= "TEMPLATE.ligation_id from READS,TEMPLATE where READS.template_id=TEMPLATE.template_id group by ligation_id";
+    }
+    elsif ($item eq 'clone') {
+# build the clone names dictionary on clone_id (different from the one on ligation_id)
+        $this->{Dictionary}->{clonename} =
+	     &createDictionary($dbh, 'CLONES','clone_id', 'name');
+        $query .= "LIGATIONS.clone_id from READS,TEMPLATE,LIGATIONS where READS.template_id=TEMPLATE.template_id and TEMPLATE.ligation_id=LIGATIONS.ligation_id group by clone_id";
+        $item = 'clonename';
+    }
+    elsif ($item =~ /\b(strand|primer|chemistry|basecaller|status)\b/) {
+        $query .= "$item from READS group by $item";
+    }
+    else {
+        return undef; 
+    }
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    my %outputhash;
+
+    while (my @ary = $sth->fetchrow_array()) {
+        my ($count,$value) = @ary;
+# translate value if it is an identifier
+        if (my $dict = $this->{Dictionary}->{$item}) {
+            $value = &dictionaryLookup($dict, $value) if $value;
+        }
+        $value = 'NULL' unless defined($value); # deal with NULL 
+        $outputhash{$value} = $count;
+    }
+
+    $sth->finish();
+
+    return \%outputhash;
+}
+
 #-----------------------------------------------------------------------------
 
 sub getReadByID {
@@ -292,9 +352,7 @@ sub getReadByID {
 
     my $dbh = $this->getConnection();
 
-    my $read_attributes = "read_id,readname,asped,strand,primer,chemistry,basecaller,lqleft,lqright,status";
-
-    my $query = "select $read_attributes,TEMPLATE.name as template,TEMPLATE.ligation_id 
+    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
                  from READS left join TEMPLATE using (template_id) 
                  where read_id = ?";
 
@@ -302,82 +360,21 @@ sub getReadByID {
 
     $sth->execute($readid);
 
-    my ($read_id,$readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id) = $sth->fetchrow_array();
+#    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id);
+
+    my ($read_id,@attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    if (defined($readname)) {
+    if (defined($read_id)) {
 	my $read = new Read();
 
         $read->setReadID($read_id);
-	$read->setReadName($readname);
 
-	$read->setAspedDate($asped);
-	$read->setStrand($strand);
-	$read->setPrimer($primer);
-	$read->setChemistry($chemistry);
+        $this->addMetaDataForRead($read,@attributes);
 
-	my $basecaller = &dictionaryLookup($this->{Dictionary}->{basecaller},
-					   $basecaller_id);
+        $this->addVectorDataForRead($read);
 
-	$read->setBaseCaller($basecaller);
-
-	my $status = &dictionaryLookup($this->{Dictionary}->{status},
-				       $status_id);
-
-	$read->setProcessStatus($status);
-
-	$read->setTemplate($template);
-
-	my $ligation = &dictionaryLookup($this->{Dictionary}->{ligation},
-					 $ligation_id);
-
-	$read->setLigation($ligation);
-
-	my $insertsize = &dictionaryLookup($this->{Dictionary}->{insertsize},
-					   $ligation_id);
-
-	$read->setInsertSize($insertsize);
-
-	my $clone = &dictionaryLookup($this->{Dictionary}->{clone},
-			              $ligation_id);
-
-	$read->setClone($clone);
-
-        $read->setLowQualityLeft($lqleft);
-
-        $read->setLowQualityRight($lqright);
-
-	$query = "select svector_id,svleft,svright from SEQVEC where read_id=?";
-
-	$sth = $dbh->prepare_cached($query);
-
-        $sth->execute($readid);
-
-	while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
-	    my $svector = &dictionaryLookup($this->{Dictionary}->{svector},
-					    $svector_id);
-
-	    $read->addSequencingVector([$svector, $svleft, $svright]);
-	}
-
-	$sth->finish();
-
-	$query = "select cvector_id,cvleft,cvright from CLONEVEC where read_id=?";
-
-	$sth = $dbh->prepare_cached($query);
-
-        $sth->execute($readid);
-
-	while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
-	    my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},
-					    $cvector_id);
-
-	    $read->addCloningVector([$cvector, $cvleft, $cvright]);
-	}
-
-	$sth->finish();
-	
 	$read->setArcturusDatabase($this);
 
 	return $read;
@@ -387,14 +384,82 @@ sub getReadByID {
     }
 }
 
-sub getVectorDataForRead {
+sub addMetaDataForRead {
+# private method: set meta data for input Read 
+    my $this = shift;
+    my $read = shift; # Read instance
+    my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$lqleft,$lqright,$status_id,$template,$ligation_id) = @_;
+
+    $read->setReadName($readname);
+
+    $read->setAspedDate($asped);
+    $read->setStrand($strand);
+    $read->setPrimer($primer);
+    $read->setChemistry($chemistry);
+
+    my $basecaller = &dictionaryLookup($this->{Dictionary}->{basecaller},
+				       $basecaller_id);
+    $read->setBaseCaller($basecaller);
+
+    my $status = &dictionaryLookup($this->{Dictionary}->{status},
+				   $status_id);
+    $read->setProcessStatus($status);
+
+    $read->setTemplate($template);
+
+    my $ligation = &dictionaryLookup($this->{Dictionary}->{ligation},
+				     $ligation_id);
+    $read->setLigation($ligation);
+
+    my $insertsize = &dictionaryLookup($this->{Dictionary}->{insertsize},
+				       $ligation_id);
+    $read->setInsertSize($insertsize);
+
+    my $clone = &dictionaryLookup($this->{Dictionary}->{clone},
+			          $ligation_id);
+    $read->setClone($clone);
+
+    $read->setLowQualityLeft($lqleft);
+
+    $read->setLowQualityRight($lqright);
+}
+
+sub addVectorDataForRead {
+# private method : add sequence vector and cloning vector data to Read
     my $this = shift;
     my $read = shift; # Read instance
 
+    my $dbh = $this->getConnection() || return;
+
     my $read_id = $read->getReadID;
 
-    my $query = "select svector_id,svleft,svright from SEQVEC where read_id = ?
-      UNION select cvector_id,cvleft,cvright from CLONEVEC where read_id = ?"; 
+    my $query = "select svector_id,svleft,svright from SEQVEC where read_id=?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($read_id);
+
+    while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
+	my $svector = &dictionaryLookup($this->{Dictionary}->{svector},$svector_id);
+
+	$read->addSequencingVector([$svector, $svleft, $svright]);
+    }
+
+    $sth->finish();
+
+    $query = "select cvector_id,cvleft,cvright from CLONEVEC where read_id=?";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($read_id);
+
+    while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
+        my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},$cvector_id);
+
+	$read->addCloningVector([$cvector, $cvleft, $cvright]);
+    }
+
+    $sth->finish();
 }
 
 sub getReadByName {
@@ -404,7 +469,7 @@ sub getReadByName {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select READS.*,TEMPLATE.name as template,TEMPLATE.ligation_id 
+    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
                  from READS left join TEMPLATE using (template_id) 
                  where readname = ?";
 
@@ -412,16 +477,18 @@ sub getReadByName {
 
     $sth->execute($readname);
 
-    my $hashref = $sth->fetchrow_hashref();
+    my ($read_id,@attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
-    if (defined($hashref)) {
+    if (defined($read_id)) {
 	my $read = new Read();
 
-#	$this->processReadData($hashref);
+        $read->setReadID($read_id);
 
-#	$read->importData($hashref);
+        $this->addMetaDataForRead($read,@attributes);
+
+        $this->addVectorDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -447,22 +514,27 @@ sub getReadsByID {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select READS.*,TEMPLATE.name as template
+    my $query = "select read_id,$this->{read_attributes},$this->{template_addons}
                  from READS left join TEMPLATE using (template_id) 
                  where read_id in ($range)";
-    my $sth = $dbh->prepare("select * from READS where read_id in ($range)");
+
+    my $sth = $dbh->prepare($query);
 
     $sth->execute();
 
     my @reads;
 
-    while (my $hashref = $sth->fetchrow_hashref()) {
+    while (my @attributes = $sth->fetchrow_array()) {
 
 	my $read = new Read();
 
-#	$this->processReadData($hashref);
+        my $read_id = shift @attributes;
 
-#	$read->importData($hashref);
+        $read->setReadID($read_id);
+
+        $this->addMetaDataForRead($read,@attributes);
+
+        $this->addVectorDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -481,27 +553,32 @@ sub getReadsForContigID{
 
     my $dbh = $this->getConnection();
 
-    my $query = "select READS.*,TEMPLATE.name as template 
-                 from  READS2CONTIG, READS, TEMPLATE 
-                 where READS2CONTIG.contig_id = ?  
-                 and READS2CONTIG.read_id = READS.read_id
+# NOTE: this query may have to be optimized
+
+    my $query = "select READS.read_id,$this->{read_attributes},$this->{template_addons}
+                 from  MAPPING, READS, TEMPLATE 
+                 where MAPPING.contig_id = ?  
+                 and MAPPING.read_id = READS.read_id
                  and READS.template_id = TEMPLATE.template_id";
-# my $query = "select READS.* from READS2CONTIG left join READS on (read_id) ";
-# $query   .= "where READS2CONTIG.contig_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($cid);
+    print "ContigID: $query\n";
+    my $nr = $sth->execute($cid); print "nr $nr\n";
 
     my @reads;
 
-    while (my $hashref = $sth->fetchrow_hashref()) {
+    while (my @attributes = $sth->fetchrow_array()) {
 
 	my $read = new Read();
 
-#	$this->processReadData($hashref);
+        my $read_id = shift @attributes;
 
-#	$read->importData($hashref);
+        $read->setReadID($read_id);
+
+        $this->addMetaDataForRead($read,@attributes);
+
+        $this->addVectorDataForRead($read);
 
 	$read->setArcturusDatabase($this);
 
@@ -509,6 +586,25 @@ sub getReadsForContigID{
     }
 
     $sth->finish();
+
+# test the number of Reads found against the number of reads in the CONTIGS record
+
+    $query = "select nreads from CONTIGS where contig_id = ?";
+   
+    $sth = $dbh->prepare_cached($query);
+
+    $nr = $sth->execute($cid); print "nr $nr\n";
+
+    if (my ($nreads) = $sth->fetchrow_array()) {
+        if ($nreads != scalar(@reads)) {
+            print STDERR "Mismatch of reads found ($nreads)\n";
+        }
+    }
+    else {
+# no nreads found?
+        print STDERR "Mismatch of reads found (0)\n";
+    } 
+
 
     return \@reads;
 }
@@ -525,7 +621,7 @@ sub getSequenceForReads {
 
     my $dbh = $this->getConnection();
 
-# build a list of read IDs / or use the Read instances inventory
+# build a list of read IDs
 
     my %rids;
     my $rids = \%rids;
@@ -1133,20 +1229,14 @@ sub updateRead {
     my $read = shift || return;
 }
 
-sub pingRead {
-# test if a readname is in the READS database table; return read_id, if exists
-    my $this = shift;
-    my $name = shift;
-}
-
 sub addTagsForRead {
     my $this = shift;
 
 }
 
-#----------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------
 # methods dealing with CONTIGs
-#----------------------------------------------------------------------------------------- 
+#----------------------------------------------------------------------------------------
 
 sub getContigByID {
 # return a Contig object with the meta data only for the specified contig ID
@@ -1155,35 +1245,57 @@ sub getContigByID {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $this->{prepared}->{getContigByID};
+    my $query = "select $this->{contig_attributes} from CONTIGS where contig_id = ?";
 
-    if (!defined($sth)) {
-
-        $sth = $dbh->prepare("select * from CONTIGS where contig_id = ?");
-
-        $this->{prepared}->{getContigByID} = $sth;
-    }
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($contig_id);
 
-    my $hashref = $sth->fetchrow_hashref();
+    undef my $contig;
 
-    $sth->finish($contig_id);
+    if (my @attributes = $sth->fetchrow_array()) {
 
-    if (defined($hashref)) {
+	my $contig = new Contig();
 
-	my $Contig = new Contig();
+        $contig->setContigID($contig_id);
 
-	$Contig->importData($hashref);
+        $this->addMetaDataForContig($contig,@attributes);
 
-	$Contig->setArcturusDatabase($this);
-
-        return $Contig;
+	$contig->setArcturusDatabase($this);
     }
-    else {
-# no such contig found
-        return undef;
-    }
+
+    $sth->finish();
+
+    return $contig; # returns undef if no such contig found
+}
+
+sub addMetaDataForContig {
+# private method: insert meta data into input Contig object
+    my $this = shift;
+    my $contig = shift; # instyance of Contig class
+    my ($contigname,$aliasname,$length,$ncntgs,$nreads,$newreads,$cover,$origin,$updated,$userid,$readnamehash) = @_;
+
+    $contig->setContigName($contigname);
+
+    $contig->setReadNameHash($readnamehash);    
+
+    $contig->setAliasName($aliasname);
+
+    $contig->setLength($length);
+
+    $contig->setPreviousContigs($ncntgs);
+
+    $contig->setNumberOfReads($nreads);
+
+    $contig->setNumberOfNewReads($newreads);
+
+    $contig->setAverageCover($cover);
+
+    $contig->setOrigin($origin);
+
+    $contig->setDate($updated);
+
+    $contig->setCreator($userid);
 }
 
 sub getContigByName {
@@ -1193,76 +1305,100 @@ sub getContigByName {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $this->{prepared}->{getContigByName};
+    my $query = "select contig_id,$this->{contig_attributes} from CONTIGS where contigname = ? or aliasname = ? ";
 
-    if (!defined($sth)) {
-
-        $sth = $dbh->prepare("select * from CONTIGS where contigname = ? or aliasname = ? ");
-
-        $this->{prepared}->{getContigByName} = $sth;
-    } 
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($name,$name);
 
-    my $hashref = $sth->fetchrow_hashref();
+    undef my $contig;
+
+    if (my @attributes = $sth->fetchrow_array()) {
+
+	my $contig = new Contig();
+
+        my $contig_id = shift @attributes;
+
+        $contig->setContigID($contig_id);
+
+        $this->addMetaDataForContig($contig,@attributes);
+
+	$contig->setArcturusDatabase($this);
+    }
 
     $sth->finish();
 
-    if (defined($hashref)) {
+    return $contig; # returns undef if no such contig found
+}
 
-	my $Contig = new Contig();
+sub getContigWithReadChecksum {
+# returns a Contig object with the meta data only which contains the specified read
+    my $this = shift;
+    my $checksum = shift;
 
-	$Contig->importData($hashref);
+    my $dbh = $this->getConnection();
 
-	$Contig->setArcturusDatabase($this);
+    my $query = "select contig_id,$this->{contig_attributes} from CONTIGS 
+                 where readnamehash = ? ";
 
-        return $Contig;
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($checksum);
+
+    undef my $contig;
+
+    if (my @attributes = $sth->fetchrow_array()) {
+
+	my $contig = new Contig();
+
+        my $contig_id = shift @attributes;
+
+        $contig->setContigID($contig_id);
+
+        $this->addMetaDataForContig($contig,@attributes);
+
+	$contig->setArcturusDatabase($this);
     }
-    else {
-# no such contig found
-        return undef;
-    }
+
+    $sth->finish();
+
+    return $contig; # returns undef if no such contig found
 }
 
 sub getContigWithRead {
-# returns a Contig object with the meta data only which contains the read specified by name
+# returns a Contig object (meta data only) which contains the read specified by name
     my $this = shift;
     my $name = shift;
 
     my $dbh = $this->getConnection();
 
-    my $sth = $this->{prepared}->{getContigWithRead};
-
-    if (!defined($sth)) {
-
-        my $query  = "select CONTIGS.* from CONTIGS join READS2CONTIG using (contig_id) where ";
-           $query .= "read_id = (select read_id from READS where readname = ?)";
-# ensure the latest contig
-        $sth = $dbh->prepare($query);
-
-        $this->{prepared}->{getContigWithRead} = $sth;
-    } 
+    my $query  = "select CONTIGS.contig_id,$this->{contig_attributes} 
+                  from CONTIGS join MAPPING using (contig_id) 
+                  where read_id = (select read_id from READS where readname = ?)";
+# NOTES: uses subqueries;  ensure the latest contig (age = 0 in CONTIGS2CONTIG)?
+        
+    my $sth = $dbh->prepare_cache($query);
 
     $sth->execute($name);
 
-    my $hashref = $sth->fetchrow_hashref();
+    undef my $contig;
+
+    if (my @attributes = $sth->fetchrow_array()) {
+
+	$contig = new Contig();
+
+        my $contig_id = shift @attributes;
+
+        $contig->setContigID($contig_id);
+
+        $this->addMetaDataForContig($contig,@attributes);
+
+	$contig->setArcturusDatabase($this);
+    }
 
     $sth->finish();
 
-    if (defined($hashref)) {
-
-	my $Contig = new Contig();
-
-	$Contig->importData($hashref);
-
-	$Contig->setArcturusDatabase($this);
-
-        return $Contig;
-    }
-    else {
-# no such contig found
-        return undef;
-    }
+    return $contig; # returns undef if no such contig found
 }
 
 sub getContigWithTag {
@@ -1272,70 +1408,34 @@ sub getContigWithTag {
 
     my $dbh = $this->getConnection();
 
-    my $query = "select CONTIGS.* from CONTIGS join TAGS2CONTIG using (contig_id) where ";
-    $query   .= "tag_id = (select tag_id from TAGS where tagname = ?)";
+    my $query = "select CONTIGS.contig_id,$this->{contig_attributes}
+                 from CONTIGS join TAGS2CONTIG using (contig_id)
+                 where tag_id = (select tag_id from TAGS where tagname = ?)";
+# NOTE: uses subquery ; use age = 0 ?
+# NOTE: use the merge table concept for tag table, else query should be several UNIONs
 
-# note: use the merge table concept for tag table, else query should be several UNIONs
-
-    my $sth = $dbh->prepare($query);
-
-# ? replace by prepared query 
-
-    $sth->execute($name);
-
-    my $hashref = $sth->fetchrow_hashref();
-
-    $sth->finish();
-
-    if (defined($hashref)) {
-
-	my $Contig = new Contig();
-
-	$Contig->importData($hashref);
-
-	$Contig->setArcturusDatabase($this);
-
-        return $Contig;
-    }
-    else {
-# no such contig found
-        return undef;
-    }
-}
-
-sub getContigWithChecksum {
-# returns a Contig object with the meta data only which contains the specified read
-    my $this = shift;
-    my $name = shift;
-
-    my $dbh = $this->getConnection();
-
-# note: use the merge table concept for tag table, else query should be several UNIONs
-
-    my $sth = $dbh->prepare("select * from CONTIGS where readnamehash = ? ");
-
-# ? replace by prepared query 
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($name);
 
-    my $hashref = $sth->fetchrow_hashref();
+    undef my $contig;
+
+    if (my @attributes = $sth->fetchrow_array()) {
+
+	$contig = new Contig();
+
+        my $contig_id = shift @attributes;
+
+        $contig->setContigID($contig_id);
+
+        $this->addMetaDataForContig($contig,@attributes);
+
+	$contig->setArcturusDatabase($this);
+    }
 
     $sth->finish();
 
-    if (defined($hashref)) {
-
-	my $Contig = new Contig();
-
-	$Contig->importData($hashref);
-
-	$Contig->setArcturusDatabase($this);
-
-        return $Contig;
-    }
-    else {
-# no such contig found
-        return undef;
-    }
+    return $contig; # returns undef if no such contig found
 }
 
 sub getContig {
@@ -1428,13 +1528,13 @@ sub getSequenceAndBaseQualityForContig {
         $query .= "contigname = ? or aliasname = ?";
     }
 
-    my $sth = $dbh->prepare($query);
+    my $sth = $dbh->prepare_cached($query);
 
     $sth->execute($value,$value);
 
     my ($sequence, $quality);
 
-    while(my @ary = $sth->fetchrow_array()) {
+    if (my @ary = $sth->fetchrow_array()) {
 	($sequence, $quality) = @ary;
     }
 
@@ -1449,6 +1549,45 @@ sub getSequenceAndBaseQualityForContig {
     }
 
     return ($sequence, $quality);
+}
+
+sub hasContig {
+# test presence of contig with given contigname and/or readchecksum
+    my $this = shift;
+    my $hash = shift; 
+
+# compose the query
+
+    my $query = "select contig_id from CONTIGS where";
+
+    my @params;
+    if ($hash->{contigname}) {
+        $query .= "contigname=?";
+        push @params, $hash->{contigname};
+    }
+    if ($hash->{readnamehash}) {
+        $query .= " and" if @params;
+        $query .= " readnamehash=?";
+        push @params, $hash->{readnamehash};
+    }
+
+    die "hasContig expects a contigname or readnamehash value" unless @params;
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute(@params);
+
+    undef my $contig_id;
+
+    if (my @ary = $sth->fetchrow_array()) {
+	($contig_id) = @ary;
+    }
+
+    $sth->finish();
+
+    return $contig_id; # returns undefined if no such contig found
 }
 
 #----------------------------------------------------------------------------------------- 
