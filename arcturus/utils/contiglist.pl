@@ -15,28 +15,38 @@ use PathogenRepository;
 my $organism;
 my $instance;
 my $contig_id;
+my $readname;
+my $tagname;
 my $fasta;
 my $fofn;
 my $verbose;
+my $metadataonly = 0;
 
-my $validKeys  = "organism|instance|contig|fofn|html|fasta|verbose|help";
+my $validKeys  = "organism|instance|contig|fofn|read|tag|short|".
+                 "fasta|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage(0,"Invalid keyword '$nextword'");
     }                                                                           
-    $instance  = shift @ARGV  if ($nextword eq '-instance');
+    $instance     = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism  = shift @ARGV  if ($nextword eq '-organism');
+    $organism     = shift @ARGV  if ($nextword eq '-organism');
 
-    $contig_id = shift @ARGV  if ($nextword eq '-contig');
+    $contig_id    = shift @ARGV  if ($nextword eq '-contig');
 
-    $fofn      = shift @ARGV  if ($nextword eq '-fofn');
+    $readname     = shift @ARGV  if ($nextword eq '-read');
 
-    $fasta     = 1            if ($nextword eq '-fasta');
+    $tagname      = shift @ARGV  if ($nextword eq '-tag');
 
-    $verbose   = 1            if ($nextword eq '-verbose');
+    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
+
+    $fasta        = 1            if ($nextword eq '-fasta');
+
+    $verbose      = 1            if ($nextword eq '-verbose');
+
+    $metadataonly = 1            if ($nextword eq '-short');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -83,21 +93,59 @@ my @contigs;
 
 if ($contig_id) {
     $logger->info("Contig $contig_id to be processed");
-    my $contig = $adb->getContig(id=>$contig_id);
+    my $contig = $adb->getContig(contig_id=>$contig_id,
+                                 metaDataOnly=>$metadataonly);
+    $logger->info("Contig $contig constructed");
+    push @contigs, $contig if $contig;
+}
+
+if ($readname) {
+    $logger->info("Contig with read $readname to be processed");
+    my $contig = $adb->getContig(withRead=>$readname,
+                                 metaDataOnly=>$metadataonly);
+    $logger->info("Contig $contig constructed");
+    push @contigs, $contig if $contig;
+}
+
+if ($tagname) {
+    $logger->info("Contig with tag $tagname to be processed");
+    my $contig = $adb->getContig(withTag=>$tagname,
+                       metaDataOnly=>$metadataonly);
     $logger->info("Contig $contig constructed");
     push @contigs, $contig if $contig;
 }
 
 if ($fofn) {
     foreach my $contig_id (@$fofn) {
-        my $contig = $adb->getContig(id=>$contig_id);
+        my $contig = $adb->getContig(id=>$contig_id,
+                                     metaDataOnly=>$metadataonly);
         push @contigs, $contig if $contig;
     }
 }
 
 foreach my $contig (@contigs) {
-    $contig->writeToCaf(*STDOUT) unless $fasta; 
-    $contig->writeToFasta(*STDOUT,*STDOUT) if $fasta; 
+    if ($metadataonly) {
+        print STDOUT "\n";
+        print STDOUT "Contig name = ".$contig->getContigName.
+	             " (".$contig->getContigID.")\n";
+        print STDOUT "Number of reads = ".$contig->getNumberOfReads.
+                     " (new reads = ".$contig->getNumberOfNewReads.")\n";
+        print STDOUT "Number of contigs = ".$contig->getNumberOfContigs."\n";
+        print STDOUT "Consensus length = ".$contig->getConsensusLength."\n";
+        print STDOUT "Average cover = ".$contig->getAverageCover."\n";
+        print STDOUT "Origin = ".$contig->getOrigin."\n";
+        if (my $pc = $contig->hasPreviousContigs) {
+	    my $cs = $contig->getPreviousContigs;
+            print STDOUT "Previous Contigs : ",$pc, " (@$cs)\n";
+        }
+        print STDOUT "\n";
+    }
+    elsif ($fasta) {
+        $contig->writeToFasta(*STDOUT,*STDOUT);
+    } 
+    else {
+        $contig->writeToCaf(*STDOUT); 
+    }
 }
 
 

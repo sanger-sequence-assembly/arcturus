@@ -142,20 +142,6 @@ CREATE TABLE CONTIG (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'CONTIG2CONTIG'
-#
-
-CREATE TABLE CONTIG2CONTIG (
-  genofo smallint(5) unsigned default '0',
-  newcontig mediumint(8) unsigned NOT NULL default '0',
-  nranges int(11) default '0',
-  nrangef int(11) default '0',
-  oldcontig mediumint(8) unsigned NOT NULL default '0',
-  oranges int(11) default '0',
-  orangef int(11) default '0'
-) TYPE=MyISAM;
-
-#
 # Table structure for table 'CONTIG2PROJECT'
 #
 
@@ -204,7 +190,6 @@ CREATE TABLE MAPPING (
   cstart int(10) unsigned NULL,
   cfinish int(10) unsigned NULL,
   direction enum('Forward','Reverse') NOT NULL default 'Forward',
-  revision smallint(5) unsigned NOT NULL default '0',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
   KEY seq_id (seq_id)
@@ -445,7 +430,6 @@ CREATE TABLE QUALITYCLIP (
   primary key (seq_id)
 ) TYPE=MyISAM;
 
-
 #
 # Table structure for table 'ALIGN2SCF'
 #
@@ -458,6 +442,32 @@ CREATE TABLE ALIGN2SCF (
   KEY (seq_id)
 ) TYPE=MyISAM;
 
+#
+# Table structure for table 'C2CMAPPING'
+#
+
+CREATE TABLE C2CMAPPING (
+  age smallint(5) unsigned default '0',
+  contig_id mediumint(8) unsigned NOT NULL default '0',
+  linked_id mediumint(8) unsigned NOT NULL default '0',
+  mapping_id mediumint(8) unsigned NOT NULL auto_increment,
+  direction enum('Forward','Reverse') NOT NULL default 'Forward',
+  PRIMARY KEY  (mapping_id),
+  KEY contig_id (contig_id),
+  KEY linked_id (linked_id)
+) TYPE=MyISAM;
+
+#
+# Table structure for table 'C2CSEGMENT'
+#
+
+CREATE TABLE C2CSEGMENT (
+  mapping_id mediumint(8) unsigned NOT NULL,
+  cstart int(10) unsigned NOT NULL default '0',
+  pstart int(10) unsigned NOT NULL default '0',
+  length smallint(5) unsigned NOT NULL default '1',
+  KEY mapping_id (mapping_id)
+) TYPE=MyISAM;
 
 
 
