@@ -1135,20 +1135,25 @@ sub chemistry {
         $warnings++ if (!$fatal);
         $errors++   if  ($fatal);
         if ($readItem{CHT} eq 'u') {
-            $diagnosis .= "! Undefined ";
- $diagnosis .= "chemistry=$readItem{CH} ";
+            $diagnosis .= "! Undefined (CH=$readItem{CH}) ";
         }
         elsif ($readItem{CHT}) {
             $diagnosis .= "! Unverified ($readItem{CHT}) ";
-            delete $readItem{CH}; # remove meaningless info
         }
         else { 
-            $diagnosis .= "! Unspecified ";
- $diagnosis .= "chemistry=$readItem{CH} ";
+            $diagnosis .= "! Unspecified (CH=$readItem{CH}) ";
         }
         $diagnosis .= "chemistry: no SCF info available ";
         $diagnosis .= "($SCFREADDIR/get_scf_field ${readFileName}SCF)\n";
         $readItem{RPS} += 32768*16 ; # bit 20 
+# try to recover using Chemtype description
+        if ($chemistry = $CHEMTYPES->associate('identifier',$readItem{CH},'chemtype')) {
+            $readItem{CH} = $chemistry;
+&logger("... recovered: = $readItem{CH})");
+        }
+        else {
+            delete $readItem{CH}; # remove meaningless info
+        }
 print "REPORT $report<br>";
     }
 }
