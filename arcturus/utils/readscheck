@@ -71,6 +71,20 @@ foreach $dbname (@dblist) {
     &db_die("$query failed");
     print STDERR "\n" if $verbose;
 
+    $query = "SELECT COUNT(*) FROM READS";
+
+    $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed on $dsn");
+
+    $sth->execute();
+    &db_die("execute($query) failed on $dsn");
+
+    ($totreads) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    print STDERR "There are $totreads reads\n";
+ 
     $ndone = 0;
     $nbad = 0;
 
