@@ -2,7 +2,7 @@
 
 use strict; # Constraint variables declaration before using them
 
-use ArcturusDatabase::ADBRead;
+use ArcturusDatabase::ADBContig;
 
 use FileHandle;
 use Logging;
@@ -66,7 +66,7 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 $instance = 'prod' unless defined($instance);
 
-my $adb = new ADBRead (-instance => $instance,
+my $adb = new ADBContig (-instance => $instance,
 		       -organism => $organism);
 
 &showUsage("Unknown organism '$organism'") unless $adb;
