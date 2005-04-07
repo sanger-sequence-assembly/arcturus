@@ -146,8 +146,8 @@ CREATE TABLE MAPPING (
 
 CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
-  name varchar(8) binary NOT NULL,
   assembly_id smallint(5) unsigned default '0',
+  name varchar(8) binary NOT NULL,
   updated timestamp NOT NULL,
   owner varchar(8) binary default NULL,
   locked datetime default NULL,
@@ -155,7 +155,7 @@ CREATE TABLE PROJECT (
   creator varchar(8) binary NOT NULL default 'arcturus',
   comment text default NULL,
   PRIMARY KEY  (project_id),
-  UNIQUE INDEX (assembly_id,name)
+  UNIQUE INDEX (assembly_id,projectname)
 ) TYPE=MyISAM;
 
 #  projectname varchar(16) binary default NULL,
