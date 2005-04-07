@@ -16,10 +16,16 @@ public class ContigManager {
     private Connection conn;
     private HashMap hashByID;
     private PreparedStatement pstmtByID;
+    private PreparedStatement pstmtCountContigsByProject, pstmtGetContigsByProject;
     private PreparedStatement pstmtCountMappingsByContigID,pstmtMappingsByContigID, pstmtSegmentsByContigID;
     private PreparedStatement pstmtReadDataByContigID,pstmtFullReadDataByContigID;
     private PreparedStatement pstmtConsensusByID;
+    private PreparedStatement pstmtReadDataByProjectID,pstmtFullReadDataByProjectID;
+    private PreparedStatement pstmtConsensusByProjectID;
     private Inflater decompresser = new Inflater();
+
+    private final static int BY_CONTIG_ID = 1;
+    private final static int BY_PROJECT_ID = 2;
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -37,8 +43,17 @@ public class ContigManager {
 	query = "select count(*) from MAPPING where contig_id = ?";
 	pstmtCountMappingsByContigID = conn.prepareStatement(query);
 
+	query = "select count(*) from CONTIG where project_id = ?";
+	pstmtCountContigsByProject = conn.prepareStatement(query);
+
+	query = "select contig_id,length,nreads,updated from CONTIG where project_id = ?";
+	pstmtGetContigsByProject = conn.prepareStatement(query);
+
 	query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
 	pstmtConsensusByID = conn.prepareStatement(query);
+
+	query = "select CONTIG.contig_id,length,sequence,quality from CONTIG left join CONSENSUS using(contig_id) where project_id = ?";
+	pstmtConsensusByProjectID = conn.prepareStatement(query);
 
 	query = "select seq_id,MAPPING.mapping_id,MAPPING.cstart,cfinish,direction,count(*)" +
 	    " from MAPPING left join SEGMENT using(mapping_id)" +
@@ -69,6 +84,24 @@ public class ContigManager {
 	    " and contig_id = ?";
 	pstmtFullReadDataByContigID = conn.prepareStatement(query);
 
+	query = "select READS.read_id,READS.readname,asped,strand,primer,chemistry," +
+	    "           TEMPLATE.template_id,TEMPLATE.name,TEMPLATE.ligation_id,SEQ2READ.seq_id,SEQ2READ.version" +
+	    " from READS,CONTIG,TEMPLATE,SEQ2READ,MAPPING" +
+	    " where READS.read_id=SEQ2READ.read_id and READS.template_id=TEMPLATE.template_id and SEQ2READ.seq_id=MAPPING.seq_id" +
+	    " and CONTIG.contig_id=MAPPING.contig_id" + 
+	    " and project_id = ?";
+	pstmtReadDataByProjectID = conn.prepareStatement(query);
+
+	query = "select READS.read_id,READS.readname,asped,strand,primer,chemistry," +
+	    "           TEMPLATE.template_id,TEMPLATE.name,TEMPLATE.ligation_id,SEQ2READ.seq_id,SEQ2READ.version," +
+	    "           SEQUENCE.seqlen,SEQUENCE.sequence,SEQUENCE.quality" +
+	    " from READS,CONTIG,TEMPLATE,SEQ2READ,MAPPING,SEQUENCE" +
+	    " where READS.read_id=SEQ2READ.read_id and READS.template_id=TEMPLATE.template_id and SEQ2READ.seq_id=MAPPING.seq_id" +
+	    " and SEQUENCE.seq_id=MAPPING.seq_id" +
+	    " and CONTIG.contig_id=MAPPING.contig_id" + 
+	    " and project_id = ?";
+	pstmtFullReadDataByProjectID = conn.prepareStatement(query);
+
 	hashByID = new HashMap();
     }
 
@@ -89,7 +122,7 @@ public class ContigManager {
 	    loadMappingsForContig(contig, mappingOption);
 
 	if (contig.getConsensus() == null && consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
-	    loadConsensusForContig(contig, consensusOption);
+	    loadConsensusForContig(contig);
 
 	return contig;
     }
@@ -114,7 +147,7 @@ public class ContigManager {
 	    loadMappingsForContig(contig, mappingOption);
 
 	if (consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
-	    loadConsensusForContig(contig, consensusOption);
+	    loadConsensusForContig(contig);
 
 	return contig;
     }
@@ -141,23 +174,29 @@ public class ContigManager {
     }
 
     private void loadMappingsForContig(Contig contig, int mappingOption) throws SQLException {
-	bulkLoadReadData(contig, mappingOption);
+	bulkLoadReadData(BY_CONTIG_ID, contig.getID(), mappingOption);
 
 	bulkLoadMappings(contig);
     }
 
-    private void bulkLoadReadData(Contig contig, int mappingOption) throws SQLException {
-	int id = contig.getID();
-	
-	ResultSet rs;
+    private void bulkLoadReadData(int idType, int id, int mappingOption) throws SQLException {
+	PreparedStatement pstmt = null;
 
-	if (mappingOption == ArcturusDatabase.CONTIG_FULL_MAPPING) {
-	    pstmtFullReadDataByContigID.setInt(1, id);
-	    rs = pstmtFullReadDataByContigID.executeQuery();
+	if (idType == BY_CONTIG_ID) {
+	    if (mappingOption == ArcturusDatabase.CONTIG_FULL_MAPPING)
+		pstmt = pstmtFullReadDataByContigID;
+	    else
+		pstmt = pstmtReadDataByContigID;
 	} else {
-	    pstmtReadDataByContigID.setInt(1, id);
-	    rs = pstmtReadDataByContigID.executeQuery();
+	    if (mappingOption == ArcturusDatabase.CONTIG_FULL_MAPPING)
+		pstmt = pstmtFullReadDataByProjectID;
+	    else
+		pstmt = pstmtReadDataByProjectID;
 	}
+
+	pstmt.setInt(1, id);
+
+	ResultSet rs = pstmt.executeQuery();
 
 	while (rs.next()) {
 	    int ligation_id = rs.getInt(9);
@@ -278,7 +317,7 @@ public class ContigManager {
 	contig.setMappings(mappings);
     }
 
-    private void loadConsensusForContig(Contig contig, int consensusOption) throws SQLException {
+    private void loadConsensusForContig(Contig contig) throws SQLException {
 	int contig_id = contig.getID();
 	
 	pstmtConsensusByID.setInt(1, contig_id);
@@ -317,6 +356,81 @@ public class ContigManager {
 	}
 
 	rs.close();
+    }
+
+    public int countContigsByProject(int project_id) throws SQLException {
+	pstmtCountContigsByProject.setInt(1, project_id);
+	ResultSet rs = pstmtCountContigsByProject.executeQuery();
+
+	int nContigs = 0;
+
+	if (rs.next()) {
+	    nContigs = rs.getInt(1);
+	}
+
+	rs.close();
+
+	return nContigs;
+    }
+
+    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+	return getContigsByProject(project_id, consensusOption, mappingOption, true);
+    }
+
+    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption,
+					boolean autoload) throws SQLException {
+	Vector contigs = new Vector();
+
+	pstmtGetContigsByProject.setInt(1, project_id);
+
+	ResultSet rs = pstmtGetContigsByProject.executeQuery();
+
+	while (rs.next()) {
+	    int id = rs.getInt(1);
+
+	    Object obj = hashByID.get(new Integer(id));
+
+	    Contig contig = (Contig)obj;
+
+	    if (contig == null) {
+		int length = rs.getInt(2);
+		int nreads = rs.getInt(3);
+		java.sql.Date updated = rs.getDate(4);
+
+		contig = createAndRegisterNewContig(id, length, nreads, updated);
+	    }
+
+	    contigs.add(contig);
+	}
+
+	if (mappingOption != ArcturusDatabase.CONTIG_NO_MAPPING) {
+	    System.err.println("loading read data for project " + project_id);
+	    loadReadDataForProject(project_id, mappingOption);
+	    System.err.println("done");
+
+	    System.err.println("loading mapping data for project " + project_id);
+	    for (Enumeration e = contigs.elements() ; e.hasMoreElements() ;) {
+		Contig contig = (Contig)e.nextElement();
+		bulkLoadMappings(contig);
+	    }
+	    System.err.println("done");
+	}
+
+	if (consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
+	    loadConsensusForProject(project_id);
+
+	Contig[] contigarray = new Contig[contigs.size()];
+
+	contigs.copyInto(contigarray);
+
+	return contigarray;
+    }
+
+    private void loadReadDataForProject(int project_id, int mappingOption) throws SQLException {
+	bulkLoadReadData(BY_PROJECT_ID, project_id, mappingOption);
+    }
+
+    private void loadConsensusForProject(int project_id) throws SQLException {
     }
 
     public int[] getCurrentContigIDList() throws SQLException {

@@ -550,6 +550,19 @@ public class ArcturusDatabase {
 	return contigManager.getCurrentContigIDList();
     }
 
+    public int countContigsByProject(int project_id) throws SQLException {
+	return contigManager.countContigsByProject(project_id);
+    }
+
+    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption);
+    }
+
+    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption,
+					boolean autoload) throws SQLException {
+	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption, autoload);
+    }
+
     public int[] getUnassembledReadIDList() throws SQLException {
 	return contigManager.getUnassembledReadIDList();
     }
