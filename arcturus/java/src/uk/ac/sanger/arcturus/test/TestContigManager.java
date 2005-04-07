@@ -57,15 +57,29 @@ public class TestContigManager {
 
 	String instance = null;
 	String organism = null;
+	String contiglist = null;
+	String projectname = null;
+
 	String objectname = null;
 
-	if (args.length < 3) {
-	    System.out.println("Argument(s) missing: instance organism contigrange(s)");
-	    System.exit(1);
+	for (int i = 0; i < args.length; i++) {
+	    if (args[i].equalsIgnoreCase("-instance"))
+		instance = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-organism"))
+		organism = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-contigs"))
+		contiglist = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-project"))
+		projectname = args[++i];
 	}
 
-	instance = args[0];
-	organism = args[1];
+	if (instance == null || organism == null) {
+	    printUsage(System.err);
+	    System.exit(1);
+	}
 
 	try {
 	    System.out.println("Creating an ArcturusInstance for " + instance);
@@ -120,45 +134,82 @@ public class TestContigManager {
 		report();
 	    }
 
-	    System.out.println("Looking up contigs by ID");
-	    System.out.println();
+	    if (contiglist != null) {
+		System.out.println("Looking up contigs by ID");
+		System.out.println();
 
-	    int ranges[][] = parseRanges(args[2]);
+		int ranges[][] = parseRanges(contiglist);
 
-	    for (int i = 0; i < ranges.length; i++) {
-		int firstid = ranges[i][0];
-		int lastid = ranges[i][1];
+		for (int i = 0; i < ranges.length; i++) {
+		    int firstid = ranges[i][0];
+		    int lastid = ranges[i][1];
 
-		try {
-		    for (int id = firstid; id <= lastid; id++) {
-			if (verbose) {
-			    System.out.println();
-			    System.out.println("LOOKING UP CONTIG[" + id + "]");
-			}
-
-			Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
-
-			if (verbose) {
-			    if (contig == null)
-				System.out.println("*** FAILED ***");
-			    else {
-				System.out.println(contig);
-				System.out.println("  LENGTH:  " + contig.getLength());
-				System.out.println("  READS:   " + contig.getReadCount());
-				System.out.println("  UPDATED: " + contig.getUpdated());
+		    try {
+			for (int id = firstid; id <= lastid; id++) {
+			    if (verbose) {
+				System.out.println();
+				System.out.println("LOOKING UP CONTIG[" + id + "]");
 			    }
+			    
+			    Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
+			    
+			    if (verbose) {
+				if (contig == null)
+				    System.out.println("*** FAILED ***");
+				else {
+				    System.out.println(contig);
+				    System.out.println("  LENGTH:  " + contig.getLength());
+				    System.out.println("  READS:   " + contig.getReadCount());
+				    System.out.println("  UPDATED: " + contig.getUpdated());
+				}
+			    }
+			    
+			    if (displayContig)
+				dumpContig(System.out, contig);
 			}
-
-			if (displayContig)
-			    dumpContig(System.out, contig);
+		    }
+		    catch (NumberFormatException nfe) {
+			System.err.println("Error parsing \"" + args[i] + "\" as an integer.");
 		    }
 		}
-		catch (NumberFormatException nfe) {
-		    System.err.println("Error parsing \"" + args[i] + "\" as an integer.");
-		}
+
+		report();
 	    }
 
-	    report();
+	    if (projectname != null) {
+		System.out.println("Looking up contigs by project");
+		System.out.println();
+
+		int project_id = Integer.parseInt(projectname);
+
+		Contig[] contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
+
+		if (contigs != null && contigs.length > 0) {
+		    int totlength = 0;
+		    int totreads = 0;
+
+		    for (int i = 0; i < contigs.length; i++) {
+			Contig contig = contigs[i];
+
+			totlength += contig.getLength();
+			totreads += contig.getReadCount();
+
+			if (verbose) {
+			    System.out.println(contig);
+			    System.out.println("  LENGTH:  " + contig.getLength());
+			    System.out.println("  READS:   " + contig.getReadCount());
+			    System.out.println("  UPDATED: " + contig.getUpdated());
+			}
+		    }
+
+		    System.out.println("Found " + contigs.length + " contigs, containing " + totreads +
+				       " reads and " + totlength + " bp");
+		} else {
+		    System.out.println("No contigs were found in project " + project_id);
+		}
+
+		report();
+	    }
 	}
 	catch (Exception e) {
 	    e.printStackTrace();
@@ -313,5 +364,22 @@ public class TestContigManager {
 	}
 
 	ps.println(">>> ------------------------------------------------------------------ <<<");
+    }
+
+    public static void printUsage(PrintStream ps) {
+	ps.println("MANDATORY PARAMETERS:");
+	ps.println("\t-instance\tName of instance");
+	ps.println("\t-organism\tName of organism");
+	ps.println();
+	ps.println("OPTIONAL PARAMETERS:");
+	ps.println("\t-contigs\tDisplay contigs with these IDs");
+	ps.println("\t-project\tDisplay contigs from this project");
+	ps.println();
+	ps.println("JAVA OPTIONS:");
+	ps.println("\tverbose\t\tProduce verbose output (boolean, default false)");
+	ps.println("\tmappingOption\tOne of noMapping (default), basicMapping or fullMapping");
+	ps.println("\tconsensusOption\tOne of noConsensus (default) or consensus");
+	ps.println("\tlogfile\t\tName of optional logging file");
+	ps.println("\tdisplayContig\tShow full contig info (boolean, default false)");
     }
 }
