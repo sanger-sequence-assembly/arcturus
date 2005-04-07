@@ -155,11 +155,9 @@ CREATE TABLE PROJECT (
   creator varchar(8) binary NOT NULL default 'arcturus',
   comment text default NULL,
   PRIMARY KEY  (project_id),
-  UNIQUE INDEX (assembly_id,projectname)
+  UNIQUE INDEX (assembly_id, name)
 ) TYPE=MyISAM;
 
-#  projectname varchar(16) binary default NULL,
-#  UNIQUE KEY projectname (projectname)
 #
 # Table structure for table 'READCOMMENT'
 #
