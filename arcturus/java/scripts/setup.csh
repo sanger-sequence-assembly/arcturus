@@ -60,8 +60,14 @@ set JNDI_OPTS="-Djava.naming.factory.initial=$JNDI_FACTORY -Djava.naming.provide
 # JAR file for Java look and feel graphics repository
 set JLFGR_JARS=${JAR_DIRECTORY}/jlfgr-1_0.jar
 
+# Set up the Apache Project's Java logging framework
+set LOG4J_VERSION=1.2.9
+set LOG4J_JARS=${JAR_DIRECTORY}/log4j-${LOG4J_VERSION}.jar
+
+#set LOG4J_CONFIGURATION=${ARCTURUS_HOME}/log4j.properties
+
 # Append any non-Arcturus JAR files to this list
-set EXTRAJARS=${CONNECTORJ_JARS}:${ORACLE_JDBC_JARS}:${JNDI_JARS}:${JLFGR_JARS}
+set EXTRAJARS=${CONNECTORJ_JARS}:${ORACLE_JDBC_JARS}:${JNDI_JARS}:${JLFGR_JARS}:${LOG4J_JARS}
 
 # Add the JAR files to the CLASSPATH environment variable
 if ( $?CLASSPATH ) then
@@ -80,6 +86,11 @@ set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.def
 
 # Specify the additional run-time options for Java
 set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI_OPTS} ${ARCTURUS_DEFAULTS} ${JAVA_HEAP_SIZE}"
+
+if ( $?LOG4J_CONFIGURATION ) then
+    echo Configuring log4j from ${LOG4J_CONFIGURATION}
+    set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${LOG4J_CONFIGURATION}"
+endif
 
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then
