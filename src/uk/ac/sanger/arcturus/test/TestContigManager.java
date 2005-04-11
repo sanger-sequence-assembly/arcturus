@@ -2,6 +2,8 @@ import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 
+import org.apache.log4j.*;
+
 import java.util.*;
 import java.io.*;
 
@@ -13,10 +15,15 @@ public class TestContigManager {
     public static void main(String args[]) {
 	lasttime = System.currentTimeMillis();
 
+	System.err.println("Creating a logger ...");
+	Logger logger = Logger.getLogger(TestContigManager.class);
+	logger.setLevel(Level.DEBUG);
+	System.err.println("Logger is class=" + logger.getClass().getName() + ", name=" + logger.getName() +
+			   ", level=" + logger.getLevel());
+
 	boolean verbose = Boolean.getBoolean("verbose");
 	String mappingOptionString = System.getProperty("mappingOption");
 	String consensusOptionString = System.getProperty("consensusOption");
-	String logfile = System.getProperty("logfile");
 	boolean displayContig = Boolean.getBoolean("displayContig");
 
 	int mappingOption = ArcturusDatabase.CONTIG_NO_MAPPING;
@@ -92,13 +99,7 @@ public class TestContigManager {
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-	    PrintStream logger = null;
-
-	    if (logfile != null) {
-		logger = new PrintStream(new FileOutputStream(logfile));
-		if (logger != null)
-		    adb.setLogger(logger);
-	    }
+	    adb.setLogger(logger);
 
 	    System.out.println("Contig mapping mode is   " + mappingOptionString);
 	    System.out.println("Contig consensus mode is " + consensusOptionString);
@@ -160,7 +161,8 @@ public class TestContigManager {
 				    System.out.println(contig);
 				    System.out.println("  LENGTH:  " + contig.getLength());
 				    System.out.println("  READS:   " + contig.getReadCount());
-				    System.out.println("  UPDATED: " + contig.getUpdated());
+				    java.util.Date updated = contig.getUpdated();
+				    System.out.println("  UPDATED: " + updated);
 				}
 			    }
 			    
@@ -182,17 +184,19 @@ public class TestContigManager {
 
 		int project_id = Integer.parseInt(projectname);
 
-		Contig[] contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
+		Vector contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
 
-		if (contigs != null && contigs.length > 0) {
+		if (contigs != null && contigs.size() > 0) {
 		    int totlength = 0;
 		    int totreads = 0;
+		    int nContigs = 0;
 
-		    for (int i = 0; i < contigs.length; i++) {
-			Contig contig = contigs[i];
+		    for (Enumeration e = contigs.elements() ; e.hasMoreElements() ;) {
+			Contig contig = (Contig)e.nextElement();
 
 			totlength += contig.getLength();
 			totreads += contig.getReadCount();
+			nContigs++;
 
 			if (verbose) {
 			    System.out.println(contig);
@@ -202,7 +206,7 @@ public class TestContigManager {
 			}
 		    }
 
-		    System.out.println("Found " + contigs.length + " contigs, containing " + totreads +
+		    System.out.println("Found " + nContigs + " contigs, containing " + totreads +
 				       " reads and " + totlength + " bp");
 		} else {
 		    System.out.println("No contigs were found in project " + project_id);
@@ -379,7 +383,6 @@ public class TestContigManager {
 	ps.println("\tverbose\t\tProduce verbose output (boolean, default false)");
 	ps.println("\tmappingOption\tOne of noMapping (default), basicMapping or fullMapping");
 	ps.println("\tconsensusOption\tOne of noConsensus (default) or consensus");
-	ps.println("\tlogfile\t\tName of optional logging file");
 	ps.println("\tdisplayContig\tShow full contig info (boolean, default false)");
     }
 }
