@@ -68,7 +68,7 @@ public class ReadManager {
 	if (rs.next()) {
 	    int id = rs.getInt(1);
 	    int template_id = rs.getInt(2);
-	    java.sql.Date asped = rs.getDate(3);
+	    java.util.Date asped = rs.getTimestamp(3);
 	    int strand = parseStrand(rs.getString(4));
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
@@ -89,7 +89,7 @@ public class ReadManager {
 	if (rs.next()) {
 	    String name = rs.getString(1);
 	    int template_id = rs.getInt(2);
-	    java.sql.Date asped = rs.getDate(3);
+	    java.util.Date asped = rs.getTimestamp(3);
 	    int strand = parseStrand(rs.getString(4));
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
@@ -114,7 +114,7 @@ public class ReadManager {
 		continue;
 
 	    String name = rs.getString(2);
-	    java.sql.Date asped = rs.getDate(3);
+	    java.util.Date asped = rs.getTimestamp(3);
 	    int strand = parseStrand(rs.getString(4));
 	    int primer = parsePrimer(rs.getString(5));
 	    int chemistry = parseChemistry(rs.getString(6));
@@ -159,7 +159,7 @@ public class ReadManager {
 	return Read.UNKNOWN;
     }
 
-    private Read createAndRegisterNewRead(String name, int id, int template_id, java.sql.Date asped,
+    private Read createAndRegisterNewRead(String name, int id, int template_id, java.util.Date asped,
 					 int strand, int primer, int chemistry) throws SQLException {
 	Template template = adb.getTemplateByID(template_id);
 
@@ -186,7 +186,7 @@ public class ReadManager {
 	    int id = rs.getInt(1);
 	    String name = rs.getString(2);
 	    int template_id = rs.getInt(3);
-	    java.sql.Date asped = rs.getDate(4);
+	    java.util.Date asped = rs.getTimestamp(4);
 	    int strand = parseStrand(rs.getString(5));
 	    int primer = parsePrimer(rs.getString(6));
 	    int chemistry = parseChemistry(rs.getString(7));

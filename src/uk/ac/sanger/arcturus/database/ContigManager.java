@@ -136,7 +136,7 @@ public class ContigManager {
 	if (rs.next()) {
 	    int length = rs.getInt(1);
 	    int nreads = rs.getInt(2);
-	    java.sql.Date updated = rs.getDate(3);
+	    java.util.Date updated = rs.getTimestamp(3);
 
 	    contig = createAndRegisterNewContig(id, length, nreads, updated);
 	}
@@ -152,7 +152,7 @@ public class ContigManager {
 	return contig;
     }
 
-    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.sql.Date updated) {
+    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.util.Date updated) {
 	Contig contig = new Contig(id, length, nreads, updated, adb);
 
 	registerNewContig(contig);
@@ -160,7 +160,7 @@ public class ContigManager {
 	return contig;
     }
 
-    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.sql.Date updated,
+    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.util.Date updated,
 				     Mapping[] mappings) {
 	Contig contig = new Contig(id, length, nreads, updated, mappings, adb);
 
@@ -214,7 +214,7 @@ public class ContigManager {
 	    Read read = adb.getReadByID(read_id, false);
 	    if (read == null) {
 		String readname = rs.getString(2);
-		java.sql.Date asped = rs.getDate(3);
+		java.util.Date asped = rs.getTimestamp(3);
 		int strand = adb.parseStrand(rs.getString(4));
 		int primer = adb.parsePrimer(rs.getString(5));
 		int chemistry = adb.parseChemistry(rs.getString(6));
@@ -373,12 +373,12 @@ public class ContigManager {
 	return nContigs;
     }
 
-    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
 	return getContigsByProject(project_id, consensusOption, mappingOption, true);
     }
 
-    public Contig[] getContigsByProject(int project_id, int consensusOption, int mappingOption,
-					boolean autoload) throws SQLException {
+    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption,
+				      boolean autoload) throws SQLException {
 	Vector contigs = new Vector();
 
 	pstmtGetContigsByProject.setInt(1, project_id);
@@ -395,7 +395,7 @@ public class ContigManager {
 	    if (contig == null) {
 		int length = rs.getInt(2);
 		int nreads = rs.getInt(3);
-		java.sql.Date updated = rs.getDate(4);
+		java.util.Date updated = rs.getTimestamp(4);
 
 		contig = createAndRegisterNewContig(id, length, nreads, updated);
 	    }
@@ -419,11 +419,7 @@ public class ContigManager {
 	if (consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
 	    loadConsensusForProject(project_id);
 
-	Contig[] contigarray = new Contig[contigs.size()];
-
-	contigs.copyInto(contigarray);
-
-	return contigarray;
+	return contigs;
     }
 
     private void loadReadDataForProject(int project_id, int mappingOption) throws SQLException {
