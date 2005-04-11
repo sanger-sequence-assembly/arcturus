@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.data;
 import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
-import java.sql.Date;
 
 /**
  * This class represents a contig.
@@ -12,7 +11,7 @@ import java.sql.Date;
 public class Contig extends Core {
     protected int length;
     protected int nreads;
-    protected java.sql.Date updated;
+    protected Date updated;
     protected Mapping[] mappings;
     protected byte[] dna;
     protected byte[] quality;
@@ -49,7 +48,7 @@ public class Contig extends Core {
      * @param adb the Arcturus database to which this Contig belongs.
      */
 
-    public Contig(int ID, int length, int nreads, java.sql.Date updated, ArcturusDatabase adb) {
+    public Contig(int ID, int length, int nreads, Date updated, ArcturusDatabase adb) {
 	super(ID, adb);
 
 	this.length = length;
@@ -67,7 +66,7 @@ public class Contig extends Core {
      * @param adb the Arcturus database to which this Contig belongs.
      */
 
-    public Contig(int ID, int length, int nreads, java.sql.Date updated, Mapping[] mappings,
+    public Contig(int ID, int length, int nreads, Date updated, Mapping[] mappings,
 		  ArcturusDatabase adb) {
 	super(ID, adb);
 
@@ -84,7 +83,7 @@ public class Contig extends Core {
 
     public int getReadCount() { return nreads; }
 
-    public java.sql.Date getUpdated() { return updated; }
+    public Date getUpdated() { return updated; }
 
     public Mapping[] getMappings() { return mappings; }
 
