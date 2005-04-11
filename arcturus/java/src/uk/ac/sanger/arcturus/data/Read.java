@@ -44,7 +44,7 @@ public class Read extends Core {
     public final static int CUSTOM_PRIMER = 2;
 
     private Template template;
-    private java.sql.Date asped;
+    private java.util.Date asped;
     private int strand;
     private int chemistry;
     private int primer;
@@ -76,7 +76,7 @@ public class Read extends Core {
      * @param adb the Arcturus database to which this Read belongs.
      */
 
-    public Read(String name, int ID, Template template, java.sql.Date asped, int strand,
+    public Read(String name, int ID, Template template, java.util.Date asped, int strand,
 		int primer, int chemistry, ArcturusDatabase adb) {
 	super(name, ID, adb);
 
@@ -113,7 +113,7 @@ public class Read extends Core {
      * @param asped the date on which this read was asped.
      */
 
-    public void setAsped(java.sql.Date asped) {
+    public void setAsped(java.util.Date asped) {
 	this.asped = asped;
     }
 
@@ -123,7 +123,7 @@ public class Read extends Core {
      * @return the date on which this read was asped.
      */
 
-    public java.sql.Date getAsped() { return asped; }
+    public java.util.Date getAsped() { return asped; }
 
     /**
      * Sets the strand for this read.
