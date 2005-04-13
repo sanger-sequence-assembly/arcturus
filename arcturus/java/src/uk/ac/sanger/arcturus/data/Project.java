@@ -3,21 +3,21 @@ package uk.ac.sanger.arcturus.data;
 import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
+import java.sql.SQLException;
 
 /**
  * This class represents a project, which is a set of contigs.
  */
 
 public class Project extends Core {
-    protected int assembly_id = 0;
-    protected String name = null;
+    protected Assembly assembly = null;
     protected Date updated = null;
     protected String owner = null;
     protected Date locked = null;
     protected Date created = null;
     protected String creator = null;
 
-    protected Vector contigs = null;
+    protected Set contigs = null;
 
     /**
      * Constructs a Project which does not yet have an ID.
@@ -51,11 +51,15 @@ public class Project extends Core {
      * @param adb the Arcturus database to which this Project belongs.
      */
 
-    public Project(int ID, int assembly_id, String name, Date updated, String owner, Date locked, Date created, String creator,
+    public Project(int ID, Assembly assembly, String name, Date updated, String owner, Date locked, Date created, String creator,
 		   ArcturusDatabase adb) {
 	super(ID, adb);
 
-	this.assembly_id = assembly_id;
+	try {
+	    setAssembly(assembly, false);
+	}
+	catch (SQLException sqle) {}
+
 	this.name = name;
 	this.updated = updated;
 	this.owner = owner;
@@ -64,9 +68,27 @@ public class Project extends Core {
 	this.creator = creator;
     }
 
-    public int getAssemblyID() { return assembly_id; }
+    public Assembly getAssembly() { return assembly; }
 
-    public void setAssemblyID(int assembly_id) { this.assembly_id = assembly_id; }
+    public void setAssembly(Assembly assembly) throws SQLException {
+	setAssembly(assembly, true);
+    }
+
+    public void setAssembly(Assembly assembly, boolean commit) throws SQLException {
+	if (this.assembly == assembly)
+	    return;
+
+	if (adb != null && assembly != null && commit)
+	    adb.setAssemblyForProject(this, assembly);
+
+	if (this.assembly != null)
+	    this.assembly.removeProject(this);
+
+	this.assembly = assembly;
+
+	if (this.assembly != null)
+	    this.assembly.addProject(this);
+    }
 
     public String getName() { return name; }
 
@@ -108,13 +130,13 @@ public class Project extends Core {
      * @return the Vector containing the contigs currently in this Project object.
      */
 
-    public Vector getContigs() { return contigs; }
+    public Set getContigs() { return contigs; }
 
-    public void setContigs(Vector contigs) { this.contigs = contigs; }
+    public void setContigs(Set contigs) { this.contigs = contigs; }
 
     public void addContig(Contig contig) {
 	if (contigs == null)
-	    contigs = new Vector();
+	    contigs = new HashSet();
 
 	contigs.add(contig);
     }
@@ -124,5 +146,10 @@ public class Project extends Core {
 	    return false;
 	else
 	    return contigs.remove(contig);
+    }
+
+    public void refresh() throws SQLException {
+	if (adb != null)
+	    adb.refreshProject(this);
     }
 }
