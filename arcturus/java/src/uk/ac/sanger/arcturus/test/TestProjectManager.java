@@ -11,6 +11,7 @@ import javax.naming.Context;
 
 public class TestProjectManager {
     private static long lasttime;
+    private static Comparator byname = new ByName();
 
     public static void main(String args[]) {
 	lasttime = System.currentTimeMillis();
@@ -72,7 +73,7 @@ public class TestProjectManager {
 	    adb.preloadAllAssemblies();
 	    adb.preloadAllProjects();
 
-	    Comparator byname = new ByName();
+	    displayAssemblies(adb);
 
 	    Set assemblies = adb.getAllAssemblies();
 
@@ -80,33 +81,92 @@ public class TestProjectManager {
 
 	    Arrays.sort(assemblyArray, byname);
 
-	    for (int i = 0; i < assemblyArray.length; i++) {
-		Assembly assembly = assemblyArray[i];
+	    Set projects1 = assemblyArray[0].getProjects();
 
-		System.out.println("ASSEMBLY: name=" + assembly.getName() + ", updated=" + assembly.getUpdated());
+	    Project[] project1Array = (Project[])projects1.toArray(new Project[0]);
 
-		Set projects = assembly.getProjects();
-
-		Project[] projectArray = (Project[])projects.toArray(new Project[0]);
-
-		Arrays.sort(projectArray, byname);
-
-		for (int j = 0; j < projectArray.length; j++) {
-		    Project project = projectArray[j];
-		    Assembly projasm = project.getAssembly();
-		    System.out.println("\tPROJECT: name=" + project.getName() +
-				       ", updated=" + project.getUpdated() +
-				       ", assembly=" + (projasm == null ? "(NULL)" : projasm.getName()));
+	    for (int i = 0; i < project1Array.length; i++) {
+		try {
+		    project1Array[i].setAssembly(assemblyArray[1], true);
 		}
-
-		System.out.println();
+		catch (java.sql.SQLException sqle) {
+		    if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+			System.err.println("Duplicate key violation when moving project " +
+					   project1Array[i].getName() + " (ID=" + project1Array[i].getID() +
+					   ") to assembly " +
+					   assemblyArray[1].getName());
+		    else
+			System.err.println("SQLException(\"" + sqle.getMessage() +
+					   ", ErrorCode=" + sqle.getErrorCode() + ")");
+		}
 	    }
+
+	    displayAssemblies(adb);
+
+	    Set projects2 = assemblyArray[1].getProjects();
+
+	    Project[] project2Array = (Project[])projects2.toArray(new Project[0]);
+
+	    for (int i = 0; i < project2Array.length; i++) {
+		try {
+		    project2Array[i].setAssembly(assemblyArray[0], true);
+		}
+		catch (java.sql.SQLException sqle) {
+		    if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+			System.err.println("Duplicate key violation when moving project " +
+					   project2Array[i].getName() + " (ID=" + project2Array[i].getID() +
+					   ") to assembly " +
+					   assemblyArray[0].getName());
+		    else
+			System.err.println("SQLException(\"" + sqle.getMessage() +
+					   ", ErrorCode=" + sqle.getErrorCode() + ")");
+		}
+	    }
+
+	    displayAssemblies(adb);
 
 	    report();
 	}
-	catch (Exception e) {
-	    e.printStackTrace();
+	catch (java.sql.SQLException sqle) {
+	    System.err.println("SQLException(\"" + sqle.getMessage() +
+			       "\", SQLState=" + sqle.getSQLState() +
+			       ", ErrorCode=" + sqle.getErrorCode() + ")");
+	    sqle.printStackTrace();
 	    System.exit(1);
+	}
+	catch (javax.naming.NamingException ne) {
+	    ne.printStackTrace();
+	    System.exit(1);
+	}
+    }
+
+    public static void displayAssemblies(ArcturusDatabase adb) {
+	Set assemblies = adb.getAllAssemblies();
+
+	Assembly[] assemblyArray = (Assembly[])assemblies.toArray(new Assembly[0]);
+
+	Arrays.sort(assemblyArray, byname);
+
+	for (int i = 0; i < assemblyArray.length; i++) {
+	    Assembly assembly = assemblyArray[i];
+
+	    System.out.println("ASSEMBLY: name=" + assembly.getName() + ", updated=" + assembly.getUpdated());
+
+	    Set projects = assembly.getProjects();
+
+	    Project[] projectArray = (Project[])projects.toArray(new Project[0]);
+
+	    Arrays.sort(projectArray, byname);
+
+	    for (int j = 0; j < projectArray.length; j++) {
+		Project project = projectArray[j];
+		Assembly projasm = project.getAssembly();
+		System.out.println("\tPROJECT: name=" + project.getName() +
+				   ", updated=" + project.getUpdated() +
+				   ", assembly=" + (projasm == null ? "(NULL)" : projasm.getName()));
+	    }
+	    
+	    System.out.println();
 	}
     }
 
