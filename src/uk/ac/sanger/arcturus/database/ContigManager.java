@@ -325,37 +325,38 @@ public class ContigManager {
 
 	if (rs.next()) {
 	    int seqlen = rs.getInt(1);
-
 	    byte[] cdna = rs.getBytes(2);
-
-	    byte[] dna = new byte[seqlen];
-
-	    try {
-		decompresser.setInput(cdna, 0, cdna.length);
-		int dnalen = decompresser.inflate(dna, 0, dna.length);
-		decompresser.reset();
-	    }
-	    catch (DataFormatException dfe) {
-		dna = null;
-	    }
-
 	    byte[] cqual = rs.getBytes(3);
 
-	    byte[] qual = new byte[seqlen];
-
-	    try {
-		decompresser.setInput(cqual, 0, cqual.length);
-		int dnalen = decompresser.inflate(qual, 0, qual.length);
-		decompresser.reset();
-	    }
-	    catch (DataFormatException dfe) {
-		qual = null;
-	    }
-
-	    contig.setConsensus(dna, qual);
+	    setContigConsensusFromRawData(contig, seqlen, cdna, cqual);
 	}
 
 	rs.close();
+    }
+
+    private void setContigConsensusFromRawData(Contig contig, int seqlen, byte[] cdna, byte[] cqual) {
+	byte[] dna = new byte[seqlen];
+
+	try {
+	    decompresser.setInput(cdna, 0, cdna.length);
+	    int dnalen = decompresser.inflate(dna, 0, dna.length);
+	    decompresser.reset();
+	}
+	catch (DataFormatException dfe) {
+	    dna = null;
+	}
+	byte[] qual = new byte[seqlen];
+	
+	try {
+	    decompresser.setInput(cqual, 0, cqual.length);
+	    int dnalen = decompresser.inflate(qual, 0, qual.length);
+	    decompresser.reset();
+	}
+	catch (DataFormatException dfe) {
+	    qual = null;
+	}
+	
+	contig.setConsensus(dna, qual);
     }
 
     public int countContigsByProject(int project_id) throws SQLException {
@@ -373,13 +374,13 @@ public class ContigManager {
 	return nContigs;
     }
 
-    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
 	return getContigsByProject(project_id, consensusOption, mappingOption, true);
     }
 
-    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption,
+    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption,
 				      boolean autoload) throws SQLException {
-	Vector contigs = new Vector();
+	Set contigs = new HashSet();
 
 	pstmtGetContigsByProject.setInt(1, project_id);
 
@@ -409,8 +410,8 @@ public class ContigManager {
 	    System.err.println("done");
 
 	    System.err.println("loading mapping data for project " + project_id);
-	    for (Enumeration e = contigs.elements() ; e.hasMoreElements() ;) {
-		Contig contig = (Contig)e.nextElement();
+	    for (Iterator iter = contigs.iterator() ; iter.hasNext() ;) {
+		Contig contig = (Contig)iter.next();
 		bulkLoadMappings(contig);
 	    }
 	    System.err.println("done");
@@ -427,6 +428,24 @@ public class ContigManager {
     }
 
     private void loadConsensusForProject(int project_id) throws SQLException {
+	pstmtConsensusByProjectID.setInt(1, project_id);
+
+	ResultSet rs = pstmtConsensusByProjectID.executeQuery();
+
+	while (rs.next()) {
+	    int contig_id = rs.getInt(1);
+
+	    Contig contig = getContigByID(contig_id, ArcturusDatabase.CONTIG_NO_CONSENSUS,
+					  ArcturusDatabase.CONTIG_NO_MAPPING, false);
+
+	    if (contig != null) {
+		int seqlen = rs.getInt(2);
+		byte[] cdna = rs.getBytes(2);
+		byte[] cqual = rs.getBytes(3);
+
+		setContigConsensusFromRawData(contig, seqlen, cdna, cqual);
+	    }
+	}
     }
 
     public int[] getCurrentContigIDList() throws SQLException {

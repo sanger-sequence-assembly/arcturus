@@ -4,7 +4,7 @@ import java.io.PrintStream;
 import java.sql.*;
 import javax.sql.*;
 import java.util.HashMap;
-import java.util.Vector;
+import java.util.Set;
 
 import org.apache.log4j.*;
 
@@ -562,7 +562,7 @@ public class ArcturusDatabase {
 	return contigManager.countContigsByProject(project_id);
     }
 
-    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("getContigsByProject(" + project_id + ", " + consensusOption + ", " +
 			 mappingOption + ")");
@@ -570,8 +570,8 @@ public class ArcturusDatabase {
 	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption);
     }
 
-    public Vector getContigsByProject(int project_id, int consensusOption, int mappingOption,
-				      boolean autoload) throws SQLException {
+    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption,
+				   boolean autoload) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("getContigsByProject(" + project_id + ", " + consensusOption + ", " +
 			 mappingOption + ", " + autoload + ")");
@@ -612,11 +612,31 @@ public class ArcturusDatabase {
 	projectManager.preloadAllProjects();
     }
 
-    public Vector getAllProjects() {
+    public Set getAllProjects() {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("getAllProjects");
 
 	return projectManager.getAllProjects();
+    }
+    public void refreshProject(Project project) throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("refreshProject(" + project + ")");
+
+	projectManager.refreshProject(project);
+    }
+
+    public void refreshAllProject() throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("refreshAllProjects");
+
+	projectManager.refreshAllProjects();
+    }
+
+    public void setAssemblyForProject(Project project, Assembly assembly) throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("setAssemblyForProject(" + project + ", " + assembly + ")");
+
+	projectManager.setAssemblyForProject(project, assembly);
     }
 
      /**
@@ -648,11 +668,25 @@ public class ArcturusDatabase {
 	assemblyManager.preloadAllAssemblies();
     }
 
-    public Vector getAllAssemblies() {
+    public Set getAllAssemblies() {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("getAllAssemblies");
 
 	return assemblyManager.getAllAssemblies();
+    }
+
+    public void refreshAssembly(Assembly assembly) throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("refreshAssembly(" + assembly + ")");
+
+	assemblyManager.refreshAssembly(assembly);
+    }
+
+    public void refreshAllAssemblies() throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("refreshAllAssemblies");
+
+	assemblyManager.refreshAllAssemblies();
     }
 
    /**
