@@ -3,18 +3,18 @@ package uk.ac.sanger.arcturus.data;
 import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
+import java.sql.SQLException;
 
 /**
  * This class represents a assembly, which is a set of projects.
  */
 
 public class Assembly extends Core {
-    protected String name = null;
     protected Date updated = null;
     protected Date created = null;
     protected String creator = null;
 
-    protected Vector projects = null;
+    protected Set projects = null;
 
     /**
      * Constructs a Assembly which does not yet have an ID.
@@ -88,13 +88,13 @@ public class Assembly extends Core {
      * @return the Vector containing the projects currently in this Assembly object.
      */
 
-    public Vector getProjects() { return projects; }
+    public Set getProjects() { return projects; }
 
-    public void setProjects(Vector projects) { this.projects = projects; }
+    public void setProjects(Set projects) { this.projects = projects; }
 
     public void addProject(Project project) {
 	if (projects == null)
-	    projects = new Vector();
+	    projects = new HashSet();
 
 	projects.add(project);
     }
@@ -104,5 +104,10 @@ public class Assembly extends Core {
 	    return false;
 	else
 	    return projects.remove(project);
+    }
+
+    public void refresh() throws SQLException {
+	if (adb != null)
+	    adb.refreshAssembly(this);
     }
 }
