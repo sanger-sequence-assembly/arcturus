@@ -12,7 +12,7 @@ import java.util.*;
 public class AssemblyManager {
     private ArcturusDatabase adb;
     private Connection conn;
-    private HashMap hashByID;
+    private HashMap hashByID = new HashMap();
     private PreparedStatement pstmtByID;
 
     /**
@@ -93,14 +93,48 @@ public class AssemblyManager {
 	    java.util.Date created = rs.getTimestamp(4);
 	    String creator = rs.getString(5);
 
-	    Assembly assembly = createAndRegisterNewAssembly(id, name, updated, created, creator);
+	    Assembly assembly = (Assembly)hashByID.get(new Integer(id));
+
+	    if (assembly == null)
+		createAndRegisterNewAssembly(id, name, updated, created, creator);
+	    else {
+		assembly.setName(name);
+		assembly.setUpdated(updated);
+		assembly.setCreated(created);
+		assembly.setCreator(creator);
+	    }
 	}
 
 	rs.close();
 	stmt.close();
     }
 
-    public Vector getAllAssemblies() {
-	return new Vector(hashByID.values());
+    public Set getAllAssemblies() {
+	return new HashSet(hashByID.values());
+    }
+
+    public void refreshAssembly(Assembly assembly) throws SQLException {
+	int id = assembly.getID();
+
+	pstmtByID.setInt(1, id);
+	ResultSet rs = pstmtByID.executeQuery();
+
+	if (rs.next()) {
+	    String name = rs.getString(1);
+	    java.util.Date updated = rs.getTimestamp(2);
+	    java.util.Date created = rs.getTimestamp(3);
+	    String creator = rs.getString(4);
+
+	    assembly.setName(name);
+	    assembly.setUpdated(updated);
+	    assembly.setCreated(created);
+	    assembly.setCreator(creator);
+	}
+
+	rs.close();
+    }
+
+    public void refreshAllAssemblies() throws SQLException {
+	preloadAllAssemblies();
     }
 }
