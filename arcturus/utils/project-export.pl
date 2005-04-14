@@ -15,18 +15,23 @@ use Logging;
 my $organism;
 my $instance;
 my $verbose;
-my $project;
+my $identifier;
+my $assembly;
 my $batch;
-my $lock;
+my $lock = 0;
 my $padded;
+my $noread;
 my $output;
 my $fofn;
-my $caffile;
-my $fastafile;
+my $caffile; # for standard CAF format
+my $maffile; # for Millikan format
+my $fastafile; # fasta
 my $qualityfile;
+my $minNX = 3; # default
+my $preview;
 
-my $validKeys  = "organism|instance|project|fofn|padded|fasta|"
-               . "caf|quality|lock|batch|verbose|debug|help";
+my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|noread|"
+               . "fasta|quality|lock|minNX|preview|batch|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -37,7 +42,9 @@ while (my $nextword = shift @ARGV) {
       
     $organism    = shift @ARGV  if ($nextword eq '-organism');
 
-    $project     = shift @ARGV  if ($nextword eq '-project');
+    $assembly    = shift @ARGV  if ($nextword eq '-assembly');
+
+    $identifier  = shift @ARGV  if ($nextword eq '-project');
 
     $fofn        = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -45,10 +52,17 @@ while (my $nextword = shift @ARGV) {
 
     $verbose     = 2            if ($nextword eq '-debug');
 
+    $preview     = 1            if ($nextword eq '-preview');
+
     $padded      = 1            if ($nextword eq '-padded');
+
+    $noread      = 1            if ($nextword eq '-noread');
 
     $fastafile   = shift @ARGV  if ($nextword eq '-fasta');
     $caffile     = shift @ARGV  if ($nextword eq '-caf');
+    $maffile     = shift @ARGV  if ($nextword eq '-maf');
+
+    $minNX       = shift @ARGV  if ($nextword eq '-minNX');
 
     $qualityfile = shift @ARGV  if ($nextword eq '-quality');
 
@@ -58,6 +72,8 @@ while (my $nextword = shift @ARGV) {
 
     &showUsage(0) if ($nextword eq '-help');
 }
+
+&showUsage("Invalid data in parameter list") if @ARGV;
 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -75,9 +91,13 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing server instance") unless $instance;
 
-&showUsage("Missing CAF or FASTA output file name") unless (defined($fastafile) || defined($caffile));
+unless (defined($fastafile) || defined($caffile) || defined($maffile)) {
+    &showUsage("Missing CAF, FASTA or MAF output file name") unless $preview;
+}
 
-&showUsage("Missing project ID or name") unless (defined($project) || $fofn);
+unless (defined($identifier) || $fofn || defined($assembly)) {
+    &showUsage("Missing project ID or name");
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -105,69 +125,136 @@ $logger->warning("Redundant '-padded' key ignored") if $padded;
 
 # get file handles
 
-my $fhCAF;
-my $fhFASTA;
-my $fhQuality;
+my ($fhDNA, $fhQTY, $fhRDS);
 
-if (defined($caffile)) {
-    $fhCAF = new FileHandle($caffile, "w");
-    &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhCAF;
+if (defined($caffile) && $caffile) {
+    $caffile .= '.caf' unless ($caffile =~ /\.caf$/);
+    $fhDNA = new FileHandle($caffile, "w");
+    &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
+}
+elsif (defined($caffile)) {
+    $fhDNA = *STDOUT;
 }
 
-if (defined($fastafile)) {
-    $fhFASTA = new FileHandle($fastafile, "w");
-    &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhFASTA;
-
+if (defined($fastafile) && $fastafile) {
+    $fastafile .= '.fas' unless ($fastafile =~ /\.fas$/);
+    $fhDNA = new FileHandle($fastafile, "w");
+    &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhDNA;
     if (defined($qualityfile)) {
-	$fhQuality = new FileHandle($qualityfile, "w");
-	&showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQuality;
+        $fhQTY = new FileHandle($qualityfile, "w");
+	&showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQTY;
     }
+}
+elsif (defined($fastafile)) {
+    $fhDNA = *STDOUT;
+}
+
+if (defined($maffile)) {
+    my $file = "$maffile.contigs.bases";
+    $fhDNA = new FileHandle($file,"w");
+    &showUsage("Failed to create MAF output file \"$file\"") unless $fhDNA;
+    $file = "$maffile.contigs.quals";
+    $fhQTY = new FileHandle($file,"w");
+    &showUsage("Failed to create MAF output file \"$file\"") unless $fhQTY;
+    $file = "$maffile.reads.placed";
+    $fhRDS = new FileHandle($file,"w");
+    &showUsage("Failed to create MAF output file \"$file\"") unless $fhRDS;
 }
 
 # get project(s) to be exported
 
-my @projects;
-
-$project = 0 if (defined($project) && $project eq 'BIN');
-
-push @projects, $project if defined($project);
+my @identifiers;
+# special cases BIN (ID=0) and all/ALL (ignore identifier)
+if (defined($identifier) && $identifier eq 'BIN') {
+    push @identifiers,0;
+}
+elsif (defined($identifier) && $identifier !~ /all/i) {
+    push @identifiers,$identifier;
+}
  
 if ($fofn) {
-    foreach my $project (@$fofn) {
-        push @projects, $project if $project;
+    foreach my $identifier (@$fofn) {
+        push @identifiers, $identifier if $identifier;
+    }
+}
+
+# now collect all projects for the given identifiers
+
+my @projects;
+
+my %selectoptions;
+if (defined($assembly)) {
+    $selectoptions{assembly_id}  = $assembly if ($assembly !~ /\D/);
+    $selectoptions{assemblyname} = $assembly if ($assembly =~ /\D/);
+}
+
+unless (@identifiers) {
+# no project name or ID is defined
+    my ($projects,$message) = $adb->getProject(%selectoptions);
+    if ($projects && @$projects) {
+        push @projects, @$projects;
+    }
+    elsif (!$batch) {
+        $logger->warning("No projects found ($message)");
+    }
+}
+
+foreach my $identifier (@identifiers) {
+
+    $selectoptions{project_id}  = $identifier if ($identifier !~ /\D/);
+    $selectoptions{projectname} = $identifier if ($identifier =~ /\D/);
+
+    my ($projects,$message) = $adb->getProject(%selectoptions); 
+
+    if ($projects && @$projects) {
+        push @projects, @$projects;
+    }
+    elsif (!$batch) {
+        $logger->warning("Unknown project $identifier");
     }
 }
 
 my %exportoptions;
-$exportoptions{'padded'} = 1 if $padded;
-$exportoptions{'acquirelock'} = 1 if $lock;
+$exportoptions{'padded'} = 1 if ($caffile && $padded);
+$exportoptions{'notacquirelock'} = 1 - $lock;
+$exportoptions{'minNX'} = $minNX;
+$exportoptions{'noreads'} = 1 if $noread;
 
 foreach my $project (@projects) {
 
-    my $Project;
+    my $projectname = $project->getProjectName();
 
-    $Project = $adb->getProject(project_id=>$project) if ($project !~ /\D/);
+    my $numberofcontigs = $project->getNumberOfContigs();
 
-    $Project = $adb->getProject(projectname=>$project) if ($project =~ /\D/);
-
-    $logger->info("Project returned: ".($Project|'undef'));
-
-    next if (!$Project && $batch); # skip error (possible) message
-
-    $logger->warning("Unknown project $project") unless $Project;
-
-    next unless $Project;
+    $logger->info("processing project $projectname with $numberofcontigs contigs");
 
     my ($s,$m);
 
-    ($s,$m) = $Project->writeContigsToCaf($fhCAF, \%exportoptions) if $fhCAF;
-
-    ($s,$m) = $Project->writeContigsToFasta($fhFASTA, $fhQuality, \%exportoptions) if $fhFASTA;
+    if ($preview) {
+        $m = "Project $projectname to be exported";
+    }
+    elsif (defined($caffile)) {
+       ($s,$m) = $project->writeContigsToCaf($fhDNA,\%exportoptions);
+    }
+    elsif (defined($fastafile)) {
+       ($s,$m) = $project->writeContigsToFasta($fhDNA,$fhQTY,\%exportoptions);
+    }
+    elsif (defined($maffile)) {
+       ($s,$m) = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,\%exportoptions);
+    }
 
     $logger->warning($m) unless $s; # no contigs exported
 
-    $logger->info("$s contigs exported for project $project") if $s;
+    $logger->info("$s contigs exported for project $projectname") if $s;
 }
+
+$fhDNA->close() if $fhDNA;
+
+$fhQTY->close() if $fhQTY;
+
+$fhRDS->close() if $fhRDS;
+
+$adb->disconnect();
 
 exit;
 
@@ -189,6 +276,8 @@ sub showUsage {
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-caf\t\tCAF output file name\n";
     print STDERR "-fasta\t\tFASTA sequence output file name\n";
+    print STDERR "-maf\t\tMAF output file name root\n";
+    print STDERR "-preview\t(no value) show what's going to happen\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-project\tProject ID or name\n";
@@ -198,13 +287,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
     print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
+    print STDERR "-noread\t\t(no value) do not include reads in fasta output\n";
     print STDERR "\n";
-#    print STDERR "Default setting exports only projects which are either \n";
-#    print STDERR "unlocked or are owned by the user running this script\n";
     print STDERR "Default setting exports all contigs in project\n";
-    print STDERR "Using a lock check, only projects which either are unlocked \n"
-               . "or are owned by the user running this script are exported, \n"
-               . "while those project(s) will have a lock status set\n\n";
+    print STDERR "When using a lock check, only those projects are exported ";
+    print STDERR "which either\n are unlocked or are owned by the user running "
+               . "this script, while those\nproject(s) will have their lock "
+               . "status switched to 'locked'\n";
+    print STDERR "\n";
     print STDERR "-lock\t\t(no value) acquire a lock on the project and , if "
                 . "successful,\n\t\t\t   export its contigs\n";
     print STDERR "\n";

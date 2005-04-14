@@ -26,7 +26,7 @@ my $cnFilter = '';         # test contig names for this substring or RE
 my $cnBlocker;             # contig name blocker, ignore contig names of age 0
 my $rnBlocker;             # ignore reads like pattern
 my $minOfReads = 2;        # default require at least 2 reads per contig
-my $readTags;              # default ignore read contents and tags, only mapping
+my $readTags = 1;          # default load read tags
 my $contigtag = 2;         # contig tag processing
 my $origin;
 
@@ -38,6 +38,7 @@ my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
 my $consensus;             # load consensus sequence
 my $noload = 0; # CHANGE to 0
+my $notest = 0;
 my $list = 0;
 my $batch = 0;
 
@@ -46,8 +47,8 @@ my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "projectname|project_id|test|minimum|filter|ignore|list|"
-               . "ignorereadnamelike|irnl|contigtagprocessing|ctp|"
-               . "frugal|padded|readtags|noload|verbose|batch|info|help";
+               . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
+               . "frugal|padded|noreadtags|noload|verbose|batch|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -78,7 +79,7 @@ while (my $nextword = shift @ARGV) {
 
     $cnFilter         = shift @ARGV  if ($nextword eq '-filter'); 
 
-    $readTags         = 1            if ($nextword eq '-readtags');
+    $readTags         = 0            if ($nextword eq '-noreadtags');
 
     $usePadded        = 1            if ($nextword eq '-padded');
 
@@ -102,6 +103,8 @@ while (my $nextword = shift @ARGV) {
 
     $noload           = 1            if ($nextword eq '-noload');
 
+    $notest           = 1            if ($nextword eq '-notest');
+
     $list             = 1            if ($nextword eq '-list');
 
     $batch            = 1            if ($nextword eq '-batch');
@@ -121,12 +124,17 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
+&showUsage(0,"Missing organism database") unless $organism;
+
+&showUsage(0,"Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
-&showUsage("Unknown organism '$organism'") unless $adb;
+if (!$adb || $adb->errorStatus()) {
+# abort with error message
+    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+}
 
 #----------------------------------------------------------------
 # test the CAF file name
@@ -164,6 +172,7 @@ if ($projectname || $projectID) {
     
     &showUsage("Unknown project ".($projectname || $projectID) ) unless $project;
     $logger->info("Project ".$project->getProjectName." identified") if $project;
+    die "not yet fully implemented";
 }
 #exit;
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
@@ -477,10 +486,11 @@ while (defined($record = <$CAF>)) {
         elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
             my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
 #print STDERR "read Tag ($record) \n";
-# test for a continuation mark (\n\); if so, read until final mark
+# test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
                 if (defined($record = <$CAF>)) {
                     chomp $record;
+#print STDOUT "multiple record added: $record\n" if ($type eq 'OLIG');
                     $info .= $record;
                     $lineCount++;
                 }
@@ -488,37 +498,80 @@ while (defined($record = <$CAF>)) {
                     $info .= '"'; # closing quote
                 }
             }
+# cleanup $info
+            $info =~ s/\s+\"([^\"]+)\".*$/$1/; # remove wrapping quotes
+            $info =~ s/^\s+//; # remove leading blanks
 
-# print STDERR "TAG info: $info \n" if ($info =~ /\\n\\/); exit if ($type eq 'OLIG');
- 
-            $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-
-	    $logger->finest("READ tag: $type $trps $trpf $info") if $noload;
+# $logger->finest("READ tag: $type $trps $trpf $info") if $noload;
 
             my $tag = new Tag('readtag');
             $tag->setType($type);
             $tag->setPosition($trps,$trpf);
             $tag->setStrand('Forward');
-            $tag->setComment($info);
 
             if ($type eq 'OLIG' || $type eq 'AFOL') {
 # test info for sequence specification
-                if ($info =~ /([ACGT]{5,})/) {
+                $info =~ s/\\n\\\W*$//; # chop off a trailing \n\..
+#print STDOUT "OLIGO detected: '$info' \n";
+                if ($info =~ /([ACGT\*]{5,})/) {
+#print STDOUT "OLIG sequence extracted: $1 \n"; 
                     $logger->info("Read Tag $type DNA '$1'");
                     $tag->setDNA($1);
                 }
 # pick up the oligo name
-                if ($type eq 'OLIG' && $info =~ /\b([opt]?\d+)\s*$/) {
-                    my $name = $1;
-                    $name =~ s/^0/o/; # correct typo 0 for o
-#print "OLIG detected: $info -> $name\n";
-                    $tag->setTagSequenceName($name);
-                }
-                if ($type eq 'AFOL' && $info =~ /oligoname\s*(\w+)/i) {
+                if ($type eq 'OLIG') {
+# clean up name (replace possible ' oligo ' string by 'o')
+                    $info =~ s/\boligo[\b\s*]/o/i;
+                    $info =~ s/\s+/\\n\\/g if ($info =~ /\\n\\/);
+                    $info =~ s/\\n\\\\n\\/\\n\\/g; # multiple \n\ by one
+# get the oligo name from the $info data
+                    my $sequence = $tag->getDNA();
+                    if (my $name = &decode_oligo_info($info,$sequence)) {
+#print "oligoname found $name\n($info)\n";
+                        $tag->setTagSequenceName($name);
+                    }
+                    else {
+                        $logger->warning("Failed to decode OLIGO info:\n$info");
+                    }
+#next;
+my $TEMP=0; if ($TEMP) {
+# split on blanks and \n\ separation symbols
+#                    my @info = split /\s+|\\n\\/,$info;
+# get sequence for comparison
+#                    if ($info =~ /^\s*(\d+)\b.*?$sequence/) {
+# the info string starts with a number followed by the sequence
+#                        my $name = "o$1";
+#                        $tag->setTagSequenceName($name);
+#		    }
+#                    elsif ($info =~ /\b([opt0]\d+)\b/) {
+#                    elsif ($info =~ /\b([opt]?\d+)\s*$/) {
+# the info contains a name like o1234 or t1234
+#                        my $name = $1;
+#                        $name =~ s/^0/o/; # correct typo 0 for o
+#print "OLIG2 detected: $info -> $name\n";
+#                        $tag->setTagSequenceName($name);
+#                    }
+# try with the results of the split
+#                    elsif ($info[1] eq $sequence) {
+#print "OLIG3 detected: $info -> $info[0]\n";
+#                        my $name = $info[0];
+#                        $name = "o$name" unless ($name =~ /\D/);
+#                        $tag->setTagSequenceName($name);
+#                    }
+#                    else {
+#                        $logger->warning("Failed to decode OLIGO info:$info");
+#                    }
+} # END TEMP                     
+		}
+                elsif ($type eq 'AFOL' && $info =~ /oligoname\s*(\w+)/i) {
                     $tag->setTagSequenceName($1);
                 }
-		$logger->info("Missing oligo name in read tag for ".
-                        $read->getReadName()) unless $tag->getTagSequenceName();
+
+                unless ($tag->getTagSequenceName()) {
+		    $logger->warning("Missing oligo name in read tag for "
+                           . $read->getReadName()." (line $lineCount)");
+                    next; # don't load this tag
+	        }
             }
             elsif ($type eq 'REPT') {
 # pickup the repeat name
@@ -530,6 +583,7 @@ while (defined($record = <$CAF>)) {
                             $read->getReadName());
                 }
             }
+            $tag->setComment($info);
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag/ && $record =~ /$ETAGS/) {
@@ -541,25 +595,33 @@ while (defined($record = <$CAF>)) {
 # EDIT tags TO BE TESTED
 	elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
-            my $tag = new Tag(type=>'edit');
+            my $tag = new Tag('edittag');
 	    $tag->editReplace($5,$3.$4);
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag(type=>'edit');
+            my $tag = new Tag('edittag');
 	    $tag->editDelete($4,$3); # delete signalled by uc ATCG
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag(type=>'edit');
+            my $tag = new Tag('edittag');
 	    $tag->editDelete($4,$3); # insert signalled by lc atcg
             $read->addTag($tag);
         }
         elsif ($record =~ /Note\sINFO\s(.*)$/) {
-	    $logger->warning("NOTE detected $1 but not processed") if $noload;
-	    $logger->info("NOTE detected $1 but not processed") unless $noload;
+
+	    my $trpf = $read->getSequenceLength();
+#            my $tag = new Tag('readtag');
+#            $tag->setType($type);
+#            $tag->setPosition($trps,$trpf);
+#            $tag->setStrand('Forward');
+#            $tag->setComment($info);
+	    my $r = $record;
+#	    $logger->warning("NOTE detected: $r but not processed") if $noload;
+	    $logger->info("NOTE detected: $r but not processed") unless $noload;
         }
 # finally
         elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
@@ -611,7 +673,7 @@ while (defined($record = <$CAF>)) {
 # detected a contig TAG
             my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-$logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
+#$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
             my $tag = new Tag('contigtag');
             $contig->addTag($tag);
             $tag->setType($type);
@@ -624,7 +686,7 @@ $logger->warning("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $nol
 # pickup repeat name
             if ($type eq 'REPT') {
 		if ($info =~ /^\s*(\S+)\s+from/i) {
-$logger->warning("TagSequenceName $1") if $noload;
+$logger->info("TagSequenceName $1") if $noload;
                     $tag->setTagSequenceName($1);
 		}
                 else {
@@ -694,7 +756,11 @@ $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
  
 my $number = 0;
 foreach my $identifier (keys %contigs) {
+
+    last if ($noload && $notest);
+
 # minimum number of reads test
+
     my $contig = $contigs{$identifier};
     if ($contig->getNumberOfReads() < $minOfReads) {
         $logger->warning("$identifier has less than $minOfReads reads");
@@ -775,7 +841,7 @@ if ($readTags) {
 #        }
     }
     my $autoload = 1;
-    my $success = $adb->putTagsForReads(\@reads,$autoload); # unless $noload;
+    my $success = $adb->putTagsForReads(\@reads,$autoload);
     $logger->info("putTagsForReads success = $success");
 }
 
@@ -814,6 +880,34 @@ sub tagList {
     my $list  = eval "join '|',\@$name";
 }
 
+sub decode_oligo_info {
+    my $info = shift;
+    my $sequence = shift;
+
+# split $info on blanks and \n\ separation symbols
+    my @info = split /\s+|\\n\\/,$info;
+
+    my $name;
+    if ($info =~ /^\s*(\d+)\b.*?$sequence/) {
+# the info string starts with a number followed by the sequence
+        $name = "o$1";
+    }
+    elsif ($info =~ /\b([opt0]\d+)\b/) {
+# the info contains a name like o1234 or t1234
+        $name = $1;
+        $name =~ s/^0/o/; # correct typo 0 for o
+#print "OLIG2 detected: $info -> $name\n";
+    }
+# try with the results of the split
+    elsif ($info[1] eq $sequence) {
+#print "OLIG3 detected: $info -> $info[0]\n";
+        $name = $info[0];
+        $name = "o$name" unless ($name =~ /\D/);
+    }
+
+    return $name;
+}
+
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
@@ -827,13 +921,14 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "-caf\t\tcaf file name OR\n";
-    print STDERR "-cafdefault\t(alternative to -caf) use the default caf file name\n";
+    print STDERR "-cafdefault\tuse the default caf file name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
 #    print STDERR "-NULL\t\t(no value) to direct output to /dev/null\n";
-    print STDERR "-instance\teither prod (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
     print STDERR "-projectname\tproject name\n";
     print STDERR "-project_id\tproject ID (alternative to above)\n";
@@ -841,12 +936,15 @@ sub showUsage {
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
-    print STDERR "-readtags\t\tprocess read tags\n";
+    print STDERR "-noreadtags\tdo not process read tags\n";
     print STDERR "-noload\t\tskip loading into database (test mode)\n";
-    print STDERR "-ignorereadnamelike\tpatter\n";
+    print STDERR "-notest\t\t(in combination with noload: "
+                 . "skip contig processing altogether\n";
+    print STDERR "-ignorereadnamelike\tpattern\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
     print STDERR "-frugal\t\t(no value) minimise memory usage\n";
-    print STDERR "-verbose\t\t(no value) for some progress info\n";
+    print STDERR "-verbose\t(no value) for some progress info\n";
+    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);

@@ -14,20 +14,21 @@ use Logging;
 
 my $organism;
 my $instance;
-my $project_id;
-my $contig_id;
+my $project;
+my $assembly;
+my $contig;
 my $generation = 'current';
 my $verbose;
 my $longwriteup;
 my $include;
 
-my $validKeys  = "organism|instance|project_id|contig_id|"
+my $validKeys  = "organism|instance|project|assembly|contig|"
                . "full|long|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
     $instance     = shift @ARGV  if ($nextword eq '-instance');
       
@@ -35,9 +36,11 @@ while (my $nextword = shift @ARGV) {
 
     $generation   = shift @ARGV  if ($nextword eq '-generation');
 
-    $project_id   = shift @ARGV  if ($nextword eq '-project_id');
+    $project      = shift @ARGV  if ($nextword eq '-project');
 
-    $contig_id    = shift @ARGV  if ($nextword eq '-contig_id');
+    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+
+    $contig       = shift @ARGV  if ($nextword eq '-contig');
 
     $longwriteup  = 1            if ($nextword eq '-long');
 
@@ -48,7 +51,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-#&showUsage(0,"Missing project name") unless $projectname;
+&showUsage("Invalid data in parameter list") if @ARGV;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -62,16 +65,16 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'dev' unless defined($instance);
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
  
 my $URL = $adb->getURL;
@@ -82,48 +85,57 @@ $logger->info("Database $URL opened succesfully");
 # MAIN
 #----------------------------------------------------------------
 
+my %options;
+
+$options{contig_id}    = $contig    if ($contig && $contig !~ /\D/);
+$options{contigname}   = $contig    if ($contig && $contig =~ /\D/);
+$options{project_id}   = $project   if (defined($project) && $project !~ /\D/);
+$options{projectname}  = $project   if ($project && $project =~ /\D/);
+$options{assembly_id}  = $assembly  if (defined($assembly) && $assembly !~ /\D/);
+$options{assemblyname} = $assembly  if ($assembly && $assembly =~ /\D/);
+
+$longwriteup = 1 if $contig;
+
 my @projects;
 
-if ($contig_id) {
-    my $project = $adb->getProject(contig_id=>$contig_id);
-    $logger->warning("Failed to find project for contig $contig_id") unless $project;
-    push @projects, $project if $project;
-    $longwriteup = 1;
+if (keys %options > 0) {
+    my ($Project,$status) = $adb->getProject(%options);
+    $logger->warning("Failed to find project: $status") unless $Project;
+    push @projects, $Project  if (ref($Project) eq 'Project');
+    push @projects, @$Project if (ref($Project) eq 'ARRAY');
+#    $logger->info("projects '@projects'") if @projects;
 }
 
-if ($project_id) {
-    my $project = $adb->getProject(project_id=>$project_id);
-    $logger->warning("Failed to find project $project_id") unless $project;
-    push @projects, $project if $project;
-}
-elsif (defined($project_id)) { # = 0
-# create new project to access unallocated contigs
-    my $project = new Project();
-    $project->setArcturusDatabase($adb);
-    $project->setComment("Unallocated contigs");
-    push @projects, $project;
-}
+unless (@projects || keys %options) {
 
-unless (@projects || $project_id || $contig_id) {
+    my %ioptions;
+    $ioptions{assembly} = $assembly if defined($assembly);
+    $ioptions{addempty} = 1 if $include; # list also empty projects
+    my $project_ids = $adb->getProjectInventory(%ioptions);
 
-    my $project_ids = $adb->getProjectInventory($include);
-
+    my $bin_project;
     foreach my $pid (@$project_ids) {
-        my $project = $adb->getProject(project_id=>$pid);
-        $logger->warning("Failed to find project $pid") unless $project;
-        push @projects, $project if $project;
+        my ($Project,$status) = $adb->getProject(project_id=>$pid);
+        $logger->warning("Failed to find project $pid") unless @$Project;
+        next unless ($Project && @$Project);
+        $bin_project = $Project->[0] unless $pid; # register BIN
+        push @projects, @$Project if $pid;
     }
 # add unallocated
-    my $project = new Project();
-    $project->setArcturusDatabase($adb);
-    $project->setComment("unallocated contigs");
-    push @projects,$project;
+    unless ($bin_project  || $include) {
+        $bin_project = new Project();
+        $bin_project->setArcturusDatabase($adb);
+        $bin_project->setComment("unallocated");
+        $bin_project->setProjectName("the bin");
+    }
+    push @projects,$bin_project;
 }
 
 if (@projects && !$longwriteup) {
-    print STDOUT "\nProject inventory for database $organism:\n\n" 
-               . "  nr name or comment          contigs   reads  "
-               . "sequence   contig    owner locked\n\n";
+    print STDOUT "\nProject inventory for database $organism ";
+    print STDOUT "(assembly $assembly) " if defined($assembly);
+    print STDOUT ":\n\n  nr as name     contigs    reads  "
+               . "sequence   largest  owner    locked comment\n\n";
 }
 
 foreach my $project (@projects) {
@@ -132,31 +144,45 @@ foreach my $project (@projects) {
 }
 print STDOUT "\n";
 
+my $hangingprojectids = $adb->getHangingProjectIDs();
+
+if ($hangingprojectids && @$hangingprojectids) {
+    print STDOUT "WARNING: there are hanging project IDs (referenced in"
+               . " CONTIG but not in PROJECT):\n @$hangingprojectids\n\n";
+} 
+
 $adb->disconnect();
 
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
 
-sub showUsage {
-    my $mode = shift || 0; 
+sub showUsage { 
     my $code = shift || 0;
 
-    print STDERR "\nProject Inventory listing\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
-    print STDERR "\n";
+    print STDERR "\nProject Inventory listing\n\n";
+    print STDERR "Parameter input ERROR: $code \n\n" if $code; 
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL EXCLUSIVE PARAMETER:\n";
+    print STDERR "\n";
+    print STDERR "-contig\tcontig or name ID\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\teither 'prod' or 'dev' (default)\n";
+    print STDERR "-project\tproject ID or name\n";
+    print STDERR "-assembly\tassembly ID or name (default 0)\n";
     print STDERR "\n";
-    print STDERR "-project_id\tproject ID (if not specified: all)\n";
+    print STDERR "LIST OPTIONS:\n";
+    print STDERR "\n";
     print STDERR "-long\t\t(no value) for long write up\n";
     print STDERR "-full\t\t(no value) to include empty projects\n";
     print STDERR "-verbose\t(no value) \n";
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
