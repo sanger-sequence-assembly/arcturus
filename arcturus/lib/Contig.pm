@@ -1282,14 +1282,14 @@ sub writeToMaf {
 # get the reads and build a hash list for identification
 
     my %reads;
-    my $reads = $this->getReads();
+    my $reads = $this->getReads(); # ? (1)
     foreach my $read (@$reads) {
         $reads{$read->getReadName()} = $read;
     }
 
 # write the individual read info
 
-    my $mappings = $this->getMappings();
+    my $mappings = $this->getMappings(); # ? (1)
     foreach my $mapping (@$mappings) {
         my @range = $mapping->getContigRange();
         my $readname = $mapping->getMappingName();
@@ -1322,7 +1322,6 @@ sub replaceNbyX {
 
 # first replace all Ns by X
 
-#print "\nsequence before:\n$sequence\n";
     $sequence =~ s/N/X/ig;
 
 # then change contiguous runs of X smaller than $min back to N
@@ -1332,7 +1331,6 @@ sub replaceNbyX {
     my $i = 1;
 
     while ($i++ < $min) {
-#        $sequence =~ s/([ACTG])($X)([ACTG])/$1$N$3/ig;
         $sequence =~ s/([ACTG\?])($X)(?=[ACTG\?])/$1$N/ig;
         $X .= 'X';
         $N .= 'N';
@@ -1340,7 +1338,6 @@ sub replaceNbyX {
 
 # replace current consensus by the substituted string 
 
-#print "sequence after:\n$sequence\n";
     $this->setSequence($sequence);
 }
 

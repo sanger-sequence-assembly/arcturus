@@ -377,9 +377,9 @@ sub putContig {
 
             if ($project) {
 # TO BE DEVELOPED 
-                $this->assignContigToProject($previous,$project); # ADBProject
-#                $project->addContigID($contigid); # ??
-                $message .= " project ?? ";
+                $this->assignContigToProject($previous,$project,1); # ADBProject
+                $project->addContigID($contigid);
+#                $message .= " project ?? ";
 # TO BE DEVELOPED
             }
 
@@ -440,16 +440,14 @@ sub putContig {
         unless ($project) {
 # find the contig_id (for the moment use largest nr of reads) 
             my $contig_id;
-
 # TO BE DEVELOPED: assign project ID to new contig 
             foreach my $linked (@linked) {
                 $contig_id = $linked unless defined($contig_id);
                 next if ($readsinlinked{$linked} < $readsinlinked{$contig_id});
                 $contig_id = $linked; 
             }
-#            $project = $this->getProject(contig_id => $contig_id);
+            $project = $this->getProject(contig_id => $contig_id);
 # keep track of the project(s) of previous generation, flag project changes
-
         }
 
 	if ($noload) {
@@ -500,7 +498,7 @@ sub putContig {
 
 # and assign the contig to the specified project
 
-    $this->assignContigToProject($contig,$project) if $project;
+    $this->assignContigToProject($contig,$project,1) if $project;
 
     return $contigid, $message;
    
