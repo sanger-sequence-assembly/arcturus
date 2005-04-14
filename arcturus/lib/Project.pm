@@ -34,7 +34,7 @@ sub setArcturusDatabase {
         die "Invalid object passed: $ADB";
     }
 }
-  
+
 sub getLockedStatus {
 # return the momentary status
     my $this = shift;
@@ -87,7 +87,7 @@ sub addContigID {
 sub getContigIDs {
 # export reference to the contig IDs array
     my $this = shift;
-    my $dolockcheckandlock = shift || 0; 
+    my $nolockcheck = shift || 0; 
 
 # get the contig IDs for this project always by reference to the database
 
@@ -97,14 +97,14 @@ sub getContigIDs {
 
     my ($cids, $status);
 
-    if ($dolockcheckandlock) {
+    if ($nolockcheck) {
+# get all contig IDs belonging to this project without locking
+       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
+    }
+    else {
 # access project only if not locked or owned by user; if so, then lock project
        ($cids, $status) = $ADB->checkOutContigIDsForProjectID($pid);
         $status = "No accessible contigs: $status" unless ($cids && @$cids);
-    }
-    else {
-# get all contig IDs belonging to this project with locking project
-       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
     }
 
     if ($cids) {
@@ -205,6 +205,16 @@ sub getProjectID {
     return $this->{data}->{project_id} || 0;
 }
   
+sub setProjectName {
+    my $this = shift;
+    $this->{data}->{projectname} = shift;
+}
+  
+sub getProjectName {
+    my $this = shift;
+    return $this->{data}->{projectname} || '';
+}
+  
 sub setUpdated {
     my $this = shift;
     $this->{data}->{updated} = shift;
@@ -225,7 +235,7 @@ sub writeContigsToCaf {
     my $FILE = shift; # obligatory file handle
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{acquirelock});
+    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock});
 
     return (0,$status) unless ($contigids && @$contigids);
 
@@ -253,7 +263,7 @@ sub writeContigsToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{acquirelock}); 
+    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock}); 
 
     return (0,$status) unless ($contigids && @$contigids);
 
@@ -267,9 +277,47 @@ sub writeContigsToFasta {
             $report .= "FAILED to retrieve contig $contig_id";
             next;
         }
-        $contig->writeToFasta($DFILE,$QFILE);
+        $contig->writeToFasta($DFILE,$QFILE,$options->{noreads});
         $export++;
     }
+    return $export,$report;
+}
+
+sub writeContigsToMaf {
+# write contig bases, contig quality data, reads placed to specified directory
+    my $this  = shift;
+    my $DFILE = shift; # obligatory file handle for DNA
+    my $QFILE = shift; # obligatory file handle for QualityData
+    my $RFILE = shift; # obligatory file handle for Placed Reads
+    my $options = shift; # hash ref
+
+    unless ($DFILE && $QFILE && $RFILE) {
+        return 0,"Missing file handle in 'writeContigsToMaf'";
+    }
+
+    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock}); 
+
+    return (0,$status) unless ($contigids && @$contigids);
+
+    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+
+    my $minNX = $options->{minNX};
+    $minNX = 3 unless defined($minNX);
+
+    my $export = 0;
+    my $report = '';
+    foreach my $contig_id (@$contigids) {
+        my $contig = $ADB->getContig(contig_id=>$contig_id);
+        unless ($contig) {
+            $report .= "FAILED to retrieve contig $contig_id";
+            next;
+        }
+        $contig->replaceNbyX($minNX) if ($minNX);
+        $contig->writeToFasta($DFILE,$QFILE,1);
+        $contig->writeToMaf($RFILE);
+        $export++;
+    }
+
     return $export,$report;
 }
 
@@ -283,17 +331,19 @@ sub toStringShort {
 
     my @line;
     push @line, $this->getProjectID();
-    push @line,($this->getComment() || '');
+    push @line, $this->getAssemblyID() || 0;
+    push @line,($this->getProjectName() || '');
     push @line,($this->getNumberOfContigs() || 0);
     push @line,($this->getNumberOfReads() || 0);
     my $stats = $this->getContigStatistics();
     push @line,($stats->[0] || 0); # total sequence length 
     push @line,($stats->[2] || 0); # largest contig
-    my $locked = $this->getLockedStatus();
+    my $locked = ($this->getLockedStatus() ? 'LOCKED' : ' free ');
     push @line,($this->getOwner() || 'undef');
     push @line,($locked || '');
+    push @line,($this->getComment() || '');
   
-    return sprintf ("%4d %-24s %7d %7d %9d %8d %8s %16s\n",@line);
+    return sprintf ("%4d %2d %-8s %7d %8d %9d %9d  %-8s %6s %-24s\n",@line);
 }
   
 sub toStringLong {
@@ -303,6 +353,8 @@ sub toStringLong {
     my $string = "\n";
 
     $string .= "Project ID         ".$this->getProjectID()."\n";
+    $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
+    $string .= "Projectname        ".$this->getProjectName()."\n";
 
     $string .= "Lock status        ";
     if (my $lock = $this->getLockedStatus()) {
@@ -313,13 +365,12 @@ sub toStringLong {
     }
     $string .= "Allocated contigs  ".($this->getNumberOfContigs() || 0)."\n";
     $string .= "Allocated reads    ".($this->getNumberOfReads() || 0)."\n";
-    $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
     if ($this->getOwner()) {
-        $string .= "Last update on     ".$this->getUpdated().
+        $string .= "Last update on     ".($this->getUpdated() || 'unknown').
                                "  by   ".$this->getOwner()."\n";
     }
     if ($this->getCreator()) {
-        $string .= "Created on         ".$this->getUpdated().
+        $string .= "Created on         ".($this->getUpdated() || 'unknown').
                                "  by   ".$this->getCreator()."\n";
     }
     $string .= "Comment            ".($this->getComment() || '')."\n";
@@ -339,7 +390,7 @@ sub toStringLong {
 }
 
 #-------------------------------------------------------------------
-# relocating a contig to another project
+# relocating a contig to another project REPLACED BY method on ADBProject
 #-------------------------------------------------------------------
 
 sub moveContigToProject {

@@ -283,7 +283,9 @@ print "  position: @spos  against  @tpos \n" if $etest;
 # finally compare comments
 
     print "  comment: ".$this->getComment."\n against ".$tag->getComment."\n" if $etest;
-    return 0 unless ($this->getComment() eq $tag->getComment());
+    if ($this->getComment() =~ /\S/ || $tag->getComment() =~ /\S/) {
+        return 0 unless ($this->getComment() eq $tag->getComment());
+    }
 
 # the tags are identical:
 print "Tags are EQUAL \n" if $etest;

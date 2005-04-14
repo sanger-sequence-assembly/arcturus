@@ -36,7 +36,7 @@ sub getContig {
 # return a Contig object  (under development)
 # options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
 # additional : metaDataOnly=>0 or 1 (default 0), noReads=>0 or 1 (default 0)
-# andblocked: include contig from blocked projects TO BE IMPLEMENTED ?
+# DO WE NEED:andblocked: include contig from blocked projects TO BE IMPLEMENTED ?
     my $this = shift;
 
 # decode input parameters and compose the query
@@ -55,28 +55,29 @@ sub getContig {
         }
         elsif ($nextword eq 'withChecksum') {
 # returns the highest contig_id, i.e. most recent contig with this checksum
-            $query .= " from CONTIG where readnamehash = ? ".
-		      "order by contig_id desc limit 1";
+            $query .= " from CONTIG where readnamehash = ? "
+		    . "order by contig_id desc limit 1";
             $value = shift;
         }
         elsif ($nextword eq 'withRead') {
 # returns the highest contig_id, i.e. most recent contig with this read
-            $query .= " from CONTIG, MAPPING, SEQ2READ, READS ".
-                      "where CONTIG.contig_id = MAPPING.contig_id".
-                      "  and MAPPING.seq_id = SEQ2READ.seq_id".
-                      "  and SEQ2READ.read_id = READS.read_id".
-                      "  and READS.readname = ? ".
-		      "order by contig_id desc limit 1";
-print STDERR "getContig: $query\n";
+            $query .= " from CONTIG, MAPPING, SEQ2READ, READS "
+                    . "where CONTIG.contig_id = MAPPING.contig_id"
+                    . "  and MAPPING.seq_id = SEQ2READ.seq_id"
+                    . "  and SEQ2READ.read_id = READS.read_id"
+                    . "  and READS.readname = ? "
+		    . "order by contig_id desc limit 1";
+#print STDERR "getContig: $query\n";
              $value = shift;
         }
         elsif ($nextword eq 'withTagName') {
 # returns the highest contig_id, i.e. most recent contig with this tag
 # NOTE: perhaps we should cater for more than one contig returned?
-            $query .= " from CONTIG join CONTIGTAG using (contig_id)".
-                      "where tag_id in". 
-                      "      (select tag_id from TAGSEQUENCE where tagseqname = ?) ".
-		      "order by contig_id desc limit 1";
+            $query .= " from CONTIG join CONTIGTAG using (contig_id) "
+                    . "where tag_seq_id in " 
+                    .       "(select tag_seq_id from TAGSEQUENCE"
+                    .       " where tagseqname = ?) "
+		    . "order by contig_id desc limit 1";
 print STDERR "getContig: $query\n";
             $value = shift;
         }
@@ -386,7 +387,7 @@ sub putContig {
 
             if ($contig->hasTags() && $dotags) {
                 my $dbh = $this->getConnection();
-                $message .= "Warning: failed to insert tags for $contigname"
+                $message .= "\nWarning: no tags inserted for $contigname"
                 unless &putTagsForContig($dbh,$contig,1);
             }
 
@@ -1442,7 +1443,7 @@ sub getInitialContigIDs {
 #------------------------------------------------------------------------------
 
 sub getTagsForContig {
-# add tags to Contig instance; returns number of tags added; undef on error
+# add Tags to Contig instance; returns number of tags added; undef on error
     my $this = shift;
     my $contig = shift; # Contig instance
 
@@ -1452,27 +1453,77 @@ sub getTagsForContig {
 
     my $cid = $contig->getContigID() || return undef;
 
-    my @sid = ($cid);
-
     my $dbh = $this->getConnection();
 
-    my $tags = &getTagsForSequenceIDs ($dbh,[@sid],'CONTIGTAG','contig_id');
+    my $tags = &fetchTagsForContigIDs($dbh,[($cid)]);
 
     foreach my $tag (@$tags) {
         $contig->addTag($tag);
     }
 
-    return scalar(@$tags); # tags added
+    return scalar(@$tags); # number of tags added to contig
+}
+
+sub getTagsForContigIDs {
+# public method, returns array of Tag objects
+    my $this = shift;
+    my @cids = @_;
+
+    my $dbh = $this->getConnection();
+
+    return &fetchTagsForContigIDs ($dbh,[@cids]);
+}
+
+sub fetchTagsForContigIDs { # TO BE DEVELOPED AND TESTED
+# private method
+    my $dbh = shift;
+    my $cids = shift; # array of seq IDs
+
+# compose query
+
+    my $items = "contig_id,tagtype,systematic_id,pstart,pfinal,strand,comment,"
+              . "tagseqname,sequence";
+
+    my $query = "select $items from CONTIGTAG left join TAGSEQUENCE"
+              . " using (tag_seq_id)"
+	      . " where contig_id in (".join (',',@$cids) .")"
+              . "   and deprecated != 'Y'"
+              . " order by contig_id";
+#print "fetchTagsForContigIDs: $query \n" if $DEBUG;
+
+    my @tag;
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query) && exit;
+
+    while (my @ary = $sth->fetchrow_array()) {
+# create a new Tag instance
+        my $tag = new Tag('contigtag');
+
+        $tag->setSequenceID      (shift @ary); # contig_id
+        $tag->setType            (shift @ary); # tagtype
+        $tag->setSystematicID    (shift @ary); # tagname
+        $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
+        $tag->setStrand          (shift @ary); # strand
+        $tag->setComment         (shift @ary); # comment
+        $tag->setTagSequenceName (shift @ary); # tagseqname
+        $tag->setDNA             (shift @ary); # sequence
+# add to output array
+        push @tag, $tag;
+    }
+
+    return [@tag];
 }
 
 
-sub putTagsForContigPublic {
+sub enterTagsForContig {
 # public method for test purposes
     my $this = shift;
     my $contig = shift;
 
     die "getTagsForContigPublic expects a Contig instance" 
-    unless (ref($contig) eq 'Contig');
+     unless (ref($contig) eq 'Contig');
 
     my $dbh = $this->getConnection();
 
@@ -1486,7 +1537,7 @@ sub putTagsForContig {
     my $testexistence = shift;
 
     return 1 unless $contig->hasTags();
-$DEBUG=0;
+$DEBUG=1;
 
     my $cid = $contig->getContigID();
 print STDOUT "putTagsForContig: contig ID = $cid\n" if $DEBUG;
@@ -1510,7 +1561,7 @@ print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
 
 # delete the existing tags from the hash
 
-        my $existingtags = &getTagsForSequenceIDs ($dbh,[($cid)],'CONTIGTAG','contig_id');
+        my $existingtags = &fetchTagsForContigIDs($dbh,[($cid)]);
 
         foreach my $etag (@$existingtags) {
             foreach my $ctag (@$ctags) {
@@ -1533,16 +1584,261 @@ print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
 print STDOUT "putTagsForContig: new tags ".scalar(@$ctags)."\n" if $DEBUG;
 
         foreach my $tag (@$ctags) {
-            $tag->writeToCaf(*STDOUT);
+            $tag->writeToCaf(*STDOUT) if $DEBUG;
         }
 print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 #exit; # temporary
     }
-$DEBUG=0;
 
-    return &putTags ($dbh,$ctags,'CONTIGTAG','contig_id',1);
+#$DEBUG=0;
+
+    return &putTags ($dbh,$ctags,'CONTIGTAG','contig_id',1); # old system
+
+# new system TO BE TESTED
+
+print "enter getTagSequenceIDsForTags $ctags @$ctags\n";     
+    my $tagIDhash = &getTagSequenceIDsForTags($dbh,$ctags,1); # autoload = 1
+print "tagIDhash: $tagIDhash \n";
+
+#    return;
+    return &putContigTags($dbh,$ctags,$tagIDhash);
+}
+
+
+sub putContigTags {
+# use as private (generic) method only
+    my $dbh = shift;
+    my $tags = shift; # ref to array with Tags
+    my $tagIDhash = shift; # of missing tag names and sequences
+
+print "ENTER putContigTags ".scalar(@$tags)."\n" if $DEBUG;;
+
+    return undef unless ($tags && @$tags);
+
+# TO BE DEVELOPED USING SEPARATE STORAGE OF systematic_id
+
+    my $query = "insert into CONTIGTAG " # insert ignore ?
+              . "(contig_id,tagtype,systematic_id,tag_seq_id,pstart,pfinal,strand,comment) "
+              . "values ";
+
+    my $success = 1;
+    my $block = 100; # insert block size
+
+    my $accumulated = 0;
+    my $accumulatedQuery = $query;
+    my $lastTag = $tags->[@$tags-1];
+
+    foreach my $tag (@$tags) {
+
+        my $contig_id        = $tag->getSequenceID();
+        next unless $contig_id; # protect against undef seq ID
+        my $tagtype          = $tag->getType();
+        my $systematic_id    = $tag->getSystematicID() || '';
+        my $tagseqname       = $tag->getTagSequenceName() || '';
+        my ($pstart,$pfinal) = $tag->getPosition();
+        my $tag_seq_id       = $tagIDhash->{$tagseqname} || 0;
+        my $strand           = $tag->getStrand();
+        $strand =~ s/(\w)\w*/$1/;
+        my $comment          = $tag->getComment() || '';
+# we quote the comment string because it may contain odd characters
+        $comment = $dbh->quote($comment); 
+
+        $accumulatedQuery .= ',' if $accumulated++;
+        $accumulatedQuery .= "($contig_id,'$tagtype',";
+        $accumulatedQuery .=  "'$systematic_id',";
+        $accumulatedQuery .=  "$tag_seq_id,$pstart,$pfinal,'$strand',$comment)";
+
+        if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
+
+            my $sth = $dbh->prepare($accumulatedQuery);        
+            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+
+            $success = 0 unless $rc;
+            $accumulatedQuery = $query;
+            $accumulated = 0;
+        }
+    }
+print "EXIT putTags success $success\n" if $DEBUG;
+    return $success; 
 }
 
 #------------------------------------------------------------------------------
 
+
+sub putTags { # TO BE REMOVED
+# use as private (generic) method only
+    my $dbh = shift;
+    my $tags = shift;
+    my $table = shift;
+    my $seqkeyid = shift;
+    my $autoload = shift; # of missing tag names and sequences
+
+print "ENTER putTags $table ".scalar(@$tags)."\n" if $DEBUG;;
+
+    return 0 unless ($tags && @$tags);
+
+# get tag_seq_id using tagseqname for (possible) link with TAGSEQUENCE (reference list)
+
+    my %tagdata;
+    foreach my $tag (@$tags) {
+        my $tagseqname = $tag->getTagSequenceName();
+        $tagdata{$tagseqname}++ if $tagseqname;
+    }
+
+# build the tag ID hash keyed on tag name
+
+    my $tagID = {};
+
+    if (my @tagseqnames = keys %tagdata) {
+# get tag_seq_id, tagsequence for tagseqnames
+        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
+	          . " where tagseqname in ('".join("','",@tagseqnames)."')";
+
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        my $tagSQ = {};
+
+        while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
+            $tagID->{$tagseqname} = $tag_seq_id;
+            $tagSQ->{$tagseqname} = $sequence;
+print "TAG SEQUENCE $tagseqname, $tag_seq_id, ".($sequence || '')."\n" if $DEBUG;
+        }
+
+        $sth->finish();
+
+# test the sequence against the one specified in the tags
+
+        foreach my $tag (@$tags) {
+            my $tagseqname = $tag->getTagSequenceName();
+            next unless $tagseqname;
+	    my $sequence = $tag->getDNA();
+            if (!$tagID->{$tagseqname}) {
+                print STDERR "Missing tag name $tagseqname (".
+                ($sequence || 'no sequence available').
+                ") in TAGSEQUENCE list\n";
+                next unless $autoload; # allow sequence to be undefined
+#                next unless ($autoload && $sequence);
+# add tag name and sequence, if any, to TAGSEQUENCE list
+	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
+         	if ($tag_seq_id) {
+                    $tagID->{$tagseqname} = $tag_seq_id;                
+                    $tagSQ->{$tagseqname} = $sequence if $sequence;
+                }
+            }
+            elsif ($sequence) {
+                unless ($sequence eq $tagSQ->{$tagseqname}) {
+                    print STDERR "Tag sequence mismatch for tag $tagseqname : ".
+                             "(tag) $sequence  (taglist) $tagSQ->{$tagseqname}\n";
+                    next;
+		}
+	    }
+        }
+    }
+   
+# insert in bulkmode
+
+    my $query = "insert into $table ". # insert ignore ?
+                "($seqkeyid,tagtype,tag_seq_id,pstart,pfinal,strand,comment) values ";
+    $query =~ s/tagtype/tagtype,systematic_id/ if ($table eq 'CONTIGTAG');
+
+    my $success = 1;
+    my $block = 100; # insert block size
+
+    my $accumulated = 0;
+    my $accumulatedQuery = $query;
+    my $lastTag = $tags->[@$tags-1];
+
+    foreach my $tag (@$tags) {
+
+        my $seq_id           = $tag->getSequenceID();
+        next unless $seq_id; # protect against undef seq ID
+        my $tagtype          = $tag->getType();
+        my $systematic_id    = $tag->getSystematicID() || '';
+        my $tagseqname       = $tag->getTagSequenceName() || '';
+        my ($pstart,$pfinal) = $tag->getPosition();
+        my $tag_seq_id       = $tagID->{$tagseqname} || 0;
+        my $strand           = $tag->getStrand();
+        $strand =~ s/(\w)\w*/$1/;
+        my $comment          = $tag->getComment() || '';
+# we quote the comment string because it may contain odd characters
+        $comment = $dbh->quote($comment) if $comment; 
+
+        $accumulatedQuery .= ',' if $accumulated++;
+        $accumulatedQuery .= "($seq_id,'$tagtype',";
+        $accumulatedQuery .=  "'$systematic_id'," if ($table eq 'CONTIGTAG');
+        $accumulatedQuery .=  "$tag_seq_id,$pstart,$pfinal,'$strand',$comment)";
+
+        if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
+
+            my $sth = $dbh->prepare($accumulatedQuery);        
+            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+
+            $success = 0 unless $rc;
+            $accumulatedQuery = $query;
+            $accumulated = 0;
+        }
+    }
+print "EXIT putTags success $success\n" if $DEBUG;
+    return $success; 
+}
+
+sub OBSOLETEgetTagsForSequenceIDs {
+# use as private (generic) method only
+    my $dbh = shift;
+    my $sequenceIDs = shift; # array of seq IDs
+    my $table = shift; # either READTAG or CONTIGTAG
+    my $seqkeyid = shift; # sequence_id column name
+
+# compose query
+
+    my $items = "$seqkeyid,tagtype,systematic_id,pstart,pfinal,strand,comment,"
+              . "tagseqname,sequence";
+    $items =~ s/systematic_id\,// if ($table eq 'READTAG'); # no finishing tags
+
+    my $query = "select $items from $table left join TAGSEQUENCE"
+              . " using (tag_seq_id)"
+	      . " where $seqkeyid in (".join (',',@$sequenceIDs) .")"
+              . "   and deprecated != 'Y'"
+#             . "   and tagtype not in (.some list.) "
+              . " order by $seqkeyid";
+print "getTagsForSequenceID: $query \n" if $DEBUG;
+
+    my @tag;
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query) && exit;
+
+    while (my @ary = $sth->fetchrow_array()) {
+# create a new Tag instance
+        my $tag = new Tag(lc($table));
+
+        $tag->setSequenceID      (shift @ary); # seq_id
+        $tag->setType            (shift @ary); # tagtype
+        $tag->setSystematicID    (shift @ary) if ($table eq 'CONTIGTAG'); # tagname
+        $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
+        $tag->setStrand          (shift @ary); # strand
+        $tag->setComment         (shift @ary); # comment
+        $tag->setTagSequenceName (shift @ary); # tagseqname
+        $tag->setDNA             (shift @ary); # sequence
+# add to output array
+        push @tag, $tag;
+#$tag->writeToCaf(*STDOUT) if ($tag->getSequenceID == 79425);
+    }
+print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n" if $DEBUG;
+
+    return [@tag];
+}
+
+
+
+
 1;
+
+
+
+
+
+

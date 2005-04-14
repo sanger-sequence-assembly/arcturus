@@ -1143,22 +1143,25 @@ sub writeToFasta {
 # private methods
 
 sub writeDNA {
-# write DNA of this read in FASTA format to FILE handle
+# write consensus sequence DNA in FASTA format to FILE handle
     my $this   = shift;
-    my $FILE   = shift; # obligatory
+    my $DFILE  = shift; # obligatory
     my $marker = shift;
 
     $marker = '>' unless defined($marker); # default FASTA format
 
     my $identifier = $this->getContigName();
 
-    if (my $dna = $this->getSequence()) {
+    if (!$DFILE) {
+        print STDERR "Missing file handle for DNA\n";
+    }
+    elsif (my $dna = $this->getSequence()) {
 # output in blocks of 60 characters
-	print $FILE "$marker$identifier\n";
+	print $DFILE "$marker$identifier\n";
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
-	    print $FILE substr($dna,$offset,60)."\n";
+	    print $DFILE substr($dna,$offset,60)."\n";
 	    $offset += 60;
 	}
     }
@@ -1168,23 +1171,26 @@ sub writeDNA {
 }
 
 sub writeBaseQuality {
-# write Quality data of this read in FASTA format to FILE handle
+# write consensus Quality Data in FASTA format to FILE handle
     my $this   = shift;
-    my $FILE   = shift; # obligatory
+    my $QFILE  = shift; # obligatory
     my $marker = shift;
 
     $marker = '>' unless defined($marker); # default FASTA format
 
     my $identifier = $this->getContigName();
 
-    if (my $quality = $this->getBaseQuality()) {
+    if (!$QFILE) {
+        print STDERR "Missing file handle for Quality Data\n";
+    }
+    elsif (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
-	print $FILE "$marker$identifier\n";
+	print $QFILE "$marker$identifier\n";
 	my $n = scalar(@$quality) - 1;
         for (my $i = 0; $i <= $n; $i += 25) {
             my $m = $i + 24;
             $m = $n if ($m > $n);
-	    print $FILE join(' ',@$quality[$i..$m]),"\n";
+	    print $QFILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
     else {
@@ -1238,6 +1244,19 @@ sub metaDataToString {
     return $string;
 }
 
+sub toString {
+# very brief summary
+    my $this = shift;
+
+    my $name   = $this->getContigName()            || "undefined";
+    my $nreads = $this->getNumberOfReads()         || "undefined";
+    my $length = $this->getConsensusLength()       ||   "unknown";
+    my $cover  = $this->getAverageCover()          ||   "unknown";
+
+    return sprintf ("%16s   reads:%-7d   length:%-8d   cover:%4.2f", 
+                    $name,$nreads,$length,$cover);
+}
+
 #-------------------------------------------------------------------    
 # non-standard output for interaction with Phusion and Gap4
 #-------------------------------------------------------------------    
@@ -1245,7 +1264,13 @@ sub metaDataToString {
 sub writeToMaf {
 # write the "reads.placed" read-contig mappings in Mullikin format
     my $this = shift;
-    my $FILE = shift; # obligatory file handle
+    my $RFILE = shift; # obligatory file handle
+
+    unless ($RFILE) {
+	print STDERR "Missing file handle for Placed Reads\n";
+	return;
+    }
+
 # extra outside info to be passed as parameters: supercontig name &
 # approximate start of contig on supercontig
 
@@ -1281,12 +1306,42 @@ sub writeToMaf {
         my $length = $read->getLowQualityRight() - $lqleft + 1;
         my $alignment = ($mapping->getAlignment() > 0) ? 0 : 1;
         my $supercontigstart  = $contigzeropoint + $range[0];
-        print $FILE "* $readname $lqleft $length $alignment " .
-                    "$contigname $supercontigname $range[0] " .
-                    "$supercontigstart\n"; 
+        print $RFILE "* $readname $lqleft $length $alignment " .
+                     "$contigname $supercontigname $range[0] " .
+                     "$supercontigstart\n"; 
+    }
+#    print $RFILE "\n\n";
+}
+
+sub replaceNbyX {
+# substitute strings of (CAF) 'N's in the consensus sequence by (MAF) 'X' 
+    my $this = shift;
+    my $min = shift || 0; # minimum length of the string
+
+    my $sequence = $this->getSequence();
+
+# first replace all Ns by X
+
+#print "\nsequence before:\n$sequence\n";
+    $sequence =~ s/N/X/ig;
+
+# then change contiguous runs of X smaller than $min back to N
+
+    my $X = 'X';
+    my $N = 'n';
+    my $i = 1;
+
+    while ($i++ < $min) {
+#        $sequence =~ s/([ACTG])($X)([ACTG])/$1$N$3/ig;
+        $sequence =~ s/([ACTG\?])($X)(?=[ACTG\?])/$1$N/ig;
+        $X .= 'X';
+        $N .= 'N';
     }
 
-#    print $FILE "\n\n";
+# replace current consensus by the substituted string 
+
+#print "sequence after:\n$sequence\n";
+    $this->setSequence($sequence);
 }
 
 sub writeToCafPadded {
