@@ -30,9 +30,8 @@ my $readTags = 1;          # default load read tags
 my $contigtag = 2;         # contig tag processing
 my $origin;
 
-my $assembly;              # ?? not really necessary
-my $projectname;           # projectname for which the data are to be loaded
-my $projectID;             # alternatively the project ID
+my $assembly;
+my $pidentifier;           # projectname for which the data are to be loaded
 
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
@@ -46,7 +45,7 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
-               . "projectname|project_id|test|minimum|filter|ignore|list|"
+               . "project|test|minimum|filter|ignore|list|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
                . "frugal|padded|noreadtags|noload|verbose|batch|info|help";
 
@@ -63,9 +62,7 @@ while (my $nextword = shift @ARGV) {
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
-    $projectname      = shift @ARGV  if ($nextword eq '-projectname');
-
-    $projectID        = shift @ARGV  if ($nextword eq '-project_id');
+    $pidentifier      = shift @ARGV  if ($nextword eq '-project');
 
     $lineLimit        = shift @ARGV  if ($nextword eq '-test');
 
@@ -161,20 +158,32 @@ if ($cafFileName) {
 
 my $project;
 
-if ($projectname || $projectID) {
-# to be completed: get info for a name from the assembly
-    $project = $adb->getProject(projectname=>$projectname) if $projectname;
-    $project = $adb->getProject(project_id=>$projectID) if (!$project && $projectID);
-# return an Assembly object from the database, which must have a default
-# project name
-# what if an assembly is defined? and no project, get the default project
-# TO BE TESTED
-    
-    &showUsage("Unknown project ".($projectname || $projectID) ) unless $project;
+if ($pidentifier) {
+# collect project specification
+    my %poptions;
+    $poptions{project_id}  = $pidentifier if ($pidentifier !~ /\D/); # a number
+    $poptions{projectname} = $pidentifier if ($pidentifier =~ /\D/); # a name
+    if (defined($assembly)) {
+        $poptions{assembly_id}  = $assembly if ($assembly !~ /\D/); # a number
+        $poptions{assemblyname} = $assembly if ($assembly =~ /\D/); # a name
+    }
+
+    my ($projects,$m) = $adb->getProject(%poptions);
+    unless ($projects && @$projects) {
+        $logger->warning("Unknown project $pidentifier ($m)");
+        exit 0;
+    }
+
+    if (@$projects > 1) {
+        $logger->warning("ambiguous project identifier $pidentifier ($m)");
+        exit 0;
+    }
+
+    $project = $projects->[0];
+
     $logger->info("Project ".$project->getProjectName." identified") if $project;
-    die "not yet fully implemented";
 }
-#exit;
+
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
 
 #----------------------------------------------------------------
@@ -916,22 +925,22 @@ sub showUsage {
 
     my $code = shift || 0;
 
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
     print STDERR "-instance\teither 'prod' or 'dev'\n\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+    print STDERR "\n";
     print STDERR "-caf\t\tcaf file name OR\n";
     print STDERR "-cafdefault\tuse the default caf file name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-#    print STDERR "-NULL\t\t(no value) to direct output to /dev/null\n";
-#    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-projectname\tproject name\n";
-    print STDERR "-project_id\tproject ID (alternative to above)\n";
+    print STDERR "-project\tproject ID or name\n";
+    print STDERR "-assembly\tassembly ID or name\n";
     print STDERR "-minimum\tnumber of reads per contig\n";
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
@@ -942,9 +951,10 @@ sub showUsage {
                  . "skip contig processing altogether\n";
     print STDERR "-ignorereadnamelike\tpattern\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
-    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
+#    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
