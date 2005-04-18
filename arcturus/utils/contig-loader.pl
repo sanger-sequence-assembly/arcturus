@@ -184,6 +184,8 @@ if ($pidentifier) {
     $logger->info("Project ".$project->getProjectName." identified") if $project;
 }
 
+print STDERR "line 187: project undefined \n" unless defined($project);
+
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
 
 #----------------------------------------------------------------
