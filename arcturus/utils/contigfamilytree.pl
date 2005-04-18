@@ -58,7 +58,7 @@ die "Failed to create ArcturusDatabase" unless $adb;
 
 my $dbh = $adb->getConnection();
 
-my $query = "SELECT nreads,length,updated FROM CONTIG WHERE contig_id=$contigid";
+my $query = "SELECT nreads,project_id,length,updated FROM CONTIG WHERE contig_id=$contigid";
 
 my $stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -66,7 +66,7 @@ my $stmt = $dbh->prepare($query);
 $stmt->execute();
 &db_die("Failed to execute query \"$query\"");
 
-my ($nreads, $ctglen, $updated) = $stmt->fetchrow_array();
+my ($nreads, $projectid, $ctglen, $updated) = $stmt->fetchrow_array();
 
 $stmt->finish();
 
@@ -76,36 +76,52 @@ unless (defined($nreads) && defined($ctglen) && defined($updated)) {
     exit(1);
 }
 
+$query = "SELECT project_id,name FROM PROJECT";
+
+$stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$stmt->execute();
+&db_die("Failed to execute query \"$query\"");
+
+my $projects = {};
+
+while (my ($projid, $projname) = $stmt->fetchrow_array()) {
+    $projects->{$projid} = $projname;
+}
+
+$stmt->finish();
+
 my $depth = 0;
 
 if ($doAncestors) {
     print "ANCESTORS OF CONTIG $contigid\n\n";
 
-    &displayContig($contigid, $nreads, $ctglen, $updated, $indent, $depth);
+    &displayContig($contigid, $projects->{$projectid}, $nreads, $ctglen, $updated, $indent, $depth);
 
-    $query = "SELECT parent_id,nreads,length,updated,cstart,cfinish,direction" .
+    $query = "SELECT parent_id,project_id,nreads,length,updated,cstart,cfinish,direction" .
 	" FROM C2CMAPPING left join CONTIG on C2CMAPPING.parent_id=CONTIG.contig_id" .
 	    " WHERE C2CMAPPING.contig_id = ? ORDER BY cstart ASC";
 
     $stmt = $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");
 
-    &displayParents($contigid, $nreads, $stmt, $indent, $depth, $maxdepth);
+    &displayParents($projects, $contigid, $nreads, $stmt, $indent, $depth, $maxdepth);
 }
 
 if ($doDescendants) {
     print "DESCENDANTS OF CONTIG $contigid\n\n";
 
-    &displayContig($contigid, $nreads, $ctglen, $updated, $indent, $depth);
+    &displayContig($contigid, $projects->{$projectid}, $nreads, $ctglen, $updated, $indent, $depth);
 
-    $query = "SELECT C2CMAPPING.contig_id,nreads,length,updated,cstart,cfinish,direction" .
+    $query = "SELECT C2CMAPPING.contig_id,project_id,nreads,length,updated,cstart,cfinish,direction" .
 	" FROM C2CMAPPING left join CONTIG USING(contig_id)" .
 	    " WHERE C2CMAPPING.parent_id = ?";
 
     $stmt = $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");
 
-    &displayChildren($contigid, $stmt, $indent, $depth, $maxdepth);
+    &displayChildren($projects, $contigid, $stmt, $indent, $depth, $maxdepth);
 }
 
 $dbh->disconnect();
@@ -113,7 +129,7 @@ $dbh->disconnect();
 exit(0);
 
 sub displayParents {
-    my ($contigid, $creads, $stmt, $indent, $depth, $maxdepth) = @_;
+    my ($projects, $contigid, $creads, $stmt, $indent, $depth, $maxdepth) = @_;
 
     return unless ($maxdepth < 1 || $depth < $maxdepth);
 
@@ -122,9 +138,9 @@ sub displayParents {
     my @parents;
     my $preads = 0;
 
-    while (my ($parentid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) =
+    while (my ($parentid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) =
 	   $stmt->fetchrow_array()) {
-	push @parents, [$parentid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction];
+	push @parents, [$parentid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction];
 	$preads += $nreads;
     }
 
@@ -133,12 +149,12 @@ sub displayParents {
     return unless (scalar(@parents) > 0);
 
     foreach my $parent (@parents) {
-	my ($parentid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$parent};
+	my ($parentid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$parent};
 
-	&displayContig($parentid, $nreads, $ctglen, $updated, $indent, $depth + 1,
+	&displayContig($parentid, $projects->{$projectid}, $nreads, $ctglen, $updated, $indent, $depth + 1,
 		       $cstart, $cfinish, $direction);
 
-	&displayParents($parentid, $nreads, $stmt, $indent, $depth + 1, $maxdepth);
+	&displayParents($projects, $parentid, $nreads, $stmt, $indent, $depth + 1, $maxdepth);
     }
 
     if ($creads > $preads) {
@@ -147,7 +163,7 @@ sub displayParents {
 }
 
 sub displayChildren {
-    my ($contigid, $stmt, $indent, $depth, $maxdepth) = @_;
+    my ($projects, $contigid, $stmt, $indent, $depth, $maxdepth) = @_;
 
     return unless ($maxdepth < 1 || $depth < $maxdepth);
 
@@ -156,9 +172,9 @@ sub displayChildren {
     my @children;
     my $preads = 0;
 
-    while (my ($childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) =
+    while (my ($childid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) =
 	   $stmt->fetchrow_array()) {
-	push @children, [$childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction];
+	push @children, [$childid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction];
 	$preads += $nreads;
     }
 
@@ -167,24 +183,26 @@ sub displayChildren {
     return unless (scalar(@children) > 0);
 
     foreach my $child (@children) {
-	my ($childid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$child};
+	my ($childid, $projectid, $nreads, $ctglen, $updated, $cstart, $cfinish, $direction) = @{$child};
 
-	&displayContig($childid, $nreads, $ctglen, $updated, $indent, $depth + 1,
+	&displayContig($childid, $projects->{$projectid}, $nreads, $ctglen, $updated, $indent, $depth + 1,
 		       $cstart, $cfinish, $direction);
 
-	&displayChildren($childid, $stmt, $indent, $depth + 1, $maxdepth);
+	&displayChildren($projects, $childid, $stmt, $indent, $depth + 1, $maxdepth);
     }
 }
 
 sub displayContig {
-    my ($contigid, $nreads, $ctglen, $updated, $indent, $depth,
+    my ($contigid, $project, $nreads, $ctglen, $updated, $indent, $depth,
 	$cstart, $cfinish, $direction) = @_;
 
     for (my $n = 0; $n < $depth; $n++) {
 	print $indent;
     }
 
-    print "CONTIG $contigid ($nreads rd, $ctglen bp, $updated)";
+    $project = defined($project) ? "$project, " : "";
+
+    print "CONTIG $contigid ($project$nreads rd, $ctglen bp, $updated)";
 
     if (defined($cstart) && defined($cfinish) && defined($direction)) {
 	print " $cstart..$cfinish $direction";
