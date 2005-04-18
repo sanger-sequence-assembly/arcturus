@@ -465,12 +465,12 @@ sub assignReadsToProject {
     my $project = shift;
 
     unless (ref($reads) eq 'Array' && ref($reads->[0]) eq 'Read') {
-        die "assignContigToProject expects an Array of Read instances "
+        die "assignReadsToProject expects an Array of Read instances "
           . "as parameter";
     }
 
     unless (ref($project) eq 'Project') {
-        die "assignContigToProject expects a Project instance as parameter";
+        die "assignReadsToProject expects a Project instance as parameter";
     }
 
 # a create a contig for each read and assign to project

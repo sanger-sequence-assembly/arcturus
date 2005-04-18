@@ -300,11 +300,12 @@ sub putContig {
             $dotags = shift;
         }
     }
+print STDERR "putContig: project undefined\n" unless defined ($project);
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
     die "ArcturusDatabase->putContig expects a Project instance ".
-        "as parameter" if ($project && ref($project) ne 'Project');
+        "as parameter" if (defined($project) && ref($project) ne 'Project');
 
 # do the statistics on this contig, allow zeropoint correction
 # the getStatistics method also checks and orders the mappings 
@@ -377,6 +378,7 @@ sub putContig {
 
             if ($project) {
 # TO BE DEVELOPED 
+print STDERR "putContig: line 381 assignContigToProject I\n";
                 $this->assignContigToProject($previous,$project,1); # ADBProject
                 $project->addContigID($contigid);
 #                $message .= " project ?? ";
@@ -446,8 +448,17 @@ sub putContig {
                 next if ($readsinlinked{$linked} < $readsinlinked{$contig_id});
                 $contig_id = $linked; 
             }
-            $project = $this->getProject(contig_id => $contig_id);
+print STDERR "putContig 451: getProject contig_id=$contig_id\n";
+            my ($projects,$m) = $this->getProject(contig_id => $contig_id);
 # keep track of the project(s) of previous generation, flag project changes
+	    print STDERR "putContig 454: undefined project\n" unless defined ($project);
+	    print STDERR "putContig 454: no project\n" unless $project;
+            if (ref($projects) eq 'ARRAY') {
+                $project = $projects->[0] ;
+            }
+            else {
+		print STDERR "no project inherited from contig $contig_id: $m\n";
+            }
         }
 
 	if ($noload) {

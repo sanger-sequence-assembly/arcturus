@@ -1540,6 +1540,7 @@ sub putNewSequenceForRead {
 # add the sequence of this read as a new (edited) sequence for existing read
     my $this = shift;
     my $read = shift; # a Read instance
+    my $noload = shift; # optional
 
     die "ArcturusDatabase->putNewSequenceForRead expects a Read instance " .
         "as parameter" unless (ref($read) eq 'Read');
@@ -1549,7 +1550,9 @@ sub putNewSequenceForRead {
     my $readname = $read->getReadName();
     return (0,"incomplete Read instance: missing readname") unless $readname; 
     my $read_id = $this->hasRead($readname);
+
 # test db read_id against (possible) Read read_id (we don't know how $read was made)
+
     if (!$read_id) {
         return (0,"unknown read $readname");
     }
@@ -1566,7 +1569,7 @@ sub putNewSequenceForRead {
 #    if ($alignToSCF->hasSegments() <= 1) { # if returns Mapping
     if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
         return (0,"insufficient alignment information") unless $read->isEdited();
-        print STDERR "read slipped through edited test:",$read->getReadName()."\n";
+        print STDERR "read slipped through edited test: $readname\n";
     }
 
 # c) ok, now we get the previous versions of the read and compare
@@ -1591,8 +1594,10 @@ sub putNewSequenceForRead {
 # d) ok, we have a new sequence version for the read which has to be loaded
 #    we only allow sequence without pad '-' symbols to entered 
 
+    return (0,"New (edited) sequence for read $readname ignored") if $noload;
+
     if ($read->getSequence() =~ /\-/) {
-# fatal error: 
+# fatal error: sequence contains non-DNA symbols
         return (0, "new sequence version contains pads");
     }
 
@@ -1600,8 +1605,7 @@ sub putNewSequenceForRead {
 
 # f) load this new version of the sequence
 
-print STDOUT "new sequence version detected ($version) for read ".
-$read->getReadName."\n" if $DEBUG;
+print STDOUT "new sequence version detected ($version) for read $readname\n" if $DEBUG;
 
     my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
@@ -1962,8 +1966,9 @@ sub getSequenceIDsForReads {
 # note: sequence ID remains undefined
         }
         elsif ($read->isEdited) {
-#        if ($read->isEdited) {
-            my ($added,$errmsg) = $this->putNewSequenceForRead($read);
+#        if ($read->isEdited) { THIS FIX PRIORITY
+#            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
+            my ($added,$errmsg) = $this->putNewSequenceForRead($read); # noload
 	    print STDERR "$errmsg\n" unless $added;
             $success = 0 unless $added;
         }
