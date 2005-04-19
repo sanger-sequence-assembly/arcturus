@@ -12,7 +12,7 @@
 	    size    CDATA       #REQUIRED
 >
 
-<!ELEMENT scaffold (contig, (gap|contig)*) >
+<!ELEMENT scaffold (contig, (gap,contig)*) >
 
 <!ATTLIST scaffold
             id      CDATA       #REQUIRED
