@@ -14,7 +14,8 @@ set ARCTURUS_JAR=${ARCTURUS_HOME}/../build/lib/arcturus.jar
 set ARCTURUS_TEST_CLASSES=${ARCTURUS_HOME}/../build/test
 
 # JAR file and driver name for MySQL Connector/J
-set CONNECTORJ_VER=3.0.14-stable
+#set CONNECTORJ_VER=3.0.14-stable
+set CONNECTORJ_VER=3.1.8
 set CONNECTORJ_JARS=${JAR_DIRECTORY}/mysql-connector-java-${CONNECTORJ_VER}-bin.jar
 set CONNECTORJ_DRIVER=com.mysql.jdbc.Driver
 
