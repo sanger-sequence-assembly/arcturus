@@ -5,7 +5,7 @@
 	    date    CDATA       #REQUIRED
 >
 
-<!ELEMENT superscaffold (scaffold+) >
+<!ELEMENT superscaffold (scaffold, (superbridge+,scaffold)*) >
 
 <!ATTLIST superscaffold
             id      CDATA       #REQUIRED
@@ -27,9 +27,35 @@
 	    sense   (F|R)	#REQUIRED
 >
 
-<!ELEMENT gap EMPTY>
+<!ELEMENT gap (bridge+)>
 
 <!ATTLIST gap
             size    CDATA       #REQUIRED
-	    bridges CDATA	#REQUIRED
+>
+
+<!ELEMENT bridge (link+)>
+
+<!ATTLIST bridge
+            template CDATA      #REQUIRED
+	    silow    CDATA	#REQUIRED
+	    sihigh   CDATA	#REQUIRED
+	    gapsize  CDATA	#REQUIRED
+>
+
+<!ELEMENT superbridge (link+)>
+
+<!ATTLIST superbridge
+            template CDATA      #REQUIRED
+	    silow    CDATA	#REQUIRED
+	    sihigh   CDATA	#REQUIRED
+>
+
+<!ELEMENT link EMPTY>
+
+<!ATTLIST link
+            contig   CDATA      #REQUIRED
+	    read     CDATA	#REQUIRED
+	    cstart   CDATA	#REQUIRED
+	    cfinish  CDATA	#REQUIRED
+	    sense    (F|R)	#REQUIRED
 >
