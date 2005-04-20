@@ -263,7 +263,12 @@ foreach my $contigid (@contiglist) {
 	    $curpos += $contiglen;
 	} else {
 	    my ($gapsize, $bridges) = @{$item};
-	    $report .= "     GAP $gapsize [" . join(",", @{$bridges}).  "]\n";
+	    my @templates;
+	    foreach my $bridge (@{$bridges}) {
+		my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
+		push @templates, $template_id;
+	    }
+	    $report .= "     GAP $gapsize [" . join(",", @templates).  "]\n";
 	    $totgap += $gapsize;
 	    $curpos += $gapsize;
 	}
@@ -364,7 +369,7 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 		print "            IN SCAFFOLD $scaffoldid ($scaflen bp) AT $ctgoffset $sense$ovh\n\n";
 
 		if ($overhang > 0) {
-		    my $entry = [$scaffoldid, $sense, $contig_id, $projid];
+		    my $entry = [$scaffoldid, $sense, $contig_id, $projid, $read_id, $cstart, $cfinish, $direction];
 		    if ($strand eq 'Forward') {
 			push @forwardlist, $entry;
 		    } else {
@@ -385,12 +390,14 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 
     if (scalar(@forwardlist) > 0 && scalar(@reverselist) > 0) {
 	foreach my $fwditem (@forwardlist) {
-	    my ($fwdscaffoldid, $fwdsense, $fwdcontigid, $fwdprojid) = @{$fwditem};
+	    my ($fwdscaffoldid, $fwdsense, $fwdcontigid, $fwdprojid,
+		$fwdreadid, $fwdcstart, $fwdcfinish, $fwddirection) = @{$fwditem};
 
 	    $fwdsense = ($fwdsense eq 'Forward') ? 'R' : 'L';
 
 	    foreach my $revitem (@reverselist) {
-		my ($revscaffoldid, $revsense, $revcontigid, $revprojid) = @{$revitem};
+		my ($revscaffoldid, $revsense, $revcontigid, $revprojid,
+		    $revreadid, $revcstart, $revcfinish, $revdirection) = @{$revitem};
 		next if ($fwdscaffoldid == $revscaffoldid);
 
 		$revsense = ($revsense eq 'Forward') ? 'R' : 'L';
@@ -400,11 +407,11 @@ while (my ($template_id, $template_name, $silow, $sihigh) = $sth_templates->fetc
 		if ($fwdscaffoldid < $revscaffoldid) {
 		    $keya = "$fwdscaffoldid.$fwdsense";
 		    $keyb = "$revscaffoldid.$revsense";
-		    $entry = [$fwditem, $revitem, $template_id];
+		    $entry = [$fwditem, $revitem, $template_id, [$silow, $sihigh]];
 		} else {
 		    $keya = "$revscaffoldid.$revsense";
 		    $keyb = "$fwdscaffoldid.$fwdsense";
-		    $entry = [$revitem, $fwditem, $template_id];
+		    $entry = [$revitem, $fwditem, $template_id, [$silow, $sihigh]];
 		}
 
 		$baclinks->{$keya} = {} unless defined($baclinks->{$keya});
@@ -508,7 +515,9 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 	$scaffoldtosuperscaffold->{$nextscaffoldid} = $superscaffold;
 
-	push @{$superscaffold}, [$nextscaffoldid, $nextdir];
+	my $bridge = $baclinks->{"$lastscaffoldid.$lastend"}->{"$nextscaffoldid.$nextend"};
+
+	push @{$superscaffold}, $bridge, [$nextscaffoldid, $nextdir];
 
 	print "  Scaffold $nextscaffoldid [$bp $ctg] $nextdir\n";
 
@@ -545,7 +554,9 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 	$scaffoldtosuperscaffold->{$nextscaffoldid} = $superscaffold;
 
-	unshift @{$superscaffold}, [$nextscaffoldid, $nextdir];
+	my $bridge = $baclinks->{"$lastscaffoldid.$lastend"}->{"$nextscaffoldid.$nextend"};
+
+	unshift @{$superscaffold}, [$nextscaffoldid, $nextdir], $bridge;
 
 	print "  Scaffold $nextscaffoldid [$bp $ctg] $nextdir\n";
 
@@ -563,29 +574,85 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
     if ($xmlfh && $totbp >= $minprojectsize) {
 	print $xmlfh "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
-	foreach my $scaffold (@{$superscaffold}) {
-	    my ($scaffoldid, $sense) = @{$scaffold};
+	my $isScaffold = 1;
 
-	    $scaffold = $scaffoldfromid{$scaffoldid};
+	foreach my $item (@{$superscaffold}) {
+	    if ($isScaffold) {
+		my ($scaffoldid, $sense) = @{$item};
 
-	    print $xmlfh "\t\t<scaffold id=\"$scaffoldid\" sense=\"$sense\" >\n";
+		$scaffold = $scaffoldfromid{$scaffoldid};
 
-	    my $isContig = 1;
+		print $xmlfh "\t\t<scaffold id=\"$scaffoldid\" sense=\"$sense\" >\n";
 
-	    foreach my $entry (@{$scaffold}) {
-		if ($isContig) {
-		    my ($contigid, $sense) = @{$entry};
-		    my $ctglen = $contiglength->{$contigid};
-		    print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\" sense=\"$sense\" />\n";
-		} else {
-		    my ($gapsize, $bridges) = @{$entry};
-		    print $xmlfh "\t\t\t<gap size=\"$gapsize\" bridges=\"",join(",",@{$bridges}),"\" />\n";
+		my $isContig = 1;
+
+		foreach my $entry (@{$scaffold}) {
+		    if ($isContig) {
+			my ($contigid, $sense) = @{$entry};
+			my $ctglen = $contiglength->{$contigid};
+			print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\" sense=\"$sense\" />\n";
+		    } else {
+			my ($gapsize, $bridges) = @{$entry};
+			print $xmlfh "\t\t\t<gap size=\"$gapsize\">\n";
+			foreach my $bridge (@{$bridges}) {
+			    my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
+			    my ($silow, $sihigh) = @{$insertsize};
+			    
+			    print $xmlfh "\t\t\t\t<bridge template=\"$template_id\"" .
+				" silow=\"$silow\" sihigh=\"$sihigh\" gapsize=\"$gapsize\">\n";
+			    
+			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
+			    
+			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+			    
+			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
+			    
+			    
+			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
+			    
+			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+			    
+			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
+			    
+			print $xmlfh "\t\t\t\t</bridge>\n";
+			}
+			print $xmlfh "\t\t\t</gap>\n";
+		    }
+		    
+		    $isContig = !$isContig;
 		}
 
-		$isContig = !$isContig;
+		print $xmlfh "\t\t</scaffold>\n";
+	    } else {
+		foreach my $link (@{$item}) {
+		    my ($linka, $linkb, $templateid, $insertsize) = @{$link};
+		    my ($silow, $sihigh) = @{$insertsize};
+
+		    print $xmlfh "\t\t<superbridge template=\"$templateid\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
+			    
+		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
+			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
+		
+		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+			    
+		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
+			    
+		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
+			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
+		
+		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+			    
+		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
+			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
+
+		    print $xmlfh "\t\t</superbridge>\n";
+		}
 	    }
 
-	    print $xmlfh "\t\t</scaffold>\n";
+	    $isScaffold = !$isScaffold;
 	}
 
 	print $xmlfh "\t</superscaffold>\n\n";
@@ -852,7 +919,11 @@ sub FindNextBridge {
 
 		$bridges{$linkname} = [] unless defined($bridges{$linkname});
 
-		push @{$bridges{$linkname}}, [$template_id, $gap_size];
+		push @{$bridges{$linkname}}, [$template_id, $gap_size,
+					      [$silow, $sihigh],
+					      [$contigid, $read_id, $cstart, $cfinish, $direction],
+					      [$link_contig, $link_read_id, $link_cstart, $link_cfinish, $link_direction],
+					       ];
 	    }
 
 	    $sth_mappings->finish();
@@ -884,12 +955,12 @@ sub FindNextBridge {
     my $templatelist = [];
 
     foreach my $bridge (@{$bridges{$bestlink}}) {
-	my ($template_id, $gap_size) = @{$bridge};
+	my ($template_id, $gap_size, $junk) = @{$bridge};
 	push @{$templatelist}, $template_id;
 	$bestgap = $gap_size if (!defined($bestgap) || $gap_size < $bestgap);
     }
 
-    return [[$bestcontig, $bestend], [$bestgap, $templatelist]];
+    return [[$bestcontig, $bestend], [$bestgap, $bridges{$bestlink}]];
 }
 
 sub showUsage {
