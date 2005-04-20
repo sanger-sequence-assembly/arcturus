@@ -465,7 +465,7 @@ if ($xmlfile) {
 
 my $scaffoldtosuperscaffold = {};
 
-my $project = 0;
+my $newproject = 0;
 
 for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid++) {
     next if defined($scaffoldtosuperscaffold->{$seedscaffoldid});
@@ -571,6 +571,16 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	print "\n\nSEED: $seedscaffoldid, $totscaff scaffolds, $contigcount contigs, $totbp bp\n\n";
     }
 
+    if ($updateproject && $contigcount > 1 && $totbp >= $minprojectsize) {
+	$newproject++;
+
+	foreach my $ctgid (@{$totctg}) {
+	    $sth_setproject->execute($newproject, $ctgid);
+	}
+
+	print "Saved as project $newproject\n\n";
+    }
+
     if ($xmlfh && $totbp >= $minprojectsize) {
 	print $xmlfh "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
@@ -590,7 +600,13 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		    if ($isContig) {
 			my ($contigid, $sense) = @{$entry};
 			my $ctglen = $contiglength->{$contigid};
-			print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\" sense=\"$sense\" />\n";
+
+			my $projid = $updateproject ? $newproject : $project->{$contigid};
+
+			$projid = 0 unless defined($projid);
+
+			print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\"" .
+			    " project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
 			my ($gapsize, $bridges) = @{$entry};
 			print $xmlfh "\t\t\t<gap size=\"$gapsize\">\n";
@@ -656,16 +672,6 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	}
 
 	print $xmlfh "\t</superscaffold>\n\n";
-    }
-
-    if ($updateproject && $contigcount > 1 && $totbp >= $minprojectsize) {
-	$project++;
-
-	foreach my $ctgid (@{$totctg}) {
-	    $sth_setproject->execute($project, $ctgid);
-	}
-
-	print "Saved as project $project\n\n";
     }
 }
 

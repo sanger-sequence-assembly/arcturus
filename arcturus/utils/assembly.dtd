@@ -24,6 +24,7 @@
 <!ATTLIST contig
             id      CDATA       #REQUIRED
 	    size    CDATA	#REQUIRED
+	    project CDATA	#REQUIRED
 	    sense   (F|R)	#REQUIRED
 >
 
