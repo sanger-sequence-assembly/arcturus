@@ -245,6 +245,8 @@ foreach my $project (@projects) {
 
     $logger->warning($m) unless $s; # no contigs exported
 
+    $logger->warning($m) if ($s && $m);
+
     $logger->info("$s contigs exported for project $projectname") if $s;
 }
 

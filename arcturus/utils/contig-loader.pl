@@ -32,6 +32,8 @@ my $origin;
 
 my $assembly;
 my $pidentifier;           # projectname for which the data are to be loaded
+my $pinherit = 'readcount'; # project inheritance method
+my $isdefault = 0;
 
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
@@ -45,8 +47,8 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
-               . "project|test|minimum|filter|ignore|list|"
-               . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
+               . "project|defaultproject|test|minimum|filter|ignore|list|setprojectby|"
+               . "spb|ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
                . "frugal|padded|noreadtags|noload|verbose|batch|info|help";
 
 
@@ -63,6 +65,9 @@ while (my $nextword = shift @ARGV) {
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
     $pidentifier      = shift @ARGV  if ($nextword eq '-project');
+
+    $pidentifier      = shift @ARGV  if ($nextword eq '-defaultproject');
+    $isdefault        = 1            if ($nextword eq '-defaultproject');
 
     $lineLimit        = shift @ARGV  if ($nextword eq '-test');
 
@@ -101,6 +106,9 @@ while (my $nextword = shift @ARGV) {
     $noload           = 1            if ($nextword eq '-noload');
 
     $notest           = 1            if ($nextword eq '-notest');
+
+    $pinherit         = shift @ARGV  if ($nextword eq '-setprojectby');
+    $pinherit         = shift @ARGV  if ($nextword eq '-spb');
 
     $list             = 1            if ($nextword eq '-list');
 
@@ -156,7 +164,14 @@ if ($cafFileName) {
 # if no project is defined, the loader allocates by inheritance
 #----------------------------------------------------------------
 
-my $project;
+my $project = 0;
+
+my $override = 0;
+unless ($pidentifier) {
+# prime for default project search
+    $pidentifier = "BIN";
+    $override = 1;
+}
 
 if ($pidentifier) {
 # collect project specification
@@ -171,20 +186,43 @@ if ($pidentifier) {
     my ($projects,$m) = $adb->getProject(%poptions);
     unless ($projects && @$projects) {
         $logger->warning("Unknown project $pidentifier ($m)");
-        exit 0;
+        $adb->disconnect();
+        exit 0 unless $override;
+        $logger->warning("No default project available");
     }
 
-    if (@$projects > 1) {
+    if ($projects && @$projects > 1) {
         $logger->warning("ambiguous project identifier $pidentifier ($m)");
-        exit 0;
+        $adb->disconnect();
+        exit 0 unless $override;
     }
 
-    $project = $projects->[0];
+    $project = $projects->[0] if ($projects && @$projects >= 1);
 
-    $logger->info("Project ".$project->getProjectName." identified") if $project;
+    $pinherit = 'project' unless ($isdefault || $override);
+
+    if ($project) {
+        my $message = "Project ".$project->getProjectName." accepted ";
+        $message .= "as assigned project" unless ($isdefault || $override);
+        $message .= "as default project" if ($isdefault || $override);
+        $logger->warning($message);
+    }
 }
 
-print STDERR "line 187: project undefined \n" unless defined($project);
+# test validity of project inheritance specification
+ 
+my @projectinheritance = ('project','none',
+                          'readcount','contiglength','contigcount');
+my $identified = 0;
+foreach my $imode (@projectinheritance) {
+    $identified = 1 if ($pinherit eq $imode);
+}
+unless ($identified) {
+    print STDERR "Invalid project inheritance option: $pinherit\n" .
+       "Options available: none, readcount, contiglength, contigcount\n";
+    $adb->disconnect();
+    exit 0;
+}
 
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
 
@@ -812,9 +850,10 @@ foreach my $identifier (keys %contigs) {
 	$contig->writeToCaf(*STDOUT) if $list;
     }
 
-    my ($added,$msg) = $adb->putContig($contig, project => $project,
-                                                noload  => $noload, 
-                                                dotags  => $contigtag);
+    my ($added,$msg) = $adb->putContig($contig, $project,
+                                       noload  => $noload,
+                                       setprojectby => $pinherit,
+                                       dotags  => $contigtag);
 
     $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
                   " reads : status $added, $msg") if $added;
@@ -939,19 +978,27 @@ sub showUsage {
     print STDERR "-caf\t\tcaf file name OR\n";
     print STDERR "-cafdefault\tuse the default caf file name\n";
     print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for project inheritance:\n";
+    print STDERR "\n";
+    print STDERR "-setprojectby\treadcount,contigcount,contiglength or none\n";
+    print STDERR "-project \tproject  ID or name (overrides setprojectby)\n";
+    print STDERR "-assembly\tassembly ID or name\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for tag processing:\n";
+    print STDERR "\n";
+    print STDERR "-ctp\t\tcontigtagprocessing (depth of inheritance, def 1)\n";
+    print STDERR "-noreadtags\tdo not process read tags\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-project\tproject ID or name\n";
-    print STDERR "-assembly\tassembly ID or name\n";
-    print STDERR "-minimum\tnumber of reads per contig\n";
+    print STDERR "-minimum\tnumber of reads per contig (default 2)\n";
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
-    print STDERR "-noreadtags\tdo not process read tags\n";
     print STDERR "-noload\t\tskip loading into database (test mode)\n";
     print STDERR "-notest\t\t(in combination with noload: "
                  . "skip contig processing altogether\n";
-    print STDERR "-ignorereadnamelike\tpattern\n";
+    print STDERR "-irnl\t\tignorereadnamelike (name filter) pattern\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
 #    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
     print STDERR "-verbose\t(no value) for some progress info\n";

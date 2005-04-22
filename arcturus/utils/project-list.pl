@@ -87,14 +87,16 @@ $logger->info("Database $URL opened succesfully");
 
 my %options;
 
-$options{contig_id}    = $contig    if ($contig && $contig !~ /\D/);
-$options{contigname}   = $contig    if ($contig && $contig =~ /\D/);
-$options{project_id}   = $project   if (defined($project) && $project !~ /\D/);
-$options{projectname}  = $project   if ($project && $project =~ /\D/);
-$options{assembly_id}  = $assembly  if (defined($assembly) && $assembly !~ /\D/);
-$options{assemblyname} = $assembly  if ($assembly && $assembly =~ /\D/);
-
-$longwriteup = 1 if $contig;
+if (defined($contig)) {
+    $options{contig_id}  = $contig    if ($contig !~ /\D/ && $contig !~ /\,/);
+    $options{contigname} = $contig    if ($contig =~ /\D/ && $contig !~ /\,/);
+    $options{contig_id}  = [split /,/,$contig] if ($contig =~ /\,/);
+    $longwriteup = 1;
+}
+$options{project_id}   = $project  if (defined($project) && $project !~ /\D/);
+$options{projectname}  = $project  if ($project && $project =~ /\D/);
+$options{assembly_id}  = $assembly if (defined($assembly) && $assembly !~ /\D/);
+$options{assemblyname} = $assembly if ($assembly && $assembly =~ /\D/);
 
 my @projects;
 

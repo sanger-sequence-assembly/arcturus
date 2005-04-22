@@ -19,18 +19,20 @@ my $verbose;
 my $confirm;
 my $fofn;
 
-my $validKeys  = "organism|instance|contig|verbose|confirm|help";
+my $validKeys  = "organism|instance|contig|fofn|verbose|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
     $instance     = shift @ARGV  if ($nextword eq '-instance');
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
     $contig_id    = shift @ARGV  if ($nextword eq '-contig');
+
+    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -39,7 +41,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage(0,"Missing contig ID") unless $contig_id;
+&showUsage("Missing contig ID or fofn") unless ($contig_id || $fofn);
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -55,14 +57,14 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 $instance = 'dev' unless defined($instance);
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing organism database") unless $organism;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'");
 }
  
 my $URL = $adb->getURL;
@@ -105,18 +107,29 @@ foreach my $contig_id (@contigs) {
 sub getNamesFromFile {
     my $file = shift; # file name
 
-    &showUsage(0,"File $file does not exist") unless (-e $file);
+    &showUsage("File $file does not exist") unless (-e $file);
 
     my $FILE = new FileHandle($file,"r");
 
-    &showUsage(0,"Can't access $file for reading") unless $FILE;
+    &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
-    while (defined (my $name = <$FILE>)) {
-        $name =~ s/^\s+|\s+$//g;
-        push @list, $name;
+    while (defined (my $record = <$FILE>)) {
+        next unless ($record =~ /\S/);
+        if ($record =~ s/^\s*(\S+)\s*$//) {
+            push @list, $1;
+        }
+        elsif ($record =~ /^\s*from\s+(\d+)\s+to\s+(\d+)\s*$/i) {
+            my $start = $1;
+            my $final = $2;
+            for my $i ($start .. $final) {
+                push @list, $i;
+            }
+        }
+        else {
+            print STDERR "Invalid input on fofn: $record\n";
+        }
     }
-
     return [@list];
 }
 
@@ -125,7 +138,6 @@ sub getNamesFromFile {
 #------------------------------------------------------------------------
 
 sub showUsage {
-    my $mode = shift || 0; 
     my $code = shift || 0;
 
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
