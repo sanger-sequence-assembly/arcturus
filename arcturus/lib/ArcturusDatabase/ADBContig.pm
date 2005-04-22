@@ -280,32 +280,33 @@ print "contig $child for id=$child_id\n";
 sub putContig {
 # enter a contig into the database
     my $this = shift;
-    my $contig = shift; # Contig instance
-
-# decode input parameters
-
-    my $project; # optional Project instance
-    my $dotags = 2;  # check tags level (1,2)/ import tags from parents (2)
-    my $noload; # test/reporting option
-
-    while (my $nextword = shift) {
-        $nextword =~ s/^\s*\-//;
-        if ($nextword eq 'project') {
-            $project = shift;
-        }
-        elsif ($nextword eq 'noload') {
-            $noload = shift;
-        }
-        elsif ($nextword eq 'dotags') {
-            $dotags = shift;
-        }
-    }
-print STDERR "putContig: project undefined\n" unless defined ($project);
+    my $contig = shift;  # Contig instance
+    my $project = shift; # Project instance or '0' or undef
+    my %options = @_;
 
     die "ArcturusDatabase->putContig expects a Contig instance ".
         "as parameter" unless (ref($contig) eq 'Contig');
     die "ArcturusDatabase->putContig expects a Project instance ".
-        "as parameter" if (defined($project) && ref($project) ne 'Project');
+        "as parameter" if ($project && ref($project) ne 'Project');
+
+# optional input parameters: 
+# setprojectby        for choice of method used for project inheritance
+# lockcheck 0/1       for choice of project used for project inheritance
+# inheritTags=>0/1/2  for generation depth of tag inheritance from parents
+# noload=>0/1         for testmode (everything except write to database)
+
+    my $setprojectby = $options{setprojectby} || 'none';
+    if ($setprojectby eq 'project' && !$project) {
+        return (0,"Missing Project instance as parameter when expected");
+    }
+    elsif ($setprojectby eq 'none' && $project) {
+        return (0,"Incompatible parameters: Project instance specified "
+                 ."when none expected");
+    }
+
+    my $inheritTags  = $options{inheritTags};
+    $inheritTags = 2 unless defined($inheritTags);
+    my $noload  = $options{noload} || 0;
 
 # do the statistics on this contig, allow zeropoint correction
 # the getStatistics method also checks and orders the mappings 
@@ -364,34 +365,38 @@ print STDERR "putContig: project undefined\n" unless defined ($project);
 
     if ($previous) {
 # the read name hash or the sequence IDs hash does match
-# pull out previous contig mappings and compare them one by one with contig
+# pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
-# add (re-assign) the previous contig ID to the contig list of the Project
-            my $message = "Contig $contigname is identical to contig ".
-                           $previous->getContigName();
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
+            my $message = "Contig $contigname is identical to contig ".
+                           $previous->getContigName();
 
+# the next block allows updates to contigs already in the database
+
+            unless ($noload) {
+ 
 # (re-)assign project, if a project is explicitly defined
 
-            if ($project) {
-# TO BE DEVELOPED 
+                if ($project && $setprojectby eq 'project') {
+# shouldn't this have an extra switch? 
+# determine old project for contig, generate message system?
 print STDERR "putContig: line 381 assignContigToProject I\n";
-                $this->assignContigToProject($previous,$project,1); # ADBProject
-                $project->addContigID($contigid);
-#                $message .= " project ?? ";
-# TO BE DEVELOPED
-            }
+# what about message? get project allocated for contig, test if pid cahnged
+                    $this->assignContigToProject($previous,$project,1);
+                    $project->addContigID($contigid);
+                }
 
-# check / import tags
+# check / import tags for this contig
 
-            if ($contig->hasTags() && $dotags) {
-                my $dbh = $this->getConnection();
-                $message .= "\nWarning: no tags inserted for $contigname"
-                unless &putTagsForContig($dbh,$contig,1);
-            }
+                if ($contig->hasTags() && $inheritTags) {
+                    my $dbh = $this->getConnection();
+                    $message .= "\nWarning: no tags inserted for $contigname"
+                    unless &putTagsForContig($dbh,$contig,1);
+                }
+	    }
 
             return $contigid,$message;
         }
@@ -403,15 +408,13 @@ print STDERR "putContig: line 381 assignContigToProject I\n";
 
 # pull out mappings for those previous contigs, if any
 
+    my @originalprojects;
     my $message = "$contigname ";
     if ($parentids && @$parentids) {
 # compare with each previous contig and return/store mapings/segments
-        my @linked;
-        my %readsinlinked;
-        $message .= "has parent(s) : @$parentids";
+        $message .= "has parent(s) : @$parentids ";
         foreach my $parentid (@$parentids) {
-            my $parent = $this->getContig(ID=>$parentid,
-                                            metaDataOnly=>1);
+            my $parent = $this->getContig(ID=>$parentid,metaDataOnly=>1);
             unless ($parent) {
 # protection against missing parent contig from CONTIG table
                 print STDERR "Parent $parentid for $contigname not found ".
@@ -420,44 +423,40 @@ print STDERR "putContig: line 381 assignContigToProject I\n";
             }
             $this->getReadMappingsForContig($parent);
             my ($linked,$deallocated) = $contig->linkToContig($parent);
-            if ($linked) {
-                my $contig_id = $parent->getContigID();
-                push @linked, $contig_id;
-                $readsinlinked{$contig_id} = $parent->getNumberOfReads();
 # add parent to contig, later import tags from parent(s)
-                $contig->addParentContig($parent); 
-            }
+            $contig->addParentContig($parent) if $linked; 
             $previous = $parent->getContigName();
             $message .= "; empty link detected to $previous" unless $linked;
             $message .= "; $deallocated reads deallocated from $previous".
-  		        "  (possibly split contig?)" if $deallocated;
+  		        "  (possibly split contig?) " if $deallocated;
         }
 
 # inherit the tags
 
-        $contig->inheritTags() if $dotags;
+        $contig->inheritTags() if $inheritTags;
 
-# determine the default project_id unless it's already specified
+# determine the project_id unless it's already specified (with options)
 
-        unless ($project) {
-# find the contig_id (for the moment use largest nr of reads) 
-            my $contig_id;
-# TO BE DEVELOPED: assign project ID to new contig 
-            foreach my $linked (@linked) {
-                $contig_id = $linked unless defined($contig_id);
-                next if ($readsinlinked{$linked} < $readsinlinked{$contig_id});
-                $contig_id = $linked; 
-            }
-print STDERR "putContig 451: getProject contig_id=$contig_id\n";
-            my ($projects,$m) = $this->getProject(contig_id => $contig_id);
-# keep track of the project(s) of previous generation, flag project changes
-	    print STDERR "putContig 454: undefined project\n" unless defined ($project);
-	    print STDERR "putContig 454: no project\n" unless $project;
-            if (ref($projects) eq 'ARRAY') {
-                $project = $projects->[0] ;
-            }
-            else {
-		print STDERR "no project inherited from contig $contig_id: $m\n";
+        unless ($setprojectby eq 'project' || $setprojectby eq 'none') {
+            my %poptions;
+            $poptions{lockcheck} = 1; # always in loading mode
+            my ($projects,$msg) = $this->inheritProject($contig,$setprojectby,
+                                                        %poptions);
+            if ($projects) {
+# a project has been determined
+                $project = shift @$projects;
+                @originalprojects = @$projects;
+                $message .= "; project ".$project->getProjectName()." selected ";
+                $message .= "($msg) " if $msg;
+	    }
+	    elsif ($project) {
+# a project could not be determined; use input $project as default project
+                $message .= "; assigned to default project "
+                          .  $project->getProjectName();
+	    }
+	    else {
+# a project could not be determined; assign to bin project
+                $message .= "; assigned to 'bin' project (ID=0) ";
             }
         }
 
@@ -470,11 +469,11 @@ print STDERR "putContig 451: getProject contig_id=$contig_id\n";
     }
     else {
 # the contig has no precursor, is completely new
-        $message = "has no parents";
-# ? add a dummy mapping to the contig (without segments)
+        $message .= "has no parents";
+        $message .= "; assigned to project 0 " unless $project;
     }
 
-    return 0,$message if $noload; # test option
+    return 0, $message."(no-load option active)" if $noload; # test option
 
 # now load the contig into the database
 
@@ -509,7 +508,19 @@ print STDERR "putContig 451: getProject contig_id=$contig_id\n";
 
 # and assign the contig to the specified project
 
-    $this->assignContigToProject($contig,$project,1) if $project;
+    if ($project) {
+        my ($success,$msg) = $this->assignContigToProject($contig,$project,1);
+        $message .= "; assigned to project ";
+        $message .=  $project->getProjectName() if $success;
+        $message .= "ID = 0" unless $success;
+        $project = 0 unless $success;
+# compose messages for owners of contigs which have changed project
+        my $messages = &informUsersOfChange($contig,$project,\@originalprojects);
+        foreach my $message (@$messages) {
+            $this->message(@$message); # owner, projects, text
+        }
+
+    }
 
     return $contigid, $message;
    
@@ -519,12 +530,197 @@ print STDERR "putContig 451: getProject contig_id=$contig_id\n";
 # 5) enter record in CONTIG with meta data, gets contig_id
 # 6) replace contig_id=0 by new contig_id in MAPPING
 # 7) release lock on MAPPING 
-# BETTER? add a function deleteContig(contig_id) to remove contig if any error
+}
 
+sub inheritProject {
+# decide which project is inherited by a contig; returns a LIST of projects, 
+# the selected one up front followed by all projects considered 
+    my $this = shift;
+    my $contig = shift;
+    my $imodel = shift; # select project by (inheritance model)
+    my %options = @_;
+
+# test input parameters and contents
+
+    die "method 'inheritProject' expects a Contig instance as parameter" 
+    unless ($contig && ref($contig) eq 'Contig');
+
+    unless ($contig->hasParentContigs()) {
+        return 0,"has no parents; project ID = 0 assigned";
+    }
+
+# test inheritance model specification and other options
+
+    my %inherit = ('readcount',1,'contigcount',2,'contiglength',3);
+    unless ($inherit{$imodel}) {
+        return (0,"invalid inheritance model: $imodel");
+    }
+    my $inheritmodel = $inherit{$imodel}; # replace by 1,2 or 3
+
+    my $lockcheck = $options{lockcheck} || 0;
+    my $preload   = $options{preload}   || 0; 
+
+# collect the parent IDs and hashed measures
+
+    my $parents = $contig->getParentContigs();
+
+    my @parentids;
+    my %readsinparent;
+    my %consensussize;
+    foreach my $parent (@$parents) {
+        my $pid = $parent->getContigID();
+        push @parentids, $pid;
+        $readsinparent{$pid} = $parent->getNumberOfReads();
+	$consensussize{$pid} = $parent->getConsensusLength();
+    }
+
+# find the projects for these parent IDs
+    
+    my @projects;
+    if ($options{preload}) {
+# check on presence of contig, project allocation hash
+        my $cphash = $this->{cphash};
+# assemble the hash for preloaded projects if it's missing
+        unless ($cphash && scalar(keys (%$cphash))) {
+            $this->{cphash} = {};
+            my $projects = $this->getProjects();
+            foreach my $project (@$projects) {
+                my $nolockcheck = ($lockcheck ? 0 : 1);
+                my ($cids,$msg) = $project->fetchContigIDs($nolockcheck);
+                $project->addContig(0); # reset contig ID list
+                next unless ($cids);
+                foreach my $contigid (@$cids) {
+                    $this->{cphash}->{$contigid} = $project;
+                }
+            }
+        }
+# build a hash for the projects for the parent IDs
+        my $subcphash = {};
+        foreach my $parentid (@parentids) {
+            my $project = $cphash->{$parentid} || next;
+            $subcphash->{$project} = $project; # should be copied!
+	}
+# assemble the list of projects
+        foreach my $key (keys (%$subcphash)) {
+            push @projects,$subcphash->{$key};
+        }
+    }
+    else {
+#print "putContig 451: getProject parentids= @parentids\n" if $DEBUG;
+        my ($projects,$msg) = $this->getProject(contig_id=>[@parentids]);
+#                                               lockcheck=>$options{lockcheck});
+#print "Projects found @$projects $msg\n" if @$projects;
+#print "No Projects found $msg\n" unless @$projects;
+        @projects = @$projects if ($projects && @$projects);
+    }
+
+# decide on which project to use; weed out (possible) BIN if more than one
+
+    my @original = @projects;
+    if (scalar(@projects) > 1) {
+# there is more than one project to chose from: first ignore any BIN
+        while (scalar(@projects)) {
+            my $isbin;
+            for (my $i=0 ; $i < @projects ; $i++) {
+                my $project = $projects[$i];
+                $isbin = $i unless ($project->getProjectID()); # PID = 0, the bin
+                $isbin = $i if ($project->getProjectName() =~ /BIN/);
+                last if defined($isbin);
+            }
+            last unless defined($isbin);
+# if the BIN project is in the list, remove it
+            splice @projects,$isbin,1;
+        }
+# if no project left (i.e. all were a BIN of some kind) restore original
+        @projects = @original unless @projects;
+    }
+
+# ok, now decide which project to use
+
+    my $project;
+    if (scalar(@projects) > 1) {
+# here we have to chose between several projects; in this case at least one of
+# the parent contigs is propagated into another project: flag project change
+        my $largestscore = 0;
+	foreach my $testproject (@projects) {
+	    my $contigids = $testproject->getContigIDs();
+print "Project ".$testproject->getProjectID().
+      " ".$testproject->getProjectName().
+      " contigs: @$contigids\n" if $DEBUG;
+            my $measure = $options{measure} || 0;
+            my $score = 0;
+            foreach my $contigid (@$contigids) {
+                if ($inheritmodel == 1) {
+                    $score += $readsinparent{$contigid};
+                }
+		elsif ($inheritmodel == 2) {
+                    $score += 1;
+		}
+		else {
+                    $score += $consensussize{$contigid};
+                }
+            }
+print "Score $score ($largestscore)\n" if $DEBUG;
+            if (!$largestscore || $score > $largestscore) {
+                $largestscore = $score;
+                $project = $testproject;
+            }          
+        }
+        unshift @original,$project;
+        return ([@original],"$imodel score $largestscore");
+    }
+    elsif (scalar(@projects) == 1) {
+        $project = $projects[0];
+        unshift @original,$project;
+        return ([@original],"default choice");
+    }
+    else {
+# should not occur when BIN autoload is active
+	return (0,"no project inherited from contig(s) @parentids");
+    }
+
+    return (0,"Illegal termination of inheritProject"); # should never occur
+}
+
+sub informUsersOfChange {
+# private method only
+    my $contig = shift; # the contig instance
+    my $newproject = shift; # Project instance or 0 for 'bin'
+    my $oldprojects = shift; # array of Project instances
+
+    my $newpid = 0;
+    $newpid = $newproject->getProjectID() if $newproject;
+    my $newprojectname = 0;
+
+    my @messages;
+    foreach my $oldproject (@$oldprojects) {
+# test if a project has changed using the project ID
+        next if ($oldproject->getProjectID() == $newpid);
+        next if ($oldproject->getProjectName() eq "BIN");
+ 
+        my $oldprojectname = $oldproject->getProjectName();
+	my $contigids = $oldproject->getContigIDs();
+        my $owner = $oldproject->getOwner();
+        my $message = "Contig(s) @$contigids from project $oldprojectname"
+	            . " have been merged into contig ".$contig->getContigID();
+        if ($newpid) {
+            $newprojectname = $newproject->getProjectName();
+            $message .= " under project $newprojectname";
+            if ($newproject->getOwner() ne $oldproject->getOwner()) {
+                $message .= " owned by user ".$newproject->getOwner();
+            } 
+        }
+        else {
+            $message .= "and assigned to the bin";
+        }
+# build output messages as array of arrays
+        push @messages,[($owner,$oldprojectname,$newprojectname,$message)]; 
+    }
+    return [@messages];
 }
 
 sub putMetaDataForContig {
-# private method
+# private method only
     my $dbh = shift; # database handle
     my $contig = shift; # Contig instance
     my $readhash = shift; 
@@ -744,10 +940,12 @@ sub deleteContig {
 
 # safeguard: contig may not belong to a project and have checked 'out' status
 
-    return 0,"Contig $contigid has project checked status 'out' and can't be deleted"
-    unless $this->unlinkContigID($contigid); # deletes from CONTIG2PROJECT
+# the next line deletes from CONTIG2PROJECT (or not)
+
+    my ($status,$message) = $this->unlinkContigID($contigid); 
+    return (0,"Contig $contigid cannot be deleted: $message") unless $status;
     
-# delete from the primary tables
+# proceed only if contig has been unlinked; now delete from the primary tables
 
     my $success = 1;
     foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
@@ -758,7 +956,8 @@ sub deleteContig {
 
 # remove the redundent entries in SEGMENT and C2CSEGMENT
 
-    $success = $this->cleanupSegmentTables(0) if $success;
+#    $success = $this->cleanupSegmentTables(0) if $success;
+    $success = &cleanupSegmentTables($dbh,0) if $success;
 
     return $success;
 }
@@ -1027,13 +1226,17 @@ sub putMappingsForContig {
     return $success;
 }
 
-sub cleanupSegmentTables {
-# houskeeping: remove redundent mapping references from (C2C)SEGMENT
-# (required after e.g. deleting contigs)
+sub cleanup {
+# public method (to be extended with other tests?)
     my $this = shift;
-    my $list = shift;
+    return &cleanupSegmentTables($this->getConnection(),1);
+}
 
-    my $dbh = $this->getConnection();
+sub cleanupSegmentTables {
+# private method: remove redundent mapping references from (C2C)SEGMENT
+# (re: housekeeping required after e.g. deleting contigs) 
+    my $dbh = shift;
+    my $list = shift;
 
 # first we deal with SEGMENT in blocks of 10000, then with C2CSEGMENT 
 
@@ -1546,7 +1749,7 @@ sub putTagsForContig {
     my $testexistence = shift;
 
     return 1 unless $contig->hasTags();
-$DEBUG=1;
+$DEBUG=0;
 
     my $cid = $contig->getContigID();
 print STDOUT "putTagsForContig: contig ID = $cid\n" if $DEBUG;
@@ -1793,61 +1996,6 @@ print "EXIT putTags success $success\n" if $DEBUG;
     return $success; 
 }
 
-sub OBSOLETEgetTagsForSequenceIDs {
-# use as private (generic) method only
-    my $dbh = shift;
-    my $sequenceIDs = shift; # array of seq IDs
-    my $table = shift; # either READTAG or CONTIGTAG
-    my $seqkeyid = shift; # sequence_id column name
-
-# compose query
-
-    my $items = "$seqkeyid,tagtype,systematic_id,pstart,pfinal,strand,comment,"
-              . "tagseqname,sequence";
-    $items =~ s/systematic_id\,// if ($table eq 'READTAG'); # no finishing tags
-
-    my $query = "select $items from $table left join TAGSEQUENCE"
-              . " using (tag_seq_id)"
-	      . " where $seqkeyid in (".join (',',@$sequenceIDs) .")"
-              . "   and deprecated != 'Y'"
-#             . "   and tagtype not in (.some list.) "
-              . " order by $seqkeyid";
-print "getTagsForSequenceID: $query \n" if $DEBUG;
-
-    my @tag;
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query) && exit;
-
-    while (my @ary = $sth->fetchrow_array()) {
-# create a new Tag instance
-        my $tag = new Tag(lc($table));
-
-        $tag->setSequenceID      (shift @ary); # seq_id
-        $tag->setType            (shift @ary); # tagtype
-        $tag->setSystematicID    (shift @ary) if ($table eq 'CONTIGTAG'); # tagname
-        $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
-        $tag->setStrand          (shift @ary); # strand
-        $tag->setComment         (shift @ary); # comment
-        $tag->setTagSequenceName (shift @ary); # tagseqname
-        $tag->setDNA             (shift @ary); # sequence
-# add to output array
-        push @tag, $tag;
-#$tag->writeToCaf(*STDOUT) if ($tag->getSequenceID == 79425);
-    }
-print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n" if $DEBUG;
-
-    return [@tag];
-}
-
-
-
+#------------------------------------------------------------------------------
 
 1;
-
-
-
-
-
-

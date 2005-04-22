@@ -79,15 +79,26 @@ sub addContigID {
     my $this = shift;
     my $contigid = shift;
 
+    undef $this->{contigIDs} unless $contigid; # reset option
+
     $this->{contigIDs} = [] unless defined $this->{contigIDs};
 
-    push @{$this->{contigIDs}}, $contigid;
+    push @{$this->{contigIDs}}, $contigid if $contigid;
 }
 
 sub getContigIDs {
-# export reference to the contig IDs array
+# export reference to the contig IDs array as is
     my $this = shift;
-    my $nolockcheck = shift || 0; 
+
+    $this->{contigIDs} = [] unless defined $this->{contigIDs};
+
+    return $this->{contigIDs}; # return array reference
+}
+
+sub fetchContigIDs {
+# get IDs from database, export reference to the contig IDs array
+    my $this = shift;
+    my $nolockcheck = shift; # set true to return only unlocked data
 
 # get the contig IDs for this project always by reference to the database
 
@@ -235,7 +246,7 @@ sub writeContigsToCaf {
     my $FILE = shift; # obligatory file handle
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock});
+    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock});
 
     return (0,$status) unless ($contigids && @$contigids);
 
@@ -263,7 +274,7 @@ sub writeContigsToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my $options = shift; # hash ref
 
-    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock}); 
+    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock}); 
 
     return (0,$status) unless ($contigids && @$contigids);
 
@@ -291,31 +302,29 @@ sub writeContigsToMaf {
     my $RFILE = shift; # obligatory file handle for Placed Reads
     my $options = shift; # hash ref
 
-    unless ($DFILE && $QFILE && $RFILE) {
-        return 0,"Missing file handle in 'writeContigsToMaf'";
-    }
-
-    my ($contigids,$status) = $this->getContigIDs($options->{notacquirelock}); 
+    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock}); 
 
     return (0,$status) unless ($contigids && @$contigids);
 
     my $ADB = $this->{ADB} || return (0,"Missing database connection");
 
-    my $minNX = $options->{minNX};
-    $minNX = 3 unless defined($minNX);
-
     my $export = 0;
     my $report = '';
+
     foreach my $contig_id (@$contigids) {
         my $contig = $ADB->getContig(contig_id=>$contig_id);
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id";
             next;
         }
-        $contig->replaceNbyX($minNX) if ($minNX);
-        $contig->writeToFasta($DFILE,$QFILE,1);
-        $contig->writeToMaf($RFILE);
-        $export++;
+        my ($w,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,$options);
+
+        unless (defined($w)) {
+            return 0,"Missing file handle(s) in 'writeContigsToMaf'";
+	}
+
+        $report .= $r unless $w; # error status $w = 0
+        $export++ if $w;
     }
 
     return $export,$report;
@@ -370,7 +379,7 @@ sub toStringLong {
                                "  by   ".$this->getOwner()."\n";
     }
     if ($this->getCreator()) {
-        $string .= "Created on         ".($this->getUpdated() || 'unknown').
+        $string .= "Created on         ".($this->getCreated() || 'unknown').
                                "  by   ".$this->getCreator()."\n";
     }
     $string .= "Comment            ".($this->getComment() || '')."\n";

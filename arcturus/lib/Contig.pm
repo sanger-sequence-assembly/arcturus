@@ -83,6 +83,7 @@ sub getAverageCover {
 sub getConsensusLength {
     my $this = shift;
     $this->importSequence() unless defined($this->{data}->{clength});
+#    $this->getStatistics()  unless defined($this->{data}->{clength});
     return $this->{data}->{clength} || 0;
 }
 
@@ -919,7 +920,7 @@ sub inheritTags {
 
     foreach my $parent (@$parents) {
 # if this parent does not have tags, test its parent(s)
-        if ($depth && !$parent->hasTags(1)) {
+        if ($depth > 0 && !$parent->hasTags(1)) {
             $parent->inheritTags($depth-1);
         }
 # get the tags from the parent into this contig
@@ -1264,42 +1265,61 @@ sub toString {
 sub writeToMaf {
 # write the "reads.placed" read-contig mappings in Mullikin format
     my $this = shift;
-    my $RFILE = shift; # obligatory file handle
+    my $DFILE = shift; # obligatory file handle for DNA
+    my $QFILE = shift; # obligatory file handle for QualityData
+    my $RFILE = shift; # obligatory file handle for Placed Reads
+    my $options = shift; # hash ref for options
 
-    unless ($RFILE) {
-	print STDERR "Missing file handle for Placed Reads\n";
-	return;
+    unless ($DFILE && $QFILE && $RFILE) {
+	print STDERR "Missing file handle for Bases\n" unless ($DFILE);
+	print STDERR "Missing file handle for Quality\n" unless ($QFILE);
+	print STDERR "Missing file handle for Placed Reads\n" unless ($RFILE);
+	return undef;
     }
+
+# preset error reporting
+
+    my $success = 1;
+    my $report = '';
+
+# first handle the fasta output of the consensus sequence DNA and Quality
+
+    my $minNX = $options->{minNX};
+    $minNX = 3 unless defined($minNX);
+
+    $this->replaceNbyX($minNX) if ($minNX);
+    $this->writeToFasta($DFILE,$QFILE,1); # no reads
 
 # extra outside info to be passed as parameters: supercontig name &
 # approximate start of contig on supercontig
 
     my $contigname = $this->getContigName();
-
-    my $supercontigname = $_[0] || $contigname;
-    my $contigzeropoint = $_[1] || 0;
+    my $supercontigname = $options->{supercontigname} || $contigname;
+    my $contigzeropoint = $options->{contigzeropoint} || 0;
 
 # get the reads and build a hash list for identification
 
     my %reads;
-    my $reads = $this->getReads(); # ? (1)
+    my $reads = $this->getReads(1); # ? (1)
     foreach my $read (@$reads) {
         $reads{$read->getReadName()} = $read;
     }
 
 # write the individual read info
 
-    my $mappings = $this->getMappings(); # ? (1)
+    my $mappings = $this->getMappings(1); # ? (1)
     foreach my $mapping (@$mappings) {
         my @range = $mapping->getContigRange();
         my $readname = $mapping->getMappingName();
         unless ($readname) {
-            print STDERR "Missing readname in mapping ".$mapping->getMappingID()."\n";
+            $report .= "Missing readname in mapping ".$mapping->getMappingID()."\n";
+            $success = 0;
             next;
         }
         my $read = $reads{$readname};
         unless ($read) {
-	    print STDERR "Missing read $readname\n";
+	    $report .= "Missing read $readname\n";
+            $success = 0;
 	    next;
 	}
         my $lqleft = $read->getLowQualityLeft();
@@ -1310,7 +1330,8 @@ sub writeToMaf {
                      "$contigname $supercontigname $range[0] " .
                      "$supercontigstart\n"; 
     }
-#    print $RFILE "\n\n";
+
+    return $success,$report;
 }
 
 sub replaceNbyX {
@@ -1342,7 +1363,7 @@ sub replaceNbyX {
 }
 
 sub writeToCafPadded {
-
+# TO BE REPLACED
 # write reads and contig to CAF (padded but leaving consensus unchanged)
 # this is an ad hoc method to make Arcturus conversant with GAP4
 # it uses the PaddedRead class for conversion of read mappings

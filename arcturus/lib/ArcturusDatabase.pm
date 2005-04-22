@@ -140,7 +140,33 @@ sub getArcturusUser {
 
 #-----------------------------------------------------------------------------
 
+sub message {
+# message TO BE DEVELOPED
+    my $this = shift;
+    my $user = shift;
+    my $pold = shift; # old project
+    my $pnew = shift; # new project
+    my $text = shift; # the message
+
+    print STDOUT "message for user $user: '$text'\n";
+}
+
+sub messagemanager {
+}
+
+#-----------------------------------------------------------------------------
+
 1;
+
+
+
+
+
+
+
+
+
+
 
 
 

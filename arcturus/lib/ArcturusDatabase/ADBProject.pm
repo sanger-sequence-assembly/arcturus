@@ -38,6 +38,7 @@ sub getProject {
     my @data;
     my $assembly = 0;
     my $binautoload = 1;
+    my $usecontigid = 0;
     while (my $nextword = shift) {
         my $datum = shift;
         return (0,"Missing parameter value") unless defined ($datum);
@@ -76,32 +77,44 @@ sub getProject {
             $query .= "comment like ? ";
             push @data, $datum;
 	}
-# if contig_id is used, it should be the only specification 
-        elsif ($nextword eq "contig_id") { 
-            return (0,"only contig_id can be specified") if (@data || shift);
-            $query .= "join CONTIG using (project_id)"
-                    . " where CONTIG.contig_id = ? ";
-            push @data, $datum;
-        }
+# if contig_id or contigname is used, it should be the only specification 
         elsif ($nextword eq "contigname") { 
             return (0,"only contig name can be specified") if (@data || shift);
+            $query =~ s/comment/comment,CONTIG.contig_id/;
             $query .= ",CONTIG,MAPPING,SEQ2READ,READS"
                     . " where CONTIG.project_id = PROJECT.project_id"
-                    . "   and MAPPING,contig_id = CONTIG.contig_id"
+                    . "   and MAPPING.contig_id = CONTIG.contig_id"
                     . "   and SEQ2READ.seq_id = MAPPING.seq_id"
                     . "   and READS.read_id = SEQ2READ.read_id"
-		    . "   and READS.readname = ?";
+		    . "   and READS.readname = ? ";
             push @data, $datum;
+            $usecontigid = 1;
+print "getProject:$query '@data' \n";
         }
-
-#    elsif ($key eq "contigIDs") {
-# determine the project ID from a number of contig_ids
-#        if (ref($value) ne 'ARRAY') {
-#	    return $this->getProject(contig_id=>$value);
-#        }
-#        elsif (!@$value) {
-#            return undef; # empty array
-#        }
+# if an array of contig_ids is used, it should be the only specification
+        elsif ($nextword eq "contig_id") {
+            return (0,"only contig_id can be specified") if (@data || shift);
+            $query =~ s/comment/comment,CONTIG.contig_id/;
+            $query .= "join CONTIG using (project_id)"
+                    . " where CONTIG.contig_id ";
+            if (ref($datum) eq 'ARRAY') {
+                if (scalar(@$datum) > 1) {
+                    $query .= "in (".join(',',@$datum).") ";
+                }
+                elsif (scalar(@$datum) == 1) {
+                    $query .= "= ? ";
+                    push @data, $datum->[0];
+	        }
+                else {
+                    return (0,"Empty array for contig IDs");
+		}
+            }
+            else {
+                $query .= "= ? ";
+                push @data, $datum;
+	    }
+            $usecontigid = 1;
+        }
 # determine the project based on a number of project_ids? 
         elsif ($nextword eq "binautoload") {
 	    $binautoload = shift;
@@ -123,19 +136,26 @@ sub getProject {
 # cater for the case of more than one project !
 
     my @projects;
+    undef my %projects;
     while (my @ary = $sth->fetchrow_array()) {
-        my $project = new Project();
-        $project->setProjectID(shift @ary);
-        $project->setProjectName(shift @ary);
-        $project->setAssemblyID(shift @ary);
-        $project->setUpdated(shift @ary);
-        $project->setOwner(shift @ary);
-        $project->setCreated(shift @ary);
-        $project->setCreator(shift @ary);
-        $project->setComment(shift @ary);
+# prevent multiple copies of the same project in case contig_id is added
+        my $project = $projects{$ary[0]};
+        unless ($project) {
+            $project = new Project();
+	    $projects{$ary[0]} = $project;
+            push @projects,$project;
+            $project->setProjectID(shift @ary);
+            $project->setProjectName(shift @ary);
+            $project->setAssemblyID(shift @ary);
+            $project->setUpdated(shift @ary);
+            $project->setOwner(shift @ary);
+            $project->setCreated(shift @ary);
+            $project->setCreator(shift @ary);
+            $project->setComment(shift @ary);
 # assign ADB reference
-        $project->setArcturusDatabase($this);
-        push @projects,$project;
+            $project->setArcturusDatabase($this);
+        }
+        $project->addContigID($ary[$#ary]) if $usecontigid;
     }
 
     $sth->finish();
@@ -300,11 +320,11 @@ sub assignContigToProject {
     my $contig_id  = $contig->getContigID()   || return (0,"Missing data");
     my $project_id = $project->getProjectID() || return (0,"Missing data");
 
-    return $this->linkContigIDsToProjectID($this->getConnection(),
-                                           $this->getArcturusUser(),
-                                           [($contig_id)],
-                                           $project_id,
-                                           @_); # transfer of 'forced' switch
+    return &linkContigIDsToProjectID($this->getConnection(),
+                                     $this->getArcturusUser(),
+                                     [($contig_id)],
+                                     $project_id,
+                                     @_); # transfer of 'forced' switch
 }
 
 sub assignContigsToProject {
@@ -498,7 +518,6 @@ sub unlinkContigID {
     my ($lock,$owner) = &getLockedStatus($dbh,$contig_id,1);
     return (0,"Contig $contig_id is locked by user $owner") if $lock;
 
-
     my $query = "update CONTIG join PROJECT using (project_id)"
               . "   set CONTIG.project_id = 0"
               . " where CONTIG.contig_id = ?"
@@ -510,7 +529,11 @@ sub unlinkContigID {
 
     $sth->finish();
 
-    return $success;
+    return ($success,"OK") if $success;
+
+# report an unexpected lock status for the contig_id 
+
+    return (0,"Contig $contig_id was (unexpectedly) found to be locked");
 }
 
 #------------------------------------------------------------------------------
