@@ -517,7 +517,7 @@ print STDERR "putContig: line 381 assignContigToProject I\n";
 # compose messages for owners of contigs which have changed project
         my $messages = &informUsersOfChange($contig,$project,\@originalprojects);
         foreach my $message (@$messages) {
-            $this->message(@$message); # owner, projects, text
+            $this->logMessage(@$message); # owner, projects, text
         }
 
     }
@@ -706,6 +706,7 @@ sub informUsersOfChange {
         if ($newpid) {
             $newprojectname = $newproject->getProjectName();
             $message .= " under project $newprojectname";
+            $message .= " (assembly ".$newproject->getAssemblyID().")";
             if ($newproject->getOwner() ne $oldproject->getOwner()) {
                 $message .= " owned by user ".$newproject->getOwner();
             } 
@@ -714,7 +715,7 @@ sub informUsersOfChange {
             $message .= "and assigned to the bin";
         }
 # build output messages as array of arrays
-        push @messages,[($owner,$oldprojectname,$newprojectname,$message)]; 
+        push @messages,[($owner,$newprojectname,$message)];
     }
     return [@messages];
 }
@@ -727,8 +728,8 @@ sub putMetaDataForContig {
 
     my $query = "insert into CONTIG " .
                 "(length,ncntgs,nreads,newreads,cover".
-                ",origin,updated,readnamehash) ".
-                "VALUES (?,?,?,?,?,?,now(),?)";
+                ",origin,readnamehash) ".
+                "VALUES (?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 

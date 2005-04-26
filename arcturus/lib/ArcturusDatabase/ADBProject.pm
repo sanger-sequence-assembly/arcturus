@@ -28,6 +28,7 @@ sub new {
 
 sub getProject {
     my $this = shift;
+    my %options = @_;
 
     my $itemlist = "PROJECT.project_id,PROJECT.name,PROJECT.assembly_id,"
                  . "PROJECT.updated,PROJECT.owner," #?locked not included here
@@ -39,11 +40,13 @@ sub getProject {
     my $assembly = 0;
     my $binautoload = 1;
     my $usecontigid = 0;
+    my $lookingforbin = 0;
     while (my $nextword = shift) {
         my $datum = shift;
         return (0,"Missing parameter value") unless defined ($datum);
 # this should usually be the only item given
         if ($nextword eq "project_id") {
+            $lookingforbin = 1 unless $datum;
             $query .= (@data ? "and " : "where ");
             $query .= "project_id = ? ";
             push @data, $datum;
@@ -68,6 +71,7 @@ sub getProject {
             $assembly = $datum;            
 	}
         elsif ($nextword eq "projectname") {
+            $lookingforbin = 1 if ($datum =~ /^bin&/i);
             $query .= (@data ? "and " : "where ");
             $query .= "PROJECT.name like ? "; # re_ allowing assembly name
             push @data, $datum;
@@ -79,7 +83,7 @@ sub getProject {
 	}
 # if contig_id or contigname is used, it should be the only specification 
         elsif ($nextword eq "contigname") { 
-            return (0,"only contig name can be specified") if (@data || shift);
+            return (0,"only contig name can be specified") if ($query =~ /where/);
             $query =~ s/comment/comment,CONTIG.contig_id/;
             $query .= ",CONTIG,MAPPING,SEQ2READ,READS"
                     . " where CONTIG.project_id = PROJECT.project_id"
@@ -93,7 +97,7 @@ print "getProject:$query '@data' \n";
         }
 # if an array of contig_ids is used, it should be the only specification
         elsif ($nextword eq "contig_id") {
-            return (0,"only contig_id can be specified") if (@data || shift);
+            return (0,"only contig_id can be specified") if ($query =~ /where/);
             $query =~ s/comment/comment,CONTIG.contig_id/;
             $query .= "join CONTIG using (project_id)"
                     . " where CONTIG.contig_id ";
@@ -124,12 +128,11 @@ print "getProject:$query '@data' \n";
 	}
     }
 
-    $query .= "order by assembly_id,project_id"; 
+    $query .= "order by assembly_id,project_id";
 
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
-
 
     $sth->execute(@data) || &queryFailed("$query @data") && return undef;
 
@@ -162,24 +165,27 @@ print "getProject:$query '@data' \n";
 
     return ([@projects],"OK") if @projects;
 
-# if no project found, test the special case that it's the bin we need
-# needs updating for the chosen assembly
+# if no project found, test if it's the bin project we're after:
+# if we search on contig ID, unallocated contigs (pid=0) require the bin
+# to exist in order to return a project
 
-#    if ($key eq "contig_id" || $value =~ /^bin$/i || $value == 0) {
-# it's the bin we are after, but it doesn't exist; create it if autoload
-#        if ($binautoload) {
-#            &createBinProject($dbh,$this->getArcturusUser()); # add assembly
-#            $project = $this->getProject($key,$value,binautoload=>0);
-#        } 
-#    }
-
-    return 0,"unknown project or assembly";
+    if ($binautoload && ($usecontigid || $lookingforbin)) {
+        &createBinProject($dbh,$this->getArcturusUser());
+        $options{binautoload} = 0;
+        return $this->getProject(%options);
+    }
+    else {
+        return 0,"unknown project or assembly";
+    }
 }
 
 sub createBinProject {
 # private method to create the project BIN in assembly 0
     my $dbh = shift;
     my $user = shift || 'arcturus';
+
+# create the special BIN project in assembly 0 and project ID 0
+#  (if it already exists, nothing will happen)
 
 print "trying to create project BIN for assembly 0\n";
 
@@ -254,30 +260,33 @@ sub putProject {
 sub deleteProject {
 # remove project for project ID / name, but only if no associated contigs
     my $this = shift;
-    my ($key,$value,$dummy) = @_;
+    my %options = @_;
 
 # upgrade to include assembly_id/assembly name
 
     my $tquery;
     my $dquery;
-    if ($key eq 'project_id' && defined($value)) {
+    my $report;
+# project_id must be specified
+    if (defined (my $value = $options{project_id})) {
         $tquery = "select contig_id from CONTIG join PROJECT"
                 . " using (project_id)"
 	        . " where PROJECT.project_id = $value";
         $dquery = "delete from PROJECT where project_id = $value ";
-    }
-    elsif ($key eq 'comment' && defined($value)) {
-        $tquery = "select contig_id from CONTIG join PROJECT"
-                . " using (project_id)" .
-		  " where PROJECT.comment like '$value'";
-        $dquery = "delete from PROJECT where comment like '$value' ";
-        $value = "like '$value'"; # display purpose
+        $report = "Project $value";
     }
     else {
-        return (0,"Invalid parameters");
+        return 0,"Invalid parameters: missing project_id"; 
     }
-
-    $dquery .= "limit 1"; # one at the time
+# if assembly is specified it acts as an extra check constraint
+    if (defined (my $value = $options{assembly_id})) {
+         $tquery .= " and assembly_id = $value";
+         $dquery .= " and assembly_id = $value";
+         $report .= " in assembly $value";
+    }
+# add user/lockstatus restriction (to be completely sure)
+    my $user = $this->getArcturusUser();
+    $dquery .= " and (locked is null or owner='$user')";
 
     my $dbh = $this->getConnection();
 
@@ -285,18 +294,26 @@ sub deleteProject {
 
     my $hascontig = $dbh->do($tquery) || &queryFailed($tquery);
 
-    return 0,"Project $value has $hascontig contigs and can't be deleted" 
-        if (!$hascontig || $hascontig > 0); # also exits on failed query
+    if (!$hascontig || $hascontig > 0) {
+# also exits on failed query
+        return 0,"$report has $hascontig contigs and cannot be deleted";
+    }
     
-# delete from the primary tables
+# test if the project is locked by acquiring a lock myself
+
+    my ($status,$msg) = $this->acquireLockForProjectID($options{project_id});
+
+    return 0,$msg unless $status; # belongs to someone else
+
+# ok, delete from the primary tables
 
     my $nrow = $dbh->do($dquery) || &queryFailed($dquery);
 
-    return 0,"Failed to delete project $value" unless $nrow;
+    return 0,"$report was NOT deleted" unless $nrow; # failed query
 
-    return 1,"Project $value does not exists" unless ($nrow+0);
+    return 0,"$report cannot be deleted or does not exists" unless ($nrow+0);
     
-    return 1,"Project $value deleted";
+    return 1,"$report deleted";
 }
 
 #------------------------------------------------------------------------------
@@ -664,7 +681,7 @@ sub getProjectInventory {
 
     my $query = "select distinct PROJECT.project_id"
 	      . "  from PROJECT ";
-    unless ($options{addempty}) {
+    unless ($options{includeempty}) {
         $query .= "  left join CONTIG using (project_id)"
 	        . " where CONTIG.contig_id is not null";
     }
@@ -758,11 +775,33 @@ sub getProjectStatisticsForProjectID {
 }
 
 sub addCommentForProject {
-# comment, status, projecttype ?
+# replace the current comment
     my $this = shift;
     my $project = shift;
 
+    die "putProject expects a Project instance as parameter"
+	unless (ref($project) eq 'Project');
 
+    my $pid = $project->getProjectID();
+    my $aid = $project->getAssemblyID();
+
+    unless (defined($pid) && defined($aid)) {
+        return 0,"undefined assembly or project identifier";
+    }
+
+    my $comment = $project->getComment() || 'null';
+    $comment = "'$comment'" unless ($comment =~ /^null$/i);
+
+    my $query = "update PROJECT set comment=$comment"
+              . " where assembly_id=$aid and project_id=$pid";
+
+    my $dbh = $this->getConnection();
+
+    my $nrow = $dbh->do($query) || &queryFailed($query) && return undef;
+
+    return 0,"Comment field was not updated ($query)" unless ($nrow+0);
+
+    return 1,"New comment entered OK";
 }
 
 #------------------------------------------------------------------------------
@@ -791,11 +830,18 @@ sub getLockedStatusForProjectID {
 
 sub getLockedStatusForContigID {
     my $this = shift;
-    my $project_id = shift;
-    return &getLockedStatus($this->getConnection(),$project_id,1);
+    my $contig_id = shift;
+    return &getLockedStatus($this->getConnection(),$contig_id,1);
 }
 
 # ------------- acquiring and releasing locks -----------------
+
+sub acquireLockForProject {
+    my $this = shift;
+    my $project = shift;
+    return 0,"Undefined project ID" unless defined($project->getProjectID());
+    return $this->acquireLockForProjectID($project->getProjectID());
+}
 
 sub acquireLockForProjectID {
     my $this = shift;
@@ -824,11 +870,11 @@ sub acquireLockForProjectID {
     }
 }
 
-sub releaseLockForProjectIDWithOverride { # ??? 
+sub releaseLockForProject {
     my $this = shift;
-    my $project_id = shift;
-# test for valid user?
-    return &unlockProject($this->getConnection(),$project_id);
+    my $project = shift;
+    return 0,"Undefined project ID" unless defined($project->getProjectID());
+    return $this->releaseLockForProjectID($project->getProjectID());
 }
 
 sub releaseLockForProjectID {
@@ -837,6 +883,15 @@ sub releaseLockForProjectID {
     return &unlockProject($this->getConnection(),$project_id,
                           $this->getArcturusUser());
 }
+
+sub releaseLockForProjectIDWithOverride { # ??? 
+    my $this = shift;
+    my $project_id = shift;
+# test for valid user?
+    return &unlockProject($this->getConnection(),$project_id);
+}
+
+# -------------------- meant for use by assembly pipeline ---------------------
 
 sub acquireLockForProjectIDs {
 # e.g. enabling the overnight assembly to lock its projects before (old) export
@@ -882,6 +937,7 @@ sub unlockProject {
         return (1,"Project $pid was not locked");
     }
     elsif ($user && $user ne $owner) {
+#    elsif ($user && !($user eq $owner || $role->{$user} eq $role->{$owner})) {
         return (0,"Project $pid remains locked; belongs to user $owner");
     }
 
@@ -931,11 +987,11 @@ sub setLockedStatus {
     my $dbh = shift;
     my $projectid = shift || return undef;
     my $owner = shift;
-    my $lockstatus = shift; # True to acquire lock, false to release lock
+    my $getlock = shift; # True to acquire lock, false to release lock
 
     my $query = "update PROJECT ";
 
-    if ($lockstatus) {
+    if ($getlock) {
         $query .= "set locked = now(), owner = ? where project_id = ? "
 	        . "and locked is null";
     }
