@@ -103,12 +103,14 @@ CREATE TABLE CONTIG (
   cover float(8,2) default '0.00',
   origin enum('Arcturus CAF parser','Finishing Software','Other') default NULL,
   userid char(8) default 'arcturus',
-  updated datetime NOT NULL default '0000-00-00 00:00:00',
+  updated timestamp NOT NULL,
   readnamehash char(16) default NULL,
   PRIMARY KEY  (contig_id),
   KEY rnhash (readnamehash(8))
 ) TYPE=MyISAM;
 
+# updated datetime NOT NULL default '0000-00-00 00:00:00',
+ 
 #
 # Table structure for table 'LIGATION'
 #

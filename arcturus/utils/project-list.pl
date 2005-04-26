@@ -20,7 +20,7 @@ my $contig;
 my $generation = 'current';
 my $verbose;
 my $longwriteup;
-my $include;
+my $includeempty;
 
 my $validKeys  = "organism|instance|project|assembly|contig|"
                . "full|long|verbose|help";
@@ -46,7 +46,7 @@ while (my $nextword = shift @ARGV) {
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
-    $include      = 1            if ($nextword eq '-full');
+    $includeempty = 1            if ($nextword eq '-full');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -112,7 +112,7 @@ unless (@projects || keys %options) {
 
     my %ioptions;
     $ioptions{assembly} = $assembly if defined($assembly);
-    $ioptions{addempty} = 1 if $include; # list also empty projects
+    $ioptions{includeempty} = 1 if $includeempty; # list also empty projects
     my $project_ids = $adb->getProjectInventory(%ioptions);
 
     my $bin_project;
@@ -124,13 +124,13 @@ unless (@projects || keys %options) {
         push @projects, @$Project if $pid;
     }
 # add unallocated
-    unless ($bin_project  || $include) {
+    unless ($bin_project  || $includeempty) {
         $bin_project = new Project();
         $bin_project->setArcturusDatabase($adb);
         $bin_project->setComment("unallocated");
         $bin_project->setProjectName("the bin");
+        push @projects,$bin_project;
     }
-    push @projects,$bin_project;
 }
 
 if (@projects && !$longwriteup) {
@@ -162,7 +162,7 @@ $adb->disconnect();
 sub showUsage { 
     my $code = shift || 0;
 
-    print STDERR "\nProject Inventory listing\n\n";
+    print STDERR "\nProject Inventory listing (default: having contigs)\n\n";
     print STDERR "Parameter input ERROR: $code \n\n" if $code; 
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";

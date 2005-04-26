@@ -17,10 +17,10 @@ my $instance;
 my $project;
 my $assembly;
 my $generation = 'current';
-my $confirm;
 my $verbose;
+my $confirm;
 
-my $validKeys  = "organism|instance|project|assembly|confirm|verbose|help";
+my $validKeys  = "organism|instance|assembly|project|confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -35,9 +35,9 @@ while (my $nextword = shift @ARGV) {
 
     $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
-    $confirm      = 1            if ($nextword eq '-confirm');
-
     $verbose      = 1            if ($nextword eq '-verbose');
+
+    $confirm      = 1            if ($nextword eq '-confirm');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -60,6 +60,8 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage(0,"Missing database instance") unless $instance;
 
+&showUsage(0,"Missing project ID") unless $project;
+
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
@@ -73,19 +75,21 @@ $logger->info("Database ".$adb->getURL." opened succesfully");
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
- 
+
 my %options;
- 
+
 $options{project_id}  = $project if ($project !~ /\D/);
 $options{projectname} = $project if ($project =~ /\D/);
- 
+
 if (defined($assembly)) {
     $options{assembly_id}  = $assembly if ($assembly !~ /\D/);
     $options{assemblyname} = $assembly if ($assembly =~ /\D/);
 }
- 
+
+my $status;
+
 my ($projects,$message) = $adb->getProject(%options);
- 
+
 if ($projects && @$projects > 1) {
     my @namelist;
     foreach my $project (@$projects) {
@@ -98,20 +102,20 @@ elsif (!$projects || !@$projects) {
     $logger->warning("Project $project not available : $message");
 }
 elsif ($confirm) {
-    my $pid = $projects->[0]->getProjectID();
-    my $aid = $projects->[0]->getAssemblyID();
-    my ($status,$message) = $adb->deleteProject(project_id => $pid,
-                                               assembly_id => $aid);
+    $project = shift @$projects;
+   ($status,$message) = $adb->acquireLockForProject($project);
     $logger->warning($message);
 }
 else {
     $project = shift @$projects;
     if (my $status = $project->getLockedStatus()) {
-        $logger->warning("Project " . $project->getProjectName() .
-                         " is locked by user " . $project->getOwner());
+        $logger->warning("Project $project is already locked by user ".
+                          $project->getOwner());
     }
-    $logger->warning("Project " . $project->getProjectName() .
-                     " will be deleted : please confirm");
+    else {
+        $logger->warning("Project " . $project->getProjectName() .
+                         " will be locked : please confirm"); 
+    }
 }
 
 $adb->disconnect();
@@ -124,7 +128,7 @@ sub showUsage {
     my $mode = shift || 0; 
     my $code = shift || 0;
 
-    print STDERR "\nDelete a project\n";
+    print STDERR "\nProject locking\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
@@ -138,8 +142,6 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
     print STDERR "-confirm\t(no value) \n";
-    print STDERR "\n";
-    print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);

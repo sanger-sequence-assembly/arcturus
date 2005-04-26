@@ -128,7 +128,7 @@ $logger->warning("Redundant '-padded' key ignored") if $padded;
 my ($fhDNA, $fhQTY, $fhRDS);
 
 if (defined($caffile) && $caffile) {
-    $caffile .= '.caf' unless ($caffile =~ /\.caf$/);
+    $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
     $fhDNA = new FileHandle($caffile, "w");
     &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
 }
@@ -137,12 +137,15 @@ elsif (defined($caffile)) {
 }
 
 if (defined($fastafile) && $fastafile) {
-    $fastafile .= '.fas' unless ($fastafile =~ /\.fas$/);
+    $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
     $fhDNA = new FileHandle($fastafile, "w");
     &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhDNA;
     if (defined($qualityfile)) {
         $fhQTY = new FileHandle($qualityfile, "w");
 	&showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQTY;
+    }
+    elsif ($fastafile eq '/dev/null') {
+        $fhQTY = $fhDNA;
     }
 }
 elsif (defined($fastafile)) {
@@ -164,11 +167,8 @@ if (defined($maffile)) {
 # get project(s) to be exported
 
 my @identifiers;
-# special cases BIN (ID=0) and all/ALL (ignore identifier)
-if (defined($identifier) && $identifier eq 'BIN') {
-    push @identifiers,0;
-}
-elsif (defined($identifier) && $identifier !~ /all/i) {
+# special case: all/ALL (ignore identifier)
+if (defined($identifier) && $identifier !~ /all/i) {
     push @identifiers,$identifier;
 }
  
@@ -220,6 +220,8 @@ $exportoptions{'notacquirelock'} = 1 - $lock;
 $exportoptions{'minNX'} = $minNX;
 $exportoptions{'noreads'} = 1 if $noread;
 
+my $errorcount = 0;
+
 foreach my $project (@projects) {
 
     my $projectname = $project->getProjectName();
@@ -228,26 +230,39 @@ foreach my $project (@projects) {
 
     $logger->info("processing project $projectname with $numberofcontigs contigs");
 
-    my ($s,$m);
+    my @emr;
 
     if ($preview) {
-        $m = "Project $projectname to be exported";
+        $logger->warning("Project $projectname to be exported");
+        next;
     }
     elsif (defined($caffile)) {
-       ($s,$m) = $project->writeContigsToCaf($fhDNA,\%exportoptions);
+        @emr = $project->writeContigsToCaf($fhDNA,%exportoptions);
     }
     elsif (defined($fastafile)) {
-       ($s,$m) = $project->writeContigsToFasta($fhDNA,$fhQTY,\%exportoptions);
+        @emr = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
     }
     elsif (defined($maffile)) {
-       ($s,$m) = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,\%exportoptions);
+        @emr = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
     }
 
-    $logger->warning($m) unless $s; # no contigs exported
+# error reporting section
 
-    $logger->warning($m) if ($s && $m);
-
-    $logger->info("$s contigs exported for project $projectname") if $s;
+    if ($emr[0] > 0 && $emr[1] == 0) {
+# no errors found    
+        $logger->info("$emr[0] contigs were exported for project $projectname");
+    }
+    elsif ($emr[1]) {
+# there were errors on some contigs
+        $logger->warning("$emr[1] errors detected while processing project "
+                        ."$projectname; $emr[0] contigs exported");
+        $errorcount += $emr[1];
+        $logger->info($emr[2]); # report (or to be written to a log file?)
+    }
+    else {
+# no contigs dumped, but no errors either
+        $logger->warning("no contigs exported for project $projectname");
+    }
 }
 
 $fhDNA->close() if $fhDNA;
@@ -257,6 +272,9 @@ $fhQTY->close() if $fhQTY;
 $fhRDS->close() if $fhRDS;
 
 $adb->disconnect();
+
+$logger->warning("There were no errors") unless $errorcount;
+$logger->warning("$errorcount Errors found") if $errorcount;
 
 exit;
 
