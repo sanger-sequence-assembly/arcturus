@@ -101,11 +101,11 @@ $options{assemblyname} = $assembly if ($assembly && $assembly =~ /\D/);
 my @projects;
 
 if (keys %options > 0) {
+    $options{binautoload} = 0;
     my ($Project,$status) = $adb->getProject(%options);
     $logger->warning("Failed to find project: $status") unless $Project;
     push @projects, $Project  if (ref($Project) eq 'Project');
     push @projects, @$Project if (ref($Project) eq 'ARRAY');
-#    $logger->info("projects '@projects'") if @projects;
 }
 
 unless (@projects || keys %options) {
@@ -120,11 +120,11 @@ unless (@projects || keys %options) {
         my ($Project,$status) = $adb->getProject(project_id=>$pid);
         $logger->warning("Failed to find project $pid") unless @$Project;
         next unless ($Project && @$Project);
-        $bin_project = $Project->[0] unless $pid; # register BIN
-        push @projects, @$Project if $pid;
+        $bin_project = $Project->[0] unless $pid; # register project with pid=0
+        push @projects, @$Project;
     }
 # add unallocated
-    unless ($bin_project  || $includeempty) {
+    unless ($bin_project) {
         $bin_project = new Project();
         $bin_project->setArcturusDatabase($adb);
         $bin_project->setComment("unallocated");
@@ -141,6 +141,7 @@ if (@projects && !$longwriteup) {
 }
 
 foreach my $project (@projects) {
+    next if ($project->getProjectName() eq 'the bin' && !$project->getNumberOfContigs());
     print STDOUT $project->toStringShort() unless $longwriteup; 
     print STDOUT $project->toStringLong()  if $longwriteup; 
 }

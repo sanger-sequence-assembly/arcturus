@@ -121,7 +121,10 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-$logger->warning("Redundant '-padded' key ignored") if $padded;
+if ($padded && (defined($fastafile) || defined($maffile))) {
+    $logger->warning("Redundant '-padded' key ignored");
+    undef $padded;
+}
 
 # get file handles
 

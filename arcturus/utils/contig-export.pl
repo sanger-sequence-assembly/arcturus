@@ -16,15 +16,17 @@ my $verbose;
 my $contig; # = 20884;
 my $batch;
 my $padded;
+my $noread;
 #my $ignoreblocked = 0;
 my $fofn;
-my $caf;
-my $fasta;
-my $quality;
+my $caffile;
+my $fastafile;
+my $qualityfile;
+my $masking;
 my $metadataonly = 1;
 
 my $validKeys  = "organism|instance|contig|fofn|ignoreblocked|full|"
-               . "caf|fasta|quality|padded|batch|verbose|debug|help";
+               . "caf|fasta|quality|padded|mask|noread|batch|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -32,31 +34,33 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
                                                           
-    $instance   = shift @ARGV  if ($nextword eq '-instance');
+    $instance     = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism   = shift @ARGV  if ($nextword eq '-organism');
+    $organism     = shift @ARGV  if ($nextword eq '-organism');
 
-    $contig     = shift @ARGV  if ($nextword eq '-contig'); # ID or name
+    $contig       = shift @ARGV  if ($nextword eq '-contig'); # ID or name
 
-    $fofn       = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
-    $caf        = shift @ARGV  if ($nextword eq '-caf');
+    $caffile      = shift @ARGV  if ($nextword eq '-caf');
 
-    $fasta      = shift @ARGV  if ($nextword eq '-fasta');
+    $fastafile    = shift @ARGV  if ($nextword eq '-fasta');
 
-    $quality    = shift @ARGV  if ($nextword eq '-quality');
+    $qualityfile  = shift @ARGV  if ($nextword eq '-quality');
 
-    $verbose    = 1            if ($nextword eq '-verbose');
+    $masking      = shift @ARGV  if ($nextword eq '-mask');
 
-    $verbose    = 2            if ($nextword eq '-debug');
+    $verbose      = 1            if ($nextword eq '-verbose');
 
-    $padded     = 1            if ($nextword eq '-padded');
+    $padded       = 1            if ($nextword eq '-padded');
 
-    $metadataonly = 0          if ($nextword eq '-full');
+    $noread       = 1            if ($nextword eq '-noread');
 
-#    $ignblocked = 1            if ($nextword eq '-ignoreblocked');
+    $metadataonly = 0            if ($nextword eq '-full');
 
-    $batch      = 1            if ($nextword eq '-batch');
+#    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
+
+    $batch        = 1            if ($nextword eq '-batch');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -77,7 +81,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
-unless (defined($caf) || defined($fasta)) {
+unless (defined($caffile) || defined($fastafile)) {
     &showUsage("Missing caf or fasta file specification");
 }
 
@@ -105,19 +109,47 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
-if (defined($caf)) {
-    $caf = new FileHandle($caf,"w") if $caf;
-    $caf = *STDOUT unless $caf;
+if ($padded && defined($fastafile)) {
+    $logger->warning("Redundant '-padded' key ignored");
+    undef $padded;
 }
 
-if (defined($fasta)) {
-    $fasta = new FileHandle($fasta,"w") if $fasta;
-    $fasta = *STDOUT unless $fasta;
-    if ($quality) {
-        $quality = new FileHandle($quality,"w");
+if ($noread && defined($caffile)) {
+    $logger->warning("Redundant '-noread' key ignored");
+    undef $noread;
+}
+
+# get file handles
+
+my ($fhDNA, $fhQTY);
+
+if (defined($caffile) && $caffile) {
+    $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
+    unless ($fhDNA = new FileHandle($caffile, "w")) {
+        &showUsage("Failed to create CAF output file \"$caffile\"");
     }
 }
+elsif (defined($caffile)) {
+    $fhDNA = *STDOUT;
+}
 
+if (defined($fastafile) && $fastafile) {
+    $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
+    unless ($fhDNA = new FileHandle($fastafile, "w")) {
+        &showUsage("Failed to create FASTA sequence output file \"$fastafile\"");
+    }
+    if (defined($qualityfile)) {
+        unless ($fhQTY = new FileHandle($qualityfile, "w")) {
+	    &showUsage("Failed to create FASTA quality output file \"$qualityfile\"");
+        }
+    }
+    elsif ($fastafile eq '/dev/null') {
+        $fhQTY = $fhDNA;
+    }
+}
+elsif (defined($fastafile)) {
+    $fhDNA = *STDOUT;
+}
 
 my @contigs;
 
@@ -129,6 +161,15 @@ if ($fofn) {
     }
 }
 
+# get the write options
+
+    my %woptions;
+    $woptions{noreads} = 1 if $noread; # fasta only
+    $woptions{qualitymask} = $masking if defined($masking);
+    $woptions{padded} = 1 if $padded;
+
+my $errorcount = 0;
+
 foreach my $identifier (@contigs) {
 
     unless ($identifier) {
@@ -136,13 +177,15 @@ foreach my $identifier (@contigs) {
         next;
     }
 
-    undef my %options;
-    $options{metaDataOnly} = $metadataonly;
-    $options{withRead}  = $identifier if ($identifier =~ /\D/);
-    $options{contig_id} = $identifier if ($identifier !~ /\D/);
-#    $options{ignoreblocked} = 1;
+# get the contig select options
 
-    my $contig = $adb->getContig(%options) || 0;
+    undef my %coptions;
+    $coptions{metaDataOnly} = $metadataonly;
+    $coptions{withRead}  = $identifier if ($identifier =~ /\D/);
+    $coptions{contig_id} = $identifier if ($identifier !~ /\D/);
+# $options{ignoreblocked} = 1;
+
+    my $contig = $adb->getContig(%coptions) || 0;
 
     $logger->info("Contig returned: $contig");
 
@@ -154,13 +197,22 @@ foreach my $identifier (@contigs) {
 
     $contig->setContigName($identifier) if ($identifier =~ /\D/);
 
-    $contig->writeToCaf($caf) unless ($padded || $fasta);
+    $contig->writeToCaf($fhDNA,%woptions) unless ($padded || defined($fastafile));
 
-    $contig->writeToFasta($fasta) if $fasta;
-    print $fasta "\n" if $fasta;
+    $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
 
-    $contig->writeToCafPadded($caf) if $padded;
+    $contig->writeToCafPadded($fhDNA,%woptions) if $padded; # later to option of writeToCaf
 }
+
+$fhDNA->close() if $fhDNA;
+
+$fhQTY->close() if $fhQTY;
+
+$adb->disconnect();
+
+# TO BE DONE: message and error testing
+#$logger->warning("There were no errors") unless $errorcount;
+#$logger->warning("$errorcount Errors found") if $errorcount;
 
 exit;
 
@@ -184,7 +236,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-caf\t\toutput file name (default STDOUT)\n";
-    print STDERR "-padded\t\t(no value) export contig in padded format\n";
+    print STDERR "-padded\t\t(no value) export contig in padded format (caf only)\n";
 #    print STDERR "-ignoreblock\t\t(no value) include contigs from blocked projects\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 

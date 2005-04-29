@@ -158,10 +158,12 @@ sub showUsage {
     print STDERR "-instance\teither 'prod' or 'dev'\n";
     print STDERR "\n";
     print STDERR "-project\tproject ID or name\n";
+    print STDERR "-comment\tthe comment to be entered or added (between '')\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
+    print STDERR "-replace\t(no value) replace the comment, else add to\n";
     print STDERR "-confirm\t(no value) \n";
     print STDERR "\n";
 
