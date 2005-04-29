@@ -907,6 +907,42 @@ print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n" if $DEBUG
     return $readids; # array of readnames
 }
 
+sub isUnassembledRead {
+# check if a read_id or readname is of an unassembled read
+    my $this = shift;
+    my $readitem = shift; # obligatory read ID or name
+    my $value = shift; # obligatory
+
+# returns 1 if the read ID/readname is unassembled, else returns 0
+# if query errors prevent determination of this status, false is returned
+
+    return undef unless (defined($readitem) && defined($value));
+
+# compose the query SHOULD INCLUDE GENERATION 0 test
+
+    my $query = "select * from MAPPING"; 
+
+    if ($readitem eq 'read_id') {
+        $query .= " left join SEQ2READ using (seq_id) where SEQ2READ.read_id = ?";
+    }
+    elsif ($readitem eq 'readname') {
+        $query .= ",SEQ2READ,READS where MAPPING.seq_id=SEQ2READ.seq_id and"
+	       .  " SEQ2READ.read_id = READS.read_id and READS.readname = ?";
+    }
+    else {
+        return undef;
+    }
+
+    my $dbh = $this->getConnection();
+    my $sth = $dbh->prepare_cached($query);
+    my $row = $sth->execute($value) || (&queryFailed($query) && return undef);
+    $sth->finish();
+
+# returns 1 if the read ID/readname is unassembled, else returns 0
+
+    return ($row+0) ? 0 : 1; 
+}
+
 #------------------------------------------------------------------------------
 # adding sequence to Reads
 #------------------------------------------------------------------------------
@@ -1870,7 +1906,7 @@ sub deleteRead { # TO BE TESTED
 
     my $dbh = $this->getConnection();
 
-# test if read is unassembled
+# test if read is unassembled, i.e. does not occur in any contig
 
     my $query = "select * from MAPPING left join SEQ2READ using (seq_id) 
                  where SEQ2READ.read_id = ?";

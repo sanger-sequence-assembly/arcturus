@@ -4,7 +4,7 @@ use strict;
 
 use Mapping;
 
-use PaddedRead;
+use PaddedRead; # remove after upgrade for Padded
 
 my $DEBUG = 0;
 
@@ -480,7 +480,7 @@ sub getStatistics {
 # go through the mappings to find begin, end of contig
 # and to determine the reads at either end
         my ($minspanonleft, $minspanonright);
-        my $name = $this->getContigName();
+        my $name = $this->getContigName() || 0;
         if (my $mappings = $this->getMappings()) {
             my $init = 0;
             $totalreadcover = 0;
@@ -1085,21 +1085,24 @@ sub writeToCaf {
 # write reads and contig to CAF (unpadded)
     my $this = shift;
     my $FILE = shift; # obligatory file handle
+    my %options = @_;
+
+    return "Missing file handle for Caf output" unless $FILE;
 
     my $contigname = $this->getContigName();
 
 # dump all reads
 
-    my $reads = $this->getReads();
+    my $reads = $this->getReads(1);
     foreach my $read (@$reads) {
-        $read->writeToCaf($FILE);
+        $read->writeToCaf($FILE,%options); # transfer options, if any
     }
 
 # write the overall maps for for the contig ("assembled from")
 
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
-    my $mappings = $this->getMappings();
+    my $mappings = $this->getMappings(1);
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
     }
@@ -1107,7 +1110,7 @@ sub writeToCaf {
 # write tags, if any
 
     if ($this->hasTags) {
-        my $tags = $this->getTags();
+        my $tags = $this->getTags(1);
         foreach my $tag (@$tags) {
             $tag->writeToCaf($FILE);
         }
@@ -1120,6 +1123,8 @@ sub writeToCaf {
     $this->writeBaseQuality($FILE,"\nBaseQuality : ");
 
     print $FILE "\n";
+
+    return undef; # error reporting to be developed
 }
 
 sub writeToFasta {
@@ -1127,18 +1132,23 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+    my %options = @_;
 
-    unless (shift) {
+    return "Missing file handle for Fasta output" unless $DFILE;
+
+    unless ($options{noreads}) {
 # suppress dumping read data with extra paramater 
-        my $reads = $this->getReads();
+        my $reads = $this->getReads(1);
         foreach my $read (@$reads) {
-            $read->writeToFasta($DFILE,$QFILE);
+            $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
         }
     }
 
     $this->writeDNA($DFILE);
 
-    $this->writeBaseQuality($QFILE) if defined $QFILE;
+    $this->writeBaseQuality($QFILE) if $QFILE;
+
+    return undef; # error reporting to be developed
 }
 
 # private methods
@@ -1154,7 +1164,7 @@ sub writeDNA {
     my $identifier = $this->getContigName();
 
     if (!$DFILE) {
-        print STDERR "Missing file handle for DNA\n";
+        return "Missing file handle for DNA";
     }
     elsif (my $dna = $this->getSequence()) {
 # output in blocks of 60 characters
@@ -1167,7 +1177,7 @@ sub writeDNA {
 	}
     }
     else {
-        print STDERR "Missing DNA data for contig $identifier\n";
+        return "Missing DNA data for contig $identifier";
     }
 }
 
@@ -1182,7 +1192,7 @@ sub writeBaseQuality {
     my $identifier = $this->getContigName();
 
     if (!$QFILE) {
-        print STDERR "Missing file handle for Quality Data\n";
+        return "Missing file handle for Quality Data";
     }
     elsif (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
@@ -1195,7 +1205,7 @@ sub writeBaseQuality {
 	}
     }
     else {
-        print STDERR "Missing BaseQuality data for contig $identifier\n";
+        return "Missing BaseQuality data for contig $identifier";
     }
 }
 
@@ -1268,51 +1278,55 @@ sub writeToMaf {
     my $DFILE = shift; # obligatory file handle for DNA
     my $QFILE = shift; # obligatory file handle for QualityData
     my $RFILE = shift; # obligatory file handle for Placed Reads
-    my $options = shift; # hash ref for options
+    my %options = @_;
+
+    my $report = '';
 
     unless ($DFILE && $QFILE && $RFILE) {
-	print STDERR "Missing file handle for Bases\n" unless ($DFILE);
-	print STDERR "Missing file handle for Quality\n" unless ($QFILE);
-	print STDERR "Missing file handle for Placed Reads\n" unless ($RFILE);
-	return undef;
+	$report .= "Missing file handle for Maf output of ";
+	$report .= "DNA Bases\n" unless $DFILE;
+	$report .= "Quality Data\n" unless $QFILE;
+	$report .= "Placed Reads\n" unless $RFILE;
+	return 0,$report;
     }
 
 # preset error reporting
 
     my $success = 1;
-    my $report = '';
 
 # first handle the fasta output of the consensus sequence DNA and Quality
 
-    my $minNX = $options->{minNX};
+    my $minNX = $options{minNX};
     $minNX = 3 unless defined($minNX);
 
     $this->replaceNbyX($minNX) if ($minNX);
-    $this->writeToFasta($DFILE,$QFILE,1); # no reads
+
+    $this->writeToFasta($DFILE,$QFILE,noreads=>1);
 
 # extra outside info to be passed as parameters: supercontig name &
 # approximate start of contig on supercontig
 
     my $contigname = $this->getContigName();
-    my $supercontigname = $options->{supercontigname} || $contigname;
-    my $contigzeropoint = $options->{contigzeropoint} || 0;
+    my $supercontigname = $options{supercontigname} || $contigname;
+    my $contigzeropoint = $options{contigzeropoint} || 0;
 
 # get the reads and build a hash list for identification
 
     my %reads;
-    my $reads = $this->getReads(1); # ? (1)
+    my $reads = $this->getReads(1);
     foreach my $read (@$reads) {
         $reads{$read->getReadName()} = $read;
     }
 
 # write the individual read info
 
-    my $mappings = $this->getMappings(1); # ? (1)
+    my $mappings = $this->getMappings(1);
     foreach my $mapping (@$mappings) {
         my @range = $mapping->getContigRange();
         my $readname = $mapping->getMappingName();
         unless ($readname) {
-            $report .= "Missing readname in mapping ".$mapping->getMappingID()."\n";
+            $report .= "Missing readname in mapping "
+                    .   $mapping->getMappingID()."\n";
             $success = 0;
             next;
         }
@@ -1331,6 +1345,8 @@ sub writeToMaf {
                      "$supercontigstart\n"; 
     }
 
+# returns 1 for success or 0 and report for errors
+
     return $success,$report;
 }
 
@@ -1348,7 +1364,7 @@ sub replaceNbyX {
 # then change contiguous runs of X smaller than $min back to N
 
     my $X = 'X';
-    my $N = 'n';
+    my $N = 'N';
     my $i = 1;
 
     while ($i++ < $min) {
@@ -1360,6 +1376,12 @@ sub replaceNbyX {
 # replace current consensus by the substituted string 
 
     $this->setSequence($sequence);
+}
+
+sub toPadded {
+    my $this = shift;
+
+    die "Contig->toPadded is not yet implemented";
 }
 
 sub writeToCafPadded {

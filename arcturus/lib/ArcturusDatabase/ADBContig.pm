@@ -349,6 +349,7 @@ sub putContig {
 # and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
     foreach my $mapping (@$mappings) {
+#?	next if ($mapping->getSequenceID());
         my $readname = $mapping->getMappingName();
         $mapping->setSequenceID($seqids{$readname});
     }
@@ -473,7 +474,7 @@ print STDERR "putContig: line 381 assignContigToProject I\n";
         $message .= "; assigned to project 0 " unless $project;
     }
 
-    return 0, $message."(no-load option active)" if $noload; # test option
+    return 0, "(NO-LOAD option active) ".$message if $noload; # test option
 
 # now load the contig into the database
 

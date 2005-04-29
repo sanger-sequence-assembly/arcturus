@@ -452,7 +452,7 @@ sub getSequence {
     $this->importSequence() unless defined($this->{Sequence});
 
     my $symbol;
-# test for extra input; only accept qualityMask=>'symbol'
+# test for extra input; only accept qualitymask=>'symbol'
     while (my $nextword = shift) {
         if ($nextword eq 'qualitymask') {
             $symbol = shift;
@@ -717,6 +717,7 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
+    my %option = @_;
 
 # optionally takes 'qualitymask=>'N' to mask low quality data (transfer to writeDNA)
 
@@ -802,6 +803,8 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+    my %option = @_;
+
 # optionally takes 'qualitymask=>'N' to mask out low quality data
 
     $this->writeDNA($DFILE,">",@_);
@@ -816,6 +819,7 @@ sub writeDNA {
     my $this   = shift;
     my $FILE   = shift; # obligatory
     my $marker = shift;
+
 # optionally takes 'qualitymask=>'N' to mask out low quality data
 
     $marker = ">" unless defined($marker); # default FASTA format

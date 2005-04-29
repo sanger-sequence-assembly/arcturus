@@ -102,7 +102,7 @@ sub fetchContigIDs {
 
 # get the contig IDs for this project always by reference to the database
 
-    my $ADB = $this->{ADB} || return undef;
+    my $ADB = $this->{ADB} || return (0,"Missing database connection");
 
     my $pid = $this->getProjectID();
 
@@ -244,27 +244,42 @@ sub writeContigsToCaf {
 # write contigs to CAF
     my $this = shift;
     my $FILE = shift; # obligatory file handle
-    my $options = shift; # hash ref
+    my %options = @_;
 
-    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock});
+    my ($contigids,$status) = $this->fetchContigIDs($options{notacquirelock});
 
-    return (0,$status) unless ($contigids && @$contigids);
+    return (0,1,$status) unless ($contigids && @$contigids);
 
-    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+    my $ADB = $this->{ADB} || return (0,1,"Missing database connection");
 
     my $export = 0;
     my $report = '';
+    my $errors = 0;
+
     foreach my $contig_id (@$contigids) {
+
         my $contig = $ADB->getContig(contig_id=>$contig_id);
+
         unless ($contig) {
-            $report .= "FAILED to retrieve contig $contig_id";
+            $report .= "FAILED to retrieve contig $contig_id\n";
+            $errors++;
             next;
         }
-#       $contig->toPadded() if ($options && $options->{padded});
-        $contig->writeToCaf($FILE);
-        $export++;
+
+        $contig->toPadded() if $options{padded};
+
+        if (my $status = $contig->writeToCaf($FILE)) {
+            $report .= "$status\n";
+            $errors++;
+        }
+        else {
+            $export++;
+        }
     }
-    return $export,$report;
+
+# returns number of contigs exported without errors, number of errors and report
+
+    return $export,$errors,$report;
 }
 
 sub writeContigsToFasta {
@@ -272,26 +287,40 @@ sub writeContigsToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
-    my $options = shift; # hash ref
+    my %options = @_;
 
-    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock}); 
+    my ($contigids,$status) = $this->fetchContigIDs($options{notacquirelock}); 
 
-    return (0,$status) unless ($contigids && @$contigids);
+    return (0,1,$status) unless ($contigids && @$contigids);
 
-    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+    my $ADB = $this->{ADB} || return (0,1,"Missing database connection");
 
     my $export = 0;
     my $report = '';
+    my $errors = 0;
+
     foreach my $contig_id (@$contigids) {
+
         my $contig = $ADB->getContig(contig_id=>$contig_id);
+
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id";
+            $errors++;
             next;
         }
-        $contig->writeToFasta($DFILE,$QFILE,$options->{noreads});
-        $export++;
+
+        if (my $status = $contig->writeToFasta($DFILE,$QFILE,%options)) {
+            $report .= "$status\n";
+            $errors++;
+        }
+        else {
+            $export++;
+        }
     }
-    return $export,$report;
+
+# returns number of contigs exported without errors, number of errors and report
+
+    return $export,$errors,$report;
 }
 
 sub writeContigsToMaf {
@@ -300,34 +329,46 @@ sub writeContigsToMaf {
     my $DFILE = shift; # obligatory file handle for DNA
     my $QFILE = shift; # obligatory file handle for QualityData
     my $RFILE = shift; # obligatory file handle for Placed Reads
-    my $options = shift; # hash ref
+    my %options = @_;
 
-    my ($contigids,$status) = $this->fetchContigIDs($options->{notacquirelock}); 
+    my ($contigids,$status) = $this->fetchContigIDs($options{notacquirelock}); 
 
-    return (0,$status) unless ($contigids && @$contigids);
+    return (0,1,$status) unless ($contigids && @$contigids);
 
-    my $ADB = $this->{ADB} || return (0,"Missing database connection");
+    my $ADB = $this->{ADB} || return (0,1,"Missing database connection");
 
     my $export = 0;
     my $report = '';
+    my $errors = 0;
 
     foreach my $contig_id (@$contigids) {
+
         my $contig = $ADB->getContig(contig_id=>$contig_id);
+
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id";
+            $errors++;
             next;
         }
-        my ($w,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,$options);
 
-        unless (defined($w)) {
-            return 0,"Missing file handle(s) in 'writeContigsToMaf'";
+        my ($status,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,%options);
+
+        if ($status) {
+            $export++;
 	}
-
-        $report .= $r unless $w; # error status $w = 0
-        $export++ if $w;
+        elsif ($r =~ /file/) { # missing file handle(s)
+            $report .= $r; 
+            return 0,1,$report;
+	}
+        else {
+            $report .= $r;
+            $errors++;
+        }
     }
 
-    return $export,$report;
+# returns number of contigs exported without errors, number of errors and report
+
+    return $export,$errors,$report;
 }
 
 #-------------------------------------------------------------------    

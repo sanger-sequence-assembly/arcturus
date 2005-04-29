@@ -29,6 +29,11 @@ sub new {
 
     $this->putArcturusUser(); # establish the username
 
+# define roles for the managers
+
+    $this->setArcturusUserRole('adh','dba');
+    $this->setArcturusUserRole('ejz','dba');
+
     return $this;
 }
 
@@ -112,6 +117,8 @@ sub disconnect {
 }
 
 #-----------------------------------------------------------------------------
+# arcturus user information
+#-----------------------------------------------------------------------------
 
 sub putArcturusUser {
 # determine the username from the system data
@@ -138,35 +145,96 @@ sub getArcturusUser {
     return $this->{ArcturusUser} || ''; 
 }
 
+#-------------------------------------------------------------------------
+# what about "roles" TO BE DEVELOPED
+
+sub setArcturusUserRole {
+    my $this = shift;
+    my ($user,$role) = @_;
+
+    $this->{userroles} = {} unless defined $this->{userroles};
+
+    my $userrolehash = $this->{userroles};
+
+    $userrolehash->{$user} = $role if $role;    
+}
+
+sub getArcturusUserRoles {
+    my $this = shift;
+
+    $this->{userroles} = {} unless defined $this->{userroles};
+ 
+    return $this->{userroles};
+}
+
 #-----------------------------------------------------------------------------
 
-sub message {
+sub logMessage {
 # message TO BE DEVELOPED
     my $this = shift;
     my $user = shift;
-    my $pold = shift; # old project
-    my $pnew = shift; # new project
+    my $project = shift; # projectname
     my $text = shift; # the message
 
     print STDOUT "message for user $user: '$text'\n";
+
+
+    $this->{messages} = [] unless defined $this->{messages};
+
+    my $log = $this->{messages};
+    
+    push @$log, [($user,$project,$text)]; # array of arrays
 }
 
-sub messagemanager {
+sub processMessages {
+    my $this = shift;
+
+# preliminary rules:
+
+# messages are sent to projects and or users
+
+# message for projects are stored in a db table
+
+#   moving contigs between projects: message to receiving project on db table
+#                                    email to user
+#   no message sent for BIN of any kind
+
+    $this->{messages} = [] unless defined $this->{messages};
+
+    my $log = $this->{messages};
+
+    foreach my $message (@$log) {
+        my ($user,$project,$text) = @$message;
+#        &emailuser ($user,$text);
+#        &logproject ($project,$text);
+    }
+
+
+# reset the buffer
+
+    $this->{messages} = [];    
 }
+
+#-----------------------------------------------------------------------------
+
+sub logQuery {
+# keep a query log for debugging purposes
+    my $this = shift;
+    my @entry = @_;
+
+# each entry exists of: sub routine of origin, query and possibly @data
+
+    my $log = $this->{querylog};
+
+    return $log unless (@entry >= 2); # retrieval mode
+
+    $log = [] unless defined $log;
+
+    push @$log, [@entry]; # array of arrays
+#print "@entry\n";
+}
+
 
 #-----------------------------------------------------------------------------
 
 1;
-
-
-
-
-
-
-
-
-
-
-
-
-
