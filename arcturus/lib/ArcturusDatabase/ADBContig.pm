@@ -73,7 +73,7 @@ sub getContig {
         elsif ($nextword eq 'withTagName') {
 # returns the highest contig_id, i.e. most recent contig with this tag
 # NOTE: perhaps we should cater for more than one contig returned?
-            $query .= " from CONTIG join CONTIGTAG using (contig_id) "
+            $query .= " from CONTIG join OLDCONTIGTAG using (contig_id) "
                     . "where tag_seq_id in " 
                     .       "(select tag_seq_id from TAGSEQUENCE"
                     .       " where tagseqname = ?) "
@@ -83,7 +83,7 @@ print STDERR "getContig: $query\n";
         }
         elsif ($nextword eq 'withAnnotationTag') {
 # returns the highest contig_id, i.e. most recent contig with this tag
-            $query .= " from CONTIG join CONTIGTAG using (contig_id)".
+            $query .= " from CONTIG join OLDCONTIGTAG using (contig_id)".
                       "where systematic_id like '?' ". 
 		      "order by contig_id desc limit 1";
 print STDERR "getContig: $query\n";
@@ -1698,7 +1698,7 @@ sub fetchTagsForContigIDs { # TO BE DEVELOPED AND TESTED
     my $items = "contig_id,tagtype,systematic_id,pstart,pfinal,strand,comment,"
               . "tagseqname,sequence";
 
-    my $query = "select $items from CONTIGTAG left join TAGSEQUENCE"
+    my $query = "select $items from OLDCONTIGTAG left join TAGSEQUENCE"
               . " using (tag_seq_id)"
 	      . " where contig_id in (".join (',',@$cids) .")"
               . "   and deprecated != 'Y'"
@@ -1806,7 +1806,7 @@ print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 
 #$DEBUG=0;
 
-    return &putTags ($dbh,$ctags,'CONTIGTAG','contig_id',1); # old system
+    return &putTags ($dbh,$ctags,'OLDCONTIGTAG','contig_id',1); # old system
 
 # new system TO BE TESTED
 
@@ -1831,7 +1831,7 @@ print "ENTER putContigTags ".scalar(@$tags)."\n" if $DEBUG;;
 
 # TO BE DEVELOPED USING SEPARATE STORAGE OF systematic_id
 
-    my $query = "insert into CONTIGTAG " # insert ignore ?
+    my $query = "insert into OLDCONTIGTAG " # insert ignore ?
               . "(contig_id,tagtype,systematic_id,tag_seq_id,pstart,pfinal,strand,comment) "
               . "values ";
 
@@ -1955,7 +1955,7 @@ print "TAG SEQUENCE $tagseqname, $tag_seq_id, ".($sequence || '')."\n" if $DEBUG
 
     my $query = "insert into $table ". # insert ignore ?
                 "($seqkeyid,tagtype,tag_seq_id,pstart,pfinal,strand,comment) values ";
-    $query =~ s/tagtype/tagtype,systematic_id/ if ($table eq 'CONTIGTAG');
+    $query =~ s/tagtype/tagtype,systematic_id/ if ($table eq 'OLDCONTIGTAG');
 
     my $success = 1;
     my $block = 100; # insert block size
@@ -1981,7 +1981,7 @@ print "TAG SEQUENCE $tagseqname, $tag_seq_id, ".($sequence || '')."\n" if $DEBUG
 
         $accumulatedQuery .= ',' if $accumulated++;
         $accumulatedQuery .= "($seq_id,'$tagtype',";
-        $accumulatedQuery .=  "'$systematic_id'," if ($table eq 'CONTIGTAG');
+        $accumulatedQuery .=  "'$systematic_id'," if ($table eq 'OLDCONTIGTAG');
         $accumulatedQuery .=  "$tag_seq_id,$pstart,$pfinal,'$strand',$comment)";
 
         if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
@@ -2001,3 +2001,6 @@ print "EXIT putTags success $success\n" if $DEBUG;
 #------------------------------------------------------------------------------
 
 1;
+
+
+
