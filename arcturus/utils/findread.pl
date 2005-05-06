@@ -68,6 +68,16 @@ $query = "select currentcontigs.contig_id,nreads,length,updated,project_id" .
 my $stmt_seq2contig = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
+$query = "select seq_id from MAPPING where contig_id = ? order by cstart asc limit 1";
+
+my $stmt_contig2mapping = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$query = "select readname from SEQ2READ left join READS using(read_id) where seq_id = ?";
+
+my $stmt_seq2read = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
 while (my $line = <STDIN>) {
     my ($readname) = $line =~ /\s*(\S+)/;
 
@@ -85,8 +95,16 @@ while (my $line = <STDIN>) {
 	    my $projname = $projectid2name{$projid};
 	    $projname = $organism . "/" . $projid unless defined($projname);
 
-	    print "$readname contig=$contig_id project=$projname contig_length=$ctglen" .
-		" contig_reads=$nreads contig_updated=$updated\n",
+	    $stmt_contig2mapping->execute($contig_id);
+	    my ($leftseqid) = $stmt_contig2mapping->fetchrow_array();
+	    $stmt_contig2mapping->finish();
+
+	    $stmt_seq2read->execute($leftseqid);
+	    my ($leftreadname) = $stmt_seq2read->fetchrow_array();
+	    $stmt_seq2read->finish();
+
+	    print "$readname is in $leftreadname in $projname (id=$contig_id length=$ctglen" .
+		" reads=$nreads created=$updated)\n",
 	}
 
 	if ($ctgcount < 1) {
@@ -95,10 +113,12 @@ while (my $line = <STDIN>) {
 
 	$stmt_seq2contig->finish();
     } else {
-	printf "$readname NOT KNOWN\n";
+	print "$readname NOT KNOWN\n";
     }
 
     $stmt_read2seq->finish();
+
+    print "\n";
 }
 
 
