@@ -29,6 +29,7 @@ my $allcontigs = 0;
 my $maxseqperfile;
 my $seqfilenum;
 my $totseqlen;
+my $project_id;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -47,6 +48,8 @@ while (my $nextword = shift @ARGV) {
     $maxseqperfile = shift @ARGV if ($nextword eq '-maxseqperfile');
 
     $allcontigs = 1 if ($nextword eq '-allcontigs');
+
+    $project_id = shift @ARGV if ($nextword eq '-project');
 
     $padton = 1 if ($nextword eq '-padton');
     $padtox = 1 if ($nextword eq '-padtox');
@@ -117,6 +120,7 @@ if (defined($contigids)) {
 
     $query .= " and length > $minlen" if defined($minlen);
 
+    $query .= " and project_id = $project_id" if defined($project_id);
 }
 
 my $sth = $dbh->prepare($query);
@@ -222,9 +226,10 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
     print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
-    print STDERR "    -allcontigs\tSelect all contigs, not just from current set\n";
+    print STDERR "    -allcontigs\t\tSelect all contigs, not just from current set\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
+    print STDERR "    -project\t\tProject ID to export\n";
 }
