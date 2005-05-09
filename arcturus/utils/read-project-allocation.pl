@@ -32,7 +32,7 @@ while (my $nextword = shift @ARGV) {
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
-    $read       = shift @ARGV  if ($nextword eq '-read');
+    $read         = shift @ARGV  if ($nextword eq '-read');
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -48,10 +48,6 @@ while (my $nextword = shift @ARGV) {
 
     &showUsage(0,1) if ($nextword eq '-help'); # long write up
 }
-
-&showUsage("Missing read ID, readname or fofn") unless ($read || $fofn);
-
-&showUsage("Missing project ID or projectname") unless $project;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -68,6 +64,10 @@ $logger->setFilter(0) if $verbose; # set reporting level
 &showUsage("Missing organism database") unless $organism;
 
 &showUsage("Missing database instance") unless $instance;
+
+&showUsage("Missing read ID, readname or fofn") unless ($read || $fofn);
+
+&showUsage("Missing project ID or projectname") unless $project;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -146,12 +146,14 @@ foreach my $read (@reads) {
     $options{noload} = 1 unless $confirm;
     my ($status,$message) = $adb->assignReadAsContigToProject($project,%options);
     if ($status) {
-        $logger->warning("read $read to be added to project ".$project->getProjectName()) unless $confirm;
-        $logger->warning("read $read is added to project ".$project->getProjectName()) if $confirm;
+        $logger->warning("read $read is added to project ".$project->getProjectName());
+    }
+    elsif ($message =~ /no-load/i) {
+        $logger->warning("read $read to be added to project ".$project->getProjectName());
     }
     else {
-        $logger->warning("read $read cannot be added : $message");
-    }
+        $logger->info("read $read is not be added : $message");
+    } 
 }
   
 $adb->disconnect();
