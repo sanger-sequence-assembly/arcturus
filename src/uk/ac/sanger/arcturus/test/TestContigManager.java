@@ -184,15 +184,15 @@ public class TestContigManager {
 
 		int project_id = Integer.parseInt(projectname);
 
-		Vector contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
+		Set contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
 
 		if (contigs != null && contigs.size() > 0) {
 		    int totlength = 0;
 		    int totreads = 0;
 		    int nContigs = 0;
 
-		    for (Enumeration e = contigs.elements() ; e.hasMoreElements() ;) {
-			Contig contig = (Contig)e.nextElement();
+		    for (Iterator iter = contigs.iterator() ; iter.hasNext() ;) {
+			Contig contig = (Contig)iter.next();
 
 			totlength += contig.getLength();
 			totreads += contig.getReadCount();
@@ -365,6 +365,19 @@ public class TestContigManager {
 		ps.println("X: " + x);
 
 	    ps.println();
+	} else {
+	    ps.println("CONSENSUS WAS NULL");
+	}
+
+	byte[] qual = contig.getQuality();
+
+	if (qual != null) {
+	    for (int i = 0; i < qual.length; i++)
+		ps.print(" " + (int)qual[i]);
+
+	    ps.println();
+	} else {
+	    ps.println("QUALITY WAS NULL");
 	}
 
 	ps.println(">>> ------------------------------------------------------------------ <<<");
