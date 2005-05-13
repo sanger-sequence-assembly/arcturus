@@ -943,6 +943,15 @@ sub isUnassembledRead {
     return ($row+0) ? 0 : 1; 
 }
 
+sub getReadNamesLike {
+# returns a list of readnames matching a pattern or name
+    my $this = shift;
+    my %options = @_;
+
+    print "getReadNamesLike: TO BE IMPLEMENTED\n";
+
+}
+
 #------------------------------------------------------------------------------
 # adding sequence to Reads
 #------------------------------------------------------------------------------
@@ -1574,6 +1583,7 @@ sub putSequenceForRead {
 
 sub putNewSequenceForRead {
 # add the sequence of this read as a new (edited) sequence for existing read
+# on success put the new sequence ID and version number into the input Read
     my $this = shift;
     my $read = shift; # a Read instance
     my $noload = shift; # optional
@@ -1596,16 +1606,19 @@ sub putNewSequenceForRead {
         $read->setReadID($read_id);
     }
     elsif ($read->getReadID() && $read->getReadID() != $read_id) {
-        return (0,"incompatible read IDs (".$read->getReadID." vs $read_id)");
+        return (0,"incompatible read IDs (".$read->getReadID." vs. $read_id)");
     }
     
 # b) test if it is an edited read by counting alignments to the trace file
 
     my $alignToSCF = $read->getAlignToTrace();
-#    if ($alignToSCF->hasSegments() <= 1) { # if returns Mapping
-    if ($alignToSCF && scalar(@$alignToSCF) <= 1) {
-        return (0,"insufficient alignment information") unless $read->isEdited();
-        print STDERR "read slipped through edited test: $readname\n";
+    if (ref($alignToSCF) eq 'Mapping' && $alignToSCF->hasSegments() <= 1) { 
+print STDOUT "using Mapping\n" if $DEBUG;
+        return (0,"insufficient alignment information");
+    }
+# old representation; to be removed after update to Read.pm
+    elsif (ref($alignToSCF) eq 'ARRAY' && scalar(@$alignToSCF) <= 1) {
+        return (0,"insufficient alignment information");
     }
 
 # c) ok, now we get the previous versions of the read and compare
@@ -1630,20 +1643,22 @@ sub putNewSequenceForRead {
 # d) ok, we have a new sequence version for the read which has to be loaded
 #    we only allow sequence without pad '-' symbols to entered 
 
-    return (0,"New (edited) sequence for read $readname ignored") if $noload;
-
     if ($read->getSequence() =~ /\-/) {
 # fatal error: sequence contains non-DNA symbols
-        return (0, "new sequence version contains pads");
+        return (0,"Invalid new sequence for read $readname: contains pads");
+    }
+    elsif ($noload) {
+# test option
+        return (0,"New (edited) sequence version for read $readname ignored");
     }
 
-# e) what about copying missing data from previous version? method on Read?
+# e) what about test/copying missing data from previous version? method on Read?
 
 # f) load this new version of the sequence
 
 print STDOUT "new sequence version detected ($version) for read $readname\n" if $DEBUG;
 
-    my ($seq_id, $errmsg) = $this->putSequenceForRead($read,$version); 
+    my ($seq_id,$errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
 
     $read->setSequenceID($seq_id);
@@ -1983,7 +1998,7 @@ sub getSequenceIDsForReads {
 # NOTE: this method may insert new read sequence
 # (see also getSequenceIDForAssembledReads in ADBContig)
     my $this = shift;
-    my $reads = shift;
+    my $reads = shift; # array ref
     my $noload = shift; # flag inhibiting insertion of new read sequence
 
 # collect the readnames of unedited and of edited reads
@@ -1995,16 +2010,11 @@ sub getSequenceIDsForReads {
 
     my $unedited = {};
     foreach my $read (@$reads) {
-        next if $read->getSequenceID(); # already loaded
-        if ($read->isEdited && $noload) {
-            my $readname = $read->getReadName();
-            print STDERR "New (edited) sequence for read $readname ignored\n";
-# note: sequence ID remains undefined
-        }
+        if ($read->getSequenceID()) { 
+            next; # already loaded
+	}
         elsif ($read->isEdited) {
-#        if ($read->isEdited) { THIS FIX PRIORITY
-#            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
-            my ($added,$errmsg) = $this->putNewSequenceForRead($read); # noload
+            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
 	    print STDERR "$errmsg\n" unless $added;
             $success = 0 unless $added;
         }
@@ -2161,7 +2171,7 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
         $tag->setType            (shift @ary); # tagtype
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
         $tag->setStrand          (shift @ary); # strand
-        $tag->setComment         (shift @ary); # comment
+        $tag->setTagComment      (shift @ary); # comment
         $tag->setTagSequenceName (shift @ary); # tagseqname
         $tag->setDNA             (shift @ary); # sequence
 # add to output array
@@ -2275,6 +2285,10 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
     my $tagIDhash = &getTagSequenceIDsForTags($dbh,\@tags,$autoload);
 
     return &putReadTags($dbh,\@tags,$tagIDhash);
+
+#    &getTagSequenceIDsForTags($dbh,\@tags,$autoload);
+
+#    return &putReadTags($dbh,\@tags);
 }
 
 sub getTagSequenceIDsForTags {
@@ -2283,7 +2297,7 @@ sub getTagSequenceIDsForTags {
     my $tags = shift;
     my $autoload = shift; # of missing tag names and sequences
 
-print "ENTER getTagSequenceIDsForTags ".scalar(@$tags)."\n" if $DEBUG;
+#print "ENTER getTagSequenceIDsForTags ".scalar(@$tags)."\n" if $DEBUG;
 
     my $tagIDhash = {};
 
@@ -2324,9 +2338,9 @@ print "ENTER getTagSequenceIDsForTags ".scalar(@$tags)."\n" if $DEBUG;
             next unless $tagseqname;
 	    my $sequence = $tag->getDNA();
             if (!$tagIDhash->{$tagseqname}) {
-                print STDERR "Missing tag name $tagseqname (".
-                    ($sequence || 'no sequence available').
-                    ") in TAGSEQUENCE list\n";
+                print STDERR "Missing tag name $tagseqname ("
+                            . ($sequence || 'no sequence available')
+                            . ") in TAGSEQUENCE list\n";
                 next unless $autoload; # allow sequence to be null
 # add tag name and sequence, if any, to TAGSEQUENCE list
 	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
@@ -2372,16 +2386,18 @@ print "ENTER getTagSequenceIDsForTags ".scalar(@$tags)."\n" if $DEBUG;
                     }
 		}
 	    }
+# add the tag sequence ID to the tag object
+            $tag->setTagSequenceID($tagIDhash->{$tagseqname});
         }
     }
-    return $tagIDhash;
+#    return $tagIDhash;
 }
    
 sub putReadTags {
 # use as private method only
     my $dbh = shift;
     my $tags = shift;
-    my $tagIDhash = shift;
+#    my $tagIDhash = shift;
 
     return undef unless ($tags && @$tags);
 
@@ -2404,10 +2420,11 @@ sub putReadTags {
         my $tagtype          = $tag->getType();
         my $tagseqname       = $tag->getTagSequenceName() || '';
         my ($pstart,$pfinal) = $tag->getPosition();
-        my $tag_seq_id       = $tagIDhash->{$tagseqname} || 0;
+# my $tag_seq_id       = $tagIDhash->{$tagseqname} || 0;
+        my $tag_seq_id       = $tag->getTagSequenceID() || 0;
         my $strand           = $tag->getStrand();
         $strand =~ s/(\w)\w*/$1/;
-        my $comment          = $tag->getComment();
+        my $comment          = $tag->getTagComment();
 # we quote the comment string because it may contain odd characters
         $comment = $dbh->quote($comment);
 
@@ -2446,8 +2463,53 @@ sub putTagSequence {
 sub insertTagSequence {
 # private method; populate the TAGSEQUENCE table
     my $dbh = shift;
-    my $tagseqname = shift;
+    my $tagseqname = shift || return undef;
     my $sequence = shift;
+    my $update = shift;
+
+# test if an update needs to be made
+
+    if ($update && $sequence) {
+
+        my $query = "select tag_seq_id,sequence from TAGSEQUENCE"
+                  . " where tagseqname like ?"
+                  . " order by tagseqname limit 1";
+
+#print "$query ($tagseqname)\n" if $DEBUG;
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute($tagseqname) || (&queryFailed($query) && return undef);
+
+        my ($tag_seq_id, $tagsequence) = $sth->fetchrow_array();
+
+        $sth->finish();
+
+#print STDERR "TAGSEQUENCE update query result $tag_seq_id \n" if $DEBUG;
+
+# if tagsequence is already in the database, update only if $update>1
+
+        if ($tag_seq_id) {
+
+            return $tag_seq_id if ($tagsequence && $update<=1);
+  
+# replace/update the sequence
+
+            $query = "update TAGSEQUENCE set sequence=?"
+                   . " where tagseqname like ?"
+                   . " order by tagseqname limit 1";
+#print "$query \n" if $DEBUG;
+
+            $sth = $dbh->prepare_cached($query);
+
+            my $rc = $sth->execute($sequence,$tagseqname) || &queryFailed($query);
+
+            return undef unless $rc; # a failed update
+
+            return $tag_seq_id;
+        }
+    }
+
+# insert a new tagseqname, sequence combination into TAGSEQUENCE
 
     my $columns = "tagseqname";
     my $values = "'$tagseqname'";
@@ -2468,9 +2530,7 @@ sub insertTagSequence {
 
 # the insert did not take place because the tag sequence name already exists
 
-
-
-print STDERR "TAGSEQUENCE insert recovery ($query)\n"; # TO BE TESTED
+#print STDERR "TAGSEQUENCE insert recovery ($query)\n" if $DEBUG; # TO BE TESTED
 
     $query = "select tag_seq_id from TAGSEQUENCE where tagseqname like ?";
 
@@ -2482,7 +2542,7 @@ print STDERR "TAGSEQUENCE insert recovery ($query)\n"; # TO BE TESTED
 
     my ($tag_seq_id) = $sth->fetchrow_array();
 
-print STDERR "TAGSEQUENCE recovery result $tag_seq_id \n";
+#print STDERR "TAGSEQUENCE recovery result $tag_seq_id \n" if $DEBUG;
 
     return $tag_seq_id;
 }

@@ -36,8 +36,11 @@ sub setOutputDevice {
     my $this   = shift;
     my $output = shift;
 
-    if (defined($output)) {
-        $this->{output} = new FileHandle($output, "w");
+    if (defined($output) && $output =~ /STDOUT|STDERR/) {
+        $this->{output} = new FileHandle(">&${output}");
+    }
+    elsif (defined($output)) {
+        $this->{output} = new FileHandle($output,"w");
 print "output device: $this->{output}\n";
     }
     else {

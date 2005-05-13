@@ -224,16 +224,24 @@ sub logQuery {
 
 # each entry exists of: sub routine of origin, query and possibly @data
 
+    $this->{querylog} = [] unless $this->{querylog};
+
     my $log = $this->{querylog};
 
-    return $log unless (@entry >= 2); # retrieval mode
+    unless (@entry >= 2) { # retrieval mode
+        my $logentry = $entry[0] || 1;
+        $logentry = $log->[$logentry-1]; # the query data
+        return undef unless $logentry;
+        @entry = @$logentry;
+        $entry[1] =~ s/(\s*(where|from|and|order|group))/\n         $1/gi;
+        my $output = "method : $entry[0]\nquery  : $entry[1]\n";
+        splice @entry,0,2;
+        $output .= "data   : @entry" if @entry;
+	return $output;
+    }
 
-    $log = [] unless defined $log;
-
-    push @$log, [@entry]; # array of arrays
-#print "@entry\n";
+    push @$log, [@entry]; # build array of arrays
 }
-
 
 #-----------------------------------------------------------------------------
 

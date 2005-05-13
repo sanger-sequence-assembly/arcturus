@@ -140,6 +140,19 @@ sub setContigName {
 }
 
 #------------------------------------------------------------------- 
+
+sub setGap4Name {
+    my $this = shift;
+    $this->{gap4name} = shift;
+}
+
+sub getGap4Name {
+    my $this = shift;
+    $this->{gap4name} = $this->getReadOnLeft() unless $this->{gap4name};
+    return $this->{gap4name} || 'unknown';
+}
+
+#------------------------------------------------------------------- 
   
 sub getNumberOfParentContigs {
     my $this = shift;
@@ -312,7 +325,6 @@ sub getMappings {
 sub addMapping {
 # add (read) Mapping object (or an array) to the internal buffer
     my $this = shift;
-#    my $Mapping = shift;
     $this->importer(shift,'Mapping');
 }
 
@@ -340,9 +352,7 @@ sub addTag {
     my $this = shift;
     my $ctag = shift;
 
-    $this->importer($ctag,'Tag');
-
-    $ctag->setSequenceID($this->getSequenceID());
+    $this->importer($ctag,'Tag','Tag',$this->getSequenceID());
 }
 
 sub hasTags {
@@ -442,7 +452,7 @@ sub importer {
     if (ref($Component) eq 'ARRAY') {
 # recursive use with scalar parameter
         while (scalar(@$Component)) {
-            $this->importer(shift @$Component,$class,$buffername);
+            $this->importer(shift @$Component,$class,$buffername,shift);
         }
     }
     else {
@@ -453,6 +463,8 @@ sub importer {
         }
         $this->{$buffername} = [] if !defined($this->{$buffername});
         push @{$this->{$buffername}}, $Component;
+        return unless (my $sequence_id = shift);
+        $Component->setSequenceID($sequence_id);
     }
 }
 
@@ -1050,30 +1062,35 @@ print "offset to be applied : $offset[$i] \n" if $DEBUG;
 # accept the new tag only if the position offsets are defined
 print "offsets: @offset \n" if $DEBUG;
         next unless @offset;
-# create a new tag by spawning from the old tag
-        my $newtag = $ptag->transpose($alignment,\@offset,$tlength);
+# create a new tag by spawning from the tag on the parent contig
+        my $tptag = $ptag->transpose($alignment,\@offset,$tlength);
 
 if ($DEBUG) {
-print "tag on parent : "; $ptag->writeToCaf(*STDOUT);
-print "tag on target : "; $newtag->writeToCaf(*STDOUT);
+print "tag on parent :\n "; $ptag->dump;
+print "tag on target :\n "; $tptag->dump;
 }
 
-# test if the new tag is not already present in the child
+
+
+# test if the transposed tag is not already present in the child;
+# if it is, inherit any properties from the transposed parent tag
+# which are not defined in it (e.g. when ctag built from Caf file) 
 
         my $present = 0;
         my $ctags = $target->getTags(0);
         foreach my $ctag (@$ctags) {
-            if ($newtag->isEqual($ctag)) {
+# test the transposed parent tag and port the tag_id / systematic ID
+            if ($tptag->isEqual($ctag,copy=>1,debug=>0)) {
                 $present = 1;
                 last;
 	    }
         }
         next if $present;
 
-# it's a new tag       
+# the (transposed) tag from parent is not in the current contig: add it
 
 print "new tag added\n" if $DEBUG;
-        $target->addTag($newtag);
+        $target->addTag($tptag);
     }
 }
 
@@ -1220,14 +1237,15 @@ sub metaDataToString {
         $this->getStatistics(1);
     }
 
-    my $name   = $this->getContigName()            || "undefined";
-    my $length = $this->getConsensusLength()       ||   "unknown";
-    my $cover  = $this->getAverageCover()          ||   "unknown";
-    my $rleft  = $this->getReadOnLeft()            ||   "unknown";
-    my $right  = $this->getReadOnRight()           ||   "unknown";
-    my $nreads = $this->getNumberOfReads()         || "undefined";
-    my $nwread = $this->getNumberOfNewReads()      ||           0;
-    my $pcntgs = $this->getNumberOfParentContigs() ||           0;
+    my $name     = $this->getContigName()            || "undefined";
+    my $gap4name = $this->getGap4Name();
+    my $length   = $this->getConsensusLength()       ||   "unknown";
+    my $cover    = $this->getAverageCover()          ||   "unknown";
+    my $rleft    = $this->getReadOnLeft()            ||   "unknown";
+    my $right    = $this->getReadOnRight()           ||   "unknown";
+    my $nreads   = $this->getNumberOfReads()         || "undefined";
+    my $nwread   = $this->getNumberOfNewReads()      ||           0;
+    my $pcntgs   = $this->getNumberOfParentContigs() ||           0;
 
 # if the contig has parents, get their names by testing/loading the mappings
 
@@ -1242,12 +1260,13 @@ sub metaDataToString {
         $parentlist = "(".join(',',sort @parents).")" if @parents;
     }
 
-    my $string = "Contig name     = $name\n" .
-                 "Number of reads = $nreads  (new reads = $nwread)\n" .
-                 "Parent contigs  = $pcntgs $parentlist\n" .
-                 "Consensuslength = $length\n" .
-                 "Average cover   = $cover\n" .   
-                 "End reads       : left $rleft  right $right\n\n";
+    my $string = "Contig name     = $name\n"
+               . "Gap4 name       = $gap4name\n"
+               . "Number of reads = $nreads  (new reads = $nwread)\n"
+               . "Parent contigs  = $pcntgs $parentlist\n"
+               . "Consensuslength = $length\n"
+               . "Average cover   = $cover\n"   
+               . "End reads       : left $rleft  right $right\n\n";
     foreach my $assembled (sort @assembledfrom) {
         $string   .= $assembled;
     }
@@ -1259,13 +1278,14 @@ sub toString {
 # very brief summary
     my $this = shift;
 
-    my $name   = $this->getContigName()            || "undefined";
-    my $nreads = $this->getNumberOfReads()         || "undefined";
-    my $length = $this->getConsensusLength()       ||   "unknown";
-    my $cover  = $this->getAverageCover()          ||   "unknown";
+    my $name     = $this->getContigName()            || "undefined";
+    my $gap4name = $this->getGap4Name();
+    my $nreads   = $this->getNumberOfReads()         || "undefined";
+    my $length   = $this->getConsensusLength()       ||   "unknown";
+    my $cover    = $this->getAverageCover()          ||   "unknown";
 
-    return sprintf ("%16s   reads:%-7d   length:%-8d   cover:%4.2f", 
-                    $name,$nreads,$length,$cover);
+    return sprintf ("%-14s = %-20s  reads:%-7d  length:%-8d  cover:%4.2f", 
+                    $name,$gap4name,$nreads,$length,$cover);
 }
 
 #-------------------------------------------------------------------    

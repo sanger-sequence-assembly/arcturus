@@ -33,19 +33,6 @@ sub getComment {
     return $this->{comment} || '';
 }
 
-sub setDescent {
-    my $this = shift;
-    my $text = shift;
-
-    $this->{descent} .= $text if $text;
-}
-
-sub getDescent {
-    my $this = shift;
-
-    return $this->{descent} || '';
-}
-
 sub setDNA {
 # DNA sequence of (special) tags, e.g. oligos
     my $this = shift;
@@ -54,23 +41,16 @@ sub setDNA {
 }
 
 sub getDNA {
+# transpose the dna if strand is reverse
     my $this = shift;
+    my $dotranspose = shift;
 
-    return $this->{DNA} || '';
+    unless ($dotranspose && $this->getStrand() ne 'Reverse') {
+        return $this->{DNA} || '';
+    }
+
+    return &transposeDNA($this->{DNA});
 }
-
-#sub setName {
-# tag type, up to 32 char
-#    my $this = shift;
-
-#    $this->{name} = shift;
-#}
-
-#sub getName {
-#    my $this = shift;
-
-#    return $this->{name} || '';
-#}
 
 sub setSystematicID {
 # tag type, up to 32 char
@@ -83,21 +63,6 @@ sub getSystematicID {
     my $this = shift;
 
     return $this->{systematicid} || '';
-}
-
-sub composeName {
-# compose a descriptive name from tag data
-    my $this = shift;
-
-    my $name = $this->{label} || '';
-    $name .= ":" if $name;
-    $name .= sprintf ("%9d",$this->getSequenceID());
-    my ($ps, $pf) = $this->getPosition();
-    $name .= sprintf ("/%11d", $ps);
-    $name .= sprintf ("-%11d", $pf);
-    $name =~ s/\s+//g; # remove any blanks
-
-    $this->setSystematicID($name);
 }
 
 sub setPosition {
@@ -129,7 +94,6 @@ sub getSequenceID {
 }
 
 sub setStrand {
-# tag type, 4 char abbreviation
     my $this = shift;
     my $strand = shift;
  
@@ -139,21 +103,65 @@ sub setStrand {
     elsif ($strand eq 'Reverse') {
         $this->{strand} = -1;
     }
+    else {
+        $this->{strand} = 0;
+    }
 }
 
 sub getStrand {
     my $this = shift;
 
-    if (!$this->{strand} || $this->{strand} > 0) {
+    if (!$this->{strand}) {
+        return "Unknown";
+    }
+    elsif ($this->{strand} > 0) {
         return "Forward";
     }
     elsif ($this->{strand} < 0) {
         return "Reverse";
-    }    
+    }
+    else {
+        return "Unknown";
+    }
+}
+
+sub setTagComment {
+    my $this = shift;
+
+    $this->{tagcomment} = shift;
+}
+
+sub getTagComment {
+    my $this = shift;
+
+    return $this->{tagcomment} || '';
+}
+
+sub setTagID {
+    my $this = shift;
+
+    $this->{tag_id} = shift;
+}
+
+sub getTagID {
+    my $this = shift;
+
+    return $this->{tag_id};
+}
+
+sub setTagSequenceID {
+    my $this = shift;
+
+    $this->{tsid} = shift;
+}
+
+sub getTagSequenceID {
+    my $this = shift;
+
+    return $this->{tsid} || 0;
 }
 
 sub setTagSequenceName {
-# tag type, 4 char abbreviation
     my $this = shift;
 
     $this->{tsname} = shift;
@@ -220,7 +228,7 @@ sub transpose {
 
     @tpos = sort {$a <=> $b} @tpos if @tpos;
 
-# transpose the strand (if needed); we don't transpose DNA
+# transpose the strand (if needed)
 
     my $strand = $this->getStrand();
     if ($strand eq 'Forward' and $align < 0) {
@@ -234,10 +242,13 @@ sub transpose {
 
     my $newtag = $this->new($this->{label});
 
+    $newtag->setTagID($this->getTagID());
     $newtag->setComment($this->getComment());
+    $newtag->setTagComment($this->getTagComment());
     $newtag->setDNA($this->getDNA());
     $this->composeName() unless $this->getSystematicID();
     $newtag->setSystematicID($this->getSystematicID());
+    $newtag->setTagSequenceID($this->getTagSequenceID());
     $newtag->setTagSequenceName($this->getTagSequenceName());
     $newtag->setPosition(@tpos);
     $newtag->setStrand($strand);
@@ -245,53 +256,113 @@ sub transpose {
 
 # finally compose the imported tag history; to be printed to caf only? 
 
-    $newtag->setDescent("imported ".$this->getSystematicID);
-    $newtag->setDescent(" truncated") if $truncated;
-    $newtag->setDescent(" frame-shifted") if ($offset->[0] != $offset->[1]);
+    $newtag->setComment("imported ".$this->getSystematicID);
+    $newtag->setComment(" truncated") if $truncated;
+    $newtag->setComment(" frame-shifted") if ($offset->[0] != $offset->[1]);
 
     return $newtag;
 }
 
+sub composeName {
+# compose a descriptive name from tag data
+    my $this = shift;
+
+    return undef unless $this->getSequenceID();
+
+    my $name = $this->{label} || '';
+    $name .= ":" if $name;
+    $name .= sprintf ("%9d",$this->getSequenceID());
+    my ($ps, $pf) = $this->getPosition();
+    $name .= sprintf ("/%11d", $ps);
+    $name .= sprintf ("-%11d", $pf);
+    $name =~ s/\s+//g; # remove any blanks
+
+    $this->setSystematicID($name);
+}
+
+sub transposeDNA {
+# reverse complement an input DNA sequence
+    my $string = shift;
+
+    return undef unless $string;
+
+    my $output = '';
+    my $length = length($string);
+    while ($length--) {
+        my $base = substr $string,$length,1;
+        $base =~ tr/ACGTacgt/TGCATGCA/;
+        $output .= $base;
+    }
+}
+
 #----------------------------------------------------------------------
 
-my $etest=0;
 sub isEqual {
-# compare tis tag with input tag
+# compare this tag with input tag
     my $this = shift;
     my $tag  = shift;
+    my %options = @_;
+
+#my $etest = $options{debug};
 
 # compare tag type
 
-print "Tag comparison: ".$this->getType." against ".$tag->getType."\n" if $etest;
+print "Tag comparison: ".$this->getType.
+            " against: ".$tag->getType."\n" if $options{debug};
+
     return 0 unless ($this->getType() eq $tag->getType());
 
 # compare tag position range
 
     my @spos = $this->getPosition();
     my @tpos = $tag->getPosition();
-print "  position: @spos  against  @tpos \n" if $etest;
+
+print "  position: @spos  against  @tpos \n" if $options{debug};
 
     return 0 unless (scalar(@spos) && scalar(@spos) == scalar(@tpos));
     return 0 if ($spos[0] != $tpos[0]);
     return 0 if ($spos[1] != $tpos[1]);
 
-# compare strands
+# compare tag comments
 
-    print "   strands: ".$this->getStrand." against ".$tag->getStrand."\n" if $etest;
-    return 0 unless ($this->getStrand() eq $tag->getStrand());
+print "  comment: ".$this->getTagComment.
+     "\n against: ".$tag->getTagComment."\n" if $options{debug};
 
-# finally compare comments
+    if ($this->getTagComment() =~ /\S/ || $tag->getTagComment() =~ /\S/) {
+        return 0 unless ($this->getTagComment() eq $tag->getTagComment());
+    }
 
-    print "  comment: ".$this->getComment."\n against ".$tag->getComment."\n" if $etest;
-    if ($this->getComment() =~ /\S/ || $tag->getComment() =~ /\S/) {
-        return 0 unless ($this->getComment() eq $tag->getComment());
+# compare strands (optional)
+
+    if ($options{includestrand}) {
+print "   strands: ".$this->getStrand.
+        " against: ".$tag->getStrand."\n" if $options{debug};
+
+        return 0 unless ( $tag->getStrand() eq 'Unknown' ||
+                         $this->getStrand() eq 'Unknown' ||
+                         $this->getStrand() eq $tag->getStrand());
     }
 
 # the tags are identical:
-print "Tags are EQUAL \n" if $etest;
-$etest-- if $etest;
+print "Tags are EQUAL \n" if $options{debug};
 
-    return 1;
+    if ($options{copy}) {
+# copy tag ID, tag sequence ID and systematic ID, ifnot already defined
+        unless ($tag->getTagID()) {
+print "Copying tag ID \n" if $options{debug};
+            $tag->setTagID($this->getTagID());
+        }
+        unless ($tag->getTagSequenceID()) {
+print "Copying tag sequence ID \n" if $options{debug};
+            $tag->setTagSequenceID($this->getTagSequenceID());
+        }
+        unless ($tag->getSystematicID()) {
+print "Copying systematic ID \n" if $options{debug};
+           $tag->setSystematicID($this->getSystematicID());
+        }
+    }
+
+    return 1
 }
 
 #----------------------------------------------------------------------
@@ -304,16 +375,40 @@ sub writeToCaf {
 
     my $type = $this->getType();
     my @pos  = $this->getPosition();
-    my $comment = $this->getComment();
-    $comment =~ s/\\n\\/\\n\\\n/g;
+    my $tagcomment = $this->getTagComment();
+    $tagcomment =~ s/\\n\\/\\n\\\n/g;
 
-    my $descent = $this->getDescent();
+    my $descent = $this->getComment();
 
     print $FILE "Tag $type ";
     print $FILE "@pos " unless ($type eq "NOTE");
-    print $FILE "\"$comment\"" if $comment;
-    print $FILE " $descent" if $descent;
+    print $FILE "\"$tagcomment\"" if $tagcomment;
     print $FILE "\n";
+    print $FILE "Tag INFO $descent\n" if $descent; # INFO tag only
+}
+
+sub dump {
+    my $tag = shift;
+    my $FILE = shift; # optional file handle
+
+    my $report = "Tag instance $tag\n";
+    $report .= "contig ID         ".($tag->getSequenceID() || 0)."\n";
+    $report .= "tag ID            ".($tag->getTagID()   || 'undef')."\n";
+    my @position = $tag->getPosition();
+    $report .= "position          '@position'\n";
+    $report .= "strand            ".($tag->getStrand()  || 'undef')."\n";
+    $report .= "comment           ".($tag->getComment() || 'undef')."\n\n";
+    $report .= "tag ID            ".($tag->getTagID()   || 'undef')."\n";
+    $report .= "tag type          ".($tag->getType()    || 'undef')."\n";
+    $report .= "systematic ID     ".($tag->getSystematicID()  || 'undef')."\n";
+    $report .= "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
+    $report .= "tag comment       ".($tag->getTagComment()    || 'undef')."\n\n";
+    $report .= "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
+    $report .= "tag sequence name ".($tag->getTagSequenceName() || 'undef')."\n";
+    $report .= "sequence          ".($tag->getDNA() || 'undef')."\n";
+
+    print $FILE $report  if $FILE;
+    return $report; 
 }
 
 #----------------------------------------------------------------------

@@ -528,13 +528,21 @@ sub assignReadAsContigToProject {
     my $lqleft  = $read->getLowQualityLeft();
     my $lqright = $read->getLowQualityRight();
 
-    return 0,"Incomplete read $identifier : missing quality range"
+    return 0,"incomplete read $identifier : missing quality range"
         unless (defined($lqleft) && defined($lqright));
 
 # check read does not belong to any contig
 
     return 0,"read $identifier is an assembled read"
         unless $this->isUnassembledRead(read_id=>$read->getReadID());
+
+# check if it meets the minimum quality range
+
+    my $minimumlength = $poption{minimumlength};
+    $minimumlength = 50 unless $minimumlength;
+    my $contiglength = $lqright - $lqleft + 1;
+    return 0,"read $identifier is of insufficient length ($minimumlength)"
+        unless ($contiglength < $minimumlength);
 
 # create a new contig with a single read
 

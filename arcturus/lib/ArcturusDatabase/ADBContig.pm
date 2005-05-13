@@ -14,8 +14,6 @@ our @ISA = qw(ArcturusDatabase::ADBRead);
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
-my $DEBUG = 0;
-
 # ----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
@@ -27,6 +25,10 @@ sub new {
 
     return $this;
 }
+
+my $DEBUG;
+sub cDebug   { $DEBUG = 1; }
+sub cNoDebug { $DEBUG = 0; }
 
 #------------------------------------------------------------------------------
 # methods for exporting CONTIGs or CONTIG attributes
@@ -41,8 +43,8 @@ sub getContig {
 
 # decode input parameters and compose the query
 
-    my $query  = "select CONTIG.contig_id,length,ncntgs,nreads,".
-                 "newreads,cover,readnamehash "; 
+    my $query  = "select CONTIG.contig_id,gap4name,length,ncntgs,nreads,"
+               . "newreads,cover,readnamehash "; 
 
     my $nextword;
     my $metadataonly = 0; # default export the lot
@@ -62,10 +64,10 @@ sub getContig {
         elsif ($nextword eq 'withRead') {
 # returns the highest contig_id, i.e. most recent contig with this read
             $query .= " from CONTIG, MAPPING, SEQ2READ, READS "
-                    . "where CONTIG.contig_id = MAPPING.contig_id"
-                    . "  and MAPPING.seq_id = SEQ2READ.seq_id"
-                    . "  and SEQ2READ.read_id = READS.read_id"
-                    . "  and READS.readname = ? "
+                    . "where CONTIG.contig_id = MAPPING.contig_id "
+                    . "  and MAPPING.seq_id = SEQ2READ.seq_id "
+                    . "  and SEQ2READ.read_id = READS.read_id "
+                    . "  and READS.readname like ? "
 		    . "order by contig_id desc limit 1";
 #print STDERR "getContig: $query\n";
              $value = shift;
@@ -73,20 +75,23 @@ sub getContig {
         elsif ($nextword eq 'withTagName') {
 # returns the highest contig_id, i.e. most recent contig with this tag
 # NOTE: perhaps we should cater for more than one contig returned?
-            $query .= " from CONTIG join OLDCONTIGTAG using (contig_id) "
-                    . "where tag_seq_id in " 
-                    .       "(select tag_seq_id from TAGSEQUENCE"
-                    .       " where tagseqname = ?) "
-		    . "order by contig_id desc limit 1";
-print STDERR "getContig: $query\n";
+            $query .= "  from CONTIG,TAG2CONTIG,CONTIGTAG,TAGSEQUENCE"
+                   .  " where CONTIG.contig_id = TAG2CONTIG.contig_id"
+                   .  "   and TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
+                   .  "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
+                   .  "   and TAGSEQUENCE.tagseqname like ?" 
+		   .  " order by contig_id desc limit 1";
+print STDOUT ">getContig: $query\n";
             $value = shift;
         }
         elsif ($nextword eq 'withAnnotationTag') {
 # returns the highest contig_id, i.e. most recent contig with this tag
-            $query .= " from CONTIG join OLDCONTIGTAG using (contig_id)".
-                      "where systematic_id like '?' ". 
-		      "order by contig_id desc limit 1";
-print STDERR "getContig: $query\n";
+            $query .= "  from CONTIG,TAG2CONTIG,CONTIGTAG"
+                   .  " where CONTIG.contig_id = TAG2CONTIG.contig_id"
+                   .  "   and TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
+                   .  "   and CONTIGTAG.systematic_id like ?"
+		   .  " order by contig_id desc limit 1";
+print STDOUT ">getContig: $query\n";
             $value = shift;
         }
         elsif ($nextword eq 'metaDataOnly') {
@@ -98,6 +103,8 @@ print STDERR "getContig: $query\n";
             exit 0;
         }
     }
+
+    $this->logQuery('getContig',$query,$value);
 
     my $dbh = $this->getConnection();
         
@@ -115,6 +122,9 @@ print STDERR "getContig: $query\n";
 
         my $contig_id = shift @attributes;
         $contig->setContigID($contig_id);
+
+        my $gap4name = shift @attributes;
+        $contig->setGap4Name($gap4name);
 
         my $length = shift @attributes;
         $contig->setConsensusLength($length);
@@ -185,13 +195,33 @@ sub getSequenceAndBaseQualityForContigID {
 
     $sth->finish();
 
-    $sequence = uncompress($sequence) if defined($sequence);
+    if (defined($sequence)) {
+        $sequence = uncompress($sequence);
+        unless ($sequence) {
+	    print STDERR "uncompress FAILED in contig_id=$contig_id : ";
+            print STDERR "undefined sequence\n";
+        }
+    }
 
     if (defined($quality)) {
 	$quality = uncompress($quality);
-print STDERR "undefined quality in contig_id = $contig_id\n" unless $quality;
-	my @qualarray = unpack("c*", $quality);
-	$quality = [@qualarray];
+        if ($quality) {
+	    my @qualarray = unpack("c*", $quality);
+	    $quality = [@qualarray];
+	}
+        else {
+# the decompression failed, probably due to a bug in the Perl Z-lib module
+            my $length = 0;
+            $length = length($sequence) if $sequence;
+	    print STDERR "uncompress FAILED in contig_id=$contig_id : ";
+            print STDERR "undefined quality (sequence length $length)\n";
+# try to recover by faking an array of low quality data
+            my @qualarray;
+            while ($length--) {
+                push @qualarray,4; 
+            }
+	    $quality = [@qualarray];
+        }
     }
 
     $sequence =~ s/\*/N/g if $sequence; # temporary fix 
@@ -233,7 +263,7 @@ sub getParentContigsForContig {
     }
 # or, if no contig_id available, get the parents from read comparison
     else {
-print "searching parents from scratch\n" if $DEBUG; 
+print ">getParentContigsForContig: searching parents from scratch\n" if $DEBUG; 
         my $parents = $this->getParentIDsForContig($contig);
         @parentids = @$parents if $parents;        
     }
@@ -524,13 +554,6 @@ print STDERR "putContig: line 381 assignContigToProject I\n";
     }
 
     return $contigid, $message;
-   
-# 2) ?? lock MAPPING and SEGMENT tables
-# 3) enter record in MAPPING for each read and contig=0 (bulk loading)
-# 4) enter segments for each mapping (bulk loading)
-# 5) enter record in CONTIG with meta data, gets contig_id
-# 6) replace contig_id=0 by new contig_id in MAPPING
-# 7) release lock on MAPPING 
 }
 
 sub inheritProject {
@@ -645,9 +668,8 @@ sub inheritProject {
         my $largestscore = 0;
 	foreach my $testproject (@projects) {
 	    my $contigids = $testproject->getContigIDs();
-print "Project ".$testproject->getProjectID().
-      " ".$testproject->getProjectName().
-      " contigs: @$contigids\n" if $DEBUG;
+print ">inheritProjectProject: ".$testproject->getProjectID()." ".
+$testproject->getProjectName()." contigs: @$contigids\n" if $DEBUG;
             my $measure = $options{measure} || 0;
             my $score = 0;
             foreach my $contigid (@$contigids) {
@@ -661,7 +683,7 @@ print "Project ".$testproject->getProjectID().
                     $score += $consensussize{$contigid};
                 }
             }
-print "Score $score ($largestscore)\n" if $DEBUG;
+print ">inheritProject: Score $score ($largestscore)\n" if $DEBUG;
             if (!$largestscore || $score > $largestscore) {
                 $largestscore = $score;
                 $project = $testproject;
@@ -727,14 +749,15 @@ sub putMetaDataForContig {
     my $contig = shift; # Contig instance
     my $readhash = shift; 
 
-    my $query = "insert into CONTIG " .
-                "(length,ncntgs,nreads,newreads,cover".
-                ",origin,readnamehash) ".
-                "VALUES (?,?,?,?,?,?,?)";
+    my $query = "insert into CONTIG "
+              . "(gap4name,length,ncntgs,nreads,newreads,cover"
+              . ",origin,readnamehash) "
+              . "VALUES (?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($contig->getConsensusLength() || 0,
+    my $rc = $sth->execute($contig->getGap4Name(),
+                           $contig->getConsensusLength() || 0,
                            $contig->hasParentContigs(),
                            $contig->getNumberOfReads(),
                            $contig->getNumberOfNewReads(),
@@ -923,6 +946,7 @@ sub deleteContig {
 # remove data for a given contig_id from all tables
     my $this = shift;
     my $contigid = shift;
+    my %options = @_;
 
     $contigid = $this->{lastinsertedcontigid} unless defined($contigid);
 
@@ -937,7 +961,7 @@ sub deleteContig {
 
     my $isparent = $dbh->do($query) || &queryFailed($query);
 
-    return 0,"Contig $contigid is, or may be, a parent and can't be deleted" 
+    return (0,"Contig $contigid is, or may be, a parent and can't be deleted") 
         if (!$isparent || $isparent > 0); # also exits on failed query
 
 # safeguard: contig may not belong to a project and have checked 'out' status
@@ -949,19 +973,25 @@ sub deleteContig {
     
 # proceed only if contig has been unlinked; now delete from the primary tables
 
+    my $report = '';
     my $success = 1;
     foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
         my $query = "delete from $table where contig_id = $contigid"; 
         my $deleted = $dbh->do($query) || &queryFailed($query);
-        $success = 0 unless $deleted;
+        $success = 0 if (!$deleted && $table eq 'CONTIG');
+        $report .= "No delete done from $table for contig_id = $contigid\n"
+        unless ($table eq 'C2CMAPPING'); 
     }
 
 # remove the redundent entries in SEGMENT and C2CSEGMENT
 
-#    $success = $this->cleanupSegmentTables(0) if $success;
-    $success = &cleanupSegmentTables($dbh,0) if $success;
+    return ($success,$report) unless $options{cleanup};
 
-    return $success;
+# cleanup the segment table; can be slow for large tables !
+
+    $report .= &cleanupSegmentTables($dbh,0);
+
+    return ($success,$report);
 }
 
 # internal consistency test
@@ -969,7 +999,7 @@ sub deleteContig {
 sub readback {
 # checks mappings against
     my $this = shift;
-    my $contig = shift; 
+    my $contig = shift;
 }
 
 #---------------------------------------------------------------------------------
@@ -1060,7 +1090,6 @@ sub getContigMappingsForContig {
                  "  from C2CMAPPING" .
                  " where contig_id = ?" .
                  " order by cstart";
-print "DEBUG getContigMappingsForContig: \n$mquery\n" if $DEBUG;
  
     my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
                  "       pstart,length" .
@@ -1170,13 +1199,10 @@ sub putMappingsForContig {
 
     my $contigid = $contig->getContigID();
 
-    #print STDERR "--> putMappingsForContig($contigid)\n";
-
 # 1) the overall mapping
 
     my $mapping;
     foreach $mapping (@$mappings) {
-	#print STDERR $mapping->toString(),"\n";
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
 
@@ -1188,8 +1214,6 @@ sub putMappingsForContig {
               || &queryFailed($mquery);
         $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
     }
-
-    #print STDERR "<--\n\n";
 
 # 2) the individual segments (in block mode)
 
@@ -1228,22 +1252,94 @@ sub putMappingsForContig {
     return $success;
 }
 
-sub cleanup {
+#-----------------------------------------------------------------------------
+# housekeeping
+#-----------------------------------------------------------------------------
+
+sub cleanupMappings {
 # public method (to be extended with other tests?)
     my $this = shift;
-    return &cleanupSegmentTables($this->getConnection(),1);
+    my %option = @_;
+
+    my $dba = $this->getConnection();
+
+    my $report = &cleanupMappingTables($dba,$option{preview});
+
+    if ($option{includesegments}) {
+        $report .= &cleanupSegmentTables($dba,$option{preview});
+    }
+
+    return $report;
+}
+
+sub cleanupMappingTables {
+# private method: remove redundent mapping references from MAPPING
+# (re: housekeeping required after e.g. deleting contigs)
+    my $dbh = shift;
+    my $preview = shift;
+
+    my $query;
+    my $report = '';
+    foreach my $table ('MAPPING','C2CMAPPING','CONSENSUS') {
+        $query  = "select $table.contig_id" if $preview; 
+        $query  = "delete $table" unless $preview;
+        $query .= "  from $table left join CONTIG using (contig_id)"
+	       .  " where CONTIG.contig_id IS NULL";
+        my $sth = $dbh->prepare_cached($query);
+        my $rc = $sth->execute() || &queryFailed($query) && next;
+        $report .= sprintf ("%6d",($rc+0)) . " contig IDs ";
+        $report .= "to be " if $preview;
+        $report .= "have been " unless $preview;
+        $report .= "removed from $table\n";
+
+        if ($preview > 1) {
+# long list option: return a list of all contig IDs affected
+        }
+    }
+
+    return $report;
 }
 
 sub cleanupSegmentTables {
 # private method: remove redundent mapping references from (C2C)SEGMENT
-# (re: housekeeping required after e.g. deleting contigs) 
+# (re: housekeeping required after e.g. deleting contigs)
     my $dbh = shift;
-    my $list = shift;
+    my $preview = shift;
+
+    my $query;
+    my $report = '';
+    foreach my $table ('','C2C') {
+        $query  = "select ${table}SEGMENT.mapping_id" if $preview; 
+        $query  = "delete ${table}SEGMENT" unless $preview;
+        $query .= "  from ${table}SEGMENT left join ${table}MAPPING"
+                . " using (mapping_id)"
+	       .  " where ${table}MAPPING.mapping_id IS NULL";
+        my $sth = $dbh->prepare_cached($query);
+        my $rc = $sth->execute() || &queryFailed($query) && next;
+        $report .= sprintf ("%6d",($rc+0)) . " mapping IDs ";
+        $report .= "to be " if $preview;
+        $report .= "have been " unless $preview;
+        $report .= "removed from ${table}SEGMENT\n";
+# long list option? preview = 2
+        if ($preview > 1) {
+# long list option: return a list of all mapping IDs affected
+        }
+    }
+
+    return $report;
+}
+
+sub oldcleanupSegmentTables { # TO BE DELETED
+# private method: remove redundent mapping references from (C2C)SEGMENT
+# (re: housekeeping required after e.g. deleting contigs)
+    my $dbh = shift;
+    my $preview = shift;
 
 # first we deal with SEGMENT in blocks of 10000, then with C2CSEGMENT 
 
     my $pf = '';
     my $success = 1;
+    my $report = '';
     while ($success) {
 # find mapping IDs in (C2C)SEGMENT which do not occur in (C2C)MAPPING
         my $query = "select distinct(${pf}SEGMENT.mapping_id)" .
@@ -1259,14 +1355,20 @@ sub cleanupSegmentTables {
             push @mappingids, $mappingid;
         }
 
-        print STDERR "To be deleted from ${pf}SEGMENT : ".
-	              scalar(@mappingids)." mapping IDs\n" if $list;
+        if ($preview) {
+            $report .= "To be deleted from ${pf}SEGMENT : "
+	             . scalar(@mappingids)." mapping IDs\n";
+            last if $pf;
+            $pf = "C2C";
+            next;
+	}
 
         if (@mappingids) {
             $query = "delete from ${pf}SEGMENT where mapping_id in (".
 		      join(',',@mappingids).")";
             my $deleted = $dbh->do($query) || &queryFailed($query);
-            $success = 0 unless $deleted;
+            $success = 0 unless $deleted; # abort on error
+            $report .= ($deleted+0)." tuples deleted from ${pf}SEGMENT\n";
         } 
         elsif (!$pf) {
 # MAPPING finished, now do C2CMAPPING
@@ -1277,7 +1379,7 @@ sub cleanupSegmentTables {
         }
     }
 
-    return $success;
+    return $report;
 }
 
 #-----------------------------------------------------------------------------
@@ -1318,7 +1420,7 @@ sub getParentIDsForContig {
         $query .= " and contig_id != $contig_id";
     }
 
-    print STDOUT "query 1 getParentIDsForContig : \n$query\n" if $DEBUG;
+print STDOUT ">getParentIDsForContig query 1: \n$query\n" if $DEBUG;
 
     my $dbh = $this->getConnection();
 
@@ -1337,7 +1439,7 @@ sub getParentIDsForContig {
 
     if (scalar(@contigids)) {
 
-        print STDOUT "Linked contigs found : @contigids\n" if $DEBUG;
+print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
 
 # step 2 : remove the parents of the contigs found in step 1 from the list
 
@@ -1362,7 +1464,7 @@ sub getParentIDsForContig {
 
         @contigids = keys %contigids;
 
-        print STDOUT "Possible parents found : @contigids\n" if $DEBUG;
+print STDOUT ">getParentIDsForContig: Possible parents found : @contigids\n" if $DEBUG;
 
 # However, this list still may contain spurious parents due to 
 # misassembled reads in early contigs which are picked up in the
@@ -1379,7 +1481,7 @@ sub getParentIDsForContig {
 
     @contigids = keys %contigids;
 
-    print STDOUT "Confirmed parents found : @contigids\n" if $DEBUG;
+print STDOUT ">getParentIDsForContig: Confirmed parents found : @contigids\n" if $DEBUG;
 
     return [@contigids];
 }
@@ -1661,7 +1763,8 @@ sub getTagsForContig {
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    die "getTagsForContig expects a Contig instance" unless (ref($contig) eq 'Contig');
+    die "getTagsForContig expects a Contig instance" 
+        unless (ref($contig) eq 'Contig');
 
     return 0 if $contig->hasTags(); # only 'empty' instance allowed
 
@@ -1688,22 +1791,30 @@ sub getTagsForContigIDs {
     return &fetchTagsForContigIDs ($dbh,[@cids]);
 }
 
-sub fetchTagsForContigIDs { # TO BE DEVELOPED AND TESTED
+sub fetchTagsForContigIDs {
 # private method
     my $dbh = shift;
-    my $cids = shift; # array of seq IDs
+    my $cids = shift; # reference to array of contig IDs
 
-# compose query
+    die "fetchTagsForContigIDs expects an array as parameter"
+    unless (ref($cids) eq 'ARRAY');
 
-    my $items = "contig_id,tagtype,systematic_id,pstart,pfinal,strand,comment,"
-              . "tagseqname,sequence";
+# compose query (note, this query depends on tag_seq_id being > 0)
+# (perhaps we should cater for the case tag_id > 0 tag_seq_id = 0)
 
-    my $query = "select $items from OLDCONTIGTAG left join TAGSEQUENCE"
-              . " using (tag_seq_id)"
-	      . " where contig_id in (".join (',',@$cids) .")"
-              . "   and deprecated != 'Y'"
+    my $items = "contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,comment,"
+              . "tagtype,systematic_id,tagcomment,"
+              . "TAGSEQUENCE.tag_seq_id,tagseqname,sequence";
+
+    my $query = "select $items"
+              . "  from TAG2CONTIG, CONTIGTAG, TAGSEQUENCE"
+              . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
+              . "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
+	      . "   and contig_id in (".join (',',@$cids) .")"
+#              . "   and deprecated != 'Y'"
               . " order by contig_id";
-#print "fetchTagsForContigIDs: $query \n" if $DEBUG;
+
+print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
 
     my @tag;
 
@@ -1716,20 +1827,26 @@ sub fetchTagsForContigIDs { # TO BE DEVELOPED AND TESTED
         my $tag = new Tag('contigtag');
 
         $tag->setSequenceID      (shift @ary); # contig_id
-        $tag->setType            (shift @ary); # tagtype
-        $tag->setSystematicID    (shift @ary); # tagname
+        $tag->setTagID           (shift @ary); # tag ID ?
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
         $tag->setStrand          (shift @ary); # strand
         $tag->setComment         (shift @ary); # comment
-        $tag->setTagSequenceName (shift @ary); # tagseqname
+        $tag->setType            (shift @ary);
+        $tag->setSystematicID    (shift @ary);
+        $tag->setTagComment      (shift @ary);
+        $tag->setTagSequenceID   (shift @ary);
+        $tag->setTagSequenceName (shift @ary);
         $tag->setDNA             (shift @ary); # sequence
 # add to output array
         push @tag, $tag;
     }
 
+print ">fetchTagsForContigIDs tags found: ".scalar(@tag)."\n" if $DEBUG;
+
     return [@tag];
 }
 
+# ---------------
 
 sub enterTagsForContig {
 # public method for test purposes
@@ -1750,35 +1867,51 @@ sub putTagsForContig {
     my $contig = shift;
     my $testexistence = shift;
 
-    return 1 unless $contig->hasTags();
-$DEBUG=0;
+    return 1 unless $contig->hasTags(); # no tags
 
     my $cid = $contig->getContigID();
-print STDOUT "putTagsForContig: contig ID = $cid\n" if $DEBUG;
 
-    return undef unless defined $cid;
+print STDOUT ">putTagsForContig: contig ID = $cid\n" if $DEBUG;
 
-# to be completed
+    return undef unless defined $cid; # missing contig ID
+
+# get the tags and test for valid tag info (at least a tag type defined)
 
     my $ctags = $contig->getTags();
-print STDOUT "putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
 
-    if ($testexistence) {
-# test contig instance tags against possible tags in database
-print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
+print STDOUT ">putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
+
 # construct a hash table for tag instance names
 
-        my $tags = {};
-        foreach my $ctag (@$ctags) {
-            $tags->{$ctag} = $ctag;
+    my $tags = {};
+    foreach my $ctag (@$ctags) {
+        my $tagtype = $ctag->getType(); # must have a tag type
+        unless ($tagtype) {
+            my $tagcomment = $ctag->getTagComment() || "no description";
+            print STDERR "Invalid tag in contig $cid ($tagcomment)\n";
+            next;
         }
+        $tags->{$ctag} = $ctag;
+    }
 
-# delete the existing tags from the hash
+# test contig instance tags against possible tags (already) in database
+
+    if ($testexistence && keys %$tags) {
+
+print STDOUT ">putTagsForContig: testing for existing Tags\n" if $DEBUG;
 
         my $existingtags = &fetchTagsForContigIDs($dbh,[($cid)]);
 
+# delete the existing tags from the hash
+
         foreach my $etag (@$existingtags) {
-            foreach my $ctag (@$ctags) {
+print STDOUT "\nTesting existing tag\n" if $DEBUG;
+$etag->dump(*STDOUT) if $DEBUG;
+#           foreach my $ctag (@$ctags) {
+            foreach my $key (keys %$tags) {
+                my $ctag = $tags->{$key};
+print STDOUT "\nTo be tested against new tag\n" if $DEBUG;
+$ctag->dump(*STDOUT) if $DEBUG;
                 if ($ctag->isEqual($etag)) {
                     delete $tags->{$ctag};
                     last;
@@ -1786,221 +1919,190 @@ print STDOUT "putTagsForContig: testing for existing Tags\n" if $DEBUG;
             }
         }
 
-# collect the tags left
+print STDOUT ">putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
 
-        my @tags;
-        foreach my $key (keys %$tags) {
-            push @tags, $tags->{$key};
-	}
-     
-
-        $ctags = [@tags];
-print STDOUT "putTagsForContig: new tags ".scalar(@$ctags)."\n" if $DEBUG;
-
-        foreach my $tag (@$ctags) {
-            $tag->writeToCaf(*STDOUT) if $DEBUG;
-        }
-print STDOUT "putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
-#exit; # temporary
     }
 
-#$DEBUG=0;
+# collect the tags left
 
-    return &putTags ($dbh,$ctags,'OLDCONTIGTAG','contig_id',1); # old system
+    my @tags;
+    foreach my $key (keys %$tags) {
+        my $ctag = $tags->{$key};
+        push @tags, $ctag;
+#$ctag->writeToCaf(*STDOUT) if $DEBUG;
+    }
+    $ctags = [@tags];
 
-# new system TO BE TESTED
+print STDOUT ">putTagsForContig: new tags ".scalar(@tags)."\n" if $DEBUG;
 
-print "enter getTagSequenceIDsForTags $ctags @$ctags\n";     
-    my $tagIDhash = &getTagSequenceIDsForTags($dbh,$ctags,1); # autoload = 1
-print "tagIDhash: $tagIDhash \n";
+    return 0 unless @tags; # no tags because of tag errors
+    
+    &getTagSequenceIDsForTags($dbh,$ctags,1); # autoload active (-> ADBRead)
 
-#    return;
-    return &putContigTags($dbh,$ctags,$tagIDhash);
+    &getTagIDsForTags($dbh,$ctags);
+
+    return &putContigTags($dbh,$ctags);
+}
+
+
+sub getTagIDsForTags {
+# use as private method only: enter new tag for tags with undefined tag_id
+    my $dbh = shift;
+    my $tags = shift; # ref to array with Tags
+
+print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
+
+    return undef unless ($tags && @$tags);
+
+# first we test if the combination tagtype and tagcomment already exists
+#   we also test if a systematic ID has to be updated
+
+    my $query = "select tag_id,systematic_id,tag_seq_id"
+              . "  from CONTIGTAG"
+              . " where tagtype like ?"
+              . "   and tagcomment like ?"
+	      . "  limit 1";
+
+    my $sth = $dbh->prepare_cached($query);       
+
+    my %sIDupdate;
+    foreach my $tag (@$tags) {
+# retrieve contig tag information for combination tagtype & tagcomment
+        my $tagtype = $tag->getType(); # already tested in putTagsForContig
+        my $tagcomment = $tag->getTagComment();
+# but skip if no systematic ID is defined
+        next unless $tag->getSystematicID();
+# pull out existing data
+        my $rc = $sth->execute($tagtype,$tagcomment) || &queryFailed($query);
+print STDOUT ">getTagIDsForTags Finding tagtype : $query rc:$rc \n" if $DEBUG;
+        if ($rc) {
+            my ($tag_id,$systematic_id,$tag_seq_id) = $sth->fetchrow_array();
+# now a) test consistency of tag ID and tag seq ID
+            my $existingtagid = $tag->getTagID();
+            if ($existingtagid && $existingtagid != $tag_id) {
+                print STDERR "Inconsistent tag ID ($existingtagid ".
+                             "vs $tag_id for '$tagcomment')\n";
+            }
+            $tag->setTagID($tag_id);
+            my $existingseqid = $tag->getTagSequenceID();
+            if ($existingseqid && $existingseqid != $tag_seq_id) {
+                print STDERR "Inconsistent tag sequence ID ($existingseqid ".
+                             "vs $tag_seq_id for '$tagcomment')\n";
+            }
+            $tag->setTagSequenceID($tag_seq_id);
+# and flag an update to sys ID
+            $sIDupdate{$tag}++ unless $systematic_id;
+print STDOUT ">getTagIDsForTags: tag ID $tag_id  tag_seq ID $tag_seq_id\n" if $DEBUG;
+$tag->dump(*STDOUT) if $DEBUG;
+	}
+    }
+
+    $sth->finish();
+
+# second, for those tags that do not now have an ID, we generate a new entry
+# in the CONTIGTAG table
+
+    my $insert = "insert into CONTIGTAG "
+               . "(tagtype,systematic_id,tag_seq_id,tagcomment) "
+	       . "values (?,?,?,?)";
+
+    $sth = $dbh->prepare_cached($insert);        
+
+    my $failed = 0;
+
+    foreach my $tag (@$tags) {
+$tag->dump(*STDOUT) if $DEBUG;
+# skip a tag if the ID is already defined
+print STDOUT ">getTagIDsForTags: NO NEW inserting into CONTIGTAG \n" if ($DEBUG && $tag->getTagID());
+        next if $tag->getTagID();
+print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
+        my $tagtype        = $tag->getType();
+        next unless $tagtype; # invalid tag
+        my $tag_seq_id     = $tag->getTagSequenceID() || 0;
+        my $systematic_id  = $tag->getSystematicID();
+        my $tagcomment     = $tag->getTagComment();
+
+        my $rc = $sth->execute($tagtype,$systematic_id,$tag_seq_id,
+                               $tagcomment) || &queryFailed($insert);
+
+        if ($rc) {
+            my $tag_id = $dbh->{'mysql_insertid'};
+            $tag->setTagID($tag_id);
+print STDOUT ">getTagIDsForTags: ID added\n" if $DEBUG; 
+$tag->dump(*STDOUT) if $DEBUG;
+        }
+        else {
+            $failed++;
+	}
+    }
+
+    $sth->finish();
+
+# finally update systematic IDs, if any
+
+    if (keys %sIDupdate) {
+
+        my $update = "update CONTIGTAG set systematic_id = ? where tag_id = ?";
+
+        my $sth = $dbh->prepare_cached($update);
+
+        foreach my $tag (@$tags) {
+            next unless $sIDupdate{$tag};
+            my $tag_id = $tag->getTagID();
+            my $systematic_id = $tag->getSystematicID();
+print STDOUT ">getTagIDsForTags: systematic ID added ($systematic_id $tag_id)\n" if $DEBUG; 
+            $sth->execute($systematic_id,$tag_id) || &queryFailed($update);
+	}
+    }
+
+print STDOUT ">getTagIDsForTags: EXIT getTagIDsForTags $failed\n" if $DEBUG;;
+    return $failed;
 }
 
 
 sub putContigTags {
-# use as private (generic) method only
+# use as private method only
     my $dbh = shift;
     my $tags = shift; # ref to array with Tags
-    my $tagIDhash = shift; # of missing tag names and sequences
 
-print "ENTER putContigTags ".scalar(@$tags)."\n" if $DEBUG;;
+print STDOUT ">putContigTags for ".scalar(@$tags)." tags\n" if $DEBUG;
 
     return undef unless ($tags && @$tags);
 
-# TO BE DEVELOPED USING SEPARATE STORAGE OF systematic_id
+    my $query = "insert into TAG2CONTIG " # insert ignore ?
+              . "(contig_id,tag_id,cstart,cfinal,strand,comment) "
+              . "values (?,?,?,?,?,?)";
 
-    my $query = "insert into OLDCONTIGTAG " # insert ignore ?
-              . "(contig_id,tagtype,systematic_id,tag_seq_id,pstart,pfinal,strand,comment) "
-              . "values ";
+    my $sth = $dbh->prepare_cached($query);        
 
-    my $success = 1;
-    my $block = 100; # insert block size
-
-    my $accumulated = 0;
-    my $accumulatedQuery = $query;
-    my $lastTag = $tags->[@$tags-1];
+    my $missed  = 0;
+    my $success = 0;
 
     foreach my $tag (@$tags) {
 
         my $contig_id        = $tag->getSequenceID();
-        next unless $contig_id; # protect against undef seq ID
-        my $tagtype          = $tag->getType();
-        my $systematic_id    = $tag->getSystematicID() || '';
-        my $tagseqname       = $tag->getTagSequenceName() || '';
-        my ($pstart,$pfinal) = $tag->getPosition();
-        my $tag_seq_id       = $tagIDhash->{$tagseqname} || 0;
+        my $tag_id           = $tag->getTagID();
+        unless ($contig_id && $tag_id) {
+            $missed++;
+            next; # protect against undef seq ID
+        }
+        my ($cstart,$cfinal) = $tag->getPosition();
         my $strand           = $tag->getStrand();
         $strand =~ s/(\w)\w*/$1/;
-        my $comment          = $tag->getComment() || '';
-# we quote the comment string because it may contain odd characters
-        $comment = $dbh->quote($comment); 
+        my $comment          = $tag->getComment();
 
-        $accumulatedQuery .= ',' if $accumulated++;
-        $accumulatedQuery .= "($contig_id,'$tagtype',";
-        $accumulatedQuery .=  "'$systematic_id',";
-        $accumulatedQuery .=  "$tag_seq_id,$pstart,$pfinal,'$strand',$comment)";
+        my $rc = $sth->execute($contig_id,$tag_id,$cstart,$cfinal,$strand,
+                               $comment || undef) || &queryFailed($query);
 
-        if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
-
-            my $sth = $dbh->prepare($accumulatedQuery);        
-            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
-
-            $success = 0 unless $rc;
-            $accumulatedQuery = $query;
-            $accumulated = 0;
-        }
-    }
-print "EXIT putTags success $success\n" if $DEBUG;
-    return $success; 
-}
-
-#------------------------------------------------------------------------------
-
-
-sub putTags { # TO BE REMOVED
-# use as private (generic) method only
-    my $dbh = shift;
-    my $tags = shift;
-    my $table = shift;
-    my $seqkeyid = shift;
-    my $autoload = shift; # of missing tag names and sequences
-
-print "ENTER putTags $table ".scalar(@$tags)."\n" if $DEBUG;;
-
-    return 0 unless ($tags && @$tags);
-
-# get tag_seq_id using tagseqname for (possible) link with TAGSEQUENCE (reference list)
-
-    my %tagdata;
-    foreach my $tag (@$tags) {
-        my $tagseqname = $tag->getTagSequenceName();
-        $tagdata{$tagseqname}++ if $tagseqname;
+        $missed++ unless $rc;
+        $success++ if $rc;
     }
 
-# build the tag ID hash keyed on tag name
+print STDOUT ">putContigTags: EXIT putContigTags success $success $missed\n" if $DEBUG;
 
-    my $tagID = {};
-
-    if (my @tagseqnames = keys %tagdata) {
-# get tag_seq_id, tagsequence for tagseqnames
-        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
-	          . " where tagseqname in ('".join("','",@tagseqnames)."')";
-
-        my $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
-
-        my $tagSQ = {};
-
-        while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
-            $tagID->{$tagseqname} = $tag_seq_id;
-            $tagSQ->{$tagseqname} = $sequence;
-print "TAG SEQUENCE $tagseqname, $tag_seq_id, ".($sequence || '')."\n" if $DEBUG;
-        }
-
-        $sth->finish();
-
-# test the sequence against the one specified in the tags
-
-        foreach my $tag (@$tags) {
-            my $tagseqname = $tag->getTagSequenceName();
-            next unless $tagseqname;
-	    my $sequence = $tag->getDNA();
-            if (!$tagID->{$tagseqname}) {
-                print STDERR "Missing tag name $tagseqname (".
-                ($sequence || 'no sequence available').
-                ") in TAGSEQUENCE list\n";
-                next unless $autoload; # allow sequence to be undefined
-#                next unless ($autoload && $sequence);
-# add tag name and sequence, if any, to TAGSEQUENCE list
-	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
-         	if ($tag_seq_id) {
-                    $tagID->{$tagseqname} = $tag_seq_id;                
-                    $tagSQ->{$tagseqname} = $sequence if $sequence;
-                }
-            }
-            elsif ($sequence) {
-                unless ($sequence eq $tagSQ->{$tagseqname}) {
-                    print STDERR "Tag sequence mismatch for tag $tagseqname : ".
-                             "(tag) $sequence  (taglist) $tagSQ->{$tagseqname}\n";
-                    next;
-		}
-	    }
-        }
-    }
-   
-# insert in bulkmode
-
-    my $query = "insert into $table ". # insert ignore ?
-                "($seqkeyid,tagtype,tag_seq_id,pstart,pfinal,strand,comment) values ";
-    $query =~ s/tagtype/tagtype,systematic_id/ if ($table eq 'OLDCONTIGTAG');
-
-    my $success = 1;
-    my $block = 100; # insert block size
-
-    my $accumulated = 0;
-    my $accumulatedQuery = $query;
-    my $lastTag = $tags->[@$tags-1];
-
-    foreach my $tag (@$tags) {
-
-        my $seq_id           = $tag->getSequenceID();
-        next unless $seq_id; # protect against undef seq ID
-        my $tagtype          = $tag->getType();
-        my $systematic_id    = $tag->getSystematicID() || '';
-        my $tagseqname       = $tag->getTagSequenceName() || '';
-        my ($pstart,$pfinal) = $tag->getPosition();
-        my $tag_seq_id       = $tagID->{$tagseqname} || 0;
-        my $strand           = $tag->getStrand();
-        $strand =~ s/(\w)\w*/$1/;
-        my $comment          = $tag->getComment() || '';
-# we quote the comment string because it may contain odd characters
-        $comment = $dbh->quote($comment) if $comment; 
-
-        $accumulatedQuery .= ',' if $accumulated++;
-        $accumulatedQuery .= "($seq_id,'$tagtype',";
-        $accumulatedQuery .=  "'$systematic_id'," if ($table eq 'OLDCONTIGTAG');
-        $accumulatedQuery .=  "$tag_seq_id,$pstart,$pfinal,'$strand',$comment)";
-
-        if ($accumulated >= $block || $accumulated && $tag eq $lastTag) {
-
-            my $sth = $dbh->prepare($accumulatedQuery);        
-            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
-
-            $success = 0 unless $rc;
-            $accumulatedQuery = $query;
-            $accumulated = 0;
-        }
-    }
-print "EXIT putTags success $success\n" if $DEBUG;
     return $success; 
 }
 
 #------------------------------------------------------------------------------
 
 1;
-
-
-
