@@ -632,7 +632,7 @@ my $TEMP=0; if ($TEMP) {
                             $read->getReadName());
                 }
             }
-            $tag->setComment($info);
+            $tag->setTagComment($info);
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag/ && $record =~ /$ETAGS/) {
@@ -667,7 +667,7 @@ my $TEMP=0; if ($TEMP) {
 #            $tag->setType($type);
 #            $tag->setPosition($trps,$trpf);
 #            $tag->setStrand('Forward');
-#            $tag->setComment($info);
+#            $tag->setTagComment($info);
 	    my $r = $record;
 #	    $logger->warning("NOTE detected: $r but not processed") if $noload;
 	    $logger->info("NOTE detected: $r but not processed") unless $noload;
@@ -727,8 +727,8 @@ my $TEMP=0; if ($TEMP) {
             $contig->addTag($tag);
             $tag->setType($type);
             $tag->setPosition($tcps,$tcpf);
-            $tag->setStrand('Forward');
-            $tag->setComment($info);
+            $tag->setStrand('Unknown');
+            $tag->setTagComment($info);
             if ($info =~ /([ACGT]{5,})/) {
                 $tag->setDNA($1);
             }
@@ -921,7 +921,7 @@ sub tagList {
 
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
                  'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
-                 'LOW' ,'MOSC','STOL','TEST');
+                 'LOW' ,'MOSC','STOL','TEST','CLIP');
 
 # edit tags
 

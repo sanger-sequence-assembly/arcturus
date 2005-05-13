@@ -172,7 +172,8 @@ if (defined($maffile)) {
 my @identifiers;
 # special case: all/ALL (ignore identifier)
 if (defined($identifier) && $identifier !~ /all/i) {
-    push @identifiers,$identifier;
+    my @ids = split /,|:|;/,$identifier; # enable spec of several projects
+    push @identifiers,@ids;
 }
  
 if ($fofn) {

@@ -106,14 +106,18 @@ if ($readname) {
     $logger->info("Contig with read $readname to be processed");
     my $contig = $adb->getContig(withRead=>$readname,
                                  metaDataOnly=>$metadataonly);
-    $logger->info("Contig $contig constructed");
+    $logger->info("Contig $contig constructed") if $contig;
     push @contigs, $contig if $contig;
 }
 
 if ($tagname) {
     $logger->info("Contig with tag $tagname to be processed");
-    my $contig = $adb->getContig(withTag=>$tagname,
+    my $contig = $adb->getContig(withTagName=>$tagname,
                        metaDataOnly=>$metadataonly);
+    unless ($contig) {
+    my $contig = $adb->getContig(withAnnotationTag=>$tagname,
+                       metaDataOnly=>$metadataonly);
+    }
     $logger->info("Contig $contig constructed");
     push @contigs, $contig if $contig;
 }
@@ -124,6 +128,11 @@ if ($fofn) {
                                      metaDataOnly=>$metadataonly);
         push @contigs, $contig if $contig;
     }
+}
+
+unless (@contigs) {
+    my $querylog = $adb->logQuery(1) || '';
+    $logger->warning("No contig found\n$querylog");
 }
 
 foreach my $contig (@contigs) {

@@ -17,9 +17,10 @@ my $instance;
 my $contig_id;
 my $verbose;
 my $confirm;
+my $cleanup = 0;
 my $fofn;
 
-my $validKeys  = "organism|instance|contig|fofn|verbose|confirm|help";
+my $validKeys  = "organism|instance|contig|fofn|verbose|confirm|cleanup|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -35,6 +36,8 @@ while (my $nextword = shift @ARGV) {
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
     $verbose      = 1            if ($nextword eq '-verbose');
+
+    $cleanup      = 1            if ($nextword eq '-cleanup');
 
     $confirm      = 1            if ($nextword eq '-confirm');
 
@@ -55,9 +58,9 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'dev' unless defined($instance);
-
 &showUsage("Missing organism database") unless $organism;
+
+&showUsage("Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -85,7 +88,6 @@ my @contigs;
 
 push @contigs, $contig_id if $contig_id;
 
-
 if ($fofn) {
     foreach my $contig_id (@$fofn) {
         push @contigs, $contig_id;
@@ -94,11 +96,24 @@ if ($fofn) {
 
 foreach my $contig_id (@contigs) {
     $logger->warning("Contig $contig_id to be deleted");
-    $logger->warning("Repeat and specify -confirm") unless $confirm;
     next unless $confirm;
-    my ($success,$msg) = $adb->deleteContig($contig_id);
-    print STDERR "$msg\n" unless $success;
+    my ($success,$msg) = $adb->deleteContig($contig_id,cleanup=>$cleanup);
+    $logger->severe("FAILED to remove contig $contig_id") unless $success;
+    $logger->warning("Contig $contig_id is deleted") if $success;
+    $logger->warning($msg);
 }
+
+if ($confirm) {
+    $adb->cleanupMappings() unless $cleanup;
+}
+else {    
+    $logger->warning("Deletes to be made without cleanup; otherwise use -cleanup") unless $cleanup;
+    $logger->warning("Repeat and specify -confirm");
+}
+
+$adb->disconnect();
+
+exit 0;
 
 #------------------------------------------------------------------------
 # read a list of names from a file and return an array
@@ -140,20 +155,29 @@ sub getNamesFromFile {
 sub showUsage {
     my $code = shift || 0;
 
+    print STDERR "Delete a contig or contigs\n";
+    print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+    print STDERR "\n";
     print STDERR "-contig\t\tContig ID\n";
+    print STDERR "-fofn\t\tfilename with list of contig IDs to be delete\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\teither 'prod' or 'dev' (default)\n";
-#    print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
     print STDERR "-confirm\t(no value) to actually do the delete\n";
+    print STDERR "-cleanup\t(no value) to cleanup after each deleted contig\n";
     print STDERR "-verbose\t(no value) \n";
+    print STDERR "\n";
+    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
 }
+

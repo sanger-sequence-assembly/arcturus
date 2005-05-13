@@ -95,6 +95,7 @@ CREATE TABLE CONSENSUS (
 
 CREATE TABLE CONTIG (
   contig_id mediumint(8) unsigned NOT NULL auto_increment,
+  gap4name char(32) binary default NULL,
   length int(10) unsigned default '0',
   ncntgs smallint(5) unsigned NOT NULL default '0',
   nreads mediumint(8) unsigned NOT NULL default '0',
@@ -208,14 +209,14 @@ CREATE TABLE READTAG (
 ) TYPE=MyISAM;
 
 #
-# Table structure for table 'CONTIGTAG'
+# Table structure for table 'OLDCONTIGTAG' TO BE REMOVED AFTER TESTING NEW
 #
 
-CREATE TABLE CONTIGTAG (
+CREATE TABLE OLDCONTIGTAG (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   tagtype CHAR(4) binary NOT NULL default '',
-    systematic_id VARCHAR(32) binary NULL,
-    tag_seq_id mediumint(8) unsigned NOT NULL default 0,
+  systematic_id VARCHAR(32) binary NULL,
+  tag_seq_id mediumint(8) unsigned NOT NULL default 0,
   pstart int(11) unsigned NOT NULL default '0',
   pfinal int(11) unsigned NOT NULL default '0',
   strand enum('F','R','U') default 'U',
@@ -223,20 +224,33 @@ CREATE TABLE CONTIGTAG (
   comment tinytext default NULL,
   KEY contigtag_index (contig_id)
 ) TYPE=MyISAM;
-#  tag_id mediumint(8) unsigned NOT NULL,
- 
 
 #
-# Table structure for table 'CONTIGTAGINFO'
+# Table structure for table 'TAG2CONTIG'
 #
 
-CREATE TABLE CONTIGTAGINFO (
-  tag_id mediumint(8) unsigned NOT NULL auto_increment,
-  systematic_id VARCHAR(32) binary NULL,
-    tag_seq_id mediumint(8) unsigned NOT NULL,
-  KEY contigtaginfo_index (tag_id)
+CREATE TABLE TAG2CONTIG (
+  contig_id mediumint(8) unsigned NOT NULL default '0',
+  tag_id mediumint(8) unsigned NOT NULL,
+  cstart int(11) unsigned NOT NULL default '0',
+  cfinal int(11) unsigned NOT NULL default '0',
+  strand enum('F','R','U') default 'U',
+  comment tinytext default NULL,
+  KEY tag2contig_index (contig_id)
 ) TYPE=MyISAM;
 
+#
+# Table structure for table 'CONTIGTAG'
+#
+
+CREATE TABLE CONTIGTAG (
+  tag_id mediumint(8) unsigned NOT NULL auto_increment,
+  tagtype CHAR(4) binary NOT NULL default '',
+  systematic_id VARCHAR(32) binary NULL,
+  tag_seq_id mediumint(8) unsigned NOT NULL,
+  tagcomment tinytext default NULL,
+  KEY contigtag_index (tag_id)
+) TYPE=MyISAM;
 
 #
 # Table structure for table 'TAGSEQUENCE'

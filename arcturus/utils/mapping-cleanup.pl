@@ -15,7 +15,6 @@ my $instance;
 my $verbose;
 my $confirm = 0;
 my $segments = 0;
-my $fofn;
 
 my $validKeys  = "organism|instance|segments|verbose|confirm|help";
 
@@ -99,3 +98,4 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+

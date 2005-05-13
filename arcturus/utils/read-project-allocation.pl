@@ -14,25 +14,30 @@ use Logging;
 my $organism;
 my $instance;
 my $read;
+my $readtype;
 my $verbose;
 my $project;
 my $assembly;
 my $confirm;
 my $fofn;
 
-my $validKeys = "organism|instance|read|fofn|project|assembly|"
-              . "verbose|confirm|preview|help";
+my $validKeys = "organism|instance|read|fofn|oligo|finishing|"
+              . "project|assembly|verbose|confirm|preview|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
+    }
+ 
     $instance     = shift @ARGV  if ($nextword eq '-instance');
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
     $read         = shift @ARGV  if ($nextword eq '-read');
+
+    $readtype     = 'oligo'      if ($nextword eq '-oligo');
+    $readtype     = 'finishing'  if ($nextword eq '-finishing');
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -64,10 +69,12 @@ $logger->setFilter(0) if $verbose; # set reporting level
 &showUsage("Missing organism database") unless $organism;
 
 &showUsage("Missing database instance") unless $instance;
-
-&showUsage("Missing read ID, readname or fofn") unless ($read || $fofn);
-
+ 
 &showUsage("Missing project ID or projectname") unless $project;
+
+unless ($read || $fofn || $readtype) {
+    &showUsage("Missing read ID, readname, readtype or fofn");
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -93,8 +100,6 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # get the read (by ID or readname)
 
 my @reads;
-
-push @reads, $read if defined($read);
 
 if ($fofn) {
     foreach my $read (@$fofn) {
@@ -135,12 +140,37 @@ if (@$Project > 1) {
     
 $project = $Project->[0];
 
+# select readnames from the database if a readtype is defined
+
+if ($readtype) {
+    my $regexp;
+    $regexp = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'oligo');
+    $regexp = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'finishing');
+    my %options;
+    $options{readname} = $read if $read;
+    $options{regexp} = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'oligo');
+    $options{regexp} = "[0-9]{4}\$" if ($readtype eq 'finishing');
+    $options{unassembled} = 1;
+    if (my $reads = $adb->getReadNamesLike(%options)) {
+        foreach my $read (@$reads) {
+            push @reads,$read;
+	}
+    }
+    else {
+        $logger->warning("No reads found");
+    }
+}
+else {
+    push @reads, $read if defined($read);
+}
+
 # execute if confirm switch set, else list 
 
 # print "reads:@reads\n";
 foreach my $read (@reads) {
     my %options;
 # determine selection by ID or by readname
+    next unless ($read);
     $options{read_id}  = $read if ($read !~ /\D/);
     $options{readname} = $read if ($read =~ /\D/);
     $options{noload} = 1 unless $confirm;
@@ -153,7 +183,7 @@ foreach my $read (@reads) {
     }
     else {
         $logger->info("read $read is not be added : $message");
-    } 
+    }  
 }
   
 $adb->disconnect();
