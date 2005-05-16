@@ -1,8 +1,9 @@
 <!ELEMENT assembly (superscaffold*) >
 
 <!ATTLIST assembly
-            name    CDATA       #REQUIRED
-	    date    CDATA       #REQUIRED
+            instance    CDATA       #REQUIRED
+            organism    CDATA       #REQUIRED
+	    date	CDATA       #REQUIRED
 >
 
 <!ELEMENT superscaffold (scaffold, (superbridge+,scaffold)*) >
