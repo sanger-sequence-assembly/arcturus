@@ -460,7 +460,7 @@ if ($xmlfile) {
 			  1900+$now[5], 1+$now[4], $now[3],
 			  $now[2], $now[1], $now[0]);
 
-    print $xmlfh "<assembly name=\"$organism\" date=\"$thedate\" >\n";
+    print $xmlfh "<assembly instance=\"$instance\" organism=\"$organism\" date=\"$thedate\" >\n";
 }
 
 my $scaffoldtosuperscaffold = {};
