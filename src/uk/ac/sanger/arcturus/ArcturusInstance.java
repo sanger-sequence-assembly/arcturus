@@ -63,7 +63,7 @@ public class ArcturusInstance implements Iterator {
      */
 
     public ArcturusDatabase findArcturusDatabase(String name)
-	throws NamingException {
+	throws NamingException, SQLException {
 	String cn = "cn=" + name;
 
 	DataSource ds = (DataSource)context.lookup(cn);
@@ -111,6 +111,10 @@ public class ArcturusInstance implements Iterator {
 	    ne = null;
 	    nextADB = null;
 	}
+	catch (SQLException sqle) {
+	    ne = null;
+	    nextADB = null;
+	}
 
 	return this;
     }
@@ -147,6 +151,9 @@ public class ArcturusInstance implements Iterator {
 	catch (NamingException ne) {
 	    nextADB = null;
 	}
+	catch (SQLException sqle) {
+	    nextADB = null;
+	}
 
 	return (Object)adb;
     }
@@ -162,7 +169,7 @@ public class ArcturusInstance implements Iterator {
 	throw new UnsupportedOperationException("Use deleteArcturusDatabase(String name) instead");
     }
 
-    private ArcturusDatabase getNextADB(NamingEnumeration ne) throws NamingException {
+    private ArcturusDatabase getNextADB(NamingEnumeration ne) throws NamingException, SQLException {
 	while (ne != null && ne.hasMore()) {
 	    Binding bd = (Binding)ne.next();
 
