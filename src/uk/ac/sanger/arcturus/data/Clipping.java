@@ -12,16 +12,20 @@ public class Clipping {
     public final static int CVEC = 3;
 
     protected int type;
+    protected String name;
     protected int left;
     protected int right;
 
-    public Clipping(int type, int left, int right) {
+    public Clipping(int type, String name, int left, int right) {
 	this.type = type;
+	this.name = name;
 	this.left = left;
 	this.right = right;
     }
 
     public int getType() { return type; }
+
+    public String getName() { return name; }
 
     public int getLeft() { return type; }
 
@@ -37,7 +41,9 @@ public class Clipping {
 	default: strtype = "UNKNOWN"; break;
 	}
 
-	return getClass().getName() + "[type=" + strtype + ", left=" + left +
+	return getClass().getName() + "[type=" + strtype +
+	    ", name=" + name +
+	    ", left=" + left +
 	    ", right=" + right + "]";
     }
 }
