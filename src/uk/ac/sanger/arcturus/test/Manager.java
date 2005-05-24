@@ -67,7 +67,10 @@ public class Manager {
 
 	query = "select seq_id,SEGMENT.cstart,rstart,length " +
 	    " from MAPPING left join SEGMENT using(mapping_id) " +
-	    " where contig_id = ? order by MAPPING.seq_id asc, SEGMENT.cstart asc";
+	    " where contig_id = ?";
+
+	// Previous server-side sorting clause:
+	// + " order by MAPPING.seq_id asc, SEGMENT.cstart asc"
 
 	pstmtSegmentData = conn.prepareStatement(query);
 
@@ -147,7 +150,7 @@ public class Manager {
     }
 
     protected void preloadAssemblies() throws SQLException {
-	String query = "select assembly_id,name,updated,created,creator";
+	String query = "select assembly_id,name,updated,created,creator from ASSEMBLY";
 
 	Statement stmt = conn.createStatement();
 
@@ -328,6 +331,10 @@ public class Manager {
 
 	    contig = new Contig(gap4name, contig_id, ctglen, nreads, created, updated,
 				project, null);
+
+	    event.setMessage("Contig " + contig_id + " : " + ctglen + " bp, " + nreads + " reads");
+	    event.setState(ManagerEvent.START);
+	    fireEvent(event);
 	} else
 	    return null;
 
@@ -361,7 +368,13 @@ public class Manager {
 
 	pstmtMappingData.setInt(1, contig_id);
 
+	event.begin("Execute mapping query", nMappings);
+	fireEvent(event);
+
 	rs = pstmtMappingData.executeQuery();
+
+	event.end();
+	fireEvent(event);
 
 	int kMapping = 0;
 
@@ -397,7 +410,13 @@ public class Manager {
 
 	pstmtReadAndTemplateData.setInt(1, contig_id);
 
+	event.begin("Execute read/template data query", nMappings);
+	fireEvent(event);
+
 	rs = pstmtReadAndTemplateData.executeQuery();
+
+	event.end();
+	fireEvent(event);
 
 	kMapping = 0;
 
@@ -456,24 +475,64 @@ public class Manager {
 
 	kMapping = 0;
 
-	int current_seq_id = 0;
-
 	Vector segv = new Vector(1000, 1000);
 
 	pstmtSegmentData.setInt(1, contig_id);
 
+	event.begin("Execute segment query", nMappings);
+	fireEvent(event);
+
 	rs = pstmtSegmentData.executeQuery();
+
+	event.end();
+	fireEvent(event);
 
 	event.begin("Loading segments", nSegments);
 	fireEvent(event);
 
+	SortableSegment segments[] = new SortableSegment[nSegments];
+
 	int kSegment = 0;
 
 	while (rs.next()) {
-	    int next_seq_id = rs.getInt(1);
+	    int seq_id = rs.getInt(1);
 	    int cstart = rs.getInt(2);
-	    int cfinish = rs.getInt(3);
+	    int rstart = rs.getInt(3);
 	    int length = rs.getInt(4);
+
+	    segments[kSegment++] = new SortableSegment(seq_id, cstart, rstart, length);
+
+	    if ((kSegment % 50) == 0) {
+		event.working(kSegment);
+		fireEvent(event);
+	    }
+	}
+
+	rs.close();
+
+	event.end();
+	fireEvent(event);
+
+	event.begin("Sorting segments", nSegments);
+	fireEvent(event);
+
+	Arrays.sort(segments);
+
+	event.end();
+	fireEvent(event);
+
+	int current_seq_id = 0;
+
+	kMapping = 0;
+
+	event.begin("Processing segments", nSegments);
+	fireEvent(event);
+
+	for (kSegment = 0; kSegment < nSegments; kSegment++) {
+	    int next_seq_id = segments[kSegment].seq_id;
+	    int cstart = segments[kSegment].cstart;
+	    int rstart = segments[kSegment].rstart;
+	    int length = segments[kSegment].length;
 
 	    if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
 		Segment segs[] = new Segment[segv.size()];
@@ -482,13 +541,9 @@ public class Manager {
 		segv.clear();
 	    }
 
-	    boolean forward = mappings[kMapping].isForward();
-
-	    segv.add(new Segment(cstart, cfinish, length));
+	    segv.add(new Segment(cstart, rstart, length));
 
 	    current_seq_id = next_seq_id;
-
-	    kSegment++;
 
 	    if ((kSegment % 50) == 0) {
 		event.working(kSegment);
@@ -500,8 +555,6 @@ public class Manager {
 	segv.toArray(segs);
 	mappings[kMapping++].setSegments(segs);
 
-	rs.close();
-
 	event.end();
 	fireEvent(event);
 
@@ -509,7 +562,13 @@ public class Manager {
 
 	pstmtSequenceData.setInt(1, contig_id);
 
+	event.begin("Execute sequence query", nMappings);
+	fireEvent(event);
+
 	rs = pstmtSequenceData.executeQuery();
+
+	event.end();
+	fireEvent(event);
 
 	event.begin("Loading sequences", nMappings);
 	fireEvent(event);
@@ -580,6 +639,33 @@ public class Manager {
 	while (e.hasMoreElements()) {
 	    ManagerEventListener l = (ManagerEventListener)e.nextElement();
 	    l.managerUpdate(event);
+	}
+    }
+
+    class SortableSegment implements Comparable {
+	public int seq_id;
+	public int cstart;
+	public int rstart;
+	public int length;
+
+	public SortableSegment(int seq_id, int cstart, int rstart, int length) {
+	    this.seq_id = seq_id;
+	    this.cstart = cstart;
+	    this.rstart = rstart;
+	    this.length = length;
+	}
+
+	public int compareTo(Object o) {
+	    SortableSegment that = (SortableSegment)o;
+
+	    int diff = this.seq_id - that.seq_id;
+
+	    if (diff != 0)
+		return diff;
+
+	    diff = this.cstart - that.cstart;
+
+	    return diff;
 	}
     }
 }
