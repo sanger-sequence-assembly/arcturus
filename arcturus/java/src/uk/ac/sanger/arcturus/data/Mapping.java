@@ -73,7 +73,26 @@ public class Mapping {
 	this.cfinish = cfinish;
 	this.direction = direction;
 	this.segments = segments;
-	nsegs = segments.length;
+
+	if (segments == null)
+	    nsegs = 0;
+	else
+	    nsegs = segments.length;
+    }
+
+    /**
+     * Constructs a mapping from the specified sequence, contig start and end position,
+     * and a direction.
+     *
+     * @param sequence the read sequence of this read-to-contig alignment.
+     * @param cstart the start position of the alignment on the contig.
+     * @param cfinish the end position of the alignment on the contig.
+     * @param direction the direction in which the read is aligned to the contig. This
+     * should be one of FORWARD or REVERSE.
+     */
+
+    public Mapping(Sequence sequence, int cstart, int cfinish, int direction) {
+	this(sequence, cstart, cfinish, direction, null);
     }
 
     /**
@@ -127,6 +146,16 @@ public class Mapping {
     public Segment[] getSegments() { return segments; }
 
     /**
+     * Sets the array of Segment objects for this alignment.
+     *
+     * @param the array of Segment objects for this alignment.
+     */
+
+    public void setSegments(Segment[] segments) {
+	this.segments = segments;
+    }
+
+    /**
      * Returns the number of Segment objects which this alignment currently contains.
      * This may be less than the number specified in the constructor if the segment
      * array has not been filled yet.
@@ -134,7 +163,12 @@ public class Mapping {
      * @return the number of Segment objects which this alignment currently contains.
      */
 
-    public int getSegmentCount() { return nsegs; }
+    public int getSegmentCount() {
+	if (segments != null)
+	    return segments.length;
+	else
+	    return nsegs;
+    }
 
     /**
      * Adds a Segment object to the array of segments for this alignment.

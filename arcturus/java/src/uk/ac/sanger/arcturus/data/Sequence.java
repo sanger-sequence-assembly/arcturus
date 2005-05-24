@@ -56,6 +56,16 @@ public class Sequence extends Core {
     public Read getRead() { return read; }
 
     /**
+     * Sets the Read object to which this sequence belongs.
+     *
+     * @param read the Read object to which this sequence belongs.
+     */
+
+    public void setRead(Read read) {
+	this.read = read;
+    }
+
+    /**
      * Returns the DNA sequence string.
      *
      * @return the DNA sequence string.

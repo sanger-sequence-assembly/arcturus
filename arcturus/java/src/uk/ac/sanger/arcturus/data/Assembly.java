@@ -44,15 +44,18 @@ public class Assembly extends Core {
      * This constructor will typically be used when a Assembly
      * is retrieved from an Arcturus database.
      *
+     * @param name the name of the Assembly.
      * @param ID the ID of the Assembly.
+     * @param updated the date and time whne this Assembly was last updated.
+     * @param created the date and time when this Assembly was created.
+     * @param creator the creator of this Assembly.
      * @param adb the Arcturus database to which this Assembly belongs.
      */
 
-    public Assembly(int ID, String name, Date updated, Date created, String creator,
+    public Assembly(String name, int ID, Date updated, Date created, String creator,
 		   ArcturusDatabase adb) {
-	super(ID, adb);
+	super(name, ID, adb);
 
-	this.name = name;
 	this.updated = updated;
 	this.created = created;
 	this.creator = creator;
