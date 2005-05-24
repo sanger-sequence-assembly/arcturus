@@ -1,4 +1,5 @@
 import java.io.*;
+import java.util.*;
 
 import uk.ac.sanger.arcturus.data.*;
 
@@ -49,6 +50,8 @@ public class CAFWriter {
 	Read read = sequence.getRead();
 	String readname = read.getName();
 
+	boolean forward = mapping.isForward();
+
 	for (int i = 0; i < segments.length; i++) {
 	    int cstart = segments[i].getContigStart();
 	    int rstart = segments[i].getReadStart();
@@ -56,16 +59,19 @@ public class CAFWriter {
 
 	    int cfinish = cstart + length - 1;
 
-	    int rfinish;
+	    ps.print("Assembled_from " + readname);
 
-	    if (mapping.isForward())
-		rfinish = rstart + length - 1;
-	    else
-		rfinish = rstart - (length - 1);
+	    if (forward) {
+		int rfinish = rstart + length - 1;
 
-	    ps.println("Assembled_from " + readname + " " +
-		       cstart + " " + cfinish + " " +
-		       rstart + " " + rfinish);
+		ps.println(" " + cstart + " " + cfinish +
+			   " " + rstart + " " + rfinish);
+	    } else {
+		int rfinish = rstart - (length - 1);
+
+		ps.println(" " + cfinish + " " + cstart +
+			   " " + rfinish + " " + rstart);
+	    }
 	}
     }
 

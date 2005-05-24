@@ -30,6 +30,9 @@ public class Manager {
 
     private transient Vector eventListeners = new Vector();
 
+    protected MappingComparator mappingComparator = new MappingComparator();
+    protected SegmentComparator segmentComparator = new SegmentComparator();
+
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
 
@@ -379,8 +382,6 @@ public class Manager {
 
 	Mapping mappings[] = new Mapping[nMappings];
 
-	contig.setMappings(mappings);
-
 	pstmtMappingData.setInt(1, contig_id);
 
 	event.begin("Execute mapping query", nMappings);
@@ -422,6 +423,10 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
+
+	Arrays.sort(mappings, mappingComparator);
+
+	contig.setMappings(mappings);
 
 	pstmtReadAndTemplateData.setInt(1, contig_id);
 
@@ -552,6 +557,7 @@ public class Manager {
 	    if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
 		Segment segs[] = new Segment[segv.size()];
 		segv.toArray(segs);
+		Arrays.sort(segs, segmentComparator);
 		mappings[kMapping++].setSegments(segs);
 		segv.clear();
 	    }
@@ -567,7 +573,11 @@ public class Manager {
 	}
 
 	Segment segs[] = new Segment[segv.size()];
+
 	segv.toArray(segs);
+
+	Arrays.sort(segs, segmentComparator);
+
 	mappings[kMapping++].setSegments(segs);
 
 	event.end();
@@ -677,6 +687,44 @@ public class Manager {
 	    diff = this.cstart - that.cstart;
 
 	    return diff;
+	}
+    }
+
+    class MappingComparator implements Comparator {
+	public int compare(Object o1, Object o2) {
+	    Mapping mapping1 = (Mapping)o1;
+	    Mapping mapping2 = (Mapping)o2;
+
+	    int diff = mapping1.getContigStart() - mapping2.getContigStart();
+
+	    return diff;
+	}
+
+	public boolean equals(Object obj) {
+	    if (obj instanceof MappingComparator) {
+		MappingComparator that = (MappingComparator)obj;
+		return this == that;
+	    } else
+		return false;
+	}
+    }
+
+    class SegmentComparator implements Comparator {
+	public int compare(Object o1, Object o2) {
+	    Segment segment1 = (Segment)o1;
+	    Segment segment2 = (Segment)o2;
+
+	    int diff = segment1.getReadStart() - segment2.getReadStart();
+
+	    return diff;
+	}
+
+	public boolean equals(Object obj) {
+	    if (obj instanceof SegmentComparator) {
+		SegmentComparator that = (SegmentComparator)obj;
+		return this == that;
+	    } else
+		return false;
 	}
     }
 }
