@@ -125,7 +125,7 @@ public class Contig extends Core {
 	this.nreads = mappings.length;
     }
 
-    public byte[] getConsensus() { return dna; }
+    public byte[] getDNA() { return dna; }
 
     public byte[] getQuality() { return quality; }
 

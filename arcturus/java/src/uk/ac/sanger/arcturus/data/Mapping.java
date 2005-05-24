@@ -148,7 +148,7 @@ public class Mapping {
     /**
      * Sets the array of Segment objects for this alignment.
      *
-     * @param the array of Segment objects for this alignment.
+     * @param segments the array of Segment objects for this alignment.
      */
 
     public void setSegments(Segment[] segments) {
