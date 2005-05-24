@@ -48,7 +48,8 @@ public class Manager {
     protected void prepareStatements() throws SQLException {
 	String query;
 
-	query = "select gap4name,length,nreads,created,updated,project_id from CONTIG where contig_id = ?";
+	query = "select gap4name,CONTIG.length,nreads,created,updated,project_id,CONSENSUS.length,sequence,quality " + 
+	    " from CONTIG left join CONSENSUS using(contig_id) where CONTIG.contig_id = ?";
 
 	pstmtContigData = conn.prepareStatement(query);
 
@@ -260,7 +261,7 @@ public class Manager {
 	rs.close();
     }
 
-    public Contig getContigByID(int contig_id) throws SQLException {
+    public Contig getContigByID(int contig_id) throws SQLException, DataFormatException {
 	Contig contig = (Contig)contigByID.get(new Integer(contig_id));
 
 	if (contig != null)
@@ -311,7 +312,7 @@ public class Manager {
 	return (Template)templateByID.get(new Integer(template_id));
     }
 
-    public Contig loadContigByID(int contig_id) throws SQLException {
+    public Contig loadContigByID(int contig_id) throws SQLException, DataFormatException {
 	Contig contig = null;
 	ManagerEvent event = new ManagerEvent(this);
 
@@ -326,13 +327,25 @@ public class Manager {
 	    java.util.Date created = rs.getTimestamp(4);
 	    java.util.Date updated = rs.getTimestamp(5);
 	    int project_id = rs.getInt(6);
+	    int consensus_length = rs.getInt(7);
+	    byte[] cdna = rs.getBytes(8);
+	    byte[] cqual = rs.getBytes(9);
 
 	    Project project = getProjectByID(project_id);
 
 	    contig = new Contig(gap4name, contig_id, ctglen, nreads, created, updated,
 				project, null);
 
-	    event.setMessage("Contig " + contig_id + " : " + ctglen + " bp, " + nreads + " reads");
+	    byte[] dna = inflate(cdna, consensus_length);
+	    byte[] qual = inflate(cqual, consensus_length);
+
+	    contig.setConsensus(dna, qual);
+
+	    int dna_len = (dna == null) ? -1 : dna.length;
+	    int qual_len = (qual == null) ? -1 : qual.length;
+
+	    event.setMessage("Contig " + contig_id + " : " + ctglen + " bp, " + nreads + " reads, dna_len=" + dna_len +
+			     ", qual_len=" + qual_len);
 	    event.setState(ManagerEvent.START);
 	    fireEvent(event);
 	} else
@@ -365,6 +378,8 @@ public class Manager {
 	 */
 
 	Mapping mappings[] = new Mapping[nMappings];
+
+	contig.setMappings(mappings);
 
 	pstmtMappingData.setInt(1, contig_id);
 
@@ -578,35 +593,18 @@ public class Manager {
 
 	    Sequence sequence = mappings[kMapping++].getSequence();
 
+
 	    byte[] cdna = rs.getBytes(2);
-	    byte[] buffer = new byte[seqlen];
 
-	    try {
-		decompresser.setInput(cdna, 0, cdna.length);
-		int dnalen = decompresser.inflate(buffer, 0, buffer.length);
-		decompresser.reset();
-	    }
-	    catch (DataFormatException dfe) {
-		buffer = null;
-		dfe.printStackTrace();
-	    }
+	    byte[] dna = inflate(cdna, seqlen);
 
-	    sequence.setDNA(buffer);
+	    sequence.setDNA(dna);
 		
 	    byte[] cqual = rs.getBytes(3);
-	    buffer = new byte[seqlen];
 
-	    try {
-		decompresser.setInput(cqual, 0, cqual.length);
-		int dnalen = decompresser.inflate(buffer, 0, buffer.length);
-		decompresser.reset();
-	    }
-	    catch (DataFormatException dfe) {
-		buffer = null;
-		dfe.printStackTrace();
-	    }
+	    byte[] qual = inflate(cqual, seqlen);
 
-	    sequence.setQuality(buffer);
+	    sequence.setQuality(qual);
 
 	    if ((kMapping % 10) == 0) {
 		event.working(kMapping);
@@ -624,6 +622,19 @@ public class Manager {
 	contigByID.put(id, contig);
 
 	return contig;
+    }
+
+    private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
+	if (cdata == null)
+	    return null;
+
+	byte[] data = new byte[length];
+
+	decompresser.setInput(cdata, 0, cdata.length);
+	decompresser.inflate(data, 0, data.length);
+	decompresser.reset();
+
+	return data;
     }
 
     public void addManagerEventListener(ManagerEventListener listener) {
