@@ -52,4 +52,17 @@ public class Segment {
      */
 
     public int getLength() { return length; }
+
+    /**
+     * Returns a string representation of this object.
+     *
+     * @return a string representation of this object.
+     */
+
+    public String toString() {
+	return "Segment[cstart=" + cstart +
+	    ", rstart=" + rstart +
+	    ", length=" + length +
+	    "]";
+    }
 }
