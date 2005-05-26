@@ -16,21 +16,9 @@ public class Mapping {
     protected Sequence sequence;
     protected int cstart;
     protected int cfinish;
-    protected int direction;
+    protected boolean forward;
     protected Segment[] segments;
     protected int nsegs;
-
-    /**
-     * A constant representing a read which is co-aligned with a contig.
-     */
-
-    public final static int FORWARD = 1;
-
-    /**
-     * A constant representing a read which is counter-aligned with a contig.
-     */
-
-    public final static int REVERSE = 2;
 
     /**
      * Constructs a mapping from the specified sequence, contig start and end position,
@@ -41,16 +29,16 @@ public class Mapping {
      * @param sequence the read sequence of this read-to-contig alignment.
      * @param cstart the start position of the alignment on the contig.
      * @param cfinish the end position of the alignment on the contig.
-     * @param direction the direction in which the read is aligned to the contig. This
-     * should be one of FORWARD or REVERSE.
+     * @param forward true if the sequence is co-aligned to the contig, false if the
+     * read is counter-aligned to the contig.
      * @param numsegs the number of Segment objects which this alignment contains.
      */
 
-    public Mapping(Sequence sequence, int cstart, int cfinish, int direction, int numsegs) {
+    public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward, int numsegs) {
 	this.sequence = sequence;
 	this.cstart = cstart;
 	this.cfinish = cfinish;
-	this.direction = direction;
+	this.forward = forward;
 	this.segments = new Segment[numsegs];
 	nsegs = 0;
     }
@@ -62,16 +50,16 @@ public class Mapping {
      * @param sequence the read sequence of this read-to-contig alignment.
      * @param cstart the start position of the alignment on the contig.
      * @param cfinish the end position of the alignment on the contig.
-     * @param direction the direction in which the read is aligned to the contig. This
-     * should be one of FORWARD or REVERSE.
+     * @param forward true if the sequence is co-aligned to the contig, false if the
+     * read is counter-aligned to the contig.
      * @param segments the array of Segment objects for this alignment.
      */
 
-    public Mapping(Sequence sequence, int cstart, int cfinish, int direction, Segment[] segments) {
+    public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward, Segment[] segments) {
 	this.sequence = sequence;
 	this.cstart = cstart;
 	this.cfinish = cfinish;
-	this.direction = direction;
+	this.forward = forward;
 	this.segments = segments;
 
 	if (segments == null)
@@ -87,12 +75,12 @@ public class Mapping {
      * @param sequence the read sequence of this read-to-contig alignment.
      * @param cstart the start position of the alignment on the contig.
      * @param cfinish the end position of the alignment on the contig.
-     * @param direction the direction in which the read is aligned to the contig. This
-     * should be one of FORWARD or REVERSE.
+     * @param forward true if the sequence is co-aligned to the contig, false if the
+     * read is counter-aligned to the contig.
      */
 
-    public Mapping(Sequence sequence, int cstart, int cfinish, int direction) {
-	this(sequence, cstart, cfinish, direction, null);
+    public Mapping(Sequence sequence, int cstart, int cfinish, boolean forward) {
+	this(sequence, cstart, cfinish, forward, null);
     }
 
     /**
@@ -125,17 +113,7 @@ public class Mapping {
      * @return the direction of the alignment on the contig.
      */
 
-    public int getDirection() { return direction; }
-
-    /**
-     * Returns true if this sequence is co-aligned with the contig, false if it
-     * is counter-aligned.
-     *
-     * @return  true if this sequence is co-aligned with the contig, false if it
-     * is counter-aligned.
-     */
-
-    public boolean isForward() { return direction == FORWARD; }
+    public boolean isForward() { return forward; }
 
     /**
      * Returns the array of Segment objects for this alignment.
@@ -187,5 +165,29 @@ public class Mapping {
 	    return true;
 	} else
 	    return false;
+    }
+
+    /**
+     * Returns a string representation of this object.
+     *
+     * @return a string representation of this object.
+     */
+
+    public String toString() {
+	String text= "Mapping[sequence=" + sequence.getID() + ", cstart=" + cstart +
+	    ", cfinish=" + cfinish + ", direction=" + (forward ? "Forward" : "Reverse");
+
+	if (segments != null) {
+	    text += "\nsegments={\n";
+	    for (int i = 0; i < segments.length; i++) {
+		if (segments[i] != null)
+		    text += "    " + segments[i] + "\n";
+	    }
+	    text += "}";
+	}
+
+	text += "]";
+
+	return text;
     }
 }
