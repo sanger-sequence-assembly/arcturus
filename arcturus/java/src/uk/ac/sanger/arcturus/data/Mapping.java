@@ -135,16 +135,19 @@ public class Mapping {
 
     /**
      * Returns the number of Segment objects which this alignment currently contains.
-     * This may be less than the number specified in the constructor if the segment
-     * array has not been filled yet.
      *
      * @return the number of Segment objects which this alignment currently contains.
      */
 
     public int getSegmentCount() {
-	if (segments != null)
-	    return segments.length;
-	else
+	if (segments != null) {
+	    int count = 0;
+	    for (int i = 0; i < segments.length; i++)
+		if (segments[i] != null)
+		    count++;
+
+	    return count;
+	} else
 	    return nsegs;
     }
 
@@ -166,6 +169,78 @@ public class Mapping {
 	} else
 	    return false;
     }
+
+    /**
+     * Returns the read offset corresponding to the specified contig offset
+     * and orientation.
+     *
+     * @param cpos the contig offset position.
+     * @param forward true if the parent mapping represents a read that is
+     * co-aligned to the contig, false if the read is counter-aligned to the
+     * contig.
+     *
+     * @return the read offset position, or -1 if the contig offset position
+     * falls outside the range of this mapping.
+     */
+
+    public int getReadOffset(int cpos) {
+	if (cpos < cstart || cpos > cfinish || segments == null)
+	    return -1;
+
+	int rpos;
+
+	for (int i = 0; i < segments.length; i++) {
+	    if (segments[i] != null) {
+		rpos = segments[i].getReadOffset(cpos, forward);
+		if (rpos >= 0)
+		    return rpos;
+	    }
+	}
+
+	return -1;
+    }
+
+    /**
+     * Returns the quality of the pad at the specified contig offset.
+     *
+     * @param cpos the contig offset position.
+     * @param quality the base quality array of the sequence of this mapping.
+     *
+     * @return the quality of the pad at the specified contig position,
+     * or -1 if there is no pad at that position in this mapping.
+     */
+
+    public int getPadQuality(int cpos, byte[] quality) {
+	if (cpos < cstart || cpos > cfinish || segments == null || getSegmentCount() < 2)
+	    return -1;
+
+	int rpos;
+
+	for (int i = 1; i < segments.length; i++) {
+	    if (segments[i-1] != null && segments[i] != null) {
+		int cleft = segments[i-1].getContigFinish();
+
+		if (cpos <= cleft)
+		    return -1;
+
+		int cright = segments[i].getContigStart();
+
+		int rleft = -1, rright = -1, qleft = -1, qright = -1, q = -1;
+
+		if (cpos > cleft && cpos < cright) {
+		    rleft = segments[i-1].getReadFinish(forward);
+		    rright = segments[i].getReadStart();
+		    qleft = (int)quality[rleft-1];
+		    qright = (int)quality[rright-1];
+		    q = qleft + ((qright - qleft) * (cpos - cleft))/(cright - cleft);
+		    return q;
+		}
+	    }
+	}
+	
+	return -1;
+    }
+
 
     /**
      * Returns a string representation of this object.
