@@ -19,6 +19,7 @@ my $updateproject = 0;
 my $minprojectsize = 5000;
 my $outfile;
 my $xmlfile;
+my $shownames = 0;
 
 ###
 ### Parse arguments
@@ -34,6 +35,8 @@ while (my $nextword = shift @ARGV) {
     $minprojectsize = shift @ARGV if ($nextword eq '-minprojectsize');
     $outfile = shift @ARGV if ($nextword eq '-out');
     $xmlfile = shift @ARGV if ($nextword eq '-xml');
+
+    $shownames = 1 if ($nextword eq '-shownames');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
 
@@ -82,6 +85,36 @@ my $dbh = $adb->getConnection();
 ###
 
 my $statements = &CreateStatements($dbh);
+
+###
+### If XML output has been requested, and the user has asked for names
+### of reads and templates rather than IDs, create ID-to-name dictionaries.
+###
+
+my %readnames;
+my %templatenames;
+
+if (defined($xmlfile) && $shownames) {
+    my $stmt = $statements->{'readnames'};
+
+    $stmt->execute();
+
+    while (my ($read_id, $readname) = $stmt->fetchrow_array()) {
+	$readnames{$read_id} = $readname;
+    }
+
+    $stmt->finish();
+
+    $stmt = $statements->{'templatenames'};
+
+    $stmt->execute();
+
+    while (my ($template_id, $templatename) = $stmt->fetchrow_array()) {
+	$templatenames{$template_id} = $templatename;
+    }
+
+    $stmt->finish();
+}
 
 ###
 ### Enumerate the list of active contigs, excluding singletons and
@@ -613,11 +646,15 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			foreach my $bridge (@{$bridges}) {
 			    my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
 			    my ($silow, $sihigh) = @{$insertsize};
+
+			    $template_id = $templatenames{$template_id} if $shownames;
 			    
 			    print $xmlfh "\t\t\t\t<bridge template=\"$template_id\"" .
 				" silow=\"$silow\" sihigh=\"$sihigh\" gapsize=\"$gapsize\">\n";
 			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
+
+			    $link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 			    
@@ -626,6 +663,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			    
 			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
+
+			    $link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 			    
@@ -643,13 +682,17 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		print $xmlfh "\t\t</scaffold>\n";
 	    } else {
 		foreach my $link (@{$item}) {
-		    my ($linka, $linkb, $templateid, $insertsize) = @{$link};
+		    my ($linka, $linkb, $template_id, $insertsize) = @{$link};
 		    my ($silow, $sihigh) = @{$insertsize};
 
-		    print $xmlfh "\t\t<superbridge template=\"$templateid\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
+		    $template_id = $templatenames{$template_id} if $shownames;
+
+		    print $xmlfh "\t\t<superbridge template=\"$template_id\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
 			    
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
 			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
+
+		    $link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 			    
@@ -658,6 +701,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			    
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
 			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
+
+		    $link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 			    
@@ -767,7 +812,13 @@ sub CreateStatements {
 		   " using(read_id) where template_id = ? order by strand asc, READS.read_id asc",
 
 		   "setproject",
-		   "update CONTIG set project_id = ? where contig_id = ?"
+		   "update CONTIG set project_id = ? where contig_id = ?",
+
+		   "readnames",
+		   "select read_id,readname from READS",
+
+		   "templatenames",
+		   "select template_id,name from TEMPLATE"
 		   );
 
     my $statements = {};
@@ -988,4 +1039,5 @@ sub showUsage {
     print STDERR "-usesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
     print STDERR "-updateproject\tUpdate each contig's project\n";
     print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
+    print STDERR "-shownames\tShow names of reads and templates in XML output instead of IDs\n";
 }
