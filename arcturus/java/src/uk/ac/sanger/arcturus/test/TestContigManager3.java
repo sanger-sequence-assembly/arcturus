@@ -48,13 +48,13 @@ public class TestContigManager3 {
 	}
 
 	try {
-	    System.out.println("Creating an ArcturusInstance for " + instance);
-	    System.out.println();
+	    System.err.println("Creating an ArcturusInstance for " + instance);
+	    System.err.println();
 
 	    ArcturusInstance ai = new ArcturusInstance(props, instance);
 
-	    System.out.println("Creating an ArcturusDatabase for " + organism);
-	    System.out.println();
+	    System.err.println("Creating an ArcturusDatabase for " + organism);
+	    System.err.println();
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 

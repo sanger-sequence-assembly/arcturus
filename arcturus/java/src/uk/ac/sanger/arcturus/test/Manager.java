@@ -402,7 +402,6 @@ public class Manager {
 	    int cstart = rs.getInt(2);
 	    int cfinish = rs.getInt(3);
 	    boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
-	    int direction = forward ? Mapping.FORWARD : Mapping.REVERSE;
 
 	    Sequence sequence = getSequenceByID(seq_id);
 
@@ -411,7 +410,7 @@ public class Manager {
 		sequenceByID.put(new Integer(seq_id), sequence);
 	    }
 
-	    mappings[kMapping++] = new Mapping(sequence, cstart, cfinish, direction);
+	    mappings[kMapping++] = new Mapping(sequence, cstart, cfinish, forward);
 
 	    if ((kMapping % 10) == 0) {
 		event.working(kMapping);
@@ -423,10 +422,6 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
-
-	Arrays.sort(mappings, mappingComparator);
-
-	contig.setMappings(mappings);
 
 	pstmtReadAndTemplateData.setInt(1, contig_id);
 
@@ -626,6 +621,10 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
+
+	Arrays.sort(mappings, mappingComparator);
+
+	contig.setMappings(mappings);
 
 	Integer id = new Integer(contig_id);
 
