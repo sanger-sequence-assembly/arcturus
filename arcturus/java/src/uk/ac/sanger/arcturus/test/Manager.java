@@ -31,7 +31,8 @@ public class Manager {
     private transient Vector eventListeners = new Vector();
 
     protected MappingComparator mappingComparator = new MappingComparator();
-    protected SegmentComparator segmentComparator = new SegmentComparator();
+    protected SegmentComparatorByContigPosition segmentComparator =
+	new SegmentComparatorByContigPosition();
 
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
@@ -708,19 +709,19 @@ public class Manager {
 	}
     }
 
-    class SegmentComparator implements Comparator {
+    class SegmentComparatorByContigPosition implements Comparator {
 	public int compare(Object o1, Object o2) {
 	    Segment segment1 = (Segment)o1;
 	    Segment segment2 = (Segment)o2;
 
-	    int diff = segment1.getReadStart() - segment2.getReadStart();
+	    int diff = segment1.getContigStart() - segment2.getContigStart();
 
 	    return diff;
 	}
 
 	public boolean equals(Object obj) {
-	    if (obj instanceof SegmentComparator) {
-		SegmentComparator that = (SegmentComparator)obj;
+	    if (obj instanceof SegmentComparatorByContigPosition) {
+		SegmentComparatorByContigPosition that = (SegmentComparatorByContigPosition)obj;
 		return this == that;
 	    } else
 		return false;

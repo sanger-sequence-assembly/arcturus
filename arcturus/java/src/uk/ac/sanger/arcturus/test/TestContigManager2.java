@@ -238,7 +238,7 @@ public class TestContigManager2 {
 	    }
 	}
 
-	byte[] dna = contig.getConsensus();
+	byte[] dna = contig.getDNA();
 
 	if (dna != null) {
 	    String seq = new String(dna);

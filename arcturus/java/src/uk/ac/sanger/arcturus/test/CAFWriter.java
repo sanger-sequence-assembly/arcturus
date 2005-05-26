@@ -5,6 +5,9 @@ import uk.ac.sanger.arcturus.data.*;
 
 public class CAFWriter {
     protected PrintStream ps = null;
+    protected Segment[] segments = null;
+    protected SegmentComparatorByReadPosition segmentComparator =
+	new SegmentComparatorByReadPosition();
 
     public CAFWriter(PrintStream ps) {
 	this.ps = ps;
@@ -40,19 +43,36 @@ public class CAFWriter {
 
 	Mapping[] mappings = contig.getMappings();
 
+	int maxsegcount = 0;
+
+	for (int i = 0; i < mappings.length; i++) {
+	    int segcount = mappings[i].getSegmentCount();
+	    if (segcount > maxsegcount)
+		maxsegcount = segcount;
+	}
+
+	if (segments == null || segments.length < maxsegcount)
+	    segments = new Segment[maxsegcount];
+
 	for (int i = 0; i < mappings.length; i++)
 	    writeAssembledFrom(mappings[i]);
     }
 
     private void writeAssembledFrom(Mapping mapping) {
-	Segment[] segments = mapping.getSegments();
+	Segment[] rawsegments = mapping.getSegments();
+
+	for (int i = 0; i < rawsegments.length; i++)
+	    segments[i] = rawsegments[i];
+
+	Arrays.sort(segments, 0, rawsegments.length, segmentComparator);
+
 	Sequence sequence = mapping.getSequence();
 	Read read = sequence.getRead();
 	String readname = read.getName();
 
 	boolean forward = mapping.isForward();
 
-	for (int i = 0; i < segments.length; i++) {
+	for (int i = 0; i < rawsegments.length; i++) {
 	    int cstart = segments[i].getContigStart();
 	    int rstart = segments[i].getReadStart();
 	    int length = segments[i].getLength();
@@ -133,5 +153,24 @@ public class CAFWriter {
 
 	if ((quality.length % 25) != 0)
 	    ps.print('\n');
+    }
+
+    class SegmentComparatorByReadPosition implements Comparator {
+	public int compare(Object o1, Object o2) {
+	    Segment segment1 = (Segment)o1;
+	    Segment segment2 = (Segment)o2;
+
+	    int diff = segment1.getReadStart() - segment2.getReadStart();
+
+	    return diff;
+	}
+
+	public boolean equals(Object obj) {
+	    if (obj instanceof SegmentComparatorByReadPosition) {
+		SegmentComparatorByReadPosition that = (SegmentComparatorByReadPosition)obj;
+		return this == that;
+	    } else
+		return false;
+	}
     }
 }
