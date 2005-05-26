@@ -15,6 +15,8 @@ public class Segment {
     protected int rstart;
     protected int length;
 
+    protected int cfinish;
+
     /**
      * Constructs a segment object with the given start positions and length.
      *
@@ -27,6 +29,8 @@ public class Segment {
 	this.cstart = cstart;
 	this.rstart = rstart;
 	this.length = length;
+
+	this.cfinish = cstart + length - 1;
     }
 
     /**
@@ -38,6 +42,14 @@ public class Segment {
     public int getContigStart() { return cstart; }
 
     /**
+     * Returns the end position on the contig.
+     *
+     * @return the end position on the contig.
+     */
+
+    public int getContigFinish() { return cfinish; }
+
+    /**
      * Returns the start position on the read.
      *
      * @return the start position on the read.
@@ -46,12 +58,46 @@ public class Segment {
     public int getReadStart() { return rstart; }
 
     /**
+     * Returns the end position on the read, given the orientation.
+     *
+     * @param forward true if the parent mapping represents a read that is
+     * co-aligned to the contig, false if the read is counter-aligned to the
+     * contig.
+     *
+     * @return the end position on the read.
+     */
+
+    public int getReadFinish(boolean forward) {
+	return forward ? rstart + (length - 1) : rstart - (length - 1);
+    }
+
+    /**
      * Returns the length of this segment.
      *
      * @return the length of this segment.
      */
 
     public int getLength() { return length; }
+
+    /**
+     * Returns the read offset corresponding to the specified contig offset
+     * and orientation.
+     *
+     * @param cpos the contig offset position.
+     * @param forward true if the parent mapping represents a read that is
+     * co-aligned to the contig, false if the read is counter-aligned to the
+     * contig.
+     *
+     * @return the read offset position, or -1 if the contig offset position
+     * falls outside the range of this segment.
+     */
+
+    public int getReadOffset(int cpos, boolean forward) {
+	if (cpos < cstart || cpos > cfinish)
+	    return -1;
+	else
+	    return forward ? rstart + (cpos - cstart) : rstart - (cpos - cstart);
+    }
 
     /**
      * Returns a string representation of this object.
