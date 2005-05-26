@@ -71,7 +71,7 @@ public class ContigHashing {
 
 		Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
 
-		byte[] dna = contig.getConsensus();
+		byte[] dna = contig.getDNA();
 
 		int maxoffset = dna.length - kmersize;
 
