@@ -20,8 +20,9 @@ my $project;
 my $assembly;
 my $confirm;
 my $fofn;
+my $ml = 0;
 
-my $validKeys = "organism|instance|read|fofn|oligo|finishing|"
+my $validKeys = "organism|instance|read|fofn|oligo|finishing|minimulength|ml|"
               . "project|assembly|verbose|confirm|preview|help";
 
 while (my $nextword = shift @ARGV) {
@@ -30,26 +31,29 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
  
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
+    $instance  = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    $organism  = shift @ARGV  if ($nextword eq '-organism');
 
-    $read         = shift @ARGV  if ($nextword eq '-read');
+    $read      = shift @ARGV  if ($nextword eq '-read');
 
-    $readtype     = 'oligo'      if ($nextword eq '-oligo');
-    $readtype     = 'finishing'  if ($nextword eq '-finishing');
+    $readtype  = 'oligo'      if ($nextword eq '-oligo');
+    $readtype  = 'finishing'  if ($nextword eq '-finishing');
 
-    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn      = shift @ARGV  if ($nextword eq '-fofn');
 
-    $project      = shift @ARGV  if ($nextword eq '-project');
+    $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
+    $ml        = shift @ARGV  if ($nextword eq '-ml');
 
-    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+    $project   = shift @ARGV  if ($nextword eq '-project');
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    $assembly  = shift @ARGV  if ($nextword eq '-assembly');
 
-    $confirm      = 1            if ($nextword eq '-confirm' && !defined($confirm));
+    $verbose   = 1            if ($nextword eq '-verbose');
+ 
+    $confirm   = 1            if ($nextword eq '-confirm' && !defined($confirm));
 
-    $confirm      = 0            if ($nextword eq '-preview');
+    $confirm   = 0            if ($nextword eq '-preview');
 
     &showUsage(0,1) if ($nextword eq '-help'); # long write up
 }
@@ -103,6 +107,7 @@ my @reads;
 
 if ($fofn) {
     foreach my $read (@$fofn) {
+        next unless $read;
         push @reads, $read;
     }
 }
@@ -166,23 +171,23 @@ else {
 
 # execute if confirm switch set, else list 
 
-# print "reads:@reads\n";
 foreach my $read (@reads) {
     my %options;
 # determine selection by ID or by readname
     next unless ($read);
     $options{read_id}  = $read if ($read !~ /\D/);
     $options{readname} = $read if ($read =~ /\D/);
+    $options{minimumlength} = $ml if ($ml >= 32);
     $options{noload} = 1 unless $confirm;
     my ($status,$message) = $adb->assignReadAsContigToProject($project,%options);
     if ($status) {
         $logger->warning("read $read is added to project ".$project->getProjectName());
     }
     elsif ($message =~ /no-load/i) {
-        $logger->warning("read $read to be added to project ".$project->getProjectName());
+        $logger->info("read $read to be added to project ".$project->getProjectName());
     }
     else {
-        $logger->info("read $read is not be added : $message");
+        $logger->warning("read is NOT added : $message");
     }  
 }
   
@@ -205,6 +210,7 @@ sub getNamesFromFile {
 
     my @list;
     while (defined (my $name = <$FILE>)) {
+        next unless $name;
         $name =~ s/^\s+|\s+$//g;
         push @list, $name;
     }

@@ -22,9 +22,10 @@ my $fofn;
 my $verbose;
 my $metadataonly = 0;
 my $loadcmaps;
+my $project;
 
 my $validKeys  = "organism|instance|contig|fofn|read|tag|short|cmaps|".
-                 "fasta|verbose|help";
+                 "project|fasta|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -38,6 +39,8 @@ while (my $nextword = shift @ARGV) {
     $contig_id    = shift @ARGV  if ($nextword eq '-contig');
 
     $readname     = shift @ARGV  if ($nextword eq '-read');
+
+    $project      = shift @ARGV  if ($nextword eq '-project');
 
     $tagname      = shift @ARGV  if ($nextword eq '-tag');
 
@@ -92,31 +95,36 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 # MAIN
 #----------------------------------------------------------------
 
+my %options;
+
+if ($project) {
+    $options{project_id}  = $project  unless ($project =~ /\D/); 
+    $options{projectname} = $project  if ($project =~ /\D/);
+}
+
+$options{metaDataOnly} = $metadataonly;
+
 my @contigs;
 
 if ($contig_id) {
     $logger->info("Contig $contig_id to be processed");
-    my $contig = $adb->getContig(contig_id=>$contig_id,
-                                 metaDataOnly=>$metadataonly);
+    my $contig = $adb->getContig(contig_id=>$contig_id,%options);
     $logger->info("Contig $contig constructed");
     push @contigs, $contig if $contig;
 }
 
 if ($readname) {
     $logger->info("Contig with read $readname to be processed");
-    my $contig = $adb->getContig(withRead=>$readname,
-                                 metaDataOnly=>$metadataonly);
+    my $contig = $adb->getContig(withRead=>$readname,%options);
     $logger->info("Contig $contig constructed") if $contig;
     push @contigs, $contig if $contig;
 }
 
 if ($tagname) {
     $logger->info("Contig with tag $tagname to be processed");
-    my $contig = $adb->getContig(withTagName=>$tagname,
-                       metaDataOnly=>$metadataonly);
+    my $contig = $adb->getContig(withTagName=>$tagname,%options);
     unless ($contig) {
-    my $contig = $adb->getContig(withAnnotationTag=>$tagname,
-                       metaDataOnly=>$metadataonly);
+        $contig = $adb->getContig(withAnnotationTag=>$tagname,%options);
     }
     $logger->info("Contig $contig constructed");
     push @contigs, $contig if $contig;
@@ -124,8 +132,7 @@ if ($tagname) {
 
 if ($fofn) {
     foreach my $contig_id (@$fofn) {
-        my $contig = $adb->getContig(id=>$contig_id,
-                                     metaDataOnly=>$metadataonly);
+        my $contig = $adb->getContig(id=>$contig_id,%options);
         push @contigs, $contig if $contig;
     }
 }

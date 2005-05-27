@@ -26,7 +26,8 @@ my $cnFilter = '';         # test contig names for this substring or RE
 my $cnBlocker;             # contig name blocker, ignore contig names of age 0
 my $rnBlocker;             # ignore reads like pattern
 my $minOfReads = 2;        # default require at least 2 reads per contig
-my $readTags = 1;          # default load read tags
+my $loadreadtags = 1;      # default load read tags
+my $readtaglist;           # allows specification of individual tags
 my $contigtag = 2;         # contig tag processing
 my $origin;
 
@@ -47,9 +48,10 @@ my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
-               . "project|defaultproject|test|minimum|filter|ignore|list|setprojectby|"
-               . "spb|ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
-               . "frugal|padded|noreadtags|noload|verbose|batch|info|help";
+               . "project|defaultproject|test|minimum|filter|ignore|list|"
+               . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
+               . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
+               . "frugal|padded|noload|verbose|batch|info|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -81,7 +83,8 @@ while (my $nextword = shift @ARGV) {
 
     $cnFilter         = shift @ARGV  if ($nextword eq '-filter'); 
 
-    $readTags         = 0            if ($nextword eq '-noreadtags');
+    $loadreadtags     = 0            if ($nextword eq '-noreadtags');
+    $loadreadtags     = 0            if ($nextword eq '-nrt');
 
     $usePadded        = 1            if ($nextword eq '-padded');
 
@@ -100,6 +103,9 @@ while (my $nextword = shift @ARGV) {
 
     $contigtag        = shift @ARGV  if ($nextword eq '-ctp');
     $contigtag        = shift @ARGV  if ($nextword eq '-contigtagprocessing');
+
+    $readtaglist      = shift @ARGV  if ($nextword eq '-readtaglist');
+    $readtaglist      = shift @ARGV  if ($nextword eq '-rtl');
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
@@ -258,14 +264,29 @@ my ($read, $mapping, $contig);
 
 my (%contigs, %reads, %mappings);
 
+# set-up tag selection
 
-    my $FTAGS = &tagList('FTAGS');
-    my $STAGS = &tagList('STAGS');
-    my $ETAGS = &tagList('ETAGS');
+my $FTAGS = &tagList('FTAGS');
+my $STAGS = &tagList('STAGS');
+my $ETAGS = &tagList('ETAGS');
+
+my $readtagmode = 0;
+
+if (!$readtaglist) {
+    $readtaglist = "$FTAGS|$STAGS";
+}
+elsif ($readtaglist eq 'default') {
+    $readtaglist = '\w{3,4}';
+}
+else {
+    $readtagmode = 1;
+}
 
 $logger->info("Read a maximum of $lineLimit lines")      if $lineLimit;
 $logger->info("Contig (or alias) name filter $cnFilter") if $cnFilter;
 $logger->info("Contigs with fewer than $minOfReads reads are NOT dumped") if ($minOfReads > 1);
+
+$logger->warning("readtags selected $readtaglist");
 
 # setup a buffer for read(name)s to be ignored
 
@@ -532,9 +553,10 @@ while (defined($record = <$CAF>)) {
             $read->addCloningVector([$4, $2, $3]);
         }
 # further processing a read Read TAGS and EDITs
-        elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
+        elsif ($record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+# elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
             my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
-#print STDERR "read Tag ($record) \n";
+# print STDERR "read Tag ($record) \n" if ($readtagmode);
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
                 if (defined($record = <$CAF>)) {
@@ -639,9 +661,9 @@ my $TEMP=0; if ($TEMP) {
            $logger->info("READ EDIT tag detected but not processed: $record");
         }
         elsif ($record =~ /Tag/) {
-           $logger->warning("READ tag not recognized: $record");
+           $logger->warning("READ tag not recognized: $record") unless $readtagmode;
         }
-# EDIT tags TO BE TESTED
+# EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
 	elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
             my $tag = new Tag('edittag');
@@ -674,7 +696,7 @@ my $TEMP=0; if ($TEMP) {
         }
 # finally
         elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
-            $logger->warning("not recognized ($lineCount): $record");
+            $logger->warning("not recognized ($lineCount): $record") unless $readtagmode;
         }
     }
 
@@ -877,22 +899,26 @@ $logger->info("$nc contigs skipped") if $nc;
 
 # add the Read tags
 
-if ($readTags) {
+if ($loadreadtags) {
 
     my @reads;
     foreach my $identifier (keys %reads) {
         my $read = $reads{$identifier};
         push @reads, $read;
-#        if ($noload) {
-#        my $tags = $read->getTags();
-#        next unless ($tags && @$tags);
-#        foreach my $tag (@$tags) {
-#            $tag->writeToCaf(*STDOUT) if $noload;
-#        }
     }
     my $autoload = 1;
     my $success = $adb->putTagsForReads(\@reads,$autoload);
     $logger->info("putTagsForReads success = $success");
+}
+else {
+    foreach my $identifier (keys %reads) {
+        my $read = $reads{$identifier};
+        my $tags = $read->getTags();
+        next unless ($tags && @$tags);
+        foreach my $tag (@$tags) {
+            $tag->writeToCaf(*STDOUT) if $noload;
+        }
+    }
 }
 
 # finally update the meta data for the Assembly and the Organism
@@ -988,6 +1014,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-ctp\t\tcontigtagprocessing (depth of inheritance, def 1)\n";
     print STDERR "-noreadtags\tdo not process read tags\n";
+    print STDERR "-rtl\t\t(readtaglist) process specified read tags only\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";

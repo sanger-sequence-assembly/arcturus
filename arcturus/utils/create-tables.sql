@@ -104,6 +104,7 @@ CREATE TABLE CONTIG (
   cover float(8,2) default '0.00',
   origin enum('Arcturus CAF parser','Finishing Software','Other') default NULL,
   userid char(8) default 'arcturus',
+  created datetime default NULL,
   updated timestamp NOT NULL,
   readnamehash char(16) default NULL,
   PRIMARY KEY  (contig_id),
@@ -206,23 +207,6 @@ CREATE TABLE READTAG (
   deprecated enum('N','Y','X') default 'N',
   comment tinyblob default NULL,
   KEY readtag_index (seq_id)
-) TYPE=MyISAM;
-
-#
-# Table structure for table 'OLDCONTIGTAG' TO BE REMOVED AFTER TESTING NEW
-#
-
-CREATE TABLE OLDCONTIGTAG (
-  contig_id mediumint(8) unsigned NOT NULL default '0',
-  tagtype CHAR(4) binary NOT NULL default '',
-  systematic_id VARCHAR(32) binary NULL,
-  tag_seq_id mediumint(8) unsigned NOT NULL default 0,
-  pstart int(11) unsigned NOT NULL default '0',
-  pfinal int(11) unsigned NOT NULL default '0',
-  strand enum('F','R','U') default 'U',
-  deprecated enum('N','Y','X') default 'N',
-  comment tinytext default NULL,
-  KEY contigtag_index (contig_id)
 ) TYPE=MyISAM;
 
 #

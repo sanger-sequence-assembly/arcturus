@@ -20,18 +20,19 @@ my $assembly;
 my $batch;
 my $lock = 0;
 my $padded;
-my $noread;
+my $readsonly = 0;
 my $output;
 my $fofn;
 my $caffile; # for standard CAF format
 my $maffile; # for Millikan format
 my $fastafile; # fasta
 my $qualityfile;
-my $minNX = 3; # default
+my $minNX = 1; # default
 my $preview;
 
-my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|noread|"
-               . "fasta|quality|lock|minNX|preview|batch|verbose|debug|help";
+my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|"
+               . "readsonly|fasta|quality|lock|minNX|preview|batch|verbose|"
+               . "debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -56,7 +57,7 @@ while (my $nextword = shift @ARGV) {
 
     $padded      = 1            if ($nextword eq '-padded');
 
-    $noread      = 1            if ($nextword eq '-noread');
+    $readsonly   = 1            if ($nextword eq '-readsonly');
 
     $fastafile   = shift @ARGV  if ($nextword eq '-fasta');
     $caffile     = shift @ARGV  if ($nextword eq '-caf');
@@ -222,7 +223,7 @@ my %exportoptions;
 $exportoptions{'padded'} = 1 if ($caffile && $padded);
 $exportoptions{'notacquirelock'} = 1 - $lock;
 $exportoptions{'minNX'} = $minNX;
-$exportoptions{'noreads'} = 1 if $noread;
+$exportoptions{'readsonly'} = 1 if $readsonly; # fasta
 
 my $errorcount = 0;
 
@@ -311,7 +312,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
     print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
-    print STDERR "-noread\t\t(no value) do not include reads in fasta output\n";
+    print STDERR "-readsonly\t(no value) export only reads in fasta output\n";
     print STDERR "\n";
     print STDERR "Default setting exports all contigs in project\n";
     print STDERR "When using a lock check, only those projects are exported ";

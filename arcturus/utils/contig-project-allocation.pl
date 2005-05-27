@@ -22,7 +22,7 @@ my $confirm;
 my $fofn;
 
 my $validKeys = "organism|instance|contig|fofn|project|assembly|"
-              . "verbose|confirm|force|preview|help";
+              . "verbose|debug|confirm|force|preview|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -42,6 +42,8 @@ while (my $nextword = shift @ARGV) {
     $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
     $verbose      = 1            if ($nextword eq '-verbose');
+
+    $verbose      = 2            if ($nextword eq '-debug');
 
     $confirm      = 1            if ($nextword eq '-confirm' && !defined($confirm));
 
@@ -103,6 +105,7 @@ push @contigids, $contig if defined($contig);
 
 if ($fofn) {
     foreach my $contig (@$fofn) {
+	next unless $contig;
         push @contigids, $contig;
     }
 }
@@ -122,6 +125,7 @@ foreach my $contigid (@contigids) {
     }
     $report .= "unidentified contig: $contigid\n" unless $contig;
     push @contigs,$contig if $contig;
+    $logger->warning($adb->logQuery(1)) if ($verbose && $verbose > 1);
 }
 
 # get the project and assembly information (ID or name for both)
@@ -159,14 +163,15 @@ $project = $Project->[0];
 if ($confirm) {
 
     my ($status,$message) = $adb->assignContigsToProject([@contigs],$project,$forced);
-    $logger->warning("status $status:\n$message");
+    $logger->warning("status $status:");
+    $logger->warning($message);
 }
 else {
-
-    print "to be allocated to project ".$project->getProjectName()
-        . " in assembly ".$project->getAssemblyID().":\n\n";
+    $logger->warning("to be allocated to project "
+                    .$project->getProjectName()
+                    ." in assembly ".$project->getAssemblyID());
     foreach my $contig (@contigs) {
-	print $contig->toString()."\n";
+	$logger->warning($contig->toString());
     }
 }
   
@@ -189,6 +194,7 @@ sub getNamesFromFile {
 
     my @list;
     while (defined (my $name = <$FILE>)) {
+        next unless ($name =~ /\S/);
         $name =~ s/^\s+|\s+$//g;
         push @list, $name;
     }
@@ -217,14 +223,17 @@ sub showUsage {
      print STDERR "Contigs will only be (re-)allocated from their current\n";
      print STDERR "project (if any) to the new one specified, if BOTH the\n";
      print STDERR "current project AND the target project are not locked by\n";
-     print STDERR "another user. Carefully check the results log!\n\n";
-     print STDERR "A special case is when a contig is in a project owned by\n";
-     print STDERR "another user, but not locked. In default mode such contigs\n";
-     print STDERR "are NOT re-allocated (as a protection measure). In order to \n";
-     print STDERR "reassign those contig(s), the '-force' switch must be used.\n\n";
+     print STDERR "another user. Carefully check the results log!\n";
+     print STDERR "\n";
      print STDERR "In default mode this script lists the contigs that it will\n";
      print STDERR "(try to) re-allocate. In order to actually make the change,\n";
      print STDERR "the '-confirm' switch must be used\n";
+     print STDERR "\n";
+     print STDERR "A special case is when a contig is already in a project\n"; 
+     print STDERR "(possibly owned by another user) but not locked.\n";
+     print STDERR "In default mode such contigs are NOT re-allocated (as a\n";
+     print STDERR "protective measure) even if owned by yourself. In order to\n";
+     print STDERR "reassign those contig(s), the '-force' switch must be used.\n";
      print STDERR "\n";
     }
     print STDERR "\n";
@@ -254,3 +263,4 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
