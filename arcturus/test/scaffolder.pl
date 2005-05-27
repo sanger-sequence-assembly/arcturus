@@ -122,6 +122,7 @@ if (defined($xmlfile) && $shownames) {
 ###
 
 my $contiglength = {};
+my $contigname = {};
 my @contiglist;
 my $project = {};
 
@@ -129,8 +130,9 @@ my $sth = $statements->{'currentcontigs'};
 
 $sth->execute($minlen);
 
-while (my ($ctgid, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
+while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
+    $contigname->{$ctgid} = defined($ctgname) ? $ctgname : sprintf("CONTIG%06d", $ctgid);
     $project->{$ctgid} = $ctgproject;
     push @contiglist, $ctgid;
 }
@@ -638,6 +640,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			$projid = 0 unless defined($projid);
 
+			$contigid = $contigname->{$contigid} if $shownames;
+
 			print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\"" .
 			    " project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
@@ -657,16 +661,19 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			    $link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
-			    
+
+			    $link_contig = $contigname->{$link_contig} if $shownames;
+
 			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
-			    
-			    
+			    			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
 
 			    $link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+
+			    $link_contig = $contigname->{$link_contig} if $shownames;
 			    
 			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -695,6 +702,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		    $link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+
+		    $link_contig = $contigname->{$link_contig} if $shownames;
 			    
 		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -705,6 +714,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		    $link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
+
+		    $link_contig = $contigname->{$link_contig} if $shownames;
 			    
 		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -768,7 +779,7 @@ sub CreateStatements {
     my $dbh = shift;
 
     my %queries = ("currentcontigs",
-		   "select CONTIG.contig_id,CONTIG.length,CONTIG.project_id" .
+		   "select CONTIG.contig_id,gap4name,CONTIG.length,CONTIG.project_id" .
 		   "  from CONTIG left join C2CMAPPING" .
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
