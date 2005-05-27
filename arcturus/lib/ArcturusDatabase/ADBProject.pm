@@ -140,7 +140,7 @@ print "getProject:$query '@data' \n";
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute(@data) || &queryFailed("$query @data") && return undef;
+    $sth->execute(@data) || &queryFailed($query,@data) && return undef;
 
 # cater for the case of more than one project !
 
@@ -230,7 +230,7 @@ sub insertProject {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute(@_) || &queryFailed("'$query' data: '@_'");
+    my $rc = $sth->execute(@_) || &queryFailed($query,@_);
 
     $sth->finish();
 
@@ -541,8 +541,8 @@ sub assignReadAsContigToProject {
     my $minimumlength = $poption{minimumlength};
     $minimumlength = 50 unless $minimumlength;
     my $contiglength = $lqright - $lqleft + 1;
-    return 0,"read $identifier is of insufficient length ($minimumlength)"
-        unless ($contiglength < $minimumlength);
+    return 0,"read $identifier is of insufficient length: $contiglength "
+            ."($minimumlength)" unless ($contiglength >= $minimumlength);
 
 # create a new contig with a single read
 
@@ -586,7 +586,7 @@ sub unlinkContigID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $success = $sth->execute($contig_id) || &queryFailed($query);
+    my $success = $sth->execute($contig_id) || &queryFailed($query,$contig_id);
 
     $sth->finish();
 
@@ -641,7 +641,7 @@ sub fetchContigIDsForProjectID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query);
+    $sth->execute($project_id) || &queryFailed($query,$project_id);
 
     my @contigids;
     while (my ($contig_id) = $sth->fetchrow_array()) {
@@ -674,7 +674,7 @@ sub getProjectIDforContigID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($contig_id) || &queryFailed($query);
+    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
 
     my ($project_id,$locked);
     while (my @ary = $sth->fetchrow_array()) {
@@ -705,7 +705,7 @@ sub getProjectIDforReadName { # TO BE TESTED
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($readname) || &queryFailed($query);
+    $sth->execute($readname) || &queryFailed($query,$readname);
 
     my ($contig_id,$project_id);
     while (my @ary = $sth->fetchrow_array()) {
@@ -810,7 +810,7 @@ sub getProjectStatisticsForProjectID {
  
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query);
+    $sth->execute($project_id) || &queryFailed($query,$project_id);
     
     my ($cs,$rs,$tl,$mn,$mx,$ml,$sd) = $sth->fetchrow_array();
 
@@ -1011,7 +1011,7 @@ sub getLockedStatus {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($identifier) || &queryFailed($query);
+    $sth->execute($identifier) || &queryFailed($query,$identifier);
 
     my ($pid,$locked,$owner) = $sth->fetchrow_array();
 
@@ -1047,7 +1047,8 @@ sub setLockedStatus {
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($owner,$projectid) || &queryFailed($query) && return;
+    my $rc = $sth->execute($owner,$projectid) 
+    || &queryFailed($query,$owner,$projectid) && return;
 
 # returns 1 for success, 0 for failure
 

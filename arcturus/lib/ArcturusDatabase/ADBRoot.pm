@@ -30,7 +30,21 @@ sub queryFailed {
 
     $query =~ s/\s+/ /g; # remove redundent white space
 
-    print STDERR "FAILED query: $query\n";
+# substitute placeholders '?' by values
+
+    my $length = length(@_);
+
+    while ($length-- > 0) {
+        my $datum = shift || 'null';
+        $datum = "'$datum'" if ($datum =~ /\D/);
+        $query =~ s/\?/$datum/;
+    }
+
+# and break up into seperate lines to make long queries more readable 
+
+    $query =~ s/(\s*(where|from|and|order|group|union))/\n$1\t/gi;
+
+    print STDERR "FAILED query:\n$query\n";
 
     print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
 

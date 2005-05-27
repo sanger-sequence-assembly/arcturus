@@ -189,7 +189,6 @@ sub compare {
 # compare this Mapping instance with input Mapping at the segment level
     my $this = shift;
     my $compare = shift;
-my $debug = shift;
 
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
@@ -205,8 +204,6 @@ my $debug = shift;
 # go through the segments of both mappings and collate consecutive overlapping
 # contig segments (on $cmapping) of the same offset into a list of output segments
 
-print "\n\nMapping ".$this->getMappingName." tm ".scalar(@$tmaps)." cm ".
-scalar(@$cmaps)."\n" if $debug; 
 
     my @osegments; # list of output segments
 
@@ -229,13 +226,12 @@ scalar(@$cmaps)."\n" if $debug;
         my $os = ($cs > $ts) ? $cs : $ts;
         my $of = ($cf < $tf) ? $cf : $tf;
 
-print "it=$it: $ts - $tf  ic=$ic $cs - $cf    overlap: $os - $of " if $debug;  
-
         if ($of >= $os) {
 # test at the segment level to obtain offset and alignment direction
             my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
-print " al=$aligned  off=$offset" if $debug;
+
 # on first interval tested register alignment direction
+
 	    $align = $aligned unless defined($align);
 # break on alignment inconsistency; fatal error, but should never occur
             return 0,undef unless ($align == $aligned);
@@ -275,10 +271,25 @@ print " al=$aligned  off=$offset" if $debug;
 # no overlap, this segment to the right of compare
             $ic++;
         }
-print "\n" if $debug;
     }
 
-    return $align,[@osegments];
+# convert the segments into a Mapping object
+
+    my $mapping = new Mapping('CC:'.$this->getMappingName);
+    $mapping->setAlignment($align) if defined($align);
+
+    foreach my $osegment (@osegments) {
+        my ($offset,@cpos) = @$osegment;
+        for my $i (0,1) {
+            $cpos[$i+2] = $cpos[$i] + $offset;
+            $cpos[$i+2] = -$cpos[$i+2] if ($align < 0);
+        }
+	$mapping->putSegment(@cpos);
+    }
+
+    return $mapping unless (shift);
+
+    return $align,[@osegments]; # old system
 }
 
 sub analyseSegments {
@@ -347,8 +358,7 @@ sub applyShiftToContigPosition {
 
     my $segments = $this->getSegments();
     foreach my $segment (@$segments) {
-        $segment->applyLinearTransform(1,$shift);
-#        $segment->applyShiftToX($shift);
+        $segment->applyLinearTransform(1,$shift); # apply shift to X
     }
 
     undef $this->{contigrange}; # force re-initialisation of cache

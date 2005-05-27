@@ -650,27 +650,28 @@ my $DEBUG = 0;
         return undef;
     }
     elsif (!defined($read->getSequenceLength())) {
-# read Read instance has no sequence information
+# read instance has no sequence information
         return undef;
     }
     elsif ($this->getSequenceLength() != $read->getSequenceLength()) {
-        return 0 unless ($read->getReadName eq 'eimer-3329b09.p1k'
-||$read->getReadName eq 'eimer-577f05.q1k' ); # different lengths
-$DEBUG = 1;
-# let be triggered by presence of - ? or edited read?
-        my $thisDNA = $this->getSequence();
-#        return 0 unless ($thisDNA =~ /-/);
+# different lengths
+        return 0;
     }
 
-# test the DNA sequences; special provision for (lossy) depadded sequence 
+# test the DNA sequences; special provision for sequence with pads 
 
     my $thisDNA = $this->getSequence();
     my $readDNA = $read->getSequence();
 
     if ($thisDNA ne $readDNA) {
-# different DNA strings; we do extra test for depadded sequences
+# try if it's a matter of case for 'N's appearing in the sequence
+        if ($thisDNA =~ s/n/N/g || $readDNA =~ s/n/N/g) {
+            return 1 if ($thisDNA eq $readDNA);
+	}
+# different DNA strings; we do extra test for sequences with pads
         return 0 unless ($thisDNA =~ /-/);
 # compare individual alignment segments (separated by '-')
+$DEBUG = 0;
 print "testing ".$read->getReadName." version ".$read->getVersion.
 " against ".$this->getReadName."\n" if $DEBUG;
         my @pad;
@@ -678,8 +679,8 @@ print "testing ".$read->getReadName." version ".$read->getVersion.
         my $thisBQD = $this->getBaseQuality();
         my $readBQD = $read->getBaseQuality();
         while (($pos = index($thisDNA,'-',$pos)) > -1) {
-# alter 'this' quality data at position pos to match the 'read' data
-            $thisBQD->[$pos] = $readBQD->[$pos]; # unless $thisBQD->[$pos];
+# alter 'this' quality data at the pad position to match the 'read' data
+            $thisBQD->[$pos] = $readBQD->[$pos];
             push @pad, $pos++;
         }
         push @pad,length($thisDNA);
@@ -691,9 +692,8 @@ print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
             if ($length > 0) {
                 my $subthis = substr $thisDNA,$start,$length;
                 my $subread = substr $readDNA,$start,$length;
-#print "$readDNA\n\n$thisDNA\n\npadds: @pad\n" unless ($subthis eq $subread);
-#print "$subthis\n$subread\n" unless ($subthis eq $subread);
-                return 0 unless ($subthis eq $subread); # different DNA strings
+# if the substrings differ we have different DNA strings
+                return 0 unless ($subthis eq $subread);
             }
             $start = $pad[$i] + 1;
 	}

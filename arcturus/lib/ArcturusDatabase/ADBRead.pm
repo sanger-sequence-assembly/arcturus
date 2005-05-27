@@ -318,7 +318,7 @@ sub getRead {
             $version = 0 unless defined($version); # define default
         }
         elsif ($nextword eq 'readname') {
-            $query .= "and READS.readname = ?";
+            $query .= "and READS.readname like ?";
             $readitem = shift;
             $version = 0 unless defined($version); # define default
         }
@@ -334,11 +334,13 @@ sub getRead {
 
     $query .= " and SEQ2READ.version = $version" if defined ($version);
 
+    $query =~ s/like/=/ unless ($readitem =~ /\%/);
+
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($readitem) || &queryFailed($query);
+    $sth->execute($readitem) || &queryFailed($query,$readitem);
 
     my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array();
 
@@ -436,7 +438,7 @@ sub addSequenceMetaDataForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id) || &queryFailed($query);
+    $sth->execute($seq_id) || &queryFailed($query,$seq_id);
 
     while (my ($svector_id, $svleft, $svright) = $sth->fetchrow_array()) {
 	my $svector = &dictionaryLookup($this->{Dictionary}->{svector},$svector_id);
@@ -452,7 +454,7 @@ sub addSequenceMetaDataForRead {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id) || &queryFailed($query);
+    $sth->execute($seq_id) || &queryFailed($query,$seq_id);
 
     while (my ($cvector_id, $cvleft, $cvright) = $sth->fetchrow_array()) {
         my $cvector = &dictionaryLookup($this->{Dictionary}->{cvector},$cvector_id);
@@ -468,7 +470,7 @@ sub addSequenceMetaDataForRead {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id) || &queryFailed($query);
+    $sth->execute($seq_id) || &queryFailed($query,$seq_id);
 
     if (my ($qleft, $qright) = $sth->fetchrow_array()) {
 
@@ -486,7 +488,7 @@ sub addSequenceMetaDataForRead {
 
     $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($seq_id) || &queryFailed($query);
+    $sth->execute($seq_id) || &queryFailed($query,$seq_id);
 
     while (my($startinseq, $startinscf, $length) = $sth->fetchrow_array()) {
 # convert to intervals
@@ -646,7 +648,7 @@ sub getSequenceIDForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($idvalue, $version) || &queryFailed($query);
+    $sth->execute($idvalue, $version) || &queryFailed($query,$idvalue,$version);
 
     my ($seq_id) = $sth->fetchrow_array();
 
@@ -732,8 +734,9 @@ sub getReadsForContig {
 
     my $sth = $dbh->prepare_cached($query);
 
-# print STDERR "getReadsForContig ContigID: $query\n";
-    my $nr = $sth->execute($contig->getContigID) || &queryFailed($query);
+    my $cid = $contig->getContigID();
+
+    my $nr = $sth->execute($cid) || &queryFailed($query,$cid);
 
     my @reads;
 
@@ -935,7 +938,7 @@ sub isUnassembledRead {
 
     my $dbh = $this->getConnection();
     my $sth = $dbh->prepare_cached($query);
-    my $row = $sth->execute($value) || (&queryFailed($query) && return undef);
+    my $row = $sth->execute($value) || (&queryFailed($query,$value) && return);
     $sth->finish();
 
 # returns 1 if the read ID/readname is unassembled, else returns 0
@@ -1070,7 +1073,7 @@ sub getSequenceForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value) || &queryFailed($query);
+    $sth->execute($value) || &queryFailed($query,$value);
 
     my ($sequence, $quality);
 
@@ -1110,7 +1113,7 @@ sub getCommentForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value) || &queryFailed($query);
+    $sth->execute($value) || &queryFailed($query,$value);
 
     my @comment;
 
@@ -1143,7 +1146,7 @@ sub getTraceArchiveIdentifier {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value) || &queryFailed($query);
+    $sth->execute($value) || &queryFailed($query,$value);
 
     my $traceref;
 
@@ -1238,7 +1241,7 @@ sub hasRead {
 
     my $read_id;
 
-    $sth->execute($readname) || &queryFailed($query);
+    $sth->execute($readname) || &queryFailed($query,$readname);
 
     while (my @ary = $sth->fetchrow_array()) {
         $read_id = $ary[0];
@@ -1556,7 +1559,8 @@ sub putSequenceForRead {
         foreach my $segment (@$segments) {
             my ($startseq,$finisseq,$startscf,$finisscf) = $segment->getSegment();
             my $slength = $finisseq - $startseq + 1;
-            $sth->execute($seqid,$startseq,$startscf,$slength) || &queryFailed($query);
+            $sth->execute($seqid,$startseq,$startscf,$slength)
+            || &queryFailed($query,$seqid,$startseq,$startscf,$slength);
         } 
 	$sth->finish();
     }
@@ -1573,7 +1577,8 @@ sub putSequenceForRead {
 		print STDERR "Length mismatch in SCF alignment ($slength, $tlength)\n";
                 next;
             }
-            $sth->execute($seqid,$startinseq,$startinscf,$slength) || &queryFailed($query);
+            $sth->execute($seqid,$startinseq,$startinscf,$slength) 
+            || &queryFailed($query,$seqid,$startinseq,$startinscf,$slength);
         } 
 	$sth->finish();
     }
@@ -1632,7 +1637,8 @@ print STDOUT "using Mapping\n" if $DEBUG;
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
-            return ($seq_id,"is identical to version $version");
+            return ("sequence ".$seq_id,"is identical to version $version "
+                   ."of read $readname");
         }
         elsif ($prior) {
             $first = $prior unless defined $first;
@@ -1644,11 +1650,10 @@ print STDOUT "using Mapping\n" if $DEBUG;
 #    we only allow sequence without pad '-' symbols to entered 
 
     if ($read->getSequence() =~ /\-/) {
-# fatal error: sequence contains non-DNA symbols
-        return (0,"Invalid new sequence for read $readname: contains pads");
+# fatal error: sequence contains non-DNA symbols ? /[^ACGTN]/ 
+        return (0,"Invalid new sequence for read $readname: contains non-DNA symbols");
     }
     elsif ($noload) {
-# test option
         return (0,"New (edited) sequence version for read $readname ignored");
     }
 
@@ -1926,16 +1931,16 @@ sub deleteRead { # TO BE TESTED
     my $query = "select * from MAPPING left join SEQ2READ using (seq_id) 
                  where SEQ2READ.read_id = ?";
     my $sth = $dbh->prepare_cached($query);
-    my $row = $sth->execute($readid) || &queryFailed($query);
+    my $row = $sth->execute($readid) || &queryFailed($query,$readid);
     $sth->finish();
 
     return (0,"Assembled read $value cannot be removed") if (!$row || $row > 0);
 
     return (0,"Read $value to be deleted") unless $execute;
 
-# remove for readid from all tables it could be in
+# remove for readid from all tables it could be in (should be separate cleanup?)
 
-    my @stables = ('SEQVEC','CLONEVEC','SEQUENCE','QUALITYCLIP','READTAG',);
+    my @stables = ('SEQVEC','CLONEVEC','SEQUENCE','QUALITYCLIP','READTAG');
 
     my $delete = 0;
 # delete seq_id items
@@ -1943,7 +1948,7 @@ sub deleteRead { # TO BE TESTED
         $query = "delete $table from $table left join SEQ2READ using (seq_id) where read_id=?";
 print "$query\n"; next; # test this query!
         $sth = $dbh->prepare_cached($query);
-#        $row = $sth->execute($readid) || &queryFailed($query);
+#        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
         $sth->finish();
     }
@@ -1954,7 +1959,7 @@ print "$query\n"; next; # test this query!
         $query = "delete from $table where read_id=?";
 print "$query\n"; next;
         $sth = $dbh->prepare_cached($query);
-#        $row = $sth->execute($readid) || &queryFailed($query);
+#        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
         $sth->finish();
     }
@@ -1968,11 +1973,13 @@ sub deleteReadsLike { # TO BE TESTED
 
     my $query = "select read_id from READS where readname like ?";
 
+    $query =~ s/like/=/ unless ($name =~ /\%/);
+
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($name) || $query =~ s/\?/$name/ && &queryFailed($query);
+    $sth->execute($name) || &queryFailed($query,$name);
 
     my @readids;
     while (my ($read_id) = $sth->fetchrow_array()) {
@@ -2003,7 +2010,7 @@ sub getSequenceIDsForReads {
 
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
-# version(s) already in the database with method addNewSequenceForRead
+# version(s) already in the database with method putNewSequenceForRead
 # for unedited reads pull the data out in bulk with a left join
 
     my $success = 1;
@@ -2475,10 +2482,9 @@ sub insertTagSequence {
                   . " where tagseqname like ?"
                   . " order by tagseqname limit 1";
 
-#print "$query ($tagseqname)\n" if $DEBUG;
         my $sth = $dbh->prepare_cached($query);
 
-        $sth->execute($tagseqname) || (&queryFailed($query) && return undef);
+        $sth->execute($tagseqname) || (&queryFailed($query,$tagseqname) && return);
 
         my ($tag_seq_id, $tagsequence) = $sth->fetchrow_array();
 
@@ -2501,7 +2507,8 @@ sub insertTagSequence {
 
             $sth = $dbh->prepare_cached($query);
 
-            my $rc = $sth->execute($sequence,$tagseqname) || &queryFailed($query);
+            my $rc = $sth->execute($sequence,$tagseqname) 
+            || &queryFailed($query,$sequence,$tagseqname);
 
             return undef unless $rc; # a failed update
 
@@ -2536,7 +2543,7 @@ sub insertTagSequence {
 
     $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($tagseqname) || &queryFailed($query);
+    $rc = $sth->execute($tagseqname) || &queryFailed($query,$tagseqname);
 
     return undef unless $rc; # a failed query
 

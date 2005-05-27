@@ -27,7 +27,7 @@ sub new {
 }
 
 my $DEBUG;
-sub cDebug   { $DEBUG = 1; }
+sub cDebug   { $DEBUG = shift || 1; }
 sub cNoDebug { $DEBUG = 0; }
 
 #------------------------------------------------------------------------------
@@ -40,37 +40,40 @@ sub getContig {
 # additional : metaDataOnly=>0 or 1 (default 0), noReads=>0 or 1 (default 0)
 # DO WE NEED:andblocked: include contig from blocked projects TO BE IMPLEMENTED ?
     my $this = shift;
+    my %options = @_;
 
 # decode input parameters and compose the query
 
     my $query  = "select CONTIG.contig_id,gap4name,length,ncntgs,nreads,"
-               . "newreads,cover,readnamehash "; 
+               . "newreads,cover,created,updated,project_id,readnamehash"; 
 
     my $nextword;
     my $metadataonly = 0; # default export the lot
-
     my $value;
+
+    my @values;
     while ($nextword = shift) {
 	if ($nextword eq 'ID' || $nextword eq 'contig_id') {
-            $query .= "from CONTIG where contig_id = ?";
-            $value = shift;
+            $query .= "  from CONTIG where contig_id = ? ";
+	    push @values,shift;
+#            $value = shift;
         }
         elsif ($nextword eq 'withChecksum') {
 # returns the highest contig_id, i.e. most recent contig with this checksum
-            $query .= " from CONTIG where readnamehash = ? "
-		    . "order by contig_id desc limit 1";
-            $value = shift;
+            $query .= "  from CONTIG where readnamehash = ? ";
+	    push @values,shift;
+#            $value = shift;
         }
         elsif ($nextword eq 'withRead') {
 # returns the highest contig_id, i.e. most recent contig with this read
-            $query .= " from CONTIG, MAPPING, SEQ2READ, READS "
-                    . "where CONTIG.contig_id = MAPPING.contig_id "
-                    . "  and MAPPING.seq_id = SEQ2READ.seq_id "
-                    . "  and SEQ2READ.read_id = READS.read_id "
-                    . "  and READS.readname like ? "
-		    . "order by contig_id desc limit 1";
+            $query .= "  from CONTIG, MAPPING, SEQ2READ, READS "
+                    . " where CONTIG.contig_id = MAPPING.contig_id "
+                    . "   and MAPPING.seq_id = SEQ2READ.seq_id "
+                    . "   and SEQ2READ.read_id = READS.read_id "
+		    . "   and READS.readname like ? ";
 #print STDERR "getContig: $query\n";
-             $value = shift;
+	    push @values,shift;
+#            $value = shift;
         }
         elsif ($nextword eq 'withTagName') {
 # returns the highest contig_id, i.e. most recent contig with this tag
@@ -79,38 +82,60 @@ sub getContig {
                    .  " where CONTIG.contig_id = TAG2CONTIG.contig_id"
                    .  "   and TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
                    .  "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
-                   .  "   and TAGSEQUENCE.tagseqname like ?" 
-		   .  " order by contig_id desc limit 1";
-print STDOUT ">getContig: $query\n";
-            $value = shift;
+                   .  "   and TAGSEQUENCE.tagseqname like ? ";
+#print STDOUT ">getContig: $query\n";
+	    push @values,shift;
+#            $value = shift;
         }
         elsif ($nextword eq 'withAnnotationTag') {
 # returns the highest contig_id, i.e. most recent contig with this tag
             $query .= "  from CONTIG,TAG2CONTIG,CONTIGTAG"
                    .  " where CONTIG.contig_id = TAG2CONTIG.contig_id"
                    .  "   and TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
-                   .  "   and CONTIGTAG.systematic_id like ?"
-		   .  " order by contig_id desc limit 1";
-print STDOUT ">getContig: $query\n";
-            $value = shift;
+		   .  "   and CONTIGTAG.systematic_id like ? ";
+#print STDOUT ">getContig: $query\n";
+	    push @values,shift;
+#            $value = shift;
         }
         elsif ($nextword eq 'metaDataOnly') {
             $metadataonly = shift;
         }
-        else {
-            print STDERR "Invalid parameter in getContig : $nextword\n";
-            $this->disconnect();
-            exit 0;
-        }
+#        else {
+#            print STDERR "Invalid parameter in getContig : $nextword\n";
+#            $this->disconnect();
+#            exit 0;
+#        }
     }
 
-    $this->logQuery('getContig',$query,$value);
+    $query =~ s/like/=/ unless (@values && $values[0] =~ /\%/);
+
+# add possible project specification
+
+    if ($options{project_id}) {
+        $query .= "   and project_id = ? ";
+	push @values,$options{project_id};
+    }
+    elsif ($options{projectname}) {
+        my $subquery = "select project_id from PROJECT"
+	             . " where name like ? ";
+        $subquery =~ s/like/=/ unless ($options{projectname} =~ /\%/);
+        $query .= "   and project_id in ($subquery)";
+        push @values, $options{projectname};
+    }
+
+# add limit clause to guarantee latest contig returned        
+
+    $query .= "order by contig_id desc limit 1";
+
+    $this->logQuery('getContig',$query,@values);
+#&queryFailed($query,@values);
+# ok, execute
 
     my $dbh = $this->getConnection();
         
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value) || &queryFailed($query);
+    $sth->execute(@values) || &queryFailed($query,@values);
 
 # get the metadata
 
@@ -141,6 +166,15 @@ print STDOUT ">getContig: $query\n";
         my $cover = shift @attributes;
         $contig->setAverageCover($cover);
 
+        my $created = shift @attributes;
+        $contig->setCreated($created);
+
+        my $updated = shift @attributes;
+        $contig->setUpdated($updated);
+
+        my $project = shift @attributes;
+        $contig->setProject($project);
+
 	$contig->setArcturusDatabase($this);
     }
 
@@ -148,7 +182,8 @@ print STDOUT ">getContig: $query\n";
 
     return undef unless defined($contig);
 
-    return $contig if $metadataonly;
+return $contig if $metadataonly;
+    return $contig if $options{metadataonly};
 
 # get the reads for this contig with their DNA sequences and tags
 
@@ -185,7 +220,7 @@ sub getSequenceAndBaseQualityForContigID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($contig_id) || &queryFailed($query);
+    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
 
     my ($sequence, $quality);
 
@@ -751,19 +786,21 @@ sub putMetaDataForContig {
 
     my $query = "insert into CONTIG "
               . "(gap4name,length,ncntgs,nreads,newreads,cover"
-              . ",origin,readnamehash) "
-              . "VALUES (?,?,?,?,?,?,?,?)";
+              . ",origin,created,readnamehash) "
+              . "VALUES (?,?,?,?,?,?,?,now(),?)";
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($contig->getGap4Name(),
-                           $contig->getConsensusLength() || 0,
-                           $contig->hasParentContigs(),
-                           $contig->getNumberOfReads(),
-                           $contig->getNumberOfNewReads(),
-                           $contig->getAverageCover(),
-                           $contig->getOrigin(),
-                           $readhash) || &queryFailed($query);
+    my @data = ($contig->getGap4Name(),
+                $contig->getConsensusLength() || 0,
+                $contig->hasParentContigs(),
+                $contig->getNumberOfReads(),
+                $contig->getNumberOfNewReads(),
+                $contig->getAverageCover(),
+                $contig->getOrigin(),
+                $readhash);
+
+    my $rc = $sth->execute(@data) || &queryFailed($query,@data); 
 
     return 0 unless ($rc == 1);
     
@@ -1025,10 +1062,11 @@ sub getReadMappingsForContig {
                  "   and SEQ2READ.read_id = READS.read_id" .
                  " order by cstart";
 
-    my $squery = "select SEGMENT.mapping_id,SEGMENT.cstart," .
-                 "       rstart,length" .
-                 "  from MAPPING join SEGMENT using (mapping_id)" .
-                 " where MAPPING.contig_id = ?";
+    my $squery = "select SEGMENT.mapping_id,SEGMENT.cstart,"
+               . "       rstart,length"
+               . "  from MAPPING join SEGMENT using (mapping_id)"
+               . " where MAPPING.contig_id = ?"
+               . " order by mapping_id,rstart";
 
     my $dbh = $this->getConnection();
 
@@ -1036,7 +1074,9 @@ sub getReadMappingsForContig {
 
     my $sth = $dbh->prepare_cached($mquery);
 
-    $sth->execute($contig->getContigID) || &queryFailed($mquery);
+    my $cid = $contig->getContigID();
+
+    $sth->execute($cid) || &queryFailed($mquery,$cid);
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
@@ -1056,7 +1096,7 @@ sub getReadMappingsForContig {
 
     $sth = $dbh->prepare($squery);
 
-    $sth->execute($contig->getContigID()) || &queryFailed($squery);
+    $sth->execute($cid) || &queryFailed($squery,$cid);
 
     while(my @ary = $sth->fetchrow_array()) {
         my ($mappingid, $cstart, $rpstart, $length) = @ary;
@@ -1102,7 +1142,9 @@ sub getContigMappingsForContig {
 
     my $sth = $dbh->prepare_cached($mquery);
 
-    $sth->execute($contig->getContigID) || &queryFailed($mquery);
+    my $cid = $contig->getContigID();
+
+    $sth->execute($cid) || &queryFailed($mquery,$cid);
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
@@ -1125,7 +1167,7 @@ sub getContigMappingsForContig {
 
     $sth = $dbh->prepare($squery);
 
-    $sth->execute($contig->getContigID()) || &queryFailed($squery);
+    $sth->execute($cid) || &queryFailed($squery,$cid);
 
     while(my @ary = $sth->fetchrow_array()) {
         my ($mappingid, $cstart, $rpstart, $length) = @ary;
@@ -1147,6 +1189,7 @@ sub putMappingsForContig {
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
     my $dbh = shift; # database handle
     my $contig = shift;
+    my %option = @_;
 
 # this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
 # tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
@@ -1206,12 +1249,15 @@ sub putMappingsForContig {
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
 
-        my $rc = $sth->execute($contigid,
-                               $mapping->getSequenceID(),
-                               $cstart,
-                               $cfinish,
-                               $mapping->getAlignmentDirection()) 
-              || &queryFailed($mquery);
+        my @data = ($contigid,
+                    $mapping->getSequenceID(),
+                    $cstart,
+                    $cfinish,
+                    $mapping->getAlignmentDirection());
+
+        my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
+
+
         $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
     }
 
@@ -1497,7 +1543,7 @@ sub getParentIDsForContigID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($contig_id) || &queryFailed($query);
+    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
 
     my @contigids;
     while (my ($contigid) = $sth->fetchrow_array()) {
@@ -1520,7 +1566,7 @@ sub getChildIDsForContigID {
     
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($contig_id) || &queryFailed($query);
+    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
 
     my @contigids;
     while (my ($contigid) = $sth->fetchrow_array()) {
@@ -1907,11 +1953,8 @@ print STDOUT ">putTagsForContig: testing for existing Tags\n" if $DEBUG;
         foreach my $etag (@$existingtags) {
 print STDOUT "\nTesting existing tag\n" if $DEBUG;
 $etag->dump(*STDOUT) if $DEBUG;
-#           foreach my $ctag (@$ctags) {
             foreach my $key (keys %$tags) {
                 my $ctag = $tags->{$key};
-print STDOUT "\nTo be tested against new tag\n" if $DEBUG;
-$ctag->dump(*STDOUT) if $DEBUG;
                 if ($ctag->isEqual($etag)) {
                     delete $tags->{$ctag};
                     last;
@@ -1929,7 +1972,6 @@ print STDOUT ">putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
     foreach my $key (keys %$tags) {
         my $ctag = $tags->{$key};
         push @tags, $ctag;
-#$ctag->writeToCaf(*STDOUT) if $DEBUG;
     }
     $ctags = [@tags];
 
@@ -1940,6 +1982,8 @@ print STDOUT ">putTagsForContig: new tags ".scalar(@tags)."\n" if $DEBUG;
     &getTagSequenceIDsForTags($dbh,$ctags,1); # autoload active (-> ADBRead)
 
     &getTagIDsForTags($dbh,$ctags);
+
+return 0,"DEBUG abort" if $DEBUG;
 
     return &putContigTags($dbh,$ctags);
 }
@@ -1959,8 +2003,8 @@ print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
 
     my $query = "select tag_id,systematic_id,tag_seq_id"
               . "  from CONTIGTAG"
-              . " where tagtype like ?"
-              . "   and tagcomment like ?"
+              . " where tagtype = ?"
+              . "   and tagcomment = ?"
 	      . "  limit 1";
 
     my $sth = $dbh->prepare_cached($query);       
@@ -1970,10 +2014,9 @@ print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
 # retrieve contig tag information for combination tagtype & tagcomment
         my $tagtype = $tag->getType(); # already tested in putTagsForContig
         my $tagcomment = $tag->getTagComment();
-# but skip if no systematic ID is defined
-        next unless $tag->getSystematicID();
 # pull out existing data
-        my $rc = $sth->execute($tagtype,$tagcomment) || &queryFailed($query);
+        my $rc = $sth->execute($tagtype,$tagcomment) 
+        || &queryFailed($query,$tagtype,$tagcomment);
 print STDOUT ">getTagIDsForTags Finding tagtype : $query rc:$rc \n" if $DEBUG;
         if ($rc) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $sth->fetchrow_array();
@@ -2022,8 +2065,8 @@ print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
         my $systematic_id  = $tag->getSystematicID();
         my $tagcomment     = $tag->getTagComment();
 
-        my $rc = $sth->execute($tagtype,$systematic_id,$tag_seq_id,
-                               $tagcomment) || &queryFailed($insert);
+        my $rc =  $sth->execute($tagtype,$systematic_id,$tag_seq_id,$tagcomment) 
+        || &queryFailed($insert,$tagtype,$systematic_id,$tag_seq_id,$tagcomment);
 
         if ($rc) {
             my $tag_id = $dbh->{'mysql_insertid'};
@@ -2051,7 +2094,8 @@ $tag->dump(*STDOUT) if $DEBUG;
             my $tag_id = $tag->getTagID();
             my $systematic_id = $tag->getSystematicID();
 print STDOUT ">getTagIDsForTags: systematic ID added ($systematic_id $tag_id)\n" if $DEBUG; 
-            $sth->execute($systematic_id,$tag_id) || &queryFailed($update);
+            $sth->execute($systematic_id,$tag_id) 
+            || &queryFailed($update,$systematic_id,$tag_id);
 	}
     }
 
@@ -2091,8 +2135,9 @@ print STDOUT ">putContigTags for ".scalar(@$tags)." tags\n" if $DEBUG;
         $strand =~ s/(\w)\w*/$1/;
         my $comment          = $tag->getComment();
 
-        my $rc = $sth->execute($contig_id,$tag_id,$cstart,$cfinal,$strand,
-                               $comment || undef) || &queryFailed($query);
+        my @data = ($contig_id,$tag_id,$cstart,$cfinal,$strand,$comment || undef);
+
+        my $rc = $sth->execute(@data) || &queryFailed($query,@data);
 
         $missed++ unless $rc;
         $success++ if $rc;

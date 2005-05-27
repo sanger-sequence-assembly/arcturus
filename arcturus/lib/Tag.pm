@@ -228,7 +228,7 @@ sub transpose {
 
     @tpos = sort {$a <=> $b} @tpos if @tpos;
 
-# transpose the strand (if needed)
+# transpose the strand (if needed) (transpose DNA on export only)
 
     my $strand = $this->getStrand();
     if ($strand eq 'Forward' and $align < 0) {
@@ -281,7 +281,7 @@ sub composeName {
 }
 
 sub transposeDNA {
-# reverse complement an input DNA sequence
+# reverse complement an input DNA sequence TO BE TESTED
     my $string = shift;
 
     return undef unless $string;
@@ -303,12 +303,7 @@ sub isEqual {
     my $tag  = shift;
     my %options = @_;
 
-#my $etest = $options{debug};
-
 # compare tag type
-
-print "Tag comparison: ".$this->getType.
-            " against: ".$tag->getType."\n" if $options{debug};
 
     return 0 unless ($this->getType() eq $tag->getType());
 
@@ -317,16 +312,11 @@ print "Tag comparison: ".$this->getType.
     my @spos = $this->getPosition();
     my @tpos = $tag->getPosition();
 
-print "  position: @spos  against  @tpos \n" if $options{debug};
-
     return 0 unless (scalar(@spos) && scalar(@spos) == scalar(@tpos));
     return 0 if ($spos[0] != $tpos[0]);
     return 0 if ($spos[1] != $tpos[1]);
 
 # compare tag comments
-
-print "  comment: ".$this->getTagComment.
-     "\n against: ".$tag->getTagComment."\n" if $options{debug};
 
     if ($this->getTagComment() =~ /\S/ || $tag->getTagComment() =~ /\S/) {
         return 0 unless ($this->getTagComment() eq $tag->getTagComment());
@@ -335,29 +325,23 @@ print "  comment: ".$this->getTagComment.
 # compare strands (optional)
 
     if ($options{includestrand}) {
-print "   strands: ".$this->getStrand.
-        " against: ".$tag->getStrand."\n" if $options{debug};
 
         return 0 unless ( $tag->getStrand() eq 'Unknown' ||
                          $this->getStrand() eq 'Unknown' ||
                          $this->getStrand() eq $tag->getStrand());
     }
 
-# the tags are identical:
-print "Tags are EQUAL \n" if $options{debug};
+# the tags are identical
 
     if ($options{copy}) {
 # copy tag ID, tag sequence ID and systematic ID, ifnot already defined
         unless ($tag->getTagID()) {
-print "Copying tag ID \n" if $options{debug};
             $tag->setTagID($this->getTagID());
         }
         unless ($tag->getTagSequenceID()) {
-print "Copying tag sequence ID \n" if $options{debug};
             $tag->setTagSequenceID($this->getTagSequenceID());
         }
         unless ($tag->getSystematicID()) {
-print "Copying systematic ID \n" if $options{debug};
            $tag->setSystematicID($this->getSystematicID());
         }
     }
@@ -408,7 +392,7 @@ sub dump {
     $report .= "sequence          ".($tag->getDNA() || 'undef')."\n";
 
     print $FILE $report  if $FILE;
-    return $report; 
+    return $report;
 }
 
 #----------------------------------------------------------------------

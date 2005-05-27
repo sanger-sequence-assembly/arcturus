@@ -6,8 +6,6 @@ use Mapping;
 
 use PaddedRead; # remove after upgrade for Padded
 
-my $DEBUG = 0;
-
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -26,6 +24,10 @@ sub new {
 
     return $this;
 }
+
+my $DEBUG;
+sub setDEBUG {$DEBUG = 1;}
+sub setNoDEBUG {$DEBUG = 0;}
 
 #------------------------------------------------------------------- 
 # parent database handle
@@ -141,6 +143,13 @@ sub setContigName {
 
 #------------------------------------------------------------------- 
 
+sub setCreated {
+    my $this = shift;
+    $this->{created} = shift;
+}
+
+#------------------------------------------------------------------- 
+
 sub setGap4Name {
     my $this = shift;
     $this->{gap4name} = shift;
@@ -233,6 +242,13 @@ sub getBaseQuality {
     return $this->{BaseQuality}; # an array reference (or undef)
 }
 
+#------------------------------------------------------------------- 
+
+sub setProject {
+    my $this = shift;
+    $this->{project} = shift;
+}
+
 #-------------------------------------------------------------------   
 
 sub getReadOnLeft {
@@ -278,6 +294,13 @@ sub getSequence {
 
     $this->importSequence() unless defined($this->{Sequence});
     return $this->{Sequence};
+}
+
+#------------------------------------------------------------------- 
+
+sub setUpdated {
+    my $this = shift;
+    $this->{updated} = shift;
 }
 
 #-------------------------------------------------------------------    
@@ -486,6 +509,7 @@ sub getStatistics {
     my $cfinal = 0;
     my ($readonleft, $readonright);
     my $totalreadcover = 0;
+    my $numberofreads = 0;
     my $isShifted = 0;
 
     while ($pass) {
@@ -495,6 +519,7 @@ sub getStatistics {
         my $name = $this->getContigName() || 0;
         if (my $mappings = $this->getMappings()) {
             my $init = 0;
+            $numberofreads = 0;
             $totalreadcover = 0;
             foreach my $mapping (@$mappings) {
                 my $readname = $mapping->getMappingName();
@@ -503,6 +528,8 @@ sub getStatistics {
 # total read cover = sum of contigspan length
                 my $contigspan = $cf - $cs + 1;
                 $totalreadcover += $contigspan;
+# count number of reads
+                $numberofreads++;
 
 # find the leftmost readname
 
@@ -571,6 +598,18 @@ sub getStatistics {
     $this->setAverageCover( sprintf("%.2f", $averagecover) );
     $this->setReadOnLeft($readonleft);
     $this->setReadOnRight($readonright);
+
+# test number of reads
+
+    if (my $nr = $this->getNumberOfReads()) {
+        unless ($nr == $numberofreads) {
+            print STDERR "Inconsistent read ($nr) and mapping ($numberofreads) "
+                       . "count in contig ".$this->getContigName()."\n";
+	}
+    }
+    else {
+        $this->setNumberOfReads($numberofreads);
+    }
 
     return 1; # register success
 }
@@ -668,30 +707,12 @@ sub linkToContig {
 # incomplete Contig instances or missing sequence IDs in mappings
     my $this = shift;
     my $compare = shift; # Contig instance to be compared to $this
+    my %options = @_;
+
+# option strong       : set True for comparison at read mapping level
+# option readclipping : if set, require a minumum number of reads in C2C segment
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
-
-# decode control input
-
-    my $DEBUG = 0;
-
-    my $strong = 0; # set True for comparison at read mapping level
-    my $guillotine = 0;
-    while (my $nextword = shift) {
-
-        if ($nextword eq 'strong') {
-            $strong = shift || 0;
-        }
-        elsif ($nextword eq 'readclipping') {
-            $guillotine = shift || 0;
-        }
-        elsif ($nextword eq 'debug') {
-            $DEBUG = shift || 0;
-	}
-        else {
-            print STDERR "Invalid keyword $nextword in 'linkToContig'\n";
-        }
-    }
 
 # test completeness
 
@@ -716,51 +737,54 @@ sub linkToContig {
     foreach my $mapping (@$mappings) {
         my $key = $mapping->getSequenceID();
         unless (defined($key)) {
-            print STDERR "Incomplete Mapping ".$mapping->getMappingName."\n";
+            print STDOUT "Incomplete Mapping ".$mapping->getMappingName."\n";
             return undef; # abort: incomplete Mapping; should never occur
         }
         my $match = $sequence->{$key};
         unless (defined($match)) {
-            $deallocated++;
+# the read in the parent is missing in this contig
+            $deallocated++; # should be more discriminate in case of split parent
             next;
         }
 
 # this mapping/sequence in $compare also figures in the current Contig
 
-        if ($strong) {
-# test alignment of complete mapping
+        if ($options{strong}) {
+# strong comparison: test for identical mappings (apart from shift)
             my ($identical,$aligned,$offset) = $match->isEqual($mapping);
 
-            print STDERR "\nmapping: id=$identical  align=".($aligned||' ').
-            "  offset=".($offset||' ')."  ".$mapping->getMappingName if $DEBUG;
- 
 # keep the first encountered (contig-to-contig) alignment value != 0 
+
             $alignment = $aligned unless $alignment;
             next unless ($identical && $aligned == $alignment);
+
 # the mappings are identical (alignment and segment sizes)
+
             my @segment = $mapping->getContigRange();
 # build a hash key based on offset and alignment direction and add segment
             my $hashkey = sprintf("%08d",$offset);
             $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
             push @{$inventory->{$hashkey}},[@segment];
-            print STDERR " contig segment @segment " if $DEBUG;
         }
 
 # otherwise do a segment-by-segment comparison and find ranges of identical mapping
 
-        else {
-            my $debug = $DEBUG;
-            if ($DEBUG) {
-                my ($identical,$al,$of) = $match->isEqual($mapping);
-                $debug = 0 if $identical;
-            }
+#####################################################################################
+        elsif (0) {
+# OBSOLETE: to be deleted after testing of alternative below
+my $debug = $DEBUG;
+if ($DEBUG) {
+my ($identical,$al,$of) = $match->isEqual($mapping);
+$debug = 0 if $identical;
+}
 
-            my ($aligned,$osegments) = $match->compare($mapping,$debug);
+            my ($aligned,$osegments) = $match->compare($mapping,1);
 # keep the first encountered (contig-to-contig) alignment value != 0 
+            next unless defined $aligned; # empty cross mapping
             $alignment = $aligned unless $alignment;
-
-            print STDERR "Fine comparison of segments for mapping: align=".
-             ($aligned||' ')."  ".$mapping->getMappingName."\n" if $DEBUG;
+print STDOUT "Fine comparison of segments for mapping: align=".
+($aligned||' ')."  ".$mapping->getMappingName."\n" if $DEBUG;
+$DEBUG = 1;
 
             next unless ($alignment && $aligned == $alignment);
 # add the mapping range(s) returned in the list to the inventory 
@@ -770,11 +794,42 @@ sub linkToContig {
                 $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
                 my @segment = @$osegment; # copy
                 push @{$inventory->{$hashkey}},[@segment];
-                print STDERR " contig segment @segment \n" if $DEBUG;
+print STDOUT "OLD contig segment for offset $offset : @segment ".
+             $mapping->getMappingName."\n" if $DEBUG;
 	    }
+print "\n" if $DEBUG;
+$DEBUG=0;
+#exit;
 	}
+#####################################################################################
+
+        else {
+# return the mapping as a Mapping object
+            my $mapping = $match->compare($mapping);
+            my $aligned = $mapping->getAlignment();
+
+            next unless defined $aligned; # empty cross mapping
+
+# keep the first encountered (contig-to-contig) alignment value != 0
+
+            $alignment = $aligned unless $alignment;
+
+            next unless ($alignment && $aligned == $alignment);
+
+# process the mapping segments and add to the inventory
+
+            my $osegments = $mapping->getSegments() || next;
+            foreach my $osegment (@$osegments) {
+                my $offset = $osegment->getOffset();
+                $offset = (-$offset+0); # conform to offset convention in this method
+                my $hashkey = sprintf("%08d",$offset);
+                $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+                $osegment->normaliseOnX();# get in the correct order
+                my @segment = ($osegment->getXstart(),$osegment->getXfinis());
+                push @{$inventory->{$hashkey}},[@segment];
+	    }
+        }
     }
-    print "\n" if $DEBUG;
 
 # OK, here we have an inventory: the number of keys equals the number of 
 # different alignments between $this and $compare. On each key we have an
@@ -789,17 +844,19 @@ sub linkToContig {
 
 # determine guillotine; accept only alignments with a minimum number of reads 
 
-    if ($guillotine) {
+    my $guillotine = 0;
+    if ($options{readclipping}) {
         $guillotine = 1 + log(scalar(@$mappings)); 
 # adjust for small numbers (2 and 3)
         $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
         $guillotine = 2  if ($guillotine < 2); # minimum required
-        print STDERR "guillotine: $guillotine \n" if $DEBUG;
+print STDOUT "guillotine: $guillotine \n" if $DEBUG;
     }
 
-
+    my $rtotal = 0;
     my @c2csegments;
     foreach my $offset (sort keys %$inventory) {
+#        next unless ($offset > -1900 && $offset < -1870);
 # sort mappings according to increasing contig start position
         my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
         my $nreads = 0; # counter of reads in current segment
@@ -827,7 +884,8 @@ sub linkToContig {
             elsif ($intervalfinis > $segmentfinis) {
                 $segmentfinis = $intervalfinis;
             }
-            $nreads++; 
+            $nreads++;
+            $rtotal++;
         }
 # add segmentstart - segmentfinis as (last) mapping segment
         next unless ($nreads >= $guillotine);
@@ -865,12 +923,19 @@ sub linkToContig {
 # enter the segments to the mapping
 
     foreach my $segment (@c2csegments) {
-	print "segment @$segment \n" if $DEBUG;
-        next if ($segment->[3] < $segment->[2]); # in case the boundaries have changed
-        $mapping->addAssembledFrom(@$segment);
+print "segment @$segment \n" if $DEBUG;
+        next if ($segment->[3] < $segment->[2]); # in case boundaries have changed
+        $mapping->putSegment(@$segment);
     }
 
     if ($mapping->hasSegments()) {
+# here, test if the mapping is valid, using the overall maping range
+        my $isValid = &isValidMapping($this,$compare,$mapping);
+        return 0,$rtotal unless $isValid;
+# in case of split contig
+        if ($isValid == 2) {
+print "deallocated $deallocated\n";
+        }
 # store the Mapping as a contig-to-contig mapping
         $this->addContigToContigMapping($mapping);
     }
@@ -911,6 +976,41 @@ sub findMapping {
     }
 
     return undef;
+}
+
+sub isValidMapping {
+# private method for 'linkToContig': decide if a mapping is reasonable, based 
+# on the mapped contig range and the sizes of the two contigs involved
+    my $contig = shift;
+    my $parent = shift;
+    my $mapping = shift;
+    my %options = @_;
+
+    my $threshold = $options{threshold} || 0.95;
+
+    my $cl = $contig->getConsensusLength();
+    my $pl = $parent->getConsensusLength();
+        
+    my @range = $mapping->getContigRange(); 
+    my $overlap = $range[1] - $range[0] + 1;
+print "\nENTER isVALID Contig Range : @range  $overlap,   cl $cl  pl $pl\n";
+
+    my @fraction;
+    my $direction;
+    foreach my $length ($pl,$cl) {
+        my $fraction = $overlap/$length;
+print "overlap  $length ".sprintf("%6.3f",$fraction)."\n";
+        push @fraction, $fraction;
+# returns 1 for $contig joined by parent(s); 2 for contig split from parent 
+        return scalar(@fraction) if ($fraction >= $threshold);
+    }
+
+    my $cr = $contig->getNumberOfReads();
+    my $pr = $parent->getNumberOfReads();
+    print "closer look (@fraction): cr $cr  pr $pr\n";
+
+print "\nEXIT isVALID\n";
+    return 1;
 }
 
 #-------------------------------------------------------------------    
@@ -963,8 +1063,8 @@ sub propagateTagsToContig {
 
     return 0 unless $parent->hasTags(1);
 print "propagateTagsToContig ".
-      "parent $parent (".$parent->getContigID().")  target $target ("
-                        .$target->getContigID().")\n" if $DEBUG;
+"parent $parent (".$parent->getContigID().")  target $target ("
+.$target->getContigID().")\n" if $DEBUG;
 
 # check the parent-child relation: is there a mapping between them and
 # is the ID of the one of the parents identical to to the input $parent?
@@ -1000,7 +1100,7 @@ print "mapping found: ".($mapping || 'not found')."\n" if $DEBUG;
 # if mapping is not defined here, we have to find it from scratch
 
     unless ($mapping) {
-print "Finding mappings from scratch \n";
+print "Finding mappings from scratch \n" if $DEBUG;
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
 print "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
         return 0 unless $nrofsegments;
@@ -1025,7 +1125,7 @@ print $mapping->assembledFromToString() if $DEBUG;
         $target->getStatistics(1); # no zeropoint shift; use contig as is
         $tlength = $target->getConsensusLength();
         unless ($tlength) {
-            print STDERR "Undefined length in (child) contig\n";
+            print STDOUT "Undefined length in (child) contig\n";
             return 0;
         }
     }
@@ -1070,8 +1170,6 @@ print "tag on parent :\n "; $ptag->dump;
 print "tag on target :\n "; $tptag->dump;
 }
 
-
-
 # test if the transposed tag is not already present in the child;
 # if it is, inherit any properties from the transposed parent tag
 # which are not defined in it (e.g. when ctag built from Caf file) 
@@ -1080,7 +1178,7 @@ print "tag on target :\n "; $tptag->dump;
         my $ctags = $target->getTags(0);
         foreach my $ctag (@$ctags) {
 # test the transposed parent tag and port the tag_id / systematic ID
-            if ($tptag->isEqual($ctag,copy=>1,debug=>0)) {
+            if ($tptag->isEqual($ctag,copy=>1,debug=>$DEBUG)) {
                 $present = 1;
                 last;
 	    }
@@ -1153,12 +1251,13 @@ sub writeToFasta {
 
     return "Missing file handle for Fasta output" unless $DFILE;
 
-    unless ($options{noreads}) {
-# suppress dumping read data with extra paramater 
+    if ($options{readsonly}) {
+# 'reads' switch dumps reads only; its absence dumps contigs 
         my $reads = $this->getReads(1);
         foreach my $read (@$reads) {
             $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
         }
+        return undef;
     }
 
     $this->writeDNA($DFILE);
@@ -1195,6 +1294,7 @@ sub writeDNA {
     }
     else {
         return "Missing DNA data for contig $identifier";
+print STDOUT "Missing DNA data for contig $identifier";
     }
 }
 
@@ -1239,6 +1339,9 @@ sub metaDataToString {
 
     my $name     = $this->getContigName()            || "undefined";
     my $gap4name = $this->getGap4Name();
+    my $created  = $this->{created}                  || "not known";
+    my $updated  = $this->{updated}                  || "not known";
+    my $project  = $this->{project}                  ||           0;
     my $length   = $this->getConsensusLength()       ||   "unknown";
     my $cover    = $this->getAverageCover()          ||   "unknown";
     my $rleft    = $this->getReadOnLeft()            ||   "unknown";
@@ -1262,11 +1365,14 @@ sub metaDataToString {
 
     my $string = "Contig name     = $name\n"
                . "Gap4 name       = $gap4name\n"
-               . "Number of reads = $nreads  (new reads = $nwread)\n"
+               . "Created         : $created\n"
+               . "Last update     : $updated\n"
+               . "Project ID      = $project\n"
+               . "Number of reads = $nreads  (newly assembled : $nwread)\n"
                . "Parent contigs  = $pcntgs $parentlist\n"
                . "Consensuslength = $length\n"
                . "Average cover   = $cover\n"   
-               . "End reads       : left $rleft  right $right\n\n";
+               . "End reads       : (L) $rleft   (R) $right\n\n";
     foreach my $assembled (sort @assembledfrom) {
         $string   .= $assembled;
     }
@@ -1283,9 +1389,11 @@ sub toString {
     my $nreads   = $this->getNumberOfReads()         || "undefined";
     my $length   = $this->getConsensusLength()       ||   "unknown";
     my $cover    = $this->getAverageCover()          ||   "unknown";
+    my $created  = $this->{created}                  || "undefined";
 
-    return sprintf ("%-14s = %-20s  reads:%-7d  length:%-8d  cover:%4.2f", 
-                    $name,$gap4name,$nreads,$length,$cover);
+    return sprintf 
+     ("%-14s = %-20s r:%-7d l:%-8d c:%4.2f %-19s",
+      $name,$gap4name,$nreads,$length,$cover,$created);
 }
 
 #-------------------------------------------------------------------    
@@ -1319,9 +1427,19 @@ sub writeToMaf {
     my $minNX = $options{minNX};
     $minNX = 3 unless defined($minNX);
 
-    $this->replaceNbyX($minNX) if ($minNX);
+    if (my $sequence = $this->getSequence()) {
 
-    $this->writeToFasta($DFILE,$QFILE,noreads=>1);
+        if (my $newsequence = &replaceNbyX($sequence,$minNX)) {
+            $this->setSequence($newsequence);
+	}
+
+# replace current consensus by the substituted string 
+
+        $this->writeToFasta($DFILE,$QFILE);
+    }
+    else {
+        return 0,"Missing sequence for contig ".$this->getContigName();
+    }
 
 # extra outside info to be passed as parameters: supercontig name &
 # approximate start of contig on supercontig
@@ -1371,31 +1489,30 @@ sub writeToMaf {
 }
 
 sub replaceNbyX {
-# substitute strings of (CAF) 'N's in the consensus sequence by (MAF) 'X' 
-    my $this = shift;
-    my $min = shift || 0; # minimum length of the string
-
-    my $sequence = $this->getSequence();
+# privatre, substitute strings of 'N's in the consensus sequence by (MAF) 'X' 
+    my $sequence = shift;
+    my $min      = shift; # minimum length of the string;
 
 # first replace all Ns by X
 
-    $sequence =~ s/N/X/ig;
+    if ($min && $sequence =~ s/[N\?]/X/ig) {
 
 # then change contiguous runs of X smaller than $min back to N
 
-    my $X = 'X';
-    my $N = 'N';
-    my $i = 1;
+        my $X = 'X';
+        my $N = 'N';
+        my $i = 1;
 
-    while ($i++ < $min) {
-        $sequence =~ s/([ACTG\?])($X)(?=[ACTG\?])/$1$N/ig;
-        $X .= 'X';
-        $N .= 'N';
+        while ($i++ < $min) {
+            $sequence =~ s/([ACTG\?])($X)(?=[ACTG\?])/$1$N/ig;
+            $X .= 'X';
+            $N .= 'N';
+        }
+
+        return $sequence;
     }
 
-# replace current consensus by the substituted string 
-
-    $this->setSequence($sequence);
+    return 0;
 }
 
 sub toPadded {
@@ -1433,7 +1550,7 @@ sub writeToCafPadded {
         my $readname = $mapping->getMappingName();
         my $paddedread = $readnamehash->{$readname};
         unless ($paddedread) {
-            print STDERR "Missing padded read $readname\n";
+            print STDOUT "Missing padded read $readname\n";
             next; 
         }
         my $afm = $paddedread->toPadded($mapping); # out: one segment mapping
