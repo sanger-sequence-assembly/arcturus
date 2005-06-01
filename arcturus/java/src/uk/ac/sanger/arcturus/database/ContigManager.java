@@ -37,7 +37,7 @@ public class ContigManager {
 
 	conn = adb.getConnection();
 
-	String query = "select length,nreads,updated from CONTIG where contig_id = ?";
+	String query = "select gap4name,length,nreads,created,updated,project_id from CONTIG where contig_id = ?";
 	pstmtByID = conn.prepareStatement(query);
 
 	query = "select count(*) from MAPPING where contig_id = ?";
@@ -46,7 +46,7 @@ public class ContigManager {
 	query = "select count(*) from CONTIG where project_id = ?";
 	pstmtCountContigsByProject = conn.prepareStatement(query);
 
-	query = "select contig_id,length,nreads,updated from CONTIG where project_id = ?";
+	query = "select contig_id,gap4name,length,nreads,created,updated from CONTIG where project_id = ?";
 	pstmtGetContigsByProject = conn.prepareStatement(query);
 
 	query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
@@ -121,7 +121,7 @@ public class ContigManager {
 	if (contig.getMappings() == null && mappingOption != ArcturusDatabase.CONTIG_NO_MAPPING)
 	    loadMappingsForContig(contig, mappingOption);
 
-	if (contig.getConsensus() == null && consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
+	if (contig.getDNA() == null && consensusOption != ArcturusDatabase.CONTIG_NO_CONSENSUS)
 	    loadConsensusForContig(contig);
 
 	return contig;
@@ -134,11 +134,15 @@ public class ContigManager {
 	Contig contig = null;
 
 	if (rs.next()) {
-	    int length = rs.getInt(1);
-	    int nreads = rs.getInt(2);
-	    java.util.Date updated = rs.getTimestamp(3);
+	    String name = rs.getString(1);
+	    int length = rs.getInt(2);
+	    int nreads = rs.getInt(3);
+	    java.util.Date created = rs.getTimestamp(4);
+	    java.util.Date updated = rs.getTimestamp(5);
+	    int project_id = rs.getInt(6);
+	    Project project = adb.getProjectByID(project_id);
 
-	    contig = createAndRegisterNewContig(id, length, nreads, updated);
+	    contig = createAndRegisterNewContig(name, id, length, nreads, created, updated, project);
 	}
 
 	rs.close();
@@ -152,17 +156,18 @@ public class ContigManager {
 	return contig;
     }
 
-    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.util.Date updated) {
-	Contig contig = new Contig(id, length, nreads, updated, adb);
+    private Contig createAndRegisterNewContig(String name, int id, int length, int nreads,
+					      java.util.Date created, java.util.Date updated, Project project) {
+	Contig contig = new Contig(name, id, length, nreads, created, updated, project, adb);
 
 	registerNewContig(contig);
 
 	return contig;
     }
 
-    private Contig createAndRegisterNewContig(int id, int length, int nreads, java.util.Date updated,
-				     Mapping[] mappings) {
-	Contig contig = new Contig(id, length, nreads, updated, mappings, adb);
+    private Contig createAndRegisterNewContig(String name, int id, int length, java.util.Date created,
+					      java.util.Date updated, Project project, Mapping[] mappings) {
+	Contig contig = new Contig(name, id, length, created, updated, project, mappings, adb);
 
 	registerNewContig(contig);
 
@@ -275,12 +280,12 @@ public class ContigManager {
 	    int mapping_id = rs.getInt(2);
 	    int cstart = rs.getInt(3);
 	    int cfinish = rs.getInt(4);
-	    int direction = rs.getString(5).equals("Forward") ? Mapping.FORWARD : Mapping.REVERSE;
+	    boolean forward = rs.getString(5).equals("Forward");
 	    int nsegs = rs.getInt(6);
 
 	    Sequence sequence = adb.getSequenceBySequenceID(seq_id);
 
-	    Mapping mapping = new Mapping(sequence, cstart, cfinish, direction, nsegs);
+	    Mapping mapping = new Mapping(sequence, cstart, cfinish, forward, nsegs);
 
 	    mappings[kmap++] = mapping;
 
@@ -382,6 +387,8 @@ public class ContigManager {
 				      boolean autoload) throws SQLException {
 	Set contigs = new HashSet();
 
+	Project project = adb.getProjectByID(project_id);
+
 	pstmtGetContigsByProject.setInt(1, project_id);
 
 	ResultSet rs = pstmtGetContigsByProject.executeQuery();
@@ -394,11 +401,13 @@ public class ContigManager {
 	    Contig contig = (Contig)obj;
 
 	    if (contig == null) {
-		int length = rs.getInt(2);
-		int nreads = rs.getInt(3);
-		java.util.Date updated = rs.getTimestamp(4);
+		String name = rs.getString(2);
+		int length = rs.getInt(3);
+		int nreads = rs.getInt(4);
+		java.util.Date created = rs.getTimestamp(5);
+		java.util.Date updated = rs.getTimestamp(6);
 
-		contig = createAndRegisterNewContig(id, length, nreads, updated);
+		contig = createAndRegisterNewContig(name, id, length, nreads, created, updated, project);
 	    }
 
 	    contigs.add(contig);

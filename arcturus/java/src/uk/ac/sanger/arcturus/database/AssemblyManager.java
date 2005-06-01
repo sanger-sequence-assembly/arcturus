@@ -57,7 +57,7 @@ public class AssemblyManager {
 	    java.util.Date created = rs.getTimestamp(3);
 	    String creator = rs.getString(4);
 
-	    assembly = createAndRegisterNewAssembly(id, name, updated, created, creator);
+	    assembly = createAndRegisterNewAssembly(name, id, updated, created, creator);
 	}
 
 	rs.close();
@@ -65,9 +65,9 @@ public class AssemblyManager {
 	return assembly;
     }
 
-    private Assembly createAndRegisterNewAssembly(int id, String name, java.util.Date updated,
+    private Assembly createAndRegisterNewAssembly(String name, int id, java.util.Date updated,
 						  java.util.Date created, String creator) {
-	Assembly assembly = new Assembly(id, name, updated, created, creator, adb);
+	Assembly assembly = new Assembly(name, id, updated, created, creator, adb);
 
 	registerNewAssembly(assembly);
 
@@ -96,7 +96,7 @@ public class AssemblyManager {
 	    Assembly assembly = (Assembly)hashByID.get(new Integer(id));
 
 	    if (assembly == null)
-		createAndRegisterNewAssembly(id, name, updated, created, creator);
+		createAndRegisterNewAssembly(name, id, updated, created, creator);
 	    else {
 		assembly.setName(name);
 		assembly.setUpdated(updated);
