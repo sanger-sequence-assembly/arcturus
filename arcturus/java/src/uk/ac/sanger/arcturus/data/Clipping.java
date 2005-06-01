@@ -23,6 +23,10 @@ public class Clipping {
 	this.right = right;
     }
 
+    public Clipping(int type, int left, int right) {
+	this(type, null, left, right);
+    }
+
     public int getType() { return type; }
 
     public String getName() { return name; }

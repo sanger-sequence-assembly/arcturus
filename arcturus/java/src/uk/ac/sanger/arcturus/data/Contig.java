@@ -87,19 +87,20 @@ public class Contig extends Core {
      * This constructor will typically be used when a Contig
      * is retrieved from an Arcturus database.
      *
+     * @param name the name of the Contig.
      * @param ID the ID of the Contig.
+     * @param created the date and time when the Contig was created.
+     * @param updated the date and time when the Contig was last updated.
+     * @param project the project to which this Contig belongs.
+     * @param mappings the read-to-contig mappings for this Contig.
      * @param adb the Arcturus database to which this Contig belongs.
      */
 
-    public Contig(int ID, int length, int nreads, Date updated, Mapping[] mappings,
-		  ArcturusDatabase adb) {
-	super(ID, adb);
-
-	this.length = length;
+    public Contig(String name, int ID, int length, Date created, Date updated,
+		  Project project, Mapping[] mappings, ArcturusDatabase adb) {
+	this(name, ID, length, 0, created, updated, project, adb);
 	
 	this.nreads = (mappings == null) ? nreads : mappings.length;
-
-	this.updated = updated;
 
 	this.mappings = mappings;
     }
