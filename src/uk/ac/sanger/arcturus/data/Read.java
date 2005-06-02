@@ -43,6 +43,8 @@ public class Read extends Core {
 
     public final static int CUSTOM_PRIMER = 2;
 
+    private final static java.text.DateFormat dateformat = new java.text.SimpleDateFormat("yyyy-MM-dd");
+
     private Template template;
     private java.util.Date asped;
     private int strand;
@@ -182,4 +184,57 @@ public class Read extends Core {
      */
 
     public int getChemistry() { return chemistry; }
+
+    /**
+     * Returns a string representation of this read suitable for inclusion in
+     * a CAF file. The string may contain multiple lines, and the last line will
+     * be terminated by a newline.
+     *
+     * @return a string representation of this read suitable for inclusion in
+     * a CAF file. The string may contain multiple lines, and the last line will
+     * be terminated by a newline.
+     */
+
+    public String toCAFString() {
+	String cafstring = "Sequence : " + name + "\nIs_read\nUnpadded\n";
+
+	if (template != null) {
+	    cafstring += "Template " + template.getName() + "\n";
+	    Ligation ligation = template.getLigation();
+
+	    if (ligation != null) {
+		cafstring += "Ligation " + ligation.getName() + "\n";
+		cafstring += "Insert_size " + ligation.getInsertSizeLow() + " " +
+		    ligation.getInsertSizeHigh() + "\n";
+
+		Clone clone = ligation.getClone();
+
+		if (clone != null)
+		    cafstring += "Clone " + clone.getName() + "\n";
+	    }
+	}
+
+	if (asped != null)
+	    cafstring += "Asped " + dateformat.format(asped) + "\n";
+
+	switch (strand) {
+	case FORWARD: cafstring += "Strand Forward\n"; break;
+	case REVERSE: cafstring += "Strand Reverse\n"; break;
+	}
+
+	switch (primer) {
+	case UNIVERSAL_PRIMER: cafstring += "Primer Universal_primer\n"; break;
+	case CUSTOM_PRIMER: cafstring += "Primer Custom\n"; break;
+	case UNKNOWN: cafstring += "Primer Unknown_primer\n"; break;
+	}
+
+	switch (chemistry) {
+	case DYE_TERMINATOR: cafstring += "Dye Dye_terminator\n"; break;
+	case DYE_PRIMER: cafstring += "Dye Dye_primer\n"; break;
+	}
+
+	cafstring += "ProcessStatus PASS\n";
+
+	return cafstring;
+    }
 }

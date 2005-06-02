@@ -8,18 +8,21 @@ import uk.ac.sanger.arcturus.database.*;
  */
 
 public class Sequence extends Core {
-    protected Read read;
-    protected byte[] dna;
-    protected byte[] quality;
+    protected Read read = null;
+    protected byte[] dna = null;
+    protected byte[] quality = null;
+    protected int length = -1;
     protected int version;
-    protected Clipping qualityClip;
-    protected Clipping cvectorClip;
-    protected Clipping svectorClipLeft;
-    protected Clipping svectorClipRight;
+    protected Clipping qualityClip = null;
+    protected Clipping cvectorClip = null;
+    protected Clipping svectorClipLeft = null;
+    protected Clipping svectorClipRight = null;
+    protected AlignToSCF[] alignToSCF = null;
 
     /**
      * Construct a Sequence object for the specified read.
      *
+     * @param id the unique identifier of this sequence.
      * @param read the Read object to which this sequence belongs.
      * @param dna the DNA sequence string. This may be null.
      * @param quality the base quality array. This may be null.
@@ -40,11 +43,26 @@ public class Sequence extends Core {
      * Construct a Sequence object for the specified read. The DNA and base quality
      * are set to null and the version is set to UNKNOWN.
      *
+     * @param id the unique identifier of this sequence.
      * @param read the Read object to which this sequence belongs.
      */
 
     public Sequence(int id, Read read) {
 	this(id, read, null, null, UNKNOWN);
+    }
+
+    /**
+     * Construct a Sequence object for the specified read. The DNA and base quality
+     * are set to null and the version is set to UNKNOWN.
+     *
+     * @param id the unique identifier of this sequence.
+     * @param read the Read object to which this sequence belongs.
+     * @param length the length of the sequence.
+     */
+
+    public Sequence(int id, Read read, int length) {
+	this(id, read, null, null, UNKNOWN);
+	this.length = length;
     }
 
     /**
@@ -79,7 +97,9 @@ public class Sequence extends Core {
      * @param dna the DNA sequence string.
      */
 
-    public void setDNA(byte[] dna) { this.dna = dna; }
+    public void setDNA(byte[] dna) {
+	this.dna = dna;
+    }
 
     /**
      * Returns the base quality array.
@@ -112,6 +132,25 @@ public class Sequence extends Core {
      */
 
     public void setVersion(int version) { this.version = version; }
+
+    /**
+     * Returns the length of the sequence, or -1 if it is not known.
+     *
+     * @return the length of the sequence, or -1 if it is not known.
+     */
+
+    public int getLength() {
+	if (dna != null)
+	    return dna.length;
+
+	if (quality != null)
+	    return quality.length;
+
+	return length;
+    }
+
+    /**
+     */
 
     /**
      * Sets the quality clipping.
@@ -218,5 +257,62 @@ public class Sequence extends Core {
     public void setClipping(Clipping qualityClip, Clipping svectorClipLeft,
 			    Clipping svectorClipRight) {
 	setClipping(qualityClip, svectorClipLeft, svectorClipRight, null);
+    }
+
+    /**
+     * Sets the array of AlignToSCF records.
+     *
+     * @param alignToSCF the array of AlignToSCF records.
+     */
+
+    public void setAlignToSCF(AlignToSCF[] alignToSCF) {
+	this.alignToSCF = alignToSCF;
+    }
+
+    /**
+     * Returns the array of AlignToSCF records.
+     *
+     * @return the array of AlignToSCF records.
+     */
+
+    public AlignToSCF[] getAlignToSCF() {
+	return alignToSCF;
+    }
+
+    /**
+     * Returns a string representation of the clipping and AligntoSCF data in a
+     * format suitable for inclusion in a CAF file. The string may contain multiple
+     * lines, and the last line will be terminated by a newline.
+     *
+     * @return a string representation of the clipping and AligntoSCF data in a
+     * format suitable for inclusion in a CAF file. The string may contain multiple
+     * lines, and the last line will be terminated by a newline.
+     */
+
+    public String toCAFString() {
+	String cafstring = "";
+
+	if (qualityClip != null)
+	    cafstring += qualityClip.toCAFString() + "\n";
+
+	if (svectorClipLeft != null)
+	    cafstring += svectorClipLeft.toCAFString() + "\n";
+
+	if (svectorClipRight != null)
+	    cafstring += svectorClipRight.toCAFString() + "\n";
+
+	if (cvectorClip != null)
+	    cafstring += cvectorClip.toCAFString() + "\n";
+
+	if (alignToSCF == null) {
+	    int seqlen = getLength();
+	    if (seqlen > 0)
+		cafstring += "Align_to_SCF 1 " + seqlen + " 1 " + seqlen + "\n";
+	} else {
+	    for (int i = 0; i < alignToSCF.length; i++)
+		cafstring += alignToSCF[i].toCAFString();
+	}
+
+	return cafstring;
     }
 }
