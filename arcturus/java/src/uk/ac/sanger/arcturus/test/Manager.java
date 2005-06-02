@@ -34,8 +34,12 @@ public class Manager {
     protected SegmentComparatorByContigPosition segmentComparator =
 	new SegmentComparatorByContigPosition();
 
+    protected ManagerEvent event = null;
+
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
+
+	event = new ManagerEvent(this);
 
 	prepareStatements();
 
@@ -317,8 +321,38 @@ public class Manager {
     }
 
     public Contig loadContigByID(int contig_id) throws SQLException, DataFormatException {
+	Contig contig = createContig(contig_id);
+
+	if (contig == null)
+	    return null;
+
+	int nMappings = getMappingCount(contig_id);
+
+	/*
+	 * Create an empty array of Mapping objects.
+	 */
+
+	Mapping mappings[] = new Mapping[nMappings];
+
+	getMappings(contig_id, mappings);
+
+	getReadAndTemplateData(contig_id, mappings);
+
+	getSegmentData(contig_id, mappings);
+
+	Arrays.sort(mappings, mappingComparator);
+
+	contig.setMappings(mappings);
+
+	Integer id = new Integer(contig_id);
+
+	contigByID.put(id, contig);
+
+	return contig;
+    }
+
+    private Contig createContig(int contig_id) throws SQLException, DataFormatException {
 	Contig contig = null;
-	ManagerEvent event = new ManagerEvent(this);
 
 	pstmtContigData.setInt(1, contig_id);
 
@@ -357,9 +391,13 @@ public class Manager {
 
 	rs.close();
 
+	return contig;
+    }
+
+    private int getMappingCount(int contig_id) throws SQLException {
 	pstmtCountMappings.setInt(1, contig_id);
 
-	rs = pstmtCountMappings.executeQuery();
+	ResultSet rs = pstmtCountMappings.executeQuery();
 
 	rs.next();
 
@@ -367,28 +405,18 @@ public class Manager {
 
 	rs.close();
 
-	pstmtCountSegments.setInt(1, contig_id);
+	return nMappings;
+    }
 
-	rs = pstmtCountSegments.executeQuery();
-
-	rs.next();
-
-	int nSegments = rs.getInt(1);
-
-	rs.close();
-
-	/*
-	 * Create an empty array of Mapping objects.
-	 */
-
-	Mapping mappings[] = new Mapping[nMappings];
+    private void getMappings(int contig_id, Mapping[] mappings) throws SQLException {
+	int nMappings = mappings.length;
 
 	pstmtMappingData.setInt(1, contig_id);
 
 	event.begin("Execute mapping query", nMappings);
 	fireEvent(event);
 
-	rs = pstmtMappingData.executeQuery();
+	ResultSet rs = pstmtMappingData.executeQuery();
 
 	event.end();
 	fireEvent(event);
@@ -423,18 +451,22 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
+    }
+
+    private void getReadAndTemplateData(int contig_id, Mapping[] mappings) throws SQLException {
+	int nMappings = mappings.length;
 
 	pstmtReadAndTemplateData.setInt(1, contig_id);
 
 	event.begin("Execute read/template data query", nMappings);
 	fireEvent(event);
 
-	rs = pstmtReadAndTemplateData.executeQuery();
+	ResultSet rs = pstmtReadAndTemplateData.executeQuery();
 
 	event.end();
 	fireEvent(event);
 
-	kMapping = 0;
+	int kMapping = 0;
 
 	event.begin("Loading read and template data", nMappings);
 	fireEvent(event);
@@ -488,8 +520,28 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
+    }
 
-	kMapping = 0;
+    private int getSegmentCount(int contig_id) throws SQLException {
+	pstmtCountSegments.setInt(1, contig_id);
+
+	ResultSet rs = pstmtCountSegments.executeQuery();
+
+	rs.next();
+
+	int nSegments = rs.getInt(1);
+
+	rs.close();
+
+	return nSegments;
+    }
+
+    private void getSegmentData(int contig_id, Mapping[] mappings) throws SQLException {
+	int nSegments = getSegmentCount(contig_id);
+
+	int nMappings = mappings.length;
+
+	int kMapping = 0;
 
 	Vector segv = new Vector(1000, 1000);
 
@@ -498,7 +550,7 @@ public class Manager {
 	event.begin("Execute segment query", nMappings);
 	fireEvent(event);
 
-	rs = pstmtSegmentData.executeQuery();
+	ResultSet rs = pstmtSegmentData.executeQuery();
 
 	event.end();
 	fireEvent(event);
@@ -579,20 +631,25 @@ public class Manager {
 	event.end();
 	fireEvent(event);
 
-	kMapping = 0;
+    }
+
+    private void getSequenceData(int contig_id, Mapping[] mappings) throws SQLException, DataFormatException {
+	int nMappings = mappings.length;
 
 	pstmtSequenceData.setInt(1, contig_id);
 
 	event.begin("Execute sequence query", nMappings);
 	fireEvent(event);
 
-	rs = pstmtSequenceData.executeQuery();
+	ResultSet rs = pstmtSequenceData.executeQuery();
 
 	event.end();
 	fireEvent(event);
 
 	event.begin("Loading sequences", nMappings);
 	fireEvent(event);
+
+	int kMapping = 0;
 
 	while (rs.next()) {
 	    int seqlen = rs.getInt(1);
@@ -622,16 +679,6 @@ public class Manager {
 	fireEvent(event);
 
 	rs.close();
-
-	Arrays.sort(mappings, mappingComparator);
-
-	contig.setMappings(mappings);
-
-	Integer id = new Integer(contig_id);
-
-	contigByID.put(id, contig);
-
-	return contig;
     }
 
     private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
