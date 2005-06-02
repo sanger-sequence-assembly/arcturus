@@ -50,4 +50,22 @@ public class Clipping {
 	    ", left=" + left +
 	    ", right=" + right + "]";
     }
+
+    public String toCAFString() {
+	String cafstring = null;
+
+	switch (type) {
+	case QUAL: cafstring = "Clipping QUAL"; break;
+	case SVEC: cafstring = "Seq_vec SVEC"; break;
+	case CVEC: cafstring = "Clone_vec CVEC"; break;
+	default: return null;
+	}
+
+	cafstring += " " + left + " " + right;
+
+	if (name != null)
+	    cafstring += " \"" + name + "\"";
+
+	return cafstring;
+    }
 }
