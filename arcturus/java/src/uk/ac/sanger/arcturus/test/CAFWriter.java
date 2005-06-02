@@ -106,9 +106,9 @@ public class CAFWriter {
     }
 
     private void writeRead(Sequence sequence) {
-	ps.println("Sequence : " + sequence.getRead().getName());
-	ps.println("Is_read");
-	ps.println("Unpadded");
+	Read read = sequence.getRead();
+	ps.print(read.toCAFString());
+	ps.print(sequence.toCAFString());
 
 	ps.println();
 
