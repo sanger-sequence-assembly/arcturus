@@ -27,6 +27,10 @@ public class Manager {
     protected PreparedStatement pstmtSegmentData = null;
     protected PreparedStatement pstmtSequenceData = null;
     protected PreparedStatement pstmtReadAndTemplateData = null;
+    protected PreparedStatement pstmtQualityClipping = null;
+    protected PreparedStatement pstmtSequenceVector = null;
+    protected PreparedStatement pstmtCloningVector = null;
+    protected PreparedStatement pstmtAlignToSCF = null;
 
     private transient Vector eventListeners = new Vector();
 
@@ -69,17 +73,16 @@ public class Manager {
 
 	pstmtCountSegments = conn.prepareStatement(query);
 
-	query = "select seq_id,cstart,cfinish,direction from MAPPING where contig_id=? " +
-	    " order by seq_id asc";
+	query = "select MAPPING.seq_id,cstart,cfinish,direction,seqlen" +
+	    " from MAPPING left join SEQUENCE using(seq_id)" +
+	    " where contig_id=? " +
+	    " order by MAPPING.seq_id asc";
 
 	pstmtMappingData = conn.prepareStatement(query);
 
 	query = "select seq_id,SEGMENT.cstart,rstart,length " +
 	    " from MAPPING left join SEGMENT using(mapping_id) " +
 	    " where contig_id = ?";
-
-	// Previous server-side sorting clause:
-	// + " order by MAPPING.seq_id asc, SEGMENT.cstart asc"
 
 	pstmtSegmentData = conn.prepareStatement(query);
 
@@ -97,6 +100,26 @@ public class Manager {
 	    " order by MAPPING.seq_id asc";
 
 	pstmtReadAndTemplateData = conn.prepareStatement(query);
+
+	query = "select MAPPING.seq_id,qleft,qright" +
+	    " from MAPPING left join QUALITYCLIP using(seq_id) where contig_id = ? order by MAPPING.seq_id asc";
+
+	pstmtQualityClipping = conn.prepareStatement(query);
+
+	query = "select MAPPING.seq_id,svector_id,svleft,svright" +
+	    " from MAPPING left join SEQVEC using(seq_id) where contig_id = ? and svleft is not null";
+
+	pstmtSequenceVector = conn.prepareStatement(query);
+
+	query = "select MAPPING.seq_id,cvector_id,cvleft,cvright" +
+	    " from MAPPING left join CLONEVEC using(seq_id) where contig_id = ? and cvleft is not null";
+
+	pstmtCloningVector = conn.prepareStatement(query);
+
+	query = "select MAPPING.seq_id,startinseq,startinscf,length" +
+	    " from MAPPING left join ALIGN2SCF using(seq_id) where contig_id = ? and startinseq is not null";
+
+	pstmtAlignToSCF = conn.prepareStatement(query);
     }
 
     protected void preloadClones() throws SQLException {
@@ -340,6 +363,16 @@ public class Manager {
 
 	getSegmentData(contig_id, mappings);
 
+	getSequenceData(contig_id, mappings);
+
+	Map mapmap = createMappingsMap(mappings);
+
+	getSequenceVectorData(contig_id, mapmap);
+
+	getCloningVectorData(contig_id, mapmap);
+
+	getQualityClippingData(contig_id, mapmap);
+
 	Arrays.sort(mappings, mappingComparator);
 
 	contig.setMappings(mappings);
@@ -431,11 +464,12 @@ public class Manager {
 	    int cstart = rs.getInt(2);
 	    int cfinish = rs.getInt(3);
 	    boolean forward = rs.getString(4).equalsIgnoreCase("Forward");
+	    int length = rs.getInt(5);
 
 	    Sequence sequence = getSequenceByID(seq_id);
 
 	    if (sequence == null) {
-		sequence = new Sequence(seq_id, null);
+		sequence = new Sequence(seq_id, null, length);
 		sequenceByID.put(new Integer(seq_id), sequence);
 	    }
 
@@ -656,7 +690,6 @@ public class Manager {
 
 	    Sequence sequence = mappings[kMapping++].getSequence();
 
-
 	    byte[] cdna = rs.getBytes(2);
 
 	    byte[] dna = inflate(cdna, seqlen);
@@ -692,6 +725,109 @@ public class Manager {
 	decompresser.reset();
 
 	return data;
+    }
+
+    private Map createMappingsMap(Mapping[] mappings) {
+	Map hash = new HashMap(mappings.length);
+
+	for (int i = 0; i < mappings.length; i++) {
+	    Mapping value = mappings[i];
+	    int sequence_id = value.getSequence().getID();
+	    Integer key = new Integer(sequence_id);
+	    hash.put(key, value);
+	}
+
+	return hash;
+    }
+
+    private void getSequenceVectorData(int contig_id, Map mapmap) throws SQLException {
+	event.begin("Loading sequence vector data", 0);
+	fireEvent(event);
+
+	pstmtSequenceVector.setInt(1, contig_id);
+
+	ResultSet rs = pstmtSequenceVector.executeQuery();
+
+	while (rs.next()) {
+	    int seq_id = rs.getInt(1);
+	    int svector_id = rs.getInt(2);
+	    int svleft = rs.getInt(3);
+	    int svright = rs.getInt(4);
+
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
+
+	    Sequence sequence = mapping.getSequence();
+
+	    String svector = (String)svectorByID.get(new Integer(svector_id));
+
+	    Clipping clipping = new Clipping(Clipping.SVEC, svector, svleft, svright);
+
+	    if (svleft == 1)
+		sequence.setSequenceVectorClippingLeft(clipping);
+	    else
+		sequence.setSequenceVectorClippingRight(clipping);
+	}
+
+	rs.close();
+
+	event.end();
+	fireEvent(event);
+    }
+
+   
+    private void getCloningVectorData(int contig_id, Map mapmap) throws SQLException {
+	event.begin("Loading cloning vector data", 0);
+	fireEvent(event);
+
+	pstmtCloningVector.setInt(1, contig_id);
+
+	ResultSet rs = pstmtCloningVector.executeQuery();
+
+	while (rs.next()) {
+	    int seq_id = rs.getInt(1);
+	    int cvector_id = rs.getInt(2);
+	    int cvleft = rs.getInt(3);
+	    int cvright = rs.getInt(4);
+
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
+
+	    Sequence sequence = mapping.getSequence();
+
+	    String cvector = (String)cvectorByID.get(new Integer(cvector_id));
+
+	    sequence.setCloningVectorClipping(new Clipping(Clipping.CVEC, cvector, cvleft, cvright));
+	}
+
+	rs.close();
+
+	event.end();
+	fireEvent(event);
+    }
+
+    private void getQualityClippingData(int contig_id, Map mapmap) throws SQLException {
+	event.begin("Loading quality clipping data", 0);
+	fireEvent(event);
+
+	pstmtQualityClipping.setInt(1, contig_id);
+
+	ResultSet rs = pstmtQualityClipping.executeQuery();
+
+	while (rs.next()) {
+	    int seq_id = rs.getInt(1);
+	    int qleft = rs.getInt(2);
+	    int qright = rs.getInt(3);
+
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
+
+	    Sequence sequence = mapping.getSequence();
+
+	    sequence.setQualityClipping(new Clipping(Clipping.QUAL, null, qleft, qright));
+	}
+
+	rs.close();
+
+	event.end();
+	fireEvent(event);
     }
 
     public void addManagerEventListener(ManagerEventListener listener) {
