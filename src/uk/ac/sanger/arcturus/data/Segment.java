@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.database.*;
  * length. The direction is a property of the parent Mapping.
  */
 
-public class Segment {
+public class Segment implements java.lang.Comparable {
     protected int cstart;
     protected int rstart;
     protected int length;
@@ -110,5 +110,18 @@ public class Segment {
 	    ", rstart=" + rstart +
 	    ", length=" + length +
 	    "]";
+    }
+
+    /**
+     * Compares this object with the specified object for order.
+     *
+     * @return a negative integer, zero, or a positive integer as this object
+     * is less than, equal to, or greater than the specified object.
+     */
+
+    public int compareTo(Object o) {
+	Segment that = (Segment)o;
+
+	return this.cstart - that.cstart;
     }
 }
