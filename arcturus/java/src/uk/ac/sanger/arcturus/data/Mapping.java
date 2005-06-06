@@ -64,8 +64,10 @@ public class Mapping {
 
 	if (segments == null)
 	    nsegs = 0;
-	else
+	else {
+	    java.util.Arrays.sort(segments);
 	    nsegs = segments.length;
+	}
     }
 
     /**
@@ -131,6 +133,9 @@ public class Mapping {
 
     public void setSegments(Segment[] segments) {
 	this.segments = segments;
+
+	if (segments != null)
+	    java.util.Arrays.sort(segments);
     }
 
     /**
@@ -165,6 +170,7 @@ public class Mapping {
     public boolean addSegment(Segment segment) {
 	if (nsegs < segments.length) {
 	    segments[nsegs++] = segment;
+	    java.util.Arrays.sort(segments, 0, nsegs);
 	    return true;
 	} else
 	    return false;
