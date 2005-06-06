@@ -75,8 +75,7 @@ public class Manager {
 
 	query = "select MAPPING.seq_id,cstart,cfinish,direction,seqlen" +
 	    " from MAPPING left join SEQUENCE using(seq_id)" +
-	    " where contig_id=? " +
-	    " order by MAPPING.seq_id asc";
+	    " where contig_id=?";
 
 	pstmtMappingData = conn.prepareStatement(query);
 
@@ -86,9 +85,9 @@ public class Manager {
 
 	pstmtSegmentData = conn.prepareStatement(query);
 
-	query = "select seqlen,sequence,quality " +
+	query = "select MAPPING.seq_id,seqlen,sequence,quality " +
 	    " from MAPPING left join SEQUENCE using(seq_id) " +
-	    " where contig_id = ? order by MAPPING.seq_id asc";
+	    " where contig_id = ?";
 
 	pstmtSequenceData = conn.prepareStatement(query);
 
@@ -96,13 +95,12 @@ public class Manager {
 	    " TEMPLATE.template_id,TEMPLATE.name,ligation_id " +
 	    " from MAPPING,SEQ2READ,READS,TEMPLATE " + 
 	    " where contig_id = ? and MAPPING.seq_id=SEQ2READ.seq_id and " +
-	    " SEQ2READ.read_id=READS.read_id and READS.template_id=TEMPLATE.template_id " +
-	    " order by MAPPING.seq_id asc";
+	    " SEQ2READ.read_id=READS.read_id and READS.template_id=TEMPLATE.template_id";
 
 	pstmtReadAndTemplateData = conn.prepareStatement(query);
 
 	query = "select MAPPING.seq_id,qleft,qright" +
-	    " from MAPPING left join QUALITYCLIP using(seq_id) where contig_id = ? order by MAPPING.seq_id asc";
+	    " from MAPPING left join QUALITYCLIP using(seq_id) where contig_id = ?";
 
 	pstmtQualityClipping = conn.prepareStatement(query);
 
@@ -359,13 +357,13 @@ public class Manager {
 
 	getMappings(contig_id, mappings);
 
-	getReadAndTemplateData(contig_id, mappings);
-
-	getSegmentData(contig_id, mappings);
-
-	getSequenceData(contig_id, mappings);
-
 	Map mapmap = createMappingsMap(mappings);
+
+	getReadAndTemplateData(contig_id, mapmap);
+
+	getSegmentData(contig_id, mapmap);
+
+	getSequenceData(contig_id, mapmap);
 
 	getSequenceVectorData(contig_id, mapmap);
 
@@ -487,8 +485,8 @@ public class Manager {
 	rs.close();
     }
 
-    private void getReadAndTemplateData(int contig_id, Mapping[] mappings) throws SQLException {
-	int nMappings = mappings.length;
+    private void getReadAndTemplateData(int contig_id, Map mapmap) throws SQLException {
+	int nMappings = mapmap.size();
 
 	pstmtReadAndTemplateData.setInt(1, contig_id);
 
@@ -500,10 +498,10 @@ public class Manager {
 	event.end();
 	fireEvent(event);
 
-	int kMapping = 0;
-
 	event.begin("Loading read and template data", nMappings);
 	fireEvent(event);
+
+	int kMapping = 0;
 
 	while (rs.next()) {
 	    int index = 1;
@@ -542,7 +540,12 @@ public class Manager {
 		readByID.put(new Integer(read_id), read);
 	    }
 
-	    mappings[kMapping++].getSequence().setRead(read);
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
+	    Sequence sequence = mapping.getSequence();
+
+	    sequence.setRead(read);
+
+	    kMapping++;
 
 	    if ((kMapping % 10) == 0) {
 		event.working(kMapping);
@@ -570,10 +573,10 @@ public class Manager {
 	return nSegments;
     }
 
-    private void getSegmentData(int contig_id, Mapping[] mappings) throws SQLException {
+    private void getSegmentData(int contig_id, Map mapmap) throws SQLException {
 	int nSegments = getSegmentCount(contig_id);
 
-	int nMappings = mappings.length;
+	int nMappings = mapmap.size();
 
 	int kMapping = 0;
 
@@ -640,7 +643,8 @@ public class Manager {
 		Segment segs[] = new Segment[segv.size()];
 		segv.toArray(segs);
 		Arrays.sort(segs, segmentComparator);
-		mappings[kMapping++].setSegments(segs);
+		Mapping mapping = (Mapping)mapmap.get(new Integer(current_seq_id));
+		mapping.setSegments(segs);
 		segv.clear();
 	    }
 
@@ -660,15 +664,16 @@ public class Manager {
 
 	Arrays.sort(segs, segmentComparator);
 
-	mappings[kMapping++].setSegments(segs);
+	Mapping mapping = (Mapping)mapmap.get(new Integer(current_seq_id));
+	mapping.setSegments(segs);
 
 	event.end();
 	fireEvent(event);
 
     }
 
-    private void getSequenceData(int contig_id, Mapping[] mappings) throws SQLException, DataFormatException {
-	int nMappings = mappings.length;
+    private void getSequenceData(int contig_id, Map mapmap) throws SQLException, DataFormatException {
+	int nMappings = mapmap.size();
 
 	pstmtSequenceData.setInt(1, contig_id);
 
@@ -686,17 +691,20 @@ public class Manager {
 	int kMapping = 0;
 
 	while (rs.next()) {
-	    int seqlen = rs.getInt(1);
+	    int seq_id = rs.getInt(1);
 
-	    Sequence sequence = mappings[kMapping++].getSequence();
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
+	    Sequence sequence = mapping.getSequence();
 
-	    byte[] cdna = rs.getBytes(2);
+	    int seqlen = rs.getInt(2);
+
+	    byte[] cdna = rs.getBytes(3);
 
 	    byte[] dna = inflate(cdna, seqlen);
 
 	    sequence.setDNA(dna);
 		
-	    byte[] cqual = rs.getBytes(3);
+	    byte[] cqual = rs.getBytes(4);
 
 	    byte[] qual = inflate(cqual, seqlen);
 
