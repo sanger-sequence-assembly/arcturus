@@ -177,6 +177,69 @@ public class Mapping {
     }
 
     /**
+     * Returns the base corresponding to the specified position in the sequence,
+     * reverse complemented if necessary.
+     *
+     * @param i the position in the sequence.
+     *
+     * @return the base corresponding to the specified position in the sequence,
+     * reverse complemented if necessary. If the sequence or its DNA is not defined,
+     * or if the position is outside the valid range, returns '?'.
+     */
+
+    public char getBase(int i) {
+	if (sequence == null)
+	    return '?';
+
+	byte[] dna = sequence.getDNA();
+
+	char base;
+
+	if (dna != null && i > 0 && i <= dna.length)
+	    base = (char)dna[i-1];
+	else
+	    base = '?';
+
+	if (!forward) {
+	    switch (base) {
+	    case 'a': base = 't'; break;
+	    case 'c': base = 'g'; break;
+	    case 'g': base = 'c'; break;
+	    case 't': base = 'a'; break;
+	    case 'A': base = 'T'; break;
+	    case 'C': base = 'G'; break;
+	    case 'G': base = 'C'; break;
+	    case 'T': base = 'A'; break;
+	    }
+	}
+
+	return base;
+    }
+
+    /**
+     * Returns the quality corresponding to the specified position in the sequence,
+     * reverse complemented if necessary.
+     *
+     * @param i the position in the sequence.
+     *
+     * @return the quality corresponding to the specified position in the sequence,
+     * reverse complemented if necessary. If the sequence or its quality is not defined,
+     * or if the position is outside the valid range, returns -1.
+     */
+
+    public int getQuality(int i) {
+	if (sequence == null)
+	    return -1;
+
+	byte[] quality = sequence.getQuality();
+
+	if (quality != null && i > 0 && i <= quality.length)
+	    return (int)quality[i-1];
+	else
+	    return -1;
+    }
+
+    /**
      * Returns the read offset corresponding to the specified contig offset
      * and orientation.
      *
@@ -216,11 +279,17 @@ public class Mapping {
      * or -1 if there is no pad at that position in this mapping.
      */
 
-    public int getPadQuality(int cpos, byte[] quality) {
-	if (cpos < cstart || cpos > cfinish || segments == null || getSegmentCount() < 2)
+    public int getPadQuality(int cpos) {
+	if (cpos < cstart || cpos > cfinish || sequence == null ||
+	    segments == null || getSegmentCount() < 2)
 	    return -1;
 
 	int rpos;
+
+	byte[] quality = sequence.getQuality();
+
+	if (quality == null)
+	    return -1;
 
 	for (int i = 1; i < segments.length; i++) {
 	    if (segments[i-1] != null && segments[i] != null) {
