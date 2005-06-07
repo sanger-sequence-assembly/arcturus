@@ -1,6 +1,7 @@
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.utils.*;
 
 import java.util.*;
 import java.io.*;
@@ -11,6 +12,8 @@ public class TestContigManager3 {
     private static long lasttime;
     private static Runtime runtime = Runtime.getRuntime();
 
+    private static Consensus consensus = new Consensus();
+    
     public static void main(String args[]) {
 	lasttime = System.currentTimeMillis();
 
@@ -34,18 +37,26 @@ public class TestContigManager3 {
 
 	String objectname = null;
 
+	String algname = null;
+
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].equalsIgnoreCase("-instance"))
 		instance = args[++i];
 
 	    if (args[i].equalsIgnoreCase("-organism"))
 		organism = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-algorithm"))
+		algname = args[++i];
 	}
 
 	if (instance == null || organism == null) {
 	    printUsage(System.err);
 	    System.exit(1);
 	}
+
+	if (algname == null)
+	    algname = System.getProperty("arcturus.default.algorithm");
 
 	try {
 	    System.err.println("Creating an ArcturusInstance for " + instance);
@@ -68,6 +79,9 @@ public class TestContigManager3 {
 
 	    BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
 
+	    Class algclass = Class.forName(algname);
+	    ConsensusAlgorithm algorithm = (ConsensusAlgorithm)algclass.newInstance();
+
 	    String line = null;
 	    Contig contig = null;
 	    CAFWriter cafWriter = new CAFWriter(System.out);
@@ -89,6 +103,30 @@ public class TestContigManager3 {
 		    if (words[i].equalsIgnoreCase("caf")) {
 			if (contig != null)
 			    cafWriter.writeContig(contig);
+		    } else if (words[i].equalsIgnoreCase("cons")) {
+			if (contig != null) {
+			    calculateConsensus(contig, algorithm, consensus, null);
+
+			    byte[] dna = consensus.getDNA();
+			    byte[] quality = consensus.getQuality();
+
+			    byte[] dna2 = contig.getDNA();
+			    byte[] quality2 = contig.getQuality();
+
+			    if (dna.length != dna2.length || quality.length != quality2.length) {
+				System.err.println("Length mismatch: DNA " + dna.length + " vs " +
+						   dna2.length + ", quality " + quality.length + " vs " +
+						   quality2.length);
+			    } else {
+				for (int k = 0; k < dna.length; k++) {
+				    if (dna[k] != dna2[k])
+					System.err.println("MISMATCH: " + (k+1) + " --> " 
+							   + dna[k] + " " + quality[k] + " vs " +
+							   dna2[k] + " " + quality2[k]);
+				}
+			    }
+			} else
+			    System.err.println("No current contig");
 		    } else {
 			int contig_id = Integer.parseInt(words[i]);
 
@@ -137,6 +175,114 @@ public class TestContigManager3 {
 	ps.println("MANDATORY PARAMETERS:");
 	ps.println("\t-instance\tName of instance");
 	ps.println("\t-organism\tName of organism");
+    }
+
+    public static void calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
+					  PrintStream debugps) {
+	Mapping[] mappings = contig.getMappings();
+	int nreads = mappings.length;
+	int cpos, rdleft, rdright, oldrdleft, oldrdright;
+	int maxleft = -1, maxright = -1, maxdepth = -1;
+
+	int cstart = mappings[0].getContigStart();
+	int cfinal = mappings[0].getContigFinish();
+
+	for (int i = 0; i < mappings.length; i++) {
+	    if (mappings[i].getContigStart() < cstart)
+		cstart = mappings[i].getContigStart();
+	    
+	    if (mappings[i].getContigFinish() > cfinal)
+		cfinal = mappings[i].getContigFinish();
+	}
+	
+	int truecontiglength = 1 + cfinal - cstart;
+
+	byte[] sequence = new byte[truecontiglength];
+	byte[] quality = new byte[truecontiglength];
+
+	for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1;
+	     cpos <= cfinal;
+	     cpos++) {
+	    while ((rdleft < nreads) && (mappings[rdleft].getContigFinish() < cpos))
+		rdleft++;
+
+	    while ((rdright < nreads - 1) && (mappings[rdright+1].getContigStart() <= cpos))
+		rdright++;
+
+	    int depth = 1 + rdright - rdleft;
+
+	    if (rdleft != oldrdleft || rdright != oldrdright) {
+		if (depth > maxdepth) {
+		    maxdepth = depth;
+		    maxleft = cpos;
+		}
+	    }
+
+	    if (depth == maxdepth)
+		maxright = cpos;
+
+	    oldrdleft = rdleft;
+	    oldrdright = rdright;
+
+	    if (debugps != null) {
+		debugps.print("CONSENSUS POSITION: " + (1 + cpos - cstart));
+	    }
+
+	    algorithm.reset();
+
+	    for (int rdid = rdleft; rdid <= rdright; rdid++) {
+		int rpos = mappings[rdid].getReadOffset(cpos);
+		if (rpos >= 0) {
+		    char base = mappings[rdid].getBase(rpos);
+		    int qual = mappings[rdid].getQuality(rpos);
+
+		    if (qual > 0)
+			algorithm.addBase(base, qual,
+					  mappings[rdid].getSequence().getRead().getStrand(),
+					  mappings[rdid].getSequence().getRead().getChemistry());
+		} else {
+		    int qual = mappings[rdid].getPadQuality(cpos);
+		    if (qual > 0)
+			algorithm.addBase('*', qual,
+					  mappings[rdid].getSequence().getRead().getStrand(),
+					  mappings[rdid].getSequence().getRead().getChemistry());
+		}
+	    }
+
+	    try {
+		sequence[cpos-cstart] = (byte)algorithm.getBestBase();
+		if (debugps != null)
+		    debugps.print(" --> " + algorithm.getBestBase());
+	    }
+	    catch (ArrayIndexOutOfBoundsException e) {
+		System.err.println("Sequence array overflow: " + cpos + " (base=" + cstart + ")");
+	    }
+
+	    try {
+		quality[cpos-cstart] = (byte)algorithm.getBestScore();
+		if (debugps != null)
+		    debugps.println(" [" + algorithm.getBestScore() + "]");
+	    }
+	    catch (ArrayIndexOutOfBoundsException e) {
+		System.err.println("Quality array overflow: " + cpos + " (base=" + cstart + ")");
+	    }
+	}
+	
+	consensus.setDNA(sequence);
+	consensus.setQuality(quality);
+    }
+
+    private static class Consensus {
+	protected byte[] dna = null;
+	protected byte[] quality = null;
+
+	public void setDNA(byte[] dna) { this.dna = dna; }
+
+	public byte[] getDNA() { return dna; }
+
+	public void setQuality(byte[] quality) { this.quality = quality; }
+
+	public byte[] getQuality() { return quality; }
     }
 }
 
