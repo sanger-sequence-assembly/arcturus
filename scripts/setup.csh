@@ -83,7 +83,7 @@ if ( ! $?JAVA_HEAP_SIZE) then
 endif
 
 # Specify Arcturus default parameters
-set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.default.algorithm=arcturus.test.Gap4BayesianConsensus"
+set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus"
 
 # Specify the additional run-time options for Java
 set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI_OPTS} ${ARCTURUS_DEFAULTS} ${JAVA_HEAP_SIZE}"
