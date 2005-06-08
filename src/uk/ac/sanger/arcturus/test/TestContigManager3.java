@@ -108,29 +108,30 @@ public class TestContigManager3 {
 			    System.err.println("Calculate consensus [" + contig.getLength() + " bp]");
 			    long clockStart = System.currentTimeMillis();
 
-			    calculateConsensus(contig, algorithm, consensus, null);
+			    if (calculateConsensus(contig, algorithm, consensus, null)) {
+				long clockStop = System.currentTimeMillis() - clockStart;
+				System.err.println("TOTAL TIME: " + clockStop + " ms");
+				
+				byte[] dna = consensus.getDNA();
+				byte[] quality = consensus.getQuality();
 
-			    long clockStop = System.currentTimeMillis() - clockStart;
-			    System.err.println("TOTAL TIME: " + clockStop + " ms");
+				byte[] dna2 = contig.getDNA();
+				byte[] quality2 = contig.getQuality();
 
-			    byte[] dna = consensus.getDNA();
-			    byte[] quality = consensus.getQuality();
-
-			    byte[] dna2 = contig.getDNA();
-			    byte[] quality2 = contig.getQuality();
-
-			    if (dna.length != dna2.length || quality.length != quality2.length) {
-				System.err.println("Length mismatch: DNA " + dna.length + " vs " +
-						   dna2.length + ", quality " + quality.length + " vs " +
-						   quality2.length);
-			    } else {
-				for (int k = 0; k < dna.length; k++) {
-				    if (dna[k] != dna2[k])
-					System.err.println("MISMATCH: " + (k+1) + " --> " 
-							   + dna[k] + " " + quality[k] + " vs " +
-							   dna2[k] + " " + quality2[k]);
+				if (dna.length != dna2.length || quality.length != quality2.length) {
+				    System.err.println("Length mismatch: DNA " + dna.length + " vs " +
+						       dna2.length + ", quality " + quality.length + " vs " +
+						       quality2.length);
+				} else {
+				    for (int k = 0; k < dna.length; k++) {
+					if (dna[k] != dna2[k])
+					    System.err.println("MISMATCH: " + (k+1) + " --> " 
+							       + dna[k] + " " + quality[k] + " vs " +
+							       dna2[k] + " " + quality2[k]);
+				    }
 				}
-			    }
+			    } else
+				System.err.println("Data missing, operation abandoned");
 			} else
 			    System.err.println("No current contig");
 		    } else {
@@ -143,6 +144,10 @@ public class TestContigManager3 {
 			long clockStop = System.currentTimeMillis() - clockStart;
 			System.err.println("TOTAL TIME: " + clockStop + " ms");
 			System.err.println();
+
+			int nseqs = manager.getSequenceMapSize();
+			long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+			System.out.println("MEMORY: " + usedMemory + " for " + nseqs + " sequences");
 		    }
 		}
 	    }
@@ -183,8 +188,11 @@ public class TestContigManager3 {
 	ps.println("\t-organism\tName of organism");
     }
 
-    public static void calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
+    public static boolean calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
 					  PrintStream debugps) {
+	if (contig == null || contig.getMappings() == null)
+	    return false;
+
 	Mapping[] mappings = contig.getMappings();
 	int nreads = mappings.length;
 	int cpos, rdleft, rdright, oldrdleft, oldrdright;
@@ -194,6 +202,10 @@ public class TestContigManager3 {
 	int cfinal = mappings[0].getContigFinish();
 
 	for (int i = 0; i < mappings.length; i++) {
+	    if (mappings[i].getSequence() == null || mappings[i].getSequence().getDNA() == null ||
+		mappings[i].getSequence().getQuality() == null || mappings[i].getSegments() == null)
+		return false;
+
 	    if (mappings[i].getContigStart() < cstart)
 		cstart = mappings[i].getContigStart();
 	    
@@ -276,6 +288,8 @@ public class TestContigManager3 {
 	
 	consensus.setDNA(sequence);
 	consensus.setQuality(quality);
+
+	return true;
     }
 
     private static class Consensus {

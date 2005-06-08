@@ -40,6 +40,13 @@ public class Manager {
 
     protected ManagerEvent event = null;
 
+    protected boolean loadSegments = true;
+    protected boolean loadReadsAndTemplates = true;
+    protected boolean loadSequences = true;
+    protected boolean loadSequenceVectors = true;
+    protected boolean loadCloningVectors = true;
+    protected boolean loadQualityClipping = true;
+
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
 
@@ -55,6 +62,13 @@ public class Manager {
 
 	preloadSequencingVectors();
 	preloadCloningVectors();
+
+	loadSegments = !Boolean.getBoolean("noLoadSegments");
+	loadReadsAndTemplates = !Boolean.getBoolean("noLoadReadsAndTemplates");
+	loadSequences = !Boolean.getBoolean("noLoadSequences");
+	loadSequenceVectors = !Boolean.getBoolean("noLoadSequenceVectors");
+	loadCloningVectors = !Boolean.getBoolean("noLoadCloningVectors");
+	loadQualityClipping = !Boolean.getBoolean("noLoadQualityClipping");
     }
 
     protected void prepareStatements() throws SQLException {
@@ -359,17 +373,23 @@ public class Manager {
 
 	Map mapmap = createMappingsMap(mappings);
 
-	getReadAndTemplateData(contig_id, mapmap);
+	if (loadReadsAndTemplates)
+	    getReadAndTemplateData(contig_id, mapmap);
 
-	getSegmentData(contig_id, mapmap);
+	if (loadSegments)
+	    getSegmentData(contig_id, mapmap);
 
-	getSequenceData(contig_id, mapmap);
+	if (loadSequences)
+	    getSequenceData(contig_id, mapmap);
 
-	getSequenceVectorData(contig_id, mapmap);
+	if (loadSequenceVectors)
+	    getSequenceVectorData(contig_id, mapmap);
 
-	getCloningVectorData(contig_id, mapmap);
+	if (loadCloningVectors)
+	    getCloningVectorData(contig_id, mapmap);
 
-	getQualityClippingData(contig_id, mapmap);
+	if (loadQualityClipping)
+	    getQualityClippingData(contig_id, mapmap);
 
 	Arrays.sort(mappings, mappingComparator);
 
@@ -852,6 +872,10 @@ public class Manager {
 	    ManagerEventListener l = (ManagerEventListener)e.nextElement();
 	    l.managerUpdate(event);
 	}
+    }
+
+    public int getSequenceMapSize() {
+	return sequenceByID.size();
     }
 
     class SortableSegment implements Comparable {
