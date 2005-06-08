@@ -105,7 +105,13 @@ public class TestContigManager3 {
 			    cafWriter.writeContig(contig);
 		    } else if (words[i].equalsIgnoreCase("cons")) {
 			if (contig != null) {
+			    System.err.println("Calculate consensus [" + contig.getLength() + " bp]");
+			    long clockStart = System.currentTimeMillis();
+
 			    calculateConsensus(contig, algorithm, consensus, null);
+
+			    long clockStop = System.currentTimeMillis() - clockStart;
+			    System.err.println("TOTAL TIME: " + clockStop + " ms");
 
 			    byte[] dna = consensus.getDNA();
 			    byte[] quality = consensus.getQuality();
