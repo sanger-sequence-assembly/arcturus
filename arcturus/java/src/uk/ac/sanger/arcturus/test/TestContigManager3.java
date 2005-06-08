@@ -86,8 +86,11 @@ public class TestContigManager3 {
 	    Contig contig = null;
 	    CAFWriter cafWriter = new CAFWriter(System.out);
 
+	    int sequenceCounter = 0;
+
 	    while (true) {
-		System.err.print(">");
+		if (!Boolean.getBoolean("quiet"))
+		    System.err.print(">");
 
 		line = stdin.readLine();
 
@@ -135,6 +138,8 @@ public class TestContigManager3 {
 			} else
 			    System.err.println("No current contig");
 		    } else {
+			manager.clearSequenceMap();
+
 			int contig_id = Integer.parseInt(words[i]);
 
 			long clockStart = System.currentTimeMillis();
@@ -145,9 +150,11 @@ public class TestContigManager3 {
 			System.err.println("TOTAL TIME: " + clockStop + " ms");
 			System.err.println();
 
-			int nseqs = manager.getSequenceMapSize();
-			long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
-			System.out.println("MEMORY: " + usedMemory + " for " + nseqs + " sequences");
+			if (Boolean.getBoolean("showMemory")) {
+			    sequenceCounter += manager.getSequenceMapSize();
+			    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+			    System.out.println(sequenceCounter + " " + usedMemory);
+			}
 		    }
 		}
 	    }

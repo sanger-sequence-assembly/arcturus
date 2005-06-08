@@ -46,6 +46,9 @@ public class Manager {
     protected boolean loadSequenceVectors = true;
     protected boolean loadCloningVectors = true;
     protected boolean loadQualityClipping = true;
+    protected boolean loadAlignToSCF = true;
+
+    protected boolean useCacheing = true;
 
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
@@ -69,6 +72,9 @@ public class Manager {
 	loadSequenceVectors = !Boolean.getBoolean("noLoadSequenceVectors");
 	loadCloningVectors = !Boolean.getBoolean("noLoadCloningVectors");
 	loadQualityClipping = !Boolean.getBoolean("noLoadQualityClipping");
+	loadAlignToSCF = !Boolean.getBoolean("noLoadAlignToSCF");
+
+	useCacheing = !Boolean.getBoolean("noCacheing");
     }
 
     protected void prepareStatements() throws SQLException {
@@ -391,13 +397,17 @@ public class Manager {
 	if (loadQualityClipping)
 	    getQualityClippingData(contig_id, mapmap);
 
+	if (loadAlignToSCF)
+	    getAlignToSCF(contig_id, mapmap);
+
 	Arrays.sort(mappings, mappingComparator);
 
 	contig.setMappings(mappings);
 
 	Integer id = new Integer(contig_id);
 
-	contigByID.put(id, contig);
+	if (useCacheing)
+	    contigByID.put(id, contig);
 
 	return contig;
     }
@@ -488,6 +498,7 @@ public class Manager {
 
 	    if (sequence == null) {
 		sequence = new Sequence(seq_id, null, length);
+
 		sequenceByID.put(new Integer(seq_id), sequence);
 	    }
 
@@ -543,7 +554,8 @@ public class Manager {
 
 	    if (template == null) {
 		template = new Template(templatename, template_id, ligation, null);
-		templateByID.put(new Integer(template_id), template);
+		if (useCacheing)
+		    templateByID.put(new Integer(template_id), template);
 	    }
 
 	    Read read = getReadByID(read_id);
@@ -557,7 +569,8 @@ public class Manager {
 
 		read = new Read(readname, read_id, template, asped, iStrand, iPrimer, iChemistry, null);
 
-		readByID.put(new Integer(read_id), read);
+		if (useCacheing)
+		    readByID.put(new Integer(read_id), read);
 	    }
 
 	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
@@ -858,6 +871,76 @@ public class Manager {
 	fireEvent(event);
     }
 
+    private void getAlignToSCF(int contig_id, Map mapmap) throws SQLException {
+	event.begin("Loading AlignToSCF data", 0);
+	fireEvent(event);
+
+	pstmtAlignToSCF.setInt(1, contig_id);
+
+	ResultSet rs = pstmtAlignToSCF.executeQuery();
+
+	Vector alignments = new Vector();
+
+	while (rs.next()) {
+	    int seq_id = rs.getInt(1);
+	    int seqstart = rs.getInt(2);
+	    int scfstart = rs.getInt(3);
+	    int length = rs.getInt(4);
+
+	    alignments.add(new SortableAlignToSCF(seq_id, seqstart, scfstart, length));
+	}
+
+	rs.close();
+
+	SortableAlignToSCF[] array = new SortableAlignToSCF[alignments.size()];
+
+	alignments.toArray(array);
+
+	Arrays.sort(array);
+
+	alignments.clear();
+
+	int current_seq_id = -1;
+
+	AlignToSCFComparator alignToSCFComparator = new AlignToSCFComparator();
+
+	for (int k = 0; k < array.length; k++) {
+	    int next_seq_id = array[k].seq_id;
+	    int seqstart = array[k].seqstart;
+	    int scfstart = array[k].scfstart;
+	    int length = array[k].length;
+
+	    if ((next_seq_id != current_seq_id) && (current_seq_id > 0)) {
+		AlignToSCF a2scf[] = new AlignToSCF[alignments.size()];
+		alignments.toArray(a2scf);
+		Arrays.sort(a2scf, alignToSCFComparator);
+		Mapping mapping = (Mapping)mapmap.get(new Integer(current_seq_id));
+		mapping.getSequence().setAlignToSCF(a2scf);
+		alignments.clear();
+	    }
+
+	    alignments.add(new AlignToSCF(seqstart, scfstart, length));
+
+	    current_seq_id = next_seq_id;
+
+	    if ((k % 50) == 0) {
+		event.working(k);
+		fireEvent(event);
+	    }
+	}
+
+	if (current_seq_id > 0) {
+	    AlignToSCF a2scf[] = new AlignToSCF[alignments.size()];
+	    alignments.toArray(a2scf);
+	    Arrays.sort(a2scf, alignToSCFComparator);
+	    Mapping mapping = (Mapping)mapmap.get(new Integer(current_seq_id));
+	    mapping.getSequence().setAlignToSCF(a2scf);
+	}
+
+	event.end();
+	fireEvent(event);
+    }
+
     public void addManagerEventListener(ManagerEventListener listener) {
 	eventListeners.addElement(listener);
     }
@@ -876,6 +959,10 @@ public class Manager {
 
     public int getSequenceMapSize() {
 	return sequenceByID.size();
+    }
+
+    public void clearSequenceMap() {
+	sequenceByID.clear();
     }
 
     class SortableSegment implements Comparable {
@@ -902,6 +989,52 @@ public class Manager {
 	    diff = this.cstart - that.cstart;
 
 	    return diff;
+	}
+    }
+
+    class SortableAlignToSCF implements Comparable {
+	public int seq_id;
+	public int seqstart;
+	public int scfstart;
+	public int length;
+
+	public SortableAlignToSCF(int seq_id, int seqstart, int scfstart, int length) {
+	    this.seq_id = seq_id;
+	    this.seqstart = seqstart;
+	    this.scfstart = scfstart;
+	    this.length = length;
+	}
+
+	public int compareTo(Object o) {
+	    SortableAlignToSCF that = (SortableAlignToSCF)o;
+
+	    int diff = this.seq_id - that.seq_id;
+
+	    if (diff != 0)
+		return diff;
+
+	    diff = this.seqstart - that.seqstart;
+
+	    return diff;
+	}
+    }
+
+    class AlignToSCFComparator implements Comparator {
+	public int compare(Object o1, Object o2) {
+	    AlignToSCF aligntoscf1 = (AlignToSCF)o1;
+	    AlignToSCF aligntoscf2 = (AlignToSCF)o2;
+
+	    int diff = aligntoscf1.getStartInSequence() - aligntoscf2.getStartInSequence();
+
+	    return diff;
+	}
+
+	public boolean equals(Object obj) {
+	    if (obj instanceof AlignToSCFComparator) {
+		AlignToSCFComparator that = (AlignToSCFComparator)obj;
+		return this == that;
+	    } else
+		return false;
 	}
     }
 
