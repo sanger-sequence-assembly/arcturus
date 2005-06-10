@@ -73,9 +73,8 @@ public class TestContigManager3 {
 
 	    Manager manager = new Manager(conn);
 
-	    MyListener listener = new MyListener();
-
-	    manager.addManagerEventListener(listener);
+	    if (!Boolean.getBoolean("quiet"))
+		manager.addManagerEventListener(new MyListener());
 
 	    BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
 
