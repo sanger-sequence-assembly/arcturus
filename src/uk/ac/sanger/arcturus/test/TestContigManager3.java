@@ -73,7 +73,9 @@ public class TestContigManager3 {
 
 	    Manager manager = new Manager(conn);
 
-	    if (!Boolean.getBoolean("quiet"))
+	    boolean quiet = Boolean.getBoolean("quiet");
+
+	    if (!quiet)
 		manager.addManagerEventListener(new MyListener());
 
 	    BufferedReader stdin = new BufferedReader(new InputStreamReader(System.in));
@@ -88,7 +90,7 @@ public class TestContigManager3 {
 	    int sequenceCounter = 0;
 
 	    while (true) {
-		if (!Boolean.getBoolean("quiet"))
+		if (!quiet)
 		    System.err.print(">");
 
 		line = stdin.readLine();
@@ -145,14 +147,16 @@ public class TestContigManager3 {
 
 			contig = manager.loadContigByID(contig_id);
 
-			long clockStop = System.currentTimeMillis() - clockStart;
-			System.err.println("TOTAL TIME: " + clockStop + " ms");
-			System.err.println();
+			if (!quiet) {
+			    long clockStop = System.currentTimeMillis() - clockStart;
+			    System.err.println("TOTAL TIME: " + clockStop + " ms");
+			    System.err.println();
 
-			if (Boolean.getBoolean("showMemory")) {
-			    sequenceCounter += manager.getSequenceMapSize();
-			    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
-			    System.out.println(sequenceCounter + " " + usedMemory);
+			    if (Boolean.getBoolean("showMemory")) {
+				sequenceCounter += manager.getSequenceMapSize();
+				long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+				System.out.println(sequenceCounter + " " + usedMemory);
+			    }
 			}
 		    }
 		}
