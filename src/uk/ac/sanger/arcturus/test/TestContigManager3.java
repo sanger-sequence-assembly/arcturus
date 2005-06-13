@@ -35,6 +35,10 @@ public class TestContigManager3 {
 	String instance = null;
 	String organism = null;
 
+	String url = null;
+	String username = null;
+	String password = null;
+
 	String objectname = null;
 
 	String algname = null;
@@ -46,11 +50,20 @@ public class TestContigManager3 {
 	    if (args[i].equalsIgnoreCase("-organism"))
 		organism = args[++i];
 
+	    if (args[i].equalsIgnoreCase("-url"))
+		url = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-username"))
+		username = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-password"))
+		password = args[++i];
+
 	    if (args[i].equalsIgnoreCase("-algorithm"))
 		algname = args[++i];
 	}
 
-	if (instance == null || organism == null) {
+	if (instance == null && organism == null && url == null && username == null && password == null) {
 	    printUsage(System.err);
 	    System.exit(1);
 	}
@@ -59,21 +72,36 @@ public class TestContigManager3 {
 	    algname = System.getProperty("arcturus.default.algorithm");
 
 	try {
-	    System.err.println("Creating an ArcturusInstance for " + instance);
-	    System.err.println();
+	    java.sql.Connection conn = null;
 
-	    ArcturusInstance ai = new ArcturusInstance(props, instance);
+	    if (instance != null && organism != null) {
+		System.err.println("Creating an ArcturusInstance for " + instance);
+		System.err.println();
 
-	    System.err.println("Creating an ArcturusDatabase for " + organism);
-	    System.err.println();
+		ArcturusInstance ai = new ArcturusInstance(props, instance);
 
-	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+		System.err.println("Creating an ArcturusDatabase for " + organism);
+		System.err.println();
 
-	    java.sql.Connection conn = adb.getConnection();
+		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+		conn = adb.getConnection();
+	    } else if (url != null && username != null && password != null) {
+		Class.forName("com.mysql.jdbc.Driver").newInstance();
+
+		conn = java.sql.DriverManager.getConnection(url, username, password);
+	    }
+
+	    if (conn == null) {
+		System.err.println("Connection is undefined");
+		printUsage(System.err);
+		System.exit(1);
+	    }
 
 	    Manager manager = new Manager(conn);
 
 	    boolean quiet = Boolean.getBoolean("quiet");
+	    boolean silent = Boolean.getBoolean("silent");
 
 	    if (!quiet)
 		manager.addManagerEventListener(new MyListener());
@@ -88,6 +116,7 @@ public class TestContigManager3 {
 	    CAFWriter cafWriter = new CAFWriter(System.out);
 
 	    int sequenceCounter = 0;
+	    int nContigs = 0;
 
 	    while (true) {
 		if (!quiet)
@@ -147,7 +176,11 @@ public class TestContigManager3 {
 
 			contig = manager.loadContigByID(contig_id);
 
-			if (!quiet) {
+			if (quiet) {
+			    if (!silent)
+				System.err.println("Contig " + contig_id + " : " + contig.getLength() + " bp, " +
+						   contig.getReadCount() + " reads");
+			} else {
 			    long clockStop = System.currentTimeMillis() - clockStart;
 			    System.err.println("TOTAL TIME: " + clockStop + " ms");
 			    System.err.println();
@@ -196,6 +229,13 @@ public class TestContigManager3 {
 	ps.println("MANDATORY PARAMETERS:");
 	ps.println("\t-instance\tName of instance");
 	ps.println("\t-organism\tName of organism");
+	ps.println("\t\t --- OR ---");
+	ps.println("\t-url\t\tJDBC URL");
+	ps.println("\t-username\tUsername");
+	ps.println("\t-password\tPassword");
+	ps.println();
+	ps.println("OPTIONAL PARAMETERS");
+	ps.println("\t-algorithm\tName of class for consensus algorithm");
     }
 
     public static boolean calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
