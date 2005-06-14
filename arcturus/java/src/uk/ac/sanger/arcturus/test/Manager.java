@@ -3,6 +3,7 @@ import java.util.zip.*;
 import java.sql.*;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ReadManager;
 
 public class Manager {
     protected Map cloneByID = new HashMap();
@@ -319,36 +320,6 @@ public class Manager {
 	    return loadContigByID(contig_id);
     }
 
-    protected int parseStrand(String text) {
-	if (text.equals("Forward"))
-	    return Read.FORWARD;
-
-	if (text.equals("Reverse"))
-	    return Read.REVERSE;
-
-	return Read.UNKNOWN;
-    }
-
-    protected int parsePrimer(String text) {
-	if (text.equals("Universal_primer"))
-	    return Read.UNIVERSAL_PRIMER;
-
-	if (text.equals("Custom"))
-	    return Read.CUSTOM_PRIMER;
-
-	return Read.UNKNOWN;
-    }
-
-    protected int parseChemistry(String text) {
-	if (text.equals("Dye_terminator"))
-	    return Read.DYE_TERMINATOR;
-
-	if (text.equals("Dye_primer"))
-	    return Read.DYE_PRIMER;
-
-	return Read.UNKNOWN;
-    }
-
     public Sequence getSequenceByID(int seq_id) {
 	return (Sequence)sequenceByID.get(new Integer(seq_id));
     }
@@ -561,11 +532,11 @@ public class Manager {
 	    Read read = getReadByID(read_id);
 
 	    if (read == null) {
-		int iStrand = parseStrand(strand);
+		int iStrand = ReadManager.parseStrand(strand);
 
-		int iChemistry = parseChemistry(chemistry);
+		int iChemistry = ReadManager.parseChemistry(chemistry);
 
-		int iPrimer = parsePrimer(primer);
+		int iPrimer = ReadManager.parsePrimer(primer);
 
 		read = new Read(readname, read_id, template, asped, iStrand, iPrimer, iChemistry, null);
 
