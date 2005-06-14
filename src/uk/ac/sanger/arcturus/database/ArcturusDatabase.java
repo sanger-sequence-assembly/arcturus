@@ -14,12 +14,29 @@ public class ArcturusDatabase {
     public static final int MYSQL = 1;
     public static final int ORACLE = 2;
 
-    public static final int CONTIG_NO_CONSENSUS = 0;
-    public static final int CONTIG_CONSENSUS = 1;
+    public static final int CONTIG_BASIC_DATA = 1 << 0;
+    public static final int CONTIG_MAPPINGS_READS_AND_TEMPLATES = 1 << 1;
+    public static final int CONTIG_SEQUENCE_DNA_AND_QUALITY = 1 << 2;
+    public static final int CONTIG_CONSENSUS = 1 << 3;
+    public static final int CONTIG_SEQUENCE_AUXILIARY_DATA = 1 << 4;
+    public static final int CONTIG_MAPPING_SEGMENTS = 1 << 5;
+    public static final int CONTIG_TAGS = 1 << 6;
 
-    public static final int CONTIG_NO_MAPPING = 0;
-    public static final int CONTIG_BASIC_MAPPING = 1;
-    public static final int CONTIG_FULL_MAPPING = 2;
+    public static final int CONTIG_TO_CALCULATE_CONSENSUS =
+	CONTIG_BASIC_DATA | CONTIG_MAPPINGS_READS_AND_TEMPLATES | 
+	CONTIG_SEQUENCE_DNA_AND_QUALITY | CONTIG_MAPPING_SEGMENTS;
+
+    public static final int CONTIG_TO_GENERATE_CAF =
+	CONTIG_BASIC_DATA | CONTIG_MAPPINGS_READS_AND_TEMPLATES |
+	CONTIG_SEQUENCE_DNA_AND_QUALITY |CONTIG_CONSENSUS |
+	CONTIG_SEQUENCE_AUXILIARY_DATA | CONTIG_MAPPING_SEGMENTS |
+	CONTIG_TAGS;
+
+    public static final int CONTIG_TO_DISPLAY_SCAFFOLDS =
+	CONTIG_BASIC_DATA | CONTIG_MAPPINGS_READS_AND_TEMPLATES | CONTIG_TAGS;
+
+    public static final int CONTIG_TO_DISPLAY_FAMILY_TREE =
+	CONTIG_BASIC_DATA | CONTIG_TAGS;
 
     protected DataSource ds;
     protected String description;
@@ -380,6 +397,10 @@ public class ArcturusDatabase {
 	templateManager.preloadAllTemplates();
     }
 
+    public Template findOrCreateTemplate(int id, String name, Ligation ligation) {
+	return templateManager.findOrCreateTemplate(id, name, ligation);
+    }
+
     /**
      * Returns the ReadManager belonging to this ArcturusDatabase.
      *
@@ -444,6 +465,11 @@ public class ArcturusDatabase {
 
     public int parseChemistry(String text) {
 	return ReadManager.parseChemistry(text);
+    }
+
+    public Read findOrCreateRead(int id, String name, Template template, java.util.Date asped,
+				 String strand, String primer, String chemistry) {
+	return readManager.findOrCreateRead(id, name, template, asped, strand, primer, chemistry);
     }
 
     /**
