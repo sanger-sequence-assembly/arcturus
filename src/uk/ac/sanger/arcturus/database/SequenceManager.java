@@ -325,8 +325,12 @@ public class SequenceManager {
      */
 
     void registerNewSequence(Sequence sequence) {
-	hashByReadID.put(new Integer(sequence.getRead().getID()), sequence);
 	hashBySequenceID.put(new Integer(sequence.getID()), sequence);
+
+	Read read = sequence.getRead();
+
+	if (read != null)
+	    hashByReadID.put(new Integer(read.getID()), sequence);
     }
 
     /**
@@ -378,5 +382,17 @@ public class SequenceManager {
 	}
 
 	rs.close();
+    }
+
+    public Sequence findOrCreateSequence(int seq_id, int length) {
+	Sequence sequence = (Sequence)hashBySequenceID.get(new Integer(seq_id));
+
+	if (sequence == null) {
+	    sequence = new Sequence(seq_id, null, length);
+
+	    registerNewSequence(sequence);
+	}
+
+	return sequence;
     }
 }
