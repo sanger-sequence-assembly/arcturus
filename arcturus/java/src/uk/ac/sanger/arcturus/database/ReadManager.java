@@ -196,4 +196,21 @@ public class ReadManager {
 	rs.close();
 	stmt.close();
     }
+
+    public Read findOrCreateRead(int id, String name, Template template, java.util.Date asped,
+				 String strand, String primer, String chemistry) {
+	Read read = (Read)hashByID.get(new Integer(id));
+
+	if (read == null) {
+	    int iStrand = parseStrand(strand);
+	    int iPrimer = parsePrimer(primer);
+	    int iChemistry = parseChemistry(chemistry);
+
+	    read = new Read(name, id, template, asped, iStrand, iPrimer, iChemistry, adb);
+
+	    registerNewRead(read);
+	}
+
+	return read;
+    }
 }
