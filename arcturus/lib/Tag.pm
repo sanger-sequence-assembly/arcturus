@@ -355,8 +355,6 @@ sub writeToCaf {
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
 
-    die "Tag->writeToCaf expect a FileHandle as parameter" unless $FILE;
-
     my $type = $this->getType();
     my @pos  = $this->getPosition();
     my $tagcomment = $this->getTagComment();
@@ -364,11 +362,15 @@ sub writeToCaf {
 
     my $descent = $this->getComment();
 
-    print $FILE "Tag $type ";
-    print $FILE "@pos " unless ($type eq "NOTE");
-    print $FILE "\"$tagcomment\"" if $tagcomment;
-    print $FILE "\n";
-    print $FILE "Tag INFO $descent\n" if $descent; # INFO tag only
+    my $string = "Tag $type ";
+    $string .= "@pos " unless ($type eq "NOTE");
+    $string .= "\"$tagcomment\"" if $tagcomment;
+    $string .= "\n";
+    $string .= "Tag INFO $descent\n" if $descent; # INFO tag only
+
+    print $FILE $string if $FILE;
+
+    return $string;
 }
 
 sub dump {
