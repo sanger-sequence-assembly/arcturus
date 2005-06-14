@@ -5,6 +5,7 @@ import java.sql.*;
 import javax.sql.*;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.zip.DataFormatException;
 
 import org.apache.log4j.*;
 
@@ -37,6 +38,10 @@ public class ArcturusDatabase {
 
     public static final int CONTIG_TO_DISPLAY_FAMILY_TREE =
 	CONTIG_BASIC_DATA | CONTIG_TAGS;
+
+    public static final int CONTIG_MAPPING_RELATED_DATA =
+	CONTIG_MAPPINGS_READS_AND_TEMPLATES | CONTIG_SEQUENCE_DNA_AND_QUALITY |
+	CONTIG_SEQUENCE_AUXILIARY_DATA | CONTIG_MAPPING_SEGMENTS;
 
     protected DataSource ds;
     protected String description;
@@ -472,6 +477,10 @@ public class ArcturusDatabase {
 	return readManager.findOrCreateRead(id, name, template, asped, strand, primer, chemistry);
     }
 
+    public int[] getUnassembledReadIDList() throws SQLException {
+	return readManager.getUnassembledReadIDList();
+    }
+
     /**
      * Returns the SequenceManager belonging to this ArcturusDatabase.
      *
@@ -551,6 +560,10 @@ public class ArcturusDatabase {
 	return sequenceManager.decodeCompressedData(compressed, length);
     }
 
+    public Sequence findOrCreateSequence(int seq_id, int length) {
+	return sequenceManager.findOrCreateSequence(seq_id, length);
+    }
+
     /**
      * Returns the ContigManager belonging to this ArcturusDatabase.
      *
@@ -559,22 +572,11 @@ public class ArcturusDatabase {
 
     public ContigManager getContigManager() { return contigManager; }
 
-    public Contig getContigByID(int id, int consensusOption, int mappingOption) throws SQLException {
+    public Contig getContigByID(int id, int options) throws SQLException, DataFormatException {
 	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigByID(" + id + ", consensusOption = " + consensusOption +
-			   ", mapingOption = " + mappingOption + ")");
+	    logger.debug("getContigByID(" + id + ", options = " + options + ")");
 
-	return contigManager.getContigByID(id, consensusOption, mappingOption);
-    }
-
-
-    public Contig getContigByID(int id, int consensusOption, int mappingOption,
-				    boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigByID(" + id + ", consensusOption = " + consensusOption +
-			   ", mapingOption = " + mappingOption + ", autoload=" + autoload + ")");
-
-	return contigManager.getContigByID(id, consensusOption, mappingOption, autoload);
+	return contigManager.getContigByID(id, options);
     }
 
     public int[] getCurrentContigIDList() throws SQLException {
@@ -603,10 +605,6 @@ public class ArcturusDatabase {
 			 mappingOption + ", " + autoload + ")");
 
 	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption, autoload);
-    }
-
-    public int[] getUnassembledReadIDList() throws SQLException {
-	return contigManager.getUnassembledReadIDList();
     }
 
      /**
