@@ -42,6 +42,9 @@ public class TestContigManager4 {
 	int flags = ArcturusDatabase.CONTIG_BASIC_DATA;
 
 	boolean debug = false;
+	boolean lowmem = false;
+	boolean silent = false;
+	boolean quiet = false;
 
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].equalsIgnoreCase("-instance"))
@@ -55,6 +58,15 @@ public class TestContigManager4 {
 
 	    if (args[i].equalsIgnoreCase("-debug"))
 		debug = true;
+
+	    if (args[i].equalsIgnoreCase("-lowmem"))
+		lowmem = true;
+
+	    if (args[i].equalsIgnoreCase("-silent"))
+		silent = true;
+
+	    if (args[i].equalsIgnoreCase("-quiet"))
+		quiet = true;
 
 	    if (args[i].equalsIgnoreCase("-loadMappings"))
 		flags |= ArcturusDatabase.CONTIG_MAPPINGS_READS_AND_TEMPLATES;
@@ -100,6 +112,9 @@ public class TestContigManager4 {
 
 	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
+	    if (lowmem)
+		adb.getSequenceManager().setCacheing(false);
+
 	    java.sql.Connection conn = adb.getConnection();
 
 	    if (conn == null) {
@@ -107,9 +122,6 @@ public class TestContigManager4 {
 		printUsage(System.err);
 		System.exit(1);
 	    }
-
-	    boolean quiet = Boolean.getBoolean("quiet");
-	    boolean silent = Boolean.getBoolean("silent");
 
 	    if (!quiet)
 		adb.addContigManagerEventListener(new MyListener());
@@ -224,25 +236,25 @@ public class TestContigManager4 {
 			} else
 			    System.err.println("No current contig");
 		    } else {
+			if (lowmem) {
+			    if (contig != null)
+				contig.setMappings(null);
+			}
+
 			int contig_id = Integer.parseInt(words[i]);
 			
 			long clockStart = System.currentTimeMillis();
 			
 			contig = adb.getContigByID(contig_id, flags);
 			
-			if (quiet) {
-			    if (!silent)
-				System.err.println("Contig " + contig_id + " : " + contig.getLength() + " bp, " +
-						   contig.getReadCount() + " reads");
-			} else {
+			if (!silent) {
 			    long clockStop = System.currentTimeMillis() - clockStart;
-			    System.err.println("TOTAL TIME: " + clockStop + " ms");
-			    System.err.println();
 			    
-			    if (Boolean.getBoolean("showMemory")) {
-				long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
-				System.out.println("MEMORY: " + usedMemory + " kb");
-			    }
+			    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+
+			    System.err.println("Contig " + contig_id + " : " + contig.getLength() + " bp, " +
+					       contig.getReadCount() + " reads (" + clockStop +
+					       " ms, " + usedMemory + " kb)");
 			}
 		    }
 		}
