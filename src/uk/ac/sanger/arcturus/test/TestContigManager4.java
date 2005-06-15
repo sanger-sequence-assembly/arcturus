@@ -140,6 +140,7 @@ public class TestContigManager4 {
 
 	    int sequenceCounter = 0;
 	    int nContigs = 0;
+	    long peakMemory = 0;
 
 	    while (true) {
 		if (!quiet)
@@ -147,14 +148,18 @@ public class TestContigManager4 {
 
 		line = stdin.readLine();
 
-		if (line == null)
+		if (line == null) {
+		    System.err.println("Peak memory usage: " + peakMemory + " kb");
 		    System.exit(0);
+		}
 
 		String[] words = tokenise(line);
 		
 		for (int i = 0; i < words.length; i++) {
-		    if (words[i].equalsIgnoreCase("quit") || words[i].equalsIgnoreCase("exit"))
+		    if (words[i].equalsIgnoreCase("quit") || words[i].equalsIgnoreCase("exit")) {
+			System.err.println("Peak memory usage: " + peakMemory + " kb");
 			System.exit(0);
+		    }
 
 		    if (words[i].equalsIgnoreCase("caf")) {
 			if (contig != null)
@@ -246,12 +251,15 @@ public class TestContigManager4 {
 			long clockStart = System.currentTimeMillis();
 			
 			contig = adb.getContigByID(contig_id, flags);
-			
+
+			long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+
+			if (usedMemory > peakMemory)
+			    peakMemory = usedMemory;
+		
 			if (!silent) {
 			    long clockStop = System.currentTimeMillis() - clockStart;
 			    
-			    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
-
 			    System.err.println("Contig " + contig_id + " : " + contig.getLength() + " bp, " +
 					       contig.getReadCount() + " reads (" + clockStop +
 					       " ms, " + usedMemory + " kb)");
@@ -297,6 +305,14 @@ public class TestContigManager4 {
 	ps.println();
 	ps.println("OPTIONAL PARAMETERS");
 	ps.println("\t-algorithm\tName of class for consensus algorithm");
+	ps.println();
+	ps.println("OPTIONS");
+	String[] options = {"-debug", "-lowmem", "-silent", "-quiet", "-loadMappings",
+			    "-loadSequenceDNA", "-loadContigConsensus", "-loadAuxiliaryData",
+			    "-loadMappingSegments", "-loadContigTags", "-loadForCAF",
+			    "-loadToCalculateConsensus"};
+	for (int i = 0; i < options.length; i++)
+	    ps.println("\t" + options[i]);
     }
 
     public static boolean calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
