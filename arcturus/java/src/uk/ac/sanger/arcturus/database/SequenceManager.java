@@ -21,7 +21,7 @@ import java.util.zip.*;
  * information added retrospectively by the SequenceManager.
  */
 
-public class SequenceManager {
+public class SequenceManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByReadID;
@@ -73,6 +73,11 @@ public class SequenceManager {
 
 	hashByReadID = new HashMap();
 	hashBySequenceID = new HashMap();
+    }
+
+    public void clearCache() {
+	hashByReadID.clear();
+	hashBySequenceID.clear();
     }
 
     /**
@@ -325,12 +330,14 @@ public class SequenceManager {
      */
 
     void registerNewSequence(Sequence sequence) {
-	hashBySequenceID.put(new Integer(sequence.getID()), sequence);
+	if (cacheing) {
+	    hashBySequenceID.put(new Integer(sequence.getID()), sequence);
 
-	Read read = sequence.getRead();
+	    Read read = sequence.getRead();
 
-	if (read != null)
-	    hashByReadID.put(new Integer(read.getID()), sequence);
+	    if (read != null)
+		hashByReadID.put(new Integer(read.getID()), sequence);
+	}
     }
 
     /**

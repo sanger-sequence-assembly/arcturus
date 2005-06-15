@@ -326,6 +326,10 @@ public class ArcturusDatabase {
 	cloneManager.preloadAllClones();
     }
 
+    public void clearCloneCache() {
+	cloneManager.clearCache();
+    }
+
     /**
      * Returns the LigationManager belonging to this ArcturusDatabase.
      *
@@ -353,6 +357,10 @@ public class ArcturusDatabase {
 	    logger.debug("preloadAllLigations()");
 
 	ligationManager.preloadAllLigations();
+    }
+
+    public void clearLigationCache() {
+	ligationManager.clearCache();
     }
 
     /**
@@ -404,6 +412,10 @@ public class ArcturusDatabase {
 
     public Template findOrCreateTemplate(int id, String name, Ligation ligation) {
 	return templateManager.findOrCreateTemplate(id, name, ligation);
+    }
+
+    public void clearTemplateCache() {
+	templateManager.clearCache();
     }
 
     /**
@@ -479,6 +491,10 @@ public class ArcturusDatabase {
 
     public int[] getUnassembledReadIDList() throws SQLException {
 	return readManager.getUnassembledReadIDList();
+    }
+
+    public void clearReadCache() {
+	readManager.clearCache();
     }
 
     /**
@@ -564,6 +580,10 @@ public class ArcturusDatabase {
 	return sequenceManager.findOrCreateSequence(seq_id, length);
     }
 
+    public void clearSequenceCache() {
+	sequenceManager.clearCache();
+    }
+
     /**
      * Returns the ContigManager belonging to this ArcturusDatabase.
      *
@@ -611,6 +631,10 @@ public class ArcturusDatabase {
 
     public void removeContigManagerEventListener(ManagerEventListener listener) {
 	contigManager.removeContigManagerEventListener(listener);
+    }
+
+    public void clearContigCache() {
+	contigManager.clearCache();
     }
 
      /**
@@ -669,6 +693,10 @@ public class ArcturusDatabase {
 	projectManager.setAssemblyForProject(project, assembly);
     }
 
+    public void clearProjectCache() {
+	projectManager.clearCache();
+    }
+
      /**
      * Returns the AssemblyManager belonging to this ArcturusDatabase.
      *
@@ -717,6 +745,10 @@ public class ArcturusDatabase {
 	    logger.debug("refreshAllAssemblies");
 
 	assemblyManager.refreshAllAssemblies();
+    }
+
+    public void clearAssemblyCache() {
+	assemblyManager.clearCache();
     }
 
    /**

@@ -10,7 +10,7 @@ import java.util.*;
  * This class manages Ligation objects.
  */
 
-public class LigationManager {
+public class LigationManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID, hashByName;
@@ -34,6 +34,11 @@ public class LigationManager {
 	    
 	hashByID = new HashMap();
 	hashByName = new HashMap();
+    }
+
+    public void clearCache() {
+	hashByID.clear();
+	hashByName.clear();
     }
 
     public Ligation getLigationByName(String name) throws SQLException {
