@@ -590,21 +590,27 @@ public class ArcturusDatabase {
 	return contigManager.countContigsByProject(project_id);
     }
 
-    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
+    public Set getContigsByProject(int project_id, int options) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigsByProject(" + project_id + ", " + consensusOption + ", " +
-			 mappingOption + ")");
+	    logger.debug("getContigsByProject(" + project_id + ", " + options + ")");
 
-	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption);
+	return contigManager.getContigsByProject(project_id, options);
     }
 
-    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption,
+    public Set getContigsByProject(int project_id, int options,
 				   boolean autoload) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigsByProject(" + project_id + ", " + consensusOption + ", " +
-			 mappingOption + ", " + autoload + ")");
+	    logger.debug("getContigsByProject(" + project_id + ", " + options + ", " + autoload + ")");
 
-	return contigManager.getContigsByProject(project_id, consensusOption, mappingOption, autoload);
+	return contigManager.getContigsByProject(project_id, options, autoload);
+    }
+
+    public void addContigManagerEventListener(ManagerEventListener listener) {
+	contigManager.addContigManagerEventListener(listener);
+    }
+
+    public void removeContigManagerEventListener(ManagerEventListener listener) {
+	contigManager.removeContigManagerEventListener(listener);
     }
 
      /**
