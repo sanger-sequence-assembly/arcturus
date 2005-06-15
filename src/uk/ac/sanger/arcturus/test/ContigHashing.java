@@ -14,9 +14,7 @@ public class ContigHashing {
     public static void main(String args[]) {
 	lasttime = System.currentTimeMillis();
 
-	int mappingOption = ArcturusDatabase.CONTIG_NO_MAPPING;
-
-	int consensusOption = ArcturusDatabase.CONTIG_CONSENSUS;
+	int option = ArcturusDatabase.CONTIG_CONSENSUS;
 
 	System.out.println("ContigHashing");
 	System.out.println("=============");
@@ -69,7 +67,7 @@ public class ContigHashing {
 	    for (int i = 0; i < contigIdList.length; i++) {
 		int id = contigIdList[i];
 
-		Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
+		Contig contig = adb.getContigByID(id, option);
 
 		byte[] dna = contig.getDNA();
 

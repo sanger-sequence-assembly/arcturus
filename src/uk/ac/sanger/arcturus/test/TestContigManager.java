@@ -26,25 +26,23 @@ public class TestContigManager {
 	String consensusOptionString = System.getProperty("consensusOption");
 	boolean displayContig = Boolean.getBoolean("displayContig");
 
-	int mappingOption = ArcturusDatabase.CONTIG_NO_MAPPING;
+	int option = ArcturusDatabase.CONTIG_BASIC_DATA;
 
 	if (mappingOptionString == null) {
 	    mappingOptionString = "noMapping";
 	} else {
 	    if (mappingOptionString.equalsIgnoreCase("basicMapping"))
-		mappingOption = ArcturusDatabase.CONTIG_BASIC_MAPPING;
+		option |= ArcturusDatabase.CONTIG_MAPPINGS_READS_AND_TEMPLATES;
 
 	    if (mappingOptionString.equalsIgnoreCase("fullMapping"))
-		mappingOption = ArcturusDatabase.CONTIG_FULL_MAPPING;
+		option |= ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS ;
 	}
-
-	int consensusOption = ArcturusDatabase.CONTIG_NO_CONSENSUS;
 
 	if (consensusOptionString == null) {
 	    consensusOptionString = "noConsensus";
 	} else {
 	    if (consensusOptionString.equalsIgnoreCase("consensus"))
-		consensusOption = ArcturusDatabase.CONTIG_CONSENSUS;
+		option |= ArcturusDatabase.CONTIG_CONSENSUS;
 	}
 
 	System.out.println("TestContigManager");
@@ -152,7 +150,7 @@ public class TestContigManager {
 				System.out.println("LOOKING UP CONTIG[" + id + "]");
 			    }
 			    
-			    Contig contig = adb.getContigByID(id, consensusOption, mappingOption);
+			    Contig contig = adb.getContigByID(id, option);
 			    
 			    if (verbose) {
 				if (contig == null)
@@ -184,7 +182,7 @@ public class TestContigManager {
 
 		int project_id = Integer.parseInt(projectname);
 
-		Set contigs = adb.getContigsByProject(project_id, consensusOption, mappingOption);
+		Set contigs = adb.getContigsByProject(project_id, option);
 
 		if (contigs != null && contigs.size() > 0) {
 		    int totlength = 0;

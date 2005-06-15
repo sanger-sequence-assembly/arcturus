@@ -119,21 +119,18 @@ public class TestContigManager2 {
 			int contig_id = Integer.parseInt(words[1]);
 
 			if (contig_id > 0) {
-			    int consensusOption = ArcturusDatabase.CONTIG_NO_CONSENSUS;
-			    int mappingOption = ArcturusDatabase.CONTIG_BASIC_MAPPING;
+			    int option = ArcturusDatabase.CONTIG_BASIC_DATA;
 
 			    for (int i = 2; i < words.length; i++) {
 				if (words[i].equalsIgnoreCase("consensus"))
-				    consensusOption = ArcturusDatabase.CONTIG_CONSENSUS;
-				else if (words[i].equalsIgnoreCase("nomapping"))
-				    mappingOption = ArcturusDatabase.CONTIG_NO_MAPPING;
+				    option |= ArcturusDatabase.CONTIG_CONSENSUS;
 				else if (words[i].equalsIgnoreCase("fullmapping"))
-				    mappingOption = ArcturusDatabase.CONTIG_FULL_MAPPING;
+				    option |= ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS;
 				else
 				    System.out.println("Unknown option: \"" + words[i] + "\"");
 			    }
 
-			    Contig contig = adb.getContigByID(contig_id, consensusOption, mappingOption);
+			    Contig contig = adb.getContigByID(contig_id, option);
 
 			    if (contig == null)
 				System.out.println("*** FAILED ***");
