@@ -4,6 +4,8 @@ import java.sql.*;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ReadManager;
+import uk.ac.sanger.arcturus.database.ManagerEvent;
+import uk.ac.sanger.arcturus.database.ManagerEventListener;
 
 public class Manager {
     protected Map cloneByID = new HashMap();
@@ -54,7 +56,7 @@ public class Manager {
     public Manager(Connection conn) throws SQLException {
 	this.conn = conn;
 
-	event = new ManagerEvent(this);
+	event = new ManagerEvent(null);
 
 	prepareStatements();
 
