@@ -123,7 +123,9 @@ public class Contig extends Core {
 
     public void setMappings(Mapping[] mappings) {
 	this.mappings = mappings;
-	this.nreads = mappings.length;
+
+	if (mappings != null)
+	    this.nreads = mappings.length;
     }
 
     public byte[] getDNA() { return dna; }
