@@ -10,7 +10,7 @@ import java.util.*;
  * This class manages Read objects.
  */
 
-public class ReadManager {
+public class ReadManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID, hashByName;
@@ -37,6 +37,11 @@ public class ReadManager {
 
 	hashByID = new HashMap();
 	hashByName = new HashMap();
+    }
+
+    public void clearCache() {
+	hashByID.clear();
+	hashByName.clear();
     }
 
     public Read getReadByName(String name) throws SQLException {

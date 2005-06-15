@@ -9,7 +9,7 @@ import java.util.*;
  * This class manages Assembly objects.
  */
 
-public class AssemblyManager {
+public class AssemblyManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID = new HashMap();
@@ -29,6 +29,9 @@ public class AssemblyManager {
 	pstmtByID = conn.prepareStatement(query);
     }
 
+    public void clearCache() {
+	hashByID.clear();
+    }
 
     public Assembly getAssemblyByID(int id) throws SQLException {
 	return getAssemblyByID(id, true);

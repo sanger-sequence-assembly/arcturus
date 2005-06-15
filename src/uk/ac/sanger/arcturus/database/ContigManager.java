@@ -11,7 +11,7 @@ import java.util.zip.DataFormatException;
  * This class manages Contig objects.
  */
 
-public class ContigManager {
+public class ContigManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID;
@@ -64,6 +64,10 @@ public class ContigManager {
 
 	preloadSequencingVectors();
 	preloadCloningVectors();
+    }
+
+    public void clearCache() {
+	hashByID.clear();
     }
 
     protected void prepareStatements() throws SQLException {

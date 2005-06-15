@@ -9,7 +9,7 @@ import java.util.*;
  * This class manages Clone objects.
  */
 
-public class CloneManager {
+public class CloneManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID, hashByName;
@@ -33,6 +33,11 @@ public class CloneManager {
 	    
 	hashByID = new HashMap();
 	hashByName = new HashMap();
+    }
+
+    public void clearCache() {
+	hashByID.clear();
+	hashByName.clear();
     }
 
     public Clone getCloneByName(String name) throws SQLException {

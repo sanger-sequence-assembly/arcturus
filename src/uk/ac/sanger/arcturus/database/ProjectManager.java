@@ -9,7 +9,7 @@ import java.util.*;
  * This class manages Project objects.
  */
 
-public class ProjectManager {
+public class ProjectManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID = new HashMap();
@@ -33,6 +33,9 @@ public class ProjectManager {
 	pstmtSetAssemblyForProject = conn.prepareStatement(query);
     }
 
+    public void clearCache() {
+	hashByID.clear();
+    }
 
     public Project getProjectByID(int id) throws SQLException {
 	return getProjectByID(id, true);

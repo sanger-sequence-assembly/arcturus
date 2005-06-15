@@ -10,7 +10,7 @@ import java.util.*;
  * This class manages Template objects.
  */
 
-public class TemplateManager {
+public class TemplateManager extends AbstractManager {
     private ArcturusDatabase adb;
     private Connection conn;
     private HashMap hashByID, hashByName;
@@ -36,6 +36,11 @@ public class TemplateManager {
 	    
 	hashByID = new HashMap();
 	hashByName = new HashMap();
+    }
+
+    public void clearCache() {
+	hashByID.clear();
+	hashByName.clear();
     }
 
     /**
