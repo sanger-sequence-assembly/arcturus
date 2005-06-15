@@ -31,6 +31,9 @@ public class ContigManager extends AbstractManager {
     protected PreparedStatement pstmtAlignToSCF = null;
     protected PreparedStatement pstmtConsensus = null;
 
+    protected PreparedStatement pstmtCountContigsByProject = null;
+    protected PreparedStatement pstmtContigsByProject = null;
+
     private final static int BY_CONTIG_ID = 1;
     private final static int BY_PROJECT_ID = 2;
 
@@ -135,6 +138,19 @@ public class ContigManager extends AbstractManager {
 	query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
 
 	pstmtConsensus = conn.prepareStatement(query);
+
+	query = "select count(*) from CONTIG left join C2CMAPPING" + 
+	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null and project_id = ?";
+
+	pstmtCountContigsByProject = conn.prepareStatement(query);
+
+	query = "select CONTIG.contig_id,gap4name,length,nreads,created,updated" +
+	    " from CONTIG left join C2CMAPPING" +
+	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null and project_id = ?";
+
+	pstmtContigsByProject = conn.prepareStatement(query);
     }
 
     protected void preloadSequencingVectors() throws SQLException {
@@ -185,7 +201,7 @@ public class ContigManager extends AbstractManager {
 	Contig contig = (Contig)hashByID.get(new Integer(contig_id));
 
 	if (contig == null)
-	    contig= loadContigByID(contig_id, options);
+	    contig = loadContigByID(contig_id, options);
 	else
 	    updateContig(contig, options);
 
@@ -220,6 +236,8 @@ public class ContigManager extends AbstractManager {
 
 	    contig = new Contig(gap4name, contig_id, ctglen, nreads, created, updated,
 				project, adb);
+
+	    registerNewContig(contig);
 
 	    event.setMessage("Contig " + contig_id + " : " + ctglen + " bp, " + nreads + " reads");
 	    event.setState(ManagerEvent.START);
@@ -802,16 +820,53 @@ public class ContigManager extends AbstractManager {
     }
 
     public int countContigsByProject(int project_id) throws SQLException {
-	return 0;
+	pstmtCountContigsByProject.setInt(1, project_id);
+
+	ResultSet rs = pstmtCountContigsByProject.executeQuery();
+
+	int count = 0;
+
+	if (rs.next())
+	    count = rs.getInt(1);
+
+	rs.close();
+
+	return count;
     }
 
     public Set getContigsByProject(int project_id, int options) throws SQLException {
-	return getContigsByProject(project_id, options, true);
-    }
+	Set contigs = new HashSet();
 
-    public Set getContigsByProject(int project_id, int options,
-				   boolean autoload) throws SQLException {
-	return null;
+	Project project = adb.getProjectByID(project_id);
+
+	pstmtContigsByProject.setInt(1, project_id);
+
+	ResultSet rs = pstmtContigsByProject.executeQuery();
+
+	while (rs.next()) {
+	    int contig_id = rs.getInt(1);
+
+	    Contig contig = (Contig)hashByID.get(new Integer(contig_id));
+
+	    if (contig == null) {
+		String gap4name = rs.getString(2);
+		int ctglen = rs.getInt(3);
+		int nreads = rs.getInt(4);
+		java.util.Date created = rs.getTimestamp(5);
+		java.util.Date updated = rs.getTimestamp(6);
+
+		contig = new Contig(gap4name, contig_id, ctglen, nreads, created, updated,
+				    project, adb);
+
+		registerNewContig(contig);
+
+		contigs.add(contig);
+	    }
+	}
+
+	rs.close();
+
+	return contigs;
     }
 
     public int[] getCurrentContigIDList() throws SQLException {

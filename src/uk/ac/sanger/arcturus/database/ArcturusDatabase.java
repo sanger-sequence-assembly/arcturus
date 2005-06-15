@@ -617,14 +617,6 @@ public class ArcturusDatabase {
 	return contigManager.getContigsByProject(project_id, options);
     }
 
-    public Set getContigsByProject(int project_id, int options,
-				   boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigsByProject(" + project_id + ", " + options + ", " + autoload + ")");
-
-	return contigManager.getContigsByProject(project_id, options, autoload);
-    }
-
     public void addContigManagerEventListener(ManagerEventListener listener) {
 	contigManager.addContigManagerEventListener(listener);
     }
