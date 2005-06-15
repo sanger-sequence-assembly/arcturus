@@ -54,6 +54,8 @@ public class ContigManager {
     public ContigManager(ArcturusDatabase adb) throws SQLException {
 	this.adb = adb;
 
+	event = new ManagerEvent(this);
+
 	conn = adb.getConnection();
 
 	prepareStatements();
@@ -271,6 +273,9 @@ public class ContigManager {
 		getAlignToSCF(contig_id, mapmap);
 	    }
 	}
+
+	if ((options & ArcturusDatabase.CONTIG_CONSENSUS) != 0 && contig.getDNA() == null)
+	    loadConsensusForContig(contig);
     }
 
     private int getMappingCount(int contig_id) throws SQLException {
@@ -364,7 +369,7 @@ public class ContigManager {
 
 	    Template template = adb.findOrCreateTemplate(template_id, templatename, ligation);
 
-	    Read read = adb.findOrCreateRead(read_id, readname, template, asped, strand, chemistry, primer);
+	    Read read = adb.findOrCreateRead(read_id, readname, template, asped, strand, primer, chemistry);
 
 	    Mapping mapping = (Mapping)mapmap.get(new Integer(seq_id));
 	    Sequence sequence = mapping.getSequence();
@@ -734,11 +739,11 @@ public class ContigManager {
 	fireEvent(event);
     }
 
-    public void addManagerEventListener(ManagerEventListener listener) {
+    public void addContigManagerEventListener(ManagerEventListener listener) {
 	eventListeners.addElement(listener);
     }
 
-    public void removeManagerEventListener(ManagerEventListener listener) {
+    public void removeContigManagerEventListener(ManagerEventListener listener) {
 	eventListeners.removeElement(listener);
     }
 
@@ -796,12 +801,12 @@ public class ContigManager {
 	return 0;
     }
 
-    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption) throws SQLException {
-	return null;
+    public Set getContigsByProject(int project_id, int options) throws SQLException {
+	return getContigsByProject(project_id, options, true);
     }
 
-    public Set getContigsByProject(int project_id, int consensusOption, int mappingOption,
-				      boolean autoload) throws SQLException {
+    public Set getContigsByProject(int project_id, int options,
+				   boolean autoload) throws SQLException {
 	return null;
     }
 

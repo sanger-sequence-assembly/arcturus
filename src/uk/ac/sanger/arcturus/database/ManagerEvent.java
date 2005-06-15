@@ -13,11 +13,11 @@ public class ManagerEvent extends EventObject {
     protected int maxvalue;
     protected int value;
 
-    public ManagerEvent(ArcturusDatabase source) {
+    public ManagerEvent(Object source) {
 	super(source);
     }
 
-    public ManagerEvent(ArcturusDatabase source, String message, int state, int value, int maxvalue) {
+    public ManagerEvent(Object source, String message, int state, int value, int maxvalue) {
 	super(source);
 
 	this.message = message;
