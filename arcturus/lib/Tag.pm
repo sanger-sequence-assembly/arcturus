@@ -189,7 +189,9 @@ sub getType {
 #----------------------------------------------------------------------
 
 sub transpose {
-# transpose a tag by applying a linear transformation, return new Tag (or undef)
+# transpose a tag by applying a linear transformation
+# (apply only to contig tags)
+# returns new Tag instance (or undef)
     my $this = shift;
     my $align = shift;
     my $offset = shift; # array length 2 with offset at begin and end
@@ -238,27 +240,35 @@ sub transpose {
         $strand = 'Forward';
     }
 
+# get a systematic ID if not already defined
+
+    $this->composeName() unless $this->getSystematicID();
+
+# transport the comment; add import details, if any
+
+    my $newcomment = $this->getComment() || '';
+    $newcomment .= ' ' if $newcomment;
+    $newcomment .= "imported ".$this->getSystematicID();
+    $newcomment .= " truncated" if $truncated;
+    $newcomment .= " frame-shifted" if ($offset->[0] != $offset->[1]);
+
 # create (spawn) a new tag instance
 
     my $newtag = $this->new($this->{label});
 
     $newtag->setTagID($this->getTagID());
-    $newtag->setComment($this->getComment());
-    $newtag->setTagComment($this->getTagComment());
-    $newtag->setDNA($this->getDNA());
-    $this->composeName() unless $this->getSystematicID();
+# TAG2CONTIG table items
+    $newtag->setPosition(@tpos); 
+    $newtag->setStrand($strand);
+    $newtag->setComment($newcomment);
+# CONTIGTAG table items
+    $newtag->setType($this->getType());
     $newtag->setSystematicID($this->getSystematicID());
     $newtag->setTagSequenceID($this->getTagSequenceID());
-    $newtag->setTagSequenceName($this->getTagSequenceName());
-    $newtag->setPosition(@tpos);
-    $newtag->setStrand($strand);
-    $newtag->setType($this->getType());
-
-# finally compose the imported tag history; to be printed to caf only? 
-
-    $newtag->setComment("imported ".$this->getSystematicID);
-    $newtag->setComment(" truncated") if $truncated;
-    $newtag->setComment(" frame-shifted") if ($offset->[0] != $offset->[1]);
+    $newtag->setTagComment($this->getTagComment());
+# TAGSEQUENCE table items
+    $newtag->setTagSequenceName($this->getTagSequenceName()); 
+    $newtag->setDNA($this->getDNA());
 
     return $newtag;
 }
@@ -353,7 +363,7 @@ sub isEqual {
 
 sub writeToCaf {
     my $this = shift;
-    my $FILE = shift; # obligatory output file handle
+    my $FILE = shift; # optional output file handle
 
     my $type = $this->getType();
     my @pos  = $this->getPosition();
@@ -394,6 +404,7 @@ sub dump {
     $report .= "sequence          ".($tag->getDNA() || 'undef')."\n";
 
     print $FILE $report  if $FILE;
+
     return $report;
 }
 
