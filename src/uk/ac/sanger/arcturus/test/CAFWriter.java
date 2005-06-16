@@ -107,6 +107,7 @@ public class CAFWriter {
 
     private void writeRead(Sequence sequence) {
 	Read read = sequence.getRead();
+
 	ps.print(read.toCAFString());
 	ps.print(sequence.toCAFString());
 
@@ -141,18 +142,26 @@ public class CAFWriter {
     }
 
     private void writeQuality(byte[] quality) {
+	StringBuffer buffer = new StringBuffer();
+
 	for (int i = 0; i < quality.length; i++) {
 	    int qual = (int)quality[i];
-	    ps.print(qual);
+	    buffer.append(qual);
+	    //ps.print(qual);
 
 	    if ((i % 25) < 24)
-		ps.print(' ');
+		buffer.append(' ');
+		//ps.print(' ');
 	    else
-		ps.print('\n');
+		buffer.append('\n');
+		//ps.print('\n');
 	}
 
 	if ((quality.length % 25) != 0)
-	    ps.print('\n');
+	    buffer.append('\n');
+	    //ps.print('\n');
+
+	ps.print(buffer.toString());
     }
 
     class SegmentComparatorByReadPosition implements Comparator {

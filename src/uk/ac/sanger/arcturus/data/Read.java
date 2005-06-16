@@ -186,55 +186,57 @@ public class Read extends Core {
     public int getChemistry() { return chemistry; }
 
     /**
-     * Returns a string representation of this read suitable for inclusion in
-     * a CAF file. The string may contain multiple lines, and the last line will
-     * be terminated by a newline.
+     * Returns a string representing this read in CAF format. The string
+     * is terminated by a newline.
      *
-     * @return a string representation of this read suitable for inclusion in
-     * a CAF file. The string may contain multiple lines, and the last line will
-     * be terminated by a newline.
+     * @return a string representing this read in CAF format. The string
+     * is terminated by a newline.
      */
 
     public String toCAFString() {
-	String cafstring = "Sequence : " + name + "\nIs_read\nUnpadded\n";
+	StringBuffer buffer = new StringBuffer();
+
+	buffer.append("Sequence : " + name + "\n");
+	buffer.append("Is_read\n");
+	buffer.append("Unpadded\n");
 
 	if (template != null) {
-	    cafstring += "Template " + template.getName() + "\n";
+	    buffer.append("Template " + template.getName() + "\n");
 	    Ligation ligation = template.getLigation();
 
 	    if (ligation != null) {
-		cafstring += "Ligation " + ligation.getName() + "\n";
-		cafstring += "Insert_size " + ligation.getInsertSizeLow() + " " +
-		    ligation.getInsertSizeHigh() + "\n";
+		buffer.append("Ligation " + ligation.getName() + "\n");
+		buffer.append("Insert_size " + ligation.getInsertSizeLow() + " " +
+		    ligation.getInsertSizeHigh() + "\n");
 
 		Clone clone = ligation.getClone();
 
 		if (clone != null)
-		    cafstring += "Clone " + clone.getName() + "\n";
+		    buffer.append("Clone " + clone.getName() + "\n");
 	    }
 	}
 
 	if (asped != null)
-	    cafstring += "Asped " + dateformat.format(asped) + "\n";
+	    buffer.append("Asped " + dateformat.format(asped) + "\n");
 
 	switch (strand) {
-	case FORWARD: cafstring += "Strand Forward\n"; break;
-	case REVERSE: cafstring += "Strand Reverse\n"; break;
+	case FORWARD: buffer.append("Strand Forward\n"); break;
+	case REVERSE: buffer.append("Strand Reverse\n"); break;
 	}
 
 	switch (primer) {
-	case UNIVERSAL_PRIMER: cafstring += "Primer Universal_primer\n"; break;
-	case CUSTOM_PRIMER: cafstring += "Primer Custom\n"; break;
-	case UNKNOWN: cafstring += "Primer Unknown_primer\n"; break;
+	case UNIVERSAL_PRIMER: buffer.append("Primer Universal_primer\n"); break;
+	case CUSTOM_PRIMER: buffer.append("Primer Custom\n"); break;
+	case UNKNOWN: buffer.append("Primer Unknown_primer\n"); break;
 	}
 
 	switch (chemistry) {
-	case DYE_TERMINATOR: cafstring += "Dye Dye_terminator\n"; break;
-	case DYE_PRIMER: cafstring += "Dye Dye_primer\n"; break;
+	case DYE_TERMINATOR: buffer.append("Dye Dye_terminator\n"); break;
+	case DYE_PRIMER: buffer.append("Dye Dye_primer\n"); break;
 	}
 
-	cafstring += "ProcessStatus PASS\n";
+	buffer.append("ProcessStatus PASS\n");
 
-	return cafstring;
+	return buffer.toString();
     }
 }

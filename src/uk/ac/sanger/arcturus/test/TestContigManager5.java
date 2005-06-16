@@ -32,7 +32,8 @@ public class TestContigManager5 implements ContigProcessor{
     private String projectname = null;
     
     private boolean doConsensus = false;
-    private boolean doCAF = false;
+
+    private PrintStream psCAF = null;
 
     private CAFWriter cafWriter = null;
     private ConsensusAlgorithm algorithm = null;
@@ -96,8 +97,14 @@ public class TestContigManager5 implements ContigProcessor{
 	    if (args[i].equalsIgnoreCase("-consensus"))
 		doConsensus = true;
 
-	    if (args[i].equalsIgnoreCase("-caf"))
-		doCAF = true;
+	    if (args[i].equalsIgnoreCase("-caf")) {
+		try {
+		    psCAF = new PrintStream(new FileOutputStream(args[++i]));
+		}
+		catch (FileNotFoundException fnfe) {
+		    psCAF = null;
+		}
+	    }
 
 	    if (args[i].equalsIgnoreCase("-loadMappings"))
 		flags |= ArcturusDatabase.CONTIG_MAPPINGS_READS_AND_TEMPLATES;
@@ -135,7 +142,7 @@ public class TestContigManager5 implements ContigProcessor{
 	if (doConsensus)
 	    flags |= ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS | ArcturusDatabase.CONTIG_CONSENSUS;
 
-	if (doCAF)
+	if (psCAF != null)
 	    flags |= ArcturusDatabase.CONTIG_TO_GENERATE_CAF;
 
 	try {
@@ -169,7 +176,7 @@ public class TestContigManager5 implements ContigProcessor{
 	    if (debug && algorithm instanceof uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus)
 		((Gap4BayesianConsensus)algorithm).setDebugPrintStream(System.out);
 
-	    cafWriter = new CAFWriter(System.out);
+	    cafWriter = new CAFWriter(psCAF);
 
 	    int sequenceCounter = 0;
 	    int nContigs = 0;
@@ -211,7 +218,7 @@ public class TestContigManager5 implements ContigProcessor{
 	    if (calculateConsensus(contig, algorithm, consensus, debugps)) {
 		long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
 		long clockStop = System.currentTimeMillis() - clockStart;
-		System.err.println(clockStop + " ms " + usedMemory + " kb");
+		System.err.println("CONSENSUS: " + clockStop + " ms " + usedMemory + " kb");
 		
 		byte[] dna = consensus.getDNA();
 		byte[] quality = consensus.getQuality();
@@ -236,8 +243,12 @@ public class TestContigManager5 implements ContigProcessor{
 	    
 	}
 	
-	if (doCAF) {
+	if (psCAF != null) {
+	    long clockStart = System.currentTimeMillis();
 	    cafWriter.writeContig(contig);
+	    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+	    long clockStop = System.currentTimeMillis() - clockStart;
+	    System.err.println("CAF: " + clockStop + " ms " + usedMemory + " kb");
 	}
 
 	if (lowmem)
@@ -266,6 +277,9 @@ public class TestContigManager5 implements ContigProcessor{
 	ps.println();
 	ps.println("OPTIONAL PARAMETERS");
 	ps.println("\t-algorithm\tName of class for consensus algorithm");
+	ps.println("\t-consensus\tGenerate and check consensus");
+	ps.println("\t-caf\t\tName of output CAF file");
+	ps.println("\t-minlen\t\tMinimum contig length");
 	ps.println();
 	ps.println("OPTIONS");
 	String[] options = {"-debug", "-lowmem", "-silent", "-quiet", "-loadMappings",
