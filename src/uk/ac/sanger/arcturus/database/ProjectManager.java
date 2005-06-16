@@ -14,6 +14,7 @@ public class ProjectManager extends AbstractManager {
     private Connection conn;
     private HashMap hashByID = new HashMap();
     private PreparedStatement pstmtByID;
+    private PreparedStatement pstmtByName;
     private PreparedStatement pstmtSetAssemblyForProject;
 
     /**
@@ -28,6 +29,9 @@ public class ProjectManager extends AbstractManager {
 
 	String query = "select assembly_id,name,updated,owner,locked,created,creator from PROJECT where project_id = ?";
 	pstmtByID = conn.prepareStatement(query);
+
+	query = "select project_id,updated,owner,locked,created,creator from PROJECT where assembly_id = ? and name = ?";
+	pstmtByName = conn.prepareStatement(query);
 
 	query = "update PROJECT set assembly_id = ? where project_id = ?";
 	pstmtSetAssemblyForProject = conn.prepareStatement(query);
@@ -70,6 +74,37 @@ public class ProjectManager extends AbstractManager {
 	    Assembly assembly = adb.getAssemblyByID(assembly_id);
 
 	    project = createAndRegisterNewProject(id, assembly, name, updated, owner, locked, created, creator);
+	}
+
+	rs.close();
+
+	return project;
+    }
+
+    public Project getProjectByName(Assembly assembly, String name) throws SQLException {
+	int assembly_id = assembly.getID();
+
+	pstmtByName.setInt(1, assembly_id);
+	pstmtByName.setString(2, name);
+
+	ResultSet rs = pstmtByName.executeQuery();
+
+	Project project = null;
+
+	if (rs.next()) {
+	    int project_id = rs.getInt(1);
+
+	    project = (Project)hashByID.get(new Integer(project_id));
+
+	    if (project == null) {
+		java.util.Date updated = rs.getTimestamp(2);
+		String owner = rs.getString(3);
+		java.util.Date locked = rs.getTimestamp(4);
+		java.util.Date created = rs.getTimestamp(5);
+		String creator = rs.getString(6);
+		
+		project = createAndRegisterNewProject(project_id, assembly, name, updated, owner, locked, created, creator);
+	    }
 	}
 
 	rs.close();

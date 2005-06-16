@@ -603,18 +603,39 @@ public class ArcturusDatabase {
 	return contigManager.getCurrentContigIDList();
     }
 
-    public int countContigsByProject(int project_id) throws SQLException {
+    public int countContigsByProject(int project_id, int minlen) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("countContigsByProject(" + project_id + ")");
+	    logger.debug("countContigsByProject(" + project_id + ", " + minlen + ")");
 
-	return contigManager.countContigsByProject(project_id);
+	return contigManager.countContigsByProject(project_id, minlen);
     }
 
-    public Set getContigsByProject(int project_id, int options) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigsByProject(" + project_id + ", " + options + ")");
+    public int countContigsByProject(int project_id) throws SQLException {
+	return countContigsByProject(project_id, 0);
+    }
 
-	return contigManager.getContigsByProject(project_id, options);
+    public int processContigsByProject(int project_id, int options, int minlen, ContigProcessor processor)
+	throws SQLException, DataFormatException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("processContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
+
+	return contigManager.processContigsByProject(project_id, options, minlen, processor);
+    }
+	
+    public int processContigsByProject(int project_id, int options, ContigProcessor processor)
+	throws SQLException, DataFormatException {
+	return processContigsByProject(project_id, options, 0, processor);
+    }
+
+    public Set getContigsByProject(int project_id, int options, int minlen) throws SQLException, DataFormatException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("getContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
+
+	return contigManager.getContigsByProject(project_id, options, minlen);
+    }
+
+    public Set getContigsByProject(int project_id, int options) throws SQLException, DataFormatException {
+	return getContigsByProject(project_id, options, 0);
     }
 
     public void addContigManagerEventListener(ManagerEventListener listener) {
@@ -649,6 +670,13 @@ public class ArcturusDatabase {
 	    logger.debug("getProjectByID(" + id + ", autoload=" + autoload + ")");
 
 	return projectManager.getProjectByID(id, true);
+    }
+
+    public Project getProjectByName(Assembly assembly, String name) throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("getProjectByName(assembly=" + assembly.getName() + ", name=" + name + ")");
+
+	return projectManager.getProjectByName(assembly, name);
     }
 
     public void preloadAllProjects() throws SQLException {
@@ -709,6 +737,13 @@ public class ArcturusDatabase {
 	    logger.debug("getAssemblyByID(" + id + ", autoload=" + autoload + ")");
 
 	return assemblyManager.getAssemblyByID(id, true);
+    }
+
+    public Assembly getAssemblyByName(String name) throws SQLException {
+	if (logger != null && logger.isDebugEnabled())
+	    logger.debug("getAssemblyByName(" + name + ")");
+
+	return assemblyManager.getAssemblyByName(name);
     }
 
     public void preloadAllAssemblies() throws SQLException {
