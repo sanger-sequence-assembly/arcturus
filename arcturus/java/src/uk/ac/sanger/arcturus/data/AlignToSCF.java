@@ -21,6 +21,6 @@ public class AlignToSCF {
 	int endInSCF = startInSCF + length - 1;
 	int endInSequence = startInSequence + length - 1;
 	return "Align_to_SCF " + startInSCF + " " + endInSCF + " " + startInSequence +
-	    " " + endInSequence + "\n";
+	    " " + endInSequence;
     }
 }

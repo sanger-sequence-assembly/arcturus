@@ -280,39 +280,37 @@ public class Sequence extends Core {
     }
 
     /**
-     * Returns a string representation of the clipping and AligntoSCF data in a
-     * format suitable for inclusion in a CAF file. The string may contain multiple
-     * lines, and the last line will be terminated by a newline.
+     * Returns a string representing the clipping and AligntoSCF data in
+     * CAF format. The string is terminated by a newline.
      *
-     * @return a string representation of the clipping and AligntoSCF data in a
-     * format suitable for inclusion in a CAF file. The string may contain multiple
-     * lines, and the last line will be terminated by a newline.
+     * @return a string representing the clipping and AligntoSCF data in
+     * CAF format. The string is terminated by a newline.
      */
 
     public String toCAFString() {
-	String cafstring = "";
+	StringBuffer buffer = new StringBuffer();
 
 	if (qualityClip != null)
-	    cafstring += qualityClip.toCAFString() + "\n";
+	    buffer.append(qualityClip.toCAFString() + "\n");
 
 	if (svectorClipLeft != null)
-	    cafstring += svectorClipLeft.toCAFString() + "\n";
+	    buffer.append(svectorClipLeft.toCAFString() + "\n");
 
 	if (svectorClipRight != null)
-	    cafstring += svectorClipRight.toCAFString() + "\n";
+	    buffer.append(svectorClipRight.toCAFString() + "\n");
 
 	if (cvectorClip != null)
-	    cafstring += cvectorClip.toCAFString() + "\n";
+	    buffer.append(cvectorClip.toCAFString() + "\n");
 
 	if (alignToSCF == null) {
 	    int seqlen = getLength();
 	    if (seqlen > 0)
-		cafstring += "Align_to_SCF 1 " + seqlen + " 1 " + seqlen + "\n";
+		buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen + "\n");
 	} else {
 	    for (int i = 0; i < alignToSCF.length; i++)
-		cafstring += alignToSCF[i].toCAFString();
+		buffer.append(alignToSCF[i].toCAFString() + "\n");
 	}
 
-	return cafstring;
+	return buffer.toString();
     }
 }
