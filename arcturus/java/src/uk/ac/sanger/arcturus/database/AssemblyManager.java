@@ -14,6 +14,7 @@ public class AssemblyManager extends AbstractManager {
     private Connection conn;
     private HashMap hashByID = new HashMap();
     private PreparedStatement pstmtByID;
+    private PreparedStatement pstmtByName;
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -27,6 +28,9 @@ public class AssemblyManager extends AbstractManager {
 
 	String query = "select name,updated,created,creator from ASSEMBLY where assembly_id = ?";
 	pstmtByID = conn.prepareStatement(query);
+
+	query = "select assembly_id,updated,created,creator from ASSEMBLY where name = ?";
+	pstmtByName = conn.prepareStatement(query);
     }
 
     public void clearCache() {
@@ -61,6 +65,31 @@ public class AssemblyManager extends AbstractManager {
 	    String creator = rs.getString(4);
 
 	    assembly = createAndRegisterNewAssembly(name, id, updated, created, creator);
+	}
+
+	rs.close();
+
+	return assembly;
+    }
+
+    public Assembly getAssemblyByName(String name) throws SQLException {
+	pstmtByName.setString(1, name);
+	ResultSet rs = pstmtByName.executeQuery();
+
+	Assembly assembly = null;
+
+	if (rs.next()) {
+	    int assembly_id = rs.getInt(1);
+
+	    assembly = (Assembly)hashByID.get(new Integer(assembly_id));
+
+	    if (assembly == null) {
+		java.util.Date updated = rs.getTimestamp(2);
+		java.util.Date created = rs.getTimestamp(3);
+		String creator = rs.getString(4);
+
+		assembly = createAndRegisterNewAssembly(name, assembly_id, updated, created, creator);
+	    }
 	}
 
 	rs.close();

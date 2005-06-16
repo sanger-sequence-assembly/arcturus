@@ -141,14 +141,14 @@ public class ContigManager extends AbstractManager {
 
 	query = "select count(*) from CONTIG left join C2CMAPPING" + 
 	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
-	    " where C2CMAPPING.parent_id is null and project_id = ?";
+	    " where C2CMAPPING.parent_id is null and project_id = ? and length > ?";
 
 	pstmtCountContigsByProject = conn.prepareStatement(query);
 
 	query = "select CONTIG.contig_id,gap4name,length,nreads,created,updated" +
 	    " from CONTIG left join C2CMAPPING" +
 	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
-	    " where C2CMAPPING.parent_id is null and project_id = ?";
+	    " where C2CMAPPING.parent_id is null and project_id = ? and length > ?";
 
 	pstmtContigsByProject = conn.prepareStatement(query);
     }
@@ -819,8 +819,9 @@ public class ContigManager extends AbstractManager {
 	contig.setConsensus(dna, qual);
     }
 
-    public int countContigsByProject(int project_id) throws SQLException {
+    public int countContigsByProject(int project_id, int minlen) throws SQLException {
 	pstmtCountContigsByProject.setInt(1, project_id);
+	pstmtCountContigsByProject.setInt(2, minlen);
 
 	ResultSet rs = pstmtCountContigsByProject.executeQuery();
 
@@ -834,14 +835,33 @@ public class ContigManager extends AbstractManager {
 	return count;
     }
 
-    public Set getContigsByProject(int project_id, int options) throws SQLException {
-	Set contigs = new HashSet();
+    public Set getContigsByProject(int project_id, int options, int minlen) throws SQLException, DataFormatException {
+	ContigSetBuilder csb = new ContigSetBuilder();
+
+	processContigsByProject(project_id, options, minlen, csb);
+
+	return csb.getContigSet();
+    }
+
+    public int processContigsByProject(int project_id, int options, int minlen, ContigProcessor processor)
+	throws SQLException, DataFormatException {
+	int nContigs = countContigsByProject(project_id, minlen);
+
+	if (nContigs == 0)
+	    return 0;
+
+	event.begin("Processing contigs for project " + project_id, nContigs);
+	fireEvent(event);
 
 	Project project = adb.getProjectByID(project_id);
 
 	pstmtContigsByProject.setInt(1, project_id);
+	pstmtContigsByProject.setInt(2, minlen);
 
 	ResultSet rs = pstmtContigsByProject.executeQuery();
+
+	int count = 0;
+	int processed = 0;
 
 	while (rs.next()) {
 	    int contig_id = rs.getInt(1);
@@ -859,14 +879,23 @@ public class ContigManager extends AbstractManager {
 				    project, adb);
 
 		registerNewContig(contig);
-
-		contigs.add(contig);
 	    }
+
+	    updateContig(contig, options);
+
+	    if (processor.processContig(contig))
+		processed++;
+
+	    event.working(++count);
+	    fireEvent(event);
 	}
 
 	rs.close();
 
-	return contigs;
+	event.end();
+	fireEvent(event);
+
+	return processed;
     }
 
     public int[] getCurrentContigIDList() throws SQLException {
@@ -932,6 +961,19 @@ public class ContigManager extends AbstractManager {
 	    diff = this.cstart - that.cstart;
 
 	    return diff;
+	}
+    }
+
+    class ContigSetBuilder implements ContigProcessor {
+	private Set contigs = new HashSet();
+
+	public boolean processContig(Contig contig) {
+	    contigs.add(contig);
+	    return true;
+	}
+
+	public Set getContigSet() {
+	    return contigs;
 	}
     }
 
