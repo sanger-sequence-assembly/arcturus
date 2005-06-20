@@ -30,6 +30,7 @@ my $maxseqperfile;
 my $seqfilenum;
 my $totseqlen;
 my $project_id;
+my $usegapname = 1;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -55,6 +56,8 @@ while (my $nextword = shift @ARGV) {
     $padtox = 1 if ($nextword eq '-padtox');
 
     $depad = 1 if ($nextword eq '-depad');
+
+    $usegapname = 0 if ($nextword eq '-nogap4name');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -109,12 +112,12 @@ my $query;
 $minlen = 1000 unless (defined($minlen) || defined($contigids));
 
 if (defined($contigids)) {
-    $query = "select contig_id,length from CONTIG where contig_id in ($contigids)";
+    $query = "select gap4name,contig_id,length from CONTIG where contig_id in ($contigids)";
 } elsif ($allcontigs) {
-    $query = "select contig_id,length from CONTIG";
+    $query = "select gap4name,contig_id,length from CONTIG";
     $query .= " where length > $minlen" if defined($minlen);
 } else {
-    $query = "select CONTIG.contig_id,length from CONTIG left join C2CMAPPING" .
+    $query = "select gap4name,CONTIG.contig_id,length from CONTIG left join C2CMAPPING" .
 	" on CONTIG.contig_id = C2CMAPPING.parent_id" .
 	    " where C2CMAPPING.parent_id is null";
 
@@ -137,7 +140,7 @@ my $sth_sequence = $dbh->prepare($query);
 $totseqlen = 0;
 
 while(my @ary = $sth->fetchrow_array()) {
-    my ($contigid, $contiglength) = @ary;
+    my ($gap4name, $contigid, $contiglength) = @ary;
 
     $sth_sequence->execute($contigid);
 
@@ -154,6 +157,8 @@ while(my @ary = $sth->fetchrow_array()) {
 	length($sequence),"\n";
     }
 
+    my $contigname = $usegapname && defined($gap4name) ? $gap4name : sprintf("contig%06d", $contigid);
+
     if ($depad) {
 	# Depad
 	$sequence =~ s/[^\w\-]//g;
@@ -166,7 +171,7 @@ while(my @ary = $sth->fetchrow_array()) {
     }
 
     if ($destdir) {
-	my $filename = sprintf("%s/contig%04d.fas", $destdir, $contigid);
+	my $filename = "$destdir/$contigname" . ".fas";
 	$fastafh = new FileHandle("$filename", "w");
 	die "Unable to open new file \"$filename\"" unless $fastafh;
     }
@@ -186,7 +191,7 @@ while(my @ary = $sth->fetchrow_array()) {
 	}
     }
 
-    printf $fastafh ">CONTIG%04d\n", $contigid;
+    printf $fastafh ">$contigname\n";
 
     while (length($sequence) > 0) {
 	print $fastafh substr($sequence, 0, 50), "\n";
@@ -232,4 +237,5 @@ sub showUsage {
     print STDERR "    -padtox\t\tConvert pads to X\n";
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
     print STDERR "    -project\t\tProject ID to export\n";
+    print STDERR "    -nogap4name\t\tUse contig ID as name, not Gap4 name\n";
 }
