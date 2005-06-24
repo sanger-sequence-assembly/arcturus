@@ -6,6 +6,9 @@ use Exporter;
 
 use ArcturusDatabase::ADBRoot;
 
+use ArcturusDatabase::ADBContig;
+#use ArcturusDatabase::ADBContig qw(getCurrentContigs);
+
 use Compress::Zlib;
 
 use Read;
@@ -40,7 +43,7 @@ sub defineReadMetaData {
     my $this = shift;
 
     $this->{read_attributes} = 
-           "readname,asped,strand,primer,chemistry,basecaller,status";
+           "readname,asped,READS.strand,primer,chemistry,basecaller,status";
     $this->{template_addons} = 
            "TEMPLATE.name as template,TEMPLATE.ligation_id";
 }
@@ -508,40 +511,87 @@ sub addSequenceMetaDataForRead {
 sub getReads{
 # all of them or with a date specification
     my $this = shift;
+    my %options = @_;
 
-    my $condition;
+    my $constraints;
 
-    my @conditions;
+    my @constraints;
 
-    while (my $nextword = shift) {
-	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
-	    my $date = shift;
-	    push @conditions, "asped > '$date'";
-	}
-	elsif ($nextword eq '-aspedbefore' || $nextword eq '-before') {
-	    my $date = shift;
-	    push @conditions, "asped < '$date'";
-	}
-        elsif ($nextword eq '-from' || $nextword eq '-ridbegin') {
-            my $ridstart = shift;
-            push @conditions, "read_id >= $ridstart";
-	}
-        elsif ($nextword eq '-to' || $nextword eq '-ridend') {
-            my $ridfinal = shift;
-            push @conditions, "read_id <= $ridfinal";
-	}
-	elsif ($nextword eq '-namelike') {
-	    my $namepattern = shift;
-	    push @conditions, "readname like '$namepattern'";
-	}
+# process (possible) constraints
 
-        else {
-            print STDERR "Invalid keyword $nextword in getReads\n";
-        }
+    if ($options{after}) {
+        push @constraints, "asped >= '$options{after}'";
     }
-    $condition = join(" and ", @conditions) if @conditions;
+    elsif ($options{aspedafter}) {
+        push @constraints, "asped >= '$options{aspedafter}'";
+    }
 
-    return &getReadsForCondition($this,$condition);
+    if ($options{before}) {
+        push @constraints, "asped <= '$options{before}'";
+    }
+    elsif ($options{aspedbefore}) {
+        push @constraints, "asped <= '$options{aspedbefore}'";
+    }
+
+# process name selection option(s)
+
+    if ($options{namelike}) {
+        push @constraints, "readname like '$options{namelike}'";
+    }
+    if ($options{namenotlike}) {
+        push @constraints, "readname not like '$options{namelike}'";
+    }
+    if ($options{nameregexp}) {
+        push @constraints, "readname regexp '$options{nameregexp}'";
+    }
+    if ($options{namenotregexp}) {
+        push @constraints, "readname not regexp '$options{namenotregexp}'";
+    }
+
+# process ID range specification
+
+    if ($options{from}) {
+        push @constraints, "read_id >= $options{from}";
+    }
+    elsif ($options{ridbegin}) {
+        push @constraints, "read_id >= $options{ridbegin}";
+    }
+
+    if ($options{to}) {
+        push @constraints, "read_id <= $options{to}";
+    }
+    elsif ($options{ridend}) {
+        push @constraints, "read_id <= $options{ridend}";
+    }
+
+# process possible TAG selection (if none, version 0 is to be used)
+
+    my @linkconstraints;
+    my $additionaltable = '';
+    if ($options{tagtype} || $options{tagname}) {
+        $options{tagtype} =~ s/\,/','/ if $options{tagtype}; # used in "in" clause
+        push @constraints, "tagtype in ('$options{tagtype}')" if $options{tagtype};
+        push @linkconstraints, "SEQ2READ.seq_id = READTAG.seq_id";
+        $additionaltable .= ",READTAG";
+    }
+    else {
+# retrieve version 0 (un-edited reads only, the raw data)
+       push @constraints,"version = 0";
+    }
+    if ($options{tagname}) {
+        $options{tagname} =~ s/\,/','/; # to use in "in" clause
+        push @constraints,"tagseqname in ('$options{tagname}')";
+        push @linkconstraints, "READTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id";
+        $additionaltable .= ",TAGSEQUENCE";
+    }
+	
+    push @constraints,@linkconstraints if @linkconstraints;
+
+    $constraints = join(" and ", @constraints) if @constraints;
+
+    $constraints .= " limit $options{limit}" if $options{limit};
+
+    return &getReadsForCondition($this,$constraints,$additionaltable);
 }
 
 sub getReadsByReadID {
@@ -566,9 +616,9 @@ sub getReadsByReadID {
 
         my $range = join ',',sort {$a <=> $b} @block;
 
-        my $condition = "READS.read_id in ($range)";
+        my $constraints = "READS.read_id in ($range) and version = 0";
 
-        my $reads = $this->getReadsForCondition($condition);
+        my $reads = $this->getReadsForCondition($constraints);
 
         push @reads, @$reads if ($reads && @$reads);
 
@@ -581,16 +631,21 @@ sub getReadsForCondition {
 # private method
     my $this = shift;
     my $condition = shift;
+    my $tables = shift || ''; # optional extra tables
 
 # retrieve version 0 (un-edited reads only, the raw data)
 
     my $query = "select READS.read_id,SEQ2READ.seq_id,"
               .        "$this->{read_attributes},$this->{template_addons}"
-              . "  from READS,SEQ2READ,TEMPLATE" 
-              . "  where READS.read_id = SEQ2READ.read_id and version = 0"
-              . "    and READS.template_id = TEMPLATE.template_id";
+              . "  from READS,SEQ2READ,TEMPLATE $tables"
+              . " where READS.read_id = SEQ2READ.read_id"
+              . "   and READS.template_id = TEMPLATE.template_id";
+# add the other conditions
     $query   .= "    and $condition" if $condition;
-#print STDOUT "getReadsForCondition: query \n$query\n\n";
+
+    $this->logQuery('getReadsForCondition',$query);
+
+# execute
 
     my $dbh = $this->getConnection();
 
@@ -648,7 +703,7 @@ sub getSequenceIDForRead {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($idvalue, $version) || &queryFailed($query,$idvalue,$version);
+    $sth->execute($idvalue,$version) || &queryFailed($query,$idvalue,$version);
 
     my ($seq_id) = $sth->fetchrow_array();
 
@@ -715,6 +770,7 @@ sub getReadsForContig {
 # puts an array of (complete, for export) Read instances for the given contig
     my $this = shift;
     my $contig = shift; # Contig instance
+    my %options = @_;
 
     die "getReadsForContig expects a Contig instance" unless (ref($contig) eq 'Contig');
 
@@ -767,7 +823,7 @@ sub getReadsForContig {
 
 # add read tags (in bulk)
 
-    $this->getTagsForReads(\@reads);
+    $this->getTagsForReads(\@reads) unless $options{notags};
 
 # and add to the contig
 
@@ -778,105 +834,224 @@ sub getReadsForContig {
 # returning a list of read IDs
 #------------------------------------------------------------------------------
 
-sub getIDsForUnassembledReads {
-# returns a list of readids of reads not figuring in any contig
+sub getNamesForUnassembledReads {
+# public: returns a list of readnames of reads not occurring in any contig
     my $this = shift;
+
+# for options see getUnassembledReads
+
+    return &getUnassembledReads($this->getConnection(),$this,'readname',@_);
+}
+
+sub getIDsForUnassembledReads {
+# public: returns a list of readIDs of reads not occurring in any contig
+    my $this = shift;
+
+# for options see getUnassembledReads
+
+    return &getUnassembledReads($this->getConnection(),$this,'read_id',@_);
+}
+
+sub getUnassembledReads {
+# private: returns a list of readids of reads not figuring in any contig
+    my $dbh  = shift;
+    my $this = shift;
+    my $item = shift;
+    my %options = @_;
+
+# options: method (standard,subquery,temporarytables)
+#          after  / aspedafter
+#          before / aspedbefore
+#          nosingleton : do not include reads in singleton contigs
+#          namelike / namenotlike / nameregexp / namenotregexp
 
 # process possible date selection option(s)
 
-    my $nextword;
+    my @constraint;
 
-    my @dateselect;
-    my $withsingletoncontigs = 0; # default INCLUDE reads in singleton contigs
+    if ($options{after}) {
+        push @constraint, "asped >= '$options{after}'";
+    }
+    elsif ($options{aspedafter}) {
+        push @constraint, "asped >= '$options{aspedafter}'";
+    }
 
-    while ($nextword = shift) {
-	if ($nextword eq '-aspedafter' || $nextword eq '-after') {
-	    my $date = shift;
-	    push @dateselect, "asped > '$date'";
-	}
-	elsif ($nextword eq '-aspedbefore' || $nextword eq '-before') {
-	    my $date = shift;
-	    push @dateselect, "asped < '$date'";
-	}
-        elsif ($nextword eq '-nosingleton') {
-            $withsingletoncontigs = 1; # EXCLUDE reads in singleton contigs
-            my $dummy = shift;
+    if ($options{before}) {
+        push @constraint, "asped <= '$options{before}'";
+    }
+    elsif ($options{aspedbefore}) {
+        push @constraint, "asped <= '$options{aspedbefore}'";
+    }
+
+# process possible name selection option(s)
+
+    if ($options{namelike}) {
+        push @constraint, "readname like '$options{namelike}'";
+    }
+    if ($options{namenotlike}) {
+        push @constraint, "readname not like '$options{namelike}'";
+    }
+    if ($options{nameregexp}) {
+        push @constraint, "readname regexp '$options{nameregexp}'";
+    }
+    if ($options{namenotregexp}) {
+        push @constraint, "readname not regexp '$options{namenotregexp}'";
+    }
+
+# limit specified
+
+    my $limit = $options{limit};
+
+# choose your method and go
+
+    my $method = $options{method};
+    unless (defined($method)) {
+        $method = 'usetemporarytables' unless @constraint;
+	$method = 'usesubselect' if @constraint;
+    }
+
+    my $readitems = []; # for output list
+
+    if ($method && (($method eq 'usetemporarytables')
+                or  ($method eq 'intemporarytable'))) {
+
+# first get a list of current generation contigs (those that are not parents)
+
+        my $query  = "create temporary table CURCTG as "
+                   . "select CONTIG.contig_id"
+                   . "  from CONTIG left join C2CMAPPING "
+                   . "    on CONTIG.contig_id = C2CMAPPING.parent_id "
+                   . " where C2CMAPPING.parent_id is null";
+        $query    .= "  and nreads > 1" unless $options{nosingleton};
+
+        $dbh->do($query) || &queryFailed($query) && return undef;
+
+# create a table of sequence IDs in those contigs
+ 
+        $query = "create temporary table CURSEQ "
+               . "(seq_id integer not null, contig_id integer not null,"
+               .                                 " key (contig_id)) as "
+               . "select seq_id,CURCTG.contig_id"
+               . "  from CURCTG left join MAPPING using(contig_id)";
+
+        $dbh->do($query) || &queryFailed($query) && return undef;
+
+# create a table of the corresponding reads in those contigs
+ 
+        $query = "create temporary table CURREAD "
+               . "(read_id integer not null, seq_id integer not null,"
+               . "     contig_id integer not null, key (read_id)) as "
+               . "select read_id,SEQ2READ.seq_id,contig_id"
+               . "  from CURSEQ left join SEQ2READ using(seq_id)";
+
+        $dbh->do($query) || &queryFailed($query) && return undef;
+
+# finally, get a list of unassembled reads
+
+        if ($method eq 'intemporarytable') {
+
+            $query  = "create temporary table FREEREAD as "
+                    . "select READS.read_id"
+                    . "  from READS left join CURREAD using(read_id)"
+                    . " where seq_id is null";
+            $query .= "   and ".join(" and ",@constraint) if @constraint;
+
+            $dbh->do($query) || &queryFailed($query) && return undef;
+
+            return 1; # table FREEREAD created
         }
+
         else {
-            print STDERR "Invalid option for getUnassembledReads : ".
-		         "$nextword\n";
-            return undef;
+            $query  = "select READS.$item"
+                    . "  from READS left join CURREAD using(read_id)"
+                    . " where seq_id is null";
+            $query .= "   and ".join(" and ",@constraint) if @constraint;
+            $query .= " limit $limit" if $limit;
+
+            my $sth = $dbh->prepare($query);
+
+            $sth->execute() || &queryFailed($query) && return undef;
+        
+            while (my ($readitem) = $sth->fetchrow_array()) {
+                push @{$readitems}, $readitem;
+            }
+            return $readitems;
         }
     }
+
+# two methods without using temporary tables
 
 # step 1: get a list of contigs of age 0 (long method)
 
     my $contigids = [];
 
+    my $withsingletoncontigs = 0; # default INCLUDE reads in singleton contigs
+
+    $withsingletoncontigs = 1 if $options{nosingleton}; # EXCLUDE those reads
+
     $contigids = $this->getCurrentContigIDs(singleton=>$withsingletoncontigs);
+# somehow the next query does not work because the method is not known
+#    $contigids = &getCurrentContigs($dbh,singleton=>$withsingletoncontigs);
 
-# step 2: find the read_id-s in the contigs
+# find the read IDs which do not occur in these contigs
 
-    my $dbh = $this->getConnection();
+    if (($method && $method eq 'usesubselect') || !@$contigids) {
+# step 2: if there are no contigs, only a possible constraint applies; if there
+# are current contigs use a subselect to get the complement of their reads
+        my $query  = "select READS.$item from READS ";
+        $query    .= " where " if (@constraint || @$contigids);
+        $query    .=  join(" and ", @constraint) if @constraint;
+        $query    .= " and " if (@constraint && @$contigids);
+        $query    .= "read_id not in (select distinct SEQ2READ.read_id "
+                   . "  from SEQ2READ join MAPPING using (seq_id)"
+	           . " where MAPPING.contig_id in ("
+                   . join(",",@$contigids)."))" if @$contigids;
+        $query    .= " limit $limit" if $limit;
 
-    my ($query, $sth);
-
-    my $readids = [];
-
-    my $SUBSELECT = 0;
-    if ($SUBSELECT || !@$contigids) {
-#*** this is the query using subselects which should replace steps 2 & 3
-        $query  = "select READS.read_id from READS ";
-        $query .= "where " if (@dateselect || @$contigids);
-        $query .=  join(" and ", @dateselect) if @dateselect;
-        $query .= " and " if (@dateselect && @$contigids);
-        $query .= "read_id not in (select distinct SEQ2READ.read_id ".
-                  "  from SEQ2READ join MAPPING on (seq_id)".
-	          " where MAPPING.contig_id in (".join(",",@$contigids)."))"
-                                                               if @$contigids;
-
-        $sth = $dbh->prepare($query);
+        my $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
+
+        while (my ($readitem) = $sth->fetchrow_array()) {
+            push @{$readitems}, $readitem;
+        }
+
+	return $readitems;
+    }
+
+# step 2: find read IDs in contigs, using a join on SEQ2READ and MAPPING
+
+    my $query = "select distinct SEQ2READ.read_id "
+	      . "  from SEQ2READ join MAPPING using (seq_id)"
+              . " where MAPPING.contig_id in (".join(",",@$contigids).")"
+              . " order by read_id";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
         
-        while (my ($read_id) = $sth->fetchrow_array()) {
-            push @{$readids}, $read_id;
+    my @tempids;
+    while (my ($read_id) = $sth->fetchrow_array()) {
+        push @tempids, $read_id;
+    }
+
+# step 3 : get the read IDs NOT found in the contigs
+
+    if (!scalar(@tempids)) {
+# no reads found (should not happen except for empty assembly)
+        $query  = "select READS.$item from READS";
+        $query .= " where ".join(" and ", @constraint) if @constraint;
+        $query .= " limit $limit" if $limit;
+  
+        $sth = $dbh->prepare_cached($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        while (my ($readitem) = $sth->fetchrow_array()) {
+            push @{$readitems}, $readitem;
         }
     }
     else {
-# find read IDs in contigs, using a join on SEQ2READ and MAPPING
-
-        my @tempids;
-
-        $query  = "select distinct SEQ2READ.read_id " .
-	          "  from SEQ2READ join MAPPING using (seq_id)" .
-                  " where MAPPING.contig_id in (".join(",",@$contigids).")" .
-                  " order by read_id";
-
-        $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
-        
-        while (my ($read_id) = $sth->fetchrow_array()) {
-            push @tempids, $read_id;
-        }
-print STDERR "reads found in the contigs: ".scalar(@tempids)."\n" if $DEBUG;
-
-# step 3 : get the read_id-s NOT found in the contigs
-
-        unless (scalar(@tempids)) {
-# no reads found (should not happen except for empty assembly)
-            $query  = "select READS.read_id from READS";
-            $query .= " where ".join(" and ", @dateselect) if @dateselect;
-  
-            $sth = $dbh->prepare_cached($query);
-            $sth->execute() || &queryFailed($query);
-
-            while (my ($read_id) = $sth->fetchrow_array()) {
-                push @{$readids}, $read_id;
-            }
-	}
-
         my $ridstart = 0;
         while (my $remainder = scalar(@tempids)) {
 
@@ -885,29 +1060,31 @@ print STDERR "reads found in the contigs: ".scalar(@tempids)."\n" if $DEBUG;
             my @readblock = splice (@tempids,0,$blocksize);
             my $ridfinal = $readblock[$#readblock];
             $ridfinal = 0 unless @tempids; # last block no upper limit
-print STDERR "doing block $ridstart to $ridfinal ($blocksize)\n" if $DEBUG;
 
-            $query  = "select READS.read_id from READS";
+            $query  = "select READS.$item from READS";
             $query .= " where read_id > $ridstart ";
             $query .= "   and read_id <= $ridfinal" if $ridfinal;
-            $query .= "   and ".join(" and ", @dateselect) if @dateselect;
+            $query .= "   and ".join(" and ", @constraint) if @constraint;
             $query .= "   and read_id not in (".join(",",@readblock).")";
             $query .= " order by read_id";
+            if ($limit) {
+                my $remainder = $limit - scalar(@$readitems);
+                last unless ($remainder > 0);
+                $query .= " limit $remainder";
+	    }
  
             $sth = $dbh->prepare($query);
 
             $sth->execute() || &queryFailed($query) && exit;
 
-            while (my ($read_id) = $sth->fetchrow_array()) {
-	        push @{$readids}, $read_id;
+            while (my ($readitem) = $sth->fetchrow_array()) {
+	        push @{$readitems}, $readitem;
             }
             $ridstart = $ridfinal;
 	}
     }
 
-print STDERR "reads found NOT in the contigs: ".scalar(@$readids)."\n" if $DEBUG;
-
-    return $readids; # array of readnames
+    return $readitems; # array of readnames
 }
 
 sub isUnassembledRead {
@@ -926,15 +1103,28 @@ sub isUnassembledRead {
     my $query = "select * from MAPPING"; 
 
     if ($readitem eq 'read_id') {
-        $query .= " left join SEQ2READ using (seq_id) where SEQ2READ.read_id = ?";
+        $query .= "  join SEQ2READ using (seq_id)"
+	        . " where SEQ2READ.read_id = ?";
     }
     elsif ($readitem eq 'readname') {
-        $query .= ",SEQ2READ,READS where MAPPING.seq_id=SEQ2READ.seq_id and"
-	       .  " SEQ2READ.read_id = READS.read_id and READS.readname = ?";
+        $query .= ",SEQ2READ,READS"
+                . " where MAPPING.seq_id = SEQ2READ.seq_id"
+                . "   and SEQ2READ.read_id = READS.read_id"
+	        . "   and READS.readname = ?";
     }
     else {
         return undef;
     }
+
+# add the generation selection term as a subselect
+
+    $query .= "    and MAPPING.contig_id in "
+            . "(select A.contig_id"
+            . "   from C2CMAPPING as A left join C2CMAPPING as B"
+            . "     on (A.contig_id = B.parent_id)"
+            . "  where B.parent_id is null)";
+
+    $this->logQuery('isUnassembledRead',$query,$value);
 
     my $dbh = $this->getConnection();
     my $sth = $dbh->prepare_cached($query);
@@ -949,7 +1139,23 @@ sub isUnassembledRead {
 sub getReadNamesLike {
 # returns a list of readnames matching a pattern or name
     my $this = shift;
+    my $name = shift; # name or pattern
     my %options = @_;
+
+    my $dbh = $this->getConnection();
+
+# options: unassembled
+
+    if ($options{unassembled}) {
+print STDERR "using getUnassembledReads \n";
+        $options{namelike} = $name if ($name !~ /[^\W\.\%\_]/);
+        $options{nameregexp} = $name if ($name =~ /[^\W\.\%\_]/);
+        $options{nosingleton} = 1; # ignore single read contigs
+        return &getUnassembledReads($dbh,$this,'readname',%options);
+    }
+
+# else search the whole database
+
 
     print "getReadNamesLike: TO BE IMPLEMENTED\n";
 
@@ -1502,6 +1708,10 @@ sub putSequenceForRead {
 				               $this->{SelectStatement}->{'svector'},
 				               $this->{InsertStatement}->{'svector'}) || 0;
 
+unless ($seqvecid) {
+print STDOUT "unidentified sequencing vector '$seqvec, $svleft, $svright' \n"; 
+}
+
 	    $rc = $sth->execute($seqid, $seqvecid, $svleft, $svright);
 
             unless (defined($rc) && $rc == 1) {
@@ -1818,11 +2028,20 @@ sub getReadAttributeID {
 #     my $select_sth = $this->{SelectStatement}->{$section};
 #     my $insert_sth = $this->{InserttStatement}->{$section};
 
+if (!defined($identifier) || !defined($dict)) {
+print STDOUT "undefined identifier or dict\n";
+}
+
     return undef unless (defined($identifier) && defined($dict));
 
 # 1
 
     my $id = &dictionaryLookup($dict, $identifier);
+
+unless (defined($id)) {
+print STDOUT "dictionary item $identifier not found in dictionay $dict\n";
+}
+
 
     return $id if defined($id);
 
@@ -2137,7 +2356,6 @@ sub getReadTagsForSequenceIDs {
         my @sids = splice @$seqIDs, 0, $block;
 
         my $tags = &getTagsForSequenceIDs ($dbh,\@sids);
-#        my $tags = &oldgetTagsForSequenceIDs ($dbh,\@sids,'READTAG','seq_id');
 
         push @tags, @$tags;
     }
@@ -2149,8 +2367,12 @@ sub getTagsForSequenceIDs {
 # use as private (generic) method only
     my $dbh = shift;
     my $sequenceIDs = shift; # array of seq IDs
+    my %options = @_;
 
 # compose query
+
+    my $excludetags = $options{excludetags};
+#    $excludetags =~ s/\W+/,/g if $excludetags; # replace any separator by ',' 
 
     my $items = "seq_id,tagtype,pstart,pfinal,strand,comment,"
               . "tagseqname,sequence";
@@ -2159,7 +2381,7 @@ sub getTagsForSequenceIDs {
               . " using (tag_seq_id)"
 	      . " where seq_id in (".join (',',@$sequenceIDs) .")"
               . "   and deprecated != 'Y'"
-#?             . "   and tagtype not in (.some list.) "
+#?             . "   and tagtype not in ($excludetags) " if $excludetags;
               . " order by seq_id";
 
 print "getTagsForSequenceID: $query \n" if $DEBUG;
@@ -2195,12 +2417,13 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-    my $autoload = shift; # autoload tag names and sequences if not present
+#    my $autoload = shift; # autoload tag names and sequences if not present
+    my %options = @_;
 
-$DEBUG=0;
+$DEBUG=0; $DEBUG=1 if $options{debug};
 print "ENTER putTagsForReads\n" if $DEBUG;
 
-    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
+    if (ref($reads) ne 'ARRAY' or (@$reads && ref($reads->[0]) ne 'Read')) {
         print STDERR "putTagsForReads expects an array of Read objects\n";
         return undef;
     }
@@ -2264,9 +2487,12 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
             my $rtags = $read->getTags();
 
             foreach my $rtag (@$rtags) {
-                if ($rtag->isEqual($etag)) {
+                if ($ignore->{$rtag}) {
+                    next;
+                }
+                elsif ($rtag->isEqual($etag,ignoreblankcomment=>1)) {
                     $ignore->{$rtag}++;
-                    last;
+                    next;
                 }
             }
             $tcounter++;
@@ -2287,15 +2513,13 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
 # here we have a list of new tags which have to be loaded
 
-    return 0.0 unless @tags;
+    return '0.0' unless @tags; # returns True for success but empty
 
-    my $tagIDhash = &getTagSequenceIDsForTags($dbh,\@tags,$autoload);
+    &getTagSequenceIDsForTags($dbh,\@tags,$options{autoload});
 
-    return &putReadTags($dbh,\@tags,$tagIDhash);
+    return [@tags] if $options{noload}; # test option
 
-#    &getTagSequenceIDsForTags($dbh,\@tags,$autoload);
-
-#    return &putReadTags($dbh,\@tags);
+    return &putReadTags($dbh,\@tags);
 }
 
 sub getTagSequenceIDsForTags {
@@ -2303,8 +2527,6 @@ sub getTagSequenceIDsForTags {
     my $dbh = shift;
     my $tags = shift;
     my $autoload = shift; # of missing tag names and sequences
-
-#print "ENTER getTagSequenceIDsForTags ".scalar(@$tags)."\n" if $DEBUG;
 
     my $tagIDhash = {};
 
@@ -2397,14 +2619,12 @@ sub getTagSequenceIDsForTags {
             $tag->setTagSequenceID($tagIDhash->{$tagseqname});
         }
     }
-#    return $tagIDhash;
 }
    
 sub putReadTags {
 # use as private method only
     my $dbh = shift;
     my $tags = shift;
-#    my $tagIDhash = shift;
 
     return undef unless ($tags && @$tags);
 
@@ -2427,7 +2647,6 @@ sub putReadTags {
         my $tagtype          = $tag->getType();
         my $tagseqname       = $tag->getTagSequenceName() || '';
         my ($pstart,$pfinal) = $tag->getPosition();
-# my $tag_seq_id       = $tagIDhash->{$tagseqname} || 0;
         my $tag_seq_id       = $tag->getTagSequenceID() || 0;
         my $strand           = $tag->getStrand();
         $strand =~ s/(\w)\w*/$1/;
@@ -2490,8 +2709,6 @@ sub insertTagSequence {
 
         $sth->finish();
 
-#print STDERR "TAGSEQUENCE update query result $tag_seq_id \n" if $DEBUG;
-
 # if tagsequence is already in the database, update only if $update>1
 
         if ($tag_seq_id) {
@@ -2503,7 +2720,6 @@ sub insertTagSequence {
             $query = "update TAGSEQUENCE set sequence=?"
                    . " where tagseqname like ?"
                    . " order by tagseqname limit 1";
-#print "$query \n" if $DEBUG;
 
             $sth = $dbh->prepare_cached($query);
 
@@ -2536,8 +2752,7 @@ sub insertTagSequence {
     return $dbh->{'mysql_insertid'} if ($rc > 0); # a successfull insert
 
 # the insert did not take place because the tag sequence name already exists
-
-#print STDERR "TAGSEQUENCE insert recovery ($query)\n" if $DEBUG; # TO BE TESTED
+# get the  tag_seq_id  with a select on the tag sequence name
 
     $query = "select tag_seq_id from TAGSEQUENCE where tagseqname like ?";
 
@@ -2549,13 +2764,11 @@ sub insertTagSequence {
 
     my ($tag_seq_id) = $sth->fetchrow_array();
 
-#print STDERR "TAGSEQUENCE recovery result $tag_seq_id \n" if $DEBUG;
-
     return $tag_seq_id;
 }
 
 #-----------------------------------------------------------------------------
-# methods dealing with BRIDGEs
+# methods dealing with ..
 #-----------------------------------------------------------------------------
 
 
