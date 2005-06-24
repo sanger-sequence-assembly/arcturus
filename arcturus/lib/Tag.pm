@@ -328,8 +328,26 @@ sub isEqual {
 
 # compare tag comments
 
-    if ($this->getTagComment() =~ /\S/ || $tag->getTagComment() =~ /\S/) {
-        return 0 unless ($this->getTagComment() eq $tag->getTagComment());
+    if ($this->getTagComment() =~ /\S/ && $tag->getTagComment() =~ /\S/) {
+# both comments defined
+        unless ($this->getTagComment() eq $tag->getTagComment()) {
+# the tags may be different, do a more detailed comparison using a cleaned version
+            unless (&cleanup($this->getTagComment) eq &cleanup($tag->getTagComment)) {
+   	        return 0;
+            }
+	}
+    }
+    elsif ($this->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment
+        $tag->setTagComment($this->getTagComment()) if $options{copycom};
+    }
+    elsif  ($tag->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment
+        $this->setTagComment($tag->getTagComment()) if $options{copycom};
     }
 
 # compare strands (optional)
@@ -344,7 +362,7 @@ sub isEqual {
 # the tags are identical
 
     if ($options{copy}) {
-# copy tag ID, tag sequence ID and systematic ID, ifnot already defined
+# copy tag ID, tag sequence ID and systematic ID, if not already defined
         unless ($tag->getTagID()) {
             $tag->setTagID($this->getTagID());
         }
@@ -357,6 +375,20 @@ sub isEqual {
     }
 
     return 1
+}
+
+sub cleanup {
+# private method cleanup comments 
+    my $comment = shift;
+
+# remove quotes, '\n\' and shrink blankspace into a single blank
+
+    $comment =~ s/^\s*([\"\'])\s*(.*)\1\s*$/$2/;
+    $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
+    $comment =~ s/\\n\\/ /g; # replace by blank space
+    $comment =~ s/\s+/ /g; # shrink blank space
+   
+    return $comment;
 }
 
 #----------------------------------------------------------------------
