@@ -127,6 +127,8 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
 
+$outputFile = 'STDOUT' if ($noload && !$outputFile);
+
 my $logger = new Logging($outputFile);
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
@@ -208,7 +210,7 @@ if ($pidentifier) {
     $pinherit = 'project' unless ($isdefault || $override);
 
     if ($project) {
-        my $message = "Project ".$project->getProjectName." accepted ";
+        my $message = "Project '".$project->getProjectName."' accepted ";
         $message .= "as assigned project" unless ($isdefault || $override);
         $message .= "as default project" if ($isdefault || $override);
         $logger->warning($message);
@@ -556,12 +558,10 @@ while (defined($record = <$CAF>)) {
         elsif ($record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
 # elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
             my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
-# print STDERR "read Tag ($record) \n" if ($readtagmode);
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
                 if (defined($record = <$CAF>)) {
                     chomp $record;
-#print STDOUT "multiple record added: $record\n" if ($type eq 'OLIG');
                     $info .= $record;
                     $lineCount++;
                 }
@@ -572,6 +572,9 @@ while (defined($record = <$CAF>)) {
 # cleanup $info
             $info =~ s/\s+\"([^\"]+)\".*$/$1/; # remove wrapping quotes
             $info =~ s/^\s+//; # remove leading blanks
+            my ($change,$inew) = &cleanup_comment($info);
+            $info = $inew if $change;
+            $logger->info("new info after cleanup: $info") if $change;
 
 # $logger->finest("READ tag: $type $trps $trpf $info") if $noload;
 
@@ -580,63 +583,53 @@ while (defined($record = <$CAF>)) {
             $tag->setPosition($trps,$trpf);
             $tag->setStrand('Forward');
 
+            my $readname = $read->getReadName();
             if ($type eq 'OLIG' || $type eq 'AFOL') {
 # test info for sequence specification
-                $info =~ s/\\n\\\W*$//; # chop off a trailing \n\..
-#print STDOUT "OLIGO detected: '$info' \n";
-                if ($info =~ /([ACGT\*]{5,})/) {
-#print STDOUT "OLIG sequence extracted: $1 \n"; 
-                    $logger->info("Read Tag $type DNA '$1'");
-                    $tag->setDNA($1);
+                my ($DNA,$inew) = &get_oligo_DNA($info);
+                if ($DNA) {
+                    $tag->setDNA($DNA);
+                    my $length = length($DNA);
+# test the length against the position specification
+                    if ($trps == $trpf) {
+                        $logger->warning("oligo length error ($trps $trpf) ".
+                                         "for $info near line $lineCount \n".
+                                         "tag *ignored* for read $readname");
+ 			next;
+                    }
+                    elsif ($trpf-$trps+1 != $length) {
+                        $logger->info("oligo length mismatch ($trps $trpf) ".
+                                      "for $info near line $lineCount");
+                    }
+# test if the DNA occurs twice in the data
+                    if ($inew) {
+			$logger->info("Multiple DNA info removed from ".
+                                      "$type tag for read $readname");
+                        $info = $inew;
+$logger->info("new info after DNA removal: $info");
+                    }
                 }
-# pick up the oligo name
+# process oligo names
                 if ($type eq 'OLIG') {
 # clean up name (replace possible ' oligo ' string by 'o')
                     $info =~ s/\boligo[\b\s*]/o/i;
+# replace blank space by \n\ if at least one \n\ already occurs
                     $info =~ s/\s+/\\n\\/g if ($info =~ /\\n\\/);
-                    $info =~ s/\\n\\\\n\\/\\n\\/g; # multiple \n\ by one
 # get the oligo name from the $info data
                     my $sequence = $tag->getDNA();
-                    if (my $name = &decode_oligo_info($info,$sequence)) {
-#print "oligoname found $name\n($info)\n";
+                    my ($name,$inew) = &decode_oligo_info($info,$sequence);
+                    if ($name) {
                         $tag->setTagSequenceName($name);
+                        $info = $inew if $inew;
                     }
                     else {
                         $logger->warning("Failed to decode OLIGO info:\n$info");
                     }
-#next;
-my $TEMP=0; if ($TEMP) {
-# split on blanks and \n\ separation symbols
-#                    my @info = split /\s+|\\n\\/,$info;
-# get sequence for comparison
-#                    if ($info =~ /^\s*(\d+)\b.*?$sequence/) {
-# the info string starts with a number followed by the sequence
-#                        my $name = "o$1";
-#                        $tag->setTagSequenceName($name);
-#		    }
-#                    elsif ($info =~ /\b([opt0]\d+)\b/) {
-#                    elsif ($info =~ /\b([opt]?\d+)\s*$/) {
-# the info contains a name like o1234 or t1234
-#                        my $name = $1;
-#                        $name =~ s/^0/o/; # correct typo 0 for o
-#print "OLIG2 detected: $info -> $name\n";
-#                        $tag->setTagSequenceName($name);
-#                    }
-# try with the results of the split
-#                    elsif ($info[1] eq $sequence) {
-#print "OLIG3 detected: $info -> $info[0]\n";
-#                        my $name = $info[0];
-#                        $name = "o$name" unless ($name =~ /\D/);
-#                        $tag->setTagSequenceName($name);
-#                    }
-#                    else {
-#                        $logger->warning("Failed to decode OLIGO info:$info");
-#                    }
-} # END TEMP                     
 		}
                 elsif ($type eq 'AFOL' && $info =~ /oligoname\s*(\w+)/i) {
                     $tag->setTagSequenceName($1);
                 }
+
 
                 unless ($tag->getTagSequenceName()) {
 		    $logger->warning("Missing oligo name in read tag for "
@@ -644,21 +637,31 @@ my $TEMP=0; if ($TEMP) {
                     next; # don't load this tag
 	        }
             }
+# special action for repeat tags
             elsif ($type eq 'REPT') {
-# pickup the repeat name
 		if ($info =~ /^\s*(\S+)\s/i) {
                     $tag->setTagSequenceName($1);
 		}
                 else {
 		    $logger->info("Missing repeat name in read tag for ".
-                            $read->getReadName());
+                        $read->getReadName());
                 }
             }
+# all others, general comment cleanup: double newline, quotation etc.
+            else {
+                if ($type eq 'ADDI' && $trps != 1) {
+                    $logger->info("Invalid ADDI tag ignored for ".
+                        $read->getReadName());
+                    next; # don't accept this tag
+		}
+	    }
+
             $tag->setTagComment($info);
             $read->addTag($tag);
+
         }
         elsif ($record =~ /Tag/ && $record =~ /$ETAGS/) {
-           $logger->info("READ EDIT tag detected but not processed: $record");
+           $logger->info("READ EDIT tag detected but not processed: $record") unless $readtagmode;
         }
         elsif ($record =~ /Tag/) {
            $logger->warning("READ tag not recognized: $record") unless $readtagmode;
@@ -740,7 +743,8 @@ my $TEMP=0; if ($TEMP) {
                 $logger->severe("positions: @positions",2);
             }
         }
-        elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
+        elsif ($record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+#        elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
 # detected a contig TAG
             my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
@@ -767,7 +771,7 @@ $logger->info("TagSequenceName $1") if $noload;
             }
         }
         elsif ($record =~ /Tag/) {
-            $logger->warning("CONTIG tag not recognized: ($lineCount) $record");
+            $logger->warning("CONTIG tag not recognized: ($lineCount) $record") unless $readtagmode;
         }
         else {
             $logger->warning("ignored: ($lineCount) $record");
@@ -904,26 +908,55 @@ if ($loadreadtags) {
     my @reads;
     foreach my $identifier (keys %reads) {
         my $read = $reads{$identifier};
+        next unless $read->hasTags();
         push @reads, $read;
     }
-    my $autoload = 1;
-    my $success = $adb->putTagsForReads(\@reads,$autoload);
+    my $success = $adb->putTagsForReads(\@reads,autoload=>1);
     $logger->info("putTagsForReads success = $success");
 }
-else {
+elsif ($noload) {
+    $logger->warning("Read Tags Listing\n");
     foreach my $identifier (keys %reads) {
         my $read = $reads{$identifier};
         my $tags = $read->getTags();
         next unless ($tags && @$tags);
+        $logger->warning("read ".$read->getReadName." : tags ".scalar(@$tags));
         foreach my $tag (@$tags) {
-            $tag->writeToCaf(*STDOUT) if $noload;
+            $logger->info($tag->writeToCaf()) if $list;
         }
+        my $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
+        if (ref($tagstobeloaded) eq 'ARRAY') {
+            $logger->warning("Tags to be loaded : ".scalar(@$tagstobeloaded));
+            foreach my $tag (@$tagstobeloaded) {
+                $logger->warning($tag->writeToCaf());
+            }
+	}
+	else {
+           $logger->info("NO tags to be loaded"); 
+	}
     }
 }
+
+# add hoc edited reads processing (debugging)
+
+    foreach my $identifier (keys %reads) {
+        my $read = $reads{$identifier};
+        my $tags = $read->getTags();
+        foreach my $tag (@$tags) {
+#            $logger->info($tag->writeToCaf());
+        }
+        next unless $read->isEdited();
+#        $read->writeToCaf(*STDOUT);
+#        $adb->?
+   }
+
+
 
 # finally update the meta data for the Assembly and the Organism
 
 # $adb->updateMetaData;
+
+$adb->disconnect();
 
 exit(0);
 
@@ -960,6 +993,12 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
+    my $change = 0;
+# clean up name (replace possible ' oligo ' string by 'o')
+    $change = 1 if ($info =~ s/\boligo[\b\s*]/o/i);
+    $change = 1 if ($info =~ s/\s+/\\n\\/g);
+#$info =~ s/\\n\\\\n\\/\\n\\/g; # multiple \n\ by one
+    $change = 1 if ($info =~ s/[\\n\\]{2,}/\\n\\/g); # multiple \n\ by one
 # split $info on blanks and \n\ separation symbols
     my @info = split /\s+|\\n\\/,$info;
 
@@ -972,16 +1011,90 @@ sub decode_oligo_info {
 # the info contains a name like o1234 or t1234
         $name = $1;
         $name =~ s/^0/o/; # correct typo 0 for o
-#print "OLIG2 detected: $info -> $name\n";
+    }
+# try its a name like 17H10.1
+    elsif ($info =~ /^(\w+\.\w{1,2})\b/) {
+        $name = $1;
     }
 # try with the results of the split
     elsif ($info[1] eq $sequence) {
-#print "OLIG3 detected: $info -> $info[0]\n";
         $name = $info[0];
         $name = "o$name" unless ($name =~ /\D/);
     }
 
+    return ($name,0) if ($name && !$change); # no new info
+    return ($name,$info) if $name; # info modified
+
+# name could not be decoded: try one or two special possibilities
+
+    foreach my $part (@info) {
+        if ($part =~ /serial\#?\=?(.*)/) {
+            $name = $1;
+            unless ($name) {
+# the name is blank, but a serial field exists: 
+# generate a random name (for later update by hand)
+                my $randomnumber = int(rand(1000)); # from 0 to 999 
+                $name = sprintf('oligo_%03x',$randomnumber);
+	    }
+# replace the serial field by the name
+            $info =~ s/$part/$name/;
+            $info =~ s/\\n\\flags\=//;
+	}
+    }
+
+    return ($name,$info) if $name;
+
+# still not done: area for adhoc changes
+print STDOUT "still undecoded info: $info  (@info)\n";
+    if ($info[1] =~ /^\w+\.\w{1,2}\b/) {
+# name and sequence possibly interchanged
+        $name = $info[1];
+        $info[1] = $info[0];
+        $info[0] = $name;
+        $info = join ('\\n\\',@info);
+print STDOUT "now decoded info: $info ($name)\n";
+        return $name,$info;
+    }
+
     return $name;
+}
+
+sub get_oligo_DNA {
+    my $info = shift;
+
+    if ($info =~ /([ACGT\*]{5,})/i) {
+        my $DNA = $1;
+# test if the DNA occurs twice in the data
+        if ($info =~ /$DNA[^ACGT].*(sequence\=)?$DNA/i) {
+# multiple occurrences of DNA to be removed ...
+            $info =~ s/($DNA[^ACGT].*?)(sequence\=)?$DNA/$1/i;
+            return $DNA,$info;
+        }
+	return $DNA,0; # no change
+    }
+    return 0,0; # no DNA
+}
+
+sub cleanup_comment {
+    my $comment = shift;
+
+    my $changes = 0;
+
+# print STDOUT "CLEANUP: '$comment'\n" if ($comment =~ /3067|3076/);
+
+    $changes = 1 if ($comment =~ s/^\s+|\s+$//g); # clip leading/trailing blanks
+
+    $changes = 1 if ($comment =~ s/\s+(\\n\\)/$1/g); # delete blanks before \n\
+
+    $changes = 1 if ($comment =~ s/(\\n\\){2,}/\\n\\/g); # delete repeats
+
+    $changes = 1 if ($comment =~ s/\\n\\\s*$//); # delete trailing newline
+
+    $changes = 1 if ($comment =~ s?\\/?/?g);
+
+# print STDOUT "CLEANED: '$comment'\n" if ($comment =~ /3067|3076/);
+
+    return $changes,$comment;
 }
 
 #------------------------------------------------------------------------
