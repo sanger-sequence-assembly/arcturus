@@ -464,7 +464,11 @@ print STDERR "putContig: line 446 assignContigToProject I\n";
 
 # okay, the contig is new; find out if it is connected to existing contigs
 
-    my $parentids = $this->getParentIDsForContig($contig);
+    my $parentids;
+# ignoreparents is a privileged option only by assignReadsAsContigToProject
+    unless ($options{ignoreparents}) {
+        $parentids = $this->getParentIDsForContig($contig);
+    }
 
 # pull out mappings for those previous contigs, if any
 
