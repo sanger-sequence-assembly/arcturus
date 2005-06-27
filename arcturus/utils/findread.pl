@@ -10,10 +10,12 @@ use strict;
 my $nextword;
 my $instance;
 my $organism;
+my $history = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
+    $history = 1 if ($nextword eq '-history');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -30,16 +32,20 @@ die "Failed to create ArcturusDatabase" unless $adb;
 
 my $dbh = $adb->getConnection();
 
-my $query = "create temporary table currentcontigs" .
-    " as select CONTIG.contig_id,nreads,length,updated,project_id" .
-    " from CONTIG left join C2CMAPPING" .
-    " on CONTIG.contig_id = C2CMAPPING.parent_id where C2CMAPPING.parent_id is null";
+my ($query, $stmt);
 
-my $stmt = $dbh->prepare($query);
-&db_die("Failed to create query \"$query\"");
+unless ($history) {
+    $query = "create temporary table currentcontigs" .
+	" as select CONTIG.contig_id,gap4name,nreads,length,created,updated,project_id" .
+	" from CONTIG left join C2CMAPPING" .
+	" on CONTIG.contig_id = C2CMAPPING.parent_id where C2CMAPPING.parent_id is null";
 
-my $ncontigs = $stmt->execute();
-&db_die("Failed to execute query \"$query\"");
+    $stmt = $dbh->prepare($query);
+    &db_die("Failed to create query \"$query\"");
+
+    my $ncontigs = $stmt->execute();
+    &db_die("Failed to execute query \"$query\"");
+}
 
 $query = "select project_id, name from PROJECT";
 
@@ -62,20 +68,12 @@ $query = "select seq_id from READS left join SEQ2READ using(read_id) where readn
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
-$query = "select currentcontigs.contig_id,nreads,length,updated,project_id" .
-    " from MAPPING left join currentcontigs using(contig_id) where seq_id = ?";
+my $contigtable = $history ? "CONTIG" : "currentcontigs";
+
+$query = "select $contigtable.contig_id,gap4name,nreads,length,created,updated,project_id,cstart,cfinish,direction" .
+    " from MAPPING left join $contigtable using(contig_id) where seq_id = ? and gap4name is not null";
 
 my $stmt_seq2contig = $dbh->prepare($query);
-&db_die("Failed to create query \"$query\"");
-
-$query = "select seq_id from MAPPING where contig_id = ? order by cstart asc limit 1";
-
-my $stmt_contig2mapping = $dbh->prepare($query);
-&db_die("Failed to create query \"$query\"");
-
-$query = "select readname from SEQ2READ left join READS using(read_id) where seq_id = ?";
-
-my $stmt_seq2read = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
 while (my $line = <STDIN>) {
@@ -88,23 +86,17 @@ while (my $line = <STDIN>) {
 
 	my $ctgcount = 0;
 
-	while (my ($contig_id,$nreads,$ctglen,$updated,$projid) =
+	while (my ($contig_id,$gap4name,$nreads,$ctglen,$created,$updated,$projid,$cstart,$cfinish,$direction) =
 	       $stmt_seq2contig->fetchrow_array()) {
 	    $ctgcount++;
 
 	    my $projname = $projectid2name{$projid};
 	    $projname = $organism . "/" . $projid unless defined($projname);
 
-	    $stmt_contig2mapping->execute($contig_id);
-	    my ($leftseqid) = $stmt_contig2mapping->fetchrow_array();
-	    $stmt_contig2mapping->finish();
+	    ($cstart,$cfinish) = ($cfinish, $cstart) if ($direction eq 'Reverse');
 
-	    $stmt_seq2read->execute($leftseqid);
-	    my ($leftreadname) = $stmt_seq2read->fetchrow_array();
-	    $stmt_seq2read->finish();
-
-	    print "$readname is in $leftreadname in $projname (id=$contig_id length=$ctglen" .
-		" reads=$nreads created=$updated)\n",
+	    print "$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
+		"(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n",
 	}
 
 	if ($ctgcount < 1) {
@@ -137,4 +129,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-instance\t\tName of instance\n";
     print STDERR "-organism\t\tName of organism\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "-history\t\tSearch for the read in all contigs, not just the current contig set\n";
 }
