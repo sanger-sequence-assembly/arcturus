@@ -19,11 +19,12 @@ my $verbose;
 my $project;
 my $assembly;
 my $confirm;
+my $limit = 100;
 my $fofn;
 my $ml = 0;
 
 my $validKeys = "organism|instance|read|fofn|oligo|finishing|minimulength|ml|"
-              . "project|assembly|verbose|confirm|preview|help";
+              . "project|assembly|limit|verbose|confirm|preview|list|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -40,6 +41,8 @@ while (my $nextword = shift @ARGV) {
     $readtype  = 'oligo'      if ($nextword eq '-oligo');
     $readtype  = 'finishing'  if ($nextword eq '-finishing');
 
+    $limit     = shift @ARGV  if ($nextword eq '-limit');
+
     $fofn      = shift @ARGV  if ($nextword eq '-fofn');
 
     $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
@@ -55,6 +58,8 @@ while (my $nextword = shift @ARGV) {
 
     $confirm   = 0            if ($nextword eq '-preview');
 
+    $verbose   = 2            if ($nextword eq '-list');
+
     &showUsage(0,1) if ($nextword eq '-help'); # long write up
 }
  
@@ -62,7 +67,7 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging();
+my $logger = new Logging('STDOUT');
  
 $logger->setFilter(0) if $verbose; # set reporting level
  
@@ -106,6 +111,7 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 my @reads;
 
 if ($fofn) {
+# input from file
     foreach my $read (@$fofn) {
         next unless $read;
         push @reads, $read;
@@ -147,19 +153,29 @@ $project = $Project->[0];
 
 # select readnames from the database if a readtype is defined
 
-if ($readtype) {
-    my $regexp;
-    $regexp = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'oligo');
-    $regexp = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'finishing');
+if ($readtype || ($read && $read =~ /\%|\*/)) {
+    my $regexp; # check for read type definition
+    if ($readtype) {
+        $regexp = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'oligo');
+        $regexp = "[pq][2-9]{1}k[0-9]{4}\$" if ($readtype eq 'finishing');
+    }
     my %options;
-    $options{readname} = $read if $read;
-    $options{regexp} = "[pq][1-9]{1}k[a-z]{1}\$" if ($readtype eq 'oligo');
-    $options{regexp} = "[0-9]{4}\$" if ($readtype eq 'finishing');
+    if ($read) {
+        $read =~ s/\*/%/g;
+# add possible type as option
+        $options{nameregexp} = $regexp if $regexp;
+    }
+    elsif ($regexp) {
+        $read = $regexp;
+    }
     $options{unassembled} = 1;
-    if (my $reads = $adb->getReadNamesLike(%options)) {
+    $options{nosingleton} = 1;
+    $options{limit} = $limit || 100;
+    if (my $reads = $adb->getReadNamesLike($read,%options)) {
         foreach my $read (@$reads) {
             push @reads,$read;
 	}
+        $logger->warning(scalar(@reads)." reads found");
     }
     else {
         $logger->warning("No reads found");
@@ -172,9 +188,13 @@ else {
 # execute if confirm switch set, else list 
 
 foreach my $read (@reads) {
+    next unless ($read);
+    if ($verbose && $verbose > 1) {
+        $logger->info($read); # list option
+        next;
+    }
     my %options;
 # determine selection by ID or by readname
-    next unless ($read);
     $options{read_id}  = $read if ($read !~ /\D/);
     $options{readname} = $read if ($read =~ /\D/);
     $options{minimumlength} = $ml if ($ml >= 32);
@@ -188,6 +208,19 @@ foreach my $read (@reads) {
     }
     else {
         $logger->warning("read is NOT added : $message");
+        next unless ($message =~ /\bassembled\b/);
+        next unless $verbose;
+# add details for assembled reads
+        my $list = $adb->getAssemblyDataforReadName($read) || next;
+        foreach my $contig_id (sort {$a <=> $b} keys %$list) {
+            my $contig = sprintf("Contig%06d",$contig_id);
+            my @items = @{$list->{$contig_id}};
+            $items[1] = substr ($items[1],0,10);
+            my $line = sprintf "%-24s  %10s  %-12s  %-8s  %2d", @items;
+            $logger->warning("\t\t    in $contig = $line");
+        }
+#        my ($c,$p) = $adb->getProjectIDforReadName($read);
+#$logger->warning("$c, $p");
     }  
 }
   
