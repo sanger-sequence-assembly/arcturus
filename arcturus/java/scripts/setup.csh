@@ -101,3 +101,10 @@ else
     # No user-defined options, so set explicitly
     setenv JAVA_OPTS "${EXTRA_OPTS}"
 endif
+
+# Determine our operating system, and alter the path to Java if we're running
+# on an Alpha system.
+
+if ( `uname -s` == 'OSF1' ) then
+    setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
+endif
