@@ -250,7 +250,7 @@ sub showUsage {
     print STDOUT "\n";
     print STDOUT "-clipmethod\tOn the fly quality clipping using method specified\n";
     print STDOUT "-threshold\tQuality clipping threshold level\n";
-    print STDOUT "-minimumrange\tMinimum high quality length\n";
+    print STDOUT "-minimumqualityrange\tMinimum high quality length\n";
     print STDOUT "\n";
     print STDOUT "-info\t\t(no value) for some progress info\n";
     print STDOUT "\n";
