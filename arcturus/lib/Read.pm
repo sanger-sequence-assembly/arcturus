@@ -4,6 +4,8 @@ use strict;
 
 use Mapping;
 
+use Asp::PhredClip;
+
 #-------------------------------------------------------------------
 # Constructor (optional instantiation with readname as identifier)
 #-------------------------------------------------------------------
@@ -448,16 +450,11 @@ sub setSequence {
 sub getSequence {
 # return the DNA (possibly) using lazy instatiation
     my $this = shift;
+    my %options = @_;
 
     $this->importSequence() unless defined($this->{Sequence});
 
-    my $symbol;
-# test for extra input; only accept qualitymask=>'symbol'
-    while (my $nextword = shift) {
-        if ($nextword eq 'qualitymask') {
-            $symbol = shift;
-        }
-    }
+    my $symbol = $options{qualitymask};
 
     return $this->{Sequence} unless $symbol;
 
@@ -856,6 +853,127 @@ sub writeBaseQuality {
 	    print $FILE join(' ',@$quality[$i..$m]),"\n";
 	}
     }
+}
+
+#----------------------------------------------------------------------
+# alternative clipping
+#----------------------------------------------------------------------
+
+my $PhredClip; # global variable
+
+sub qualityClip {
+    my $this = shift;
+    my %options = @_;
+
+# options: clipmethod to be used (phredclip, other)
+#          threshold level (default 15)
+#          minimum range (default 32)
+
+    my $clipmethod =  $options{clipmethod} || 'phredclip';
+
+    my ($QL,$QR);
+
+    if ($clipmethod eq 'phredclip') {
+
+# use standard clipping method from package PhredClip
+
+       ($QL,$QR) = Asp::PhredClip->phred_clip($options{threshold} || 15,
+                                              $this->getBaseQuality());
+    }
+    elsif ($clipmethod eq 'myphredclip') {
+# use local test version
+       ($QL,$QR) = &phred_clip($options{threshold} || 15,
+                               $this->getBaseQuality());
+    }
+    elsif ($clipmethod eq 'someothermethodtobedeveloped') {
+        return 0; # method to be defined 
+    }
+    else {
+        return 0; # invalid method 
+    }
+
+# analyse returned range
+
+    my $qualityrange = $QR - $QL + 1;
+    my $minimumrange = $options{minimumrange} || 32;
+        
+    if ($qualityrange >= $minimumrange) {
+        $this->setLowQualityLeft($QL);
+        $this->setLowQualityRight($QR);
+        return $qualityrange;
+    }
+    else {
+        return 0; # failure
+    }
+}
+
+# this method is taken from Paul Mooney's PhredClip
+
+sub phred_clip {
+# private method adapted from Paul Mooney's PhredClip module
+    my $threshold = shift;
+    my $avquality = shift; # array reference
+
+    my $qualLen  = scalar(@{$avquality});
+    my $lastQual = $qualLen - 1;
+    my $i;
+    my @q;
+
+    for ($i = 0; $i < $qualLen; $i++) {
+	$q[$i] = $avquality->[$i] - $threshold;
+    }
+
+    my @cleft;
+    my @l;
+
+    my $Left = 0;
+    $cleft[0] = $q[0] > 0 ? $q[0] : 0;
+    $l[0] = $Left;
+
+    for ($i = 1; $i < $qualLen; $i++) {
+	$cleft[$i] = $q[$i] + $cleft[$i - 1];
+
+	if ($cleft[$i] <= 0) {
+	    $cleft[$i] = 0;
+	    $Left = $i;
+	}
+
+	$l[$i] = $Left;
+    }
+
+    my @cright;
+    my @r;
+
+    my $Right = $lastQual;
+    $cright[$lastQual] = $q[$lastQual] > 0 ? $q[$lastQual] : 0;
+    $r[$lastQual] = $Right;
+
+    for ($i = $lastQual - 1; $i >= 0; $i--) {
+	$cright[$i] = $q[$i] + $cright[$i + 1];
+
+	if ($cright[$i] <= 0) {
+	    $cright[$i] = 0;
+	    $Right = $i;
+	}
+
+	$r[$i] = $Right;
+    }
+
+    my $best  = 0;
+    my $coord = 0;
+
+    for($i = 0; $i < $qualLen; $i++) {
+	my $s = $cright[$i] + $cleft[$i];
+	if ( $best < $s ) {
+	    $best = $s;
+	    $coord = $i;
+	}
+    }
+    
+    $Right = $r[$coord] + 1;
+    $Left  = $l[$coord] + 1; # convert to coords starting at 1
+
+    return ($Left, $Right);
 }
 
 ##############################################################
