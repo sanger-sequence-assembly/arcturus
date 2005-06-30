@@ -2029,7 +2029,7 @@ sub getReadAttributeID {
 #     my $insert_sth = $this->{InserttStatement}->{$section};
 
 if (!defined($identifier) || !defined($dict)) {
-print STDOUT "undefined identifier or dict\n";
+print STDOUT "undefined identifier or dict\n" if $DEBUG;
 }
 
     return undef unless (defined($identifier) && defined($dict));
@@ -2038,7 +2038,7 @@ print STDOUT "undefined identifier or dict\n";
 
     my $id = &dictionaryLookup($dict, $identifier);
 
-unless (defined($id)) {
+unless (defined($id) && $DEBUG) {
 print STDOUT "dictionary item $identifier not found in dictionay $dict\n";
 }
 
@@ -2420,7 +2420,7 @@ sub putTagsForReads {
 #    my $autoload = shift; # autoload tag names and sequences if not present
     my %options = @_;
 
-$DEBUG=0; $DEBUG=1 if $options{debug};
+my $DEBUG = $options{debug};
 print "ENTER putTagsForReads\n" if $DEBUG;
 
     if (ref($reads) ne 'ARRAY' or (@$reads && ref($reads->[0]) ne 'Read')) {
