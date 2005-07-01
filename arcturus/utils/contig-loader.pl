@@ -43,6 +43,7 @@ my $noload = 0; # CHANGE to 0
 my $notest = 0;
 my $list = 0;
 my $batch = 0;
+my $debug = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
@@ -51,7 +52,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
                . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
-               . "frugal|padded|noload|verbose|batch|info|help";
+               . "frugal|padded|noload|verbose|batch|info|help|debug";
 
 
 while (my $nextword = shift @ARGV) {
@@ -78,6 +79,8 @@ while (my $nextword = shift @ARGV) {
     $logLevel         = 0            if ($nextword eq '-verbose'); 
 
     $logLevel         = 2            if ($nextword eq '-info'); 
+
+    $debug            = 1            if ($nextword eq '-debug'); 
 
     $minOfReads       = shift @ARGV  if ($nextword eq '-minimum');
 
@@ -148,6 +151,8 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
+
+$adb->setRDEBUG(1) if $debug;
 
 #----------------------------------------------------------------
 # test the CAF file name
@@ -288,7 +293,7 @@ $logger->info("Read a maximum of $lineLimit lines")      if $lineLimit;
 $logger->info("Contig (or alias) name filter $cnFilter") if $cnFilter;
 $logger->info("Contigs with fewer than $minOfReads reads are NOT dumped") if ($minOfReads > 1);
 
-$logger->warning("readtags selected $readtaglist");
+$logger->warning("readtags selected $readtaglist") if $readtagmode;
 
 # setup a buffer for read(name)s to be ignored
 
@@ -302,6 +307,8 @@ my $objectType = 0;
 my $objectName = '';
 my $buildReads = 0;
 my $buildContigs = 1;
+
+my $dictionaries;
 
 # assume default unpadded caf file
 
@@ -531,6 +538,9 @@ while (defined($record = <$CAF>)) {
                 my $entry = $read->addAlignToTrace([@positions]);
                 if ($isUnpadded && $entry == 2) {
                     $logger->info("Edited read $objectName detected ($lineCount)");
+# on first encounter load the read item dictionaries
+                    $adb->populateLoadingDictionaries() unless $dictionaries;
+                    $dictionaries = 1;
                 }
             }
             else {
