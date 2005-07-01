@@ -35,6 +35,10 @@ sub new {
     return $this;
 }
 
+sub setRDEBUG {
+    $DEBUG = shift || 0;
+}
+
 # ----------------------------------------------------------------------------
 # methods dealing with READs
 #-----------------------------------------------------------------------------
@@ -194,6 +198,8 @@ sub dictionaryLookup {
 
 sub dictionaryInsert {
     my ($dict, $pkey, $value, $junk) = @_;
+
+print STDOUT "Inserted item $pkey $value into dictionary\n" if $DEBUG;
 
     if (defined($dict) && defined($pkey)) {
 	$dict->{$pkey} = $value;
@@ -2055,6 +2061,10 @@ print STDOUT "dictionary item $identifier not found in dictionay $dict\n";
 	($id) = $select_sth->fetchrow_array();
 	$select_sth->finish();
     }
+
+unless (defined($id) && $DEBUG) {
+print STDOUT "dictionary item $identifier also not found with select_sth\n";
+}
 
     return $id if defined($id);
 
