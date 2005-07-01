@@ -37,6 +37,8 @@ sub new {
 
 sub setRDEBUG {
     $DEBUG = shift || 0;
+    print STDOUT "DEBUG mode ADBRead switched ON\n" if $DEBUG;
+    print STDOUT "DEBUG mode ADBRead switched OFF\n" unless $DEBUG;
 }
 
 # ----------------------------------------------------------------------------
@@ -198,8 +200,6 @@ sub dictionaryLookup {
 
 sub dictionaryInsert {
     my ($dict, $pkey, $value, $junk) = @_;
-
-print STDOUT "Inserted item $pkey $value into dictionary\n" if $DEBUG;
 
     if (defined($dict) && defined($pkey)) {
 	$dict->{$pkey} = $value;
@@ -1153,7 +1153,7 @@ sub getReadNamesLike {
 # options: unassembled
 
     if ($options{unassembled}) {
-print STDERR "using getUnassembledReads \n";
+print STDERR "using getUnassembledReads \n" if $DEBUG;
         $options{namelike} = $name if ($name !~ /[^\W\.\%\_]/);
         $options{nameregexp} = $name if ($name =~ /[^\W\.\%\_]/);
         $options{nosingleton} = 1; # ignore single read contigs
@@ -2034,24 +2034,17 @@ sub getReadAttributeID {
 #     my $select_sth = $this->{SelectStatement}->{$section};
 #     my $insert_sth = $this->{InserttStatement}->{$section};
 
-if (!defined($identifier) || !defined($dict)) {
-print STDOUT "undefined identifier or dict\n" if $DEBUG;
-}
-
     return undef unless (defined($identifier) && defined($dict));
 
-# 1
+
+# 1 try to find it in the stored dictionary hashes
 
     my $id = &dictionaryLookup($dict, $identifier);
 
-unless (defined($id) && $DEBUG) {
-print STDOUT "dictionary item $identifier not found in dictionay $dict\n";
-}
-
-
     return $id if defined($id);
 
-# 2
+
+# 2 try to read it from the database (if found, the dictionary was not loaded)
    
     return undef unless defined($select_sth);
 
@@ -2062,13 +2055,10 @@ print STDOUT "dictionary item $identifier not found in dictionay $dict\n";
 	$select_sth->finish();
     }
 
-unless (defined($id) && $DEBUG) {
-print STDOUT "dictionary item $identifier also not found with select_sth\n";
-}
-
     return $id if defined($id);
 
-# 3
+
+# 3 it's a new dictionary item: add to the database and to the dictionary hash
 
     return undef unless defined($insert_sth);
 
