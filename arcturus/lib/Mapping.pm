@@ -108,9 +108,10 @@ sub getAlignmentDirection {
 sub setAlignment {
 # define alignment direction as +1 or -1
     my $this = shift;
-    my $adir = shift;
+    my $adir = shift || 0;
 
-    return unless (abs($adir) == 1);
+    return unless (abs($adir) == 1); # accepts only +1 or -1
+
     $this->{direction} = $adir;
 }
 
@@ -196,6 +197,9 @@ sub compare {
 
     my $tmaps = $this->analyseSegments();    # also sorts segments
     my $cmaps = $compare->analyseSegments(); # also sorts segments
+
+#    return $this->multiply($compare->inverse()); # to be tested at some point
+#    return $compare->multiply($this->inverse()); # to be tested at some point
 
 # test presence of mappings
 
@@ -287,6 +291,8 @@ sub compare {
 	$mapping->putSegment(@cpos);
     }
 
+    $mapping->analyseSegments();
+
     return $mapping unless (shift);
 
     return $align,[@osegments]; # old system
@@ -332,7 +338,7 @@ sub analyseSegments {
 # direction in the MAPPING table, likely in a read with unit-length segment
             print STDERR "Inconsistent alignment direction in mapping "
                          .($this->getMappingName || $this->getSequenceID).
-			 "\n: ".$this->assembledFromToString;
+			 " :\n".$this->assembledFromToString;
             $direction = 0;
             last;
         }
@@ -459,6 +465,7 @@ sub inverse {
                              $segment[0],$segment[1]);
     }
 
+#    $segments = $mapping->getSegments();
 #    @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
     return $mapping;   
@@ -515,6 +522,11 @@ sub multiply {
             }
             else {
 	        print STDERR "Mapping->multiply: should not occur (2) !!\n";
+print STDOUT $this->writeToString()."\n";
+print STDOUT $mapping->writeToString()."\n";
+print STDOUT "\nts $ts  rs $rs  txf $txf\n";
+print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
+print STDOUT "mxs $mxs  mxf $mxf\n";
 		exit;
 	    }
 	}
@@ -526,7 +538,13 @@ sub multiply {
                 $ts++;
             }
             else {
-	        print STDERR "Mapping->multiply: should not occur (3) !!\n";
+	        print STDOUT "Mapping->multiply: should not occur (3) !!\n";
+print STDOUT $this->writeToString()."\n";
+print STDOUT $mapping->writeToString()."\n";
+print STDOUT "\nts $ts  rs $rs  txf $txf\n";
+print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
+print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
+                exit;
             }
         }
         else {
