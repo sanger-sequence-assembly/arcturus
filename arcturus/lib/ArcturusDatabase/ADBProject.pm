@@ -571,6 +571,8 @@ sub assignReadAsContigToProject {
 # Load into database for project
 
     $poption{setprojectby} = 'project';
+# the new contig may not have any parent contigs (else it is an assembled read)
+    $poption{prohibitparents} = 1;
 
     return $this->putContig($contig,$project,%poption); # transfer of noload
 }
@@ -696,20 +698,19 @@ sub getProjectIDforContigID {
     return ($project_id,$locked);  
 }
 
-sub getProjectIDforReadName { # TO BE TESTED
-# return project ID and locked status for input contig ID
+sub getProjectIDforReadName {
+# return hash of project ID(s) keyed on contig ID for input readname
     my $this = shift;
     my $readname = shift;
 
-    my $query = "select CONTIG.contig_id,CONTIG.project_id"
+    my $query = "select distinct CONTIG.contig_id,CONTIG.project_id"
               . "  from READS,SEQ2READ,MAPPING,CONTIG"
               . " where CONTIG.contig_id = MAPPING.contig_id"
               . "   and MAPPING.seq_id = SEQ2READ.seq_id"
               . "   and SEQ2READ.read_id = READS.read_id"
-              . "   and SEQ2READ.version = 0"
 	      . "   and READS.readname = ?"
-              . " order by contig_id DESC"
-              . " limit 1";
+	      . " order by contig_id DESC";
+#   $query   .= " limit 1" if $options{current};
 
     my $dbh = $this->getConnection();
 
@@ -717,14 +718,14 @@ sub getProjectIDforReadName { # TO BE TESTED
 
     $sth->execute($readname) || &queryFailed($query,$readname);
 
-    my ($contig_id,$project_id);
-    while (my @ary = $sth->fetchrow_array()) {
-        ($contig_id,$project_id) = @ary;
+    my $resultlist = {};
+    while (my ($contig_id,$project_id) = $sth->fetchrow_array()) {
+        $resultlist->{$contig_id} = $project_id;
     }
 
     $sth->finish();
 
-    return ($contig_id,$project_id);  
+    return $resultlist;
 }
 
 sub getProjectInventory {
