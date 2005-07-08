@@ -133,7 +133,7 @@ if ($fofn) {
 
 if ($unassembled) {
 
-    my $readids = $adb->getUnassembledReads();
+    my $readids = $adb->getIDsForUnassembledReads();
 
     if ($caf || $fasta) {
         my $reads = $adb->getReadsByReadID($readids);
