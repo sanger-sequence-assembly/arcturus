@@ -1122,19 +1122,21 @@ sub isUnassembledRead {
         return undef;
     }
 
-# add the generation selection term as a subselect
+# add the generation selection term as a subselect using a left join
 
-    $query .= "    and MAPPING.contig_id in "
-            . "(select A.contig_id"
-            . "   from C2CMAPPING as A left join C2CMAPPING as B"
-            . "     on (A.contig_id = B.parent_id)"
-            . "  where B.parent_id is null)";
+    my $subquery = "select CONTIG.contig_id"
+                 . "  from CONTIG left join C2CMAPPING"
+                 . "    on (CONTIG.contig_id = C2CMAPPING.parent_id)"
+		 . " where C2CMAPPING.parent_id is null";
+
+
+    $query .= " and MAPPING.contig_id in ($subquery) limit 1";
 
     $this->logQuery('isUnassembledRead',$query,$value);
 
     my $dbh = $this->getConnection();
     my $sth = $dbh->prepare_cached($query);
-    my $row = $sth->execute($value) || (&queryFailed($query,$value) && return);
+    my $row = $sth->execute($value) || return &queryFailed($query,$value);
     $sth->finish();
 
 # returns 1 if the read ID/readname is unassembled, else returns 0
