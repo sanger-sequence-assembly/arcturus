@@ -222,7 +222,7 @@ sub logQuery {
     my $this = shift;
     my @entry = @_;
 
-# each entry exists of: sub routine of origin, query and possibly @data
+# each entry consists of: subroutine of origin, query and possibly @data
 
     $this->{querylog} = [] unless $this->{querylog};
 
@@ -236,8 +236,14 @@ sub logQuery {
         $entry[1] =~ s/(\s*(where|from|and|order|group))/\n         $1/gi;
         my $output = "method : $entry[0]\nquery  : $entry[1]\n";
         splice @entry,0,2;
-        $output .= "data   : @entry" if @entry;
-	return $output;
+# if any data given, substitute wildcards
+        my $length = length(@entry); 
+        while ($length-- > 0) {
+            my $datum = shift @entry || 'null';
+            $datum = "'$datum'" if ($datum =~ /\D/);
+            $output =~ s/\?/$datum/;
+        }
+ 	return $output;
     }
 
     push @$log, [@entry]; # build array of arrays
@@ -246,5 +252,3 @@ sub logQuery {
 #-----------------------------------------------------------------------------
 
 1;
-
-

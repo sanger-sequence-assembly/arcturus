@@ -859,8 +859,6 @@ sub writeBaseQuality {
 # alternative clipping
 #----------------------------------------------------------------------
 
-my $PhredClip; # global variable
-
 sub qualityClip {
     my $this = shift;
     my %options = @_;

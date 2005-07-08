@@ -130,8 +130,9 @@ sub getContigName {
 
 # in its absence generate a name based on the contig_id
 
-    if (!defined($this->{contigname}) && $this->getContigID()) {
-        $this->setContigName(sprintf("contig%08d",$this->getContigID()));
+    unless(defined($this->{contigname})) {
+        my $cid = $this->getContigID() || 0;
+        $this->setContigName(sprintf("contig%08d",$cid));
     }
     return $this->{contigname};
 }
@@ -478,7 +479,7 @@ sub importer {
             $this->importer(shift @$Component,$class,$buffername,shift);
         }
     }
-    else {
+    elsif ($Component) {
 # test type of input object against specification
         my $instanceref = ref($Component);
         if ($class ne $instanceref) {
@@ -488,6 +489,10 @@ sub importer {
         push @{$this->{$buffername}}, $Component;
         return unless (my $sequence_id = shift);
         $Component->setSequenceID($sequence_id);
+    }
+    else {
+# reset option
+        undef $this->{$buffername};
     }
 }
 
@@ -732,7 +737,9 @@ sub linkToContig {
 
     my $alignment = 0;
     my $inventory = {};
+    my $accumulate = {};
     my $deallocated = 0;
+    my $overlapreads = 0;
     $mappings = $compare->getMappings();
     foreach my $mapping (@$mappings) {
         my $key = $mapping->getSequenceID();
@@ -746,6 +753,8 @@ sub linkToContig {
             $deallocated++; # should be more discriminate in case of split parent
             next;
         }
+# count the number of reads in the overlapping area
+        $overlapreads++;
 
 # this mapping/sequence in $compare also figures in the current Contig
 
@@ -765,47 +774,15 @@ sub linkToContig {
             my $hashkey = sprintf("%08d",$offset);
             $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
             push @{$inventory->{$hashkey}},[@segment];
+            $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
+            $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
         }
 
 # otherwise do a segment-by-segment comparison and find ranges of identical mapping
 
-#####################################################################################
-        elsif (0) {
-# OBSOLETE: to be deleted after testing of alternative below
-my $debug = $DEBUG;
-if ($DEBUG) {
-my ($identical,$al,$of) = $match->isEqual($mapping);
-$debug = 0 if $identical;
-}
-
-            my ($aligned,$osegments) = $match->compare($mapping,1);
-# keep the first encountered (contig-to-contig) alignment value != 0 
-            next unless defined $aligned; # empty cross mapping
-            $alignment = $aligned unless $alignment;
-print STDOUT "Fine comparison of segments for mapping: align=".
-($aligned||' ')."  ".$mapping->getMappingName."\n" if $DEBUG;
-$DEBUG = 1;
-
-            next unless ($alignment && $aligned == $alignment);
-# add the mapping range(s) returned in the list to the inventory 
-            foreach my $osegment (@$osegments) {
-                my $offset = shift @$osegment;
-                my $hashkey = sprintf("%08d",$offset);
-                $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
-                my @segment = @$osegment; # copy
-                push @{$inventory->{$hashkey}},[@segment];
-print STDOUT "OLD contig segment for offset $offset : @segment ".
-             $mapping->getMappingName."\n" if $DEBUG;
-	    }
-print "\n" if $DEBUG;
-$DEBUG=0;
-#exit;
-	}
-#####################################################################################
-
         else {
 # return the mapping as a Mapping object
-            my $mapping = $match->compare($mapping);
+            $mapping = $match->compare($mapping);
             my $aligned = $mapping->getAlignment();
 
             next unless defined $aligned; # empty cross mapping
@@ -823,10 +800,12 @@ $DEBUG=0;
                 my $offset = $osegment->getOffset();
                 $offset = (-$offset+0); # conform to offset convention in this method
                 my $hashkey = sprintf("%08d",$offset);
-                $inventory->{$hashkey} = [] unless defined $inventory->{$hashkey};
+                $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
                 $osegment->normaliseOnX();# get in the correct order
                 my @segment = ($osegment->getXstart(),$osegment->getXfinis());
                 push @{$inventory->{$hashkey}},[@segment];
+                $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
+                $accumulate->{$hashkey} += abs($segment[1]-$segment[0]+1);
 	    }
         }
     }
@@ -849,14 +828,73 @@ $DEBUG=0;
         $guillotine = 1 + log(scalar(@$mappings)); 
 # adjust for small numbers (2 and 3)
         $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
-        $guillotine = 2  if ($guillotine < 2); # minimum required
-print STDOUT "guillotine: $guillotine \n" if $DEBUG;
+        $guillotine  = 2 if ($guillotine < 2); # minimum required
     }
 
+# if the alignment offsets vary too much apply a window
+
+    my @offsets = sort { $a <=> $b } keys %$inventory;
+    my $offsetwindow = $options{offsetwindow};
+    $offsetwindow = 40 unless $offsetwindow;
+    my ($lower,$upper) = (0,0); # default no offset range window
+    my $minimumsize = 1; # lowest accepted segment size
+
+    unless (($offsets[$#offsets] - $offsets[0]) <= $offsetwindow) {
+# the offset values vary too much; check how they correlate with contig position:
+# if no good correlation found the distribution is dodgy, then use a window based
+# on the median offset and the nominal range
+        my $sumpp = 0.0; # for sum position**2
+        my $sumoo = 0.0; # for sum offset*2
+        my $sumop = 0.0; # for sum offset*position
+        my $weightedsum = 0;
+        foreach my $offset (@offsets) {
+            $weightedsum += $accumulate->{$offset};
+            my $segmentlist = $inventory->{$offset};
+            foreach my $mapping (@$segmentlist) {
+#print "offset $offset mapping @$mapping\n";
+                my $position = 0.5 * ($mapping->[0] + $mapping->[1]);
+                $sumpp += $position * $position;
+                $sumop += $position * $offset;
+                $sumoo += $offset * $offset;
+            }
+        }
+# get the correlation coefficient
+        my $threshold = $options{correlation} || 0.8;
+        my $R = $sumop / sqrt($sumpp * $sumoo);
+print "Correlation coefficient = $R\n\n" if $DEBUG;
+        unless (abs($sumop / sqrt($sumpp * $sumoo)) >= $threshold) {
+# relation offset-position looks messy: set up for offset masking
+            my $partialsum = 0;
+            foreach my $offset (@offsets) { 
+                $partialsum += $accumulate->{$offset};
+                next if ($partialsum < $weightedsum/2);
+# the first offset here is the median
+                $lower = $offset - $offsetwindow/2; 
+                $upper = $offset + $offsetwindow/2;
+print STDOUT "median: $offset ($lower $upper)\n" if $DEBUG;
+                $minimumsize = $options{segmentsize} || 1;
+                last;
+	    }
+        }
+    }
+
+# go through all offset values and collate the mapping segments;
+# if the offset falls outside the offset range window, we are probably
+# dealing with data arising from mis-assembled reads, resulting in
+# outlier offset values and messed-up rogue alignment segments. We will
+# ignore regular segments which straddle the bad mapping range
+
     my $rtotal = 0;
-    my @c2csegments;
-    foreach my $offset (sort keys %$inventory) {
-#        next unless ($offset > -1900 && $offset < -1870);
+    my @c2csegments; # for the regular segments
+    my $badmapping = new Mapping("Bad Mapping"); # for bad mapping range
+    foreach my $offset (@offsets) {
+# apply filter if boundaries are defined
+        my $outofrange = 0;
+print STDOUT "Testing offset $offset\n" if $DEBUG;
+        if (($lower != $upper) && ($offset < $lower || $offset > $upper)) {
+            $outofrange = 1; # outsize offset range, probably dodgy mapping
+print STDOUT "offset out of range $offset\n" if $DEBUG;
+        }
 # sort mappings according to increasing contig start position
         my @mappings = sort { $a->[0] <=> $b->[0] } @{$inventory->{$offset}};
         my $nreads = 0; # counter of reads in current segment
@@ -870,11 +908,13 @@ print STDOUT "guillotine: $guillotine \n" if $DEBUG;
 # break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
-                if ($nreads >= $guillotine) {
+                my $size = abs($segmentfinis-$segmentstart);
+                if ($nreads >= $guillotine && $size >= $minimumsize) {
                     my $start = ($segmentstart + $offset) * $alignment;
                     my $finis = ($segmentfinis + $offset) * $alignment;
 		    my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-                    push @c2csegments,[@segment];
+                    push @c2csegments,[@segment]  unless $outofrange;
+                    $badmapping->putSegment(@segment) if $outofrange;
                 }
 # initialize the new mapping interval
                 $nreads = 0;
@@ -889,59 +929,116 @@ print STDOUT "guillotine: $guillotine \n" if $DEBUG;
         }
 # add segmentstart - segmentfinis as (last) mapping segment
         next unless ($nreads >= $guillotine);
+        my $size = abs($segmentfinis-$segmentstart);
+        next unless ($size >= $minimumsize);
         my $start = ($segmentstart + $offset) * $alignment;
         my $finis = ($segmentfinis + $offset) * $alignment;
         my @segment = ($start,$finis,$segmentstart,$segmentfinis,$offset);
-        push @c2csegments,[@segment];
+        push @c2csegments,[@segment]  unless $outofrange;
+        $badmapping->putSegment(@segment) if $outofrange;
     }
 
-# the segment list now may on rare occasions contain overlapping segments
-# the position of overlap have conflicting offsets, and therefore have to
-# be removed by adjusting the intervals
+# if there are rogue mappings, determine the contig range affected
+
+    my @badmap;
+    if ($options{maskbadmappingrange} && $badmapping->hasSegments()) {
+# the contig interval covered by the bad mapping
+        @badmap = $badmapping->getContigRange();
+# subsequently we could use this interval to mask the regular mappings found
+print STDOUT "checking bad mapping range\n" if $DEBUG;
+print STDOUT $badmapping->writeToString('bad range')."\n" if $DEBUG;
+print STDOUT "bad contig range: @badmap\n" if $DEBUG;
+    }
+
+# the segment list now may on rare occasions (but in particular when
+# there is a bad mapping range) contain overlapping segments where
+# the position of overlap have conflicting boundaries, and therefore 
+# have to be removed or pruned by adjusting the interval boundaries
+
+# the folowing requires segment data sorted according to increasing X values
+
+    foreach my $segment (@c2csegments) {
+        my ($xs,$xf,$ys,$yf,$s) = @$segment;
+        @$segment = ($xf,$xs,$yf,$ys,$s) if ($xs > $xf);
+    }
 
     @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
 
-    for (my $i = 1 ; $i < @c2csegments ; $i++) {
-        my $this = $c2csegments[$i-1];
-        my $next = $c2csegments[$i];
-# the aligned case
-        while ($alignment > 0 && $this->[1] >= $next->[0]) {
-            $this->[1]--;
-            $this->[3]--;
-            $next->[0]++;
-            $next->[2]++;
-	}
+    my $j =1;
+    while ($j < @c2csegments) {
+        my $i = $j - 1;
+        my $this = $c2csegments[$i];
+        my $next = $c2csegments[$j];
+# first remove segments which completely fall inside another
+        if ($this->[0] <= $next->[0] && $this->[1] >= $next->[1]) {
+# the next segment falls completely inside this segment; remove $next
+            splice @c2csegments, $j, 1;
+#            next;
+        }
+        elsif ($this->[0] >= $next->[0] && $this->[1] <= $next->[1]) {
+# this segment falls completely inside the next segment; remove $this
+            splice @c2csegments, $i, 1;
+#            next;
+        }
+        elsif (@badmap && $next->[0] >= $badmap[0] && $next->[1] <= $badmap[1]) {
+# the next segment falls completely inside the bad mapping range: remove $next
+            splice @c2csegments, $j, 1;
+        }
+        else {
+# this segment overlaps at the end with the beginning of the next segment: prune
+            while ($alignment > 0 && $this->[1] >= $next->[0]) {
+                $this->[1]--;
+                $this->[3]--;
+                $next->[0]++;
+                $next->[2]++;
+  	    }
 # the counter-aligned case
-        while ($alignment < 0 && $this->[0] >= $next->[1]) {
-            $this->[0]--;
-            $this->[2]++;
-            $next->[1]++;
-            $next->[3]--;
+            while ($alignment < 0 && $this->[1] >= $next->[0]) {
+                $this->[1]--;
+                $this->[3]++;
+                $next->[0]++;
+                $next->[2]--;
+	    }
+            $j++;
 	}
     }
 
 # enter the segments to the mapping
 
     foreach my $segment (@c2csegments) {
-print "segment @$segment \n" if $DEBUG;
-        next if ($segment->[3] < $segment->[2]); # in case boundaries have changed
+print "segment after filter @$segment \n" if $DEBUG;
+        next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
         $mapping->putSegment(@$segment);
     }
+# use the analyse method to handle possible single-base segments
+my @r = $mapping->getContigRange(); print "contigrange before test @r\n" if $DEBUG; 
+    $mapping->analyseSegments();
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
-        my $isValid = &isValidMapping($this,$compare,$mapping);
-        return 0,$rtotal unless $isValid;
+        my $isValid = &isValidMapping($this,$compare,$mapping,$overlapreads);
+print STDOUT "\nEXIT isVALID $isValid\n" if $DEBUG;
+        if (!$isValid) {
+print STDOUT "Spurious link detected to contig ".
+      $compare->getContigName()."\n" if $DEBUG;
+            return 0, $overlapreads;
+        }
 # in case of split contig
-        if ($isValid == 2) {
-print "deallocated $deallocated\n";
+        elsif ($isValid == 2) {
+print STDOUT "(Possibly) split parent contig ".
+      $compare->getContigName()."\n" if $DEBUG;
+            $deallocated = 0; # because we really don't know
+        }
+# for a regular link
+        else {
+            $deallocated = $compare->getNumberOfReads() - $overlapreads; 
         }
 # store the Mapping as a contig-to-contig mapping
         $this->addContigToContigMapping($mapping);
     }
 
 # and return the number of segments, which could be 0
-        
+
     return $mapping->hasSegments(),$deallocated;
 
 # if the mapping has no segments, no mapping range could be determined
@@ -949,6 +1046,69 @@ print "deallocated $deallocated\n";
 # method should be re-run in standard (strong=0) mode
 
 }
+
+sub isValidMapping {
+# private method for 'linkToContig': decide if a mapping is reasonable, based 
+# on the mapped contig range and the sizes of the two contigs involved and the
+# number of reads
+    my $child = shift;
+    my $parent = shift;
+    my $mapping = shift;
+    my $olreads = shift; # number of reads in overlapping area
+    my %options = @_; # if any
+
+# the following heuristic is used to decide if a parent-child link is wel
+# established or may be spurious. Based on the length of each contig, the number
+# of reads (and possibly other factors as refinement?). Given the size of the
+# region of overlap we derive the approximate number of reads (No) in it. This
+# number should be equal or larger than a minimum for both the parent and the 
+# child; if it smaller than either, the link is probably spurious
+        
+print STDOUT "\nEnter isVALIDmapping: ".$child->getContigName()."  parent ".$parent->getContigName()."\n\n" if $DEBUG;
+
+    my @range = $mapping->getContigRange(); 
+    my $overlap = $range[1] - $range[0] + 1;
+
+print STDOUT "Contig overlap: $olreads reads, @range ($overlap) length\n\n" if $DEBUG;
+
+    my @thresholds;
+    my @readsincontig;
+    my @fractions;
+    foreach my $contig ($child,$parent) {
+        my $numberofreads = $contig->getNumberOfReads();
+        push @readsincontig,$numberofreads;
+# for the moment we use a sqrt function; could be something more sophysticated
+        my $threshold = sqrt($numberofreads - 0.4) + 0.2;
+print STDOUT "contig ".$contig->getContigName()." $numberofreads reads "
+                      ."threshold $threshold ($olreads)\n" if $DEBUG;
+        push @thresholds, $threshold;
+# get the number of reads in the overlapping area (for possible later usage)
+        my $contiglength = $contig->getConsensusLength() || 1;
+        my $fraction = $overlap / $contiglength;
+print STDOUT "\tContig fraction overlap ($contiglength) ".sprintf("%6.3f",$fraction)."\n" if $DEBUG;
+	push @fractions,$fraction;
+    }
+
+# get threshold for spurious link
+
+    my $threshold = $thresholds[1];
+    $threshold *= $options{spurious} if $options{spurious};
+
+    return 0 if ($olreads < $threshold); # spurious link
+
+# get threshold for link to split contig
+
+    $threshold = $thresholds[1];
+    $threshold *= $options{splitparent} if $options{splitparent};
+
+    return 2 if ($olreads < $readsincontig[1] - $threshold); #  split contig
+
+# seems to be a regular link to parent contig
+
+    return 1;
+}
+
+# -----------------------------------------------------
 
 sub reverse {
 # inverts all read alignments
@@ -964,7 +1124,7 @@ sub reverse {
     @$mappings = sort {$a->getContigStart <=> $b->getContigStart} @$mappings;
 }
 
-sub findMapping {
+sub findMapping { # used NOWHERE
     my $this = shift;
     my $readname = shift;
 
@@ -978,41 +1138,6 @@ sub findMapping {
     return undef;
 }
 
-sub isValidMapping {
-# private method for 'linkToContig': decide if a mapping is reasonable, based 
-# on the mapped contig range and the sizes of the two contigs involved
-    my $contig = shift;
-    my $parent = shift;
-    my $mapping = shift;
-    my %options = @_;
-
-    my $threshold = $options{threshold} || 0.95;
-
-    my $cl = $contig->getConsensusLength();
-    my $pl = $parent->getConsensusLength();
-        
-    my @range = $mapping->getContigRange(); 
-    my $overlap = $range[1] - $range[0] + 1;
-print "\nENTER isVALID Contig Range : @range  $overlap,   cl $cl  pl $pl\n";
-
-    my @fraction;
-    my $direction;
-    foreach my $length ($pl,$cl) {
-        my $fraction = $overlap/$length;
-print "overlap  $length ".sprintf("%6.3f",$fraction)."\n";
-        push @fraction, $fraction;
-# returns 1 for $contig joined by parent(s); 2 for contig split from parent 
-        return scalar(@fraction) if ($fraction >= $threshold);
-    }
-
-    my $cr = $contig->getNumberOfReads();
-    my $pr = $parent->getNumberOfReads();
-    print "closer look (@fraction): cr $cr  pr $pr\n";
-
-print "\nEXIT isVALID\n";
-    return 1;
-}
-
 #-------------------------------------------------------------------    
 # Tags
 #-------------------------------------------------------------------    
@@ -1021,6 +1146,7 @@ sub inheritTags {
 # inherit tags from this contig's parents
     my $this = shift;
     my $depth = shift;
+# what about selected tags only?
 
     $depth = 1 unless defined($depth);
 
