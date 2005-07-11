@@ -1144,6 +1144,36 @@ sub isUnassembledRead {
     return ($row+0) ? 0 : 1; 
 }
 
+sub testReadAllocation {
+# return a list of doubly allocated reads
+    my $this = shift;
+
+# build temporary tables to faciltate easy search
+
+    return 0, "Failed to build temporary tables" unless
+        $this->getIDsForUnassembledReads(method=>'intemporarytable');
+
+# now search the CURREAD table for double reads
+
+    my $query = "select read_id,count(read_id) as counts,contig_id"
+              . "  from CURREAD"
+              . " group by read_id having counts > 1"; 
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rows = $sth->execute() || &queryFailed($query);
+
+    my $resulthash = {};
+    while (my ($read,$count,$contig) = $sth->fetchrow_array()) {
+        $resulthash->{$read} = [] unless $resulthash->{$read};
+        push @{$resulthash->{$read}}, $contig;
+    }
+
+    return ($rows+0),$resulthash;
+}
+
 sub getReadNamesLike {
 # returns a list of readnames matching a pattern or name
     my $this = shift;
