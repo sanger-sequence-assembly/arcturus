@@ -91,6 +91,10 @@ set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI
 if ( $?LOG4J_CONFIGURATION ) then
     echo Configuring log4j from ${LOG4J_CONFIGURATION}
     set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${LOG4J_CONFIGURATION}"
+else
+    if ( -f ${ARCTURUS_HOME}/log4j.properties ) then
+	set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${ARCTURUS_HOME}/log4j.properties"
+    endif
 endif
 
 # Add the JDBC and JNDI options to the run-time options
