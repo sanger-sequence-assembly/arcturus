@@ -4,6 +4,7 @@ import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
 import java.sql.SQLException;
+import java.util.zip.DataFormatException;
 
 /**
  * This class represents a project, which is a set of contigs.
@@ -131,6 +132,16 @@ public class Project extends Core {
      */
 
     public Set getContigs() { return contigs; }
+
+    public Set getContigs(boolean refresh) throws SQLException {
+	try {
+	    if (refresh && adb != null)
+		contigs = adb.getContigsByProject(ID, ArcturusDatabase.CONTIG_BASIC_DATA, 0);
+	}
+	catch (DataFormatException dfe) { /* This is never going to happen */ }
+
+	return contigs;
+    }
 
     public void setContigs(Set contigs) { this.contigs = contigs; }
 
