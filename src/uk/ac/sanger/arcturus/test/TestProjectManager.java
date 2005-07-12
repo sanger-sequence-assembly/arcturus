@@ -6,6 +6,7 @@ import org.apache.log4j.*;
 
 import java.util.*;
 import java.io.*;
+import java.sql.SQLException;
 
 import javax.naming.Context;
 
@@ -48,6 +49,7 @@ public class TestProjectManager {
 	String instance = null;
 	String organism = null;
 	boolean testmove = false;
+	boolean enumeratecontigs = false;
 
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].equalsIgnoreCase("-instance"))
@@ -58,6 +60,9 @@ public class TestProjectManager {
 
 	    if (args[i].equalsIgnoreCase("-testmove"))
 		testmove = true;
+
+	    if (args[i].equalsIgnoreCase("-contigs"))
+		enumeratecontigs = true;
 	}
 
 	if (instance == null || organism == null) {
@@ -83,7 +88,7 @@ public class TestProjectManager {
 	    adb.preloadAllAssemblies();
 	    adb.preloadAllProjects();
 
-	    displayAssemblies(adb);
+	    displayAssemblies(adb, enumeratecontigs);
 
 	    if (testmove) {
 		Set assemblies = adb.getAllAssemblies();
@@ -112,7 +117,7 @@ public class TestProjectManager {
 		    }
 		}
 		
-		displayAssemblies(adb);
+		displayAssemblies(adb, false);
 		
 		Set projects2 = assemblyArray[1].getProjects();
 		
@@ -134,7 +139,7 @@ public class TestProjectManager {
 		    }
 		}
 		
-		displayAssemblies(adb);
+		displayAssemblies(adb, false);
 	    }
 
 	    report();
@@ -152,7 +157,7 @@ public class TestProjectManager {
 	}
     }
 
-    public void displayAssemblies(ArcturusDatabase adb) {
+    public void displayAssemblies(ArcturusDatabase adb, boolean enumeratecontigs) {
 	Set assemblies = adb.getAllAssemblies();
 
 	Assembly[] assemblyArray = (Assembly[])assemblies.toArray(new Assembly[0]);
@@ -173,8 +178,21 @@ public class TestProjectManager {
 	    for (int j = 0; j < projectArray.length; j++) {
 		Project project = projectArray[j];
 		Assembly projasm = project.getAssembly();
+
+		Set contigs = null;
+
+		if (enumeratecontigs) {
+		    try {
+			contigs = project.getContigs(true);
+		    }
+		    catch (SQLException sqle) {
+			sqle.printStackTrace();
+		    }
+		}
+
 		System.out.println("\tPROJECT: name=" + project.getName() +
 				   ", updated=" + project.getUpdated() +
+				   ((enumeratecontigs && contigs != null) ? ", " + contigs.size() + " contigs" : "") + 
 				   ", assembly=" + (projasm == null ? "(NULL)" : projasm.getName()));
 	    }
 	    
