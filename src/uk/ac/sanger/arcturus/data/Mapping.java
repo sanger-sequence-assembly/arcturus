@@ -244,9 +244,6 @@ public class Mapping {
      * and orientation.
      *
      * @param cpos the contig offset position.
-     * @param forward true if the parent mapping represents a read that is
-     * co-aligned to the contig, false if the read is counter-aligned to the
-     * contig.
      *
      * @return the read offset position, or -1 if the contig offset position
      * falls outside the range of this mapping.
@@ -273,7 +270,6 @@ public class Mapping {
      * Returns the quality of the pad at the specified contig offset.
      *
      * @param cpos the contig offset position.
-     * @param quality the base quality array of the sequence of this mapping.
      *
      * @return the quality of the pad at the specified contig position,
      * or -1 if there is no pad at that position in this mapping.
