@@ -10,10 +10,16 @@ import java.io.*;
 import javax.naming.Context;
 
 public class TestProjectManager {
-    private static long lasttime;
-    private static Comparator byname = new ByName();
+    private long lasttime;
+    private Comparator byname = new ByName();
 
     public static void main(String args[]) {
+	TestProjectManager tpm = new TestProjectManager();
+
+	tpm.run(args);
+    }
+
+    public void run(String args[]) {
 	lasttime = System.currentTimeMillis();
 
 	System.err.println("Creating a logger ...");
@@ -41,6 +47,7 @@ public class TestProjectManager {
 
 	String instance = null;
 	String organism = null;
+	boolean testmove = false;
 
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].equalsIgnoreCase("-instance"))
@@ -48,6 +55,9 @@ public class TestProjectManager {
 
 	    if (args[i].equalsIgnoreCase("-organism"))
 		organism = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-testmove"))
+		testmove = true;
 	}
 
 	if (instance == null || organism == null) {
@@ -75,55 +85,57 @@ public class TestProjectManager {
 
 	    displayAssemblies(adb);
 
-	    Set assemblies = adb.getAllAssemblies();
+	    if (testmove) {
+		Set assemblies = adb.getAllAssemblies();
 
-	    Assembly[] assemblyArray = (Assembly[])assemblies.toArray(new Assembly[0]);
+		Assembly[] assemblyArray = (Assembly[])assemblies.toArray(new Assembly[0]);
 
-	    Arrays.sort(assemblyArray, byname);
+		Arrays.sort(assemblyArray, byname);
 
-	    Set projects1 = assemblyArray[0].getProjects();
+		Set projects1 = assemblyArray[0].getProjects();
 
-	    Project[] project1Array = (Project[])projects1.toArray(new Project[0]);
+		Project[] project1Array = (Project[])projects1.toArray(new Project[0]);
 
-	    for (int i = 0; i < project1Array.length; i++) {
-		try {
-		    project1Array[i].setAssembly(assemblyArray[1], true);
+		for (int i = 0; i < project1Array.length; i++) {
+		    try {
+			project1Array[i].setAssembly(assemblyArray[1], true);
+		    }
+		    catch (java.sql.SQLException sqle) {
+			if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+			    System.err.println("Duplicate key violation when moving project " +
+					       project1Array[i].getName() + " (ID=" + project1Array[i].getID() +
+					       ") to assembly " +
+					       assemblyArray[1].getName());
+			else
+			    System.err.println("SQLException(\"" + sqle.getMessage() +
+					       ", ErrorCode=" + sqle.getErrorCode() + ")");
+		    }
 		}
-		catch (java.sql.SQLException sqle) {
-		    if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
-			System.err.println("Duplicate key violation when moving project " +
-					   project1Array[i].getName() + " (ID=" + project1Array[i].getID() +
-					   ") to assembly " +
-					   assemblyArray[1].getName());
-		    else
-			System.err.println("SQLException(\"" + sqle.getMessage() +
-					   ", ErrorCode=" + sqle.getErrorCode() + ")");
+		
+		displayAssemblies(adb);
+		
+		Set projects2 = assemblyArray[1].getProjects();
+		
+		Project[] project2Array = (Project[])projects2.toArray(new Project[0]);
+		
+		for (int i = 0; i < project2Array.length; i++) {
+		    try {
+			project2Array[i].setAssembly(assemblyArray[0], true);
+		    }
+		    catch (java.sql.SQLException sqle) {
+			if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
+			    System.err.println("Duplicate key violation when moving project " +
+					       project2Array[i].getName() + " (ID=" + project2Array[i].getID() +
+					       ") to assembly " +
+					       assemblyArray[0].getName());
+			else
+			    System.err.println("SQLException(\"" + sqle.getMessage() +
+					       ", ErrorCode=" + sqle.getErrorCode() + ")");
+		    }
 		}
+		
+		displayAssemblies(adb);
 	    }
-
-	    displayAssemblies(adb);
-
-	    Set projects2 = assemblyArray[1].getProjects();
-
-	    Project[] project2Array = (Project[])projects2.toArray(new Project[0]);
-
-	    for (int i = 0; i < project2Array.length; i++) {
-		try {
-		    project2Array[i].setAssembly(assemblyArray[0], true);
-		}
-		catch (java.sql.SQLException sqle) {
-		    if (sqle.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
-			System.err.println("Duplicate key violation when moving project " +
-					   project2Array[i].getName() + " (ID=" + project2Array[i].getID() +
-					   ") to assembly " +
-					   assemblyArray[0].getName());
-		    else
-			System.err.println("SQLException(\"" + sqle.getMessage() +
-					   ", ErrorCode=" + sqle.getErrorCode() + ")");
-		}
-	    }
-
-	    displayAssemblies(adb);
 
 	    report();
 	}
@@ -140,7 +152,7 @@ public class TestProjectManager {
 	}
     }
 
-    public static void displayAssemblies(ArcturusDatabase adb) {
+    public void displayAssemblies(ArcturusDatabase adb) {
 	Set assemblies = adb.getAllAssemblies();
 
 	Assembly[] assemblyArray = (Assembly[])assemblies.toArray(new Assembly[0]);
@@ -170,7 +182,7 @@ public class TestProjectManager {
 	}
     }
 
-    public static void report() {
+    public void report() {
 	long timenow = System.currentTimeMillis();
 
 	System.out.println("******************** REPORT ********************");
@@ -186,7 +198,7 @@ public class TestProjectManager {
     }
 
 
-    public static void printUsage(PrintStream ps) {
+    public void printUsage(PrintStream ps) {
 	ps.println("MANDATORY PARAMETERS:");
 	ps.println("\t-instance\tName of instance");
 	ps.println("\t-organism\tName of organism");
@@ -196,20 +208,20 @@ public class TestProjectManager {
 	ps.println("JAVA OPTIONS:");
 	ps.println("\tverbose\t\tProduce verbose output (boolean, default false)");
     }
-}
 
-class ByName implements Comparator {
-    public int compare(Object o1, Object o2) throws ClassCastException {
-	if (o1 instanceof Core && o2 instanceof Core) {
-	    String name1 = ((Core)o1).getName();
-	    String name2 = ((Core)o2).getName();
-
-	    return name1.compareToIgnoreCase(name2);
-	} else
-	    throw new ClassCastException();
-    }
-
-    public boolean equals(Object obj) {
-	return (obj instanceof ByName && this == obj);
+    class ByName implements Comparator {
+	public int compare(Object o1, Object o2) throws ClassCastException {
+	    if (o1 instanceof Core && o2 instanceof Core) {
+		String name1 = ((Core)o1).getName();
+		String name2 = ((Core)o2).getName();
+		
+		return name1.compareToIgnoreCase(name2);
+	    } else
+		throw new ClassCastException();
+	}
+	
+	public boolean equals(Object obj) {
+	    return (obj instanceof ByName && this == obj);
+	}
     }
 }
