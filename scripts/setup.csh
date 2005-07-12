@@ -97,6 +97,8 @@ else
     endif
 endif
 
+set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.home=${ARCTURUS_HOME}"
+
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then
     # Append to user-specified options
