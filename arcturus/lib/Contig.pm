@@ -796,8 +796,11 @@ sub linkToContig {
 # process the mapping segments and add to the inventory
 
             my $osegments = $mapping->getSegments() || next;
+#print STDOUT "mapping: ".$mapping->getMappingName()."\n" if $DEBUG;
             foreach my $osegment (@$osegments) {
                 my $offset = $osegment->getOffset();
+my @seg = $osegment->getSegment(); 
+#print STDOUT "\t\t\t\toffset -$offset @seg\n" if $DEBUG;
                 $offset = (-$offset+0); # conform to offset convention in this method
                 my $hashkey = sprintf("%08d",$offset);
                 $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
@@ -872,7 +875,7 @@ print "Correlation coefficient = $R\n\n" if $DEBUG;
                 $lower = $offset - $offsetwindow/2; 
                 $upper = $offset + $offsetwindow/2;
 print STDOUT "median: $offset ($lower $upper)\n" if $DEBUG;
-                $minimumsize = $options{segmentsize} || 1;
+                $minimumsize = $options{segmentsize} || 2;
                 last;
 	    }
         }
@@ -908,7 +911,7 @@ print STDOUT "offset out of range $offset\n" if $DEBUG;
 # break of coverage is indicated by begin of interval beyond end of previous
             if ($intervalstart > $segmentfinis) {
 # add segmentstart - segmentfinis as mapping segment
-                my $size = abs($segmentfinis-$segmentstart);
+                my $size = abs($segmentfinis-$segmentstart) + 1;
                 if ($nreads >= $guillotine && $size >= $minimumsize) {
                     my $start = ($segmentstart + $offset) * $alignment;
                     my $finis = ($segmentfinis + $offset) * $alignment;
@@ -929,7 +932,7 @@ print STDOUT "offset out of range $offset\n" if $DEBUG;
         }
 # add segmentstart - segmentfinis as (last) mapping segment
         next unless ($nreads >= $guillotine);
-        my $size = abs($segmentfinis-$segmentstart);
+        my $size = abs($segmentfinis-$segmentstart) + 1;
         next unless ($size >= $minimumsize);
         my $start = ($segmentstart + $offset) * $alignment;
         my $finis = ($segmentfinis + $offset) * $alignment;
@@ -1003,15 +1006,16 @@ print STDOUT "bad contig range: @badmap\n" if $DEBUG;
 	}
     }
 
+#print STDOUT scalar(@c2csegments)." segements; before filter\n" if $DEBUG;
+
 # enter the segments to the mapping
 
     foreach my $segment (@c2csegments) {
-print "segment after filter @$segment \n" if $DEBUG;
+#print "segment after filter @$segment \n" if $DEBUG;
         next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
         $mapping->putSegment(@$segment);
     }
 # use the analyse method to handle possible single-base segments
-my @r = $mapping->getContigRange(); print "contigrange before test @r\n" if $DEBUG; 
     $mapping->analyseSegments();
 
     if ($mapping->hasSegments()) {
