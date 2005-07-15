@@ -41,7 +41,7 @@ sub setOutputDevice {
     }
     elsif (defined($output)) {
         $this->{output} = new FileHandle($output,"w");
-print "output device: $this->{output}\n";
+#print "output device: $this->{output}\n";
     }
     else {
         $this->{output} = new FileHandle(">&STDERR");
@@ -73,6 +73,14 @@ sub log {
     $line =~ s/\s+$//; # remove trailing blank space
 
     print $OUTPUT "$line$linebreak";
+}
+
+sub skip {
+    my $this = shift;
+
+    my $OUTPUT = $this->{output} || return; # the file handle
+
+    print $OUTPUT "$linebreak";
 }
 
 sub severe {
