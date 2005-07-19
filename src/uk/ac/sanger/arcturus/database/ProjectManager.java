@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.database;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import java.sql.*;
 import java.util.*;
@@ -16,6 +17,7 @@ public class ProjectManager extends AbstractManager {
     private PreparedStatement pstmtByID;
     private PreparedStatement pstmtByName;
     private PreparedStatement pstmtSetAssemblyForProject;
+    private PreparedStatement pstmtProjectSummary;
 
     /**
      * Creates a new ContigManager to provide contig management
@@ -35,6 +37,13 @@ public class ProjectManager extends AbstractManager {
 
 	query = "update PROJECT set assembly_id = ? where project_id = ?";
 	pstmtSetAssemblyForProject = conn.prepareStatement(query);
+
+	query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)) from " +
+	    " CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where C2CMAPPING.parent_id is null " +
+	    " and project_id = ? and length >= ?";
+	pstmtProjectSummary = conn.prepareStatement(query);
+
     }
 
     public void clearCache() {
@@ -211,5 +220,42 @@ public class ProjectManager extends AbstractManager {
 
 	    int rows = pstmtSetAssemblyForProject.executeUpdate();
 	}
+    }
+
+    public void getProjectSummary(Project project, int minlen, ProjectSummary summary) throws SQLException {
+	int project_id = project.getID();
+
+	pstmtProjectSummary.setInt(1, project_id);
+	pstmtProjectSummary.setInt(2, minlen);
+
+	ResultSet rs = pstmtProjectSummary.executeQuery();
+
+	if (rs.next()) {
+	    summary.setNumberOfContigs(rs.getInt(1));
+	    summary.setNumberOfReads(rs.getInt(2));
+	    summary.setTotalConsensusLength(rs.getInt(3));
+	    summary.setMeanConsensusLength(rs.getInt(4));
+	    summary.setSigmaConsensusLength(rs.getInt(5));
+	    summary.setMaximumConsensusLength(rs.getInt(6));
+	} else
+	    summary.reset();
+
+	rs.close();
+    }
+
+    public void getProjectSummary(Project project, ProjectSummary summary) throws SQLException {
+	getProjectSummary(project, 0, summary);
+    }
+
+    public ProjectSummary getProjectSummary(Project project, int minlen) throws SQLException {
+	ProjectSummary summary = new ProjectSummary();
+
+	getProjectSummary(project, minlen, summary);
+
+	return summary;
+    }
+
+    public ProjectSummary getProjectSummary(Project project) throws SQLException {
+	return getProjectSummary(project, 0);
     }
 }
