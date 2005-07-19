@@ -10,6 +10,7 @@ import java.util.zip.DataFormatException;
 import org.apache.log4j.*;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 public class ArcturusDatabase {
     public static final int MYSQL = 1;
@@ -713,7 +714,23 @@ public class ArcturusDatabase {
 	projectManager.setAssemblyForProject(project, assembly);
     }
 
-    public void clearProjectCache() {
+    public void getProjectSummary(Project project, int minlen, ProjectSummary summary) throws SQLException {
+	projectManager.getProjectSummary(project, minlen, summary);
+    }
+
+    public void getProjectSummary(Project project, ProjectSummary summary) throws SQLException {
+	projectManager.getProjectSummary(project, summary);
+    }
+
+    public ProjectSummary getProjectSummary(Project project, int minlen) throws SQLException {
+	return projectManager.getProjectSummary(project, minlen);
+    }
+
+    public ProjectSummary getProjectSummary(Project project) throws SQLException {
+	return projectManager.getProjectSummary(project);
+    }
+
+   public void clearProjectCache() {
 	projectManager.clearCache();
     }
 
