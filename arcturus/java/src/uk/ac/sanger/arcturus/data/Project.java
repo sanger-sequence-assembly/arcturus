@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
 import uk.ac.sanger.arcturus.database.*;
+import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import java.util.*;
 import java.sql.SQLException;
@@ -162,5 +163,16 @@ public class Project extends Core {
     public void refresh() throws SQLException {
 	if (adb != null)
 	    adb.refreshProject(this);
+    }
+
+    public ProjectSummary getProjectSummary(int minlen) throws SQLException {
+	if (adb != null)
+	    return adb.getProjectSummary(this, minlen);
+	else
+	    return null;
+    }
+
+    public ProjectSummary getProjectSummary() throws SQLException {
+	return getProjectSummary(0);
     }
 }
