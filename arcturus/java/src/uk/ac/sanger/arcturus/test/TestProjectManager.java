@@ -1,6 +1,7 @@
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.utils.*;
 
 import org.apache.log4j.*;
 
@@ -194,6 +195,33 @@ public class TestProjectManager {
 				   ", updated=" + project.getUpdated() +
 				   ((enumeratecontigs && contigs != null) ? ", " + contigs.size() + " contigs" : "") + 
 				   ", assembly=" + (projasm == null ? "(NULL)" : projasm.getName()));
+
+		int[] minlens = {0, 1, 2, 5, 10, 20, 50, 100 };
+
+		for (int k = 0; k < minlens.length; k++) {
+		    int minlen = 1000 * minlens[k];
+
+		    ProjectSummary summary = null;
+
+		    try {
+			summary = project.getProjectSummary(minlen);
+		    }
+		    catch (SQLException sqle) {
+			sqle.printStackTrace();
+		    }
+
+		    if (summary != null) {
+			System.out.println();
+			System.out.println("\tSUMMARY for contigs of " + minlens[k] + "kb or longer");
+			System.out.println("\t\tNumber of Contigs:        " + summary.getNumberOfContigs());
+			System.out.println("\t\tNumber of Reads:          " + summary.getNumberOfReads());
+			System.out.println("\t\tTotal Consensus Length:   " + summary.getTotalConsensusLength());
+			System.out.println("\t\tMean Consensus Length:    " + summary.getMeanConsensusLength());
+			System.out.println("\t\tSigma Consensus Length:   " + summary.getSigmaConsensusLength());
+			System.out.println("\t\tMaximum Consensus Length: " + summary.getMaximumConsensusLength());
+		    }
+		}
+		System.out.println();
 	    }
 	    
 	    System.out.println();
