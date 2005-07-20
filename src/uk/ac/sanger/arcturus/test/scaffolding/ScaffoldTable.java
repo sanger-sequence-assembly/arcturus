@@ -11,7 +11,8 @@ import java.awt.GridLayout;
 
 class ScaffoldTable extends JPanel implements ListSelectionListener {
     private JTable table;
-    private JEditorPane htmlPane;
+    //private JTextArea textarea;
+    private ScaffoldPanel panel;
     private ScaffoldTableModel model;
 
     public ScaffoldTable(Assembly assembly) {
@@ -30,17 +31,22 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
         JScrollPane tableView = new JScrollPane(table);
 
         //Create the HTML viewing pane.
-        htmlPane = new JEditorPane();
-        htmlPane.setEditable(false);
-        JScrollPane htmlView = new JScrollPane(htmlPane);
+        //textarea = new JTextArea();
+        //textarea.setEditable(false);
+        //JScrollPane textView = new JScrollPane(textarea);
+
+	panel = new ScaffoldPanel();
+	JScrollPane panelView = new JScrollPane(panel);
 
         //Add the scroll panes to a split pane.
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
         splitPane.setTopComponent(tableView);
-        splitPane.setBottomComponent(htmlView);
+        //splitPane.setBottomComponent(textView);
+	splitPane.setBottomComponent(panelView);
 
         Dimension minimumSize = new Dimension(100, 50);
-        htmlView.setMinimumSize(minimumSize);
+        //textView.setMinimumSize(minimumSize);
+	panelView.setMinimumSize(minimumSize);
         tableView.setMinimumSize(minimumSize);
         splitPane.setDividerLocation(100);
 
@@ -58,7 +64,8 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
         if (!lsm.isSelectionEmpty()) {
 	    int selectedRow = lsm.getMinSelectionIndex();
             SuperScaffoldInfo ssi = (SuperScaffoldInfo)model.getSuperScaffoldInfo(selectedRow);
-	    System.err.println("Selected: " + ssi);
+	    //textarea.append("Selected: " + ssi + "\n");
+	    panel.setSuperScaffold(ssi.getSuperScaffold());
 	}
     }
 
@@ -73,6 +80,8 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
 	    calculateStatistics();
 	}
+
+	public SuperScaffold getSuperScaffold() { return ss; }
 
 	public int getId() { return ss.getId(); }
 

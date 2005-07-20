@@ -19,6 +19,10 @@ class Core {
 	return children.elements();
     }
 
+    public Object[] toArray() {
+	return children.toArray();
+    }
+
     public void displayIndented(String prefix, int indentLevel, PrintStream ps) {
 	for (int i = 0; i < indentLevel; i++)
 	    ps.print(prefix);
