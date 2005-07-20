@@ -9,17 +9,22 @@ import java.util.Enumeration;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 
-class ScaffoldTable extends JPanel {
+class ScaffoldTable extends JPanel implements ListSelectionListener {
     private JTable table;
-     private JEditorPane htmlPane;
+    private JEditorPane htmlPane;
+    private ScaffoldTableModel model;
 
     public ScaffoldTable(Assembly assembly) {
         super(new GridLayout(1,0));
 
-	ScaffoldTableModel model = new ScaffoldTableModel(assembly);
+	model = new ScaffoldTableModel(assembly);
 
         //Create a table.
         table = new JTable(model);
+
+	table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+
+	table.getSelectionModel().addListSelectionListener(this);
 
         //Create the scroll pane and add the table to it. 
         JScrollPane tableView = new JScrollPane(table);
@@ -42,6 +47,19 @@ class ScaffoldTable extends JPanel {
         splitPane.setPreferredSize(new Dimension(500, 300));
 
         add(splitPane);
+    }
+
+    public void valueChanged(ListSelectionEvent e) {
+        //Ignore extra messages.
+        if (e.getValueIsAdjusting()) return;
+	
+        ListSelectionModel lsm = (ListSelectionModel)e.getSource();
+
+        if (!lsm.isSelectionEmpty()) {
+	    int selectedRow = lsm.getMinSelectionIndex();
+            SuperScaffoldInfo ssi = (SuperScaffoldInfo)model.getSuperScaffoldInfo(selectedRow);
+	    System.err.println("Selected: " + ssi);
+	}
     }
 
     class SuperScaffoldInfo {
@@ -88,6 +106,12 @@ class ScaffoldTable extends JPanel {
 		    totalLength += contig.getSize();
 		}
 	    }
+	}
+
+	public String toString() {
+	    return "SuperScaffoldInfo[SuperScaffold=" + ss.getId() +
+		", " + numScaffolds + " scaffolds, " + numContigs + " contigs, " +
+		totalLength + " bp]";
 	}
     }
 
@@ -155,6 +179,10 @@ class ScaffoldTable extends JPanel {
 	    default:
 		return null;
 	    }
+	}
+
+	public SuperScaffoldInfo getSuperScaffoldInfo(int row) {
+	    return info[row];
 	}
     }
 }
