@@ -3,6 +3,7 @@ package scaffolding;
 import javax.swing.*;
 import java.awt.*;
 import java.util.Vector;
+import java.util.Enumeration;
 
 public class ScaffoldPanel extends JPanel {
     protected int bpPerPixel = 100;
@@ -12,6 +13,8 @@ public class ScaffoldPanel extends JPanel {
 
     protected ContigBar[] contigBars = null;
     protected ScaffoldBar[] scaffoldBars = null;
+    protected LinkLine[] pucLines = null;
+    protected LinkLine[] bacLines = null;
 
     protected Dimension preferredSize = new Dimension(100, 100);
 
@@ -44,8 +47,6 @@ public class ScaffoldPanel extends JPanel {
 
 	int left = 0;
 	int scaffolds = 0;
-
-   
 
 	for (int i = 0; i < items.length; i++) {
 	    Object item = items[i];
@@ -91,6 +92,72 @@ public class ScaffoldPanel extends JPanel {
 
 	contigBars = (ContigBar[])ctgbars.toArray(new ContigBar[0]);
 	scaffoldBars = (ScaffoldBar[])scafbars.toArray(new ScaffoldBar[0]);
+
+	Vector pucs = new Vector();
+	Vector bacs = new Vector();
+
+	recursiveBridgeSearch(ss, pucs, bacs);
+
+	pucLines = (LinkLine[])pucs.toArray(new LinkLine[0]);
+	bacLines = (LinkLine[])bacs.toArray(new LinkLine[0]);
+    }
+
+    private void recursiveBridgeSearch(Core core, Vector pucs, Vector bacs) {
+	if (core instanceof Bridge) {
+	    addBridge((SuperBridge)core, pucs);
+	} else if (core instanceof SuperBridge) {
+	    addBridge((SuperBridge)core, bacs);
+	} else {
+	    for (Enumeration e = core.elements(); e.hasMoreElements();) {
+		Object obj = e.nextElement();
+
+		if (obj instanceof Core)
+		    recursiveBridgeSearch((Core)obj, pucs, bacs);
+	    }
+	}
+    }
+
+    private void addBridge(SuperBridge sb, Vector v) {
+	Link linkA = sb.getLinkA();
+	Link linkB = sb.getLinkB();
+
+	ContigBar ctgbarA = getContigBar(linkA.getContigId());
+	ContigBar ctgbarB = getContigBar(linkB.getContigId());
+
+	if (ctgbarA == null || ctgbarB == null)
+	    return;
+
+	int leftA, rightA, leftB, rightB;
+
+	if (ctgbarA.isForward()) {
+	    leftA = ctgbarA.getLeft() + linkA.getCStart();
+	    rightA = ctgbarA.getLeft() + linkA.getCFinish();
+	} else {
+	    leftA = ctgbarA.getRight() - linkA.getCStart();
+	    rightA = ctgbarA.getRight() - linkA.getCFinish();
+	}
+
+
+	if (ctgbarB.isForward()) {
+	    leftB = ctgbarB.getLeft() + linkB.getCStart();
+	    rightB = ctgbarB.getLeft() + linkB.getCFinish();
+	} else {
+	    leftB = ctgbarB.getRight() - linkB.getCStart();
+	    rightB = ctgbarB.getRight() - linkB.getCFinish();
+	}
+
+	v.add(new LinkLine(leftA, rightA, leftB, rightB));
+    }
+
+    private ContigBar getContigBar(int id) {
+	if (contigBars == null)
+	    return null;
+
+	for (int i = 0; i < contigBars.length; i++)
+	    if (contigBars[i].getContigId() == id)
+		return contigBars[i];
+
+	return null;
     }
 
     protected void recalculateLayout() {
@@ -149,12 +216,42 @@ public class ScaffoldPanel extends JPanel {
 	    g.setColor(bar.isForward() ? Color.blue : Color.red);
 
 	    int x = leftPadding + bar.getLeft()/bpPerPixel;
-	    int y = 20;
+	    int y = 40;
 
 	    int w = bar.getLength()/bpPerPixel;
 	    int h = 20;
 
 	    g.fillRect(x, y, w, h);
+	}
+
+	g.setColor(Color.cyan);
+
+	for (int i = 0; i < bacLines.length; i++) {
+	    LinkLine ll = bacLines[i];
+
+	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
+	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
+
+	    int y = 40;
+
+	    g.drawLine(xLeft, y, xLeft, y - 5);
+	    g.drawLine(xLeft, y - 5, xRight, y - 5);
+	    g.drawLine(xRight, y - 5, xRight, y);
+	}
+
+	g.setColor(Color.magenta);
+
+	for (int i = 0; i < pucLines.length; i++) {
+	    LinkLine ll = pucLines[i];
+
+	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
+	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
+
+	    int y = 60;
+
+	    g.drawLine(xLeft, y, xLeft, y + 5);
+	    g.drawLine(xLeft, y + 5, xRight, y + 5);
+	    g.drawLine(xRight, y + 5, xRight, y);
 	}
     }
 
@@ -196,5 +293,24 @@ public class ScaffoldPanel extends JPanel {
 	public int getLength() { return length; }
 
 	public int getRight() { return left + length; }
+    }
+
+    class LinkLine {
+	protected int leftA, rightA, leftB, rightB;
+
+	public LinkLine(int leftA, int rightA, int leftB, int rightB) {
+	    this.leftA = leftA;
+	    this.rightA = rightA;
+	    this.leftB = leftB;
+	    this.rightB = rightB;
+	}
+
+	public int getLeftA() { return leftA; }
+
+	public int getRightA() { return rightA; }
+
+	public int getLeftB() { return leftB; }
+
+	public int getRightB() { return rightB; }
     }
 }
