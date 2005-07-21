@@ -194,6 +194,7 @@ public class ScaffoldPanel extends JComponent {
 	preferredSize = new Dimension(width, height);
 
 	revalidate();
+	repaint();
     }
 
     public Dimension getPreferredSize() { return preferredSize; }
