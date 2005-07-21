@@ -2,11 +2,14 @@ package scaffolding;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.*;
+
 import java.util.Vector;
 import java.util.Enumeration;
+import java.util.Random;
 
-public class ScaffoldPanel extends JPanel {
-    protected int bpPerPixel = 100;
+public class ScaffoldPanel extends JComponent {
+    protected int bpPerPixel = 128;
     protected int leftPadding = 20;
     protected int rightPadding = 20;
     protected int interScaffoldGap = 1000;
@@ -17,6 +20,20 @@ public class ScaffoldPanel extends JPanel {
     protected LinkLine[] bacLines = null;
 
     protected Dimension preferredSize = new Dimension(100, 100);
+
+    Random random = new Random();
+
+    public void zoomIn() {
+	bpPerPixel /= 4;
+	if (bpPerPixel < 1)
+	    bpPerPixel = 1;
+	recalculateLayout();
+    }
+
+    public void zoomOut() {
+	bpPerPixel *= 4;
+	recalculateLayout();
+    }
 
     public void setSuperScaffold(SuperScaffold ss) {
 	makeBars(ss);
@@ -146,7 +163,9 @@ public class ScaffoldPanel extends JPanel {
 	    rightB = ctgbarB.getRight() - linkB.getCFinish();
 	}
 
-	v.add(new LinkLine(leftA, rightA, leftB, rightB));
+	int dy = 3 + random.nextInt(5);
+
+	v.add(new LinkLine(leftA, rightA, leftB, rightB, dy));
     }
 
     private ContigBar getContigBar(int id) {
@@ -234,9 +253,11 @@ public class ScaffoldPanel extends JPanel {
 
 	    int y = 40;
 
-	    g.drawLine(xLeft, y, xLeft, y - 5);
-	    g.drawLine(xLeft, y - 5, xRight, y - 5);
-	    g.drawLine(xRight, y - 5, xRight, y);
+	    int dy = ll.getDy();
+
+	    g.drawLine(xLeft, y, xLeft, y - dy);
+	    g.drawLine(xLeft, y - dy, xRight, y - dy);
+	    g.drawLine(xRight, y - dy, xRight, y);
 	}
 
 	g.setColor(Color.magenta);
@@ -249,9 +270,11 @@ public class ScaffoldPanel extends JPanel {
 
 	    int y = 60;
 
-	    g.drawLine(xLeft, y, xLeft, y + 5);
-	    g.drawLine(xLeft, y + 5, xRight, y + 5);
-	    g.drawLine(xRight, y + 5, xRight, y);
+	    int dy = ll.getDy();
+
+	    g.drawLine(xLeft, y, xLeft, y + dy);
+	    g.drawLine(xLeft, y + dy, xRight, y + dy);
+	    g.drawLine(xRight, y + dy, xRight, y);
 	}
     }
 
@@ -296,13 +319,14 @@ public class ScaffoldPanel extends JPanel {
     }
 
     class LinkLine {
-	protected int leftA, rightA, leftB, rightB;
+	protected int leftA, rightA, leftB, rightB, dy;
 
-	public LinkLine(int leftA, int rightA, int leftB, int rightB) {
+	public LinkLine(int leftA, int rightA, int leftB, int rightB, int dy) {
 	    this.leftA = leftA;
 	    this.rightA = rightA;
 	    this.leftB = leftB;
 	    this.rightB = rightB;
+	    this.dy = dy;
 	}
 
 	public int getLeftA() { return leftA; }
@@ -312,5 +336,7 @@ public class ScaffoldPanel extends JPanel {
 	public int getLeftB() { return leftB; }
 
 	public int getRightB() { return rightB; }
+
+	public int getDy() { return dy; }
     }
 }

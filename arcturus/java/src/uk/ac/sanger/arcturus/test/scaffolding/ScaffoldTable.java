@@ -4,10 +4,11 @@ import javax.swing.*;
 import javax.swing.table.*;
 import javax.swing.event.*;
 
+import java.awt.event.*;
+
 import java.util.Enumeration;
 
-import java.awt.Dimension;
-import java.awt.GridLayout;
+import java.awt.*;
 
 class ScaffoldTable extends JPanel implements ListSelectionListener {
     private JTable table;
@@ -16,7 +17,7 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
     private ScaffoldTableModel model;
 
     public ScaffoldTable(Assembly assembly) {
-        super(new GridLayout(1,0));
+        super(new BorderLayout());
 
 	model = new ScaffoldTableModel(assembly);
 
@@ -52,7 +53,50 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
         splitPane.setPreferredSize(new Dimension(500, 300));
 
-        add(splitPane);
+	JPanel mainpanel = new JPanel(new GridLayout(1,0));
+        mainpanel.add(splitPane);
+
+	add(mainpanel, BorderLayout.CENTER);
+
+	JToolBar toolbar = new JToolBar();
+
+	Action zoomInAction = new MyAbstractAction("Zoom In", createImageIcon("general/ZoomIn24"),
+					  "Zoom In",
+					  new Integer(KeyEvent.VK_PLUS),
+					  KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, ActionEvent.ALT_MASK)) {
+		public void actionPerformed(ActionEvent e) {
+		    panel.zoomIn();
+		}
+	    };
+ 
+	Action zoomOutAction = new MyAbstractAction("Zoom Out", createImageIcon("general/ZoomOut24"),
+					  "Zoom Out",
+					  new Integer(KeyEvent.VK_MINUS),
+					  KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, ActionEvent.ALT_MASK)) {
+		public void actionPerformed(ActionEvent e) {
+		    panel.zoomOut();
+		}
+	    };
+
+	toolbar.add(zoomInAction);
+	toolbar.add(zoomOutAction);
+
+	add(toolbar, BorderLayout.NORTH);
+   }
+
+    protected static ImageIcon createImageIcon(String imageName) {
+	String path = "toolbarButtonGraphics/"
+	    + imageName
+	    + ".gif";
+
+        java.net.URL imgURL = ScaffoldTable.class.getResource(path);
+
+        if (imgURL != null) {
+            return new ImageIcon(imgURL);
+        } else {
+            System.err.println("Couldn't find file: " + path);
+            return null;
+        }
     }
 
     public void valueChanged(ListSelectionEvent e) {
@@ -192,6 +236,22 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
 	public SuperScaffoldInfo getSuperScaffoldInfo(int row) {
 	    return info[row];
+	}
+    }
+
+    abstract class MyAbstractAction extends AbstractAction {
+	public MyAbstractAction(String text, ImageIcon icon, String description,
+				Integer mnemonic, KeyStroke accelerator) {
+	    super(text, icon);
+	    
+	    if (description != null)
+		putValue(SHORT_DESCRIPTION, description);
+	    
+	    if (mnemonic != null)
+		putValue(MNEMONIC_KEY, mnemonic);
+	    
+	    if (accelerator != null)
+		putValue(ACCELERATOR_KEY, accelerator);
 	}
     }
 }
