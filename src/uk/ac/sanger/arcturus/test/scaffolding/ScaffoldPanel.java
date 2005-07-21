@@ -13,6 +13,7 @@ public class ScaffoldPanel extends JComponent {
     protected int leftPadding = 20;
     protected int rightPadding = 20;
     protected int interScaffoldGap = 1000;
+    protected int contigBarHeight = 15;
 
     protected ContigBar[] contigBars = null;
     protected ScaffoldBar[] scaffoldBars = null;
@@ -211,11 +212,33 @@ public class ScaffoldPanel extends JComponent {
 
 	g.setColor(Color.black);
 
+	int y = 5;
+
+	int widthbp = contigBars[contigBars.length - 1].getRight();
+	int widthkb = widthbp/1000;
+
+	g.drawLine(leftPadding, y, leftPadding + widthbp/bpPerPixel, y);
+
+	for (int i = 0; i < widthkb; i++) {
+	    int x = leftPadding + (1000 * i)/bpPerPixel;
+
+	    int dy = 3;
+
+	    if ((i % 10) == 0)
+		dy = 5;
+
+	    if ((i % 100) == 0)
+		dy = 7;
+
+	    g.drawLine(x, y, x, y + dy);
+	}
+
+	y += 15;
+
 	for (int i = 0; i < scaffoldBars.length; i++) {
 	    ScaffoldBar sbar = scaffoldBars[i];
 
 	    int x = leftPadding + sbar.getLeft()/bpPerPixel;
-	    int y = 10;
 
 	    int w = sbar.getLength()/bpPerPixel;
 	    int h = 4;
@@ -229,18 +252,18 @@ public class ScaffoldPanel extends JComponent {
 	    g.drawLine(x, y, x, y + 2 * h);
 	}
 
+	y += 15;
+
 	for (int i = 0; i < contigBars.length; i++) {
 	    ContigBar bar = contigBars[i];
 
 	    g.setColor(bar.isForward() ? Color.blue : Color.red);
 
 	    int x = leftPadding + bar.getLeft()/bpPerPixel;
-	    int y = 40;
 
 	    int w = bar.getLength()/bpPerPixel;
-	    int h = 20;
 
-	    g.fillRect(x, y, w, h);
+	    g.fillRect(x, y, w, contigBarHeight);
 	}
 
 	g.setColor(Color.cyan);
@@ -251,8 +274,6 @@ public class ScaffoldPanel extends JComponent {
 	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
 	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
 
-	    int y = 40;
-
 	    int dy = ll.getDy();
 
 	    g.drawLine(xLeft, y, xLeft, y - dy);
@@ -262,13 +283,13 @@ public class ScaffoldPanel extends JComponent {
 
 	g.setColor(Color.magenta);
 
+	y += contigBarHeight;
+
 	for (int i = 0; i < pucLines.length; i++) {
 	    LinkLine ll = pucLines[i];
 
 	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
 	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
-
-	    int y = 60;
 
 	    int dy = ll.getDy();
 
