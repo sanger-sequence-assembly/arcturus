@@ -24,6 +24,11 @@ public class ScaffoldPanel extends JComponent {
 
     Random random = new Random();
 
+    public ScaffoldPanel() {
+	super();
+	setBackground(new Color(0xff, 0xff, 0xee));
+    }
+
     public void zoomIn() {
 	bpPerPixel /= 4;
 	if (bpPerPixel < 1)
@@ -200,9 +205,6 @@ public class ScaffoldPanel extends JComponent {
     public Dimension getPreferredSize() { return preferredSize; }
 
     public void paintComponent(Graphics gr) {
-	if (contigBars == null)
-	    return;
-
 	Graphics2D g = (Graphics2D)gr;
 
 	Dimension size = getSize();
@@ -210,6 +212,9 @@ public class ScaffoldPanel extends JComponent {
 	g.setColor(getBackground());
 
 	g.fillRect(0, 0, size.width, size.height);
+
+	if (contigBars == null)
+	    return;
 
 	g.setColor(Color.black);
 
