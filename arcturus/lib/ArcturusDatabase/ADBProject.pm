@@ -582,14 +582,16 @@ sub assignReadAsContigToProject {
 sub unlinkContigID {
 # remove link between contig_id and project_id (set project_id to 0)
     my $this = shift;
-    my $contig_id = shift || return undef; 
+    my $dbh = shift;
+    my $contig_id = shift || return undef;
+    my $confirm = shift;
 
-# does the user have modifify privileges on this project
-
-    my $dbh = $this->getConnection();
+# does the user have modify privileges on this project ?
 
     my ($lock,$owner) = &getLockedStatus($dbh,$contig_id,1);
     return (0,"Contig $contig_id is locked by user $owner") if $lock;
+
+    return (1,"OK") unless $confirm; # preview option   
 
     my $query = "update CONTIG join PROJECT using (project_id)"
               . "   set CONTIG.project_id = 0"
@@ -1010,7 +1012,7 @@ sub getLockedStatus {
     my $identifier = shift; # project ID or contig ID
     my $iscontigid = shift; # set TRUE for contig ID
 
-    my $query = "select PROJECT.project_id,PROJECT.locked,PROJECT.owner"
+    my $query = "select PROJECT.project_id,PROJECT.locked,PROJECT.lockedby"
 	      . "  from PROJECT";
 
     if ($iscontigid) {
@@ -1048,11 +1050,11 @@ sub setLockedStatus {
     my $query = "update PROJECT ";
 
     if ($getlock) {
-        $query .= "set locked = now(), owner = ? where project_id = ? "
+        $query .= "set locked = now(), lockedby = ? where project_id = ? "
 	        . "and locked is null";
     }
     else {
-        $query .= "set locked = null where owner = ? and project_id = ? "
+        $query .= "set locked = null where lockedby = ? and project_id = ? "
 	        . "and locked is not null";
     }
 
@@ -1069,3 +1071,4 @@ sub setLockedStatus {
 #------------------------------------------------------------------------------
 
 1;
+
