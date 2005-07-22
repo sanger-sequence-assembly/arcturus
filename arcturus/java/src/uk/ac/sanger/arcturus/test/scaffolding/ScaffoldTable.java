@@ -62,8 +62,8 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
 	Action zoomInAction = new MyAbstractAction("Zoom In", createImageIcon("general/ZoomIn24"),
 					  "Zoom In",
-					  new Integer(KeyEvent.VK_PLUS),
-					  KeyStroke.getKeyStroke(KeyEvent.VK_PLUS, ActionEvent.ALT_MASK)) {
+					  new Integer(KeyEvent.VK_I),
+					  KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.ALT_MASK)) {
 		public void actionPerformed(ActionEvent e) {
 		    panel.zoomIn();
 		}
@@ -71,8 +71,8 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
  
 	Action zoomOutAction = new MyAbstractAction("Zoom Out", createImageIcon("general/ZoomOut24"),
 					  "Zoom Out",
-					  new Integer(KeyEvent.VK_MINUS),
-					  KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, ActionEvent.ALT_MASK)) {
+					  new Integer(KeyEvent.VK_O),
+					  KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.ALT_MASK)) {
 		public void actionPerformed(ActionEvent e) {
 		    panel.zoomOut();
 		}
@@ -81,15 +81,17 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 	toolbar.add(zoomInAction);
 	toolbar.add(zoomOutAction);
 
+	toolbar.setFloatable(false);
+
 	add(toolbar, BorderLayout.NORTH);
    }
 
-    protected static ImageIcon createImageIcon(String imageName) {
-	String path = "toolbarButtonGraphics/"
+    protected ImageIcon createImageIcon(String imageName) {
+	String path = "/toolbarButtonGraphics/"
 	    + imageName
 	    + ".gif";
 
-        java.net.URL imgURL = ScaffoldTable.class.getResource(path);
+        java.net.URL imgURL = getClass().getResource(path);
 
         if (imgURL != null) {
             return new ImageIcon(imgURL);
