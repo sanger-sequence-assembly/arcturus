@@ -81,10 +81,13 @@ while (my $line = <STDIN>) {
 
     $stmt_read2seq->execute($readname);
 
-    if (my ($seqid) = $stmt_read2seq->fetchrow_array()) {
-	$stmt_seq2contig->execute($seqid);
+    my $ctgcount = 0;
+    my $seqcount = 0;
 
-	my $ctgcount = 0;
+    while (my ($seqid) = $stmt_read2seq->fetchrow_array()) {
+	$seqcount++;
+
+	$stmt_seq2contig->execute($seqid);
 
 	while (my ($contig_id,$gap4name,$nreads,$ctglen,$created,$updated,$projid,$cstart,$cfinish,$direction) =
 	       $stmt_seq2contig->fetchrow_array()) {
@@ -99,13 +102,13 @@ while (my $line = <STDIN>) {
 		"(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n",
 	}
 
-	if ($ctgcount < 1) {
-	    print "$readname is free\n";
-	}
-
 	$stmt_seq2contig->finish();
-    } else {
+    }
+
+    if ($seqcount == 0) {
 	print "$readname NOT KNOWN\n";
+    } elsif ($ctgcount < 1) {
+	print "$readname is free\n";
     }
 
     $stmt_read2seq->finish();
