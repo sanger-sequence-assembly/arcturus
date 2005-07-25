@@ -243,4 +243,5 @@ sub showUsage {
     print STDERR "-children\tDisplay descendants of initial contig\n";
     print STDERR "\n";
     print STDERR "-indent\t\tIndent each generation by this amount\n";
+    print STDERR "-maxdepth\tMaximum number of parent or child generations to display\n";
 }
