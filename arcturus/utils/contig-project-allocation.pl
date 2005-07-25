@@ -62,7 +62,7 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging();
+my $logger = new Logging('STDOUT');
  
 $logger->setFilter(0) if $verbose; # set reporting level
  
@@ -101,7 +101,15 @@ $logger->warning("Are you sure you do not need to specify assembly?") unless def
 
 my @contigids;
 
-push @contigids, $contig if defined($contig);
+if (defined($contig)) {
+
+    if ($contig =~ /\,/) {
+        push @contigids, split /\,/,$contig;
+    }
+    else {
+        push @contigids, $contig;
+    }
+}
 
 if ($fofn) {
     foreach my $contig (@$fofn) {
@@ -154,7 +162,7 @@ if (@$Project > 1) {
 	$list .= $project->getProjectName()." (".$project->getAssemblyID().") ";
     }
     &showUsage("More than one project found: $list");
-} 
+}
     
 $project = $Project->[0];
 

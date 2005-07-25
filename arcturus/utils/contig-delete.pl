@@ -50,7 +50,7 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging();
+my $logger = new Logging('STDOUT');
  
 $logger->setFilter(0) if $verbose; # set reporting level
  
@@ -86,7 +86,12 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 
 my @contigs;
 
-push @contigs, $contig_id if $contig_id;
+if ($contig_id && $contig_id =~ /\,/) {
+    @contigs = split /\,/,$contig_id;
+}
+elsif ($contig_id) {
+    push @contigs, $contig_id;
+}
 
 if ($fofn) {
     foreach my $contig_id (@$fofn) {
@@ -94,12 +99,26 @@ if ($fofn) {
     }
 }
 
+my $isName = 0;
+foreach my $identifier (@contigs) {
+    $isName = 1 if ($identifier =~ /\D/);
+}
+
+
+
+
 foreach my $contig_id (@contigs) {
-    $logger->warning("Contig $contig_id to be deleted");
-    next unless $confirm;
-    my ($success,$msg) = $adb->deleteContig($contig_id,cleanup=>$cleanup);
-    $logger->severe("FAILED to remove contig $contig_id") unless $success;
-    $logger->warning("Contig $contig_id is deleted") if $success;
+    my %options;
+    $options{cleanup} = 1 if $cleanup;
+    $options{confirm} = 1 if $confirm;
+#    $logger->warning("Contig $contig_id is to be deleted");
+#    next unless $confirm;
+#    my ($success,$msg) = $adb->deleteContig($contig_id,cleanup=>$cleanup);
+    my ($success,$msg) = $adb->deleteContig($contig_id,%options);
+    if ($confirm) {
+        $logger->severe("FAILED to remove contig $contig_id") unless $success;
+        $logger->warning("Contig $contig_id is deleted") if $success;
+    }
     $logger->warning($msg);
 }
 

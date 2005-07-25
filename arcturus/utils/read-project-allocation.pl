@@ -181,8 +181,13 @@ if ($readtype || ($read && $read =~ /\%|\*/)) {
         $logger->warning("No reads found");
     }
 }
-else {
-    push @reads, $read if defined($read);
+elsif (defined($read)) {
+    if ($read =~ /\,/) {
+        push @reads, split /\,/,$read;
+    }
+    else {
+        push @reads, $read;
+    }
 }
 
 # execute if confirm switch set, else list 
