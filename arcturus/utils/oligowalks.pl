@@ -10,12 +10,12 @@ use strict;
 my $nextword;
 my $instance;
 my $organism;
-my $history = 0;
+my $insertsize = 8000;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
-    $history = 1 if ($nextword eq '-history');
+    $insertsize = shift @ARGV if ($nextword eq '-insertsize');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -34,18 +34,16 @@ my $dbh = $adb->getConnection();
 
 my ($query, $stmt);
 
-unless ($history) {
-    $query = "create temporary table currentcontigs" .
-	" as select CONTIG.contig_id,gap4name,nreads,length,created,updated,project_id" .
-	" from CONTIG left join C2CMAPPING" .
-	" on CONTIG.contig_id = C2CMAPPING.parent_id where C2CMAPPING.parent_id is null";
+$query = "create temporary table currentcontigs" .
+    " as select CONTIG.contig_id,gap4name,nreads,length,created,updated,project_id" .
+    " from CONTIG left join C2CMAPPING" .
+    " on CONTIG.contig_id = C2CMAPPING.parent_id where C2CMAPPING.parent_id is null";
 
-    $stmt = $dbh->prepare($query);
-    &db_die("Failed to create query \"$query\"");
+$stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
 
-    my $ncontigs = $stmt->execute();
-    &db_die("Failed to execute query \"$query\"");
-}
+my $ncontigs = $stmt->execute();
+&db_die("Failed to execute query \"$query\"");
 
 $query = "select project_id, name from PROJECT";
 
@@ -68,10 +66,8 @@ $query = "select seq_id from READS left join SEQ2READ using(read_id) where readn
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
-my $contigtable = $history ? "CONTIG" : "currentcontigs";
-
-$query = "select $contigtable.contig_id,gap4name,nreads,length,created,updated,project_id,cstart,cfinish,direction" .
-    " from MAPPING left join $contigtable using(contig_id) where seq_id = ? and gap4name is not null";
+$query = "select currentcontigs.contig_id,gap4name,nreads,length,created,updated,project_id,cstart,cfinish,direction" .
+    " from MAPPING left join currentcontigs using(contig_id) where seq_id = ? and gap4name is not null";
 
 my $stmt_seq2contig = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -98,13 +94,46 @@ while (my $line = <STDIN>) {
     foreach my $xctg (@{$oligocontig}) {
 	foreach my $actg (@{$readacontig}) {
 	    foreach my $bctg (@{$readbcontig}) {
-		printf "%-25s %-25s %6d %6d %6d %3s %-25s %6d %6d %6d %3s %-25s %6d %6d %6d\n",
-		$readname,
-		$xctg->[1], $xctg->[4], $xctg->[2], $xctg->[3],
-		$exta,
-		$actg->[1], $actg->[4], $actg->[2], $actg->[3],
-		$extb,
-		$bctg->[1], $bctg->[4], $bctg->[2], $bctg->[3];
+		# p1k and q1k reads must be in different contigs
+		next unless ($actg->[1] ne $bctg->[1]);
+
+		# The oligo read must be in the same read as either the p1k or q1k read
+		next unless (($xctg->[1] eq $actg->[1]) || ($xctg->[1] eq $bctg->[1]));
+
+		# The shotgun reads must be within a sub-clone length of the end of their respective
+		# contigs and pointing outwards
+		next unless (&nearEndAndPointingOut($actg->[4], $actg->[2], $actg->[3], $insertsize) &&
+			     &nearEndAndPointingOut($bctg->[4], $bctg->[2], $bctg->[3], $insertsize));
+
+		my $enda = &whichEnd($actg->[2], $actg->[3]);
+		my $endb = &whichEnd($bctg->[2], $bctg->[3]);
+
+		# Does one of the contigs need to be reversed?
+		my $rev = ($enda eq $endb) ? 'R' : '';
+
+		my @info = ();
+
+		if ($xctg->[1] eq $actg->[1]) {
+		    # The oligo read is in the same contig as its shotgun counterpart
+
+		    # It should be within a sub-clone length of the end of its contig and pointing outwards
+		    next unless &nearEndAndPointingOut($xctg->[4], $xctg->[2], $xctg->[3], $insertsize);
+
+		    push @info, $readname, $actg->[4], $readnameb, $bctg->[4];
+		} else {
+		    # The oligo read is in the same contig as the mate of its shotgun counterpart
+
+		    # It should be pointing into its contig and closer to the end than the mate of
+		    # its shotgun counterpart
+		    next unless &nearEndAndPointingIn($xctg->[4], $xctg->[2], $xctg->[3],
+						      $bctg->[2], $bctg->[3], $insertsize);
+
+		    push @info, $readname, $bctg->[4], $readnamea, $actg->[4];
+		}
+
+		push @info, $rev;
+
+		printf "%-25s %8d  %-25s %8d %s\n", @info;
 	    }
 	}
     }
@@ -114,6 +143,36 @@ while (my $line = <STDIN>) {
 $dbh->disconnect();
 
 exit(0);
+
+sub nearEndAndPointingOut {
+    my ($ctglen, $ctgstart, $ctgfinish, $insertsize, $junk) = @_;
+
+    if ($ctgstart < $ctgfinish) {
+	# Read is co-aligned with contig
+	return ($ctgstart > $ctglen - $insertsize);
+    } else {
+	# read is counter-aligned with contig
+	return ($ctgfinish < $insertsize);
+    }
+}
+
+sub nearEndAndPointingIn {
+    my ($ctglen, $ctgstart, $ctgfinish, $ctgstartb, $ctgfinishb, $insertsize, $junk) = @_;
+
+    if ($ctgstartb < $ctgfinishb) {
+	# Mate of shotgun read is co-aligned with contig, so it must be near the end
+	return (($ctgstart > $ctgfinish) && ($ctgfinish > $ctgfinishb));
+    } else {
+	# Mate of shotgun read is counter-aligned with contig, so it must be near the start
+	return (($ctgstart < $ctgfinish) && ($ctgfinish < $ctgfinishb));
+    }
+}
+
+sub whichEnd {
+    my ($ctgstart, $ctgfinish, $junk) = @_;
+
+    return ($ctgstart < $ctgfinish) ? 'R' : 'L';
+}
 
 sub read2contig {
     my $readname = shift;
@@ -154,5 +213,5 @@ sub showUsage {
     print STDERR "-organism\t\tName of organism\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "-history\t\tSearch for the read in all contigs, not just the current contig set\n";
+    print STDERR "-insertsize\t\tThe size of the sub-clones [default: 8000]\n";
 }
