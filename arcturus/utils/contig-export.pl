@@ -25,7 +25,7 @@ my $qualityfile;
 my $masking;
 my $metadataonly = 1;
 
-my $validKeys  = "organism|instance|contig|fofn|ignoreblocked|full|"
+my $validKeys  = "organism|instance|contig|contigs|fofn|ignoreblocked|full|"
                . "caf|fasta|quality|padded|mask|noread|batch|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -39,6 +39,8 @@ while (my $nextword = shift @ARGV) {
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
     $contig       = shift @ARGV  if ($nextword eq '-contig'); # ID or name
+
+    $contig       = shift @ARGV  if ($nextword eq '-contigs'); # ID or name
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -153,7 +155,7 @@ elsif (defined($fastafile)) {
 
 my @contigs;
 
-push @contigs, $contig if $contig;
+push @contigs, split(/,/, $contig) if $contig;
  
 if ($fofn) {
     foreach my $contig (@$fofn) {
@@ -232,6 +234,7 @@ sub showUsage {
     print STDERR "-instance\teither 'prod' or 'dev'\n\n";
     print STDERR "OPTIONAL EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-contig\t\tContig name or ID\n";
+    print STDERR "-contigs\tComma-separated list of ontig names or IDs\n";
     print STDERR "-fofn \t\tname of file with list of Contig IDs\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
