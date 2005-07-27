@@ -234,7 +234,7 @@ sub showUsage {
     print STDERR "-instance\teither 'prod' or 'dev'\n\n";
     print STDERR "OPTIONAL EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-contig\t\tContig name or ID\n";
-    print STDERR "-contigs\tComma-separated list of ontig names or IDs\n";
+    print STDERR "-contigs\tComma-separated list of contig names or IDs\n";
     print STDERR "-fofn \t\tname of file with list of Contig IDs\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
