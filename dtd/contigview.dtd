@@ -34,12 +34,12 @@
 <!ATTLIST position
 	    x       CDATA	#REQUIRED
 	    y       CDATA	#REQUIRED
-	    sense   (F|R)	#REQUIRED
+	    sense   (F|R)	"F"
 >
 
 <!ELEMENT objectlist (object+) >
 
-<!ELEMENT object (property+) >
+<!ELEMENT object (position?, properties?) >
 
 <!ATTLIST object
             name    CDATA       #REQUIRED
