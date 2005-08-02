@@ -42,6 +42,7 @@
 <!ELEMENT object (position?, properties?) >
 
 <!ATTLIST object
-            name    CDATA       #REQUIRED
+            type    CDATA       #REQUIRED
+            id      CDATA       #IMPLIED
 >
 
