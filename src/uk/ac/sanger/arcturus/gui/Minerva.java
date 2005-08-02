@@ -1,0 +1,214 @@
+package uk.ac.sanger.arcturus.gui;
+
+import java.awt.event.*;
+import javax.swing.*;
+import java.awt.Dimension;
+import java.util.*;
+import java.io.*;
+
+import uk.ac.sanger.arcturus.database.*;
+
+/**
+ * This class is the main class for all GUI applications.
+ * It handles user preferences and manages the shared ArcturusDatabase
+ * objects. It also maintains a list of all active frames.
+ */
+
+public class Minerva implements WindowListener {
+    public static final String ARCTURUS_USER_DIRECTORY = ".arcturus";
+    public static final String MINERVA_PREFERENCES_FILE = "minerva.prefs";
+
+    protected Properties userProperties = new Properties();
+    protected Properties siteProperties = new Properties();
+    protected Vector activeFrames = new Vector();
+    protected ArcturusDatabase adb = null;
+
+    public Minerva(String[] args) {
+	loadUserProperties();
+	loadSiteProperties();
+
+	//adb = createArcturusDatabase(args);
+
+	//restoreOldSessions();
+
+	//createNewSessions(args);
+    }
+
+    private void loadUserProperties() {
+	String userHome = System.getProperty("user.home");
+
+	File file = new File(userHome);
+
+	file = new File(file, ARCTURUS_USER_DIRECTORY);
+
+	if (!file.exists()) {
+	    System.err.println("Cannot load user preferences: directory " + file +
+			       " does not exist");
+	    return;
+	}
+
+	if (!file.isDirectory()) {
+	    System.err.println("Cannot load user preferences: " + file +
+			       " exists but is not a directory");
+	}
+
+	file = new File(file, MINERVA_PREFERENCES_FILE);
+
+	loadPropertiesFromFile(userProperties, file);
+    }
+
+    private void loadSiteProperties() {
+	String siteHome = System.getProperty("arcturus.site.home");
+
+	if (siteHome == null) {
+	    System.err.println("Cannot load site preferences: site home directory is not defined");
+	    return;
+	}
+
+	File file = new File(siteHome);
+
+	if (!file.exists()) {
+	    System.err.println("Cannot load site preferences: directory " + file + " does not exist");
+	    return;
+	}
+
+	if (!file.isDirectory()) {
+	    System.err.println("Cannot load site preferences: " + file + " exists but is not a directory");
+	    return;
+	}
+
+	if (!file.canRead()) {
+	    System.err.println("Cannot load site preferences: directory " + file + " exists but is not readable");
+	    return;
+	}
+
+	file = new File(file, MINERVA_PREFERENCES_FILE);
+
+	loadPropertiesFromFile(siteProperties, file);
+    }
+
+    private void loadPropertiesFromFile(Properties props, File file) {
+	String preftype = (props == userProperties) ? "user" : (props == siteProperties) ? "site" : "(unknown)";
+
+	String warning = "Cannot load " + preftype + " preferences:";
+
+	if (!file.exists()) {
+	    System.err.println(warning + file + " does not exist");
+	    return;
+	}
+
+	if (!file.isFile()) {
+	    System.err.println(warning + file + " is not a file");
+	    return;
+	}
+
+	if (!file.canRead()) {
+	    System.err.println(warning + file + " is not readable");
+	    return;
+	}
+
+	try {
+	    FileInputStream fis = new FileInputStream(file);
+	    props.load(fis);
+	    fis.close();
+	}
+	catch (IOException ioe) {
+	    System.err.println(warning + " an IOException occurred when attempting to read " + file);
+	    System.err.println("The error message is: " + ioe.getMessage());
+	}
+    }
+
+    public String getUserProperty(String key) {
+	return userProperties.getProperty(key);
+    }
+
+    public Object setUserProperty(String key, String value) {
+	return userProperties.setProperty(key, value);
+    }
+
+    public String getSiteProperty(String key) {
+	return siteProperties.getProperty(key);
+    }
+
+    public String getProperty(String key) {
+	String value = siteProperties.getProperty(key);
+
+	return (value != null) ? value : userProperties.getProperty(key);
+    }
+    
+    /**
+     * This method is required by the WindowListener interface.
+     * It is a no-op because we are not interested in this type
+     * of event.
+     */
+    public void windowActivated(WindowEvent event) {}
+
+    /**
+     * This method is required by the WindowListener interface.
+     * It is a no-op because we are not interested in this type
+     * of event.
+     */
+    public void windowDeactivated(WindowEvent event) {}
+
+    /**
+     * This method is required by the WindowListener interface.
+     * It is a no-op because we are not interested in this type
+     * of event.
+     */
+    public void windowIconified(WindowEvent event) {}
+
+    /**
+     * This method is required by the WindowListener interface.
+     * It is a no-op because we are not interested in this type
+     * of event.
+     */
+    public void windowDeiconified(WindowEvent event) {}
+
+    /**
+     * This method is required by the WindowListener interface.
+     * It is a no-op because we are not interested in this type
+     * of event.
+     */
+    public void windowClosing(WindowEvent event) {}
+
+    /**
+     * This method is required by the WindowListener interface.
+     * We add the window to the set of active frames.
+     */
+    public void windowOpened(WindowEvent event) {
+	java.awt.Window window = (java.awt.Window)event.getSource();
+	activeFrames.add(window);
+	System.err.println("windowOpened(" + event + ")");
+    }
+
+    /**
+     * This method is required by the WindowListener interface.
+     */
+    public void windowClosed(WindowEvent event) {
+	java.awt.Window window = (java.awt.Window)event.getSource();
+	activeFrames.remove(window);
+	System.err.println("windowClosed(" + event + ")");
+    }
+
+    public void displayNewFrame(JFrame frame) {
+	frame.addWindowListener(this);
+	frame.pack();
+	frame.show();
+    }
+
+    public void run() {
+	SwingUtilities.invokeLater(new Runnable() {
+		public void run() {
+		    MinervaFrame frame = new MinervaFrame(Minerva.this, "Test Frame");
+		    frame.setSize(new Dimension(600,500));
+		    displayNewFrame(frame);
+		}
+	    });
+    }
+
+    public static void main(String[] args) {
+	Minerva minerva = new Minerva(args);
+
+	minerva.run();
+    }
+}
