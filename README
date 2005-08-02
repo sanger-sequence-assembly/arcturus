@@ -61,3 +61,6 @@ ArcturusDatabase.
 
 uk.ac.sanger.arcturus.dataloading will contain classes which act as a
 bridge between Arcturus and external source of read data.
+
+uk.ac.sanger.arcturus.gui contains classes which implement the GUI
+client software, called Minerva.
