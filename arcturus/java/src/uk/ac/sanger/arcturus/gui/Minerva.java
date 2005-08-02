@@ -5,7 +5,11 @@ import javax.swing.*;
 import java.awt.Dimension;
 import java.util.*;
 import java.io.*;
+import javax.naming.NamingException;
+import javax.naming.Context;
+import java.sql.SQLException;
 
+import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.*;
 
 /**
@@ -27,7 +31,33 @@ public class Minerva implements WindowListener {
 	loadUserProperties();
 	loadSiteProperties();
 
-	//adb = createArcturusDatabase(args);
+	String instance = getStringParameter(args, "-instance");
+	String organism = getStringParameter(args, "-organism");
+
+	if (instance == null) {
+	    System.err.println("No instance specified");
+	    System.exit(1);
+	}
+
+	if (organism == null) {
+	    System.err.println("No organism specified");
+	    System.exit(1);
+	}
+
+	try {
+	    adb = createArcturusDatabase(instance ,organism);
+	}
+	catch (Exception e) {
+	    System.err.println("Failed to create an ArcturusDatabase  for instance \"" + instance +
+			       "\", organism \"" + organism + "\" : " + e.getMessage());
+	    System.exit(1);
+	}
+
+	if (adb == null) {
+	    System.err.println("ArcturusDatabase object for instance \"" + instance +
+			       "\", organism \"" + organism + "\" was null");
+	    System.exit(1);
+	}
 
 	//restoreOldSessions();
 
@@ -116,6 +146,52 @@ public class Minerva implements WindowListener {
 	    System.err.println(warning + " an IOException occurred when attempting to read " + file);
 	    System.err.println("The error message is: " + ioe.getMessage());
 	}
+    }
+
+    private String getStringParameter(String[] args, String key) {
+	if (args == null || key == null)
+	    return null;
+
+	for (int i = 0; i < args.length - 1; i++)
+	    if (args[i].equalsIgnoreCase(key) && !args[i+1].startsWith("-"))
+		return args[i+1];
+
+	return null;
+    }
+
+    private boolean getBooleanParameter(String[] args, String key) {
+	if (args == null || key == null)
+	    return false;
+
+	String notkey = "-no" + key.substring(1);
+
+	boolean value = false;
+
+	for (int i = 0; i < args.length; i++) {
+	    if (args[i].equalsIgnoreCase(key))
+		value = true;
+
+	    if (args[i].equalsIgnoreCase(notkey))
+		value = false;
+	}
+
+	return value;
+    }
+
+    private ArcturusDatabase createArcturusDatabase(String instance, String organism)
+	throws NamingException, SQLException {
+	Properties props = new Properties();
+
+	Properties env = System.getProperties();
+
+	props.put(Context.INITIAL_CONTEXT_FACTORY, env.get(Context.INITIAL_CONTEXT_FACTORY));
+	props.put(Context.PROVIDER_URL, env.get(Context.PROVIDER_URL));
+
+	ArcturusInstance ai = new ArcturusInstance(props, instance);
+
+	ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+	return adb;
     }
 
     public String getUserProperty(String key) {
