@@ -37,7 +37,7 @@ set JNDI_JARS=${JNDI_FS_JARS}:${JNDI_LDAP_JARS}
 set DEFAULT_JNDI_FACTORY=com.sun.jndi.ldap.LdapCtxFactory
 #set DEFAULT_JNDI_URL="ldap://hoyle:1389/ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 # Use the official Sanger Institute LDAP server
-set DEFAULT_JNDI_URL="ldap://ldap.internal.sanger.ac.uk/ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
+set DEFAULT_JNDI_URL="ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk"
 
 # Use the JNDI factory specified via ARCTURUS_JNDI_FACTORY, if it exists
 # otherwise use a fallback
