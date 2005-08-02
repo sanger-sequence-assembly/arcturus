@@ -266,6 +266,10 @@ public class Minerva implements WindowListener {
 	System.err.println("windowClosed(" + event + ")");
     }
 
+    public Vector getActiveFrames() {
+	return (Vector)activeFrames.clone();
+    }
+
     public void displayNewFrame(JFrame frame) {
 	frame.addWindowListener(this);
 	frame.pack();
