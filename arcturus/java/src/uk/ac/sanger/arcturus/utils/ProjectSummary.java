@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.utils;
 
+import java.util.Date;
+
 public class ProjectSummary {
     protected int numberOfContigs = 0;
     protected int numberOfReads = 0;
@@ -7,6 +9,7 @@ public class ProjectSummary {
     protected int meanConsensusLength = 0;
     protected int sigmaConsensusLength = 0;
     protected int maximumConsensusLength = 0;
+    protected Date newestContigCreated = null;
 
     public void reset() {
 	numberOfContigs = 0;
@@ -15,6 +18,7 @@ public class ProjectSummary {
 	meanConsensusLength = 0;
 	sigmaConsensusLength = 0;
 	maximumConsensusLength = 0;
+	newestContigCreated = null;
     }
 
     public void setNumberOfContigs(int numberOfContigs) {
@@ -53,4 +57,10 @@ public class ProjectSummary {
     }
 
     public int getMaximumConsensusLength() { return maximumConsensusLength; }
+
+    public void setNewestContigCreated(Date created) {
+	this.newestContigCreated = created;
+    }
+
+    public Date getNewestContigCreated() { return newestContigCreated; }
 }
