@@ -29,6 +29,8 @@ public class ProjectProxy {
 
     public int getID() { return project.getID(); }
 
+    public String getAssemblyName() { return project.getAssembly().getName(); }
+
     public int getContigCount() { return summary.getNumberOfContigs(); }
 
     public int getMaximumLength() { return summary.getMaximumConsensusLength(); }
