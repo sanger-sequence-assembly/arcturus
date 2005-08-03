@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 class ProjectTableModel extends AbstractTableModel implements SortableTableModel {
-    protected Vector projects;
+    protected Vector projects = new Vector();;
     protected ProjectComparator comparator;
     protected int lastSortColumn = 3;
     protected ArcturusDatabase adb = null;
