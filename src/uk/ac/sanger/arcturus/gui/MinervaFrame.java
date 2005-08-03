@@ -16,9 +16,7 @@ public class MinervaFrame extends JFrame {
     private JMenu viewMenu = null;
     private JMenu toolMenu = null;
     private JMenu windowMenu = null;
-    private JToolBar toolbar = null;
     private JPanel mainPane = null;
-    private Container contentPane = null;
 
     private Action newAction = null;
 
@@ -30,10 +28,6 @@ public class MinervaFrame extends JFrame {
     public MinervaFrame(Minerva minerva, String title) {
 	super(title);
 	this.minerva = minerva;
-
-	mainPane = new JPanel(new BorderLayout());
-	mainPane.setOpaque(true);
-	super.setContentPane(mainPane);
 
 	createActions();
 
@@ -101,7 +95,6 @@ public class MinervaFrame extends JFrame {
 	    windowPopup.add(new MyWindowAction(frame));
 	}
     }
-	
 
     public JMenu getFileMenu() { return fileMenu; }
 
@@ -110,30 +103,6 @@ public class MinervaFrame extends JFrame {
     public JMenu getViewMenu() { return viewMenu; }
 
     public JMenu getToolMenu() { return toolMenu; }
-
-    public void setContentPane(Container contentPane) {
-	if (this.contentPane != null)
-	    mainPane.remove(this.contentPane);
-
-	this.contentPane = contentPane;
-
-	mainPane.add(contentPane, BorderLayout.CENTER);
-
-	pack();
-    }
-
-    public Container getContentPane() { return contentPane; }
-
-    public void setToolBar(JToolBar toolbar) {
-	if (this.toolbar != null)
-	    mainPane.remove(this.toolbar);
-
-	this.toolbar = toolbar;
-
-	mainPane.add(toolbar, BorderLayout.NORTH);
-
-	pack();
-    }
 
     private void createNewWindow() {
 	MinervaFrame frame = new MinervaFrame(minerva);

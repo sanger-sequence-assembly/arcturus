@@ -12,6 +12,8 @@ import java.sql.SQLException;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.*;
 
+import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
+
 /**
  * This class is the main class for all GUI applications.
  * It handles user preferences and manages the shared ArcturusDatabase
@@ -194,6 +196,8 @@ public class Minerva implements WindowListener {
 	return adb;
     }
 
+    public ArcturusDatabase getArcturusDatabase() { return adb; }
+
     public String getUserProperty(String key) {
 	return userProperties.getProperty(key);
     }
@@ -254,7 +258,6 @@ public class Minerva implements WindowListener {
     public void windowOpened(WindowEvent event) {
 	java.awt.Window window = (java.awt.Window)event.getSource();
 	activeFrames.add(window);
-	System.err.println("windowOpened(" + event + ")");
     }
 
     /**
@@ -263,7 +266,6 @@ public class Minerva implements WindowListener {
     public void windowClosed(WindowEvent event) {
 	java.awt.Window window = (java.awt.Window)event.getSource();
 	activeFrames.remove(window);
-	System.err.println("windowClosed(" + event + ")");
     }
 
     public Vector getActiveFrames() {
@@ -279,8 +281,7 @@ public class Minerva implements WindowListener {
     public void run() {
 	SwingUtilities.invokeLater(new Runnable() {
 		public void run() {
-		    MinervaFrame frame = new MinervaFrame(Minerva.this, "Test Frame");
-		    frame.setSize(new Dimension(600,500));
+		    MinervaFrame frame = new ProjectTableFrame(Minerva.this);
 		    displayNewFrame(frame);
 		}
 	    });
