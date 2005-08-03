@@ -38,7 +38,7 @@ public class ProjectManager extends AbstractManager {
 	query = "update PROJECT set assembly_id = ? where project_id = ?";
 	pstmtSetAssemblyForProject = conn.prepareStatement(query);
 
-	query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length) from " +
+	query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created) from " +
 	    " CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id" +
 	    " where C2CMAPPING.parent_id is null " +
 	    " and project_id = ? and length >= ?";
@@ -173,7 +173,8 @@ public class ProjectManager extends AbstractManager {
 	stmt.close();
     }
 
-    public Set getAllProjects() {
+    public Set getAllProjects() throws SQLException {
+	preloadAllProjects();
 	return new HashSet(hashByID.values());
     }
 
@@ -237,6 +238,7 @@ public class ProjectManager extends AbstractManager {
 	    summary.setMeanConsensusLength(rs.getInt(4));
 	    summary.setSigmaConsensusLength(rs.getInt(5));
 	    summary.setMaximumConsensusLength(rs.getInt(6));
+	    summary.setNewestContigCreated(rs.getTimestamp(7));
 	} else
 	    summary.reset();
 
