@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 class ProjectTableModel extends AbstractTableModel implements SortableTableModel {
-    protected Vector projects = new Vector();;
+    protected Vector projects = new Vector();
     protected ProjectComparator comparator;
     protected int lastSortColumn = 3;
     protected ArcturusDatabase adb = null;
@@ -31,7 +31,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    }
 
 	    comparator.setAscending(false);
-	    sortOnColumn(1);
+	    sortOnColumn(2);
 	}
 	catch (SQLException sqle) {
 	    sqle.printStackTrace();
@@ -42,21 +42,24 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     public String getColumnName(int col) {
         switch (col) {
 	case 0:
-	    return "Project";
+	    return "Assembly";
 
 	case 1:
-	    return "Total length";
+	    return "Project";
 
 	case 2:
-	    return "Contigs";
+	    return "Total length";
 
 	case 3:
-	    return "Max length";
+	    return "Contigs";
 
 	case 4:
-	    return "Reads";
+	    return "Max length";
 
 	case 5:
+	    return "Reads";
+
+	case 6:
 	    return "Updated";
 
 	default:
@@ -67,15 +70,16 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     public Class getColumnClass(int col) {
         switch (col) {
 	case 0:
+	case 1:
 	    return String.class;
 
-	case 1:
 	case 2:
 	case 3:
 	case 4:
+	case 5:
 	    return Integer.class;
 
-	case 5:
+	case 6:
 	    return java.util.Date.class;
 
 	default:
@@ -87,7 +91,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	return projects.size();
     }
 
-    public int getColumnCount() { return 6; }
+    public int getColumnCount() { return 7; }
 
     protected ProjectProxy getProjectAtRow(int row) {
 	return (ProjectProxy)projects.elementAt(row);
@@ -98,21 +102,24 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 
 	switch (col) {
 	case 0:
-	    return project.getName();
+	    return project.getAssemblyName();
 
 	case 1:
-	    return new Integer(project.getTotalLength());
+	    return project.getName();
 
 	case 2:
-	    return new Integer(project.getContigCount());
+	    return new Integer(project.getTotalLength());
 
 	case 3:
-	    return new Integer(project.getMaximumLength());
+	    return new Integer(project.getContigCount());
 
 	case 4:
-	    return new Integer(project.getReadCount());
+	    return new Integer(project.getMaximumLength());
 
 	case 5:
+	    return new Integer(project.getReadCount());
+
+	case 6:
 	    return project.getNewestContigCreated();
 
 	default:
@@ -123,7 +130,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     public boolean isCellEditable(int row, int col) { return false; }
 
     public boolean isColumnSortable(int col) {
-	return (col > 0);
+	return (col > 1);
     }
 
     public void sortOnColumn(int col, boolean ascending) {
@@ -133,23 +140,23 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 
     public void sortOnColumn(int col) {
 	switch (col) {
-	case 1:
+	case 2:
 	    comparator.setType(ProjectComparator.BY_TOTAL_LENGTH);
 	    break;
 
-	case 2:
+	case 3:
 	    comparator.setType(ProjectComparator.BY_CONTIGS);
 	    break;
 
-	case 3:
+	case 4:
 	    comparator.setType(ProjectComparator.BY_MAXIMUM_LENGTH);
 	    break;
 
-	case 4:
+	case 5:
 	    comparator.setType(ProjectComparator.BY_READS);
 	    break;
 
-	case 5:
+	case 6:
 	    comparator.setType(ProjectComparator.BY_DATE);
 	    break;
 	}
