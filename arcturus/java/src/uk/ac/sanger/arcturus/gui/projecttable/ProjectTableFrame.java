@@ -14,7 +14,7 @@ public class ProjectTableFrame extends MinervaFrame {
     public ProjectTableFrame(Minerva minerva) {
 	super(minerva, "Project List : " +  minerva.getArcturusDatabase().getName());
 
-	ProjectTableModel model = new ProjectTableModel( minerva.getArcturusDatabase());
+	ProjectTableModel model = new ProjectTableModel(minerva);
 
 	table = new ProjectTable(model);
 

@@ -6,9 +6,11 @@ import javax.swing.*;
 import javax.swing.table.*;
 import java.sql.Connection;
 
-import uk.ac.sanger.arcturus.gui.SortableTable;
-import uk.ac.sanger.arcturus.gui.SortableTableModel;
-import uk.ac.sanger.arcturus.gui.ISODateRenderer;
+import uk.ac.sanger.arcturus.gui.*;
+
+import uk.ac.sanger.arcturus.gui.contigtable.ContigTableFrame;
+
+import uk.ac.sanger.arcturus.data.Project;
 
 public class ProjectTable extends SortableTable {
     protected final Color paleYellow = new Color(255, 255, 238);
@@ -98,11 +100,16 @@ public class ProjectTable extends SortableTable {
 
     public void displaySelectedProjects() {
 	int[] indices = getSelectedRows();
+	Project projects[] = new Project[indices.length];
 	ProjectTableModel ptm = (ProjectTableModel)getModel();
 	for (int i = 0; i < indices.length; i++) {
 	    ProjectProxy project = (ProjectProxy)ptm.elementAt(indices[i]);
-	    indices[i] = project.getID();
-	    System.err.println("index[" + i + "] ==> Project " + indices[i]);
+	    projects[i] = project.getProject();
 	}
+
+	Minerva minerva = Minerva.getInstance();
+
+	ContigTableFrame frame = new ContigTableFrame(minerva, projects);
+	minerva.displayNewFrame(frame);
     }
 }
