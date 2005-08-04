@@ -55,26 +55,17 @@ public class ProjectTable extends SortableTable {
 	int modelcol = convertColumnIndexToModel(col);
 
 	if (event.isPopupTrigger()) {
-	    //System.err.println("popup triggered at row " + row + ", view column " + col + ", model column " + modelcol);
 	    popupMenu.show(event.getComponent(), event.getX(), event.getY());
 	}
 
 	if (event.getID() == MouseEvent.MOUSE_CLICKED &&
 	    event.getButton() == MouseEvent.BUTTON1 &&
 	    event.getClickCount() == 2) {
-	    //System.err.println("Double click at row " + row + ", view column " + col + ", model column " + modelcol);
-	    ProjectTableModel ptm = (ProjectTableModel)getModel();
-	    ProjectProxy project = (ProjectProxy)ptm.elementAt(row);
-	    int project_id = project.getID();
-	    Connection conn = ptm.getConnection();
-	    int idlist[] = {project_id};
-	    //createAndShowContigTable(conn, idlist);
+	    //ProjectTableModel ptm = (ProjectTableModel)getModel();
+	    //ProjectProxy project = (ProjectProxy)ptm.elementAt(row);
+	    displaySelectedProjects();
 	}
     }
-
-    //private void createAndShowContigTable(Connection conn, int[] idlist) {
-    //	ContigPanel.createAndShowGUI(conn, idlist);
-    //}
 
     public Component prepareRenderer(TableCellRenderer renderer,
 				     int rowIndex, int vColIndex) {
@@ -105,12 +96,13 @@ public class ProjectTable extends SortableTable {
 	return clist;
     }
 
-    private void displaySelectedProjects() {
+    public void displaySelectedProjects() {
 	int[] indices = getSelectedRows();
 	ProjectTableModel ptm = (ProjectTableModel)getModel();
 	for (int i = 0; i < indices.length; i++) {
 	    ProjectProxy project = (ProjectProxy)ptm.elementAt(indices[i]);
 	    indices[i] = project.getID();
+	    System.err.println("index[" + i + "] ==> Project " + indices[i]);
 	}
     }
 }
