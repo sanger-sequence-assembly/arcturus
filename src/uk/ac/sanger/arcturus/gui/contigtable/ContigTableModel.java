@@ -7,6 +7,7 @@ import java.util.*;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.data.Assembly;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
@@ -20,6 +21,8 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
     protected boolean garish;
     protected ArcturusDatabase adb = null;
 
+    protected HashMap projectColours = new HashMap();
+
     protected final Color VIOLET1 = new Color(245, 245, 255);
     protected final Color VIOLET2 = new Color(238, 238, 255);
     protected final Color VIOLET3 = new Color(226, 226, 255);
@@ -27,8 +30,26 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
     public ContigTableModel(Minerva minerva, Project[] projects) {
 	adb = minerva.getArcturusDatabase();
 	comparator = new ContigComparator();
+	populateColourMap(minerva, projects);
 	populateContigsArray(projects);
 	garish = Boolean.getBoolean("garish");
+    }
+
+    protected void populateColourMap(Minerva minerva, Project[] projects) {
+	for (int i = 0; i < projects.length; i++) {
+	    String assemblyName = projects[i].getAssembly().getName();
+	    String projectName = projects[i].getName();
+
+	    String key = "project.colour." + assemblyName + "." + projectName;
+
+	    String colourString = minerva.getProperty(key);
+
+	    if (key != null) {
+		Integer colourInteger = Integer.decode(colourString);
+		Color colour = colourInteger == null ? Color.WHITE  : new Color(colourInteger.intValue());
+		projectColours.put(assemblyName + "." + projectName, colour);
+	    }
+	}
     }
 
     protected void populateContigsArray(Project[] projects) {
@@ -135,33 +156,18 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
     }
 
     public Color getColourForRow(int row) {
-	int projid = getContigAtRow(row).getProject().getID();
+	Project project = getContigAtRow(row).getProject();
 
-	if (projid == 0)
+	if (project == null)
 	    return Color.WHITE;
 
-	if (garish) {
-	    switch (projid%5) {
-	    case 0:
-		return Color.CYAN;
-		
-	    case 1:
-		return Color.YELLOW;
-		
-	    case 2:
-		return Color.RED;
-		
-	    case 3:
-		return Color.GREEN;
-		
-	    case 4:
-		return Color.BLUE;
-		
-	    default:
-		return Color.LIGHT_GRAY;
-	    }
-	} else
-	    return (projid % 2 == 0) ? VIOLET1 : VIOLET3;
+	Assembly assembly = project.getAssembly();
+
+	String key = assembly.getName() + "." + project.getName();
+
+	Color colour = (Color)projectColours.get(key);
+
+	return (colour == null) ? Color.WHITE : colour;
     }
 
     public boolean isColumnSortable(int col) {
