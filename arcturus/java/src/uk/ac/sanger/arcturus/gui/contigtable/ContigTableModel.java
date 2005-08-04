@@ -79,9 +79,9 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
     public Class getColumnClass(int col) {
         switch (col) {
 	case 0:
+	case 1:
 	    return String.class;
 
-	case 1:
 	case 2:
 	case 3:
 	    return Integer.class;
@@ -112,7 +112,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	    return contig.getName();
 
 	case 1:
-	    return new Integer(contig.getProject().getID());
+	    return contig.getProject().getName();
 
 	case 2:
 	    return new Integer(contig.getLength());
