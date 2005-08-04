@@ -38,6 +38,10 @@ public class Minerva implements WindowListener {
 	return instance;
     }
 
+    public static Minerva getInstance() {
+	return instance;
+    }
+
     private Minerva(String[] args) {
 	loadUserProperties();
 	loadSiteProperties();
