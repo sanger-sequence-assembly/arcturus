@@ -8,6 +8,7 @@ import java.util.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
+import uk.ac.sanger.arcturus.gui.Minerva;
 
 class ProjectTableModel extends AbstractTableModel implements SortableTableModel {
     protected Vector projects = new Vector();
@@ -15,8 +16,8 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     protected int lastSortColumn = 3;
     protected ArcturusDatabase adb = null;
 
-    public ProjectTableModel(ArcturusDatabase adb) {
-	this.adb = adb;
+    public ProjectTableModel(Minerva minerva) {
+	adb = minerva.getArcturusDatabase();
 	comparator = new ProjectComparator();
 	populateProjectsArray();
     }
