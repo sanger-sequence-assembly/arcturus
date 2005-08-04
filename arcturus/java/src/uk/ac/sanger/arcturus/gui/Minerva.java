@@ -24,12 +24,21 @@ public class Minerva implements WindowListener {
     public static final String ARCTURUS_USER_DIRECTORY = ".arcturus";
     public static final String MINERVA_PREFERENCES_FILE = "minerva.prefs";
 
+    private static Minerva instance = null;
+
     protected Properties userProperties = new Properties();
     protected Properties siteProperties = new Properties();
     protected Vector activeFrames = new Vector();
     protected ArcturusDatabase adb = null;
 
-    public Minerva(String[] args) {
+    public static Minerva getInstance(String[] args) {
+	if (instance == null)
+	    instance = new Minerva(args);
+
+	return instance;
+    }
+
+    private Minerva(String[] args) {
 	loadUserProperties();
 	loadSiteProperties();
 
@@ -288,7 +297,7 @@ public class Minerva implements WindowListener {
     }
 
     public static void main(String[] args) {
-	Minerva minerva = new Minerva(args);
+	Minerva minerva = Minerva.getInstance(args);
 
 	minerva.run();
     }
