@@ -9,14 +9,13 @@ import java.util.*;
 public class MinervaFrame extends JFrame {
     private static int counter = 0;
 
-    private Minerva minerva = null;
-    private JMenuBar menubar = null;
-    private JMenu fileMenu = null;
-    private JMenu editMenu = null;
-    private JMenu viewMenu = null;
-    private JMenu toolMenu = null;
-    private JMenu windowMenu = null;
-    private JPanel mainPane = null;
+    protected Minerva minerva = null;
+    protected JMenuBar menubar = null;
+    protected JMenu fileMenu = null;
+    protected JMenu editMenu = null;
+    protected JMenu viewMenu = null;
+    protected JMenu toolMenu = null;
+    protected JMenu windowMenu = null;
 
     private Action newAction = null;
 
