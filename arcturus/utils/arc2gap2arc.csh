@@ -8,6 +8,7 @@ set instance=undef
 set organism=undef
 set contigs=undef
 set cleanup=0
+set use64bit=0
 
 while ( $#argv > 0 )
   if ( "$1" == "-instance" ) then
@@ -24,6 +25,9 @@ while ( $#argv > 0 )
       shift
   else if ( "$1" == "-cleanup" ) then
       set cleanup=1
+      shift
+  else if ( "$1" == "-64bit" ) then
+      set use64bit=1
       shift
   endif
 end
@@ -43,6 +47,17 @@ if ( "$contigs" == "undef" ) then
     exit 1
 endif
 
+if ( "$use64bit" == "1") then
+    set CAF2GAP=/nfs/pathsoft/prod/WGSassembly/bin/64bit/caf2gap
+    set GAP2CAF=/nfs/pathsoft/prod/WGSassembly/bin/64bit/gap2caf
+    set GAP4="gap4 -root=/usr/local/badger/STADEN_PKGS/unix-rel-1-6-0b1"
+    echo Using 64-bit Gap4
+else
+    set CAF2GAP=caf2gap
+    set GAP2CAF=gap2caf
+    set GAP4=gap4
+endif
+
 set project=${organism}$$
 set tmpdir=/tmp/${project}
 
@@ -54,11 +69,11 @@ ${arcturus}/contig-export -instance ${instance} -organism ${organism} -caf expor
 
 caf_pad < export.unpadded.caf > export.padded.caf
 
-caf2gap -ace export.padded.caf -project ${project}
+${CAF2GAP} -ace export.padded.caf -project ${project}
 
-lsrun -m ${hostname} gap4 ${project}.0.aux
+lsrun -m ${hostname} ${GAP4} ${project}.0.aux
 
-gap2caf -project ${project} -ace import.padded.caf
+${GAP2CAF} -project ${project} -ace import.padded.caf
 
 caf_depad < import.padded.caf > import.unpadded.caf
 
