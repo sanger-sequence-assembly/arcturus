@@ -77,7 +77,7 @@ ${GAP2CAF} -project ${project} -ace import.padded.caf
 
 caf_depad < import.padded.caf > import.unpadded.caf
 
-${arcturus}/contig-loader -instance ${instance} -organism ${organism} -caf import.unpadded.caf
+${arcturus}/contig-loader -instance ${instance} -organism ${organism} -caf import.unpadded.caf -minimum 1
 
 ${arcturus}/calculateconsensus -instance ${instance} -organism ${organism} -quiet
 
