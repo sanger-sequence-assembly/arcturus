@@ -20,6 +20,7 @@ my $minprojectsize = 5000;
 my $outfile;
 my $xmlfile;
 my $shownames = 0;
+my $myproject;
 
 ###
 ### Parse arguments
@@ -35,6 +36,8 @@ while (my $nextword = shift @ARGV) {
     $minprojectsize = shift @ARGV if ($nextword eq '-minprojectsize');
     $outfile = shift @ARGV if ($nextword eq '-out');
     $xmlfile = shift @ARGV if ($nextword eq '-xml');
+
+    $myproject = shift @ARGV if ($nextword eq '-project');
 
     $shownames = 1 if ($nextword eq '-shownames');
 
@@ -188,6 +191,8 @@ foreach my $contigid (@contiglist) {
 	print STDERR $bs;
 	printf STDERR $format, $done, $alldone;
     }
+
+    next if (defined($myproject) && $myproject != $project->{$contigid});
 
     if ($updateproject) {
 	$sth_setproject->execute(0, $contigid);
@@ -1051,4 +1056,5 @@ sub showUsage {
     print STDERR "-updateproject\tUpdate each contig's project\n";
     print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
     print STDERR "-shownames\tShow names of reads and templates in XML output instead of IDs\n";
+    print STDERR "-project\tSelect seed contigs only from this project\n";
 }
