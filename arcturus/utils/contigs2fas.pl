@@ -31,6 +31,7 @@ my $seqfilenum;
 my $totseqlen;
 my $project_id;
 my $usegapname = 1;
+my $ends = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -51,6 +52,8 @@ while (my $nextword = shift @ARGV) {
     $allcontigs = 1 if ($nextword eq '-allcontigs');
 
     $project_id = shift @ARGV if ($nextword eq '-project');
+
+    $ends = shift @ARGV if ($nextword eq '-ends');
 
     $padton = 1 if ($nextword eq '-padton');
     $padtox = 1 if ($nextword eq '-padtox');
@@ -170,6 +173,19 @@ while(my @ary = $sth->fetchrow_array()) {
 	$sequence =~ s/[^\w\-]/X/g;
     }
 
+    if ($ends && length($sequence) > 2 * $ends) {
+	my $leftend = substr($sequence, 0, $ends);
+	my $midlen = length($sequence) - 2 * $ends;
+	my $middle = substr($sequence, $ends, $midlen);
+	my $rightend = substr($sequence, $midlen + $ends);
+
+	$middle = substr($middle, 0, 2 * $ends) if ($midlen > 2 * $ends);
+
+	$middle =~ s/[^X]/X/g;
+
+	$sequence = $leftend . $middle . $rightend;
+    }
+
     if ($destdir) {
 	my $filename = "$destdir/$contigname" . ".fas";
 	$fastafh = new FileHandle("$filename", "w");
@@ -238,4 +254,5 @@ sub showUsage {
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
     print STDERR "    -project\t\tProject ID to export\n";
     print STDERR "    -nogap4name\t\tUse contig ID as name, not Gap4 name\n";
+    print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
 }
