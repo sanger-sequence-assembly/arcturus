@@ -687,12 +687,13 @@ public class ArcturusDatabase {
 	projectManager.preloadAllProjects();
     }
 
-    public Set getAllProjects() {
+    public Set getAllProjects() throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("getAllProjects");
 
 	return projectManager.getAllProjects();
     }
+
     public void refreshProject(Project project) throws SQLException {
 	if (logger != null && logger.isDebugEnabled())
 	    logger.debug("refreshProject(" + project + ")");
