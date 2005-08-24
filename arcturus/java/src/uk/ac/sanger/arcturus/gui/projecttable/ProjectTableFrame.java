@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.database.*;
 
 import javax.swing.*;
 import java.awt.BorderLayout;
@@ -11,10 +12,10 @@ public class ProjectTableFrame extends MinervaFrame {
     protected ProjectTable table = null;
     protected JMenu projectMenu = null;
 
-    public ProjectTableFrame(Minerva minerva) {
-	super(minerva, "Project List : " +  minerva.getArcturusDatabase().getName());
+    public ProjectTableFrame(Minerva minerva, ArcturusDatabase adb) {
+	super(minerva, "Project List : " +  adb.getName());
 
-	ProjectTableModel model = new ProjectTableModel(minerva);
+	ProjectTableModel model = new ProjectTableModel(adb);
 
 	table = new ProjectTable(model);
 
