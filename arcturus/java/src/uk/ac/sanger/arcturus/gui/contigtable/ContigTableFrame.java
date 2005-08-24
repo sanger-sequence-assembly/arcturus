@@ -8,12 +8,14 @@ import java.awt.event.*;
 import java.net.*;
 import java.util.Comparator;
 import java.util.Arrays;
+import java.util.Set;
 import javax.swing.plaf.metal.MetalLookAndFeel;
 
 import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.gui.MinervaFrame;
 
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ContigTableFrame extends MinervaFrame
     implements ActionListener, ItemListener {
@@ -29,14 +31,8 @@ public class ContigTableFrame extends MinervaFrame
     JCheckBox checkColourByProject;
     JCheckBox checkGroupByProject;
 
-    public ContigTableFrame(Minerva minerva, Project[] projects) {
-	super(minerva);
-
-	String title = "Contig List: ";
-	for (int i = 0; i < projects.length; i++)
-	    title += (i == 0) ? projects[i].getName() : ", " + projects[i].getName();
-
-	setTitle(title);
+    public ContigTableFrame(Minerva minerva, String title, ArcturusDatabase adb, Set contigs) {
+	super(minerva, title);
 
 	JPanel panel = new JPanel(new BorderLayout());
 
@@ -47,7 +43,7 @@ public class ContigTableFrame extends MinervaFrame
 
 	panel.add(toolBar, BorderLayout.PAGE_START);
 
-	ContigTableModel ctm = new ContigTableModel(minerva, projects);
+	ContigTableModel ctm = new ContigTableModel(adb, contigs);
 
 	contigTable = new ContigTable(ctm);
 
