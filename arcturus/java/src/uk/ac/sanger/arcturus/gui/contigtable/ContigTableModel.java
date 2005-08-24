@@ -30,8 +30,9 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 
     public ContigTableModel(ArcturusDatabase adb, Set contigset) {
 	this.adb = adb;
-	comparator = new ContigComparator();
+	comparator = new ContigComparator(ContigComparator.BY_LENGTH, false);
 	contigs.addAll(contigset);
+	sortOnColumn(2);
     }
 
     public String getColumnName(int col) {
