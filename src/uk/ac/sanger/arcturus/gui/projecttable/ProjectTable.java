@@ -4,13 +4,15 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.*;
-import java.sql.Connection;
+import java.util.*;
+import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.gui.*;
 
 import uk.ac.sanger.arcturus.gui.contigtable.ContigTableFrame;
 
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ProjectTable extends SortableTable {
     protected final Color paleYellow = new Color(255, 255, 238);
@@ -100,16 +102,33 @@ public class ProjectTable extends SortableTable {
 
     public void displaySelectedProjects() {
 	int[] indices = getSelectedRows();
-	Project projects[] = new Project[indices.length];
 	ProjectTableModel ptm = (ProjectTableModel)getModel();
+
+	Set contigs = new HashSet();
+
+	String title = "Contig List:";
+
 	for (int i = 0; i < indices.length; i++) {
-	    ProjectProxy project = (ProjectProxy)ptm.elementAt(indices[i]);
-	    projects[i] = project.getProject();
+	    ProjectProxy proxy = (ProjectProxy)ptm.elementAt(indices[i]);
+	    Project project = proxy.getProject();
+
+	    title += ((i > 0) ? "," : " ") + project.getName();
+
+	    try {
+		Set contigsForProject = project.getContigs(true);
+		contigs.addAll(contigsForProject);
+	    }
+	    catch (SQLException sqle) {
+		sqle.printStackTrace();
+	    }
 	}
 
 	Minerva minerva = Minerva.getInstance();
 
-	ContigTableFrame frame = new ContigTableFrame(minerva, projects);
+	ArcturusDatabase adb = ptm.getArcturusDatabase();
+
+	ContigTableFrame frame = new ContigTableFrame(minerva, title, adb, contigs);
+
 	minerva.displayNewFrame(frame);
     }
 }

@@ -16,8 +16,8 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     protected int lastSortColumn = 3;
     protected ArcturusDatabase adb = null;
 
-    public ProjectTableModel(Minerva minerva) {
-	adb = minerva.getArcturusDatabase();
+    public ProjectTableModel(ArcturusDatabase adb) {
+	this.adb = adb;
 	comparator = new ProjectComparator();
 	populateProjectsArray();
     }
@@ -184,4 +184,6 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     public ProjectProxy elementAt(int index) {
 	return (ProjectProxy)projects.elementAt(index);
     }
+
+    public ArcturusDatabase getArcturusDatabase() { return adb; }
 }
