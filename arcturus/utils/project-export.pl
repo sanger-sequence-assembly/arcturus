@@ -27,12 +27,15 @@ my $caffile; # for standard CAF format
 my $maffile; # for Millikan format
 my $fastafile; # fasta
 my $qualityfile;
+my $masking;
+my $msymbol;
+my $mshrink;
 my $minNX = 1; # default
 my $preview;
 
 my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|"
                . "readsonly|fasta|quality|lock|minNX|preview|batch|verbose|"
-               . "debug|help";
+               . "mask|symbol|shrink|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -66,6 +69,12 @@ while (my $nextword = shift @ARGV) {
     $minNX       = shift @ARGV  if ($nextword eq '-minNX');
 
     $qualityfile = shift @ARGV  if ($nextword eq '-quality');
+
+    $masking     = shift @ARGV  if ($nextword eq '-mask');
+
+    $msymbol     = shift @ARGV  if ($nextword eq '-symbol');
+
+    $mshrink     = shift @ARGV  if ($nextword eq '-shrink');
 
     $lock        = 1            if ($nextword eq '-lock');
 
@@ -220,10 +229,21 @@ foreach my $identifier (@identifiers) {
 }
 
 my %exportoptions;
-$exportoptions{'padded'} = 1 if ($caffile && $padded);
+if (defined($caffile)) {
+#    $exportoptions{'padded'} = 1 if $padded;
+    $exportoptions{qualitymask} = $masking if defined($masking);
+}
+elsif (defined($fastafile)) {
+    $exportoptions{'readsonly'} = 1 if $readsonly; # fasta
+    $exportoptions{endregiononly} = $masking if defined($masking);
+    $exportoptions{maskingsymbol} = $msymbol || 'X';
+    $exportoptions{shrink} = $mshrink;
+}
+elsif (defined($maffile)) {
+    $exportoptions{'minNX'} = $minNX;
+}
+
 $exportoptions{'notacquirelock'} = 1 - $lock;
-$exportoptions{'minNX'} = $minNX;
-$exportoptions{'readsonly'} = 1 if $readsonly; # fasta
 
 my $errorcount = 0;
 

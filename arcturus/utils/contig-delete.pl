@@ -109,11 +109,8 @@ foreach my $identifier (@contigs) {
 
 foreach my $contig_id (@contigs) {
     my %options;
-    $options{cleanup} = 1 if $cleanup;
     $options{confirm} = 1 if $confirm;
-#    $logger->warning("Contig $contig_id is to be deleted");
-#    next unless $confirm;
-#    my ($success,$msg) = $adb->deleteContig($contig_id,cleanup=>$cleanup);
+    $logger->warning("Contig $contig_id is to be deleted");
     my ($success,$msg) = $adb->deleteContig($contig_id,%options);
     if ($confirm) {
         $logger->severe("FAILED to remove contig $contig_id") unless $success;
@@ -123,7 +120,7 @@ foreach my $contig_id (@contigs) {
 }
 
 if ($confirm) {
-    $adb->cleanupMappings() unless $cleanup;
+    $adb->cleanupMappings() if $cleanup;
 }
 else {    
     $logger->warning("Deletes to be made without cleanup; otherwise use -cleanup") unless $cleanup;

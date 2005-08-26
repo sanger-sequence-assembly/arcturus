@@ -13,20 +13,22 @@ use Logging;
 my $organism;
 my $instance;
 my $verbose;
-my $contig; # = 20884;
-my $batch;
+my $contig;
 my $padded;
-my $noread;
+my $readsonly = 0;
 #my $ignoreblocked = 0;
 my $fofn;
 my $caffile;
 my $fastafile;
 my $qualityfile;
 my $masking;
+my $msymbol;
+my $mshrink;
 my $metadataonly = 1;
 
-my $validKeys  = "organism|instance|contig|contigs|fofn|ignoreblocked|full|"
-               . "caf|fasta|quality|padded|mask|noread|batch|verbose|help";
+my $validKeys  = "organism|instance|contig|contig|fofn|ignoreblocked|caf|"
+               . "fasta|quality|padded|mask|symbol|shrink|readsonly|"
+               . "verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -38,9 +40,7 @@ while (my $nextword = shift @ARGV) {
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
-    $contig       = shift @ARGV  if ($nextword eq '-contig'); # ID or name
-
-    $contig       = shift @ARGV  if ($nextword eq '-contigs'); # ID or name
+    $contig       = shift @ARGV  if ($nextword eq '-contig'); # ID(s) or name(s)
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
 
@@ -52,17 +52,19 @@ while (my $nextword = shift @ARGV) {
 
     $masking      = shift @ARGV  if ($nextword eq '-mask');
 
+    $msymbol      = shift @ARGV  if ($nextword eq '-symbol');
+
+    $mshrink      = shift @ARGV  if ($nextword eq '-shrink');
+
     $verbose      = 1            if ($nextword eq '-verbose');
 
     $padded       = 1            if ($nextword eq '-padded');
 
-    $noread       = 1            if ($nextword eq '-noread');
+    $readsonly    = 1            if ($nextword eq '-readsonly');
 
-    $metadataonly = 0            if ($nextword eq '-full');
+#    $metadataonly = 0            if ($nextword eq '-full'); # redundent
 
 #    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
-
-    $batch        = 1            if ($nextword eq '-batch');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -116,9 +118,10 @@ if ($padded && defined($fastafile)) {
     undef $padded;
 }
 
-if ($noread && defined($caffile)) {
-    $logger->warning("Redundant '-noread' key ignored");
-    undef $noread;
+if (defined($caffile)) {
+    $logger->warning("Ineffective '-readsonly' key ignored") if $readsonly;
+    $logger->warning("Redundant '-shrink' key ignored") if $mshrink;
+    undef $readsonly;
 }
 
 # get file handles
@@ -165,24 +168,40 @@ if ($fofn) {
 
 # get the write options
 
-    my %woptions;
-    $woptions{noreads} = 1 if $noread; # fasta only
-    $woptions{qualitymask} = $masking if defined($masking);
-    $woptions{padded} = 1 if $padded;
+my %woptions;
+if (defined($fastafile)) {
+# fasta options
+    if ($readsonly) {
+        $woptions{readsonly} = 1;
+        $logger->warning("Redundant '-shrink' key ignored") if $mshrink;
+        $woptions{qualitymask} = $masking if $masking;
+        $woptions{qualitymask} = $msymbol if $msymbol; # overrides
+    }
+    else {
+        $woptions{endregiononly} = $masking if defined($masking);
+        $woptions{maskingsymbol} = $msymbol || 'X';
+        $woptions{shrink} = $mshrink;
+    }
+}
+elsif (defined($caffile)) {
+# caf options
+    $woptions{qualitymask} = $masking if $masking;
+    $woptions{qualitymask} = $msymbol if $msymbol; # overrides
+}
 
 my $errorcount = 0;
 
 foreach my $identifier (@contigs) {
 
     unless ($identifier) {
-        print STDERR "Invalid or missing contig identifier\n";
+        $logger->warning("Invalid or missing contig identifier");
         next;
     }
 
 # get the contig select options
 
     undef my %coptions;
-    $coptions{metaDataOnly} = $metadataonly;
+    $coptions{metaDataOnly} = $metadataonly; # redundent?
     $coptions{withRead}  = $identifier if ($identifier =~ /\D/);
     $coptions{contig_id} = $identifier if ($identifier !~ /\D/);
 # $options{ignoreblocked} = 1;
@@ -191,19 +210,22 @@ foreach my $identifier (@contigs) {
 
     $logger->info("Contig returned: $contig");
 
-    next if (!$contig && $batch); # re: contig-padded-tester
-
-    $logger->warning ("Blocked or unknown contig $identifier") unless $contig;
+    $logger->warning("Blocked or unknown contig $identifier") unless $contig;
 
     next unless $contig;
 
+#    $contig->toPadded() if $padded;
+
+    my $err;
+
     $contig->setContigName($identifier) if ($identifier =~ /\D/);
 
-    $contig->writeToCaf($fhDNA,%woptions) unless ($padded || defined($fastafile));
+    $err = $contig->writeToCaf($fhDNA,%woptions)      unless defined($fastafile);
 
-    $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
+    $err = $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
 
-    $contig->writeToCafPadded($fhDNA,%woptions) if $padded; # later to option of writeToCaf
+#    $contig->writeToCafPadded($fhDNA,%woptions) if $padded; # later to option of writeToCaf
+    $errorcount++ if $err;
 }
 
 $fhDNA->close() if $fhDNA;
@@ -213,6 +235,7 @@ $fhQTY->close() if $fhQTY;
 $adb->disconnect();
 
 # TO BE DONE: message and error testing
+
 #$logger->warning("There were no errors") unless $errorcount;
 #$logger->warning("$errorcount Errors found") if $errorcount;
 
@@ -231,17 +254,49 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n\n";
-    print STDERR "OPTIONAL EXCLUSIVE PARAMETERS:\n\n";
-    print STDERR "-contig\t\tContig name or ID\n";
-    print STDERR "-contigs\tComma-separated list of contig names or IDs\n";
-    print STDERR "-fofn \t\tname of file with list of Contig IDs\n\n";
-    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n";
     print STDERR "\n";
-    print STDERR "-caf\t\toutput file name (default STDOUT)\n";
-    print STDERR "-padded\t\t(no value) export contig in padded format (caf only)\n";
-#    print STDERR "-ignoreblock\t\t(no value) include contigs from blocked projects\n";
+    print STDERR "MANDATORY NON-EXCLUSIVE PARAMETERS:\n\n";
+    print STDERR "-contig\t\tcontig name or ID, or comma-separated list of "
+               . "names or IDs\n";
+    print STDERR "-fofn \t\tname of file with list of Contig IDs\n";
+#    print STDERR "-ignoreblock\t(no value) include contigs from blocked projects\n";
+    print STDERR "\n";
+    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-caf\t\toutput file name (specify 0 for default STDOUT), CAF "
+               . "format\n\t\t('-caf' always exports the whole contig including "
+               . "its reads)\n";
+    print STDERR "-fasta\t\toutput file name (specify 0 for default STDOUT), fasta "
+               . "format\n\t\t(default, '-fasta' exports the consensus sequence "
+               . "(no reads)\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for CAF export:\n";
+    print STDERR "\n";
+    print STDERR "-mask\t\tmask low quality data in reads by this symbol\n";
+#    print STDERR "-padded\t\t(no value) export contig & reads in padded format\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for fasta export:\n";
+    print STDERR "\n"; 
+    print STDERR "-quality\toutput file name for fasta quality data\n";
+    print STDERR "-readsonly\t'-fasta' exports only the reads (no consensus); in "
+               . "this case\n\t\tonly the '-mask' option applies and acts as for "
+               . "'-caf' export\n";
+    print STDERR "\n"; 
+    print STDERR "-mask\t\tlength of end regions of contig(s) to be exported, while "
+               . "the\n\t\tbases in the central part thereof will be replaced by a "
+               . "masking\n\t\tsymbol (to be specified separately)\n";
+    print STDERR "-symbol\t\tthe symbol used for the masking (default 'X')\n";
+
+    print STDERR "-shrink\t\tif specified, the size of the masked central part will "
+               . "be\n\t\ttruncated to size 'shrink'; longer contigs are then "
+               . "clipped\n\t\tto size '2*mask+shrink'; shrink values "
+               . "smaller than 'mask'\n\t\twill be reset to 'mask'\n";
+#    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
+    print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
