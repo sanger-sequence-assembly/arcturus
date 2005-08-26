@@ -1775,7 +1775,7 @@ sub getParentIDsForContig {
 
     if (scalar(@contigids)) {
 
-$DEBUG=1;
+$DEBUG=0;
 print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
         my $ageoffset = 0;
         push @contigids,$contigID if $contigID;
