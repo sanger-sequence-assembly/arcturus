@@ -796,11 +796,9 @@ sub linkToContig {
 # process the mapping segments and add to the inventory
 
             my $osegments = $mapping->getSegments() || next;
-#print STDOUT "mapping: ".$mapping->getMappingName()."\n" if $DEBUG;
+
             foreach my $osegment (@$osegments) {
                 my $offset = $osegment->getOffset();
-my @seg = $osegment->getSegment(); 
-#print STDOUT "\t\t\t\toffset -$offset @seg\n" if $DEBUG;
                 $offset = (-$offset+0); # conform to offset convention in this method
                 my $hashkey = sprintf("%08d",$offset);
                 $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
@@ -842,10 +840,10 @@ my @seg = $osegment->getSegment();
     my ($lower,$upper) = (0,0); # default no offset range window
     my $minimumsize = 1; # lowest accepted segment size
 
-    unless (($offsets[$#offsets] - $offsets[0]) <= $offsetwindow) {
-# the offset values vary too much; check how they correlate with contig position:
-# if no good correlation found the distribution is dodgy, then use a window based
-# on the median offset and the nominal range
+    if (@offsets && ($offsets[$#offsets] - $offsets[0]) >= $offsetwindow) {
+# the offset values vary too much; check how they correlate with position:
+# if no good correlation found the distribution is dodgy, then use a window 
+# based on the median offset and the nominal range
         my $sumpp = 0.0; # for sum position**2
         my $sumoo = 0.0; # for sum offset*2
         my $sumop = 0.0; # for sum offset*position
@@ -854,7 +852,7 @@ my @seg = $osegment->getSegment();
             $weightedsum += $accumulate->{$offset};
             my $segmentlist = $inventory->{$offset};
             foreach my $mapping (@$segmentlist) {
-#print "offset $offset mapping @$mapping\n";
+print "offset $offset mapping @$mapping\n" if $DEBUG;
                 my $position = 0.5 * ($mapping->[0] + $mapping->[1]);
                 $sumpp += $position * $position;
                 $sumop += $position * $offset;
@@ -862,7 +860,7 @@ my @seg = $osegment->getSegment();
             }
         }
 # get the correlation coefficient
-        my $threshold = $options{correlation} || 0.8;
+        my $threshold = $options{correlation} || 0.75;
         my $R = $sumop / sqrt($sumpp * $sumoo);
 print "Correlation coefficient = $R\n\n" if $DEBUG;
         unless (abs($sumop / sqrt($sumpp * $sumoo)) >= $threshold) {
@@ -944,9 +942,9 @@ print STDOUT "offset out of range $offset\n" if $DEBUG;
 # if there are rogue mappings, determine the contig range affected
 
     my @badmap;
-    if ($options{maskbadmappingrange} && $badmapping->hasSegments()) {
+    if ($badmapping->hasSegments()) {
 # the contig interval covered by the bad mapping
-        @badmap = $badmapping->getContigRange();
+        @badmap = $badmapping->getContigRange() unless $options{nobadrange};
 # subsequently we could use this interval to mask the regular mappings found
 print STDOUT "checking bad mapping range\n" if $DEBUG;
 print STDOUT $badmapping->writeToString('bad range')."\n" if $DEBUG;
@@ -1011,7 +1009,7 @@ print STDOUT "bad contig range: @badmap\n" if $DEBUG;
 # enter the segments to the mapping
 
     foreach my $segment (@c2csegments) {
-#print "segment after filter @$segment \n" if $DEBUG;
+print "segment after filter @$segment \n" if $DEBUG;
         next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
         $mapping->putSegment(@$segment);
     }
@@ -1022,22 +1020,32 @@ print STDOUT "bad contig range: @badmap\n" if $DEBUG;
 # here, test if the mapping is valid, using the overall maping range
         my $isValid = &isValidMapping($this,$compare,$mapping,$overlapreads);
 print STDOUT "\nEXIT isVALID $isValid\n" if $DEBUG;
-        if (!$isValid) {
+        if (!$isValid && !$options{forcelink}) {
 print STDOUT "Spurious link detected to contig ".
-      $compare->getContigName()."\n" if $DEBUG;
+$compare->getContigName()."\n" if $DEBUG;
             return 0, $overlapreads;
         }
 # in case of split contig
         elsif ($isValid == 2) {
 print STDOUT "(Possibly) split parent contig ".
-      $compare->getContigName()."\n" if $DEBUG;
+$compare->getContigName()."\n" if $DEBUG;
             $deallocated = 0; # because we really don't know
         }
 # for a regular link
         else {
             $deallocated = $compare->getNumberOfReads() - $overlapreads; 
         }
-# store the Mapping as a contig-to-contig mapping
+# store the Mapping as a contig-to-contig mapping (prevent duplicates)
+        if ($this->hasContigToContigMappings()) {
+            my $c2cmaps = $this->getContigToContigMappings();
+            foreach my $c2cmap (@$c2cmaps) {
+                my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,1);
+                next unless $isEqual;
+                print STDERR "Duplicate mapping to parent " .
+		             $compare->getContigName()." ignored\n";
+                return $mapping->hasSegments(),$deallocated;
+            }
+        }
         $this->addContigToContigMapping($mapping);
     }
 
@@ -1083,8 +1091,10 @@ print STDOUT "Contig overlap: $olreads reads, @range ($overlap) length\n\n" if $
         push @readsincontig,$numberofreads;
 # for the moment we use a sqrt function; could be something more sophysticated
         my $threshold = sqrt($numberofreads - 0.4) + 0.2;
+        $threshold *= $options{spurious} if $options{spurious};
+        $threshold = 1 if ($contig eq $parent && $numberofreads <= 2);
 print STDOUT "contig ".$contig->getContigName()." $numberofreads reads "
-                      ."threshold $threshold ($olreads)\n" if $DEBUG;
+."threshold $threshold ($olreads)\n" if $DEBUG;
         push @thresholds, $threshold;
 # get the number of reads in the overlapping area (for possible later usage)
         my $contiglength = $contig->getConsensusLength() || 1;
@@ -1093,12 +1103,18 @@ print STDOUT "\tContig fraction overlap ($contiglength) ".sprintf("%6.3f",$fract
 	push @fractions,$fraction;
     }
 
-# get threshold for spurious link
+# get threshold for spurious link to the parent
 
     my $threshold = $thresholds[1];
-    $threshold *= $options{spurious} if $options{spurious};
 
     return 0 if ($olreads < $threshold); # spurious link
+
+# extra test for very small parents: require at least 50% overlap
+
+    if ($threshold <= 1) {
+# this cuts out small parents of 1,2 reads with little overlap)
+        return 0 if ($fractions[1] < 0.5);
+    }
 
 # get threshold for link to split contig
 
@@ -1390,6 +1406,14 @@ sub writeToFasta {
         return undef;
     }
 
+# apply end-region masking
+
+    if ($options{endregiononly}) {
+        if (my $sequence = &endregionmask($this->getSequence(),%options)) {
+            $this->setSequence($sequence);
+        }
+    }
+
     $this->writeDNA($DFILE);
 
     $this->writeBaseQuality($QFILE) if $QFILE;
@@ -1520,14 +1544,15 @@ sub toString {
     my $length   = $this->getConsensusLength()       ||   "unknown";
     my $cover    = $this->getAverageCover()          ||   "unknown";
     my $created  = $this->{created}                  || "undefined";
+    my $project  = $this->{project}                  || 0;
 
     return sprintf 
-     ("%-14s = %-20s r:%-7d l:%-8d c:%4.2f %-19s",
-      $name,$gap4name,$nreads,$length,$cover,$created);
+     ("%-14s = %-20s r:%-7d l:%-8d c:%4.2f %-19s %3d",
+      $name,$gap4name,$nreads,$length,$cover,$created,$project);
 }
 
 #-------------------------------------------------------------------    
-# non-standard output for interaction with Phusion and Gap4
+# non-standard output (e.g. for interaction with Phusion and Gap4)
 #-------------------------------------------------------------------    
 
 sub writeToMaf {
@@ -1619,7 +1644,7 @@ sub writeToMaf {
 }
 
 sub replaceNbyX {
-# privatre, substitute strings of 'N's in the consensus sequence by (MAF) 'X' 
+# private, substitute strings of 'N's in the consensus sequence by (MAF) 'X' 
     my $sequence = shift;
     my $min      = shift; # minimum length of the string;
 
@@ -1645,6 +1670,47 @@ sub replaceNbyX {
     return 0;
 }
 
+sub endregionmask {
+# replace the central part of the consensus sequence by X-s (re: crossmatch)
+    my $sequence = shift || return;
+    my %moptions = @_;
+
+# get options
+
+    my $unmask = $moptions{endregiononly}; # unmasked length at either end
+    my $symbol = $moptions{maskingsymbol}; # replacement symbol for remainder
+    my $shrink = $moptions{shrink}; # replace centre with fixed length string
+
+# apply lower limit, if shrink option active
+
+    $shrink = $unmask if ($shrink and $shrink < $unmask);
+
+    my $length = length($sequence);
+
+    if ($unmask > 0 && $symbol && $length > 2*$unmask) {
+
+        my $begin  = substr $sequence,0,$unmask;
+        my $centre = substr $sequence,$unmask,$length-2*$unmask;
+        my $end = substr $sequence,$length-$unmask,$unmask;
+
+        if ($shrink && $length-2*$unmask >= $shrink) {
+            $centre = '';
+            while ($shrink--) {
+                $centre .= $symbol;
+            }
+        }
+	else {
+            $centre =~ s/./$symbol/g;
+	}
+
+        $sequence = $begin.$centre.$end;
+    }
+
+    return $sequence;
+}
+
+#---------------------------
+
 sub toPadded {
     my $this = shift;
 
@@ -1652,7 +1718,7 @@ sub toPadded {
 }
 
 sub writeToCafPadded {
-# TO BE REPLACED
+# TO BE REPLACED by internal state (padded unpaaded) and tranform function
 # write reads and contig to CAF (padded but leaving consensus unchanged)
 # this is an ad hoc method to make Arcturus conversant with GAP4
 # it uses the PaddedRead class for conversion of read mappings

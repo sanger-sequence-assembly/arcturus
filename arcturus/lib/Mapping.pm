@@ -141,8 +141,8 @@ sub isEqual {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
-    my $tmaps = $this->analyseSegments();    # also sorts segments
-    my $cmaps = $compare->analyseSegments(); # also sorts segments
+    my $tmaps = $this->analyseSegments(@_);    # also sorts segments
+    my $cmaps = $compare->analyseSegments(@_); # also sorts segments
 
 # test presence of mappings
 
@@ -195,8 +195,8 @@ sub compare {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
-    my $tmaps = $this->analyseSegments();    # also sorts segments
-    my $cmaps = $compare->analyseSegments(); # also sorts segments
+    my $tmaps = $this->analyseSegments(@_);    # also sorts segments
+    my $cmaps = $compare->analyseSegments(@_); # also sorts segments
 
 #    return $this->multiply($compare->inverse()); # to be tested at some point
 #    return $compare->multiply($this->inverse()); # to be tested at some point
@@ -302,6 +302,7 @@ sub analyseSegments {
 # sort the segments according to increasing read position
 # determine/test alignment direction from the segments
     my $this = shift;
+    my $silent = shift;
 
     return 0 unless $this->hasSegments();
 
@@ -321,32 +322,57 @@ sub analyseSegments {
 
     my $n = scalar(@$segments) - 1;
  
-    my $direction = 1;
+    my $globalalignment = 1; # overall alignment
     if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
+        $globalalignment = -1;
+    }
+
+# test consistency of alignments
+
+    my $localalignment = 0;
+    foreach my $segment (@$segments) {
+# ignore unit-length segments
+        next if ($segment->getYstart() == $segment->getYfinis());
+# register alignment of first segment longer than one base
+        $localalignment = $segment->getAlignment() unless $localalignment;
+# test the alignment of each subsequent segment; exit on inconsistency
+	if ($segment->getAlignment() != $localalignment) {
+# if this error occurs it is an indication for an erroneous alignment
+# direction in the MAPPING table; on first encounter, printer error message
+            print STDERR "Inconsistent alignment(s) in mapping "
+                         .($this->getMappingName || $this->getSequenceID).
+			 " :\n".$this->assembledFromToString unless $silent;
+            $globalalignment = 0;
+            last;
+        }
+    }
+
+# if alignment == 0, all segments are unit length: adopt globalalignment
+# if local and global alignment are different, the mapping is anomalous with
+# consistent alignment direction, but inconsistent ordering in X and Y; then
+# use the local alignment direction. (re: contig-to-contig mapping) 
+
+    $localalignment = $globalalignment unless $localalignment;
+
+    if ($localalignment == 0 || $localalignment != $globalalignment) {
+        print STDERR "Anomalous alignment in mapping "
+                     .($this->getMappingName || $this->getSequenceID).
+	             " :\n".$this->assembledFromToString unless $silent;
+        $globalalignment = $localalignment;
+     }
+
+# finally, counter align unit-length alignments if mapping is counter-aligned
+
+    if ($globalalignment == -1) {
 # the counter align method only works for unit length intervals
-        $direction = -1;
         foreach my $segment (@$segments) {
             $segment->counterAlignUnitLengthInterval();
         }
     }
 
-# test consistency of alignments
-
-    foreach my $segment (@$segments) {
-	if ($segment->getAlignment() != $direction) {
-# if this error occurs it is an indication for an erroneous alignment
-# direction in the MAPPING table, likely in a read with unit-length segment
-            print STDERR "Inconsistent alignment direction in mapping "
-                         .($this->getMappingName || $this->getSequenceID).
-			 " :\n".$this->assembledFromToString;
-            $direction = 0;
-            last;
-        }
-    }
-
 # register the alignment direction
     
-    $this->setAlignment($direction);
+    $this->setAlignment($globalalignment);
 
     return $segments;
 }
@@ -638,7 +664,7 @@ sub toString {
 
     $this->{contigrange} = undef;
     my $mappingname = $this->getMappingName() || 'undefined';
-    my $direction = $this->getAlignmentDirection();
+    my $direction = $this->getAlignmentDirection() || 'UNDEFINED';
 
     my $string = "Mapping: name=$mappingname, sense=$direction";
 

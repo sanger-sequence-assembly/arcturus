@@ -1166,10 +1166,29 @@ sub testReadAllocation {
     my $rows = $sth->execute() || &queryFailed($query);
 
     my $resulthash = {};
+
+    return ($rows+0),$resulthash unless ($rows+0);
+
+    my $reads = [];
     while (my ($read,$count,$contig) = $sth->fetchrow_array()) {
+        push @$reads,$read;
+    }
+
+    $sth->finish();
+
+    $query = "select read_id,contig_id from CURREAD"
+	   . " where read_id in (".join(',',@$reads).")";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    while (my ($read,$contig) = $sth->fetchrow_array()) {
         $resulthash->{$read} = [] unless $resulthash->{$read};
         push @{$resulthash->{$read}}, $contig;
     }
+
+    $sth->finish();
 
     return ($rows+0),$resulthash;
 }

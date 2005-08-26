@@ -552,7 +552,9 @@ print STDERR "putContig: line 449 assignContigToProject I\n";
 
     my $dbh = $this->getConnection();
 
-    my $contigid = &putMetaDataForContig($dbh,$contig,$readhash);
+    my $user_id = $this->getArcturusUser();
+
+    my $contigid = &putMetaDataForContig($dbh,$contig,$readhash,$user_id);
 
     $this->{lastinsertedcontigid} = $contigid;
 
@@ -789,12 +791,13 @@ sub putMetaDataForContig {
 # private method only
     my $dbh = shift; # database handle
     my $contig = shift; # Contig instance
-    my $readhash = shift; 
+    my $readhash = shift;
+    my $userid = shift;
 
     my $query = "insert into CONTIG "
-              . "(gap4name,length,ncntgs,nreads,newreads,cover"
+              . "(gap4name,length,ncntgs,nreads,newreads,cover,userid"
               . ",origin,created,readnamehash) "
-              . "VALUES (?,?,?,?,?,?,?,now(),?)";
+              . "VALUES (?,?,?,?,?,?,?,?,now(),?)";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -804,6 +807,7 @@ sub putMetaDataForContig {
                 $contig->getNumberOfReads(),
                 $contig->getNumberOfNewReads(),
                 $contig->getAverageCover(),
+                $userid,
                 $contig->getOrigin(),
                 $readhash);
 
@@ -989,42 +993,76 @@ sub testContig {
 sub deleteContig {
 # remove data for a given contig_id from all tables
     my $this = shift;
-    my $contigid = shift;
+    my $identifier = shift;
     my %options = @_;
 
-    $contigid = $this->{lastinsertedcontigid} unless defined($contigid);
+    $identifier = $this->{lastinsertedcontigid} unless $identifier;
 
-    return 0,"Missing contig ID" unless defined($contigid);
+    return 0,"Missing contig ID" unless defined($identifier);
+
+# collect some data for the contig to be deleted
+
+    my $query = "select contig_id,gap4name,nreads,ncntgs,created from CONTIG";
+    $query   .= " where gap4name  = ?" if ($identifier =~ /\D/);
+    $query   .= " where contig_id = ?" if ($identifier !~ /\D/);
 
     my $dbh = $this->getConnection();
 
+    my $sth = $dbh->prepare_cached($query);
+
+    my $row = $sth->execute($identifier) || &queryFailed($query,$identifier);
+
+    unless ($row && $row > 0) { 
+
+        $sth->finish();
+
+        return 0,"Unknown contig identifier $identifier";
+    }
+
+# if more than one row was found, the contig may be a parent; test below
+
+    my ($cid,$gap4name,$nreads,$ncntgs,$created) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    my $description = "$cid $gap4name  r:$nreads c:$ncntgs  $created ";
+
 # safeguard: contig may not be among the parents
 
-    my $query = "select parent_id from C2CMAPPING" .
-	        " where parent_id = $contigid";
+    my $pquery = "select parent_id from C2CMAPPING where parent_id = $cid";
 
-    my $isparent = $dbh->do($query) || &queryFailed($query);
+    my $isparent = $dbh->do($pquery) || &queryFailed($pquery);
 
-    return (0,"Contig $contigid is, or may be, a parent and can't be deleted") 
+    return (0,"Contig $identifier is, or may be, a parent and can't be deleted") 
         if (!$isparent || $isparent > 0); # also exits on failed query
+
+# here we finally test for ambiguity not found by parent test
+
+    return 0,"Ambiguous contig $description ($row)" if ($row > 1);
 
 # safeguard: contig may not belong to a project and have checked 'out' status
 
-# the next line deletes from CONTIG2PROJECT (or not)
+# the next line deletes the contig from a project (or not)
 
-    my ($status,$message) = $this->unlinkContigID($contigid); 
-    return (0,"Contig $contigid cannot be deleted: $message") unless $status;
+    my $confirm = $options{confirm};
+
+    my ($status,$message) = $this->unlinkContigID($dbh,$cid,$confirm); 
+#    my ($status,$message) = &unlinkContigID($dbh,$cid,$confirm); 
+
+    return (0,"Contig $identifier cannot be deleted: $message") unless $status;
+
+    return (1,"Contig $description can be deleted") unless $confirm; # preview
     
 # proceed only if contig has been unlinked; now delete from the primary tables
 
     my $report = '';
     my $success = 1;
     foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
-        my $query = "delete from $table where contig_id = $contigid"; 
+        my $query = "delete from $table where contig_id = $cid"; 
         my $deleted = $dbh->do($query) || &queryFailed($query);
         $success = 0 if (!$deleted && $table eq 'CONTIG');
-        $report .= "No delete done from $table for contig_id = $contigid\n"
-        unless ($table eq 'C2CMAPPING'); 
+        $report .= "No delete done from $table for contig_id = $cid\n"
+        unless (($deleted+0) || $table eq 'C2CMAPPING');
     }
 
 # remove the redundent entries in SEGMENT and C2CSEGMENT
@@ -1133,7 +1171,7 @@ sub getContigMappingsForContig {
                 
     return if $contig->hasContigToContigMappings(); # already done
 
-    my $mquery = "select parent_id,mapping_id," .
+    my $mquery = "select age,parent_id,mapping_id," .
                  "       cstart,cfinish,direction" .
                  "  from C2CMAPPING" .
                  " where contig_id = ?" .
@@ -1156,7 +1194,8 @@ sub getContigMappingsForContig {
 
     my @mappings;
     my $mappings = {}; # to identify mapping instance with mapping ID
-    while(my ($pid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
+    my $generation;
+    while(my ($age,$pid, $mid, $cs, $cf, $dir) = $sth->fetchrow_array()) {
 # protect against empty contig-to-contig links 
         $dir = 'Forward' unless defined($dir);
 # intialise and add parent name and parent ID as sequence ID
@@ -1169,6 +1208,10 @@ sub getContigMappingsForContig {
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;
 # add remainder of data (cstart, cfinish) ?
+# do an age consistence check for this mapping
+        $generation = $age unless defined ($generation);
+        next if ($generation == $age);
+        print STDOUT "Inconsistent generation in links for contig $cid\n";
     }
     $sth->finish();
 
@@ -1192,6 +1235,8 @@ sub getContigMappingsForContig {
     $sth->finish();
 
     $contig->addContigToContigMapping([@mappings]);
+
+    return $generation;
 }
 
 sub putMappingsForContig {
@@ -1352,7 +1397,7 @@ sub cleanupMappingTables {
         $report .= "have been " unless $preview;
         $report .= "removed from $table\n";
 
-        if ($preview > 1) {
+        if ($preview && $preview > 1) {
 # long list option: return a list of all contig IDs affected
         }
     }
@@ -1408,7 +1453,7 @@ sub deleteContigToContigMapping {
 }
 
 sub repairContigToContigMappings {
-# replace contig to contig mappings which are different from database contents
+# replace contig to contig mappings which are different from those in database
     my $this = shift;
     my $contig = shift;
     my %options = @_;
@@ -1423,18 +1468,20 @@ sub repairContigToContigMappings {
 #  - first copy the (new) mappings into a temporary buffer;
 #  - reset the mapping array, then pull out the existing mappings
 
-    my $newmappings = $contig->getContigToContigMappings();
+    my $newmappings = $contig->getContigToContigMappings() || [];
 
     $contig->addContigToContigMapping(0); # reset the $contig C2C buffer
 
 # return 0,"Missing new contig-to-contig mappings" unless @$newmappings;
 
-    $this->getContigMappingsForContig($contig,orderbyparent=>1);
+    my $age = $this->getContigMappingsForContig($contig,orderbyparent=>1);
    
 # 2) compare the existing mappings (now in $contig) with the new ones
 #    add the ones that have changed to the contig
+#    remove the mappings that do not figure in the list of new mappings
+#    remove the mappings that have not changed
 
-    my $oldmappings = $contig->getContigToContigMappings();
+    my $oldmappings = $contig->getContigToContigMappings() || [];
 
     $contig->addContigToContigMapping(0); # reset the $contig C2C buffer again
 
@@ -1460,6 +1507,7 @@ sub repairContigToContigMappings {
     $message .= "to parents:  " if scalar(@$newmappings);
 
     my @deletemappings;
+    my @deleteparentids;
     foreach my $mapping (@$newmappings) {
         my $parent_id = $mapping->getSequenceID();
         my $existingmapping = $inventory->{$parent_id};
@@ -1469,7 +1517,8 @@ sub repairContigToContigMappings {
 	    $contig->addContigToContigMapping($mapping);
             next;
         }
-        delete $inventory->{$parent_id}; # remove mappings having a counterpart
+        push @deleteparentids,$parent_id; # collect mappings with a counterpart
+#       delete $inventory->{$parent_id}; # not here, to trap duplicate mappings
         my ($isEqual,@dummy) = $mapping->isEqual($existingmapping);
         if ($isEqual) {
             $message .= "(unchanged) ";
@@ -1481,14 +1530,23 @@ sub repairContigToContigMappings {
         $message .= "(changed) ";
     }
 
+# remove all mappings having a counterpart
+
+    foreach my $parent_id (@deleteparentids) {
+        delete $inventory->{$parent_id};
+    }
+
 # the keys left of %$inventory are existing mappings without
 # new counterpart; they have to be deleted too
 
-    push @deletemappings, keys %$inventory if (keys %$inventory);
+    foreach my $parent_id (keys %$inventory) {
+        push @deletemappings, $inventory->{$parent_id};
+    }
 
     my $dbh = $this->getConnection();
 
     $message .= "\n";
+#print "deletemappings  @deletemappings  $message\n" if $DEBUG;
     foreach my $existingmapping (@deletemappings) {
         my $parent_id = $existingmapping->getSequenceID();
         my $mapping_id = $existingmapping->getMappingID();
@@ -1506,7 +1564,7 @@ sub repairContigToContigMappings {
     }
 
     if ($options{cleanup}) {
-# remove redundent segments form the SEGMENT table
+# remove redundent segments form the C2CSEGMENT table
         $message .= &cleanupSegmentTables($dbh, ($options{confirm} ? 0 : 1) ,1);
     }
   
@@ -1520,6 +1578,16 @@ sub repairContigToContigMappings {
         $message .= "Insert contig-to-contig mappings for $contig_id ..";
         if (&putMappingsForContig($dbh,$contig,type=>'contig')) {
             $message .= ".. DONE\n";
+# update the age of the mapping, if > 0
+            if ($age) {
+                $message .= "Update generation age counter (to $age) ..";
+                if (&updateMappingAge($dbh,$contig_id,$age)) {
+                    $message .= ".. DONE\n";
+		}
+		else {
+                    $message .= ".. FAILED\n";
+		}
+	    }
         }
         else {
             $message .= ".. FAILED\n";
@@ -1534,9 +1602,10 @@ sub repairContigToContigMappings {
 # methods dealing with generations and age tree
 #-----------------------------------------------------------------------------
 
-sub getParentIDsForContig {
+sub oldgetParentIDsForContig {
 # returns a list contig IDs of parents for input Contig based on 
 # its reads sequence IDs and the sequence-to-contig MAPPING data
+# search from scratch for new contigs (no ID!) and existing contigs
     my $this = shift;
     my $contig = shift; # Contig Instance
 
@@ -1561,14 +1630,15 @@ sub getParentIDsForContig {
 
 # step 1: get all (potential) parents
 
+    my $contig_id = $contig->getContigID();
+
     my $query = "select distinct contig_id from MAPPING"
 	      . " where seq_id in (".join(',',@seqids).")";
 # add an exclusion of the contig itself if its ID is defined
-    if (my $contig_id = $contig->getContigID()) {
-        $query .= " and contig_id != $contig_id";
-    }
+    $query .= " and contig_id < $contig_id" if $contig_id;
 
-print STDOUT ">getParentIDsForContig query 1: \n$query\n" if $DEBUG;
+$DEBUG = 0;
+print STDOUT ">oldgetParentIDsForContig query 1: \n$query\n" if $DEBUG;
 
     my $dbh = $this->getConnection();
 
@@ -1587,13 +1657,14 @@ print STDOUT ">getParentIDsForContig query 1: \n$query\n" if $DEBUG;
 
     if (scalar(@contigids)) {
 
-print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
+print STDOUT ">oldgetParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
 
 # step 2 : remove the parents of the contigs found in step 1 from the list
+# THERE MAY BE A PROBLEM HERE: INVESTIGATE!
 
         $query = "select age,contig_id, parent_id from C2CMAPPING"
 	       . " where contig_id in (".join(',',@contigids).")";
-
+print STDOUT ">oldgetParentIDsForContig: $query \n" if $DEBUG;
 
         $sth = $dbh->prepare($query);
 
@@ -1602,9 +1673,135 @@ print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $D
         my %ageprofile;
         while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
 # the parent_id is removed because it is not the last in the chain
+print STDOUT ">oldgetParentIDsForContig: $age,$contig_id,$parent_id\n" if $DEBUG; 
             delete $contigids{$parent_id};
             $ageprofile{$contig_id} = $age; 
         }
+
+        $sth->finish();
+
+# ok, the keys of %contigids are the IDs of the possible parents
+
+        @contigids = keys %contigids;
+
+print STDOUT ">oldgetParentIDsForContig: Possible parents found : @contigids\n" if $DEBUG;
+
+# However, this list still may contain spurious parents due to 
+# misassembled reads in early contigs which are picked up in the
+# first step of the search; these are weeded out by selecting on
+# the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
+# NOTE: this applies only to newly added contigs, i.e. without contig_id
+
+        unless ($contig_id) {
+            foreach my $contig_id (keys %contigids) {
+                next unless defined($ageprofile{$contig_id});
+                delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
+	    }
+        }
+    }
+
+# those keys left are the true parent(s)
+
+    @contigids = keys %contigids;
+
+print STDOUT ">oldgetParentIDsForContig: Confirmed parents found : @contigids\n" if $DEBUG;
+exit if $DEBUG;
+
+    return [@contigids];
+}
+
+sub getParentIDsForContig {
+# returns a list contig IDs of parents for input Contig based on 
+# its reads sequence IDs and the sequence-to-contig MAPPING data
+# search from scratch for new contigs (no ID!) and existing contigs
+    my $this = shift;
+    my $contig = shift; # Contig Instance
+
+    return undef unless $contig->hasReads();
+
+    my $reads = $contig->getReads();
+
+# get the sequenceIDs (from Read instances)
+
+    my @seqids;
+    foreach my $read (@$reads) {
+        push @seqids,$read->getSequenceID();
+    }
+
+# we find the parent contigs in two steps: first we collect all contigs
+# in which the sequenceIDs are referenced; subsequently we eliminate
+# from that list those contigs which do have a child IN THE LIST, i.e.
+# select from the list those which are NOT parent of a child in the list.
+# This strategy will deal with split parent contigs as well as "normal" 
+# parents and does only rely on the fact that all contigIDs also occur
+# as parentIDs except for those in the previous generation for $contig
+
+# step 1: get all (potential) parents
+
+    my $contigID = $contig->getContigID(); # may be defined or not
+
+# do a blocked search (to deal with very large contigs)
+
+    my $blocksize = 10000;
+
+    my $dbh = $this->getConnection();
+
+    my %contigids;
+    while (my $block = scalar(@seqids)) {
+
+        $block = $blocksize if ($block > $blocksize);
+
+        my @block = splice @seqids, 0, $block;
+
+        my $range = join ',',sort {$a <=> $b} @block;
+
+        my $query = "select distinct contig_id from MAPPING"
+	          . " where seq_id in ($range)";
+# add an exclusion of the contig itself if its ID is defined
+        $query .= " and contig_id < $contigID" if $contigID;
+
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        while (my ($contig_id) = $sth->fetchrow_array()) {
+            $contigids{$contig_id}++;
+        }
+
+        $sth->finish();
+    }
+
+    my @contigids = keys %contigids;
+
+    if (scalar(@contigids)) {
+
+$DEBUG=1;
+print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
+        my $ageoffset = 0;
+        push @contigids,$contigID if $contigID;
+
+# step 2 : remove the parents of the contigs found in step 1 from the list
+
+        my $query = "select age,contig_id, parent_id from C2CMAPPING"
+        	  . " where contig_id in (".join(',',@contigids).")";
+print STDOUT ">getParentIDsForContig: $query \n" if $DEBUG;
+
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        my %ageprofile;
+        while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
+# the parent_id is removed because it is not the last in the chain
+print STDOUT ">getParentIDsForContig: $age,$contig_id,$parent_id\n" if $DEBUG;
+            if ($contigID && $contig_id == $contigID) {
+                $ageoffset = $age;
+                next;
+            } 
+            delete $contigids{$parent_id};
+            $ageprofile{$contig_id} = $age;
+        }
+print STDOUT "ageoffset $ageoffset \n" if $DEBUG;
 
         $sth->finish();
 
@@ -1618,11 +1815,15 @@ print STDOUT ">getParentIDsForContig: Possible parents found : @contigids\n" if 
 # misassembled reads in early contigs which are picked up in the
 # first step of the search; these are weeded out by selecting on
 # the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
+# NOTE: this applies only to newly added contigs, i.e. without contig_id
+#       when testing on older generation contigs apply age offset 
 
         foreach my $contig_id (keys %contigids) {
             next unless defined($ageprofile{$contig_id});
-            delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
-        }
+            if ($ageprofile{$contig_id} > 1 + $ageoffset) {
+                delete $contigids{$contig_id};
+            }
+	}
     }
 
 # those keys left are the true parent(s)
@@ -1630,13 +1831,14 @@ print STDOUT ">getParentIDsForContig: Possible parents found : @contigids\n" if 
     @contigids = keys %contigids;
 
 print STDOUT ">getParentIDsForContig: Confirmed parents found : @contigids\n" if $DEBUG;
+#exit if $DEBUG;
 
     return [@contigids];
 }
 
 sub getParentIDsForContigID {
 # private,  returns a list of contig IDs of connected contig(s)
-# using the C2CMAPPING table
+# using the C2CMAPPING table; i.e for contigs already loaded
     my $dbh = shift;
     my $contig_id = shift;
 
@@ -1769,6 +1971,17 @@ sub rebuildHistoryTree {
     }
 }
 
+sub updateMappingAge {
+# private, redefine the age for a contig-to-contig mapping
+    my $dbh = shift;
+    my $cid = shift;
+    my $age = shift;
+
+    my $query = "update C2CMAPPING set age=$age where contig_id=$cid";
+
+    return $dbh->do($query) || &queryFailed($query);
+}
+
 #-------------------------------------------------------------------------
 # contig generations
 #-------------------------------------------------------------------------
@@ -1851,7 +2064,6 @@ sub getCurrentParentIDs {
 
     my $dbh = $this->getConnection();
 
-#   my $current = $this->getCurrentContigIDs(@_,short=>0); delete after testing
     $options{short} = 0; # force 'long' method
     my $current = &getCurrentContigs($dbh,%options);
 
@@ -1901,6 +2113,38 @@ sub getInitialContigIDs {
     }
 
     return [@contigids];
+}
+
+sub getContigIDsForReadNames {
+# returns a list of contigids (in generation 0) for input readname(s)
+    my $this = shift;
+    my $reads = shift; # array ref
+
+    my $dbh = $this->getConnection();
+
+    my $subselect = "select CONTIG.contig_id "
+                  . "  from CONTIG left join C2CMAPPING using (contig_id)"
+		  . " where C2CMAPPING.parent_id is null";
+
+    my $query = "select distinct CONTIG.contig_id,gap4name,readname"
+              . "  from READS,CONTIG,SEQ2READ,MAPPING"
+              . " where READS.read_id = SEQ2READ.read_id"
+              . "   and SEQ2READ.seq_id = MAPPING.seq_id"
+              . "   and READS.readname in ('".join("','",@$reads)."')"
+              . "   and CONTIG.contig_id = MAPPING.contig_id"
+	      . "   and CONTIG.contig_id in ($subselect)";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my $outputlist = []; # array of arrays
+    while (my @ary = $sth->fetchrow_array()) {
+        push @$outputlist,[@ary];
+    }
+    $sth->finish();
+
+    return $outputlist;
 }
 
 #------------------------------------------------------------------------------
