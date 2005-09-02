@@ -143,22 +143,6 @@ while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
 $sth->finish();
 
 ###
-### Retrieve contig names
-###
-
-my $contigname = {};
-
-$sth = $statements->{'gap4contigname'};
-
-foreach my $ctgid (@contiglist) {
-    $sth->execute($ctgid);
-    my ($ctgname) = $sth->fetchrow_array();
-    $contigname->{$ctgid} = $ctgname;
-}
-
-$sth->finish();
-
-###
 ### Process each contig in turn
 ###
 
@@ -621,7 +605,7 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 	print "Saved as project $newproject\n\n";
     }
 
-    if ($xmlfh && $totbp >= $minprojectsize) {
+    if ($xmlfh && $totbp >= $minprojectsize && $contigcount > 1) {
 	print $xmlfh "\t<superscaffold id=\"$seedscaffoldid\" size=\"$totbp\" >\n";
 
 	my $isScaffold = 1;
@@ -789,11 +773,6 @@ sub CreateStatements {
 		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
 		   " order by CONTIG.length desc",
-
-		   "gap4contigname",
-		   "select readname from MAPPING,SEQ2READ,READS" .
-		   " where cstart = 1 and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id" .
-		   " and contig_id = ? limit 1",
 
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
