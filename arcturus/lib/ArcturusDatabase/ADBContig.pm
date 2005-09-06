@@ -1548,6 +1548,7 @@ sub repairContigToContigMappings {
     $message .= "\n";
 #print "deletemappings  @deletemappings  $message\n" if $DEBUG;
     foreach my $existingmapping (@deletemappings) {
+        next if $options{nodelete};
         my $parent_id = $existingmapping->getSequenceID();
         my $mapping_id = $existingmapping->getMappingID();
         $message .= "To be deleted: $contig_id - $parent_id ($mapping_id) ..";
