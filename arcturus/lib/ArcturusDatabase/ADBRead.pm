@@ -1151,7 +1151,8 @@ sub testReadAllocation {
 # build temporary tables to faciltate easy search
 
     return 0, "Failed to build temporary tables" unless
-        $this->getIDsForUnassembledReads(method=>'intemporarytable');
+        $this->getIDsForUnassembledReads(method=>'intemporarytable',
+                                         nosingleton=>1);
 
 # now search the CURREAD table for double reads
 
