@@ -245,6 +245,11 @@ sub getBaseQuality {
 
 #------------------------------------------------------------------- 
 
+sub getProject {
+    my $this = shift;
+    return $this->{project};
+}
+
 sub setProject {
     my $this = shift;
     $this->{project} = shift;
@@ -1066,7 +1071,7 @@ sub isValidMapping {
     my $child = shift;
     my $parent = shift;
     my $mapping = shift;
-    my $olreads = shift; # number of reads in overlapping area
+    my $olreads = shift || return 0; # number of reads in overlapping area
     my %options = @_; # if any
 
 # the following heuristic is used to decide if a parent-child link is wel
@@ -1090,7 +1095,7 @@ print STDOUT "Contig overlap: $olreads reads, @range ($overlap) length\n\n" if $
         my $numberofreads = $contig->getNumberOfReads();
         push @readsincontig,$numberofreads;
 # for the moment we use a sqrt function; could be something more sophysticated
-        my $threshold = sqrt($numberofreads - 0.4) + 0.2;
+        my $threshold = sqrt($numberofreads - 0.4) + 0.1;
         $threshold *= $options{spurious} if $options{spurious};
         $threshold = 1 if ($contig eq $parent && $numberofreads <= 2);
 print STDOUT "contig ".$contig->getContigName()." $numberofreads reads "
@@ -1103,16 +1108,22 @@ print STDOUT "\tContig fraction overlap ($contiglength) ".sprintf("%6.3f",$fract
 	push @fractions,$fraction;
     }
 
+# return valid read if number of overlap reads equals number in either contig
+
+    return 1 if ($olreads == $readsincontig[1]); # all reads of parent
+    return 1 if ($olreads == $readsincontig[0]); # all reads of child
+
 # get threshold for spurious link to the parent
 
     my $threshold = $thresholds[1];
 
     return 0 if ($olreads < $threshold); # spurious link
 
-# extra test for very small parents: require at least 50% overlap
+# extra test for very small parents with incomplete overlaping reads: 
+# require at least 50% overlap length
 
     if ($threshold <= 1) {
-# this cuts out small parents of 1,2 reads with little overlap)
+# this cuts out small parents of 1,2 reads with little overlap length)
         return 0 if ($fractions[1] < 0.5);
     }
 
