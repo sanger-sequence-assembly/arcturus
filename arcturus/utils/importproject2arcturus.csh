@@ -63,10 +63,10 @@ if ( -f ${projectname}.A.BUSY ) then
   exit 0
 endif
 
-echo Test abort
-set pwd = `pwd`
-echo d:$pwd i:$instance o:$organism p:$projectname tp:$trashproject
-exit 0
+#echo Test abort
+#set pwd = `pwd`
+#echo d:$pwd i:$instance o:$organism p:$projectname tp:$trashproject
+#exit 0
 
 echo Backing up version 0 to version B
 
@@ -92,7 +92,7 @@ ${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -ca
 
 # added 06/09/2005 read allocation test with assignment to TRASH project
 
-echo Testing read-allocation for posible duplicates
+echo Testing read-allocation for possible duplicates
 
 ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -trash -project $trashproject
 
