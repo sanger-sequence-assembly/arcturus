@@ -120,6 +120,7 @@ foreach my $contig_id (@contigs) {
 }
 
 if ($confirm) {
+    $logger->warning("Cleaning up") if $cleanup;
     $adb->cleanupMappings() if $cleanup;
 }
 else {    
