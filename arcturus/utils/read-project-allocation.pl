@@ -22,9 +22,11 @@ my $confirm;
 my $limit = 100;
 my $fofn;
 my $ml = 0;
+my $qc = 20; # default quality clip set differently from asp value
 
 my $validKeys = "organism|instance|read|fofn|oligo|finishing|minimulength|ml|"
-              . "project|assembly|limit|verbose|confirm|preview|list|help";
+              . "qualityclip|qc|project|assembly|limit|confirm|preview|"
+              . "verbose|list|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -47,6 +49,9 @@ while (my $nextword = shift @ARGV) {
 
     $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
     $ml        = shift @ARGV  if ($nextword eq '-ml');
+
+    $qc        = shift @ARGV  if ($nextword eq '-qualityclip');
+    $qc        = shift @ARGV  if ($nextword eq '-qc');
 
     $project   = shift @ARGV  if ($nextword eq '-project');
 
@@ -198,13 +203,15 @@ foreach my $read (@reads) {
         $logger->info($read); # list option
         next;
     }
-    my %options;
+    my %roptions;
 # determine selection by ID or by readname
-    $options{read_id}  = $read if ($read !~ /\D/);
-    $options{readname} = $read if ($read =~ /\D/);
+    $roptions{read_id}  = $read if ($read !~ /\D/);
+    $roptions{readname} = $read if ($read =~ /\D/);
+    my %options;
     $options{minimumlength} = $ml if ($ml >= 32);
     $options{noload} = 1 unless $confirm;
-    my ($status,$message) = $adb->assignReadAsContigToProject($project,%options);
+    $options{qualityclip} = $qc if $qc;
+    my ($status,$message) = $adb->assignReadAsContigToProject($project,%roptions,%options);
     if ($status) {
         $logger->warning("read $read is added to project ".$project->getProjectName());
     }
