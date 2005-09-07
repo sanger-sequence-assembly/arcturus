@@ -533,6 +533,18 @@ sub assignReadAsContigToProject {
 
     $identifier = $read->getReadName();
 
+# apply our own clipping if so specified
+
+    my $minimumlength = $poption{minimumlength};
+    $minimumlength = 50 unless $minimumlength;
+
+    if (my $qc = $poption{qualityclip}) {
+        my $qr = $read->qualityClip(threshold=>$qc);
+        return 0,"read $identifier is of insufficient length: $qr "
+                ."($minimumlength) for quality clip level $qc" 
+        unless ($qr >= $minimumlength);
+    }
+
 # check if it is a valid read by getting the read_id and quality ranges
 
     my $lqleft  = $read->getLowQualityLeft();
@@ -548,8 +560,6 @@ sub assignReadAsContigToProject {
 
 # check if it meets the minimum quality range
 
-    my $minimumlength = $poption{minimumlength};
-    $minimumlength = 50 unless $minimumlength;
     my $contiglength = $lqright - $lqleft + 1;
     return 0,"read $identifier is of insufficient length: $contiglength "
             ."($minimumlength)" unless ($contiglength >= $minimumlength);
