@@ -13,11 +13,14 @@ use Logging;
 my $organism;
 my $instance;
 my $verbose;
-my $repair;
-my $confirm = 0;
+my $repair = 0;
+my $delete;
+my $trashproject = 'TRASH';
 my $force = 0;
+my $confirm;
 
-my $validKeys  = "organism|instance|verbose|debug|repair|force|confirm|help";
+my $validKeys  = "organism|instance|verbose|debug|trash|mark|repair|project|"
+               . "delete|force|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -32,11 +35,21 @@ while (my $nextword = shift @ARGV) {
 
     $verbose      = 2            if ($nextword eq '-debug');
 
-    $repair       = 1            if ($nextword eq '-repair');
+    $repair       = 1            if ($nextword eq '-trash');
+    $confirm      = 1            if ($nextword eq '-trash');
 
-    $force        = 1            if ($nextword eq '-force');
+    $repair       = 2            if ($nextword eq '-mark');
+
+    $repair       = 3            if ($nextword eq '-repair');
+    $force        = 1            if ($nextword eq '-repair');
+
+    $trashproject = shift @ARGV  if ($nextword eq '-project');
+
+    $delete       = 1            if ($nextword eq '-delete');
 
     $confirm      = 1            if ($nextword eq '-confirm');
+
+    $force        = 1            if ($nextword eq '-force');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -65,17 +78,52 @@ if (!$adb || $adb->errorStatus()) {
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
 
+&showUsage(0,"Missing database instance") unless $instance;
+
 $logger->info("Database ".$adb->getURL." opened succesfully");
+
+#----------------------------------------------------------------
+# get the backup project
+#----------------------------------------------------------------
+my %options;
+ 
+$options{project_id}  = $trashproject if ($trashproject !~ /\D/);
+$options{projectname} = $trashproject if ($trashproject =~ /\D/);
+
+#if (defined($assembly)) {
+#    $options{assembly_id}  = $assembly if ($assembly !~ /\D/);
+#    $options{assemblyname} = $assembly if ($assembly =~ /\D/);
+#}
+ 
+#my $status;
+ 
+my ($projects,$message) = $adb->getProject(%options);
+ 
+if ($projects && @$projects > 1) {
+    my @namelist;
+    foreach my $project (@$projects) {
+        push @namelist,$project->getProjectName();
+    }
+    $logger->warning("Non-unique project specification : $trashproject (@namelist)");
+#    $logger->warning("Perhaps specify the assembly ?") unless defined($assembly);
+    $adb->disconnect();
+    exit;
+}
+elsif (!$projects || !@$projects) {
+    $logger->warning("Project $trashproject not available : $message");
+    $adb->disconnect();
+    exit;     
+}
+
+$trashproject = shift @$projects;   
+my $trashprojectid = $trashproject->getProjectID();
+my $trashprojectname = $trashproject->getProjectName();
+$logger->warning("Project $trashprojectname ($trashprojectid) used for repair mode");
 
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 my ($n,$hashlist);
-
-# test set up
-#@{$hashlist->{1}} = (30280,7712);#@{$hashlist->{2}} = (30280,7712);
-#@{$hashlist->{3}} = (30496,16349);#@{$hashlist->{4}} = (30496,16349);
-#@{$hashlist->{5}} = (30000,20000,10000);#@{$hashlist->{7}} = (30000,20000,10000);
 
 $logger->info("Building temporary tables (be patient ... )");
 
@@ -100,9 +148,12 @@ foreach my $read (sort {$a <=> $b} keys %$hashlist) {
     }
 }
 
-$logger->skip;
+$logger->skip if $n;
 
-# test each contig to parent link; in repair mode add the missing link to database
+# test each contig to parent link; 
+# in repair mode put offending contig in TRASH: this moves the contig out
+# of the projects, which will be clean. However, if wanted you can restore
+# the link and move the contig back into its project by hand afterwards
 
 foreach my $contig (sort keys %$link) {
     my $parents = $link->{$contig};
@@ -112,7 +163,7 @@ foreach my $contig (sort keys %$link) {
     }
 }
 
-$logger->skip;
+$logger->skip if $n;
         
 $logger->warning("Analysing link between contigs and parents") if $n;
 
@@ -128,6 +179,8 @@ foreach my $contig_id (sort keys %$link) {
 
     $contig->setDEBUG() if ($verbose && $verbose > 1);
 
+    my $currentproject = $contig->getProject();
+
     my $parents = $link->{$contig_id};
     foreach my $parent_id (sort keys %$parents) {
 	$logger->warning("Testing contig $contig_id against parent $parent_id");
@@ -142,11 +195,12 @@ foreach my $contig_id (sort keys %$link) {
         my $length = $parent->getConsensusLength();
         $logger->warning("number of mapping segments = $segments ($length)");
     }
-# enter the mappings into the database
+
+# list the mappings into the database (result of 'force' option)
+
     if ($contig->hasContigToContigMappings) {
         $logger->warning("summary of parents for contig $contig_id");
         my $ccm = $contig->getContigToContigMappings();
-print STDOUT "number of mappings: $ccm \n";
         my $length = $contig->getConsensusLength();
         $logger->warning("number of mappings : ".scalar(@$ccm)." ($length)");
         foreach my $mapping (@$ccm) {
@@ -154,10 +208,68 @@ print STDOUT "number of mappings: $ccm \n";
         }
     }
 
-    next unless $repair;
-# no cleanup required
-    my ($s,$m)= $adb->repairContigToContigMappings($contig,confirm=>$confirm);
-    $logger->warning($m);
+    foreach my $parent_id (sort keys %$parents) {
+
+        my $parent = $adb->getContig(contig_id=>$parent_id,metaDataOnly=>1);
+        my $nr = $parent->getNumberOfReads();
+
+# first, treat single read contigs (delete if delete option active)
+
+        if ($nr <= 1 && $delete) {
+            unless ($confirm) {
+                $logger->warning("Single-read parent contig "
+                                . $parent->getParentID()
+				 . " will be deleted in repair mode");
+                next;
+            }
+# delete the contig
+            my ($success,$msg) = $adb->deleteContig($parent_id,confirm=>1);
+            $logger->severe("FAILED to remove contig $parent_id") unless $success;
+            $logger->warning("Contig $parent_id is deleted") if $success;
+            next if $success;
+        }
+
+# then, do the remaining ones
+
+        my $project_id = $parent->getProject();
+        
+        if ($project_id == $trashprojectid && $repair <= 1) {
+            $logger->warning("parent contig $parent_id is already allocated to "
+			    . "project $trashprojectname");
+        }
+        elsif ($repair <= 1) {
+# move the offending parent contig to the trash project
+            $logger->warning("Contig $parent_id will be allocated to "
+		   	   . "project $trashprojectname in repair mode");
+            next unless $confirm;
+# move contig to trash project
+            my ($status,$msg) = $adb->assignContigToProject($parent,$trashproject,1);
+            $logger->warning("status $status: $msg");
+	}
+
+        elsif ($repair == 2) {
+# set the 'current' flag in the CONTIG table
+            $logger->warning("Contig $parent_id will be marked as not belonging to "
+		   	   . "the current generation in repair mode");
+            next unless $confirm;
+#          $adb->markContig($parent_id); # to be completed
+	}
+
+        elsif ($repair == 3) {
+# restore the link from $contig to $parent
+            $logger->warning("The link to parent contig $parent_id will be added to "
+		   	   . "the database in repair mode");
+            next unless $confirm;
+# add the new link(s) to the C2CMAPPING list for this contig  TO BE TESTED
+            my ($s,$m)= $adb->repairContigToContigMappings($contig,confirm=>1,
+                                                                   nodelete=>1);
+            $logger->warning($m);
+	}
+
+        else {
+            $logger->warning("invalid parameter value $repair");
+	}
+    }
 }
 
 $logger->skip;
@@ -169,7 +281,6 @@ $adb->disconnect();
 #------------------------------------------------------------------------
 
 sub showUsage {
-    my $mode = shift || 0; 
     my $code = shift || 0;
 
     print STDERR "\nList multiply allocated reads in the current assembly\n";
@@ -183,7 +294,10 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-repair\t(no value) if multiple allocations, repair links\n";
-    print STDERR "-confirm\t(no value) confirm changes to database\n";
+
+
+
+#    print STDERR "-confirm\t(no value) confirm changes to database\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
