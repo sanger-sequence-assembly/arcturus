@@ -1,6 +1,10 @@
 #!/bin/csh
 
-# parameters: database instance, organism name, Gap4 project name
+# parameters: no 1 = database instance
+#             no 2 = organism name
+#             no 3 = gap4 project (database) name
+#             no 4 = indicates 64 bit version or 32 bit
+#             no 5 = trash project name (optional, default TRASH)
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
@@ -26,9 +30,28 @@ endif
 
 set projectname = $3
 
-set organism_dir = `pfind -q $organism`
+if ( $#argv == 3 ) then
+  echo \!\! -- No bit version specified --
+  echo usage: $0 instance_name organism-name project_name bit_version \[1\]
+  exit 1
+else if ( $4 == 64 ) then
 
-cd $organism_dir/arcturus
+  set gap2caf_dir = /nfs/pathsoft/prod/WGSassembly/bin/64bit
+
+else if ( $4 == 32 ) then
+
+  set gap2caf_dir = /usr/local/badger/bin
+
+else
+  echo \!\! -- Invalid bit version \($4\) specified specified \(should be 32 or 64\) --
+  exit 1 
+endif
+
+# ok, here we go : go to the work directory and request memory for the big action
+
+limit datasize 16000000
+
+cd `pfind -q $organism`/arcturus
 
 if ( ! -f ${projectname}.0 ) then
   echo \!\! -- Project $projectname version 0 does not exist --
@@ -39,28 +62,26 @@ endif
 
 set trashproject = TRASH
 
-if ( $#argv > 3 ) then
-    set trashproject = $4
+if ( $#argv > 4 ) then
+    set trashproject = $5
 endif
 
 set arcturus_home=/nfs/pathsoft/arcturus
 
-# limit datasize 16000000
+set padded=/tmp/${projectname}.$$.padded.caf
 
-set padded=/tmp/${projectname}.padded.caf
-
-set depadded=/tmp/${projectname}.depadded.caf
+set depadded=/tmp/${projectname}.$$.depadded.caf
 
 echo Processing $projectname
 
 if ( -f ${projectname}.0.BUSY ) then
   echo \!\! -- Import of project $projectname aborted: Gap4 version 0 is BUSY --
-  exit 0
+  exit 1
 endif
 
 if ( -f ${projectname}.A.BUSY ) then
   echo \!\! -- Import of project $projectname aborted: Gap4 version A is BUSY --
-  exit 0
+  exit 1
 endif
 
 #echo Test abort
@@ -78,7 +99,7 @@ cpdb $projectname 0 $projectname B
 
 echo Converting Gap4 database to CAF format
 
-/nfs/pathsoft/prod/WGSassembly/bin/64bit/gap2caf -project $projectname -version 0 -ace $padded
+$gap2caf_dir/gap2caf -project $projectname -version 0 -ace $padded
 
 echo Depadding CAF file
 
@@ -96,12 +117,15 @@ echo Testing read-allocation for possible duplicates
 
 ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -trash -project $trashproject
 
-echo Calculating consensus sequence
+#echo Calculating consensus sequence
 
 setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 
-/nfs/pathsoft/arcturus/java/scripts/calculateconsensus -instance $instance -organism $organism -quiet -lowmem
+${arcturus_home}/java/scripts/calculateconsensus -instance $instance -organism $organism -quiet -lowmem
 
 echo Cleaning up
 
 rm -f $padded $depadded
+
+exit 0
+
