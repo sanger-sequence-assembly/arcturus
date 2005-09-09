@@ -21,6 +21,8 @@ my $outfile;
 my $xmlfile;
 my $shownames = 0;
 my $myproject;
+my $onlyproject;
+my $seedcontig;
 
 ###
 ### Parse arguments
@@ -39,6 +41,10 @@ while (my $nextword = shift @ARGV) {
 
     $myproject = shift @ARGV if ($nextword eq '-project');
 
+    $onlyproject = shift @ARGV if ($nextword eq '-onlyproject');
+
+    $seedcontig = shift @ARGV if ($nextword eq '-seedcontig');
+
     $shownames = 1 if ($nextword eq '-shownames');
 
     $usesilow = 1 if ($nextword eq '-usesilow');
@@ -55,9 +61,20 @@ while (my $nextword = shift @ARGV) {
 }
 
 unless (defined($organism) && defined($instance)) {
-    print STDERR "One or more mandatory parameters are missing.\n\n";
+    print STDERR "ERROR: One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(0);
+}
+
+###
+### Check consitency of -project and -onlyproject arguments
+###
+
+if (defined($myproject) && defined($onlyproject) && $myproject != $onlyproject) {
+    print STDERR "ERROR: \"-project $myproject\" is inconsistent with \"-onlyproject $onlyproject\"";
+    print STDERR "\tPlease supply only one of these options. Note that \"-onlyproject N\"\n";
+    print STDERR "\timplies \"-project N\"\n";
+    exit 1;
 }
 
 ###
@@ -129,9 +146,15 @@ my $contigname = {};
 my @contiglist;
 my $project = {};
 
-my $sth = $statements->{'currentcontigs'};
+my $sth;
 
-$sth->execute($minlen);
+if (defined($onlyproject)) {
+    $sth = $statements->{'currentcontigsfromproject'};
+    $sth->execute($onlyproject, $minlen);
+} else {
+    $sth = $statements->{'currentcontigs'};
+    $sth->execute($minlen);
+}
 
 while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
@@ -141,6 +164,15 @@ while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
 }
 
 $sth->finish();
+
+if (defined($seedcontig)) {
+    if (defined($contiglength->{$seedcontig})) {
+	@contiglist = ($seedcontig);
+    } else {
+	print STDERR "Contig $seedcontig is not in the list of current contigs.\n";
+	exit(1);
+    }
+}
 
 ###
 ### Process each contig in turn
@@ -774,6 +806,13 @@ sub CreateStatements {
 		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and CONTIG.length >= ?" .
 		   " order by CONTIG.length desc",
 
+		   "currentcontigsfromproject",
+		   "select CONTIG.contig_id,gap4name,CONTIG.length,CONTIG.project_id" .
+		   "  from CONTIG left join C2CMAPPING" .
+		   "    on CONTIG.contig_id = C2CMAPPING.parent_id" .
+		   " where C2CMAPPING.parent_id is null and CONTIG.nreads > 1 and project_id= ? and CONTIG.length >= ?" .
+		   " order by CONTIG.length desc",
+
 		   "leftendreads", 
 		   "select read_id,cstart,cfinish,direction from" .
 		   " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" .
@@ -1036,4 +1075,6 @@ sub showUsage {
     print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
     print STDERR "-shownames\tShow names of reads and templates in XML output instead of IDs\n";
     print STDERR "-project\tSelect seed contigs only from this project\n";
+    print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
+    print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
 }
