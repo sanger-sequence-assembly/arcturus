@@ -1560,7 +1560,7 @@ sub putRead {
 # insert read into the database
     my $this = shift;
     my $read = shift;
-    my $options = shift;
+    my %options = @_;
 
     if (ref($read) ne 'Read') {
         return (0,"putRead expects an instance of the Read class");
@@ -1568,10 +1568,14 @@ sub putRead {
 
 # a) test consistency and completeness
 
-    my ($rc, $errmsg) = $this->checkReadForCompleteness($read, $options);
+    my ($rc, $errmsg);
+
+   ($rc, $errmsg) = &checkReadForCompleteness($read, @_);
     return (0, "failed completeness check ($errmsg)") unless $rc;
 
-    ($rc, $errmsg) = $this->checkReadForConsistency($read);
+#return 0,"TEST ABORT checkReadForCompletenes: $errmsg";
+
+   ($rc, $errmsg) = &checkReadForConsistency($read, @_);
     return (0, "failed consistency check ($errmsg)") unless $rc;
 
 # b) encode dictionary items; special case: template & ligation
@@ -1579,16 +1583,15 @@ sub putRead {
 #    $this->populateLoadingDictionaries(); # autoload (ignored if already done)
     my $dbh = $this->getConnection();
 
-    # CLONE
+# CLONE
 
-#    my $clone_id = $this->getReadAttributeID('clone',$read->getClone());
     my $clone_id = &getReadAttributeID($read->getClone(),
 				       $this->{LoadingDictionary}->{'clone'},
 				       $this->{SelectStatement}->{'clone'},
 				       $this->{InsertStatement}->{'clone'});
     $clone_id = 0 unless defined($clone_id); # ensure its definition
 
-    # LIGATION
+# LIGATION
 
     my ($sil,$sih) = @{$read->getInsertSize()}; 
 
@@ -1600,9 +1603,15 @@ sub putRead {
 					  $this->{InsertStatement}->{'ligation'},
 					  [$sil, $sih, $clone_id]);
 
+# the next line set ligation_id to defined but 0 to handle undefined ligation
+
+    $ligation_id = 0 unless ($ligation_id || $read->getLigation());
+
+# the next line traps an unidentified ligation
+
     return (0, "failed to retrieve ligation_id") unless defined($ligation_id);
 
-    # TEMPLATE
+# TEMPLATE
 
 #    my $template_id = $this->getReadAttributeID('template',$read->getTemplate(),
 #					   [$ligation_id]);
@@ -1612,11 +1621,17 @@ sub putRead {
 					  $this->{InsertStatement}->{'template'},
 					  [$ligation_id]);
 
+# the next line set template_id to defined but 0 to handle undefined template
+
+    $template_id = 0 unless ($template_id || $read->getTemplate());
+
+# the next line traps an unidentified template
+
     return (0, "failed to retrieve template_id") unless defined($template_id);
 
-# c) encode dictionary items basecaller, clone, status
+# c) encode dictionary items basecaller, status
 
-    # BASECALLER
+# BASECALLER
 
 #    my $basecaller = $this->getReadAttributeID('basecaller',$read->getBaseCaller());
     my $basecaller = &getReadAttributeID($read->getBaseCaller(),
@@ -1680,8 +1695,6 @@ sub putRead {
 
     return (1, "OK"); # or $readid?
 }
-
-# SPLIT this part of because we will need it to insert edited sequences
 
 sub putSequenceForRead {
 # private method to load all sequence related data
@@ -1965,19 +1978,37 @@ sub putCommentForReadName {
     return $this->putCommentForReadID($readid,shift);
 }
 
-sub checkReadForCompleteness {
+sub testRead {
+# public method to check read for validity
     my $this = shift;
     my $read = shift;
-    my $options = shift;
 
-    my $skipAspedCheck = 0;
-
-    if (defined($options) && ref($options) && ref($options) eq 'HASH') {
-	$skipAspedCheck = $options->{skipaspedcheck} || 0;
-    }
-
-    return (0, "invalid argument")
+    return (0, "checkRead expects a Read instance as parameter")
 	unless (defined($read) && ref($read) && ref($read) eq 'Read');
+
+    my $report = '';
+
+    my ($status,$msg);
+   ($status,$msg) = &checkReadForCompleteness($read,@_);
+    $report .= 'completeness : '.($status ? 'passed' : 'FAILED');
+    $report .= " ($msg)" unless $status;
+    $report .= "\n";
+
+    return $report;
+
+   ($status,$msg) = &checkReadForConsistency($read,@_);
+    $report .= 'consistency  : '.($status ? 'passed' : 'FAILED');
+    $report .= " ($msg)" unless $status;
+    $report .= "\n";
+
+    return $report;
+}
+
+sub checkReadForCompleteness {
+# private
+    my $read = shift;
+    my %options = @_;
+
 
     return (0, "undefined readname")
 	unless defined($read->getReadName());
@@ -1986,28 +2017,7 @@ sub checkReadForCompleteness {
 	unless defined($read->getSequence());
 
     return (0, "undefined base-quality")
-	unless defined($read->getBaseQuality());
-
-    return (0, "undefined asped-date")
-	unless (defined($read->getAspedDate()) || $skipAspedCheck);
-
-    return (0, "undefined template")
-	unless defined($read->getTemplate());
-
-    return (0, "undefined ligation")
-	unless defined($read->getLigation());
-
-    return (0, "undefined insert-size")
-	unless defined($read->getInsertSize());
-
-    return (0, "undefined strand")
-	unless defined($read->getStrand());
-
-    return (0, "undefined chemistry")
-	unless defined($read->getChemistry());
-
-    return (0, "undefined primer")
-	unless defined($read->getPrimer());
+        unless defined($read->getBaseQuality());
 
     return (0, "undefined low-quality-left")
 	unless defined($read->getLowQualityLeft());
@@ -2015,12 +2025,45 @@ sub checkReadForCompleteness {
     return (0, "undefined low-quality-right")
 	unless defined($read->getLowQualityRight());
 
+    return (0, "undefined strand")
+	unless defined($read->getStrand());
+
+# the following checks can be switched off
+
+    unless ($options{skipaspedcheck}) {
+
+        return (0, "undefined asped-date")
+	    unless defined($read->getAspedDate());
+    }
+
+    unless ($options{skipligationcheck}) {
+
+        return (0, "undefined template")
+	    unless defined($read->getTemplate());
+
+        return (0, "undefined ligation")
+            unless defined($read->getLigation());
+
+        return (0, "undefined insert-size")
+	    unless defined($read->getInsertSize());
+    }
+
+    unless ($options{skipchemistrycheck}) {
+
+        return (0, "undefined chemistry")
+	    unless defined($read->getChemistry());
+
+        return (0, "undefined primer")
+            unless defined($read->getPrimer());
+    }
+
     return (1, "OK");
 }
 
 sub checkReadForConsistency {
-    my $this = shift;
+# private
     my $read = shift || return (0,"Missing Read instance");
+    my $options = shift;
 
 # check process status 
 
