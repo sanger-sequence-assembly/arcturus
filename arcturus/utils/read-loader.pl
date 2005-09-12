@@ -26,15 +26,17 @@ my $noexclude = 0; # re: suppresses chack against already loaded reads
 my $noloading = 0; # re: test mode without read loading
 
 my $skipaspedcheck = 0;
+my $consensus_read = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys  = "organism|instance|assembly|caf|cafdefault|fofn|out|";
-   $validKeys .= "limit|filter|source|exclude|info|help|asped|";
-   $validKeys .= "readnames|include|filter|readnamelike|rootdir|";
-   $validKeys .= "subdir|verbose|schema|projid|aspedafter|aspedbefore|";
-   $validKeys .= "minreadid|maxreadid|skipaspedcheck|noload|noexclude";
+my $validKeys = "organism|instance|assembly|caf|cafdefault|fofn|out|"
+              . "limit|filter|source|exclude|info|help|asped|"
+              . "readnames|include|filter|readnamelike|rootdir|"
+              . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
+              . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
+              . "noload|noexclude|test";
 
 my %PARS;
 
@@ -58,10 +60,15 @@ while (my $nextword = shift @ARGV) {
 
     $noloading        = 1            if ($nextword eq '-noload');
 
+    $noloading        = 2            if ($nextword eq '-test');
+
 # Do not check Read objects for the presence of an Asped date. This allows
 # us to load external reads, which lack this information.
 
-    $skipaspedcheck   = 1 if ($nextword eq '-skipaspedcheck');
+    $skipaspedcheck   = 1            if ($nextword eq '-skipaspedcheck');
+
+    $consensus_read   = 1            if ($nextword eq '-isconsensusread');
+    $consensus_read   = 1            if ($nextword eq '-icr');
 
 # logging
 
@@ -263,8 +270,11 @@ $factory->setLogging($logger);
 
 my $processed = 0;
 
-my $loadoptions = {};
-$loadoptions->{skipaspedcheck} = 1 if $skipaspedcheck;
+my %loadoptions;
+$loadoptions{skipaspedcheck} = 1 if $skipaspedcheck;
+$loadoptions{skipaspedcheck}     = 1 if $consensus_read;
+$loadoptions{skipligationcheck}  = 1 if $consensus_read;
+$loadoptions{skipchemistrycheck} = 1 if $consensus_read;
 
 while (my $readname = $factory->getNextReadName()) {
 
@@ -274,16 +284,20 @@ while (my $readname = $factory->getNextReadName()) {
 
     next if !defined($read); # do error listing inside factory
 
-    $logger->info("Storing $readname (".$read->getReadName.")");
-
     if ($noloading) {
 
-        $read->writeToCaf(*STDOUT);
+        $read->writeToCaf(*STDOUT) if ($noloading > 1);
+
+        my $report = $adb->testRead($read,%loadoptions);
+
+        print STDOUT "$readname:\n$report\n";
 
         next;
     }
 
-    my ($success,$errmsg) = $adb->putRead($read, $loadoptions);
+    $logger->info("Storing $readname (".$read->getReadName.")");
+
+    my ($success,$errmsg) = $adb->putRead($read, %loadoptions);
 
     $logger->severe("Unable to put read $readname: $errmsg") unless $success;
 
@@ -374,6 +388,9 @@ sub showUsage {
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
     print STDERR "-noload\t(no value) do not load the read(s) found (test mode)\n";    
     print STDERR "\n";
+    print STDERR "-skipaspedcheck\n";
+    print STDERR "-isconcensusread\t(icr)\n";
+    print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
     print STDERR "-verbose\t(no value)\n";
@@ -397,8 +414,8 @@ sub showUsage {
     if ($mode == 0 || $mode == 3) {
 	print STDERR "Source-specific parameters for Expfiles input:\n";
 	print STDERR "\n";
-	print STDERR "-root\t\troot directory of data repository\n";
-	print STDERR "-sub\t\tsub-directory filter\n";
+	print STDERR "-rootdir\t\troot directory of data repository\n";
+	print STDERR "-subdir\t\tsub-directory filter\n";
 	print STDERR "-limit\t\tlargest number of reads to be loaded\n";
 	print STDERR "\n";
     }
