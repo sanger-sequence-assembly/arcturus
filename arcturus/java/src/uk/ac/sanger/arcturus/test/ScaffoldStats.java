@@ -67,6 +67,8 @@ public class ScaffoldStats {
     }
 
     class MyHandler extends DefaultHandler {
+	private static final int MAXPROJECTS = 100;
+
 	public static final int ASSEMBLY = 1;
 	public static final int SUPERSCAFFOLD = 2;
 	public static final int SCAFFOLD = 3;
@@ -82,6 +84,12 @@ public class ScaffoldStats {
 	protected int superContigLength;
 	protected int scaffoldCount;
 	protected int totalScaffoldLength;
+	protected int[] projectCount = new int[MAXPROJECTS];
+	protected int[] projectLength = new int[MAXPROJECTS];
+	protected int superscaffoldID;
+	protected int[] scaffoldProjectCount = new int[MAXPROJECTS];
+	protected int[] scaffoldProjectLength = new int[MAXPROJECTS];
+	protected int scaffoldID;
 
 	public void startDocument() throws SAXException {
 	}
@@ -138,15 +146,25 @@ public class ScaffoldStats {
 		break;
 		
 	    case SUPERSCAFFOLD:
+		superscaffoldID = getIntegerAttribute(attrs, "id", -1);
 		superContigCount = 0;
 		superContigLength = 0;
 		scaffoldCount = 0;
+		for (int i = 0; i < projectCount.length; i++)
+		    projectCount[i] = 0;
+		for (int i = 0; i < projectLength.length; i++)
+		    projectLength[i] = 0;
 		break;
 		
 	    case SCAFFOLD:
+		scaffoldID = getIntegerAttribute(attrs, "id", -1);
 		contigCount = 0;
 		totalContigLength = 0;
 		scaffoldCount++;
+		for (int i = 0; i < projectCount.length; i++)
+		    scaffoldProjectCount[i] = 0;
+		for (int i = 0; i < projectLength.length; i++)
+		    scaffoldProjectLength[i] = 0;
 		break;
 		
 	    case CONTIG:
@@ -155,6 +173,14 @@ public class ScaffoldStats {
 		superContigCount++;
 		totalContigLength += size;
 		superContigLength += size;
+
+		int project = getIntegerAttribute(attrs, "project", -1);
+		if (project > 0) {
+		    projectCount[project]++;
+		    projectLength[project] += size;
+		    scaffoldProjectCount[project]++;
+		    scaffoldProjectLength[project] += size;
+		}
 		break;
 		
 	    case GAP:
@@ -183,12 +209,24 @@ public class ScaffoldStats {
 		break;
 		
 	    case SUPERSCAFFOLD:
-		System.out.println("SUPER " + scaffoldCount + " " +
+		System.out.print("SUPER " + superscaffoldID + " " + scaffoldCount + " " +
 				   superContigCount + " " + superContigLength);
+
+		for (int i = 0; i < projectCount.length; i++)
+		    if (projectCount[i] > 0)
+			System.out.print(" " + i + "," + projectCount[i] + "," + projectLength[i]);
+
+		System.out.println();
 		break;
 		
 	    case SCAFFOLD:
-		System.out.println("SCAFF " + contigCount + " " + totalContigLength);
+		System.out.print("SCAFF " + scaffoldID + " " + contigCount + " " + totalContigLength);
+
+		for (int i = 0; i < scaffoldProjectCount.length; i++)
+		    if (scaffoldProjectCount[i] > 0)
+			System.out.print(" " + i + "," + scaffoldProjectCount[i] + "," + scaffoldProjectLength[i]);
+
+		System.out.println();
 		break;
 		
 	    case CONTIG:
