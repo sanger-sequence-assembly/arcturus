@@ -109,7 +109,7 @@ echo Importing to Arcturus
 
 # added 06/09/2005 default project name
 
-${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -caf $depadded -project $projectname
+${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -caf $depadded -defaultproject $projectname
 
 # added 06/09/2005 read allocation test with assignment to TRASH project
 
@@ -117,7 +117,7 @@ echo Testing read-allocation for possible duplicates
 
 ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -trash -project $trashproject
 
-#echo Calculating consensus sequence
+# calculating consensus sequence
 
 setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 
