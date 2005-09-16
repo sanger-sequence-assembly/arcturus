@@ -116,7 +116,7 @@ sub getContig {
         push @values, $options{projectname};
     }
 
-# add limit clause to guarantee latest contig returned        
+# add limit clause to guarantee latest contig returned
 
     $query .= "order by contig_id desc limit 1";
 
@@ -259,12 +259,17 @@ sub getSequenceAndBaseQualityForContigID {
 }
 
 sub hasContig {
-# test presence of contig with given contig_id; (REDUNDENT?)
-# if so, return Contig instance with metadata only
+# test presence of contig with given contig identifier; return 0 or contig id
     my $this = shift;
-    my $contig_id = shift;
+    my %options = @_;
 
-    return $this->getContig(ID=>$contig_id,metaDataOnly=>1);
+    $options{metaDataOnly} = 1;
+
+    my $contig = $this->getContig(%options);
+
+    return 0 unless $contig;
+
+    return $contig->getContigID();
 }
 
 sub getParentContigsForContig {
@@ -443,10 +448,13 @@ sub putContig {
 # (re-)assign project, if a project is explicitly defined
 
                 if ($project && $setprojectby eq 'project') {
-# shouldn't this have an extra switch? 
+# shouldn't this have an extra switch?
+                    my $newproject = $project->getProjectID();
+                    my $oldproject = $previous->getProject();
 # determine old project for contig, generate message system?
-print STDERR "putContig: line 449 assignContigToProject I\n";
-# what about message? get project allocated for contig, test if pid cahnged
+print STDERR "putContig: line 449 assignContigToProject "
+           .  $project->getProjectName()."\n";
+# what about message? get project allocated for contig, test if pid changed
                     $this->assignContigToProject($previous,$project,1);
                     $project->addContigID($contigid);
                 }
@@ -501,7 +509,7 @@ print STDERR "putContig: line 449 assignContigToProject I\n";
 
 # inherit the tags
 
-#        $contig->inheritTags(exclude=>'REPT') if $inheritTags;
+#        $contig->inheritTags(excludeTagType=>'REPT') if $inheritTags;
         $contig->inheritTags() if $inheritTags;
 
 # determine the project_id unless it's already specified (with options)
@@ -512,9 +520,9 @@ print STDERR "putContig: line 449 assignContigToProject I\n";
             my ($projects,$msg) = $this->inheritProject($contig,$setprojectby,
                                                         %poptions);
             if ($projects) {
-# a project has been determined
+# a project has been determined; the first in the list is the chosen project
                 $project = shift @$projects;
-                @originalprojects = @$projects;
+                @originalprojects = @$projects; # original parent projects
                 $message .= "; project ".$project->getProjectName()." selected ";
                 $message .= "($msg) " if $msg;
 	    }
@@ -676,7 +684,7 @@ sub inheritProject {
     else {
 #print "putContig 451: getProject parentids= @parentids\n" if $DEBUG;
         my ($projects,$msg) = $this->getProject(contig_id=>[@parentids]);
-#                                               lockcheck=>$options{lockcheck});
+#                                               lockcheck=>$lockcheck);
 #print "Projects found @$projects $msg\n" if @$projects;
 #print "No Projects found $msg\n" unless @$projects;
         @projects = @$projects if ($projects && @$projects);
@@ -733,10 +741,12 @@ print ">inheritProject: Score $score ($largestscore)\n" if $DEBUG;
                 $project = $testproject;
             }          
         }
+# add chosen project upfront in the return list
         unshift @original,$project;
         return ([@original],"$imodel score $largestscore");
     }
     elsif (scalar(@projects) == 1) {
+# add chosen project upfront in the return list
         $project = $projects[0];
         unshift @original,$project;
         return ([@original],"default choice");
@@ -762,6 +772,11 @@ sub informUsersOfChange {
     my @messages;
     foreach my $oldproject (@$oldprojects) {
 # test if a project has changed using the project ID
+
+print STDOUT "Diagnostic message: enter ADBContig->informUsersOfChange "
+           . "($newpid, ".$oldproject->getProjectID()
+           . ", ".$oldproject->getProjectName().")\n";
+
         next if ($oldproject->getProjectID() == $newpid);
         next if ($oldproject->getProjectName() eq "BIN");
  
@@ -1046,8 +1061,11 @@ sub deleteContig {
 
     my $confirm = $options{confirm};
 
-    my ($status,$message) = $this->unlinkContigID($dbh,$cid,$confirm); 
-#    my ($status,$message) = &unlinkContigID($dbh,$cid,$confirm); 
+# for some reason I have to call this private function on the fully specified
+# class; importing unlinkContigID using Exporter in ADBProject doesn't work as
+# expected ...
+  
+    my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$confirm); 
 
     return (0,"Contig $identifier cannot be deleted: $message") unless $status;
 
