@@ -1086,7 +1086,7 @@ print STDOUT "\nEnter isVALIDmapping: ".$child->getContigName()."  parent ".$par
     my @range = $mapping->getContigRange(); 
     my $overlap = $range[1] - $range[0] + 1;
 
-print STDOUT "Contig overlap: $olreads reads, @range ($overlap) length\n\n" if $DEBUG;
+print STDOUT "Contig overlap: $olreads reads, @range ($overlap)\n\n" if $DEBUG;
 
     my @thresholds;
     my @readsincontig;
@@ -1104,14 +1104,15 @@ print STDOUT "contig ".$contig->getContigName()." $numberofreads reads "
 # get the number of reads in the overlapping area (for possible later usage)
         my $contiglength = $contig->getConsensusLength() || 1;
         my $fraction = $overlap / $contiglength;
-print STDOUT "\tContig fraction overlap ($contiglength) ".sprintf("%6.3f",$fraction)."\n" if $DEBUG;
+print STDOUT "\tContig fraction overlap (l:$contiglength) ".sprintf("%6.3f",$fraction)."\n" if $DEBUG;
 	push @fractions,$fraction;
     }
 
 # return valid read if number of overlap reads equals number in either contig
 
-    return 1 if ($olreads == $readsincontig[1]); # all reads of parent
-    return 1 if ($olreads == $readsincontig[0]); # all reads of child
+    return 1 if ($olreads == $readsincontig[1]); # all parent reads in child
+    return 1 if ($olreads == $readsincontig[0]); # all child reads in parent
+#    return 1 if ($olreads == $readsincontig[0] && $olreads <= 2); # ? of child
 
 # get threshold for spurious link to the parent
 
@@ -1178,6 +1179,10 @@ sub inheritTags {
     my $this = shift;
     my $depth = shift;
 # what about selected tags only?
+#    my %options = @_;
+
+#    $options{depth} = 1 unless defined($options{depth});
+#    $options{depth} -= 1;
 
     $depth = 1 unless defined($depth);
 
@@ -1191,10 +1196,13 @@ sub inheritTags {
 # if this parent does not have tags, test its parent(s)
         if ($depth > 0 && !$parent->hasTags(1)) {
             $parent->inheritTags($depth-1);
+#        if ($options{depth} > 0 && !$parent->hasTags(1)) {
+#            $parent->inheritTags(%options);
         }
 # get the tags from the parent into this contig
         next unless $parent->hasTags();
         $parent->propagateTagsToContig($this);
+#        $parent->propagateTagsToContig($this,%options);
     }
 
     $depth-- if $depth;
@@ -1209,7 +1217,7 @@ sub propagateTags {
     my $children = $this->getChildContigs(1);
 
     foreach my $child (@$children) {
-        $this->propagateTagsToContig($child);
+        $this->propagateTagsToContig($child,@_);
     }
 }
 
@@ -1217,6 +1225,7 @@ sub propagateTagsToContig {
 # propagate tags from this (parent) to target contig
     my $parent = shift;
     my $target = shift;
+    my %options = @_;
 
     return 0 unless $parent->hasTags(1);
 print "propagateTagsToContig ".
@@ -1290,12 +1299,22 @@ print "Target contig length : $tlength \n" if $DEBUG;
 
 # ok, propagate the tags from parent to target
 
+    my $include = $options{includeTagType};
+    my $exclude = $options{excludeTagType};
+
+
     my $c2csegments = $mapping->getSegments();
     my $alignment = $mapping->getAlignment();
 
     my @tags;
     my $ptags = $parent->getTags(1); # tags in parent
     foreach my $ptag (@$ptags) {
+
+# apply include or exclude filter
+
+#        my $tagtype = $ptag->getType();
+#        next if ($exclude && $tagtype =~ /\b$exclude\b/i);
+#        next if ($include && $tagtype !~ /\b$include\b/i);
 
 # determine the segment(s) of the mapping with the tag's position
 print "processing tag $ptag (align $alignment) \n" if $DEBUG;
