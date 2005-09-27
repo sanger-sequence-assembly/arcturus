@@ -77,8 +77,10 @@ my %processedcontigs;
 
 push @contigset, $seedcontig;
 
+my $graph = {};
+
 while (my $contigid = shift @contigset) {
-    next if defined($processedcontigs{$contigid});
+    next if defined($graph->{$contigid});
 
     $sth_contiginfo->execute($contigid);
 
@@ -86,10 +88,9 @@ while (my $contigid = shift @contigset) {
 
     next unless defined($contiglength);
 
-    if ($contiglength < $minlen) {
-	$processedcontigs{$contigid} = 1;
-	next;
-    }
+    $graph->{$contigid}= {} unless defined($graph->{$contigid});
+
+    next if ($contiglength < $minlen);
 
     printf STDERR "CONTIG %8d %-30s %8d project=%d\n", $contigid, $gap4name, $contiglength, $projectid if $progress;
 
@@ -215,12 +216,40 @@ while (my $contigid = shift @contigset) {
 
 		    $links_score->{$link_contig}->{$link_endcode} += 1;
 
-		    printf "%8d %8d %1d %8d %8d", $contigid, $link_contig, $link_endcode, $contiglength, $link_ctglen;
-		    printf " %2d %2d", $projectid, $link_projectid;
-		    printf " // TEMPLATE %8d %6d %6d", $templateid, $silow, $sihigh;
-		    printf " // READ %8d %8d %8d %7s %7s", $readid, $cstart, $cfinish, $direction, $strand;
-		    printf " // READ %8d %8d %8d %7s", $link_read_id, $link_cstart, $link_cfinish, $link_direction;
-		    printf " // GAP %6d\n",$gap_size;
+		    ###
+		    ### Add this pUC bridge to the lnkage graph
+		    ###
+
+		    $graph->{$contigid}->{$link_contig} = {}
+		    unless defined($graph->{$contigid}->{$link_contig});
+
+		    $graph->{$contigid}->{$link_contig}->{$endcode} = {}
+		    unless defined$graph->{$contigid}->{$link_contig}->{$endcode};
+
+		    my $link =  $graph->{$contigid}->{$link_contig}->{$endcode};
+
+		    $link->{$templateid} = {} unless defined($link->{$templateid});
+
+		    $link->{$templateid}->{'A'} = {} unless defined($link->{$templateid}->{'A'});
+		    $link->{$templateid}->{'B'} = {} unless defined($link->{$templateid}->{'B'});
+
+		    $link->{$templateid}->{'A'}->{$readid} = 1;
+		    $link->{$templateid}->{'B'}->{$link_read_id} = 1;
+
+		    $link->{$templateid}->{'gap'} = $gap_size
+			if (!defined($link->{$templateid}->{'gap'}) || $gap_size < $link->{$templateid}->{'gap'});
+
+		    ###
+		    ### Print out the pUC bridge information
+		    ###
+		    if ($verbose) {
+			printf STDERR "%8d %8d %1d %8d %8d", $contigid, $link_contig, $link_endcode, $contiglength, $link_ctglen;
+			printf STDERR " %2d %2d", $projectid, $link_projectid;
+			printf STDERR " // TEMPLATE %8d %6d %6d", $templateid, $silow, $sihigh;
+			printf STDERR " // READ %8d %8d %8d %7s %7s", $readid, $cstart, $cfinish, $direction, $strand;
+			printf STDERR " // READ %8d %8d %8d %7s", $link_read_id, $link_cstart, $link_cfinish, $link_direction;
+			printf STDERR " // GAP %6d\n",$gap_size;
+		    }
 		}
 		
 		$sth_mappings->finish();
@@ -231,7 +260,7 @@ while (my $contigid = shift @contigset) {
     }
 
     foreach my $link_contig (keys %{$links_score}) {
-	next if defined($processedcontigs{$link_contig});
+	next if defined($graph->{$link_contig});
 
 	unshift @contigset, $link_contig
 	    if ($links_score->{$link_contig}->{0} >= $minbridges ||
@@ -239,13 +268,43 @@ while (my $contigid = shift @contigset) {
 		$links_score->{$link_contig}->{2} >= $minbridges ||
 		$links_score->{$link_contig}->{3} >= $minbridges);
     }
-
-    $processedcontigs{$contigid} = 1;
 }
 
 &finishStatements($statements);
 
 $dbh->disconnect();
+
+###
+### Now analyse the graph
+###
+
+foreach my $contiga (keys %{$graph}) {
+    foreach my $contigb (keys %{$graph->{$contiga}}) {
+	next if ($contiga > $contigb);
+
+	foreach my $endcode (keys %{$graph->{$contiga}->{$contigb}}) {
+	    my $link = $graph->{$contiga}->{$contigb}->{$endcode};
+
+	    my @templates = keys %{$link};
+
+	    my $ntemplates = scalar(@templates);
+
+	    next if ($ntemplates < $minbridges);
+
+	    my $gapsize;
+
+	    foreach my $templateid (@templates) {
+		$gapsize = $link->{$templateid}->{'gap'}
+		if (!defined($gapsize) || $gapsize > $link->{$templateid}->{'gap'});
+	    }
+
+	    my $leftarrow = ($endcode < 2) ? '--->' : '<---';
+	    my $rightarrow = (($endcode % 2) == 0) ? '--->' : '<---';
+
+	    printf "%8d %s [%2d %6d] %s %8d\n", $contiga, $leftarrow, $ntemplates, $gapsize, $rightarrow, $contigb;
+	}
+    }
+}
 
 exit(0);
 
