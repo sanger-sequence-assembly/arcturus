@@ -79,6 +79,9 @@ push @contigset, $seedcontig;
 
 my $graph = {};
 
+my $contig2length = {};
+my $contig2project = {};
+
 while (my $contigid = shift @contigset) {
     next if defined($graph->{$contigid});
 
@@ -93,6 +96,9 @@ while (my $contigid = shift @contigset) {
     next if ($contiglength < $minlen);
 
     printf STDERR "CONTIG %8d %-30s %8d project=%d\n", $contigid, $gap4name, $contiglength, $projectid if $progress;
+
+    $contig2length->{$contigid} = $contiglength;
+    $contig2project->{$contigid} = $projectid;
 
     my $links_score = {};
 
@@ -278,6 +284,8 @@ $dbh->disconnect();
 ### Now analyse the graph
 ###
 
+my @bridges;
+
 foreach my $contiga (keys %{$graph}) {
     foreach my $contigb (keys %{$graph->{$contiga}}) {
 	next if ($contiga > $contigb);
@@ -301,12 +309,200 @@ foreach my $contiga (keys %{$graph}) {
 	    my $leftarrow = ($endcode < 2) ? '--->' : '<---';
 	    my $rightarrow = (($endcode % 2) == 0) ? '--->' : '<---';
 
-	    printf "%8d %s [%2d %6d] %s %8d\n", $contiga, $leftarrow, $ntemplates, $gapsize, $rightarrow, $contigb;
+	    printf "%8d (%8d %2d) %s [%2d %6d] %s %8d (%8d %2d)\n",
+	    $contiga, $contig2length->{$contiga}, $contig2project->{$contiga}, $leftarrow,
+	    $ntemplates, $gapsize,
+	    $rightarrow, $contigb, $contig2length->{$contigb}, $contig2project->{$contigb};
+
+	    push @bridges, [$contiga, $contigb, $endcode, $ntemplates, $gapsize];
 	}
     }
 }
 
+###
+### Calculate layout
+###
+
+my $rows = 1;
+
+my %rowranges;
+
+my %contigpos;
+
+###
+### Begin with the first bridge. Lay both contigs out in row zero.
+###
+
+my $bridge = shift @bridges;
+
+my ($contiga, $contigb, $endcode, $ntemplates, $gapsize) = @{$bridge};
+
+my $lengtha = $contig2length->{$contiga};
+
+my $sensea = ($endcode < 2) ? 'F' : 'R';
+
+my ($starta, $enda) = (1, $lengtha);
+
+$contigpos{$contiga} = [$starta, 0, $sensea];
+
+$rowranges{0} = [];
+
+push @{$rowranges{0}}, [$starta, $enda];
+
+my $lengthb = $contig2length->{$contigb};
+
+my $senseb = (($endcode % 2) == 0) ? 'F' : 'R';
+
+my $startb = $enda + $gapsize;
+my $endb = $startb + $lengthb - 1;
+
+$contigpos{$contigb} = [$startb, 0, $senseb];
+
+###
+### Now iterate through the remaning bridges, placing contigs as we go,
+### until there are no bridges left.
+###
+
+my $ticks = 0;
+
+while ((scalar(@bridges) > 0) && ($ticks < scalar(@bridges))) {
+    $bridge = shift @bridges;
+    my ($contiga, $contigb, $endcode, $ntemplates, $gapsize) = @{$bridge};
+
+    if (defined($contigpos{$contiga}) || defined($contigpos{$contigb})) {
+	my $posa = $contigpos{$contiga};
+
+	if (!defined($posa)) {
+	    ###
+	    ### The second contig is the one that is already placed, so we
+	    ### reverse the sense of the bridge.
+	    ###
+
+	    ($contiga, $contigb) = ($contigb, $contiga);
+	    $posa = $contigpos{$contiga};
+
+	    ###
+	    ### The codes correspond to the following alignments:
+	    ###
+	    ### 0:  --->  --->
+	    ### 1:  --->  <---
+	    ### 2:  <---  --->
+	    ### 3:  <---  <---
+	    ###
+	    ### Hence codes 1 and 2 are symmetric under reversal, and we only
+	    ### need to convert between code 0 and code 3
+	    ###
+	    $endcode = 3 - $endcode if ($endcode == 0 || $endcode == 3);
+	}
+
+	###
+	### At this point, contig A is already placed, and we need to determine
+	### where to put contig B.
+	###
+
+	my ($starta, $rowa, $sensea) = @{$posa};
+
+	$enda = $starta + $contig2length->{$contiga};
+
+	if ($endcode == 0 || $endcode == 3) {
+	    $senseb = $sensea;
+	} else {
+	    $senseb = ($sensea eq 'F') ? 'R' : 'F';
+	}
+
+	if ($endcode < 2) {
+	    $startb = $enda + $gapsize;
+	    $endb = $startb + $contig2length->{$contigb} - 1;
+	} else {
+	    $endb = $starta - $gapsize;
+	    $startb = $endb - $contig2length->{$contigb} + 1;
+	}
+
+	my $rowb;
+
+	for ($rowb = $rowa; $rowb < $rows; $rowb++) {
+	    last if &canContain($rowranges{$rowb}, [$startb, $endb]);
+	}
+
+	if ($rowb == $rows) {
+	    $rows++;
+	    $rowranges{$rowb} = [];
+	}
+
+	push @{$rowranges{$rowb}}, [$startb, $endb];
+
+	$contigpos{$contigb} = [$startb, $rowb, $senseb];
+
+	$ticks = 0;
+    } else {
+	###
+	### We have not yet seen either of these contigs, so we put the bridge
+	### back at the end of the list and proceed to the next bridge.
+	###
+	push @bridges, $bridge;
+	$ticks++;
+    }
+}
+
+my $offset = 0;
+
+foreach my $contig (keys %contigpos) {
+    my $pos = $contigpos{$contig};
+    my ($start, $row, $sense) = @{$pos};
+
+    $offset = $start if ($start < $offset);
+}
+
+$offset = 1 - $offset if ($offset < 0);
+
+print "\nLAYOUT\n\n";
+
+foreach my $contig (sort keys %contigpos) {
+    my $pos = $contigpos{$contig};
+    my ($start, $row, $sense) = @{$pos};
+
+    $start += $offset;
+
+    printf "%8d %2d %8d %8d %s\n", $contig, $row, $start, $start + $contig2length->{$contig} - 1, $sense;
+}
+
+if ($ticks > 0) {
+    my $nbridges = scalar(@bridges);
+    print "\n\nThere are still bridges remaining:\n\n"; 
+    foreach $bridge (@bridges) {
+	my ($contiga, $contigb, $endcode, $ntemplates, $gapsize) = @{$bridge};
+	printf "%8d %8d %2d  %2d %6d\n", $contiga, $contigb, $endcode, $ntemplates, $gapsize;
+    }
+}
+
 exit(0);
+
+sub canContain {
+    my $ranges = shift;
+    my $newrange = shift;
+
+    foreach my $oldrange (@{$ranges}) {
+	return 0 if &rangesOverlap($oldrange, $newrange);
+    }
+
+    return 1;
+}
+
+sub rangesOverlap {
+    my $oldrange = shift;
+    my $newrange = shift;
+
+    my ($olds, $oldf) = @{$oldrange};
+    my ($news, $newf) = @{$newrange};
+
+    return 1 if ($news >= $olds && $news <= $oldf);
+    return 1 if ($newf >= $olds && $newf <= $oldf);
+
+    return 1 if ($olds >= $news && $olds <= $newf);
+    return 1 if ($oldf >= $news && $oldf <= $newf);
+
+    return 0;
+}
 
 sub db_die {
     return unless $DBI::err;
