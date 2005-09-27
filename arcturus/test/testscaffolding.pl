@@ -309,9 +309,9 @@ foreach my $contiga (keys %{$graph}) {
 	    my $leftarrow = ($endcode < 2) ? '--->' : '<---';
 	    my $rightarrow = (($endcode % 2) == 0) ? '--->' : '<---';
 
-	    printf "%8d (%8d %2d) %s [%2d %6d] %s %8d (%8d %2d)\n",
+	    printf "%8d (%8d %2d) %s [%2d %6d %1d] %s %8d (%8d %2d)\n",
 	    $contiga, $contig2length->{$contiga}, $contig2project->{$contiga}, $leftarrow,
-	    $ntemplates, $gapsize,
+	    $ntemplates, $gapsize, $endcode,
 	    $rightarrow, $contigb, $contig2length->{$contigb}, $contig2project->{$contigb};
 
 	    push @bridges, [$contiga, $contigb, $endcode, $ntemplates, $gapsize];
@@ -333,6 +333,8 @@ my %contigpos;
 ### Begin with the first bridge. Lay both contigs out in row zero.
 ###
 
+print "\nLAYOUT\n\n";
+
 my $bridge = shift @bridges;
 
 my ($contiga, $contigb, $endcode, $ntemplates, $gapsize) = @{$bridge};
@@ -344,6 +346,8 @@ my $sensea = ($endcode < 2) ? 'F' : 'R';
 my ($starta, $enda) = (1, $lengtha);
 
 $contigpos{$contiga} = [$starta, 0, $sensea];
+
+print "Placed $contiga at $starta..$enda in row 0 in $sensea sense\n";
 
 $rowranges{0} = [];
 
@@ -357,6 +361,8 @@ my $startb = $enda + $gapsize;
 my $endb = $startb + $lengthb - 1;
 
 $contigpos{$contigb} = [$startb, 0, $senseb];
+
+print "Placed $contigb at $startb..$endb in row 0 in $senseb sense\n";
 
 ###
 ### Now iterate through the remaning bridges, placing contigs as we go,
@@ -410,7 +416,7 @@ while ((scalar(@bridges) > 0) && ($ticks < scalar(@bridges))) {
 	    $senseb = ($sensea eq 'F') ? 'R' : 'F';
 	}
 
-	if ($endcode < 2) {
+	if (($endcode > 1) xor ($sensea eq 'F')) {
 	    $startb = $enda + $gapsize;
 	    $endb = $startb + $contig2length->{$contigb} - 1;
 	} else {
@@ -432,6 +438,8 @@ while ((scalar(@bridges) > 0) && ($ticks < scalar(@bridges))) {
 	push @{$rowranges{$rowb}}, [$startb, $endb];
 
 	$contigpos{$contigb} = [$startb, $rowb, $senseb];
+
+	print "Placed $contigb at $startb..$endb in row $rowb in $senseb sense, using $contiga\n";
 
 	$ticks = 0;
     } else {
@@ -455,7 +463,7 @@ foreach my $contig (keys %contigpos) {
 
 $offset = 1 - $offset if ($offset < 0);
 
-print "\nLAYOUT\n\n";
+print"\n";
 
 foreach my $contig (sort keys %contigpos) {
     my $pos = $contigpos{$contig};
