@@ -6,6 +6,7 @@ import uk.ac.sanger.arcturus.utils.*;
 import java.util.*;
 import java.io.*;
 import java.sql.*;
+import java.util.zip.DataFormatException;
 
 import javax.naming.Context;
 
@@ -27,6 +28,7 @@ public class DynamicScaffolding {
     private int puclimit = 8000;
     private int minbridges = 2;
 
+    protected ArcturusDatabase adb = null;
     protected Connection conn = null;
     protected PreparedStatement pstmtContigData;
     protected PreparedStatement pstmtLeftEndReads;
@@ -35,6 +37,8 @@ public class DynamicScaffolding {
     protected PreparedStatement pstmtLigation;
     protected PreparedStatement pstmtLinkReads;
     protected PreparedStatement pstmtMappings;
+
+    protected Graph graph = new Graph();
 
     public static void main(String args[]) {
 	DynamicScaffolding ds = new DynamicScaffolding();
@@ -100,7 +104,7 @@ public class DynamicScaffolding {
 	    System.err.println("Creating an ArcturusDatabase for " + organism);
 	    System.err.println();
 
-	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+	    adb = ai.findArcturusDatabase(organism);
 
 	    if (lowmem)
 		adb.getSequenceManager().setCacheing(false);
@@ -136,13 +140,13 @@ public class DynamicScaffolding {
 	pstmtContigData = conn.prepareStatement(query);
 
 	query = "select read_id,MAPPING.seq_id,cstart,cfinish,direction from" +
-	    " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" +
+	    " MAPPING left join SEQ2READ using(seq_id) where contig_id = ?" +
 	    " and cfinish < ? and direction = 'Reverse'";
 
 	pstmtLeftEndReads = conn.prepareStatement(query);
 
 	query = "select read_id,MAPPING.seq_id,cstart,cfinish,direction from" +
-	    " MAPPING left join SEQ2READ using(seq_id) where contig_id=?" +
+	    " MAPPING left join SEQ2READ using(seq_id) where contig_id = ?" +
 	    " and cstart > ? and direction = 'Forward'";
 
 	pstmtRightEndReads = conn.prepareStatement(query);
@@ -166,8 +170,179 @@ public class DynamicScaffolding {
 	pstmtMappings = conn.prepareStatement(query);
     }
 
-    protected void createScaffold() {
-	
+    protected boolean isCurrentContig(int contigid) throws SQLException {
+	pstmtContigData.setInt(1, seedcontigid);
+
+	ResultSet rs = pstmtContigData.executeQuery();
+
+	boolean found = rs.next();
+
+	rs.close();
+
+	return found;
+    }
+
+    protected void createScaffold() throws SQLException, DataFormatException {
+	Vector contigset = new Vector();
+
+	Contig seedcontig = adb.getContigByID(seedcontigid, ArcturusDatabase.CONTIG_BASIC_DATA);
+
+	if (seedcontig == null || !isCurrentContig(seedcontigid))
+	    return;
+
+	contigset.add(seedcontig);
+
+	processContigSet(contigset);
+    }
+
+    protected void processContigSet(Vector contigset) throws SQLException, DataFormatException {
+	Set processed = new HashSet();
+
+	while (!contigset.isEmpty()) {
+	    Contig contig = (Contig)contigset.elementAt(0);
+	    contigset.removeElementAt(0);
+
+	    if (processed.contains(contig))
+		continue;
+
+	    processed.add(contig);
+
+	    if (contig.getLength() < minlen)
+		continue;
+
+	    System.err.println("Processing " + contig);
+
+	    int contiglength = contig.getLength();
+
+	    Set linkedContigs = new HashSet();
+
+	    for (int iEnd = 0; iEnd < 2; iEnd++) {
+		//System.err.println((iEnd == 0) ? "LEFT END" : "RIGHT END");
+
+		int endcode = 2 * iEnd;
+
+		PreparedStatement pstmt = (iEnd == 0) ? pstmtLeftEndReads : pstmtRightEndReads;
+
+		int limit = (iEnd == 0) ? puclimit : contig.getLength() - puclimit;
+
+		pstmt.setInt(1, contig.getID());
+		pstmt.setInt(2, limit);
+
+		ResultSet rs = pstmt.executeQuery();
+
+		while (rs.next()) {
+		    int readid = rs.getInt(1);
+		    int seqid = rs.getInt(2);
+		    int cstart = rs.getInt(3);
+		    int cfinish = rs.getInt(4);
+		    String direction = rs.getString(5);
+
+		    //System.err.println("Read " + readid + ", sequence " + seqid + " , cstart " + cstart +
+		    //		       ", cfinish " + cfinish + ", " + direction);
+
+		    pstmtTemplate.setInt(1, readid);
+
+		    ResultSet rs2 = pstmtTemplate.executeQuery();
+
+		    int templateid = 0;
+		    String strand = null;
+
+		    if (rs2.next()) {
+			templateid = rs2.getInt(1);
+			strand = rs2.getString(2);
+		    }
+
+		    rs2.close();
+
+		    int sihigh = 0;
+
+		    pstmtLigation.setInt(1, templateid);
+
+		    rs2 = pstmtLigation.executeQuery();
+
+		    if (rs2.next())
+			sihigh = rs2.getInt(2);
+
+		    rs2.close();
+
+		    int overhang = (iEnd == 0) ? sihigh - cfinish : cstart + sihigh - contiglength;
+
+		    if (overhang < 1 || sihigh > puclimit)
+			continue;
+
+		    pstmtLinkReads.setInt(1, templateid);
+		    pstmtLinkReads.setString(2, strand);
+
+		    rs2 = pstmtLinkReads.executeQuery();
+
+		    while (rs2.next()) {
+			int link_readid = rs2.getInt(1);
+			int link_seqid = rs2.getInt(2);
+
+			//System.err.println("\tREADID " + link_readid + " SEQID " + link_seqid);
+
+			pstmtMappings.setInt(1, link_seqid);
+
+			ResultSet rs3 = pstmtMappings.executeQuery();
+
+			while (rs3.next()) {
+			    int link_contigid = rs3.getInt(1);
+			    int link_cstart = rs3.getInt(2);
+			    int link_cfinish = rs3.getInt(3);
+			    String link_direction = rs3.getString(4);
+
+			    if (isCurrentContig(link_contigid)) {
+				Contig link_contig = adb.getContigByID(link_contigid, ArcturusDatabase.CONTIG_BASIC_DATA);
+
+				int link_contiglength = link_contig.getLength();
+
+				boolean link_forward = link_direction.equalsIgnoreCase("Forward");
+
+				int gapsize = link_forward ?
+				    overhang - (link_contiglength - link_cstart) :
+				    overhang - link_cfinish;
+
+				char link_end = link_forward ? 'R' : 'L';
+
+				int myendcode = endcode;
+
+				if (link_forward)
+				    myendcode++;
+
+				if (gapsize > 0) {
+				    //System.err.println("\t\tCONTIG " + link_contigid + " CSTART " + link_cstart +
+				    //	       " CFINISH " + link_cfinish + " " + link_direction +
+				    //	       " // GAP " + gapsize);
+
+				    //System.err.println(contig.getID() + " " + link_contigid + " " + myendcode +
+				    //	       " " + templateid + " " + readid + " " + link_readid + " " + gapsize);
+
+				    graph.addLink(contig, link_contig, myendcode, templateid, readid, link_readid, gapsize);
+
+				    linkedContigs.add(link_contig);
+				}
+			    }
+			}
+
+			rs3.close();
+		    }
+
+		    rs2.close();
+		}
+
+		rs.close();
+	    }
+
+	    for (Iterator iterator = linkedContigs.iterator(); iterator.hasNext();) {
+		Contig link_contig = (Contig)iterator.next();
+
+		for (int endcode = 0; endcode < 4; endcode++)
+		    if (graph.getTemplateCount(contig, link_contig, endcode) >= minbridges && !processed.contains(link_contig))
+			contigset.add(link_contig);
+	    }
+	}
+
+	graph.dump(System.out, minbridges);
     }
 
     protected void printUsage(PrintStream ps) {
@@ -187,5 +362,130 @@ public class DynamicScaffolding {
 	    ps.println("\t" + options[i]);
     }
 
+    class Graph {
+	private HashMap byContigA = new HashMap();
 
+	public void addLink(Contig contiga, Contig contigb, int endcode, int templateid, int readida,
+		       int readidb, int gapsize) {
+	    HashMap byContigB = (HashMap)byContigA.get(contiga);
+
+	    if (byContigB == null) {
+		byContigB = new HashMap();
+		byContigA.put(contiga, byContigB);
+	    }
+
+	    HashMap byEndCode = (HashMap)byContigB.get(contigb);
+
+	    if (byEndCode == null) {
+		byEndCode = new HashMap();
+		byContigB.put(contigb, byEndCode);
+	    }
+
+	    Integer intEndCode = new Integer(endcode);
+
+	    HashMap byTemplate = (HashMap)byEndCode.get(intEndCode);
+
+	    if (byTemplate == null) {
+		byTemplate = new HashMap();
+		byEndCode.put(intEndCode, byTemplate);
+	    }
+
+	    Integer template = new Integer(templateid);
+
+	    Link link = (Link)byTemplate.get(template);
+
+	    if (link == null) {
+		link = new Link();
+		byTemplate.put(template, link);
+	    }
+
+	    link.addBridge(readida, readidb, gapsize);
+	}
+
+	public HashMap getHashMap() { return byContigA; }
+
+	public int getTemplateCount(Contig contiga, Contig contigb, int endcode) {
+	    HashMap byContigB = (HashMap)byContigA.get(contiga);
+
+	    if (byContigB == null)
+		return 0;
+
+	    HashMap byEndCode = (HashMap)byContigB.get(contigb);
+
+	    if (byEndCode == null)
+		return 0;
+
+	    Integer intEndCode = new Integer(endcode);
+
+	    HashMap byTemplate = (HashMap)byEndCode.get(intEndCode);
+
+	    return (byTemplate == null) ? 0 : byTemplate.size();
+	}
+
+	public void dump(PrintStream ps, int minsize) {
+	    ps.println("Graph.dump");
+
+	    Set entries = byContigA.entrySet();
+
+	    for (Iterator iterator = entries.iterator(); iterator.hasNext();) {
+		Map.Entry entry = (Map.Entry)iterator.next();
+
+		Contig contiga = (Contig)entry.getKey();
+		HashMap byContigB = (HashMap)entry.getValue();
+
+		//ps.println("CONTIG A = " + contiga.getID() + " (" + contiga.getName() + ", " + contiga.getLength() + ")");
+
+		Set entries2 = byContigB.entrySet();
+
+		for (Iterator iterator2 = entries2.iterator(); iterator2.hasNext();) {
+		    Map.Entry entry2 = (Map.Entry)iterator2.next();
+
+		    Contig contigb = (Contig)entry2.getKey();
+		    HashMap byEndCode = (HashMap)entry2.getValue();
+
+		    //ps.println("\tCONTIG B = " + contigb.getID() + " (" + contigb.getName() + ", " + contigb.getLength() + ")");
+
+		    Set entries3 = byEndCode.entrySet();
+
+		    for (Iterator iterator3 = entries3.iterator(); iterator3.hasNext();) {
+			Map.Entry entry3 = (Map.Entry)iterator3.next();
+
+			Integer intEndCode = (Integer)entry3.getKey();
+			HashMap byTemplate = (HashMap)entry3.getValue();
+
+			int mysize = byTemplate.size();
+
+			if (mysize >= minsize)
+			    ps.println( contiga.getID() + " " + contiga.getLength() + " " +
+					contigb.getID() + " " + contigb.getLength() + " " +
+					intEndCode + " " + mysize);
+		    }
+		}
+	    }	    
+	}
+    }
+
+    class Link {
+	private Set readSetA = new HashSet();
+	private Set readSetB = new HashSet();
+	private int gapsize = -1;
+
+	public void addBridge(int readidA, int readidB, int gapsize) {
+	    readSetA.add(new Integer(readidA));
+	    readSetB.add(new Integer(readidB));
+
+	    if (this.gapsize < 0 || this.gapsize > gapsize)
+		this.gapsize = gapsize;
+	}
+
+	public int getGapSize() { return gapsize; }
+
+	public Set getReadSetA() { return readSetA; }
+
+	public int getCardinalityA() { return readSetA.size(); }
+
+	public Set getReadSetB() { return readSetB; }
+
+	public int getCardinalityB() { return readSetB.size(); }
+    }
 }
