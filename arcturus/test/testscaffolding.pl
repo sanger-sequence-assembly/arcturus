@@ -144,8 +144,6 @@ while (my $contigid = shift @contigset) {
 	    
 	    next unless ($sihigh < $puclimit);
 
-	    $end, $readid, $seqid, $cstart, $cfinish, $direction, $strand;
-
 	    ###
 	    ### List the reads from the other end of the template
 	    ###
@@ -284,7 +282,7 @@ $dbh->disconnect();
 ### Now analyse the graph
 ###
 
-my @bridges;
+my $subgraphs = {};
 
 foreach my $contiga (keys %{$graph}) {
     foreach my $contigb (keys %{$graph->{$contiga}}) {
@@ -314,7 +312,25 @@ foreach my $contiga (keys %{$graph}) {
 	    $ntemplates, $gapsize, $endcode,
 	    $rightarrow, $contigb, $contig2length->{$contigb}, $contig2project->{$contigb};
 
-	    push @bridges, [$contiga, $contigb, $endcode, $ntemplates, $gapsize];
+	    my $edge = [$contiga, $contigb, $endcode, $ntemplates, $gapsize];
+
+	    my $sga = $subgraphs->{$contiga};
+	    my $sgb = $subgraphs->{$contigb};
+
+	    if (defined($sga) && defined($sgb)) {
+		$sga = &mergeSubgraphs($subgraphs, $sga, $sgb) unless ($sga == $sgb);
+		push @{$sga}, $edge;		
+	    } elsif (defined($sga)) {
+		push @{$sga}, $edge;
+		$subgraphs->{$contigb} = $sga;
+	    } elsif (defined($sgb)) {
+		push @{$sgb}, $edge;
+		$subgraphs->{$contiga} = $sgb;
+	    } else {
+		my $newsg = [$edge];
+		$subgraphs->{$contigb} = $newsg;
+		$subgraphs->{$contiga} = $newsg;
+	    }
 	}
     }
 }
@@ -322,6 +338,15 @@ foreach my $contiga (keys %{$graph}) {
 ###
 ### Calculate layout
 ###
+
+my $sg = $subgraphs->{$seedcontig};
+
+if (!defined($sg)) {
+    print STDERR "Contig $seedcontig did not appear in any of the sub-graphs\n";
+    exit(1);
+}
+
+my @bridges = @{$sg};
 
 my $rows = 1;
 
@@ -484,6 +509,35 @@ if ($ticks > 0) {
 }
 
 exit(0);
+
+sub mergeSubgraphs {
+    my $hash = shift;
+    my $sga = shift;
+    my $sgb = shift;
+
+    if (scalar(@{$sga}) < scalar(@{$sgb})) {
+	return &copySubgraph($hash, $sga, $sgb);
+    } else {
+	return &copySubgraph($hash, $sgb, $sga);
+    }
+}
+
+sub copySubgraph {
+    my $hash = shift;
+    my $srcsg = shift;
+    my $dstsg = shift;
+
+    foreach my $entry (@{$srcsg}) {
+	my $ctga = $entry->[0];
+	my $ctgb = $entry->[1];
+	$hash->{$ctga} = $dstsg;
+	$hash->{$ctgb} = $dstsg;
+    }
+
+    push @{$dstsg}, @{$srcsg};
+
+    return $dstsg;
+}
 
 sub canContain {
     my $ranges = shift;
