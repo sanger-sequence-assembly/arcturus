@@ -213,7 +213,7 @@ public class DynamicScaffolding {
 	    if (!isCurrentContig(contig.getID()))
 		continue;
 
-	    System.err.println("Processing " + contig);
+	    System.err.println("Processing contig " + contig.getID());
 
 	    int contiglength = contig.getLength();
 
@@ -451,10 +451,11 @@ public class DynamicScaffolding {
 			    gapsize.add(pucbridge.getGapSize());
 			}
 
-			if (mysize >= minsize)
+			if (mysize >= minsize && contiga.getID() < contigb.getID())
 			    ps.println( contiga.getID() + " " + contiga.getLength() + " " +
 					contigb.getID() + " " + contigb.getLength() + " " +
-					intEndCode + " " + mysize + " " + gapsize);
+					intEndCode + " " + mysize + " " +
+					gapsize.getMinimum() + ":" + gapsize.getMaximum());
 		    }
 		}
 	    }	    
