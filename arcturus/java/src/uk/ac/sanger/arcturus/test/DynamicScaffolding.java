@@ -38,7 +38,7 @@ public class DynamicScaffolding {
     protected PreparedStatement pstmtLinkReads;
     protected PreparedStatement pstmtMappings;
 
-    protected Graph graph = new Graph();
+    protected PucBridgeSet pucbridgeset = new PucBridgeSet();
 
     public static void main(String args[]) {
 	DynamicScaffolding ds = new DynamicScaffolding();
@@ -171,7 +171,7 @@ public class DynamicScaffolding {
     }
 
     protected boolean isCurrentContig(int contigid) throws SQLException {
-	pstmtContigData.setInt(1, seedcontigid);
+	pstmtContigData.setInt(1, contigid);
 
 	ResultSet rs = pstmtContigData.executeQuery();
 
@@ -210,6 +210,9 @@ public class DynamicScaffolding {
 	    if (contig.getLength() < minlen)
 		continue;
 
+	    if (!isCurrentContig(contig.getID()))
+		continue;
+
 	    System.err.println("Processing " + contig);
 
 	    int contiglength = contig.getLength();
@@ -217,8 +220,6 @@ public class DynamicScaffolding {
 	    Set linkedContigs = new HashSet();
 
 	    for (int iEnd = 0; iEnd < 2; iEnd++) {
-		//System.err.println((iEnd == 0) ? "LEFT END" : "RIGHT END");
-
 		int endcode = 2 * iEnd;
 
 		PreparedStatement pstmt = (iEnd == 0) ? pstmtLeftEndReads : pstmtRightEndReads;
@@ -236,9 +237,6 @@ public class DynamicScaffolding {
 		    int cstart = rs.getInt(3);
 		    int cfinish = rs.getInt(4);
 		    String direction = rs.getString(5);
-
-		    //System.err.println("Read " + readid + ", sequence " + seqid + " , cstart " + cstart +
-		    //		       ", cfinish " + cfinish + ", " + direction);
 
 		    pstmtTemplate.setInt(1, readid);
 
@@ -279,8 +277,6 @@ public class DynamicScaffolding {
 			int link_readid = rs2.getInt(1);
 			int link_seqid = rs2.getInt(2);
 
-			//System.err.println("\tREADID " + link_readid + " SEQID " + link_seqid);
-
 			pstmtMappings.setInt(1, link_seqid);
 
 			ResultSet rs3 = pstmtMappings.executeQuery();
@@ -310,14 +306,7 @@ public class DynamicScaffolding {
 				    myendcode++;
 
 				if (gapsize > 0) {
-				    //System.err.println("\t\tCONTIG " + link_contigid + " CSTART " + link_cstart +
-				    //	       " CFINISH " + link_cfinish + " " + link_direction +
-				    //	       " // GAP " + gapsize);
-
-				    //System.err.println(contig.getID() + " " + link_contigid + " " + myendcode +
-				    //	       " " + templateid + " " + readid + " " + link_readid + " " + gapsize);
-
-				    graph.addLink(contig, link_contig, myendcode, templateid, readid, link_readid, gapsize);
+				    pucbridgeset.addPucBridge(contig, link_contig, myendcode, templateid, readid, link_readid, gapsize);
 
 				    linkedContigs.add(link_contig);
 				}
@@ -337,12 +326,13 @@ public class DynamicScaffolding {
 		Contig link_contig = (Contig)iterator.next();
 
 		for (int endcode = 0; endcode < 4; endcode++)
-		    if (graph.getTemplateCount(contig, link_contig, endcode) >= minbridges && !processed.contains(link_contig))
+		    if (pucbridgeset.getTemplateCount(contig, link_contig, endcode) >= minbridges &&
+			!processed.contains(link_contig))
 			contigset.add(link_contig);
 	    }
 	}
 
-	graph.dump(System.out, minbridges);
+	pucbridgeset.dump(System.out, minbridges);
     }
 
     protected void printUsage(PrintStream ps) {
@@ -362,10 +352,10 @@ public class DynamicScaffolding {
 	    ps.println("\t" + options[i]);
     }
 
-    class Graph {
+    class PucBridgeSet {
 	private HashMap byContigA = new HashMap();
 
-	public void addLink(Contig contiga, Contig contigb, int endcode, int templateid, int readida,
+	public void addPucBridge(Contig contiga, Contig contigb, int endcode, int templateid, int readida,
 		       int readidb, int gapsize) {
 	    HashMap byContigB = (HashMap)byContigA.get(contiga);
 
@@ -392,14 +382,14 @@ public class DynamicScaffolding {
 
 	    Integer template = new Integer(templateid);
 
-	    Link link = (Link)byTemplate.get(template);
+	    PucBridge pucbridge = (PucBridge)byTemplate.get(template);
 
-	    if (link == null) {
-		link = new Link();
-		byTemplate.put(template, link);
+	    if (pucbridge == null) {
+		pucbridge = new PucBridge();
+		byTemplate.put(template, pucbridge);
 	    }
 
-	    link.addBridge(readida, readidb, gapsize);
+	    pucbridge.addBridge(readida, readidb, gapsize);
 	}
 
 	public HashMap getHashMap() { return byContigA; }
@@ -423,7 +413,7 @@ public class DynamicScaffolding {
 	}
 
 	public void dump(PrintStream ps, int minsize) {
-	    ps.println("Graph.dump");
+	    ps.println("PucBridgeSet.dump");
 
 	    Set entries = byContigA.entrySet();
 
@@ -433,8 +423,6 @@ public class DynamicScaffolding {
 		Contig contiga = (Contig)entry.getKey();
 		HashMap byContigB = (HashMap)entry.getValue();
 
-		//ps.println("CONTIG A = " + contiga.getID() + " (" + contiga.getName() + ", " + contiga.getLength() + ")");
-
 		Set entries2 = byContigB.entrySet();
 
 		for (Iterator iterator2 = entries2.iterator(); iterator2.hasNext();) {
@@ -442,8 +430,6 @@ public class DynamicScaffolding {
 
 		    Contig contigb = (Contig)entry2.getKey();
 		    HashMap byEndCode = (HashMap)entry2.getValue();
-
-		    //ps.println("\tCONTIG B = " + contigb.getID() + " (" + contigb.getName() + ", " + contigb.getLength() + ")");
 
 		    Set entries3 = byEndCode.entrySet();
 
@@ -455,30 +441,43 @@ public class DynamicScaffolding {
 
 			int mysize = byTemplate.size();
 
+			GapSize gapsize = new GapSize();
+
+			for (Iterator iterator4 = byTemplate.entrySet().iterator(); iterator4.hasNext();) {
+			    Map.Entry entry4 = (Map.Entry)iterator4.next();
+
+			    PucBridge pucbridge = (PucBridge)entry4.getValue();
+
+			    gapsize.add(pucbridge.getGapSize());
+			}
+
 			if (mysize >= minsize)
 			    ps.println( contiga.getID() + " " + contiga.getLength() + " " +
 					contigb.getID() + " " + contigb.getLength() + " " +
-					intEndCode + " " + mysize);
+					intEndCode + " " + mysize + " " + gapsize);
 		    }
 		}
 	    }	    
 	}
     }
 
-    class Link {
+    class PucBridge {
 	private Set readSetA = new HashSet();
 	private Set readSetB = new HashSet();
-	private int gapsize = -1;
+	private GapSize gapsize = new GapSize();
 
 	public void addBridge(int readidA, int readidB, int gapsize) {
 	    readSetA.add(new Integer(readidA));
 	    readSetB.add(new Integer(readidB));
 
-	    if (this.gapsize < 0 || this.gapsize > gapsize)
-		this.gapsize = gapsize;
+	    this.gapsize.add(gapsize);
 	}
 
-	public int getGapSize() { return gapsize; }
+	public GapSize getGapSize() { return gapsize; }
+
+	public int getMinimumGapSize() { return gapsize.getMinimum(); }
+
+	public int getMaximumGapSize() { return gapsize.getMaximum(); }
 
 	public Set getReadSetA() { return readSetA; }
 
@@ -487,5 +486,39 @@ public class DynamicScaffolding {
 	public Set getReadSetB() { return readSetB; }
 
 	public int getCardinalityB() { return readSetB.size(); }
+    }
+
+    class GapSize {
+	private int minsize = -1;
+	private int maxsize = -1;
+
+	public GapSize() {}
+
+	public GapSize(int minsize, int maxsize) {
+	    this.minsize = minsize;
+	    this.maxsize = maxsize;
+	}
+
+	public int getMinimum() { return minsize; }
+
+	public int getMaximum() { return maxsize; }
+
+	public void add(int value) {
+	    if (minsize < 0 || value < minsize)
+		minsize = value;
+
+	    if (maxsize < 0 || value > maxsize)
+		maxsize = value;
+	}
+
+	public void add(GapSize that) {
+	    if (minsize < 0 || (that.minsize >= 0 && that.minsize < minsize))
+		minsize = that.minsize;
+
+	    if (maxsize < 0 || (that.maxsize >=0 && that.maxsize > maxsize))
+		maxsize = that.maxsize;
+	}
+
+	public String toString() { return "GapSize[" + minsize + ":" + maxsize + "]"; }
     }
 }
