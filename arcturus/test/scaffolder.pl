@@ -661,9 +661,9 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			$projid = 0 unless defined($projid);
 
-			$contigid = $contigname->{$contigid} if $shownames;
+			my $contigname = $shownames ? "name=\"$contigname->{$contigid}\"" : "";
 
-			print $xmlfh "\t\t\t<contig id=\"$contigid\" size=\"$ctglen\"" .
+			print $xmlfh "\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
 			    " project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
 			my ($gapsize, $bridges) = @{$entry};
@@ -672,29 +672,29 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 			    my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
 			    my ($silow, $sihigh) = @{$insertsize};
 
-			    $template_id = $templatenames{$template_id} if $shownames;
+			    #$template_id = $templatenames{$template_id} if $shownames;
 			    
 			    print $xmlfh "\t\t\t\t<bridge template=\"$template_id\"" .
 				" silow=\"$silow\" sihigh=\"$sihigh\" gapsize=\"$gapsize\">\n";
 			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
 
-			    $link_read = $readnames{$link_read} if $shownames;
+			    #$link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 
-			    $link_contig = $contigname->{$link_contig} if $shownames;
+			    #$link_contig = $contigname->{$link_contig} if $shownames;
 
 			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
 			    			    
 			    my ($link_contig, $link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
 
-			    $link_read = $readnames{$link_read} if $shownames;
+			    #$link_read = $readnames{$link_read} if $shownames;
 			    
 			    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 
-			    $link_contig = $contigname->{$link_contig} if $shownames;
+			    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
 			    print $xmlfh "\t\t\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 				" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -713,18 +713,18 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		    my ($linka, $linkb, $template_id, $insertsize) = @{$link};
 		    my ($silow, $sihigh) = @{$insertsize};
 
-		    $template_id = $templatenames{$template_id} if $shownames;
+		    #$template_id = $templatenames{$template_id} if $shownames;
 
 		    print $xmlfh "\t\t<superbridge template=\"$template_id\" silow=\"$silow\" sihigh=\"$sihigh\">\n";
 			    
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
 			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linka};
 
-		    $link_read = $readnames{$link_read} if $shownames;
+		    #$link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 
-		    $link_contig = $contigname->{$link_contig} if $shownames;
+		    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
 		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -732,11 +732,11 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 		    my ($link_scaffold, $link_sense, $link_contig, $link_project,
 			$link_read, $link_cstart, $link_cfinish, $link_direction) = @{$linkb};
 
-		    $link_read = $readnames{$link_read} if $shownames;
+		    #$link_read = $readnames{$link_read} if $shownames;
 		
 		    $link_direction = ($link_direction eq 'Forward') ? 'F' : 'R';
 
-		    $link_contig = $contigname->{$link_contig} if $shownames;
+		    #$link_contig = $contigname->{$link_contig} if $shownames;
 			    
 		    print $xmlfh "\t\t\t<link contig=\"$link_contig\" read=\"$link_read\"" .
 			" cstart=\"$link_cstart\" cfinish=\"$link_cfinish\" sense=\"$link_direction\" />\n";
@@ -1073,7 +1073,7 @@ sub showUsage {
     print STDERR "-usesilow\tUse the minimum insert size for long-range mapping (default: false)\n";
     print STDERR "-updateproject\tUpdate each contig's project\n";
     print STDERR "-minprojectsize\tMinimum scaffold length to qualify as a project\n";
-    print STDERR "-shownames\tShow names of reads and templates in XML output instead of IDs\n";
+    print STDERR "-shownames\tShow names of reads and templates in XML output in addition to IDs\n";
     print STDERR "-project\tSelect seed contigs only from this project\n";
     print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
     print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
