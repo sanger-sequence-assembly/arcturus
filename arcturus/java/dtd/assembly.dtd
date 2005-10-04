@@ -24,6 +24,7 @@
 
 <!ATTLIST contig
             id      CDATA       #REQUIRED
+	    name    CDATA	#IMPLIED
 	    size    CDATA	#REQUIRED
 	    project CDATA	#REQUIRED
 	    sense   (F|R)	#REQUIRED
@@ -39,6 +40,7 @@
 
 <!ATTLIST bridge
             template CDATA      #REQUIRED
+	    name     CDATA	#IMPLIED
 	    silow    CDATA	#REQUIRED
 	    sihigh   CDATA	#REQUIRED
 	    gapsize  CDATA	#REQUIRED
@@ -48,6 +50,7 @@
 
 <!ATTLIST superbridge
             template CDATA      #REQUIRED
+	    name     CDATA	#IMPLIED
 	    silow    CDATA	#REQUIRED
 	    sihigh   CDATA	#REQUIRED
 >
