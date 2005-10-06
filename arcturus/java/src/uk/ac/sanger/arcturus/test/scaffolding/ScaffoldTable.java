@@ -60,26 +60,39 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
 	JToolBar toolbar = new JToolBar();
 
-	Action zoomInAction = new MyAbstractAction("Zoom In", createImageIcon("general/ZoomIn24"),
-					  "Zoom In",
-					  new Integer(KeyEvent.VK_I),
-					  KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.ALT_MASK)) {
-		public void actionPerformed(ActionEvent e) {
-		    panel.zoomIn();
-		}
-	    };
- 
-	Action zoomOutAction = new MyAbstractAction("Zoom Out", createImageIcon("general/ZoomOut24"),
-					  "Zoom Out",
-					  new Integer(KeyEvent.VK_O),
-					  KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.ALT_MASK)) {
-		public void actionPerformed(ActionEvent e) {
-		    panel.zoomOut();
-		}
-	    };
+	JButton zoomInButton = new JButton(new ImageIcon("zoomin.png"));
 
-	toolbar.add(zoomInAction);
-	toolbar.add(zoomOutAction);
+	zoomInButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.ZOOM_IN);
+		}
+	    });
+
+	JButton zoomOutButton = new JButton(new ImageIcon("zoomout.png"));
+
+	zoomOutButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.ZOOM_OUT);
+		}
+	    });
+
+	JButton selectButton = new JButton(new ImageIcon("pick.png"));
+
+	selectButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.SELECT);
+		}
+	    });
+
+	ButtonGroup group = new ButtonGroup();
+
+	group.add(zoomInButton);
+	group.add(zoomOutButton);
+	group.add(selectButton);
+
+	toolbar.add(zoomInButton);
+	toolbar.add(zoomOutButton);
+	toolbar.add(selectButton);
 
 	toolbar.setFloatable(false);
 
@@ -238,22 +251,6 @@ class ScaffoldTable extends JPanel implements ListSelectionListener {
 
 	public SuperScaffoldInfo getSuperScaffoldInfo(int row) {
 	    return info[row];
-	}
-    }
-
-    abstract class MyAbstractAction extends AbstractAction {
-	public MyAbstractAction(String text, ImageIcon icon, String description,
-				Integer mnemonic, KeyStroke accelerator) {
-	    super(text, icon);
-	    
-	    if (description != null)
-		putValue(SHORT_DESCRIPTION, description);
-	    
-	    if (mnemonic != null)
-		putValue(MNEMONIC_KEY, mnemonic);
-	    
-	    if (accelerator != null)
-		putValue(ACCELERATOR_KEY, accelerator);
 	}
     }
 }
