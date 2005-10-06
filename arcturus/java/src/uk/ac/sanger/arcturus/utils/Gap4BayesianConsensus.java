@@ -278,7 +278,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	findBestBase();
 
 	if (bestbase < 0)
-	    return '?';
+	    return '*';
 	else
 	    return basecodes.charAt(bestbase);
     }
@@ -287,7 +287,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	findBestBase();
  
 	if (bestbase < 0)
-	    return -1;
+	    return 0;
 	else
 	    return scores[bestbase];
     }
