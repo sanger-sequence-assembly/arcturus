@@ -9,6 +9,11 @@ import java.util.Enumeration;
 import java.util.Random;
 
 public class ScaffoldPanel extends JComponent {
+    public static final int ZOOM_IN = 1;
+    public static final int ZOOM_OUT = 2;
+    public static final int SELECT = 3;
+
+    protected int mode;
     protected int bpPerPixel = 128;
     protected int leftPadding = 20;
     protected int rightPadding = 20;
@@ -20,6 +25,10 @@ public class ScaffoldPanel extends JComponent {
     protected LinkLine[] pucLines = null;
     protected LinkLine[] bacLines = null;
 
+    protected Cursor csrZoomIn = null;
+    protected Cursor csrZoomOut = null;
+    protected Cursor csrSelect = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
+
     protected Dimension preferredSize = new Dimension(100, 100);
 
     Random random = new Random();
@@ -27,6 +36,54 @@ public class ScaffoldPanel extends JComponent {
     public ScaffoldPanel() {
 	super();
 	setBackground(new Color(0xff, 0xff, 0xee));
+
+	Toolkit tk = Toolkit.getDefaultToolkit();
+	Image cursorImage = tk.getImage("zoomin.png");
+
+	csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom in");
+
+	cursorImage = tk.getImage("zoomout.png");
+	csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom out");
+
+	setAction(SELECT);
+
+	addMouseListener(new MouseAdapter() {
+		public void mouseClicked(MouseEvent e) {
+		    actOnMouseClick(e);
+		}
+	    });
+    }
+
+    public void setAction(int newmode) {
+	switch (newmode) {
+	case ZOOM_IN:
+	    mode = newmode;
+	    setCursor(csrZoomIn);
+	    break;
+
+	case ZOOM_OUT:
+	    mode = newmode;
+	    setCursor(csrZoomOut);
+	    break;
+
+	case SELECT:
+	    mode = newmode;
+	    setCursor(csrSelect);
+	}
+    }
+
+    private String getModeAsString() {
+	switch (mode) {
+	case ZOOM_IN:  return "ZOOM_IN";
+	case ZOOM_OUT: return "ZOOM_OUT";
+	case SELECT:   return "SELECT";
+	default:       return "UNKNOWN";
+	}
+    }
+
+    private void actOnMouseClick(MouseEvent e) {
+	System.out.println("Mouse clicked at " + e.getX() + "," + e.getY() + " in " +
+			   getModeAsString() + " mode");
     }
 
     public void zoomIn() {

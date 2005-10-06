@@ -32,7 +32,7 @@ public class ScaffoldParser {
 	}
 
 	if (displayclassname == null)
-	    displayclassname = "scaffolding.ScaffoldTree";
+	    displayclassname = "scaffolding.ScaffoldTable";
 
 	Constructor displayconstructor = null;
 
