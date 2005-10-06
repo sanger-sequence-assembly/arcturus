@@ -200,7 +200,7 @@ public class CalculateConsensus {
 	ps.println("\t-consensustable\tName of consensus table");
 	ps.println();
 	ps.println("OPTIONS");
-	String[] options = {"-debug", "-lowmem", "-quiet"};
+	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs"};
 	for (int i = 0; i < options.length; i++)
 	    ps.println("\t" + options[i]);
     }
