@@ -27,6 +27,7 @@ my $noloading = 0; # re: test mode without read loading
 
 my $skipaspedcheck = 0;
 my $consensus_read = 0;
+my $acceptlikeyeast = 0;
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
@@ -36,7 +37,7 @@ my $validKeys = "organism|instance|assembly|caf|cafdefault|fofn|out|"
               . "readnames|include|filter|readnamelike|rootdir|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
-              . "noload|noexclude|test";
+              . "noload|noexclude|acceptlikeyeast|aly|test";
 
 my %PARS;
 
@@ -69,6 +70,9 @@ while (my $nextword = shift @ARGV) {
 
     $consensus_read   = 1            if ($nextword eq '-isconsensusread');
     $consensus_read   = 1            if ($nextword eq '-icr');
+
+    $acceptlikeyeast  = 1            if ($nextword eq '-acceptlikeyeast');
+    $acceptlikeyeast  = 1            if ($nextword eq '-aly');
 
 # logging
 
@@ -230,6 +234,8 @@ elsif ($source eq 'Oracle') {
 
     &showUsage(2) if &testForExcessInput(\%PARS,\@valid);
 
+    $logger->info("Searching Oracle database for new reads");
+
     $factory = new OracleReadFactory(%PARS);
 }
 
@@ -275,6 +281,7 @@ $loadoptions{skipaspedcheck} = 1 if $skipaspedcheck;
 $loadoptions{skipaspedcheck}     = 1 if $consensus_read;
 $loadoptions{skipligationcheck}  = 1 if $consensus_read;
 $loadoptions{skipchemistrycheck} = 1 if $consensus_read;
+$loadoptions{acceptlikeyeast} = 1 if $acceptlikeyeast;
 
 while (my $readname = $factory->getNextReadName()) {
 
