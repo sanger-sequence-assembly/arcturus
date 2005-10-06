@@ -631,6 +631,11 @@ $logger->info("new info after DNA removal: $info");
                     if ($name) {
                         $tag->setTagSequenceName($name);
                         $info = $inew if $inew;
+if ($inew && $debug) {
+    print STDOUT "decode new oligio info again\n$info\n";
+   ($name,$inew) = &decode_oligo_info($info,$sequence);
+    print STDOUT "name = $name new : $inew\n\n";
+}
                     }
                     else {
                         $logger->warning("Failed to decode OLIGO info:\n$info");
@@ -1007,10 +1012,21 @@ sub decode_oligo_info {
 # clean up name (replace possible ' oligo ' string by 'o')
     $change = 1 if ($info =~ s/\boligo[\b\s*]/o/i);
     $change = 1 if ($info =~ s/\s+/\\n\\/g);
-#$info =~ s/\\n\\\\n\\/\\n\\/g; # multiple \n\ by one
-    $change = 1 if ($info =~ s/[\\n\\]{2,}/\\n\\/g); # multiple \n\ by one
+    $change = 1 if ($info =~ s/(\\n\\){2,}/\\n\\/g); # multiple \n\ by one
 # split $info on blanks and \n\ separation symbols
     my @info = split /\s+|\\n\\/,$info;
+
+# cleanup empty flags= specifications
+
+    foreach my $part (@info) {
+        if ($part =~ /flags\=(.*)/) {
+            my $flag = $1;
+            unless ($flag =~ /\S/) {
+                $info =~ s/\\n\\flags\=\s*//;
+                $change = 1;
+            }
+        }
+    }
 
     my $name;
     if ($info =~ /^\s*(\d+)\b.*?$sequence/) {
@@ -1022,11 +1038,19 @@ sub decode_oligo_info {
         $name = $1;
         $name =~ s/^0/o/; # correct typo 0 for o
     }
+    elsif ($info =~ /\b(o\w+)\b/) {
+# the info contains a name like oxxxxx
+        $name = $1;
+    }
 # try its a name like 17H10.1
     elsif ($info =~ /^(\w+\.\w{1,2})\b/) {
         $name = $1;
     }
 # try with the results of the split
+    elsif ($info[0] !~ /\=/ && $info =~ /^([a-z]\w+)\b/i) {
+# the info string starts with a name like axx..
+        $name = $1;
+    }
     elsif ($info[1] eq $sequence) {
         $name = $info[0];
         $name = "o$name" unless ($name =~ /\D/);
@@ -1035,29 +1059,30 @@ sub decode_oligo_info {
     return ($name,0) if ($name && !$change); # no new info
     return ($name,$info) if $name; # info modified
 
-# name could not be decoded: try one or two special possibilities
+
+# name could not easily be decoded: try one or two special possibilities
+
 
     foreach my $part (@info) {
         if ($part =~ /serial\#?\=?(.*)/) {
             $name = $1;
-            unless ($name) {
-# the name is blank, but a serial field exists: 
-# generate a random name (for later update by hand)
-                my $randomnumber = int(rand(1000)); # from 0 to 999 
-                $name = sprintf('oligo_%03x',$randomnumber);
+# replace the serial field by the name, if it is defined
+            if ($name =~ /\w/) {
+                $info =~ s/$part/$name/;
+            }
+            else { 
+                $info =~ s/$part//;
 	    }
-# replace the serial field by the name
-            $info =~ s/$part/$name/;
-            $info =~ s/\\n\\flags\=//;
 	}
     }
 
     return ($name,$info) if $name;
 
-# still not done: area for adhoc changes
-print STDOUT "still undecoded info: $info  (@info)\n";
+# or see if possibly the name and sequence fields have been interchanged
+
     if ($info[1] =~ /^\w+\.\w{1,2}\b/) {
 # name and sequence possibly interchanged
+print STDOUT "still undecoded info: $info  (@info)\n";
         $name = $info[1];
         $info[1] = $info[0];
         $info[0] = $name;
@@ -1066,7 +1091,38 @@ print STDOUT "now decoded info: $info ($name)\n";
         return $name,$info;
     }
 
-    return $name;
+# still no joy, try info field that looks like a name (without = sign etc.)
+
+    foreach my $part (@info) {
+        next if ($part =~ /\=/);
+# consider it a name if the field starts with a character
+        if ($part =~ /\b([a-z]\w+)\b/) {
+            my $save = $1;
+# avoid repeating information
+            $name  = $save if ($name && $save =~ /$name/);
+            $name .= $save unless ($name && $name =~ /$save/);
+        }
+    }
+
+    $info =~ s/\\n\\\s*$name\s*$//; # chop off name at end, if any
+
+# if the name is still blank,generate a random name (for later update by hand)
+            
+    unless ($name) {
+        my $randomnumber = int(rand(1000)); # from 0 to 999 
+        $name = sprintf('oligo_m%03x',$randomnumber);
+    }
+
+    if ($name) {
+# put the name upfront in the info string
+        $info = "$name\\n\\".$info;
+        $info =~ s/\\n\\\s*\\n\\/\\n\\/g;
+        return ($name,$info);
+    }
+
+# still not done: area for adhoc changes
+
+    return 0;
 }
 
 sub get_oligo_DNA {
@@ -1121,7 +1177,8 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n\n";
+    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-caf\t\tcaf file name OR\n";
