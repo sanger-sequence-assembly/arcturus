@@ -85,6 +85,14 @@ if ( ! $?JAVA_HEAP_SIZE) then
     setenv JAVA_HEAP_SIZE -Xmx256M
 endif
 
+# Determine our operating system, and alter the path to Java if we're running
+# on an Alpha system.
+
+if ( `uname -s` == 'OSF1' ) then
+    setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
+    setenv JAVA_HEAP_SIZE -Xmx1024M
+endif
+
 # Specify Arcturus default parameters
 set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus"
 
@@ -109,11 +117,4 @@ if ( $?JAVA_OPTS ) then
 else
     # No user-defined options, so set explicitly
     setenv JAVA_OPTS "${EXTRA_OPTS}"
-endif
-
-# Determine our operating system, and alter the path to Java if we're running
-# on an Alpha system.
-
-if ( `uname -s` == 'OSF1' ) then
-    setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 endif
