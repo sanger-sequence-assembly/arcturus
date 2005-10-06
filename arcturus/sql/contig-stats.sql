@@ -15,6 +15,18 @@ select PROJECT.name,count(*) as contigs,
   from currentcontigs left join PROJECT using(project_id)
   group by currentcontigs.project_id order by name asc;
 
+select 'CONTIGS 2kb OR MORE';
+                                                                                                                                             
+select PROJECT.name,count(*) as contigs,
+  sum(nreads) as reads,
+  sum(length) as length,
+  round(avg(length)) as avglen,
+  round(std(length)) as stdlen,
+  max(length) as maxlen
+  from currentcontigs left join PROJECT using(project_id)
+  where length >= 2000
+  group by currentcontigs.project_id order by name asc;
+
 select 'CONTIGS 5kb OR MORE';
 
 select PROJECT.name,count(*) as contigs,
