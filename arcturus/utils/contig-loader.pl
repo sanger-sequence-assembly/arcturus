@@ -1047,7 +1047,7 @@ sub decode_oligo_info {
         $name = $1;
     }
 # try with the results of the split
-    elsif ($info[0] !~ /\=/ && $info =~ /^([a-z]\w+)\b/i) {
+    elsif ($info[0] !~ /\=/ && $info =~ /^([a-zA-Z]\w+)\b/i) {
 # the info string starts with a name like axx..
         $name = $1;
     }
