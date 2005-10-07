@@ -2062,15 +2062,17 @@ sub checkReadForCompleteness {
 
 sub checkReadForConsistency {
 # private
-    my $read = shift || return (0,"Missing Read instance");
-    my $options = shift;
+    my $read = shift;
+    my %options = @_;
 
 # check process status 
 
     if (my $status = $read->getProcessStatus()) {
         return (0,$status) if ($status =~ /Completely\ssequencing\svector/i);
         return (0,"Low $status") if ($status =~ /Trace\squality/i);
-        return (0,$status) if ($status =~ /Matches\sYeast/i);
+        unless ($options{acceptlikeyeast}) {
+            return (0,$status) if ($status =~ /Matches\sYeast/i);
+	}
     }
 
     # This method should check the template, ligation and insert size to ensure
