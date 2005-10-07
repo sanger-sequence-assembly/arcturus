@@ -32,7 +32,7 @@ sub queryFailed {
 
 # substitute placeholders '?' by values
 
-    my $length = length(@_);
+    my $length = scalar(@_);
 
     while ($length-- > 0) {
         my $datum = shift || 'null';
