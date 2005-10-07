@@ -84,6 +84,30 @@ public class ScaffoldPanel extends JComponent {
     private void actOnMouseClick(MouseEvent e) {
 	System.out.println("Mouse clicked at " + e.getX() + "," + e.getY() + " in " +
 			   getModeAsString() + " mode");
+
+	JViewport viewport = (JViewport)getParent();
+	Point viewposition = viewport.getViewPosition();
+	Dimension viewsize = viewport.getViewSize();
+	Dimension viewextent = viewport.getExtentSize();
+
+	System.out.println("Viewport position = [" + viewposition.x + "," + viewposition.y + "]" +
+			   ", size = " + viewsize.width + "x" + viewsize.height +
+			   ", extent=" + viewextent.width + "x" + viewextent.height);
+
+	Point click = e.getPoint();
+
+	int xDNA = (click.x - leftPadding) * bpPerPixel;
+
+	int viewDNA = (viewposition.x - leftPadding) * bpPerPixel;
+
+	int widthDNA = viewextent.width * bpPerPixel;
+
+	System.out.println("In DNA coordinates (at " + bpPerPixel + "bp/pxl): click at " + xDNA +
+			   ", viewport begins at " + viewDNA +
+			   " and is " + widthDNA + " bp wide");
+
+	if (mode == ZOOM_IN)
+	    viewport.setViewPosition(new Point(e.getX(), viewposition.y));
     }
 
     public void zoomIn() {
