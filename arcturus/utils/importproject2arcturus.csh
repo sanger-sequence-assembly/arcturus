@@ -60,10 +60,13 @@ endif
 
 # get trash project name, if any
 
+set repair = mark
+
 set trashproject = TRASH
 
 if ( $#argv > 4 ) then
     set trashproject = $5
+    set repair = trash
 endif
 
 set arcturus_home=/nfs/pathsoft/arcturus
@@ -115,7 +118,7 @@ ${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -ca
 
 echo Testing read-allocation for possible duplicates
 
-${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -trash -project $trashproject
+${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $trashproject
 
 # calculating consensus sequence
 
