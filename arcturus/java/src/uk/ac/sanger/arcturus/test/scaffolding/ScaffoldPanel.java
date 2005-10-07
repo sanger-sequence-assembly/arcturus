@@ -87,44 +87,83 @@ public class ScaffoldPanel extends JComponent {
 
 	JViewport viewport = (JViewport)getParent();
 	Point viewposition = viewport.getViewPosition();
-	Dimension viewsize = viewport.getViewSize();
-	Dimension viewextent = viewport.getExtentSize();
-
-	System.out.println("Viewport position = [" + viewposition.x + "," + viewposition.y + "]" +
-			   ", size = " + viewsize.width + "x" + viewsize.height +
-			   ", extent=" + viewextent.width + "x" + viewextent.height);
 
 	Point click = e.getPoint();
 
-	int xDNA = (click.x - leftPadding) * bpPerPixel;
+	switch (mode) {
+	case ZOOM_IN:
+	    zoomIn(click);
+	    break;
 
-	int viewDNA = (viewposition.x - leftPadding) * bpPerPixel;
-
-	int widthDNA = viewextent.width * bpPerPixel;
-
-	System.out.println("In DNA coordinates (at " + bpPerPixel + "bp/pxl): click at " + xDNA +
-			   ", viewport begins at " + viewDNA +
-			   " and is " + widthDNA + " bp wide");
-
-	if (mode == ZOOM_IN)
-	    viewport.setViewPosition(new Point(e.getX(), viewposition.y));
+	case ZOOM_OUT:
+	    zoomOut(click);
+	    break;
+	}
     }
 
-    public void zoomIn() {
-	bpPerPixel /= 4;
-	if (bpPerPixel < 1)
-	    bpPerPixel = 1;
-	recalculateLayout();
-    }
+    public void zoomIn(Point p) {
+	int newBpPerPixel = bpPerPixel >> 2;
 
-    public void zoomOut() {
-	bpPerPixel *= 4;
+	if (newBpPerPixel < 1)
+	    newBpPerPixel = 1;
+
+	recalculateLayout(p, newBpPerPixel);
+
+	revalidate();
+	repaint();
+     }
+
+    public void zoomOut(Point p) {
+	int newBpPerPixel = bpPerPixel << 2;
+
+	recalculateLayout(p, newBpPerPixel);
+
+	revalidate();
+	repaint();
+     }
+
+    protected void recalculateLayout(Point p, int newBpPerPixel) {
+	Point newViewPosition = calculateNewViewPosition(p, newBpPerPixel);
+
+	bpPerPixel = newBpPerPixel;
+
 	recalculateLayout();
+
+	JViewport viewport = (JViewport)getParent();	    
+	viewport.setViewPosition(newViewPosition);
+   }
+
+    protected Point calculateNewViewPosition(Point p, int newBpPerPixel) {
+	System.err.println("calculateNewViewPosition(" + p + ", " + newBpPerPixel + ")");
+
+	int dnax = (p.x - leftPadding) * bpPerPixel;
+
+	JViewport viewport = (JViewport)getParent();
+	Point viewposition = viewport.getViewPosition();
+
+	int xoffset = p.x - viewposition.x;
+
+	int pxnew = dnax / newBpPerPixel + leftPadding;
+
+	System.err.println("\tbpperPixel = " + bpPerPixel + "\n" +
+			   "\tdnax = " + dnax + "\n" +
+			   "\tviewposition = [" + viewposition.x + "," + viewposition.y + "]\n" +
+			   "\txoffset = " + xoffset + "\n" +
+			   "\tpxnew = " + pxnew);
+
+	viewposition.x = pxnew - xoffset;
+
+	System.err.println("\tNew viewposition = [" + viewposition.x + "," + viewposition.y + "]\n");
+
+	return new Point(viewposition);
     }
 
     public void setSuperScaffold(SuperScaffold ss) {
 	makeBars(ss);
 	recalculateLayout();
+
+	revalidate();
+	repaint();
     }
 
     public void setScale(int bpPerPixel) {
@@ -278,9 +317,6 @@ public class ScaffoldPanel extends JComponent {
 	}
 
 	preferredSize = new Dimension(width, height);
-
-	revalidate();
-	repaint();
     }
 
     public Dimension getPreferredSize() { return preferredSize; }
