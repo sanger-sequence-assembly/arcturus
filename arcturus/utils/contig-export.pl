@@ -25,10 +25,11 @@ my $masking;
 my $msymbol;
 my $mshrink;
 my $metadataonly = 1;
+my $qualityclip;
 
 my $validKeys  = "organism|instance|contig|contig|fofn|ignoreblocked|caf|"
                . "fasta|quality|padded|mask|symbol|shrink|readsonly|"
-               . "verbose|help";
+               . "qualityclip|qc|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -55,6 +56,9 @@ while (my $nextword = shift @ARGV) {
     $msymbol      = shift @ARGV  if ($nextword eq '-symbol');
 
     $mshrink      = shift @ARGV  if ($nextword eq '-shrink');
+
+    $qualityclip  = shift @ARGV  if ($nextword eq '-qualityclip');
+    $qualityclip  = shift @ARGV  if ($nextword eq '-qc');
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -120,6 +124,7 @@ if ($padded && defined($fastafile)) {
 
 if (defined($caffile)) {
     $logger->warning("Ineffective '-readsonly' key ignored") if $readsonly;
+    $logger->warning("Redundant '-qualityclip' key ignored") if $qualityclip;
     $logger->warning("Redundant '-shrink' key ignored") if $mshrink;
     undef $readsonly;
 }
@@ -173,6 +178,7 @@ if (defined($fastafile)) {
 # fasta options
     if ($readsonly) {
         $woptions{readsonly} = 1;
+        $logger->warning("Redundant '-qualityclip' key ignored") if $qualityclip;
         $logger->warning("Redundant '-shrink' key ignored") if $mshrink;
         $woptions{qualitymask} = $masking if $masking;
         $woptions{qualitymask} = $msymbol if $msymbol; # overrides
@@ -181,6 +187,7 @@ if (defined($fastafile)) {
         $woptions{endregiononly} = $masking if defined($masking);
         $woptions{maskingsymbol} = $msymbol || 'X';
         $woptions{shrink} = $mshrink;
+        $woptions{qualityclip} = $qualityclip if defined($qualityclip);
     }
 }
 elsif (defined($caffile)) {
