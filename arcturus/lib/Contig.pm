@@ -1046,8 +1046,16 @@ $compare->getContigName()."\n" if $DEBUG;
             foreach my $c2cmap (@$c2cmaps) {
                 my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,1);
                 next unless $isEqual;
+                next if ($mapping->getSequenceID() != $c2cmap->getSequenceID());
                 print STDERR "Duplicate mapping to parent " .
 		             $compare->getContigName()." ignored\n";
+if ($DEBUG) {
+print STDOUT "Duplicate mapping to parent " .
+	      $compare->getContigName()." ignored\n";
+print STDOUT "existing Mappings: @$c2cmaps \n";
+print STDOUT "to be added Mapping: $mapping, tested against $c2cmap\n";
+print STDOUT "equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString();
+}
                 return $mapping->hasSegments(),$deallocated;
             }
         }
@@ -1444,6 +1452,19 @@ sub writeToFasta {
         }
     }
 
+# apply quality clipping
+
+    if ($options{qualityclip}) {
+# get a clipped version of the current consensus
+        my ($sequence,$quality) = &qualityclip($this->getSequence(),
+                                               $this->getBaseQuality(),
+					       $options{qualityclip});
+        if ($sequence && $quality) {
+            $this->setSequence($sequence);
+            $this->setBaseQuality($quality);
+	}
+    }
+
     $this->writeDNA($DFILE);
 
     $this->writeBaseQuality($QFILE) if $QFILE;
@@ -1737,6 +1758,34 @@ sub endregionmask {
     }
 
     return $sequence;
+}
+
+sub qualityclip {
+# remove low quality data from consensus (fasta export only)
+    my $sequence = shift; # input consensus
+    my $quality = shift;  # quality data
+    my $cliplevel = shift;
+
+    print STDERR "Clipping quality below level $cliplevel\n";
+
+    my @lowquality;
+    push @lowquality, -1;
+    for (my $i = 0 ; $i < scalar(@$quality) ; $i++) {
+        next unless ($quality->[$i] <= $cliplevel);
+        push @lowquality, $i;
+    }
+
+    print STDERR scalar(@lowquality)." values clipped\n";
+
+    my @newquality;
+    my $newsequence = '';
+    for (my $i = 1 ; $i < scalar(@lowquality) ; $i++) {
+        my $lqspos = $lowquality[$i-1] + 1;
+        my $lqfpos = $lowquality[$i] - 1;
+        $newsequence .= substr $sequence, $lqspos, $lqfpos - $lqspos + 1;
+    } 
+
+    return $sequence,$quality;
 }
 
 #---------------------------
