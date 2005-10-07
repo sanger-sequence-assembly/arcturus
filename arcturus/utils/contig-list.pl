@@ -109,7 +109,7 @@ my @contigs;
 if ($contig_id) {
     $logger->info("Contig $contig_id to be processed");
     my $contig = $adb->getContig(contig_id=>$contig_id,%options);
-    $logger->info("Contig $contig constructed");
+    $logger->info("Contig $contig constructed") if $contig;
     push @contigs, $contig if $contig;
 }
 
@@ -126,7 +126,7 @@ if ($tagname) {
     unless ($contig) {
         $contig = $adb->getContig(withAnnotationTag=>$tagname,%options);
     }
-    $logger->info("Contig $contig constructed");
+    $logger->info("Contig $contig constructed") if $contig;
     push @contigs, $contig if $contig;
 }
 
