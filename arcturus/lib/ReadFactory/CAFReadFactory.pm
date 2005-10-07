@@ -135,13 +135,16 @@ sub CAFFileParser {
 
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
 # there is a new object name
-            my $item = $1;
-#            my $name = $2;
-#            if ($object && $object ne $name && $reads{$object} && $dotf) {
-#            }             
-            $object = $2;
             $type = 0;
+            my $item = $1;
+            $object = $2;
+
+# clip out any object named Contig
+
+            next if ($record =~ /Contig/i);
+
 # test against readname exclude and include filters
+
             if (defined($exclude->{$object}) ||
 		defined($include) && !defined($include->{$object})) {
                 $this->loginfo("read $object ignored");
@@ -164,7 +167,7 @@ sub CAFFileParser {
         }
 
         elsif ($record =~ /Is_contig\b/) {
-            $this->loginfo("Contig $object ignored");
+            $this->logwarning("Contig $object ignored");
             delete $reads{$object};
             $type = 0;
             next;
@@ -315,6 +318,3 @@ sub CAFFileParser {
 
     return $count;
 }
-
-
-

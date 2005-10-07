@@ -99,6 +99,8 @@ sub new {
 
     $query .= " where " . join(' AND ', @conditions);
 
+#    print STDOUT "query $query\n";
+
     my $sth = $dbh->prepare($query);
 
     $sth->execute();
