@@ -1096,7 +1096,7 @@ print STDOUT "now decoded info: $info ($name)\n";
     foreach my $part (@info) {
         next if ($part =~ /\=/);
 # consider it a name if the field starts with a character
-        if ($part =~ /\b([a-z]\w+)\b/) {
+        if ($part =~ /\b([a-zA-Z]\w+)\b/) {
             my $save = $1;
 # avoid repeating information
             $name  = $save if ($name && $save =~ /$name/);
