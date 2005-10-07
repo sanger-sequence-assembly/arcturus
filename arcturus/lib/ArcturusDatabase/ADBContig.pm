@@ -39,7 +39,7 @@ sub cNoDebug { $DEBUG = 0; }
 #------------------------------------------------------------------------------
 
 sub getContig {
-# return a Contig object  (under development)
+# return a Contig object 
 # options: one of: contig_id=>N, withRead=>R, withChecksum=>C, withTag=>T 
 # additional : metaDataOnly=>0 or 1 (default 0), noReads=>0 or 1 (default 0)
 #              noreadtag=>0, nocontigtags=>0 (or just notags?)
@@ -1065,7 +1065,9 @@ sub deleteContig {
 # class; importing unlinkContigID using Exporter in ADBProject doesn't work as
 # expected ...
   
-    my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$confirm); 
+    my $user = $this->getArcturusUser();
+
+    my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$user,$confirm); 
 
     return (0,"Contig $identifier cannot be deleted: $message") unless $status;
 
@@ -1275,38 +1277,26 @@ sub putMappingsForContig {
     my $squery; # for insert on the (C2C)SEGMENT table
     my $mappings; # for the array of Mapping instances
 
-    while (my $nextword = shift) {
-        my $value = shift;
-        if ($nextword eq "type") {
+    if ($option{type} eq "read") {
 # for read-to-contig mappings
-            if ($value eq "read") {
-                $mappings = $contig->getMappings();
-                return 0 unless $mappings; # MUST have read-to-contig mappings
-                $mquery = "insert into MAPPING " .
-	                  "(contig_id,seq_id,cstart,cfinish,direction) ";
-                $squery = "insert into SEGMENT " .
-                          "(mapping_id,cstart,rstart,length) values ";
-            }
+        $mappings = $contig->getMappings();
+        return 0 unless $mappings; # MUST have read-to-contig mappings
+        $mquery = "insert into MAPPING " .
+                  "(contig_id,seq_id,cstart,cfinish,direction) ";
+        $squery = "insert into SEGMENT " .
+                  "(mapping_id,cstart,rstart,length) values ";
+    }
+    elsif ($option{type} eq "contig") {
 # for contig-to-contig mappings
-            elsif ($value eq "contig") {
-                $mappings = $contig->getContigToContigMappings();
-                return 1 unless $mappings; # MAY have contig-to-contig mappings
-                $mquery = "insert into C2CMAPPING " .
-	                  "(contig_id,parent_id,cstart,cfinish,direction) ";
-                $squery = "insert into C2CSEGMENT " .
-                          " (mapping_id,cstart,pstart,length) values ";
-            }
-            else {
-                die "Invalid parameter value for ->putMappingsForContig";
-            }
-        }
-
-        else {
-            die "Invalid parameter $nextword for ->putMappingsForContig";
-        }
+        $mappings = $contig->getContigToContigMappings();
+        return 1 unless $mappings; # MAY have contig-to-contig mappings
+        $mquery = "insert into C2CMAPPING " .
+	          "(contig_id,parent_id,cstart,cfinish,direction) ";
+        $squery = "insert into C2CSEGMENT " .
+                  " (mapping_id,cstart,pstart,length) values ";
     }
 
-    die "Missing parameter for ->putMappingsForContig" unless $mappings;
+    die "Missing 'type' parameter for ->putMappingsForContig" unless $mappings;
 
     $mquery .= "values (?,?,?,?,?)";
 
@@ -1317,10 +1307,11 @@ sub putMappingsForContig {
 # 1) the overall mapping
 
     my $mapping;
-#    foreach my $mapping (@$mappings) {
     foreach $mapping (@$mappings) {
 
-        next unless $mapping->hasSegments(); # protect against empty mappings
+# protect against empty mappings (unless invoked via method 'markAsVirtualParent')
+
+        next unless ($mapping->hasSegments() || $option{allowemptymapping});
 
         my ($cstart, $cfinish) = $mapping->getContigRange();
 
@@ -1373,6 +1364,35 @@ sub putMappingsForContig {
         }
     }
     return $success;
+}
+
+sub markAsVirtualParent {
+# enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
+# this virtual link removes the contig from the current contig list
+    my $this = shift;
+    my $parent_id = shift || return 0;
+
+    return 0 unless $parent_id;
+
+# create a dummy contig with contig ID 0
+
+    my $contig = new Contig();
+
+    $contig->setContigID(0);
+
+# create a dummy C2CMAPPING for this contig
+
+    my $c2cmap = new Mapping();
+
+    $c2cmap->setSequenceID($parent_id);
+
+    $contig->addContigToContigMapping($c2cmap);
+
+# present for loading
+
+    my %options = (type=>'contig',allowemptymapping=>1);
+
+    return &putMappingsForContig($this->getConnection(),$contig,%options);
 }
 
 #-----------------------------------------------------------------------------
@@ -1879,13 +1899,12 @@ sub getParentIDsForContigID {
 }
 
 sub getChildIDsForContigID {
-# private, returns a list of contig IDs of child contig(s)
-# using the C2CMAPPING table
+# private, returns a list of contig IDs of child contig(s) using C2CMAPPING table
     my $dbh = shift;
     my $contig_id = shift;
 
     my $query = "select distinct(contig_id) from C2CMAPPING".
-	" where parent_id = ?"; print "$query $contig_id\n";
+	        " where parent_id = ? and contig_id > 0";
     
     my $sth = $dbh->prepare_cached($query);
 
@@ -1898,7 +1917,6 @@ sub getChildIDsForContigID {
 
     $sth->finish();
 
-print "children @contigids\n";
     return [@contigids];
 }
 
@@ -2051,7 +2069,8 @@ sub getCurrentContigs {
     }
     elsif ($short || $age) {
 # use age column information and include possible singletons
-	$query = "select distinct(contig_id) from C2CMAPPING where age = $age";
+	$query = "select distinct(contig_id) from C2CMAPPING where age = $age"
+               . "   and contig_id > 0";
     }
     else {
 # generation 0 consists of all those contigs which ARE NOT a parent
@@ -2164,6 +2183,68 @@ sub getContigIDsForReadNames {
     $sth->finish();
 
     return $outputlist;
+}
+
+sub getContigIDsForContigProperty {
+# return a list of contig IDs for (a combination of) contig properties
+    my $this = shift;
+    my %options = @_;
+
+# select option on: length, nr of reads, nr of parents, cover, creation date
+
+    my $dbh = $this->getConnection();
+
+    my $subselect = "select CONTIG.contig_id "
+                  . "  from CONTIG left join C2CMAPPING using (contig_id)"
+		  . " where C2CMAPPING.parent_id is null";
+
+    my $query = "select CONTIG.contig_id"
+              . "  from CONTIG"
+	      . " where CONTIG.contig_id in ($subselect)";
+
+    my @data;
+    foreach my $key (keys %options) {
+# get the relationship
+        my $relation = "=";
+        $relation = "=>" if ($key =~ /^(minimum|after)/);
+        $relation = "=<" if ($key =~ /^(maximum|before)/);
+# get the contig property
+        my $property;
+        $property = "length"  if ($key =~ /^(min|max)imumlength$/);
+        $property = "nreads"  if ($key =~ /^(min|max)imumnumberofreads$/);
+        $property = "ncntgs"  if ($key =~ /^(min|max)imumnumberofparents$/);
+        $property = "cover"   if ($key =~ /^(min|max)imumcover$/);
+        $property = "created" if ($key =~ /^created(before|after)$/);
+        $property = $key unless $property; # e.g. origin
+# add the clause to the query
+        $query .= " and $property $relation ?";
+        push @data,$options{$key}; 
+    }
+
+    $this->logQuery('getContigIDsForContigProperty',$query,@data); # for debugging
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute(@data) || &queryFailed($query,@data);
+
+    my @cids;
+    while (my ($cid) = $sth->fetchrow_array()) {
+        push @cids,$cid;
+    }
+    $sth->finish();
+
+    return [@cids];
+}
+
+sub isCurrentContigID {
+# returns true if the contig ID is of a contig in the current generation
+    my $this = shift;
+
+    my $dbh = $this->getConnection();
+
+    my $children = &getChildIDsForContigID($dbh,@_);
+
+    return (scalar(@$children) ? 0 : 1);
 }
 
 #------------------------------------------------------------------------------
