@@ -6,6 +6,8 @@ use Mapping;
 
 use PaddedRead; # remove after upgrade for Padded
 
+use Asp::PhredClip;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -585,6 +587,14 @@ sub getStatistics {
                 foreach my $mapping (@$mappings) {
                     $mapping->applyShiftToContigPosition($shift);
                 }
+# and apply shift to possible tags
+                if ($this->hasTags()) {
+                    print STDERR "Adjusting tag positions (to be tested)\n";
+                    my $tags = $this->getTags();
+                    foreach my $tag (@$tags) {
+                        $tag->transpose(1,[($shift,$shift)],$cfinal-$shift);
+                    }
+	        }
 # and redo the loop (as $pass > 0)
                 $isShifted = 1;
             }
@@ -1392,9 +1402,11 @@ sub writeToCaf {
 
 # dump all reads
 
-    my $reads = $this->getReads(1);
-    foreach my $read (@$reads) {
-        $read->writeToCaf($FILE,%options); # transfer options, if any
+    unless ($options{noreads}) {
+        my $reads = $this->getReads(1);
+        foreach my $read (@$reads) {
+            $read->writeToCaf($FILE,%options); # transfer options, if any
+        }
     }
 
 # write the overall maps for for the contig ("assembled from")
@@ -1431,7 +1443,7 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
-    my %options = @_;
+    my %options = @_; 
 
     return "Missing file handle for Fasta output" unless $DFILE;
 
@@ -1458,7 +1470,7 @@ sub writeToFasta {
 # get a clipped version of the current consensus
         my ($sequence,$quality) = &qualityclip($this->getSequence(),
                                                $this->getBaseQuality(),
-					       $options{qualityclip});
+					       %options);
         if ($sequence && $quality) {
             $this->setSequence($sequence);
             $this->setBaseQuality($quality);
@@ -1694,6 +1706,8 @@ sub writeToMaf {
     return $success,$report;
 }
 
+#-------------------------------------------------------------------    
+
 sub replaceNbyX {
 # private, substitute strings of 'N's in the consensus sequence by (MAF) 'X' 
     my $sequence = shift;
@@ -1761,31 +1775,140 @@ sub endregionmask {
 }
 
 sub qualityclip {
-# remove low quality data from consensus (fasta export only)
+# remove low quality pad(s) from consensus (fasta export only)
     my $sequence = shift; # input consensus
     my $quality = shift;  # quality data
-    my $cliplevel = shift;
+    my %options = @_; # print STDOUT "options: @_\n";
 
-    print STDERR "Clipping quality below level $cliplevel\n";
+    my $symbol    = $options{qcsymbol} || "*";
+    my $threshold = $options{qcthreshold} || 0;
 
-    my @lowquality;
-    push @lowquality, -1;
-    for (my $i = 0 ; $i < scalar(@$quality) ; $i++) {
-        next unless ($quality->[$i] <= $cliplevel);
-        push @lowquality, $i;
+print STDERR "Clipping low quality pads ($symbol, $threshold)\n";
+
+    my $length = length($sequence);
+
+    my $pad = 0; # last pad position
+
+    my $clipped = 0;
+    my $newquality = [];
+    my $newsequence = '';
+    for (my $i = 0 ; $i <= $length ; $i++) {
+# the last value results in adding the remainder, if any, to the output
+        if ($i < $length) {
+            next unless (substr($sequence, $i, 1) =~ /^[$symbol]$/); # no-pad
+            next if ($threshold && $quality->[$i] >= $threshold);
+            $clipped++;
+# deal with consecutive pads
+            if ($i == $pad) {
+                $pad++;
+                next; 
+	    }
+	}
+        elsif (!$clipped) {
+            last;
+        }
+# the next pad is detected at position $i
+        $newsequence .= substr($sequence, $pad, $i-$pad);
+        push @$newquality, @$quality [$pad .. $i-1];
+# adjust the last pad position
+        $pad = $i+1;
     }
 
-    print STDERR scalar(@lowquality)." values clipped\n";
+print STDERR "$clipped values clipped\n";
 
-    my @newquality;
-    my $newsequence = '';
-    for (my $i = 1 ; $i < scalar(@lowquality) ; $i++) {
-        my $lqspos = $lowquality[$i-1] + 1;
-        my $lqfpos = $lowquality[$i] - 1;
-        $newsequence .= substr $sequence, $lqspos, $lqfpos - $lqspos + 1;
-    } 
+    return $newsequence, $newquality;
+}
 
-    return $sequence,$quality;
+#----------------------------------------------------------------------------
+
+sub endregiontrim {
+# trim low quality data from the end of the contig
+    my $this = shift;
+    my $cliplevel = shift || return 0;
+
+    my $sequence = $this->getSequence();
+    my $quality = $this->getBaseQuality();
+
+    unless ($quality) {
+        print STDERR "Can't do trimming: missing consensus quality data in "
+                   . $this->getContigName()."\n";
+        return undef;
+    }
+
+# clipping algorithm for the moment taken from Asp
+
+    my ($QL,$QR) = Asp::PhredClip->phred_clip($cliplevel, $quality);
+
+# adjust the sequence and quality data
+
+    $this->setSequence (substr($sequence,$QL-1,$QR-$QL+1));
+    $this->setBaseQuality ([ @$quality [$QL-1 .. $QR-1] ]);
+
+    my $mask = new Mapping ("Contig Mask");
+    $mask->putSegment($QL,$QR,$QL,$QR);
+
+    my $mappings = $this->getMappings(1);
+
+#print "masking existing read mappings for ".$this->getContigName()."\n";
+
+    my @toberemoved;
+    foreach my $mapping (@$mappings) {
+        my $mappingname = $mapping->getMappingName();
+#print STDOUT "processing mapping $mappingname\n";
+#print STDOUT $mapping->writeToString();
+        my $inverse = $mapping->inverse();
+# determine if the masked read is still in the contig
+        my $product = $inverse->multiply($mask,1);
+        if ($product->hasSegments()) {
+            $mapping = $product->inverse();
+            $mapping->analyseSegments();
+            $mapping->setMappingName($mappingname);
+#print STDOUT $mapping->writeToString()."\n";
+            next;
+	}
+# the product is empty: remove this mapping and read from the list
+        push @toberemoved,$mapping->getMappingName();
+    }
+
+# if there are reads to be removed:
+
+    foreach my $read (@toberemoved) {
+	print STDERR "read $read to be removed\n";
+        my $s = $this->removeRead($read);
+        print STDERR "unidentified read or mapping $read\n" unless ($s == 2);
+    }
+
+    $this->getStatistics(2);    
+  
+    return ($QL,$QR);
+}
+
+sub removeRead {
+# remove a named read from the Read and Mapping stock
+    my $this = shift;
+    my $read = shift;
+    my $hash = shift;
+
+    my $spliced = 0;
+
+    my $reads = $this->getReads(1);
+    for (my $i = 0 ; $i < scalar(@$reads) ; $i++) {
+        next unless ($reads->[$i]->getReadName() eq $read);
+        splice @$reads,$i,1;
+        $this->setNumberOfReads(scalar(@$reads));
+        $spliced++;
+        last;
+    }
+            
+    my $mapps = $this->getMappings(1);
+    for (my $i = 0 ; $i < scalar(@$mapps) ; $i++) {
+        next unless ($mapps->[$i]->getMappingName() eq $read);
+        splice @$mapps,$i,1;
+        $spliced++;
+        last;
+    }
+
+    return $spliced;
 }
 
 #---------------------------
