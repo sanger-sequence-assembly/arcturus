@@ -15,8 +15,9 @@ public class ScaffoldPanel extends JComponent {
 
     protected int mode;
     protected int bpPerPixel = 128;
-    protected int leftPadding = 20;
-    protected int rightPadding = 20;
+
+    protected Insets margins = new Insets(20, 20, 20, 20);
+
     protected int interScaffoldGap = 1000;
     protected int contigBarHeight = 15;
 
@@ -102,79 +103,111 @@ public class ScaffoldPanel extends JComponent {
     }
 
     public void zoomIn(Point p) {
+	if (bpPerPixel < 4) {
+	    System.err.println("Scale is 1 bp/pixel: Cannot zoom in any further");
+	    return;
+	}
+
 	int newBpPerPixel = bpPerPixel >> 2;
 
-	if (newBpPerPixel < 1)
-	    newBpPerPixel = 1;
-
 	recalculateLayout(p, newBpPerPixel);
-
-	revalidate();
-	repaint();
      }
 
     public void zoomOut(Point p) {
 	int newBpPerPixel = bpPerPixel << 2;
 
 	recalculateLayout(p, newBpPerPixel);
-
-	revalidate();
-	repaint();
      }
 
+    private String p2s(Point p) {
+	return "[" + p.x + "," + p.y + "]";
+    }
+
     protected void recalculateLayout(Point p, int newBpPerPixel) {
-	Point newViewPosition = calculateNewViewPosition(p, newBpPerPixel);
+	System.err.println("recalculateLayout(" + p2s(p) + ", " + newBpPerPixel);
+	System.err.println("\tOld bpPerPixel = " + bpPerPixel);
+	
+	Point wp = viewToWorld(p);
+
+	System.err.println("\tWorld position = " + p2s(wp));
+
+	JViewport viewport = (JViewport)getParent();
+	Point vp = viewport.getViewPosition();
+
+	System.err.println("\tViewport position = " + p2s(vp));
+
+	Point offset = new Point(p.x - vp.x, p.y - vp.y);
+
+	System.err.println("\tOffset = " + p2s(offset));
 
 	bpPerPixel = newBpPerPixel;
 
+	System.err.println("\tSet bpPerPixel to " + bpPerPixel);
+
+	p = worldToView(wp);
+
+	System.err.println("\tNew view position = " + p2s(p));
+
+	vp = new Point(p.x - offset.x, p.y - offset.y);
+
+	System.err.println("\tNew viewport position = " + p2s(vp));
+
 	recalculateLayout();
 
-	JViewport viewport = (JViewport)getParent();	    
-	viewport.setViewPosition(newViewPosition);
+	setPreferredSize(preferredSize);
+	revalidate();
+
+	Dimension size = getSize();
+	System.err.println("\tSize = " + size.width + "x" + size.height);
+
+	viewport.setViewPosition(vp);
+	vp = viewport.getViewPosition();
+	System.err.println("\tActual vp = " + p2s(vp));
    }
 
-    protected Point calculateNewViewPosition(Point p, int newBpPerPixel) {
-	System.err.println("calculateNewViewPosition(" + p + ", " + newBpPerPixel + ")");
+    private Point viewToWorld(Point p) {
+	int x = (p.x - margins.left) * bpPerPixel;
+	int y = (p.y - margins.top);
 
-	int dnax = (p.x - leftPadding) * bpPerPixel;
+	return new Point(x, y);
+    }
+
+    private Point worldToView(Point p) {
+	int x = margins.left + p.x/bpPerPixel;
+	int y = margins.top + p.y;
+
+	return new Point(x, y);
+    }
+
+    protected Point calculateNewViewPosition(Point p, int newBpPerPixel) {
+	Point wp = viewToWorld(p);
 
 	JViewport viewport = (JViewport)getParent();
-	Point viewposition = viewport.getViewPosition();
+	Point vp = viewport.getViewPosition();
 
-	int xoffset = p.x - viewposition.x;
+	Point offset = new Point(wp.x - vp.x, wp.y - vp.y);
 
-	int pxnew = dnax / newBpPerPixel + leftPadding;
+	bpPerPixel = newBpPerPixel;
 
-	System.err.println("\tbpperPixel = " + bpPerPixel + "\n" +
-			   "\tdnax = " + dnax + "\n" +
-			   "\tviewposition = [" + viewposition.x + "," + viewposition.y + "]\n" +
-			   "\txoffset = " + xoffset + "\n" +
-			   "\tpxnew = " + pxnew);
+	p = worldToView(wp);
 
-	viewposition.x = pxnew - xoffset;
-
-	System.err.println("\tNew viewposition = [" + viewposition.x + "," + viewposition.y + "]\n");
-
-	return new Point(viewposition);
+	return new Point(p.x - offset.x, p.y - offset.y);
     }
 
     public void setSuperScaffold(SuperScaffold ss) {
 	makeBars(ss);
-	recalculateLayout();
+
+	setSize(getPreferredSize());
 
 	revalidate();
-	repaint();
     }
 
     public void setScale(int bpPerPixel) {
 	this.bpPerPixel = bpPerPixel;
-	recalculateLayout();
-    }
 
-    public void setPadding(int leftPadding, int rightPadding) {
-	this.leftPadding = leftPadding;
-	this.rightPadding = rightPadding;
-	recalculateLayout();
+	setSize(getPreferredSize());
+
+	revalidate();
     }
 
     public void setInterScaffoldGap(int interScaffoldGap) {
@@ -306,8 +339,8 @@ public class ScaffoldPanel extends JComponent {
     }
 
     protected void recalculateLayout() {
-	int width = leftPadding + rightPadding;
-	int height = 200;
+	int width = margins.left + margins.right;
+	int height = margins.top + margins.bottom + 200;
 
 	if (contigBars != null) {
 	    int k = contigBars.length - 1;
@@ -319,7 +352,10 @@ public class ScaffoldPanel extends JComponent {
 	preferredSize = new Dimension(width, height);
     }
 
-    public Dimension getPreferredSize() { return preferredSize; }
+    public Dimension getPreferredSize() {
+	recalculateLayout();
+	return preferredSize;
+    }
 
     public void paintComponent(Graphics gr) {
 	Graphics2D g = (Graphics2D)gr;
@@ -335,15 +371,15 @@ public class ScaffoldPanel extends JComponent {
 
 	g.setColor(Color.black);
 
-	int y = 5;
+	int y = margins.top + 5;
 
 	int widthbp = contigBars[contigBars.length - 1].getRight();
 	int widthkb = widthbp/1000;
 
-	g.drawLine(leftPadding, y, leftPadding + widthbp/bpPerPixel, y);
+	g.drawLine(margins.left, y, margins.left + widthbp/bpPerPixel, y);
 
 	for (int i = 0; i < widthkb; i++) {
-	    int x = leftPadding + (1000 * i)/bpPerPixel;
+	    int x = margins.left + (1000 * i)/bpPerPixel;
 
 	    int dy = 3;
 
@@ -361,7 +397,7 @@ public class ScaffoldPanel extends JComponent {
 	for (int i = 0; i < scaffoldBars.length; i++) {
 	    ScaffoldBar sbar = scaffoldBars[i];
 
-	    int x = leftPadding + sbar.getLeft()/bpPerPixel;
+	    int x = margins.left + sbar.getLeft()/bpPerPixel;
 
 	    int w = sbar.getLength()/bpPerPixel;
 	    int h = 4;
@@ -382,7 +418,7 @@ public class ScaffoldPanel extends JComponent {
 
 	    g.setColor(bar.isForward() ? Color.blue : Color.red);
 
-	    int x = leftPadding + bar.getLeft()/bpPerPixel;
+	    int x = margins.left + bar.getLeft()/bpPerPixel;
 
 	    int w = bar.getLength()/bpPerPixel;
 
@@ -394,8 +430,8 @@ public class ScaffoldPanel extends JComponent {
 	for (int i = 0; i < bacLines.length; i++) {
 	    LinkLine ll = bacLines[i];
 
-	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
-	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
+	    int xLeft = margins.left + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
+	    int xRight = margins.left + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
 
 	    int dy = ll.getDy();
 
@@ -411,8 +447,8 @@ public class ScaffoldPanel extends JComponent {
 	for (int i = 0; i < pucLines.length; i++) {
 	    LinkLine ll = pucLines[i];
 
-	    int xLeft = leftPadding + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
-	    int xRight = leftPadding + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
+	    int xLeft = margins.left + (ll.getLeftA() + ll.getRightA())/(2 * bpPerPixel);
+	    int xRight = margins.left + (ll.getLeftB() + ll.getRightB())/(2 * bpPerPixel);
 
 	    int dy = ll.getDy();
 
