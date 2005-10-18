@@ -30,8 +30,6 @@ public class ScaffoldPanel extends JComponent {
     protected Cursor csrZoomOut = null;
     protected Cursor csrSelect = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
 
-    protected Dimension preferredSize = new Dimension(100, 100);
-
     Random random = new Random();
 
     public ScaffoldPanel() {
@@ -53,6 +51,8 @@ public class ScaffoldPanel extends JComponent {
 		    actOnMouseClick(e);
 		}
 	    });
+
+	setPreferredSize(new Dimension(100, 100));
     }
 
     public void setAction(int newmode) {
@@ -110,21 +110,21 @@ public class ScaffoldPanel extends JComponent {
 
 	int newBpPerPixel = bpPerPixel >> 2;
 
-	recalculateLayout(p, newBpPerPixel);
+	rescale(p, newBpPerPixel);
      }
 
     public void zoomOut(Point p) {
 	int newBpPerPixel = bpPerPixel << 2;
 
-	recalculateLayout(p, newBpPerPixel);
+	rescale(p, newBpPerPixel);
      }
 
     private String p2s(Point p) {
 	return "[" + p.x + "," + p.y + "]";
     }
 
-    protected void recalculateLayout(Point p, int newBpPerPixel) {
-	System.err.println("recalculateLayout(" + p2s(p) + ", " + newBpPerPixel);
+    protected void rescale(Point p, int newBpPerPixel) {
+	System.err.println("rescale(" + p2s(p) + ", " + newBpPerPixel);
 	System.err.println("\tOld bpPerPixel = " + bpPerPixel);
 	
 	Point wp = viewToWorld(p);
@@ -154,7 +154,7 @@ public class ScaffoldPanel extends JComponent {
 
 	recalculateLayout();
 
-	setPreferredSize(preferredSize);
+	setSize(getPreferredSize());
 	revalidate();
 
 	Dimension size = getSize();
@@ -179,23 +179,10 @@ public class ScaffoldPanel extends JComponent {
 	return new Point(x, y);
     }
 
-    protected Point calculateNewViewPosition(Point p, int newBpPerPixel) {
-	Point wp = viewToWorld(p);
-
-	JViewport viewport = (JViewport)getParent();
-	Point vp = viewport.getViewPosition();
-
-	Point offset = new Point(wp.x - vp.x, wp.y - vp.y);
-
-	bpPerPixel = newBpPerPixel;
-
-	p = worldToView(wp);
-
-	return new Point(p.x - offset.x, p.y - offset.y);
-    }
-
     public void setSuperScaffold(SuperScaffold ss) {
 	makeBars(ss);
+
+	recalculateLayout();
 
 	setSize(getPreferredSize());
 
@@ -205,14 +192,11 @@ public class ScaffoldPanel extends JComponent {
     public void setScale(int bpPerPixel) {
 	this.bpPerPixel = bpPerPixel;
 
+	recalculateLayout();
+
 	setSize(getPreferredSize());
 
 	revalidate();
-    }
-
-    public void setInterScaffoldGap(int interScaffoldGap) {
-	this.interScaffoldGap = interScaffoldGap;
-	recalculateLayout();
     }
 
     protected void makeBars(SuperScaffold ss) {
@@ -349,12 +333,7 @@ public class ScaffoldPanel extends JComponent {
 	    width += (right - left + 1)/bpPerPixel;
 	}
 
-	preferredSize = new Dimension(width, height);
-    }
-
-    public Dimension getPreferredSize() {
-	recalculateLayout();
-	return preferredSize;
+	setPreferredSize(new Dimension(width, height));
     }
 
     public void paintComponent(Graphics gr) {
