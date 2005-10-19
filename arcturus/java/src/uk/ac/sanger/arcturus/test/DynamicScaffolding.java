@@ -192,10 +192,17 @@ public class DynamicScaffolding {
 
 	contigset.add(seedcontig);
 
-	processContigSet(contigset);
+	PucBridgeSet pbs = processContigSet(contigset);
+
+	pbs.dump(System.out, minbridges);
+
+	Graph graph = pbs.findGraph(seedcontig, minbridges);
+
+	if (graph != null)
+	    System.out.println("Sub-graph containing contig " + seedcontig.getID() + " :\n" + graph);
     }
 
-    protected void processContigSet(Vector contigset) throws SQLException, DataFormatException {
+    protected PucBridgeSet processContigSet(Vector contigset) throws SQLException, DataFormatException {
 	Set processed = new HashSet();
 
 	while (!contigset.isEmpty()) {
@@ -332,7 +339,7 @@ public class DynamicScaffolding {
 	    }
 	}
 
-	pucbridgeset.dump(System.out, minbridges);
+	return pucbridgeset;
     }
 
     protected void printUsage(PrintStream ps) {
@@ -374,16 +381,16 @@ public class DynamicScaffolding {
 	    Integer intEndCode = new Integer(endcode);
 
 	    HashMap byTemplate = (HashMap)byEndCode.get(intEndCode);
-
+		
 	    if (byTemplate == null) {
 		byTemplate = new HashMap();
 		byEndCode.put(intEndCode, byTemplate);
 	    }
-
+		
 	    Integer template = new Integer(templateid);
-
+	    
 	    PucBridge pucbridge = (PucBridge)byTemplate.get(template);
-
+		
 	    if (pucbridge == null) {
 		pucbridge = new PucBridge();
 		byTemplate.put(template, pucbridge);
@@ -460,6 +467,95 @@ public class DynamicScaffolding {
 		}
 	    }	    
 	}
+
+	public Graph findGraph(Contig seedcontig, int minbridges) {
+	    HashMap subgraphs = new HashMap();
+
+	    Set entries = byContigA.entrySet();
+
+	    for (Iterator iterator = entries.iterator(); iterator.hasNext();) {
+		Map.Entry entry = (Map.Entry)iterator.next();
+
+		Contig contiga = (Contig)entry.getKey();
+		HashMap byContigB = (HashMap)entry.getValue();
+
+		Set entries2 = byContigB.entrySet();
+
+		for (Iterator iterator2 = entries2.iterator(); iterator2.hasNext();) {
+		    Map.Entry entry2 = (Map.Entry)iterator2.next();
+
+		    Contig contigb = (Contig)entry2.getKey();
+		    HashMap byEndCode = (HashMap)entry2.getValue();
+
+		    Set entries3 = byEndCode.entrySet();
+
+		    for (Iterator iterator3 = entries3.iterator(); iterator3.hasNext();) {
+			Map.Entry entry3 = (Map.Entry)iterator3.next();
+
+			Integer intEndCode = (Integer)entry3.getKey();
+			HashMap byTemplate = (HashMap)entry3.getValue();
+
+			int mysize = byTemplate.size();
+
+			GapSize gapsize = new GapSize();
+
+			for (Iterator iterator4 = byTemplate.entrySet().iterator(); iterator4.hasNext();) {
+			    Map.Entry entry4 = (Map.Entry)iterator4.next();
+
+			    PucBridge pucbridge = (PucBridge)entry4.getValue();
+
+			    gapsize.add(pucbridge.getGapSize());
+			}
+
+			Graph seedgraph = null;
+
+			if (mysize >= minbridges && contiga.getID() < contigb.getID()) {
+			    Edge edge = new Edge(contiga, contigb, intEndCode.intValue(), mysize, gapsize);
+
+			    Graph sga = (Graph)subgraphs.get(contiga);
+			    Graph sgb = (Graph)subgraphs.get(contigb);
+
+			    if (sga != null && sgb != null) {
+				if (sga != sgb)
+				    sga = mergeSubGraphs(subgraphs, sga, sgb);
+
+				sga.addEdge(edge);
+			    } else if (sga != null) {
+				sga.addEdge(edge);
+				subgraphs.put(contigb, sga);
+			    } else if (sgb != null) {
+				sgb.addEdge(edge);
+				subgraphs.put(contiga, sgb);
+			    } else {
+				Graph graph = new Graph();
+				graph.addEdge(edge);
+				subgraphs.put(contiga, graph);
+				subgraphs.put(contigb, graph);
+			    }
+			}
+		    }
+		}
+	    }	    
+
+	    return (Graph)subgraphs.get(seedcontig);
+	}
+
+	private Graph mergeSubGraphs(HashMap subgraphs, Graph sga, Graph sgb) {
+	    return (sga.size() < sgb.size()) ? copyGraph(subgraphs, sga, sgb) : copyGraph(subgraphs, sgb, sga);
+	}
+
+	private Graph copyGraph(HashMap subgraphs, Graph src, Graph dst) {
+	    for (Iterator iterator = src.iterator(); iterator.hasNext();) {
+		Edge edge = (Edge)iterator.next();
+		Contig contiga = edge.getContigA();
+		Contig contigb = edge.getContigB();
+		dst.addEdge(edge);
+		subgraphs.put(contiga, dst);
+		subgraphs.put(contigb, dst);
+	    }
+
+	    return dst;
+	}
     }
 
     class PucBridge {
@@ -521,5 +617,63 @@ public class DynamicScaffolding {
 	}
 
 	public String toString() { return "GapSize[" + minsize + ":" + maxsize + "]"; }
+    }
+
+    class Graph {
+	protected Set edges = new HashSet();
+
+	public int size() { return edges.size(); }
+
+	public void addEdge(Edge edge) {
+	    edges.add(edge);
+	}
+
+	public Set getEdgeSet() { return edges; }
+
+	public Iterator iterator() { return edges.iterator(); }
+
+	public String toString() {
+	    StringBuffer sb = new StringBuffer();
+
+	    sb.append("Graph[\n");
+
+	    for (Iterator iterator = edges.iterator(); iterator.hasNext();)
+		sb.append("\t" + (Edge)iterator.next() + "\n");
+
+	    sb.append("]");
+
+	    return sb.toString();
+	}
+    }
+
+    class Edge {
+	protected Contig contiga;
+	protected Contig contigb;
+	protected int endcode;
+	protected int nTemplates;
+	protected GapSize gapsize;
+
+	public Edge(Contig contiga, Contig contigb, int endcode, int nTemplates, GapSize gapsize) {
+	    this.contiga = contiga;
+	    this.contigb = contigb;
+	    this.endcode = endcode;
+	    this.nTemplates = nTemplates;
+	    this.gapsize = gapsize;
+	}
+
+	public Contig getContigA() { return contiga; }
+
+	public Contig getContigB() { return contigb; }
+
+	public int getEndCode() { return endcode; }
+
+	public int getTemplateCount() { return nTemplates; }
+
+	public GapSize getGapSize() { return gapsize; }
+
+	public String toString() {
+	    return "Edge[" + contiga.getID() + ", " + contigb.getID() + ", " + endcode + ", " +
+		nTemplates + ", " + gapsize + "]";
+	}
     }
 }
