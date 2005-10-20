@@ -200,6 +200,23 @@ public class DynamicScaffolding {
 
 	if (graph != null)
 	    System.out.println("Sub-graph containing contig " + seedcontig.getID() + " :\n" + graph);
+
+	Map layout = graph.createLayout();
+
+	System.out.println("\n\n----- LAYOUT -----\n");
+	for (Iterator iterator = layout.entrySet().iterator(); iterator.hasNext();) {
+	    Map.Entry mapentry = (Map.Entry)iterator.next();
+
+	    Contig contig = (Contig)mapentry.getKey();
+
+	    ContigBox cb = (ContigBox)mapentry.getValue();
+
+	    int left = cb.getRange().getStart();
+	    int right = cb.getRange().getEnd();
+
+	    System.out.println("Contig " + contig.getID() + " : row " + cb.getRow() + " from " +
+			       left + " to " + right + " in " + (cb.isForward() ? "forward" : "reverse") + " sense");
+	}
     }
 
     protected PucBridgeSet processContigSet(Vector contigset) throws SQLException, DataFormatException {
@@ -229,9 +246,9 @@ public class DynamicScaffolding {
 	    for (int iEnd = 0; iEnd < 2; iEnd++) {
 		int endcode = 2 * iEnd;
 
-		PreparedStatement pstmt = (iEnd == 0) ? pstmtLeftEndReads : pstmtRightEndReads;
+		PreparedStatement pstmt = (iEnd == 0) ? pstmtRightEndReads : pstmtLeftEndReads;
 
-		int limit = (iEnd == 0) ? puclimit : contig.getLength() - puclimit;
+		int limit = (iEnd == 0) ? contig.getLength() - puclimit : puclimit;
 
 		pstmt.setInt(1, contig.getID());
 		pstmt.setInt(2, limit);
@@ -270,7 +287,7 @@ public class DynamicScaffolding {
 
 		    rs2.close();
 
-		    int overhang = (iEnd == 0) ? sihigh - cfinish : cstart + sihigh - contiglength;
+		    int overhang = (iEnd == 0) ? cstart + sihigh - contiglength : sihigh - cfinish;
 
 		    if (overhang < 1 || sihigh > puclimit)
 			continue;
@@ -620,6 +637,8 @@ public class DynamicScaffolding {
     }
 
     class Graph {
+	protected static final int MAXROWS = 100;
+
 	protected Set edges = new HashSet();
 
 	public int size() { return edges.size(); }
@@ -643,6 +662,154 @@ public class DynamicScaffolding {
 	    sb.append("]");
 
 	    return sb.toString();
+	}
+
+	public Map createLayout() {
+	    Map layout = new HashMap();
+	    RowRanges rowranges = new RowRanges();
+
+	    Vector edgevector = new Vector(edges);
+
+	    Collections.sort(edgevector, new EdgeComparator());
+
+	    System.out.println("Sorted graph:");
+	    for (int j = 0; j < edgevector.size(); j++)
+		System.out.println("\t" + edgevector.elementAt(j));
+
+	    Edge edge = (Edge)edgevector.firstElement();
+	    edgevector.removeElementAt(0);
+
+	    Contig contiga = edge.getContigA();
+	    Contig contigb = edge.getContigB();
+	    int endcode = edge.getEndCode();
+	    int gapsize = edge.getGapSize().getMinimum();
+
+	    Range rangea = new Range(0, contiga.getLength());
+
+	    int rowa = rowranges.addRange(rangea);
+
+	    ContigBox cba = new ContigBox(rowa, rangea, true);
+	    layout.put(contiga, cba);
+
+	    ContigBox cbb = calculateRelativePosition(cba, contiga, contigb, endcode, gapsize, rowranges);
+	    layout.put(contigb, cbb);
+
+	    System.out.println("# Using " + edge);
+	    System.out.println("Laid out contig " + contiga.getID() + " at " + cba);
+	    System.out.println("Laid out contig " + contigb.getID() + " at " + cbb);
+
+	    int ordinal = 1;
+	    
+	    while (edgevector.size() > 0) {
+		edge = null;
+
+		boolean hasa = false;
+		boolean hasb = false;
+
+		for (int i = 0; i < edgevector.size(); i++) {
+		    Edge nextedge = (Edge)edgevector.elementAt(i);
+
+		    contiga = nextedge.getContigA();
+		    contigb = nextedge.getContigB();
+
+		    hasa = layout.containsKey(contiga);
+		    hasb = layout.containsKey(contigb);
+
+		    if (hasa || hasb) {
+			edge = nextedge;
+			edgevector.removeElementAt(i);
+			break;
+		    }
+		}
+
+		if (edge != null) {
+		    System.out.println("# Using " + edge);
+		    if (hasa && hasb) {
+			System.out.println("INCONSISTENCY : Both contig " + contiga.getID() + " and contig " +
+					   contigb.getID() + " have been laid out already.");
+		    } else {
+			endcode = edge.getEndCode();
+			gapsize = edge.getGapSize().getMinimum();
+
+			if (hasa) {
+			    cba = (ContigBox)layout.get(contiga);
+
+			    cbb = calculateRelativePosition(cba, contiga, contigb, endcode, gapsize, rowranges);
+			    layout.put(contigb, cbb);
+
+			    System.out.println("Laid out contig " + contigb.getID() + " at " + cbb);
+			} else {
+			    cbb = (ContigBox)layout.get(contigb);
+
+			    if (endcode == 0 || endcode == 3)
+				endcode = 3 - endcode;
+
+			    cba = calculateRelativePosition(cbb, contigb, contiga, endcode, gapsize, rowranges);
+			    layout.put(contiga, cba);
+
+			    System.out.println("Laid out contig " + contiga.getID() + " at " + cba);
+			}
+		    }
+		} else {
+		    System.out.println("INCONSISTENCY : Neither contig " + contiga.getID() + " nor contig " +
+					   contigb.getID() + " have been laid out yet.");
+		    break;
+		}
+	    }
+
+	    normaliseLayout(layout);
+
+	    return layout;
+	}
+
+	private ContigBox calculateRelativePosition(ContigBox cba, Contig contiga, Contig contigb, int endcode,
+						    int gapsize, RowRanges rowranges) {
+	    int starta = cba.getRange().getStart();
+	    boolean forwarda = cba.isForward();
+	    int lengtha = contiga.getLength();
+	    int enda = starta + lengtha;
+
+	    boolean forwardb = (endcode == 0 || endcode == 3) ? forwarda : !forwarda;
+
+	    int startb;
+	    int endb;
+
+	    if ((endcode > 1) ^ forwarda) {
+		startb = enda + gapsize;
+		endb = startb + contigb.getLength() - 1;
+	    } else {
+		endb = starta - gapsize;
+		startb = endb - contigb.getLength() + 1;
+	    }
+
+	    Range rangeb = new Range(startb, endb);
+
+	    int rowb = rowranges.addRange(rangeb);
+
+	    return new ContigBox(rowb, rangeb, forwardb);
+	}
+
+	private void normaliseLayout(Map layout) {
+	    int xmin = 0;
+
+	    for (Iterator iterator = layout.entrySet().iterator(); iterator.hasNext();) {
+		Map.Entry mapentry = (Map.Entry)iterator.next();
+		ContigBox cb = (ContigBox)mapentry.getValue();
+		int left = cb.getRange().getStart();
+		if (left < xmin)
+		    xmin = left;
+	    }
+
+	    if (xmin == 0)
+		return;
+
+	    xmin = -xmin;
+
+	    for (Iterator iterator = layout.entrySet().iterator(); iterator.hasNext();) {
+		Map.Entry mapentry = (Map.Entry)iterator.next();
+		ContigBox cb = (ContigBox)mapentry.getValue();
+		cb.getRange().shift(xmin);
+	    }
 	}
     }
 
@@ -674,6 +841,89 @@ public class DynamicScaffolding {
 	public String toString() {
 	    return "Edge[" + contiga.getID() + ", " + contigb.getID() + ", " + endcode + ", " +
 		nTemplates + ", " + gapsize + "]";
+	}
+    }
+
+    class EdgeComparator implements Comparator {
+	public int compare(Object o1, Object o2) {
+	    Edge edgea = (Edge)o1;
+	    Edge edgeb = (Edge)o2;
+
+	    return edgeb.getTemplateCount() - edgea.getTemplateCount();
+	}
+    }
+
+    class ContigBox {
+	protected int row;
+	protected Range range;
+	protected boolean forward;
+
+	public ContigBox(int row, Range range, boolean forward) {
+	    this.row = row;
+	    this.range = range;
+	    this.forward = forward;
+	}
+
+	public int getRow() { return row; }
+
+	public Range getRange() { return range; }
+
+	public boolean isForward() { return forward; }
+
+	public String toString() {
+	    return "ContigBox[row=" + row + ", range=" + range.getStart() + ".." + range.getEnd() + ", " +
+		(forward ? "forward" : "reverse") + "]";
+	}
+    }
+
+    class Range {
+	protected int start;
+	protected int end;
+
+	public Range(int start, int end) {
+	    this.start = (start < end) ? start : end;
+	    this.end = (start < end ) ? end : start;
+	}
+
+	public int getStart() { return start; }
+
+	public int getEnd() { return end; }
+
+	public boolean overlaps(Range that) {
+	    return !(start > that.end || end < that.start);
+	}
+
+	public void shift(int offset) {
+	    start += offset;
+	    end += offset;
+	}
+    }
+
+    class RowRanges {
+	Vector rangesets = new Vector();
+
+	public int addRange(Range range) {
+	    for (int row = 0; row < rangesets.size(); row++) {
+		Set ranges = (Set)rangesets.elementAt(row);
+
+		boolean overlaps = false;
+
+		for (Iterator iterator = ranges.iterator(); iterator.hasNext() && !overlaps;) {
+		    Range rangeInRow = (Range)iterator.next();
+		    overlaps = range.overlaps(rangeInRow);
+		}
+
+		if (!overlaps) {
+		    ranges.add(range);
+		    return row;
+		}
+	    }
+
+	    Set ranges = new HashSet();
+	    ranges.add(range);
+
+	    rangesets.add(ranges);
+	    return rangesets.indexOf(ranges);
 	}
     }
 }
