@@ -196,6 +196,8 @@ while (my $contigid = shift @contigset) {
 		    
 		    my $link_end;
 		    my $gap_size;
+
+		    my $link_endcode = $endcode;
 		    
 		    if ($link_direction eq 'Forward') {
 			###
@@ -204,6 +206,7 @@ while (my $contigid = shift @contigset) {
 			
 			$gap_size = $overhang - ($link_ctglen - $link_cstart);
 			$link_end = 'R';
+			$link_endcode += 1;
 		    } else {
 			###
 			### The left end of the link contig
@@ -215,9 +218,6 @@ while (my $contigid = shift @contigset) {
 		    
 		    next unless ($gap_size > 0);
 
-		    my $link_endcode = $endcode;
-		    $link_endcode += ($link_end eq 'L') ? 0 : 1;
-
 		    $links_score->{$link_contig}->{$link_endcode} += 1;
 
 		    ###
@@ -227,10 +227,10 @@ while (my $contigid = shift @contigset) {
 		    $graph->{$contigid}->{$link_contig} = {}
 		    unless defined($graph->{$contigid}->{$link_contig});
 
-		    $graph->{$contigid}->{$link_contig}->{$endcode} = {}
-		    unless defined$graph->{$contigid}->{$link_contig}->{$endcode};
+		    $graph->{$contigid}->{$link_contig}->{$link_endcode} = {}
+		    unless defined$graph->{$contigid}->{$link_contig}->{$link_endcode};
 
-		    my $link =  $graph->{$contigid}->{$link_contig}->{$endcode};
+		    my $link =  $graph->{$contigid}->{$link_contig}->{$link_endcode};
 
 		    $link->{$templateid} = {} unless defined($link->{$templateid});
 
@@ -249,10 +249,10 @@ while (my $contigid = shift @contigset) {
 		    if ($verbose) {
 			printf STDERR "%8d %8d %1d %8d %8d", $contigid, $link_contig, $link_endcode, $contiglength, $link_ctglen;
 			printf STDERR " %2d %2d", $projectid, $link_projectid;
-			printf STDERR " // TEMPLATE %8d %6d %6d", $templateid, $silow, $sihigh;
-			printf STDERR " // READ %8d %8d %8d %7s %7s", $readid, $cstart, $cfinish, $direction, $strand;
-			printf STDERR " // READ %8d %8d %8d %7s", $link_read_id, $link_cstart, $link_cfinish, $link_direction;
-			printf STDERR " // GAP %6d\n",$gap_size;
+			printf STDERR "\n\t// TEMPLATE %8d %6d %6d", $templateid, $silow, $sihigh;
+			printf STDERR "\n\t// READ %8d %8d %8d %7s %7s", $readid, $cstart, $cfinish, $direction, $strand;
+			printf STDERR "\n\t// READ %8d %8d %8d %7s", $link_read_id, $link_cstart, $link_cfinish, $link_direction;
+			printf STDERR "\n\t// GAP %6d\n",$gap_size;
 		    }
 		}
 		
