@@ -83,8 +83,8 @@ if ( -f ${projectname}.0.BUSY ) then
 endif
 
 if ( -f ${projectname}.A.BUSY ) then
-  echo \!\! -- Import of project $projectname aborted: Gap4 version A is BUSY --
-  exit 1
+  echo \!\! -- Import of project $projectname WARNING: Gap4 version A is BUSY #  echo \!\! -- Import of project $projectname aborted: Gap4 version A is BUSY --
+#  exit 1
 endif
 
 #echo Test abort
