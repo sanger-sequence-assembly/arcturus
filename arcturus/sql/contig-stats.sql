@@ -48,7 +48,7 @@ select PROJECT.name,count(*) as contigs,
   round(std(length)) as stdlen,
   max(length) as maxlen
   from currentcontigs left join PROJECT using(project_id)
-  where length >= 1-000
+  where length >= 10000
   group by currentcontigs.project_id order by name asc;
 
 select 'CONTIGS 100kb OR MORE';
@@ -61,4 +61,16 @@ select PROJECT.name,count(*) as contigs,
   max(length) as maxlen
   from currentcontigs left join PROJECT using(project_id)
   where length >= 100000
+  group by currentcontigs.project_id order by name asc;
+
+select 'CONTIGS WITH 3 OR MORE READS';
+
+select PROJECT.name,count(*) as contigs,
+  sum(nreads) as reads,
+  sum(length) as length,
+  round(avg(length)) as avglen,
+  round(std(length)) as stdlen,
+  max(length) as maxlen
+  from currentcontigs left join PROJECT using(project_id)
+  where nreads > 2
   group by currentcontigs.project_id order by name asc;
