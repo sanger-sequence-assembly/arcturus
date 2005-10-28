@@ -1594,7 +1594,7 @@ sub putRead {
 # LIGATION
 
     my ($sil,$sih);
-    if (my $insertsize = @{$read->getInsertSize()}) {
+    if (my $insertsize = $read->getInsertSize()) {
        ($sil,$sih) = @{$read->getInsertSize()};
     }
 
