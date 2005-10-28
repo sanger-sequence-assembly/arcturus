@@ -1593,7 +1593,10 @@ sub putRead {
 
 # LIGATION
 
-    my ($sil,$sih) = @{$read->getInsertSize()}; 
+    my ($sil,$sih);
+    if (my $insertsize = @{$read->getInsertSize()}) {
+       ($sil,$sih) = @{$read->getInsertSize()};
+    }
 
 #    my $ligation_id = $this->getReadAttributeID('ligation',$read->getLigation(),
 #					   [$sil, $sih, $clone_id]);
