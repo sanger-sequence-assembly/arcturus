@@ -9,8 +9,7 @@ import java.io.PrintStream;
 public class BridgeSet {
     private HashMap byContigA = new HashMap();
 
-    public void addBridge(Contig contiga, Contig contigb, int endcode, Template template,
-			  ReadMapping mappinga, ReadMapping mappingb, GapSize gapsize) {
+    private Bridge getBridge(Contig contiga, Contig contigb, int endcode) {
 	// Enforce the condition that the first contig must have the smaller ID.
 	if (contigb.getID() < contiga.getID()) {
 	    Contig temp = contiga;
@@ -44,27 +43,29 @@ public class BridgeSet {
 	    byEndCode.put(intEndCode, bridge);
 	}
 
+	return bridge;
+    }
+
+    public void addBridge(Contig contiga, Contig contigb, int endcode, Template template,
+			  ReadMapping mappinga, ReadMapping mappingb, GapSize gapsize) {
+	Bridge bridge = getBridge(contiga, contigb, endcode);
+
+	// Enforce the condition that the first contig must have the smaller ID.
+	if (contigb.getID() < contiga.getID()) {
+	    ReadMapping temp = mappinga;
+	    mappinga = mappingb;
+	    mappingb = temp;
+	}
+
 	bridge.addLink(template, mappinga, mappingb, gapsize);
     }
 
     public HashMap getHashMap() { return byContigA; }
 
     public int getTemplateCount(Contig contiga, Contig contigb, int endcode) {
-	HashMap byContigB = (HashMap)byContigA.get(contiga);
-
-	if (byContigB == null)
-	    return 0;
+	Bridge bridge = getBridge(contiga, contigb, endcode);
 	
-	HashMap byEndCode = (HashMap)byContigB.get(contigb);
-	
-	if (byEndCode == null)
-	    return 0;
-	
-	Integer intEndCode = new Integer(endcode);
-	
-	HashMap byTemplate = (HashMap)byEndCode.get(intEndCode);
-	
-	return (byTemplate == null) ? 0 : byTemplate.size();
+	return (bridge == null) ? 0 : bridge.getLinkCount();
     }
     
     public void dump(PrintStream ps, int minsize) {

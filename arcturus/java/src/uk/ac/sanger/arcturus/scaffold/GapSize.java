@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.scaffold;
 
-class GapSize {
+public class GapSize {
     private int minsize = -1;
     private int maxsize = -1;
 
@@ -9,6 +9,10 @@ class GapSize {
     public GapSize(int minsize, int maxsize) {
 	this.minsize = minsize;
 	this.maxsize = maxsize;
+    }
+
+    public GapSize(int size) {
+	this(size, size);
     }
 
     public int getMinimum() { return minsize; }
