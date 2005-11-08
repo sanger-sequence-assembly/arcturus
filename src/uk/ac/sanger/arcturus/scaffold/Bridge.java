@@ -6,7 +6,7 @@ import uk.ac.sanger.arcturus.data.Template;
 import java.util.Map;
 import java.util.HashMap;
 
-class Bridge {
+public class Bridge {
     public final static int LEFT = 0;
     public final static int RIGHT = 1;
 
@@ -49,6 +49,7 @@ class Bridge {
 	}
 
 	link.merge(mappinga, mappingb, gapsize);
+	this.gapsize.add(gapsize);
     }
 
     public GapSize getGapSize() { return gapsize; }
