@@ -8,6 +8,7 @@ import java.io.PrintStream;
 
 public class BridgeSet {
     private HashMap byContigA = new HashMap();
+    private Set allBridges = new HashSet();
 
     private Bridge getBridge(Contig contiga, Contig contigb, int endcode) {
 	// Enforce the condition that the first contig must have the smaller ID.
@@ -41,6 +42,7 @@ public class BridgeSet {
 	if (bridge == null) {
 	    bridge = new Bridge(contiga, contigb, endcode);
 	    byEndCode.put(intEndCode, bridge);
+	    allBridges.add(bridge);
 	}
 
 	return bridge;
@@ -68,43 +70,61 @@ public class BridgeSet {
 	return (bridge == null) ? 0 : bridge.getLinkCount();
     }
     
-    public void dump(PrintStream ps, int minsize) {
+    public void dump(PrintStream ps, int minlinks) {
 	ps.println("BridgeSet.dump");
-	
-	Set entries = byContigA.entrySet();
-	
-	for (Iterator iterator = entries.iterator(); iterator.hasNext();) {
-	    Map.Entry entry = (Map.Entry)iterator.next();
-	    
-	    Contig contiga = (Contig)entry.getKey();
-	    HashMap byContigB = (HashMap)entry.getValue();
-	    
-	    Set entries2 = byContigB.entrySet();
-	    
-	    for (Iterator iterator2 = entries2.iterator(); iterator2.hasNext();) {
-		Map.Entry entry2 = (Map.Entry)iterator2.next();
-		
-		Contig contigb = (Contig)entry2.getKey();
-		HashMap byEndCode = (HashMap)entry2.getValue();
-		
-		Set entries3 = byEndCode.entrySet();
-		
-		for (Iterator iterator3 = entries3.iterator(); iterator3.hasNext();) {
-		    Map.Entry entry3 = (Map.Entry)iterator3.next();
-		    
-		    Integer intEndCode = (Integer)entry3.getKey();
-		    Bridge bridge = (Bridge)entry3.getValue();
-		    
-		    int mysize = bridge.getLinkCount();
-		    GapSize gapsize = bridge.getGapSize();
-		    
-		    if (mysize >= minsize && contiga.getID() < contigb.getID())
-			ps.println( contiga.getID() + " " + contiga.getLength() + " " +
-				    contigb.getID() + " " + contigb.getLength() + " " +
-				    intEndCode + " " + mysize + " " +
-				    gapsize.getMinimum() + ":" + gapsize.getMaximum());
+	for (Iterator iterator = allBridges.iterator(); iterator.hasNext();) {
+	    Bridge bridge = (Bridge)iterator.next();
+	    if (bridge.getLinkCount() >= minlinks)
+		ps.println(bridge);
+	}
+    }
+
+    public Set getSubgraph(Contig seedcontig, int minlinks) {
+	Set contigsToProcess = new HashSet();
+	Set subgraph = new HashSet();
+	Set newContigs = new HashSet();
+
+	Set all = new HashSet(allBridges);
+
+	contigsToProcess.add(seedcontig);
+
+	while (!contigsToProcess.isEmpty()) {
+	    newContigs.clear();
+
+	    for (Iterator iterator = all.iterator(); iterator.hasNext();) {
+		Bridge bridge = (Bridge)iterator.next();
+
+		if (bridge.getLinkCount() < minlinks) {
+		    iterator.remove();
+		    continue;
+		}
+
+		Contig contiga = bridge.getContigA();
+		Contig contigb = bridge.getContigB();
+
+		boolean toProcessA = contigsToProcess.contains(contiga);
+		boolean toProcessB = contigsToProcess.contains(contigb);
+
+		if (toProcessA || toProcessB) {
+		    iterator.remove();
+
+		    if (bridge.getLinkCount() >= minlinks) {
+			subgraph.add(bridge);
+
+			if (!toProcessA)
+			    newContigs.add(contiga);
+
+			if (!toProcessB)
+			    newContigs.add(contigb);
+		    }
 		}
 	    }
-	}	    
+
+	    contigsToProcess.clear();
+
+	    contigsToProcess.addAll(newContigs);
+	}
+
+	return subgraph;
     }
 }
