@@ -235,11 +235,51 @@ public class DynamicScaffolding2 {
 
 	contentpane.setLayout(new BorderLayout());
 
-	ScaffoldPanel panel = new ScaffoldPanel(layout, bridges);
+	final ScaffoldPanel panel = new ScaffoldPanel(layout, bridges);
 
 	JScrollPane scrollpane = new JScrollPane(panel);
 
 	contentpane.add(scrollpane, BorderLayout.CENTER);
+
+	JToolBar toolbar = new JToolBar();
+
+	JButton zoomInButton = new JButton(new ImageIcon("zoomin.png"));
+
+	zoomInButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.ZOOM_IN);
+		}
+	    });
+
+	JButton zoomOutButton = new JButton(new ImageIcon("zoomout.png"));
+
+	zoomOutButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.ZOOM_OUT);
+		}
+	    });
+
+	JButton selectButton = new JButton(new ImageIcon("pick.png"));
+
+	selectButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    panel.setAction(ScaffoldPanel.SELECT);
+		}
+	    });
+
+	ButtonGroup group = new ButtonGroup();
+
+	group.add(zoomInButton);
+	group.add(zoomOutButton);
+	group.add(selectButton);
+
+	toolbar.add(zoomInButton);
+	toolbar.add(zoomOutButton);
+	toolbar.add(selectButton);
+
+	toolbar.setFloatable(false);
+
+	contentpane.add(toolbar, BorderLayout.NORTH);
 
 	frame.setSize(650, 500);
 	frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -687,7 +727,7 @@ public class DynamicScaffolding2 {
 	
 	protected int interScaffoldGap = 1000;
 	protected int contigBarHeight = 20;
-	protected int contigBarGap = 15;
+	protected int contigBarGap = 20;
 
 	protected int xmin;
 	protected int xmax;
@@ -759,9 +799,6 @@ public class DynamicScaffolding2 {
 	}
 
 	private void actOnMouseClick(MouseEvent e) {
-	    System.out.println("Mouse clicked at " + e.getX() + "," + e.getY() + " in " +
-			       getModeAsString() + " mode");
-	    
 	    JViewport viewport = (JViewport)getParent();
 	    Point viewposition = viewport.getViewPosition();
 	    
@@ -800,33 +837,18 @@ public class DynamicScaffolding2 {
 	}
 	
 	protected void rescale(Point p, int newBpPerPixel) {
-	    System.err.println("rescale(" + p2s(p) + ", " + newBpPerPixel);
-	    System.err.println("\tOld bpPerPixel = " + bpPerPixel);
-	    
 	    Point wp = viewToWorld(p);
-	    
-	    System.err.println("\tWorld position = " + p2s(wp));
 	    
 	    JViewport viewport = (JViewport)getParent();
 	    Point vp = viewport.getViewPosition();
 	    
-	    System.err.println("\tViewport position = " + p2s(vp));
-	    
 	    Point offset = new Point(p.x - vp.x, p.y - vp.y);
-	    
-	    System.err.println("\tOffset = " + p2s(offset));
 	    
 	    bpPerPixel = newBpPerPixel;
 	    
-	    System.err.println("\tSet bpPerPixel to " + bpPerPixel);
-	    
 	    p = worldToView(wp);
-	    
-	    System.err.println("\tNew view position = " + p2s(p));
 
 	    vp = new Point(p.x - offset.x, p.y - offset.y);
-
-	    System.err.println("\tNew viewport position = " + p2s(vp));
 
 	    recalculateLayout();
 
@@ -834,11 +856,9 @@ public class DynamicScaffolding2 {
 	    revalidate();
 
 	    Dimension size = getSize();
-	    System.err.println("\tSize = " + size.width + "x" + size.height);
 
 	    viewport.setViewPosition(vp);
 	    vp = viewport.getViewPosition();
-	    System.err.println("\tActual vp = " + p2s(vp));
 	}
 
 	private Point viewToWorld(Point p) {
@@ -891,6 +911,13 @@ public class DynamicScaffolding2 {
 	
 	public void paintComponent(Graphics gr) {
 	    Graphics2D g = (Graphics2D)gr;
+
+	    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+			       RenderingHints.VALUE_ANTIALIAS_ON);
+
+	    Font font = new Font("SansSerif", Font.PLAIN, 10);
+
+	    g.setFont(font);
 	    
 	    Dimension size = getSize();
 	    
@@ -924,7 +951,7 @@ public class DynamicScaffolding2 {
 		g.drawLine(x, y, x, y + dy);
 	    }
 	    
-	    y += 15;
+	    y += 2 * contigBarGap;
 	    
 	    for (int i = 0; i < contigBoxes.length; i++) {
 		ContigBox box = contigBoxes[i];
@@ -940,6 +967,12 @@ public class DynamicScaffolding2 {
 		int w = box.getLength()/bpPerPixel;
 		
 		g.fillRect(x, y + dy, w, contigBarHeight);
+
+		g.setColor(Color.black);
+
+		String cid = "" + box.getContig().getID();
+
+		g.drawString(cid, x, y + dy - 2);
 	    }
 	    
 	    g.setColor(Color.black);
