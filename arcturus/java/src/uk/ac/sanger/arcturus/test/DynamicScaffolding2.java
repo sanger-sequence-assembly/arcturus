@@ -340,7 +340,7 @@ public class DynamicScaffolding2 {
 				if (link_forward)
 				    myendcode++;
 
-				if (gapsize > 0) {
+				if (contig != link_contig && gapsize > 0) {
 				    bridgeset.addBridge(contig, link_contig, myendcode, template, mappinga, link_mapping, 
 							new GapSize(gapsize));
 
