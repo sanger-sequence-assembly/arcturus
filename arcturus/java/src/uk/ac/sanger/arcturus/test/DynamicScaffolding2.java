@@ -11,6 +11,11 @@ import java.util.zip.DataFormatException;
 
 import javax.naming.Context;
 
+import java.awt.*;
+import java.awt.event.*;
+import java.awt.geom.*;
+import javax.swing.*;
+
 public class DynamicScaffolding2 {
     private long lasttime;
     private Runtime runtime = Runtime.getRuntime();
@@ -219,6 +224,26 @@ public class DynamicScaffolding2 {
 	    System.out.println("Contig " + contig.getID() + " : row " + cb.getRow() + " from " +
 			       left + " to " + right + " in " + (cb.isForward() ? "forward" : "reverse") + " sense");
 	}
+
+	displayScaffold(layout, subgraph);
+    }
+
+    private void displayScaffold(Map layout, Set bridges) {
+	JFrame frame = new JFrame("Scaffold");
+
+	Container contentpane = frame.getContentPane();
+
+	contentpane.setLayout(new BorderLayout());
+
+	ScaffoldPanel panel = new ScaffoldPanel(layout, bridges);
+
+	JScrollPane scrollpane = new JScrollPane(panel);
+
+	contentpane.add(scrollpane, BorderLayout.CENTER);
+
+	frame.setSize(650, 500);
+	frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+	frame.setVisible(true);
     }
 
     protected BridgeSet processContigSet(Vector contigset) throws SQLException, DataFormatException {
@@ -564,6 +589,12 @@ public class DynamicScaffolding2 {
 
 	public Range getRange() { return range; }
 
+	public int getLeft() { return range.getStart(); }
+
+	public int getRight() { return range.getEnd(); }
+
+	public int getLength() { return range.getLength(); }
+
 	public boolean isForward() { return forward; }
 
 	public String toString() {
@@ -577,12 +608,12 @@ public class DynamicScaffolding2 {
 	    ContigBox box1 = (ContigBox)o1;
 	    ContigBox box2 = (ContigBox)o2;
 	    
-	    int diff = box1.getRange().getStart() - box2.getRange().getStart();
+	    int diff = box1.getLeft() - box2.getLeft();
 
 	    if (diff != 0)
 		return diff;
 
-	    diff = box1.getRange().getEnd() - box2.getRange().getEnd();
+	    diff = box1.getRight() - box2.getRight();
 
 	    if (diff != 0)
 		return diff;
@@ -603,6 +634,8 @@ public class DynamicScaffolding2 {
 	public int getStart() { return start; }
 
 	public int getEnd() { return end; }
+
+	public int getLength() { return 1 + end - start; }
 
 	public boolean overlaps(Range that) {
 	    return !(start > that.end || end < that.start);
@@ -641,4 +674,333 @@ public class DynamicScaffolding2 {
 	    return rangesets.indexOf(ranges);
 	}
     }
+
+    class ScaffoldPanel extends JComponent {
+	public static final int ZOOM_IN = 1;
+	public static final int ZOOM_OUT = 2;
+	public static final int SELECT = 3;
+
+	protected int mode;
+	protected int bpPerPixel = 128;
+
+	protected Insets margins = new Insets(20, 20, 20, 20);
+	
+	protected int interScaffoldGap = 1000;
+	protected int contigBarHeight = 20;
+	protected int contigBarGap = 15;
+
+	protected int xmin;
+	protected int xmax;
+
+	protected Map layout;
+	protected Set bridgeset;
+	protected ContigBox[] contigBoxes;
+
+	protected Cursor csrZoomIn = null;
+	protected Cursor csrZoomOut = null;
+	protected Cursor csrSelect = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
+
+	public ScaffoldPanel(Map layout, Set bridgeset) {
+	    super();
+	    setBackground(new Color(0xff, 0xff, 0xee));
+	    
+	    Toolkit tk = Toolkit.getDefaultToolkit();
+	    Image cursorImage = tk.getImage("zoomin.png");
+	    
+	    csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom in");
+	    
+	    cursorImage = tk.getImage("zoomout.png");
+	    csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom out");
+	    
+	    setAction(SELECT);
+
+	    addMouseListener(new MouseAdapter() {
+		    public void mouseClicked(MouseEvent e) {
+			actOnMouseClick(e);
+		    }
+		});
+
+	    this.layout = layout;
+	    this.bridgeset = bridgeset;
+
+	 
+	    contigBoxes = (ContigBox[])layout.values().toArray(new ContigBox[0]);
+
+	    Arrays.sort(contigBoxes, new ContigBoxComparator());
+
+	    recalculateLayout();
+	}
+
+	public void setAction(int newmode) {
+	    switch (newmode) {
+	    case ZOOM_IN:
+		mode = newmode;
+		setCursor(csrZoomIn);
+		break;
+		
+	    case ZOOM_OUT:
+		mode = newmode;
+		setCursor(csrZoomOut);
+		break;
+		
+	    case SELECT:
+		mode = newmode;
+		setCursor(csrSelect);
+	    }
+	}
+	
+	private String getModeAsString() {
+	    switch (mode) {
+	    case ZOOM_IN:  return "ZOOM_IN";
+	    case ZOOM_OUT: return "ZOOM_OUT";
+	    case SELECT:   return "SELECT";
+	    default:       return "UNKNOWN";
+	    }
+	}
+
+	private void actOnMouseClick(MouseEvent e) {
+	    System.out.println("Mouse clicked at " + e.getX() + "," + e.getY() + " in " +
+			       getModeAsString() + " mode");
+	    
+	    JViewport viewport = (JViewport)getParent();
+	    Point viewposition = viewport.getViewPosition();
+	    
+	    Point click = e.getPoint();
+	    
+	    switch (mode) {
+	    case ZOOM_IN:
+		zoomIn(click);
+		break;
+		
+	    case ZOOM_OUT:
+		zoomOut(click);
+		break;
+	    }
+	}
+
+	public void zoomIn(Point p) {
+	    if (bpPerPixel < 4) {
+		System.err.println("Scale is 1 bp/pixel: Cannot zoom in any further");
+		return;
+	    }
+	    
+	    int newBpPerPixel = bpPerPixel >> 2;
+	    
+	    rescale(p, newBpPerPixel);
+	}
+	
+	public void zoomOut(Point p) {
+	    int newBpPerPixel = bpPerPixel << 2;
+	    
+	    rescale(p, newBpPerPixel);
+	}
+	
+	private String p2s(Point p) {
+	    return "[" + p.x + "," + p.y + "]";
+	}
+	
+	protected void rescale(Point p, int newBpPerPixel) {
+	    System.err.println("rescale(" + p2s(p) + ", " + newBpPerPixel);
+	    System.err.println("\tOld bpPerPixel = " + bpPerPixel);
+	    
+	    Point wp = viewToWorld(p);
+	    
+	    System.err.println("\tWorld position = " + p2s(wp));
+	    
+	    JViewport viewport = (JViewport)getParent();
+	    Point vp = viewport.getViewPosition();
+	    
+	    System.err.println("\tViewport position = " + p2s(vp));
+	    
+	    Point offset = new Point(p.x - vp.x, p.y - vp.y);
+	    
+	    System.err.println("\tOffset = " + p2s(offset));
+	    
+	    bpPerPixel = newBpPerPixel;
+	    
+	    System.err.println("\tSet bpPerPixel to " + bpPerPixel);
+	    
+	    p = worldToView(wp);
+	    
+	    System.err.println("\tNew view position = " + p2s(p));
+
+	    vp = new Point(p.x - offset.x, p.y - offset.y);
+
+	    System.err.println("\tNew viewport position = " + p2s(vp));
+
+	    recalculateLayout();
+
+	    setSize(getPreferredSize());
+	    revalidate();
+
+	    Dimension size = getSize();
+	    System.err.println("\tSize = " + size.width + "x" + size.height);
+
+	    viewport.setViewPosition(vp);
+	    vp = viewport.getViewPosition();
+	    System.err.println("\tActual vp = " + p2s(vp));
+	}
+
+	private Point viewToWorld(Point p) {
+	    int x = (p.x - margins.left) * bpPerPixel;
+	    int y = (p.y - margins.top);
+	    
+	    return new Point(x, y);
+	}
+	
+	private Point worldToView(Point p) {
+	    int x = margins.left + p.x/bpPerPixel;
+	    int y = margins.top + p.y;
+	    
+	    return new Point(x, y);
+	}
+
+	protected void recalculateLayout() {
+	    int width = margins.left + margins.right;
+	    int height = margins.top + margins.bottom;
+	    
+	    if (contigBoxes != null) {
+		xmin = contigBoxes[0].getLeft();
+		xmax = contigBoxes[0].getRight();
+
+		int maxrow = 0;
+
+		for (int j = 0; j < contigBoxes.length; j++) {
+		    int row = contigBoxes[j].getRow();
+		    if (row > maxrow)
+			maxrow = row;
+
+		    int left = contigBoxes[j].getLeft();
+		    int right = contigBoxes[j].getRight();
+
+		    if (left < xmin)
+			xmin = left;
+
+		    if (right > xmax)
+			xmax = right;
+		}
+
+		width += (xmax - xmin + 1)/bpPerPixel;
+
+		height += (1 + maxrow) * contigBarHeight + maxrow * contigBarGap;
+	    }
+
+	    
+	    setPreferredSize(new Dimension(width, height));
+	}
+	
+	public void paintComponent(Graphics gr) {
+	    Graphics2D g = (Graphics2D)gr;
+	    
+	    Dimension size = getSize();
+	    
+	    g.setColor(getBackground());
+	    
+	    g.fillRect(0, 0, size.width, size.height);
+	    
+	    if (contigBoxes == null)
+		return;
+	    
+	    g.setColor(Color.black);
+	    
+	    int y = margins.top + 5;
+	    
+	    int widthbp = xmax;
+	    int widthkb = widthbp/1000;
+	    
+	    g.drawLine(margins.left, y, margins.left + widthbp/bpPerPixel, y);
+	    
+	    for (int i = 0; i < widthkb; i++) {
+		int x = margins.left + (1000 * i)/bpPerPixel;
+		
+		int dy = 3;
+		
+		if ((i % 10) == 0)
+		    dy = 5;
+		
+		if ((i % 100) == 0)
+		    dy = 7;
+		
+		g.drawLine(x, y, x, y + dy);
+	    }
+	    
+	    y += 15;
+	    
+	    for (int i = 0; i < contigBoxes.length; i++) {
+		ContigBox box = contigBoxes[i];
+		
+		g.setColor(box.isForward() ? Color.blue : Color.red);
+		
+		int x = margins.left + box.getLeft()/bpPerPixel;
+
+		int row = box.getRow();
+
+		int dy = row * (contigBarHeight + contigBarGap);
+		
+		int w = box.getLength()/bpPerPixel;
+		
+		g.fillRect(x, y + dy, w, contigBarHeight);
+	    }
+	    
+	    g.setColor(Color.black);
+
+	    for (Iterator iterator = bridgeset.iterator(); iterator.hasNext();) {
+		Bridge bridge = (Bridge)iterator.next();
+
+		Contig contiga = bridge.getContigA();
+		Contig contigb = bridge.getContigB();
+
+		int endcode = bridge.getEndCode();
+
+		ContigBox boxa = (ContigBox)layout.get(contiga);
+
+		int xa = boxa.getLeft();
+		int dxa = -10;
+
+		if ((boxa.isForward() && endcode < 2) || (!boxa.isForward() && endcode > 1)) {
+		    xa += boxa.getLength();
+		    dxa = 10;
+		}
+
+		xa = margins.left + xa/bpPerPixel;
+
+		int rowa = boxa.getRow();
+
+		int dya = rowa * (contigBarHeight + contigBarGap) + contigBarHeight/2;
+
+		ContigBox boxb = (ContigBox)layout.get(contigb);
+
+		int xb = boxb.getLeft();
+		int dxb = -10;
+
+		if ((boxb.isForward() && (endcode % 2) == 0) || (!boxb.isForward() && (endcode % 2) != 0)) {
+		    xb += boxb.getLength();
+		    dxb = 10;
+		}
+
+		xb = margins.left + xb/bpPerPixel;
+
+		int rowb = boxb.getRow();
+
+		int dyb =  rowb * (contigBarHeight + contigBarGap) + contigBarHeight/2;
+
+		int links = bridge.getLinkCount();
+
+		if (links > 5)
+		    links = 5;
+
+		Shape path = new CubicCurve2D.Double((double)xa, (double)(y + dya),
+						     (double)(xa + dxa), (double)(y + dya),
+						     (double)(xb + dxb), (double)(y + dyb),
+						     (double)xb, (double)(y + dyb));
+
+		Stroke stroke = new BasicStroke((float)links);
+
+		g.setStroke(stroke);
+
+		g.draw(path);
+	    }
+	}
+    }
+   
 }
