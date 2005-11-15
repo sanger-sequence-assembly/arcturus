@@ -990,7 +990,9 @@ public class DynamicScaffolding2 {
 		int xa = boxa.getLeft();
 		int dxa = -10;
 
-		if ((boxa.isForward() && endcode < 2) || (!boxa.isForward() && endcode > 1)) {
+		boolean rightenda = (endcode < 2);
+
+		if (rightenda ^ !boxa.isForward()) {
 		    xa += boxa.getLength();
 		    dxa = 10;
 		}
@@ -1006,7 +1008,9 @@ public class DynamicScaffolding2 {
 		int xb = boxb.getLeft();
 		int dxb = -10;
 
-		if ((boxb.isForward() && (endcode % 2) == 0) || (!boxb.isForward() && (endcode % 2) != 0)) {
+		boolean rightendb = (endcode % 2) != 0;
+
+		if (rightendb ^ !boxb.isForward()) {
 		    xb += boxb.getLength();
 		    dxb = 10;
 		}
