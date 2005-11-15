@@ -16,9 +16,16 @@ import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 class ContigTableModel extends AbstractTableModel implements SortableTableModel {
+    public final int COLUMN_ID = 0;
+    public final int COLUMN_NAME = 1;
+    public final int COLUMN_PROJECT = 2;
+    public final int COLUMN_LENGTH = 3;
+    public final int COLUMN_READS = 4;
+    public final int COLUMN_CREATED = 5;
+
     protected Vector contigs = new Vector();
     protected ContigComparator comparator;
-    protected int lastSortColumn = 3;
+    protected int lastSortColumn = COLUMN_LENGTH;
     protected boolean garish;
     protected ArcturusDatabase adb = null;
 
@@ -32,24 +39,27 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	this.adb = adb;
 	comparator = new ContigComparator(ContigComparator.BY_LENGTH, false);
 	contigs.addAll(contigset);
-	sortOnColumn(2);
+	sortOnColumn(COLUMN_LENGTH);
     }
 
     public String getColumnName(int col) {
         switch (col) {
-	case 0:
+	case COLUMN_ID:
 	    return "ID";
 
-	case 1:
+	case COLUMN_NAME:
+	    return "Name";
+
+	case COLUMN_PROJECT:
 	    return "Project";
 
-	case 2:
+	case COLUMN_LENGTH:
 	    return "Length";
 
-	case 3:
+	case COLUMN_READS:
 	    return "Reads";
 
-	case 4:
+	case COLUMN_CREATED:
 	    return "Created";
 
 	default:
@@ -59,15 +69,16 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 
     public Class getColumnClass(int col) {
         switch (col) {
-	case 0:
-	case 1:
+	case COLUMN_ID:
+	case COLUMN_NAME:
+	case COLUMN_PROJECT:
 	    return String.class;
 
-	case 2:
-	case 3:
+	case COLUMN_LENGTH:
+	case COLUMN_READS:
 	    return Integer.class;
 
-	case 4:
+	case COLUMN_CREATED:
 	    return java.util.Date.class;
 
 	default:
@@ -79,7 +90,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	return contigs.size();
     }
 
-    public int getColumnCount() { return 5; }
+    public int getColumnCount() { return 6; }
 
     protected Contig getContigAtRow(int row) {
 	return (Contig)contigs.elementAt(row);
@@ -89,19 +100,22 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
         Contig contig = getContigAtRow(row);
 
 	switch (col) {
-	case 0:
+	case COLUMN_ID:
+	    return new Integer(contig.getID());
+
+	case COLUMN_NAME:
 	    return contig.getName();
 
-	case 1:
+	case COLUMN_PROJECT:
 	    return contig.getProject().getName();
 
-	case 2:
+	case COLUMN_LENGTH:
 	    return new Integer(contig.getLength());
 
-	case 3:
+	case COLUMN_READS:
 	    return new Integer(contig.getReadCount());
 
-	case 4:
+	case COLUMN_CREATED:
 	    return contig.getCreated();
 
 	default:
@@ -129,7 +143,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
     }
 
     public boolean isColumnSortable(int col) {
-	return (col > 1);
+	return (col != COLUMN_PROJECT);
     }
 
     public void sortOnColumn(int col, boolean ascending) {
@@ -139,15 +153,23 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 
     public void sortOnColumn(int col) {
 	switch (col) {
-	case 2:
+	case COLUMN_ID:
+	    comparator.setType(ContigComparator.BY_ID);
+	    break;
+
+	case COLUMN_NAME:
+	    comparator.setType(ContigComparator.BY_NAME);
+	    break;
+
+	case COLUMN_LENGTH:
 	    comparator.setType(ContigComparator.BY_LENGTH);
 	    break;
 
-	case 3:
+	case COLUMN_READS:
 	    comparator.setType(ContigComparator.BY_READS);
 	    break;
 
-	case 4:
+	case COLUMN_CREATED:
 	    comparator.setType(ContigComparator.BY_CREATION_DATE);
 	    break;
 	}

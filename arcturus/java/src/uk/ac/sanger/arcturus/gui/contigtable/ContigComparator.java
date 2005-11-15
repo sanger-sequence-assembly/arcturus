@@ -10,6 +10,8 @@ public class ContigComparator implements Comparator {
     public static final int BY_LENGTH = 1;
     public static final int BY_READS = 2;
     public static final int BY_CREATION_DATE = 3;
+    public static final int BY_ID = 4;
+    public static final int BY_NAME = 5;
 
     protected boolean ascending;
     protected int type;
@@ -87,6 +89,12 @@ public class ContigComparator implements Comparator {
 	case BY_CREATION_DATE:
 	    return compareByCreationDate(c1, c2);
 
+	case BY_ID:
+	    return compareByID(c1, c2);
+
+	case BY_NAME:
+	    return compareByName(c1, c2);
+
 	default:
 	    return compareByLength(c1, c2);
 	}
@@ -129,5 +137,35 @@ public class ContigComparator implements Comparator {
 	    diff = -diff;
 
 	return diff;
+    }
+
+    protected int compareByID(Contig c1, Contig c2) {
+	int diff = c1.getID() - c2.getID();
+
+	if (ascending)
+	    diff = -diff;
+
+	if (diff < 0)
+	    return -1;
+
+	if (diff > 0)
+	    return 1;
+
+	return 0;
+    }
+
+    protected int compareByName(Contig c1, Contig c2) {
+	int diff = c1.getName().compareTo(c2.getName());
+
+	if (ascending)
+	    diff = -diff;
+
+	if (diff < 0)
+	    return -1;
+
+	if (diff > 0)
+	    return 1;
+
+	return 0;
     }
 }
