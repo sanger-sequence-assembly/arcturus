@@ -52,8 +52,8 @@ public class DynamicScaffolding2 {
     public void execute(String args[]) {
 	lasttime = System.currentTimeMillis();
 
-	System.err.println("DynamicScaffolding");
-	System.err.println("==================");
+	System.err.println("DynamicScaffolding2");
+	System.err.println("===================");
 	System.err.println();
 
 	String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
@@ -842,6 +842,11 @@ public class DynamicScaffolding2 {
 		
 	    case ZOOM_OUT:
 		zoomOut(click);
+		break;
+
+	    case SELECT:
+		Point p = viewToWorld(click);
+		System.err.println("Clicked at " + p.getX() + " bp");
 		break;
 	    }
 	}
