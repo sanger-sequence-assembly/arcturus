@@ -125,6 +125,15 @@ public class ProjectComparator implements Comparator {
     }
 
     protected int compareByNewestContigCreated(ProjectProxy p1, ProjectProxy p2) {
+	if (p1 == null && p2 == null)
+	    return 0;
+
+	if (p1 == null || p1.getNewestContigCreated() == null)
+	    return 1;
+
+	if (p2 == null || p2.getNewestContigCreated() == null)
+	    return -1;
+
 	int diff = p1.getNewestContigCreated().compareTo(p2.getNewestContigCreated());
 
 	if (!ascending)
