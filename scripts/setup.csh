@@ -99,6 +99,10 @@ set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.def
 # Specify the additional run-time options for Java
 set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI_OPTS} ${ARCTURUS_DEFAULTS} ${JAVA_HEAP_SIZE}"
 
+# Specify local host name parameter
+set HOSTNAME=`hostname -s`
+set EXTRA_OPTS="${EXTRA_OPTS} -Dhost.name=${HOSTNAME}"
+
 if ( $?LOG4J_CONFIGURATION ) then
     echo Configuring log4j from ${LOG4J_CONFIGURATION}
     set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${LOG4J_CONFIGURATION}"
