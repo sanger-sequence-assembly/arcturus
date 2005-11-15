@@ -20,6 +20,9 @@
   <!-- Documents directory -->
   <property name="javadoc.dir" value="${build.dir}/docs"/>
 
+  <!-- Resources directory -->
+  <property name="resources.dir" value="resources" />
+
   <!-- Target to create the build directories prior to the -->
   <!-- compile target. -->
   <target name="prepare">
@@ -41,8 +44,10 @@
 
   <target name="jar" depends="compile"
           description="Generates the JAR file.">
-    <jar jarfile="${build.lib}/${project.name}.jar" 
-         basedir="${build.classes}"/>
+    <jar jarfile="${build.lib}/${project.name}.jar">
+        <fileset dir="${build.classes}" />
+	<fileset dir="${resources.dir}" />
+    </jar>
   </target>
 
   <target name="all" depends="clean,jar"
