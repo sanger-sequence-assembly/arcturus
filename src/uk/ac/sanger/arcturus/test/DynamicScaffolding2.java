@@ -243,7 +243,11 @@ public class DynamicScaffolding2 {
 
 	JToolBar toolbar = new JToolBar();
 
-	JButton zoomInButton = new JButton(new ImageIcon("zoomin.png"));
+	java.net.URL url = ArcturusDatabase.class.getResource("/icons/zoomin.png");
+
+	ImageIcon icon = new ImageIcon(url);
+
+	JButton zoomInButton = new JButton(icon);
 
 	zoomInButton.addActionListener(new ActionListener() {
 		public void actionPerformed(ActionEvent e) {
@@ -251,7 +255,11 @@ public class DynamicScaffolding2 {
 		}
 	    });
 
-	JButton zoomOutButton = new JButton(new ImageIcon("zoomout.png"));
+	url = ArcturusDatabase.class.getResource("/icons/zoomout.png");
+
+	icon = new ImageIcon(url);
+
+	JButton zoomOutButton = new JButton(icon);
 
 	zoomOutButton.addActionListener(new ActionListener() {
 		public void actionPerformed(ActionEvent e) {
@@ -259,7 +267,11 @@ public class DynamicScaffolding2 {
 		}
 	    });
 
-	JButton selectButton = new JButton(new ImageIcon("pick.png"));
+	url = ArcturusDatabase.class.getResource("/icons/pick.png");
+
+	icon = new ImageIcon(url);
+
+	JButton selectButton = new JButton(icon);
 
 	selectButton.addActionListener(new ActionListener() {
 		public void actionPerformed(ActionEvent e) {
@@ -475,7 +487,7 @@ public class DynamicScaffolding2 {
 	
 	Range rangea = new Range(0, contiga.getLength());
 	
-	int rowa = rowranges.addRange(rangea);
+	int rowa = rowranges.addRange(rangea, 0);
 	
 	ContigBox cba = new ContigBox(contiga, rowa, rangea, true);
 	layout.put(contiga, cba);
@@ -557,6 +569,7 @@ public class DynamicScaffolding2 {
 	boolean forwarda = cba.isForward();
 	int lengtha = contiga.getLength();
 	int enda = starta + lengtha;
+	int rowa = cba.getRow();
 	
 	boolean forwardb = (endcode == 0 || endcode == 3) ? forwarda : !forwarda;
 	
@@ -573,7 +586,7 @@ public class DynamicScaffolding2 {
 	
 	Range rangeb = new Range(startb, endb);
 	
-	int rowb = rowranges.addRange(rangeb);
+	int rowb = rowranges.addRange(rangeb, rowa);
 	
 	return new ContigBox(contigb, rowb, rangeb, forwardb);
     }
@@ -690,18 +703,20 @@ public class DynamicScaffolding2 {
     class RowRanges {
 	Vector rangesets = new Vector();
 
-	public int addRange(Range range) {
-	    for (int row = 0; row < rangesets.size(); row++) {
+	public int addRange(Range range, int tryrow) {
+	    for (int row = tryrow; row < rangesets.size(); row++) {
 		Set ranges = (Set)rangesets.elementAt(row);
-
-		boolean overlaps = false;
-
-		for (Iterator iterator = ranges.iterator(); iterator.hasNext() && !overlaps;) {
-		    Range rangeInRow = (Range)iterator.next();
-		    overlaps = range.overlaps(rangeInRow);
+	
+		if (!overlaps(range, ranges)) {
+		    ranges.add(range);
+		    return row;
 		}
+	    }
 
-		if (!overlaps) {
+	    for (int row = tryrow - 1; row >= 0; row--) {
+		Set ranges = (Set)rangesets.elementAt(row);
+	
+		if (!overlaps(range, ranges)) {
 		    ranges.add(range);
 		    return row;
 		}
@@ -712,6 +727,16 @@ public class DynamicScaffolding2 {
 
 	    rangesets.add(ranges);
 	    return rangesets.indexOf(ranges);
+	}
+
+	private boolean overlaps(Range range, Set ranges) {
+	    for (Iterator iterator = ranges.iterator(); iterator.hasNext();) {
+		Range rangeInRow = (Range)iterator.next();
+		if (range.overlaps(rangeInRow))
+		    return true;
+	    }
+
+	    return false;
 	}
     }
 
@@ -745,11 +770,17 @@ public class DynamicScaffolding2 {
 	    setBackground(new Color(0xff, 0xff, 0xee));
 	    
 	    Toolkit tk = Toolkit.getDefaultToolkit();
-	    Image cursorImage = tk.getImage("zoomin.png");
+
+	    java.net.URL url = ArcturusDatabase.class.getResource("/icons/zoomin.png");
+
+	    Image cursorImage = tk.getImage(url);
 	    
 	    csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom in");
-	    
-	    cursorImage = tk.getImage("zoomout.png");
+
+	    url = ArcturusDatabase.class.getResource("/icons/zoomout.png");
+
+	    cursorImage = tk.getImage(url);
+
 	    csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7,7), "zoom out");
 	    
 	    setAction(SELECT);
