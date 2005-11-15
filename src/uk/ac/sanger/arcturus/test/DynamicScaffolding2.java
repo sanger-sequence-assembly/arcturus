@@ -1001,8 +1001,11 @@ public class DynamicScaffolding2 {
 		int dy = row * (contigBarHeight + contigBarGap);
 		
 		int w = box.getLength()/bpPerPixel;
+
+		Shape rect = new Rectangle2D.Double((double)x, (double)(y + dy),
+						    (double)w, (double)contigBarHeight);
 		
-		g.fillRect(x, y + dy, w, contigBarHeight);
+		g.fill(rect);
 
 		g.setColor(Color.black);
 
