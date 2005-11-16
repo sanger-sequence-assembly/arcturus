@@ -225,17 +225,17 @@ public class DynamicScaffolding2 {
 			       left + " to " + right + " in " + (cb.isForward() ? "forward" : "reverse") + " sense");
 	}
 
-	displayScaffold(layout, subgraph);
+	displayScaffold(layout, subgraph, seedcontig);
     }
 
-    private void displayScaffold(Map layout, Set bridges) {
-	JFrame frame = new JFrame("Scaffold");
+    private void displayScaffold(Map layout, Set bridges, Contig seedcontig) {
+	JFrame frame = new JFrame("Scaffold from contig " + seedcontig.getID());
 
 	Container contentpane = frame.getContentPane();
 
 	contentpane.setLayout(new BorderLayout());
 
-	final ScaffoldPanel panel = new ScaffoldPanel(layout, bridges);
+	final ScaffoldPanel panel = new ScaffoldPanel(layout, bridges, seedcontig);
 
 	JScrollPane scrollpane = new JScrollPane(panel);
 
@@ -761,11 +761,13 @@ public class DynamicScaffolding2 {
 	protected Set bridgeset;
 	protected ContigBox[] contigBoxes;
 
+	protected Contig seedcontig;
+
 	protected Cursor csrZoomIn = null;
 	protected Cursor csrZoomOut = null;
 	protected Cursor csrSelect = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
 
-	public ScaffoldPanel(Map layout, Set bridgeset) {
+	public ScaffoldPanel(Map layout, Set bridgeset, Contig seedcontig) {
 	    super();
 	    setBackground(new Color(0xff, 0xff, 0xee));
 	    
@@ -793,7 +795,7 @@ public class DynamicScaffolding2 {
 
 	    this.layout = layout;
 	    this.bridgeset = bridgeset;
-
+	    this.seedcontig = seedcontig;
 	 
 	    contigBoxes = (ContigBox[])layout.values().toArray(new ContigBox[0]);
 
@@ -988,11 +990,24 @@ public class DynamicScaffolding2 {
 	    }
 	    
 	    y += 2 * contigBarGap;
+
+	    Stroke thinline = new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
+
+	    int seedcontigproject = seedcontig.getProject().getID();
 	    
 	    for (int i = 0; i < contigBoxes.length; i++) {
 		ContigBox box = contigBoxes[i];
+
+		Contig contig = box.getContig();
+
+		boolean sameProject = seedcontigproject == contig.getProject().getID();
+
+		Color boxcolor = box.isForward() ? Color.blue : Color.red;
+
+		if (!sameProject)
+		    boxcolor = boxcolor.darker().darker();
 		
-		g.setColor(box.isForward() ? Color.blue : Color.red);
+		g.setColor(boxcolor);
 		
 		int x = margins.left + box.getLeft()/bpPerPixel;
 
@@ -1008,6 +1023,11 @@ public class DynamicScaffolding2 {
 		g.fill(rect);
 
 		g.setColor(Color.black);
+
+		if (contig == seedcontig) {
+		    g.setStroke(thinline);
+		    g.draw(rect);
+		}
 
 		String cid = "" + box.getContig().getID();
 
