@@ -761,6 +761,9 @@ public class DynamicScaffolding2 {
 	protected Set bridgeset;
 	protected ContigBox[] contigBoxes;
 
+	protected Map mapBoxes = new HashMap();
+	protected Map mapBridges = new HashMap();
+
 	protected Contig seedcontig;
 
 	protected Cursor csrZoomIn = null;
@@ -849,6 +852,24 @@ public class DynamicScaffolding2 {
 	    case SELECT:
 		Point p = viewToWorld(click);
 		System.err.println("Clicked at " + p.getX() + " bp");
+		for (Iterator iterator = mapBoxes.keySet().iterator(); iterator.hasNext();) {
+		    Rectangle2D.Double rect = (Rectangle2D.Double)iterator.next();
+		    if (rect.contains(click)) {
+			ContigBox cbox = (ContigBox)mapBoxes.get(rect);
+			Contig contig = cbox.getContig();
+			System.err.println(" --> Contig " + contig.getID() + " in project " + contig.getProject().getID());
+			return;
+		    }
+		}
+
+		for (Iterator iterator = mapBridges.keySet().iterator(); iterator.hasNext();) {
+		    Shape shape = (Shape)iterator.next();
+		    if (shape.contains(click)) {
+			Bridge bridge = (Bridge)mapBridges.get(shape);
+			System.err.println(" --> " + bridge);
+			return;
+		    }
+		}
 		break;
 	    }
 	}
@@ -916,6 +937,8 @@ public class DynamicScaffolding2 {
 	protected void recalculateLayout() {
 	    int width = margins.left + margins.right;
 	    int height = margins.top + margins.bottom;
+	    	    
+	    int y0 = margins.top + 5 + 2 * contigBarGap;
 	    
 	    if (contigBoxes != null) {
 		xmin = contigBoxes[0].getLeft();
@@ -923,28 +946,107 @@ public class DynamicScaffolding2 {
 
 		int maxrow = 0;
 
+		mapBoxes.clear();
+
 		for (int j = 0; j < contigBoxes.length; j++) {
-		    int row = contigBoxes[j].getRow();
+		    ContigBox box = contigBoxes[j];
+
+		    int row = box.getRow();
 		    if (row > maxrow)
 			maxrow = row;
 
-		    int left = contigBoxes[j].getLeft();
-		    int right = contigBoxes[j].getRight();
+		    int left = box.getLeft();
+		    int right = box.getRight();
 
 		    if (left < xmin)
 			xmin = left;
 
 		    if (right > xmax)
 			xmax = right;
+		
+		    int x = margins.left + box.getLeft()/bpPerPixel;
+
+		    int dy = row * (contigBarHeight + contigBarGap);
+		
+		    int w = box.getLength()/bpPerPixel;
+
+		    Rectangle2D.Double rect = new Rectangle2D.Double((double)x, (double)(y0 + dy),
+								     (double)w, (double)contigBarHeight);
+
+		    mapBoxes.put(rect, box);
 		}
 
 		width += (xmax - xmin + 1)/bpPerPixel;
 
 		height += (1 + maxrow) * contigBarHeight + maxrow * contigBarGap;
 	    }
-
 	    
 	    setPreferredSize(new Dimension(width, height));
+
+	    if (bridgeset != null) {
+		mapBridges.clear();
+
+		for (Iterator iterator = bridgeset.iterator(); iterator.hasNext();) {
+		    Bridge bridge = (Bridge)iterator.next();
+
+		    Contig contiga = bridge.getContigA();
+		    Contig contigb = bridge.getContigB();
+
+		    int endcode = bridge.getEndCode();
+
+		    ContigBox boxa = (ContigBox)layout.get(contiga);
+
+		    int xa = boxa.getLeft();
+		    int dxa = -10;
+
+		    boolean rightenda = (endcode < 2);
+
+		    if (rightenda ^ !boxa.isForward()) {
+			xa += boxa.getLength();
+			dxa = 10;
+		    }
+
+		    xa = margins.left + xa/bpPerPixel;
+
+		    int rowa = boxa.getRow();
+
+		    int dya = rowa * (contigBarHeight + contigBarGap) + contigBarHeight/2;
+
+		    ContigBox boxb = (ContigBox)layout.get(contigb);
+
+		    int xb = boxb.getLeft();
+		    int dxb = -10;
+
+		    boolean rightendb = (endcode % 2) != 0;
+
+		    if (rightendb ^ !boxb.isForward()) {
+			xb += boxb.getLength();
+			dxb = 10;
+		    }
+
+		    xb = margins.left + xb/bpPerPixel;
+
+		    int rowb = boxb.getRow();
+
+		    int dyb =  rowb * (contigBarHeight + contigBarGap) + contigBarHeight/2;
+
+		    int links = bridge.getLinkCount();
+		    
+		    if (links > 5)
+			links = 5;
+
+		    Shape path = new CubicCurve2D.Double((double)xa, (double)(y0 + dya),
+							 (double)(xa + dxa), (double)(y0 + dya),
+							 (double)(xb + dxb), (double)(y0 + dyb),
+							 (double)xb, (double)(y0 + dyb));
+
+		    Stroke stroke = new BasicStroke((float)links);
+
+		    Shape outline = stroke.createStrokedShape(path);
+
+		    mapBridges.put(outline, bridge);
+		}
+	    }
 	}
 	
 	public void paintComponent(Graphics gr) {
@@ -968,12 +1070,12 @@ public class DynamicScaffolding2 {
 	    
 	    g.setColor(Color.black);
 	    
-	    int y = margins.top + 5;
+	    int y0 = margins.top + 5;
 	    
 	    int widthbp = xmax;
 	    int widthkb = widthbp/1000;
 	    
-	    g.drawLine(margins.left, y, margins.left + widthbp/bpPerPixel, y);
+	    g.drawLine(margins.left, y0, margins.left + widthbp/bpPerPixel, y0);
 	    
 	    for (int i = 0; i < widthkb; i++) {
 		int x = margins.left + (1000 * i)/bpPerPixel;
@@ -986,17 +1088,20 @@ public class DynamicScaffolding2 {
 		if ((i % 100) == 0)
 		    dy = 7;
 		
-		g.drawLine(x, y, x, y + dy);
+		g.drawLine(x, y0, x, y0 + dy);
 	    }
 	    
-	    y += 2 * contigBarGap;
+	    y0 += 2 * contigBarGap;
 
 	    Stroke thinline = new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND);
 
 	    int seedcontigproject = seedcontig.getProject().getID();
-	    
-	    for (int i = 0; i < contigBoxes.length; i++) {
-		ContigBox box = contigBoxes[i];
+
+	    for (Iterator iterator = mapBoxes.entrySet().iterator(); iterator.hasNext();) {
+		Map.Entry entry = (Map.Entry)iterator.next();
+
+		ContigBox box = (ContigBox)entry.getValue();
+		Rectangle2D.Double rect = (Rectangle2D.Double)entry.getKey();
 
 		Contig contig = box.getContig();
 
@@ -1008,18 +1113,7 @@ public class DynamicScaffolding2 {
 		    boxcolor = boxcolor.darker().darker();
 		
 		g.setColor(boxcolor);
-		
-		int x = margins.left + box.getLeft()/bpPerPixel;
-
-		int row = box.getRow();
-
-		int dy = row * (contigBarHeight + contigBarGap);
-		
-		int w = box.getLength()/bpPerPixel;
-
-		Shape rect = new Rectangle2D.Double((double)x, (double)(y + dy),
-						    (double)w, (double)contigBarHeight);
-		
+				
 		g.fill(rect);
 
 		g.setColor(Color.black);
@@ -1031,70 +1125,21 @@ public class DynamicScaffolding2 {
 
 		String cid = "" + box.getContig().getID();
 
-		g.drawString(cid, x, y + dy - 2);
+		int x = (int)rect.getX();
+		int y = (int)rect.getY();
+
+		g.drawString(cid, x, y - 2);
 	    }
 	    
 	    g.setColor(Color.black);
 
-	    for (Iterator iterator = bridgeset.iterator(); iterator.hasNext();) {
-		Bridge bridge = (Bridge)iterator.next();
+	    for (Iterator iterator = mapBridges.entrySet().iterator(); iterator.hasNext();) {
+		Map.Entry entry = (Map.Entry)iterator.next();
 
-		Contig contiga = bridge.getContigA();
-		Contig contigb = bridge.getContigB();
+		Shape outline = (Shape)entry.getKey();
+		Bridge bridge = (Bridge)entry.getValue();
 
-		int endcode = bridge.getEndCode();
-
-		ContigBox boxa = (ContigBox)layout.get(contiga);
-
-		int xa = boxa.getLeft();
-		int dxa = -10;
-
-		boolean rightenda = (endcode < 2);
-
-		if (rightenda ^ !boxa.isForward()) {
-		    xa += boxa.getLength();
-		    dxa = 10;
-		}
-
-		xa = margins.left + xa/bpPerPixel;
-
-		int rowa = boxa.getRow();
-
-		int dya = rowa * (contigBarHeight + contigBarGap) + contigBarHeight/2;
-
-		ContigBox boxb = (ContigBox)layout.get(contigb);
-
-		int xb = boxb.getLeft();
-		int dxb = -10;
-
-		boolean rightendb = (endcode % 2) != 0;
-
-		if (rightendb ^ !boxb.isForward()) {
-		    xb += boxb.getLength();
-		    dxb = 10;
-		}
-
-		xb = margins.left + xb/bpPerPixel;
-
-		int rowb = boxb.getRow();
-
-		int dyb =  rowb * (contigBarHeight + contigBarGap) + contigBarHeight/2;
-
-		int links = bridge.getLinkCount();
-
-		if (links > 5)
-		    links = 5;
-
-		Shape path = new CubicCurve2D.Double((double)xa, (double)(y + dya),
-						     (double)(xa + dxa), (double)(y + dya),
-						     (double)(xb + dxb), (double)(y + dyb),
-						     (double)xb, (double)(y + dyb));
-
-		Stroke stroke = new BasicStroke((float)links);
-
-		g.setStroke(stroke);
-
-		g.draw(path);
+		g.fill(outline);
 	    }
 	}
     }
