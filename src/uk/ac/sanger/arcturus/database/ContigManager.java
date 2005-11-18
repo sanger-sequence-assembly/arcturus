@@ -30,6 +30,7 @@ public class ContigManager extends AbstractManager {
     protected PreparedStatement pstmtCloningVector = null;
     protected PreparedStatement pstmtAlignToSCF = null;
     protected PreparedStatement pstmtConsensus = null;
+    protected PreparedStatement pstmtTags = null;
 
     protected PreparedStatement pstmtCountContigsByProject = null;
     protected PreparedStatement pstmtContigsByProject = null;
@@ -138,6 +139,14 @@ public class ContigManager extends AbstractManager {
 	query = "select length,sequence,quality from CONSENSUS where contig_id = ?";
 
 	pstmtConsensus = conn.prepareStatement(query);
+
+	query = "select tagtype,cstart,cfinal,strand,tagseqname" +
+	    " from TAG2CONTIG,CONTIGTAG,TAGSEQUENCE" +
+	    " where contig_id = ?" +
+	    " and TAG2CONTIG.tag_id = CONTIGTAG.tag_id" +
+	    " and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id";
+
+	pstmtTags = conn.prepareStatement(query);
 
 	query = "select count(*) from CONTIG left join C2CMAPPING" + 
 	    " on CONTIG.contig_id = C2CMAPPING.parent_id" +
@@ -298,6 +307,9 @@ public class ContigManager extends AbstractManager {
 
 	if ((options & ArcturusDatabase.CONTIG_CONSENSUS) != 0 && contig.getDNA() == null)
 	    loadConsensusForContig(contig);
+
+	if ((options & ArcturusDatabase.CONTIG_TAGS) != 0)
+	    loadTagsForContig(contig);
     }
 
     private int getMappingCount(int contig_id) throws SQLException {
@@ -817,6 +829,31 @@ public class ContigManager extends AbstractManager {
 	}
 	
 	contig.setConsensus(dna, qual);
+    }
+
+    private void loadTagsForContig(Contig contig) throws SQLException {
+	int contig_id = contig.getID();
+
+	Vector tags = contig.getTags();
+	tags.clear();
+	
+	pstmtTags.setInt(1, contig_id);
+	ResultSet rs = pstmtTags.executeQuery();
+
+	if (rs.next()) {
+	    String type = rs.getString(1);
+	    int cstart = rs.getInt(2);
+	    int cfinal = rs.getInt(3);
+	    String strandstring = rs.getString(4);
+	    char strand = strandstring == null ? '?' : strandstring.charAt(0);
+	    String name = rs.getString(5);
+
+	    ContigTag tag = new ContigTag(type, cstart, cfinal, strand, name);
+
+	    tags.add(tag);
+	}
+
+	rs.close();
     }
 
     public int countContigsByProject(int project_id, int minlen) throws SQLException {
