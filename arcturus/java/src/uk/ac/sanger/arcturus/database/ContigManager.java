@@ -840,7 +840,7 @@ public class ContigManager extends AbstractManager {
 	pstmtTags.setInt(1, contig_id);
 	ResultSet rs = pstmtTags.executeQuery();
 
-	if (rs.next()) {
+	while (rs.next()) {
 	    String type = rs.getString(1);
 	    int cstart = rs.getInt(2);
 	    int cfinal = rs.getInt(3);
