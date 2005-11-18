@@ -23,7 +23,7 @@ public class DynamicScaffolding2 {
     private String instance = null;
     private String organism = null;
 
-    private int flags = ArcturusDatabase.CONTIG_BASIC_DATA;
+    private int flags = ArcturusDatabase.CONTIG_BASIC_DATA | ArcturusDatabase.CONTIG_TAGS;
 
     private boolean debug = false;
     private boolean lowmem = false;
@@ -189,7 +189,7 @@ public class DynamicScaffolding2 {
     protected void createScaffold() throws SQLException, DataFormatException {
 	Vector contigset = new Vector();
 
-	Contig seedcontig = adb.getContigByID(seedcontigid, ArcturusDatabase.CONTIG_BASIC_DATA);
+	Contig seedcontig = adb.getContigByID(seedcontigid, flags);
 
 	if (seedcontig == null || !isCurrentContig(seedcontigid))
 	    return;
@@ -400,7 +400,7 @@ public class DynamicScaffolding2 {
 								       link_direction.equalsIgnoreCase("Forward"));
 
 			    if (isCurrentContig(link_contigid)) {
-				Contig link_contig = adb.getContigByID(link_contigid, ArcturusDatabase.CONTIG_BASIC_DATA);
+				Contig link_contig = adb.getContigByID(link_contigid, flags);
 
 				int link_contiglength = link_contig.getLength();
 
@@ -1116,19 +1116,45 @@ public class DynamicScaffolding2 {
 				
 		g.fill(rect);
 
+		double x = rect.getX();
+		double y = rect.getY();
+		double h = rect.getHeight();
+		double w = rect.getWidth();
+
+		Vector tags = contig.getTags();
+
+		g.setColor(Color.green);
+
+		for (int j = 0; j < tags.size(); j++) {
+		    ContigTag tag = (ContigTag)tags.elementAt(j);
+
+		    if (tag.getType().equalsIgnoreCase("REPT")) {
+			int cstart = tag.getContigStart();
+			int cfinish = tag.getContigFinish();
+
+			int taglen = 1 + cfinish - cstart;
+
+			double dx = (double)cstart/(double)bpPerPixel;
+
+			double xtag = box.isForward() ? x + dx : x + w - dx;
+			double wtag = (double)taglen/(double)bpPerPixel;
+
+			Rectangle2D.Double rept = new Rectangle2D.Double(xtag, y, wtag, h);
+
+			g.fill(rept);
+		    }
+		}
+	
 		g.setColor(Color.black);
 
 		if (contig == seedcontig) {
 		    g.setStroke(thinline);
 		    g.draw(rect);
 		}
-
+ 
 		String cid = "" + box.getContig().getID();
 
-		int x = (int)rect.getX();
-		int y = (int)rect.getY();
-
-		g.drawString(cid, x, y - 2);
+		g.drawString(cid, (int)x, (int)y - 2);
 	    }
 	    
 	    g.setColor(Color.black);
