@@ -22,4 +22,9 @@ public class ContigTag extends Core {
     public char getStrand() { return strand; }
 
     public String getType() { return type; }
+
+    public String toString() {
+	return "ContigTag[type=" + type + ", name=" + name + ", cstart=" + cstart +
+	    ", cfinal=" + cfinal + ", strand=" + strand + "]";
+    }
 }
