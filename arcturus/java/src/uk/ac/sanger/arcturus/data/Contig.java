@@ -17,6 +17,7 @@ public class Contig extends Core {
     protected byte[] dna = null;
     protected byte[] quality = null;
     protected Project project = null;
+    protected Vector tags = new Vector();
 
     /**
      * Constructs a Contig which does not yet have an ID or a name.
@@ -136,4 +137,10 @@ public class Contig extends Core {
 	this.dna = dna;
 	this.quality = quality;
     }
+
+    public void addTag(ContigTag tag) {
+	tags.add(tag);
+    }
+
+    public Vector getTags() { return tags; }
 }
