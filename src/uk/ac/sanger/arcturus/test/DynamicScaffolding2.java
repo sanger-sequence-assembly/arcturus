@@ -790,6 +790,8 @@ public class DynamicScaffolding2 {
 	    
 	    setAction(SELECT);
 
+	    ToolTipManager.sharedInstance().registerComponent(this);
+
 	    addMouseListener(new MouseAdapter() {
 		    public void mouseClicked(MouseEvent e) {
 			actOnMouseClick(e);
@@ -851,27 +853,61 @@ public class DynamicScaffolding2 {
 
 	    case SELECT:
 		Point p = viewToWorld(click);
-		System.err.println("Clicked at " + p.getX() + " bp");
-		for (Iterator iterator = mapBoxes.keySet().iterator(); iterator.hasNext();) {
-		    Rectangle2D.Double rect = (Rectangle2D.Double)iterator.next();
-		    if (rect.contains(click)) {
-			ContigBox cbox = (ContigBox)mapBoxes.get(rect);
-			Contig contig = cbox.getContig();
-			System.err.println(" --> Contig " + contig.getID() + " in project " + contig.getProject().getID());
-			return;
-		    }
-		}
+		Object o = getObjectAt(click);
 
-		for (Iterator iterator = mapBridges.keySet().iterator(); iterator.hasNext();) {
-		    Shape shape = (Shape)iterator.next();
-		    if (shape.contains(click)) {
-			Bridge bridge = (Bridge)mapBridges.get(shape);
+		System.err.println("Clicked at " + p.getX() + " bp");
+
+		if (o != null) {
+		    if (o instanceof Contig) {
+			Contig contig = (Contig )o;
+			System.err.println(" --> Contig " + contig.getID() + " in project " + contig.getProject().getID());
+		    } else if (o instanceof Bridge) {
+			Bridge bridge = (Bridge)o;
 			System.err.println(" --> " + bridge);
-			return;
 		    }
 		}
 		break;
 	    }
+	}
+
+	private Object getObjectAt(Point click) {
+	    for (Iterator iterator = mapBoxes.keySet().iterator(); iterator.hasNext();) {
+		Rectangle2D.Double rect = (Rectangle2D.Double)iterator.next();
+		if (rect.contains(click)) {
+		    ContigBox cbox = (ContigBox)mapBoxes.get(rect);
+		    Contig contig = cbox.getContig();
+		    return contig;
+		}
+	    }
+
+	    for (Iterator iterator = mapBridges.keySet().iterator(); iterator.hasNext();) {
+		Shape shape = (Shape)iterator.next();
+		if (shape.contains(click)) {
+		    Bridge bridge = (Bridge)mapBridges.get(shape);
+		    return bridge;
+		}
+	    }
+
+	    return null;
+	}
+
+	public String getToolTipText(MouseEvent event) {
+	    Object o = getObjectAt(event.getPoint());
+
+	    if (o != null) {
+		if (o instanceof Contig) {
+		    Contig contig = (Contig)o;
+		    Project project = contig.getProject();
+
+		    return "Contig " + contig.getID() + "(" + contig.getName() + ")"
+			+ ((project == null) ? " (project not known)" : " in project " + project.getName());
+		}
+
+		if (o instanceof Bridge)
+		    return ((Bridge)o).toString();
+	    }
+
+	    return getToolTipText();
 	}
 
 	public void zoomIn(Point p) {
