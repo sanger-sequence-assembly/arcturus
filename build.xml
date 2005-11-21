@@ -23,6 +23,9 @@
   <!-- Resources directory -->
   <property name="resources.dir" value="resources" />
 
+  <!-- Target version of Java -->
+  <property name="build.target" value="1.4" />
+
   <!-- Target to create the build directories prior to the -->
   <!-- compile target. -->
   <target name="prepare">
@@ -39,7 +42,10 @@
 
   <target name="compile" depends="prepare"
           description="Compiles all source code.">
-    <javac srcdir="${src.dir}" destdir="${build.classes}" debug="true"/>
+    <javac srcdir="${src.dir}" destdir="${build.classes}" 
+           source="${build.target}"
+           target="${build.target}"
+	   debug="true"/>
   </target>
 
   <target name="jar" depends="compile"
@@ -68,6 +74,8 @@
   <target name="test" depends="jar"
           description="Compile the suite of test classes">
     <javac srcdir="${testsrc.dir}" destdir="${build.test}"
+           source="${build.target}"
+           target="${build.target}"
            debug="true"
 	   classpath="${build.lib}/${project.name}.jar" />
   </target>
