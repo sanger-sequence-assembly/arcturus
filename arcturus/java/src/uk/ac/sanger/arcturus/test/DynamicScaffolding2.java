@@ -291,7 +291,24 @@ public class DynamicScaffolding2 {
 
 	toolbar.addSeparator(new Dimension(100, 50));
 
-	toolbar.add(new HamsterDance(100));
+	final HamsterDance hampton = new HamsterDance(100);
+	toolbar.add(hampton);
+
+	final JButton hamsterButton = new JButton("Stop Hampton");
+
+	hamsterButton.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    if (hampton.isRunning()) {
+			hampton.stop();
+			hamsterButton.setText("Start Hampton");
+		    } else {
+			hampton.start();
+			hamsterButton.setText("Stop Hampton");
+		    }
+		}
+	    });
+
+	toolbar.add(hamsterButton);
 
 	toolbar.setFloatable(false);
 
@@ -907,8 +924,13 @@ public class DynamicScaffolding2 {
 			+ ((project == null) ? " (project not known)" : " in project " + project.getName());
 		}
 
-		if (o instanceof Bridge)
-		    return ((Bridge)o).toString();
+		if (o instanceof Bridge) {
+		    Bridge bridge = (Bridge)o;
+		    GapSize gapsize = bridge.getGapSize();
+		    return "Bridge between contig " + bridge.getContigA().getID() + " and " + bridge.getContigB().getID() +
+			" from " + bridge.getLinkCount() + " templates, gap size " + gapsize.getMinimum() + " to " +
+			gapsize.getMaximum() + " bp";
+		}
 	    }
 
 	    return getToolTipText();
