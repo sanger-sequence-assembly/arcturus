@@ -15,13 +15,15 @@ use PathogenRepository;
 my $instance;
 my $organism;
 my $assembly;
-my $cafFileName ='';
+my $outputFileName ='';
 my $selectmethod;
 my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
 my $blocksize = 10000;
 my $mask;
+
+my $number;
 
 my $fasta;
 my $addtag;
@@ -39,7 +41,7 @@ my $debug;
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|mask|tags|"
+               . "namenotlike|nnl|mask|tags|all|fasta|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "info|verbose|debug|help";
 
@@ -71,7 +73,9 @@ while (my $nextword = shift @ARGV) {
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
-    $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
+    $outputFileName   = shift @ARGV  if ($nextword eq '-caf');
+    $outputFileName   = shift @ARGV  if ($nextword eq '-fasta');
+    $fasta            = 1            if ($nextword eq '-fasta');
 
     $blocksize        = shift @ARGV  if ($nextword eq '-blocksize');
     $blocksize        = shift @ARGV  if ($nextword eq '-bs');
@@ -90,8 +94,6 @@ while (my $nextword = shift @ARGV) {
     $nosingleton      = 1            if ($nextword eq '-nosingleton');
     $nosingleton      = 1            if ($nextword eq '-ns');
 
-    $fasta            = 1            if ($nextword eq '-fasta');
-
     $addtag           = 1            if ($nextword eq '-tags');
 
     $logLevel         = 1            if ($nextword eq '-verbose'); 
@@ -99,6 +101,8 @@ while (my $nextword = shift @ARGV) {
     $logLevel         = 1            if ($nextword eq '-debug');
 
     $debug            = 1            if ($nextword eq '-debug'); 
+
+    $number           = shift @ARGV  if ($nextword eq '-all');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -129,11 +133,19 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 # MAIN
 #----------------------------------------------------------------
 
-$logger->info("Opening CAF file $cafFileName for output") if $cafFileName;
+$logger->info("Opening CAF file $outputFileName for output") if $outputFileName;
 
-my $CAF;
-$CAF = new FileHandle($cafFileName,"w") if $cafFileName;
-$CAF = *STDOUT unless $CAF;
+my ($CAF,$FAS,$QLT);
+if ($fasta) {
+    $FAS = new FileHandle("$outputFileName.fas","w") if $outputFileName;
+    $FAS = *STDOUT unless $FAS;
+    $QLT = new FileHandle("$outputFileName.fas","w") if $outputFileName;
+    $QLT = *STDOUT unless $QLT;
+}
+else {
+    $CAF = new FileHandle("$outputFileName.caf","w") if $outputFileName;
+    $CAF = *STDOUT unless $CAF;
+}
 
 my %options;
 $options{nosingleton} = 1 if $nosingleton;
@@ -158,7 +170,17 @@ if ($namenotlike) {
 
 $logger->info("Getting read IDs for unassembled reads");
 
-my $readids = $adb->getIDsForUnassembledReads(%options);
+my $readids;
+
+if ($number) {
+# overrides all other qualifiers, export all reads up to read_id number
+    my @readids = (1 .. $number);
+    $readids = \@readids;
+}
+else {
+# standard mode
+    $readids = $adb->getIDsForUnassembledReads(%options);
+}
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
@@ -185,7 +207,7 @@ while (my $remainder = scalar(@$readids)) {
         $adb->getTagsForReads($reads);
     }
 
-    $logger->info("Writing to CAF file $cafFileName");
+    $logger->info("Writing to output file $outputFileName");
 
     foreach my $read (@$reads) {
         if (defined($clipmethod) || $threshold || $minimumrange) {
@@ -200,7 +222,7 @@ while (my $remainder = scalar(@$readids)) {
         }
 
         $read->writeToCaf($CAF,qualitymask=>$mask) unless $fasta;
-        $read->writeFasta($CAF,qualitymask=>$mask) if $fasta;
+        $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $fasta;
     }
     undef @$reads;
 }
