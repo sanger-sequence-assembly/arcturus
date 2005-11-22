@@ -289,6 +289,10 @@ public class DynamicScaffolding2 {
 	toolbar.add(zoomOutButton);
 	toolbar.add(selectButton);
 
+	toolbar.addSeparator(new Dimension(100, 50));
+
+	toolbar.add(new HamsterDance(100));
+
 	toolbar.setFloatable(false);
 
 	contentpane.add(toolbar, BorderLayout.NORTH);
