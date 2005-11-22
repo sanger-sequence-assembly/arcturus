@@ -55,12 +55,16 @@ public class HamsterDance extends JComponent {
 	g.drawImage(frames[counter], 0, 0, Color.black, null);
     }
 
-    public void stopTheHamster() {
+    public void stop() {
 	timer.stop();
     }
 
-    public void startTheHamster() {
+    public void start() {
 	timer.restart();
+    }
+
+    public boolean isRunning() {
+	return timer.isRunning();
     }
 
     public static void main(String args[]) {
