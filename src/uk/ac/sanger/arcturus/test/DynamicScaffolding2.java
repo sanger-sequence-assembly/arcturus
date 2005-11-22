@@ -920,8 +920,9 @@ public class DynamicScaffolding2 {
 		    Contig contig = (Contig)o;
 		    Project project = contig.getProject();
 
-		    return "Contig " + contig.getID() + "(" + contig.getName() + ")"
-			+ ((project == null) ? " (project not known)" : " in project " + project.getName());
+		    return "Contig " + contig.getID() + " (" + contig.getName() + ") " +
+			contig.getLength() + " bp, " + contig.getReadCount() + " reads" +
+			((project == null) ? " (project not known)" : " in project " + project.getName());
 		}
 
 		if (o instanceof Bridge) {
