@@ -45,7 +45,7 @@ public class Bridge {
 
 	if (link == null) {
 	    link = new Link(template);
-	    links.put(link, template);
+	    links.put(template, link);
 	}
 
 	link.merge(mappinga, mappingb, gapsize);
