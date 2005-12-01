@@ -28,6 +28,7 @@ public class DynamicScaffolding2 {
     private boolean debug = false;
     private boolean lowmem = false;
     private boolean quiet = false;
+    private boolean hamster = false;
 
     private int seedcontigid = 0;
     private int minlen = 0;
@@ -92,12 +93,19 @@ public class DynamicScaffolding2 {
 
 	    if (args[i].equalsIgnoreCase("-quiet"))
 		quiet = true;
+
+	    if (args[i].equalsIgnoreCase("-hamster"))
+		hamster = true;
 	}
 
 	if (instance == null || organism == null | seedcontigid == 0) {
 	    printUsage(System.err);
 	    System.exit(1);
 	}
+
+	String username = System.getProperty("user.name");
+
+	hamster |= username.equalsIgnoreCase("carol") || username.equalsIgnoreCase("klb");
 
 	try {
 	    System.err.println("Creating an ArcturusInstance for " + instance);
@@ -289,26 +297,28 @@ public class DynamicScaffolding2 {
 	toolbar.add(zoomOutButton);
 	toolbar.add(selectButton);
 
-	toolbar.addSeparator(new Dimension(100, 50));
+	if (hamster) {
+	    toolbar.addSeparator(new Dimension(100, 50));
 
-	final HamsterDance hampton = new HamsterDance(100);
-	toolbar.add(hampton);
+	    final HamsterDance hampton = new HamsterDance(100);
+	    toolbar.add(hampton);
 
-	final JButton hamsterButton = new JButton("Stop Hampton");
+	    final JButton hamsterButton = new JButton("Stop Hampton");
 
-	hamsterButton.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent e) {
-		    if (hampton.isRunning()) {
-			hampton.stop();
-			hamsterButton.setText("Start Hampton");
-		    } else {
-			hampton.start();
-			hamsterButton.setText("Stop Hampton");
+	    hamsterButton.addActionListener(new ActionListener() {
+		    public void actionPerformed(ActionEvent e) {
+			if (hampton.isRunning()) {
+			    hampton.stop();
+			    hamsterButton.setText("Start Hampton");
+			} else {
+			    hampton.start();
+			    hamsterButton.setText("Stop Hampton");
+			}
 		    }
-		}
-	    });
-
-	toolbar.add(hamsterButton);
+		});
+	    
+	    toolbar.add(hamsterButton);
+	}
 
 	toolbar.setFloatable(false);
 
@@ -761,6 +771,189 @@ public class DynamicScaffolding2 {
 	}
     }
 
+    class ContigInfoPanel extends JPanel {
+	protected String[] lines = new String[5];
+	protected ScaffoldPanel parent;
+	protected Font plainFont = new Font("SansSerif", Font.PLAIN, 14);
+	protected Font boldFont = new Font("SansSerif", Font.BOLD, 14);
+
+	protected String[] labels = {"CONTIG", "Name:", "Length:", "Reads:", "Project:"};
+
+	protected int valueOffset;
+
+	public ContigInfoPanel(ScaffoldPanel myparent) {
+	    this.parent = myparent;
+
+	    setBackground(new Color(255, 204, 0));
+
+	    addMouseListener(new MouseAdapter() {
+		    public void mousePressed(MouseEvent event) {
+			parent.hidePopup();
+		    }
+		});
+	}
+
+	public void setContig(Contig contig) {
+	    createStrings(contig);
+
+	    FontMetrics fm = getFontMetrics(boldFont);
+
+	    valueOffset = fm.stringWidth(labels[0]) + fm.stringWidth("    ");
+
+	    int txtheight = lines.length * fm.getHeight();
+
+	    int txtwidth = 0;
+
+	    for (int j = 0; j < lines.length; j++) {
+		int sw = fm.stringWidth(lines[j]);
+		if (sw > txtwidth)
+		    txtwidth = sw;
+		if (j == 0)
+		    fm = getFontMetrics(boldFont);
+	    }
+
+	    setPreferredSize(new Dimension(valueOffset + txtwidth, txtheight + 5));
+	}
+
+	private void createStrings(Contig contig) {
+	    lines[0] = "" + contig.getID();
+
+	    lines[1] = contig.getName();
+
+	    lines[2] = "" + contig.getLength();
+
+	    lines[3] = "" + contig.getReadCount();
+
+	    lines[4] = contig.getProject().getName();
+	}
+
+	public void paintComponent(Graphics g) {
+	    Dimension size = getSize();
+	    g.setColor(getBackground());
+	    g.fillRect(0, 0, size.width, size.height);
+
+	    g.setColor(Color.black);
+
+	    FontMetrics fm = getFontMetrics(plainFont);
+
+	    int y0 = fm.getAscent();
+	    int dy = fm.getHeight();
+
+	    g.setFont(boldFont);
+
+	    for (int j = 0; j < lines.length; j++) {
+		int x = 0;
+		int y = y0 + j * dy;
+		g.drawString(labels[j], x, y);
+		g.drawString(lines[j], valueOffset + x, y);
+		if (j == 0) {
+		    g.setFont(plainFont);
+		    g.drawLine(0, y + 5, size.width, y + 5);
+		    y0 += 5;
+		}
+	    }
+	}
+    }
+
+
+    class BridgeInfoPanel extends JPanel {
+	protected String[] lines;
+	protected ScaffoldPanel parent;
+	protected Font plainFont = new Font("SansSerif", Font.PLAIN, 14);
+	protected Font boldFont = new Font("SansSerif", Font.BOLD, 14);
+
+	protected final String RIGHT = "Right";
+	protected final String LEFT = "Left";
+
+	public BridgeInfoPanel(ScaffoldPanel myparent) {
+	    this.parent = myparent;
+
+	    setBackground(new Color(255, 204, 0));
+
+	    addMouseListener(new MouseAdapter() {
+		    public void mousePressed(MouseEvent event) {
+			parent.hidePopup();
+		    }
+		});
+	}
+
+	public void setBridge(Bridge bridge) {
+	    createStrings(bridge);
+
+	    FontMetrics fm = getFontMetrics(boldFont);
+
+	    int txtheight = lines.length * fm.getHeight();
+
+	    int txtwidth = 0;
+
+	    for (int j = 0; j < lines.length; j++) {
+		int sw = fm.stringWidth(lines[j]);
+		if (sw > txtwidth)
+		    txtwidth = sw;
+		if (j == 0)
+		    fm = getFontMetrics(boldFont);
+	    }
+
+	    setPreferredSize(new Dimension(txtwidth, txtheight + 10));
+	}
+
+	private void createStrings(Bridge bridge) {
+	    GapSize gapsize = bridge.getGapSize();
+	    Contig contiga = bridge.getContigA();
+	    Contig contigb = bridge.getContigB();
+
+	    int endcode = bridge.getEndCode();
+
+	    String enda = (endcode < 2) ? RIGHT : LEFT;
+	    String endb = ((endcode % 2) == 0) ? LEFT : RIGHT;
+
+	    Template templates[] = (Template[])bridge.getLinks().keySet().toArray(new Template[0]);
+
+	    int linkcount = templates.length;
+
+	    lines = new String[linkcount + 5];
+
+	    lines[0] = "BRIDGE";
+
+	    lines[1] = enda + " end of contig " + contiga.getID();
+
+	    lines[2] = endb + " end of contig " + contigb.getID();
+
+	    lines[3] = "Gap size " + gapsize.getMinimum() + " to " + gapsize.getMaximum() + " bp";
+
+	    lines[4] = "TEMPLATES";
+
+	    for (int j = 0; j < linkcount; j++)
+		lines[j + 5] = templates[j].getName();
+	}
+
+	public void paintComponent(Graphics g) {
+	    Dimension size = getSize();
+	    g.setColor(getBackground());
+	    g.fillRect(0, 0, size.width, size.height);
+
+	    g.setColor(Color.black);
+
+	    FontMetrics fm = getFontMetrics(plainFont);
+
+	    int y0 = fm.getAscent();
+	    int dy = fm.getHeight();
+
+	    g.setFont(boldFont);
+
+	    for (int j = 0; j < lines.length; j++) {
+		int x = 0;
+		int y = y0 + j * dy;
+		g.drawString(lines[j], x, y);
+		if (j == 0 || j == 3) {
+		    g.setFont(plainFont);
+		    g.drawLine(0, y + 5, size.width, y + 5);
+		    y0 += 5;
+		}
+	    }
+	}
+    }
+
     class ScaffoldPanel extends JComponent {
 	public static final int ZOOM_IN = 1;
 	public static final int ZOOM_OUT = 2;
@@ -791,6 +984,10 @@ public class DynamicScaffolding2 {
 	protected Cursor csrZoomOut = null;
 	protected Cursor csrSelect = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
 
+	protected ContigInfoPanel cip;
+	protected BridgeInfoPanel bip;
+	protected Popup popup;
+
 	public ScaffoldPanel(Map layout, Set bridgeset, Contig seedcontig) {
 	    super();
 	    setBackground(new Color(0xff, 0xff, 0xee));
@@ -811,7 +1008,10 @@ public class DynamicScaffolding2 {
 	    
 	    setAction(SELECT);
 
-	    ToolTipManager.sharedInstance().registerComponent(this);
+	    cip = new ContigInfoPanel(this);
+	    bip = new BridgeInfoPanel(this);
+
+	    //ToolTipManager.sharedInstance().registerComponent(this);
 
 	    addMouseListener(new MouseAdapter() {
 		    public void mouseClicked(MouseEvent e) {
@@ -862,6 +1062,8 @@ public class DynamicScaffolding2 {
 	    Point viewposition = viewport.getViewPosition();
 	    
 	    Point click = e.getPoint();
+
+	    hidePopup();
 	    
 	    switch (mode) {
 	    case ZOOM_IN:
@@ -876,15 +1078,19 @@ public class DynamicScaffolding2 {
 		Point p = viewToWorld(click);
 		Object o = getObjectAt(click);
 
-		System.err.println("Clicked at " + p.getX() + " bp");
+		//System.err.println("Clicked at " + p.getX() + " bp");
 
 		if (o != null) {
 		    if (o instanceof Contig) {
 			Contig contig = (Contig )o;
-			System.err.println(" --> Contig " + contig.getID() + " in project " + contig.getProject().getID());
+			cip.setContig(contig);
+			displayPopup(cip, click);
+			//System.err.println(" --> Contig " + contig.getID() + " in project " + contig.getProject().getID());
 		    } else if (o instanceof Bridge) {
 			Bridge bridge = (Bridge)o;
-			System.err.println(" --> " + bridge);
+			bip.setBridge(bridge);
+			displayPopup(bip, click);
+			//System.err.println(" --> " + bridge);
 		    }
 		}
 		break;
@@ -910,6 +1116,29 @@ public class DynamicScaffolding2 {
 	    }
 
 	    return null;
+	}
+
+	private void displayPopup(ContigInfoPanel cip, Point p) {
+	    SwingUtilities.convertPointToScreen(p, this);
+	    
+	    PopupFactory factory = PopupFactory.getSharedInstance();
+	    popup = factory.getPopup(this, cip, p.x, p.y);
+	    popup.show();
+	}
+
+	private void displayPopup(BridgeInfoPanel bip, Point p) {
+	    SwingUtilities.convertPointToScreen(p, this);
+	    
+	    PopupFactory factory = PopupFactory.getSharedInstance();
+	    popup = factory.getPopup(this, bip, p.x, p.y);
+	    popup.show();
+	}
+
+	public void hidePopup() {
+	    if (popup != null) {
+		popup.hide();
+		popup = null;
+	    }
 	}
 
 	public String getToolTipText(MouseEvent event) {
