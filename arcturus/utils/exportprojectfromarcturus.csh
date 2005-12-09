@@ -58,7 +58,7 @@ cd `pfind -q $organism`/arcturus
 
 if ( ! -f ${projectname}.0 ) then
   echo \!\! -- Project $projectname version 0 does not exist --
-  exit 1
+#  exit 1
 endif
 
 # unless the 5-th parameter is defined and true, do consensus update 
