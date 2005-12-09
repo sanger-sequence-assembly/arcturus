@@ -178,24 +178,18 @@ CREATE TABLE CONTIGTRANSFERREQUEST (
   contig_id mediumint(8) unsigned NOT NULL default '0',
   old_project_id mediumint(8) unsigned NOT NULL default '0',
   new_project_id mediumint(8) unsigned NOT NULL default '0',
-  `owner` varchar(8) NOT NULL default '',
-  created timestamp NOT NULL default CURRENT_TIMESTAMP,
-  `rstatus` enum ('pending','completed') NOT NULL default 'pending',
-  `comment` tinytext,
+  `requester` varchar(8) NOT NULL default '',
+  opened datetime NOT NULL,
+  requester_comment varchar(255) NULL,
+  `reviewer` varchar(8) NULL,
+  reviewed timestamp NULL on update CURRENT_TIMESTAMP,
+  reviewer_comment varchar(255) NULL,
+  `status` enum ('approved','cancelled','done','failed','pending','refused') NOT NULL default 'pending',
+  closed datetime NULL,
   PRIMARY KEY  (request_id)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+#  reviewed timestamp NULL,  # old version requires active update
 
-#
-# Table structure for table 'CONTIGTRANSFERSTATUS'
-#
-
-CREATE TABLE CONTIGTRANSFERSTATUS (
-  request_id mediumint(8) unsigned NOT NULL auto_increment,
-  `user` varchar(8) NOT NULL default '',
-  updated timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-  `status` enum('approved','cancelled','done','pending','refused','wait') NOT NULL default 'pending',
-  KEY request_id (request_id)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 #
 # Table structure for table 'LIGATION'
@@ -305,21 +299,6 @@ CREATE TABLE READTAG (
   KEY readtag_index (seq_id)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
-#
-# Table structure for table 'READTRANSFERREQUEST'
-#
-
-CREATE TABLE READTRANSFERREQUEST (
-  request_id mediumint(8) unsigned NOT NULL auto_increment,
-  read_id mediumint(8) unsigned NOT NULL default '0',
-  new_project_id mediumint(8) unsigned NOT NULL default '0',
-  creator varchar(8) NOT NULL default '',
-  created datetime NOT NULL default '0000-00-00 00:00:00',
-  updated timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
-  `status` enum('pending','cancelled','approved','refused','done') NOT NULL default 'pending',
-  `comment` tinytext,
-  PRIMARY KEY  (request_id)
-) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 #
 # Table structure for table 'SCAFFOLD'
@@ -418,6 +397,37 @@ CREATE TABLE TAG2CONTIG (
   KEY tag2contig_index (contig_id)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
+
+#
+# Table structure for table 'ANNOTATIONTAG2CONTIG'
+#
+
+#***
+CREATE TABLE ANNOTATIONTAG2CONTIG (
+  contig_id mediumint(8) unsigned NOT NULL default '0',
+  tag_id mediumint(8) unsigned NOT NULL default '0',
+  cstart int(11) unsigned NOT NULL default '0',
+  cfinal int(11) unsigned NOT NULL default '0',
+  strand enum('F','R','U') default 'U',
+  `comment` tinytext,
+  KEY annotationtag2contig_index (contig_id,tag_id)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+#
+# Table structure for table 'FINISHINGTAG2CONTIG'
+#
+
+CREATE TABLE FINISHINGTAG2CONTIG (
+  contig_id mediumint(8) unsigned NOT NULL default '0',
+  tag_id mediumint(8) unsigned NOT NULL default '0',
+  cstart int(11) unsigned NOT NULL default '0',
+  cfinal int(11) unsigned NOT NULL default '0',
+  strand enum('F','R','U') default 'U',
+  `comment` tinytext,
+  KEY finishingtag2contig_index (contig_id)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+#***
+
 #
 # Table structure for table 'TAGSEQUENCE'
 #
@@ -464,3 +474,21 @@ CREATE TABLE TRACEARCHIVE (
   PRIMARY KEY  (read_id)
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
+
+#
+# Table structure for table 'USER'
+#
+
+CREATE TABLE `USER` (
+  username char(8) NOT NULL default '',
+  role char(32) NOT NULL default 'finisher',
+  can_create_new_project enum('N','Y') NOT NULL default 'N',
+  can_assign_project enum('N','Y') NOT NULL default 'N',
+  can_move_any_contig enum('N','Y') NOT NULL default 'N',
+  can_grant_privileges enum('N','Y') NOT NULL default 'N',
+  PRIMARY KEY  (username)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+INSERT into USER values ('arcturus','superuser','Y','Y','Y','Y');
+INSERT into USER values ('adh','administrator','Y','Y','Y','Y');
+INSERT into USER values ('ejz','administrator','Y','Y','Y','Y');
