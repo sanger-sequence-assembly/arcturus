@@ -31,11 +31,16 @@ my $masking;
 my $msymbol;
 my $mshrink;
 my $minNX = 1; # default
+my $qualityclip;
+my $clipthreshold;
+my $endregiontrim;
+my $clipsymbol;
 my $preview;
 
 my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|"
                . "readsonly|fasta|quality|lock|minNX|preview|batch|verbose|"
-               . "mask|symbol|shrink|debug|help";
+               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|"
+               . "qct|qclipsymbol|qcs|endregiontrim|ert|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -75,6 +80,18 @@ while (my $nextword = shift @ARGV) {
     $msymbol     = shift @ARGV  if ($nextword eq '-symbol');
 
     $mshrink     = shift @ARGV  if ($nextword eq '-shrink');
+
+    $qualityclip   = 1          if ($nextword eq '-qualityclip');
+    $qualityclip   = 1          if ($nextword eq '-qc');
+
+    $clipthreshold = shift @ARGV  if ($nextword eq '-qclipthreshold');
+    $clipthreshold = shift @ARGV  if ($nextword eq '-qct');
+
+    $clipsymbol    = shift @ARGV  if ($nextword eq '-qclipsymbol');
+    $clipsymbol    = shift @ARGV  if ($nextword eq '-qcs');
+
+    $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
+    $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
 
     $lock        = 1            if ($nextword eq '-lock');
 
@@ -229,8 +246,10 @@ foreach my $identifier (@identifiers) {
 }
 
 my %exportoptions;
+$exportoptions{endregiontrim} = $endregiontrim;
+
 if (defined($caffile)) {
-#    $exportoptions{'padded'} = 1 if $padded;
+#    $exportoptions{padded} = 1 if $padded;
     $exportoptions{qualitymask} = $masking if defined($masking);
 }
 elsif (defined($fastafile)) {
@@ -238,6 +257,12 @@ elsif (defined($fastafile)) {
     $exportoptions{endregiononly} = $masking if defined($masking);
     $exportoptions{maskingsymbol} = $msymbol || 'X';
     $exportoptions{shrink} = $mshrink;
+
+    $exportoptions{qualityclip} = 1 if defined($qualityclip);
+    $exportoptions{qualityclip} = 1 if defined($clipthreshold);
+    $exportoptions{qualityclip} = 1 if defined($clipsymbol);
+    $exportoptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
+    $exportoptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
 }
 elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
