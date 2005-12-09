@@ -266,6 +266,8 @@ sub writeContigsToCaf {
             next;
         }
 
+        $contig->endregiontrim($options{endregiontrim});
+
         $contig->toPadded() if $options{padded};
 
         if (my $status = $contig->writeToCaf($FILE)) {
@@ -309,6 +311,8 @@ sub writeContigsToFasta {
             next;
         }
 
+        $contig->endregiontrim($options{endregiontrim});
+
         if (my $status = $contig->writeToFasta($DFILE,$QFILE,%options)) {
             $report .= "$status\n";
             $errors++;
@@ -350,6 +354,8 @@ sub writeContigsToMaf {
             $errors++;
             next;
         }
+
+        $contig->endregiontrim($options{endregiontrim});
 
         my ($status,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,%options);
 
@@ -439,24 +445,6 @@ sub toStringLong {
     return $string;
 }
 
-#-------------------------------------------------------------------
-# relocating a contig to another project REPLACED BY method on ADBProject
-#-------------------------------------------------------------------
-
-sub moveContigToProject {
-    my $this = shift;
-    my $contig_id = shift;
-    my $project = shift;
-
-# 1) get the current projectID and checked status for contigID
-# if it's the same then return, if it's different and not checked in, 
-# exit with error status
-
-# 2) if the contig_id was not allocated before add to C2P table
-#    or, if it was, update the C2P table.
-#    both are handled by assignContigIDtoProjectID
-}
- 
 #-------------------------------------------------------------------
  
 1;
