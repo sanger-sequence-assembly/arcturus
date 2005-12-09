@@ -187,6 +187,15 @@ sub userCanGrantPrivilege {
 
 #-----------------------------------------------------------------------------
 
+sub logMessage {
+    my $this = shift;
+    my $entry = shift;
+
+# to be developed
+}
+
+#-----------------------------------------------------------------------------
+
 sub logQuery {
 # keep a query log for debugging purposes
     my $this = shift;
