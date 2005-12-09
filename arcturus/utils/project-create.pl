@@ -15,11 +15,12 @@ my $instance;
 my $project_id;
 my $projectname;
 my $assembly_id;
+my $owner;
 my $comment;
 my $verbose;
 
 my $validKeys  = "organism|instance|project_id|projectname|assembly_id|"
-               . "comment|verbose|help";
+               . "owner|comment|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -34,6 +35,8 @@ while (my $nextword = shift @ARGV) {
     $project_id   = shift @ARGV  if ($nextword eq '-project_id');
 
     $assembly_id  = shift @ARGV  if ($nextword eq '-assembly_id');
+
+    $owner        = shift @ARGV  if ($nextword eq '-owner');
 
     $comment      = shift @ARGV  if ($nextword eq '-comment');
 
@@ -79,6 +82,18 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
+# test if the current user has privilege to create a new project
+#----------------------------------------------------------------
+
+unless ($adb->userCanCreateProject()) {
+# also tests if the user actually is known to this organism database 
+    $logger->error("Sorry, but you cannot create a new project "
+                  ."on this $organism database");
+    $adb->disconnect();
+    exit 1;
+}
+
+#----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
@@ -90,6 +105,8 @@ $project->setProjectID($project_id) if defined($project_id);
 
 $project->setAssemblyID($assembly_id) if defined ($assembly_id);
 
+$project->setOwner($owner) if defined($owner);
+
 $project->setComment($comment) if $comment;
 
 my ($pid,$status) = $adb->putProject($project);
@@ -97,6 +114,10 @@ my ($pid,$status) = $adb->putProject($project);
 $logger->warning("New project added with ID = $pid") if $pid;
 
 $logger->severe("FAILED to add new project: $status") unless $pid;
+
+$adb->disconnect();
+
+exit 0;
 
 #------------------------------------------------------------------------
 # HELP
@@ -117,6 +138,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-project_id\tproject ID to be inserted\n";
     print STDERR "-assembly_id\tassembly ID to be used (default 0)\n";
+    print STDERR "-owner\t\tAAssign the new project to this user\n";
     print STDERR "-comment\tA comment in quotation marks\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
