@@ -126,7 +126,9 @@ sub putArcturusUser {
 
     $this->{ArcturusUser} = getpwuid($<);
 
-    foreach my $forbidden ('pathdb','othernames') {
+# test against prohibited names (force login with own user name)
+
+    foreach my $forbidden ('pathdb','pathsoft','yeasties','othernames') {
 
         if ($this->{ArcturusUser} eq $forbidden) {
 
@@ -137,16 +139,15 @@ sub putArcturusUser {
     }
 }
 
-
 sub getArcturusUser {
-# determine the username from the system data
+# return the username (as is)
     my $this = shift;
 
     return $this->{ArcturusUser} || ''; 
 }
 
 #-------------------------------------------------------------------------
-# what about "roles" TO BE DEVELOPED
+# "roles" using USER table data TO BE DEVELOPED
 
 sub setArcturusUserRole {
     my $this = shift;
@@ -167,52 +168,21 @@ sub getArcturusUserRoles {
     return $this->{userroles};
 }
 
-#-----------------------------------------------------------------------------
-
-sub logMessage {
-# message TO BE DEVELOPED
+sub userCanCreateProject {
     my $this = shift;
-    my $user = shift;
-    my $project = shift; # projectname
-    my $text = shift; # the message
-
-    print STDOUT "message for user $user: '$text'\n";
-
-
-    $this->{messages} = [] unless defined $this->{messages};
-
-    my $log = $this->{messages};
-    
-    push @$log, [($user,$project,$text)]; # array of arrays
+    return 1; # temporary
 }
 
-sub processMessages {
+sub userCanAssignProject {
     my $this = shift;
+}
 
-# preliminary rules:
+sub userCanMoveAnyContig {
+    my $this = shift;
+}
 
-# messages are sent to projects and or users
-
-# message for projects are stored in a db table
-
-#   moving contigs between projects: message to receiving project on db table
-#                                    email to user
-#   no message sent for BIN of any kind
-
-    $this->{messages} = [] unless defined $this->{messages};
-
-    my $log = $this->{messages};
-
-    foreach my $message (@$log) {
-        my ($user,$project,$text) = @$message;
-#        &emailuser ($user,$text);
-#        &logproject ($project,$text);
-    }
-
-
-# reset the buffer
-
-    $this->{messages} = [];    
+sub userCanGrantPrivilege {
+    my $this = shift;
 }
 
 #-----------------------------------------------------------------------------
