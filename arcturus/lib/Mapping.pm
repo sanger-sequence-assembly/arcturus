@@ -499,14 +499,14 @@ sub inverse {
 
 sub multiply {
 # return the product of this (mapping) and another mapping
-    my $this = shift;
+    my $thismap = shift;
     my $mapping = shift;
     my $repair = shift || 0;
 
-    my $rsegments = $this->getSegments();
-    my $tsegments = $mapping->getSegments();
+    my $rsegments = $thismap->analyseSegments();
+    my $tsegments = $mapping->analyseSegments();
 
-    my $rname = $this->getMappingName() || 'R';
+    my $rname = $thismap->getMappingName() || 'R';
     my $tname = $mapping->getMappingName() || 'T';
 
     my $product = new Mapping("$rname x $tname");
@@ -535,7 +535,13 @@ sub multiply {
                 $ts++;
 	    }
 	    else {
-		print STDERR "Mapping->multiply: should not occur (1) !!\n";
+		print STDOUT "Mapping->multiply: should not occur (1) !!\n";
+print STDOUT $thismap->writeToString()."\n";
+print STDOUT $mapping->writeToString()."\n";
+print STDOUT "\nts $ts  rs $rs  txf $txf\n";
+print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
+print STDOUT "mxs $mxs  mxf $mxf\n";
+		exit;
 	    }
 	}
 # begin of x window of R does not map to y inside the T window
@@ -547,8 +553,8 @@ sub multiply {
                 $rs++;
             }
             else {
-	        print STDERR "Mapping->multiply: should not occur (2) !!\n";
-print STDOUT $this->writeToString()."\n";
+	        print STDOUT "Mapping->multiply: should not occur (2) !!\n";
+print STDOUT $thismap->writeToString()."\n";
 print STDOUT $mapping->writeToString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
@@ -565,7 +571,7 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             }
             else {
 	        print STDOUT "Mapping->multiply: should not occur (3) !!\n";
-print STDOUT $this->writeToString()."\n";
+print STDOUT $thismap->writeToString()."\n";
 print STDOUT $mapping->writeToString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
