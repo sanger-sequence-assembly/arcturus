@@ -189,11 +189,32 @@ sub userCanGrantPrivilege {
 
 sub logMessage {
     my $this = shift;
-    my $entry = shift;
+    my $user = shift;
+    my $project = shift; # project name
+    my $text = shift; # the message
 
-# to be developed
+print STDOUT "message for user $user: $text \n";
+
+    $this->{messages} = [] unless defined $this->{messages};
+
+    my $log = $this->{messages};
+
+    push @$log, [($user,$project,$text)]; # array of arrays
 }
 
+sub getMessage {
+# returns the next message (to be processed by calling script)
+    my $this = shift;
+
+    return undef unless $this->{messages};
+
+    my $log = $this->{messages};
+
+    return 0 unless @$log;
+
+    return shift @$log; # array ref (user, project, text)
+}
+    
 #-----------------------------------------------------------------------------
 
 sub logQuery {
