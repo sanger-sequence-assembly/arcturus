@@ -253,7 +253,7 @@ sub getSequenceAndBaseQualityForContigID {
         }
     }
 
-    $sequence =~ s/\*/N/g if $sequence; # temporary fix 
+#    $sequence =~ s/\*/N/g if $sequence; # temporary fix 
 
     return ($sequence, $quality);
 }
