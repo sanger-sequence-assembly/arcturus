@@ -4,7 +4,7 @@ use strict;
 
 use Mapping;
 
-use Asp::PhredClip;
+#use Asp::PhredClip;
 
 #-------------------------------------------------------------------
 # Constructor (optional instantiation with readname as identifier)
@@ -875,11 +875,11 @@ sub qualityClip {
 
 # use standard clipping method from package PhredClip
 
-       ($QL,$QR) = Asp::PhredClip->phred_clip($options{threshold} || 15,
-                                              $this->getBaseQuality());
-    }
-    elsif ($clipmethod eq 'myphredclip') {
-# use local test version
+#       ($QL,$QR) = Asp::PhredClip->phred_clip($options{threshold} || 15,
+#                                              $this->getBaseQuality());
+#    }
+#    elsif ($clipmethod eq 'myphredclip') {
+
        ($QL,$QR) = &phred_clip($options{threshold} || 15,
                                $this->getBaseQuality());
     }
