@@ -16,6 +16,7 @@ my $verbose;
 my $contig;
 my $padded;
 my $readsonly = 0;
+my $noreads;
 #my $ignoreblocked = 0;
 my $fofn;
 my $caffile;
@@ -26,10 +27,14 @@ my $msymbol;
 my $mshrink;
 my $metadataonly = 1;
 my $qualityclip;
+my $clipthreshold;
+my $clipsymbol;
+my $endregiontrim;
 
-my $validKeys  = "organism|instance|contig|contig|fofn|ignoreblocked|caf|"
-               . "fasta|quality|padded|mask|symbol|shrink|readsonly|"
-               . "qualityclip|qc|verbose|help";
+my $validKeys  = "organism|instance|contig|contigs|fofn|ignoreblocked|caf|"
+               . "fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
+               . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
+               . "endregiontrim|ert|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -37,34 +42,46 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
+    $instance      = shift @ARGV  if ($nextword eq '-instance');
       
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    $organism      = shift @ARGV  if ($nextword eq '-organism');
 
-    $contig       = shift @ARGV  if ($nextword eq '-contig'); # ID(s) or name(s)
+    $contig        = shift @ARGV  if ($nextword eq '-contig'); # name or ID
+    $contig        = shift @ARGV  if ($nextword eq '-contigs'); # names or IDs
 
-    $fofn         = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn          = shift @ARGV  if ($nextword eq '-fofn'); # file of names/IDs
 
-    $caffile      = shift @ARGV  if ($nextword eq '-caf');
+    $caffile       = shift @ARGV  if ($nextword eq '-caf');
 
-    $fastafile    = shift @ARGV  if ($nextword eq '-fasta');
+    $fastafile     = shift @ARGV  if ($nextword eq '-fasta');
 
-    $qualityfile  = shift @ARGV  if ($nextword eq '-quality');
+    $qualityfile   = shift @ARGV  if ($nextword eq '-quality');
 
-    $masking      = shift @ARGV  if ($nextword eq '-mask');
+    $masking       = shift @ARGV  if ($nextword eq '-mask');
 
-    $msymbol      = shift @ARGV  if ($nextword eq '-symbol');
+    $msymbol       = shift @ARGV  if ($nextword eq '-symbol');
 
-    $mshrink      = shift @ARGV  if ($nextword eq '-shrink');
+    $mshrink       = shift @ARGV  if ($nextword eq '-shrink');
 
-    $qualityclip  = shift @ARGV  if ($nextword eq '-qualityclip');
-    $qualityclip  = shift @ARGV  if ($nextword eq '-qc');
+    $qualityclip   = 1            if ($nextword eq '-qualityclip');
+    $qualityclip   = 1            if ($nextword eq '-qc');
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    $clipthreshold = shift @ARGV  if ($nextword eq '-qclipthreshold');
+    $clipthreshold = shift @ARGV  if ($nextword eq '-qct');
 
-    $padded       = 1            if ($nextword eq '-padded');
+    $clipsymbol    = shift @ARGV  if ($nextword eq '-qclipsymbol');
+    $clipsymbol    = shift @ARGV  if ($nextword eq '-qcs');
 
-    $readsonly    = 1            if ($nextword eq '-readsonly');
+    $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
+    $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
+
+    $verbose       = 1            if ($nextword eq '-verbose');
+
+    $padded        = 1            if ($nextword eq '-padded');
+
+    $readsonly     = 1            if ($nextword eq '-readsonly');
+
+    $noreads       = 1            if ($nextword eq '-noreads');
 
 #    $metadataonly = 0            if ($nextword eq '-full'); # redundent
 
@@ -186,12 +203,18 @@ if (defined($fastafile)) {
     else {
         $woptions{endregiononly} = $masking if defined($masking);
         $woptions{maskingsymbol} = $msymbol || 'X';
-        $woptions{shrink} = $mshrink;
-        $woptions{qualityclip} = $qualityclip if defined($qualityclip);
+        $woptions{shrink} = $mshrink if defined($mshrink);
+
+        $woptions{qualityclip} = 1 if defined($qualityclip);
+        $woptions{qualityclip} = 1 if defined($clipthreshold);
+        $woptions{qualityclip} = 1 if defined($clipsymbol);
+        $woptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
+        $woptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
     }
 }
 elsif (defined($caffile)) {
 # caf options
+    $woptions{noreads} = 1 if $noreads;
     $woptions{qualitymask} = $masking if $masking;
     $woptions{qualitymask} = $msymbol if $msymbol; # overrides
 }
@@ -221,6 +244,11 @@ foreach my $identifier (@contigs) {
 
     next unless $contig;
 
+    if ($endregiontrim) {
+        my ($ql,$qr) = $contig->endregiontrim($endregiontrim);
+        $logger->warning("end region clipping $endregiontrim clipped range $ql, $qr");
+    }
+
 #    $contig->toPadded() if $padded;
 
     my $err;
@@ -231,7 +259,6 @@ foreach my $identifier (@contigs) {
 
     $err = $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
 
-#    $contig->writeToCafPadded($fhDNA,%woptions) if $padded; # later to option of writeToCaf
     $errorcount++ if $err;
 }
 
@@ -301,6 +328,12 @@ sub showUsage {
                . "smaller than 'mask'\n\t\twill be reset to 'mask'\n";
 #    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
     print STDERR "\n";
+    print STDERR "-endregiontrim\ttrim low quality endregions at level\n";
+    print STDERR "\n";
+    print STDERR "-qualityclip\tRemove low quality pads (default '*')\n";
+    print STDERR "-qclipsymbol\tuse specified symbol as low quality pad\n";
+    print STDERR "-qclipthreshold\tclip those quality values below threshold\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
@@ -309,7 +342,7 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
- 
+
 sub getNamesFromFile {
     my $file = shift; # file name
                                                                                 
