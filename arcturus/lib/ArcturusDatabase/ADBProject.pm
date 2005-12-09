@@ -237,6 +237,10 @@ sub insertProject {
     }
 
     my $query = "insert into PROJECT ($pitems) VALUES ($values)";
+#    my $query = "insert into PROJECT ($pitems) "
+#              . "select $d[0],$d[1],username as owner,now(),$d[3],$d[4]"
+#              . "  from USER where username = ?)
+
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -261,7 +265,8 @@ sub putProject {
 
     my @data   = ($project->getAssemblyID() || 0,
                   $project->getProjectName() || 'undefined',
-                  $this->getArcturusUser() || 'unknown',
+                  $project->getOwner() || $this->getArcturusUser() || 'unknown',
+# $this->getArcturusUser() || 'unknown',
                   $this->getArcturusUser() || 'arcturus',
                   $project->getComment() || undef,
                   $project->getProjectID() );
@@ -391,11 +396,23 @@ sub assignContigsToProject {
                                      @_); # transfer of possible switches
 }
 
+sub assignContigIDsToProjectID {
+# assign directly
+    my $this = shift;
+    my $cids = shift; # array ref
+    my $pid = shift;
+
+    return &linkContigIDsToProjectID($this->getConnection(),
+                                     $this->getArcturusUser(),
+                                     $cids,$pid,@_);
+}
+
+
 sub linkContigIDsToProjectID {
 # private method : allocate contig IDs to project ID
     my $dbh = shift;
     my $user = shift;
-    my $contig_ids = shift || return undef;
+    my $contig_ids = shift || return undef; # array ref
     my $project_id = shift || return undef;
     my $forced = shift;
 
@@ -633,553 +650,61 @@ sub unlinkContigID {
 }
 
 #------------------------------------------------------------------------------
-# assigning reads to projects using the queuing system
+# assigning contigs to projects using the contig transfer queuing system
 #------------------------------------------------------------------------------
 
-sub createReadTransferRequest {
-# enter a request for project allocation of read as single-read contig to the queue 
+sub getContigTransferRequestIDs {
+# return request IDs for pending (default), or all, requests for options
     my $this = shift;
-    my $r_id = shift; # read ID
-    my $p_id = shift; # project ID
-    my $user = shift;
+    my $full = shift; # 0 for default pending only, 1 for all, 2 for completed
+    my %options = @_; # specifying column names & values, if any
 
-# each request is tested against other (active) requests in the queue
-# for consistency; each request is then tested for validity, i.e. can be executed
+# if $options{status} is defined use $full = 1; else defaults are used
+# invalid column names result in a failed query message generated in method
+# findContigTransferRequestIDs
 
-    return 0,"invalid parameters ($r_id,$p_id)" unless ($r_id && $p_id);
+    $options{status} = 'pending,approved' unless $full;
+    $options{status} = 'cancelled,done,failed,refused' if ($full && $full != 1);
 
-    $user = $this->getArcturusUser() unless $user;
-
-    my ($dbh,$sth,$query);
-
-# open database
-
-    $dbh = $this->getConnection();
-
-# test if the request is not already present (include refused requests)
-
-    if (my $r = &existsReadTransferRequest($dbh,$r_id,$p_id,1)) {
-        my $status = ($r->[3] eq 'approved' ? 1 : 0);
-        return $status,"request $r->[0] was created on $r->[2] by $r->[1] ($r->[3])";
-    }
-
-# enter the new request with status 'pending'; get its request ID
-
-    my $ritems = "read_id,new_project_id,creator,created";
-
-    $query = "insert into READTRANSFERREQUEST ($ritems) values(?,?,?,now())";
-
-    $sth = $dbh->prepare_cached($query);
-
-    my $rc = $sth->execute($r_id,$p_id,$user) || &queryFailed($query,$r_id,$p_id,$user);
-
-    $sth->finish();
-
-    return 0,"failed to add request to queue" unless ($rc && $rc == 1);
-    
-    my $rqid = $dbh->{'mysql_insertid'}; # request ID
-
-# now check if the request is valid: is the read not requested by someone else
-# and is it an unassembled read; if not set status to 'refused', else to 'approved'
-
-    my $message = '';
-    my $returnstatus = $rqid;
-    my $status = 'approved';
-
-    $query = "select new_project_id,creator"
-           . "  from READTRANSFERREQUEST"
-           . " where read_id = ? and status = 'approved'";
-
-    $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($r_id) || &queryFailed($query,$rqid) || return 0,"failed to verify";
-
-    if (my($project_id,$creator) = $sth->fetchrow_array()) {
-        $message = "read $r_id is requested by $creator for project $project_id";
-        $status = "refused";
-        $returnstatus = 0;
-    }
-    $sth->finish();
-
-    unless ($this->isUnassembledRead(read_id=>$r_id)) {
-        $message = "read $r_id is an assembled read";
-        $status = "refused";
-        $returnstatus = 0;
-    }
-
-# update the status of the new request: we do a multi-table update to catch the
-# possibility that we use a non-existent project ID; in that case no row is returned
-
-    $rc = &updateReadTransferRequest($dbh,$rqid,$status,$p_id);
-
-    if ($rc+0) {
-# the update was successful; message depends on status
-        $message = "request $rqid was created for user $user" if $returnstatus;
-    }
-    else {
-# the update failed: status value could not be changed and remains 'pending'
-        $message .= " & " if $message;
-        $message .= "possibly invalid project ID?";
-        $message = "failed to complete request ($message)";
-        $returnstatus = 0;
-    }
-
-# finally, add a comment if return status = 0 (no checks here)
-
-    &addReadTransferRequestComment($dbh,$rqid,$message) unless $returnstatus;
-#    &addTransferRequestComment($dbh,'READ',$rqid,$message) unless $returnstatus;
-
-# the 'status' field in the record can have 3 values: 'approved','rejected' or 'pending'
-# the latter occurs when the last update fails, either because of a SQL error (unlikely)
-# or because of an invalid project ID used. Thus, 'pending' could be treated as rejected
-
-    return $returnstatus,$message;
+    return &findContigTransferRequestIDs ($this->getConnection(),%options);
 }
 
-sub cancelReadTransferRequest {
-# cancel an existing read transfer request identified by read_id and project_id
-    my $this = shift;
-    my $r_id = shift || 0; # read ID
-    my $p_id = shift || 0; # project ID
 
-# put user verification in this section; user ID (or user 'role') should match
-
-    my $user = $this->getArcturusUser();
-
-    my $dbh = $this->getConnection();
-
-# does the request exist?
-
-    my $req = &existsReadTransferRequest($dbh,$r_id,$p_id);
-
-    return 0, "no active request exists" unless $req;
-
-    my $description = "$req->[0] (read $r_id -> project $p_id)";
-
-# do the users match?
-
-    unless ($user eq $req->[1] || &userRoles($user,$req->[1])) {
-        return 0, "request $description belongs to user '$req->[1]'";
-    }
-
-# preview option (no other entry in parameter list)
-
-    return 1, "request $description is to be cancelled" unless shift;
-    
-# ok, do the update
-
-    my $rc = &updateReadTransferRequest($dbh,$req->[0],'cancelled');
-
-    return 1, "request $description was cancelled" if ($rc+0);
-
-    return 0, "failed to cancel request $description";
+sub getContigTransferRequestData {
+    my $this = shift; # parameter (request ID) is transported to private method
+    return &fetchContigTransferRequestData($this->getConnection(),@_);
 }
 
-sub processReadTransferRequests {
-# execute all pending transfers, optionally for a specified user
-    my $this = shift;
-    my %options = @_;
 
-# first, create a list of pending requests
-
-    my $dbh = $this->getConnection();
-
-    my $query = "select request_id,read_id,new_project_id"
-              . "  from READTRANSFERREQUEST"
-              . " where status = 'approved'";
-    $query   .= "   and creator = '$options{user}'" if $options{user};
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    my %readrequest;
-    my %readtransfer;
-    my %project;
-    while (my ($req,$rid,$pid) = $sth->fetchrow_array()) {
-        $readtransfer{$rid} = $pid;
-        $readrequest{$rid} = $req;
-        $project{$pid}++;
-    }
-
-    $sth->finish();
-
-# get the projects
-
-    foreach my $pid (keys %project) {
-        my ($plist,$msg) = $this->getProject(project_id=>$pid);
-        $project{$pid} = $plist->[0] if ($msg eq 'OK');
-        print STDERR "WARNING: unkown project $pid\n" unless ($msg eq 'OK');
-    }
-
-# ok, go and do it
-
-    my $report = "There are ".scalar(keys %readtransfer)." transfer requests\n";
-
-    my $success = 0;
-    foreach my $rid (keys %readtransfer) {
-        my $pid = $readtransfer{$rid}; 
-        $report .= "read $rid is to be moved to project $pid ..";
-        if ($options{confirm}) {
-            my ($cid,$msg) = $this->assignReadAsContigToProject($project{$pid},read_id=>$rid);
-            if ($cid) {
-                $success++;
-                $report .= ".. done (contig $cid)";
-  	        print STDERR "failed to update queue entry $readrequest{$rid} for read $rid\n"
-                    unless &updateReadTransferRequest($dbh,$readrequest{$rid},'done');
-	    }
-	    else {
-                $report .= ".. FAILED ($msg)";
-  	        print STDERR "failed to update queue entry $readrequest{$rid} for read $rid\n"
-                    unless &updateReadTransferRequest($dbh,$readrequest{$rid},'pending');
-            }
-	}
-	else {
-            my ($cid,$msg) = $this->assignReadAsContigToProject($project{$pid},read_id=>$rid,
-                                                                               noload=>1);
-            $report .= ".. rejected $msg" unless $cid;
-            $report .= ".. to be confirmed" if $cid;
-        }
-        $report .= "\n";
-    }
-
-    return $success,$report;
-}
-
-sub findReadTransferRequest {
-# public: return the status and possibly comment for the input request
-    my $this = shift;
-    my $rid = shift; # read ID
-    my $pid = shift; # project ID
-
-# requests with status 'done' or 'cancelled' are ignored because they could be present
-# more than once: returns data of active request only ('pending','approved','refused')
-
-    my $output = &existsReadTransferRequest($this->getConnection(),$rid,$pid,1);
-
-    return 1,$output if @$output;
-
-    return 0; 
-}
-
-#---------------------------------------------------------------------------------
-
-sub existsReadTransferRequest {
-# private: test existence of an active request
-    my $dbh = shift;
-    my $rid = shift; # read ID
-    my $pid = shift; # project ID
-
-    my @svalues = ('pending','approved');
-    push @svalues,'refused' if shift; # add refused option with extar parameter
-
-    my $query = "select request_id, creator, created, status, comment"
-              . "  from READTRANSFERREQUEST"
-              . " where read_id = ? and new_project_id = ?"
-              . "   and status in ('". join("','",@svalues) ."')"
-              . " order by status limit 1";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($rid,$pid) || &queryFailed($query,$rid,$pid);  
-
-    my @output = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    return (@output ? [@output] : 0);
-}
-
-sub updateReadTransferRequest {
-# private: change request status
-    my $dbh = shift;
-    my $rid = shift; # request ID
-    my $status = shift; # new status
-    my $pid = shift; # project ID, optional
-
-    my $query = "update READTRANSFERREQUEST,PROJECT"
-              . "   set READTRANSFERREQUEST.status = '$status'"
-	      . " where READTRANSFERREQUEST.request_id = $rid";
-
-# invoke multi-table update if project ID is specified
-
-    if (defined($pid)) {
-        $query .= " and READTRANSFERREQUEST.new_project_id = PROJECT.project_id"
-	       .  " and PROJECT.project_id = $pid";
-    }
-    else {
-	$query =~ s/\,PROJECT//; # perhaps could be left out?
-    }
-
-    my $rc = $dbh->do($query) || &queryFailed($query);
-}
-
-sub addReadTransferRequestComment {
-# OBSOLETE, to be replaced by addTransferRequestComment
-# private: update comment field for transfer request
-    my $dbh = shift;
-    my $rid = shift;
-    my $text = shift;
-
-    return unless $text;
-
-    my $query = "update READTRANSFERREQUEST set comment = ? where request_id = ?";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute($text,$rid) || &queryFailed($query,$text,$rid);
-}
-
-#------------------------------------------------------------------------------
-# assigning contigs to projects using the queuing system
-#------------------------------------------------------------------------------
-
-sub createContigTransferRequest {
-# public; create a contig transfer request if it does not already exist
+sub putContigTransferRequest {
     my $this = shift;
     my $c_id = shift; # contig ID
-    my $p_id = shift; # project ID
-    my %options = @_;
+    my $tpid = shift; # target project ID
+    my $user = shift; # requester
 
-# each request is tested against other (active) requests in the queue for
-# consistency; each request is then tested for validity, i.e. whether it
-# can be executed
+    $user = $this->getArcturusUser() unless $user; # default
 
-    return 0,"invalid parameters ($c_id,$p_id)" unless ($c_id && $p_id);
-
-    my $user = $options{user};
-
-    $user = $this->getArcturusUser() unless $user;
-print STDOUT "ENTER createContigTransferRequest $c_id, $p_id, $user\n";
-
-    my ($dbh,$sth,$query);
-
-# open database
-
-    $dbh = $this->getConnection();
-
-# test if a request to move the contig is not already present
-
-    my %foptions = (contig_id=>$c_id,rstatus=>'pending');
-
-    my $rids = &findContigTransferRequestIDs($dbh,%foptions);
-
-    if (my $r_id = $rids->[0]) {
-# get the details
-        my $data = &fetchContigTransferRequest($dbh,$r_id);
-
-        unless ($data->[3] == $p_id) {
-# contig is involved in another request
-            return 0, "contig $c_id is not available: is requested for "
-                    . "project $data->[3] by user $data->[4]";
-        }
-# this request is already queued
-        return 2, "existing request $r_id was created on $data->[5] "
-                . "by $data->[4] (current status: $data->[10], $data->[8])";
-    }
-
-# test if the contig is in the latest generation
-
-print STDOUT "testing contig $c_id\n";
-    unless ($this->isCurrentContigID($c_id)) {
-        return 0,"contig $c_id is not in the current generation";
-    }
-
-# test current project against target project 
-print STDOUT "testing project against $p_id\n";
-
-    my ($cpid,$lock) = $this->getProjectIDforContigID($c_id); # current project ID
-
-    if ($cpid == $p_id) {
-        return 0,"contig $c_id is already allocated to project $p_id";
-    }  
-
-# has the user privilege on its current project or its target project or both?
-
-
-    my @opns = split /\W/,$options{open}; # optional: open project names
-print STDOUT "open projects: @opns\n";
-
-    my $open = '';
-    foreach my $openprojectname (@opns) {
-        my $projectlist = $this->getProjectIDsForProjectName($openprojectname);
-	return 0,"invalid project name $openprojectname" unless @$projectlist;
-        foreach my $project (@$projectlist) {
-            $open .= " " if $open;
-            $open .= $project->[0];
-        }
-    }
-print STDOUT "open project test string '$open'\n";
-
-#$user = "ajax";
-#$user = "ibg";
-    my ($cpp,$cown) = &hasPrivilegeOnProject($dbh,$cpid,$user); # current project
-print STDOUT "privilege $user,$cpid  : $cpp, $cown\n";
-    $cpp = 1 if (!$cpp && $open && $open =~ /\b$cpid\b/); # override open project
-print STDOUT "privilege $user,$cpid  : $cpp, $cown\n";
-    my ($tpp,$town) = &hasPrivilegeOnProject($dbh,$p_id,$user); # target  project
-print STDOUT "privilege $user,$p_id  : $tpp, $town\n";
-    $tpp = 1 if (!$tpp && $open && $open =~ /\b$p_id\b/); # override open project
-print STDOUT "privilege $user,$p_id  : $tpp, $town\n";
-
-    unless ($cpp || $tpp) {
-        return 0,"user $user has no privilege for a transfer from project "
-                ."nr $cpid to project nr $p_id";
-    }
-  
-    return 2,"transfer of contig to be confirmed" unless $options{confirm};
-
-    print STDOUT "Entering request ... \n";
-# OK, enter the new request with rstatus 'pending'; get its request ID
-
-    my $rqid = 0;
-
-    unless ($rqid = &enterContigTransferRequest($dbh,$user,$c_id,$cpid,$p_id)) {
-        return 0, "failed to insert request; possibly invalid "
-                . "contig ID or project ID?";
-    }
-
-# the request has been added with rstatus 'pending'
-    print STDOUT "Insert successfull privileges: $cpp $tpp \n";
-
-    my $message;
-    if ($cpp && $tpp) {
-# user has privilege on both the current and the target projects
-        my $rc = &updateContigTransferRequest($dbh,$rqid,$user,'approved');
-    }
-    elsif ($tpp) {
-# user has no privilege on the project the contig is currently in
-        $message = "waiting for approval by $cown";
-        $this->sendApprovalRequestToOwner($cown,$c_id,$cpid,$user); #..
-    }
-    else {
-# user has no privilege on the target project
-        $message = "waiting for approval by $town";
-        $this->sendApprovalRequestToOwner($town,$c_id,$cpid,$user); #..
-    }
-
-# update the comment of the new request: we do a multi-table update to catch
-# the possibility that we use a non-existent project ID; in that case no row 
-# is returned
-
-    &addTransferRequestComment($dbh,'CONTIG',$rqid,$message,$p_id) if $message;
-
-# exit with happy message
-
-    return 1, "request $rqid was created for user $user";
-}
-
-sub sendApprovalRequestToOwner {
-    my $this = shift;
-    print STDOUT "sendApprovalRequestToOwner: @_ TO BE COMPLETED\n";
-}
-sub grantContigTransferRequest {
-# public
-    my $this = shift;
-    my $c_id = shift || 0; # contig ID
-    my $p_id = shift || 0; # project ID
-}
-
-sub cancelContigTransferRequest {
-# public
-    my $this = shift;
-    my $c_id = shift || 0; # contig ID
-    my $p_id = shift || 0; # project ID
-
-# put user verification in this section; user ID (or user 'role') should match
-
-    my $user = $this->getArcturusUser();
-
-    my $dbh = $this->getConnection();
-
-# does the request exist?
-
-    my $req = &existsContigTransferRequest($dbh,$c_id,$p_id);
-
-    return 0, "no active request exists" unless $req;
-
-    my $description = "$req->[0] (contig $c_id -> project $p_id)";
-
-# do the users match?
-
-    unless ($user eq $req->[1] || &userRoles($user,$req->[1])) {
-        return 0, "request $description belongs to user '$req->[1]'";
-    }
-
-# preview option (no other entry in parameter list)
-
-
-    return 1, "request $description is to be cancelled" unless shift;
-    
-# ok, do the update
-
-    my $rc = &updateContigTransferRequest($dbh,$req->[0],'cancelled');
-
-    return 1, "request $description was cancelled" if ($rc+0);
-
-    return 0, "failed to cancel request $description";
-}
-
-sub processContigTransferRequest {
-# process all approved requests, if needed for a specified user
-    my $this = shift;
-
-    return 0,"processContigTransferRequest to be developed";
-}
-
-sub existContigTransferRequest {
-# public: return the status and possibly comment for the input request
-    my $this = shift;
-    my $cid = shift; # contig ID
-    my $pid = shift; # project ID
-
-# return 
-print STDOUT "ENTER existContigTransferRequest $cid, $pid\n";
-
-    my $dbh = $this->getConnection();
-
-    my %options = (contig_id=>$cid,new_project_id=>$pid,rstatus=>'pending');
-
-    my $rid = &findContigTransferRequestIDs($dbh,%options);
-
-print STDOUT "RESULT existContigTransferRequest $rid\n";
-    if (@$rid) {
-# get the details
-        my $output = &fetchContigTransferRequest($dbh,$rid->[0]);
-
-        return 1,$output if @$output;
-    }
-
-    return 0;
-}
-
-# private
-
-sub enterContigTransferRequest {
-# private (parameters: user c_id  cpid  p_id)
-    my $dbh  = shift;
-    my $user = shift;
-
-# first insert into the main table; we do a select insert to test 
-# simultaneously the existence of the contig ID and project IDs:
-# a non existent contig or project results in no insert
+# we do a select insert to test simultaneously the existence of 
+# the contig ID and project IDs: a non existent contig or project 
+# results in no insert;  default 'opened' and 'status' values
   
     my $query = "insert into CONTIGTRANSFERREQUEST"
-              . "      (contig_id,old_project_id,new_project_id,owner) "
+              . " (contig_id,old_project_id,new_project_id,requester,opened) "
               . "select distinct CONTIG.contig_id"
               . "     , CONTIG.project_id as old_project_id"
               . "     , PROJECT.project_id as new_project_id" 
               . "     , '$user'"
+              . "     , now()"
               . "  from CONTIG join PROJECT"
-              . " where CONTIG.contig_id = ?"
-              . "   and CONTIG.project_id = ?"
-              . "   and PROJECT.project_id = ?";
+              . " where CONTIG.contig_id = $c_id"
+              . "   and PROJECT.project_id = $tpid";
+
+
+    my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute(@_) || &queryFailed($query,@_);
-
-&queryFailed($query,@_) unless ($rc+0);
+    my $rc = $sth->execute() || &queryFailed($query);
 
     $sth->finish();
 
@@ -1187,81 +712,135 @@ sub enterContigTransferRequest {
     
     my $rid = $dbh->{'mysql_insertid'}; # request ID
 
-# ? then add a 'pending' record into the status table
-
-#    return 0 unless &updateContigTransferRequest($rid,$user);
-
-    return $rid; # return request ID
+    return $rid;
 }
 
-sub updateContigTransferRequest {
-# private: add status record for request ID
-    my $dbh = shift;
-    my ($rid, $user, $status) = @_;
 
-# add pid at end to do a multitable insert testing project as well
+sub modifyContigTransferRequest {
+# change elements of a request (by requestor or, in 'force' mode,
+# by user with overriding role)
+    my $this = shift;
+    my $rqid = shift; # request ID
+    my $force = shift || 0; # test user access to request
+    my %changes = @_; # hash with new column values keyed on column name
 
-    my $query = "insert into CONTIGTRANSFERSTATUS (request_id,user,status) "
-              . "values(?,?,?)";
-print STDOUT "Enter updateContigTransferRequest (I)\n$query\n";
+# get the details of the request
 
-    my $sth = $dbh->prepare_cached($query);
+    my $dbh = $this->getConnection();
 
-    my $rc = $sth->execute(@_) || &queryFailed($query,@_);
+    my $hash = &fetchContigTransferRequestData($dbh,$rqid);
 
-    $sth->finish();
+    return 0, "no such request $rqid" unless $hash;
 
-    if ($rc && $status =~ /\b(done|refused|cancelled)\b/) {
-# the request is completed
-        $query = "update CONTIGTRANSFERREQUEST set rstatus='completed'"
-               . " where request_id = ?";
-print STDOUT "Enter updateContigTransferRequest (II)\n$query\n";
+# test the changes
 
-        $sth = $dbh->prepare_cached($query);
-        
-        $sth->execute($rid) || &queryFailed($query,$rid);
-
-        $sth->finish();
+    my $changes = 0;
+    foreach my $key (keys %changes) {
+        my $isvalid = 1;
+        foreach my $column (keys %$hash) {
+            next unless ($key eq $column);
+            $changes{$column} = '' unless defined $changes{$column};
+            $changes++ if ($changes{$column} ne $hash->{$column});
+            $isvalid = 1;
+            last;
+        }
+        return 0,"invalid request attribute $key" unless $isvalid;
     }
 
-    return ($rc && $rc == 1) ? 1 : 0;
+    return 0, "no changes specified" unless $changes;
+
+# test the user
+
+    my $user = $this->getArcturusUser();
+
+    my $description = "$hash->{request_id} (move contig "
+                    . "$hash->{contig_id} to project "
+		    . "$hash->{new_project_id})";
+
+# user/owner ID or 'role' should match, if force == 2 also consider reviewer 
+
+    my $owner = $hash->{requester};
+    unless ($user eq $owner || $force && &userRoles($user,$owner)) {
+        my $review = $force > 1 ? $hash->{reviewer} : 0;
+        unless ($review && ($user eq $review || &userRoles($user,$review))) {
+            return 0, "request $description belongs to user '$owner'"
+                    . ($review ? ", to be reviewed by $review" : "");
+        }
+    }
+
+    $changes{reviewer} = $user unless $changes{reviewer};
+    unless (&updateContigTransferRequest($dbh,$rqid,%changes)) {
+        return 0,"failed to update the database";
+    }
+
+    return ($user eq $owner ? 1 : 2), "OK";
 }
+
+#-----------------------------------------------
+# private methods for contig transfer management
+#-----------------------------------------------
 
 sub findContigTransferRequestIDs {
 # return a list of request IDs matching user, projects or status info
     my $dbh = shift;
     my %option = @_;
 
-# build the where clause on the 
+# build the where clause from the input options
     
     my @data;
     my @clause;
-    my $union = 1;
     foreach my $key (keys %option) {
-# the union flag registers a query which does NOT include date in CR-STATUS
-        $union = 0 if ($key eq "user");
-        $union = 0 if ($key eq "status" && $option{status} ne "pending");
-# keys: old-project_id, new_project_id,contig_id,owner,user,status,
-        push @clause, "$key = ?" unless ($key eq 'before' or $key eq 'after');
-# special cases: before,after (creation date)
-        push @clause, "created <= ?" if ($key eq 'before');
-        push @clause, "created >= ?" if ($key eq 'after');
-        push @data,$option{$key};
+# special case: project_ids
+        my $clause = '';
+        if ($key eq 'projectids') {
+            my @projects = split ',',$option{projectids};
+            if (@projects) {
+                my $clause = '';
+                unless ($option{old_project_id}) {
+                    $clause .= "(old_project_id in ($option{projectids})";
+	        }
+                unless ($option{new_project_id}) {
+                    $clause .= " or " if $clause;
+                    $clause .= "new_project_id in ($option{projectids}))";
+   	        }
+                push @clause,$clause;
+                next;
+            }
+# invalid input aborts
+            print STDERR "undefined project ID constraints\n"; # check caller
+            next;
+	}
+# keys: old_project_id, new_project_id,contig_id,owner,user,status
+        elsif ($key eq 'status' && $option{$key} =~ s/\,/','/g) {
+	    push @clause, "$key in ('$option{$key}')";
+            next;
+        }
+# special cases: before,after (creation date), request_id
+        if ($key eq 'before') {
+            $clause = "requested <= ?";
+        }
+        elsif ($key eq 'after') {
+            $clause = "requested >= ?";
+	}
+        elsif ($key eq 'request_id' || $key eq 'request') {
+            $clause = "request_id = ?";
+	}
+        elsif ($key eq 'contig_id' || $key eq 'contig') {
+            $clause = "contig_id = ?";
+	}
+	else {
+            $clause = "$key = ?";
+	}
+# allocate the key and data
+        push @data, $option{$key};
+        push @clause, $clause;
     }
 
 # ok compose the query, first the join for entries with data in both tables
 
-    my $whereclause = join (' and ',@clause);
-    $whereclause .= ' and '  if $whereclause;
+    my $query = "select request_id from CONTIGTRANSFERREQUEST";
 
-    my $query = "select CONTIGTRANSFERREQUEST.request_id as rid"
-              . "  from CONTIGTRANSFERREQUEST join CONTIGTRANSFERSTATUS"
-              . " using (request_id)"
-	      . " where $whereclause updated in "
-              . "(select max(updated) from CONTIGTRANSFERSTATUS"
-	      . "  where request_id=rid)";
-
-#print STDOUT "Enter findContigTransferRequestIDs $query\n";
+    $query .= " where ".join (' and ',@clause) if @clause;
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1274,100 +853,79 @@ sub findContigTransferRequestIDs {
 
     $sth->finish();
 
-#print STDOUT "findContigTransferRequestIDs rids: @rids  (union $union)\n";
-    return [@rids] unless $union;
-
-# now search for (possible) pending requests without data in CONTIGTRANSFERSTATUS
-
-    $query = "select CONTIGTRANSFERREQUEST.request_id as rid"
-           . "  from CONTIGTRANSFERREQUEST left join CONTIGTRANSFERSTATUS"
-           . " using (request_id)"
-	   . " where $whereclause CONTIGTRANSFERSTATUS.request_id is null";
-
-#print STDOUT "Continue findContigTransferRequestIDs $query\n";
-    $sth = $dbh->prepare_cached($query);
-
-    $sth->execute(@data) || &queryFailed($query,@data);
-
-    while (my ($rid) = $sth->fetchrow_array()) {
-        push @rids,$rid;
-    }
-
-    $sth->finish();
-
-#print STDOUT "rids: @rids\n";
     return [@rids];
 }
 
-sub findPendingContigTransferRequestIDs { # OR getPendingContigTransferRequests
-# private, get all requests which do not have an entry in the STATUS table
-    my $dbh = shift;
-    my %option = @_;
-
-    $option{status} = 'pending';
-    delete $option{user}; # if any
-
-    return &findContigTransferRequestIDs($dbh,%option);
-}
-
-sub fetchContigTransferRequest {
-# private, return all current data for a request identified by request ID
+sub fetchContigTransferRequestData {
+# private, returns a hash with all data for a request identified by request ID
     my $dbh = shift;
     my $rid = shift;
 
-# this query returns all current data for a request
+# this query returns a hash with all current data for a request
 
-    my $ritem = "contig_id, old_project_id, new_project_id, owner, created, "
-	      . "rstatus, comment";
-    my $sitem = "user, updated, status";
-    my $uitem = "owner, created, 'pending'";
-
-    my $query = "select CONTIGTRANSFERREQUEST.request_id, $ritem, $sitem"
-              . "  from CONTIGTRANSFERREQUEST join CONTIGTRANSFERSTATUS"
-              . " using (request_id)"
-	      . " where CONTIGTRANSFERREQUEST.request_id = ?"
-              . "   and updated in "
-              . "(select max(updated) from CONTIGTRANSFERSTATUS"
-	      . "  where request_id= ?)"
-              . " union "
-              . "select CONTIGTRANSFERREQUEST.request_id, $ritem, $uitem"
-              . "  from CONTIGTRANSFERREQUEST left join CONTIGTRANSFERSTATUS"
-              . " using (request_id)"
- 	      . " where CONTIGTRANSFERREQUEST.request_id = ?"
-              . "   and CONTIGTRANSFERSTATUS.request_id is null";
-
-print STDOUT "Enter fetchContigTransferRequest $query\n";
+    my $query = "select * from CONTIGTRANSFERREQUEST where request_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($rid,$rid,$rid) || &queryFailed($query,$rid,$rid,$rid);
-
-    print STDERR "Unexpected multiple result for query:\n$query\n" if ($rc > 1);
+    my $row = $sth->execute($rid) || &queryFailed($query,$rid);
     
-    my @result = $sth->fetchrow_array();
+    my $hashref = $sth->fetchrow_hashref();
 
     $sth->finish();
 
-    return [@result]; # either empty or length 11
+# return the hashref or undef
+
+    return undef unless ($row+0); # no data
+
+# check undefined hash elements, replace by empty string
+
+    foreach my $column (keys %$hashref) {
+        $hashref->{$column} = "" unless defined $hashref->{$column};
+    }
+
+    return $hashref;
 }
 
-#-----------------------------------------------------------------------------
-
-sub addTransferRequestComment {
-# private: update comment field for transfer request
+sub updateContigTransferRequest {
+# private, change parameters of a transfer request
     my $dbh = shift;
-    my $table = shift;  # tablename (READ or CONTIG)
-    my $rid = shift;    # request ID
-    my $text = shift;
+    my $rid = shift; # request ID
+    my %change = @_;
 
-    return unless $text;
+# compose the change instructions
 
-    my $query = "update ${table}TRANSFERREQUEST set comment = ?"
-              . " where request_id = ?";
+    my $update = "update CONTIGTRANSFERREQUEST set ";
 
-    my $sth = $dbh->prepare_cached($query);
+# add the set items
 
-    $sth->execute($text,$rid) || &queryFailed($query,$text,$rid);
+    my @updatedata;
+    foreach my $column (keys %change) {
+        next unless defined $change{$column};
+        $update .= ", " if ($update =~ /\=/);
+        $update .= "$column = ?";
+        push @updatedata,$change{$column};
+    }
+
+# check for a final state
+
+    if ($change{status} && $change{status} =~ /\b(canc|done|fail|refu)/) {
+        $update .= ", closed = now()";
+    }
+
+# add the request identifier
+
+    $update .= " where request_id = ?";
+    push @updatedata, $rid;
+    
+# print STDOUT "Enter updateContigTransferRequest (II)\n$update\n@updatedata\n";
+
+    my $sth = $dbh->prepare_cached($update);
+        
+    my $rc = $sth->execute(@updatedata) || &queryFailed($update,@updatedata);
+
+    $sth->finish();
+
+    return ($rc && $rc == 1) ? 1 : 0;
 }
 
 #------------------------------------------------------------------------------
@@ -1492,26 +1050,45 @@ sub getProjectIDforReadName {
 sub getProjectInventory {
 # returns a list of IDs of all projects with contigs assigned to them
     my $this = shift;
-
     my %options = @_;
 
+# compose the query ; basic query returns all project IDs of projects
+#                     which have contigs allocated to them
+
+    my @data;
+
     my $query = "select distinct PROJECT.project_id"
-	      . "  from PROJECT ";
+	      . "  from PROJECT "; # basic query
+
+# use the 'includeempty' switch to return also projects without contigs
+
     unless ($options{includeempty}) {
         $query .= "  left join CONTIG using (project_id)"
 	        . " where CONTIG.contig_id is not null";
     }
 
+# use the 'project' switch to test existence of a particular project
+
+    if (defined($options{project})) { 
+        $query .= (($query =~ /where/) ? "and" : "where");
+        $query .= " PROJECT.name like ? " if ($options{project} =~ /\D/);
+        $query .= " project_id = ? " if ($options{project} !~ /\D/);
+        push @data, $options{project};
+    }
+
+# use the 'assembly' switch to select assemblies (wild card allowed) 
+
     if (defined($options{assembly})) {
         $query .= (($query =~ /where/) ? "and" : "where");
-        if ($options{assembly} =~ /\D/) {
+        if ($options{assembly} =~ /\D/) { 
             $query .= " assembly_id in "
                     . "(select assembly_id from ASSEMBLY"
-                    . "  where ASSEMBLY.name = '$options{assembly}')";
+                    . "  where ASSEMBLY.name like ?)";
 	}
 	else {
-            $query .= " assembly_id = $options{assembly}";
+            $query .= " assembly_id = ? ";
         } 
+        push @data, $options{assembly};
     }
 
     $query .= " order by assembly_id,project_id"; 
@@ -1520,7 +1097,7 @@ sub getProjectInventory {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute() || &queryFailed($query);
+    $sth->execute(@data) || &queryFailed($query,@data);
 
     my $projectids = [];
     while (my ($pid) = $sth->fetchrow_array()) {
@@ -1550,6 +1127,39 @@ sub getProjectIDsForProjectName {
     }
 
     return [@projectids];
+}
+
+sub getNamesForProjectID {
+# return project name, assembly name (or 'undefined') and the owner's name 
+    my $this = shift;
+    my $pid  = shift;
+
+# the next query also returns a result if the assembly referenced is invalid
+# this should not occur, but just in case ...
+
+    my $query = "select PROJECT.name as pname, ASSEMBLY.name as aname, owner"
+              . "  from PROJECT join ASSEMBLY using (assembly_id)"
+              . " where project_id = ?"
+              . " union "
+              . "select PROJECT.name as pname, 'undefined', owner"
+              . "  from PROJECT"
+              . " where project_id = ?"
+	      . " limit 1 ";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($pid,$pid) || &queryFailed($query,$pid,$pid);
+
+    my ($pname,$aname,$owner) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    print STDERR "!! unreferenced assembly ID for project $pname ($pid) !!\n"
+	if ($aname && $aname eq 'undefined'); # just a warning
+
+    return ($pname,$aname,$owner);
 }
 
 sub getHangingProjectIDs {
@@ -1642,8 +1252,42 @@ sub addCommentForProject {
 }
 
 #------------------------------------------------------------------------------
-# locked status  handling
+# project access and locked status handling
 #------------------------------------------------------------------------------
+
+sub getAccessibleProjects {
+# returns a list of projects accessible to this user
+    my $this = shift;
+    my %options = @_;
+
+# options: project => P to test (a) particular project(s)
+#          user    => U overriding the default Arcturus user
+
+    my $user = $options{user};
+    $user = $this->getArcturusUser() unless defined $user;
+# remove switches meaningless to getProjectInventory (just in case)
+    foreach my $key (keys %options) {
+        delete $options{$key} unless ($key eq 'project');
+    }
+# add switch to retrieve all projects, irrespective of contig allocations
+    $options{includeempty} = 1;
+
+# get a list of project IDs 
+
+    my $projectids = $this->getProjectInventory(%options);
+
+# test projects found against user privileges
+
+    my $dbh = $this->getConnection();
+
+    my @projectids;
+    foreach my $projectid (@$projectids) {
+        my ($access,$owner) = &hasPrivilegeOnProject($dbh,$projectid,$user);
+        push @projectids, $projectid if $access;
+    }
+
+    return [@projectids];
+}
 
 sub getLockedStatusForProjectID {
     my $this = shift;
@@ -1754,11 +1398,9 @@ sub hasPrivilegeOnProject {
     my $project_id = shift;
     my $user = shift;
 
-    my $owner1 = &getLockedStatus($dbh,$project_id,0,1);
-print STDOUT "hasPrivilegeOnProject  owner1  $owner1\n";
+    my $owner = &getLockedStatus($dbh,$project_id,0,1);
 
-    my ($islocked,$lockedby,$owner) = &getLockedStatus($dbh,$project_id,0,1);
-print STDOUT "hasPrivilegeOnProject  owner  $owner, $lockedby ".($islocked || 'unlocked')."\n";
+    return undef unless $owner; # probably invalid project_id
 
 # user has privilege as owner or if the user's role overrides the ownership
 
