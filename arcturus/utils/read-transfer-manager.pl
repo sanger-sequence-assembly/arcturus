@@ -117,6 +117,8 @@ my ($Project,$pid);
 
 $Project = &getProjectInstance($project,$assembly,$adb);
 
+&showUsage("Unknown project '$project'");
+
 # check if the user has access privilege on the project
 
 my $projectids = $adb->getAccessibleProjects();
@@ -291,7 +293,7 @@ sub getProjectInstance {
     my $assembly = shift; # ID or name
     my $adb = shift;
 
-    return undef unless $identifier;
+    return undef unless defined($identifier);
 
 # get project info by getting a Project instance
 
