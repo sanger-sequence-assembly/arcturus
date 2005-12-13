@@ -1098,15 +1098,35 @@ public class DynamicScaffolding2 {
 	}
 
 	private Object getObjectAt(Point click) {
+	    Contig contig = getContigAt(click);
+
+	    if (contig!= null)
+		return contig;
+
+	    Bridge bridge = getBridgeAt(click);
+
+	    return bridge;
+	}
+
+	private ContigBox getContigBoxAt(Point click) {
 	    for (Iterator iterator = mapBoxes.keySet().iterator(); iterator.hasNext();) {
 		Rectangle2D.Double rect = (Rectangle2D.Double)iterator.next();
 		if (rect.contains(click)) {
 		    ContigBox cbox = (ContigBox)mapBoxes.get(rect);
-		    Contig contig = cbox.getContig();
-		    return contig;
+		    return cbox;
 		}
 	    }
 
+	    return null;
+	}
+
+	private Contig getContigAt(Point click) {
+	    ContigBox cbox = getContigBoxAt(click);
+
+	    return (cbox != null) ? cbox.getContig() : null;
+	}
+
+	private Bridge getBridgeAt(Point click) {
 	    for (Iterator iterator = mapBridges.keySet().iterator(); iterator.hasNext();) {
 		Shape shape = (Shape)iterator.next();
 		if (shape.contains(click)) {
