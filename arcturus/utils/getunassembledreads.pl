@@ -209,8 +209,10 @@ while (my $remainder = scalar(@$readids)) {
 
     $logger->info("Writing to output file $outputFileName");
 
+    $threshold = 1 if (defined($threshold) && $threshold < 1);
+
     foreach my $read (@$reads) {
-        if (defined($clipmethod) || $threshold || $minimumrange) {
+        if (defined($clipmethod) || defined($threshold) || $minimumrange) {
             $clipmethod = 0 unless defined($clipmethod);
             unless ($read->qualityClip(clipmethod=>$clipmethod,
                                        threshold=>$threshold,
