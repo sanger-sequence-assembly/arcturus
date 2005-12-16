@@ -12,7 +12,7 @@ require Mail::Send;
 
 my $organism;
 my $instance;
-my $action = 'list';
+my $action;
 my $project;
 my $assembly;
 my $contig;
@@ -122,6 +122,8 @@ $logger->setFilter(0) if $verbose; # set reporting level
 #----------------------------------------------------------------
 # test input parameters
 #----------------------------------------------------------------
+
+$action = 'list' unless $action;
 
 &showUsage("Missing organism database") unless $organism;
 
