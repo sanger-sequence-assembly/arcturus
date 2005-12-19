@@ -28,9 +28,9 @@ my $confirm;
 my $verbose;
 my $testmode;
 
-my $validKeys = "organism|instance|project|assembly|"
-              . "read|forn|oligo|finishing|limit|qclip|lclip|"
-              . "confirm|verbose|test|help";
+my $validKeys = "organism|instance|project|p|assembly|a|"
+              . "read|r|forn|oligo|finishing|limit|qclip|qtrim|lclip|ltrim|"
+              . "confirm|verbose|v|test|help|h|s";
 
 while (my $nextword = shift @ARGV) {
 
@@ -49,6 +49,7 @@ while (my $nextword = shift @ARGV) {
     $organism  = shift @ARGV  if ($nextword eq '-organism');
 
     $read      = shift @ARGV  if ($nextword eq '-read');
+    $read      = shift @ARGV  if ($nextword eq '-r');
 
     $forn      = shift @ARGV  if ($nextword eq '-forn');
 
@@ -58,14 +59,19 @@ while (my $nextword = shift @ARGV) {
     $limit     = shift @ARGV  if ($nextword eq '-limit');
 
     $project   = shift @ARGV  if ($nextword eq '-project');
+    $project   = shift @ARGV  if ($nextword eq '-p');
 
     $assembly  = shift @ARGV  if ($nextword eq '-assembly');
+    $assembly  = shift @ARGV  if ($nextword eq '-a');
 
     $qclip     = shift @ARGV  if ($nextword eq '-qclip');
+    $qclip     = shift @ARGV  if ($nextword eq '-qtrim');
 
     $lclip     = shift @ARGV  if ($nextword eq '-lclip');
+    $lclip     = shift @ARGV  if ($nextword eq '-ltrim');
 
     $verbose   = 1            if ($nextword eq '-verbose');
+    $verbose   = 1            if ($nextword eq '-v');
  
     $confirm   = 1            if ($nextword eq '-confirm' && !defined($confirm));
 
@@ -74,6 +80,8 @@ while (my $nextword = shift @ARGV) {
     $testmode  = 1            if ($nextword eq '-test');
 
     &showUsage(0,1) if ($nextword eq '-help'); # long write up
+    &showUsage(0,0) if ($nextword eq '-h');    # short write up
+    &showUsage(0,2) if ($nextword eq '-s');    # synopsis
 }
  
 #----------------------------------------------------------------
@@ -81,7 +89,7 @@ while (my $nextword = shift @ARGV) {
 #----------------------------------------------------------------
                                                                                
 my $logger = new Logging('STDOUT');
- 
+
 $logger->setFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
@@ -92,7 +100,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
  
-&showUsage("Missing project ID or projectname") unless $project;
+&showUsage("Missing project ID or projectname") unless defined($project);
 
 unless ($read || $forn || $readtype) {
     &showUsage("Missing read ID, read name, read type or a forn list");
@@ -117,7 +125,7 @@ my ($Project,$pid);
 
 $Project = &getProjectInstance($project,$assembly,$adb);
 
-&showUsage("Unknown project '$project'");
+&showUsage("Unknown project '$project'") unless $Project;
 
 # check if the user has access privilege on the project
 
@@ -240,22 +248,26 @@ foreach my $read (@reads) {
     }
     else {
         $logger->warning("read transfer request is REJECTED : $message");
+
         next if $confirm;
 
         next unless ($verbose && $message =~ /\bassembled\b/);
 
 # the read is already assembled: list details 
 
-        my $list = $adb->getAssemblyDataforReadName($read) || next;
+        my $list = $adb->getAssemblyDataforReadName(%roption) || next;
+# refine this list
         foreach my $contig_id (sort {$a <=> $b} keys %$list) {
             my $contig = sprintf("Contig%06d",$contig_id);
             my @items = @{$list->{$contig_id}};
-            $items[1] = substr ($items[1],0,10);
+            $items[1] = substr ($items[1],0,10); # date field
             my $line = sprintf "%-24s  %10s  %-12s  %-8s  %2d", @items;
-            $logger->warning("\t\t    in $contig = $line");
+            $logger->warning("  in $contig = $line");
         }
     }  
 }
+    
+$logger->skip();
   
 $adb->disconnect();
 
@@ -342,48 +354,71 @@ sub showUsage {
     my $long = shift || 0;
 
     if ($long) {
-     print STDERR "\n";
-     print STDERR "Allocate read(s) to a specified project, optionally in a\n";
-     print STDERR "specified assembly\n\n";
-     print STDERR "A read can be specified on the command line by a read ID ";
-     print STDERR "or by name;\n a list of reads can ";
-     print STDERR "be presented in a file using the '-forn' option\n\n";
-     print STDERR "Both project and assembly can be specified with \n";
-     print STDERR "a number (ID) or a name (i.e. not a number)\n\n";
-     print STDERR "The allocation process tests the project ownership:\n";
-     print STDERR "reads will only be assigned to the project if you have ";
-     print STDERR "write privilege\n";
-     print STDERR "In default mode this script lists the reads that it will\n";
-     print STDERR "(try to) allocate. In order to actually make the change,\n";
-     print STDERR "the '-confirm' switch must be used\n";
-     print STDERR "\n";
+# synopsis
+        print STDERR "\n";
+        print STDERR " read-transfer-manager: OVERVIEW\n";
+        print STDERR "\n";
+        print STDERR " Allocate read(s) to a specified project, optionally ";
+        print STDERR "in a specified assembly\n";
+        print STDERR "\n";
+        print STDERR " A read can be specified on the command line by a read ";
+        print STDERR "ID or by name;\n a list of reads can ";
+        print STDERR "be presented in a file using the '-forn' option\n";
+        print STDERR "\n";
+        print STDERR " Both project and assembly can be specified with ";
+        print STDERR "a number (ID) or a name\n";
+        print STDERR "\n";
+        print STDERR " The allocation process tests the project ownership: ";
+        print STDERR "reads will only be\n assigned to the project if you have ";
+        print STDERR "access privilege\n";
+        print STDERR "\n";
+        print STDERR "Reads can be tested for quality and minimum length\n";
+        print STDERR "\n";
+        print STDERR " In default mode this script lists the reads that it will ";
+        print STDERR "(try to) allocate\n In order to actually make the change, ";
+        print STDERR "the '-confirm' switch must be used\n";
+        print STDERR "\n";
+        unless ($long == 1) {
+            print STDERR " ** Use the -h switch for parameter information **\n";
+            print STDERR "\n";
+            exit 0;
+        }
     }
+# parameter information
     print STDERR "\n";
+    print STDERR "read-transfer-manager: SUMMARY\n";
+    print STDERR "\n" if $code;
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "-organism\tArcturus database name\n" unless $organism;
+    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
     print STDERR "-project\tproject ID or projectname\n";
     print STDERR "\n";
     print STDERR "MANDATORY NON-EXCLUSIVE PARAMETERS (at least one needed):\n";
     print STDERR "\n";
     print STDERR "-read\t\tread ID or readname\n";
     print STDERR "-forn\t\tfilename with list of read IDs or names\n";
-    print STDERR "-oligo\t\tto select oligo reads (on name pattern)\n";
-    print STDERR "-finishing\tto select finishing reads (on name pattern)\n";
+    print STDERR "-oligo\t\tto select oligo reads\n";
+    print STDERR "-finishing\tto select finishing reads\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or assemblyname\n";
-    print STDERR "-confirm\t(no value) to execute on the database\n";
-#    print STDERR "-preview\t(no value) produce default listing (negates 'confirm')\n";
-#    print STDERR "-force\t\t(no value) to process reads allocated to other users\n";
-    print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
+    print STDERR "-qtrim\t\ttrim low quality regions at both ends at this level\n";
+    print STDERR "-ltrim\t\trequire this minimum high quality read length\n";
+    print STDERR "\n";
+    print STDERR "-confirm\t(no value) required to execute on the database\n";
+    print STDERR "\n" if $code; 
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
+    unless ($long) {
+        print STDERR " ** Use the -s switch for a synopsis **\n";
+        print STDERR "\n";
+    }
 
     $code ? exit(1) : exit(0);
 }
+

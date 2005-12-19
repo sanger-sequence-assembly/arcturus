@@ -229,7 +229,7 @@ CREATE TABLE MAPPING (
 CREATE TABLE PROJECT (
   project_id mediumint(8) unsigned NOT NULL auto_increment,
   assembly_id smallint(5) unsigned default '0',
-  name varchar(16) NOT NULL default '',
+  name varchar(16) binary NOT NULL default '',
   updated timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   owner varchar(8) default NULL,
   locked datetime default NULL,

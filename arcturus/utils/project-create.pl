@@ -14,12 +14,12 @@ my $organism;
 my $instance;
 my $project_id;
 my $projectname;
-my $assembly_id;
+my $assembly = 1; # default assembly ID
 my $owner;
 my $comment;
 my $verbose;
 
-my $validKeys  = "organism|instance|project_id|projectname|assembly_id|"
+my $validKeys  = "organism|instance|project_id|projectname|assembly|"
                . "owner|comment|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -34,7 +34,7 @@ while (my $nextword = shift @ARGV) {
 
     $project_id   = shift @ARGV  if ($nextword eq '-project_id');
 
-    $assembly_id  = shift @ARGV  if ($nextword eq '-assembly_id');
+    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
     $owner        = shift @ARGV  if ($nextword eq '-owner');
 
@@ -47,9 +47,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage("Invalid data in parameter list") if @ARGV;
-
-#&showUsage(0,"Missing project description") unless $comment;
+&showUsage("Invalid data in parameter list: @ARGV") if @ARGV;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -94,6 +92,27 @@ unless ($adb->userCanCreateProject()) {
 }
 
 #----------------------------------------------------------------
+# identify the assembly
+#----------------------------------------------------------------
+
+my ($Ary,$Assembly);
+if ($assembly =~ /\D/) {
+   ($Ary,$Assembly) = $adb->getAssembly(assemblyname => $assembly);
+    undef $Assembly if ($Ary && @$Ary > 1); # ambiguous asssembly name
+}
+else {
+    $Assembly = $adb->getAssembly(assembly_id => $assembly);
+}
+
+unless ($Assembly) {
+    &showUsage("Assembly $assembly does not exist or is ambiguous");
+    $adb->disconnect();
+    exit 1;
+}
+
+my $assembly_id = $Assembly->getAssemblyID();
+
+#----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
@@ -103,17 +122,21 @@ $project->setProjectName($projectname);
 
 $project->setProjectID($project_id) if defined($project_id);
 
-$project->setAssemblyID($assembly_id) if defined ($assembly_id);
+$project->setAssemblyID($assembly_id);
 
 $project->setOwner($owner) if defined($owner);
 
 $project->setComment($comment) if $comment;
 
-my ($pid,$status) = $adb->putProject($project);
+my $pid = $adb->putProject($project);
 
-$logger->warning("New project added with ID = $pid") if $pid;
-
-$logger->severe("FAILED to add new project: $status") unless $pid;
+if ($pid) {
+    $logger->warning("New project $projectname added with ID = $pid");
+}
+else {
+    $logger->severe("FAILED to add new project $projectname");
+    $logger->warning("Check if user '$owner' exists") if defined $owner;
+}
 
 $adb->disconnect();
 
@@ -136,9 +159,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-project_id\tproject ID to be inserted\n";
-    print STDERR "-assembly_id\tassembly ID to be used (default 0)\n";
-    print STDERR "-owner\t\tAAssign the new project to this user\n";
+    print STDERR "-project_id\tproject ID to be allocated (overrides autoincrement)\n";
+    print STDERR "-assembly\tassembly name or ID to be used (default 1)\n";
+    print STDERR "-owner\t\tAssign the new project to this user\n";
     print STDERR "-comment\tA comment in quotation marks\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 

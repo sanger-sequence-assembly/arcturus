@@ -413,9 +413,10 @@ if ($action =~ /\b(grant|wait|cancel|deny|reenter)\b/) {
             $logger->warning("operation refused : $report");
         }
     }
-    else {
+    elsif ($request) {
         my $status = ($action ne 'reenter' ? "pending" : "completed");
         $logger->warning("operation refused : no such ($status) request $request");
+	$logger->skip();
     }
 }
 
