@@ -16,17 +16,18 @@ my $action;
 my $project;
 my $assembly;
 my $contig;
-my $fofn;
+my $focn;
 my $user;
 my $owner;
 my $request;
 my $openproject = 'BIN,TRASH';
+my $newoproject;
 my $confirm;
 my $force;
 my $comment;
 
 my $verbose;
-my $testmode;
+my $TESTMODE;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -35,19 +36,19 @@ my $testmode;
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe";
 
 my $validKeys = "organism|instance|$actions|"
-#              . "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe|"
-              . "contig|fofn|project|assembly|"
-              . "user|owner|request|comment|"
-              . "list|longlist|"
-              . "openproject|confirm|force|preview|test|help|verbose";
+              . "contig|c|focn|project|p|assembly|a|openproject|"
+              . "user|u|owner|o|request|r|comment|"
+              . "list|longlist|ll|"
+              . "help|h|s|"
+              . "confirm|commit|force|preview|test|verbose";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage("Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'",0,$action);
     }
 
-# the next die statement prevents redefinition when used with e.g. a wrapper script 
+ # the next die statement prevents redefinition when used with e.g. a wrapper script 
 
     die "You can't re-define instance" if ($instance && $nextword eq '-instance');
 
@@ -67,48 +68,61 @@ while (my $nextword = shift @ARGV) {
 
     $action      = 'grant'      if ($nextword eq '-grant');
 
-    $action      = 'wait'       if ($nextword eq '-wait');
-    $action      = 'wait'       if ($nextword eq '-defer');
+    $action      = 'defer'      if ($nextword eq '-wait');
+    $action      = 'defer'      if ($nextword eq '-defer');
 
-    $action      = 'deny'       if ($nextword eq '-reject');
+    $action      = 'reject'     if ($nextword eq '-reject');
 
-    $action      = 'reenter'    if ($nextword eq '-reschedule');
+$action      = 'reenter'    if ($nextword eq '-reschedule'); # test phase
 
-    $action      = 'probe'      if ($nextword eq '-probe');
+$action      = 'probe'      if ($nextword eq '-probe');      # separate script?
 
-    $action      = 'list'       if ($nextword eq '-list'); # pending requests only
+    $action      = 'list'       if ($nextword eq '-list');     # pending requests only
 
     $action      = 'longlist'   if ($nextword eq '-longlist'); # all requests
+    $action      = 'longlist'   if ($nextword eq '-ll');       # all requests
 
     $project     = shift @ARGV  if ($nextword eq '-project');
+    $project     = shift @ARGV  if ($nextword eq '-p');
 
     $assembly    = shift @ARGV  if ($nextword eq '-assembly');
+    $assembly    = shift @ARGV  if ($nextword eq '-a');
 
     $contig      = shift @ARGV  if ($nextword eq '-contig');
 
-    $fofn        = shift @ARGV  if ($nextword eq '-fofn');
+    $focn        = shift @ARGV  if ($nextword eq '-focn');
 
-    $user        = shift @ARGV  if ($nextword eq '-user');
+$user        = shift @ARGV  if ($nextword eq '-user'); # ?
+$user        = shift @ARGV  if ($nextword eq '-u');    # ?
 
     $owner       = shift @ARGV  if ($nextword eq '-owner');
 
     $request     = shift @ARGV  if ($nextword eq '-request');
+    $request     = shift @ARGV  if ($nextword eq '-r');
 
     $comment     = shift @ARGV  if ($nextword eq '-comment');
 
-    $openproject = shift @ARGV  if ($nextword eq '-openproject');
+    if ($newoproject && $nextword eq '-openproject') {
+        die "You can't re-define open projects";
+    }
+    $newoproject = shift @ARGV  if ($nextword eq '-openproject');
 
     $verbose     = 1            if ($nextword eq '-verbose');
  
     $confirm     = 1            if ($nextword eq '-confirm' && !defined($confirm));
+    $confirm     = 1            if ($nextword eq '-commit'  && !defined($confirm));
 
     $confirm     = 0            if ($nextword eq '-preview');
 
     $force       = 1            if ($nextword eq '-force');
 
-    $testmode    = 1            if ($nextword eq '-test');
+$TESTMODE    = 1            if ($nextword eq '-test'); # temporary
 
-    &showUsage(0,1) if ($nextword eq '-help'); # long write up
+# on-line help 
+
+    &showUsage(0,1,$action) if ($nextword eq '-help'); # long write up
+    &showUsage(0,0,$action) if ($nextword eq '-h'); # short write up
+    &showUsage(0,2,$action) if ($nextword eq '-s'); # synopsis
 }
  
 #----------------------------------------------------------------
@@ -125,25 +139,27 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 $action = 'list' unless $action;
 
-&showUsage("Missing organism database") unless $organism;
+&showUsage("Missing organism database",0,$action) unless $organism;
 
-&showUsage("Missing database instance") unless $instance;
+&showUsage("Missing database instance",0,$action) unless $instance;
 
 # contig identifier is mandatory for 'transfer', optional otherwise
 
 if ($action eq 'transfer') {
 # project and contig identifiers must be given; user is ignored
-    &showUsage("Missing contig identifier or fofn") unless ($contig || $fofn);
+    &showUsage("Missing project ID or projectname",0,$action) unless $project;
 
-    &showUsage("Missing project ID or projectname") unless $project;
+    &showUsage("Missing contig identifier or focn",0,$action) unless ($contig || $focn);
 
+
+# perhaps more restrictibve, here?
     if ($user || $owner || $request) {
         $logger->warning("Redundant keyword(s) ignored");
     }
 }
 else {
-# fofn may not be specified, only a contig ID allowed
-    &showUsage("Invalid key 'fofn' for '$action' action") if $fofn;
+# focn may not be specified, but a contig ID is allowed
+    &showUsage("Invalid key 'focn' for '$action' action",0,$action) if $focn;
 }
 
 #----------------------------------------------------------------
@@ -154,7 +170,7 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'",0,$action);
 }
  
 my $URL = $adb->getURL;
@@ -163,8 +179,12 @@ $logger->info("Database $URL opened succesfully");
     
 $logger->skip();
 
-$user = 'ejztst' if ($testmode && !$user);
-$adb->{ArcturusUser} = $user if $testmode;
+#***** to be removed
+if ($TESTMODE) {
+    $user = 'ejztst' unless $user;
+    $adb->{ArcturusUser} =  $user;
+}
+#***** to be removed
 
 #----------------------------------------------------------------
 # preliminaries: get (possible) contig and/or project info
@@ -172,31 +192,37 @@ $adb->{ArcturusUser} = $user if $testmode;
 
 my $cids;
 
-$cids = &getContigIdentifiers($contig,$fofn,$adb) if ($contig || $fofn);
+$cids = &getContigIdentifiers($contig,$focn,$adb) if ($contig || $focn);
 
 
-# get the project and assembly information (ID or name for both)
+# get the project and assembly information (ID or name for both, and if any)
 
 my ($Project,$pid);
 
-$Project = &getProjectInstance($project,$assembly,$adb) if $project;
+if ($project) {
 
-# disable for testmode with non existent projects
+    $Project = &getProjectInstance($project,$assembly,$adb);
 
-unless ($Project) {
-# TEMPORARY provision for TEST mode when no valid project specified
-    if ($project && !$testmode) {
-# invalid project identifier (all cases)
+#   unless ($Project) {
+    unless ($Project || $TESTMODE) {
+# invalid project/assembly specification (all cases); abort
         $adb->disconnect();
+
+        &showUsage("Unknown project $project",0,$action);
+
         exit 0;
     }
-    if ($project && $testmode) {
+
+#***** to be removed
+# TEMPORARY provision for TEST mode when no valid project specified
+    if (!$Project && $TESTMODE) {
 print STDERR "creating test project with project ID $project\n";
         my $p = new Project();
         $p->setProjectName("project $project");
         $p->setProjectID($project);
         $project = $p;
     }
+#***** to be removed 
 }
 
 $pid = $Project->getProjectID() if $Project;
@@ -219,8 +245,15 @@ $pid = $Project->getProjectID() if $Project;
 
 if ($action eq 'transfer') {
 
-    my %options = (open=>$openproject);
-$options{user} = $user if $user;
+    my %options;
+    if ($newoproject) {
+#        $openproject = $newoproject; 
+# should be protected e.g. allow only a limited range of names for non-privi users
+	$options{useropen} = 1;
+    }
+
+    $options{open} = $openproject;
+#$options{user} = $user if $user; # what does this, check
     $options{requester_comment} = $comment if $comment;
 #$pid=7;
 
@@ -249,7 +282,7 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
 # if NO specific request ID is specified all these options revert to 'list'
     my %options;
     $options{requester} = $user if $user;
-    $options{requester} = $owner if $owner;
+    $options{requester} = $owner if $owner; # overrides
     $options{contig_id} = $contig if $contig;
     $options{projectids} = $pid if $pid;
     $options{request_id} = $request if $request;
@@ -271,6 +304,8 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
 
 # print out
 
+    $user = $adb->getArcturusUser(); # (possibly) redefine
+
     my $header;
     my $linemode = 1;
     if ($requestsfound && @$requestsfound > 1) {
@@ -281,8 +316,9 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
         $linemode = 0;
     }
     else {
-        $user = $adb->getArcturusUser();
-        $header = "There are NO transfer requests involving user $user";
+        $header = "There are NO transfer" 
+                . ($action =~ /longlist/ ? " " : " pending ") 
+                . "requests involving user $user";
     }
 
     $logger->skip();
@@ -292,7 +328,6 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
     foreach my $request (@$requestsfound) {
         my $rd = $adb->getContigTransferRequestData($request);
 # get comment information
-        $user = $adb->getArcturusUser();
         if ($linemode) {
             my $comment = $rd->{requester_comment};
             $comment .= " " if $comment;
@@ -324,16 +359,19 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
             }
             $logger->skip();
 	}
-
     }
-    $logger->skip();
+
+    if ($requestsfound && @$requestsfound && $action !~ /list/) {
+        $logger->skip();
+        $logger->warning("** Provide the '-request N' key to select a request **");
+    }
 }
 
 #------------------------------------------------------------------------------
 # CANCEL, GRANT or REJECT a request; these options come with confirm/force mode
 #------------------------------------------------------------------------------
 
-if ($action =~ /\b(grant|wait|cancel|deny|reenter)\b/) {
+if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
 
     my %options;
     $options{requester} = $user if $user;
@@ -343,7 +381,7 @@ if ($action =~ /\b(grant|wait|cancel|deny|reenter)\b/) {
 
 # check if the request exists
 
-    $options{request_id} = $request;
+    $options{request_id} = $request; # is always defined (see list selection above)
     $options{status} = 'pending' unless ($action eq 'reenter');
     $options{status} .= ',approved'  if ($action eq 'cancel');
 
@@ -362,20 +400,20 @@ if ($action =~ /\b(grant|wait|cancel|deny|reenter)\b/) {
 
         $operation = "cancelled"  if ($action eq 'cancel');
         $operation = "approved"   if ($action eq 'grant');
-        $operation = "refused"    if ($action eq 'deny');
+        $operation = "refused"    if ($action eq 'reject');
         $operation = "re-entered" if ($action eq 'reenter');
-        $operation = "marked for later consideration" if ($action eq 'wait');
+        $operation = "marked for later consideration" if ($action eq 'defer');
 
 # adjust the force flag, if any (=1 to test requestor against user, =2 to include reviewer)
 
-        $force = 2 if ($force && $action ne 'cancel');
+        $force = 2 if ($force && $action ne 'cancel'); # only the owner can cancel
 
         if (!$confirm) {
-            $logger->warning("request $description is to be $operation\n=> use -confirm");
+            $logger->warning("request $description is to be $operation\n=> use '-confirm'");
         }
 
 
-        if ($action eq 'wait') {
+        if ($action eq 'defer') {
             $comment = "" unless $comment;
             $comment = " ($comment)" if $comment;
             $comment = "will be considered later".$comment;
@@ -416,7 +454,6 @@ if ($action =~ /\b(grant|wait|cancel|deny|reenter)\b/) {
     elsif ($request) {
         my $status = ($action ne 'reenter' ? "pending" : "completed");
         $logger->warning("operation refused : no such ($status) request $request");
-	$logger->skip();
     }
 }
 
@@ -502,9 +539,9 @@ elsif ($action eq 'execute') {
         $pid = $rd->{new_project_id};
        ($status,$report) = $adb->assignContigIDsToProjectID([($cid)],$pid,1);
 
-# status 0, failure project lock (=> back to 'approved' for later execution)
+# status 0, failure project locked (-> back to 'approved' for later execution)
 # status 1, success
-# status 2, contig already allocated (=> set to 'failed') should not occur
+# status 2, contig already allocated (-> set to 'failed') should not occur
 
 
         if ($status == 1) {
@@ -525,15 +562,15 @@ elsif ($action eq 'execute') {
 
     $logger->skip();
     $logger->warning("no transfer requests processed") unless $processed;            
-    $logger->skip();
 }
 
 
 
 elsif ($action eq 'probe') {
+# ? separate script?
 }
-
-# execute if confirm switch set, else list 
+    
+$logger->skip();
   
 $adb->disconnect();
 
@@ -544,14 +581,14 @@ exit 0;
 #------------------------------------------------------------------------
 
 sub getContigIdentifiers {
-# ad hoc routine, returns contig IDs specified with $contig, $fofn or both
+# ad hoc routine, returns contig IDs specified with $contig, $focn or both
     my $contig = shift; # contig ID, name or comma-separated list of these
-    my $fofn = shift; # filename
+    my $focn = shift; # filename
     my $adb = shift; # database handle
 
     my @contigs;
 
-    if ($contig || $fofn) {
+    if ($contig || $focn) {
 # get contig identifiers in array
         if ($contig =~ /\,/) {
             @contigs = split /\,/,$contig;
@@ -560,9 +597,9 @@ sub getContigIdentifiers {
             push @contigs,$contig;
         }
 # add possible info from file with names
-        if ($fofn) {
-            $fofn = &getNamesFromFile($fofn);
-            push @contigs,@$fofn;
+        if ($focn) {
+            $focn = &getNamesFromFile($focn);
+            push @contigs,@$focn;
         }
     }
 
@@ -676,7 +713,7 @@ sub createContigTransferRequest {
 # consistency; each request is then tested for validity, i.e. whether it
 # can be executed
 
-    return 0,"invalid parameters ($cid,$tpid)" unless ($cid && $tpid);
+    return 0,"invalid parameters ($cid,$tpid)" unless ($cid && defined($tpid));
 
     my $user = $adb->getArcturusUser();
 
@@ -711,6 +748,10 @@ sub createContigTransferRequest {
 
     my ($cpid,$lock) = $adb->getProjectIDforContigID($cid); # current project ID
 
+    unless (defined($cpid)) {
+        return 0,"contig $cid does not exist";
+    }
+
     if ($cpid == $tpid) {
         return 0,"contig $cid is already allocated to project $tpid";
     }  
@@ -725,7 +766,9 @@ sub createContigTransferRequest {
         foreach my $openprojectname (@opns) {
             my $projects = $adb->getProjectIDsForProjectName($openprojectname);
 # returns a list of project ID, assembly ID pairs
-	    return 0,"invalid project name $openprojectname" unless @$projects;
+            unless (@$projects || !$options{useropen}) {
+    	        print STDERR "!! invalid open project name $openprojectname !!\n";
+            }
             foreach my $project (@$projects) {
                 $open .= " " if $open;
                 $open .= $project->[0];
@@ -815,23 +858,31 @@ sub mailMessageToOwner {
 # compose and submit a message to the owner of project 
     my ($request,$contig,$cproject,$tproject,$owner,$requestor,$in) = @_;
 
-    my $message = "user $requestor requests contig $contig to be moved ";
-    $message .= "from ".($in ? "" : "your ")." project $cproject "
-             .  "into ".($in ? "your " : ""). "project $tproject\n\n";
-    $message .= "To cancel, grant or deny this transfer, or to defer a decision,\n"
-             .  "execute one of the following commands (use cut & paste):\n\n"; 
+    my $arcturusworkdir = `pfind -q $organism`;
+    $arcturusworkdir .= "/arcturus";
 
-    $message .= "grantContigRequest  -request $request\n"
-             .  "cancelContigRequest -request $request\n"
-             .  "rejectContigRequest -request $request\n"
-             .  "deferContigRequest  -request $request\n"
+    my $message = "user $requestor requests contig $contig to be moved\n";
+    $message .= "from ".($in ? "" : "** your **")." project $cproject\n"
+             .  "into ".($in ? "** your **" : ""). "project $tproject\n\n";
+
+    $message .= "To cancel, grant or reject this transfer, or to defer a decision,\n"
+             .  "do execute one of the following commands in the arcturus work\n"
+             .  "directory for $organism ($arcturusworkdir) : \n\n";
+
+    $message .= "transfer/grantContigRequest  -request $request\n"
+             .  "transfer/cancelContigRequest -request $request\n"
+             .  "transfer/rejectContigRequest -request $request\n"
+             .  "transfer/deferContigRequest  -request $request\n"
 	     .  "\n";
 
-    $message .= "listContigRequests will show all request that relate to you\n\n";
+    $message .= "In order to list requests that relate to you use :\n\n"
+             .  "transfer/listContigRequests  [-longlist]\n\n";
 
-    $message .= "executeContigRequests -request $request will execute your requests\n\n";
+    $message .= "In order to execute your approved requests use :\n\n"
+             .  "executeContigRequests [-request $request]\n\n";
 
-    $message .= "\n"; 
+    $message .= "Most of these scripts come with additional options. Get a \n"
+	     .  "parameter list or synopsis with the '-h' or the '-s' switch\n\n";
 
     &sendMessage($owner,$message);
 }
@@ -842,7 +893,7 @@ sub sendMessage {
     my ($user,$message) = @_;
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
-$user='ejz';
+$user="ejz+$user"; # temporary redirect
 
     my $mail = new Mail::Send;
     $mail->to($user);
@@ -861,64 +912,227 @@ $user='ejz';
 sub showUsage { 
     my $code = shift || 0;
     my $long = shift || 0;
+    my $action = shift;
+
+    my %section = (transfer=>1,cancel=>2,grant=>2,defer=>2,reject=>2,execute=>3,
+                    list=>4,longlist=>4);
+    my $help = ($action ? $section{$action} : 0);
 
     if ($long) {
-     print STDERR "\n";
-     print STDERR "Allocate contig(s) to a specified project, optionally in a\n";
-     print STDERR "specified assembly\n\n";
-     print STDERR "A contig can be specified on the command line by a number (ID)\n";
-     print STDERR "or by the name of a contig occurring in it; a list of contigs can\n";
-     print STDERR "be presented in a file using the '-fofn' option\n\n";
-     print STDERR "Both project and assembly can be specified with \n";
-     print STDERR "a number (ID) or a name (i.e. not a number)\n\n";
-     print STDERR "The allocation process tests the project locking status:\n";
-     print STDERR "Contigs will only be (re-)allocated from their current\n";
-     print STDERR "project (if any) to the new one specified, if BOTH the\n";
-     print STDERR "current project AND the target project are not locked by\n";
-     print STDERR "another user. Carefully check the results log!\n\n";
-     print STDERR "A special case is when a contig is in a project owned by\n";
-     print STDERR "another user, but not locked. In default mode such contigs\n";
-     print STDERR "are NOT re-allocated (as a protection measure). In order to \n";
-     print STDERR "reassign those contig(s), the '-force' switch must be used.\n\n";
-     print STDERR "In default mode this script lists the contigs that it will\n";
-     print STDERR "(try to) re-allocate. In order to actually make the change,\n";
-     print STDERR "the '-confirm' switch must be used\n";
-     print STDERR "\n";
+        print STDERR "\n";
+        print STDERR " contig-transfer-manager" . ($action ? " ($action) ":" ");
+        print STDERR ": OVERVIEW\n";
+        unless ($action) {
+            print STDERR "\n";
+            print STDERR " Allocate contig(s) to a specified project (split)\n";
+            print STDERR "\n";
+            print STDERR " Select one of the following options:\n";
+            print STDERR "\n";
+            print STDERR "-transfer\n";
+            print STDERR "-grant , -reject , -defer , -cancel\n";
+            print STDERR "-execute\n";
+            print STDERR "-list , -longlist\n";
+        }
+        if ($help == 1) {
+            print STDERR "\n";
+            print STDERR " Issue a request to allocate contig(s) to a specified ";
+            print STDERR "project (split)\n";
+            print STDERR "\n";
+            print STDERR " Transfer requests are entered into a queue. If you have ";
+            print STDERR "the appropriate privilege\n a request is entered with ";
+            print STDERR "status 'approved'. If, conversely, approval is required\n ";
+            print STDERR "from another Arcturus user, the request will be entered as ";
+            print STDERR "'pending'; in addition,\n a mail message will be sent to ";
+            print STDERR "inform that user that action is required on your\n request ";
+            print STDERR "(approval or otherwise). 'approved' transfer requests are ";
+            print STDERR "executed\n separately by using this script in '-execute' ";
+            print STDERR "mode (by a privileged user)\n";
+            print STDERR "\n";
+            print STDERR " You can only issue a transfer request if you have (owner ";
+            print STDERR "or other) privilege on\n";
+            print STDERR " at least one of the projects involved\n";
+            print STDERR "\n";
+            print STDERR " A contig can be specified on the command line by a ";
+            print STDERR "contig ID or by the name of\n a read occurring in it; a ";
+            print STDERR "list of contig identifiers can be presented in a file\n";
+            print STDERR " using the '-focn' option\n";
+            print STDERR "\n";
+            print STDERR " Both project and assembly can be specified by ";
+            print STDERR "number (ID) or by name;\n";
+            print STDERR " the assembly has to be specified in case of ambiguity\n"; 
+            print STDERR "\n";
+            print STDERR " Use the '-comment' switch to add additional information\n";
+            print STDERR "\n";
+            print STDERR " When entering a request you will get a preview of how ";
+            print STDERR "Arcturus will (try to) deal\n with it; ";
+            print STDERR "to commit a valid transfer request to the queue the ";
+            print STDERR "'-commit' switch\n *must* be used\n";
+        }
+	if ($help == 2) {
+            print STDERR "\n";
+            print STDERR " ".ucfirst($action)." a"
+                       . ($action eq 'defer' ? " decision about a " : " ")
+                       . "'pending' request\n";
+            print STDERR "\n";
+            print STDERR " This command operates on one pending request only, which ";
+            print STDERR "*has* to be specified\n with the '-request' switch. In its ";
+            print STDERR "absence a list will be displayed of all, if\n any, pending ";
+            print STDERR "requests involving projects relating to you (as owner or ";
+            print STDERR "otherwise)\n The selection may be restricted by specifying ";
+            print STDERR "additional constrainst (e.g. the\n project, ownership of ";
+            print STDERR "the request, etc.)\n";
+            print STDERR "\n";
+            print STDERR " Use the '-comment' switch to add your remarks as reviewer.\n";
+            if ($action eq 'defer') {
+                print STDERR " (Recommended, as a sign that you are considering ";
+                print STDERR "the request)\n";
+	    }
+            print STDERR "\n";
+            print STDERR " The '$action' action will only take effect when the ";
+            print STDERR "'-commit' switch is used,\n with one proviso: ";
+            if ($action eq 'cancel') {
+                print STDERR "you can only cancel your own requests; requests made ";
+                print STDERR "by\n other users have to be rejected\n";
+            }
+            else {
+                print STDERR "if you are ${action}ing on behalf of another user ";
+                print STDERR "(that is you're\n not the owner of the projects ";
+                print STDERR "involved, but do have the required privilege),\n then ";
+                print STDERR "you must also use the '-force' switch. (This is meant ";
+                print STDERR "as safeguard to\n give some protection against you ";
+                print STDERR "operating on requests by accident).\n";
+	    }
+        }
+        elsif ($help == 3) {
+            print STDERR "\n";
+            print STDERR " Execute 'approved' requests\n";
+            print STDERR "\n";
+            print STDERR " This command implements approved requests relating to you ";
+            print STDERR "(as owner or otherwise).\n";
+            print STDERR " The selection may be restricted by specifying a particular ";
+            print STDERR "request ID and/or other\n constrainst (e.g. the project, ";
+            print STDERR "ownership, etc.)\n";
+            print STDERR "\n";
+            print STDERR " To execute the selected request(s) add '-commit'\n";
+            print STDERR "\n";
+            print STDERR " When processing a transfer request, one of three things ";
+            print STDERR "can happen:\n\n 1) The transfer is completed normally.\n";
+            print STDERR " 2) It aborts because e.g. the contig does not anymore ";
+            print STDERR "belong to the current generation;\n    the request status ";
+            print STDERR "is set to 'failed'\n";
+            print STDERR " 3) It bounces because the project the contig is in is ";
+            print STDERR "locked by another user;\n    the request will be re-queued\n";
+            print STDERR "\n";
+        }
+        elsif ($help == 4) { 
+            print STDERR "\n";
+            print STDERR " List ".($action eq 'list' ? "pending and approved" : "all")
+                       . " requests\n";
+            print STDERR "\n";
+            print STDERR " The selection may be restricted by specifying a particular ";
+            print STDERR "request ID and/or other\n constrainst (e.g. the project, ";
+            print STDERR "ownership, etc.)\n";
+        }
+
+        print STDERR "\n\n";
+        unless ($long == 1) {
+            print STDERR "** Use the '-h' switch for parameter information **\n";
+            print STDERR "\n";
+            print STDERR "++ questions and comments to Ed Zuiderwijk (ejz) ++\n";
+            print STDERR "\n";
+            exit 0;
+        }
     }
+
     print STDERR "\n";
-    print STDERR "Parameter input ERROR: $code \n" if $code; 
+    print STDERR "contig-transfer-manager" . ($action ? " ($action) " : " ") . ":\n";
+    print STDERR "\n" if $code;
+    print STDERR "Parameter input ERROR: ** $code **\n" if $code;
+
+    unless ($organism && $instance) {
+        print STDERR "\n";
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-organism\tArcturus database name\n" unless $organism;
+        print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    }
+# help level 0
+    unless ($help) {
+        print STDERR "\n";
+        print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-transfer\t(no value) create a new request\n";
+        print STDERR "-cancel\t\t(no value) remove a pending request from the queue\n";
+        print STDERR "-grant\t\t(no value) approve a pending request\n";
+        print STDERR "-defer\t\t(no value) delay a decision on a pending request\n";
+        print STDERR "-reject\t\t(no value) reject pending request\n";
+        print STDERR "\n";
+        print STDERR "-list\t\t (default) show all pending requests relating to you\n";
+        print STDERR "-longlist\t(no value) show all requests relating to you\n";
+        print STDERR "\n";
+        print STDERR "** select one of these options **\n";
+    }
+
+    if ($help == 1) { # parameters for transfer function
+        print STDERR "\n";
+        print STDERR "MANDATORY PARAMETER:\n";
+        print STDERR "\n";
+        print STDERR "-project\tproject ID or projectname\n";
+        print STDERR "\n";
+        print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-contig\t\tcontig ID or name of a constituent read\n";
+        print STDERR "-focn\t\tfilename with list of contig IDs or names\n";
+        print STDERR "\n";
+        print STDERR "OPTIONAL PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-assembly\tassembly ID or assemblyname\n";
+        print STDERR "-comment\tany information explaining the request\n";
+#        print STDERR "-openproject\tcomma-separated list of open projects (default ";
+#        print STDERR "'BIN,TRASH')\n";
+        print STDERR "\n";
+        print STDERR "-commit\t\t(no value) to enter the request into the database\n";
+    }
+    elsif ($help == 2) {
+        print STDERR "\n";
+        print STDERR "MANDATORY/OPTIONAL PARAMETER:\n";
+        print STDERR "\n";
+        print STDERR "-request\trequest ID; if absent, defaulting to list mode\n";
+        print STDERR "\n";
+        print STDERR "OPTIONAL PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-owner\t\tthe owner/originator of the request\n";
+        print STDERR "-project\tproject ID or projectname\n";
+        print STDERR "-assembly\tassembly ID or assemblyname (only with '-project')\n";
+        print STDERR "-contig\t\tcontig ID or name of a constituent read\n";
+        print STDERR "\n";
+        print STDERR "-commit\t\t(no value) to execute on the database\n";
+        print STDERR "-force\t\t(no value) to operate on requests owned by other ";
+        print STDERR "users (requires privilege)\n";
+    }
+    elsif ($help) {
+        print STDERR "\n";
+        print STDERR "OPTIONAL PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-request\trequest ID\n";
+        print STDERR "-owner\t\tthe owner/originator of the request\n";
+        print STDERR "-project\tproject ID or projectname\n";
+        print STDERR "-assembly\tassembly ID or assemblyname (only with '-project')\n";
+        print STDERR "-contig\t\tcontig ID or name of a constituent read\n";
+        if ($help == 3) { # execute
+            print STDERR "\n";
+            print STDERR "-commit\t\t(no value) to execute the selected request(s)\n";
+	}
+    }
+    print STDERR "\n" if $code;
+    print STDERR "Parameter input ERROR: ** $code **\n" if $code; 
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
-    print STDERR "-project\tproject ID or projectname\n";
-    print STDERR "\n";
-    print STDERR "MANDATORY EXCLUSIVE PARAMETERS (default '-list'):\n";
-    print STDERR "\n";
-    print STDERR "-transfer\t(no value) create a new request\n";
-    print STDERR "-grant\t\t(no value) approve a pending request\n";
-    print STDERR "-wait\t\t(no value) delay a decision on a pending request\n";
-    print STDERR "-reject\t\t(no value) deny approval of a pending request\n";
-    print STDERR "-cancel\t\t(no value) delete a pending request from the queue\n";
-    print STDERR "\n";
-    print STDERR "-list\t\t(no value) show all pending requests\n";
-    print STDERR "-longlist\t(no value) show all requests\n";
-    print STDERR "\n";
-    print STDERR "MUTUALLY EXCLUSIVE PARAMETERS (mandatory with '-create'):\n";
-    print STDERR "\n";
-    print STDERR "-contig\t\tcontig ID or name of constituent read\n";
-    print STDERR "-fofn\t\tfilename with list of contig IDs or names\n";
-    print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-assembly\tassembly ID or assemblyname\n";
-    print STDERR "-confirm\t(no value) to execute on the database\n";
-    print STDERR "-preview\t(no value) produce default listing (negates 'confirm')\n";
-    print STDERR "-force\t\t(no value) to process requests allocated to other users\n";
-    print STDERR "-verbose\t(no value) \n";
-    print STDERR "\n";
-    print STDERR "Parameter input ERROR: $code \n" if $code; 
+    unless ($long) {
+        print STDERR "** Use the '-s' switch for a synopsis **\n";
+        print STDERR "\n";
+    }
+
+    print STDERR "++ questions and comments to Ed Zuiderwijk (ejz) ++\n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
