@@ -5,6 +5,7 @@ use strict;
 use ArcturusDatabase;
 
 use FileHandle;
+use Compress::Zlib;
 
 my $instance;
 my $organism;
@@ -23,6 +24,8 @@ my $shownames = 0;
 my $myproject;
 my $onlyproject;
 my $seedcontig;
+my $fastadir;
+my $c2sfile;
 
 ###
 ### Parse arguments
@@ -54,6 +57,10 @@ while (my $nextword = shift @ARGV) {
 
     $updateproject = 1 if ($nextword eq '-updateproject');
 
+    $fastadir = shift @ARGV if ($nextword eq '-fastadir');
+
+    $c2sfile = shift @ARGV if ($nextword eq '-contigmap');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -67,7 +74,7 @@ unless (defined($organism) && defined($instance)) {
 }
 
 ###
-### Check consitency of -project and -onlyproject arguments
+### Check consistency of -project and -onlyproject arguments
 ###
 
 if (defined($myproject) && defined($onlyproject) && $myproject != $onlyproject) {
@@ -200,6 +207,10 @@ if ($progress) {
 
 my $sth_setproject = $statements->{'setproject'};
 
+my $c2sfh;
+
+$c2sfh = new FileHandle($c2sfile, "w") if defined($c2sfile);
+
 foreach my $contigid (@contiglist) {
     $done++;
 
@@ -305,6 +316,8 @@ foreach my $contigid (@contiglist) {
     my $totctg = 0;
     my $curpos = 0;
 
+    my $sequence = '';
+
     foreach my $item (@{$scaffold}) {
 	if ($isContig) {
 	    my ($contigid, $contigdir) = @{$item};
@@ -316,7 +329,33 @@ foreach my $contigid (@contiglist) {
 	    $contigref{$contigid} = $item;
 	    $totlen += $contiglen;
 	    $totctg += 1;
+	    my $c2sstart = 1 + $curpos;
 	    $curpos += $contiglen;
+	    my $c2sfinish = $curpos;
+
+	    if ($fastadir) {
+		my $stmt = $statements->{'contigsequence'};
+		$stmt->execute($contigid);
+		my ($ctgseq) = $stmt->fetchrow_array();
+		$stmt->finish();
+		if (defined($ctgseq)) {
+		    $ctgseq = uncompress($ctgseq);
+		    $ctgseq =~ s/[\-\*]//g;
+		    if ($contigdir eq 'R') {
+			$ctgseq = reverse($ctgseq);
+			$ctgseq =~ tr/ACGTacgt/TGCAtgca/;
+		    }
+
+		    $c2sstart = 1 + length($sequence);
+		    $sequence .= $ctgseq;
+		    $c2sfinish = length($sequence);
+		}
+	    }
+
+	    if (defined($c2sfh)) {
+		printf $c2sfh "%6d %6d %8d %8d %s\n", $scaffoldid, $contigid, $c2sstart, $c2sfinish,
+		$contigdir;
+	    }
 	} else {
 	    my ($gapsize, $bridges) = @{$item};
 	    my @templates;
@@ -327,6 +366,10 @@ foreach my $contigid (@contiglist) {
 	    $report .= "     GAP $gapsize [" . join(",", @templates).  "]\n";
 	    $totgap += $gapsize;
 	    $curpos += $gapsize;
+
+	    if ($fastadir) {
+		$sequence .= &fastaPadding($gapsize);
+	    }
 	}
 
 	$isContig = !$isContig;
@@ -341,12 +384,33 @@ foreach my $contigid (@contiglist) {
 
     $totgap = '   *** DEGENERATE ***' unless (scalar(@{$scaffold}) > 1);
 
+    if ($fastadir  && length($sequence) >= 5000) {
+	my $fastafile = $fastadir . '/' . sprintf("scaffold%06d.fas", $scaffoldid);
+
+	my $fastafh = new FileHandle("$fastafile", "w");
+
+	printf $fastafh ">scaffold%06d\n", $scaffoldid;
+
+	if (defined($fastafh)) {
+	    while (length($sequence) > 0) {
+		print $fastafh substr($sequence, 0, 100), "\n";
+		$sequence = substr($sequence, 100);
+	    }
+	    
+	    $fastafh->close;
+	} else {
+	    print STDERR "Unable to open $fastafile for writing\n";
+	}
+    }
+
     print "SCAFFOLD $scaffoldid $totctg $totlen $totgap\n\n";
 
     print $report;
 
     print "\n";
 }
+
+$c2sfh->close;
 
 my $maxscaffoldid = $scaffoldid;
 
@@ -852,7 +916,10 @@ sub CreateStatements {
 		   "select read_id,readname from READS",
 
 		   "templatenames",
-		   "select template_id,name from TEMPLATE"
+		   "select template_id,name from TEMPLATE",
+
+		   "contigsequence",
+		   "select sequence from CONSENSUS where contig_id = ?"
 		   );
 
     my $statements = {};
@@ -1054,6 +1121,26 @@ sub FindNextBridge {
     return [[$bestcontig, $bestend], [$bestgap, $bridges{$bestlink}]];
 }
 
+sub fastaPadding {
+    my $count = shift;
+
+    my $string = '';
+
+    my $tenpads = 'NNNNNNNNNN';
+
+    while ($count > 10) {
+	$string .= $tenpads;
+	$count -= 10;
+    }
+
+    while ($count) {
+	$string .= 'N';
+	$count--;
+    }
+
+    return $string;
+}
+
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
@@ -1077,4 +1164,6 @@ sub showUsage {
     print STDERR "-project\tSelect seed contigs only from this project\n";
     print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
     print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
+    print STDERR "-fastadir\tDirectory for FASTA output of scaffold sequences\n";
+    print STDERR "-contigmap\tScaffold-contig mapping file\n";
 }
