@@ -26,6 +26,7 @@ my $onlyproject;
 my $seedcontig;
 my $fastadir;
 my $c2sfile;
+my $fastaminlen = 5000;
 
 ###
 ### Parse arguments
@@ -58,6 +59,8 @@ while (my $nextword = shift @ARGV) {
     $updateproject = 1 if ($nextword eq '-updateproject');
 
     $fastadir = shift @ARGV if ($nextword eq '-fastadir');
+
+    $fastaminlen = shift @ARGV if ($nextword eq '-fastaminlen');
 
     $c2sfile = shift @ARGV if ($nextword eq '-contigmap');
 
@@ -384,7 +387,7 @@ foreach my $contigid (@contiglist) {
 
     $totgap = '   *** DEGENERATE ***' unless (scalar(@{$scaffold}) > 1);
 
-    if ($fastadir  && length($sequence) >= 5000) {
+    if ($fastadir  && length($sequence) >= $fastaminlen) {
 	my $fastafile = $fastadir . '/' . sprintf("scaffold%06d.fas", $scaffoldid);
 
 	my $fastafh = new FileHandle("$fastafile", "w");
@@ -1165,5 +1168,6 @@ sub showUsage {
     print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
     print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
     print STDERR "-fastadir\tDirectory for FASTA output of scaffold sequences\n";
+    print STDERR "-fastaminlen\tMinimum scaffold length for FASTA output\n";
     print STDERR "-contigmap\tScaffold-contig mapping file\n";
 }
