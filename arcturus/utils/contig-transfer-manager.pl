@@ -590,7 +590,7 @@ sub getContigIdentifiers {
 
     if ($contig || $focn) {
 # get contig identifiers in array
-        if ($contig =~ /\,/) {
+        if ($contig && $contig =~ /\,/) {
             @contigs = split /\,/,$contig;
         }
         elsif ($contig) {
@@ -634,11 +634,11 @@ sub getNamesFromFile {
 # read a list of names from a file and return an array
     my $file = shift; # file name
 
-    &showUsage(0,"File $file does not exist") unless (-e $file);
+    &showUsage("File $file does not exist") unless (-e $file);
 
     my $FILE = new FileHandle($file,"r");
 
-    &showUsage(0,"Can't access $file for reading") unless $FILE;
+    &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
     while (defined (my $name = <$FILE>)) {
