@@ -343,7 +343,7 @@ sub SCFchemistry {
 # read a list of names from a file and return an array
 #------------------------------------------------------------------------
 
-sub readNamesFromFile {
+sub getNamesFromFile {
     my $file = shift; # file name
 
     &showUsage(0,"File $file does not exist") unless (-e $file);
