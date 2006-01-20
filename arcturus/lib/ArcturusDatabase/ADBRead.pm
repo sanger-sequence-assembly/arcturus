@@ -533,10 +533,10 @@ sub getReads{
     }
 
     if ($options{before}) {
-        push @constraints, "asped <= '$options{before}'";
+        push @constraints, "asped < '$options{before}'";
     }
     elsif ($options{aspedbefore}) {
-        push @constraints, "asped <= '$options{aspedbefore}'";
+        push @constraints, "asped < '$options{aspedbefore}'";
     }
 
 # process name selection option(s)
@@ -545,7 +545,7 @@ sub getReads{
         push @constraints, "readname like '$options{namelike}'";
     }
     if ($options{namenotlike}) {
-        push @constraints, "readname not like '$options{namelike}'";
+        push @constraints, "readname not like '$options{namenotlike}'";
     }
     if ($options{nameregexp}) {
         push @constraints, "readname regexp '$options{nameregexp}'";
@@ -866,8 +866,8 @@ sub getUnassembledReads {
     my %options = @_;
 
 # options: method (standard,subquery,temporarytables)
-#          after  / aspedafter
-#          before / aspedbefore
+#          after  / aspedafter  (after and equal!)
+#          before / aspedbefore (strictly before)
 #          nosingleton : do not include reads in singleton contigs
 #          namelike / namenotlike / nameregexp / namenotregexp
 
@@ -883,10 +883,10 @@ sub getUnassembledReads {
     }
 
     if ($options{before}) {
-        push @constraint, "asped <= '$options{before}'";
+        push @constraint, "asped < '$options{before}'";
     }
     elsif ($options{aspedbefore}) {
-        push @constraint, "asped <= '$options{aspedbefore}'";
+        push @constraint, "asped < '$options{aspedbefore}'";
     }
 
 # process possible name selection option(s)
@@ -895,7 +895,7 @@ sub getUnassembledReads {
         push @constraint, "readname like '$options{namelike}'";
     }
     if ($options{namenotlike}) {
-        push @constraint, "readname not like '$options{namelike}'";
+        push @constraint, "readname not like '$options{namenotlike}'";
     }
     if ($options{nameregexp}) {
         push @constraint, "readname regexp '$options{nameregexp}'";
