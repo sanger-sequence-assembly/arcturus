@@ -197,6 +197,7 @@ else {
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
 my $discarded = 0;
+my $excluded  = 0;
 
 while (my $remainder = scalar(@$readids)) {
 
@@ -229,6 +230,7 @@ while (my $remainder = scalar(@$readids)) {
         my $readname = $read->getReadName();
         if ($excludelist && $excludehash{$readname}) {
             print STDERR "read $readname excluded\n";
+            $excluded++;
             next;
         }
         if (defined($clipmethod) || defined($threshold) || $minimumrange) {
@@ -249,6 +251,7 @@ while (my $remainder = scalar(@$readids)) {
 }
     
 print STDERR "$discarded reads ignored\n" if $discarded;
+print STDERR "$excluded reads excluded\n" if $excluded;
 
 $adb->disconnect();
 
