@@ -264,11 +264,11 @@ exit 0;
 sub getNamesFromFile {
     my $file = shift; # file name
 
-    &showUsage(0,"File $file does not exist") unless (-e $file);
+    &showUsage("File $file does not exist") unless (-e $file);
 
     my $FILE = new FileHandle($file,"r");
 
-    &showUsage(0,"Can't access $file for reading") unless $FILE;
+    &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
     while (defined (my $name = <$FILE>)) {
