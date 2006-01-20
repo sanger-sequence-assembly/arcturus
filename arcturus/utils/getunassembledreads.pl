@@ -35,7 +35,7 @@ my $threshold;  # only with clipmethod
 my $clipmethod;
 my $minimumrange = 32;
 
-my $outputFile;            # default STDOUT
+my $outputFile;            # default STDERR
 my $logLevel;              # default log warnings and errors only
 my $debug;
 
@@ -184,6 +184,8 @@ else {
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
+my $discarded = 0;
+
 while (my $remainder = scalar(@$readids)) {
 
     $blocksize = $remainder if ($blocksize > $remainder);
@@ -219,6 +221,7 @@ while (my $remainder = scalar(@$readids)) {
 				       minimum=>$minimumrange)) {
                 print STDERR "read ".$read->getReadName().
 		             " discarded after clipping\n";
+                $discarded++;
                 next;
 	    }
         }
@@ -228,6 +231,8 @@ while (my $remainder = scalar(@$readids)) {
     }
     undef @$reads;
 }
+    
+print STDERR "$discarded reads ignored\n" if $discarded;
 
 $adb->disconnect();
 
