@@ -30,6 +30,7 @@ my $addtag;
 
 my $namelike;
 my $namenotlike;
+my $excludelist;
 
 my $threshold;  # only with clipmethod
 my $clipmethod;
@@ -41,7 +42,7 @@ my $debug;
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
-               . "namenotlike|nnl|mask|tags|all|fasta|"
+               . "namenotlike|nnl|excludelist|el|mask|tags|all|fasta|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
                . "info|verbose|debug|help";
 
@@ -67,6 +68,9 @@ while (my $nextword = shift @ARGV) {
 
     $namenotlike      = shift @ARGV  if ($nextword eq '-namenotlike');
     $namenotlike      = shift @ARGV  if ($nextword eq '-nnl');
+
+    $excludelist      = shift @ARGV  if ($nextword eq '-excludelist');
+    $excludelist      = shift @ARGV  if ($nextword eq '-el');
 
     $selectmethod     = shift @ARGV  if ($nextword eq '-selectmethod');
     $selectmethod     = shift @ARGV  if ($nextword eq '-sm');
@@ -168,6 +172,14 @@ if ($namenotlike) {
     $options{namenotregexp} = $namenotlike if ($namenotlike =~ /[^\w\.\%\_]/);
 }
 
+my %excludehash;
+if ($excludelist) {
+    my $namelist = &getNamesFromFile($excludelist);
+    foreach my $name (@$namelist) {
+        $excludehash{$name}++;
+    }
+}
+
 $logger->info("Getting read IDs for unassembled reads");
 
 my $readids;
@@ -214,13 +226,17 @@ while (my $remainder = scalar(@$readids)) {
     $threshold = 1 if (defined($threshold) && $threshold < 1);
 
     foreach my $read (@$reads) {
+        my $readname = $read->getReadName();
+        if ($excludelist && $excludehash{$readname}) {
+            print STDERR "read $readname excluded\n";
+            next;
+        }
         if (defined($clipmethod) || defined($threshold) || $minimumrange) {
             $clipmethod = 0 unless defined($clipmethod);
             unless ($read->qualityClip(clipmethod=>$clipmethod,
                                        threshold=>$threshold,
 				       minimum=>$minimumrange)) {
-                print STDERR "read ".$read->getReadName().
-		             " discarded after clipping\n";
+                print STDERR "read $readname discarded after clipping\n";
                 $discarded++;
                 next;
 	    }
@@ -242,6 +258,23 @@ exit 0;
 # subroutines
 #------------------------------------------------------------------------
 
+sub getNamesFromFile {
+    my $file = shift; # file name
+
+    &showUsage(0,"File $file does not exist") unless (-e $file);
+
+    my $FILE = new FileHandle($file,"r");
+
+    &showUsage(0,"Can't access $file for reading") unless $FILE;
+
+    my @list;
+    while (defined (my $name = <$FILE>)) {
+        $name =~ s/^\s+|\s+$//g;
+        push @list, $name;
+    }
+
+    return [@list];
+}
 
 #------------------------------------------------------------------------
 # HELP
@@ -271,6 +304,7 @@ sub showUsage {
     print STDOUT "-aspedbefore\tAsped date upper bound (inclusive)\n";
     print STDOUT "-namelike\t(include) readname with wildcard or a pattern\n";
     print STDOUT "-namenotlike\t(exclude) readname with wildcard or a pattern\n";
+    print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
     print STDOUT "-caf\t\tcaf file name for output\n";
     print STDOUT "-fasta\t\t(no value) write in fasta format (default CAF)\n";
