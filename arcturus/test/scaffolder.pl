@@ -147,6 +147,26 @@ if (defined($xmlfile) && $shownames) {
 }
 
 ###
+### Create ID-to-name dictionary for projects
+###
+
+my $sth;
+
+my $projectid2name = {};
+my $projectname2id = {};
+
+$sth = $statements->{'projects'};
+
+$sth->execute();
+
+while (my ($project_id, $projectname) = $sth->fetchrow_array()) {
+    $projectid2name->{$project_id} = $projectname;
+    $projectname2id->{$projectname} = $project_id;
+}
+
+$sth->finish();
+
+###
 ### Enumerate the list of active contigs, excluding singletons and
 ### ordering them by size, largest first.
 ###
@@ -155,8 +175,6 @@ my $contiglength = {};
 my $contigname = {};
 my @contiglist;
 my $project = {};
-
-my $sth;
 
 if (defined($onlyproject)) {
     $sth = $statements->{'currentcontigsfromproject'};
@@ -356,8 +374,8 @@ foreach my $contigid (@contiglist) {
 	    }
 
 	    if (defined($c2sfh)) {
-		printf $c2sfh "%6d %6d %8d %8d %1s %4d\n", $scaffoldid, $contigid, $c2sstart, $c2sfinish,
-		$contigdir, $projid;
+		printf $c2sfh "%6d %6d %8d %8d %1s %s\n", $scaffoldid, $contigid, $c2sstart, $c2sfinish,
+		$contigdir, $projectid2name->{$projid};
 	    }
 	} else {
 	    my ($gapsize, $bridges) = @{$item};
@@ -922,7 +940,10 @@ sub CreateStatements {
 		   "select template_id,name from TEMPLATE",
 
 		   "contigsequence",
-		   "select sequence from CONSENSUS where contig_id = ?"
+		   "select sequence from CONSENSUS where contig_id = ?",
+
+		   "projects",
+		   "select project_id,name from PROJECT"
 		   );
 
     my $statements = {};
