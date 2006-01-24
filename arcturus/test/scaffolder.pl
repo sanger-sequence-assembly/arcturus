@@ -356,8 +356,8 @@ foreach my $contigid (@contiglist) {
 	    }
 
 	    if (defined($c2sfh)) {
-		printf $c2sfh "%6d %6d %8d %8d %s\n", $scaffoldid, $contigid, $c2sstart, $c2sfinish,
-		$contigdir;
+		printf $c2sfh "%6d %6d %8d %8d %1s %4d\n", $scaffoldid, $contigid, $c2sstart, $c2sfinish,
+		$contigdir, $projid;
 	    }
 	} else {
 	    my ($gapsize, $bridges) = @{$item};
@@ -413,7 +413,7 @@ foreach my $contigid (@contiglist) {
     print "\n";
 }
 
-$c2sfh->close;
+$c2sfh->close if defined($c2sfh);
 
 my $maxscaffoldid = $scaffoldid;
 
