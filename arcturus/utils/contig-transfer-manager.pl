@@ -17,6 +17,7 @@ my $project;
 my $assembly;
 my $contig;
 my $focn;
+my $focpn;
 my $user;
 my $owner;
 my $request;
@@ -29,6 +30,8 @@ my $comment;
 my $verbose;
 my $TESTMODE;
 
+my $PROJECTINSTANCECACHE = {};
+
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
@@ -36,7 +39,7 @@ my $TESTMODE;
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe";
 
 my $validKeys = "organism|instance|$actions|"
-              . "contig|c|focn|project|p|assembly|a|openproject|"
+              . "contig|c|focn|project|p|focpn|assembly|a|openproject|"
               . "user|u|owner|o|request|r|comment|"
               . "list|longlist|ll|"
               . "help|h|s|"
@@ -74,7 +77,6 @@ while (my $nextword = shift @ARGV) {
     $action      = 'reject'     if ($nextword eq '-reject');
 
 $action      = 'reenter'    if ($nextword eq '-reschedule'); # test phase
-
 $action      = 'probe'      if ($nextword eq '-probe');      # separate script?
 
     $action      = 'list'       if ($nextword eq '-list');     # pending requests only
@@ -91,6 +93,8 @@ $action      = 'probe'      if ($nextword eq '-probe');      # separate script?
     $contig      = shift @ARGV  if ($nextword eq '-contig');
 
     $focn        = shift @ARGV  if ($nextword eq '-focn');
+
+    $focpn       = shift @ARGV  if ($nextword eq '-focpn');
 
 $user        = shift @ARGV  if ($nextword eq '-user'); # ?
 $user        = shift @ARGV  if ($nextword eq '-u');    # ?
@@ -146,20 +150,29 @@ $action = 'list' unless $action;
 # contig identifier is mandatory for 'transfer', optional otherwise
 
 if ($action eq 'transfer') {
-# project and contig identifiers must be given; user is ignored
-    &showUsage("Missing project ID or projectname",0,$action) unless $project;
+# check on project and contig identifiers
+    unless ($project || $focpn) {
+        &showUsage("Missing project ID or projectname",0,$action);
+    }
 
-    &showUsage("Missing contig identifier or focn",0,$action) unless ($contig || $focn);
+    unless ($contig || $focn || $focpn) {
+        &showUsage("Missing contig identifier or focn",0,$action);
+    }
 
+    if ($focpn && ($project || $contig)) {
+        &showUsage("When using 'focpn' no contig or project can be specified ",0,$action);
+    }
 
-# perhaps more restrictibve, here?
+# perhaps more restrictive, here?
     if ($user || $owner || $request) {
         $logger->warning("Redundant keyword(s) ignored");
     }
 }
 else {
 # focn may not be specified, but a contig ID is allowed
-    &showUsage("Invalid key 'focn' for '$action' action",0,$action) if $focn;
+    if ($focn || $focpn) {
+        &showUsage("Invalid key 'focn' or 'focpn' for '$action' action",0,$action);
+    }
 }
 
 #----------------------------------------------------------------
@@ -190,42 +203,47 @@ if ($TESTMODE) {
 # preliminaries: get (possible) contig and/or project info
 #----------------------------------------------------------------
 
-my $cids;
+my ($cids,$ctophash,$pid);
 
-$cids = &getContigIdentifiers($contig,$focn,$adb) if ($contig || $focn);
+if ($focpn) {
 
+    print "reading from file $focpn\n";
+   ($cids,$ctophash) = &getContigProjectIdentifiers($focpn,$adb);
 
-# get the project and assembly information (ID or name for both, and if any)
+# run through all contigs and collect the projects
 
-my ($Project,$pid);
+    foreach my $cid (@$cids) {
+        my $project = $ctophash->{$cid};
+	unless (&getCachedProject($adb,$project,$assembly)) {
+# invalid project/assembly specification (all cases); abort
+            $adb->disconnect();
+            &showUsage("Unknown project $project specified on file $focpn",0,$action);
+            exit 0;
+	}
+    }
+}
+
+elsif ($contig || $focn) {
+
+    $cids = &getContigIdentifiers($contig,$focn,$adb);
+}
+
+# if the project is defined on the command line (all cases, except with 'focpn')
+# then get the project and assembly information (ID or name for both, and if any)
 
 if ($project) {
+# get the project via the caching method
+    my $Project = &getCachedProject($adb,$project,$assembly);
 
-    $Project = &getProjectInstance($project,$assembly,$adb);
-
-#   unless ($Project) {
-    unless ($Project || $TESTMODE) {
+    unless ($Project) {
 # invalid project/assembly specification (all cases); abort
         $adb->disconnect();
-
         &showUsage("Unknown project $project",0,$action);
-
         exit 0;
     }
 
-#***** to be removed
-# TEMPORARY provision for TEST mode when no valid project specified
-    if (!$Project && $TESTMODE) {
-print STDERR "creating test project with project ID $project\n";
-        my $p = new Project();
-        $p->setProjectName("project $project");
-        $p->setProjectID($project);
-        $project = $p;
-    }
-#***** to be removed 
+    $pid = $Project->getProjectID();
 }
-
-$pid = $Project->getProjectID() if $Project;
  
 #----------------------------------------------------------------
 # MAIN
@@ -247,26 +265,31 @@ if ($action eq 'transfer') {
 
     my %options;
     if ($newoproject) {
-#        $openproject = $newoproject; 
-# should be protected e.g. allow only a limited range of names for non-privi users
-	$options{useropen} = 1;
+# open projects can only be re-defined by privileged users
+        if ($adb->userCanAssignProject()) {
+            $openproject = $newoproject; 
+            $options{useropen} = 1;
+        }
+	else {
+	    $logger->warning("Sorry, but you can not re-define 'open' projects");
+	}
     }
 
     $options{open} = $openproject;
 #$options{user} = $user if $user; # what does this, check
     $options{requester_comment} = $comment if $comment;
-#$pid=7;
 
     foreach my $contig (@$cids) {
 
         my ($status,$message) = &createContigTransferRequest($adb,$contig,$pid,
                                                              $confirm,%options);
         if ($status == 1) {
+            my $Project = &getCachedProject($adb,$pid,$assembly);
             $logger->warning("A request to transfer contig $contig to project ".
                              $Project->getProjectName()." is queued : $message");
         }
         elsif ($status == 2) {
-            $logger->warning("$message \n=> use -confirm");
+            $logger->warning("$message  => use -confirm");
 	}
         else {
             $logger->warning("transfer request is REJECTED : $message");
@@ -309,8 +332,8 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
     my $header;
     my $linemode = 1;
     if ($requestsfound && @$requestsfound > 1) {
-        $header = " ID  contig projects owner       created       "
-                . "     reviewed          by      status comments";
+        $header = " ID  contig         projects         owner    created  "
+                . "     reviewed          by       status  comments";
     }
     elsif ($requestsfound && @$requestsfound == 1) {
         $linemode = 0;
@@ -327,16 +350,24 @@ elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'e
 
     foreach my $request (@$requestsfound) {
         my $rd = $adb->getContigTransferRequestData($request);
-# get comment information
+# translate project_ID's into project names
+        my $old_project = &getCachedProject($adb,$rd->{old_project_id});
+        my $new_project = &getCachedProject($adb,$rd->{new_project_id});
+        $rd->{old_project_id} = $old_project->getProjectName() if $old_project;
+        $rd->{new_project_id} = $new_project->getProjectName() if $new_project;
         if ($linemode) {
+# clip created field down to date
+            $rd->{opened} =~ s/^\s*(\S+)\s.*/$1/;
+# get comment information (to be developed)
             my $comment = $rd->{requester_comment};
-            $comment .= " " if $comment;
+            $comment .= "\n\t\t\t\t\t\t\t\t\t\t\t\t" if $comment;
             $comment .= "$rd->{reviewer_comment}";
             unless ($comment || $rd->{status} ne 'pending') {
                 $comment  = "AWAITING approval";
                 $comment .= " by $rd->{reviewer}" if ($rd->{reviewer} ne $user);
 	    }
-            my $line = sprintf("%3d %7d %2d > %-2d %6s %19s %19s %6s %10s %-40s",
+#            my $line = sprintf("%3d %7d %2d > %-2d %6s %19s %19s %6s %10s %-40s",
+            my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s  %-40s",
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
         	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
 	               $rd->{reviewed},$rd->{reviewer},$rd->{status},$comment);
@@ -390,11 +421,17 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
 
     if ($requestsfound && @$requestsfound && $requestsfound->[0] == $request) {
 # get request details
-        my $hash = $adb->getContigTransferRequestData($request);
-        my $description = "$hash->{request_id} (move contig "
-                        . "$hash->{contig_id} to project "
-	        	. "$hash->{new_project_id} for user "
-                        . "$hash->{requester})";
+        my $rd = $adb->getContigTransferRequestData($request);
+# translate project_ID's into project names
+        my $old_project = &getCachedProject($adb,$rd->{old_project_id});
+        my $new_project = &getCachedProject($adb,$rd->{new_project_id});
+        $rd->{old_project_id} = $old_project->getProjectName() if $old_project;
+        $rd->{new_project_id} = $new_project->getProjectName() if $new_project;
+        my $description = "$rd->{request_id} "
+                        . "(move contig $rd->{contig_id} "
+	        	. "from project $rd->{old_project_id} "
+	        	. "to $rd->{new_project_id} "
+                        . "for user $rd->{requester})";
 # and prepare for some intelligible messages
         my ($operation,$status,$report);
 
@@ -409,11 +446,10 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         $force = 2 if ($force && $action ne 'cancel'); # only the owner can cancel
 
         if (!$confirm) {
-            $logger->warning("request $description is to be $operation\n=> use '-confirm'");
+            $logger->warning("request $description is to be $operation  => use '-confirm'");
         }
 
-
-        if ($action eq 'defer') {
+        elsif ($action eq 'defer') {
             $comment = "" unless $comment;
             $comment = " ($comment)" if $comment;
             $comment = "will be considered later".$comment;
@@ -424,7 +460,7 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         elsif ($action eq 'reenter') {
 # only for dba
    	    my %options = (status => 'pending');
-            $options{requester_comment} = "previously $hash->{status} request was re-entered"
+            $options{requester_comment} = "previously $rd->{status} request was re-entered"
                                        . ($comment ? ": $comment" : "");
             undef $options{reviewer_comment};
             undef $options{closed};
@@ -443,7 +479,7 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         if ($status) {
             $logger->warning("operation successful : request $description is $operation");
 	    if ($status == 2) {
-                &sendMessage($hash->{requester}, "your request $description was $operation "
+                &sendMessage($rd->{requester}, "your request $description was $operation "
                                                . "by user ".$adb->getArcturusUser());
 	    }
         }
@@ -488,8 +524,11 @@ elsif ($action eq 'execute') {
     foreach my $request (@$requestsfound) {
 # get request data
         my $rd = $adb->getContigTransferRequestData($request);
+# get the corresponding projects
+        my $old_project = &getCachedProject($adb,$rd->{old_project_id});
+        my $new_project = &getCachedProject($adb,$rd->{new_project_id});
+# and the user
         my $requester = $rd->{requester};
-
 # test current generation the contig is in, and the current project
 
         my $cid = $rd->{contig_id};
@@ -506,6 +545,10 @@ elsif ($action eq 'execute') {
         my $pid = $rd->{old_project_id};
         my ($cpid,$lock) = $adb->getProjectIDforContigID($cid); # current project ID
         unless ($pid == $cpid) {
+# translate project IDs into project names
+            my $cur_project = &getCachedProject($adb,$cpid);
+            $pid  = $old_project->getProjectName() if $old_project;
+            $cpid = $cur_project->getProjectName() if $cur_project;
             my $report = "contig $cid is not anymore in project $pid (but is in $cpid)";
             $logger->warning($report);
             next unless $confirm;
@@ -516,12 +559,16 @@ elsif ($action eq 'execute') {
         }        
         
         unless ($confirm) {
-            my $line = sprintf("%3d %7d %2d > %-2d %6s %19s %19s %6s %10s %-40s",
+# translate project_ID's into project names
+            $rd->{old_project_id} = $old_project->getProjectName() if $old_project;
+            $rd->{new_project_id} = $new_project->getProjectName() if $new_project;
+            my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s  %-40s",
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
             	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
-	               $rd->{reviewed},$rd->{reviewer},$rd->{status},
+	               $rd->{reviewer},$rd->{status},
                        $rd->{reviewer_comment});
-            $logger->warning("contig transfer request to be executed:\n".$line);
+            $logger->warning("contig transfer request to be executed "
+                           . "(=> use '-confirm') :\n\n".$line);
             next;
         }
 
@@ -537,7 +584,10 @@ elsif ($action eq 'execute') {
 # ok, the operation is authorized
 
         $pid = $rd->{new_project_id};
+# pass the cid on as refernce to an array of (length 1)
        ($status,$report) = $adb->assignContigIDsToProjectID([($cid)],$pid,1);
+# replace pid by (new) project name
+        $pid = $new_project->getProjectName() if $new_project;
 
 # status 0, failure project locked (-> back to 'approved' for later execution)
 # status 1, success
@@ -628,11 +678,53 @@ sub getContigIdentifiers {
     return [@cids];
 }
 
+sub getContigProjectIdentifiers {
+
+    my $focpn = shift; # filename with contig-project pairs
+    my $adb = shift; # database handle
+
+    my ($contigs,$ctophash) = &getNamesFromFile($focpn,2);
+
+# identify the contigs, also if cids already is the contig ID to test existence
+# and collect the projects listed on the file with each contig
+
+    my $cids = [];
+    my $itophash = {}; # contig ID to project
+
+    foreach my $contig (@$contigs) {
+
+        next unless $contig;
+
+# do the project first
+
+        my $project = $ctophash->{$contig};
+
+# identify the contig if a name is provided 
+
+        if ($contig =~ /\D/) {
+# get contig ID from contig name
+            my $contig_id = $adb->hasContig(withRead=>$contig);
+# test its existence
+            unless ($contig_id) {
+                $logger->warning("contig with read $contig not found");
+                next;
+            }
+            $contig = $contig_id;
+        }
+
+        push @$cids,$contig;
+        $itophash->{$contig} = $project;
+    }
+
+    return $cids,$itophash;
+}
+
 #------------------------------------------------------------------------
 
 sub getNamesFromFile {
 # read a list of names from a file and return an array
     my $file = shift; # file name
+    my $ncol = shift || 1;
 
     &showUsage("File $file does not exist") unless (-e $file);
 
@@ -640,14 +732,36 @@ sub getNamesFromFile {
 
     &showUsage("Can't access $file for reading") unless $FILE;
 
-    my @list;
-    while (defined (my $name = <$FILE>)) {
-        next unless $name;
-        $name =~ s/^\s+|\s+$//g;
-        push @list, $name;
+    my $cids = [];
+    my $hash = {};
+
+    $ncol = 2 if ($ncol != 1);
+
+    while (defined (my $record = <$FILE>)) {
+        next unless ($record =~ /\S/);
+        $record =~ s/^\s+|\s+$//g; # renmove leading / trailing blank space
+        my @fields = split /\s+/,$record;
+        unless (scalar(@fields) == $ncol) {
+            print STDERR "** ".scalar(@fields)." data field(s) "
+		       . "detected on file '$file' when $ncol expected ** : ";
+            print STDERR "data ignored: @fields\n";
+            next;
+        }
+# add first field (contig ID) to list
+        push @$cids, $fields[0];
+        next if ($ncol == 1);
+# add second field to hash, keyed on first field
+        if ($hash->{$fields[0]}) {
+            print STDERR "Duplicate contig ID $fields[0] on file $file\n";
+	}
+        $hash->{$fields[0]} = $fields[1];
     }
 
-    return [@list];
+    print STDERR "NO valid data found on file '$file'\n" unless @$cids; 
+
+    return $cids if ($ncol == 1);
+
+    return $cids,$hash;
 }
 
 #------------------------------------------------------------------------
@@ -655,9 +769,9 @@ sub getNamesFromFile {
 sub getProjectInstance {
 # returns Project given project ID or name and (optionally) assembly
 # (also in case of project ID we consult the database to check its existence)
+    my $adb = shift; # database handle
     my $identifier = shift;  # ID or name
     my $assembly = shift; # ID or name
-    my $adb = shift;
 
     return undef unless $identifier;
 
@@ -697,6 +811,28 @@ sub getProjectInstance {
     return $Project->[0] if $Project;
 
     return undef;
+}
+
+sub getCachedProject {
+# build cache of project names keyed on project ID
+    my $adb = shift;
+    my $pid = shift; # project identifier
+    my $aid = shift; # assembly identifier, optional
+
+    return $PROJECTINSTANCECACHE->{$pid}  if $PROJECTINSTANCECACHE->{$pid};
+
+# get project and cache
+
+    my $Project = &getProjectInstance($adb,$pid,$aid);
+
+    return 0 unless $Project; 
+
+# cache the project instance reference on both project ID and project name
+
+    $PROJECTINSTANCECACHE->{$Project->getProjectID()}   = $Project;
+    $PROJECTINSTANCECACHE->{$Project->getProjectName()} = $Project;
+
+    return $Project;
 }
 
 #------------------------------------------------------------------------
@@ -753,7 +889,8 @@ sub createContigTransferRequest {
     }
 
     if ($cpid == $tpid) {
-        return 0,"contig $cid is already allocated to project $tpid";
+        my @pns = $adb->getNamesForProjectID($tpid);
+        return 0,"contig $cid is already allocated to project $pns[0]";# $tpid
     }  
 
 # ok, a transfer request can be queued provided that the user has access
@@ -780,13 +917,11 @@ sub createContigTransferRequest {
 
     my $cpp = $adb->getAccessibleProjects(project=>$cpid,user=>$user);
     $cpp = (@$cpp ? $cpp->[0] : 0); # replace reference by value
-# $cpp = 1 if (!$cpp && $open && $open =~ /\b$cpid\b/); # override open project
 
 # test access of this user to target project
 
     my $tpp = $adb->getAccessibleProjects(project=>$tpid,user=>$user);
     $tpp = (@$tpp ? $tpp->[0] : 0); # replace reference by value
-# $tpp = 1 if (!$tpp && $open && $open =~ /\b$tpid\b/); # override open project
 
     my @cnames = $adb->getNamesForProjectID($cpid);
     my @tnames = $adb->getNamesForProjectID($tpid);
@@ -794,15 +929,17 @@ sub createContigTransferRequest {
     return 0,"invalid project ID: project $tpid does not exist" unless $tnames[2];
  
     unless ($cpp || $tpp) {
-        return 0, "user $user has no privilege for a transfer from project "
-                . "$cnames[0] ($cpid, $cnames[1]) to "
-                . "$tnames[0] ($tpid, $tnames[1])";
+        my $report = "user $user has no privilege for a transfer from project "
+                   . "$cnames[0] ($cnames[1]) to project $tnames[0] ($tnames[1])";
+        $report =~ s/\s\([^\)]+\)//g if ($cnames[1] eq $tnames[1]);
+        return 0, $report;
     }
   
     unless ($confirm) {
-        return 2, "contig $cid may be moved from project "
-                . "$cnames[0] ($cpid, $cnames[1]) to "
-                . "$tnames[0] ($tpid, $tnames[1])";
+        my $report = "contig $cid may be moved from project "
+                   . "$cnames[0] ($cnames[1]) to project $tnames[0] ($tnames[1])";
+        $report =~ s/\s\([^\)]+\)//g if ($cnames[1] eq $tnames[1]);
+        return 2, $report;
     }
 
 # test for open projects (either original or target)
@@ -850,8 +987,8 @@ sub createContigTransferRequest {
         &mailMessageToOwner($rqid,$cid,$cnames[0],$tnames[0],$tnames[2],$user,1);
     }
 
-    return 1, "request $rqid was created for user $user\n   ($status)"
-            . ($message ? "\n$message" : "");
+    return 1, "request $rqid was created for user $user ($status)"
+            . ($message ? " $message" : "");
 }
 
 sub mailMessageToOwner {
@@ -953,9 +1090,14 @@ sub showUsage {
             print STDERR " at least one of the projects involved\n";
             print STDERR "\n";
             print STDERR " A contig can be specified on the command line by a ";
-            print STDERR "contig ID or by the name of\n a read occurring in it; a ";
-            print STDERR "list of contig identifiers can be presented in a file\n";
-            print STDERR " using the '-focn' option\n";
+            print STDERR "contig ID or by the name of\n a read occurring in it.";
+            print STDERR " Further, a list of contig identifiers can be presented in\n";
+            print STDERR " a file using the '-focn' option; in these cases the target";
+            print STDERR " project ** must ** be\n specified on the command line.\n";
+            print STDERR "\n";
+            print STDERR " Alternatively, a list of contig identifier and project pairs can";
+            print STDERR " be presented in\n a file using the '-focpn' option. In that";
+            print STDERR " case ** no ** project can be specified\n on the command line\n";
             print STDERR "\n";
             print STDERR " Both project and assembly can be specified by ";
             print STDERR "number (ID) or by name;\n";
@@ -1077,12 +1219,15 @@ sub showUsage {
         print STDERR "\n";
         print STDERR "MANDATORY PARAMETER:\n";
         print STDERR "\n";
-        print STDERR "-project\tproject ID or projectname\n";
+        print STDERR "-project\tproject ID or projectname (except with '-focpn')\n";
         print STDERR "\n";
         print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
         print STDERR "\n";
-        print STDERR "-contig\t\tcontig ID or name of a constituent read\n";
-        print STDERR "-focn\t\tfilename with list of contig IDs or names\n";
+        print STDERR "-contig\t\tcontig ID or name of constituent read, or";
+        print STDERR " comma-separated list of these\n";
+        print STDERR "-focn\t\tfilename with list of contig IDs or names (one ID per line)\n";
+        print STDERR "-focpn\t\tfilename with list of contig ID/name and project ID/name";
+        print STDERR " pairs\n";
         print STDERR "\n";
         print STDERR "OPTIONAL PARAMETERS:\n";
         print STDERR "\n";
@@ -1132,7 +1277,7 @@ sub showUsage {
         print STDERR "\n";
     }
 
-    print STDERR "++ questions and comments to Ed Zuiderwijk (ejz) ++\n";
+    print STDERR "++ questions and comments to Ed Zuiderwijk (email:ejz) ++\n";
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
