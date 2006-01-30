@@ -289,7 +289,12 @@ sub getNamesFromFile {
     my @list;
     while (defined (my $name = <$FILE>)) {
         next unless $name;
+# removed leading and/or trailing blankspace 
         $name =~ s/^\s+|\s+$//g;
+# remove the directory path top get the pure read name
+        if ($name =~ /.*\/(\S+)$/) {
+            $name = $1;
+	}
         push @list, $name;
     }
 
