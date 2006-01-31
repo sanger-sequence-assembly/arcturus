@@ -44,7 +44,7 @@ sub queryFailed {
 
     $query =~ s/(\s*(where|from|and|order|group|union))/\n$1\t/gi;
 
-    print STDERR "FAILED query:\n$query\n";
+    print STDERR "FAILED query:\n$query\n\n";
 
     print STDERR "MySQL error: $DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
 
@@ -70,6 +70,8 @@ sub userRoles {
 # THIS IS AD HOC for exploratory purposes
 
     return 1 if ($boss eq $user || $boss eq 'ejz' || $boss eq 'adh');
+
+    return 1 if ($boss eq 'klb'); # temporary
 
     return 0;
 }
