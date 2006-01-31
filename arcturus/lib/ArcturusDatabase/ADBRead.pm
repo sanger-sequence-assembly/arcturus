@@ -2507,6 +2507,8 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
         push @tag, $tag;
     }
 
+    $sth->finish();
+
 print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n" if $DEBUG;
 
     return [@tag];
@@ -2826,6 +2828,8 @@ sub insertTagSequence {
             my $rc = $sth->execute($sequence,$tagseqname) 
             || &queryFailed($query,$sequence,$tagseqname);
 
+            $sth->finish();
+
             return undef unless $rc; # a failed update
 
             return $tag_seq_id;
@@ -2835,17 +2839,21 @@ sub insertTagSequence {
 # insert a new tagseqname, sequence combination into TAGSEQUENCE
 
     my $columns = "tagseqname";
-    my $values = "'$tagseqname'";
+    my $values = "?";
+    my @values = ($tagseqname);
     if ($sequence) {
         $columns .= ",sequence";
-        $values .= ",'$sequence'";
+        $values .= ",?";
+	push @values,$sequence;
     }
 
     my $query = "insert ignore into TAGSEQUENCE ($columns) values ($values)";
 
-    my $sth = $dbh->prepare($query);        
+    my $sth = $dbh->prepare_cached($query);        
                     
-    my $rc = $sth->execute() || &queryFailed($query);
+    my $rc = $sth->execute(@values) || &queryFailed($query,@values);
+
+    $sth->finish();
 
     return undef unless $rc; # a failed query
 
@@ -2864,14 +2872,10 @@ sub insertTagSequence {
 
     my ($tag_seq_id) = $sth->fetchrow_array();
 
+    $sth->finish();
+
     return $tag_seq_id;
 }
-
-#-----------------------------------------------------------------------------
-# methods dealing with ..
-#-----------------------------------------------------------------------------
-
-
 
 #-----------------------------------------------------------------------------
 
