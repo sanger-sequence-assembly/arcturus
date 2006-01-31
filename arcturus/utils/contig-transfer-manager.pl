@@ -301,7 +301,7 @@ if ($action eq 'transfer') {
 # LIST requests (default if NO specific request ID is specified) 
 #----------------------------------------------------------------
 
-elsif ($action eq 'list' or $action eq 'longlist' or (!$request && $action ne 'execute')) {
+elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'execute')) {
 # if NO specific request ID is specified all these options revert to 'list'
     my %options;
     $options{requester} = $user if $user;
@@ -441,10 +441,6 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         $operation = "re-entered" if ($action eq 'reenter');
         $operation = "marked for later consideration" if ($action eq 'defer');
 
-# adjust the force flag, if any (=1 to test requestor against user, =2 to include reviewer)
-
-        $force = 2 if ($force && $action ne 'cancel'); # only the owner can cancel
-
         if (!$confirm) {
             $logger->warning("request $description is to be $operation  => use '-confirm'");
         }
@@ -453,8 +449,8 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
             $comment = "" unless $comment;
             $comment = " ($comment)" if $comment;
             $comment = "will be considered later".$comment;
-           ($status,$report) = $adb->modifyContigTransferRequest($request,$force,
-					            reviewer_comment => $comment);
+           ($status,$report) = $adb->modifyContigTransferRequest($request,1,$force,
+					                        reviewer_comment => $comment);
         }
 
         elsif ($action eq 'reenter') {
@@ -464,14 +460,15 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
                                        . ($comment ? ": $comment" : "");
             undef $options{reviewer_comment};
             undef $options{closed};
-           ($status,$report) = $adb->modifyContigTransferRequest($request,$force,%options);
+           ($status,$report) = $adb->modifyContigTransferRequest($request,0,$force,%options);
         }
 
         else {
 # the 'force' flag is required if invoked by other than owner
    	    my %options = (status => $operation);
             $options{reviewer_comment} = $comment; # clears existing if not defined
-           ($status,$report) = $adb->modifyContigTransferRequest($request,$force,%options);
+            my $ot = ($action eq 'cancel') ? 0 : 1; # only the owner can cancel
+           ($status,$report) = $adb->modifyContigTransferRequest($request,$ot,$force,%options);
         }
 
 # test status and report on command line
@@ -484,6 +481,11 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
 	    }
         }
         elsif ($confirm) {
+# replace project ID by name
+            if ($report =~ /project\sID\s(\d+)\b/i) {
+                my $projectname = &getCachedProject($adb,$1);
+                $report =~ s/ID\s(\d+)\b/$projectname/i;
+            }
             $logger->warning("operation refused : $report");
         }
     }
@@ -536,9 +538,9 @@ elsif ($action eq 'execute') {
             my $report = "contig $cid is not (anymore) in the current generation";
             $logger->warning($report);
             next unless $confirm;
-            $adb->modifyContigTransferRequest($request,2,status =>'failed',
-                                               reviewer_comment =>"expired generation");
-            &sendMessage($requester,"contig $cid could not be transfered: $report");
+            $adb->modifyContigTransferRequest($request,2,$force,status =>'failed',
+                                              reviewer_comment =>"expired generation");
+            &sendMessage($requester,"contig $cid could NOT be transfered: $report");
             next;
         }
 
@@ -552,9 +554,9 @@ elsif ($action eq 'execute') {
             my $report = "contig $cid is not anymore in project $pid (but is in $cpid)";
             $logger->warning($report);
             next unless $confirm;
-            $adb->modifyContigTransferRequest($request,2,status =>'failed',
-                                               reviewer_comment =>"expired original project");
-            &sendMessage($requester,"contig $cid could not be transfered: $report");
+            $adb->modifyContigTransferRequest($request,2,$force,status =>'failed',
+                                              reviewer_comment =>"expired original project");
+            &sendMessage($requester,"contig $cid could NOT be transfered: $report");
             next;
         }        
         
@@ -574,7 +576,8 @@ elsif ($action eq 'execute') {
 
 # execute the request, first do the status to done (to check access rights)
 
-        my ($status,$report) = $adb->modifyContigTransferRequest($request,2,status=>'done');
+        my ($status,$report) = $adb->modifyContigTransferRequest($request,2,$force,
+                                                                  status=>'done');
 
         unless ($status) {
             $logger->warning("transfer refused: $report");
@@ -606,7 +609,7 @@ elsif ($action eq 'execute') {
 	}
         else {
             $report = "project $pid is locked; request will be requeued";
-            $adb->modifyContigTransferRequest($request,2,status=>'approved');
+            $adb->modifyContigTransferRequest($request,2,$force,status=>'approved');
 	}
     }
 
@@ -962,28 +965,28 @@ sub createContigTransferRequest {
     my $status; # for output message
 
     if ($cpp && $tpp) {
-# user has privilege on both (current & destination) projects; add comment if not owner
+# user has privilege on both (current & destination) projects; add comment if not project owner
         unless ($comment || $user eq $cnames[2]) {
      	    $comment = "original contig owner $cnames[2]";
 	}
-        $adb->modifyContigTransferRequest($rqid,1,status =>'approved',
-                                          requester_comment => $comment);
+        $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
+                                                    status =>'approved');
         $status = "approved";
     }
     elsif ($tpp) {
 # user has no privilege on the project the contig is currently in
         $status = "waiting for approval by $cnames[2]";
 # update the comment (if any) and set the reviewer of the new request
-        $adb->modifyContigTransferRequest($rqid,0,requester_comment => $comment,
-                                                  reviewer => $cnames[2]);
+        $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
+                                                    reviewer => $cnames[2]);
         &mailMessageToOwner($rqid,$cid,$cnames[0],$tnames[0],$cnames[2],$user,0);
     }
     else {
 # user has no privilege on the target project
         $status = "waiting for approval by $tnames[2]";
 # update the comment of the new request
-        $adb->modifyContigTransferRequest($rqid,1,requester_comment => $comment,
-                                                  reviewer => $tnames[2]);
+        $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
+                                                    reviewer => $tnames[2]);
         &mailMessageToOwner($rqid,$cid,$cnames[0],$tnames[0],$tnames[2],$user,1);
     }
 
@@ -1013,10 +1016,10 @@ sub mailMessageToOwner {
 	     .  "\n";
 
     $message .= "In order to list requests that relate to you use :\n\n"
-             .  "transfer/listContigRequests  [-longlist]\n\n";
+             .  "transfer/listContigRequest  [-longlist]\n\n";
 
     $message .= "In order to execute your approved requests use :\n\n"
-             .  "executeContigRequests [-request $request]\n\n";
+             .  "executeContigRequest [-request $request]\n\n";
 
     $message .= "Most of these scripts come with additional options. Get a \n"
 	     .  "parameter list or synopsis with the '-h' or the '-s' switch\n\n";
