@@ -483,7 +483,8 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         elsif ($confirm) {
 # replace project ID by name
             if ($report =~ /project\sID\s(\d+)\b/i) {
-                my $projectname = &getCachedProject($adb,$1);
+                my $project = &getCachedProject($adb,$1);
+                my $projectname = $project->getProjectName();
                 $report =~ s/ID\s(\d+)\b/$projectname/i;
             }
             $logger->warning("operation refused : $report");
@@ -1010,7 +1011,7 @@ sub mailMessageToOwner {
              .  "directory for $organism ($arcturusworkdir) : \n\n";
 
     $message .= "transfer/grantContigRequest  -request $request\n"
-             .  "transfer/cancelContigRequest -request $request\n"
+#             .  "transfer/cancelContigRequest -request $request\n"
              .  "transfer/rejectContigRequest -request $request\n"
              .  "transfer/deferContigRequest  -request $request\n"
 	     .  "\n";
