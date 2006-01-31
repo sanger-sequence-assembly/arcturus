@@ -21,7 +21,7 @@ while ($nextword = shift @ARGV) {
     $username = shift @ARGV if ($nextword eq '-username');
     $password = shift @ARGV if ($nextword eq '-password');
 
-    $dropcontigtable = 1 if ($nextword eq '-dropcontigtable');
+    $dropcontigtable = 1 if ($nextword eq '-truncate');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -102,49 +102,17 @@ print STDERR "$nrows deleted from table SEQ2READ.\n";
 $delete_stmt->finish();
 
 if ($dropcontigtable) {
-    print STDERR "Preparing to drop CONTIG table.\n";
+    print STDERR "Preparing to truncate CONTIG table.\n";
 
-    print STDERR "Getting CREATE TABLE command.\n";
-    $query = "SHOW CREATE TABLE CONTIG";
+    $query = "TRUNCATE TABLE CONTIG";
 
     my $stmt = $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");
 
     $stmt->execute();
+    &db_die("Failed to execute query \"$query\"");
 
-    my ($tablename, $createcommand) = $stmt->fetchrow_array();
-
-    $stmt->finish();
-
-    if (defined($createcommand)) {
-	print STDERR "Table will be created using the command\n\n$createcommand\n\n";
-
-	$query = "DROP TABLE CONTIG";
-
-	$stmt = $dbh->prepare($query);
-	&db_die("Failed to create query \"$query\"");
-
-	$stmt->execute();
-	&db_die("Failed to execute query \"$query\"");
-
-	$stmt->finish();
-
-	print STDERR "Dropped table CONTIG.\n";
-
-	$query = $createcommand;
-
-	$stmt = $dbh->prepare($query);
-	&db_die("Failed to create query \"$query\"");
-
-	$stmt->execute();
-	&db_die("Failed to execute query \"$query\"");
-
-	$stmt->finish();
-
-	print STDERR "Created table CONTIG.\n";
-    } else {
-	print STDERR "Unable to retrieve CREATE TABLE command. Table will not be dropped.\n";
-    }
+    print STDERR "Table CONTIG has been truncated\n";
 }
 
 $dbh->disconnect();
@@ -155,17 +123,18 @@ sub db_die {
     my $msg = shift;
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(1);
 }
 
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\t\tName of instance\n";
-    print STDERR "-organism\t\tName of organism\n";
+    print STDERR "-instance\tName of instance\n";
+    print STDERR "-organism\tName of organism\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-dropcontigtable\tDrop the CONTIG table and re-create it\n";
-    print STDERR "-username\t\tMySQL username with DROP TABLE privileges\n";
-    print STDERR "-password\t\tMySQL password for user with DROP TABLE privileges\n";
+    print STDERR "-truncate\tTruncate the CONTIG table (equivalent to DROP followed by CREATE)\n";
+    print STDERR "-username\tMySQL username with DROP TABLE privileges\n";
+    print STDERR "-password\tMySQL password for user with DROP TABLE privileges\n";
 }
