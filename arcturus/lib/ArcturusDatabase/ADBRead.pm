@@ -2645,22 +2645,29 @@ sub getTagSequenceIDsForTags {
 # build the tag ID hash keyed on (unique) tag sequence name
 
     if (my @tagseqnames = keys %tagdata) {
-# get tag_seq_id, tagsequence for tagseqnames
-        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
-	          . " where tagseqname in ('".join("','",@tagseqnames)."')";
-
-        my $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
 
         my $tagSQhash = {};
 
-        while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
-            $tagIDhash->{$tagseqname} = $tag_seq_id;
-            $tagSQhash->{$tagseqname} = $sequence;
-        }
+# get tag_seq_id, tagsequence for tagseqnames
 
-        $sth->finish();
+        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
+	          . " where tagseqname = ?";
+# my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
+#           . " where tagseqname in ('".join("','",@tagseqnames)."')";
+
+        my $sth = $dbh->prepare_cached($query);
+
+        foreach my $tagseqname (@tagseqnames) {
+
+            $sth->execute($tagseqname) || &queryFailed($query,$tagseqname);
+
+            while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
+                $tagIDhash->{$tagseqname} = $tag_seq_id;
+                $tagSQhash->{$tagseqname} = $sequence;
+            }
+
+            $sth->finish();
+	}
 
 # test the sequence against the one specified in the tags
 
@@ -2838,16 +2845,16 @@ sub insertTagSequence {
 
 # insert a new tagseqname, sequence combination into TAGSEQUENCE
 
-    my $columns = "tagseqname";
-    my $values = "?";
-    my @values = ($tagseqname);
+    my $query;
+    my @values;
     if ($sequence) {
-        $columns .= ",sequence";
-        $values .= ",?";
-	push @values,$sequence;
+        $query = "insert ignore into TAGSEQUENCE (tagseqname,sequence) values (?,?)";
+        @values = ($tagseqname,$sequence);
     }
-
-    my $query = "insert ignore into TAGSEQUENCE ($columns) values ($values)";
+    else {
+        $query = "insert ignore into TAGSEQUENCE (tagseqname) values (?)";
+        push @values, $tagseqname;
+    }
 
     my $sth = $dbh->prepare_cached($query);        
                     
