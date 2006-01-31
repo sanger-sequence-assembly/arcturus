@@ -225,7 +225,6 @@ sub insertProject {
 # the publicly used mode checks existence of both owner and assembly
     my $dbh = shift;
     my $method = shift;
- $method = 1;
 
 # compose query and input parameters
 
@@ -744,7 +743,8 @@ sub modifyContigTransferRequest {
 # by user with overriding role)
     my $this = shift;
     my $rqid = shift; # request ID
-    my $force = shift || 0; # test user access to request
+    my $otest = shift || 0; # test ownership (0: owner, 1: reviewer, 2: both)
+    my $force = shift || 0; # test override
     my %changes = @_; # hash with new column values keyed on column name
 
 # get the details of the request
@@ -777,18 +777,30 @@ sub modifyContigTransferRequest {
     my $user = $this->getArcturusUser();
 
     my $description = "$hash->{request_id} (move contig "
-                    . "$hash->{contig_id} to project "
+                    . "$hash->{contig_id} to project ID "
 		    . "$hash->{new_project_id})";
 
-# user/owner ID or 'role' should match, if force == 2 also consider reviewer 
+# user/owner ID or 'role' should match 
 
+    my $accept = 0;
     my $owner = $hash->{requester};
-    unless ($user eq $owner || $force && &userRoles($user,$owner)) {
-        my $review = $force > 1 ? $hash->{reviewer} : 0;
-        unless ($review && ($user eq $review || &userRoles($user,$review))) {
-            return 0, "request $description belongs to user '$owner'"
-                    . ($review ? ", to be reviewed by $review" : "");
-        }
+    my $reviewer;
+
+    if ($otest != 1) {
+# require the user to be the request's owner or have overriding privilege
+	$accept = 1 if ($user eq $owner);
+	$accept = 1 if (!$accept && $force && &userRoles($user,$owner));
+    }
+    if ($otest > 0 && !$accept) {
+# require the user to be the request's reviewer or have overriding privilege
+        $reviewer = $hash->{reviewer};
+	$accept = 1 if ($user eq $reviewer);
+	$accept = 1 if (!$accept && $force && &userRoles($user,$reviewer));
+    }
+# if not accepted, exit with error message
+    unless ($accept) {
+        return 0, "request $description belongs to user '$owner'"
+                . ($reviewer ? ", to be reviewed by $reviewer" : "");
     }
 
     $changes{reviewer} = $user unless $changes{reviewer};
@@ -1179,7 +1191,7 @@ sub getNamesForProjectID {
 
     $sth->finish();
 
-    print STDERR "!! unreferenced assembly ID for project $pname ($pid) !!\n"
+    print STDERR "!! unreferenced assembly ID for project $pname ($pid) !!\n\n"
 	if ($aname && $aname eq 'undefined'); # just a warning
 
     return ($pname,$aname,$owner);
