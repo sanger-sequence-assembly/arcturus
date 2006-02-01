@@ -133,7 +133,7 @@ sub CAFFileParser {
         $this->loginfo("Processing line $line") if !($line%100000);
         next if ($record !~ /\S/); # skip empty lines 
 
-        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*:\s*(\S+)/) {
 # there is a new object name
             $type = 0;
             my $item = $1;
