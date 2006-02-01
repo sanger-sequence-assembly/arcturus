@@ -356,8 +356,9 @@ sub analyseSegments {
 
     if ($localalignment == 0 || $localalignment != $globalalignment) {
         print STDERR "Anomalous alignment in mapping "
-                     .($this->getMappingName || $this->getSequenceID).
-	             " :\n".$this->assembledFromToString unless $silent;
+                   . ($this->getMappingName || $this->getSequenceID)
+	           . " ($localalignment $globalalignment) :\n"
+                   .  $this->assembledFromToString unless $silent;
         $globalalignment = $localalignment;
      }
 
@@ -675,8 +676,10 @@ sub toString {
     my $string = "Mapping: name=$mappingname, sense=$direction";
 
     if (!$flags) {
-	my ($cstart, $cfinish) =  $this->getContigRange();
-	$string .= ", contigrange=[$cstart, $cfinish]";
+	my ($cstart, $cfinis) =  $this->getContigRange();
+        $cstart = 'undef' unless defined $cstart;
+        $cfinis = 'undef' unless defined $cfinis;
+	$string .= ", contigrange=[$cstart, $cfinis]";
     }
 
     $string .= "\n";
