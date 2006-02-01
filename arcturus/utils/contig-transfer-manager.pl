@@ -207,7 +207,8 @@ my ($cids,$ctophash,$pid);
 
 if ($focpn) {
 
-    print "reading from file $focpn\n";
+    $logger->info("Reading from file $focpn");
+
    ($cids,$ctophash) = &getContigProjectIdentifiers($focpn,$adb);
 
 # run through all contigs and collect the projects
@@ -281,6 +282,11 @@ if ($action eq 'transfer') {
 
     foreach my $contig (@$cids) {
 
+        if ($ctophash) {
+	    my $Project = &getCachedProject($adb,$ctophash->{$contig},$assembly);
+            $pid = $Project->getProjectID() if $Project;
+        } 
+
         my ($status,$message) = &createContigTransferRequest($adb,$contig,$pid,
                                                              $confirm,%options);
         if ($status == 1) {
@@ -292,7 +298,7 @@ if ($action eq 'transfer') {
             $logger->warning("$message  => use -confirm");
 	}
         else {
-            $logger->warning("transfer request is REJECTED : $message");
+            $logger->warning("transfer request is REFUSED : $message");
         }  
     }
 }
@@ -761,6 +767,8 @@ sub getNamesFromFile {
         $hash->{$fields[0]} = $fields[1];
     }
 
+    $FILE->close();
+
     print STDERR "NO valid data found on file '$file'\n" unless @$cids; 
 
     return $cids if ($ncol == 1);
@@ -853,7 +861,7 @@ sub createContigTransferRequest {
 # consistency; each request is then tested for validity, i.e. whether it
 # can be executed
 
-    return 0,"invalid parameters ($cid,$tpid)" unless ($cid && defined($tpid));
+    return 0,"undefined contig or project identifier" unless ($cid && defined($tpid));
 
     my $user = $adb->getArcturusUser();
 
