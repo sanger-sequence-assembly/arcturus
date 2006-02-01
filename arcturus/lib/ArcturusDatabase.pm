@@ -8,6 +8,8 @@ use ArcturusDatabase::ADBAssembly;
 
 our @ISA = qw(ArcturusDatabase::ADBAssembly);
 
+# use ArcturusDatabase::ADBRoot qw(queryFailed);
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -96,12 +98,14 @@ sub getURL {
 }
 
 sub errorStatus {
-# returns DBI::err  or 0
+# returns DBI error code or message, if any
     my $this = shift;
 
     return "Can't get a database handle" unless $this->getConnection();
 
-    return $DBI::err || 0;
+    return ($DBI::err || 0) unless shift;
+
+    return ($DBI::errstr || '');  
 }
 
 sub disconnect {
@@ -147,7 +151,8 @@ sub getArcturusUser {
 }
 
 #-------------------------------------------------------------------------
-# "roles" using USER table data TO BE DEVELOPED
+# "roles" and privileges using USER table data ... TO BE DEVELOPED FURTHER
+#-------------------------------------------------------------------------
 
 sub setArcturusUserRole {
     my $this = shift;
@@ -168,23 +173,182 @@ sub getArcturusUserRoles {
     return $this->{userroles};
 }
 
+#-------------------------------------------------------------------------
+
 sub userCanCreateProject {
     my $this = shift;
-    return 1; # temporary
+#    return 1; # temporary
+
+    my $user = $this->getArcturusUser() || return undef;
+
+    my $userdatahash = &fetchUserData($this->getConnection(),$user);
+
+# require an exact match of the user name
+
+    return undef unless ($userdatahash->[0]->{username} eq $user); 
+
+    return ($userdatahash->[0]->{can_create_new_project} eq 'Y' ? 1 : 0);
 }
 
 sub userCanAssignProject {
     my $this = shift;
+
+    my $user = $this->getArcturusUser() || return undef;
+
+    my $userdatahash = &fetchUserData($this->getConnection(),$user);
+
+# require an exact match of the user name
+
+    return undef unless ($userdatahash->[0]->{username} eq $user); 
+
+    return ($userdatahash->[0]->{can_assign_project} eq 'Y' ? 1 : 0);
 }
 
 sub userCanMoveAnyContig {
     my $this = shift;
+
+    my $user = $this->getArcturusUser() || return undef;
+
+    my $userdatahash = &fetchUserData($this->getConnection(),$user);
+
+# require an exact match of the user name
+
+    return undef unless ($userdatahash->[0]->{username} eq $user); 
+
+    return ($userdatahash->[0]->{can_move_any_contig} eq 'Y' ? 1 : 0);
 }
 
 sub userCanGrantPrivilege {
     my $this = shift;
+
+    my $user = $this->getArcturusUser() || return undef;
+print STDOUT "testing privilege of user $user\n";
+
+    my $userdatahash = &fetchUserData($this->getConnection(),$user);
+
+# require an exact match of the user name
+
+print STDOUT "testing privilege of user $user : $userdatahash->[0]->{can_grant_privileges}\n";
+    return undef unless ($userdatahash->[0]->{username} eq $user); 
+
+    return ($userdatahash->[0]->{can_grant_privileges} eq 'Y' ? 1 : 0);
 }
 
+#-----------------------------------------------------------------------------
+# user administration
+#-----------------------------------------------------------------------------
+
+sub putNewUser {
+# add a new username to the USER table
+    my $this = shift;
+    my $user = shift;
+
+    return 0 unless $this->userCanGrantPrivilege();
+
+    my $query = "insert into USER (username) values (?)";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($user) || 0;
+
+    $sth->finish();
+
+    return ($rc + 0);
+}
+
+sub updateUser {
+# alter user attribute(s)
+    my $this = shift;
+    my $user = shift;
+    my %options = @_;
+
+    return 0 unless $this->userCanGrantPrivilege(); # the user running the script
+
+    my $dbh = $this->getConnection();
+
+    my @items = ('role',
+                 'can_create_new_project','can_assign_project',
+                 'can_move_any_contig','can_grant_privileges');
+
+    my $success = 0;
+    foreach my $item (@items) {
+        next unless $options{$item};
+        $success++ if &changeUserData($dbh,$item,$options{$item},$user);
+    }
+
+    return $success;
+}
+
+sub changeUserData {
+# private, update the user table
+    my $dbh  = shift;
+    my $item = shift;
+
+    my $query = "update USER set $item = ? where username = ?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute(@_) || 0;
+
+    $sth->finish();
+
+    return ($rc + 0);
+}
+
+sub deleteUser {
+# remove a user from USER table
+    my $this = shift;
+    my $user = shift;
+
+    return 0 unless $this->userCanGrantPrivilege(); # or replace by multitable delete
+
+    my $query = "delete from USER where username = ?";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rc = $sth->execute($user) || 0;
+
+    $sth->finish();
+
+    return ($rc + 0);
+}
+
+sub getUserData {
+# public interface to retrieve user data hash list
+    my $this = shift;
+
+    undef @_ unless $_[0]; # to set the array length to 0
+
+    return &fetchUserData($this->getConnection(),@_);
+}
+
+sub fetchUserData {
+# return a list of hashes with requested userdata
+    my $dbh  = shift;
+
+    my $query = "select * from USER ";
+    $query .= "where username like ?" if @_;
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute(@_) || return undef;
+
+    my $arrayofhashes = [];
+    while (my $hashref = $sth->fetchrow_hashref()) {
+        push @$arrayofhashes, $hashref;
+    }
+
+    $sth->finish();
+
+    return $arrayofhashes;
+}
+
+#-----------------------------------------------------------------------------
+#
 #-----------------------------------------------------------------------------
 
 sub logMessage {
