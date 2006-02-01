@@ -225,7 +225,6 @@ foreach my $read (@reads) {
     $options{minimumlength} = $lclip if ($lclip >= 32);
     $options{qualityclip} = $qclip if $qclip;
     $options{noload} = 1 unless $confirm; # prevents actual loading
-        $options{noload} = 1; # prevents actual loading
  
     my $report = "read $read ";
 
