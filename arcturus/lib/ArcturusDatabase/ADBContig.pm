@@ -438,8 +438,8 @@ sub putContig {
             $contig->setContigID($contigid);
             my $message = "Contig $contigname is identical to contig ".
                            $previous->getContigName();
-# 'prohibitparents' is an option used by assignReadAsContigToProject
-            return 0,$message if $options{prohibitparents};
+# 'prohibitparent' is an option used by assignReadAsContigToProject
+            return 0,$message if $options{prohibitparent};
  
 # the next block allows updates to contigs already in the database
 
@@ -483,9 +483,9 @@ print STDERR "putContig: line 449 assignContigToProject "
     if ($parentids && @$parentids) {
 # compare with each previous contig and return/store mapings/segments
         $message .= "has parent(s) : @$parentids ";
-# 'prohibitparents' is an option used by assignReadAsContigToProject
+# 'prohibitparent' is an option used by assignReadAsContigToProject
 # to avoid loading single-read contigs when the read is an assembled read
-        if ($options{prohibitparents}) {
+        if ($options{prohibitparent}) {
             return 0,"$message  ('prohibitparent' option active)";
         }
         foreach my $parentid (@$parentids) {
