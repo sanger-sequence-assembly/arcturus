@@ -629,7 +629,7 @@ sub assignReadAsContigToProject {
 
     $poption{setprojectby} = 'project';
 # the new contig may not have any parent contigs (else it is an assembled read)
-    $poption{prohibitparents} = 1;
+    $poption{prohibitparent} = 1 unless defined $poption{prohibitparent};
 
     return $this->putContig($contig,$project,%poption); # transfer of noload
 }
@@ -1317,6 +1317,7 @@ sub getAccessibleProjects {
 
     my @projectids;
     foreach my $projectid (@$projectids) {
+# test user privilege against the ownership of the project
         my ($access,$owner) = &hasPrivilegeOnProject($dbh,$projectid,$user);
         push @projectids, $projectid if $access;
     }
