@@ -173,7 +173,7 @@ sub getAssemblyDataforReadName {
     my $contig_items = "CONTIG.contig_id,gap4name,CONTIG.created";
     my $projectitems = "PROJECT.name,PROJECT.owner,assembly_id";
 
-    my $query = "select distinct $contig_items,$projectitems"
+    my $query = "select distinct $contig_items,$projectitems,CONTIG.nreads"
               . "  from READS,SEQ2READ,MAPPING,CONTIG,PROJECT"
               . " where CONTIG.project_id = PROJECT.project_id"
               . "   and CONTIG.contig_id = MAPPING.contig_id"
