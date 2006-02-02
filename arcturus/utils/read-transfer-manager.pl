@@ -225,6 +225,7 @@ foreach my $read (@reads) {
     $options{minimumlength} = $lclip if ($lclip >= 32);
     $options{qualityclip} = $qclip if $qclip;
     $options{noload} = 1 unless $confirm; # prevents actual loading
+    $options{prohibitparent} = 0; # override default setting
  
     my $report = "read $read ";
 
@@ -260,7 +261,8 @@ foreach my $read (@reads) {
             my $contig = sprintf("Contig%06d",$contig_id);
             my @items = @{$list->{$contig_id}};
             $items[1] = substr ($items[1],0,10); # date field
-            my $line = sprintf "%-24s  %10s  %-12s  %-8s  %2d", @items;
+#                           gap4name   date project & ID  ass rds
+            my $line = sprintf "%-24s  %10s  %-12s  %-8s  %2d %7d", @items;
             $logger->warning("  in $contig = $line");
         }
     }  
@@ -279,11 +281,11 @@ exit 0;
 sub getNamesFromFile {
     my $file = shift; # file name
 
-    &showUsage(0,"File $file does not exist") unless (-e $file);
+    &showUsage("File $file does not exist") unless (-e $file);
 
     my $FILE = new FileHandle($file,"r");
 
-    &showUsage(0,"Can't access $file for reading") unless $FILE;
+    &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
     while (defined (my $name = <$FILE>)) {
