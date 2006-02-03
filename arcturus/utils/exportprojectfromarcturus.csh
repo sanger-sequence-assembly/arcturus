@@ -99,9 +99,9 @@ $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
 
 echo Changing access privileges on Gap4 database
 
-chmod g+w ${projectname}.A
+chmod g-w ${projectname}.A
 
-chmod g+w ${projectname}.A.aux
+chmod g-w ${projectname}.A.aux
 
 echo Cleaning up
 
