@@ -11,7 +11,14 @@ import java.text.DecimalFormat;
 
 public class Gap4BayesianConsensus implements ConsensusAlgorithm {
     private static int[] dependent_table = {0, 0, 8, 16, 24, 31, 38, 44, 48, 51, 52};
-    private static String basecodes = "ACGT*-";
+    private static String basecodes = "ACGT*N";
+
+    private static int BASE_A = 0;
+    private static int BASE_C = 1;
+    private static int BASE_G = 2;
+    private static int BASE_T = 3;
+    private static int BASE_PAD = 4;
+    private static int BASE_N = 5;
 
     private boolean pad_present = false;
     private boolean best_is_current = true;
@@ -123,7 +130,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	// weighting this base type.
 
 	if (quality == 0)
-	    iBase = 5;
+	    iBase = BASE_N;
 
 	// Check the quality against the current maximum value for this base and strand/chemistry
 
@@ -139,7 +146,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	    debugps.println("  qCount[" + iBase + "][" + iStrandAndChemistry + "] = " + qcount[iBase][iStrandAndChemistry]);
 	}
 
-	if (iBase == 4)
+	if (iBase == BASE_PAD || iBase == BASE_N)
 	    pad_present = true;
 
 	best_is_current = false;
@@ -156,7 +163,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	    debugps.println("Gap4BayesianConsensus::findBestBase()");
 	}
 
-	int nbase_types = 4; // Don't allow pads; was "pad_present ? 5 : 4";
+	int nbase_types = pad_present ? 5 : 4;
 	int nevents = 0;
 
 	if (debugps != null)
@@ -239,6 +246,9 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		debugps.println();
 
 	    for (int j = 0; j < nbase_types; j++) {
+		if (j == BASE_PAD)
+		    continue;
+
 		double product = 1.0;
 
 		for (int k = 0; k < nEvents; k++)
@@ -278,7 +288,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	findBestBase();
 
 	if (bestbase < 0)
-	    return '*';
+	    return 'N';
 	else
 	    return basecodes.charAt(bestbase);
     }
