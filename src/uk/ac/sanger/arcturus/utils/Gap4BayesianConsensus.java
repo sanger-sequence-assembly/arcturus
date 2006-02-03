@@ -156,7 +156,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	    debugps.println("Gap4BayesianConsensus::findBestBase()");
 	}
 
-	int nbase_types = pad_present ? 5 : 4;
+	int nbase_types = 4; // Don't allow pads; was "pad_present ? 5 : 4";
 	int nevents = 0;
 
 	if (debugps != null)
