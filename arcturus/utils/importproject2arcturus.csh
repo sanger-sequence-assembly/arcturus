@@ -90,8 +90,7 @@ endif
 if ( -e ${projectname}.0 ) then
 # test age of version 0 against version A
     if ( -e ${projectname}.A ) then
-#        if ( { ${arcturus_home}/utils/isolderthan ${projectname}.0 ${projectname}.A } ) then
-        if ( { $ARC_UTILS/isolderthan ${projectname}.A ${projectname}.0 } ) then
+        if ( { ${arcturus_home}/utils/isolderthan ${projectname}.A ${projectname}.0 } ) then
             echo \!\! -- Import of project $projectname skipped: Gap4 version 0 older than version A --
             exit 0
         endif
