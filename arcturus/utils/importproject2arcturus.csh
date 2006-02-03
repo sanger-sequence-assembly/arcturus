@@ -83,14 +83,29 @@ if ( -f ${projectname}.0.BUSY ) then
 endif
 
 if ( -f ${projectname}.A.BUSY ) then
-  echo \!\! -- Import of project $projectname WARNING: Gap4 version A is BUSY #  echo \!\! -- Import of project $projectname aborted: Gap4 version A is BUSY --
+  echo \!\! -- Import of project $projectname WARNING: Gap4 version A is BUSY --
 #  exit 1
+endif
+
+if ( -e ${projectname}.0 ) then
+# test age of version 0 against version A
+    if ( -e ${projectname}.A ) then
+#        if ( { ${arcturus_home}/utils/isolderthan ${projectname}.0 ${projectname}.A } ) then
+        if ( { $ARC_UTILS/isolderthan ${projectname}.A ${projectname}.0 } ) then
+            echo \!\! -- Import of project $projectname skipped: Gap4 version 0 older than version A --
+            exit 0
+        endif
+    endif
+else
+  echo \!\! -- Import of project $projectname aborted: Gap4 version 0 not found --
+  exit 1
 endif
 
 #echo Test abort
 #set pwd = `pwd`
 #echo d:$pwd i:$instance o:$organism p:$projectname tp:$trashproject
 #exit 0
+
 
 echo Backing up version 0 to version B
 
@@ -131,4 +146,7 @@ echo Cleaning up
 rm -f $padded $depadded
 
 exit 0
+
+
+
 
