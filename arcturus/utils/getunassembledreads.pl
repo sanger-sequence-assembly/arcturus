@@ -15,7 +15,7 @@ use PathogenRepository;
 my $instance;
 my $organism;
 my $assembly;
-my $outputFileName ='';
+my $outputFileName;
 my $selectmethod;
 my $aspedbefore;
 my $aspedafter;
@@ -77,7 +77,12 @@ while (my $nextword = shift @ARGV) {
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
+    if (defined($fasta) && ($nextword eq '-caf' || $nextword eq '-fasta')) {
+        die "-caf and -fasta specification are mutually exclusive";
+    }
+
     $outputFileName   = shift @ARGV  if ($nextword eq '-caf');
+    $fasta            = 0            if ($nextword eq '-caf');
     $outputFileName   = shift @ARGV  if ($nextword eq '-fasta');
     $fasta            = 1            if ($nextword eq '-fasta');
 
@@ -127,6 +132,8 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
+&showUsage("Missing caf or fasta filename") unless defined $outputFileName;
+
 my $adb = new ArcturusDatabase (-instance => $instance,
 			        -organism => $organism);
 
@@ -141,13 +148,24 @@ $logger->info("Opening CAF file $outputFileName for output") if $outputFileName;
 
 my ($CAF,$FAS,$QLT);
 if ($fasta) {
-    $FAS = new FileHandle("$outputFileName.fas","w") if $outputFileName;
+# fasta output
+    if ($outputFileName) {
+        $logger->info("Opening fasta file $outputFileName.fas for output");
+        $FAS = new FileHandle("$outputFileName.fas","w");
+    }
     $FAS = *STDOUT unless $FAS;
-    $QLT = new FileHandle("$outputFileName.fas","w") if $outputFileName;
+    if ($outputFileName) {
+        $logger->info("Opening fasta file $outputFileName.qlt for output");
+        $QLT = new FileHandle("$outputFileName.qlt","w");
+    }
     $QLT = *STDOUT unless $QLT;
 }
 else {
-    $CAF = new FileHandle("$outputFileName.caf","w") if $outputFileName;
+# caf output
+    if ($outputFileName) {
+        $logger->info("Opening caf file $outputFileName.caf for output");
+        $CAF = new FileHandle("$outputFileName.caf","w");
+    }
     $CAF = *STDOUT unless $CAF;
 }
 
@@ -294,6 +312,11 @@ sub showUsage {
     print STDOUT "-organism\tArcturus database name\n";
     print STDOUT "-instance\teither 'prod' or 'dev'\n";
     print STDOUT "\n";
+    print STDOUT "MANDATORY EXCLUSIVE PARAMETER:\n";
+    print STDOUT "\n";
+    print STDOUT "-caf\t\tcaf file name for output (0 for STDOUT)\n";
+    print STDOUT "-fasta\t\tfile name for output in fasta format\n";
+    print STDOUT "\n";
     print STDOUT "OPTIONAL PARAMETERS:\n";
     print STDOUT "\n";
     print STDOUT "-selectmethod\t1: for using sub queries\n"
@@ -309,8 +332,6 @@ sub showUsage {
     print STDOUT "-namenotlike\t(exclude) readname with wildcard or a pattern\n";
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
-    print STDOUT "-caf\t\tcaf file name for output\n";
-    print STDOUT "-fasta\t\t(no value) write in fasta format (default CAF)\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
 # print STDOUT "-assembly\tassembly name\n";
     print STDOUT "\n";
