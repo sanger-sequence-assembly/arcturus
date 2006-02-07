@@ -423,21 +423,33 @@ sub putContig {
     my $readhash = md5(sort @seqids);
 # first try the sequence ID hash (returns the last entered contig, if any)
     my $previous = $this->getContig(withChecksum=>$readhash,
-                                    metaDataOnly=>1);
+                                    metaDataOnly=>1); # current generation?
 # if not found try the readname hash
     $previous = $this->getContig(withChecksum=>md5(sort keys %seqids),
                                  metaDataOnly=>1) unless $previous;
 
+# if a matching contig is found, test that it is in the current generation
+
+    my $message;
     if ($previous) {
-# the read name hash or the sequence IDs hash does match
+        $message = "Contig $contigname matches contig "
+                 .  $previous->getContigName();
+# the read name hash or the sequence IDs hash does match: test generation
+        unless ($this->isCurrentContigID($previous->getContigID())) {
+            $message .= " in an older generation; ";
+            $previous = 0; # reject the match
+	}
+    }
+
+    if ($previous) {
 # pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
-            my $message = "Contig $contigname is identical to contig ".
-                           $previous->getContigName();
+            $message = "Contig $contigname is identical to contig "
+                     .  $previous->getContigName();
 # 'prohibitparent' is an option used by assignReadAsContigToProject
             return 0,$message if $options{prohibitparent};
  
@@ -470,6 +482,7 @@ print STDERR "putContig: line 449 assignContigToProject "
 
             return $contigid,$message;
         }
+        $message .= "but is not identical; ";
     }
 
 # okay, the contig is new; find out if it is connected to existing contigs
@@ -479,7 +492,7 @@ print STDERR "putContig: line 449 assignContigToProject "
 # pull out mappings for those previous contigs, if any
 
     my @originalprojects;
-    my $message = "$contigname ";
+    $message = "$contigname " unless $message;
     if ($parentids && @$parentids) {
 # compare with each previous contig and return/store mapings/segments
         $message .= "has parent(s) : @$parentids ";
