@@ -336,6 +336,7 @@ sub showUsage {
 # print STDOUT "-assembly\tassembly name\n";
     print STDOUT "\n";
     print STDOUT "-clipmethod\tOn the fly quality clipping using method specified\n";
+    print STDOUT "-mask\t\tSymbol replacing low quality data (recommended: 'x')\n";
     print STDOUT "-threshold\tQuality clipping threshold level\n";
     print STDOUT "-minimumqualityrange\tMinimum high quality length\n";
     print STDOUT "\n";
