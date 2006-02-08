@@ -105,12 +105,14 @@ while (my $line = <STDIN>) {
 	}
 
 	$stmt_seq2contig->finish();
+
+	if ($ctgcount < 1) {
+	    print "\n$readname is free\n\n";
+	}
     }
 
     if ($seqcount == 0) {
 	print "$readlike NOT KNOWN\n";
-    } elsif ($ctgcount < 1) {
-	print "$readlike is free\n";
     }
 
     $stmt_read2seq->finish();
