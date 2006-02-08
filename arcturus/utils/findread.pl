@@ -63,7 +63,7 @@ while (my ($projid,$projname) = $stmt->fetchrow_array()) {
 
 $stmt->finish();
 
-$query = "select seq_id from READS left join SEQ2READ using(read_id) where readname = ?";
+$query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ?";
 
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -77,14 +77,16 @@ my $stmt_seq2contig = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
 while (my $line = <STDIN>) {
-    my ($readname) = $line =~ /\s*(\S+)/;
+    my ($readlike) = $line =~ /\s*(\S+)/;
 
-    $stmt_read2seq->execute($readname);
+    $readlike =~ s/\*/%/g;
+
+    $stmt_read2seq->execute($readlike);
 
     my $ctgcount = 0;
     my $seqcount = 0;
 
-    while (my ($seqid) = $stmt_read2seq->fetchrow_array()) {
+    while (my ($readname,$seqid) = $stmt_read2seq->fetchrow_array()) {
 	$seqcount++;
 
 	$stmt_seq2contig->execute($seqid);
@@ -106,9 +108,9 @@ while (my $line = <STDIN>) {
     }
 
     if ($seqcount == 0) {
-	print "$readname NOT KNOWN\n";
+	print "$readlike NOT KNOWN\n";
     } elsif ($ctgcount < 1) {
-	print "$readname is free\n";
+	print "$readlike is free\n";
     }
 
     $stmt_read2seq->finish();
