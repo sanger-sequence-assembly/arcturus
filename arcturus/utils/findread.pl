@@ -63,7 +63,7 @@ while (my ($projid,$projname) = $stmt->fetchrow_array()) {
 
 $stmt->finish();
 
-$query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ?";
+$query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ? order by readname asc";
 
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -100,7 +100,7 @@ while (my $line = <STDIN>) {
 
 	    ($cstart,$cfinish) = ($cfinish, $cstart) if ($direction eq 'Reverse');
 
-	    print "$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
+	    print "\n$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
 		"(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n",
 	}
 
