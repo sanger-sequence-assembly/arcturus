@@ -1008,6 +1008,8 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
+#my $LIST = 1; print "decoding OLIG $info ($sequence) \n" if $LIST;
+
     my $change = 0;
 # clean up name (replace possible ' oligo ' string by 'o')
     $change = 1 if ($info =~ s/\boligo[\b\s*]/o/i);
@@ -1029,12 +1031,13 @@ sub decode_oligo_info {
     }
 
     my $name;
-    if ($info =~ /^\s*(\d+)\b.*?$sequence/) {
+    if ($info =~ /^\s*(\d+)\b(.*?)$sequence/) {
 # the info string starts with a number followed by the sequence
         $name = "o$1";
     }
-    elsif ($info =~ /\b([opt0]\d+)\b/) {
+    elsif ($info !~ /serial/ && $info =~ /\b([opt0]\d+)\b/) {
 # the info contains a name like o1234 or t1234
+#print "2 name decoded: $1  \n" if $LIST; 
         $name = $1;
         $name =~ s/^0/o/; # correct typo 0 for o
     }
@@ -1056,6 +1059,8 @@ sub decode_oligo_info {
         $name = "o$name" unless ($name =~ /\D/);
     }
 
+#print "name $name (change $change) \n" if $LIST;
+
     return ($name,0) if ($name && !$change); # no new info
     return ($name,$info) if $name; # info modified
 
@@ -1075,6 +1080,8 @@ sub decode_oligo_info {
 	    }
 	}
     }
+
+#print "name $name (change $change) \n" if $LIST;
 
     return ($name,$info) if $name;
 
