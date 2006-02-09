@@ -1429,9 +1429,9 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
-    $this->writeDNA($FILE,"\nDNA : "); # specifying the CAF marker
+    $this->writeDNA($FILE,marker => "\nDNA : "); # specifying the CAF marker
 
-    $this->writeBaseQuality($FILE,"\nBaseQuality : ");
+    $this->writeBaseQuality($FILE,marker => "\nBaseQuality : ");
 
     print $FILE "\n";
 
@@ -1477,9 +1477,9 @@ sub writeToFasta {
 	}
     }
 
-    $this->writeDNA($DFILE);
+    $this->writeDNA($DFILE,%options);
 
-    $this->writeBaseQuality($QFILE) if $QFILE;
+    $this->writeBaseQuality($QFILE,%options) if $QFILE;
 
     return undef; # error reporting to be developed
 }
@@ -1487,14 +1487,16 @@ sub writeToFasta {
 # private methods
 
 sub writeDNA {
-# write consensus sequence DNA in FASTA format to FILE handle
-    my $this   = shift;
-    my $DFILE  = shift; # obligatory
-    my $marker = shift;
+# write consensus sequence DNA to DFILE handle
+    my $this    = shift;
+    my $DFILE   = shift; # obligatory
+    my %options = @_;
 
-    $marker = '>' unless defined($marker); # default FASTA format
+    my $marker = $options{marker} || '>'; # default FASTA format
 
     my $identifier = $this->getContigName();
+# optionally add gap4name 
+    $identifier .= "-".$this->getGap4Name() if $options{gap4name};
 
     if (!$DFILE) {
         return "Missing file handle for DNA";
@@ -1516,14 +1518,15 @@ print STDOUT "Missing DNA data for contig $identifier";
 }
 
 sub writeBaseQuality {
-# write consensus Quality Data in FASTA format to FILE handle
+# write consensus Quality Data to QFILE handle
     my $this   = shift;
     my $QFILE  = shift; # obligatory
-    my $marker = shift;
+    my %options = @_;
 
-    $marker = '>' unless defined($marker); # default FASTA format
+    my $marker = $options{marker} || '>'; # default FASTA format
 
     my $identifier = $this->getContigName();
+    $identifier = $this->getGap4Name() if $options{gap4name};
 
     if (!$QFILE) {
         return "Missing file handle for Quality Data";
