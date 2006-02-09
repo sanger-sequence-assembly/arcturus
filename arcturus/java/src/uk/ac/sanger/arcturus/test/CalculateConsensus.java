@@ -39,6 +39,8 @@ public class CalculateConsensus {
     private ConsensusAlgorithm algorithm = null;
 
     private PreparedStatement insertStmt = null;
+    private PreparedStatement updateStmt = null;
+
     private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
     private String consensustable = null;
@@ -138,7 +140,14 @@ public class CalculateConsensus {
 	    int nContigs = 0;
 	    long peakMemory = 0;
 
-	    String query = allcontigs ? "select contig_id from CONTIG" :
+	    insertStmt = conn.prepareStatement("insert into " + consensustable + " (contig_id,sequence,length,quality)" +
+					       " VALUES(?,?,?,?)");
+
+	    updateStmt = conn.prepareStatement("update " + consensustable + " set sequence=?,length=?,quality=? where contig_id=?");
+
+
+	    String query = allcontigs ?
+		"select CONTIG.contig_id,length(sequence) from CONTIG left join "  + consensustable + " using(contig_id)":
 		"select CONTIG.contig_id from CONTIG left join " + consensustable + " using(contig_id) where sequence is null";
 
 	    Statement stmt = conn.createStatement();
@@ -147,7 +156,9 @@ public class CalculateConsensus {
 
 	    while (rs.next()) {
 		int contig_id = rs.getInt(1);
-		calculateConsensusForContig(contig_id);
+		int seqlen = rs.getInt(2);
+		boolean doUpdate = allcontigs && !rs.wasNull();
+		calculateConsensusForContig(contig_id, doUpdate);
 		nContigs++;
 	    }
 
@@ -159,7 +170,7 @@ public class CalculateConsensus {
 	}
     }
 
-    public void calculateConsensusForContig(int contig_id) throws SQLException, DataFormatException {
+    public void calculateConsensusForContig(int contig_id, boolean doUpdate) throws SQLException, DataFormatException {
 	long clockStart = System.currentTimeMillis();
 	    
 	Contig contig = adb.getContigByID(contig_id, flags);
@@ -169,9 +180,10 @@ public class CalculateConsensus {
 	if (calculateConsensus(contig, algorithm, consensus, debugps)) {
 	    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
 	    long clockStop = System.currentTimeMillis() - clockStart;
-	    System.err.println("CONTIG " + contig_id + ": " + contig.getLength() + " bp, " +
+	    System.err.print("CONTIG " + contig_id + ": " + contig.getLength() + " bp, " +
 			       contig.getReadCount() + " reads, " +  clockStop + " ms, " + usedMemory + " kb");
-	    storeConsensus(contig_id, consensus);
+	    storeConsensus(contig_id, consensus, doUpdate);
+	    System.err.println(doUpdate ? "    UPDATED" : "    STORED");
 	} else
 	    System.err.println("Data missing, operation abandoned");
 	
@@ -316,11 +328,7 @@ public class CalculateConsensus {
 	return true;
     }
 
-    public void storeConsensus(int contig_id, Consensus consensus) throws SQLException {
-	if (insertStmt == null)
-	    insertStmt = conn.prepareStatement("insert into " + consensustable + " (contig_id,sequence,length,quality)" +
-						   " VALUES(?,?,?,?)");
-
+    public void storeConsensus(int contig_id, Consensus consensus, boolean doUpdate) throws SQLException {
 	byte[] sequence = consensus.getDNA();
 	byte[] quality = consensus.getQuality();
 
@@ -344,11 +352,19 @@ public class CalculateConsensus {
 	for (int i = 0; i < compressedQualityLength; i++)
 	    compressedQuality[i] = buffer[i];
 
-	insertStmt.setInt(1, contig_id);
-	insertStmt.setBytes(2, compressedSequence);
-	insertStmt.setInt(3, seqlen);
-	insertStmt.setBytes(4, compressedQuality);
-	insertStmt.executeUpdate();
+	if (doUpdate) {
+	    updateStmt.setInt(4, contig_id);
+	    updateStmt.setBytes(1, compressedSequence);
+	    updateStmt.setInt(2, seqlen);
+	    updateStmt.setBytes(3, compressedQuality);
+	    updateStmt.executeUpdate();
+	} else {
+	    insertStmt.setInt(1, contig_id);
+	    insertStmt.setBytes(2, compressedSequence);
+	    insertStmt.setInt(3, seqlen);
+	    insertStmt.setBytes(4, compressedQuality);
+	    insertStmt.executeUpdate();
+	}
     }
 
     private class Consensus {
