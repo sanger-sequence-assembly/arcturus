@@ -30,11 +30,12 @@ my $qualityclip;
 my $clipthreshold;
 my $clipsymbol;
 my $endregiontrim;
+my $gap4name;
 
 my $validKeys  = "organism|instance|contig|contigs|fofn|ignoreblocked|caf|"
                . "fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
-               . "endregiontrim|ert|verbose|help";
+               . "endregiontrim|gap4name|g4n|ert|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -74,6 +75,9 @@ while (my $nextword = shift @ARGV) {
 
     $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
     $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
+
+    $gap4name      = 1            if ($nextword eq '-gap4name');
+    $gap4name      = 1            if ($nextword eq '-g4n');
 
     $verbose       = 1            if ($nextword eq '-verbose');
 
@@ -210,6 +214,7 @@ if (defined($fastafile)) {
         $woptions{qualityclip} = 1 if defined($clipsymbol);
         $woptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
         $woptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
+        $woptions{gap4name} = 1 if $gap4name;
     }
 }
 elsif (defined($caffile)) {

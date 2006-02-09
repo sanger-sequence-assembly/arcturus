@@ -22,7 +22,7 @@ my $lock = 0;
 my $padded;
 my $readsonly = 0;
 my $output;
-my $fofn;
+my $fopn;
 my $caffile; # for standard CAF format
 my $maffile; # for Millikan format
 my $fastafile; # fasta
@@ -35,12 +35,13 @@ my $qualityclip;
 my $clipthreshold;
 my $endregiontrim;
 my $clipsymbol;
+my $gap4name;
 my $preview;
 
-my $validKeys  = "organism|instance|project|assembly|fofn|padded|caf|maf|"
+my $validKeys  = "organism|instance|project|assembly|fopn|padded|caf|maf|"
                . "readsonly|fasta|quality|lock|minNX|preview|batch|verbose|"
-               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|"
-               . "qct|qclipsymbol|qcs|endregiontrim|ert|debug|help";
+               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|gap4name|"
+               . "qct|qclipsymbol|qcs|endregiontrim|ert|g4n|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -55,7 +56,7 @@ while (my $nextword = shift @ARGV) {
 
     $identifier  = shift @ARGV  if ($nextword eq '-project');
 
-    $fofn        = shift @ARGV  if ($nextword eq '-fofn');
+    $fopn        = shift @ARGV  if ($nextword eq '-fopn');
 
     $verbose     = 1            if ($nextword eq '-verbose');
 
@@ -93,6 +94,9 @@ while (my $nextword = shift @ARGV) {
     $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
     $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
 
+    $gap4name    = 1            if ($nextword eq '-gap4name');
+    $gap4name    = 1            if ($nextword eq '-g4n');
+
     $lock        = 1            if ($nextword eq '-lock');
 
     $batch       = 1            if ($nextword eq '-batch');
@@ -122,7 +126,7 @@ unless (defined($fastafile) || defined($caffile) || defined($maffile)) {
     &showUsage("Missing CAF, FASTA or MAF output file name") unless $preview;
 }
 
-unless (defined($identifier) || $fofn || defined($assembly)) {
+unless (defined($identifier) || $fopn || defined($assembly)) {
     &showUsage("Missing project ID or name");
 }
 
@@ -142,7 +146,7 @@ $logger->info("Database $URL opened succesfully");
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
  
-$fofn = &getNamesFromFile($fofn) if $fofn;
+$fopn = &getNamesFromFile($fopn) if $fopn;
  
 #----------------------------------------------------------------
 # MAIN
@@ -203,8 +207,8 @@ if (defined($identifier) && $identifier !~ /all/i) {
     push @identifiers,@ids;
 }
  
-if ($fofn) {
-    foreach my $identifier (@$fofn) {
+if ($fopn) {
+    foreach my $identifier (@$fopn) {
         push @identifiers, $identifier if $identifier;
     }
 }
@@ -263,6 +267,7 @@ elsif (defined($fastafile)) {
     $exportoptions{qualityclip} = 1 if defined($clipsymbol);
     $exportoptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
     $exportoptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
+    $exportoptions{gap4name} = 1 if $gap4name;
 }
 elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
@@ -336,7 +341,7 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "Export contigs in project(s) by ID/name or using a fofn with IDs or names\n";
+    print STDERR "Export contigs in project(s) by ID/name or using a fopn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
@@ -351,7 +356,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-project\tProject ID or name\n";
-    print STDERR "-fofn\t\tname of file with list of project IDs or names\n";
+    print STDERR "-fopn\t\tname of file with list of project IDs or names\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
