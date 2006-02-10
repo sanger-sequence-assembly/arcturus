@@ -156,8 +156,14 @@ public class CalculateConsensus {
 
 	    while (rs.next()) {
 		int contig_id = rs.getInt(1);
-		int seqlen = rs.getInt(2);
-		boolean doUpdate = allcontigs && !rs.wasNull();
+
+		boolean doUpdate = false;
+
+		if (allcontigs) {
+		    int seqlen = rs.getInt(2);
+		    doUpdate = !rs.wasNull();
+		}
+
 		calculateConsensusForContig(contig_id, doUpdate);
 		nContigs++;
 	    }
