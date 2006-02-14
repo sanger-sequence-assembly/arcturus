@@ -274,8 +274,10 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
                 next;
 	    }
 
-            my $mk = $adb->markAsVirtualParent($parent_id);
-            $logger->severe("Failed to re-allocate contig $parent_id") unless $mk;  
+            my ($status,$msg) = $adb->retireContig($parent_id);
+            unless ($status) {
+                $logger->severe("Failed to re-allocate contig $parent_id : $msg");
+            }
 	}
 
         elsif ($repair == 3) {
