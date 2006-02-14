@@ -15,6 +15,7 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.*;
 
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
+import uk.ac.sanger.arcturus.gui.organismtable.OrganismTableFrame;
 
 /**
  * This class is the main class for all GUI applications.
@@ -166,16 +167,35 @@ public class Minerva implements WindowListener {
 	String instance = getStringParameter(args, "-instance");
 	String organism = getStringParameter(args, "-organism");
 
-	if (instance != null && organism != null) {
-	    try {
-		ArcturusDatabase adb = getArcturusDatabase(instance, organism);
-		if (adb != null) {
-		    MinervaFrame frame = new ProjectTableFrame(this, adb);
-		    displayNewFrame(frame);
+	if (instance != null) {
+	    if (organism == null) {
+		try {
+		    ArcturusInstance ai = (ArcturusInstance)instances.get(instance);
+
+		    if (ai == null) {
+			ai = new ArcturusInstance(ldapProps, instance);
+			instances.put(instance, ai);
+		    }
+
+		    if (ai != null) {
+			MinervaFrame frame = new OrganismTableFrame(this, ai);
+			displayNewFrame(frame);
+		    }
 		}
-	    }
-	    catch (Exception e) {
-		e.printStackTrace();
+		catch (Exception e) {
+		    e.printStackTrace();
+		}
+	    } else {
+		try {
+		    ArcturusDatabase adb = getArcturusDatabase(instance, organism);
+		    if (adb != null) {
+			MinervaFrame frame = new ProjectTableFrame(this, adb);
+			displayNewFrame(frame);
+		    }
+		}
+		catch (Exception e) {
+		    e.printStackTrace();
+		}
 	    }
 	}
     }
