@@ -70,6 +70,24 @@ public class ArcturusDatabase {
 	this.description = description;
 	this.name = name;
 
+	initialise();
+    }
+
+    /**
+     * Creates a new ArcturusDatabase object from an Organism object.
+     *
+     * @param organism the Organism from which to create the ArcturusDatabase.
+     */
+
+    public ArcturusDatabase(Organism organism) throws SQLException {
+	this.name = organism.getName();
+	this.description = organism.getDescription();
+	this.ds = organism.getDataSource();
+
+	initialise();
+    }
+
+    private void initialise() throws SQLException {
 	namedConnections = new HashMap();
 
 	createManagers();
