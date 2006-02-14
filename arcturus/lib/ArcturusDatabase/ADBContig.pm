@@ -586,17 +586,17 @@ print STDERR "putContig: line 449 assignContigToProject "
 # then load the overall mappings (and put the mapping ID's in the instances)
 
     return 0, "Failed to insert read-to-contig mappings for $contigname"
-    unless &putMappingsForContig($dbh,$contig,type=>'read');
+      unless &putMappingsForContig($dbh,$contig,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
     return 0, "Failed to insert contig-to-contig mappings for $contigname"
-    unless &putMappingsForContig($dbh,$contig,type=>'contig');
+      unless &putMappingsForContig($dbh,$contig,type=>'contig');
 
 # and contig tags?
 
     return 0, "Failed to insert tags for $contigname"
-    unless &putTagsForContig($dbh,$contig);
+      unless &putTagsForContig($dbh,$contig);
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
@@ -1211,7 +1211,7 @@ sub getContigMappingsForContig {
                  " order by ".($options{orderbyparent} ? "parent_id" : "cstart");
  
     my $squery = "select C2CSEGMENT.mapping_id,C2CSEGMENT.cstart," .
-                 "       pstart,length" .
+                 "       C2CSEGMENT.pstart,length" .
                  "  from C2CMAPPING join C2CSEGMENT using (mapping_id)".
                  " where C2CMAPPING.contig_id = ?";
 
@@ -1376,8 +1376,64 @@ sub putMappingsForContig {
             $accumulated = 0;
         }
     }
+
+# we now update the contig-to-contig mappings by adding the parent range
+# this is kept separate from the basic inserts because this is derived data
+# which may or may not be transparently defined, hence may be missing (undef)
+
+    &updateMappingsForContig ($dbh,$mappings) if ($option{type} eq "contig");
+
     return $success;
 }
+
+sub addMappingsForContig {
+# public interface for update of contig mappings
+    my $this = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    my $mappings = $contig->getContigToContigMappings();
+
+    my $dbh = $this->getConnection();
+    return &updateMappingsForContig($dbh,$mappings,$options{replace});
+}
+
+sub updateMappingsForContig {
+# private, update the mapped contig range
+    my $dbh = shift;
+    my $mappings = shift || return;
+    my $replace = shift;
+
+# default query inserts when pstart or pfinish field undefined
+
+    my $rquery = "update C2CMAPPING"
+               . "   set pstart = ?, pfinish = ?"
+	       . " where mapping_id = ?";
+    $rquery   .= "   and (pstart is null or pfinish is null)" unless $replace;
+
+    my $sth = $dbh->prepare_cached($rquery);
+
+    my $report = '';
+    foreach my $mapping (@$mappings) {
+# test existence of segments
+        next unless $mapping->hasSegments();
+# test existence of mappingID
+        if (my $mappingid = $mapping->getMappingID()) {
+            my @data = $mapping->getMappedRange();
+            next unless defined($data[0]);
+            next unless defined($data[1]);
+            push @data,$mappingid;
+            my $rc = $sth->execute(@data) || &queryFailed($rquery,@data);
+            $report .= "range inserted : @data\n" if ($rc && $rc == 1);
+	}
+    }
+
+    $sth->finish();
+
+    return $report;
+}
+
+#--------------------------------------------------------------------------
 
 sub markAsVirtualParent {
 # enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
@@ -1406,6 +1462,68 @@ sub markAsVirtualParent {
     my %options = (type=>'contig',allowemptymapping=>1);
 
     return &putMappingsForContig($this->getConnection(),$contig,%options);
+}
+
+sub retireContig {
+# remove a contig from the list of current contigs by linking it to contig 0
+    my $this = shift;
+    my $c_id = shift; # contig ID
+
+# is the contig a current contig?
+
+    unless ($this->isCurrentContigID($c_id)) {
+        return 0,"Contig $c_id is not a current contig";
+    }   
+
+# get the project ID and test if the user has access to the project
+
+    my ($p_id,$islocked) = $this->getProjectIDforContigID($c_id);
+
+    return 0,"Project $p_id is locked" if $islocked; #? replace by acquire a lock?
+
+    my $accessibleproject = $this->getAccessibleProjects(project=>$p_id);
+
+    unless (@$accessibleproject == 1 && $accessibleproject->[0] == $p_id) {
+        return 0, "User " . $this->getArcturusUser()
+                . " has no access to project $p_id";
+    }
+
+# add a link for this contig ID marking it as parent of contig 0
+# this (virtual) link removes the contig from the current contig list
+ 
+    unless (&putAsVirtualParent($this->getConnection(),$c_id)) {
+        return 0,"Failed to update database";
+    }
+
+    return 1,"OK";
+}
+
+sub putAsVirtualParent {
+# enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
+    my $adb = shift;
+    my $parent_id = shift || return 0;
+
+    return 0 unless $parent_id;
+
+# create a dummy contig with contig ID 0
+
+    my $contig = new Contig();
+
+    $contig->setContigID(0);
+
+# create a dummy C2CMAPPING for this contig
+
+    my $c2cmap = new Mapping();
+
+    $c2cmap->setSequenceID($parent_id);
+
+    $contig->addContigToContigMapping($c2cmap);
+
+# present for loading
+
+    my %options = (type=>'contig',allowemptymapping=>1);
+
+    return &putMappingsForContig($adb,$contig,%options);
 }
 
 #-----------------------------------------------------------------------------
