@@ -1020,6 +1020,7 @@ sub testContig {
 
 sub deleteContig {
 # remove data for a given contig_id from all tables
+# this function requires DBA privilege
     my $this = shift;
     my $identifier = shift;
     my %options = @_;
@@ -1107,14 +1108,6 @@ sub deleteContig {
     $report .= &cleanupSegmentTables($dbh,0);
 
     return ($success,$report);
-}
-
-# internal consistency test
-
-sub readback {
-# checks mappings against
-    my $this = shift;
-    my $contig = shift;
 }
 
 #---------------------------------------------------------------------------------
@@ -1435,11 +1428,13 @@ sub updateMappingsForContig {
 
 #--------------------------------------------------------------------------
 
-sub markAsVirtualParent {
+sub oldmarkAsVirtualParent { # to be renmoved after testing ot retireContig
 # enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
 # this virtual link removes the contig from the current contig list
     my $this = shift;
     my $parent_id = shift || return 0;
+
+    return $this->retireContig($parent_id) if $parent_id;
 
     return 0 unless $parent_id;
 
@@ -1468,6 +1463,7 @@ sub retireContig {
 # remove a contig from the list of current contigs by linking it to contig 0
     my $this = shift;
     my $c_id = shift; # contig ID
+print "retireContig: $c_id\n";
 
 # is the contig a current contig?
 
@@ -1491,15 +1487,16 @@ sub retireContig {
 # add a link for this contig ID marking it as parent of contig 0
 # this (virtual) link removes the contig from the current contig list
  
-    unless (&putAsVirtualParent($this->getConnection(),$c_id)) {
+    unless (&markAsVirtualParent($this->getConnection(),$c_id)) {
         return 0,"Failed to update database";
     }
 
     return 1,"OK";
 }
 
-sub putAsVirtualParent {
+sub markAsVirtualParent {
 # enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
+# this virtual link removes the contig from the current contig list
     my $adb = shift;
     my $parent_id = shift || return 0;
 
