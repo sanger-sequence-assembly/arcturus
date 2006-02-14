@@ -221,8 +221,6 @@ public class ArcturusInstance implements Iterator {
 	while (enum.hasMore()) {
 	    Binding bd = (Binding)enum.next();
 
-	    System.err.println(bd);
-
 	    String name = bd.getName();
 
 	    int i = name.indexOf('=');
