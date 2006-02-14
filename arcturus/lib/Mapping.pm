@@ -47,6 +47,14 @@ sub getContigStart {
     return $range[0];
 }
 
+sub getMappedRange {
+    my $this = shift;
+    my $range = &findMappedRange($this->getSegments());
+    return @$range if $range;
+}
+
+#-------------------------------------------------------------------
+
 sub getMappingID {
     my $this = shift;
     return $this->{mapping_id};
@@ -690,7 +698,7 @@ sub toString {
 }
 
 #-------------------------------------------------------------------
-# private function
+# private functions
 #-------------------------------------------------------------------
 
 sub findContigRange {
@@ -713,6 +721,29 @@ sub findContigRange {
     }
 
     return defined($cstart) ? [($cstart, $cfinal)] : undef;
+}
+
+
+sub findMappedRange {
+# private find contig begin and end positions from input mapping segments
+    my $segments = shift; # arrayref for Segments
+
+# if no segments specified default to all
+
+    return undef unless (ref($segments) eq 'ARRAY');
+
+    my ($mstart,$mfinal);
+
+    foreach my $segment (@$segments) {
+# ensure the correct alignment cstart <= cfinish
+        $segment->normaliseOnY();
+        my $ms = $segment->getYstart();
+        $mstart = $ms if (!defined($mstart) || $ms < $mstart);
+        my $mf = $segment->getYfinis();
+        $mfinal = $mf if (!defined($mfinal) || $mf > $mfinal);
+    }
+
+    return defined($mstart) ? [($mstart, $mfinal)] : undef;
 }
 
 #-------------------------------------------------------------------
