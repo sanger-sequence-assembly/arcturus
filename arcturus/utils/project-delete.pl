@@ -14,13 +14,16 @@ use Logging;
 
 my $organism;
 my $instance;
+my $username;
+my $password;
 my $project;
 my $assembly;
 my $generation = 'current';
 my $confirm;
 my $verbose;
 
-my $validKeys  = "organism|instance|project|assembly|confirm|verbose|help";
+my $validKeys  = "organism|instance|username|password|project|assembly|"
+               . "confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -30,6 +33,10 @@ while (my $nextword = shift @ARGV) {
     $instance     = shift @ARGV  if ($nextword eq '-instance');
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
+
+    $username     = shift @ARGV  if ($nextword eq '-username');
+
+    $password     = shift @ARGV  if ($nextword eq '-password');
 
     $project      = shift @ARGV  if ($nextword eq '-project');
 
@@ -41,8 +48,6 @@ while (my $nextword = shift @ARGV) {
 
     &showUsage(0) if ($nextword eq '-help');
 }
-
-&showUsage(0,"Missing project name or ID") unless $project;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -56,16 +61,25 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing database instance") unless $instance;
+&showUsage("Missing database instance") unless $instance;
+
+&showUsage("Missing project name or ID") unless $project;
+
+&showUsage("Missing arcturus username") unless $username;
+
+&showUsage("Missing arcturus password") unless $password;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
-		                -organism => $organism);
+		                -organism => $organism,
+                                -username => $username,
+                                -password => $password);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Unknown organism '$organism' on server '$instance', "
+              ."or invalid username and password");
 }
 
 $logger->info("Database ".$adb->getURL." opened succesfully");
@@ -120,8 +134,7 @@ $adb->disconnect();
 # HELP
 #------------------------------------------------------------------------
 
-sub showUsage {
-    my $mode = shift || 0; 
+sub showUsage { 
     my $code = shift || 0;
 
     print STDERR "\nDelete a project\n";
