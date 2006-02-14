@@ -14,13 +14,16 @@ use PathogenRepository;
 
 my $organism;
 my $instance;
+my $username;
+my $password;
 my $contig_id;
 my $verbose;
 my $confirm;
 my $cleanup = 0;
 my $fofn;
 
-my $validKeys  = "organism|instance|contig|fofn|verbose|confirm|cleanup|help";
+my $validKeys  = "organism|instance|username|password|contig|fofn|cleanup|"
+               . "verbose|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -31,20 +34,22 @@ while (my $nextword = shift @ARGV) {
       
     $organism     = shift @ARGV  if ($nextword eq '-organism');
 
+    $username     = shift @ARGV  if ($nextword eq '-username');
+
+    $password     = shift @ARGV  if ($nextword eq '-password');
+
     $contig_id    = shift @ARGV  if ($nextword eq '-contig');
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
-
-    $verbose      = 1            if ($nextword eq '-verbose');
 
     $cleanup      = 1            if ($nextword eq '-cleanup');
 
     $confirm      = 1            if ($nextword eq '-confirm');
 
+    $verbose      = 1            if ($nextword eq '-verbose');
+
     &showUsage(0) if ($nextword eq '-help');
 }
-
-&showUsage("Missing contig ID or fofn") unless ($contig_id || $fofn);
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -62,12 +67,21 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
+&showUsage("Missing contig ID or fofn") unless ($contig_id || $fofn);
+
+&showUsage("Missing arcturus username") unless $username;
+
+&showUsage("Missing arcturus password") unless $password;
+
 my $adb = new ArcturusDatabase (-instance => $instance,
-		                -organism => $organism);
+		                -organism => $organism,
+                                -username => $username,
+                                -password => $password);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+    &showUsage("Unknown organism '$organism' on server '$instance', "
+              ."or invalid username and password");
 }
  
 my $URL = $adb->getURL;
@@ -103,8 +117,6 @@ my $isName = 0;
 foreach my $identifier (@contigs) {
     $isName = 1 if ($identifier =~ /\D/);
 }
-
-
 
 
 foreach my $contig_id (@contigs) {
