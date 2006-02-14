@@ -7,6 +7,7 @@ import java.sql.*;
 import javax.sql.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.data.Organism;
 
 /**
  * This class represents an Arcturus instance, which is a set of Arcturus databases
@@ -54,6 +55,14 @@ public class ArcturusInstance implements Iterator {
     }
 
     /**
+     * Returns the name which was used to create this object.
+     *
+     * @return the name which was used to create this object.
+     */
+
+    public String getName() { return name; }
+
+    /**
      * Creates a new Arcturus database object by searching the instance's LDAP
      * directory for an entry whose CN matches the specified name.
      *
@@ -81,6 +90,9 @@ public class ArcturusInstance implements Iterator {
 	Attributes attrs = context.getAttributes(cn, attrnames);
 
 	Attribute description = attrs.get(attrnames[0]);
+
+	if (description == null)
+	    return null;
 
 	String desc = null;
 
@@ -190,6 +202,45 @@ public class ArcturusInstance implements Iterator {
 	}
 
 	return null;
+    }
+
+    /**
+     * Returns a Vector of all of the organisms in this instance.
+     *
+     * @return a Vector of all of the organisms in this instance.
+     */
+
+    public Vector getAllOrganisms() throws NamingException {
+	NamingEnumeration enum = context.listBindings("");
+
+	if (enum == null)
+	    return null;
+
+	Vector zoo = new Vector();
+
+	while (enum.hasMore()) {
+	    Binding bd = (Binding)enum.next();
+
+	    System.err.println(bd);
+
+	    String name = bd.getName();
+
+	    int i = name.indexOf('=');
+
+	    if (i >= 0)
+		name = name.substring(i + 1);
+
+	    Object object = bd.getObject();
+
+	    if (object instanceof DataSource) {
+		String description = getDescription(name);
+
+		if (description != null)
+		    zoo.add(new Organism(name, description, (DataSource)object));
+	    }
+	}
+
+	return zoo;
     }
 
     /**
