@@ -10,7 +10,7 @@ import javax.swing.ImageIcon;
 public class PeopleManager {
     protected static PeopleManager instance = null;
 
-    public static PeopleManager getInstance() throws NamingException {
+    public static PeopleManager getInstance() {
 	if (instance == null)
 	    instance = new PeopleManager();
 
@@ -22,6 +22,8 @@ public class PeopleManager {
     protected Map uidToPerson = new HashMap();
 
     protected final String[] attrs = {"cn",
+				      "sn",
+				      "givenname",
 				      "mail",
 				      "telephonenumber",
 				      "homedirectory",
@@ -29,7 +31,7 @@ public class PeopleManager {
 				      "departmentnumber",
 				      "jpegphoto"};
 
-    private PeopleManager() throws NamingException {
+    private PeopleManager() {
 	Properties sysprops = System.getProperties();
 
 	Properties env = new Properties();
@@ -40,89 +42,128 @@ public class PeopleManager {
 	env.put(Context.PROVIDER_URL,
 		sysprops.get("arcturus.naming.people.url"));
 
-	ctx = new InitialDirContext(env);
+	try {
+	    ctx = new InitialDirContext(env);
+	}
+	catch (NamingException ne) {
+	    ne.printStackTrace();
+	    ctx = null;
+	}
     }
 
-    public Person findPerson(String uid) throws NamingException {
+    public Person findPerson(String uid) {
 	Person person = (Person)uidToPerson.get(uid);
 
 	if (person != null)
 	    return person;
 
-	String searchterm = "uid=" + uid;
+	person = new Person(uid);
 
-        Attributes result = null;
+	uidToPerson.put(uid, person);
+
+	if (ctx == null)
+	    return person;
+
+	String searchterm = "uid=" + uid;
+	
+	Attributes result = null;
 
 	try {
 	    result = ctx.getAttributes(searchterm, attrs);
 	}
 	catch (NameNotFoundException nnfe) {
-	    return null;
+	    result = null;
 	}
+	catch (NamingException ne) {
+	    ne.printStackTrace();
+	    result = null;
+	}
+	
+	if (result != null) {
+	    String commonname = getAttribute(result, "cn");
+	    
+	    if (commonname != null)
+		person.setName(commonname);
+	    
+	    String surname = getAttribute(result, "sn");
+	    
+	    if (surname != null)
+		person.setSurname(surname);
+	    
+	    String givenname = getAttribute(result, "givenname");
+	    
+	    if (givenname != null)
+		person.setGivenName(givenname);
+	    
+	    String mail = getAttribute(result, "mail");
 
-	person = new Person(uid);
-
-	String commonname = getAttribute(result, "cn");
-
-	if (commonname != null)
-	    person.setName(commonname);
-
-	String mail = getAttribute(result, "mail");
-
-	if (mail != null)
-	    person.setMail(mail);
-
-	String phone = getAttribute(result, "telephonenumber");
-
-	if (phone != null)
-	    person.setTelephone(phone);
-
-	String homedir = getAttribute(result, "homedirectory");
-
-	if (homedir != null)
-	    person.setHomeDirectory(homedir);
-
-	String room = getAttribute(result, "roomnumber");
-
-	if (room != null)
-	    person.setRoom(room);
-
-	String dept = getAttribute(result, "departmentnumber");
-
-	if (dept != null)
-	    person.setDepartment(dept);
-
-	ImageIcon icon = getIconAttribute(result, "jpegphoto");
-
-	if (icon != null)
-	    person.setPhotograph(icon);
-
-	uidToPerson.put(uid, person);
+	    if (mail != null)
+		person.setMail(mail);
+	    
+	    String phone = getAttribute(result, "telephonenumber");
+	    
+	    if (phone != null)
+		person.setTelephone(phone);
+	    
+	    String homedir = getAttribute(result, "homedirectory");
+	    
+	    if (homedir != null)
+		person.setHomeDirectory(homedir);
+	    
+	    String room = getAttribute(result, "roomnumber");
+	    
+	    if (room != null)
+		person.setRoom(room);
+	    
+	    String dept = getAttribute(result, "departmentnumber");
+	    
+	    if (dept != null)
+		person.setDepartment(dept);
+	    
+	    ImageIcon icon = getIconAttribute(result, "jpegphoto");
+	    
+	    if (icon != null)
+		person.setPhotograph(icon);
+	}
 
 	return person;
     }
 
-    private String getAttribute(Attributes attrs, String key) throws NamingException {
-	Attribute attr = attrs.get(key);
+    private String getAttribute(Attributes attrs, String key) {
+	try {
+	    Attribute attr = attrs.get(key);
 
-	return (attr == null) ? null : (String)attr.get();
+	    return (attr == null) ? null : (String)attr.get();
+	}
+	catch (NamingException ne) {
+	    return null;
+	}
     }
 
-    private ImageIcon getIconAttribute(Attributes attrs, String key) throws NamingException {
-	Attribute attr = attrs.get(key);
+    private ImageIcon getIconAttribute(Attributes attrs, String key) {
+	try {
+	    Attribute attr = attrs.get(key);
 
-	NamingEnumeration vals = attr.getAll();
+	    if (attr == null)
+		return null;
 
-	while (vals.hasMoreElements()) {
-	    Object object = vals.nextElement();
+	    NamingEnumeration vals = attr.getAll();
 
-	    if (object instanceof byte[]) {
-		byte[] bytes = (byte[])object;
-		ImageIcon icon = new ImageIcon(bytes);
-		return icon;
+	    while (vals.hasMoreElements()) {
+		Object object = vals.nextElement();
+
+		if (object instanceof byte[]) {
+		    byte[] bytes = (byte[])object;
+		    ImageIcon icon = new ImageIcon(bytes);
+		    return icon;
+		}
 	    }
-	}
 
-	return null;
+	    return null;
+	}
+	catch (NamingException ne) {
+	    ne.printStackTrace();
+	    return null;
+	}
     }
 }
