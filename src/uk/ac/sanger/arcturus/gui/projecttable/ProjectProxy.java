@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
+import uk.ac.sanger.arcturus.people.Person;
+
 import java.sql.SQLException;
 import java.util.Date;
 
@@ -44,4 +46,6 @@ public class ProjectProxy {
     public Date getNewestContigCreated() { return summary.getNewestContigCreated(); }
 
     public Date getProjectUpdated() { return project.getUpdated(); }
+
+    public Person getOwner() { return project.getOwner(); }
 }

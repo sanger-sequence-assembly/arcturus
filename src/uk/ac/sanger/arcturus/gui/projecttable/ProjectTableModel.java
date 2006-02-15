@@ -9,6 +9,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 import uk.ac.sanger.arcturus.gui.Minerva;
+import uk.ac.sanger.arcturus.people.Person;
 
 class ProjectTableModel extends AbstractTableModel implements SortableTableModel {
     protected Vector projects = new Vector();
@@ -63,6 +64,9 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	case 6:
 	    return "Updated";
 
+	case 7:
+	    return "Owner";
+
 	default:
 	    return "UNKNOWN";
 	}
@@ -72,6 +76,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
         switch (col) {
 	case 0:
 	case 1:
+	case 7:
 	    return String.class;
 
 	case 2:
@@ -92,7 +97,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	return projects.size();
     }
 
-    public int getColumnCount() { return 7; }
+    public int getColumnCount() { return 8; }
 
     protected ProjectProxy getProjectAtRow(int row) {
 	return (ProjectProxy)projects.elementAt(row);
@@ -122,6 +127,14 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 
 	case 6:
 	    return project.getNewestContigCreated();
+
+	case 7:
+	    Person owner = project.getOwner();
+	    String name = owner.getName();
+	    if (name == null)
+		name = owner.getUID();
+
+	    return name;
 
 	default:
 	    return null;
@@ -159,6 +172,10 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 
 	case 6:
 	    comparator.setType(ProjectComparator.BY_DATE);
+	    break;
+
+	case 7:
+	    comparator.setType(ProjectComparator.BY_OWNER);
 	    break;
 	}
 
