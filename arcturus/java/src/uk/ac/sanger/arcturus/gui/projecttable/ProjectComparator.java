@@ -9,6 +9,7 @@ public class ProjectComparator implements Comparator {
     public static final int BY_MAXIMUM_LENGTH = 3;
     public static final int BY_READS = 4;
     public static final int BY_DATE = 5;
+    public static final int BY_OWNER = 6;
 
     protected boolean ascending;
     protected int type;
@@ -58,6 +59,9 @@ public class ProjectComparator implements Comparator {
 
 	case BY_DATE:
 	    return compareByNewestContigCreated(p1, p2);
+
+	case BY_OWNER:
+	    return compareByOwner(p1, p2);
 
 	default:
 	    return compareByMaximumLength(p1, p2);
@@ -140,5 +144,20 @@ public class ProjectComparator implements Comparator {
 	    diff = -diff;
 
 	return diff;
+    }
+
+    protected int compareByOwner(ProjectProxy p1, ProjectProxy p2) {
+	if (p1 == null && p2 == null)
+	    return 0;
+
+	if (p1 == null || p1.getOwner() == null)
+	    return 1;
+
+	if (p2 == null || p2.getOwner() == null)
+	    return -1;
+
+	int diff = p2.getOwner().compareTo(p1.getOwner());
+
+	return ascending ? diff : -diff;
     }
 }
