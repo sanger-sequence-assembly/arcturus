@@ -96,6 +96,10 @@ endif
 # Specify Arcturus default parameters
 set ARCTURUS_DEFAULTS="-Darcturus.default.instance=cn=dev,cn=jdbc -Darcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus"
 
+set ARCTURUS_JNDI_PEOPLE_URL="ldap://ldap.internal.sanger.ac.uk/ou=people,dc=sanger,dc=ac,dc=uk"
+
+set ARCTURUS_DEFAULTS="${ARCTURUS_DEFAULTS} -Darcturus.naming.people.url=${ARCTURUS_JNDI_PEOPLE_URL}"
+
 # Specify the additional run-time options for Java
 set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI_OPTS} ${ARCTURUS_DEFAULTS} ${JAVA_HEAP_SIZE}"
 
