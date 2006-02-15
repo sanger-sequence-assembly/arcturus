@@ -2,9 +2,11 @@ package uk.ac.sanger.arcturus.people;
 
 import javax.swing.ImageIcon;
 
-public class Person {
+public class Person implements Comparable {
     protected String uid;
     protected String name;
+    protected String surname;
+    protected String givenname;
     protected String mail;
     protected String phone;
     protected String homedir;
@@ -21,6 +23,14 @@ public class Person {
     public void setName(String name) { this.name = name; }
 
     public String getName() { return name; }
+
+    public void setSurname(String surname) { this.surname = surname; }
+
+    public String getSurname() { return surname; }
+
+    public void setGivenName(String givenname) { this.givenname = givenname; }
+
+    public String getGivenName() { return givenname; }
 
     public void setMail(String mail) { this.mail = mail; }
 
@@ -73,5 +83,23 @@ public class Person {
 	string += "]";
 
 	return string;
+    }
+
+    public int compareTo(Object o) {
+	Person that = (Person)o;
+
+	if (surname != null && that.surname != null) {
+	    int diff = surname.compareToIgnoreCase(that.surname);
+
+	    if (diff != 0)
+		return diff;
+
+	    if (givenname != null && that.givenname != null)
+		return givenname.compareToIgnoreCase(that.givenname);
+	    else
+		return 0;
+	}
+
+	return uid.compareToIgnoreCase(that.uid);
     }
 }
