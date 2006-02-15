@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.data;
 
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
+import uk.ac.sanger.arcturus.people.*;
 
 import java.util.*;
 import java.sql.SQLException;
@@ -14,10 +15,10 @@ import java.util.zip.DataFormatException;
 public class Project extends Core {
     protected Assembly assembly = null;
     protected Date updated = null;
-    protected String owner = null;
+    protected Person owner = null;
     protected Date locked = null;
     protected Date created = null;
-    protected String creator = null;
+    protected Person creator = null;
 
     protected Set contigs = null;
 
@@ -53,7 +54,7 @@ public class Project extends Core {
      * @param adb the Arcturus database to which this Project belongs.
      */
 
-    public Project(int ID, Assembly assembly, String name, Date updated, String owner, Date locked, Date created, String creator,
+    public Project(int ID, Assembly assembly, String name, Date updated, Person owner, Date locked, Date created, Person creator,
 		   ArcturusDatabase adb) {
 	super(ID, adb);
 
@@ -68,6 +69,36 @@ public class Project extends Core {
 	this.locked = locked;
 	this.created = created;
 	this.creator = creator;
+    }
+
+    /**
+     * Constructs a Project with basic properties.
+     * This constructor will typically be used when a Project
+     * is retrieved from an Arcturus database.
+     *
+     * @param ID the ID of the Project.
+     * @param adb the Arcturus database to which this Project belongs.
+     */
+
+    public Project(int ID, Assembly assembly, String name, Date updated, String owner, Date locked, Date created, String creator,
+		   ArcturusDatabase adb) {
+	super(ID, adb);
+
+	try {
+	    setAssembly(assembly, false);
+	}
+	catch (SQLException sqle) {}
+
+	this.name = name;
+	this.updated = updated;
+	this.owner = findPerson(owner);
+	this.locked = locked;
+	this.created = created;
+	this.creator = findPerson(creator);
+    }
+
+    private Person findPerson(String uid) {
+	return PeopleManager.getInstance().findPerson(uid);
     }
 
     public Assembly getAssembly() { return assembly; }
@@ -100,9 +131,11 @@ public class Project extends Core {
 
     public void setUpdated(Date updated) { this.updated = updated; }
 
-    public String getOwner() { return owner; }
+    public Person getOwner() { return owner; }
 
-    public void setOwner(String owner) { this.owner = owner; }
+    public void setOwner(String owner) { this.owner = findPerson(owner); }
+
+    public void setOwner(Person owner) { this.owner = owner; }
 
     public Date getLocked() { return locked; }
 
@@ -114,9 +147,11 @@ public class Project extends Core {
 
     public void setCreated(Date created) { this.created = created; }
 
-    public String getCreator() { return creator; }
+    public Person getCreator() { return creator; }
 
-    public void setCreator(String creator) { this.creator = creator; }
+    public void setCreator(String creator) { this.creator = findPerson(creator); }
+
+    public void setCreator(Person creator) { this.creator = creator; }
 
     /**
      * Returns the number of contigs currently contained in this Project object.
