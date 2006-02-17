@@ -8,30 +8,21 @@ import javax.swing.ImageIcon;
 
 
 public class PeopleManager {
-    protected static PeopleManager instance = null;
+    protected static DirContext ctx = null;
 
-    public static PeopleManager getInstance() {
-	if (instance == null)
-	    instance = new PeopleManager();
+    protected static Map uidToPerson = new HashMap();
 
-	return instance;
-    }
+    protected static final String[] attrs = {"cn",
+					     "sn",
+					     "givenname",
+					     "mail",
+					     "telephonenumber",
+					     "homedirectory",
+					     "roomnumber",
+					     "departmentnumber",
+					     "jpegphoto"};
 
-    protected DirContext ctx = null;
-
-    protected Map uidToPerson = new HashMap();
-
-    protected final String[] attrs = {"cn",
-				      "sn",
-				      "givenname",
-				      "mail",
-				      "telephonenumber",
-				      "homedirectory",
-				      "roomnumber",
-				      "departmentnumber",
-				      "jpegphoto"};
-
-    private PeopleManager() {
+    static {
 	Properties sysprops = System.getProperties();
 
 	Properties env = new Properties();
@@ -51,7 +42,7 @@ public class PeopleManager {
 	}
     }
 
-    public Person findPerson(String uid) {
+    public static Person findPerson(String uid) {
 	Person person = (Person)uidToPerson.get(uid);
 
 	if (person != null)
@@ -129,7 +120,13 @@ public class PeopleManager {
 	return person;
     }
 
-    private String getAttribute(Attributes attrs, String key) {
+    public static Person findMe() {
+	String uid = System.getProperty("user.name");
+
+	return (uid == null) ? null : findPerson(uid);
+    }
+
+    private static String getAttribute(Attributes attrs, String key) {
 	try {
 	    Attribute attr = attrs.get(key);
 
@@ -140,7 +137,7 @@ public class PeopleManager {
 	}
     }
 
-    private ImageIcon getIconAttribute(Attributes attrs, String key) {
+    private static ImageIcon getIconAttribute(Attributes attrs, String key) {
 	try {
 	    Attribute attr = attrs.get(key);
 
