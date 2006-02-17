@@ -98,7 +98,7 @@ public class Project extends Core {
     }
 
     private Person findPerson(String uid) {
-	return PeopleManager.getInstance().findPerson(uid);
+	return PeopleManager.findPerson(uid);
     }
 
     public Assembly getAssembly() { return assembly; }
