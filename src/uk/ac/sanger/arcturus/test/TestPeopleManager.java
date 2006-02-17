@@ -5,22 +5,20 @@ import uk.ac.sanger.arcturus.people.*;
 
 public class TestPeopleManager {
     public static void main(String[] args) {
-	try {
-	    PeopleManager manager = PeopleManager.getInstance();
+	for (int i = 0; i < args.length; i++) {
+	    String uid = args[i];
 
-	    for (int i = 0; i < args.length; i++) {
-		String uid = args[i];
+	    Person person = PeopleManager.findPerson(uid);
 
-		Person person = manager.findPerson(uid);
-
-		System.out.println(person == null ?
-				   uid + " NOT FOUND" :
-				   person.toString());
-	    }
+	    System.out.println(person == null ?
+			       uid + " NOT FOUND" :
+			       uid + " --> " + person);
 	}
-	catch (NamingException ne) {
-	    ne.printStackTrace();
-	    System.exit(1);
-	}
+
+	Person me = PeopleManager.findMe();
+
+	System.out.println(me == null ?
+			   "I don't know who I am!" :
+			   "I am " + me);
     }
 }
