@@ -296,6 +296,8 @@ sub getNamesFromFile {
         if ($name =~ /.*\/(\S+)$/) {
             $name = $1;
 	}
+# remove blanks in the readname
+        $name =~ s/\s+//g;
         push @list, $name;
     }
 
