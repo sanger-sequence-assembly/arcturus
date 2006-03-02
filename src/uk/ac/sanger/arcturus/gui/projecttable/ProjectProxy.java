@@ -45,6 +45,8 @@ public class ProjectProxy {
 
     public Date getNewestContigCreated() { return summary.getNewestContigCreated(); }
 
+    public Date getMostRecentContigUpdated() { return summary.getMostRecentContigUpdated(); }
+
     public Date getProjectUpdated() { return project.getUpdated(); }
 
     public Person getOwner() { return project.getOwner(); }

@@ -62,9 +62,12 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    return "Reads";
 
 	case 6:
-	    return "Updated";
+	    return "Newest Contig";
 
 	case 7:
+	    return "Contig Updated";
+
+	case 8:
 	    return "Owner";
 
 	default:
@@ -76,7 +79,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
         switch (col) {
 	case 0:
 	case 1:
-	case 7:
+	case 8:
 	    return String.class;
 
 	case 2:
@@ -86,6 +89,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    return Integer.class;
 
 	case 6:
+	case 7:
 	    return java.util.Date.class;
 
 	default:
@@ -97,7 +101,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	return projects.size();
     }
 
-    public int getColumnCount() { return 8; }
+    public int getColumnCount() { return 9; }
 
     protected ProjectProxy getProjectAtRow(int row) {
 	return (ProjectProxy)projects.elementAt(row);
@@ -129,6 +133,9 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    return project.getNewestContigCreated();
 
 	case 7:
+	    return project.getMostRecentContigUpdated();
+
+	case 8:
 	    Person owner = project.getOwner();
 	    String name = owner.getName();
 	    if (name == null)
@@ -171,10 +178,14 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    break;
 
 	case 6:
-	    comparator.setType(ProjectComparator.BY_DATE);
+	    comparator.setType(ProjectComparator.BY_CONTIG_CREATED_DATE);
 	    break;
 
 	case 7:
+	    comparator.setType(ProjectComparator.BY_CONTIG_UPDATED_DATE);
+	    break;
+
+	case 8:
 	    comparator.setType(ProjectComparator.BY_OWNER);
 	    break;
 	}
