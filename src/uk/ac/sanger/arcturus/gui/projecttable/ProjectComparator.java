@@ -11,6 +11,7 @@ public class ProjectComparator implements Comparator {
     public static final int BY_CONTIG_CREATED_DATE = 5;
     public static final int BY_OWNER = 6;
     public static final int BY_CONTIG_UPDATED_DATE = 7;
+    public static final int BY_PROJECT_UPDATED_DATE = 8;
 
     protected boolean ascending;
     protected int type;
@@ -63,6 +64,9 @@ public class ProjectComparator implements Comparator {
 
 	case BY_CONTIG_UPDATED_DATE:
 	    return compareByMostRecentContigUpdated(p1, p2);
+
+	case BY_PROJECT_UPDATED_DATE:
+	    return compareByProjectUpdated(p1, p2);
 
 	case BY_OWNER:
 	    return compareByOwner(p1, p2);
@@ -133,34 +137,37 @@ public class ProjectComparator implements Comparator {
     }
 
     protected int compareByNewestContigCreated(ProjectProxy p1, ProjectProxy p2) {
-	if (p1 == null && p2 == null)
-	    return 0;
+	Date d1 = (p1 == null) ? null : p1.getNewestContigCreated();
+	Date d2 = (p2 == null) ? null : p2.getNewestContigCreated();
 
-	if (p1 == null || p1.getNewestContigCreated() == null)
-	    return 1;
-
-	if (p2 == null || p2.getNewestContigCreated() == null)
-	    return -1;
-
-	int diff = p1.getNewestContigCreated().compareTo(p2.getNewestContigCreated());
-
-	if (!ascending)
-	    diff = -diff;
-
-	return diff;
+	return compareByDate(d1, d2);
     }
 
     protected int compareByMostRecentContigUpdated(ProjectProxy p1, ProjectProxy p2) {
-	if (p1 == null && p2 == null)
+	Date d1 = (p1 == null) ? null : p1.getMostRecentContigUpdated();
+	Date d2 = (p2 == null) ? null : p2.getMostRecentContigUpdated();
+
+	return compareByDate(d1, d2);
+    }
+
+    protected int compareByProjectUpdated(ProjectProxy p1, ProjectProxy p2) {
+	Date d1 = (p1 == null) ? null : p1.getProjectUpdated();
+	Date d2 = (p2 == null) ? null : p2.getProjectUpdated();
+
+	return compareByDate(d1, d2);
+    }
+
+    protected int compareByDate(Date d1, Date d2) {
+	if (d1 == null && d2 == null)
 	    return 0;
 
-	if (p1 == null || p1.getMostRecentContigUpdated() == null)
+	if (d1 == null)
 	    return 1;
 
-	if (p2 == null || p2.getMostRecentContigUpdated() == null)
+	if (d2 == null)
 	    return -1;
 
-	int diff = p1.getMostRecentContigUpdated().compareTo(p2.getMostRecentContigUpdated());
+	int diff = d1.compareTo(d2);
 
 	if (!ascending)
 	    diff = -diff;
