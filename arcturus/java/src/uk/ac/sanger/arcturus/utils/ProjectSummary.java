@@ -10,6 +10,7 @@ public class ProjectSummary {
     protected int sigmaConsensusLength = 0;
     protected int maximumConsensusLength = 0;
     protected Date newestContigCreated = null;
+    protected Date mostRecentContigUpdated = null;
 
     public void reset() {
 	numberOfContigs = 0;
@@ -19,6 +20,7 @@ public class ProjectSummary {
 	sigmaConsensusLength = 0;
 	maximumConsensusLength = 0;
 	newestContigCreated = null;
+	mostRecentContigUpdated = null;
     }
 
     public void setNumberOfContigs(int numberOfContigs) {
@@ -63,4 +65,10 @@ public class ProjectSummary {
     }
 
     public Date getNewestContigCreated() { return newestContigCreated; }
+
+    public void setMostRecentContigUpdated(Date updated) {
+	this.mostRecentContigUpdated = updated;
+    }
+
+    public Date getMostRecentContigUpdated() { return mostRecentContigUpdated; }
 }
