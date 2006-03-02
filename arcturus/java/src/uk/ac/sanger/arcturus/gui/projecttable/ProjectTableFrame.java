@@ -7,15 +7,17 @@ import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 public class ProjectTableFrame extends MinervaFrame {
     protected ProjectTable table = null;
+    protected ProjectTableModel model = null;
     protected JMenu projectMenu = null;
 
     public ProjectTableFrame(Minerva minerva, ArcturusDatabase adb) {
 	super(minerva, "Project List : " +  adb.getName());
 
-	ProjectTableModel model = new ProjectTableModel(adb);
+	model = new ProjectTableModel(adb);
 
 	table = new ProjectTable(model);
 
@@ -31,7 +33,44 @@ public class ProjectTableFrame extends MinervaFrame {
 	projectMenu = new JMenu("Project");
 	menubar.add(projectMenu);
 
-	projectMenu.add(new ViewProjectAction("View selected project(s)")); 
+	projectMenu.add(new ViewProjectAction("View selected project(s)"));
+
+	projectMenu.addSeparator();
+
+	ButtonGroup group = new ButtonGroup();
+
+	JRadioButtonMenuItem rbShowProjectDate = new JRadioButtonMenuItem("Show project date");
+	group.add(rbShowProjectDate);
+	projectMenu.add(rbShowProjectDate);
+
+	rbShowProjectDate.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    model.setDateColumn(ProjectTableModel.PROJECT_UPDATED_DATE);
+		}
+	    });
+
+	JRadioButtonMenuItem rbShowContigCreated = new JRadioButtonMenuItem("Show contig creation date");
+	group.add(rbShowContigCreated);
+	projectMenu.add(rbShowContigCreated);
+
+	rbShowContigCreated.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    model.setDateColumn(ProjectTableModel.CONTIG_CREATED_DATE);
+		}
+	    });
+
+	JRadioButtonMenuItem rbShowContigUpdated = new JRadioButtonMenuItem("Show contig updated date");
+	group.add(rbShowContigUpdated);
+	projectMenu.add(rbShowContigUpdated);
+
+	rbShowContigUpdated.addActionListener(new ActionListener() {
+		public void actionPerformed(ActionEvent e) {
+		    model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
+		}
+	    });
+
+	model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
+	rbShowContigUpdated.setSelected(true);
 
 	pack();
 	setVisible(true);

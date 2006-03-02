@@ -12,10 +12,17 @@ import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.people.Person;
 
 class ProjectTableModel extends AbstractTableModel implements SortableTableModel {
+    public static final int PROJECT_UPDATED_DATE = 1;
+    public static final int CONTIG_CREATED_DATE = 2;
+    public static final int CONTIG_UPDATED_DATE = 3;
+
     protected Vector projects = new Vector();
     protected ProjectComparator comparator;
     protected int lastSortColumn = 3;
     protected ArcturusDatabase adb = null;
+    protected int dateColumnType = CONTIG_UPDATED_DATE;
+
+    protected static final int DATE_COLUMN = 6;
 
     public ProjectTableModel(ArcturusDatabase adb) {
 	this.adb = adb;
@@ -61,13 +68,22 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	case 5:
 	    return "Reads";
 
-	case 6:
-	    return "Newest Contig";
+	case DATE_COLUMN:
+	    switch (dateColumnType) {
+	    case PROJECT_UPDATED_DATE:
+		return "Project updated";
+
+	    case CONTIG_CREATED_DATE:
+		return "Newest contig";
+
+	    case CONTIG_UPDATED_DATE:
+		return "Last contig update";
+
+	    default:
+		return "UNKNOWN";
+	    }
 
 	case 7:
-	    return "Contig Updated";
-
-	case 8:
 	    return "Owner";
 
 	default:
@@ -79,7 +95,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
         switch (col) {
 	case 0:
 	case 1:
-	case 8:
+	case 7:
 	    return String.class;
 
 	case 2:
@@ -88,8 +104,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	case 5:
 	    return Integer.class;
 
-	case 6:
-	case 7:
+	case DATE_COLUMN:
 	    return java.util.Date.class;
 
 	default:
@@ -101,7 +116,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	return projects.size();
     }
 
-    public int getColumnCount() { return 9; }
+    public int getColumnCount() { return 8; }
 
     protected ProjectProxy getProjectAtRow(int row) {
 	return (ProjectProxy)projects.elementAt(row);
@@ -129,13 +144,23 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	case 5:
 	    return new Integer(project.getReadCount());
 
-	case 6:
-	    return project.getNewestContigCreated();
+	case DATE_COLUMN:
+	    switch (dateColumnType) {
+	    case PROJECT_UPDATED_DATE:
+		return project.getProjectUpdated();
+
+	    case CONTIG_CREATED_DATE:
+		return project.getNewestContigCreated();
+
+	    case CONTIG_UPDATED_DATE:
+		return project.getMostRecentContigUpdated();
+
+	    default:
+		return null;
+	    }
+	     
 
 	case 7:
-	    return project.getMostRecentContigUpdated();
-
-	case 8:
 	    Person owner = project.getOwner();
 	    String name = owner.getName();
 	    if (name == null)
@@ -177,15 +202,23 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	    comparator.setType(ProjectComparator.BY_READS);
 	    break;
 
-	case 6:
-	    comparator.setType(ProjectComparator.BY_CONTIG_CREATED_DATE);
+	case DATE_COLUMN:
+	    switch (dateColumnType) {
+	    case PROJECT_UPDATED_DATE:
+		comparator.setType(ProjectComparator.BY_PROJECT_UPDATED_DATE);
+		break;
+
+	    case CONTIG_CREATED_DATE:
+		comparator.setType(ProjectComparator.BY_CONTIG_CREATED_DATE);
+		break;
+
+	    case CONTIG_UPDATED_DATE:
+		comparator.setType(ProjectComparator.BY_CONTIG_UPDATED_DATE);
+		break;
+	    }
 	    break;
 
 	case 7:
-	    comparator.setType(ProjectComparator.BY_CONTIG_UPDATED_DATE);
-	    break;
-
-	case 8:
 	    comparator.setType(ProjectComparator.BY_OWNER);
 	    break;
 	}
@@ -195,6 +228,17 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	Collections.sort(projects, comparator);
 
 	fireTableDataChanged();
+    }
+
+    public void setDateColumn(int dateColumnType) {
+	this.dateColumnType = dateColumnType;
+
+	fireTableStructureChanged();
+
+	if (lastSortColumn == DATE_COLUMN)
+	    sortOnColumn(DATE_COLUMN);
+	else
+	    fireTableDataChanged();
     }
 
     public void add(int index, ProjectProxy project) {
