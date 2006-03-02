@@ -8,8 +8,9 @@ public class ProjectComparator implements Comparator {
     public static final int BY_CONTIGS = 2;
     public static final int BY_MAXIMUM_LENGTH = 3;
     public static final int BY_READS = 4;
-    public static final int BY_DATE = 5;
+    public static final int BY_CONTIG_CREATED_DATE = 5;
     public static final int BY_OWNER = 6;
+    public static final int BY_CONTIG_UPDATED_DATE = 7;
 
     protected boolean ascending;
     protected int type;
@@ -57,8 +58,11 @@ public class ProjectComparator implements Comparator {
 	case BY_READS:
 	    return compareByReads(p1, p2);
 
-	case BY_DATE:
+	case BY_CONTIG_CREATED_DATE:
 	    return compareByNewestContigCreated(p1, p2);
+
+	case BY_CONTIG_UPDATED_DATE:
+	    return compareByMostRecentContigUpdated(p1, p2);
 
 	case BY_OWNER:
 	    return compareByOwner(p1, p2);
@@ -139,6 +143,24 @@ public class ProjectComparator implements Comparator {
 	    return -1;
 
 	int diff = p1.getNewestContigCreated().compareTo(p2.getNewestContigCreated());
+
+	if (!ascending)
+	    diff = -diff;
+
+	return diff;
+    }
+
+    protected int compareByMostRecentContigUpdated(ProjectProxy p1, ProjectProxy p2) {
+	if (p1 == null && p2 == null)
+	    return 0;
+
+	if (p1 == null || p1.getMostRecentContigUpdated() == null)
+	    return 1;
+
+	if (p2 == null || p2.getMostRecentContigUpdated() == null)
+	    return -1;
+
+	int diff = p1.getMostRecentContigUpdated().compareTo(p2.getMostRecentContigUpdated());
 
 	if (!ascending)
 	    diff = -diff;
