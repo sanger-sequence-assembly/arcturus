@@ -84,31 +84,31 @@ $logger->info("Database $URL opened succesfully");
 
 my $cids = &getContigIdentifiers($contig,$focn,$adb);
 
+&showUsage("No valid contig identifier provided") unless @$cids;
+
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
+my %options;
+
+$options{confirm} = 1 if $confirm;
+
 foreach my $cid (@$cids) {
-print STDERR "processing contig $cid \n";
-# test if the contig is a current contig
-    unless ($adb->isCurrentContigID($cid)) {
-        $logger->warning("Contig $cid is not in the current generation");
-	next;
-    }
-    $logger->warning("Contig $cid is to be retired");
 
-    unless ($confirm) {
-        $logger->warning("Repeat and specify -confirm");
-        next;
-    }
-
-    my ($status,$message) = $adb->retireContig($cid);
+    my ($status,$message) = $adb->retireContig($cid,%options);
 
     if ($status) {
         $logger->warning("Contig $cid has been retired");
     }
-    else {
+    elsif ($confirm) {
         $logger->severe("FAILED to retire contig $cid: $message");
+    }
+    elsif ($message =~ /can\sbe\sretired/) {
+        $logger->warning($message." (=> use '-confirm')");
+    }
+    else {
+        $logger->severe($message);
     }
 }
 
@@ -224,7 +224,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-confirm\t(no value) to actually do the delete\n";
+    print STDERR "-confirm\t(no value) \n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
