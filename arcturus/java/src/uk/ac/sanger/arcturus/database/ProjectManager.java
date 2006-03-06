@@ -29,10 +29,10 @@ public class ProjectManager extends AbstractManager {
 
 	conn = adb.getConnection();
 
-	String query = "select assembly_id,name,updated,owner,locked,created,creator from PROJECT where project_id = ?";
+	String query = "select assembly_id,name,updated,owner,lockdate,created,creator from PROJECT where project_id = ?";
 	pstmtByID = conn.prepareStatement(query);
 
-	query = "select project_id,updated,owner,locked,created,creator from PROJECT where assembly_id = ? and name = ?";
+	query = "select project_id,updated,owner,lockdate,created,creator from PROJECT where assembly_id = ? and name = ?";
 	pstmtByName = conn.prepareStatement(query);
 
 	query = "update PROJECT set assembly_id = ? where project_id = ?";
@@ -76,13 +76,13 @@ public class ProjectManager extends AbstractManager {
 	    String name = rs.getString(2);
 	    java.util.Date updated = rs.getTimestamp(3);
 	    String owner = rs.getString(4);
-	    java.util.Date locked = rs.getTimestamp(5);
+	    java.util.Date lockdate = rs.getTimestamp(5);
 	    java.util.Date created = rs.getTimestamp(6);
 	    String creator = rs.getString(7);
 
 	    Assembly assembly = adb.getAssemblyByID(assembly_id);
 
-	    project = createAndRegisterNewProject(id, assembly, name, updated, owner, locked, created, creator);
+	    project = createAndRegisterNewProject(id, assembly, name, updated, owner, lockdate, created, creator);
 	}
 
 	rs.close();
@@ -108,11 +108,11 @@ public class ProjectManager extends AbstractManager {
 	    if (project == null) {
 		java.util.Date updated = rs.getTimestamp(2);
 		String owner = rs.getString(3);
-		java.util.Date locked = rs.getTimestamp(4);
+		java.util.Date lockdate = rs.getTimestamp(4);
 		java.util.Date created = rs.getTimestamp(5);
 		String creator = rs.getString(6);
 		
-		project = createAndRegisterNewProject(project_id, assembly, name, updated, owner, locked, created, creator);
+		project = createAndRegisterNewProject(project_id, assembly, name, updated, owner, lockdate, created, creator);
 	    }
 	}
 
@@ -122,8 +122,8 @@ public class ProjectManager extends AbstractManager {
     }
 
     private Project createAndRegisterNewProject(int id, Assembly assembly, String name, java.util.Date updated, String owner,
-						java.util.Date locked, java.util.Date created, String creator) {
-	Project project = new Project(id, assembly, name, updated, owner, locked, created, creator, adb);
+						java.util.Date lockdate, java.util.Date created, String creator) {
+	Project project = new Project(id, assembly, name, updated, owner, lockdate, created, creator, adb);
 
 	registerNewProject(project);
 
@@ -135,7 +135,7 @@ public class ProjectManager extends AbstractManager {
     }
 
     public void preloadAllProjects() throws SQLException {
-	String query = "select project_id,assembly_id,name,updated,owner,locked,created,creator from PROJECT";
+	String query = "select project_id,assembly_id,name,updated,owner,lockdate,created,creator from PROJECT";
 
 	Statement stmt = conn.createStatement();
 
@@ -148,7 +148,7 @@ public class ProjectManager extends AbstractManager {
 	    String name = rs.getString(3);
 	    java.util.Date updated = rs.getTimestamp(4);
 	    String owner = rs.getString(5);
-	    java.util.Date locked = rs.getTimestamp(6);
+	    java.util.Date lockdate = rs.getTimestamp(6);
 	    java.util.Date created = rs.getTimestamp(7);
 	    String creator = rs.getString(8);
 
@@ -157,13 +157,13 @@ public class ProjectManager extends AbstractManager {
 	    Project project = (Project)hashByID.get(new Integer(id));
 
 	    if (project == null)
-		createAndRegisterNewProject(id, assembly, name, updated, owner, locked, created, creator);
+		createAndRegisterNewProject(id, assembly, name, updated, owner, lockdate, created, creator);
 	    else {
 		project.setAssembly(assembly);
 		project.setName(name);
 		project.setUpdated(updated);
 		project.setOwner(owner);
-		project.setLocked(locked);
+		project.setLockdate(lockdate);
 		project.setCreated(created);
 		project.setCreator(creator);
 	    }
@@ -189,7 +189,7 @@ public class ProjectManager extends AbstractManager {
 	    String name = rs.getString(2);
 	    java.util.Date updated = rs.getTimestamp(3);
 	    String owner = rs.getString(4);
-	    java.util.Date locked = rs.getTimestamp(5);
+	    java.util.Date lockdate = rs.getTimestamp(5);
 	    java.util.Date created = rs.getTimestamp(6);
 	    String creator = rs.getString(7);
 
@@ -199,7 +199,7 @@ public class ProjectManager extends AbstractManager {
 	    project.setName(name);
 	    project.setUpdated(updated);
 	    project.setOwner(owner);
-	    project.setLocked(locked);
+	    project.setLockdate(lockdate);
 	    project.setCreated(created);
 	    project.setCreator(creator);
 	}
