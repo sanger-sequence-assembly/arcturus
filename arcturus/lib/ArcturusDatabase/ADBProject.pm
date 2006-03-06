@@ -35,7 +35,7 @@ sub getProject {
     my %options = @_;
 
     my $itemlist = "PROJECT.project_id,PROJECT.name,PROJECT.assembly_id,"
-                 . "PROJECT.updated,PROJECT.owner," #?locked not included here
+                 . "PROJECT.updated,PROJECT.owner,PROJECT.status,"
 		 . "PROJECT.created,PROJECT.creator,PROJECT.comment";
 
     my $query = "select $itemlist from PROJECT ";
@@ -158,6 +158,7 @@ print "getProject:$query '@data' \n";
             $project->setAssemblyID(shift @ary);
             $project->setUpdated(shift @ary);
             $project->setOwner(shift @ary);
+            $project->setProjectStatus(shift @ary);
             $project->setCreated(shift @ary);
             $project->setCreator(shift @ary);
             $project->setComment(shift @ary);
@@ -276,8 +277,9 @@ sub putProject {
     my $project = shift;
 # my $method = shift || 0;
 
-    die "putProject expects a Project instance as parameter"
-	unless (ref($project) eq 'Project');
+    &testParameterType($project,'Project','putProject');
+#    die "putProject expects a Project instance as parameter"
+#	unless (ref($project) eq 'Project');
 
     return undef unless $this->userCanCreateProject(); # check privilege
 
@@ -303,33 +305,45 @@ sub deleteProject {
 # remove project for project ID / name, but only if no associated contigs
 # ** this function requires 'delete' privilege on the database tables **
     my $this = shift;
+    my $project = shift;
     my %options = @_;
 
-# REVISIT upgrade to include assembly_id/assembly name
+    &testParameterType($project,'Project','deleteProject');
 
+    my $user = $this->getArcturusUser();
+
+    unless ($this->userCanCreateProjects($user)) {
+        return 0,"User '$user' has no privilege to delete a project";
+    } 
+
+# compose the delete query and the test query for allocated contigs
+
+    my $pid;
     my $tquery;
     my $dquery;
     my $report;
 # project_id must be specified
-    if (defined (my $value = $options{project_id})) {
+    if (defined ($pid = $project->getProjectID())) {
         $tquery = "select contig_id from CONTIG join PROJECT"
                 . " using (project_id)"
-	        . " where PROJECT.project_id = $value";
-        $dquery = "delete from PROJECT where project_id = $value ";
-        $report = "Project $value";
+	        . " where PROJECT.project_id = $pid";
+        $dquery = "delete from PROJECT where project_id = $pid ";
+        $report = "Project ".$project->getProjectName()." ($pid) ";
     }
     else {
-        return 0,"Invalid parameters: missing project_id"; 
+        return 0,"Invalid project data: missing project ID"; 
     }
 # if assembly is specified it acts as an extra check constraint
-    if (defined (my $value = $options{assembly_id})) {
+    if (defined (my $value = $project->getAssemblyID())) {
          $tquery .= " and assembly_id = $value";
          $dquery .= " and assembly_id = $value";
          $report .= " in assembly $value";
     }
+
 # add user/lockstatus restriction (to be completely sure)
-    my $user = $this->getArcturusUser();
-    $dquery .= " and (locked is null or owner='$user')";
+
+    $dquery .= " and (locked is null or owner='$user' or lockowner='$user')";
+    $dquery .= " and status not in ('finished','quality checked')";
 
     my $dbh = $this->getConnection();
 
@@ -340,23 +354,27 @@ sub deleteProject {
     if (!$hascontig || $hascontig > 0) {
 # also exits on failed query
         return 0,"$report has $hascontig contigs and cannot be deleted";
-    }
-    
-# test if the project is locked by acquiring a lock myself
+    }    
 
-    my ($status,$msg) = $this->acquireLockForProjectID($options{project_id});
+# the project need to be either unlocked while the user has privilege
+# or locked by the current user. We test this by acquiring a lock; if
+# succesful the project can be deleted, else not
 
-    return 0,$msg unless $status; # belongs to someone else
+    my ($status,$message) = &acquireLockForProjectID($dbh,$user,$pid,1);
 
-# ok, delete from the primary tables
+    return 0, $message unless $status; # belongs to someone else
+
+    return 1, "$report can be deleted" unless $options{confirm};
+
+# ok, delete from the primary table
 
     my $nrow = $dbh->do($dquery) || &queryFailed($dquery);
 
-    return 0,"$report was NOT deleted" unless $nrow; # failed query
+    return 0, "$report was NOT deleted" unless $nrow; # failed query
 
-    return 0,"$report cannot be deleted or does not exists" unless ($nrow+0);
+    return 0, "$report cannot be deleted or does not exists" unless ($nrow+0);
     
-    return 1,"$report deleted";
+    return 2, "$report was deleted";
 }
 
 #------------------------------------------------------------------------------
@@ -368,14 +386,11 @@ sub assignContigToProject {
     my $this = shift;
     my $contig = shift;
     my $project = shift;
+    my %options = @_;
 
-    unless (ref($contig) eq 'Contig') {
-        die "assignContigToProject expects a Contig instance as parameter";
-    }
+    &testParameterType($contig,'Contig','assignContigToProject');
 
-    unless (ref($project) eq 'Project') {
-        die "assignContigToProject expects a Project instance as parameter";
-    }
+    &testParameterType($project,'Project','assignContigToProject');
 
     my $contig_id  = $contig->getContigID()   || return (0,"Missing data");
     my $project_id = $project->getProjectID() || return (0,"Missing data");
@@ -384,26 +399,23 @@ sub assignContigToProject {
                                      $this->getArcturusUser(),
                                      [($contig_id)],
                                      $project_id,
-                                     @_); # transfer of possible switches
+                                     $options{unassigned});
 }
 
-sub assignContigsToProject {
+sub assignContigsToProject { # USED nowhere
 # public method for allocating several contigs to a project
     my $this  = shift;
     my $contigs = shift; # array ref for Contig instances
     my $project = shift; # Project instance
+    my %options = @_;
 
-    unless (ref($contigs) eq 'ARRAY' && ref($contigs->[0]) eq 'Contig') {
-        die "assignContigsToProject expects an Array of Contig instances "
-          . "as parameter";
-    }
+    &testParameterType($contigs,'ARRAY','assignContigsToProject');
 
-    unless (ref($project) eq 'Project') {
-        die "assignContigToProject expects a Project instance as parameter";
-    }
+    &testParameterType($project,'Project','assignContigsToProject');
 
     my @contigids;
     foreach my $contig (@$contigs) {
+        &testParameterType($contig,'Contig','assignContigsToProject');
         my $contig_id = $contig->getContigID();
         return (0,"Missing or invalid contig ID(s)") unless $contig_id;
 	push @contigids, $contig->getContigID();
@@ -415,7 +427,7 @@ sub assignContigsToProject {
                                      $this->getArcturusUser(),
                                      [@contigids],
                                      $project_id,
-                                     @_); # transfer of possible switches
+                                     $options{unassigned});
 }
 
 sub assignContigIDsToProjectID {
@@ -423,10 +435,15 @@ sub assignContigIDsToProjectID {
     my $this = shift;
     my $cids = shift; # array ref
     my $pid = shift;
+    my %options = @_;
+
+    &testParameterType($cids,'ARRAY','assignContigIDsToProjectID');
 
     return &linkContigIDsToProjectID($this->getConnection(),
                                      $this->getArcturusUser(),
-                                     $cids,$pid,@_);
+                                     $cids,
+                                     $pid,
+                                     $options{unassigned});
 }
 
 
@@ -436,7 +453,7 @@ sub linkContigIDsToProjectID {
     my $user = shift;
     my $contig_ids = shift || return undef; # array ref
     my $project_id = shift || return undef;
-    my $forced = shift;
+    my $unassigned = shift;
 
 # protect against an empty list
 
@@ -446,18 +463,22 @@ sub linkContigIDsToProjectID {
 
     my $donotreleaselock;
 
-    my ($islocked,$lockedby) = &getLockedStatus($dbh,$project_id);
-# lock also overrides the owner of the project (if different from lockedby)
-# (to acquire a lock requires ownership or overriding privilege): test lockedby
-    if ($islocked && $lockedby ne $user) {
-        return (0,"Project $project_id is locked by user $lockedby");
+    my @lockinfo = &getLockedStatus($dbh,$project_id); # print "lockinfo @lockinfo\n";
+
+    if ($lockinfo[0] > 1) {
+        return (0,"Project $lockinfo[5] cannot be accessed");
     }
-    elsif ($islocked && $lockedby eq $user) {
+# lock also overrides the ownership of the project (if different from lockowner)
+    elsif ($lockinfo[0] && $lockinfo[1] ne $user) {
+        return (0,"Project $lockinfo[5] is locked by user $lockinfo[1]");
+    }
+    elsif ($lockinfo[0] && $lockinfo[1] eq $user) {
         $donotreleaselock = 1;
     }
 # acquire a lock on the project
+# (to acquire a lock requires ownership or overriding privilege): test lockowner
     elsif (!&setLockedStatus($dbh,$project_id,$user,1)) {
-        return (0,"Failed to acquire lock on project $project_id");
+        return (0,"Failed to acquire lock on project $lockinfo[5]");
     }
 
 # now assign the contigs to this project, except for those contigs
@@ -470,7 +491,9 @@ sub linkContigIDsToProjectID {
 # and nothing will happen if the project_id in CONTIG doesn't exist in PROJECT
 # Therefore, we also use a left join 
 
-# THIS QUERY SUCKS! investigate!
+# THIS QUERY SUCKS! investigate! 1) add extra precaution of 'status' check
+#  2) add status check to original project as well!
+# this doesn't address the project status of the contig is in now
 
     my $message = '';
 
@@ -479,9 +502,10 @@ sub linkContigIDsToProjectID {
               . " where CONTIG.project_id = PROJECT.project_id"
               . "   and CONTIG.contig_id in (".join(',',@$contig_ids).")"
               . "   and CONTIG.project_id != $project_id"
-#	      . "   and (PROJECT.locked is null or PROJECT.lockedby = '$user')";
-	      . "   and (PROJECT.locked is null or PROJECT.owner = '$user')";
-    $query   .= "   and CONTIG.project_id = 0" unless $forced;
+# the fluid lock status is tested earlier, here prevent change to frozen
+#	      . "   and PROJECT.status not in ('finished','quality checked')"
+	      . "   and (PROJECT.lockdate is null or PROJECT.owner = '$user')";
+    $query   .= "   and CONTIG.project_id = 0" if $unassigned; # ? what, when?
 
     my $nrow = $dbh->do($query) || &queryFailed($query) || return undef;
 
@@ -489,7 +513,7 @@ sub linkContigIDsToProjectID {
 
     $message .= ($nrow+0)." Contigs were (re-)assigned to project $project_id\n" if ($nrow+0);
 
-#print STDOUT "linkContigIDsToProjectID :\n$query\nrows: $nrow lockedby $lockedby\n";
+#print STDOUT "linkContigIDsToProjectID :\n$query\nrows: $nrow lockowner $lockowner\n";
 #return 0,$message;
 
 # return if all expected entries have been updated
@@ -515,6 +539,7 @@ sub linkContigIDsToProjectID {
 # return if all expected entries have been updated
 
     if ($nrow+$mrow == scalar(@$contig_ids)) {
+# release the lock if the project was not locked before the transfer
         &setLockedStatus($dbh,$project_id,$user,0) unless $donotreleaselock;
         return (1,$message);
     }
@@ -522,13 +547,13 @@ sub linkContigIDsToProjectID {
 # not all expected rows have changed; do a test on the remaining ones
 
     $query = "select CONTIG.contig_id,CONTIG.project_id,"
-           .        "PROJECT.locked,PROJECT.owner"
+           .        "PROJECT.lockdate,PROJECT.owner" #,PROJECT.lockowner"
            . "  from CONTIG join PROJECT using (project_id)"
            . " where CONTIG.contig_id in (".join(',',@$contig_ids).")"
 	   . "   and CONTIG.project_id != $project_id"
            . " UNION "
            . "select CONTIG.contig_id,CONTIG.project_id,"
-           .        "'missing','project'"
+           .        "'missing','project'" # ,'
            . "  from CONTIG left join PROJECT using (project_id)"
            . " where CONTIG.contig_id in (".join(',',@$contig_ids).")"
 	   . "   and CONTIG.project_id != $project_id"
@@ -539,14 +564,18 @@ sub linkContigIDsToProjectID {
     $sth->execute() || &queryFailed($query) && return undef;
 
     my $na = 0; # not assigned
+#    while (my ($cid,$pid,$locked,$owner,$lockowner) = $sth->fetchrow_array()) {
     while (my ($cid,$pid,$locked,$owner) = $sth->fetchrow_array()) {
         $message .= "- contig $cid is in project $pid ";
         $message .= "(owned by user $owner)\n" unless $locked;
+#        $message .= "(owned by user $owner; locked by $lockowner)\n" if $locked;
         $message .= "(owned by user $owner; locked by [$owner])\n" if $locked;
         $na++;
     }
 
     $sth->finish();
+
+# release the lock if the project was not locked before the transfer
 
     &setLockedStatus($dbh,$project_id,$user,0) unless $donotreleaselock;
 
@@ -646,17 +675,21 @@ sub unlinkContigID {
 # a contig can only be unlinked (assigned to project_id = 0) by the owner
 # of the project or a user with overriding privilege on unlocked project
 
-# THIS QUERY SUCKS! redo, allowing changes by lockedby 
+# should change be allowed by the lock owner?
 
-    my ($islocked,$lockedby) = &getLockedStatus($dbh,$contig_id,1);
-    return (0,"Contig $contig_id is locked by user $lockedby") if $islocked;
+    my @lockinfo = &getLockedStatus($dbh,$contig_id,1);
+
+# check privilege, check lockstatus
+
+    return (0,"Contig $contig_id is locked by user $lockinfo[1]") if $lockinfo[0];
 
     return (1,"OK") unless $confirm; # preview option   
 
     my $query = "update CONTIG join PROJECT using (project_id)"
               . "   set CONTIG.project_id = 0"
               . " where CONTIG.contig_id = ?"
-	      . "   and PROJECT.locked is null";
+#	      . "   and PROJECT.lockdate is null"  # ?? this sucks
+              . "   and PROJECT.status not in ('finished','quality checked')"; 
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -964,34 +997,42 @@ sub updateContigTransferRequest {
 }
 
 #------------------------------------------------------------------------------
-# finding contigs for projects
+# finding contigs for a project
 #------------------------------------------------------------------------------
 
-sub getContigIDsForProjectID {
+sub getContigIDsForProject {
 # public method, retrieve contig IDs and current checked status
     my $this = shift;
-    my $project_id = shift; 
+    my $project = shift; # project instance
+
+    &testParamaterType($project,'Project','getContigIDsForProject');
+
 # return reference to array of contig IDs and locked status
-    return &fetchContigIDsForProjectID($this->getConnection(),$project_id);
+
+    return &getContigIDsForProjectID($this->getConnection(),
+                                    $project->getProjectID());
 }
 
-sub checkOutContigIDsForProjectID {
+sub checkOutContigIDsForProject {
 # public method, lock the project and get contigIDs in it (re: Project.pm)
     my $this = shift;
-    my $project_id = shift;
+    my $project = shift; # project instance
+
+    &testParamaterType($project,'Project','checkOutContigIDsForProject');
 
 # acquire lock before exporting the contig IDs
 
-    my ($islocked,$message) = $this->acquireLockForProjectID($project_id); 
+    my ($islocked,$message) = $this->acquireLockForProject($project);
 
     return (0,$message) unless $islocked;
  
 # return reference to array of contig IDs and locked status
     
-    return &fetchContigIDsForProjectID($this->getConnection(),$project_id);
+    return &getContigIDsForProjectID($this->getConnection(),
+                                    $project->getProjectID());
 }
 
-sub fetchContigIDsForProjectID {
+sub getContigIDsForProjectID {
 # private function: return contig IDs of contigs allocated to project with
 # given project ID (age zero only) used in delayed loading mode from Project
     my $dbh = shift;
@@ -1028,11 +1069,13 @@ sub fetchContigIDsForProjectID {
 #------------------------------------------------------------------------------
 
 sub getProjectIDforContigID {
-# return project ID and locked status for input contig ID
+# return project ID for input contig ID (used in contig-transfer-manager)
     my $this = shift;
     my $contig_id = shift;
 
-    my $query = "select CONTIG.project_id,locked" .
+# use the join to ensure the project exists
+
+    my $query = "select CONTIG.project_id,PROJECT.lockdate" .
                 "  from CONTIG join PROJECT using (project_id)" .
                 " where contig_id=?";
 
@@ -1049,7 +1092,7 @@ sub getProjectIDforContigID {
 
     $sth->finish();
 
-    return ($project_id,$islocked);  
+    return $project_id;  
 }
 
 sub getProjectIDforReadName {
@@ -1102,7 +1145,7 @@ sub getProjectInventory {
 	        . " where CONTIG.contig_id is not null";
     }
 
-# use the 'project' switch to test existence of a particular project
+# use the 'project' switch to test existence of only particular project(s)
 
     if (defined($options{project})) { 
         $query .= (($query =~ /where/) ? "and" : "where");
@@ -1147,6 +1190,7 @@ sub getProjectInventory {
 sub getProjectIDsForProjectName {
 # return project IDs (could be more than 1) for name (may contain wildcards)
     my $this = shift;
+    my $name = shift;
 
     my $query = "select project_id,assembly_id from PROJECT where name like ?";
 
@@ -1154,14 +1198,14 @@ sub getProjectIDsForProjectName {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute(@_) || &queryFailed($query,@_);
+    $sth->execute($name) || &queryFailed($query,$name);
 
     my @projectids;
     while (my @ary = $sth->fetchrow_array()) {
         push @projectids,[@ary];
     }
 
-    return [@projectids];
+    return [@projectids]; # list of project ID, assembly ID pairs
 }
 
 sub getNamesForProjectID {
@@ -1224,10 +1268,14 @@ sub getHangingProjectIDs {
 # meta data (delayed loading from Project class)
 #------------------------------------------------------------------------------
 
-sub getProjectStatisticsForProjectID {
+sub getProjectStatisticsForProject {
 # re: Project->getProjectData
     my $this = shift;
-    my $project_id = shift || 0;
+    my $project = shift;
+
+    &testParameterType($project,'Project','getProjectStatisticsForProject');
+
+    my $project_id = $project->getProjectID();
 
 # get the number of contigs and reads in this project
 
@@ -1236,54 +1284,172 @@ sub getProjectStatisticsForProjectID {
               .       " sum(length) as tlength,"
               .       " min(length) as minlength,"
               .       " max(length) as maxlength,"
-              .       " round(avg(length)) as meanlength,"
+              .       " round(avg(length)) as avglength,"
               .       " round(std(length)) as stdlength"
               . "  from CONTIG left join C2CMAPPING"
               . "    on CONTIG.contig_id = C2CMAPPING.parent_id"
 	      . " where C2CMAPPING.parent_id is null"
-	      . "   and CONTIG.project_id = ?"; # print "$query\n";
+	      . "   and CONTIG.project_id = ?";
 
     my $dbh = $this->getConnection();
  
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($project_id) || &queryFailed($query,$project_id);
+    my $rw = $sth->execute($project_id) || &queryFailed($query,$project_id);
     
-    my ($cs,$rs,$tl,$mn,$mx,$ml,$sd) = $sth->fetchrow_array();
+    my @data = $sth->fetchrow_array();
 
     $sth->finish();
 
-    return ($cs,$rs,$tl,$mn,$mx,$ml,$sd);
+    $project->setNumberOfContigs(shift @data);
+    $project->setNumberOfReads(shift @data);
+    $project->setContigStatistics(@data);
+
+    return ($rw+0);
 }
 
-sub addCommentForProject {
-# replace the current comment
+
+############### UPDATE ############
+
+sub updateProjectAttribute {
+# public method, takes a Project instance
     my $this = shift;
     my $project = shift;
+    my %options = @_;
 
-    die "addCommentForProject expects a Project instance as parameter"
-	unless (ref($project) eq 'Project');
+    &testParameterType($project,'Project','updateProject');
 
-    my $pid = $project->getProjectID();
-    my $aid = $project->getAssemblyID();
+    return 0,"Missing project identifier" unless $project->getProjectID();
 
-    unless (defined($pid) && defined($aid)) {
-        return 0,"undefined assembly or project identifier";
+# get current project data from database and compare with input project
+
+    my $project_id = $project->getProjectID();
+
+    my ($dbproject,$status) = $this->getProject(project_id=>$project_id);
+
+# changes by project owner or by privilege
+
+    my $user = $this->getArcturusUser();
+
+    my $owner = $dbproject->[0]->getOwner();
+
+    unless ($user eq $owner || &userRoles($user,$owner)) {
+        return 0,"user '$user' has no privilege on project ".$dbproject->getProjectName();
+    } 
+
+# scan test these fields for changes
+
+    my %changes;
+    my $message = '';
+    my $preview = '';
+    foreach my $item ('ProjectName','Comment','Owner') {
+# get the project values by using the 'eval' construct
+        my $newvalue = eval("\$project->get$item()");
+        my $oldvalue = eval("\$dbproject->[0]->get$item()");
+        next unless (($oldvalue || $newvalue) && $oldvalue ne $newvalue);
+# the value has changed
+        $preview .= "$item '$oldvalue' will be replaced by '$newvalue'\n";
+        $message .= "$item set to '$newvalue' for project nr $project_id\n";
+        my $databaseitem = lc($item);
+        $databaseitem  =~ s/project//i;
+        $changes{$databaseitem} = $newvalue;
     }
 
-    my $comment = $project->getComment() || 'null';
-    $comment = "'$comment'" unless ($comment =~ /^null$/i);
+    return 0,"No changes detected" unless $preview;
 
-    my $query = "update PROJECT set comment=$comment"
-              . " where assembly_id=$aid and project_id=$pid";
+    return 1,$preview unless $options{confirm};
 
     my $dbh = $this->getConnection();
+    if (&updateProjectItem($dbh,$project_id,%changes,nostatustest=>1)) {
+        return 2,$message; # success
+    }
 
-    my $nrow = $dbh->do($query) || &queryFailed($query) || return undef;
+    return 0,"No changes made to project ".$dbproject->[0]->getProjectName();
+}
 
-    return 0,"Comment field was not updated ($query)" unless ($nrow+0);
+sub updateProjectStatus {
+# public, takes a Project instance and updates the database PROJECT.status
+    my $this = shift;
+    my $project = shift;
+    my %options = @_;
 
-    return 1,"New comment entered OK";
+    &testParameterType($project,'Project','updateProject');
+
+    return 0,"Missing project identifier" unless $project->getProjectID();
+
+# the new value of the project status is embedded in the input project
+
+    my $newstatus = $project->getProjectStatus();
+
+    return 0,"No new project status specified" unless $newstatus;
+
+# get the current database status (overrides the current value)
+
+    my @lockinfo = &getLockedStatus($this->getConnection(),
+                                   $project->getProjectID());
+
+# status [3], owner [4]
+
+    if ($newstatus eq $lockinfo[3]) {
+        return 0,"No change of project status indicated";
+    }
+
+# new status finished,quality-locked should lock the project
+# access test by acquiring a lock on the project? 
+
+
+
+}
+
+sub updateProjectItem {
+# private
+    my $dbh = shift;
+    my $pid = shift;
+    my %options = @_;
+
+# keys: PROJECT items and nostatustest, nolocktest
+
+    my @values;
+    my $username;
+    my $setstring = "set ";
+    foreach my $option (keys %options) {
+        next if ($option =~ /test$/);
+        $username = $options{$option} if ($option =~ /owner$/);
+        $setstring .= ", " if ($setstring =~ /\=/);
+        if ($options{$option} =~ /\bnow\b/) {
+            $setstring .= "$option = now()";
+	}
+	else {
+ 	    push @values, $options{$option};
+  	    $setstring .= "$option = ?";
+	}
+    }
+
+# compose the query and collect the values
+
+    my $query = "update PROJECT";
+
+    if ($username) {
+        $query .= ",USER $setstring where USER.username = ? and ";
+        push @values,$username;
+    }
+    else {
+        $query .= " $setstring where ";
+    }
+    $query .= "PROJECT.project_id = ? ";
+    push @values, $pid;
+
+    $query .= "and lockdate is null and lockowner is null " if $options{isnotlockedtest};
+
+    $query .= "and status not in ('finished','quality checked')" unless $options{nostatustest};
+
+# print STDOUT "updateProjectItem query: $query\n";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $nrw = $sth->execute(@values) || &queryFailed($query,@values);
+
+    return ($nrw+0);
 }
 
 #------------------------------------------------------------------------------
@@ -1291,12 +1457,13 @@ sub addCommentForProject {
 #------------------------------------------------------------------------------
 
 sub getAccessibleProjects {
-# returns a list of projects accessible to this user
+# returns a list of projects accessible to this user (irrespective lockstatus)
     my $this = shift;
     my %options = @_;
 
 # options: project => P to test (a) particular project(s)
 #          user    => U overriding the default Arcturus user
+#          unlock  => override lock level 2, requires privilege
 
     my $user = $options{user};
     $user = $this->getArcturusUser() unless defined $user;
@@ -1313,157 +1480,249 @@ sub getAccessibleProjects {
 
 # test projects found against user privileges
 
+    my $userHasPrivilege = $this->userCanGrantPrivilege();
+
     my $dbh = $this->getConnection();
 
     my @projectids;
     foreach my $projectid (@$projectids) {
 # test user privilege against the ownership of the project
         my ($access,$owner) = &hasPrivilegeOnProject($dbh,$projectid,$user);
+# if the user has no access, but may override locks, repeat the test
+        if (!$access && $options{unlock} && $userHasPrivilege) {
+           ($access,$owner) = &hasPrivilegeOnProject($dbh,$projectid,$user,unlock=>1);
+        }
         push @projectids, $projectid if $access;
     }
 
     return [@projectids];
 }
 
-sub getLockedStatusForProjectID {
+sub getLockedStatusForProject {
+# public, takes a Project instance 
     my $this = shift;
-    my $project_id = shift;
-    return &getLockedStatus($this->getConnection(),$project_id);
+    my $project = shift;
+
+    &testParameterType($project,'Project','getLockedStatusForProject');
+
+    my @lockinfo = &getLockedStatus($this->getConnection(),
+                                   $project->getProjectID());
+# if the project is locked, set lock attributes
+    if (@lockinfo && $lockinfo[0]) {
+        $project->setLockOwner($lockinfo[1]);
+        $project->setLockDate ($lockinfo[2]);
+    }
+# and return lock level (0, 1, 2)
+    return $lockinfo[0];
 }
 
-sub getLockedStatusForContigID {
+sub getLockedStatusForContigID { 
+# public, used in ADBContig->retireContig
     my $this = shift;
     my $contig_id = shift;
-    return &getLockedStatus($this->getConnection(),$contig_id,1);
+    my @lockinfo = &getLockedStatus($this->getConnection(),$contig_id,1);
+    return @lockinfo; # returns lockstatus,lockowner,lockdate & projectinfo
 }
 
 # ------------- acquiring and releasing locks -----------------
 
 sub acquireLockForProject {
+# public, takes a Project instance (re: project-lock.pl)
     my $this = shift;
     my $project = shift;
+    my %options = @_;
+
+    &testParameterType($project,'Project','acquireLockForProject');
+
     return 0,"Undefined project ID" unless defined($project->getProjectID());
-    return $this->acquireLockForProjectID($project->getProjectID());
-}
 
-sub acquireLockForProjectID {
-    my $this = shift;
-    my $pid = shift;
+# acquire lock
 
-    my $dbh = $this->getConnection();
-
-# test the current lock status
-
-    my ($islocked,$lockedby) = &getLockedStatus($dbh,$pid);
-
-    my $user = $this->getArcturusUser();
-
-# (try to) acquire a lock for this user
-
-    if (!$islocked) { 
-        my $islocked = &setLockedStatus($dbh,$pid,$user,1);  
-        return (1,"Project $pid locked by $user") if $islocked;
-        return (0,"Failed to acquire lock on project $pid");
-    }
-    elsif ($user eq $lockedby) {
-        return (1,"Project $pid is already locked by user $lockedby");
-    }
-    else {
-        return (0,"Project $pid cannot be locked; is owned by user $lockedby");
-    }
+    return &acquireLockForProjectID($this->getConnection(),
+                                    $this->getArcturusUser(),
+                                    $project->getProjectID(),
+                                    $options{confirm});
 }
 
 sub releaseLockForProject {
+# public, takes a Project instance (re: project-unlock.pl)
     my $this = shift;
     my $project = shift;
+    my %options = @_;
+
+    &testParameterType($project,'Project','releaseLockForProject');
+
     return 0,"Undefined project ID" unless defined($project->getProjectID());
-    return $this->releaseLockForProjectID($project->getProjectID());
+
+# here option to change lock owner ship?
+
+# release the lock
+
+    return &releaseLockForProjectID($this->getConnection(),
+                                    $this->getArcturusUser(),
+                                    $project->getProjectID(),
+                                    $options{confirm});
 }
 
-sub releaseLockForProjectID {
+sub transferLockOwnershipForProject {
+# public, takes a Project instance as parameter
     my $this = shift;
-    my $project_id = shift;
-    return &unlockProject($this->getConnection(),$project_id,
-                          $this->getArcturusUser());
-}
+    my $project = shift;
+    my %options = @_; # newowner, forcing, confirm
 
-sub releaseLockForProjectIDWithOverride { # ??? 
-    my $this = shift;
-    my $project_id = shift;
-# test for valid user?
-    return &unlockProject($this->getConnection(),$project_id);
-}
+    &testParameterType($project,'Project','changeLockOwnerForProject');
 
-# -------------------- meant for use by assembly pipeline ---------------------
+    my $pid = $project->getProjectID();
 
-sub acquireLockForProjectIDs {
-# e.g. enabling the overnight assembly to lock its projects before (old) export
-    my $this = shift;
-    my $projectids = shift; # array ref with pIDs
+# get current lock status of project
 
-    $projectids = $this->getProjectInventory() unless $projectids;
+    my $dbh = $this->getConnection();
 
-    my $message = '';
-    foreach my $pid (@$projectids) {
-        my ($lock,$status) = $this->acquireLockForProjectID($pid);
-        $message .= $status."\n" unless $lock;
+    my ($locklevel,$lockowner,@lockinfo) = &getLockedStatus($dbh,$pid);
+
+    return 0,"Project $lockinfo[3] is not locked" unless $locklevel;
+
+# get the new lockowner
+
+    my $user = $this->getArcturusUser();
+
+    my $newlockowner = $options{newowner} || $user; # acquire the lock for self
+
+# test if the lock is already owned by the indicated new owner
+
+    unless ($lockowner ne $newlockowner) {
+        return 2,"User '$lockowner' already owns the lock on project $lockinfo[3]";
+    } 
+
+# the current owner can always change ownership
+
+    unless ($user eq $lockowner) {
+
+# protect against change when locked at level 2 (always, no role test)
+
+        my $message = "Lock ownership for project $lockinfo[3] can only be "
+	            . "relinquished by user '$lockowner'"; # the current owner
+
+        return 0, $message unless ($locklevel == 1); # locklevel 2
+
+# protect against ownership change when no roles are tested
+
+        return 0, $message." or by invoking role privilege" unless $options{forcing};
     }
-    return $message;
-}
 
-sub releaseLockForProjectIDs {
-# e.g. enabling the overnight assembly to unlock its projects after (new) import
-    my $this = shift;
-    my $projectids = shift; # array ref with pIDs
+# ok, test/do (with 'confirm' option) the change, if required with role privilege test
 
-    $projectids = $this->getProjectInventory() unless $projectids;
+    my $message = "transfer the lock ownership for project $lockinfo[3]";
+    if ($lockowner eq $user || &userRoles($user,$lockowner) 
+                            && &userRoles($user,$lockinfo[2])) {
 
-    my $message = '';
-    foreach my $pid (@$projectids) {
-        my ($unlock,$status) = $this->releaseLockForProjectID($pid);
-        $message .= $status."\n" unless $unlock;
+        return 1, "User '$user' can ".$message unless $options{confirm};
+
+        if (&updateProjectItem($dbh,$lockinfo[4],lockowner=>$newlockowner,
+                                                 nostatustest=>1,
+                                                 lockdate=>'now')) {
+            $project->setLockOwner($newlockowner);      
+            return 2, "Lock on project $lockinfo[3] transfered to user '$newlockowner'";
+        }
+# failed to update the database record (is newlockowner in USER table?)
+        return 0,"FAILED to ".$message;   
     }
-    return $message;
+
+# failed (or partially failed) to acquire/transfer lock
+
+    return 0, "User '$user' does not have the required privilege"; 
 }
 
 #---------------------------- private methods --------------------------
 
 sub hasPrivilegeOnProject {
-# private: has user modification privilege on project? (ignoring lockstatus)
+# private: has user modification privilege on project (unblocked state)? 
     my $dbh = shift;
     my $project_id = shift;
     my $user = shift;
+    my %option = @_;
 
-    my $owner = &getLockedStatus($dbh,$project_id,0,1);
+    my @projectinfo = &getLockedStatus($dbh,$project_id); # just to get at project info 
+
+    my $owner = $projectinfo[4]; # the project owner
 
     return undef unless $owner; # probably invalid project_id
+
+# default no-one has privilege on a blocked project; override with unblock option
+
+    return 0 unless ($projectinfo[0] < 2 || $option{unlock});
 
 # user has privilege as owner or if the user's role overrides the ownership
 
     return (($user eq $owner || &userRoles($user,$owner)) ? 1 : 0), $owner;
 }
 
-sub unlockProject {
-# private function (only here because two releaseLock methods, move to above?)
+sub acquireLockForProjectID {
+# private; returns status & message; status 0,1 for info, 2 for lock acquired
     my $dbh = shift;
+    my $user = shift;
     my $pid = shift;
-    my $user = shift; # if not defined, override ownership test
+    my $dolock = shift;
 
-    my ($islocked,$lockedby) = &getLockedStatus($dbh,$pid);
+# test the current lock status
+
+    my @lockinfo = &getLockedStatus($dbh,$pid);
+
+    unless ($lockinfo[0]) {
+# the project is not locked; try to acquire a lock
+        my $owner = $lockinfo[4]; # the project owner
+        if ($user eq $owner || &userRoles($user,$owner)) {
+# the user has privilege and can (try to) lock the project
+            return (1,"Project $lockinfo[5] can be locked by $user") unless $dolock;
+            my $islocked = &setLockedStatus($dbh,$pid,$user,1); # acquire
+            return (2,"Project $lockinfo[5] is now locked by $user") if $islocked;
+            return (0,"FAILED to acquire lock on project $lockinfo[5]");
+        }
+        else {
+            return (0,"User $user has no access to project $lockinfo[5]");
+	}
+    }
+
+# the project is already locked; check who owns the lock
+
+    if ($user eq $lockinfo[1]) {
+        return (2,"Project $lockinfo[5] has already been locked by user '$lockinfo[1]'");
+    }
+    else {
+        return (0,"Project $lockinfo[5] is currently locked by user '$lockinfo[1]'");
+    }
+}
+
+sub releaseLockForProjectID {
+# private; returns status & message; status 0,1 for info, 2 for lock released
+    my $dbh = shift;
+    my $user = shift || return (0,"Undefined user"); 
+    my $pid = shift;
+    my $unlock = shift;
+
+# unlock can only be done by lock owner; no role override here (first rename lock owner)
+
+    my ($islocked,$lockowner,@info) = &getLockedStatus($dbh,$pid);
 
     if (!$islocked) {
-        return (1,"Project $pid was not locked");
+        return (2,"Project $info[3] was found not to be locked");
     }
-    elsif ($user && $user ne $lockedby) {
-#    elsif ($user && !($user eq $lockedby || $role->{$user} eq $role->{$lockedby})) {
-        return (0,"Project $pid remains locked; belongs to user $lockedby");
+    elsif ($islocked > 1) {
+        return (0,"Project $info[3] remains locked at protected level 2 ($info[1])");
     }
-
-    if (&setLockedStatus($dbh,$pid,$lockedby,0)) {
-        return (1,"Lock released OK on project $pid");
+    elsif ($user ne $lockowner) {
+        return (0,"Lock belongs to user '$lockowner'");
     }
 
-    return (0,"Failed to release lock on project $pid");
+# ok, the project is found to be locked and owned by the current user
+
+    return (1,"Lock can be released on project $info[3]") unless $unlock;
+
+    if (&setLockedStatus($dbh,$pid,$lockowner,0)) {
+        return (2,"Lock released OK on project $info[3]");
+    }
+
+    return (0,"FAILED to release lock on project $info[3]");
 }
 
 sub getLockedStatus {
@@ -1472,9 +1731,9 @@ sub getLockedStatus {
     my $identifier = shift; # project ID or contig ID
     my $iscontigid = shift; # set TRUE for contig ID
 
-    my $query = "select PROJECT.project_id, owner, locked, lockedby"
+    my $query = "select lockowner, lockdate, status, owner, name, PROJECT.project_id"
 	      . "  from PROJECT";
-                          
+
     if ($iscontigid) {
         $query .= " join CONTIG using (project_id) where contig_id = ?";
     }
@@ -1484,20 +1743,31 @@ sub getLockedStatus {
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($identifier) || &queryFailed($query,$identifier);
+    my $row = $sth->execute($identifier) || &queryFailed($query,$identifier);
 
-    my ($pid,$owner,$islocked,$lockedby) = $sth->fetchrow_array();
+    my @projectinfo = $sth->fetchrow_array();
 
     $sth->finish();
 
-    $islocked = 0 if (!$islocked && $pid);
+# determine lockstatus from project info
 
-# returns  undef        if the project does not exists
-#          0   , owner  if project exists with status: not locked
-#          date, owner  if project exists and is locked
+    my $lockstatus = 0;
 
-    return $islocked,$lockedby unless shift; # temporary
-    return $islocked,$lockedby,$owner;
+    if ($row != 1 || !@projectinfo) {
+# the project does not exist (non-existent project ID referenced in contig data)
+        $lockstatus = 3;
+    }
+    elsif ($projectinfo[2] eq 'finished' || $projectinfo[2] eq 'quality checked') {
+        $lockstatus = 2;
+    }
+    elsif ($projectinfo[0] || $projectinfo[1]) {
+        $lockstatus = 1;
+    }
+
+# returns lockstatus level and projectinfo: lock owner, lock date, project status,
+#                                           project owner, project name, project id
+
+    return $lockstatus,@projectinfo;
 }
 
 sub setLockedStatus {
@@ -1505,22 +1775,32 @@ sub setLockedStatus {
     my $dbh = shift;
     my $projectid = shift || return undef;
     my $user = shift;
-    my $getlock = shift; # True to acquire lock, false to release lock
 
-    my $query = "update PROJECT ";
+    my $query;
+    my @qdata = ($user,$projectid);
 
-    if ($getlock) {
-        $query .= "set locked = now(), lockedby = ? where project_id = ? "
-	        . "and locked is null";
+    if (shift) {
+# put a lock on a project if it is not already locked
+        $query = "update PROJECT,USER"
+               . "   set lockdate = now(), lockowner = ? "
+               . " where project_id = ? "
+	       . "   and lockdate is null"
+	       . "   and lockowner is null"
+	       . "   and status not in ('finished','quality checked')"
+               . "   and USER.username = ?";
+        push @qdata ,$user;
     }
     else {
-        $query .= "set locked = null where lockedby = ? and project_id = ? "
-	        . "and locked is not null";
+# release lock (by lockowner only) unless the project is locked at level 2
+        $query = "update PROJECT"
+               . "   set lockdate = null, lockowner = null "
+               . " where lockowner = ? and project_id = ?"
+	       . "   and status not in ('finished','quality checked')";
     }
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rc = $sth->execute($user,$projectid) || &queryFailed($query,$user,$projectid);
+    my $rc = $sth->execute(@qdata) || &queryFailed($query,@qdata);
 
 # returns 1 for success, 0 for failure
 
