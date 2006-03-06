@@ -36,30 +36,21 @@ sub setArcturusDatabase {
 }
 
 sub getLockedStatus {
-# return the momentary status
+# return the momentary lock status
     my $this = shift;
 
     my $ADB = $this->{ADB} || return undef;
 
-    my ($lock,$user) = $ADB->getLockedStatusForProjectID($this->getProjectID());
-
-    $this->setOwner($user);
-
-    return $lock;
+    return $ADB->getLockedStatusForProject($this);
 }
  
 sub getProjectData {
+# return the momentary project statistics
     my $this = shift;
 
     my $ADB = $this->{ADB} || return undef;
 
-    my $pid = $this->getProjectID();
-
-    my @data = $ADB->getProjectStatisticsForProjectID($pid);
-
-    $this->setNumberOfContigs(shift @data);
-    $this->setNumberOfReads(shift @data);
-    $this->setContigStatistics(@data);
+    $ADB->getProjectStatisticsForProject($this);
 }
 
 #-------------------------------------------------------------------
@@ -104,17 +95,15 @@ sub fetchContigIDs {
 
     my $ADB = $this->{ADB} || return (0,"Missing database connection");
 
-    my $pid = $this->getProjectID();
-
     my ($cids, $status);
 
     if ($nolockcheck) {
 # get all contig IDs belonging to this project without locking
-       ($cids, $status) = $ADB->getContigIDsForProjectID($pid);
+       ($cids, $status) = $ADB->getContigIDsForProject($this);
     }
     else {
-# access project only if not locked or owned by user; if so, then lock project
-       ($cids, $status) = $ADB->checkOutContigIDsForProjectID($pid);
+# access project only if the current user can acquire a lock on the project
+       ($cids, $status) = $ADB->checkOutContigIDsForProject($this);
         $status = "No accessible contigs: $status" unless ($cids && @$cids);
     }
 
@@ -173,6 +162,26 @@ sub getCreator {
     my $this = shift;
     return $this->{data}->{creator};
 }
+  
+sub setLockDate {
+    my $this = shift;
+    $this->{data}->{lockdate} = shift;
+}
+  
+sub getLockDate {
+    my $this = shift;
+    return $this->{data}->{lockdate};
+}
+  
+sub setLockOwner {
+    my $this = shift;
+    $this->{data}->{lockowner} = shift;
+}
+  
+sub getLockOwner {
+    my $this = shift;
+    return $this->{data}->{lockowner};
+}
     
 sub setNumberOfContigs {
     my $this = shift;
@@ -224,6 +233,16 @@ sub setProjectName {
 sub getProjectName {
     my $this = shift;
     return $this->{data}->{projectname} || '';
+}
+  
+sub setProjectStatus {
+    my $this = shift;
+    $this->{data}->{projectstatus} = shift;
+}
+  
+sub getProjectStatus {
+    my $this = shift;
+    return $this->{data}->{projectstatus} || '';
 }
   
 sub setUpdated {
@@ -397,7 +416,10 @@ sub toStringShort {
     my $locked = ($this->getLockedStatus() ? 'LOCKED' : ' free ');
     push @line,($this->getOwner() || 'undef');
     push @line,($locked || '');
-    push @line,($this->getComment() || '');
+    my $comment = $this->getProjectStatus();
+    $comment .= "  " if $comment;
+    $comment .= ($this->getComment() || '');
+    push @line,$comment;
   
     return sprintf ("%4d %2d %-8s %7d %8d %9d %9d  %-8s %6s %-24s\n",@line);
 }
@@ -410,24 +432,27 @@ sub toStringLong {
 
     $string .= "Project ID         ".$this->getProjectID()."\n";
     $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
-    $string .= "Projectname        ".$this->getProjectName()."\n";
+    $string .= "Project name       ".$this->getProjectName()."\n";
+    $string .= "Project owner      ".($this->getOwner() || 'undef')."\n";
+
+    $string .= "Project status     ".$this->getProjectStatus()."\n";
 
     $string .= "Lock status        ";
     if (my $lock = $this->getLockedStatus()) {
-        $string .= "locked by user ".$this->getOwner()." on $lock\n";     
+        $string .= "locked by user '".($this->getLockOwner() || 'unknown')."'";
+        $string .= " on ".$this->getLockDate() if $this->getLockDate();
+        $string .= "  lock level $lock\n";
     }
     else {
         $string .= "not locked\n";
     }
     $string .= "Allocated contigs  ".($this->getNumberOfContigs() || 0)."\n";
     $string .= "Allocated reads    ".($this->getNumberOfReads() || 0)."\n";
-    if ($this->getOwner()) {
-        $string .= "Last update on     ".($this->getUpdated() || 'unknown').
-                               "  by   ".$this->getOwner()."\n";
-    }
+    $string .= "Last update on     ".($this->getUpdated() || 'unknown')."\n";
+
     if ($this->getCreator()) {
         $string .= "Created on         ".($this->getCreated() || 'unknown').
-                               "  by   ".$this->getCreator()."\n";
+                               "  by user '".$this->getCreator()."'\n";
     }
     $string .= "Comment            ".($this->getComment() || '')."\n";
 
