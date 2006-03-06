@@ -8,7 +8,7 @@ use Exporter;
 
 our @ISA = qw(Exporter);
 
-our @EXPORT = qw(queryFailed userRoles); # export to remote sub-classes
+our @EXPORT = qw(queryFailed userRoles testParameterType); # export to remote sub-classes
 
 # ----------------------------------------------------------------------------
 # constructor
@@ -21,6 +21,19 @@ sub new {
     bless $this, $class;
 
     return $this;
+}
+
+#------------------------------------------------------------------------------
+
+sub testParameterType {
+# check type of an instance against the expected type
+    my $instance = shift;
+    my $expected = shift;
+    my $origin = shift;
+
+    return if (ref($instance) eq $expected);
+
+    die "Method '$origin' expects a $expected instance as parameter";
 }
 
 #------------------------------------------------------------------------------
