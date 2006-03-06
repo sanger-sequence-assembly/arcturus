@@ -586,7 +586,7 @@ while (defined($record = <$CAF>)) {
             $info = $inew if $change;
             $logger->info("new info after cleanup: $info") if $change;
 
-# $logger->finest("READ tag: $type $trps $trpf $info") if $noload;
+#$logger->warning("READ tag: $type $trps $trpf $info") if $noload;
 
             my $tag = new Tag('readtag');
             $tag->setType($type);
@@ -608,7 +608,7 @@ while (defined($record = <$CAF>)) {
  			next;
                     }
                     elsif ($trpf-$trps+1 != $length) {
-                        $logger->info("oligo length mismatch ($trps $trpf) ".
+                        $logger->info("oligo length mismatch ($trps $trpf $length) ".
                                       "for $info near line $lineCount");
                     }
 # test if the DNA occurs twice in the data
@@ -616,7 +616,7 @@ while (defined($record = <$CAF>)) {
 			$logger->info("Multiple DNA info removed from ".
                                       "$type tag for read $readname");
                         $info = $inew;
-$logger->info("new info after DNA removal: $info");
+$logger->info("new info after DNA removal: $info") if $debug;
                     }
                 }
 # process oligo names
@@ -1008,7 +1008,8 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
-#my $LIST = 1; print "decoding OLIG $info ($sequence) \n" if $LIST;
+my $DEBUG = 0; 
+print "decode_oligo_info  $info ($sequence) \n" if $DEBUG;
 
     my $change = 0;
 # clean up name (replace possible ' oligo ' string by 'o')
@@ -1035,11 +1036,12 @@ sub decode_oligo_info {
 # the info string starts with a number followed by the sequence
         $name = "o$1";
     }
-    elsif ($info !~ /serial/ && $info =~ /\b([opt0]\d+)\b/) {
+    elsif ($info !~ /serial/ && $info =~ /\b([opt]\d+)\b/) {
 # the info contains a name like o1234 or t1234
-#print "2 name decoded: $1  \n" if $LIST; 
         $name = $1;
-        $name =~ s/^0/o/; # correct typo 0 for o
+    }
+    elsif ($info !~ /serial/ && $info =~ /[^\w\.]0(\d+)\b/) {
+        $name = "o$1"; # correct typo 0 for o
     }
     elsif ($info =~ /\b(o\w+)\b/) {
 # the info contains a name like oxxxxx
@@ -1059,8 +1061,8 @@ sub decode_oligo_info {
         $name = "o$name" unless ($name =~ /\D/);
     }
 
-#print "name $name (change $change) \n" if $LIST;
-
+print "name $name (change $change) \n" if $DEBUG;
+ 
     return ($name,0) if ($name && !$change); # no new info
     return ($name,$info) if $name; # info modified
 
@@ -1081,7 +1083,7 @@ sub decode_oligo_info {
 	}
     }
 
-#print "name $name (change $change) \n" if $LIST;
+print "name $name (change $change) \n" if $DEBUG;
 
     return ($name,$info) if $name;
 
