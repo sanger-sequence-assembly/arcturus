@@ -552,7 +552,9 @@ elsif ($action eq 'execute') {
         }
 
         my $pid = $rd->{old_project_id};
-        my ($cpid,$lock) = $adb->getProjectIDforContigID($cid); # current project ID
+
+        my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
+
         unless ($pid == $cpid) {
 # translate project IDs into project names
             my $cur_project = &getCachedProject($adb,$cpid);
@@ -894,7 +896,7 @@ sub createContigTransferRequest {
 
 # test if the contig is not already allocated to the target project 
 
-    my ($cpid,$lock) = $adb->getProjectIDforContigID($cid); # current project ID
+    my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
 
     unless (defined($cpid)) {
         return 0,"contig $cid does not exist";
