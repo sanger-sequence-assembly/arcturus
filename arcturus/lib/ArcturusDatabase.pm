@@ -177,9 +177,11 @@ sub getArcturusUserRoles {
 
 sub userCanCreateProject {
     my $this = shift;
-#    return 1; # temporary
+    my $user = shift;
 
-    my $user = $this->getArcturusUser() || return undef;
+    $user = $this->getArcturusUser() unless $user;
+
+    return undef unless $user; # protection
 
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
 
@@ -192,8 +194,11 @@ sub userCanCreateProject {
 
 sub userCanAssignProject {
     my $this = shift;
+    my $user = shift;
 
-    my $user = $this->getArcturusUser() || return undef;
+    $user = $this->getArcturusUser() unless $user;
+
+    return undef unless $user; # protection
 
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
 
@@ -206,8 +211,11 @@ sub userCanAssignProject {
 
 sub userCanMoveAnyContig {
     my $this = shift;
+    my $user = shift;
 
-    my $user = $this->getArcturusUser() || return undef;
+    $user = $this->getArcturusUser() unless $user;
+
+    return undef unless $user; # protection
 
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
 
@@ -220,8 +228,12 @@ sub userCanMoveAnyContig {
 
 sub userCanGrantPrivilege {
     my $this = shift;
+    my $user = shift;
 
-    my $user = $this->getArcturusUser() || return undef;
+    $user = $this->getArcturusUser() unless $user;
+
+    return undef unless $user; # protection
+
 print STDOUT "testing privilege of user $user\n";
 
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
