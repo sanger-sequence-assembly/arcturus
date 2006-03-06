@@ -56,6 +56,8 @@ CREATE TABLE C2CMAPPING (
   mapping_id mediumint(8) unsigned NOT NULL auto_increment,
   cstart int(10) unsigned default NULL,
   cfinish int(10) unsigned default NULL,
+  pstart int(10) unsigned default NULL,
+  pfinish int(10) unsigned default NULL,
   direction enum('Forward','Reverse') default 'Forward',
   PRIMARY KEY  (mapping_id),
   KEY contig_id (contig_id),
@@ -72,6 +74,18 @@ CREATE TABLE C2CSEGMENT (
   pstart int(10) unsigned NOT NULL default '0',
   length int(10) unsigned default NULL,
   KEY mapping_id (mapping_id)
+) ENGINE=MyISAM DEFAULT CHARSET=latin1;
+
+#
+# Table structure for table 'CHECHOUTLOG'
+#
+
+CREATE TABLE CHECKOUTSTATUS (
+  project_id smallint(5) unsigned NOT NULL,
+  lastcheckout datetime NOT NULL,
+  lastcheckin datetime NOT NULL,
+  directory varchar(64),
+  user char(8) NOT NULL
 ) ENGINE=MyISAM DEFAULT CHARSET=latin1;
 
 #
@@ -232,8 +246,9 @@ CREATE TABLE PROJECT (
   name varchar(16) binary NOT NULL default '',
   updated timestamp NOT NULL default CURRENT_TIMESTAMP on update CURRENT_TIMESTAMP,
   owner varchar(8) default NULL,
-  locked datetime default NULL,
-  lockedby varchar(8) default NULL,
+  status enum ('in shotgun','prefinishing','in finishing','finished','quality checked') default 'in shotgun',
+  lockdate datetime default NULL,
+  lockowner varchar(8) default NULL,
   created datetime default NULL,
   creator varchar(8) NOT NULL default 'arcturus',
   `comment` text,
