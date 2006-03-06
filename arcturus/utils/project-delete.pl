@@ -16,9 +16,10 @@ my $organism;
 my $instance;
 my $username;
 my $password;
+
 my $project;
 my $assembly;
-my $generation = 'current';
+
 my $confirm;
 my $verbose;
 
@@ -111,21 +112,28 @@ if ($projects && @$projects > 1) {
 elsif (!$projects || !@$projects) {
     $logger->warning("Project $project not available : $message");
 }
-elsif ($confirm) {
-    my $pid = $projects->[0]->getProjectID();
-    my $aid = $projects->[0]->getAssemblyID();
-    my ($status,$message) = $adb->deleteProject(project_id => $pid,
-                                               assembly_id => $aid);
-    $logger->warning($message);
-}
+
+
 else {
-    $project = shift @$projects;
-    if (my $status = $project->getLockedStatus()) {
-        $logger->warning("Project " . $project->getProjectName() .
-                         " is locked by user " . $project->getOwner());
+    my $project = shift @$projects;
+    $logger->info($project->toStringLong); # project info if verbose
+
+    my %options;
+    $options{confirm} = 1 if $confirm;
+         
+    my ($success,$message) = $adb->deleteProject($project,%options);
+
+    $logger->skip();
+    if ($success == 2) {
+        $logger->warning($message);
     }
-    $logger->warning("Project " . $project->getProjectName() .
-                     " will be deleted : please confirm");
+    elsif ($success == 1) {
+        $logger->warning($message." (=> use '-confirm')");
+    }
+    else {
+        $logger->warning("FAILED to delete the project: ".$message);
+    }
+    $logger->skip();
 }
 
 $adb->disconnect();
@@ -137,15 +145,28 @@ $adb->disconnect();
 sub showUsage { 
     my $code = shift || 0;
 
-    print STDERR "\nDelete a project\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "Delete a project. Project to be specified with ID or ";
+    print STDERR "project name [& assembly].\nThe project must be empty and ";
+    print STDERR "you must be able to acquire a lock on the project\n";
+    print STDERR "i.e. the project is either unlocked or you own the lock; if ";
+    print STDERR "you do not own\nthe lock, acquire it with 'project-lock'";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "-project\tproject ID or name\n";
+    unless ($organism && $instance && $project) {
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+    }
+    unless ($organism && $instance) {
+        print STDERR "-organism\tArcturus database name\n"  unless $organism;
+        print STDERR "-instance\t'prod', 'dev' or 'test'\n" unless $instance;
+        print STDERR "\n";
+    }
+    unless ($project) {
+        print STDERR "-project\tproject identifier (ID or name)\n";
+        print STDERR "\n";
+    }
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
@@ -153,6 +174,8 @@ sub showUsage {
     print STDERR "-confirm\t(no value) \n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) \n";
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code;
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
