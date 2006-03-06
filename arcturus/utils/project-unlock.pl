@@ -16,16 +16,16 @@ my $organism;
 my $instance;
 my $project;
 my $assembly;
-my $generation = 'current';
+my $forcing;
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|instance|assembly|project|confirm|verbose|help";
+my $validKeys  = "organism|instance|assembly|project|forcing|confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
     $instance     = shift @ARGV  if ($nextword eq '-instance');
       
@@ -35,6 +35,8 @@ while (my $nextword = shift @ARGV) {
 
     $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
+    $forcing      = 1            if ($nextword eq '-forcing');
+
     $verbose      = 1            if ($nextword eq '-verbose');
 
     $confirm      = 1            if ($nextword eq '-confirm');
@@ -42,13 +44,11 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage(0,"Missing project name or ID") unless $project;
- 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging();
+my $logger = new Logging('STDOUT');
  
 $logger->setFilter(0) if $verbose; # set reporting level
  
@@ -56,18 +56,18 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing database instance") unless $instance;
+&showUsage("Missing database instance") unless $instance;
 
-&showUsage(0,"Missing project ID") unless $project;
-
+&showUsage("Missing project name or ID") unless $project;
+ 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Unknown organism '$organism' on server '$instance'");
 }
 
 $logger->info("Database ".$adb->getURL." opened succesfully");
@@ -86,7 +86,7 @@ if (defined($assembly)) {
     $options{assemblyname} = $assembly if ($assembly =~ /\D/);
 }
 
-my $status;
+my $success;
 
 my ($projects,$message) = $adb->getProject(%options);
 
@@ -101,26 +101,47 @@ if ($projects && @$projects > 1) {
 elsif (!$projects || !@$projects) {
     $logger->warning("Project $project not available : $message");
 }
-elsif ($confirm) {
-    $project = shift @$projects;
-   ($status,$message) = $adb->releaseLockForProject($project);
-    $logger->warning($message);
-}
+
 else {
-    $project = shift @$projects;
-    if (my $status = $project->getLockedStatus()) {
-        $logger->warning("Project ". $project->getProjectName() . 
-                         " is locked by user ". $project->getOwner());
-        $logger->warning("Lock on project " . $project->getProjectName() .
-                         " to be released : please confirm");
+# only one project found, continue
+    my $project = shift @$projects;
+    $logger->info($project->toStringLong); # project info if verbose
+
+# unlocking a project with someone else as lockowner requires transfer of the lock
+
+    if ($forcing) {
+# acquire the lock ownership yourself (if you don't have it but can acquire it)
+       ($success,$message) = $adb->transferLockOwnershipForProject($project,
+				                          confirm=>1,forcing=>1);
+        $logger->warning($message);
+        $logger->skip();
+    }
+
+
+    my %options;
+    $options{confirm} = 1 if $confirm;
+
+   ($success,$message) = $adb->releaseLockForProject($project,%options);
+
+    $logger->skip();
+    if ($success == 2) {
+        $logger->warning($message);
+    }
+    elsif ($success == 1) {
+        $logger->warning($message." (=> use '-confirm')");
     }
     else {
-        $logger->warning("project ". $project->getProjectName() .
-                         " is not locked");
+        $message = "FAILED to release lock: ".$message if $confirm;
+        $logger->warning($message);
     }
+    $logger->skip();
 }
 
 $adb->disconnect();
+
+exit 0 unless $success;
+
+exit 1; # failed
 
 #------------------------------------------------------------------------
 # HELP
@@ -130,20 +151,33 @@ sub showUsage {
     my $mode = shift || 0; 
     my $code = shift || 0;
 
-    print STDERR "\nFrre a lock on a project\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
+    print STDERR "\nRelease a lock on a project\n";
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
-    print STDERR "\n";
-    print STDERR "-project\tproject ID or name\n";
-    print STDERR "\n";
+    unless ($organism && $instance && $project) {
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+    }
+    unless ($organism && $instance) {
+        print STDERR "-organism\tArcturus database name\n"  unless $organism;
+        print STDERR "-instance\t'prod', 'dev' or 'test'\n" unless $instance;
+        print STDERR "\n";
+    }
+    unless ($project) {
+        print STDERR "-project\tproject identifier (ID or name)\n";
+        print STDERR "\n";
+    }
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
-    print STDERR "-confirm\t(no value) \n";
+    print STDERR "-forcing\tunlock a project locked by another user\n";
+    print STDERR "\n";
+    print STDERR "-confirm\t(no value)\n";
+    print STDERR "\n";
+    print STDERR "-verbose\t(no value) for full info\n";
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
