@@ -326,7 +326,7 @@ sub getChildContigsForContig {
 
     my $dbh = $this->getConnection();
 
-    my $childids = &getChildIDsForContigID($dbh,$contig_id);
+    my $childids = &getChildIDsForContigID($dbh,$contig_id,notnull=>1);
 
 # build the Contig instances (metadata only) and add to the input Contig object
 
@@ -785,12 +785,10 @@ sub informUsersOfChange {
     my @messages;
     foreach my $oldproject (@$oldprojects) {
 # test if a project has changed using the project ID
-
+        next if ($oldproject->getProjectID() == $newpid);
 print STDOUT "Diagnostic message: enter ADBContig->informUsersOfChange "
            . "($newpid, ".$oldproject->getProjectID()
            . ", ".$oldproject->getProjectName().")\n";
-
-        next if ($oldproject->getProjectID() == $newpid);
         next if ($oldproject->getProjectName() eq "BIN");
  
         my $oldprojectname = $oldproject->getProjectName();
@@ -1428,70 +1426,55 @@ sub updateMappingsForContig {
 
 #--------------------------------------------------------------------------
 
-sub oldmarkAsVirtualParent { # to be renmoved after testing ot retireContig
-# enter a record in C2CMAPPING for parent_id pointing to contig_id = 0
-# this virtual link removes the contig from the current contig list
-    my $this = shift;
-    my $parent_id = shift || return 0;
-
-    return $this->retireContig($parent_id) if $parent_id;
-
-    return 0 unless $parent_id;
-
-# create a dummy contig with contig ID 0
-
-    my $contig = new Contig();
-
-    $contig->setContigID(0);
-
-# create a dummy C2CMAPPING for this contig
-
-    my $c2cmap = new Mapping();
-
-    $c2cmap->setSequenceID($parent_id);
-
-    $contig->addContigToContigMapping($c2cmap);
-
-# present for loading
-
-    my %options = (type=>'contig',allowemptymapping=>1);
-
-    return &putMappingsForContig($this->getConnection(),$contig,%options);
-}
-
 sub retireContig {
 # remove a contig from the list of current contigs by linking it to contig 0
     my $this = shift;
     my $c_id = shift; # contig ID
-print "retireContig: $c_id\n";
+    my %options = @_;
 
 # is the contig a current contig?
 
     unless ($this->isCurrentContigID($c_id)) {
-        return 0,"Contig $c_id is not a current contig";
+        return 0,"Contig $c_id is not in the current generation";
     }   
 
 # get the project ID and test if the user has access to the project
 
-    my ($p_id,$islocked) = $this->getProjectIDforContigID($c_id);
+    my @lockinfo = $this->getLockedStatusForContigID($c_id);
 
-    return 0,"Project $p_id is locked" if $islocked; #? replace by acquire a lock?
+# re organise: if locked level 2, always fail; if locked level 1, 
+# only proceed if user == lockowner; if no lock, test user access to project
 
-    my $accessibleproject = $this->getAccessibleProjects(project=>$p_id);
+    my $user = $this->getArcturusUser();
 
-    unless (@$accessibleproject == 1 && $accessibleproject->[0] == $p_id) {
-        return 0, "User " . $this->getArcturusUser()
-                . " has no access to project $p_id";
+    my $message = "Contig $c_id is in project $lockinfo[5]";
+
+    if ($lockinfo[0] > 1) {
+        return 0, $message." which can not be modified ($lockinfo[3])";
     }
+    elsif ($lockinfo[0] && $user ne $lockinfo[1]) {
+        return 0, $message." and locked by user $lockinfo[1]";
+    }
+    elsif (!$lockinfo[0]) {
+        my $p_id = $lockinfo[6];
+# test if the user has access to the project (either as owner or by privilege) 
+        my $accessibleproject = $this->getAccessibleProjects(project=>$p_id);
+# abort if the user has no access
+        unless (@$accessibleproject == 1 && $accessibleproject->[0] == $p_id) {
+            return 0, $message." to which $user has no access";
+        }
+    }
+
+    return 0, $message." and can be retired" unless $options{confirm}; 
 
 # add a link for this contig ID marking it as parent of contig 0
 # this (virtual) link removes the contig from the current contig list
  
     unless (&markAsVirtualParent($this->getConnection(),$c_id)) {
-        return 0,"Failed to update database";
+        return 0, "Failed to update database";
     }
 
-    return 1,"OK";
+    return 1, "OK";
 }
 
 sub markAsVirtualParent {
@@ -2030,9 +2013,11 @@ sub getChildIDsForContigID {
 # private, returns a list of contig IDs of child contig(s) using C2CMAPPING table
     my $dbh = shift;
     my $contig_id = shift;
+    my %options = @_;
 
-    my $query = "select distinct(contig_id) from C2CMAPPING".
-	        " where parent_id = ? and contig_id > 0";
+    my $query = "select distinct(contig_id) from C2CMAPPING"
+	      . " where parent_id = ?";
+    $query   .= "   and contig_id > 0" if $options{notnull};
     
     my $sth = $dbh->prepare_cached($query);
 
