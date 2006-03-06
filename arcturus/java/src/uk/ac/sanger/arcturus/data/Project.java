@@ -16,7 +16,7 @@ public class Project extends Core {
     protected Assembly assembly = null;
     protected Date updated = null;
     protected Person owner = null;
-    protected Date locked = null;
+    protected Date lockdate = null;
     protected Date created = null;
     protected Person creator = null;
 
@@ -54,7 +54,7 @@ public class Project extends Core {
      * @param adb the Arcturus database to which this Project belongs.
      */
 
-    public Project(int ID, Assembly assembly, String name, Date updated, Person owner, Date locked, Date created, Person creator,
+    public Project(int ID, Assembly assembly, String name, Date updated, Person owner, Date lockdate, Date created, Person creator,
 		   ArcturusDatabase adb) {
 	super(ID, adb);
 
@@ -66,7 +66,7 @@ public class Project extends Core {
 	this.name = name;
 	this.updated = updated;
 	this.owner = owner;
-	this.locked = locked;
+	this.lockdate = lockdate;
 	this.created = created;
 	this.creator = creator;
     }
@@ -80,7 +80,7 @@ public class Project extends Core {
      * @param adb the Arcturus database to which this Project belongs.
      */
 
-    public Project(int ID, Assembly assembly, String name, Date updated, String owner, Date locked, Date created, String creator,
+    public Project(int ID, Assembly assembly, String name, Date updated, String owner, Date lockdate, Date created, String creator,
 		   ArcturusDatabase adb) {
 	super(ID, adb);
 
@@ -92,7 +92,7 @@ public class Project extends Core {
 	this.name = name;
 	this.updated = updated;
 	this.owner = findPerson(owner);
-	this.locked = locked;
+	this.lockdate = lockdate;
 	this.created = created;
 	this.creator = findPerson(creator);
     }
@@ -137,11 +137,11 @@ public class Project extends Core {
 
     public void setOwner(Person owner) { this.owner = owner; }
 
-    public Date getLocked() { return locked; }
+    public Date getLockdate() { return lockdate; }
 
-    public void setLocked(Date locked) { this.locked = locked; }
+    public void setLockdate(Date lockdate) { this.lockdate = lockdate; }
 
-    public boolean isLocked() { return locked == null; }
+    public boolean isLocked() { return lockdate == null; }
 
     public Date getCreated() { return created; }
 
