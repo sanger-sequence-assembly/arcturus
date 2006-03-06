@@ -234,13 +234,13 @@ sub userCanGrantPrivilege {
 
     return undef unless $user; # protection
 
-print STDOUT "testing privilege of user $user\n";
+#print STDOUT "testing privilege of user $user\n";
 
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
 
 # require an exact match of the user name
 
-print STDOUT "testing privilege of user $user : $userdatahash->[0]->{can_grant_privileges}\n";
+#print STDOUT "testing privilege of user $user : $userdatahash->[0]->{can_grant_privileges}\n";
     return undef unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_grant_privileges} eq 'Y' ? 1 : 0);
