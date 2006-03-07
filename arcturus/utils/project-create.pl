@@ -85,7 +85,7 @@ $logger->info("Database $URL opened succesfully");
 
 unless ($adb->userCanCreateProject()) {
 # also tests if the user actually is known to this organism database 
-    $logger->error("Sorry, but you cannot create a new project "
+    $logger->severe("Sorry, but you cannot create a new project "
                   ."on this $organism database");
     $adb->disconnect();
     exit 1;
