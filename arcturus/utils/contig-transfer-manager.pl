@@ -151,15 +151,15 @@ $action = 'list' unless $action;
 
 if ($action eq 'transfer') {
 # check on project and contig identifiers
-    unless ($project || $focpn) {
+    unless ($project || defined($focpn)) {
         &showUsage("Missing project ID or projectname",0,$action);
     }
 
-    unless ($contig || $focn || $focpn) {
+    unless ($contig || defined($focn) || defined($focpn)) {
         &showUsage("Missing contig identifier or focn",0,$action);
     }
 
-    if ($focpn && ($project || $contig)) {
+    if (defined($focpn) && ($project || $contig)) {
         &showUsage("When using 'focpn' no contig or project can be specified ",0,$action);
     }
 
@@ -170,7 +170,7 @@ if ($action eq 'transfer') {
 }
 else {
 # focn may not be specified, but a contig ID is allowed
-    if ($focn || $focpn) {
+    if (defined($focn) || defined($focpn)) {
         &showUsage("Invalid key 'focn' or 'focpn' for '$action' action",0,$action);
     }
 }
@@ -205,7 +205,7 @@ if ($TESTMODE) {
 
 my ($cids,$ctophash,$pid);
 
-if ($focpn) {
+if (defined($focpn)) {
 
     $logger->info("Reading from file $focpn");
 
@@ -218,13 +218,13 @@ if ($focpn) {
 	unless (&getCachedProject($adb,$project,$assembly)) {
 # invalid project/assembly specification (all cases); abort
             $adb->disconnect();
-            &showUsage("Unknown project $project specified on file $focpn",0,$action);
+            &showUsage("Unknown project '$project' specified on file $focpn",0,$action);
             exit 0;
 	}
     }
 }
 
-elsif ($contig || $focn) {
+elsif ($contig || defined($focn)) {
 
     $cids = &getContigIdentifiers($contig,$focn,$adb);
 }
@@ -239,7 +239,7 @@ if ($project) {
     unless ($Project) {
 # invalid project/assembly specification (all cases); abort
         $adb->disconnect();
-        &showUsage("Unknown project $project",0,$action);
+        &showUsage("Unknown project '$project'",0,$action);
         exit 0;
     }
 
@@ -645,12 +645,12 @@ exit 0;
 sub getContigIdentifiers {
 # ad hoc routine, returns contig IDs specified with $contig, $focn or both
     my $contig = shift; # contig ID, name or comma-separated list of these
-    my $focn = shift; # filename
+    my $focn = shift; # filename, can be 0 for STDIN
     my $adb = shift; # database handle
 
     my @contigs;
 
-    if ($contig || $focn) {
+    if ($contig || defined($focn)) {
 # get contig identifiers in array
         if ($contig && $contig =~ /\,/) {
             @contigs = split /\,/,$contig;
@@ -659,9 +659,9 @@ sub getContigIdentifiers {
             push @contigs,$contig;
         }
 # add possible info from file with names
-        if ($focn) {
-            $focn = &getNamesFromFile($focn);
-            push @contigs,@$focn;
+        if (defined($focn)) {
+            my $names = &getNamesFromFile($focn);
+            push @contigs,@$names;
         }
     }
 
@@ -738,11 +738,20 @@ sub getNamesFromFile {
     my $file = shift; # file name
     my $ncol = shift || 1;
 
-    &showUsage("File $file does not exist") unless (-e $file);
+# open a file handle if a filename is provided, else open STDIN
+    
+    my $FILE;
 
-    my $FILE = new FileHandle($file,"r");
+    if ($file) {
 
-    &showUsage("Can't access $file for reading") unless $FILE;
+        &showUsage("File $file does not exist") unless (-e $file);
+        $FILE = new FileHandle($file,"r");
+        &showUsage("Can't access $file for reading") unless $FILE;
+    }
+    else{
+	$FILE = *STDIN;
+        $file = 'STDIN'; # for reporting
+    }
 
     my $cids = [];
     my $hash = {};
