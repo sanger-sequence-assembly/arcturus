@@ -3,4 +3,6 @@
 set basedir=`dirname $0`
 source ${basedir}/setup.csh
 
+unsetenv DISPLAY
+
 java ${JAVA_OPTS} CalculateConsensus $*
