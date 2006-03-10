@@ -5,7 +5,7 @@ import java.util.*;
 import javax.naming.*;
 import javax.naming.directory.*;
 import javax.swing.ImageIcon;
-
+import java.awt.GraphicsEnvironment;
 
 public class PeopleManager {
     protected static DirContext ctx = null;
@@ -111,10 +111,10 @@ public class PeopleManager {
 	    if (dept != null)
 		person.setDepartment(dept);
 	    
-	    ImageIcon icon = getIconAttribute(result, "jpegphoto");
+	    //ImageIcon icon = getIconAttribute(result, "jpegphoto");
 	    
-	    if (icon != null)
-		person.setPhotograph(icon);
+	    //if (icon != null)
+	    //person.setPhotograph(icon);
 	}
 
 	return person;
@@ -139,6 +139,9 @@ public class PeopleManager {
 
     private static ImageIcon getIconAttribute(Attributes attrs, String key) {
 	try {
+	    if (GraphicsEnvironment.isHeadless())
+		return null;
+
 	    Attribute attr = attrs.get(key);
 
 	    if (attr == null)
