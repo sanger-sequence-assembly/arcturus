@@ -86,7 +86,7 @@ $logger->info("Database $URL opened succesfully");
 unless ($adb->userCanCreateProject()) {
 # also tests if the user actually is known to this organism database 
     $logger->severe("Sorry, but you cannot create a new project "
-                  ."on this $organism database");
+                   ."on this $organism database");
     $adb->disconnect();
     exit 1;
 }
@@ -135,7 +135,9 @@ if ($pid) {
 }
 else {
     $logger->severe("FAILED to add new project $projectname");
-    $logger->warning("Check if user '$owner' exists") if defined $owner;
+    if (defined($owner)) {
+        $logger->warning("Check if the intended owner user '$owner' exists");
+    }
 }
 
 $adb->disconnect();
