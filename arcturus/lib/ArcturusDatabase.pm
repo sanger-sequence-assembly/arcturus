@@ -187,6 +187,8 @@ sub userCanCreateProject {
 
 # require an exact match of the user name
 
+    return undef unless @$userdatahash;
+
     return undef unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_create_new_project} eq 'Y' ? 1 : 0);
@@ -204,6 +206,8 @@ sub userCanAssignProject {
 
 # require an exact match of the user name
 
+    return undef unless @$userdatahash;
+
     return undef unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_assign_project} eq 'Y' ? 1 : 0);
@@ -220,6 +224,8 @@ sub userCanMoveAnyContig {
     my $userdatahash = &fetchUserData($this->getConnection(),$user);
 
 # require an exact match of the user name
+
+    return undef unless @$userdatahash;
 
     return undef unless ($userdatahash->[0]->{username} eq $user); 
 
@@ -241,6 +247,9 @@ sub userCanGrantPrivilege {
 # require an exact match of the user name
 
 #print STDOUT "testing privilege of user $user : $userdatahash->[0]->{can_grant_privileges}\n";
+
+    return undef unless @$userdatahash;
+
     return undef unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_grant_privileges} eq 'Y' ? 1 : 0);
@@ -332,6 +341,8 @@ sub deleteUser {
 sub getUserData {
 # public interface to retrieve user data hash list
     my $this = shift;
+
+    die "getUserData expects at most one parameter" if (@_ > 1);
 
     undef @_ unless $_[0]; # to set the array length to 0
 
