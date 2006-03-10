@@ -1005,7 +1005,7 @@ sub getContigIDsForProject {
     my $this = shift;
     my $project = shift; # project instance
 
-    &testParamaterType($project,'Project','getContigIDsForProject');
+    &testParameterType($project,'Project','getContigIDsForProject');
 
 # return reference to array of contig IDs and locked status
 
@@ -1018,7 +1018,7 @@ sub checkOutContigIDsForProject {
     my $this = shift;
     my $project = shift; # project instance
 
-    &testParamaterType($project,'Project','checkOutContigIDsForProject');
+    &testParameterType($project,'Project','checkOutContigIDsForProject');
 
 # acquire lock before exporting the contig IDs
 
