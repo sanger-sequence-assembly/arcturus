@@ -467,7 +467,7 @@ sub putContig {
 print STDERR "putContig: line 449 assignContigToProject "
            .  $project->getProjectName()."\n";
 # what about message? get project allocated for contig, test if pid changed
-                    $this->assignContigToProject($previous,$project,1);
+                    $this->assignContigToProject($previous,$project);
                     $project->addContigID($contigid);
                 }
 
@@ -605,7 +605,8 @@ print STDERR "putContig: line 449 assignContigToProject "
 # and assign the contig to the specified project
 
     if ($project) {
-        my ($success,$msg) = $this->assignContigToProject($contig,$project,1);
+        my ($success,$msg) = $this->assignContigToProject($contig,$project,
+                                                            unassigned=>1);
         $message .= "; assigned to project ";
         $message .=  $project->getProjectName() if $success;
         $message .= "ID = 0" unless $success;
