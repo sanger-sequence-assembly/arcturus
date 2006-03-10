@@ -111,10 +111,10 @@ public class PeopleManager {
 	    if (dept != null)
 		person.setDepartment(dept);
 	    
-	    //ImageIcon icon = getIconAttribute(result, "jpegphoto");
+	    ImageIcon icon = getIconAttribute(result, "jpegphoto");
 	    
-	    //if (icon != null)
-	    //person.setPhotograph(icon);
+	    if (icon != null)
+	    person.setPhotograph(icon);
 	}
 
 	return person;
