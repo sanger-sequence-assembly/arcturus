@@ -328,6 +328,7 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
 
 # get request IDs for input parameter options
 
+    $options{orderby} = 'reviewed';
     my $full = ($action eq 'longlist' ? 1 : 0);
     my $requestsfound = $adb->getContigTransferRequestIDs($full,%options);
 
@@ -596,8 +597,8 @@ elsif ($action eq 'execute') {
 # ok, the operation is authorized
 
         $pid = $rd->{new_project_id};
-# pass the cid on as refernce to an array of (length 1)
-       ($status,$report) = $adb->assignContigIDsToProjectID([($cid)],$pid,1);
+# pass the cid on as reference to an array of (length 1)
+       ($status,$report) = $adb->assignContigIDsToProjectID([($cid)],$pid);
 # replace pid by (new) project name
         $pid = $new_project->getProjectName() if $new_project;
 
