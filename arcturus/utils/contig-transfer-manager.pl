@@ -23,6 +23,12 @@ my $owner;
 my $request;
 my $openproject = 'BIN,TRASH';
 my $newoproject;
+
+my $before;
+my $after;
+my $since;
+my $truncate;
+
 my $confirm;
 my $force;
 my $comment;
@@ -41,9 +47,9 @@ my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe"
 my $validKeys = "organism|instance|$actions|"
               . "contig|c|focn|project|p|focpn|assembly|a|openproject|"
               . "user|u|owner|o|request|r|comment|"
-              . "list|longlist|ll|"
+              . "list|longlist|ll|before|after|since|truncate|trun|full|"
               . "help|h|s|"
-              . "confirm|commit|force|preview|test|verbose";
+              . "confirm|commit|force|preview|pre|test|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -105,11 +111,18 @@ $user        = shift @ARGV  if ($nextword eq '-u');    # ?
     $request     = shift @ARGV  if ($nextword eq '-r');
 
     $comment     = shift @ARGV  if ($nextword eq '-comment');
+    $truncate    = 0            if ($nextword eq '-comment');
 
     if ($newoproject && $nextword eq '-openproject') {
         die "You can't re-define open projects";
     }
     $newoproject = shift @ARGV  if ($nextword eq '-openproject');
+
+    $before      = shift @ARGV  if ($nextword eq '-before');
+
+    $after       = shift @ARGV  if ($nextword eq '-after');
+
+    $since       = shift @ARGV  if ($nextword eq '-since');
 
     $verbose     = 1            if ($nextword eq '-verbose');
  
@@ -117,6 +130,11 @@ $user        = shift @ARGV  if ($nextword eq '-u');    # ?
     $confirm     = 1            if ($nextword eq '-commit'  && !defined($confirm));
 
     $confirm     = 0            if ($nextword eq '-preview');
+    $confirm     = 0            if ($nextword eq '-pre');
+
+    $truncate    = 1            if ($nextword eq '-truncate');
+    $truncate    = 1            if ($nextword eq '-trun');
+    $truncate    = 0            if ($nextword eq '-full');
 
     $force       = 1            if ($nextword eq '-force');
 
@@ -147,6 +165,18 @@ $action = 'list' unless $action;
 
 &showUsage("Missing database instance",0,$action) unless $instance;
 
+&testdateformat($before) if $before;
+
+&testdateformat($after)  if $after;
+
+if ($since) {
+    $since = lc($since);
+    &testdateformat($since) unless ($since eq 'today' 
+                                or  $since eq 'yesterday'
+                                or  $since eq 'week'
+                                or  $since eq 'month');
+}
+
 # contig identifier is mandatory for 'transfer', optional otherwise
 
 if ($action eq 'transfer') {
@@ -167,7 +197,10 @@ if ($action eq 'transfer') {
     if ($user || $owner || $request) {
         $logger->warning("Redundant keyword(s) ignored");
     }
-}
+    if ($action !~ /list/ && ($before || $after || $since)) {
+        $logger->warning("Redundant time specification ignored");
+    }
+ }
 else {
 # focn may not be specified, but a contig ID is allowed
     if (defined($focn) || defined($focpn)) {
@@ -315,6 +348,9 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
     $options{contig_id} = $contig if $contig;
     $options{projectids} = $pid if $pid;
     $options{request_id} = $request if $request;
+    $options{before} = $before if $before;
+    $options{after}  = $after  if $after;
+    $options{since}  = $since  if $since;
 
     unless ($options{projectids}) {
 # default selection of projects to be used
@@ -328,7 +364,7 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
 
 # get request IDs for input parameter options
 
-    $options{orderby} = 'reviewed';
+    $options{orderby} = 'reviewed desc,request_id desc';
     my $full = ($action eq 'longlist' ? 1 : 0);
     my $requestsfound = $adb->getContigTransferRequestIDs($full,%options);
 
@@ -339,8 +375,9 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
     my $header;
     my $linemode = 1;
     if ($requestsfound && @$requestsfound > 1) {
-        $header = " ID  contig         projects         owner    created  "
-                . "     reviewed          by       status  comments";
+        $header = " ID  contig         projects          owner    created  "
+                . "       reviewed          by     status  ";
+        $header .= "comments" unless $truncate;
     }
     elsif ($requestsfound && @$requestsfound == 1) {
         $linemode = 0;
@@ -374,10 +411,11 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
                 $comment .= " by $rd->{reviewer}" if ($rd->{reviewer} ne $user);
 	    }
 #            my $line = sprintf("%3d %7d %2d > %-2d %6s %19s %19s %6s %10s %-40s",
-            my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s  %-40s",
+            my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s",
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
         	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
-	               $rd->{reviewed},$rd->{reviewer},$rd->{status},$comment);
+	               $rd->{reviewed},$rd->{reviewer},$rd->{status});
+            $line .= sprintf("  %-40s",$comment) unless $truncate;
             $logger->warning($line);
 	}
         else {
@@ -642,6 +680,12 @@ exit 0;
 #------------------------------------------------------------------------
 # subroutines (ad hoc for this script only)
 #------------------------------------------------------------------------
+sub testdateformat {
+    my $date = shift;
+    unless ($date =~ /^\d{4}\-\d{2}-\d{2}$/) {
+        &showUsage("Invalid date specification $date (use YYYY-MM-DD)");
+    }
+}
 
 sub getContigIdentifiers {
 # ad hoc routine, returns contig IDs specified with $contig, $focn or both
@@ -1292,6 +1336,11 @@ sub showUsage {
             print STDERR "\n";
             print STDERR "-commit\t\t(no value) to execute the selected request(s)\n";
 	}
+        else { # specific for listing
+            print STDERR "-before\t\tdate of last review\n";
+            print STDERR "-after\t\tdate of last review\n";
+            print STDERR "-since\t\tcreation date or :today, yesterday, week\n";
+        }
     }
     print STDERR "\n" if $code;
     print STDERR "Parameter input ERROR: ** $code **\n" if $code; 
