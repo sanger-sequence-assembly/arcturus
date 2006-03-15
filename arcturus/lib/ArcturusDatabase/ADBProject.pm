@@ -453,7 +453,7 @@ sub linkContigIDsToProjectID {
     my $user = shift;
     my $contig_ids = shift || return undef; # array ref
     my $project_id = shift || return undef;
-    my $unassigned = shift;
+    my $unassigned = shift; # true to accept only if current project ID is 0
 
 # protect against an empty list
 
@@ -716,7 +716,7 @@ sub getContigTransferRequestIDs {
 
 # if $options{status} is defined use $full = 1; else defaults are used
 # invalid column names result in a failed query message generated in method
-# findContigTransferRequestIDs
+# findContigTransferRequestIDs; perhaps testing those names here?
 
     $options{status} = 'pending,approved' unless $full;
     $options{status} = 'cancelled,done,failed,refused' if ($full && $full != 1);
@@ -883,18 +883,42 @@ sub findContigTransferRequestIDs {
 	    push @clause, "$key in ('$option{$key}')";
             next;
         }
-# special cases: before,after (creation date), request_id
+# special cases: before,after (last review date)
         if ($key eq 'before') {
-            $clause = "requested <= ?";
+            $clause = "reviewed <= ?";
         }
         elsif ($key eq 'after') {
-            $clause = "requested >= ?";
+            $clause = "reviewed >= ?";
+	}
+# special case: since (creation date)
+        elsif ($key eq 'since') {
+            my $date = lc($option{$key});
+            if ($date eq 'today') {
+                push @clause, "opened >= curdate()";
+                next;
+            }
+            elsif ($date eq 'yesterday') {
+                push @clause, "opened >= adddate(curdate(),INTERVAL -1 DAY)";
+                next;
+	    }
+            elsif ($date eq 'week') {
+                push @clause, "opened >= adddate(curdate(),INTERVAL -7 DAY)";
+                next;
+	    }
+            elsif ($date eq 'month') {
+                push @clause, "opened >= adddate(curdate(),INTERVAL -31 DAY)";
+                next;
+	    }
+            $clause = "opened >= ?"; # defaults to 'after'
 	}
         elsif ($key eq 'request_id' || $key eq 'request') {
             $clause = "request_id = ?";
 	}
         elsif ($key eq 'contig_id' || $key eq 'contig') {
             $clause = "contig_id = ?";
+	}
+        elsif ($key eq 'orderby') {
+            next;
 	}
 	else {
             $clause = "$key = ?";
@@ -909,6 +933,8 @@ sub findContigTransferRequestIDs {
     my $query = "select request_id from CONTIGTRANSFERREQUEST";
 
     $query .= " where ".join (' and ',@clause) if @clause;
+
+    $query .= " order by $option{orderby}" if $option{orderby};
 
     my $sth = $dbh->prepare_cached($query);
 
