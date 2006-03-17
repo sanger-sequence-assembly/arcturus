@@ -740,12 +740,16 @@ sub linkToContig {
     return undef unless $compare->hasMappings();
 
 # make the comparison using sequence ID; start by getting an inventory of $this
+# we build a hash on sequence ID values & one for back up on mapping(read)name
 
-    my $sequence = {};
-    my $mappings = $this->getMappings();
-    foreach my $mapping (@$mappings) {
-        my $key = $mapping->getSequenceID();
-        $sequence->{$key} = $mapping if $key;
+    my $sequencehash = {};
+    my $readnamehash = {};
+    my $lmappings = $this->getMappings();
+    foreach my $mapping (@$lmappings) {
+        my $seq_id = $mapping->getSequenceID();
+        $sequencehash->{$seq_id} = $mapping if $seq_id;
+        $seq_id = $mapping->getMappingName();
+        $readnamehash->{$seq_id} = $mapping if $seq_id;
     }
 
 # make an inventory hash of (identical) alignments from $compare to $this
@@ -755,18 +759,60 @@ sub linkToContig {
     my $accumulate = {};
     my $deallocated = 0;
     my $overlapreads = 0;
-    $mappings = $compare->getMappings();
-    foreach my $mapping (@$mappings) {
-        my $key = $mapping->getSequenceID();
-        unless (defined($key)) {
+    my $cmappings = $compare->getMappings();
+    foreach my $mapping (@$cmappings) {
+        my $oseq_id = $mapping->getSequenceID();
+        unless (defined($oseq_id)) {
             print STDOUT "Incomplete Mapping ".$mapping->getMappingName."\n";
-            return undef; # abort: incomplete Mapping; should never occur
+            return undef; # abort: incomplete Mapping; should never occur!
         }
-        my $match = $sequence->{$key};
-        unless (defined($match)) {
-# the read in the parent is missing in this contig
-            $deallocated++; # should be more discriminate in case of split parent
-            next;
+        my $sequencematch = $sequencehash->{$oseq_id};
+        unless (defined($sequencematch)) {
+# the read in the parent is not identified in this contig; this can be due
+# to several causes: the most likely ones are: 1) the read is deallocated
+# from the previous assembly, or 2) the read sequence was edited and hence
+# its seq_id has been changed and thus is not recognized in the parent; 
+# we can decide between these cases by looking at the readnamehash
+            my $readname = $mapping->getMappingName();
+            my $readnamematch = $readnamehash->{$readname};
+            unless (defined($readnamematch)) {
+# it's a de-allocated read, except possibly in the case of a split parent
+                $deallocated++; 
+                next;
+	    }
+# ok, the readnames match, but the sequences not: its a (new) edited sequence
+# we now use the align-to-trace mapping between the sequences and the original
+# trace file in order to find the contig-to-contig alignment defined by this read 
+            my $eseq_id = $readnamematch->getSequenceID(); # (newly) edited sequence
+# check the existence of the database handle in order get at the read versions
+            unless ($this->{ADB}) {
+		print STDERR "Unable to recover C2C link: missing database handle\n";
+		next;
+            }
+# get the versions of this read in a hash keyed on sequence IDs
+            my $reads = $this->{ADB}->getAllVersionsOfRead(readname=>$readname);
+# test if both reads are found, just to be sure
+            unless ($reads->{$oseq_id} && $reads->{$eseq_id}) {
+		print STDERR "Cannot recover sequence $oseq_id or $eseq_id "
+                           . "for read $readname\n";
+		next;
+	    }
+# pull out the align-to-SCF as mappings
+            my $omapping = $reads->{$oseq_id}->getAlignToTraceMapping(); # original
+            my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited
+#****
+#        - find the proper chain of multiplication to get the new mapping 
+print STDOUT "Missing match for sequence ID $oseq_id\n"; 
+print STDOUT "But the readnames do match : $readname\n";
+print STDOUT "sequences: parent $oseq_id   child (edited) $eseq_id\n";
+print STDOUT "original Align-to-SCF:".$omapping->toString();
+print STDOUT "edited   Align-to-SCF:".$emapping->toString();
+#        - assign this new mapping to $sequencematch
+	    $sequencematch = $readnamematch;
+# to be removed later
+            next if (@$lmappings>1 && @$cmappings>1);
+print STDOUT "sequences equated to one another (temporary fix)\n";
+#****
         }
 # count the number of reads in the overlapping area
         $overlapreads++;
@@ -775,7 +821,7 @@ sub linkToContig {
 
         if ($options{strong}) {
 # strong comparison: test for identical mappings (apart from shift)
-            my ($identical,$aligned,$offset) = $match->isEqual($mapping);
+            my ($identical,$aligned,$offset) = $sequencematch->isEqual($mapping);
 
 # keep the first encountered (contig-to-contig) alignment value != 0 
 
@@ -797,8 +843,10 @@ sub linkToContig {
 
         else {
 # return the mapping as a Mapping object
-            $mapping = $match->compare($mapping);
+            $mapping = $sequencematch->compare($mapping);
             my $aligned = $mapping->getAlignment();
+
+print STDOUT "Mapping between reads:".$mapping->toString() if $DEBUG;
 
             next unless defined $aligned; # empty cross mapping
 
@@ -828,7 +876,7 @@ sub linkToContig {
 
 # OK, here we have an inventory: the number of keys equals the number of 
 # different alignments between $this and $compare. On each key we have an
-# array of arrays with the individual mappings data. For each alignment we
+# array of arrays with the individual mapping data. For each alignment we
 # determine if the covered interval is contiguous. For each such interval
 # we add a (contig) Segment alignment to the output mapping
 # NOTE: the table can be empty, which occurs if all reads in the current Contig
@@ -837,13 +885,15 @@ sub linkToContig {
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
 
+print STDOUT "mapping between contigs:".$mapping->toString() if $DEBUG;
+
 # determine guillotine; accept only alignments with a minimum number of reads 
 
     my $guillotine = 0;
     if ($options{readclipping}) {
-        $guillotine = 1 + log(scalar(@$mappings)); 
+        $guillotine = 1 + log(scalar(@$cmappings)); 
 # adjust for small numbers (2 and 3)
-        $guillotine -= 1 if ($guillotine > scalar(@$mappings) - 1);
+        $guillotine -= 1 if ($guillotine > scalar(@$cmappings) - 1);
         $guillotine  = 2 if ($guillotine < 2); # minimum required
     }
 
@@ -980,6 +1030,8 @@ print STDOUT "bad contig range: @badmap\n" if $DEBUG;
 
     @c2csegments = sort {$a->[0] <=> $b->[0]} @c2csegments;
 
+print STDOUT scalar(@c2csegments)." segments; before pruning\n" if $DEBUG;
+
     my $j =1;
     while ($j < @c2csegments) {
         my $i = $j - 1;
@@ -1019,7 +1071,7 @@ print STDOUT "bad contig range: @badmap\n" if $DEBUG;
 	}
     }
 
-#print STDOUT scalar(@c2csegments)." segements; before filter\n" if $DEBUG;
+print STDOUT scalar(@c2csegments)." segments after pruning\n" if $DEBUG;
 
 # enter the segments to the mapping
 
