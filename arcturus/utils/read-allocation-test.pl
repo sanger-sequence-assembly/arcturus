@@ -26,11 +26,18 @@ my $validKeys  = "organism|instance|verbose|debug|trash|mark|repair|project|"
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
-    }                                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
+        &showUsage("Invalid keyword '$nextword'");
+    }
+                                                                           
+    if ($nextword eq '-instance') {
+        &showUsage("You can't re-define instance") if $instance;
+        $instance = shift @ARGV;
+    }
       
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-organism') {
+        &showUsage("You can't re-define organism") if $organism;
+        $organism = shift @ARGV; 
+    }
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -69,19 +76,19 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing database instance") unless $instance;
+&showUsage("Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'");
 }
 
-&showUsage(0,"Missing database instance") unless $instance;
+&showUsage("Missing database instance") unless $instance;
 
 $logger->info("Database ".$adb->getURL." opened succesfully");
 
@@ -123,7 +130,7 @@ if ($repair <= 1) {
     $trashproject = shift @$projects;   
     $trashprojectid = $trashproject->getProjectID();
     $trashprojectname = $trashproject->getProjectName();
-    $logger->warning("Project $trashprojectname ($trashprojectid) used for repair mode");
+    $logger->warning("Project $trashprojectname ($trashprojectid) used for recover mode");
 }
 
 #----------------------------------------------------------------
@@ -157,9 +164,9 @@ foreach my $read (sort {$a <=> $b} keys %$hashlist) {
 
 $logger->skip if $n;
 
-# test each contig to parent link; 
-# in repair mode put offending contig in TRASH: this moves the contig out
-# of the projects, which will be clean. However, if wanted you can restore
+# test each contig to parent link; in default recover mode
+# put offending contig in TRASH: this moves the contig out of the projects,
+# which will then be clean. However, if wanted you can restore
 # the link and move the contig back into its project by hand afterwards
 
 foreach my $contig (sort {$a <=> $b} keys %$link) {
@@ -229,8 +236,9 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
         if ($nr <= 1 && $delete) {
             unless ($confirm) {
                 $logger->warning("Single-read parent contig "
-                                . $parent->getParentID()
-				 . " will be deleted in repair mode");
+                                . $parent->getContigID()
+				. " will be deleted in recover mode");
+	        $logger->warning("repeat command with '-confirm' switch");
                 next;
             }
 # delete the contig
@@ -251,26 +259,26 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
         elsif ($repair <= 1) {
 # move the offending parent contig to the trash project
             $logger->warning("Contig $parent_id will be allocated to "
-		   	   . "project $trashprojectname in repair mode");
+		   	   . "project $trashprojectname in recover mode");
             unless ($confirm) {
 	        $logger->warning("repeat command with '-confirm' switch");
                 next;
 	    }
 # move contig to trash project
-            my ($status,$msg) = $adb->assignContigToProject($parent,$trashproject,1);
+            my ($status,$msg) = $adb->assignContigToProject($parent,$trashproject);
             $logger->warning("status $status: $msg");
 	}
 
         elsif ($repair == 2) {
-# set the 'current' flag in the CONTIG table
+# move the contig out of the current generation by making it a parent of contig 0
             if ($markedparents{$parent_id}++) {
                 $logger->warning("Contig $parent_id has been processed earlier");
                 next;
             }
             $logger->warning("Contig $parent_id will be marked as not belonging to "
-		   	   . "the current generation in repair mode");
+		   	   . "the current generation in recover mode");
             unless ($confirm) {
-	        $logger->warning("repeat command with '-confirm' switch");
+	        $logger->warning("repeat with '-confirm' switch");
                 next;
 	    }
 
@@ -283,7 +291,7 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
         elsif ($repair == 3) {
 # restore the link from $contig to $parent
             $logger->warning("The link to parent contig $parent_id will be added to "
-		   	   . "the database in repair mode");
+		   	   . "the database in recover mode");
             unless ($confirm) {
 	        $logger->warning("repeat command with '-confirm' switch");
                 next;
@@ -313,15 +321,19 @@ sub showUsage {
 
     print STDERR "\nList multiple allocated reads in the current assembly\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
-    print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
+
+    unless ($organism && $instance) {
+        print STDERR "\n";
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-organism\tArcturus database name\n" unless $organism;
+        print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    }
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-repair\t\t(no value) if multiple allocations, repair links\n";
+    print STDERR "\t\trepair requires the -confirm switch to have the effect\n";
     print STDERR "-trash\t\t(no value) if multiple allocations, assign offending\n";
     print STDERR "\t\tparent to trash project (default TRASH)\n";
     print STDERR "-project\tdefine the trash project explicitly\n";
@@ -333,6 +345,8 @@ sub showUsage {
 
 #    print STDERR "-confirm\t(no value) confirm changes to database\n";
     print STDERR "-verbose\t(no value) \n";
+    print STDERR "\n";
+    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
