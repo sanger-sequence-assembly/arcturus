@@ -156,7 +156,7 @@ sub getAlignToTraceMapping {
 
     my $alignToTrace = $this->getAlignToTrace();
 
-    my $mapping = new Mapping();
+    my $mapping = new Mapping($this->getReadName());
 
     if ($alignToTrace && @$alignToTrace) {
         foreach my $segment (@$alignToTrace) {
