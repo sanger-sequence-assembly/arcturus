@@ -60,7 +60,7 @@ endif
 
 # get trash project name, if any
 
-set repair = mark
+set repair = trash
 
 set trashproject = TRASH
 
