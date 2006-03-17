@@ -377,7 +377,25 @@ sub getRead {
     }
 }
 
-# aliases
+sub getAllVersionsOfRead {
+# returns a hash of Read instances keyed on sequence ID for a single read
+    my $this = shift;
+    my %options = @_;
+
+# note: a 'version' option specification is ignored; use getRead or getReads instead
+
+    my $reads = {};
+    for (my $version = 0 ; ; $version++) {
+        my $read = $this->getRead(version=>$version,%options);
+        last unless $read;
+        my $seq_id = $read->getSequenceID();
+        $reads->{$seq_id} = $read;
+    }
+
+    return $reads; # returns a hash
+}
+
+# aliases, taking parameters as values to be used
 
 sub getReadBySequenceID {
     my $this = shift;
@@ -570,19 +588,30 @@ sub getReads{
         push @constraints, "read_id <= $options{ridend}";
     }
 
-# process possible TAG selection (if none, version 0 is to be used)
+# process possible TAG selection (if none, version 0 is to be used), which
+# implicitly selects on version because tags are put on sequence
 
     my @linkconstraints;
     my $additionaltable = '';
     if ($options{tagtype} || $options{tagname}) {
+# for tag type or tag name add link to READTAG table
         $options{tagtype} =~ s/\,/','/ if $options{tagtype}; # used in "in" clause
         push @constraints, "tagtype in ('$options{tagtype}')" if $options{tagtype};
         push @linkconstraints, "SEQ2READ.seq_id = READTAG.seq_id";
         $additionaltable .= ",READTAG";
+# for tag name add link to the TAGSEQUENCE table as well (TO BE TESTED)
+#       if ($options{tagname}) {
+#            $options{tagname} =~ s/\,/','/; # to use in "in" clause
+#            push @constraints,"tagseqname in ('$options{tagname}')";
+#            push @linkconstraints, "READTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id";
+#            $additionaltable .= ",TAGSEQUENCE";
+#        }
     }
     else {
 # retrieve version 0 (un-edited reads only, the raw data)
-       push @constraints,"version = 0";
+        push @constraints,"version = 0";
+# possibly here version selection? TO BE TESTED
+#        push @constraints,"version = ".($options{version} || 0);
     }
     if ($options{tagname}) {
         $options{tagname} =~ s/\,/','/; # to use in "in" clause
@@ -2625,7 +2654,7 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 }
 
 sub getTagSequenceIDsForTags {
-# use as private (generic) method only
+# private (generic) method only
     my $dbh = shift;
     my $tags = shift;
     my $autoload = shift; # of missing tag names and sequences
