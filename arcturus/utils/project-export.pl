@@ -105,6 +105,8 @@ while (my $nextword = shift @ARGV) {
 }
 
 &showUsage("Invalid data in parameter list") if @ARGV;
+&showUsage("Sorry, padded option not yet operational") if $padded; # to be removed later
+
 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -361,7 +363,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
-    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
+#    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
     print STDERR "-readsonly\t(no value) export only reads in fasta output\n";
     print STDERR "\n";
     print STDERR "Default setting exports all contigs in project\n";

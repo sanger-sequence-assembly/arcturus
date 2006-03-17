@@ -94,6 +94,8 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
  
+&showUsage("Sorry, padded option not yet operational") if $padded;
+
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
