@@ -2493,18 +2493,18 @@ sub getReadTagsForSequenceIDs {
 }
 
 sub getTagsForSequenceIDs {
-# use as private (generic) method only
+# use as private method only
     my $dbh = shift;
     my $sequenceIDs = shift; # array of seq IDs
     my %options = @_;
 
-# compose query
+# compose query: use left join to retrieve data also if none in TAGSEQUENCE
 
     my $excludetags = $options{excludetags};
 #    $excludetags =~ s/\W+/,/g if $excludetags; # replace any separator by ',' 
 
     my $items = "seq_id,tagtype,pstart,pfinal,strand,comment,"
-              . "tagseqname,sequence";
+              . "tagseqname,sequence,TAGSEQUENCE.tag_seq_id";
 
     my $query = "select $items from READTAG left join TAGSEQUENCE"
               . " using (tag_seq_id)"
@@ -2532,6 +2532,7 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
         $tag->setTagComment      (shift @ary); # comment
         $tag->setTagSequenceName (shift @ary); # tagseqname
         $tag->setDNA             (shift @ary); # sequence
+	$tag->setTagSequenceID   (shift @ary); # tag sequence identifier
 # add to output array
         push @tag, $tag;
     }
@@ -2600,6 +2601,9 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
     @sids = sort {$a <=> $b} keys(%$readlist);
 
+    my %isequaloptions = (ignoreblankcomment=>1);
+    $isequaloptions{ignorenameofpattern} = "oligo\\_m\\w+";
+
     while ($scounter < @sids && $tcounter < @$existingtags) {
  
 	my $etag = $existingtags->[$tcounter];
@@ -2621,7 +2625,7 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
                 if ($ignore->{$rtag}) {
                     next;
                 }
-                elsif ($rtag->isEqual($etag,ignoreblankcomment=>1)) {
+                elsif ($rtag->isEqual($etag,%isequaloptions)) {
                     $ignore->{$rtag}++;
                     next;
                 }
@@ -2654,6 +2658,112 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 }
 
 sub getTagSequenceIDsForTags {
+# private (generic) method only
+    my $dbh = shift;
+    my $tags = shift;
+    my $autoload = shift; # of missing tag names and sequences
+
+    my $tagIDhash = {};
+
+    return $tagIDhash unless ($tags && @$tags); # return empty hash
+
+# get tag_seq_id using tagseqname for link with the TAGSEQUENCE reference list
+
+    my %tagdata;
+    foreach my $tag (@$tags) {
+        my $tagseqname = $tag->getTagSequenceName();
+        $tagdata{$tagseqname}++ if $tagseqname;
+    }
+
+# build the tag ID hash keyed on (unique) tag sequence name
+
+    if (my @tagseqnames = keys %tagdata) {
+
+        my $tagSQhash = {};
+
+# get tag_seq_id, tagsequence for tagseqnames
+
+        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
+	          . " where tagseqname = ?";
+# my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
+#           . " where tagseqname in ('".join("','",@tagseqnames)."')";
+
+        my $sth = $dbh->prepare_cached($query);
+
+        foreach my $tagseqname (@tagseqnames) {
+
+            $sth->execute($tagseqname) || &queryFailed($query,$tagseqname);
+
+            while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
+                $tagIDhash->{$tagseqname} = $tag_seq_id;
+                $tagSQhash->{$tagseqname} = $sequence;
+            }
+
+            $sth->finish();
+	}
+
+# test the sequence against the one specified in the tags
+
+        foreach my $tag (@$tags) {
+            my $tagseqname = $tag->getTagSequenceName();
+            next unless $tagseqname;
+	    my $sequence = $tag->getDNA();
+            if (!$tagIDhash->{$tagseqname}) {
+                print STDERR "Missing tag name $tagseqname ("
+                            . ($sequence || 'no sequence available')
+                            . ") in TAGSEQUENCE list\n";
+                next unless $autoload; # allow sequence to be null
+# add tag name and sequence, if any, to TAGSEQUENCE list
+	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
+         	if ($tag_seq_id) {
+                    $tagIDhash->{$tagseqname} = $tag_seq_id;                
+                    $tagSQhash->{$tagseqname} = $sequence if $sequence;
+                }
+            }
+# test for a possible mismatch of sequence with the one in the database
+            elsif ($sequence && $sequence ne $tagSQhash->{$tagseqname}) {
+# test if the sequence is already in the database for another name (with a query)
+                my $query = "select tag_seq_id,tagseqname,sequence"
+                          . "  from TAGSEQUENCE"
+	                  . " where sequence = '$sequence'";
+                my $sth = $dbh->prepare($query);  
+ 
+                $sth->execute() || &queryFailed($query);
+                while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
+                    $tagIDhash->{$tagseqname} = $tag_seq_id;
+                    $tagSQhash->{$tagseqname} = $sequence;
+                }
+                $sth->finish();
+                foreach my $name (keys %$tagSQhash) {
+                    next unless defined($tagSQhash->{$name});
+                    next unless ($tagSQhash->{$name} eq $sequence);
+                    $tag->setTagSequenceName($name); # replace
+                    $tagseqname = $name;
+                    last;
+		}
+# if the sequence was not found, then generate a new entry with a related name
+                unless ($sequence eq $tagSQhash->{$tagseqname}) {
+                    print STDERR "Tag sequence mismatch for tag $tagseqname : ".
+                       "(tag) $sequence  (taglist) $tagSQhash->{$tagseqname}\n";
+# generate a new tag sequence name by appending a random string
+                    my $randomnumber = int(rand(100)); # from 0 to 99
+                    $tagseqname .= sprintf ('n%02d',$randomnumber);
+# add tag name and sequence, if any, to TAGSEQUENCE list
+	            my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
+         	    if ($tag_seq_id) {
+                        $tagIDhash->{$tagseqname} = $tag_seq_id;                
+                        $tagSQhash->{$tagseqname} = $sequence if $sequence;
+                        $tag->setTagSequenceName($tagseqname); # replace
+                    }
+		}
+	    }
+# add the tag sequence ID to the tag object
+            $tag->setTagSequenceID($tagIDhash->{$tagseqname});
+        }
+    }
+}
+
+sub newgetTagSequenceIDsForTags {
 # private (generic) method only
     my $dbh = shift;
     my $tags = shift;
