@@ -45,6 +45,8 @@ my $list = 0;
 my $batch = 0;
 my $debug = 0;
 
+my $safemode = 0;
+
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
@@ -52,7 +54,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
                . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
-               . "frugal|padded|noload|verbose|batch|info|help|debug";
+               . "frugal|padded|noload|safemode|verbose|batch|info|help|debug";
 
 
 while (my $nextword = shift @ARGV) {
@@ -122,6 +124,8 @@ while (my $nextword = shift @ARGV) {
     $list             = 1            if ($nextword eq '-list');
 
     $batch            = 1            if ($nextword eq '-batch');
+
+    $safemode         = 1            if ($nextword eq '-safemode');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -845,6 +849,7 @@ $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
                           $origin eq 'Finishing Software');
  
 my $number = 0;
+my $lastinsertedcontig = 0;
 foreach my $identifier (keys %contigs) {
 
     last if ($noload && $notest);
@@ -905,6 +910,7 @@ foreach my $identifier (keys %contigs) {
     if ($added) {
 # what about tags? better in ADBContig
         delete $contigs{$identifier};
+        $lastinsertedcontig = $added;
     }
     else {
 #        $adb->clearLastContig();
@@ -965,7 +971,23 @@ elsif ($noload) {
 #        $adb->?
    }
 
+# read-back lastly inserted contig (meta data) to check on OS cache dump
 
+if ($lastinsertedcontig && $safemode) {
+# pause to be sure the OS cache of the server has emptied 
+# and the data have to be read back from disk.
+    sleep(10); 
+# readback the contig (or all contigs?)
+    my $contig = $adb->getContig(contig_id=>$lastinsertedcontig,
+                                 metadataonly=>1);
+# test project specification
+    if ($contig->getProjectID() > 0) {
+        $logger->severe("Safemode test PASSED");
+    }
+    else {      
+        $logger->severe("Safemode test FAILED");
+    }
+}
 
 # finally update the meta data for the Assembly and the Organism
 
@@ -1008,7 +1030,7 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
-my $DEBUG = 0; 
+my $DEBUG = 1; 
 print "decode_oligo_info  $info ($sequence) \n" if $DEBUG;
 
     my $change = 0;
@@ -1155,19 +1177,17 @@ sub cleanup_comment {
 
     my $changes = 0;
 
-# print STDOUT "CLEANUP: '$comment'\n" if ($comment =~ /3067|3076/);
-
     $changes = 1 if ($comment =~ s/^\s+|\s+$//g); # clip leading/trailing blanks
 
     $changes = 1 if ($comment =~ s/\s+(\\n\\)/$1/g); # delete blanks before \n\
+
+    $changes = 1 if ($comment =~ s/(\\n\\)\-(\\n\\)/-/g); # - between \n\
 
     $changes = 1 if ($comment =~ s/(\\n\\){2,}/\\n\\/g); # delete repeats
 
     $changes = 1 if ($comment =~ s/\\n\\\s*$//); # delete trailing newline
 
     $changes = 1 if ($comment =~ s?\\/?/?g);
-
-# print STDOUT "CLEANED: '$comment'\n" if ($comment =~ /3067|3076/);
 
     return $changes,$comment;
 }
