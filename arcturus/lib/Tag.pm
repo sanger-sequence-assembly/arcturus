@@ -97,10 +97,10 @@ sub setStrand {
     my $this = shift;
     my $strand = shift;
  
-    if ($strand eq 'Forward') {
+    if ($strand eq 'Forward' || $strand eq 'F') {
         $this->{strand} = +1;
     }
-    elsif ($strand eq 'Reverse') {
+    elsif ($strand eq 'Reverse' || $strand eq 'R') {
         $this->{strand} = -1;
     }
     else {
@@ -303,6 +303,8 @@ sub transposeDNA {
         $base =~ tr/ACGTacgt/TGCATGCA/;
         $output .= $base;
     }
+
+    return $output;
 }
 
 #----------------------------------------------------------------------
@@ -332,7 +334,9 @@ sub isEqual {
 # both comments defined
         unless ($this->getTagComment() eq $tag->getTagComment()) {
 # the tags may be different, do a more detailed comparison using a cleaned version
-            unless (&cleanup($this->getTagComment) eq &cleanup($tag->getTagComment)) {
+            my $itnop = $options{ignorenameofpattern}; # e.g.: oligo's
+            unless (&cleanup($this->getTagComment(),$itnop) 
+                 eq &cleanup( $tag->getTagComment(),$itnop)) {
    	        return 0;
             }
 	}
@@ -380,6 +384,7 @@ sub isEqual {
 sub cleanup {
 # private method cleanup comments 
     my $comment = shift;
+    my $itnop = shift; # special treatment for e.g. auto-generated oligo names
 
 # remove quotes, '\n\' and shrink blankspace into a single blank
 
@@ -387,6 +392,8 @@ sub cleanup {
     $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
     $comment =~ s/\\n\\/ /g; # replace by blank space
     $comment =~ s/\s+/ /g; # shrink blank space
+
+    $comment =~ s/^$itnop// if $itnop; # remove if present at begin
    
     return $comment;
 }
@@ -420,7 +427,7 @@ sub dump {
     my $FILE = shift; # optional file handle
 
     my $report = "Tag instance $tag\n";
-    $report .= "contig ID         ".($tag->getSequenceID() || 0)."\n";
+    $report .= "sequence ID       ".($tag->getSequenceID() || 0)."\n";
     $report .= "tag ID            ".($tag->getTagID()   || 'undef')."\n";
     my @position = $tag->getPosition();
     $report .= "position          '@position'\n";
