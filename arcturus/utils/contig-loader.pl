@@ -1030,7 +1030,7 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
-my $DEBUG = 1; 
+my $DEBUG = 0; 
 print "decode_oligo_info  $info ($sequence) \n" if $DEBUG;
 
     my $change = 0;
@@ -1065,7 +1065,7 @@ print "decode_oligo_info  $info ($sequence) \n" if $DEBUG;
     elsif ($info !~ /serial/ && $info =~ /[^\w\.]0(\d+)\b/) {
         $name = "o$1"; # correct typo 0 for o
     }
-    elsif ($info =~ /\b(o\w+)\b/) {
+    elsif ($info =~ /\b(o\w+)\b/ && $info !~ /\bover\b/i) {
 # the info contains a name like oxxxxx
         $name = $1;
     }
@@ -1094,7 +1094,7 @@ print "name $name (change $change) \n" if $DEBUG;
 
     foreach my $part (@info) {
         if ($part =~ /serial\#?\=?(.*)/) {
-            $name = $1;
+            $name = "o$1";
 # replace the serial field by the name, if it is defined
             if ($name =~ /\w/) {
                 $info =~ s/$part/$name/;
@@ -1135,13 +1135,15 @@ print STDOUT "now decoded info: $info ($name)\n";
         }
     }
 
-    $info =~ s/\\n\\\s*$name\s*$//; # chop off name at end, if any
+    $info =~ s/\\n\\\s*$name\s*$// if $name; # chop off name at end, if any
 
 # if the name is still blank,generate a random name (for later update by hand)
             
     unless ($name) {
         my $randomnumber = int(rand(1000)); # from 0 to 999 
         $name = sprintf('oligo_m%03x',$randomnumber);
+# THIS SHOULD BE REPLACED BY A PLACEHOLDER TO BE FILLED IN IN ADBRead Tagloader
+#       $name = '<preliminarytagname>';
     }
 
     if ($name) {
