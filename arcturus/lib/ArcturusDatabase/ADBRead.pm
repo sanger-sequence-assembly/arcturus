@@ -624,6 +624,8 @@ sub getReads{
 
     $constraints = join(" and ", @constraints) if @constraints;
 
+    $constraints .= " order by $options{orderby}" if $options{orderby};
+
     $constraints .= " limit $options{limit}" if $options{limit};
 
     return &getReadsForCondition($this,$constraints,$additionaltable);
@@ -2513,18 +2515,17 @@ sub getTagsForSequenceIDs {
 #?             . "   and tagtype not in ($excludetags) " if $excludetags;
               . " order by seq_id";
 
-print "getTagsForSequenceID: $query \n" if $DEBUG;
-
     my @tag;
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
+
 
     $sth->execute() || &queryFailed($query) && exit;
 
     while (my @ary = $sth->fetchrow_array()) {
 # create a new Tag instance
         my $tag = new Tag('readtag');
-
+# and define its contents
         $tag->setSequenceID      (shift @ary); # seq_id
         $tag->setType            (shift @ary); # tagtype
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
@@ -2538,8 +2539,6 @@ print "getTagsForSequenceID: $query \n" if $DEBUG;
     }
 
     $sth->finish();
-
-print "EXIT getTagsForSequenceIDs ".scalar(@tag)."\n" if $DEBUG;
 
     return [@tag];
 }
@@ -2602,7 +2601,7 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
     @sids = sort {$a <=> $b} keys(%$readlist);
 
     my %isequaloptions = (ignoreblankcomment=>1);
-    $isequaloptions{ignorenameofpattern} = "oligo\\_m\\w+";
+    $isequaloptions{ignorenameofpattern} = "oligo\\w+";
 
     while ($scounter < @sids && $tcounter < @$existingtags) {
  
@@ -2648,6 +2647,8 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
 # here we have a list of new tags which have to be loaded
 
+print "new tags to be loaded : ".scalar(@tags)."\n" if $DEBUG;
+
     return '0.0' unless @tags; # returns True for success but empty
 
     &getTagSequenceIDsForTags($dbh,\@tags,$options{autoload});
@@ -2678,6 +2679,8 @@ sub getTagSequenceIDsForTags {
 # build the tag ID hash keyed on (unique) tag sequence name
 
     if (my @tagseqnames = keys %tagdata) {
+
+print "tagseqnames: @tagseqnames to be identified\n" if $DEBUG; 
 
         my $tagSQhash = {};
 
@@ -2928,10 +2931,15 @@ sub putReadTags {
 sub putTagSequence {
 # public method add tagseqname and sequence to TAGSEQUENCE table
     my $this = shift;
+    my %options = @_;
+
+    my $tagseqname  = $options{tagseqname}  || return 0;
+
+    my $tagsequence = $options{tagsequence} || return 0;
 
     my $dbh = $this->getConnection();
 
-    return &insertTagSequence($dbh,@_); # transfer tagseqname & sequence
+    return &insertTagSequence($dbh,$tagseqname,$tagsequence,$options{update});
 }
 
 sub insertTagSequence {
@@ -2967,7 +2975,7 @@ sub insertTagSequence {
 
             $query = "update TAGSEQUENCE set sequence=?"
                    . " where tagseqname like ?"
-                   . " order by tagseqname limit 1";
+                   . " limit 1";
 
             $sth = $dbh->prepare_cached($query);
 
