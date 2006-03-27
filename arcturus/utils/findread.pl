@@ -11,11 +11,13 @@ my $nextword;
 my $instance;
 my $organism;
 my $history = 0;
+my $verbose = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
     $history = 1 if ($nextword eq '-history');
+    $verbose = 1 if ($nextword eq '-verbose');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -87,6 +89,9 @@ while (my $line = <STDIN>) {
     my $seqcount = 0;
 
     while (my ($readname,$seqid) = $stmt_read2seq->fetchrow_array()) {
+	print STDERR "Examining $readname (seq_id $seqid)\n" if $verbose;
+
+	$ctgcount = 0;
 	$seqcount++;
 
 	$stmt_seq2contig->execute($seqid);
