@@ -6,6 +6,8 @@ use ReadFactory;
 
 use Read;
 
+use Tag;
+
 use FileHandle;
 
 our (@ISA);
@@ -129,6 +131,7 @@ sub expFileFinder {
                 if ($include && defined($include->{$file})) {          
 # print "accepted: $file \n";
                    $this->addReadToList($file,"$dir/$file");
+                   last if (++$counted >= $limit);
                 }
                 elsif ($include) {
                     next;
@@ -213,6 +216,7 @@ sub expFileParser {
     my $record;
     my %item;
     my $chemistry;
+    my @readtaginfo;
     while (defined($record = <$READ>)) {
 
 # decode data in data file and test
@@ -308,8 +312,12 @@ sub expFileParser {
         }
 # treat tag info as a comment too
         elsif ($record =~ /^TG\s+(\S.*)$/) {
-            $read->addComment($1);
+            push @readtaginfo, $1;
         }
+# here NT is ignored
+        elsif ($record =~ /^NT/) {
+            next;
+	}
 
 # everything else is put in the temporary items hash; this includes 
 # sequencing and cloning vector data which have to be analysed afterwards
@@ -399,6 +407,29 @@ sub expFileParser {
     }
 # here chemistry should be defined
     $read->setChemistry($chemistry);
+
+# handle tag info, if any
+
+    if (@readtaginfo) {
+# for the moment we only process ADDI tags
+        my $addi = '';
+        foreach my $info (@readtaginfo) {
+            next unless ($info =~ /addi|written/i); # ignore other tags (for now)
+            $info =~ s/^\s+|\s+$//; # remove leading and trailing blanks
+            $addi .= "\\n\\" if $addi;
+            $addi .= $info;
+        }
+        if ($addi) {
+            my $length = $read->getSequenceLength();
+            $addi =~ s/ADDI\s\=\s1\.\.$length\s//i; # remove redundent data
+            my $tag = new Tag('readtag');
+            $tag->setType('ADDI');
+            $tag->setTagComment($addi);
+            $tag->setPosition(1,$length);
+            $tag->setStrand('Forward');
+            $read->addTag($tag);
+        }        
+    }
 
 # test number of fields read
 
