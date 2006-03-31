@@ -16,6 +16,7 @@ my $instance;
 my $organism;
 my $readsperfile = 10000;
 my $filename;
+my $clip = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -23,6 +24,8 @@ while (my $nextword = shift @ARGV) {
     $filename = shift @ARGV if ($nextword eq '-filename');
 
     $readsperfile = shift @ARGV if ($nextword eq '-readsperfile');
+
+    $clip = 1 if ($nextword eq '-clip');
 
     $verbose = 1 if ($nextword eq '-verbose');
 
@@ -32,7 +35,7 @@ while (my $nextword = shift @ARGV) {
     }
 }
 
-unless (defined($instance) && defined($instance) && defined($filename)) {
+unless (defined($instance) && defined($organism) && defined($filename)) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
@@ -49,10 +52,24 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
+my @queries = ('create temporary table clipping like QUALITYCLIP',
+	       'insert into clipping select * from QUALITYCLIP',
+	       'update clipping,SEQVEC set qleft=svright where clipping.seq_id=SEQVEC.seq_id and svleft=1',
+	       'update clipping,SEQVEC set qright=svleft where clipping.seq_id=SEQVEC.seq_id and svleft>1');
+
+my $query;
+
+foreach $query (@queries) {
+    my $rc = $dbh->do($query);
+    &db_die("do($query) failed");
+    $rc = "no" unless ($rc > 0);
+    print STDERR "Executed \"$query\", $rc rows changed\n" if $verbose;
+}
+
 my $ndone = 0;
 my $nfile = 1;
 
-my $query = "SELECT seq_id,sequence from SEQUENCE";
+$query = "SELECT SEQUENCE.seq_id,sequence,qleft,qright from SEQUENCE left join clipping using(seq_id)";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -67,7 +84,7 @@ my $fasfilename = $filename . sprintf("%04d", $nfile) . ".fas";
 
 my $fasfh = new FileHandle($fasfilename, "w");
 
-while (my ($seqid, $sequence) = $sth->fetchrow_array()) {
+while (my ($seqid, $sequence, $qleft, $qright) = $sth->fetchrow_array()) {
     $ndone++;
 
     if (($ndone % $readsperfile) == 0) {
@@ -79,7 +96,10 @@ while (my ($seqid, $sequence) = $sth->fetchrow_array()) {
 
     $sequence = uncompress($sequence);
 
-    printf $fasfh ">%s%06d\n", $organism, $seqid;
+    printf $fasfh ">%s%06d:%d-%d\n", $organism, $seqid, $qleft+1, $qright-1;
+
+    $sequence = substr($sequence, $qleft, $qright-$qleft-1) if ($clip);
+
     while (length($sequence)) {
 	print $fasfh substr($sequence, 0, 50),"\n";
 	$sequence = substr($sequence, 50);
@@ -117,4 +137,5 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -verbose\t\tVerbose output\n";
     print STDERR "    -readsperfile\tMaximum number of reads per file\n";
+    print STDERR "    -clip\t\tClip sequences before writing to file\n";
 }
