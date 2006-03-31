@@ -1038,6 +1038,18 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
     $change = 1 if ($info =~ s/\boligo[\b\s*]/o/i);
     $change = 1 if ($info =~ s/\s+/\\n\\/g);
     $change = 1 if ($info =~ s/(\\n\\){2,}/\\n\\/g); # multiple \n\ by one
+# clean up stretches of text between \n\
+    $change++ if ($info =~ s/ig\\n\\pk/ig-pk/);
+    if ($info =~ /(pcr.+)\\n\\seq/) {
+        my $clutter = $1;
+print "clutter: $clutter\n" if $DEBUG;
+        my $cleanup = $clutter;
+        $cleanup =~ s/\\n\\/-/g;
+print "cleanup: $cleanup\n" if $DEBUG;
+        $clutter =~ s/\\/\\\\/g; # quote backslash symbol
+        $change = 1 if ($info =~ s/$clutter/$cleanup/);
+print "new info: $info\n" if $DEBUG;
+    }
 # split $info on blanks and \n\ separation symbols
     my @info = split /\s+|\\n\\/,$info;
 
@@ -1057,7 +1069,8 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
     if ($info =~ /^\s*(\d+)\b(.*?)$sequence/) {
 # the info string starts with a number followed by the sequence
         $name = "o$1";
-    }
+        $change++ if ($info =~ s/^\s*(\d+)\b/$name/);
+   }
     elsif ($info !~ /serial/ && $info =~ /\b([opt]\d+)\b/) {
 # the info contains a name like o1234 or t1234
         $name = $1;
@@ -1065,7 +1078,7 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
     elsif ($info !~ /serial/ && $info =~ /[^\w\.]0(\d+)\b/) {
         $name = "o$1"; # correct typo 0 for o
     }
-    elsif ($info =~ /\b(o\w+)\b/ && $info !~ /\bover\b/i) {
+    elsif ($info =~ /\b(o\w+)\b/ && $info !~ /\bover\b/i && $info !~ /\bof\b/i) {
 # the info contains a name like oxxxxx
         $name = $1;
     }
@@ -1083,7 +1096,7 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
         $name = "o$name" unless ($name =~ /\D/);
     }
 
-print STDOUT "name $name (change $change) \n" if $DEBUG;
+print STDOUT "name ".($name || '')." (change $change) \n" if $DEBUG;
 print STDOUT "  decoded\n\n" if ($DEBUG && $name && !$change);
  
     return ($name,0) if ($name && !$change); # no new info
@@ -1095,14 +1108,19 @@ print STDOUT "  decoded\n\n" if ($DEBUG && $name && !$change);
 
     foreach my $part (@info) {
         if ($part =~ /serial\#?\=?(.*)/) {
-            $name = "o$1" if $1;
-# replace the serial field by the name, if it is defined
-            if ($name =~ /\w/) {
+            my $number = $1;
+print STDOUT "number $number \n" if $DEBUG;
+            if (defined($number)) {
+# generate a name based on the information following '=' (mostly a number)
+                $name = "o$number"; 
+# replace the serial field by the name
                 $info =~ s/$part/$name/;
             }
-            else { 
+            else {
+# remove the part from the info (it contains no information)
                 $info =~ s/$part//;
 	    }
+print "info: $info, name $name \n" if $DEBUG;
 	}
     }
 
