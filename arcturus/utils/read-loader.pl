@@ -22,34 +22,44 @@ my $assembly;
 
 my $source; # name of factory type
 
-my $noexclude = 0; # re: suppresses chack against already loaded reads
+my $noexclude = 0; # re: suppresses check against already loaded reads
 my $noloading = 0; # re: test mode without read loading
 
 my $skipaspedcheck = 0;
 my $consensus_read = 0;
 my $acceptlikeyeast = 0;
 
+my $onlyloadtags; # Exp files only
+
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys = "organism|instance|assembly|caf|cafdefault|fofn|out|"
+my $validKeys = "organism|instance|assembly|caf|cafdefault|fofn|forn|out|"
               . "limit|filter|source|exclude|info|help|asped|"
-              . "readnames|include|filter|readnamelike|rootdir|"
+              . "filter|readnamelike|rootdir|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
-              . "noload|noexclude|acceptlikeyeast|aly|test";
+              . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test";
 
 my %PARS;
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }
 
-    $instance         = shift @ARGV  if ($nextword eq '-instance');
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
-    $organism         = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
@@ -74,6 +84,13 @@ while (my $nextword = shift @ARGV) {
     $acceptlikeyeast  = 1            if ($nextword eq '-acceptlikeyeast');
     $acceptlikeyeast  = 1            if ($nextword eq '-aly');
 
+# special mode for tagloading only
+
+    if ($nextword eq '-onlyloadtags' || $nextword eq '-olt') {
+        $noexclude    = 1;
+        $onlyloadtags = 1;
+    }
+
 # logging
 
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
@@ -88,8 +105,7 @@ while (my $nextword = shift @ARGV) {
     $PARS{caf}          = 'default'    if ($nextword eq '-cafdefault');
 
     $PARS{include}      = shift @ARGV  if ($nextword eq '-fofn');
-    $PARS{include}      = shift @ARGV  if ($nextword eq '-readnames');
-    $PARS{include}      = shift @ARGV  if ($nextword eq '-include');
+    $PARS{include}      = shift @ARGV  if ($nextword eq '-forn');
 
     $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
     $PARS{aspedbefore}  = shift @ARGV  if ($nextword eq '-aspedbefore');
@@ -122,26 +138,26 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 # check the data source
 #----------------------------------------------------------------
 
-&showUsage(0,"Undefined data source") unless $source;
+&showUsage("Undefined data source") unless $source;
 
 if ($source ne 'CAF' && $source ne 'Oracle' && $source ne 'Expfiles') {
-    &showUsage(0,"Invalid data source '$source'");
+    &showUsage("Invalid data source '$source'");
 }
 
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
-if ($adb->errorStatus()) {
+if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'");
 }
  
 my $URL = $adb->getURL;
@@ -198,7 +214,7 @@ if ($source eq 'CAF') {
 
 # test CAF filename and open it
 
-    &showUsage(1,"Missing CAF file name") unless $PARS{caf};
+    &showUsage("Missing CAF file name") unless $PARS{caf};
 
     if ($PARS{caf} eq 'default') {
 # use the default assembly caf file in the assembly repository
@@ -207,11 +223,11 @@ if ($source eq 'CAF') {
         $logger->info("Default CAF file used: $PARS{caf}") if $PARS{caf};
     }
 
-    &showUsage(1,"File $PARS{caf} does not exist") unless (-e $PARS{caf});
+    &showUsage("File $PARS{caf} does not exist") unless (-e $PARS{caf});
 
     $PARS{caf} = new FileHandle($PARS{caf},"r"); # replace by file handle
 
-    &showUsage(1,"Cannot access file $PARS{caf}") unless $PARS{caf};
+    &showUsage("Cannot access file $PARS{caf}") unless $PARS{caf};
 
 # add logger to input PARS
 
@@ -220,19 +236,19 @@ if ($source eq 'CAF') {
 # test for excess baggage; abort if present (force correct input)
 
     my @valid = ('caf','include','exclude','log','readnamelike','filter');
-    &showUsage(1) if &testForExcessInput(\%PARS,\@valid);
+    &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new CAFReadFactory(%PARS);
 }
 
 elsif ($source eq 'Oracle') {
 
-    &showUsage(2,"Missing Oracle schema") unless $PARS{schema};
+    &showUsage("Missing Oracle schema") unless $PARS{schema};
 
     my @valid = ('schema','projid','aspedafter','aspedbefore',
 		 'readnamelike','include','exclude','minreadid','maxreadid');
 
-    &showUsage(2) if &testForExcessInput(\%PARS,\@valid);
+    &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $logger->info("Searching Oracle database for new reads");
 
@@ -253,12 +269,12 @@ elsif ($source eq 'Expfiles') {
             $logger->severe("Failed to determine root directory .. ");
         }
     }
-    &showUsage(3,"No repository defined for $organism") unless $PARS{root};
+    &showUsage("No repository defined for $organism") unless $PARS{root};
 # add logger to input PARS
     $PARS{log} = $logger;
 
     my @valid = ('readnamelike','root','subdir','limit','include','exclude','log');
-    &showUsage(3) if &testForExcessInput(\%PARS,\@valid);
+    &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new ExpFileReadFactory(%PARS);
 
@@ -266,7 +282,7 @@ elsif ($source eq 'Expfiles') {
     print "REJECTED files: @$rejects\n\n" if $rejects;
 }
 
-&showUsage(0,"Unable to build a ReadFactory instance") unless $factory;
+&showUsage("Unable to build a ReadFactory instance") unless $factory;
 
 $factory->setLogging($logger);
 
@@ -277,11 +293,11 @@ $factory->setLogging($logger);
 my $processed = 0;
 
 my %loadoptions;
-$loadoptions{skipaspedcheck} = 1 if $skipaspedcheck;
+$loadoptions{skipaspedcheck}     = 1 if $skipaspedcheck;
 $loadoptions{skipaspedcheck}     = 1 if $consensus_read;
 $loadoptions{skipligationcheck}  = 1 if $consensus_read;
 $loadoptions{skipchemistrycheck} = 1 if $consensus_read;
-$loadoptions{acceptlikeyeast} = 1 if $acceptlikeyeast;
+$loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
 
 while (my $readname = $factory->getNextReadName()) {
 
@@ -291,7 +307,25 @@ while (my $readname = $factory->getNextReadName()) {
 
     next if !defined($read); # do error listing inside factory
 
-    if ($noloading) {
+    if ($onlyloadtags) {
+# check if the read exists in the database
+        next unless $read->hasTags();
+        my $readname = $read->getReadName();
+        $logger->info("processing read $readname");
+        my $existingread = $adb->getRead(readname=>$readname);
+        unless ($existingread) {
+            $logger->warning("read $readname is not found in database $organism");
+            next;
+	}
+        my $tags = $read->getTags();
+        foreach my $tag (@$tags) {
+            $existingread->addTag($tag);
+	}
+        $adb->putTagsForReads([($read)]);
+        next;
+    }
+
+    elsif ($noloading) {
 
         $read->writeToCaf(*STDOUT) if ($noloading > 1);
 
@@ -309,6 +343,8 @@ while (my $readname = $factory->getNextReadName()) {
     $logger->severe("Unable to put read $readname: $errmsg") unless $success;
 
     $adb->putTraceArchiveIdentifierForRead($read) if $success;
+
+    $adb->putTagsForReads([($read)]) if $read->hasTags();
 }
 
 $adb->disconnect();
@@ -354,15 +390,16 @@ sub testForExcessInput {
 sub readNamesFromFile {
     my $file = shift; # file name
 
-    &showUsage(0,"File $file does not exist") unless (-e $file);
+    &showUsage("File $file does not exist") unless (-e $file);
 
     my $FILE = new FileHandle($file,"r");
 
-    &showUsage(0,"Can't access $file for reading") unless $FILE;
+    &showUsage("Can't access $file for reading") unless $FILE;
 
     my @list;
     while (defined (my $name = <$FILE>)) {
-        $name =~ s/^\s+|\s+$//g;
+        $name =~ s/^\s+|\s+$//g; # clip leading/trailing blanks
+        $name =~ s/^.*\///; # remove directory indicators
         push @list, $name;
     }
 
@@ -374,58 +411,64 @@ sub readNamesFromFile {
 #------------------------------------------------------------------------
 
 sub showUsage {
-    my $mode = shift || 0; 
     my $code = shift || 0;
 
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-source\t\tEither 'CAF',' Oracle' or 'Expfiles'\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code;
+    unless ($organism && $instance && $source) {
+        print STDERR "\n";
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-organism\tArcturus database name\n" unless $organism;
+        print STDERR "-instance\teither 'prod', 'dev' or 'test'\n" unless $instance;
+        print STDERR "-source\t\tEither 'CAF',' Oracle' or 'Expfiles'\n" unless $source;
+    }
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-instance\teither 'prod' (default) or 'dev'\n";
 #    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-fofn\t\tfilename with list of readnames to be included\n";
-    print STDERR "-include\t  idem\n";
+    print STDERR "-forn\t\t(fofn) filename with list of readnames to be included\n";
     print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
-    print STDERR "-readnamelike\t  idem\n";
+    print STDERR "-readnamelike\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
-    print STDERR "-noload\t(no value) do not load the read(s) found (test mode)\n";    
+    print STDERR "-noload\t\t(no value) do not load the read(s) found (test mode)\n";    print STDERR "-onlyloadtags\t(olt, no value) load tags for already loaded read(s)\n";    
     print STDERR "\n";
-    print STDERR "-skipaspedcheck\n";
-    print STDERR "-isconcensusread\t(icr)\n";
+    print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
+    print STDERR "-isconcensusread (icr; for artificial reads) \n";
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
     print STDERR "-verbose\t(no value)\n";
     print STDERR "\n";
-    if ($mode == 0 || $mode == 1) {
-	print STDERR "Source-specific parameters for CAF input:\n";
+
+    if (!$source || $source eq 'CAF') {
+	print STDERR "Parameters for CAF input:\n";
 	print STDERR "\n";
 	print STDERR "-caf\t\tcaf file name OR as alternative\n";
-	print STDERR "-cafdefault\t use the default caf file name\n";
+	print STDERR "-cafdefault\tuse a default caf file name\n";
 	print STDERR "\n";
     }
-    if ($mode == 0 || $mode == 2) {
-	print STDERR "Source-specific parameters for Oracle input:\n";
+    if (!$source || $source eq 'Oracle') {
+	print STDERR "Parameters for Oracle input:\n";
 	print STDERR "\n";
-	print STDERR "-schema\t(MANDATORY) Oracle schema\n";
-	print STDERR "-projid\t(MANDATORY) Oracle project ID\n";
+	print STDERR "-schema\t\tMANDATORY: Oracle schema\n";
+	print STDERR "-projid\t\tMANDATORY: Oracle project ID\n";
 	print STDERR "-aspedbefore\tasped date guillotine\n";
 	print STDERR "-aspedafter\tasped date guillotine\n";
+	print STDERR "-minreadid\tminimum Oracle read ID\n";
+	print STDERR "-maxreadid\tmaximum Oracle read ID\n";
 	print STDERR "\n";
     }
-    if ($mode == 0 || $mode == 3) {
-	print STDERR "Source-specific parameters for Expfiles input:\n";
+    if (!$source || $source eq 'Expfiles') {
+	print STDERR "Parameters for Expfiles input:\n";
 	print STDERR "\n";
-	print STDERR "-rootdir\t\troot directory of data repository\n";
+	print STDERR "-rootdir\troot directory of data repository\n";
 	print STDERR "-subdir\t\tsub-directory filter\n";
 	print STDERR "-limit\t\tlargest number of reads to be loaded\n";
 	print STDERR "\n";
     }
-
+    print STDERR "Parameter input ERROR: $code\n\n" if $code;
+    print STDERR "Define a data source!\n\n"  unless $source;
+    
     $code ? exit(1) : exit(0);
 }
