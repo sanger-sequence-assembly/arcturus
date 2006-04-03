@@ -172,12 +172,12 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL EXCLUSIVE PARAMETER:\n";
     print STDERR "\n";
-    print STDERR "-contig\tcontig or name ID\n";
+    print STDERR "-contig\t\tcontig ID or name\n";
     print STDERR "\n";
-    print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "\n";
+#    print STDERR "OPTIONAL PARAMETERS:\n";
+#    print STDERR "\n";
     print STDERR "-project\tproject ID or name\n";
-    print STDERR "-assembly\tassembly ID or name (default 0)\n";
+    print STDERR "-assembly\tassembly ID or name (default 1)\n";
     print STDERR "\n";
     print STDERR "LIST OPTIONS:\n";
     print STDERR "\n";
