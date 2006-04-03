@@ -97,7 +97,7 @@ sub getProject {
 		    . "   and READS.readname = ? ";
             push @data, $datum;
             $usecontigid = 1;
-print "getProject:$query '@data' \n";
+#print "getProject:$query '@data' \n";
         }
 # if an array of contig_ids is used, it should be the only specification
         elsif ($nextword eq "contig_id") {
@@ -906,7 +906,7 @@ sub findContigTransferRequestIDs {
                 next;
 	    }
             elsif ($date eq 'month') {
-                push @clause, "opened >= adddate(curdate(),INTERVAL -31 DAY)";
+                push @clause, "opened >= adddate(curdate(),INTERVAL -1 MONTH)";
                 next;
 	    }
             $clause = "opened >= ?"; # defaults to 'after'
@@ -1311,7 +1311,8 @@ sub getProjectStatisticsForProject {
               .       " min(length) as minlength,"
               .       " max(length) as maxlength,"
               .       " round(avg(length)) as avglength,"
-              .       " round(std(length)) as stdlength"
+              .       " round(std(length)) as stdlength,"
+              .       " max(updated) as maxdate"
               . "  from CONTIG left join C2CMAPPING"
               . "    on CONTIG.contig_id = C2CMAPPING.parent_id"
 	      . " where C2CMAPPING.parent_id is null"
@@ -1329,6 +1330,23 @@ sub getProjectStatisticsForProject {
 
     $project->setNumberOfContigs(shift @data);
     $project->setNumberOfReads(shift @data);
+
+# get the contig name and ID of the lastly added contig
+
+    $query = "select contig_id, gap4name"
+           . "  from CONTIG"
+           . " where updated = ?"
+           . " order by contig_id desc"
+           . " limit 1";
+
+    $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($data[$#data]) || &queryFailed($query,$data[$#data]);
+
+    push @data, $sth->fetchrow_array();
+
+    $sth->finish();
+
     $project->setContigStatistics(@data);
 
     return ($rw+0);
