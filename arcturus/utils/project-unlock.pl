@@ -147,8 +147,7 @@ exit 1; # failed
 # HELP
 #------------------------------------------------------------------------
 
-sub showUsage {
-    my $mode = shift || 0; 
+sub showUsage { 
     my $code = shift || 0;
 
     print STDERR "\nRelease a lock on a project\n";
