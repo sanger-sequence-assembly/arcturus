@@ -15,13 +15,13 @@ my $instance;
 my $verbose;
 my $repair = 2; # default mark as virtual parent
 my $delete;
-my $trashproject = 'TRASH';
+my $problemproject = 'PROBLEMS';
 my $assembly;
 my $force = 0;
 my $confirm;
 
-my $validKeys  = "organism|instance|verbose|debug|trash|mark|repair|project|"
-               . "assembly|delete|force|confirm|help";
+my $validKeys  = "organism|instance|verbose|debug|movetoproblems|mark|repair|"
+               . "project|assembly|delete|force|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -39,27 +39,29 @@ while (my $nextword = shift @ARGV) {
         $organism = shift @ARGV; 
     }
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    $verbose        = 1            if ($nextword eq '-verbose');
 
-    $verbose      = 2            if ($nextword eq '-debug');
+    $verbose        = 2            if ($nextword eq '-debug');
 
-    $repair       = 1            if ($nextword eq '-trash');
-    $confirm      = 1            if ($nextword eq '-trash');
+    if ($nextword eq '-movetoproblems' || $nextword eq '-mtp') {
+        $repair     = 1;
+        $confirm    = 1;
+    }
 
-    $repair       = 2            if ($nextword eq '-mark');
+    $repair         = 2            if ($nextword eq '-mark');
 
-    $repair       = 3            if ($nextword eq '-repair');
-    $force        = 1            if ($nextword eq '-repair');
+    $repair         = 3            if ($nextword eq '-repair');
+    $force          = 1            if ($nextword eq '-repair');
 
-    $trashproject = shift @ARGV  if ($nextword eq '-project');
+    $problemproject = shift @ARGV  if ($nextword eq '-project');
 
-    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+    $assembly       = shift @ARGV  if ($nextword eq '-assembly');
 
-    $delete       = 1            if ($nextword eq '-delete');
+    $delete         = 1            if ($nextword eq '-delete');
 
-    $confirm      = 1            if ($nextword eq '-confirm');
+    $confirm        = 1            if ($nextword eq '-confirm');
 
-    $force        = 1            if ($nextword eq '-force');
+    $force          = 1            if ($nextword eq '-force');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -97,8 +99,8 @@ $logger->info("Database ".$adb->getURL." opened succesfully");
 #----------------------------------------------------------------
 my %options;
  
-$options{project_id}  = $trashproject if ($trashproject !~ /\D/);
-$options{projectname} = $trashproject if ($trashproject =~ /\D/);
+$options{project_id}  = $problemproject if ($problemproject !~ /\D/);
+$options{projectname} = $problemproject if ($problemproject =~ /\D/);
 
 if (defined($assembly)) {
     $options{assembly_id}  = $assembly if ($assembly !~ /\D/);
@@ -112,25 +114,25 @@ if ($projects && @$projects > 1) {
     foreach my $project (@$projects) {
         push @namelist,$project->getProjectName();
     }
-    $logger->warning("Non-unique project specification : $trashproject (@namelist)");
+    $logger->warning("Non-unique project specification : $problemproject (@namelist)");
     $logger->warning("Perhaps specify the assembly ?") unless defined($assembly);
     $adb->disconnect();
     exit;
 }
 elsif ($repair <= 1 && (!$projects || !@$projects)) {
-    $logger->warning("Project $trashproject not available : $message");
+    $logger->warning("Project $problemproject not available : $message");
     $adb->disconnect();
     exit;     
 }
 
-my $trashprojectid;
-my $trashprojectname;
+my $problemprojectid;
+my $problemprojectname;
 
 if ($repair <= 1) {
-    $trashproject = shift @$projects;   
-    $trashprojectid = $trashproject->getProjectID();
-    $trashprojectname = $trashproject->getProjectName();
-    $logger->warning("Project $trashprojectname ($trashprojectid) used for recover mode");
+    $problemproject = shift @$projects;   
+    $problemprojectid = $problemproject->getProjectID();
+    $problemprojectname = $problemproject->getProjectName();
+    $logger->warning("Project $problemprojectname ($problemprojectid) used for recover mode");
 }
 
 #----------------------------------------------------------------
@@ -165,7 +167,7 @@ foreach my $read (sort {$a <=> $b} keys %$hashlist) {
 $logger->skip if $n;
 
 # test each contig to parent link; in default recover mode
-# put offending contig in TRASH: this moves the contig out of the projects,
+# put offending contig in PROBLEMS: this moves the contig out of the projects,
 # which will then be clean. However, if wanted you can restore
 # the link and move the contig back into its project by hand afterwards
 
@@ -179,7 +181,7 @@ foreach my $contig (sort {$a <=> $b} keys %$link) {
 
 $logger->skip if $n;
         
-$logger->warning("Analysing link between contigs and parents") if $n;
+$logger->warning("Analysing links between contigs and parents") if $n;
 
 undef %$link unless $repair;
 
@@ -222,7 +224,7 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
         my $length = $contig->getConsensusLength();
         $logger->warning("number of mappings : ".scalar(@$ccm)." ($length)");
         foreach my $mapping (@$ccm) {
-            $logger->warning($mapping->toString); 
+            $logger->info($mapping->toString);
         }
     }
 
@@ -252,21 +254,22 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 
         my $project_id = $parent->getProject();
         
-        if ($repair <= 1 && $project_id == $trashprojectid) {
+        if ($repair <= 1 && $project_id == $problemprojectid) {
             $logger->warning("parent contig $parent_id is already allocated to "
-			    . "project $trashprojectname");
+			    . "project $problemprojectname");
         }
         elsif ($repair <= 1) {
-# move the offending parent contig to the trash project
+# move the offending parent contig to the problems project
             $logger->warning("Contig $parent_id will be allocated to "
-		   	   . "project $trashprojectname in recover mode");
+		   	   . "project $problemprojectname in recover mode");
             unless ($confirm) {
 	        $logger->warning("repeat command with '-confirm' switch");
                 next;
 	    }
-# move contig to trash project
-            my ($status,$msg) = $adb->assignContigToProject($parent,$trashproject);
+# move contig to problems project
+            my ($status,$msg) = $adb->assignContigToProject($parent,$problemproject);
             $logger->warning("status $status: $msg");
+# enter record in transfer queue with status 'done'
 	}
 
         elsif ($repair == 2) {
@@ -334,9 +337,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-repair\t\t(no value) if multiple allocations, repair links\n";
     print STDERR "\t\trepair requires the -confirm switch to have the effect\n";
-    print STDERR "-trash\t\t(no value) if multiple allocations, assign offending\n";
-    print STDERR "\t\tparent to trash project (default TRASH)\n";
-    print STDERR "-project\tdefine the trash project explicitly\n";
+    print STDERR "-movetoproblems\t(mtp, no value) if multiple allocations, assign\n";
+    print STDERR "\t\toffending parent to problems project (default PROBLEMS)\n";
+    print STDERR "-project\tdefine the problems project explicitly\n";
     print STDERR "-mark\t\t(no value) if multiple allocations, link offending\n";
     print STDERR "\t\tparent to virtual contig 0\n";
 

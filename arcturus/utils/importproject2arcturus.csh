@@ -4,7 +4,7 @@
 #             no 2 = organism name
 #             no 3 = gap4 project (database) name
 #             no 4 = indicates 64 bit version or 32 bit
-#             no 5 = trash project name (optional, default TRASH)
+#             no 5 = problems project name (optional, default PROBLEMS)
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
@@ -58,15 +58,15 @@ if ( ! -f ${projectname}.0 ) then
   exit 1
 endif
 
-# get trash project name, if any
+# get problems project name, if any
 
-set repair = trash
+set repair = movetoproblems
 
-set trashproject = TRASH
+set problemsproject = PROBLEMS
 
 if ( $#argv > 4 ) then
-    set trashproject = $5
-    set repair = trash
+    set problemsproject = $5
+    set repair = mtp
 endif
 
 set arcturus_home=/nfs/pathsoft/arcturus
@@ -102,7 +102,7 @@ endif
 
 #echo Test abort
 #set pwd = `pwd`
-#echo d:$pwd i:$instance o:$organism p:$projectname tp:$trashproject
+#echo d:$pwd i:$instance o:$organism p:$projectname tp:$problemsproject
 #exit 0
 
 
@@ -128,11 +128,11 @@ echo Importing to Arcturus
 
 ${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -caf $depadded -defaultproject $projectname
 
-# added 06/09/2005 read allocation test with assignment to TRASH project
+# added 06/09/2005 read allocation test with assignment to PROBLEMS project
 
 echo Testing read-allocation for possible duplicates
 
-${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $trashproject
+${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $problemsproject
 
 # calculating consensus sequence
 
