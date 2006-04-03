@@ -430,12 +430,12 @@ sub toStringLong {
 
     my $string = "\n";
 
-    $string .= "Project ID         ".$this->getProjectID()."\n";
+    $string .= "Project ID         ". $this->getProjectID()."\n";
     $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
-    $string .= "Project name       ".$this->getProjectName()."\n";
+    $string .= "Project name       ". $this->getProjectName()."\n";
     $string .= "Project owner      ".($this->getOwner() || 'undef')."\n";
 
-    $string .= "Project status     ".$this->getProjectStatus()."\n";
+    $string .= "Project status     ". $this->getProjectStatus()."\n";
 
     $string .= "Lock status        ";
     if (my $lock = $this->getLockedStatus()) {
@@ -460,11 +460,16 @@ sub toStringLong {
 
     if ($this->getNumberOfContigs()) {
         $string .= "Contig statistics:\n";
-        $string .= " Total sequence    ".($stats->[0] || 0)."\n";
-        $string .= " Minimum length    ".($stats->[1] || 0)."\n";
-        $string .= " Maximum length    ".($stats->[2] || 0)."\n";
-        $string .= " Average length    ".($stats->[3] || 0)."\n";
-        $string .= " Variance          ".($stats->[4] || 0)."\n";
+        $string .= " Total sequence    " . ($stats->[0] || 0)."\n";
+        $string .= " Minimum length    " . ($stats->[1] || 0)."\n";
+        $string .= " Maximum length    " . ($stats->[2] || 0)."\n";
+        $string .= " Average length    " . ($stats->[3] || 0)."\n";
+        $string .= " Variance          " . ($stats->[4] || 0)."\n";
+# lastly added contig here
+        $string .= " Last added        " 
+                .  sprintf("contig%08d",($stats->[6] || 0)) 
+                .  " (" . ($stats->[7] || 0) . ") on "
+                .  ($stats->[5] || 0) . "\n";
     }
 
     return $string;
