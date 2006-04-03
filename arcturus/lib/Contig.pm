@@ -766,8 +766,8 @@ sub linkToContig {
             print STDOUT "Incomplete Mapping ".$mapping->getMappingName."\n";
             return undef; # abort: incomplete Mapping; should never occur!
         }
-        my $sequencematch = $sequencehash->{$oseq_id};
-        unless (defined($sequencematch)) {
+        my $complement = $sequencehash->{$oseq_id};
+        unless (defined($complement)) {
 # the read in the parent is not identified in this contig; this can be due
 # to several causes: the most likely ones are: 1) the read is deallocated
 # from the previous assembly, or 2) the read sequence was edited and hence
@@ -802,16 +802,18 @@ sub linkToContig {
             my $emapping = $reads->{$eseq_id}->getAlignToTraceMapping(); # edited
 #****
 #        - find the proper chain of multiplication to get the new mapping 
-print STDOUT "Missing match for sequence ID $oseq_id\n"; 
-print STDOUT "But the readnames do match : $readname\n";
-print STDOUT "sequences: parent $oseq_id   child (edited) $eseq_id\n";
-print STDOUT "original Align-to-SCF:".$omapping->toString();
-print STDOUT "edited   Align-to-SCF:".$emapping->toString();
-#        - assign this new mapping to $sequencematch
-	    $sequencematch = $readnamematch;
+if ($DEBUG) {
+ print STDOUT "Missing match for sequence ID $oseq_id\n"; 
+ print STDOUT "But the readnames do match : $readname\n";
+ print STDOUT "sequences: parent $oseq_id   child (edited) $eseq_id\n";
+ print STDOUT "original Align-to-SCF:".$omapping->toString();
+ print STDOUT "edited   Align-to-SCF:".$emapping->toString();
+}
+#        - assign this new mapping to $complement
+	    $complement = $readnamematch;
 # to be removed later
             next if (@$lmappings>1 && @$cmappings>1);
-print STDOUT "sequences equated to one another (temporary fix)\n";
+print STDOUT "sequences equated to one another (temporary fix)\n" if $DEBUG;
 #****
         }
 # count the number of reads in the overlapping area
@@ -821,7 +823,7 @@ print STDOUT "sequences equated to one another (temporary fix)\n";
 
         if ($options{strong}) {
 # strong comparison: test for identical mappings (apart from shift)
-            my ($identical,$aligned,$offset) = $sequencematch->isEqual($mapping);
+            my ($identical,$aligned,$offset) = $complement->isEqual($mapping);
 
 # keep the first encountered (contig-to-contig) alignment value != 0 
 
@@ -842,23 +844,31 @@ print STDOUT "sequences equated to one another (temporary fix)\n";
 # otherwise do a segment-by-segment comparison and find ranges of identical mapping
 
         else {
-# return the mapping as a Mapping object
-            $mapping = $sequencematch->compare($mapping);
-            my $aligned = $mapping->getAlignment();
+# return the ** local ** contig-to-parent mapping as a Mapping object
+            my $cpmapping = $complement->compare($mapping);
+            my $cpaligned = $cpmapping->getAlignment();
 
-print STDOUT "Mapping between reads:".$mapping->toString() if $DEBUG;
+if ($DEBUG) {
+ print STDOUT "parent mapping:".$mapping->toString();
+ print STDOUT "contig mapping:".$complement->toString();
+ print STDOUT "c-to-p mapping:".$cpmapping->toString();
+ unless ($cpaligned || $compare->getNumberOfReads() > 1) {
+  print STDOUT "Non-overlapping read segments for single-read parent contig ".
+                $compare->getContigID()."\n";
+ }    
+}
 
-            next unless defined $aligned; # empty cross mapping
+            next unless defined $cpaligned; # empty cross mapping
 
 # keep the first encountered (contig-to-contig) alignment value != 0
 
-            $alignment = $aligned unless $alignment;
+            $alignment = $cpaligned unless $alignment;
 
-            next unless ($alignment && $aligned == $alignment);
+            next unless ($alignment && $cpaligned == $alignment);
 
 # process the mapping segments and add to the inventory
 
-            my $osegments = $mapping->getSegments() || next;
+            my $osegments = $cpmapping->getSegments() || next;
 
             foreach my $osegment (@$osegments) {
                 my $offset = $osegment->getOffset();
@@ -1112,11 +1122,11 @@ $compare->getContigName()."\n" if $DEBUG;
                 print STDERR "Duplicate mapping to parent " .
 		             $compare->getContigName()." ignored\n";
 if ($DEBUG) {
-print STDOUT "Duplicate mapping to parent " .
-	      $compare->getContigName()." ignored\n";
-print STDOUT "existing Mappings: @$c2cmaps \n";
-print STDOUT "to be added Mapping: $mapping, tested against $c2cmap\n";
-print STDOUT "equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString();
+ print STDOUT "Duplicate mapping to parent " .
+	       $compare->getContigName()." ignored\n";
+ print STDOUT "existing Mappings: @$c2cmaps \n";
+ print STDOUT "to be added Mapping: $mapping, tested against $c2cmap\n";
+ print STDOUT "equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString();
 }
                 return $mapping->hasSegments(),$deallocated;
             }
