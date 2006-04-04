@@ -511,6 +511,7 @@ print STDERR "putContig: line 449 assignContigToProject "
             }
             $this->getReadMappingsForContig($parent);
 #$contig->setDEBUG();
+            $contig->setArcturusDatabase($this->getConnection()); # link recovery
             my ($linked,$deallocated) = $contig->linkToContig($parent);
 # add parent to contig, later import tags from parent(s)
             $contig->addParentContig($parent) if $linked; 
