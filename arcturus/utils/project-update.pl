@@ -33,7 +33,7 @@ my $validKeys  = "organism|instance|assembly|project|comment|pc|extend|"
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
     $instance         = shift @ARGV  if ($nextword eq '-instance');
       
@@ -66,7 +66,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-&showUsage(0,"Missing project name or ID") unless $project;
+&showUsage("Missing project name or ID") unless $project;
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -80,18 +80,18 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing database instance") unless $instance;
+&showUsage("Missing database instance") unless $instance;
 
-&showUsage(0,"Missing project name or ID") unless $project;
+&showUsage("Missing project name or ID") unless $project;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'");
 }
 
 $logger->info("Database ".$adb->getURL." opened succesfully");
@@ -135,7 +135,6 @@ else {
 
     $project->setProjectName($projectname)        if $projectname;
     $project->setOwner($projectowner)             if $projectowner;
-#    $project->setLockOwner($projectlockowner)     if $projectlockowner;
     $project->setProjectStatus($projectstatus)    if $projectstatus;
 # special case
     if ($projectcomment && $extend && $project->getComment()) {
@@ -171,7 +170,6 @@ $adb->disconnect();
 #------------------------------------------------------------------------
 
 sub showUsage {
-    my $mode = shift || 0; 
     my $code = shift || 0;
 
     print STDERR "\n";
