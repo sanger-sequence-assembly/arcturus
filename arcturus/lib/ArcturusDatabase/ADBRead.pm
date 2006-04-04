@@ -2548,7 +2548,7 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-#    my $autoload = shift; # autoload tag names and sequences if not present
+# my $autoload = shift; # autoload tag names and sequences if not present
     my %options = @_;
 
 my $DEBUG = $options{debug};
@@ -2621,13 +2621,16 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
             my $rtags = $read->getTags();
 
             foreach my $rtag (@$rtags) {
-                if ($ignore->{$rtag}) {
-                    next;
-                }
-                elsif ($rtag->isEqual($etag,%isequaloptions)) {
-                    $ignore->{$rtag}++;
-                    next;
-                }
+# skip if the tag is already marked
+                next if $ignore->{$rtag};
+# process possible placeholder names
+                &processTagPlaceHolderName($rtag);
+# and compare the tag with the current existing tag
+                $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
+#                if ($rtag->isEqual($etag,%isequaloptions)) {
+#                    $ignore->{$rtag}++;
+#                    next;
+#                }
             }
             $tcounter++;
         }
@@ -2656,6 +2659,31 @@ print "new tags to be loaded : ".scalar(@tags)."\n" if $DEBUG;
     return [@tags] if $options{noload}; # test option
 
     return &putReadTags($dbh,\@tags);
+}
+
+sub processTagPlaceHolderName {
+# private method, substitute (possible) placeholder name of the tag sequence
+    my $tag = shift;
+
+    my $name = $tag->getTagSequenceName();
+
+    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
+
+# generate a generic name from the place holder name and sequence ID
+
+    $name = $1; # the place holder name
+
+    my $seq_id = $tag->getSequenceID();
+    my $randomnumber = int(rand(100)); # from 0 to 99 
+    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
+# check/replace if the place holder appears in the comment as well 
+    my $comment = $tag->getTagComment();
+    $comment =~ s/\<$name\>/$newname/ if $comment;
+
+    $tag->setTagSequenceName($newname);
+    $tag->setTagComment($comment);
+
+    return 1;
 }
 
 sub getTagSequenceIDsForTags {
