@@ -1,5 +1,7 @@
 #!/bin/csh
 
+# run script from your work directory
+
 # parameters: no 1 = database instance
 #             no 2 = organism name
 #             no 3 = gap4 project (database) name
@@ -54,7 +56,7 @@ endif
 
 limit datasize 16000000
 
-cd `pfind -q $organism`/arcturus
+# cd `pfind -q $organism`/arcturus # removed: run script from work directory
 
 if ( ! -f ${projectname}.0 ) then
   echo \!\! -- Project $projectname version 0 does not exist --
