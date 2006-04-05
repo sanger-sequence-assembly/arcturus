@@ -2513,12 +2513,11 @@ sub getTagsForSequenceIDs {
 	      . " where seq_id in (".join (',',@$sequenceIDs) .")"
               . "   and deprecated != 'Y'"
 #?             . "   and tagtype not in ($excludetags) " if $excludetags;
-              . " order by seq_id";
+		  . " order by seq_id";
 
     my @tag;
 
     my $sth = $dbh->prepare($query);
-
 
     $sth->execute() || &queryFailed($query) && exit;
 
@@ -2623,7 +2622,7 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
             foreach my $rtag (@$rtags) {
 # skip if the tag is already marked
                 next if $ignore->{$rtag};
-# process possible placeholder names
+# process possible placeholder names (to enable the name comparison)
                 &processTagPlaceHolderName($rtag);
 # and compare the tag with the current existing tag
                 $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
@@ -2644,7 +2643,10 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 #        next unless $read->getSequenceID();
         my $rtags = $read->getTags();
         foreach my $tag (@$rtags) {
-            push @tags,$tag unless $ignore->{$tag};
+            next if $ignore->{$tag};
+# process possible placeholder names (again! there may be no existing tags)
+            &processTagPlaceHolderName($tag);
+            push @tags,$tag;
 	}
     }
 
@@ -2666,7 +2668,7 @@ sub processTagPlaceHolderName {
     my $tag = shift;
 
     my $name = $tag->getTagSequenceName();
-
+print STDOUT "DEBUG processTagPlaceHolderName: $name \n" if $DEBUG;
     return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
 
 # generate a generic name from the place holder name and sequence ID
@@ -2676,9 +2678,12 @@ sub processTagPlaceHolderName {
     my $seq_id = $tag->getSequenceID();
     my $randomnumber = int(rand(100)); # from 0 to 99 
     my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
+print STDOUT "new tag name $newname   placeholder '$name'\n" if $DEBUG;
 # check/replace if the place holder appears in the comment as well 
     my $comment = $tag->getTagComment();
+print STDOUT "comment:\n$comment\n" if $DEBUG;
     $comment =~ s/\<$name\>/$newname/ if $comment;
+print STDOUT "new comment:\n$comment\n" if $DEBUG;
 
     $tag->setTagSequenceName($newname);
     $tag->setTagComment($comment);
