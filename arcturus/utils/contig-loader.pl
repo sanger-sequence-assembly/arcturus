@@ -1030,11 +1030,12 @@ sub decode_oligo_info {
     my $info = shift;
     my $sequence = shift;
 
-my $DEBUG = 0; 
+my $DEBUG = 0;
 print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
 
     my $change = 0;
 # clean up name (replace possible ' oligo ' string by 'o')
+    $change = 1 if ($info =~ s/^\<\w+\>//i); # delete a possible place holder
     $change = 1 if ($info =~ s/\boligo[\b\s*]/o/i);
     $change = 1 if ($info =~ s/\s+/\\n\\/g);
     $change = 1 if ($info =~ s/(\\n\\){2,}/\\n\\/g); # multiple \n\ by one
@@ -1042,15 +1043,14 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
     $change++ if ($info =~ s/ig\\n\\pk/ig-pk/);
     if ($info =~ /(pcr.+)\\n\\seq/) {
         my $clutter = $1;
-print "clutter: $clutter\n" if $DEBUG;
         my $cleanup = $clutter;
         $cleanup =~ s/\\n\\/-/g;
-print "cleanup: $cleanup\n" if $DEBUG;
         $clutter =~ s/\\/\\\\/g; # quote backslash symbol
         $change = 1 if ($info =~ s/$clutter/$cleanup/);
-print "new info: $info\n" if $DEBUG;
     }
+
 # split $info on blanks and \n\ separation symbols
+
     my @info = split /\s+|\\n\\/,$info;
 
 # cleanup empty flags= specifications
@@ -1070,7 +1070,7 @@ print "new info: $info\n" if $DEBUG;
 # the info string starts with a number followed by the sequence
         $name = "o$1";
         $change++ if ($info =~ s/^\s*(\d+)\b/$name/);
-   }
+    }
     elsif ($info !~ /serial/ && $info =~ /\b([opt]\d+)\b/) {
 # the info contains a name like o1234 or t1234
         $name = $1;
@@ -1097,8 +1097,8 @@ print "new info: $info\n" if $DEBUG;
     }
 
 print STDOUT "name ".($name || '')." (change $change) \n" if $DEBUG;
-print STDOUT "  decoded\n\n" if ($DEBUG && $name && !$change);
- 
+print STDOUT "DECODED\n\n" if ($DEBUG && $name && !$change);
+
     return ($name,0) if ($name && !$change); # no new info
     return ($name,$info) if $name; # info modified
 
@@ -1110,7 +1110,7 @@ print STDOUT "  decoded\n\n" if ($DEBUG && $name && !$change);
         if ($part =~ /serial\#?\=?(.*)/) {
             my $number = $1;
 print STDOUT "number $number \n" if $DEBUG;
-            if (defined($number)) {
+            if (defined($number) && $number =~ /\w/) {
 # generate a name based on the information following '=' (mostly a number)
                 $name = "o$number"; 
 # replace the serial field by the name
@@ -1120,11 +1120,12 @@ print STDOUT "number $number \n" if $DEBUG;
 # remove the part from the info (it contains no information)
                 $info =~ s/$part//;
 	    }
-print "info: $info, name $name \n" if $DEBUG;
+print "info: $info, name ".($name || '')."\n" if $DEBUG;
+	    $change++;
 	}
     }
 
-print STDOUT "name $name (change $change) \n" if $DEBUG;
+print STDOUT "name ".($name || '')." (change $change) \n" if $DEBUG;
 
     return ($name,$info) if $name;
 
@@ -1156,26 +1157,16 @@ print STDOUT "now decoded info: $info ($name)\n";
 
     $info =~ s/\\n\\\s*$name\s*$// if $name; # chop off name at end, if any
 
-# if the name is still blank,generate a random name (for later update by hand)
+# if the name is still blank substitute a placeholder
             
-    unless ($name) {
-        my $randomnumber = int(rand(1000)); # from 0 to 999 
-        $name = sprintf('oligo_m%03x',$randomnumber);
-# THIS SHOULD BE REPLACED BY A PLACEHOLDER TO BE FILLED IN IN ADBRead Tagloader
-print STDOUT "generating default name $name\n\n" if $DEBUG;
-#       $name = '<preliminarytagname>';
-    }
+    $name = '<oligo>' unless $name; # place holder name
 
-    if ($name) {
 # put the name upfront in the info string
-        $info = "$name\\n\\".$info;
-        $info =~ s/\\n\\\s*\\n\\/\\n\\/g;
-        return ($name,$info);
-    }
 
-# still not done: area for adhoc changes
+    $info = "$name\\n\\".$info;
+    $info =~ s/\\n\\[\s*|o]\\n\\/\\n\\/g; # cleanup
 
-    return 0;
+    return ($name,$info);
 }
 
 sub get_oligo_DNA {
