@@ -85,7 +85,12 @@ sub getProject {
             $query .= "comment like ? ";
             push @data, $datum;
 	}
-# if contig_id or contigname is used, it should be the only specification 
+        elsif ($nextword eq "status") {
+            $query .= (@data ? "and " : "where ");
+            $query .= "status like ? ";
+            push @data, $datum;
+	}
+## if contig_id or contigname is used, it should be the only specification 
         elsif ($nextword eq "contigname") { 
             return (0,"only contig name can be specified") if ($query =~ /where/);
             $query =~ s/comment/comment,CONTIG.contig_id/;
@@ -312,7 +317,7 @@ sub deleteProject {
 
     my $user = $this->getArcturusUser();
 
-    unless ($this->userCanCreateProjects($user)) {
+    unless ($this->userCanCreateProject($user)) {
         return 0,"User '$user' has no privilege to delete a project";
     } 
 
@@ -1352,8 +1357,9 @@ sub getProjectStatisticsForProject {
     return ($rw+0);
 }
 
-
-############### UPDATE ############
+#--------------------------------------------------------------------------
+# changing project attributes
+#--------------------------------------------------------------------------
 
 sub updateProjectAttribute {
 # public method, takes a Project instance
@@ -1369,46 +1375,79 @@ sub updateProjectAttribute {
 
     my $project_id = $project->getProjectID();
 
-    my ($dbproject,$status) = $this->getProject(project_id=>$project_id);
+    my ($dbprojects,$status) = $this->getProject(project_id=>$project_id);
+
+    return 0,"Invalid project returned" unless (scalar(@$dbprojects) == 1);
+
+    my $dbproject = shift @$dbprojects;
 
 # changes by project owner or by privilege
 
     my $user = $this->getArcturusUser();
 
-    my $owner = $dbproject->[0]->getOwner();
+    my $owner = $dbproject->getOwner();
 
     unless ($user eq $owner || &userRoles($user,$owner)) {
-        return 0,"user '$user' has no privilege on project ".$dbproject->getProjectName();
+        return 0,"user '$user' has no privilege on project "
+                .$dbproject->getProjectName();
     } 
 
 # scan test these fields for changes
 
     my %changes;
-    my $message = '';
+    my $execute = '';
     my $preview = '';
-    foreach my $item ('ProjectName','Comment','Owner') {
+    foreach my $item ('ProjectName','Comment','Owner') { #'ProjectStatus'
 # get the project values by using the 'eval' construct
         my $newvalue = eval("\$project->get$item()");
-        my $oldvalue = eval("\$dbproject->[0]->get$item()");
+        my $oldvalue = eval("\$dbproject->get$item()");
         next unless (($oldvalue || $newvalue) && $oldvalue ne $newvalue);
 # the value has changed
         $preview .= "$item '$oldvalue' will be replaced by '$newvalue'\n";
-        $message .= "$item set to '$newvalue' for project nr $project_id\n";
+        $execute .= "$item set to '$newvalue' for project nr $project_id\n";
         my $databaseitem = lc($item);
         $databaseitem  =~ s/project//i;
         $changes{$databaseitem} = $newvalue;
     }
 
-    return 0,"No changes detected" unless $preview;
+    return 0, "No changes detected" unless $preview;
 
-    return 1,$preview unless $options{confirm};
+# if the project is locked, change requires lock ownership
 
     my $dbh = $this->getConnection();
-    if (&updateProjectItem($dbh,$project_id,%changes,nostatustest=>1)) {
-        return 2,$message; # success
+    my @lockinfo = &getLockedStatus($dbh,$project_id);
+    if ($lockinfo[0]) {
+        my $message = "Project ".$dbproject->getProjectName()
+	            . " is locked by user $lockinfo[0]";
+        return 0,$message if ($user ne $lockinfo[0]);
+        $preview .= "$message\n";
     }
 
-    return 0,"No changes made to project ".$dbproject->[0]->getProjectName();
+# first deal with a change of project status (if any)
+
+    if ($changes{status}) {
+# status to 'finished' will lock the project by this user
+        my $message = "Changing status to $changes{status} will lock project "
+	            . $dbproject->getProjectName() . " permanently";
+        if ($changes{status} eq 'finished' && !$lockinfo[0]) {
+            $preview .= $message."\n";
+        }
+        elsif ($changes{status} eq 'quality checked') {
+# status to 'quality checked' will lock the project for user 'arcturus'        
+            $preview .= $message . " for user 'arcturus'\n";
+        }
+        
+
+    }
+
+    return 1, $preview unless $options{confirm};
+
+#    my $dbh = $this->getConnection();
+    if (&updateProjectItem($dbh,$project_id,%changes,nostatustest=>1)) {
+        return 2,$execute; # success
+    }
+
+    return 0,"No changes made to project ".$dbproject->getProjectName();
 }
 
 sub updateProjectStatus {
@@ -1469,7 +1508,7 @@ sub updateProjectItem {
 	}
     }
 
-# compose the query and collect the values
+# compose the query and collect the values; with user test its presence in USER
 
     my $query = "update PROJECT";
 
@@ -1480,12 +1519,17 @@ sub updateProjectItem {
     else {
         $query .= " $setstring where ";
     }
+
     $query .= "PROJECT.project_id = ? ";
     push @values, $pid;
 
-    $query .= "and lockdate is null and lockowner is null " if $options{isnotlockedtest};
+    if ($options{isnotlockedtest}) {
+        $query .= "and lockdate is null and lockowner is null ";
+    }
 
-    $query .= "and status not in ('finished','quality checked')" unless $options{nostatustest};
+    unless ($options{nostatustest}) {
+        $query .= "and status not in ('finished','quality checked')";
+    }
 
 # print STDOUT "updateProjectItem query: $query\n";
 
@@ -1755,7 +1799,7 @@ sub releaseLockForProjectID {
         return (0,"Project $info[3] remains locked at protected level 2 ($info[1])");
     }
     elsif ($user ne $lockowner) {
-        return (0,"Lock belongs to user '$lockowner'");
+        return (0,"Lock on project $info[3] belongs to user '$lockowner'");
     }
 
 # ok, the project is found to be locked and owned by the current user
