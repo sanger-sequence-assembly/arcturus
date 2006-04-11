@@ -12,12 +12,14 @@ my $instance;
 my $organism;
 my $history = 0;
 my $verbose = 0;
+my $finishing = 0;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
     $history = 1 if ($nextword eq '-history');
     $verbose = 1 if ($nextword eq '-verbose');
+    $finishing = 1 if ($nextword eq '-finishing');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -65,7 +67,18 @@ while (my ($projid,$projname) = $stmt->fetchrow_array()) {
 
 $stmt->finish();
 
-$query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ? order by readname asc";
+if ($finishing) {
+    # This query finds reads from the same strand and template as the named read, and
+    # returns the readname and sequence ID of each corresponding sequence.  It only
+    # returns reads that are older than the named read, on the assumption that it is
+    # being presented with the names of finishing/re-sequenced reads.
+    $query = "select ra.readname,seq_id" .
+	" from READS as ra,READS as rb,SEQ2READ" .
+	" where rb.readname=? and ra.template_id=rb.template_id and ra.strand=rb.strand" .
+	"   and ra.read_id!=rb.read_id and ra.asped<rb.asped and ra.read_id=SEQ2READ.read_id";
+} else {
+    $query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ? order by readname asc";
+}
 
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -105,24 +118,29 @@ while (my $line = <STDIN>) {
 
 	    ($cstart,$cfinish) = ($cfinish, $cstart) if ($direction eq 'Reverse');
 
-	    print "\n$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
-		"(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n",
+	    if ($finishing) {
+		my $signum = ($direction eq 'Forward') ? '+' : '-';
+		print "$readlike $readname $signum\n";
+	    } else {
+		print "\n$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
+		    "(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n";
+	    }
 	}
 
 	$stmt_seq2contig->finish();
 
 	if ($ctgcount < 1) {
-	    print "\n$readname is free\n\n";
+	    print "\n$readname is free\n\n" unless $finishing;
 	}
     }
 
     if ($seqcount == 0) {
-	print "$readlike NOT KNOWN\n";
+	print "$readlike NOT KNOWN\n" unless $finishing;
     }
 
     $stmt_read2seq->finish();
 
-    print "\n";
+    print "\n" unless $finishing;
 }
 
 
