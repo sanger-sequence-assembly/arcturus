@@ -6,7 +6,25 @@ use ArcturusDatabase;
 
 use Compress::Zlib;
 
-my $smithwaterman = "test/smithwaterman.alpha";
+my $swprog;
+my $instance;
+my $organism;
+my $fofn;
+
+while (my $nextword = shift @ARGV) {
+    $instance = shift @ARGV if ($nextword eq '-instance');
+    $organism = shift @ARGV if ($nextword eq '-organism');
+    $swprog = shift @ARGV if ($nextword eq '-swprog');
+    $fofn = shift @ARGV if ($nextword eq '-fofn');
+}
+
+unless (defined($instance) && defined($organism) && defined($swprog)) {
+    &showUsage("One or more mandatory parameters are missing");
+    exit(1);
+}
+
+die "\"$swprog\" is not an executable program"
+    unless (-x $swprog);
 
 pipe(PARENT_RDR, CHILD_WTR);
 pipe(CHILD_RDR, PARENT_WTR);
@@ -27,13 +45,10 @@ if ($pid = fork) {
     open(STDIN, "<&PARENT_RDR");
     open(STDOUT, ">&PARENT_WTR");
 
-    exec($smithwaterman);
+    exec($swprog);
 
     exit(0);
 }
-
-my $instance = 'dev';
-my $organism = 'EIMER';
 
 my $adb = new ArcturusDatabase(-instance => $instance,
                                -organism => $organism);
@@ -61,6 +76,8 @@ my @queries = (
 	       " where seq_id is null"
 	       );
 
+print STDERR "Generating temporary tables ...\n";
+
 foreach my $query (@queries) {
     print STDERR "Executing $query\n";
 
@@ -73,30 +90,40 @@ foreach my $query (@queries) {
     $sth->finish();
 }
 
-my $limit = $ENV{'EIMERLIMIT'};
+my @finishing_reads;
 
-my $query =  "select READS.read_id,readname from FREEREAD left join READS using(read_id)" .
-    " where readname like '%.____%'";
+if ($fofn) {
+    die "Unable to open $fofn for reading" unless open(FOFN, $fofn);
 
-my $sth = $dbh->prepare($query);
-&db_die("prepare($query) failed");
+    while (my $line = <FOFN>) {
+	my ($readname) = $line =~ /\s*(\S+)\s*/;
 
-$sth->execute();
-&db_die("execute($query) failed");
+	push @finishing_reads, $readname if defined($readname);
+    }
 
-my %finishing_reads;
+    close(FOFN);
+} else {
+    my $query =  "select readname from FREEREAD left join READS using(read_id)" .
+	" where readname like '%.____%'";
 
-while (my @ary = $sth->fetchrow_array()) {
-    my ($readid, $readname) = @ary;
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
 
-    $finishing_reads{$readname} = $readid;
+    $sth->execute();
+    &db_die("execute($query) failed");
+
+    while (my @ary = $sth->fetchrow_array()) {
+	my ($readname) = @ary;
+
+	push @finishing_reads, $readname;
+    }
+
+    $sth->finish();
 }
 
-my $nreads = scalar(keys %finishing_reads);
+my $nreads = scalar(@finishing_reads);
 
-$sth->finish();
-
-$query = "select read_id from READS where readname = ?";
+my $query = "select read_id from READS where readname = ?";
 
 my $sth_readid = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -154,7 +181,7 @@ my %consensus_by_id;
 
 my $nfound = 0;
 
-foreach my $finishing_readname (keys %finishing_reads) {
+foreach my $finishing_readname (@finishing_reads) {
     $sth_seqid->execute($finishing_readname);
 
     my ($finishing_seqid) = $sth_seqid->fetchrow_array();
@@ -188,7 +215,7 @@ foreach my $finishing_readname (keys %finishing_reads) {
 	    my ($ctglen) = $sth_contig->fetchrow_array();
 	    $sth_contig->finish();
 
-	    $sth = ($direction eq 'Forward') ? $sth_fwd_readextents : $sth_rev_readextents;
+	    my $sth = ($direction eq 'Forward') ? $sth_fwd_readextents : $sth_rev_readextents;
 		
 	    $sth->execute($mappingid);
 	    my ($rstart, $rfinish) = $sth->fetchrow_array();
@@ -307,8 +334,6 @@ foreach my $finishing_readname (keys %finishing_reads) {
     }
 
     $sth_readid->finish();
-
-    last if (defined($limit) && $nfound >= $limit);
 }
 
 print STDERR "\nFound $nfound finishing read partners out of $nreads\n";
@@ -371,4 +396,20 @@ sub getConsensus {
     $sequence = uncompress($sequence) if defined($sequence);
 
     return $sequence;
+}
+
+sub showUsage {
+    my $msg = shift;
+    print STDERR "ERROR: $msg\n\n" if defined($msg);
+
+    print STDERR "MANDATORY PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-instance\tName of instance\n";
+    print STDERR "-organism\tName of organism\n";
+    print STDERR "-swprog\t\tName of Smith-Waterman binary\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    print STDERR "-fofn\t\tFile containing a list of finishing read names\n";
+
 }
