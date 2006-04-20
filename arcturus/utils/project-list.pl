@@ -133,17 +133,56 @@ unless (@projects || keys %options) {
     }
 }
 
+my %projectdata;
+my $maxnamelen = 0;
+
+foreach my $project (@projects) {
+    my $pd = $project->getProjectData();
+
+    my $pname = $pd->{'name'};
+
+    $projectdata{$project} = $pd;
+
+    my $pnamelen = length($pname);
+
+    $maxnamelen = $pnamelen if ($pnamelen > $maxnamelen);
+}
+
 if (@projects && !$longwriteup) {
     print STDOUT "\nProject inventory for database $organism ";
     print STDOUT "(assembly $assembly) " if defined($assembly);
-    print STDOUT ":\n\n  nr as name     contigs    reads  "
-               . "sequence   largest  owner    locked comment\n\n";
+
+    print STDOUT ":\n\n";
+
+    my $format = "%4s %2s %-" . $maxnamelen . "s %7s %8s %9s %9s  %-8s %6s %-24s\n\n";
+
+    printf STDOUT $format,'nr','as','name','contigs','reads',
+    'sequence','largest','owner','locked','comment';
 }
 
-foreach my $project (@projects) {
+my $format = "%4d %2d %-" . $maxnamelen . "s %7d %8d %9d %9d  %-8s %6s %-24s\n";
+
+foreach $project (@projects) {
     next if ($project->getProjectName() eq 'the bin' && !$project->getNumberOfContigs());
-    print STDOUT $project->toStringShort() unless $longwriteup; 
-    print STDOUT $project->toStringLong()  if $longwriteup; 
+
+    if ($longwriteup) {
+	print STDOUT $project->toStringLong(); 
+    } else {
+	my $pd = $projectdata{$project};
+
+	printf STDOUT $format,
+	$pd->{'id'},
+	$pd->{'assembly_id'},
+	$pd->{'name'},
+	$pd->{'contigs'},
+	$pd->{'reads'},
+	$pd->{'total_sequence_length'},
+	$pd->{'largest_contig_length'},
+	$pd->{'owner'} || 'unknown',
+	($pd->{'locked'} ? 'LOCKED' : 'free'),
+	$pd->{'status'} || 'unknown',
+	$pd->{'comment'} || '';
+    } 
 }
 print STDOUT "\n";
 
