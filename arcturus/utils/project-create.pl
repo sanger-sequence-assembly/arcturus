@@ -28,9 +28,17 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
 
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $project_id   = shift @ARGV  if ($nextword eq '-project_id');
 
@@ -151,13 +159,14 @@ exit 0;
 sub showUsage {
     my $code = shift || 0;
 
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
-    print STDERR "-projectname\tProject name (should be unique for assembly)\n";
+    print STDERR "-organism\tArcturus database name\n" unless $organism;
+    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    print STDERR "-projectname\tProject name (unique in an assembly)\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
@@ -166,7 +175,8 @@ sub showUsage {
     print STDERR "-owner\t\tAssign the new project to this user\n";
     print STDERR "-comment\tA comment in quotation marks\n";
     print STDERR "-verbose\t(no value) \n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code; 
+    print STDERR "\n";
+    print STDERR "Parameter input ERROR: $code \n" if $code;
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
