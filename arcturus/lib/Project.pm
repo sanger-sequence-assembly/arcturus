@@ -43,15 +43,6 @@ sub getLockedStatus {
 
     return $ADB->getLockedStatusForProject($this);
 }
- 
-sub getProjectData {
-# return the momentary project statistics
-    my $this = shift;
-
-    my $ADB = $this->{ADB} || return undef;
-
-    $ADB->getProjectStatisticsForProject($this);
-}
 
 #-------------------------------------------------------------------
   
@@ -139,7 +130,7 @@ sub setContigStatistics {
 
 sub getContigStatistics {
     my $this = shift;
-    $this->getProjectData() unless ($this->{data}->{contigstats});
+    $this->updateProjectData() unless ($this->{data}->{contigstats});
     return $this->{data}->{contigstats};
 }
   
@@ -190,7 +181,7 @@ sub setNumberOfContigs {
 
 sub getNumberOfContigs {
     my $this = shift;
-    $this->getProjectData() unless ($this->{data}->{numberofcontigs});
+    $this->updateProjectData() unless ($this->{data}->{numberofcontigs});
     return $this->{data}->{numberofcontigs};
 }
   
@@ -201,7 +192,7 @@ sub setNumberOfReads {
   
 sub getNumberOfReads {
     my $this = shift;
-    $this->getProjectData() unless ($this->{data}->{numberofreads});
+    $this->updateProjectData() unless ($this->{data}->{numberofreads});
     return $this->{data}->{numberofreads};
 }
   
@@ -395,7 +386,54 @@ sub writeContigsToMaf {
 
     return $export,$errors,$report;
 }
+ 
+sub updateProjectData {
+# return the momentary project statistics
+    my $this = shift;
 
+    my $ADB = $this->{ADB} || return undef;
+
+    $ADB->getProjectStatisticsForProject($this);
+}
+
+#-------------------------------------------------------------------    
+# exporting meta data as hash
+#-------------------------------------------------------------------    
+
+sub getProjectData {
+    my $this = shift;
+
+    # Make sure that the data are current
+    $this->updateProjectData();
+
+    my $pd = {};
+
+    $pd->{'id'} = $this->getProjectID();
+
+    $pd->{'assembly_id'} = $this->getAssemblyID() || 0;
+
+    $pd->{'name'} = $this->getProjectName();
+
+    $pd->{'contigs'} = $this->getNumberOfContigs() || 0;
+
+    $pd->{'reads'} = $this->getNumberOfReads() || 0;
+
+    my $stats = $this->getContigStatistics();
+
+    $pd->{'total_sequence_length'} = $stats->[0] || 0;
+
+    $pd->{'largest_contig_length'} = $stats->[2] || 0;
+
+    $pd->{'locked'} = $this->getLockedStatus();
+
+    $pd->{'owner'} = $this->getOwner();
+
+    $pd->{'status'} = $this->getProjectStatus();
+
+    $pd->{'comment'} = $this->getComment();
+
+    return $pd;
+}
 #-------------------------------------------------------------------    
 # exporting meta data as formatted string
 #-------------------------------------------------------------------    
@@ -403,6 +441,9 @@ sub writeContigsToMaf {
 sub toStringShort {
 # short writeup (one line)
     my $this = shift;
+
+    # Make sure that the data are current
+    $this->updateProjectData();
 
     my @line;
     push @line, $this->getProjectID();
@@ -427,6 +468,9 @@ sub toStringShort {
 sub toStringLong {
 # long writeup
     my $this = shift;
+
+    # Make sure that the data are current
+    $this->updateProjectData();
 
     my $string = "\n";
 
