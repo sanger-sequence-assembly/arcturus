@@ -39,6 +39,9 @@ sub new {
     my $this = {};
     bless $this, $type;
 
+    $this->{'instance'} = $instance;
+    $this->{'organism'} = $organism;
+
     my $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
 
     my $ldap = Net::LDAP->new($url) or die "$@";
@@ -182,5 +185,18 @@ sub getURL {
 
     return $url;
 }
+
+sub getInstance {
+     my $this = shift;
+
+     return $this->{'instance'};
+ }
+
+
+sub getOrganism {
+     my $this = shift;
+
+     return $this->{'organism'};
+ }
 
 1;
