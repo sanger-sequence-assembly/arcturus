@@ -20,11 +20,11 @@ my $project;
 my $assembly;
 my $confirm;
 my $limit = 100;
-my $fofn;
+my $forn;
 my $ml = 0;
 my $qc = 20; # default quality clip set differently from asp value
 
-my $validKeys = "organism|instance|read|fofn|oligo|finishing|minimulength|ml|"
+my $validKeys = "organism|instance|read|forn|oligo|finishing|minimumlength|ml|"
               . "qualityclip|qc|project|assembly|limit|confirm|preview|"
               . "verbose|list|help";
 
@@ -33,10 +33,18 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }
- 
-    $instance  = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism  = shift @ARGV  if ($nextword eq '-organism');
+
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $read      = shift @ARGV  if ($nextword eq '-read');
 
@@ -45,7 +53,7 @@ while (my $nextword = shift @ARGV) {
 
     $limit     = shift @ARGV  if ($nextword eq '-limit');
 
-    $fofn      = shift @ARGV  if ($nextword eq '-fofn');
+    $forn      = shift @ARGV  if ($nextword eq '-forn');
 
     $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
     $ml        = shift @ARGV  if ($nextword eq '-ml');
@@ -86,8 +94,8 @@ $logger->setFilter(0) if $verbose; # set reporting level
  
 &showUsage("Missing project ID or projectname") unless $project;
 
-unless ($read || $fofn || $readtype) {
-    &showUsage("Missing read ID, readname, readtype or fofn");
+unless ($read || $forn || $readtype) {
+    &showUsage("Missing read ID, readname, readtype or forn");
 }
 
 my $adb = new ArcturusDatabase (-instance => $instance,
@@ -105,7 +113,7 @@ $logger->info("Database $URL opened succesfully");
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
 
-$fofn = &getNamesFromFile($fofn) if $fofn;
+$forn = &getNamesFromFile($forn) if $forn;
 
 #----------------------------------------------------------------
 # MAIN
@@ -115,9 +123,9 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 
 my @reads;
 
-if ($fofn) {
+if ($forn) {
 # input from file
-    foreach my $read (@$fofn) {
+    foreach my $read (@$forn) {
         next unless $read;
         push @reads, $read;
     }
@@ -174,7 +182,7 @@ if ($readtype || ($read && $read =~ /\%|\*/)) {
         $read = $regexp;
     }
     $options{unassembled} = 1;
-    $options{nosingleton} = 1;
+#    $options{nosingleton} = 1;
     $options{limit} = $limit || 100;
     if (my $reads = $adb->getReadNamesLike($read,%options)) {
         foreach my $read (@$reads) {
@@ -273,24 +281,24 @@ sub showUsage {
 
     if ($long) {
      print STDERR "\n";
-     print STDERR "Allocate read(s) to a specified project, optionally in a\n";
-     print STDERR "specified assembly\n\n";
+     print STDERR "Allocate free read(s) to a specified project, optionally in a\n";
+     print STDERR "specified assembly\n";
+     print STDERR "\n";
      print STDERR "A read can be specified on the command line by a number (ID)\n";
-     print STDERR "or by the name of a read occurring in it; a list of reads can\n";
-     print STDERR "be presented in a file using the '-fofn' option\n\n";
+     print STDERR "or by the readname which may contain wildcard symbols\n";
+     print STDERR "A list of reads can be provided in a file using the '-forn' option\n";
+     print STDERR "\n";
      print STDERR "Both project and assembly can be specified with \n";
-     print STDERR "a number (ID) or a name (i.e. not a number)\n\n";
-     print STDERR "The allocation process tests the project locking status:\n";
-     print STDERR "Contigs will only be (re-)allocated from their current\n";
-     print STDERR "project (if any) to the new one specified, if BOTH the\n";
-     print STDERR "current project AND the target project are not locked by\n";
-     print STDERR "another user. Carefully check the results log!\n\n";
-     print STDERR "A special case is when a contig is in a project owned by\n";
-     print STDERR "another user, but not locked. In default mode such contigs\n";
-     print STDERR "are NOT re-allocated (as a protection measure). In order to \n";
-     print STDERR "reassign those contig(s), the '-force' switch must be used.\n\n";
-     print STDERR "In default mode this script lists the contigs that it will\n";
-     print STDERR "(try to) re-allocate. In order to actually make the change,\n";
+     print STDERR "a number (ID) or a name (i.e. not a number)\n";
+     print STDERR "\n";
+     print STDERR "Reads found are converted into single-read contigs and allocated \n";
+     print STDERR "to the project without regarding the project lock status\n";
+     print STDERR "\n";
+     print STDERR "Reads of insufficient quality will be ignored; you can adjust the \n";
+     print STDERR "requirements for quality clipping and minimum good quality length\n";
+     print STDERR "\n";
+     print STDERR "In default mode this script lists the reads which it will allocate\n";
+     print STDERR "In order to actually make the change, ";
      print STDERR "the '-confirm' switch must be used\n";
      print STDERR "\n";
     }
@@ -299,22 +307,24 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "-organism\tArcturus database name\n" unless $organism;
+    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance; 
     print STDERR "-project\tproject ID or projectname\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-read\t\tread ID or readname\n";
-    print STDERR "-fofn\t\tfilename with list of read IDs or names\n";
+    print STDERR "-read\t\tread ID or readname (may include wildcard)\n";
+    print STDERR "-forn\t\tfilename with list of read IDs or names\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or assemblyname\n";
+    print STDERR "-minimumlength\t(ml) required for quality-clipped data (default 50)\n";
+    print STDERR "-qualityclip\t(qc) clip level (default 20) \n";
+    print STDERR "\n";
     print STDERR "-confirm\t(no value) to execute on the database\n";
     print STDERR "-preview\t(no value) produce default listing (negates 'confirm')\n";
-    print STDERR "-force\t\t(no value) to process reads allocated to other users\n";
-    print STDERR "-verbose\t(no value) \n";
+    print STDERR "-verbose\t(or: list; no value) \n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
