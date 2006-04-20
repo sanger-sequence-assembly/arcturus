@@ -1236,15 +1236,14 @@ sub getReadNamesLike {
 # options: unassembled
 
     if ($options{unassembled}) {
-print STDERR "using getUnassembledReads \n" if $DEBUG;
-        $options{namelike} = $name if ($name !~ /[^\W\.\%\_]/);
-        $options{nameregexp} = $name if ($name =~ /[^\W\.\%\_]/);
-        $options{nosingleton} = 1; # ignore single read contigs
+# if name contains a wildcard, also use namelike
+	$options{namelike} = $name;
+# ignore single read contigs (unless otherwise specified)
+        $options{nosingleton} = 1 unless defined $options{nosingleton};
         return &getUnassembledReads($dbh,$this,'readname',%options);
     }
 
 # else search the whole database
-
 
     print "getReadNamesLike: TO BE IMPLEMENTED\n";
 
