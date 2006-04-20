@@ -56,7 +56,8 @@ limit datasize 16000000
 # cd `pfind -q $organism`/arcturus # removed: run script from work directory
 
 if ( ! -f ${projectname}.0 ) then
-  echo \!\! -- Project $projectname version 0 does not exist --
+  set pwd = `pwd`
+  echo \!\! -- Project $projectname version 0 does not exist in ${pwd} --
   exit 1
 endif
 
