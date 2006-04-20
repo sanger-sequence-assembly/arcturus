@@ -84,6 +84,22 @@ sub getConnection {
     return $this->{Connection};
 }
 
+sub getInstance {
+    my $this = shift;
+
+    my $ds = $this->{DataSource} || return '';
+
+    return $ds->getInstance();
+}
+
+sub getOrganism {
+    my $this = shift;
+
+    my $ds = $this->{DataSource} || return '';
+
+    return $ds->getOrganism();
+}
+
 sub getURL {
     my $this = shift;
 
@@ -420,7 +436,7 @@ sub logQuery {
         $logentry = $log->[$logentry-1]; # the query data
         return undef unless $logentry;
         @entry = @$logentry;
-        $entry[1] =~ s/(\s*(where|from|and|order|group))/\n         $1/gi;
+#        $entry[1] =~ s/(\s*(where|from|and|order|group))/\n         $1/gi;
         my $output = "method : $entry[0]\nquery  : $entry[1]\n";
         splice @entry,0,2;
 # if any data given, substitute wildcards
