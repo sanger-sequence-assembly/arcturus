@@ -24,7 +24,7 @@ my $forn;
 my $ml = 0;
 my $qc = 20; # default quality clip set differently from asp value
 
-my $validKeys = "organism|instance|read|forn|oligo|finishing|minimumlength|ml|"
+my $validKeys = "organism|instance|read|fofn|forn|oligo|finishing|minimumlength|ml|"
               . "qualityclip|qc|project|assembly|limit|confirm|preview|"
               . "verbose|list|help";
 
@@ -53,7 +53,7 @@ while (my $nextword = shift @ARGV) {
 
     $limit     = shift @ARGV  if ($nextword eq '-limit');
 
-    $forn      = shift @ARGV  if ($nextword eq '-forn');
+    $forn      = shift @ARGV  if ($nextword eq '-forn' ||$nextword eq '-fofn');
 
     $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
     $ml        = shift @ARGV  if ($nextword eq '-ml');
@@ -314,7 +314,9 @@ sub showUsage {
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-read\t\tread ID or readname (may include wildcard)\n";
-    print STDERR "-forn\t\tfilename with list of read IDs or names\n";
+    print STDERR "-forn\t}\n";
+    print STDERR "  OR\t}\tfilename with list of read IDs or names\n";
+    print STDERR "-fofn\t}\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
