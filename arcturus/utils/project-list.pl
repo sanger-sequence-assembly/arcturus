@@ -30,9 +30,17 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }                                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $generation   = shift @ARGV  if ($nextword eq '-generation');
 
@@ -211,11 +219,11 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL EXCLUSIVE PARAMETER:\n";
     print STDERR "\n";
-    print STDERR "-contig\t\tcontig ID or name\n";
+    print STDERR "-contig\t\tcontig ID or name of project member\n";
     print STDERR "\n";
 #    print STDERR "OPTIONAL PARAMETERS:\n";
 #    print STDERR "\n";
-    print STDERR "-project\tproject ID or name\n";
+    print STDERR "-project\tproject ID or name (may contain wildcard\n";
     print STDERR "-assembly\tassembly ID or name (default 1)\n";
     print STDERR "\n";
     print STDERR "LIST OPTIONS:\n";
