@@ -21,6 +21,7 @@ my $noreads;
 my $fofn;
 my $caffile;
 my $fastafile;
+my $emblfile;
 my $qualityfile;
 my $masking;
 my $msymbol;
@@ -32,8 +33,8 @@ my $clipsymbol;
 my $endregiontrim;
 my $gap4name;
 
-my $validKeys  = "organism|instance|contig|contigs|fofn|ignoreblocked|caf|"
-               . "fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
+my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
+               . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
                . "endregiontrim|gap4name|g4n|ert|verbose|help";
 
@@ -42,19 +43,34 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }
-                                                          
-    $instance      = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism      = shift @ARGV  if ($nextword eq '-organism');
+
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $contig        = shift @ARGV  if ($nextword eq '-contig'); # name or ID
     $contig        = shift @ARGV  if ($nextword eq '-contigs'); # names or IDs
 
     $fofn          = shift @ARGV  if ($nextword eq '-fofn'); # file of names/IDs
+    $fofn          = shift @ARGV  if ($nextword eq '-focn'); # file of names/IDs
+
+    if ($nextword eq '-caf' || $nextword eq '-fasta' || $nextword eq '-embl') {
+        die "You can not select more than one output format (CAF, fasta or embl)"         if (defined($caffile) || defined($fastafile) || defined($emblfile));
+    }
 
     $caffile       = shift @ARGV  if ($nextword eq '-caf');
 
     $fastafile     = shift @ARGV  if ($nextword eq '-fasta');
+
+    $emblfile      = shift @ARGV  if ($nextword eq '-embl');
 
     $qualityfile   = shift @ARGV  if ($nextword eq '-quality');
 
@@ -112,8 +128,8 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
-unless (defined($caffile) || defined($fastafile)) {
-    &showUsage("Missing caf or fasta file specification");
+unless (defined($caffile) || defined($fastafile) || defined($emblfile)) {
+    &showUsage("Missing caf, fasta or EMBL file specification");
 }
 
 &showUsage("Missing contig name or ID") unless ($contig || $fofn);
@@ -156,6 +172,8 @@ if (defined($caffile)) {
 
 my ($fhDNA, $fhQTY);
 
+# CAF output
+
 if (defined($caffile) && $caffile) {
     $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
     unless ($fhDNA = new FileHandle($caffile, "w")) {
@@ -165,6 +183,8 @@ if (defined($caffile) && $caffile) {
 elsif (defined($caffile)) {
     $fhDNA = *STDOUT;
 }
+
+# FASTA output
 
 if (defined($fastafile) && $fastafile) {
     $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
@@ -184,6 +204,26 @@ elsif (defined($fastafile)) {
     $fhDNA = *STDOUT;
 }
 
+# EMBL format
+
+if (defined($emblfile) && $emblfile) {
+    $emblfile .= '.embl' unless ($emblfile =~ /\.embl$|null/);
+    unless ($fhDNA = new FileHandle($emblfile, "w")) {
+        &showUsage("Failed to create EMBL output file \"$emblfile\"");
+    }
+    if (defined($qualityfile)) {
+        unless ($fhQTY = new FileHandle($qualityfile, "w")) {
+	    &showUsage("Failed to create EMBL quality output file \"$qualityfile\"");
+        }
+    }
+    elsif ($emblfile eq '/dev/null') {
+        $fhQTY = $fhDNA;
+    }
+}
+elsif (defined($emblfile)) {
+    $fhDNA = *STDOUT;
+}
+
 my @contigs;
 
 push @contigs, split(/,/, $contig) if $contig;
@@ -194,7 +234,7 @@ if ($fofn) {
     }
 }
 
-# get the write options
+# get the write options (caf and fasta only, for now)
 
 my %woptions;
 if (defined($fastafile)) {
@@ -262,9 +302,11 @@ foreach my $identifier (@contigs) {
 
     $contig->setContigName($identifier) if ($identifier =~ /\D/);
 
-    $err = $contig->writeToCaf($fhDNA,%woptions)      unless defined($fastafile);
+    $err = $contig->writeToCaf($fhDNA,%woptions)          if defined($caffile);
 
     $err = $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
+
+    $err = $contig->writeToEMBL($fhDNA)                   if defined($emblfile);
 
     $errorcount++ if $err;
 }
@@ -300,7 +342,7 @@ sub showUsage {
     print STDERR "MANDATORY NON-EXCLUSIVE PARAMETERS:\n\n";
     print STDERR "-contig\t\tcontig name or ID, or comma-separated list of "
                . "names or IDs\n";
-    print STDERR "-fofn \t\tname of file with list of Contig IDs\n";
+    print STDERR "-fofn \t\t(focn) name of file with list of Contig IDs\n";
 #    print STDERR "-ignoreblock\t(no value) include contigs from blocked projects\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
@@ -311,6 +353,8 @@ sub showUsage {
     print STDERR "-fasta\t\toutput file name (specify 0 for default STDOUT), fasta "
                . "format\n\t\t(default, '-fasta' exports the consensus sequence "
                . "(no reads)\n";
+    print STDERR "-embl\t\toutput file name (specify 0 for default STDOUT), EMBL "
+               . "format\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for CAF export:\n";
     print STDERR "\n";
