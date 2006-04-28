@@ -48,6 +48,24 @@ sub setArcturusDatabase {
     }
 }
 
+sub getOrganism {
+# retrieve the organism 
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return 0; # the parent database
+
+    return $ADB->getOrganism();
+}
+
+sub getInstance {
+# retrieve the instance 
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return 0; # the parent database
+
+    return $ADB->getInstance();
+}
+
 #-------------------------------------------------------------------
 # delayed loading of DNA and quality data from database
 #-------------------------------------------------------------------
@@ -134,7 +152,9 @@ sub getContigName {
 
     unless(defined($this->{contigname})) {
         my $cid = $this->getContigID() || 0;
-        $this->setContigName(sprintf("contig%08d",$cid));
+        my $ins = $this->getInstance() || 0;
+        my $org = $this->getOrganism() || 0;
+        $this->setContigName($ins."_".$org."_contig_".sprintf("%08d",$cid));
     }
     return $this->{contigname};
 }
@@ -444,7 +464,7 @@ sub hasParentContigs {
 # child contig instances (re: tag propagation)
 
 sub getChildContigs {
-# returns array of parent Contig instances
+# returns array of child Contig instances
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
 
@@ -455,13 +475,13 @@ sub getChildContigs {
 }
 
 sub addChildContig {
-# add parent Contig instance
+# add child Contig instance
     my $this = shift;
     $this->importer(shift,'Contig','ChildContig');
 }
 
 sub hasChildContigs {
-# returns number of previous contigs
+# returns number of offspring contigs 
     my $this = shift;
     my $parents = $this->getChildContigs(shift);
     return $parents ? scalar(@$parents) : 0;
@@ -784,9 +804,10 @@ sub linkToContig {
 # we now use the align-to-trace mapping between the sequences and the original
 # trace file in order to find the contig-to-contig alignment defined by this read 
             my $eseq_id = $readnamematch->getSequenceID(); # (newly) edited sequence
-# check the existence of the database handle in order get at the read versions
+# check the existence of the database handle in order to get at the read versions
             unless ($this->{ADB}) {
-		print STDERR "Unable to recover C2C link: missing database handle\n";
+		print STDERR "Unable to recover C2C link for read $readname "
+                           . ": missing database handle\n";
 		next;
             }
 # get the versions of this read in a hash keyed on sequence IDs
@@ -809,11 +830,15 @@ if ($DEBUG) {
  print STDOUT "original Align-to-SCF:".$omapping->toString();
  print STDOUT "edited   Align-to-SCF:".$emapping->toString();
 }
+else {
+ print STDERR "Recovering link for read $readname (seqs:$oseq_id, $eseq_id)\n";
+}
 #        - assign this new mapping to $complement
 	    $complement = $readnamematch;
-# to be removed later
+# to be removed later (fix only for single read parents, for the moment)
             next if (@$lmappings>1 && @$cmappings>1);
 print STDOUT "sequences equated to one another (temporary fix)\n" if $DEBUG;
+print STDERR "sequences equated to one another (temporary fix)\n" unless $DEBUG;
 #****
         }
 # count the number of reads in the overlapping area
@@ -848,14 +873,14 @@ print STDOUT "sequences equated to one another (temporary fix)\n" if $DEBUG;
             my $cpmapping = $complement->compare($mapping);
             my $cpaligned = $cpmapping->getAlignment();
 
-if ($DEBUG) {
- print STDOUT "parent mapping:".$mapping->toString();
- print STDOUT "contig mapping:".$complement->toString();
- print STDOUT "c-to-p mapping:".$cpmapping->toString();
- unless ($cpaligned || $compare->getNumberOfReads() > 1) {
-  print STDOUT "Non-overlapping read segments for single-read parent contig ".
-                $compare->getContigID()."\n";
- }    
+unless ($cpaligned || $compare->getNumberOfReads() > 1) {
+    print STDERR "Non-overlapping read segments for single-read parent contig ".
+                  $compare->getContigID()."\n";
+    if ($DEBUG) {
+        print STDOUT "parent mapping:".$mapping->toString();
+        print STDOUT "contig mapping:".$complement->toString();
+        print STDOUT "c-to-p mapping:".$cpmapping->toString();
+    }    
 }
 
             next unless defined $cpaligned; # empty cross mapping
@@ -1324,7 +1349,7 @@ print "propagateTagsToContig ".
 
 
     if ($cparents && @$cparents && $target->hasContigToContigMappings(1)) {
-# there are mappings: hence the child is taken from the database (and has parents)
+# there are mappings: hence the child is taken from the database (& has parents)
         foreach my $cparent (@$cparents) {
 print "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
 	    if ($cparent->getContigID() == $parent_id) {
@@ -1332,7 +1357,13 @@ print "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
 # find the corresponding mapping using contig and mapping names
                 my $c2cmappings = $target->getContigToContigMappings();
                 foreach my $c2cmapping (@$c2cmappings) {
-		    if ($c2cmapping->getMappingName eq $parent->getContigName) {
+print "mapping name ".$c2cmapping->getMappingName." contigname: "
+                     .$parent->getContigName."\n" if $DEBUG;
+print "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
+                     .$parent->getSequenceID()."\n" if $DEBUG;
+# we use the sequence IDs here because the mappings come from the database
+#  	            if ($c2cmapping->getMappingName eq $parent->getContigName) {
+		    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
                         $mapping = $c2cmapping;
                         last;
                     }
@@ -1350,9 +1381,10 @@ print "Finding mappings from scratch \n" if $DEBUG;
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
 print "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
         return 0 unless $nrofsegments;
-# identify the mapping using contig and mapping names
+# identify the mapping using parent contig and mapping name
         my $c2cmappings = $target->getContigToContigMappings();
         foreach my $c2cmapping (@$c2cmappings) {
+#	    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
 	    if ($c2cmapping->getMappingName eq $parent->getContigName) {
                 $mapping = $c2cmapping;
                 last;
@@ -1480,10 +1512,10 @@ sub writeToCaf {
         print $FILE $mapping->assembledFromToString();
     }
 
-# write tags, if any
+# write tags, if any are loaded (take as is, no delayed loading)
 
-    if ($this->hasTags) {
-        my $tags = $this->getTags(1);
+    if ($this->hasTags()) {
+        my $tags = $this->getTags();
         foreach my $tag (@$tags) {
             $tag->writeToCaf($FILE);
         }
@@ -1558,7 +1590,7 @@ sub writeDNA {
 
     my $identifier = $this->getContigName();
 # optionally add gap4name 
-    $identifier .= "-".$this->getGap4Name() if $options{gap4name};
+    $identifier .= " - ".$this->getGap4Name() if $options{gap4name};
 
     if (!$DFILE) {
         return "Missing file handle for DNA";
@@ -1588,7 +1620,8 @@ sub writeBaseQuality {
     my $marker = $options{marker} || '>'; # default FASTA format
 
     my $identifier = $this->getContigName();
-    $identifier = $this->getGap4Name() if $options{gap4name};
+# optionally add gap4name 
+    $identifier .= " - ".$this->getGap4Name() if $options{gap4name};
 
     if (!$QFILE) {
         return "Missing file handle for Quality Data";
@@ -1769,6 +1802,103 @@ sub writeToMaf {
 # returns 1 for success or 0 and report for errors
 
     return $success,$report;
+}
+
+sub writeToEMBL {
+# write contig info in (minimal) EMBL format (TO BE TESTED)
+    my $this = shift;
+    my $DFILE = shift; # obligatory file handle for DNA output
+    my $QFILE = shift; # optional file handle for quality data
+
+    my $identifier = $this->getContigName();
+
+    if (!$DFILE) {
+        return "Missing file handle for DNA";
+    }
+    elsif (my $dna = $this->getSequence()) {
+
+# collect length and print header record
+
+	my $length = length($dna);
+	print $DFILE "ID   $identifier  standard; Genomic DNA; CON; $length BP\n";
+        print $DFILE "XX\n";
+
+# the tag section (if any)
+
+        my $feature = 0;
+        if ($this->hasTags(1)) {
+
+            my $tags = $this->getTags(); # force delayed loading
+            foreach my $tag (@$tags) {
+                my $tagtype     = $tag->getType();
+                my $strand      = $tag->getStrand();
+                my $sysID       = $tag->getSystematicID();
+                my $comment     = $tag->getComment();
+                my $tagcomment  = $tag->getTagComment();
+                my ($ps,$pf)    = $tag->getPosition;
+#              next if ($tagtype ne 'ANNO');
+                unless ($feature) {
+                    print $DFILE "FH   Key             Location/Qualifiers\nFH\n";
+                }
+                $feature++;
+                my $sp17 = "                 "; # format spacer
+                print $DFILE "FT   TAG             $ps..$pf\n";
+                print $DFILE "FT $sp17 /type=$tagtype\n" if $tagtype;
+                print $DFILE "FT $sp17 /systematic ID = $sysID\n" if $sysID;
+                if ($strand eq 'U') {
+                    print $DFILE "FT $sp17 /no strand information\n";
+		}
+		else {
+                    print $DFILE "FT $sp17 /strand $strand\n";
+		}
+                print $DFILE "FT $sp17 /comment: $comment\n" if $comment;
+                print $DFILE "FT $sp17 /description: $tagcomment\n" if $tagcomment;
+            }
+            print $DFILE "XX\n" if $feature;
+        }
+  
+# the DNA section, count the base composition
+
+        my %base;
+        while ($dna =~ /(.)/g) {
+            $base{uc($1)}++; # count on upper case
+        }
+# count other than ACTG
+        my $other = $length;
+        foreach my $key ('A','C','G','T') {
+            $other -= $base{$key};
+        }
+        print $DFILE  "SQ   Sequence $length BP; "
+                    . "$base{A} A;  $base{C} C; $base{G} G; $base{T} T; "
+			. "$other  other;\n";
+
+# output in blocks of 60 characters
+
+	my $offset = 0;
+	while ($offset < $length) {    
+	    my $line = substr($dna,$offset,60);
+            $line =~ tr/A-Z/a-z/; # lower case
+	    $offset += 60;
+            if ($offset > $length) {
+# append the missing blanks to the line
+                my $gap = $offset - $length;
+                while ($gap--) {
+                    $line .= " ";
+                }
+                $offset = $length;
+	    }
+            $line =~ s/(.{1,10})/$1  /g; # insert double spaces
+            print $DFILE "     ". $line . "  " . sprintf('%8d',$offset) . "\n";
+	}
+        print $DFILE "//\n";
+    }
+    else {
+        return "Missing DNA data for contig $identifier";
+    }
+
+    return unless $QFILE;
+
+# Quality printout to be completed
 }
 
 #-------------------------------------------------------------------    
@@ -1976,6 +2106,8 @@ sub removeRead {
     return $spliced;
 }
 
+#---------------------------
+# TO BE DEVELOPED
 #---------------------------
 
 sub toPadded {
