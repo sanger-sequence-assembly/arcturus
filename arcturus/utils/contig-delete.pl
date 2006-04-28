@@ -22,25 +22,39 @@ my $confirm;
 my $cleanup = 0;
 my $fofn;
 
-my $validKeys  = "organism|instance|username|password|contig|fofn|cleanup|"
-               . "verbose|confirm|help";
+my $validKeys  = "organism|instance|username|password|contig|fofn|focn|"
+               . "cleanup|verbose|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    }
+                                                                         
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance = shift @ARGV;
+    }
 
-    $username     = shift @ARGV  if ($nextword eq '-username');
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism = shift @ARGV;
+    }
+
+    if ($nextword eq '-username') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define username" if $username;
+        $username = shift @ARGV;
+    }
 
     $password     = shift @ARGV  if ($nextword eq '-password');
 
     $contig_id    = shift @ARGV  if ($nextword eq '-contig');
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
+    $fofn         = shift @ARGV  if ($nextword eq '-focn'); # alias
 
     $cleanup      = 1            if ($nextword eq '-cleanup');
 
@@ -116,6 +130,8 @@ if ($fofn) {
 my $isName = 0;
 foreach my $identifier (@contigs) {
     $isName = 1 if ($identifier =~ /\D/);
+# develop:    my $contig=
+# also: better message (give length and nreads) in message further down
 }
 
 
@@ -190,13 +206,15 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n";
+    print STDERR "-organism\tArcturus database name\n" unless $organism;
+    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    print STDERR "-username\tArcturus user with delete privilege\n" unless $username;
+    print STDERR "-password\tpassword of Arcturur DBA with delete privilege\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-contig\t\tContig ID\n";
-    print STDERR "-fofn\t\tfilename with list of contig IDs to be delete\n";
+    print STDERR "-contig\t\tContig ID or comma-separated list of \n";
+    print STDERR "-fofn\t\tfilename with list of contig IDs to be deleted\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
