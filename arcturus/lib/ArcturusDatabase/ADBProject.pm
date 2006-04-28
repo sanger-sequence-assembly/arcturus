@@ -1397,7 +1397,7 @@ sub updateProjectAttribute {
     my %changes;
     my $execute = '';
     my $preview = '';
-    foreach my $item ('ProjectName','Comment','Owner') { #'ProjectStatus'
+    foreach my $item ('ProjectName','Comment','Owner','ProjectStatus') {
 # get the project values by using the 'eval' construct
         my $newvalue = eval("\$project->get$item()");
         my $oldvalue = eval("\$dbproject->get$item()");
@@ -1418,8 +1418,8 @@ sub updateProjectAttribute {
     my @lockinfo = &getLockedStatus($dbh,$project_id);
     if ($lockinfo[0]) {
         my $message = "Project ".$dbproject->getProjectName()
-	            . " is locked by user $lockinfo[0]";
-        return 0,$message if ($user ne $lockinfo[0]);
+	            . " is locked by user $lockinfo[1]";
+        return 0,$message if ($user ne $lockinfo[1]);
         $preview .= "$message\n";
     }
 
@@ -1439,6 +1439,8 @@ sub updateProjectAttribute {
         
 
     }
+
+    return 1, $preview if $changes{status}; # temporary untill tests done
 
     return 1, $preview unless $options{confirm};
 
