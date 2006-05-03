@@ -1464,7 +1464,7 @@ public class DynamicScaffolding2 {
 		    g.draw(rect);
 		}
  
-		String cid = "" + box.getContig().getID();
+		String cid = "" + box.getContig().getName();
 
 		g.drawString(cid, (int)x, (int)y - 2);
 	    }
