@@ -72,13 +72,18 @@ if ($finishing) {
     # returns the readname and sequence ID of each corresponding sequence.  It only
     # returns reads that are older than the named read, on the assumption that it is
     # being presented with the names of finishing/re-sequenced reads.
-    $query = "select ra.readname,seq_id" .
-	" from READS as ra,READS as rb,SEQ2READ" .
+    $query = "select ra.readname,ra.read_id" .
+	" from READS as ra,READS as rb" .
 	" where rb.readname=? and ra.template_id=rb.template_id and ra.strand=rb.strand" .
-	"   and ra.read_id!=rb.read_id and ra.asped<rb.asped and ra.read_id=SEQ2READ.read_id";
+	"   and ra.read_id!=rb.read_id and ra.asped<rb.asped";
 } else {
-    $query = "select readname,seq_id from READS left join SEQ2READ using(read_id) where readname like ? order by readname asc";
+    $query = "select readname,read_id from READS where readname like ? order by readname asc";
 }
+
+my $stmt_readname = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$query = "select seq_id from SEQ2READ where read_id = ?";
 
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -96,38 +101,41 @@ while (my $line = <STDIN>) {
 
     $readlike =~ s/\*/%/g;
 
-    $stmt_read2seq->execute($readlike);
+    $stmt_readname->execute($readlike);
 
     my $ctgcount = 0;
     my $seqcount = 0;
 
-    while (my ($readname,$seqid) = $stmt_read2seq->fetchrow_array()) {
-	print STDERR "Examining $readname (seq_id $seqid)\n" if $verbose;
+    while (my ($readname,$readid) = $stmt_readname->fetchrow_array()) {
+	print STDERR "Examining $readname (id $readid)\n" if $verbose;
 
 	$ctgcount = 0;
-	$seqcount++;
 
-	$stmt_seq2contig->execute($seqid);
+	$stmt_read2seq->execute($readid);
 
-	while (my ($contig_id,$gap4name,$nreads,$ctglen,$created,$updated,$projid,$cstart,$cfinish,$direction) =
-	       $stmt_seq2contig->fetchrow_array()) {
-	    $ctgcount++;
+	while (my ($seqid) = $stmt_read2seq->fetchrow_array()) {
+	    $seqcount++;
 
-	    my $projname = $projectid2name{$projid};
-	    $projname = $organism . "/" . $projid unless defined($projname);
+	    $stmt_seq2contig->execute($seqid);
 
-	    ($cstart,$cfinish) = ($cfinish, $cstart) if ($direction eq 'Reverse');
+	    while (my ($contig_id,$gap4name,$nreads,$ctglen,$created,$updated,$projid,$cstart,$cfinish,$direction) =
+		   $stmt_seq2contig->fetchrow_array()) {
+		$ctgcount++;
 
-	    if ($finishing) {
-		my $signum = ($direction eq 'Forward') ? '+' : '-';
-		print "$readlike $readname $signum\n";
-	    } else {
-		print "\n$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
-		    "(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n";
+		my $projname = $projectid2name{$projid};
+		$projname = $organism . "/" . $projid unless defined($projname);
+
+		($cstart,$cfinish) = ($cfinish, $cstart) if ($direction eq 'Reverse');
+
+		if ($finishing) {
+		    my $signum = ($direction eq 'Forward') ? '+' : '-';
+		    print "$readlike $readname $signum\n";
+		} else {
+		    print "\n$readname is in $gap4name in $projname at $cstart..$cfinish\n" .
+			"(contig_id=$contig_id length=$ctglen reads=$nreads created=$created updated=$updated)\n";
+		}
 	    }
 	}
-
-	$stmt_seq2contig->finish();
 
 	if ($ctgcount < 1) {
 	    print "\n$readname is free\n\n" unless $finishing;
@@ -138,11 +146,12 @@ while (my $line = <STDIN>) {
 	print "$readlike NOT KNOWN\n" unless $finishing;
     }
 
-    $stmt_read2seq->finish();
-
     print "\n" unless $finishing;
 }
 
+$stmt_readname->finish();
+$stmt_read2seq->finish();
+$stmt_seq2contig->finish();
 
 $dbh->disconnect();
 
@@ -162,4 +171,6 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "-history\t\tSearch for the read in all contigs, not just the current contig set\n";
+    print STDERR "-verbose\t\tVerbose output\n";
+    print STDERR "-finishing\t\tDisplay information suitable for modifying experiment files\n";
 }
