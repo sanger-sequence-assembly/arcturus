@@ -164,13 +164,13 @@ while(my @ary = $sth->fetchrow_array()) {
 
     if ($depad) {
 	# Depad
-	$sequence =~ s/[^\w\-]//g;
+	$sequence =~ s/[NnXx\*\-]//g;
     } elsif ($padton) {
 	# Convert pads to N ...
-	$sequence =~ s/[^\w\-]/N/g;
+	$sequence =~ s/[\*\-]/N/g;
     } elsif ($padtox) {
 	# Convert pads to X ...
-	$sequence =~ s/[^\w\-]/X/g;
+	$sequence =~ s/[\*\-]/X/g;
     }
 
     if ($ends && length($sequence) > 2 * $ends) {
