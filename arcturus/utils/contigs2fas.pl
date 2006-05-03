@@ -29,7 +29,8 @@ my $allcontigs = 0;
 my $maxseqperfile;
 my $seqfilenum;
 my $totseqlen;
-my $project_id;
+my $pinclude;
+my $pexclude;
 my $usegapname = 1;
 my $ends = 0;
 
@@ -51,7 +52,9 @@ while (my $nextword = shift @ARGV) {
 
     $allcontigs = 1 if ($nextword eq '-allcontigs');
 
-    $project_id = shift @ARGV if ($nextword eq '-project');
+    $pinclude = shift @ARGV if ($nextword eq '-include');
+
+    $pexclude = shift @ARGV if ($nextword eq '-exclude');
 
     $ends = shift @ARGV if ($nextword eq '-ends');
 
@@ -110,7 +113,24 @@ if (defined($fastafile)) {
     }
 }
 
-my $query;
+my $query = "select project_id,name from PROJECT";
+
+my $sth = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$sth->execute();
+&db_die("execute($query) failed");
+
+my $projectname2id;
+
+while (my ($projid,$projname) = $sth->fetchrow_array()) {
+    $projectname2id->{$projname} = $projid;
+}
+
+$sth->finish();
+
+$pinclude = &getProjectIDs($pinclude, $projectname2id) if defined($pinclude);
+$pexclude = &getProjectIDs($pexclude, $projectname2id) if defined($pexclude);
 
 $minlen = 1000 unless (defined($minlen) || defined($contigids));
 
@@ -126,10 +146,14 @@ if (defined($contigids)) {
 
     $query .= " and length > $minlen" if defined($minlen);
 
-    $query .= " and project_id = $project_id" if defined($project_id);
+    $query .= " and project_id in ($pinclude)" if defined($pinclude);
+
+    $query .= " and project_id not in ($pexclude)" if defined($pexclude);
 }
 
-my $sth = $dbh->prepare($query);
+print STDERR $query,"\n";
+
+$sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
 $sth->execute();
@@ -252,7 +276,30 @@ sub showUsage {
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
-    print STDERR "    -project\t\tProject ID to export\n";
+    print STDERR "    -include\t\tInclude contigs in these projects\n";
+    print STDERR "    -exclude\t\tExclude contigs in these projects\n";
     print STDERR "    -nogap4name\t\tUse contig ID as name, not Gap4 name\n";
     print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
+}
+
+sub getProjectIDs {
+    my $pnames = shift;
+    my $name2id = shift;
+
+    my @projects = split(/,/, $pnames);
+
+    my @projectids;
+
+    foreach my $pname (@projects) {
+	my $pid = $name2id->{$pname};
+	if (defined($pid)) {
+	    push @projectids, $pid;
+	} else {
+	    print STDERR "Unknown project name: $pname\n";
+	}
+    }
+
+    my $projectlist = join(',', @projectids);
+
+    return $projectlist;
 }
