@@ -1226,7 +1226,8 @@ sub getContigMappingsForContig {
         $dir = 'Forward' unless defined($dir);
 # intialise and add parent name and parent ID as sequence ID
         my $mapping = new Mapping();
-        $mapping->setMappingName(sprintf("contig%08d",$pid));
+#        $mapping->setMappingName(sprintf("contig%08d",$pid)); # to the parent
+        $mapping->setMappingName("contig_".sprintf("%08d",$pid)); # the parent
         $mapping->setSequenceID($pid);
         $mapping->setAlignmentDirection($dir);
         $mapping->setMappingID($mid);
@@ -2407,22 +2408,29 @@ sub fetchTagsForContigIDs {
     die "fetchTagsForContigIDs expects an array as parameter"
     unless (ref($cids) eq 'ARRAY');
 
-# compose query (note, this query depends on tag_seq_id being > 0)
-# (perhaps we should cater for the case tag_id > 0 tag_seq_id = 0)
+# compose query (note, this query uses the UNION construct to cater
+# for the case tag_id > 0 tag_seq_id = 0)
 
-    my $items = "contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,comment,"
-              . "tagtype,systematic_id,tagcomment,"
-              . "TAGSEQUENCE.tag_seq_id,tagseqname,sequence";
+    my $tagitems = "contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,comment,"
+	         . "tagtype,systematic_id,tagcomment,CONTIGTAG.tag_seq_id";
+    my $seqitems = "tagseqname,sequence";
 
-    my $query = "select $items"
+    my $query = "select $tagitems,$seqitems"
               . "  from TAG2CONTIG, CONTIGTAG, TAGSEQUENCE"
               . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
               . "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
 	      . "   and contig_id in (".join (',',@$cids) .")"
-#              . "   and deprecated != 'Y'"
+#              . "   and deprecated != 'Y'" # no table column now
+              . " union "
+              . "select $tagitems,'',''"
+              . "  from TAG2CONTIG, CONTIGTAG"
+              . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
+              . "   and CONTIGTAG.tag_seq_id = 0" # explicitly undefined sequence
+	      . "   and contig_id in (".join (',',@$cids) .")"
+#              . "   and deprecated != 'Y'" # no table column now
               . " order by contig_id";
 
-#print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
+print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
 
     my @tag;
 
@@ -2449,7 +2457,7 @@ sub fetchTagsForContigIDs {
         push @tag, $tag;
     }
 
-#print ">fetchTagsForContigIDs tags found: ".scalar(@tag)."\n" if $DEBUG;
+print ">fetchTagsForContigIDs tags found: ".scalar(@tag)."\n" if $DEBUG;
 
     return [@tag];
 }
@@ -2460,8 +2468,11 @@ sub enterTagsForContig {
 # public method for test purposes
     my $this = shift;
     my $contig = shift;
+    my %options = @_;
 
-    die "getTagsForContigPublic expects a Contig instance" 
+$DEBUG=$options{debug};
+
+    die "getTagsForContigPublic expects a Contig instance"
      unless (ref($contig) eq 'Contig');
 
     my $dbh = $this->getConnection();
@@ -2514,7 +2525,7 @@ print STDOUT ">putTagsForContig: testing for existing Tags\n" if $DEBUG;
 
         foreach my $etag (@$existingtags) {
 print STDOUT "\nTesting existing tag\n" if $DEBUG;
-$etag->dump(*STDOUT) if $DEBUG;
+$etag->dump(*STDOUT,1) if $DEBUG;
             foreach my $key (keys %$tags) {
                 my $ctag = $tags->{$key};
                 if ($ctag->isEqual($etag)) {
@@ -2552,7 +2563,7 @@ print STDOUT ">putTagsForContig: new tags ".scalar(@tags)."\n" if $DEBUG;
 
 
 sub getTagIDsForTags {
-# use as private method only: enter new tag for tags with undefined tag_id
+# use as private method only: get tag IDs for tags with undefined tag_id
     my $dbh = shift;
     my $tags = shift; # ref to array with Tags
 
@@ -2560,28 +2571,43 @@ print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
 
     return undef unless ($tags && @$tags);
 
-# first we test if the combination tagtype and tagcomment already exists
-#   we also test if a systematic ID has to be updated
+# first we test if the combination tagtype and tagcomment/systematic ID exists
+# we use the UNION construct to test cases where either tagcommenmt or the
+# systematic ID is null; we also cater for undefined data values (-> 'is not null') 
 
     my $query = "select tag_id,systematic_id,tag_seq_id"
               . "  from CONTIGTAG"
               . " where tagtype = ?"
-              . "   and tagcomment = ?"
-	      . "  limit 1";
+              . "   and tagcomment is not null" # these three conditions ensure
+              . "   and tagcomment != ''"       # that no line is returned should
+              . "   and tagcomment = ?"         # the bind value be NULL or '' 
+              . " union "
+              . "select tag_id,systematic_id,tag_seq_id"
+              . "  from CONTIGTAG"
+              . " where tagtype = ?"
+              . "   and systematic_id is not null and systematic_id = ?"
+              . "   and (tagcomment is null or tagcomment = '')"
+	      . " limit 1";
 
-    my $sth = $dbh->prepare_cached($query);       
+    my $sth = $dbh->prepare($query);
 
     my %sIDupdate;
     foreach my $tag (@$tags) {
-# retrieve contig tag information for combination tagtype & tagcomment
+
+# retrieve contig tag information for combination tagtype & tagcomment/systematic_id
+
         my $tagtype = $tag->getType(); # already tested in putTagsForContig
         my $tagcomment = $tag->getTagComment();
+        my $systematic_id = $tag->getSystematicID();
+        my @data = ($tagtype,$tagcomment,$tagtype,$systematic_id);
+
 # pull out existing data
-        my $rc = $sth->execute($tagtype,$tagcomment) 
-              || &queryFailed($query,$tagtype,$tagcomment);
-print STDOUT ">getTagIDsForTags Finding tagtype : $query rc:$rc \n" if $DEBUG;
+
+        my $rc = $sth->execute(@data) || &queryFailed($query,@data);
+
         if ($rc > 0) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $sth->fetchrow_array();
+print STDOUT ">getTagIDsForTags: tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)\n" if $DEBUG;
 # now a) test consistency of tag ID and tag seq ID
             my $existingtagid = $tag->getTagID();
             if ($existingtagid && $existingtagid != $tag_id) {
@@ -2597,8 +2623,7 @@ print STDOUT ">getTagIDsForTags Finding tagtype : $query rc:$rc \n" if $DEBUG;
             $tag->setTagSequenceID($tag_seq_id);
 # and flag an update to sys ID
             $sIDupdate{$tag}++ unless $systematic_id;
-print STDOUT ">getTagIDsForTags: tag ID $tag_id  tag_seq ID $tag_seq_id\n" if $DEBUG;
-$tag->dump(*STDOUT) if $DEBUG;
+$tag->dump(*STDOUT,1) if $DEBUG;
 	}
         $sth->finish();
     }
@@ -2628,17 +2653,10 @@ print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
                     $tag->getTagComment());
         my $rc =  $sth->execute(@data) || &queryFailed($insert,@data);
 
-#        my $tag_seq_id     = $tag->getTagSequenceID() || 0;
-#        my $systematic_id  = $tag->getSystematicID();
-#        my $tagcomment     = $tag->getTagComment();
-
-#        my $rc =  $sth->execute($tagtype,$systematic_id,$tag_seq_id,$tagcomment) 
-#        || &queryFailed($insert,$tagtype,$systematic_id,$tag_seq_id,$tagcomment);
-
         if ($rc > 0) {
             my $tag_id = $dbh->{'mysql_insertid'};
             $tag->setTagID($tag_id);
-#print STDOUT ">getTagIDsForTags: ID added\n" if $DEBUG;
+print STDOUT ">getTagIDsForTags: ID $tag_id added\n" if $DEBUG;
         }
         else {
             $failed++;
@@ -2657,11 +2675,11 @@ print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
 
         foreach my $tag (@$tags) {
             next unless $sIDupdate{$tag};
-            my $tag_id = $tag->getTagID();
-            my $systematic_id = $tag->getSystematicID();
-print STDOUT ">getTagIDsForTags: systematic ID added ($systematic_id $tag_id)\n" if $DEBUG; 
-            $sth->execute($systematic_id,$tag_id) 
-            || &queryFailed($update,$systematic_id,$tag_id);
+#            my $tag_id = $tag->getTagID();
+#            my $systematic_id = $tag->getSystematicID();
+            my @binddata = ($tag->getTagID(),$tag->getSystematicID());
+print STDOUT ">getTagIDsForTags: systematic ID added (@binddata)\n" if $DEBUG; 
+            $sth->execute(@binddata) || &queryFailed($update,@binddata);
 	}
     }
 
