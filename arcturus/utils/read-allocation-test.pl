@@ -20,8 +20,8 @@ my $assembly;
 my $force = 0;
 my $confirm;
 
-my $validKeys  = "organism|instance|verbose|debug|movetoproblems|mark|repair|"
-               . "project|assembly|delete|force|confirm|help";
+my $validKeys  = "organism|instance|verbose|debug|movetoproblems|mtp|mark|"
+               . "repair|project|assembly|delete|force|confirm|help";
 
 while (my $nextword = shift @ARGV) {
 
