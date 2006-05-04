@@ -203,7 +203,7 @@ sub setOwner {
   
 sub getOwner {
     my $this = shift;
-    return $this->{data}->{owner};
+    return $this->{data}->{owner} || '';
 }
   
 sub setProjectID {
