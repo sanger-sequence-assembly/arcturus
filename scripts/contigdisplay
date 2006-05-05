@@ -1,0 +1,7 @@
+#!/bin/csh
+
+set basedir=`dirname $0`
+source ${basedir}/setup.csh
+
+java ${JAVA_OPTS} contigdisplay.Test $*
+
