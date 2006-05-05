@@ -258,7 +258,7 @@ public abstract class GenericDisplay extends JPanel
 
 		if (ip != null) {
 		    try {
-			ip.setClientObject(f.getClientObject());
+			ip.setClientObject(f);
 			displayPopup(ip, click);
 		    }
 		    catch (InvalidClientObjectException icoe) {
