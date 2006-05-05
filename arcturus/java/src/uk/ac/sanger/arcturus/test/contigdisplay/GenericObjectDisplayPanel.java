@@ -11,11 +11,13 @@ public class GenericObjectDisplayPanel extends GenericDisplay
     protected FeaturePainter contigPainter = new ContigFeaturePainter();
     protected FeaturePainter bridgePainter = new BridgeFeaturePainter();
     protected ContigInfoPanel cip;
+    protected BridgeInfoPanel bip;
 
     public GenericObjectDisplayPanel() {
 	super();
 
 	cip = new ContigInfoPanel(this);
+	bip = new BridgeInfoPanel(this);
     }
 
     public DrawableFeature addFeature(Feature f, int dragMode) {
@@ -32,6 +34,12 @@ public class GenericObjectDisplayPanel extends GenericDisplay
     }
 
     public InfoPanel findInfoPanelForFeature(Feature f) {
-	return (f instanceof ContigFeature) ? cip : null;
+	if (f instanceof ContigFeature)
+	    return cip;
+
+	if (f instanceof BridgeFeature)
+	    return bip;
+
+	return null;
     }
 }
