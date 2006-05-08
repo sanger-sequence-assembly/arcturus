@@ -14,7 +14,7 @@ public abstract class GenericDisplay extends JPanel
     protected int bpPerPixel = 128;
     protected DrawableFeature draggingFeature;
     protected Point dragLastPoint;
-    protected int displayMode = DisplayMode.INFO;
+    protected int displayMode;
 
     protected Cursor csrDefault = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
     protected Cursor csrDrag;
@@ -85,6 +85,8 @@ public abstract class GenericDisplay extends JPanel
 	    csrInfo = tk.createCustomCursor(cursorImage, new Point(1, 1), "info");
 	else
 	    System.err.println("Unable to create cursor from image at /icons/help-cursor.gif");
+
+	setDisplayMode(DisplayMode.INFO);
     }
 
     public abstract DrawableFeature addFeature(Feature f, int dragMode);
@@ -110,6 +112,10 @@ public abstract class GenericDisplay extends JPanel
 	switch (displayMode) {
 	case DisplayMode.DRAG:
 	    setCursor(csrDrag);
+	    break;
+
+	case DisplayMode.INFO:
+	    setCursor(csrInfo);
 	    break;
 
 	case DisplayMode.ZOOM_IN:
