@@ -1,22 +1,13 @@
 package contigdisplay;
 
 import java.awt.*;
-import javax.swing.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
-public class BridgeInfoPanel extends InfoPanel {
-    protected String[] lines = new String[2];
-    protected Font plainFont = new Font("SansSerif", Font.PLAIN, 14);
-    protected Font boldFont = new Font("SansSerif", Font.BOLD, 14);
-
-    protected String[] labels = {"BRIDGE", "Links:"};
-
-    protected int valueOffset;
-
+public class BridgeInfoPanel extends GenericInfoPanel {
     public BridgeInfoPanel(PopupManager myparent) {
 	super(myparent);
-
-	setBackground(new Color(255, 204, 0));
+	lines = new String[2];
+	labels =  new String[] {"BRIDGE", "Links:"};
     }
 
     public void setClientObject(Object o) throws InvalidClientObjectException {
@@ -55,32 +46,5 @@ public class BridgeInfoPanel extends InfoPanel {
 	lines[0] = "";
 
 	lines[1] = "" + bridge.getScore();
-    }
-
-    public void paintComponent(Graphics g) {
-	Dimension size = getSize();
-	g.setColor(getBackground());
-	g.fillRect(0, 0, size.width, size.height);
-	
-	g.setColor(Color.black);
-	
-	FontMetrics fm = getFontMetrics(plainFont);
-	
-	int y0 = fm.getAscent();
-	int dy = fm.getHeight();
-	
-	g.setFont(boldFont);
-	
-	for (int j = 0; j < lines.length; j++) {
-	    int x = 0;
-	    int y = y0 + j * dy;
-	    g.drawString(labels[j], x, y);
-	    g.drawString(lines[j], valueOffset + x, y);
-	    if (j == 0) {
-		g.setFont(plainFont);
-		g.drawLine(0, y + 5, size.width, y + 5);
-		y0 += 5;
-	    }
-	}
     }
 }

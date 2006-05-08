@@ -61,16 +61,7 @@ public class Test extends JFrame {
     }
 
     protected void populate(GenericObjectDisplayPanel panel) {
-	int dragMode = DrawableFeature.DRAG_NONE;
-
-	if (Boolean.getBoolean("drag_x"))
-	    dragMode = DrawableFeature.DRAG_X;
-
-	if (Boolean.getBoolean("drag_y"))
-	    dragMode = DrawableFeature.DRAG_Y;
-
-	if (Boolean.getBoolean("drag_xy"))
-	    dragMode = DrawableFeature.DRAG_XY;
+	int dragMode = DrawableFeature.DRAG_XY;
 
 	ContigFeature cf1 = new ContigFeature(new Contig("dinah", 40000),
 					      new Point(1000, 100),
