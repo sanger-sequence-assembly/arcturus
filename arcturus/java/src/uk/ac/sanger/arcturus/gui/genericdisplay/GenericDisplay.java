@@ -17,7 +17,7 @@ public abstract class GenericDisplay extends JPanel
     protected int displayMode = DisplayMode.INFO;
 
     protected Cursor csrDefault = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
-    protected Cursor csrDrag = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR);
+    protected Cursor csrDrag;
     protected Cursor csrCross = Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR);
     protected Cursor csrZoomIn;
     protected Cursor csrZoomOut;
@@ -55,6 +55,8 @@ public abstract class GenericDisplay extends JPanel
 
 	if (cursorImage != null)
 	    csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7, 7), "zoom in");
+	else
+	    System.err.println("Unable to create cursor from image at /icons/zoomin.png");
 
 	url = getClass().getResource("/icons/zoomout.png");
 
@@ -62,6 +64,17 @@ public abstract class GenericDisplay extends JPanel
 
 	if (cursorImage != null)
 	    csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7, 7), "zoom out");
+	else
+	    System.err.println("Unable to create cursor from image at /icons/zoomout.png");
+
+	url = getClass().getResource("/icons/white_fleur.gif");
+
+	cursorImage = tk.getImage(url);
+
+	if (cursorImage != null)
+	    csrDrag = tk.createCustomCursor(cursorImage, new Point(7, 7), "drag");
+	else
+	    System.err.println("Unable to create cursor from image at /icons/white_fleur.gif");
     }
 
     public abstract DrawableFeature addFeature(Feature f, int dragMode);
