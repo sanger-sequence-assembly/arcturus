@@ -4,6 +4,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import javax.swing.*;
+import java.net.URL;
 
 public abstract class GenericDisplay extends JPanel
     implements Transformer, PopupManager {
@@ -16,7 +17,7 @@ public abstract class GenericDisplay extends JPanel
     protected int displayMode = DisplayMode.INFO;
 
     protected Cursor csrDefault = Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR);
-    protected Cursor csrDrag = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR);
+    protected Cursor csrDrag = Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR);
     protected Cursor csrCross = Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR);
     protected Cursor csrZoomIn;
     protected Cursor csrZoomOut;
@@ -48,12 +49,16 @@ public abstract class GenericDisplay extends JPanel
 
 	Toolkit tk = Toolkit.getDefaultToolkit();
 
-	Image cursorImage = tk.getImage("zoomin.png");
+	URL url = getClass().getResource("/icons/zoomin.png");
+
+	Image cursorImage = tk.getImage(url);
 
 	if (cursorImage != null)
 	    csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7, 7), "zoom in");
 
-	cursorImage = tk.getImage("zoomout.png");
+	url = getClass().getResource("/icons/zoomout.png");
+
+	cursorImage = tk.getImage(url);
 
 	if (cursorImage != null)
 	    csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7, 7), "zoom out");
