@@ -3,10 +3,9 @@ package Contig;
 use strict;
 
 use Mapping;
+use Clipping;
 
 use PaddedRead; # remove after upgrade for Padded
-
-use Asp::PhredClip;
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -2032,7 +2031,7 @@ sub endregiontrim {
 
 # clipping algorithm for the moment taken from Asp
 
-    my ($QL,$QR) = Asp::PhredClip->phred_clip($cliplevel, $quality);
+    my ($QL,$QR) = Clipping->phred_clip($cliplevel, $quality);
 
 # adjust the sequence and quality data
 
