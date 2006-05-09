@@ -6,14 +6,14 @@ import java.util.*;
 import javax.swing.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
-public class GenericObjectDisplayPanel extends GenericDisplay
+public class GenericContigDisplayPanel extends GenericDisplay
     implements Transformer, PopupManager {
     protected FeaturePainter contigPainter = new ContigFeaturePainter();
     protected FeaturePainter bridgePainter = new BridgeFeaturePainter();
     protected ContigInfoPanel cip;
     protected BridgeInfoPanel bip;
 
-    public GenericObjectDisplayPanel() {
+    public GenericContigDisplayPanel() {
 	super();
 
 	cip = new ContigInfoPanel(this);
