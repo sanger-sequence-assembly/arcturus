@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
 import uk.ac.sanger.arcturus.data.Project;
+import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import uk.ac.sanger.arcturus.people.Person;
@@ -33,7 +34,10 @@ public class ProjectProxy {
 
     public Project getProject() { return project; }
 
-    public String getAssemblyName() { return project.getAssembly().getName(); }
+    public String getAssemblyName() {
+	Assembly assembly = project.getAssembly();
+	return (assembly == null) ? "unknown" : assembly.getName();
+    }
 
     public int getContigCount() { return summary.getNumberOfContigs(); }
 
