@@ -13,7 +13,7 @@ import javax.swing.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class Test extends JFrame {
-    protected GenericObjectDisplayPanel panel = new GenericObjectDisplayPanel();
+    protected GenericContigDisplayPanel panel = new GenericContigDisplayPanel();
 
     public Test(String title) {
 	super(title);
@@ -60,7 +60,7 @@ public class Test extends JFrame {
 	populate(panel);
     }
 
-    protected void populate(GenericObjectDisplayPanel panel) {
+    protected void populate(GenericContigDisplayPanel panel) {
 	int dragMode = DrawableFeature.DRAG_XY;
 
 	ContigFeature cf1 = new ContigFeature(new Contig("dinah", 40000),
