@@ -70,9 +70,6 @@ set problemsproject = PROBLEMS
 if ( $#argv > 4 ) then
     set problemsproject = $5
     set repair = mtp
-#    if (!$problemproject) then
-#        set repair = 0
-#    endif
 endif
 
 set arcturus_home=/nfs/pathsoft/arcturus
@@ -136,14 +133,16 @@ ${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -ca
 
 # added 06/09/2005 read allocation test with assignment to PROBLEMS project
 
-#if (!$repair) then
-#  echo Read-allocation test and consensus sequence calculation skipped
-#  exit 0
-#end if
-
 echo Testing read-allocation for possible duplicates
 
 ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $problemsproject
+
+# test exit status of read-allocation-test; if not completed with 0 exit this
+
+if ( $? != 0 ) then
+  echo consensus calculation skipped
+  exit 0
+endif
 
 # calculating consensus sequence
 
@@ -156,6 +155,12 @@ echo Cleaning up
 rm -f $padded $depadded
 
 exit 0
+
+
+
+
+
+
 
 
 
