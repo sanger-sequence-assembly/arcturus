@@ -14,12 +14,15 @@ use strict;
 my $verbose = 0;
 my $instance;
 my $organism;
+my $samestrand = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
 
     $verbose = 1 if ($nextword eq '-verbose');
+
+    $samestrand = 1 if ($nextword eq '-samestrand');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -80,7 +83,7 @@ $rc = $dbh->do($query);
 
 print STDERR "temporary table currentcontigs created with $rc rows\n" if $verbose;
 
-$query = "select read_id,template_id from READS where readname = ?";
+$query = "select read_id,template_id,strand from READS where readname = ?";
 
 my $sth_read2template = $dbh->prepare($query);
 &db_die("failed to prepare \"$query\"");
@@ -88,6 +91,8 @@ my $sth_read2template = $dbh->prepare($query);
 $query = "select READS.read_id,seq_id,readname" .
     " from READS left join SEQ2READ using(read_id)" .
     " where template_id = ?";
+
+$query .= " and strand=?" if $samestrand;
 
 my $sth_template2readseq =  $dbh->prepare($query);
 &db_die("failed to prepare \"$query\"");
@@ -108,7 +113,7 @@ while (my $line = <STDIN>) {
 
     $sth_read2template->execute($finreadname);
 
-    my ($finreadid,$templateid) = $sth_read2template->fetchrow_array();
+    my ($finreadid,$templateid,$strand) = $sth_read2template->fetchrow_array();
 
     unless (defined($finreadid) && defined($templateid)) {
 	print STDERR $verbose ? " not found\n" : "Unable to find read $finreadname\n";
@@ -119,7 +124,11 @@ while (my $line = <STDIN>) {
 
     my $votes = {};
 
-    $sth_template2readseq->execute($templateid);
+    if ($samestrand) {
+	$sth_template2readseq->execute($templateid, $strand);
+    } else {
+	$sth_template2readseq->execute($templateid);
+    }
 
     my $allvotes = 0;
 
@@ -201,4 +210,5 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -verbose\t\tVerbose output\n";
+    print STDERR "    -samestrand\t\tPlace finishing reads with same-stranded shotgun read\n";
 }
