@@ -901,6 +901,7 @@ sub getUnassembledReads {
 #          before / aspedbefore (strictly before)
 #          nosingleton : do not include reads in singleton contigs
 #          namelike / namenotlike / nameregexp / namenotregexp
+#          status : add selection on status, otherwise only 'PASS'
 
 # process possible date selection option(s)
 
@@ -935,7 +936,21 @@ sub getUnassembledReads {
         push @constraint, "readname not regexp '$options{namenotregexp}'";
     }
 
-# limit specified
+# add status selection (default PASS only); specify name or id
+
+    my $status = "PASS"; # default
+    $status = $options{status} if defined($options{status}); # could equal 0
+    my $status_id = $options{status_id}; # if defined, takes precedence
+    if ($status || $status_id) {
+# identify the status in the dictionary; if not, assign 0 to status_id
+        unless ($status_id) {
+            my $dictionary = &createDictionary($dbh,"STATUS","name","status_id");
+            $status_id = &dictionaryLookup($dictionary,$status) || 0;
+	}
+        push @constraint, "status = $status_id";
+    }
+
+# add limit if specified
 
     my $limit = $options{limit};
 
