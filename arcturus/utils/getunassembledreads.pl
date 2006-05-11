@@ -144,27 +144,30 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 # MAIN
 #----------------------------------------------------------------
 
-$logger->info("Opening CAF file $outputFileName for output") if $outputFileName;
-
 my ($CAF,$FAS,$QLT);
+
 if ($fasta) {
 # fasta output
     if ($outputFileName) {
-        $logger->info("Opening fasta file $outputFileName.fas for output");
-        $FAS = new FileHandle("$outputFileName.fas","w");
+        $outputFileName .= '.fas' unless ($outputFileName =~ /\.fas/);
+        $logger->info("Opening fasta file $outputFileName for DNA output");
+        $FAS = new FileHandle($outputFileName,"w");
     }
     $FAS = *STDOUT unless $FAS;
     if ($outputFileName) {
-        $logger->info("Opening fasta file $outputFileName.qlt for output");
-        $QLT = new FileHandle("$outputFileName.qlt","w");
+        $outputFileName =~ s/\.fas\w*/\.qlt/;
+        $outputFileName .= '.qlt' unless ($outputFileName =~ /\.qlt/);
+        $logger->info("Opening fasta file $outputFileName for Quality output");
+        $QLT = new FileHandle($outputFileName,"w");
     }
     $QLT = *STDOUT unless $QLT;
 }
 else {
 # caf output
     if ($outputFileName) {
-        $logger->info("Opening caf file $outputFileName.caf for output");
-        $CAF = new FileHandle("$outputFileName.caf","w");
+        $outputFileName .= '.caf' unless ($outputFileName =~ /\.caf/);
+        $logger->info("Opening CAF file $outputFileName for output");
+        $CAF = new FileHandle($outputFileName,"w");
     }
     $CAF = *STDOUT unless $CAF;
 }
