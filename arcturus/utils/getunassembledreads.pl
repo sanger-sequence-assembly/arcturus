@@ -200,12 +200,17 @@ if ($excludelist) {
 
 $logger->info("Getting read IDs for unassembled reads");
 
-my $readids;
+my $readids = [];
 
 if ($number) {
 # overrides all other qualifiers, export all reads up to read_id number
-    my @readids = (1 .. $number);
-    $readids = \@readids;
+    if ($number =~ /^\d+$/) {
+        my @readids = (1 .. $number);
+        $readids = \@readids;
+    }
+    else {
+	$logger->severe("invalid specification for '-all' option: integer expected");
+    }
 }
 else {
 # standard mode
@@ -330,6 +335,10 @@ sub showUsage {
     print STDOUT "-aspedbefore\tAsped date upper bound (inclusive)\n";
     print STDOUT "-namelike\t(include) readname with wildcard or a pattern\n";
     print STDOUT "-namenotlike\t(exclude) readname with wildcard or a pattern\n";
+    print STDOUT "\n";
+    print STDOUT "-all\t\toverrides all other selection (except excludelist &\n";
+    print STDOUT "\t\tstatus); \n";
+    print STDOUT "\n";
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
@@ -345,7 +354,3 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
-
-
-
-
