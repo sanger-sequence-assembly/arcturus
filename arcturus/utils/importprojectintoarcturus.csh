@@ -139,6 +139,9 @@ ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organ
 
 # test exit status of read-allocation-test; if not completed with 0 exit this
 
+if ( ! $?) then
+  echo test: undefined output status for read-allocation-test
+endif
 if ( $? != 0 ) then
   echo consensus calculation skipped
   exit 0
