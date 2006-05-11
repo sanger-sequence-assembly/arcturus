@@ -337,7 +337,7 @@ sub showUsage {
     print STDOUT "-namenotlike\t(exclude) readname with wildcard or a pattern\n";
     print STDOUT "\n";
     print STDOUT "-all\t\toverrides all other selection (except excludelist &\n";
-    print STDOUT "\t\tstatus); \n";
+    print STDOUT "\t\tstatus); exports reads 1 to number provided \n";
     print STDOUT "\n";
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
