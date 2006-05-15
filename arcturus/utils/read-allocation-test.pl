@@ -97,6 +97,9 @@ $logger->info("Database ".$adb->getURL." opened succesfully");
 #----------------------------------------------------------------
 # get the backup project
 #----------------------------------------------------------------
+
+# protect against undefined project
+
 my %options;
  
 $options{project_id}  = $problemproject if ($problemproject !~ /\D/);
@@ -117,13 +120,16 @@ if ($projects && @$projects > 1) {
     $logger->warning("Non-unique project specification : $problemproject (@namelist)");
     $logger->warning("Perhaps specify the assembly ?") unless defined($assembly);
     $adb->disconnect();
-    exit;
+    exit 1;
 }
 elsif ($repair <= 1 && (!$projects || !@$projects)) {
     $logger->warning("Project $problemproject not available : $message");
     $adb->disconnect();
-    exit;     
+    exit 1;     
 }
+
+# acquire lock on project
+# TO BE IMPLEMENTED
 
 my $problemprojectid;
 my $problemprojectname;
@@ -285,7 +291,7 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
                 next;
 	    }
 
-            my ($status,$msg) = $adb->retireContig($parent_id);
+            my ($status,$msg) = $adb->retireContig($parent_id,confirm=>$confirm);
             unless ($status) {
                 $logger->severe("Failed to re-allocate contig $parent_id : $msg");
             }
@@ -313,7 +319,11 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 
 $logger->skip;
 
+# if problem project locked, unlock
+
 $adb->disconnect();
+
+exit 0;
 
 #------------------------------------------------------------------------
 # HELP
