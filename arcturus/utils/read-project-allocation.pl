@@ -53,7 +53,8 @@ while (my $nextword = shift @ARGV) {
 
     $limit     = shift @ARGV  if ($nextword eq '-limit');
 
-    $forn      = shift @ARGV  if ($nextword eq '-forn' ||$nextword eq '-fofn');
+    $forn      = shift @ARGV  if ($nextword eq '-fofn');
+    $forn      = shift @ARGV  if ($nextword eq '-forn');
 
     $ml        = shift @ARGV  if ($nextword eq '-minimumlength');
     $ml        = shift @ARGV  if ($nextword eq '-ml');
@@ -308,15 +309,13 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n" unless $organism;
-    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance; 
+    print STDERR "-instance\te.g.: 'prod', 'dev', or 'test'\n" unless $instance; 
     print STDERR "-project\tproject ID or projectname\n";
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-read\t\tread ID or readname (may include wildcard)\n";
-    print STDERR "-forn\t}\n";
-    print STDERR "  OR\t}\tfilename with list of read IDs or names\n";
-    print STDERR "-fofn\t}\n";
+    print STDERR "-fofn\t\t(-forn) filename with list of read IDs or names\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
