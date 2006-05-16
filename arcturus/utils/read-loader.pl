@@ -289,7 +289,7 @@ $loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
 
 while (my $readname = $factory->getNextReadName()) {
 
-    next if (!$noloading && $adb->hasRead($readname));
+    next if (!$noloading && !$onlyloadtags && $adb->hasRead($readname)); # already stored
 
     my $read = $factory->getNextRead();
 
@@ -299,17 +299,17 @@ while (my $readname = $factory->getNextReadName()) {
 # check if the read exists in the database
         $logger->info("processing read $readname") if ($noloading  > 1); # test
         next unless $read->hasTags();
-        $logger->info("processing read $readname") if ($noloading <= 1); # standard
+        my $rtags = $read->getTags();
+        my $nrtgs = scalar(@$rtags);
+        $logger->info("processing read $readname ($nrtgs tag)") if ($noloading <= 1);
         my $existingread = $adb->getRead(readname=>$readname);
         unless ($existingread) {
             $logger->warning("read $readname is not found in database $organism");
             next;
 	}
-        my $tags = $read->getTags();
-        $logger->info("read $readname has tags:".scalar(@$tags));
-#        foreach my $tag (@$tags) {
+#        foreach my $tag (@$rtags) {
 #            $existingread->addTag($tag);
-#	}
+#	 }
         next if $noloading; # test mode
         $adb->putTagsForReads([($read)]);
         next;
@@ -404,6 +404,9 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
+    print STDERR "Arcturus read loader from one of 3 source\n";
+    print STDERR "Arcturus read-tag loader for reads already loaded\n";
+    print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code;
     unless ($organism && $instance && $source) {
         print STDERR "\n";
@@ -416,16 +419,17 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-#    print STDERR "-assembly\tassembly name\n";
-    print STDERR "-forn\t\t(fofn) filename with list of readnames to be included\n";
+    print STDERR "-forn\t\t(-fofn) filename with list of readnames to be included\n";
     print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-readnamelike\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
     print STDERR "-noload\t\t(no value) do not load the read(s) found (test mode)\n";
-    print STDERR "-onlyloadtags\t(olt, no value) load tags for already loaded read(s)\n";    
+    print STDERR "-onlyloadtags\t(-olt, no value) load tags for already loaded read(s)\n";
+    print STDERR "\t\t e.g. to load tags from experiment files use:\n";
+    print STDERR "\t\t.. -source Expfiles -onlyloadtags -subdir ETC [-verbose -noload]\n";
     print STDERR "\n";
     print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
-    print STDERR "-isconcensusread (icr; for artificial reads) \n";
+    print STDERR "-isconcensusread (-icr; for artificial reads) \n";
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
@@ -463,3 +467,9 @@ sub showUsage {
     
     $code ? exit(1) : exit(0);
 }
+
+
+
+
+
+
