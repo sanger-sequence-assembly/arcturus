@@ -29,7 +29,7 @@ my $verbose;
 my $testmode;
 
 my $validKeys = "organism|instance|project|p|assembly|a|"
-              . "read|r|forn|oligo|finishing|limit|qclip|qtrim|lclip|ltrim|"
+              . "read|r|forn|fofn|oligo|finishing|limit|qclip|qtrim|lclip|ltrim|"
               . "confirm|verbose|v|test|help|h|s";
 
 while (my $nextword = shift @ARGV) {
@@ -52,6 +52,7 @@ while (my $nextword = shift @ARGV) {
     $read      = shift @ARGV  if ($nextword eq '-r');
 
     $forn      = shift @ARGV  if ($nextword eq '-forn');
+    $forn      = shift @ARGV  if ($nextword eq '-fofn');
 
     $readtype  = 1            if ($nextword eq '-oligo');
     $readtype  = 2            if ($nextword eq '-finishing');
@@ -401,13 +402,13 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n" unless $organism;
-    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    print STDERR "-instance\te.g.: 'prod', 'dev' or 'test'\n" unless $instance;
     print STDERR "-project\tproject ID or projectname\n";
     print STDERR "\n";
     print STDERR "MANDATORY NON-EXCLUSIVE PARAMETERS (at least one needed):\n";
     print STDERR "\n";
     print STDERR "-read\t\tread ID or readname\n";
-    print STDERR "-forn\t\tfilename with list of read IDs or names\n";
+    print STDERR "-fofn\t\t(-forn) filename with list of read IDs or names\n";
     print STDERR "-oligo\t\tto select oligo reads\n";
     print STDERR "-finishing\tto select finishing reads\n";
     print STDERR "\n";
