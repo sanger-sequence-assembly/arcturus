@@ -18,23 +18,22 @@ use PathogenRepository;
 
 my $instance;
 my $organism;
-my $assembly;
 
 my $source; # name of factory type
 
-my $noexclude = 0; # re: suppresses check against already loaded reads
-my $noloading = 0; # re: test mode without read loading
+my $noexclude = 0;         # re: suppresses check against already loaded reads
+my $noloading = 0;         # re: test mode without read loading
 
 my $skipaspedcheck = 0;
 my $consensus_read = 0;
 my $acceptlikeyeast = 0;
 
-my $onlyloadtags; # Exp files only
+my $onlyloadtags;          # Exp files only
 
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
-my $validKeys = "organism|instance|assembly|caf|cafdefault|fofn|forn|out|"
+my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
               . "limit|filter|source|exclude|info|help|asped|"
               . "filter|readnamelike|rootdir|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
@@ -60,17 +59,18 @@ while (my $nextword = shift @ARGV) {
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
     }  
-
-    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
-
-    $source           = shift @ARGV  if ($nextword eq '-source');
+   
+    if ($nextword eq '-source') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $source;
+        $source       = shift @ARGV;
+    }
 
 # exclude defines if reads already loaded are to be ignored (default = Y) 
 
     $noexclude        = 1            if ($nextword eq '-noexclude');
 
     $noloading        = 1            if ($nextword eq '-noload');
-
     $noloading        = 2            if ($nextword eq '-test');
 
 # Do not check Read objects for the presence of an Asped date. This allows
@@ -96,7 +96,6 @@ while (my $nextword = shift @ARGV) {
     $outputFile       = shift @ARGV  if ($nextword eq '-out');
 
     $logLevel         = 0            if ($nextword eq '-verbose');
- 
     $logLevel         = 2            if ($nextword eq '-info'); 
 
 # source specific entries are imported in a hash
@@ -177,17 +176,6 @@ $adb->populateLoadingDictionaries();
 #----------------------------------------------------------------
 
 $PARS{include} = &readNamesFromFile($PARS{include}) if $PARS{include};
-
-#----------------------------------------------------------------
-# if assembly not defined, use default assembly
-#----------------------------------------------------------------
-
-if (!$assembly) {
-# to be completed: get info for a name from the assembly
-# return an Assembly object from the database, which must have a default
-# project name
-# what if an assembly is defined? what if not?
-}
 
 #----------------------------------------------------------------
 # ignore already loaded reads? then get them from the database
@@ -309,18 +297,20 @@ while (my $readname = $factory->getNextReadName()) {
 
     if ($onlyloadtags) {
 # check if the read exists in the database
+        $logger->info("processing read $readname") if ($noloading  > 1); # test
         next unless $read->hasTags();
-        my $readname = $read->getReadName();
-        $logger->info("processing read $readname");
+        $logger->info("processing read $readname") if ($noloading <= 1); # standard
         my $existingread = $adb->getRead(readname=>$readname);
         unless ($existingread) {
             $logger->warning("read $readname is not found in database $organism");
             next;
 	}
         my $tags = $read->getTags();
-        foreach my $tag (@$tags) {
-            $existingread->addTag($tag);
-	}
+        $logger->info("read $readname has tags:".scalar(@$tags));
+#        foreach my $tag (@$tags) {
+#            $existingread->addTag($tag);
+#	}
+        next if $noloading; # test mode
         $adb->putTagsForReads([($read)]);
         next;
     }
@@ -431,7 +421,8 @@ sub showUsage {
     print STDERR "-filter\t\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-readnamelike\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
-    print STDERR "-noload\t\t(no value) do not load the read(s) found (test mode)\n";    print STDERR "-onlyloadtags\t(olt, no value) load tags for already loaded read(s)\n";    
+    print STDERR "-noload\t\t(no value) do not load the read(s) found (test mode)\n";
+    print STDERR "-onlyloadtags\t(olt, no value) load tags for already loaded read(s)\n";    
     print STDERR "\n";
     print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
     print STDERR "-isconcensusread (icr; for artificial reads) \n";
