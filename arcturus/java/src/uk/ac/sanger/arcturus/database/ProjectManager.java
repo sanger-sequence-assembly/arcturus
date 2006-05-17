@@ -16,6 +16,7 @@ public class ProjectManager extends AbstractManager {
     private HashMap hashByID = new HashMap();
     private PreparedStatement pstmtByID;
     private PreparedStatement pstmtByName;
+    private PreparedStatement pstmtByNameAndAssembly;
     private PreparedStatement pstmtSetAssemblyForProject;
     private PreparedStatement pstmtProjectSummary;
 
@@ -33,6 +34,9 @@ public class ProjectManager extends AbstractManager {
 	pstmtByID = conn.prepareStatement(query);
 
 	query = "select project_id,updated,owner,lockdate,created,creator from PROJECT where assembly_id = ? and name = ?";
+	pstmtByNameAndAssembly = conn.prepareStatement(query);
+
+	query = "select project_id,updated,owner,lockdate,created,creator from PROJECT where name = ?";
 	pstmtByName = conn.prepareStatement(query);
 
 	query = "update PROJECT set assembly_id = ? where project_id = ?";
@@ -91,12 +95,19 @@ public class ProjectManager extends AbstractManager {
     }
 
     public Project getProjectByName(Assembly assembly, String name) throws SQLException {
-	int assembly_id = assembly.getID();
+	PreparedStatement pstmt;
 
-	pstmtByName.setInt(1, assembly_id);
-	pstmtByName.setString(2, name);
+	if (assembly == null) {
+	    pstmt = pstmtByName;
+	    pstmt.setString(1, name);
+	} else {
+	    int assembly_id = assembly.getID();
+	    pstmt = pstmtByNameAndAssembly;
+	    pstmt.setInt(1, assembly_id);
+	    pstmt.setString(2, name);
+	}
 
-	ResultSet rs = pstmtByName.executeQuery();
+	ResultSet rs = pstmt.executeQuery();
 
 	Project project = null;
 
