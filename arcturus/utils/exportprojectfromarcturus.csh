@@ -66,11 +66,12 @@ endif
 # unless the 5-th parameter is defined and true, do consensus update 
 
 if  ( ! $5 ) then
+echo Consensus calculation for $projectname
   set arcturus_java = ${arcturus_home}/java/scripts
 
   setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 
-  ${arcturus_java}/calculateconsensus -instance $instance -organism $organism -quiet -lowmem
+  ${arcturus_java}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
 endif
 
 #echo test abort $projectname $caf2gap_dir
