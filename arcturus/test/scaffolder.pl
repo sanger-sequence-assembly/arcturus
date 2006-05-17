@@ -27,6 +27,7 @@ my $seedcontig;
 my $fastadir;
 my $c2sfile;
 my $fastaminlen = 5000;
+my $nogap4name = 0;
 
 ###
 ### Parse arguments
@@ -63,6 +64,8 @@ while (my $nextword = shift @ARGV) {
     $fastaminlen = shift @ARGV if ($nextword eq '-fastaminlen');
 
     $c2sfile = shift @ARGV if ($nextword eq '-contigmap');
+
+    $nogap4name = 1 if ($nextword eq '-nogap4name');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -186,7 +189,8 @@ if (defined($onlyproject)) {
 
 while (my ($ctgid, $ctgname, $ctglen, $ctgproject) = $sth->fetchrow_array()) {
     $contiglength->{$ctgid} = $ctglen;
-    $contigname->{$ctgid} = defined($ctgname) ? $ctgname : sprintf("CONTIG%06d", $ctgid);
+    $contigname->{$ctgid} = (!$nogap4name && defined($ctgname)) ?
+	$ctgname : sprintf("contig%06d", $ctgid);
     $project->{$ctgid} = $ctgproject;
     push @contiglist, $ctgid;
 }
@@ -338,8 +342,14 @@ foreach my $contigid (@contiglist) {
     my $curpos = 0;
 
     my $sequence = '';
+    my $agp = [];
+    my $agppart = 0;
+
+    my $scaffoldname = sprintf("scaffold%06d", $scaffoldid);
 
     foreach my $item (@{$scaffold}) {
+	$agppart++;
+
 	if ($isContig) {
 	    my ($contigid, $contigdir) = @{$item};
 	    my $contiglen = $contiglength->{$contigid};
@@ -370,6 +380,12 @@ foreach my $contigid (@contiglist) {
 		    $c2sstart = 1 + length($sequence);
 		    $sequence .= $ctgseq;
 		    $c2sfinish = length($sequence);
+
+		    push @{$agp}, sprintf("%-20s %8d %8d %4d %1s %-20s %8d %8d %s",
+					  $scaffoldname, $c2sstart, $c2sfinish,
+					  $agppart, 'A',
+					  $ctgname, 1, length($ctgseq),
+					  ($contigdir eq 'R' ? '-' : '+'));
 		}
 	    }
 
@@ -384,7 +400,18 @@ foreach my $contigid (@contiglist) {
 		my ($template_id, $gapsize, $insertsize, $linka, $linkb) = @{$bridge};
 		push @templates, $template_id;
 	    }
+
 	    $report .= "     GAP $gapsize [" . join(",", @templates).  "]\n";
+
+	    my $gapstart = 1 + length($sequence);
+	    my $gapfinish = $gapstart + $gapsize - 1;
+
+	    push @{$agp}, sprintf("%-20s %8d %8d %4d %1s %-20d %8s %8s",
+				  $scaffoldname, $gapstart, $gapfinish,
+				  $agppart, 'N',
+				  $gapsize, 'fragment', 'yes');
+
+
 	    $totgap += $gapsize;
 	    $curpos += $gapsize;
 
@@ -406,13 +433,13 @@ foreach my $contigid (@contiglist) {
     $totgap = '   *** DEGENERATE ***' unless (scalar(@{$scaffold}) > 1);
 
     if ($fastadir  && length($sequence) >= $fastaminlen) {
-	my $fastafile = $fastadir . '/' . sprintf("scaffold%06d.fas", $scaffoldid);
+	my $fastafile = "$fastadir/$scaffoldname.fas";
 
 	my $fastafh = new FileHandle("$fastafile", "w");
 
-	printf $fastafh ">scaffold%06d\n", $scaffoldid;
-
 	if (defined($fastafh)) {
+	    print $fastafh ">$scaffoldname\n";
+
 	    while (length($sequence) > 0) {
 		print $fastafh substr($sequence, 0, 100), "\n";
 		$sequence = substr($sequence, 100);
@@ -421,6 +448,17 @@ foreach my $contigid (@contiglist) {
 	    $fastafh->close;
 	} else {
 	    print STDERR "Unable to open $fastafile for writing\n";
+	}
+
+	my $agpfile = "$fastadir/$scaffoldname.agp";
+
+	my $agpfh = new FileHandle("$agpfile", "w");
+
+	if (defined($agpfh)) {
+	    print $agpfh join("\n", @{$agp}),"\n";
+	    $agpfh->close;
+	} else {
+	    print STDERR "Unable to open $agpfile for writing\n";
 	}
     }
 
@@ -1191,4 +1229,5 @@ sub showUsage {
     print STDERR "-fastadir\tDirectory for FASTA output of scaffold sequences\n";
     print STDERR "-fastaminlen\tMinimum scaffold length for FASTA output\n";
     print STDERR "-contigmap\tScaffold-contig mapping file\n";
+    print STDERR "-nogap4name\tUse contig IDs as contig names instead of Gap4 names\n";
 }
