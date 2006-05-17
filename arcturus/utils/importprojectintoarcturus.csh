@@ -137,21 +137,11 @@ echo Testing read-allocation for possible duplicates
 
 ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $problemsproject
 
-# test exit status of read-allocation-test; if not completed with 0 exit this
-
-if ( ! $?) then
-  echo test: undefined output status for read-allocation-test
-endif
-if ( $? != 0 ) then
-  echo consensus calculation skipped
-  exit 0
-endif
-
-# calculating consensus sequence
+# calculating consensus sequence (for this project only)
 
 setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 
-${arcturus_home}/java/scripts/calculateconsensus -instance $instance -organism $organism -quiet -lowmem
+${arcturus_home}/java/scripts/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
 
 echo Cleaning up
 
