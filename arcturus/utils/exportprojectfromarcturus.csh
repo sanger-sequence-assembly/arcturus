@@ -72,6 +72,7 @@ echo Consensus calculation for $projectname
   setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
 
   ${arcturus_java}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+echo Consensus calculation for $projectname end
 endif
 
 #echo test abort $projectname $caf2gap_dir
@@ -111,3 +112,5 @@ echo Cleaning up
 rm -f $padded $depadded
 
 exit 0
+
+
