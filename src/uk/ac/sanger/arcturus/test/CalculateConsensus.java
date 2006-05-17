@@ -92,6 +92,9 @@ public class CalculateConsensus {
 
 	    if (args[i].equalsIgnoreCase("-allcontigs"))
 		allcontigs = true;
+
+	    if (args[i].equalsIgnoreCase("-project"))
+		projectname = args[++i];
 	}
 
 	if (instance == null || organism == null) {
@@ -115,6 +118,8 @@ public class CalculateConsensus {
 	    System.err.println();
 
 	    adb = ai.findArcturusDatabase(organism);
+
+	    Project project = (projectname == null) ? null : adb.getProjectByName(null, projectname);
 
 	    if (lowmem)
 		adb.getSequenceManager().setCacheing(false);
@@ -150,6 +155,9 @@ public class CalculateConsensus {
 		"select CONTIG.contig_id,length(sequence) from CONTIG left join "  + consensustable + " using(contig_id)":
 		"select CONTIG.contig_id from CONTIG left join " + consensustable + " using(contig_id) where sequence is null";
 
+	    if (project != null)
+		query += (allcontigs ? " where" : " and") + " project_id = " + project.getID();
+			  
 	    Statement stmt = conn.createStatement();
 
 	    ResultSet rs = stmt.executeQuery(query);
@@ -216,6 +224,7 @@ public class CalculateConsensus {
 	ps.println("OPTIONAL PARAMETERS");
 	ps.println("\t-algorithm\tName of class for consensus algorithm");
 	ps.println("\t-consensustable\tName of consensus table");
+	ps.println("\t-project\tName of project for contigs");
 	ps.println();
 	ps.println("OPTIONS");
 	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs"};
