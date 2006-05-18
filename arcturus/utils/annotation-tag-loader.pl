@@ -31,7 +31,9 @@ my $verbose;
 my $confirm;
 my $debug;
 
-my $validKeys  = "organism|instance|filename|fn|propagate|fasta|"
+my $swprog;
+
+my $validKeys  = "organism|instance|filename|fn|propagate|fasta|swprog|"
                . "confirm|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
@@ -66,7 +68,44 @@ while (my $nextword = shift @ARGV) {
 
     $confirm    = 1            if ($nextword eq '-confirm');
 
+    $swprog     = shift @ARGV  if ($nextword eq '-swprog');
+
     &showUsage(0) if ($nextword eq '-help');
+}
+
+#----------------------------------------------------------------
+# use forking if Smith=-Waterman alignment is to be used
+#----------------------------------------------------------------
+
+if ($swprog) {
+
+    die "\"$swprog\" is not an executable program"
+        unless (-x $swprog);
+
+    pipe(PARENT_RDR, CHILD_WTR);
+    pipe(CHILD_RDR, PARENT_WTR);
+
+    my $pid;
+
+    if ($pid = fork) {
+        close PARENT_RDR;
+        close PARENT_WTR;
+
+        select CHILD_WTR; # default output for print command
+
+        $| = 1;
+    } 
+    else {
+        close CHILD_RDR;
+        close CHILD_WTR;
+
+        open(STDIN, "<&PARENT_RDR");
+        open(STDOUT, ">&PARENT_WTR");
+
+        exec($swprog);
+
+        exit(0);
+    }
 }
  
 #----------------------------------------------------------------
@@ -269,19 +308,33 @@ foreach my $contigname (keys %$contigtaghash) {
 # determine the transformation from annotation contig to arcturus contig
 
 #*********** THIS PART IS EXPERIMENTAL AND UNDER DEVELOPMENT
-        $logger->warning("SORRY, this part is not yet operational"); next;
-	my $peakdrift = $length - $annotatedlength->{$contigname};
-        my %options = (kmersize=>9,coaligned=>1,peakdrift=>$peakdrift);
+#        $logger->warning("SORRY, this part is not yet operational"); next;
+        my $fsequence = $fastacontig->getSequence();
+        my $asequence = $arcturuscontig->getSequence();
+
+$logger->warning("\n\n\n\n");
+$fastacontig->writeDNA(*STDOUT);
+$logger->warning("\n\n\n\n");
+$arcturuscontig->writeDNA(*STDOUT);
+$logger->warning("\n\n\n\n");
+
+        if ($swprog) {
+            my $mapping = &SmithWatermanAlignment($fsequence,$asequence);
+        }
+
+        else {
+   	    my $peakdrift = $length - $annotatedlength->{$contigname};
+	    $logger->warning("peak drift: $peakdrift");
+            my %options = (kmersize=>9,coaligned=>1,peakdrift=>$peakdrift);
 # no peakdrift? but linear drift? in this case
 Correlate->setDebug(1) if $debug;
-        my $mapping = Correlate->correlate($fastacontig->getSequence(),0,
-                                           $arcturuscontig->getSequence(),0,
-                                           %options);
+            my $mapping = Correlate->correlate($fsequence,0,$asequence,0,%options);
+	}
 # 4) transform the tags accordingly
         foreach my $tag (@tags) {
 #            $tag->transpose(); ??
         }
-next;
+last;
 #*********** UNTIL HERE
     }
 # warn if no annotated sequence length provided
@@ -394,6 +447,45 @@ print "propagating child  ".$child->getContigName()."\n" if $debug;
     return $cstack;    
 }
 
+sub SmithWatermanAlignment {
+# uses ADH's C programme
+    my ($fsequence,$asequence) = @_;
+
+# write the contents of the sequences to the input handle of the child process
+
+    my $offset = 0;
+    my $length = length($fsequence);
+    while ($offset < $length) {    
+	print substr($fsequence,$offset,50)."\n";
+	$offset += 50;
+    }
+    print ".\n";
+
+    $offset = 0;
+    $length = length($asequence);
+    while ($offset < $length) {    
+	print substr($asequence,$offset,50)."\n";
+	$offset += 50;
+    }
+    print ".\n";
+
+# and capture the output of the child process
+
+    my $goodread = 0;
+
+    while (my $line = <CHILD_RDR>) {
+        last if ($line =~ /^\./);
+        my @words = split(';', $line);
+        my ($score, $smap, $fmap, $segs) = split(',', $words[0]);
+print STDOUT "$line \n";
+
+        if ($segs > 0 && $score > 50) {
+            print STDOUT " // $score $fmap $smap $segs";
+            $goodread = 1;
+        }
+    }
+    print STDOUT "\n\n";
+}
 
 #------------------------------------------------------------------------
 # HELP
