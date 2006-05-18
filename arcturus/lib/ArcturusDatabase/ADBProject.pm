@@ -347,7 +347,7 @@ sub deleteProject {
 
 # add user/lockstatus restriction (to be completely sure)
 
-    $dquery .= " and (locked is null or owner='$user' or lockowner='$user')";
+    $dquery .= " and (lockdate is null or owner='$user' or lockowner='$user')";
     $dquery .= " and status not in ('finished','quality checked')";
 
     my $dbh = $this->getConnection();
@@ -552,13 +552,13 @@ sub linkContigIDsToProjectID {
 # not all expected rows have changed; do a test on the remaining ones
 
     $query = "select CONTIG.contig_id,CONTIG.project_id,"
-           .        "PROJECT.lockdate,PROJECT.owner" #,PROJECT.lockowner"
+           .        "PROJECT.lockdate,PROJECT.owner,PROJECT.lockowner"
            . "  from CONTIG join PROJECT using (project_id)"
            . " where CONTIG.contig_id in (".join(',',@$contig_ids).")"
 	   . "   and CONTIG.project_id != $project_id"
            . " UNION "
            . "select CONTIG.contig_id,CONTIG.project_id,"
-           .        "'missing','project'" # ,'
+           .        "'missing','project',' ' "
            . "  from CONTIG left join PROJECT using (project_id)"
            . " where CONTIG.contig_id in (".join(',',@$contig_ids).")"
 	   . "   and CONTIG.project_id != $project_id"
@@ -569,12 +569,11 @@ sub linkContigIDsToProjectID {
     $sth->execute() || &queryFailed($query) && return undef;
 
     my $na = 0; # not assigned
-#    while (my ($cid,$pid,$locked,$owner,$lockowner) = $sth->fetchrow_array()) {
-    while (my ($cid,$pid,$locked,$owner) = $sth->fetchrow_array()) {
+    while (my ($cid,$pid,$locked,$owner,$lockowner) = $sth->fetchrow_array()) {
+#    while (my ($cid,$pid,$locked,$owner) = $sth->fetchrow_array()) {
         $message .= "- contig $cid is in project $pid ";
         $message .= "(owned by user $owner)\n" unless $locked;
-#        $message .= "(owned by user $owner; locked by $lockowner)\n" if $locked;
-        $message .= "(owned by user $owner; locked by [$owner])\n" if $locked;
+        $message .= "(owned by user $owner; locked by $lockowner)\n" if $locked;
         $na++;
     }
 
@@ -625,6 +624,10 @@ sub assignReadAsContigToProject {
                 ."($minimumlength) for quality clip level $qc" 
         unless ($qr >= $minimumlength);
     }
+
+# vector screening
+
+    $read->vectorScreen(); # mask out possible vector sequence
 
 # check if it is a valid read by getting the read_id and quality ranges
 
