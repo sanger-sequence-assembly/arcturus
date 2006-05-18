@@ -23,17 +23,19 @@ my $SCFchem;
 my $caf;
 my $fasta;
 my $mask;
+my $clip;
+my $screen;
 my $fofn;
 my $verbose;
 
 my $validKeys  = "organism|instance|readname|read_id|seq_id|".
                  "unassembled|fofn|chemistry|caf|fasta|".
-                 "mask|verbose|help";
+                 "clip|mask|screen|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
     $instance    = shift @ARGV  if ($nextword eq '-instance');
       
@@ -55,6 +57,10 @@ while (my $nextword = shift @ARGV) {
 
     $mask        = shift @ARGV  if ($nextword eq '-mask');
 
+    $clip        = shift @ARGV  if ($nextword eq '-clip');
+
+    $screen      = 1            if ($nextword eq '-screen');
+
     $fasta       = 1            if ($nextword eq '-fasta');
 
     $caf         = 1            if ($nextword eq '-caf');
@@ -73,23 +79,21 @@ $SCFchem = 0 if ($fasta || $caf);
 my $logger = new Logging();
  
 $logger->setFilter(0) if $verbose; # set reporting level
-
-my $break = "\n";
  
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
 
-$instance = 'prod' unless defined($instance);
+&showUsage("Missing organism database") unless $organism;
 
-&showUsage(0,"Missing organism database") unless $organism;
+&showUsage("Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage(0,"Invalid organism '$organism' on server '$instance'");
+    &showUsage("Invalid organism '$organism' on server '$instance'");
 }
  
 my $URL = $adb->getURL;
@@ -161,6 +165,10 @@ $option{qualitymask} = $mask if $mask;
 
 foreach my $read (@reads) {
 
+    $read->qualityClip(threshold=>$clip) if ($clip && $clip > 0);
+
+    $read->vectorScreen() if $screen; # after quality clip!
+
     $read->writeToCaf(*STDOUT,%option) if $caf;
 
     $read->writeToFasta(*STDOUT,*STDOUT,%option) if $fasta;
@@ -187,6 +195,8 @@ exit;
 sub list {
     my $read = shift;
     my $rdir = shift; # if rdir defined, do full chemistry
+
+    my $break = "\n";
 
     undef my %L;
 
@@ -365,10 +375,10 @@ sub getNamesFromFile {
 # HELP
 #------------------------------------------------------------------------
 
-sub showUsage {
-    my $mode = shift || 0; 
+sub showUsage { 
     my $code = shift || 0;
 
+    print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
@@ -385,10 +395,15 @@ sub showUsage {
     print STDERR "-unassembled\t(no value) Specify -caf or -fasta,".
                  " else only list reads\n";
     print STDERR "-mask\t\tMask low quality data with the symbol provided\n";
+    print STDERR "-clip\t\tGet quality boundaries for given clip level\n";
+    print STDERR "-screen\t\tAdjust quality boundaries for vector sequence\n";
+    print STDERR "\n";
     print STDERR "-chemistry\t(no value) Extended chemistry information".
                  " (slow, not with -caf or -fasta)\n";
+    print STDERR "\n";
     print STDERR "-caf\t\t(no value) Output in caf format\n";
     print STDERR "-fasta\t\t(no value) Output in fasta format\n";
+    print STDERR "\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
