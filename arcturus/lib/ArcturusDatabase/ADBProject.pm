@@ -631,8 +631,8 @@ sub assignReadAsContigToProject {
 
 # check if it is a valid read by getting the read_id and quality ranges
 
-    my $lqleft  = $read->getLowQualityLeft();
-    my $lqright = $read->getLowQualityRight();
+    my $lqleft  = $read->getLowQualityLeft() + 1; # the first high quality base
+    my $lqright = $read->getLowQualityRight() - 1; # the last high quality base
 
     return 0,"incomplete read $identifier : missing quality range"
         unless (defined($lqleft) && defined($lqright));
