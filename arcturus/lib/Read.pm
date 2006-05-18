@@ -570,11 +570,12 @@ sub getSequencingVector {
     my $this = shift;
 
 if (defined($this->{data}->{svector}->[0])) {
-unless ($this->{data}->{svector}->[0]->[0]) {
-print STDERR "Read.pm: Get sequencing vector : 'unknown' for read ".
-              $this->getReadName."\n"; 
-$this->{data}->{svector}->[0]->[0] = "unknown";
-}}
+ unless ($this->{data}->{svector}->[0]->[0]) {
+  print STDERR "Read.pm: Get sequencing vector : 'unknown' for read ".
+                $this->getReadName."\n"; 
+  $this->{data}->{svector}->[0]->[0] = "unknown";
+ }
+}
     return $this->{data}->{svector};
 }
 
@@ -872,12 +873,7 @@ sub qualityClip {
 
     if ($clipmethod eq 'phredclip') {
 
-# use standard clipping method from package PhredClip
-
-#       ($QL,$QR) = Asp::PhredClip->phred_clip($options{threshold} || 15,
-#                                              $this->getBaseQuality());
-#    }
-#    elsif ($clipmethod eq 'myphredclip') {
+# use standard clipping method from package PhredClip (in Clipping module)
 
        ($QL,$QR) = Clipping->phred_clip($options{threshold} || 15,
 					$this->getBaseQuality());
@@ -887,6 +883,17 @@ sub qualityClip {
     }
     else {
         return 0; # invalid method 
+    }
+
+# optionally screen for vector sequence
+
+    if ($options{vectorscreen}) {
+# adjust the quality boundaries to exclude any vector sequence
+        my $svector = $this->getSequencingVector();
+       ($QL,$QR) = &screen($QL,$QR,$svector) if $svector;
+
+        my $cvector = $this->getCloningVector();
+       ($QL,$QR) = &screen($QL,$QR,$cvector) if $cvector;
     }
 
 # analyse returned range
@@ -902,6 +909,53 @@ sub qualityClip {
     else {
         return 0; # failure
     }
+}
+
+sub vectorScreen {
+# adjust the quality boundaries to exclude any vector sequence
+    my $this = shift;
+
+# get current quality boundaries
+
+    my $QL = $this->getLowQualityLeft();
+    my $QR = $this->getLowQualityRight();
+
+# adjust for vector(s)
+
+    my $svector = $this->getSequencingVector();
+    ($QL,$QR) = &screen($QL,$QR,$svector) if $svector;
+
+    my $cvector = $this->getCloningVector();
+    ($QL,$QR) = &screen($QL,$QR,$cvector) if $cvector;
+
+# and put them back
+
+    $this->setLowQualityLeft($QL);
+    $this->setLowQualityRight($QR);
+
+# return quality range left
+
+    my $qualityrange = $QR - $QL + 1;
+    $qualityrange = 0 if ($qualityrange < 0);
+    return $qualityrange;
+}
+
+sub screen {
+# helper routine for qualityClip and vectorScreen
+    my ($ql,$qr,$vector) = @_;
+
+    foreach my $segment (@$vector) {
+# first if the segment is on the left-hand side
+        if ($segment->[1] <= 1) {
+            $ql = $segment->[2] if ($segment->[2] > $ql);
+        }
+# else on the right-hand side 
+        else {
+            $qr = $segment->[1] if ($segment->[1] < $qr);
+	}
+    }
+
+    return $ql, $qr;
 }
 
 ##############################################################
