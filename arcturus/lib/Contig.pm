@@ -633,7 +633,7 @@ sub getStatistics {
 
     my $clength = $cfinal-$cstart+1;
     $this->setConsensusLength($clength);
-    my $averagecover = $totalreadcover/$clength;
+    my $averagecover = $totalreadcover/$clength; # ? clength - average readlength?
     $this->setAverageCover( sprintf("%.2f", $averagecover) );
     $this->setReadOnLeft($readonleft);
     $this->setReadOnRight($readonright);
@@ -1119,8 +1119,11 @@ print "segment after filter @$segment \n" if $DEBUG;
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
-        my $isValid = &isValidMapping($this,$compare,$mapping,$overlapreads);
-print STDOUT "\nEXIT isVALID $isValid\n" if $DEBUG;
+        my ($isValid,$msg) = &isValidMapping($this,$compare,$mapping,$overlapreads);
+print STDOUT "\n isVALIDmapping $isValid\n$msg\n" if $DEBUG;
+# here possible recovery based on analysis of continuity of mapping segments
+
+# if still not valid, 
         if (!$isValid && !$options{forcelink}) {
 print STDOUT "Spurious link detected to contig ".
 $compare->getContigName()."\n" if $DEBUG;
@@ -1169,7 +1172,7 @@ if ($DEBUG) {
 }
 
 sub isValidMapping {
-# private method for 'linkToContig': decide if a mapping is reasonable, based 
+# helper method for 'linkToContig': decide if a mapping is reasonable, based 
 # on the mapped contig range and the sizes of the two contigs involved and the
 # number of reads
     my $child = shift;
@@ -1178,58 +1181,73 @@ sub isValidMapping {
     my $olreads = shift || return 0; # number of reads in overlapping area
     my %options = @_; # if any
 
-# the following heuristic is used to decide if a parent-child link is wel
-# established or may be spurious. Based on the length of each contig, the number
-# of reads (and possibly other factors as refinement?). Given the size of the
-# region of overlap we derive the approximate number of reads (No) in it. This
-# number should be equal or larger than a minimum for both the parent and the 
-# child; if it smaller than either, the link is probably spurious
-        
-print STDOUT "\nEnter isVALIDmapping: ".$child->getContigName()."  parent ".$parent->getContigName()."\n\n" if $DEBUG;
+# a simple heuristic is used to decide if a parent-child link is wel
+# established or may be spurious. It is based on the length of each contig, 
+# the number of reads the size of the region of overlap. We derive the minimum 
+# approximately expected number of reads in the overlap area. The observed
+# number should be equal or larger than the minimum for both the contig and its
+# parent; if it is smaller than either, the link is probably spurious
 
     my @range = $mapping->getContigRange(); 
     my $overlap = $range[1] - $range[0] + 1;
 
-print STDOUT "Contig overlap: $olreads reads, @range ($overlap)\n\n" if $DEBUG;
-
     my @thresholds;
     my @readsincontig;
-    my @fractions;
-    foreach my $contig ($child,$parent) {
+    my @rfractions;
+    my @lfractions;
+
+    my @contigs = ($child,$parent);
+    foreach my $contig (@contigs) {
         my $numberofreads = $contig->getNumberOfReads();
         push @readsincontig,$numberofreads;
 # for the moment we use a sqrt function; could be something more sophysticated
         my $threshold = sqrt($numberofreads - 0.4) + 0.1;
         $threshold *= $options{spurious} if $options{spurious};
         $threshold = 1 if ($contig eq $parent && $numberofreads <= 2);
-print STDOUT "contig ".$contig->getContigName()." $numberofreads reads "
-."threshold $threshold ($olreads)\n" if $DEBUG;
         push @thresholds, $threshold;
-# get the number of reads in the overlapping area (for possible later usage)
+# get the length fraction in the overlapping area (for possible later usage)
         my $contiglength = $contig->getConsensusLength() || 1;
-        my $fraction = $overlap / $contiglength;
-print STDOUT "\tContig fraction overlap (l:$contiglength) ".sprintf("%6.3f",$fraction)."\n" if $DEBUG;
-	push @fractions,$fraction;
+        my $lfraction = $overlap / $contiglength;
+	push @lfractions,$lfraction;
+# get the fraction of reads in the overlapping area 
+        my $rfraction = $olreads/$numberofreads;
+        push @rfractions,$rfraction;
+    }
+
+# compile a summary which we may want to use 
+
+    my $report = "Contig overlap range @range ($overlap), $olreads reads\n\n";
+    foreach my $i (0,1) {
+        my $contig = $contigs[$i];
+        $report .= $contig->getContigName();
+        $report .= " (C) : " unless $i;
+        $report .= " (P) : " if $i;
+        $report .= "$readsincontig[$i] reads, threshold "
+                .  sprintf("%6.1f",$thresholds[$i]) . " ($olreads)\n";
+        $report .= "\tFraction overlap : length ("
+                .  ($contig->getConsensusLength() || 1)
+                .  ") ".sprintf("%6.3f",$lfractions[$i]) . ", reads "
+                .  sprintf("%6.3f",$rfractions[$i]) . "\n";
     }
 
 # return valid read if number of overlap reads equals number in either contig
 
-    return 1 if ($olreads == $readsincontig[1]); # all parent reads in child
-    return 1 if ($olreads == $readsincontig[0]); # all child reads in parent
+    return 1,$report if ($olreads == $readsincontig[1]); # all parent reads in child
+    return 1,$report if ($olreads == $readsincontig[0]); # all child reads in parent
 #    return 1 if ($olreads == $readsincontig[0] && $olreads <= 2); # ? of child
 
 # get threshold for spurious link to the parent
 
     my $threshold = $thresholds[1];
 
-    return 0 if ($olreads < $threshold); # spurious link
+    return 0,$report if ($olreads < $threshold); # probably spurious link
 
 # extra test for very small parents with incomplete overlaping reads: 
 # require at least 50% overlap length
 
     if ($threshold <= 1) {
-# this cuts out small parents of 1,2 reads with little overlap length)
-        return 0 if ($fractions[1] < 0.5);
+# this cuts out small parents of 2,3 reads with little overlap length)
+        return 0,$report if ($lfractions[1] < 0.5); # bad/spurious link
     }
 
 # get threshold for link to split contig
@@ -1237,11 +1255,11 @@ print STDOUT "\tContig fraction overlap (l:$contiglength) ".sprintf("%6.3f",$fra
     $threshold = $thresholds[1];
     $threshold *= $options{splitparent} if $options{splitparent};
 
-    return 2 if ($olreads < $readsincontig[1] - $threshold); #  split contig
+    return 2,$report if ($olreads < $readsincontig[1] - $threshold); #  split contig
 
 # seems to be a regular link to parent contig
 
-    return 1;
+    return 1,$report;
 }
 
 # -----------------------------------------------------
