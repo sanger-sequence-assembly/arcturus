@@ -1617,6 +1617,31 @@ sub getLockedStatusForContigID {
     return @lockinfo; # returns lockstatus,lockowner,lockdate & projectinfo
 }
 
+sub getLockCount {
+# return a count of the number of locked projects
+    my $this = shift;
+    my %options = @_;
+
+    my $query = "select count(*) from PROJECT"
+	      . " where (lockdate is not null or lockowner is not null)";
+    if (my $projects = $options{exclude}) {
+        my @projects = split ',',$projects; # specify full list
+        $query .= " and name not in ('" . join ("','",@projects)."')"; 
+    }
+  
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query) && return 1;
+
+    my $count = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $count;
+}
+
 # ------------- acquiring and releasing locks -----------------
 
 sub acquireLockForProject {
@@ -1898,6 +1923,40 @@ sub setLockedStatus {
 # returns 1 for success, 0 for failure
 
     return ($rc + 0);
+}
+
+#----------------------------------------------------------------------------
+# methods to release a lock on irregular termination of a script (experimental)
+#----------------------------------------------------------------------------
+
+my $PROJECT_LOCKS_TO_BE_RELEASED = []; # class variable
+
+sub registerLockedProject {
+# register that this project has to be closed on non-standard exit
+    my $this = shift;
+    my $project = shift;
+
+# we store the database handle and arcturus user here because the instances of
+# the methods involved may have gone out of scope by the time they are needed
+ 
+    my @project;
+    push @project, $this->getConnection();
+    push @project, $this->getArcturusUser();
+    push @project, $project->getProjectID();
+
+# add to stack of array of arrays
+
+    push @$PROJECT_LOCKS_TO_BE_RELEASED, [@project];    
+}
+
+sub DESTROY {
+
+# invoked on termination of the program
+
+    foreach my $project (@$PROJECT_LOCKS_TO_BE_RELEASED) {
+        my ($status,$msg) = &releaseLockForProjectID(@$project[0 .. 2],1);
+        print STDERR "$msg (status = $status)\n" if ($status != 2);
+    }
 }
 
 #------------------------------------------------------------------------------
