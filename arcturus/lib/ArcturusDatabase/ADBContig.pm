@@ -1056,14 +1056,20 @@ sub deleteContig {
 
     my $description = "$cid $gap4name  r:$nreads c:$ncntgs  $created ";
 
-# safeguard: contig may not be among the parents
+# safeguard: contig may not be among the parents (careful with override!)
 
-    my $pquery = "select parent_id from C2CMAPPING where parent_id = $cid";
+    unless ($nreads == 1 && $options{noparentcheck}) {
+# only single-read contigs can be exempted from this protection
+        my $pquery = "select parent_id from C2CMAPPING where parent_id = $cid";
 
-    my $isparent = $dbh->do($pquery) || &queryFailed($pquery);
+        my $isparent = $dbh->do($pquery) || &queryFailed($pquery);
 
-    return (0,"Contig $identifier is, or may be, a parent and can't be deleted") 
-        if (!$isparent || $isparent > 0); # also exits on failed query
+        if (!$isparent || $isparent > 0) {
+# this also exits on failed query as safeguard
+            return 0, "Contig $identifier is, or may be, a parent "
+                    . "and can't be deleted";
+	}
+    }
 
 # here we finally test for ambiguity not found by parent test
 
@@ -1097,6 +1103,16 @@ sub deleteContig {
         $success = 0 if (!$deleted && $table eq 'CONTIG');
         $report .= "No delete done from $table for contig_id = $cid\n"
         unless (($deleted+0) || $table eq 'C2CMAPPING');
+    }
+
+# if noparentcheck active, the deleted contig can be a (single-read) parent
+
+    if ($nreads == 1 && $options{noparentcheck}) {
+        my $query = "delete from C2CMAPPING where parent_id = $cid"; 
+        my $deleted = $dbh->do($query) || &queryFailed($query);
+        $success = 0 unless $deleted;
+        $report .= "No delete done from C2CMAPPING for parent_id = $cid\n"
+        unless ($deleted+0);
     }
 
 # remove the redundent entries in SEGMENT and C2CSEGMENT
@@ -1468,7 +1484,7 @@ sub retireContig {
         }
     }
 
-    return 0, $message." and can be retired" unless $options{confirm}; 
+    return 0, $message." and can be retired" unless $options{confirm};
 
 # add a link for this contig ID marking it as parent of contig 0
 # this (virtual) link removes the contig from the current contig list
@@ -1516,14 +1532,18 @@ sub markAsVirtualParent {
 sub cleanupMappings {
 # public method (to be extended with other tests?)
     my $this = shift;
-    my %option = @_;
+    my %options = @_;
+
+    my $preview = $options{confirm} ? 0 : 1; # specify confirm explicitly
+
+    my $fullscan = $options{fullscan} || 0;
 
     my $dba = $this->getConnection();
 
-    my $report = &cleanupMappingTables($dba,$option{preview});
+    my $report = &cleanupMappingTables($dba,$preview,$fullscan);
 
-    if ($option{includesegments}) {
-        $report .= &cleanupSegmentTables($dba,$option{preview});
+    if ($options{includesegments} || $options{fullscan}) {
+        $report .= &cleanupSegmentTables($dba,$preview);
     }
 
     return $report;
@@ -1534,6 +1554,7 @@ sub cleanupMappingTables {
 # (re: housekeeping required after e.g. deleting contigs)
     my $dbh = shift;
     my $preview = shift;
+    my $full = shift; # include testing parent IDs
 
     my $query;
     my $report = '';
@@ -1541,18 +1562,31 @@ sub cleanupMappingTables {
         $query  = "select $table.contig_id" if $preview; 
         $query  = "delete $table" unless $preview;
         $query .= "  from $table left join CONTIG using (contig_id)"
-	       .  " where CONTIG.contig_id IS NULL";
+	       .  " where $table.contig_id > 0"
+	       .  "   and CONTIG.contig_id IS NULL";
         my $sth = $dbh->prepare_cached($query);
         my $rc = $sth->execute() || &queryFailed($query) && next;
         $report .= sprintf ("%6d",($rc+0)) . " contig IDs ";
         $report .= "to be " if $preview;
         $report .= "have been " unless $preview;
         $report .= "removed from $table\n";
-
-        if ($preview && $preview > 1) {
-# long list option: return a list of all contig IDs affected
-        }
     }
+
+    return $report unless $full;       
+
+# also remove entries of C2CMAPPING with un matched parent IDs
+
+    $query  = "select C2CMAPPING.parent_id" if $preview; 
+    $query  = "delete C2CMAPPING" unless $preview;
+    $query .= "  from C2CMAPPING left join CONTIG"
+           .  "    on (C2CMAPPING.parent_id = CONTIG.contig_id)"
+	   .  " where CONTIG.contig_id IS NULL";
+    my $sth = $dbh->prepare_cached($query);
+    my $rc = $sth->execute() || &queryFailed($query);
+    $report .= sprintf ("%6d",($rc+0)) . " parent IDs ";
+    $report .= "to be " if $preview;
+    $report .= "have been " unless $preview;
+    $report .= "removed from C2CMAPPING\n";
 
     return $report;
 }
@@ -2034,6 +2068,172 @@ sub getChildIDsForContigID {
     $sth->finish();
 
     return [@contigids];
+}
+
+sub getSingleReadParentIDs {
+# get contigs which are parents and have one read only, i.e. a read which
+# is assembled in a larger contig of the next generation
+    my $this = shift;
+    my %options = @_;  print "options @_\n";
+
+    my $linktype = $options{linktype} || 0;
+
+# linktype = 0 for all parents (default)
+#          = 1 for parents with links listed in C2CMAPPING
+#          = 2 for parents without such links
+
+    my @data;
+    my @constraint;
+    my $constraints;
+
+# contig : contig ID of (child) for which parent contigs are tested
+# parent : contig ID of parent (very specific, select one parent only)
+
+    if ($options{parent}) {
+# retrieve a given parent contig
+        push @constraint, "C2CMAPPING.parent_id = ?";
+        push @data, $options{parent};
+    }
+
+    if ($options{contig}) {
+# retrieve parents of a given child contig
+        push @constraint, "C2CMAPPING.contig_id = ?";
+        push @data, $options{contig};
+    }
+# mincid & maxcid : selects (child) contigs for which parent contigs are tested
+    else {
+# specify a range of contig IDs to explore
+        if ($options{mincid}) {
+            push @constraint, "C2CMAPPING.contig_id >= ?";
+            push @data, $options{mincid};
+        }
+        if ($options{maxcid}) {
+            push @constraint, "C2CMAPPING.contig_id <= ?";
+            push @data, $options{maxcid};
+        }
+    }
+
+# contigname, parentname (may include wild card)
+# including contig names requires the long version of a query
+
+    if ($options{contigname}) {
+# retrieve parents of a given child contig
+        push @constraint, "CHILD.gap4name like ?";
+        push @data, $options{contigname};
+    }
+
+    if ($options{parentname}) {
+# retrieve parents of a given child contig
+        push @constraint, "PARENT.gap4name like ?";
+        push @data, $options{parentname};
+    }
+
+# including project info requires the long version of a query
+
+    if ($options{project}) {
+        push @constraint,"CHILD.project_id = ?";
+        push @data, $options{project};
+    }
+
+    if ($options{parentproject}) {
+        push @constraint,"PARENT.project_id = ?";
+        push @data, $options{parentproject};
+    }
+
+    $constraints = join(' and ',@constraint) if @constraint;
+
+    my $dbh = $this->getConnection();
+
+    my @pids;
+
+    if ($linktype <= 1) {
+# select contigs that occur as single-read parents in C2CMAPPING table
+        my $query = "select distinct PARENT.contig_id";
+        if ($constraints && $constraints =~ /CHILD/) {
+# long version includes constraints on PARENT or CHILD contigs
+            $query .= "  from CONTIG as PARENT, CONTIG as CHILD, C2CMAPPING"
+                   .  " where PARENT.contig_id = C2CMAPPING.parent_id"
+                   .  "   and  CHILD.contig_id = C2CMAPPING.contig_id"
+                   .  "   and PARENT.nreads = 1"
+                   .  "   and  CHILD.nreads > 1"
+                   .  "   and $constraints";
+        }
+	else {
+# the short version contains no testing of (child) contig items
+            $query .= "  from CONTIG as PARENT join C2CMAPPING"
+                   .  "   on (PARENT.contig_id = C2CMAPPING.parent_id)"
+                   .  " where PARENT.nreads = 1";
+            $query .= " and $constraints" if $constraints;
+	}
+
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute(@data) || &queryFailed($query);
+
+        while (my $pid = $sth->fetchrow_array()) {
+            push @pids, $pid;
+        }
+
+        $sth->finish();
+    }   
+
+# then add the unlinked parents (occur in MAPPING but not in C2CMAPPING)
+
+    if ($linktype != 1) {
+# select contigs that do not occur as single-read parents in C2CMAPPING table
+# but do occur in the MAPPING table; this part uses temporary tables
+# the result list has all single read contigs contigs without links
+        my $temporaryitems = "contig_id integer not null,"
+	                   . "project_id integer not null";
+        my $create = "create temporary table absentparent "
+                   . "($temporaryitems, key(contig_id)) as "
+                   . "select CONTIG.contig_id from CONTIG left join C2CMAPPING"
+                   . "   on (CONTIG.contig_id = C2CMAPPING.parent_id)"
+                   . " where CONTIG.nreads = 1 "
+		   . "   and C2CMAPPING.parent_id is null";
+
+        my $rw = $dbh->do($create) || &queryFailed($create);
+
+my $TEST=0; if ($TEST) {
+print "rw=$rw\n";
+my $testquery = "select contig_id from absentparent";
+my $tsth = $dbh->prepare_cached($testquery);
+$tsth->execute() || &queryFailed($testquery);
+while (my $pid = $tsth->fetchrow_array()) {push @pids, $pid;}
+print "IDs found: @pids\n";
+undef @pids;
+}
+
+# now find those parent IDs which are linked to contigs via the MAPPING table
+        my $query = "select distinct absentparent.contig_id "
+                  . "  from absentparent,MAPPING as PMAP, SEQ2READ as PS2R,"
+                  . "       SEQ2READ as CS2R,  MAPPING as CMAP, CONTIG"
+                  . " where absentparent.contig_id = PMAP.contig_id"
+                  . "   and PMAP.seq_id  = PS2R.seq_id"
+                  . "   and PS2R.read_id = CS2R.read_id"
+		  . "   and CS2R.seq_id  = CMAP.seq_id"
+                  . "   and CMAP.contig_id = CONTIG.contig_id"
+                  . "   and CONTIG.contig_id > absentparent.contig_id"
+#                  . "   and CONTIG.contig_id in (".join(',',@current).")"
+                  . "   and CONTIG.nreads > 1";
+        if ($constraints) {
+            $constraints =~ s/C2CMAPPING|CHILD/CONTIG/g;
+            $constraints =~ s/PARENT/absentparent/g;
+            $query .= "  and $constraints";
+        }
+
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute(@data) || &queryFailed($query);
+
+        while (my $pid = $sth->fetchrow_array()) {
+            push @pids, $pid;
+        }
+
+        $sth->finish();
+    }
+
+    return [@pids];
 }
 
 sub buildHistoryTreeForContig {
