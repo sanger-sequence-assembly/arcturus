@@ -6,7 +6,7 @@ use ArcturusDatabase;
 
 use FileHandle;
 use Logging;
-use PathogenRepository;
+#use PathogenRepository;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -16,14 +16,26 @@ my $organism;
 my $instance;
 my $username;
 my $password;
-my $contig_id;
+
+my $contig;
+my $parent;
+my $fofn;
+my $cleanup = 0;
+my $srparents;
+my $mincid;
+my $maxcid;
+
+my $cproject;
+my $pproject;
+my $assembly;
+
 my $verbose;
 my $confirm;
-my $cleanup = 0;
-my $fofn;
 
-my $validKeys  = "organism|instance|username|password|contig|fofn|focn|"
-               . "cleanup|verbose|confirm|help";
+my $validKeys  = "help|organism|instance|username|password|contig|fofn|focn|"
+               . "singlereadparents|srp|srplinked|srpunlinked|mincid|maxcid|"
+               . "project|childproject|cp|parentproject|pp|library|assembly|"
+               . "cleanup|parent|confirm|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -51,10 +63,28 @@ while (my $nextword = shift @ARGV) {
 
     $password     = shift @ARGV  if ($nextword eq '-password');
 
-    $contig_id    = shift @ARGV  if ($nextword eq '-contig');
+    $contig       = shift @ARGV  if ($nextword eq '-contig');
+    $contig       = shift @ARGV  if ($nextword eq '-library');
+    $parent       = shift @ARGV  if ($nextword eq '-parent');
+    $parent       = $contig      if ($nextword eq '-library');
 
     $fofn         = shift @ARGV  if ($nextword eq '-fofn');
     $fofn         = shift @ARGV  if ($nextword eq '-focn'); # alias
+
+    $srparents    = 1            if ($nextword eq '-singlereadparents');
+    $srparents    = 1            if ($nextword eq '-srp');         # all parents
+    $srparents    = 2            if ($nextword eq '-srplinked');   # linked only
+    $srparents    = 3            if ($nextword eq '-srpunlinked'); # unlinked only
+
+    $mincid       = shift @ARGV  if ($nextword eq '-mincid');
+    $maxcid       = shift @ARGV  if ($nextword eq '-maxcid');
+
+    $cproject     = shift @ARGV  if ($nextword eq '-project');
+    $cproject     = shift @ARGV  if ($nextword eq '-childproject');
+    $cproject     = shift @ARGV  if ($nextword eq '-cp');
+    $pproject     = shift @ARGV  if ($nextword eq '-parentproject');
+    $pproject     = shift @ARGV  if ($nextword eq '-pp');
+    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
     $cleanup      = 1            if ($nextword eq '-cleanup');
 
@@ -81,7 +111,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
-&showUsage("Missing contig ID or fofn") unless ($contig_id || $fofn);
+&showUsage("Missing contig ID or fofn") unless (defined($contig) || $fofn || $srparents);
 
 &showUsage("Missing arcturus username") unless $username;
 
@@ -103,41 +133,102 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
-# get an include list from a FOFN (replace name by array reference)
-#----------------------------------------------------------------
-
-$fofn = &getNamesFromFile($fofn) if $fofn;
-
-#----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
+my ($cpid,$ppid); # project IDs
+
+if ($cproject) {
+    my $cProject = &getProjectInstance($cproject,$assembly,$adb);
+    &showUsage("Unknown project '$cproject'") unless $cProject;
+    $cpid = $cProject->getProjectID();
+}
+ 
+if ($pproject) {
+    my $pProject = &getProjectInstance($pproject,$assembly,$adb);
+    &showUsage("Unknown project '$pproject'") unless $pProject;
+    $ppid = $pProject->getProjectID();
+} 
+
 my @contigs;
 
-if ($contig_id && $contig_id =~ /\,/) {
-    @contigs = split /\,/,$contig_id;
-}
-elsif ($contig_id) {
-    push @contigs, $contig_id;
-}
+my %options;
 
-if ($fofn) {
-    foreach my $contig_id (@$fofn) {
-        push @contigs, $contig_id;
+if ($srparents && $srparents > 0) {
+# signal redundent input parameters
+    if ($fofn) {
+        $logger->warning("You cannot specify '-fofn' together "
+                       . "with the '-singlereadparents' option");
+        $logger->warning("'confirm' option reset to 'preview'") if $confirm;
+        $confirm = 0;
     }
+# obtain a list of single-read parents
+    my %getoptions;
+    $getoptions{linktype} = $srparents - 1;
+
+    $getoptions{parent} = $parent if ($parent && $parent !~ /\D/);
+    $getoptions{contig} = $contig if ($contig && $contig !~ /\D/);
+    $getoptions{parentname} = $parent if ($parent && $parent =~ /\D/); 
+    $getoptions{contigname} = $contig if ($contig && $contig =~ /\D/); 
+
+    $getoptions{mincid} = $mincid if $mincid;
+    $getoptions{maxcid} = $maxcid if $maxcid;
+    $getoptions{project} = $cpid if $cpid; # child's project
+    $getoptions{parentproject} = $ppid if $ppid;
+    my $pids = $adb->getSingleReadParentIDs(%getoptions);
+
+    $logger->warning(scalar(@$pids)." single read parents found");
+
+    foreach my $contig (@$pids) {
+        push @contigs, $contig;
+    }
+    $options{noparentcheck} = 1;
+}
+else {
+
+#----------------------------------------------------------------
+# get an include list from a FOFN (replace name by array reference)
+#----------------------------------------------------------------
+
+    if ($fofn) {
+# read list from file and add to @contigs
+        $fofn = &getNamesFromFile($fofn);
+        foreach my $contig (@$fofn) {
+            push @contigs, $contig;
+        }
+    }
+
+#----------------------------------------------------------------
+# and/or collect contig IDs
+#----------------------------------------------------------------
+
+    if ($contig && $contig =~ /\,/) {
+        @contigs = split /\,/,$contig;
+    }
+    elsif ($contig) {
+        push @contigs, $contig;
+    }
+# possibly here range specifier?
 }
 
-my $isName = 0;
+# convert contig names into IDs (if names are provided)
+
 foreach my $identifier (@contigs) {
-    $isName = 1 if ($identifier =~ /\D/);
-# develop:    my $contig=
-# also: better message (give length and nreads) in message further down
+    next if ($identifier !~ /\D/); # not a name, (possibly) a number
+    my @readnames = ($identifier);
+    my $list = $adb->getContigIDsForReadNames([@readnames]);
+    unless ($list->[0]->[0] > 0) {
+        $logger->warning("Contig $identifier not found; entry disabled");
+        $identifier = 0;
+	next;
+    }
+    $identifier = $list->[0]->[0];
 }
-
+    
+$options{confirm} = 1 if $confirm;
 
 foreach my $contig_id (@contigs) {
-    my %options;
-    $options{confirm} = 1 if $confirm;
+    next unless ($contig_id > 0);
     $logger->warning("Contig $contig_id is to be deleted");
     my ($success,$msg) = $adb->deleteContig($contig_id,%options);
     if ($confirm) {
@@ -147,13 +238,27 @@ foreach my $contig_id (@contigs) {
     $logger->warning($msg);
 }
 
-if ($confirm) {
-    $logger->warning("Cleaning up") if $cleanup;
-    $adb->cleanupMappings() if $cleanup;
+
+
+if ($confirm && $cleanup) {
+    my $fullscan = $srparents;
+    $fullscan = 1 unless @contigs; # run full scan when specified '-contig 0'
+    $logger->warning("Cleaning up ... be patient");
+    my $msg = $adb->cleanupMappings(confirm=>1,fullscan=>$fullscan);
+    $logger->warning($msg);
 }
-else {    
-    $logger->warning("Deletes to be made without cleanup; otherwise use -cleanup") unless $cleanup;
-    $logger->warning("Repeat and specify -confirm");
+
+elsif ($cleanup) { # not confirmed
+    my $fullscan = $srparents;
+    $fullscan = 1 unless @contigs; # run full scan when specified '-contig 0'
+    my $msg = $adb->cleanupMappings(fullscan=>$fullscan);
+    $logger->warning($msg); # print a preview
+    $logger->warning("To do the deletes with cleanup: repeat and specify -confirm");
+}
+
+elsif (!$confirm) {  
+    $logger->warning("Deletes to be made without cleanup; otherwise use -cleanup");
+    $logger->warning("To do the delete: repeat and specify -confirm");
 }
 
 $adb->disconnect();
@@ -193,6 +298,58 @@ sub getNamesFromFile {
     return [@list];
 }
 
+
+#------------------------------------------------------------------------
+# identify project
+#------------------------------------------------------------------------
+
+sub getProjectInstance {
+# returns Project given project ID or name and (optionally) assembly
+# (also in case of project ID we consult the database to check its existence)
+    my $identifier = shift;  # ID or name
+    my $assembly = shift; # ID or name
+    my $adb = shift;
+
+    return undef unless defined($identifier);
+
+# get project info by getting a Project instance
+
+    my %projectoptions;
+    $projectoptions{project_id}  = $identifier if ($identifier !~ /\D/);
+    $projectoptions{projectname} = $identifier if ($identifier =~ /\D/);
+    if (defined($assembly)) {
+        $projectoptions{assembly_id}   = $assembly if ($assembly !~ /\D/);
+        $projectoptions{assemblyname}  = $assembly if ($assembly =~ /\D/);
+    }
+
+# find the project and test if it is unique
+
+    my ($Project,$log) = $adb->getProject(%projectoptions);
+# test if any found
+    unless ($Project && @$Project) {
+        my $message = "No project $identifier found";
+        $message .= " in assembly $assembly" if $projectoptions{assemblyname};
+        $logger->warning("$message: $log");
+        return undef;
+    }
+# test if project is unique; if not return undef
+    if ($Project && @$Project > 1) {
+        my $list = '';
+        foreach my $project (@$Project) {
+            $list .= $project->getProjectName()." ("
+                   . $project->getAssemblyID().") ";
+        }
+        $logger->warning("More than one project found: $list");
+        $logger->warning("Are you sure you do not need to specify assembly?")
+            unless defined($assembly);
+        return undef;
+    }
+
+    return $Project->[0] if $Project;
+
+    return undef;
+}
+
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
@@ -215,6 +372,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-contig\t\tContig ID or comma-separated list of \n";
     print STDERR "-fofn\t\tfilename with list of contig IDs to be deleted\n";
+    print STDERR "\n";
+    print STDERR "-srp\t\tdelete single-read parent contigs\n";
+    print STDERR "-srplinked\tsame, excluding parentss with missing links\n";
+    print STDERR "-srpunlinked\tsame, including parents with links\n";
+    print STDERR "-mincid\t\tminumum (child) contig ID\n";
+    print STDERR "-maxcid\t\tmaxumum (child) contig ID\n";
+    print STDERR "-childproject\tproject name or ID for child contigs\n";
+    print STDERR "-parentproject\tproject name or ID for parent contigs\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
