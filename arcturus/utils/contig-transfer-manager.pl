@@ -34,7 +34,6 @@ my $force;
 my $comment;
 
 my $verbose;
-my $TESTMODE;
 
 my $PROJECTINSTANCECACHE = {};
 
@@ -45,11 +44,11 @@ my $PROJECTINSTANCECACHE = {};
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe";
 
 my $validKeys = "organism|instance|$actions|"
-              . "contig|c|focn|project|p|focpn|assembly|a|openproject|"
+              . "contig|c|focn|fofn|project|p|focpn|assembly|a|openproject|"
               . "user|u|owner|o|request|r|comment|"
               . "list|longlist|ll|before|after|since|truncate|trun|full|"
               . "help|h|s|"
-              . "confirm|commit|force|preview|pre|test|verbose";
+              . "confirm|commit|force|preview|pre|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -99,6 +98,7 @@ $action      = 'probe'      if ($nextword eq '-probe');      # separate script?
     $contig      = shift @ARGV  if ($nextword eq '-contig');
 
     $focn        = shift @ARGV  if ($nextword eq '-focn');
+    $focn        = shift @ARGV  if ($nextword eq '-fofn');
 
     $focpn       = shift @ARGV  if ($nextword eq '-focpn');
 
@@ -137,8 +137,6 @@ $user        = shift @ARGV  if ($nextword eq '-u');    # ?
     $truncate    = 0            if ($nextword eq '-full');
 
     $force       = 1            if ($nextword eq '-force');
-
-$TESTMODE    = 1            if ($nextword eq '-test'); # temporary
 
 # on-line help 
 
@@ -224,13 +222,6 @@ my $URL = $adb->getURL;
 $logger->info("Database $URL opened succesfully");
     
 $logger->skip();
-
-#***** to be removed
-if ($TESTMODE) {
-    $user = 'ejztst' unless $user;
-    $adb->{ArcturusUser} =  $user;
-}
-#***** to be removed
 
 #----------------------------------------------------------------
 # preliminaries: get (possible) contig and/or project info
@@ -1293,7 +1284,7 @@ sub showUsage {
         print STDERR "\n";
         print STDERR "-contig\t\tcontig ID or name of constituent read, or";
         print STDERR " comma-separated list of these\n";
-        print STDERR "-focn\t\tfilename with list of contig IDs or names (one ID per line)\n";
+        print STDERR "-fofn\t\t(-focn) filename with list of contig IDs or names\n";
         print STDERR "-focpn\t\tfilename with list of contig ID/name and project ID/name";
         print STDERR " pairs\n";
         print STDERR "\n";
