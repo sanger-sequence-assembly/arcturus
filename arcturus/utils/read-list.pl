@@ -27,12 +27,13 @@ my $clip;
 my $screen;
 my $fofn;
 my $verbose;
+my $notags;
 
 my $validKeys  = "organism|instance|readname|read_id|seq_id|".
                  "unassembled|fofn|chemistry|caf|fasta|".
-                 "clip|mask|screen|verbose|help";
+                 "clip|mask|screen|notags|verbose|help";
 
-while (my $nextword = shift @ARGV) {
+while (defined(my $nextword = shift @ARGV)) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
@@ -64,6 +65,8 @@ while (my $nextword = shift @ARGV) {
     $fasta       = 1            if ($nextword eq '-fasta');
 
     $caf         = 1            if ($nextword eq '-caf');
+
+    $notags      = 1            if ($nextword eq '-notags');
 
     $verbose     = 1            if ($nextword eq '-verbose');
 
@@ -147,7 +150,6 @@ if ($unassembled) {
     else {
 # list read IDs only
         print "Reads: @$readids\n";
-#        exit 0;
     }
 }
 
@@ -159,6 +161,8 @@ my @items = ('read_id','readname','seq_id','version',
              'quality','align-to-SCF','pstatus');
 
 $logger->warning("No reads selected") if !@reads;
+
+$adb->getTagsForReads([@reads]) unless $notags;
 
 my %option;
 $option{qualitymask} = $mask if $mask;
