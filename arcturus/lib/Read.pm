@@ -457,11 +457,12 @@ sub getSequence {
 
     return $this->{Sequence} unless $symbol;
 
-# quality masking
+# quality masking, including vector clipping (changes DNA sequence)
+
+    $this->vectorScreen(); # may change quality boundaries
 
     my $ql = $this->getLowQualityLeft();
     my $qr = $this->getLowQualityRight();
-# what about masking sequencing and cloning vector?
 
     return $this->{Sequence} unless (defined($ql) && defined($qr));
 
@@ -856,7 +857,7 @@ sub writeBaseQuality {
 }
 
 #----------------------------------------------------------------------
-# alternative clipping
+# alternative clipping and vector screen
 #----------------------------------------------------------------------
 
 sub qualityClip {
