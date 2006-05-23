@@ -269,7 +269,6 @@ while (my $remainder = scalar(@$readids)) {
                 next;
 	    }
         }
-
         $read->writeToCaf($CAF,qualitymask=>$mask) unless $fasta;
         $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $fasta;
     }
@@ -349,6 +348,7 @@ sub showUsage {
     print STDOUT "\n";
     print STDOUT "-clipmethod\tOn the fly quality clipping using method specified\n";
     print STDOUT "-mask\t\tSymbol replacing low quality data (recommended: 'x')\n";
+    print STDOUT "\t\t the masking includes screening for vector sequence\n";
     print STDOUT "-threshold\tQuality clipping threshold level\n";
     print STDOUT "-minimumqualityrange\tMinimum high quality length\n";
     print STDOUT "\n";
