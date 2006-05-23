@@ -1393,7 +1393,7 @@ sub updateProjectAttribute {
     unless ($user eq $owner || &userRoles($user,$owner)) {
         return 0,"user '$user' has no privilege on project "
                 .$dbproject->getProjectName();
-    } 
+    }
 
 # scan test these fields for changes
 
@@ -1419,78 +1419,60 @@ sub updateProjectAttribute {
 
     my $dbh = $this->getConnection();
     my @lockinfo = &getLockedStatus($dbh,$project_id);
-    if ($lockinfo[0]) {
-        my $message = "Project ".$dbproject->getProjectName()
-	            . " is locked by user $lockinfo[1]";
-        return 0,$message if ($user ne $lockinfo[1]);
+    my $projectname = $dbproject->getProjectName();
+    if ($lockinfo[0] == 2 && !$options{useprivilege}) {
+        return 0, "Project $projectname is permanently locked "
+                . "and can only be updated with privilege";
+    }
+    elsif ($lockinfo[0] == 1) {
+        my $message = "Project $projectname is locked by user $lockinfo[1]";
+        return 0,"$message and cannot be updated" if ($user ne $lockinfo[1]);
         $preview .= "$message\n";
     }
 
 # first deal with a change of project status (if any)
 
-    if ($changes{status}) {
+    my $nst = 0; # no-status-test
+    if (my $newstatus = $changes{status}) {
+# test validity of value presented
+        my $statusoptions = &getEnumOptionsHash($dbh,'PROJECT','status');
+        unless ($statusoptions->{$newstatus}) {
+            return 0,"Invalid value $newstatus for project status";
+        }
 # status to 'finished' will lock the project by this user
-        my $message = "Changing status to $changes{status} will lock project "
+        my $message = "Changing status to '$changes{status}' will lock project "
 	            . $dbproject->getProjectName() . " permanently";
-        if ($changes{status} eq 'finished' && !$lockinfo[0]) {
+        if ($newstatus eq 'finished' && !$lockinfo[0]) {
             $preview .= $message."\n";
         }
-        elsif ($changes{status} eq 'quality checked') {
+        elsif ($newstatus eq 'quality checked') {
 # status to 'quality checked' will lock the project for user 'arcturus'        
             $preview .= $message . " for user 'arcturus'\n";
+            $nst = 1; # always allow
         }
-        
-
+# override on status testing depends on user privilege
+        elsif ($options{useprivilege}) {
+            $nst = 1 if $this->userCanAssignProject();
+            return 0,"User $user cannot change the project status" unless $nst;
+	}
     }
-
-    return 1, $preview if $changes{status}; # temporary untill tests done
+    else {
+        $nst = 1;
+    }
 
     return 1, $preview unless $options{confirm};
 
-#    my $dbh = $this->getConnection();
-    if (&updateProjectItem($dbh,$project_id,%changes,nostatustest=>1)) {
+# ok, do the update
+
+    if (&updateProjectItem($dbh,$project_id,%changes,nostatustest=>$nst)) {
         return 2,$execute; # success
     }
 
     return 0,"No changes made to project ".$dbproject->getProjectName();
 }
 
-sub updateProjectStatus {
-# public, takes a Project instance and updates the database PROJECT.status
-    my $this = shift;
-    my $project = shift;
-    my %options = @_;
-
-    &testParameterType($project,'Project','updateProject');
-
-    return 0,"Missing project identifier" unless $project->getProjectID();
-
-# the new value of the project status is embedded in the input project
-
-    my $newstatus = $project->getProjectStatus();
-
-    return 0,"No new project status specified" unless $newstatus;
-
-# get the current database status (overrides the current value)
-
-    my @lockinfo = &getLockedStatus($this->getConnection(),
-                                   $project->getProjectID());
-
-# status [3], owner [4]
-
-    if ($newstatus eq $lockinfo[3]) {
-        return 0,"No change of project status indicated";
-    }
-
-# new status finished,quality-locked should lock the project
-# access test by acquiring a lock on the project? 
-
-
-
-}
-
 sub updateProjectItem {
-# private
+# helper method for 'updateProjectAttribute'
     my $dbh = shift;
     my $pid = shift;
     my %options = @_;
@@ -1543,6 +1525,40 @@ sub updateProjectItem {
     my $nrw = $sth->execute(@values) || &queryFailed($query,@values);
 
     return ($nrw+0);
+}
+
+sub getEnumOptionsHash {
+# helper method for 'updateProjectAttribute'
+    my $dbh = shift;
+    my $table = shift || return;
+    my $column = shift;
+
+    my $query = "show columns from $table";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute() || &queryFailed($query) && return;
+
+    my $enumoptions;
+    while (my @description = $sth->fetchrow_array()) {
+        next unless ($description[0] eq $column);
+        next unless ($description[1] =~ /enum\((.+)\)/);
+        $enumoptions = $1;
+    }
+
+    $sth->finish();
+
+    return unless $enumoptions;
+
+    my $options = {};
+
+    my $rank = 0;
+    $enumoptions =~ s/^\'|\'$//g; # remove outer quotes
+    foreach my $option (split /\'\,\'/ , $enumoptions) {
+        $options->{$option} = ++$rank; 
+    }
+
+    return $options;
 }
 
 #------------------------------------------------------------------------------
@@ -1624,11 +1640,17 @@ sub getLockCount {
 
     my $query = "select count(*) from PROJECT"
 	      . " where (lockdate is not null or lockowner is not null)";
+# include specific projects only (list all in full)
+    if (my $projects = $options{include}) {
+        my @projects = split ',',$projects; # specify full list
+        $query .= " and name in ('" . join ("','",@projects)."')"; 
+    }
+# exclude specific projects only (list all in full)
     if (my $projects = $options{exclude}) {
         my @projects = split ',',$projects; # specify full list
         $query .= " and name not in ('" . join ("','",@projects)."')"; 
     }
-  
+   
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
