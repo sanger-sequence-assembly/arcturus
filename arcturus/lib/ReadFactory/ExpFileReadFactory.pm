@@ -411,10 +411,30 @@ sub expFileParser {
 # handle tag info, if any
 
     if (@readtaginfo) {
-# for the moment we only process ADDI tags
+# process the taginfo: WARN tags occupy one lines
+        foreach my $info (@readtaginfo) {
+            $info =~ s/^\s+|\s+$//; # remove leading and trailing blanks
+            if ($info =~ /^WARN\s+([\-\+])\s+(\d+)\.+(\d+)\s+\"([^\"]+)\"/) {
+# print "Taginfo: $info \n";
+                my $tag = new Tag('readtag');
+                $tag->setType('WARN');
+                $tag->setTagComment($4);
+                $tag->setPosition($2,$3);
+                $tag->setStrand('Forward') if ($1 eq '+');
+                $tag->setStrand('Reverse') if ($1 eq '-');
+                $read->addTag($tag);
+# $tag->writeToCaf(*STDOUT);
+	    }
+# here process possible SVEC or CVEC tags
+            elsif ($info =~ /^(SVEC|CVEC)/) {
+		print STDERR "Unprocessed taginfo $info\n";
+            }
+	}
+# process the taginfo: ADDI tags occupy two lines
         my $addi = '';
         foreach my $info (@readtaginfo) {
-            next unless ($info =~ /addi|written/i); # ignore other tags (for now)
+            next unless ($info =~ /addi|written/i);
+# print "Taginfo: $info \n";
             $info =~ s/^\s+|\s+$//; # remove leading and trailing blanks
             $addi .= "\\n\\" if $addi;
             $addi .= $info;
@@ -428,7 +448,7 @@ sub expFileParser {
             $tag->setPosition(1,$length);
             $tag->setStrand('Forward');
             $read->addTag($tag);
-        }        
+        }       
     }
 
 # test number of fields read
