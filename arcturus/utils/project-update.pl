@@ -23,11 +23,13 @@ my $projectowner;
 my $projectstatus;
 my $projectcomment;
 
+my $useprivilege;
+
 my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|instance|assembly|project|comment|pc|extend|"
-               . "owner|po|name|pn|status|ps|"
+               . "owner|po|name|pn|status|ps|privilege|"
                . "confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -58,6 +60,8 @@ while (my $nextword = shift @ARGV) {
 
     $projectstatus    = shift @ARGV  if ($nextword eq '-status');
     $projectstatus    = shift @ARGV  if ($nextword eq '-ps');
+
+    $useprivilege     = 1            if ($nextword eq '-privilege');
 
     $verbose          = 1            if ($nextword eq '-verbose');
 
@@ -145,7 +149,9 @@ else {
     
     $confirm = 0 unless $confirm;
 
-    my ($success,$message) = $adb->updateProjectAttribute($project,confirm=>$confirm);
+    my %uoptions = (confirm => $confirm);
+    $uoptions{useprivilege} = 1 if $useprivilege;
+    my ($success,$message) = $adb->updateProjectAttribute($project,%uoptions);
 
 # from here change
 
