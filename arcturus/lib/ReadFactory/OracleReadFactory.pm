@@ -173,6 +173,10 @@ sub setupPreparedStatements {
 						 from $schema.clipping
 						 where seqid = ?]);
 
+    $this->{sth}->{tags} = $dbh->prepare(qq[select type, begin, end, text
+					    from $schema.tag
+					    where seqid = ?]);
+
     $this->{sth}->{scfdir} = $dbh->prepare(qq[select scfdir
 					      from $schema.scfdirs
 					      where scfdirid = ?]);
@@ -259,6 +263,21 @@ sub getNextRead {
 	    $read->setLowQualityLeft($clipleft);
 	    $read->setLowQualityRight($clipright);
 	}
+    }
+
+
+    $this->{sth}->{tags}->execute($seqid);
+
+    while (my ($tagtype, $tagleft, $tagright, $tagtext) =
+	   $this->{sth}->{tags}->fetchrow_array()) {
+	my $tag = new Tag();
+
+	$tag->setPosition($tagleft, $tagright);
+	$tag->setStrand('Forward');
+	$tag->setType($tagtype);
+	$tag->setTagComment($tagtext);
+
+	$read->addTag($tag);
     }
 
     return $read;
