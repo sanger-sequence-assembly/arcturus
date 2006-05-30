@@ -13,12 +13,18 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
     private static int[] dependent_table = {0, 0, 8, 16, 24, 31, 38, 44, 48, 51, 52};
     private static String basecodes = "ACGT*N";
 
-    private static int BASE_A = 0;
-    private static int BASE_C = 1;
-    private static int BASE_G = 2;
-    private static int BASE_T = 3;
-    private static int BASE_PAD = 4;
-    private static int BASE_N = 5;
+    private static final int BASE_A = 0;
+    private static final int BASE_C = 1;
+    private static final int BASE_G = 2;
+    private static final int BASE_T = 3;
+    private static final int BASE_PAD = 4;
+    private static final int BASE_DASH = 5;
+
+    public static final int MODE_PAD_IS_N = 0;
+    public static final int MODE_PAD_IS_STAR = 1;
+    public static final int MODE_NO_PAD =2;
+
+    private int mode = MODE_PAD_IS_N;
 
     private boolean pad_present = false;
     private boolean best_is_current = true;
@@ -43,6 +49,10 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
     }
 
     public PrintStream getDebugPrintStream() { return debugps; }
+
+    public void setMode(int mode) { this.mode = mode; }
+
+    public int getMode() { return mode; }
 
     public boolean reset() {
 	if (debugps != null) {
@@ -89,12 +99,12 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	int iBase = -1;
 
 	switch (base) {
-	case 'a': case 'A': iBase = 0; break;
-	case 'c': case 'C': iBase = 1; break;
-	case 'g': case 'G': iBase = 2; break;
-	case 't': case 'T': iBase = 3; break;
-	case '*':           iBase = 4; break;
-	case '-':           iBase = 5; break;
+	case 'a': case 'A': iBase = BASE_A; break;
+	case 'c': case 'C': iBase = BASE_C; break;
+	case 'g': case 'G': iBase = BASE_G; break;
+	case 't': case 'T': iBase = BASE_T; break;
+	case '*':           iBase = BASE_PAD; break;
+	case '-':           iBase = BASE_DASH; break;
 	default: return false;
 	}
 
@@ -130,7 +140,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	// weighting this base type.
 
 	if (quality == 0)
-	    iBase = BASE_N;
+	    iBase = BASE_DASH;
 
 	// Check the quality against the current maximum value for this base and strand/chemistry
 
@@ -146,7 +156,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	    debugps.println("  qCount[" + iBase + "][" + iStrandAndChemistry + "] = " + qcount[iBase][iStrandAndChemistry]);
 	}
 
-	if (iBase == BASE_PAD || iBase == BASE_N)
+	if (iBase == BASE_PAD || iBase == BASE_DASH)
 	    pad_present = true;
 
 	best_is_current = false;
@@ -246,7 +256,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		debugps.println();
 
 	    for (int j = 0; j < nbase_types; j++) {
-		if (j == BASE_PAD)
+		if (mode == MODE_NO_PAD && (j == BASE_PAD || j == BASE_DASH))
 		    continue;
 
 		double product = 1.0;
@@ -288,9 +298,15 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	findBestBase();
 
 	if (bestbase < 0)
-	    return 'N';
-	else
-	    return basecodes.charAt(bestbase);
+	    return (mode == MODE_PAD_IS_N) ? 'N' : '*';
+	else {
+	    char c = basecodes.charAt(bestbase);
+
+	    if (c == '*' || c == 'N')
+		return (mode == MODE_PAD_IS_N) ? 'N' : '*';
+	    else
+		return c;
+	}
     }
 
     public int getBestScore() {
@@ -306,12 +322,12 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	findBestBase();
 
 	switch (base) {
-	case 'a': case 'A': return scores[0];
-	case 'c': case 'C': return scores[1];
-	case 'g': case 'G': return scores[2];
-	case 't': case 'T': return scores[3];
-	case '*':           return scores[4];
-	case '-':           return scores[5];
+	case 'a': case 'A': return scores[BASE_A];
+	case 'c': case 'C': return scores[BASE_C];
+	case 'g': case 'G': return scores[BASE_G];
+	case 't': case 'T': return scores[BASE_T];
+	case '*':           return scores[BASE_PAD];
+	case '-':           return scores[BASE_DASH];
 	default:            return -1;
 	}
     }
