@@ -32,6 +32,8 @@ public class CalculateConsensus {
     private boolean lowmem = false;
     private boolean quiet = false;
     private boolean allcontigs = false;
+
+    private int mode = Gap4BayesianConsensus.MODE_NO_PAD;
     
     private String assemblyname = null;
     private String projectname = null;
@@ -95,6 +97,15 @@ public class CalculateConsensus {
 
 	    if (args[i].equalsIgnoreCase("-project"))
 		projectname = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-pad_is_n"))
+		mode = Gap4BayesianConsensus.MODE_PAD_IS_N;
+
+	    if (args[i].equalsIgnoreCase("-pad_is_star"))
+		mode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
+
+	    if (args[i].equalsIgnoreCase("-no_pad"))
+		mode = Gap4BayesianConsensus.MODE_NO_PAD;
 	}
 
 	if (instance == null || organism == null) {
@@ -138,8 +149,14 @@ public class CalculateConsensus {
 	    Class algclass = Class.forName(algname);
 	    algorithm = (ConsensusAlgorithm)algclass.newInstance();
 
-	    if (debug && algorithm instanceof uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus)
-		((Gap4BayesianConsensus)algorithm).setDebugPrintStream(System.out);
+	    if (algorithm instanceof Gap4BayesianConsensus) {
+		Gap4BayesianConsensus g4bc = (Gap4BayesianConsensus)algorithm;
+
+		if (debug)
+		    g4bc.setDebugPrintStream(System.out);
+
+		g4bc.setMode(mode);
+	    }
 
 	    int sequenceCounter = 0;
 	    int nContigs = 0;
@@ -227,7 +244,7 @@ public class CalculateConsensus {
 	ps.println("\t-project\tName of project for contigs");
 	ps.println();
 	ps.println("OPTIONS");
-	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs"};
+	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs", "-pad_is_n", "-pad_is_star", "-no_pad"};
 	for (int i = 0; i < options.length; i++)
 	    ps.println("\t" + options[i]);
     }
