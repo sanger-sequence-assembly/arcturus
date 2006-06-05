@@ -43,12 +43,12 @@ char *direction[4] = {
 #define SGAPEXT (SMISMATCH-1)
 #endif
 
-#define MAXSEQLEN 16384
+#define MAXSEQLEN 1024*1024
 #define MAXEDITLEN (MAXSEQLEN*2)
 #define MAXSEGMENTS 4096
 
 int readSequence(FILE *fp, char *seqbuf, int seqbufsize) {
-  char buffer[1024*1024];
+  char buffer[MAXSEQLEN];
   char *cp = seqbuf;
   int bases = 0;
   int len;
