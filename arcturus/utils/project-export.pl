@@ -275,7 +275,7 @@ elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
 }
 
-$exportoptions{'notacquirelock'} = 1 - $lock;
+$exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED
 
 my $errorcount = 0;
 
@@ -365,6 +365,8 @@ sub showUsage {
     print STDERR "-quality\tFASTA quality output file name\n";
 #    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
     print STDERR "-readsonly\t(no value) export only reads in fasta output\n";
+    print STDERR "\n";
+    print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
     print STDERR "\n";
     print STDERR "Default setting exports all contigs in project\n";
     print STDERR "When using a lock check, only those projects are exported ";

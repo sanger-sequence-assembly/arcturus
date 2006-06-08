@@ -385,6 +385,8 @@ sub showUsage {
     print STDERR "-qclipsymbol\tuse specified symbol as low quality pad\n";
     print STDERR "-qclipthreshold\tclip those quality values below threshold\n";
     print STDERR "\n";
+    print STDERR "-gap4name\tadd the gap4name (lefthand read) to the identifier\n";
+    print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
