@@ -48,6 +48,13 @@ sub setOutputDevice {
     }
 }
 
+sub getOutputDevice {
+
+    my $this   = shift;
+
+    return $this->{output};
+}
+
 sub setFilter {
 
     my $this = shift;
