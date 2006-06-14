@@ -22,6 +22,7 @@ my $unassembled;
 my $SCFchem;
 my $caf;
 my $fasta;
+my $quality;
 my $mask;
 my $clip;
 my $screen;
@@ -30,7 +31,7 @@ my $verbose;
 my $notags;
 
 my $validKeys  = "organism|instance|readname|read_id|seq_id|".
-                 "unassembled|fofn|chemistry|caf|fasta|".
+                 "unassembled|fofn|chemistry|caf|fasta|quality|".
                  "clip|mask|screen|notags|verbose|help";
 
 while (defined(my $nextword = shift @ARGV)) {
@@ -65,6 +66,8 @@ while (defined(my $nextword = shift @ARGV)) {
     $fasta       = 1            if ($nextword eq '-fasta');
 
     $caf         = 1            if ($nextword eq '-caf');
+
+    $quality     = 1            if ($nextword eq '-quality');
 
     $notags      = 1            if ($nextword eq '-notags');
 
@@ -175,7 +178,9 @@ foreach my $read (@reads) {
 
     $read->writeToCaf(*STDOUT,%option) if $caf;
 
-    $read->writeToFasta(*STDOUT,*STDOUT,%option) if $fasta;
+    $read->writeToFasta(*STDOUT,*STDOUT,%option) if ($fasta && $quality);
+
+    $read->writeToFasta(*STDOUT,undef,%option)  if ($fasta && !$quality);
 
     next if ($caf || $fasta);
 
@@ -407,6 +412,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-caf\t\t(no value) Output in caf format\n";
     print STDERR "-fasta\t\t(no value) Output in fasta format\n";
+    print STDERR "-quality\t(no value, with '-fasta') include quality values\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
