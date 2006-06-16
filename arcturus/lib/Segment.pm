@@ -59,7 +59,7 @@ sub normaliseOnY {
 
     $this->invert() if ($this->[2] > $this->[3]);
 
-    return $this->getYstart(); # (re: Mapping->orederSegments)
+    return $this->getYstart(); # (re: Mapping->analyseSegments)
 }
 
 sub normaliseOnX {
@@ -211,8 +211,6 @@ sub getXforY {
 
     my $k = ($this->[3] >= $this->[2]) ? 2 : 3;
 
-#print "ypos $ypos k $k  $this->[$k] $this->[5-$k] (@$this)\n" if ($this->[3]==$this->[2]);
-
     if ($ypos < $this->[$k] || $ypos > $this->[5-$k]) {
         return undef; # out of range
     }
@@ -227,10 +225,10 @@ sub getYforX {
     my $this = shift;
     my $xpos = shift;
 
-# apply transformation Y = d * X - o
+# apply transformation Y = d * [X - o]
 
-    $xpos = -$xpos if ($this->[0] < 0);
     my $ypos = $xpos - $this->[1];
+    $ypos = -$ypos if ($this->[0] < 0);
 
 # this interval test is independent of the ordering
 
