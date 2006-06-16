@@ -276,7 +276,7 @@ sub writeContigsToCaf {
             next;
         }
 
-        $contig->endregiontrim($options{endregiontrim});
+        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
 
         $contig->toPadded() if $options{padded};
 
@@ -321,7 +321,7 @@ sub writeContigsToFasta {
             next;
         }
 
-        $contig->endregiontrim($options{endregiontrim});
+        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
 
         if (my $status = $contig->writeToFasta($DFILE,$QFILE,%options)) {
             $report .= "$status\n";
@@ -365,7 +365,7 @@ sub writeContigsToMaf {
             next;
         }
 
-        $contig->endregiontrim($options{endregiontrim});
+        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
 
         my ($status,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,%options);
 
