@@ -501,6 +501,7 @@ print STDERR "putContig: line 449 assignContigToProject "
         if ($options{prohibitparent}) {
             return 0,"$message  ('prohibitparent' option active)";
         }
+        my @rejectids; # for spurious links
         foreach my $parentid (@$parentids) {
             my $parent = $this->getContig(ID=>$parentid,metaDataOnly=>1);
             unless ($parent) {
@@ -514,9 +515,31 @@ print STDERR "putContig: line 449 assignContigToProject "
             $contig->setArcturusDatabase($this); # re: link recovery
             my ($linked,$deallocated) = $contig->linkToContig($parent);
 # add parent to contig, later import tags from parent(s)
-            $contig->addParentContig($parent) if $linked; 
-            $previous = $parent->getContigName();
-            $message .= "; empty link detected to $previous" unless $linked;
+            my $previous = $parent->getContigName();
+            if ($linked) {
+                $contig->addParentContig($parent); # re: Tag transport
+	    }
+            else {
+                $message .= "; empty link detected to $previous";
+# TO BE TESTED: what if the link is spurious? Go back to 
+# getParentIDsForContig and find new parents by masking with this parent
+# then add new parents at the end of the current list
+                push @rejectids, $parentid;
+                my $exclude = join ',',@rejectids;
+                my $newids = $this->getParentIDsForContig($contig,exclude=>$exclude);
+# determine if any new contig ids are added to the list
+                my $parentidhash = {};
+                foreach my $pid (@$parentids) {
+                    $parentidhash->{$pid}++;
+		}
+# find the newly added parent IDs, if any, which do not occur in the parent ID hash 
+                foreach my $pid (@$newids) {
+                    next if $parentidhash->{$pid};
+                    $message .= "; parent $pid added";
+                    push @$parentids,$pid;
+                }
+
+	    }
             $message .= "; $deallocated reads deallocated from $previous".
   		        "  (possibly split contig?)\n" if $deallocated;
         }
@@ -1903,6 +1926,7 @@ sub getParentIDsForContig {
 # search from scratch for new contigs (no ID!) and existing contigs
     my $this = shift;
     my $contig = shift; # Contig Instance
+    my %options = @_;   # for exclude list
 
     return undef unless $contig->hasReads();
 
@@ -1944,8 +1968,19 @@ sub getParentIDsForContig {
 
         my $query = "select distinct contig_id from MAPPING"
 	          . " where seq_id in ($range)";
-# add an exclusion of the contig itself if its ID is defined
+# add an exclusion of the contig itself (and younger) if its ID is defined
         $query .= " and contig_id < $contigID" if $contigID;
+# add an exclusion clause for any contigs listed with options
+        if (my $excludelist = $options{exclude}) {
+# NOTE: the list should consist of comma-separated contig IDs
+            $excludelist =~ s/^\s*|\s*$//g; # remove leading/trailing blanks
+            if ($excludelist =~ /[^\,\d]/) { # other than comma and numbers
+                my @exclude = split /\D+/,$excludelist;
+                $excludelist = join ',',@exclude;
+	    }
+            $query .= " and contig_id not in ($excludelist)";
+print "Diagnostic message: exclude list active:\nQ: $query\n" if $options{debug};
+        }
 
         my $sth = $dbh->prepare($query);
 
@@ -2672,7 +2707,7 @@ sub enterTagsForContig {
 
 $DEBUG=$options{debug};
 
-    die "getTagsForContigPublic expects a Contig instance"
+    die "enterTagsForContigPublic expects a Contig instance"
      unless (ref($contig) eq 'Contig');
 
     my $dbh = $this->getConnection();
