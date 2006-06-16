@@ -558,11 +558,13 @@ print STDOUT "txs $txs  reverse maps to  bxs $tempbxs\n";
 	    }
 	    else {
 		print STDOUT "Mapping->multiply: should not occur (1) !!\n";
+if ($options{debug}) {
 print STDOUT $thismap->writeToString()."\n";
 print STDOUT $mapping->writeToString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf\n";
+}
 		exit;
 	    }
 	}
@@ -576,11 +578,13 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             }
             else {
 	        print STDOUT "Mapping->multiply: should not occur (2) !!\n";
+if ($options{debug}) {
 print STDOUT $thismap->writeToString()."\n";
 print STDOUT $mapping->writeToString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf\n";
+}
 		exit;
 	    }
 	}
@@ -593,11 +597,13 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             }
             else {
 	        print STDOUT "Mapping->multiply: should not occur (3) !!\n";
+if ($options{debug}) {
 print STDOUT $thismap->writeToString()."\n";
 print STDOUT $mapping->writeToString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
+}
                 exit;
             }
         }
@@ -605,7 +611,6 @@ print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
 print STDOUT "no segment matching or overlap\n" if $options{debug}; 
             $ts++ if ($ryf >= $txf);
             $rs++ if ($ryf <= $txf);
-#print STDOUT "No new segment\n" if ($rname =~ /invers/i or $tname =~ /invers/i);
 	}
     }
 
