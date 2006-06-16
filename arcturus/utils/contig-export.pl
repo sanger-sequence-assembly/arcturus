@@ -292,7 +292,7 @@ foreach my $identifier (@contigs) {
     next unless $contig;
 
     if ($endregiontrim) {
-        my ($ql,$qr) = $contig->endregiontrim($endregiontrim);
+        my ($ql,$qr) = $contig->endregiontrim(cliplevel=>$endregiontrim);
         $logger->warning("end region clipping $endregiontrim clipped range $ql, $qr");
     }
 
