@@ -612,6 +612,7 @@ sub getStatistics {
                     my $tags = $this->getTags();
                     foreach my $tag (@$tags) {
                         $tag->transpose(1,[($shift,$shift)],$cfinal-$shift);
+#                        $tag->shift($shift,1,$cfinal);
                     }
 	        }
 # and redo the loop (as $pass > 0)
@@ -1269,13 +1270,46 @@ sub reverse {
     my $this = shift;
 
     my $length = $this->getContigLength();
- 
-    my $mappings = $this->getMappings();
-    foreach my $mapping (@$mappings) {
-        $mapping->applyMirrorTransform($length+1);
-    }
+
+# the read mappings
+
+    if ($this->getMappings()) {
+        my $mappings = $this->getMappings();
+        foreach my $mapping (@$mappings) {
+            $mapping->applyMirrorTransform($length+1);
+        }
 # and sort the mappings according to increasing contig position
-    @$mappings = sort {$a->getContigStart <=> $b->getContigStart} @$mappings;
+        @$mappings = sort {$a->getContigStart <=> $b->getContigStart} @$mappings;
+    }
+
+# possible parent contig mappings
+
+    if ($this->getContigToContigMappings()) {
+        my $mappings = $this->getContigToContigMappings();
+        foreach my $mapping (@$mappings) {
+            $mapping->applyMirrorTransform($length+1);
+        }
+    }
+
+# tags
+
+    my $tags = $this->getTags();
+    foreach my $tag (@$tags) {
+        $tag->mirror($length+1);
+    }
+
+# consensus sequence
+
+    if (my $consensus = $this->getConsensus()) {
+        my $length = length($consensus);
+        my $newsensus = '';
+        while ($length--) {
+            my $base = substr $consensus,$length,1;
+            $base =~ tr/ACGTacgt/TGCAtgca/;
+            $newsensus .= $base;
+        }
+	$this->setConsensus($newsensus);
+    }
 }
 
 sub findMapping { # used NOWHERE
@@ -1344,12 +1378,13 @@ sub propagateTags {
 }
 
 sub propagateTagsToContig {
-# propagate tags from this (parent) to target contig
+# propagate tags FROM this (parent) TO target contig
     my $parent = shift;
     my $target = shift;
     my %options = @_;
 
     return 0 unless $parent->hasTags(1);
+
 print "propagateTagsToContig ".
 "parent $parent (".$parent->getContigID().")  target $target ("
 .$target->getContigID().")\n" if $DEBUG;
@@ -1363,7 +1398,6 @@ print "propagateTagsToContig ".
     my $cparents = $target->getParentContigs(1);
 
     my $parent_id = $parent->getContigID();
-
 
     if ($cparents && @$cparents && $target->hasContigToContigMappings(1)) {
 # there are mappings: hence the child is taken from the database (& has parents)
@@ -1428,22 +1462,68 @@ print "Target contig length : $tlength \n" if $DEBUG;
 
 # ok, propagate the tags from parent to target
 
-    my $include = $options{includeTagType};
-    my $exclude = $options{excludeTagType};
+    my $includetag = $options{includetag};
+    my $excludetag = $options{excludetag};
+    if ($options{includetag}) { # specified takes precedence
+        $includetag = $options{includetag};
+        $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $includetag =~ s/\W+/|/g; # put separators in include list
+    }
+    elsif ($options{excludetag}) {
+        $excludetag = $options{excludetag};
+        $excludetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $excludetag =~ s/\W+/|/g; # put separators in exclude list
+    }
 
+# get the tags in the parent
+
+    my @tags;
+    my $ptags = $parent->getTags(1);
+
+# first attempt for ANNO tags (later to be used for others as well)
+
+    foreach my $ptag (@$ptags) {
+        my $tagtype = $ptag->getType();
+        next unless ($tagtype eq 'ANNO');
+        my $tptags = $ptag->remap($mapping,break=>1); 
+        push @tags,@$tptags if $tptags; 
+    }
+# if annotation tags found, sort according to start position
+    if (@tags) {
+        @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
+# test if some tags can be merged
+        my ($i,$j) = (0,1);
+        while ($i < scalar(@tags) && $j < scalar(@tags)) {
+# test for possible merger of tags i and j
+            if (my $newtag = $tags[$i]->merge($tags[$j])) {
+# the tags are merged: replace tags i and j by the new one
+                splice @tags, $i, 2, $newtag;
+# keep the same values of i and j
+	    }
+            else {
+# tags cannot be merged: increase both i and j
+                $i++;
+		$j++;
+            }
+        }
+        $target->addTag([@tags]) if @tags;
+    }
+
+# the remainder is for other tags using the old algorithm
 
     my $c2csegments = $mapping->getSegments();
     my $alignment = $mapping->getAlignment();
 
-    my @tags;
-    my $ptags = $parent->getTags(1); # tags in parent
     foreach my $ptag (@$ptags) {
 
 # apply include or exclude filter
 
-#        my $tagtype = $ptag->getType();
+        my $tagtype = $ptag->getType();
+        next if ($tagtype eq 'ANNO');
 #        next if ($exclude && $tagtype =~ /\b$exclude\b/i);
 #        next if ($include && $tagtype !~ /\b$include\b/i);
+#        my $tptags = $ptag->remap($mapping,break=>0); 
+#        push @tags,@$tptags if $tptags; 
 
 # determine the segment(s) of the mapping with the tag's position
 print "processing tag $ptag (align $alignment) \n" if $DEBUG;
@@ -1533,7 +1613,27 @@ sub writeToCaf {
 
     if ($this->hasTags()) {
         my $tags = $this->getTags();
+# decide on which tags to export; default no annotation (assembly export)
+        my $includetag;
+        my $excludetag = 'ANNO'; 
+        if ($options{alltags}) {
+            undef $excludetag;
+        }
+        elsif ($options{includetag}) { # specified takes precedence
+            $includetag = $options{includetag};
+            $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+            $includetag =~ s/\W+/|/g; # put separators in include list
+	}
+        elsif ($options{excludetag}) {
+            $excludetag = $options{excludetag};
+            $excludetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+            $excludetag =~ s/\W+/|/g; # put separators in exclude list
+	}
+# export the tags which pass the possible tag type filter               
         foreach my $tag (@$tags) {
+            my $tagtype = $tag->getType();
+            next if ($includetag && $tagtype !~ /$includetag/);
+            next if ($excludetag && $tagtype !~ /$excludetag/);
             $tag->writeToCaf($FILE);
         }
     }
@@ -1826,6 +1926,7 @@ sub writeToEMBL {
     my $this = shift;
     my $DFILE = shift; # obligatory file handle for DNA output
     my $QFILE = shift; # optional file handle for quality data
+    my %options = @_;
 
     my $identifier = $this->getContigName();
 
@@ -1844,32 +1945,40 @@ sub writeToEMBL {
 
         my $feature = 0;
         if ($this->hasTags(1)) {
+# termine which tags to export
+            my $includetag = 'ANNO'; # default 
+            if ($options{includetag}) {
+                $includetag = $options{includetag};
+                $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+                $includetag =~ s/\W+/|/g; # put separators in include list
+	    }
 
             my $tags = $this->getTags(); # force delayed loading
             foreach my $tag (@$tags) {
                 my $tagtype     = $tag->getType();
-                my $strand      = $tag->getStrand();
+                next if (!$includetag || $tagtype !~ /$includetag/);
+                my $strand      = lc($tag->getStrand());
                 my $sysID       = $tag->getSystematicID();
                 my $comment     = $tag->getComment();
                 my $tagcomment  = $tag->getTagComment();
                 my ($ps,$pf)    = $tag->getPosition;
-#              next if ($tagtype ne 'ANNO');
                 unless ($feature) {
                     print $DFILE "FH   Key             Location/Qualifiers\nFH\n";
                 }
                 $feature++;
                 my $sp17 = "                 "; # format spacer
                 print $DFILE "FT   TAG             $ps..$pf\n";
-                print $DFILE "FT $sp17 /type=$tagtype\n" if $tagtype;
-                print $DFILE "FT $sp17 /systematic ID = $sysID\n" if $sysID;
+                $tagtype =~ s/ANNO/annotation/ if $tagtype;
+                print $DFILE "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
+                print $DFILE "FT $sp17 /arcturus_feature_id=\"$sysID\"\n" if $sysID;
                 if ($strand eq 'U') {
-                    print $DFILE "FT $sp17 /no strand information\n";
+                    print $DFILE "FT $sp17 /strand=\"no strand information\"\n";
 		}
 		else {
-                    print $DFILE "FT $sp17 /strand $strand\n";
+                    print $DFILE "FT $sp17 /strand=\"$strand\"\n";
 		}
-                print $DFILE "FT $sp17 /comment: $comment\n" if $comment;
-                print $DFILE "FT $sp17 /description: $tagcomment\n" if $tagcomment;
+                print $DFILE "FT $sp17 /arcturus_comment=\"$comment\"\n" if $comment;
+                print $DFILE "FT $sp17 /description=\"$tagcomment\"\n" if $tagcomment;
             }
             print $DFILE "XX\n" if $feature;
         }
@@ -2036,7 +2145,9 @@ print STDERR "$clipped values clipped\n";
 sub endregiontrim {
 # trim low quality data from the end of the contig
     my $this = shift;
-    my $cliplevel = shift || return 0;
+    my %options = @_;
+
+    my $cliplevel = $options{cliplevel} || return 0;
 
     my $sequence = $this->getSequence();
     my $quality = $this->getBaseQuality();
@@ -2061,21 +2172,21 @@ sub endregiontrim {
 
     my $mappings = $this->getMappings(1);
 
-#print "masking existing read mappings for ".$this->getContigName()."\n";
+print "masking existing read mappings for ".$this->getContigName()."\n" if $options{debug};
 
     my @toberemoved;
     foreach my $mapping (@$mappings) {
         my $mappingname = $mapping->getMappingName();
-#print STDOUT "processing mapping $mappingname\n";
-#print STDOUT $mapping->writeToString();
+print STDOUT "processing mapping $mappingname\n" if $options{debug};
+print STDOUT $mapping->writeToString() if $options{debug};
         my $inverse = $mapping->inverse();
 # determine if the masked read is still in the contig
-        my $product = $inverse->multiply($mask,1);
+        my $product = $inverse->multiply($mask,repair=>1);
         if ($product->hasSegments()) {
             $mapping = $product->inverse();
             $mapping->analyseSegments();
             $mapping->setMappingName($mappingname);
-#print STDOUT $mapping->writeToString()."\n";
+print STDOUT $mapping->writeToString()."\n" if $options{debug};
             next;
 	}
 # the product is empty: remove this mapping and read from the list
