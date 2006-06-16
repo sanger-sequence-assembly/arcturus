@@ -478,9 +478,9 @@ sub putSegment {
 
     return scalar(@{$this->{mySegments}});
 }
- 
+
 #-------------------------------------------------------------------
-# inverting and multiplying mappings (re: padded - unpadded)
+# inverting and multiplying mappings
 #-------------------------------------------------------------------
 
 sub inverse {
@@ -500,6 +500,8 @@ sub inverse {
                              $segment[0],$segment[1]);
     }
 
+    $mapping->analyseSegments();
+
 #    $segments = $mapping->getSegments();
 #    @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
@@ -510,7 +512,7 @@ sub multiply {
 # return the product of this (mapping) and another mapping
     my $thismap = shift;
     my $mapping = shift;
-    my $repair = shift || 0;
+    my %options = @_;
 
     my $rsegments = $thismap->analyseSegments();
     my $tsegments = $mapping->analyseSegments();
@@ -529,6 +531,17 @@ sub multiply {
 
         my ($rxs,$rxf,$rys,$ryf) = $rsegment->getSegment();
         my ($txs,$txf,$tys,$tyf) = $tsegment->getSegment();
+
+if ($options{debug}) {
+print STDOUT "this segment [$rs]  ($rxs,$rxf,$rys,$ryf)  @$rsegment\n";  
+print STDOUT " map segment [$ts]  ($txs,$txf,$tys,$tyf)  @$tsegment\n"; 
+my $tempmxs = $tsegment->getYforX($rys) || 'undef';
+print STDOUT "rys $rys  maps to   mxs $tempmxs\n";
+my $tempmxf = $tsegment->getYforX($ryf) || 'undef';
+print STDOUT "ryf $ryf  maps to   mxf $tempmxf\n";
+my $tempbxs = $rsegment->getXforY($txs) || 'undef';
+print STDOUT "txs $txs  reverse maps to  bxs $tempbxs\n";
+}
 
         if (my $mxs = $tsegment->getYforX($rys)) {
 # begin of x window of R maps to y inside the T window
@@ -589,12 +602,14 @@ print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
             }
         }
         else {
+print STDOUT "no segment matching or overlap\n" if $options{debug}; 
             $ts++ if ($ryf >= $txf);
             $rs++ if ($ryf <= $txf);
+#print STDOUT "No new segment\n" if ($rname =~ /invers/i or $tname =~ /invers/i);
 	}
     }
 
-    $product->collate($repair);
+    $product->collate($options{repair});
 
     return $product;
 }
