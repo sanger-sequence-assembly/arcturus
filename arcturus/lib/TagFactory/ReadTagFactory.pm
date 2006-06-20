@@ -1,4 +1,4 @@
-package ReadTag;
+package ReadTagFactory;
 
 use strict;
 
@@ -27,6 +27,9 @@ use strict;
 # and the comment; a modified tag may subsequently replace the original one
 # in Arcturus (using a specialized script)
 #
+
+my $readtagfactory; # class variable
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -35,9 +38,18 @@ sub new {
 # constructor
     my $class = shift;
 
-    my $this = {};
+# we want only one instance per process
 
-    bless $this, $class;
+    my $this = $readtagfactory; 
+
+    unless ($this && ref($this) eq $class) {
+# create a new instance
+        $this = {};
+
+        bless $this, $class;
+
+        $readtagfactory = $this;
+    }
 
     $this->importTag(@_) if @_; # import a Tag instance, if specified 
 
@@ -67,7 +79,7 @@ sub importTag {
 sub cleanup {
 # clean the tag info by removing clutter, double info and redundent new line
     my $this = shift;
-
+    
     my $tag = $this->{Tag} || return undef; # Missing Tag
 
     my $info = $tag->getTagComment();
@@ -86,9 +98,9 @@ sub cleanup {
 sub processOligoTag {
 # test/complete oligo information
     my $this = shift;
-    my %options = @_;
+    my %options = @_; # used in repair mode
  
-    my $tag = $this->{Tag};
+    my $tag = $this->{Tag} || return undef; # Missing Tag
 
     my $tagtype = $tag->getType();
 
@@ -206,7 +218,7 @@ sub processOligoTag {
                 $report .= "Conflicting tag sequence name and place holder: "
 		        .  "($tagseqname, <$placeholder>)\n";
                 $warning++;
-# choose which one do by specifying the name with the force option
+# choose which one by specifying the name with the force option (repair mode)
                 if (my $force = $options{nameforcing}) {
                     if ($tagseqname =~ /$force/ && $placeholder =~ /$force/) {
                         $report .= "'force' option not discriminating\n";
@@ -234,7 +246,7 @@ sub processOligoTag {
 		        .  "($tagseqname --> $newname)\n";
 # specify with the force option if the new name is selected
                 my $force = $options{nameforcing};
-                if ($force && $newname =~ /$force/) {
+                if ($force && ($newname =~ /$force/ || $tagseqname =~ /$force/)) {
                     $tag->setTagSequenceName($newname);
                 }
 	    }
@@ -260,7 +272,7 @@ sub processRepeatTag {
 # check repeat tags for presence of tag sequence name
     my $this = shift;
 
-    my $tag = $this->{Tag} || return undef;
+    my $tag = $this->{Tag} || return undef; # Missing Tag
 
     my $tagtype = $tag->getTagType();
 
