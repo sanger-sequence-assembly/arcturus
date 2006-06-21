@@ -3,9 +3,8 @@ package Contig;
 use strict;
 
 use Mapping;
-use Clipping;
 
-use PaddedRead; # remove after upgrade for Padded
+use Clipping;
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -25,10 +24,6 @@ sub new {
 
     return $this;
 }
-
-my $DEBUG;
-sub setDEBUG {$DEBUG = 1;}
-sub setNoDEBUG {$DEBUG = 0;}
 
 #------------------------------------------------------------------- 
 # parent database handle
@@ -540,7 +535,7 @@ sub getStatistics {
     my $cfinal = 0;
     my ($readonleft, $readonright);
     my $totalreadcover = 0;
-    my $numberofreads = 0;
+    my $numberofnames = 0;
     my $isShifted = 0;
 
     while ($pass) {
@@ -550,7 +545,7 @@ sub getStatistics {
         my $name = $this->getContigName() || 0;
         if (my $mappings = $this->getMappings()) {
             my $init = 0;
-            $numberofreads = 0;
+            $numberofnames = 0;
             $totalreadcover = 0;
             foreach my $mapping (@$mappings) {
                 my $readname = $mapping->getMappingName();
@@ -560,7 +555,7 @@ sub getStatistics {
                 my $contigspan = $cf - $cs + 1;
                 $totalreadcover += $contigspan;
 # count number of reads
-                $numberofreads++;
+                $numberofnames++;
 
 # find the leftmost readname
 
@@ -642,13 +637,13 @@ sub getStatistics {
 # test number of reads
 
     if (my $nr = $this->getNumberOfReads()) {
-        unless ($nr == $numberofreads) {
-            print STDERR "Inconsistent read ($nr) and mapping ($numberofreads) "
+        unless ($nr == $numberofnames) {
+            print STDERR "Inconsistent read ($nr) and mapping ($numberofnames) "
                        . "count in contig ".$this->getContigName()."\n";
 	}
     }
     else {
-        $this->setNumberOfReads($numberofreads);
+        $this->setNumberOfReads($numberofnames);
     }
 
     return 1; # register success
@@ -657,6 +652,8 @@ sub getStatistics {
 #-------------------------------------------------------------------    
 # compare this Contig with another one using metadata and mappings
 #-------------------------------------------------------------------
+
+my $DEBUG;
 
 sub isSameAs {
 # compare the $compare and $this Contig instances
@@ -1640,13 +1637,13 @@ sub writeToCaf {
 
 # to write the DNA and BaseQuality we use the two private methods
 
-    $this->writeDNA($FILE,marker => "\nDNA : "); # specifying the CAF marker
+    my $errors = $this->writeDNA($FILE,marker => "\nDNA : "); # CAF marker
 
-    $this->writeBaseQuality($FILE,marker => "\nBaseQuality : ");
+    $errors += $this->writeBaseQuality($FILE,marker => "\nBaseQuality : ");
 
     print $FILE "\n";
 
-    return undef; # error reporting to be developed
+    return $errors;
 }
 
 sub writeToFasta {
@@ -1688,11 +1685,11 @@ sub writeToFasta {
 	}
     }
 
-    $this->writeDNA($DFILE,%options);
+    my $errors = $this->writeDNA($DFILE,%options);
 
-    $this->writeBaseQuality($QFILE,%options) if $QFILE;
+    $errors += $this->writeBaseQuality($QFILE,%options) if $QFILE;
 
-    return undef; # error reporting to be developed
+    return $errors;
 }
 
 # private methods
@@ -1710,7 +1707,8 @@ sub writeDNA {
     $identifier .= " - ".$this->getGap4Name() if $options{gap4name};
 
     if (!$DFILE) {
-        return "Missing file handle for DNA";
+       print STDERR "Missing file handle for DNA sequence\n";
+       return 1; # error status
     }
     elsif (my $dna = $this->getSequence()) {
 # output in blocks of 60 characters
@@ -1723,9 +1721,11 @@ sub writeDNA {
 	}
     }
     else {
-        return "Missing DNA data for contig $identifier";
-print STDOUT "Missing DNA data for contig $identifier";
+        print STDERR "Missing DNA data for contig $identifier\n";
+        return 1; # error status
     }
+       
+    return 0; # no errors
 }
 
 sub writeBaseQuality {
@@ -1741,7 +1741,8 @@ sub writeBaseQuality {
     $identifier .= " - ".$this->getGap4Name() if $options{gap4name};
 
     if (!$QFILE) {
-        return "Missing file handle for Quality Data";
+        priont STDERR "Missing file handle for Quality Data\n";
+        return 1; # error status
     }
     elsif (my $quality = $this->getBaseQuality()) {
 # output in lines of 25 numbers
@@ -1754,8 +1755,11 @@ sub writeBaseQuality {
 	}
     }
     else {
-        return "Missing BaseQuality data for contig $identifier";
+        print STDERR "Missing BaseQuality data for contig $identifier\n";
+        return 1; # error status
     }
+
+    return 0; # no errors
 }
 
 sub metaDataToString {
@@ -1931,7 +1935,8 @@ sub writeToEMBL {
     my $identifier = $this->getContigName();
 
     if (!$DFILE) {
-        return "Missing file handle for DNA";
+        print STDERR "Missing file handle for DNA sequence\n";
+        return 1;
     }
     elsif (my $dna = $this->getSequence()) {
 
@@ -2019,10 +2024,11 @@ sub writeToEMBL {
         print $DFILE "//\n";
     }
     else {
-        return "Missing DNA data for contig $identifier";
+        print STDERR "Missing DNA data for contig $identifier\n";
+        return 1;
     }
 
-    return unless $QFILE;
+    return 0 unless $QFILE;
 
 # Quality printout to be completed
 }
@@ -2210,7 +2216,6 @@ sub removeRead {
 # remove a named read from the Read and Mapping stock
     my $this = shift;
     my $read = shift;
-    my $hash = shift;
 
     my $spliced = 0;
 
@@ -2235,14 +2240,31 @@ sub removeRead {
 }
 
 #---------------------------
-# TO BE DEVELOPED
+# Pad status TO BE DEVELOPED
 #---------------------------
+
+sub isPadded {
+# return 0 for unpadded (default) or true for padded
+    my $this = shift;
+
+    return $this->{ispadded} || 0;
+}
 
 sub toPadded {
     my $this = shift;
 
-    die "Contig->toPadded is not yet implemented";
+    return 0; # failed
+#    die "Contig->toPadded is not yet implemented";
 }
+
+sub toUnPadded {
+    my $this = shift;
+
+    return 0; # failed
+#    die "Contig->toUnPadded is not yet implemented";
+}
+
+use PaddedRead;
 
 sub writeToCafPadded {
 # TO BE REPLACED by internal state (padded unpaaded) and tranform function
@@ -2310,5 +2332,8 @@ sub writeToCafPadded {
 #-------------------------------------------------------------------    
 # 
 #-------------------------------------------------------------------    
+
+sub setDEBUG {$DEBUG = 1;}
+sub setNoDEBUG {$DEBUG = 0;}
 
 1;
