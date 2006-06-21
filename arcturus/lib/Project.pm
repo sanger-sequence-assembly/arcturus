@@ -280,8 +280,8 @@ sub writeContigsToCaf {
 
         $contig->toPadded() if $options{padded};
 
-        if (my $status = $contig->writeToCaf($FILE)) {
-            $report .= "$status\n";
+        if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
+            $report .= "FAILED to export contig $contig_id\n";
             $errors++;
         }
         else {
@@ -316,15 +316,16 @@ sub writeContigsToFasta {
         my $contig = $ADB->getContig(contig_id=>$contig_id);
 
         unless ($contig) {
-            $report .= "FAILED to retrieve contig $contig_id";
+            $report .= "FAILED to retrieve contig $contig_id\n";
             $errors++;
             next;
         }
 
         $contig->endregiontrim(cliplevel=>$options{endregiontrim});
 
-        if (my $status = $contig->writeToFasta($DFILE,$QFILE,%options)) {
-            $report .= "$status\n";
+        if ($contig->writeToFasta($DFILE,$QFILE,%options)) {
+# writeToFasta returns 0 for no errors
+            $report .= "FAILED to export contig $contig_id\n";
             $errors++;
         }
         else {
@@ -360,7 +361,7 @@ sub writeContigsToMaf {
         my $contig = $ADB->getContig(contig_id=>$contig_id);
 
         unless ($contig) {
-            $report .= "FAILED to retrieve contig $contig_id";
+            $report .= "FAILED to retrieve contig $contig_id\n";
             $errors++;
             next;
         }
