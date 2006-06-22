@@ -35,6 +35,18 @@ public class ScaffoldBuilder {
 	}
     }
 
+    public void setMinimumLength(int minlen) { this.minlen = minlen; }
+
+    public int getMinimumLength() { return minlen; }
+
+    public void setPucLimit(int puclimit) { this.puclimit = puclimit; }
+
+    public int getPucLimit() { return puclimit; }
+
+    public void setMinimumBridges(int minbridges) { this.minbridges = minbridges; }
+
+    public int getMinimumBridges() { return minbridges; }
+
     private void prepareStatements(Connection conn) throws SQLException {
 	String query;
 
