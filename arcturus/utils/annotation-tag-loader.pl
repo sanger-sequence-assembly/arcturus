@@ -8,7 +8,7 @@ use Contig;
 
 use ContigFactory::ContigFactory;
 
-# use Correlate;
+use Alignment;
 
 use Mapping;
 
@@ -32,9 +32,11 @@ my $confirm;
 my $debug;
 
 my $swprog;
+my $nopads = 1;
+my $noembl = 1;
 
 my $validKeys  = "organism|instance|filename|fn|propagate|fasta|swprog|"
-               . "confirm|verbose|debug|help";
+               . "embl|confirm|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -68,6 +70,8 @@ while (my $nextword = shift @ARGV) {
 
     $confirm    = 1            if ($nextword eq '-confirm');
 
+    $noembl     = 0            if ($nextword eq '-embl');
+
     $swprog     = shift @ARGV  if ($nextword eq '-swprog');
 
     &showUsage(0) if ($nextword eq '-help');
@@ -92,7 +96,7 @@ if ($swprog) {
         close PARENT_WTR;
 
         select CHILD_WTR; # default output for print command
-
+# NOTE: from here you have to use explicitly STDOUT for print
         $| = 1;
     } 
     else {
@@ -222,7 +226,7 @@ while ($FILE && defined(my $record = <$FILE>)) {
     }
 }
 
-$FILE->close();
+$FILE->close() if $FILE;
 
 $logger->warning("$line records read from file $datafile");
 
@@ -233,10 +237,13 @@ $logger->warning("$line records read from file $datafile");
 # run through all the contigs
 
 my $lengthmismatch = 0;
+my $fastamappinghash = {};
 
 foreach my $contigname (keys %$contigtaghash) {
 
     $logger->info("Processing contig $contigname");
+
+    next unless ($contigname =~ /1926|0031/); # 2701 2103
 
 # run through the tags and create a Tag object for each
 
@@ -287,7 +294,7 @@ foreach my $contigname (keys %$contigtaghash) {
 
     $logger->info("contig $contigname: ".$arcturuscontig->getContigID());
 
-    my $length = $arcturuscontig->getConsensusLength();
+    my $alength = $arcturuscontig->getConsensusLength();
 
 # compare the length of the contig in Arcturus with the one given in the
 
@@ -296,67 +303,155 @@ foreach my $contigname (keys %$contigtaghash) {
         my $cid = $arcturuscontig->getContigID();
         my $fastacontig = $fastacontighash->{$cid};
         unless ($annotatedlength->{$contigname}) {
-            $logger->warning("No annotated sequence length provided for contig $contigname");
+            $logger->warning("No annotated sequence length provided "
+                            ."for contig $contigname");
             $annotatedlength->{$contigname} = 0;
 	}
 # test the three lengthes (annotation contig, annotatedlength and length)
-        my $summary = "Annotated: " . sprintf("%8d",$annotatedlength->{$contigname}) . "; "
-                    . "Arcturus: " . sprintf("%8d",$length) . "; "
-		    . "Fasta: " . sprintf("%8d",$fastacontig->getConsensusLength());
+        my $summary = "Annotated: "
+                    . sprintf("%8d",$annotatedlength->{$contigname}) . "; "
+                    . "Arcturus: " . sprintf("%8d",$alength) . "; "
+		    . "Fasta: "
+                    . sprintf("%8d",$fastacontig->getConsensusLength());
         $logger->warning("processing contig $contigname ($summary)");
 
 # determine the transformation from annotation contig to arcturus contig
 
-#*********** THIS PART IS EXPERIMENTAL AND UNDER DEVELOPMENT
-#        $logger->warning("SORRY, this part is not yet operational"); next;
         my $fsequence = $fastacontig->getSequence();
         my $asequence = $arcturuscontig->getSequence();
+        $logger->fine("Processing $contigname lengths: "
+                      .length($asequence)." & ".length($fsequence));
+  
+# get the alignment from the annotated sequence to the sequence in arcturus
 
-$logger->warning("\n\n\n\n");
-$fastacontig->writeDNA(*STDOUT);
-$logger->warning("\n\n\n\n");
-$arcturuscontig->writeDNA(*STDOUT);
-$logger->warning("\n\n\n\n");
+        my $mapping;
 
-        if ($swprog) {
-            my $mapping = &SmithWatermanAlignment($fsequence,$asequence);
+# method 1 : Smith-Waterman alignment
+
+        if ($swprog && length($asequence) < 20000) {
+	    $logger->warning("Smith Waterman Alignment selected");
+            $mapping = &SmithWatermanAlignment($asequence,$fsequence);
+            unless ($mapping) {
+                print STDOUT "Failed SW mapping for $contigname\n\n";
+	    }
         }
 
-        else {
-   	    my $peakdrift = $length - $annotatedlength->{$contigname};
-	    $logger->warning("peak drift: $peakdrift");
-            my %options = (kmersize=>9,coaligned=>1,peakdrift=>$peakdrift);
-# no peakdrift? but linear drift? in this case
-Correlate->setDebug(1) if $debug;
-            my $mapping = Correlate->correlate($fsequence,0,$asequence,0,%options);
+# method 2:  using pads in the quality data
+
+        unless ($mapping || $nopads) {
+	    $logger->warning("Low quality padding analysis selected");
+
+#$logger->warning("\n\n\n\n");
+#$fastacontig->writeDNA(*STDOUT);
+#$logger->warning("\n\n\n\n");
+#$arcturuscontig->writeDNA(*STDOUT);
+#$logger->warning("\n\n\n\n");
+
+my $mismatch = length($asequence) - length($fsequence);
+$logger->warning("Re-processing $contigname lengths: "
+         .length($asequence)." & ".length($fsequence)." $mismatch" );
+
+            my $quality = $arcturuscontig->getBaseQuality();
+
+            my %poptions = (threshold=>15 , window=>7);
+
+            $mapping = &PaddedAlignment($asequence,$quality,$fsequence,
+                                        %poptions);
 	}
-# 4) transform the tags accordingly
+
+# method 3 : using the Alignment package version
+
+       unless ($mapping) {
+	    $logger->warning("Alignment.pm correlation selected");
+	    my $flength = $annotatedlength->{$contigname};
+   	    my $peakdrift = $alength - $flength;
+            my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
+            my $bandedwindow = 2.0 * sqrt($peakdrift); # generous minimum of 
+            $bandedwindow = $peakdrift/2 if ($peakdrift/2 < $bandedwindow);
+	    $logger->warning("peak drift: $peakdrift, window: $bandedwindow");
+            my %options = (kmersize=>9,
+                           coaligned=>1,
+                           peakdrift=>$peakdrift,
+                           bandedwindow=>$bandedwindow,
+                           bandedlinear=>$linear,
+                           bandedoffset=>0.0,
+                           list=>1);
+# experimental options
+            $options{autoclip} = 0;
+	    $options{goldenpath} = 1; # not operational yet
+            my $fquality = $arcturuscontig->getBaseQuality();
+            $options{fquality} = $fquality;
+            $options{aquality} = 0;
+            my $output = $logger->getOutputDevice() || *STDOUT;
+            $options{debug} = $output if $debug;
+#$logger->warning("ENTER CORRELATE");
+            $mapping = Alignment->correlate($fsequence,0,$asequence,0,%options);
+	}
+
+        $mapping->setMappingName($contigname);
+        $logger->warning("Mapping : ".$mapping->toString() );
+
+# ok, here we have a mapping; put the tags on the fastacontig
+
         foreach my $tag (@tags) {
-#            $tag->transpose(); ??
+            $fastacontig->addTag($tag);
         }
+
+# and make the arcturus contig its child
+
+        $mapping->setSequenceID(1);
+        $fastacontig->setContigID(1);
+
+        $arcturuscontig->addParentContig($fastacontig);
+        $arcturuscontig->addContigToContigMapping($mapping);
+
+# then propagate the tags from parent to child
+
+$fastacontig->writeToEMBL(*STDOUT) unless $noembl;
+$arcturuscontig->setDEBUG();
+        $arcturuscontig->inheritTags();
+$arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
 last;
-#*********** UNTIL HERE
+
+# transform the tags accordingly
+
+        my %options;
+        $options{sequence} = $fsequence;
+        $options{break} = 1;
+
+        foreach my $tag (@tags) {
+            my $tags = $tag->remap($mapping,%options);
+            next unless $tags; # possibly outside range
+            foreach my $tag (@$tags) {
+                $arcturuscontig->addTag($tag);
+            }
+        }
+$fastacontig->writeToEMBL(*STDOUT) unless $noembl;
+
+$arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
     }
 # warn if no annotated sequence length provided
-    elsif (!$annotatedlength->{$contigname}) {
+    elsif ($annotatedlength->{$contigname}) {
         $logger->warning("No annotated sequence length provided for contig $contigname");
+        $logger->warning("Contig assumed to be correctly identified");
+
     }
 # compare the length of the contig in Arcturus with that given with annotation
-    elsif ($annotatedlength->{$contigname} != $length) {
+    elsif ($alength != $annotatedlength->{$contigname}) {
         my $summary = "Annotated: ".sprintf("%8d",$annotatedlength->{$contigname})."; "
-                    . "Arcturus: " .sprintf("%8d",$length);
+                    . "Arcturus: " .sprintf("%8d",$alength);
         $logger->warning("Length mismatch for contig $contigname ($summary)");
         $logger->warning("-confirm switch is reset") if $confirm;
         $lengthmismatch++;
-        $confirm = 0;
+        next; # contigname
     }
 
     my $tagcount = 0;
     foreach my $tag (@tags) {
         my @pos = $tag->getPosition();
-        unless ($pos[0] > 0 && $pos[1] <= $length) {
+        unless ($pos[0] > 0 && $pos[1] <= $alength) {
             $logger->severe("Tag outside range for contig $contigname: "
-			    ."@pos  (1-$length)");
+			    ."@pos  (1-$alength)");
 	    next;
 	}
         $arcturuscontig->addTag($tag);
@@ -374,6 +469,11 @@ last;
     my $contigs = [];
 
     if ($propagate) {
+# test set up for propagation to offspring
+#my $cid = $arcturuscontig->getContigID();
+#my $fastacontig = $fastacontighash->{$cid};
+#$arcturuscontig->addChildContig($fastacontig);
+# 
         $contigs = &propagate($arcturuscontig);
 	$logger->info("Contigs after propagation:");
         unless ($confirm) {
@@ -449,22 +549,22 @@ print "propagating child  ".$child->getContigName()."\n" if $debug;
 
 sub SmithWatermanAlignment {
 # uses ADH's C programme
-    my ($fsequence,$asequence) = @_;
+    my ($in_sequence,$outsequence) = @_;
 
 # write the contents of the sequences to the input handle of the child process
 
     my $offset = 0;
-    my $length = length($fsequence);
+    my $length = length($in_sequence);
     while ($offset < $length) {    
-	print substr($fsequence,$offset,50)."\n";
+	print substr($in_sequence,$offset,50)."\n";
 	$offset += 50;
     }
     print ".\n";
 
     $offset = 0;
-    $length = length($asequence);
+    $length = length($outsequence);
     while ($offset < $length) {    
-	print substr($asequence,$offset,50)."\n";
+	print substr($outsequence,$offset,50)."\n";
 	$offset += 50;
     }
     print ".\n";
@@ -473,18 +573,88 @@ sub SmithWatermanAlignment {
 
     my $goodread = 0;
 
+# just one mapping expected
+
+    my $mapping;
     while (my $line = <CHILD_RDR>) {
+# print STDOUT "line $line \n";
         last if ($line =~ /^\./);
         my @words = split(';', $line);
+# decode the first field (overall mapping and quality)
         my ($score, $smap, $fmap, $segs) = split(',', $words[0]);
-print STDOUT "$line \n";
 
         if ($segs > 0 && $score > 50) {
-            print STDOUT " // $score $fmap $smap $segs";
             $goodread = 1;
+            $mapping = new Mapping();
+            foreach my $i (1..$segs) {
+                my ($xs,$xf,$ys,$yf) = split /\:|\,/ , $words[$i];
+                if (abs($xf-$xs) != abs($yf-$ys)) {
+                    print STDERR "invalid mapping segment $words[$i] "
+                               . "($xs,$xf,$ys,$yf)\n";
+		    next;
+                }
+	        $mapping->putSegment($xs,$xf,$ys,$yf);
+            }
         }
+        else {
+            return undef;
+	}
     }
-    print STDOUT "\n\n";
+    return $mapping;
+}
+
+sub PaddedAlignment {
+# find alignment, using low quality pads
+    my $asequence = shift;
+    my $aquality  = shift;
+    my $fsequence = shift;
+    my %options = @_;
+
+    my $threshold = $options{threshold} || 15;
+    my $window = $options{window} || 5;
+    my $lgt = 2 * int(($window-1)/2) + 1; # ensure odd value
+
+    my $mismatch = length($asequence) - length($fsequence);
+
+    my @pads;
+    for (my $i = 2 ; $i < @$aquality ; $i++) {
+# trigger investigation by detection of minimum
+        next unless ($aquality->[$i] > $aquality->[$i-1]);
+        my $reference = $aquality->[$i-2] + $aquality->[$i]; 
+        next unless ($aquality->[$i - 1] < $reference/2 - $threshold);
+# at i-1 a deep minumum was found which may be a pad
+
+$logger->warning("possible pad at $i  $aquality->[$i-2], $aquality->[$i-1], $aquality->[$i]");
+my $asub = substr $asequence, $i-1-int($lgt/2), $lgt;
+my $j = $i - scalar(@pads); 
+my $fsub = substr $fsequence, $j-1-int($lgt/2), $lgt;
+$logger->warning("a: $asub    f: $fsub");
+
+        next if ($asub eq $fsub);
+        push @pads, ($i-1);
+    }
+# compare the number of pads with the length mismatch
+$logger->warning("Pads ".scalar(@pads)." $mismatch");
+
+    my $mapping;
+    if ($mismatch == scalar(@pads)) {
+# ok, here we most likely have the original pads recovered
+        push @pads,length($asequence); # add ficticious pad at end
+        my ($ss,$sf,$ts,$tf) = (1,0,1,0);
+        $mapping = new Mapping('recovered pads');
+        for (my $i = 0 ; $i < @pads ; $i++) {
+            $tf = $pads[$i];
+            $sf = $ss + ($tf - $ts);
+            my $lgt = $tf - $ts + 1;
+my $asub = substr $asequence, $ts-1, $lgt;
+my $fsub = substr $fsequence, $ss-1, $lgt;
+$logger->warning("segment $ss, $sf   $ts, $tf \na: $asub\nf: $fsub\n");
+# add segment
+            $ss = $tf - $i + 1;
+            $ts = $tf + 2;
+	}
+    }
+    return $mapping; 
 }
 
 #------------------------------------------------------------------------
@@ -512,6 +682,8 @@ sub showUsage {
     print STDERR "-propagate\tpropagate contig tag(s) to the last generation\n";
     print STDERR "\n";
     print STDERR "-fasta\t\tFasta file with contigs used for annotation\n";
+    print STDERR "-swprog\t\tuse Smith-Waterman alignment algorithm\n";
+    print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "-debug\t\t(no value)\n";
     print STDERR "\n";
