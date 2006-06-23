@@ -252,7 +252,7 @@ foreach my $identifier (@identifiers) {
 }
 
 my %exportoptions;
-$exportoptions{endregiontrim} = $endregiontrim;
+$exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
 
 if (defined($caffile)) {
 #    $exportoptions{padded} = 1 if $padded;
@@ -262,7 +262,7 @@ elsif (defined($fastafile)) {
     $exportoptions{'readsonly'} = 1 if $readsonly; # fasta
     $exportoptions{endregiononly} = $masking if defined($masking);
     $exportoptions{maskingsymbol} = $msymbol || 'X';
-    $exportoptions{shrink} = $mshrink;
+    $exportoptions{shrink} = $mshrink if $mshrink;
 
     $exportoptions{qualityclip} = 1 if defined($qualityclip);
     $exportoptions{qualityclip} = 1 if defined($clipthreshold);
