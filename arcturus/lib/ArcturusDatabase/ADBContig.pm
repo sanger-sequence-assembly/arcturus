@@ -175,7 +175,7 @@ sub getContig {
 
     return undef unless defined($contig);
 
-    return $contig if $options{metaDataOnly};
+    return $contig if ($options{metaDataOnly} || $options{metadataonly});
 
 # get the reads for this contig with their DNA sequences and tags
 
@@ -486,6 +486,8 @@ print STDERR "putContig: line 449 assignContigToProject "
     }
 
 # okay, the contig is new; find out if it is connected to existing contigs
+
+    $contig->setContigID(); # clears ID to ensure correct exec of next
 
     my $parentids = $this->getParentIDsForContig($contig);
 
@@ -2596,6 +2598,42 @@ sub isCurrentContigID {
     my $children = &getChildIDsForContigID($dbh,@_);
 
     return (scalar(@$children) ? 0 : 1);
+}
+
+sub getRelationsForContigID {
+# returns a list of contig_id,generation of all contigs related to input contig ID
+    my $this = shift;
+    my $contig_id = shift;
+    my $hash = shift;
+    my %options = @_;
+
+    $hash = {} unless (ref($hash) eq 'HASH');
+
+    my $generation = $options{generation} || 0;
+
+    $hash->{$contig_id} = $generation;
+
+    my $dbh = $this->getConnection();
+
+    unless ($options{children}) {
+        my $parentids = &getParentIDsForContigID($dbh,$contig_id);
+        my $parentgeneration = $generation + 1;
+        my %poptions = (generation=>$parentgeneration,parents=>1);
+        foreach my $parent_id (@$parentids) {
+            $this->getRelationsForContigID($parent_id,$hash,%poptions);
+	}
+    }
+
+    unless ($options{parents}) {
+        my $childids = &getChildIDsForContigID($dbh,$contig_id);
+        my $childgeneration = $generation - 1;
+        my %coptions = (generation=>$childgeneration,children=>1);
+        foreach my $child_id (@$childids) {
+            $this->getRelationsForContigID($child_id,$hash,%coptions);
+	}
+    }
+
+    return $hash; # generation keyed on contig ID
 }
 
 #------------------------------------------------------------------------------
