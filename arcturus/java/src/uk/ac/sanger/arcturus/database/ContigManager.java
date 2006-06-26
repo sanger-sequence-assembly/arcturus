@@ -19,6 +19,7 @@ public class ContigManager extends AbstractManager {
     private Inflater decompresser = new Inflater();
 
     protected PreparedStatement pstmtContigData = null;
+    protected PreparedStatement pstmtCurrentContigData = null;
     protected PreparedStatement pstmtCountMappings = null;
     protected PreparedStatement pstmtMappingData = null;
     protected PreparedStatement pstmtCountSegments = null;
@@ -81,6 +82,13 @@ public class ContigManager extends AbstractManager {
 	    " from CONTIG where contig_id = ?";
 
 	pstmtContigData = conn.prepareStatement(query);
+
+	query = "select gap4name,length,nreads,created,updated,project_id " +
+	    "  from CONTIG  left join C2CMAPPING" +
+	    "    on CONTIG.contig_id = C2CMAPPING.parent_id" +
+	    " where CONTIG.contig_id = ? and C2CMAPPING.parent_id is null";
+
+	pstmtCurrentContigData = conn.prepareStatement(query);
 
 	query = "select count(*) from MAPPING where contig_id = ?";
 
@@ -933,6 +941,18 @@ public class ContigManager extends AbstractManager {
 	fireEvent(event);
 
 	return processed;
+    }
+
+    public boolean isCurrentContig(int contigid) throws SQLException {
+	pstmtCurrentContigData.setInt(1, contigid);
+
+	ResultSet rs = pstmtCurrentContigData.executeQuery();
+
+	boolean found = rs.next();
+
+	rs.close();
+
+	return found;
     }
 
     public int[] getCurrentContigIDList() throws SQLException {
