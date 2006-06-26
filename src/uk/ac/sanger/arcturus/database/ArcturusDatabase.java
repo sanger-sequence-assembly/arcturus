@@ -618,6 +618,10 @@ public class ArcturusDatabase {
 	return contigManager.getContigByID(id, options);
     }
 
+    public boolean isCurrentContig(int contigid) throws SQLException {
+	return contigManager.isCurrentContig(contigid);
+    }
+
     public int[] getCurrentContigIDList() throws SQLException {
 	return contigManager.getCurrentContigIDList();
     }
