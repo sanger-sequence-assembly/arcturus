@@ -102,6 +102,13 @@ public class ScaffoldBuilder {
 
     public Set createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
 	throws SQLException, DataFormatException {
+	if (!adb.isCurrentContig(seedcontigid)) {
+	    if (listener != null)
+		listener.scaffoldUpdate(new ScaffoldEvent(this, ScaffoldEvent.FINISH, "Not a current contig"));
+
+	    return null;
+	}
+
 	Vector contigset = new Vector();
 
 	if (listener != null)
@@ -111,7 +118,7 @@ public class ScaffoldBuilder {
 
 	Set subgraph = null;
 
-	if (seedcontig != null && isCurrentContig(seedcontigid)) {
+	if (seedcontig != null) {
 	    contigset.add(seedcontig);
 
 	    BridgeSet bs = processContigSet(contigset, listener);
