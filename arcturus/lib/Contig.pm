@@ -124,7 +124,7 @@ sub setContigID {
     my $this = shift;
     my $cid  = shift;
 
-    return if ($cid =~ /\D/); # must be a number
+    return if ($cid && $cid =~ /\D/); # if defined must be a number
 
     $this->{data}->{contig_id} = $cid;
 
