@@ -14,7 +14,7 @@ use strict;
 my $verbose = 0;
 my $instance;
 my $organism;
-my $samestrand = 0;
+my $anystrand = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -22,7 +22,7 @@ while (my $nextword = shift @ARGV) {
 
     $verbose = 1 if ($nextword eq '-verbose');
 
-    $samestrand = 1 if ($nextword eq '-samestrand');
+    $anystrand = 1 if ($nextword eq '-anystrand');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -92,9 +92,12 @@ $query = "select READS.read_id,seq_id,readname" .
     " from READS left join SEQ2READ using(read_id)" .
     " where template_id = ?";
 
-$query .= " and strand=?" if $samestrand;
+my $sth_template2readseq_loose =  $dbh->prepare($query);
+&db_die("failed to prepare \"$query\"");
 
-my $sth_template2readseq =  $dbh->prepare($query);
+$query .= " and strand=?";
+
+my $sth_template2readseq_strict =  $dbh->prepare($query);
 &db_die("failed to prepare \"$query\"");
 
 $query = "select currentcontigs.contig_id,project_id" .
@@ -123,40 +126,48 @@ while (my $line = <STDIN>) {
     print STDERR "  (read_id $finreadid, template_id $templateid)\n" if $verbose;
 
     my $votes = {};
-
-    if ($samestrand) {
-	$sth_template2readseq->execute($templateid, $strand);
-    } else {
-	$sth_template2readseq->execute($templateid);
-    }
-
     my $allvotes = 0;
 
-    while (my ($readid, $seqid, $readname) = $sth_template2readseq->fetchrow_array()) {
-	next if ($readid == $finreadid);
+    for (my $pass = 1; $pass < 3; $pass++) {
+	my $sth;
 
-	print STDERR "    Shotgun read $readname (read_id $readid, seq_id $seqid)"
-	    if $verbose;
-
-	$sth_seq2contig->execute($seqid);
-
-	my ($contigid, $projectid) = $sth_seq2contig->fetchrow_array();
-
-	if (defined($contigid) && defined($projectid)) {
-	    my $project = $projectid2name{$projectid};
-	    print STDERR " in contig $contigid, project $project\n"
-		if $verbose;
-	    
-	    if (defined($votes->{$project})) {
-		$votes->{$project}++;
-	    } else {
-		$votes->{$project} = 1;
-	    }
-
-	    $allvotes++;
+	if ($pass == 1) {
+	    $sth_template2readseq_strict->execute($templateid, $strand);
+	    $sth = $sth_template2readseq_strict;
 	} else {
-	    print STDERR ", unallocated\n" if $verbose;
+	    $sth_template2readseq_loose->execute($templateid);
+	    $sth = $sth_template2readseq_loose;
+	    print STDERR "---- Commencing loose pass, no matches found in strict pass ----\n";
 	}
+
+	while (my ($readid, $seqid, $readname) = $sth->fetchrow_array()) {
+	    next if ($readid == $finreadid);
+
+	    print STDERR "    Shotgun read $readname (read_id $readid, seq_id $seqid)"
+		if $verbose;
+
+	    $sth_seq2contig->execute($seqid);
+
+	    my ($contigid, $projectid) = $sth_seq2contig->fetchrow_array();
+
+	    if (defined($contigid) && defined($projectid)) {
+		my $project = $projectid2name{$projectid};
+		print STDERR " in contig $contigid, project $project\n"
+		    if $verbose;
+	    
+		if (defined($votes->{$project})) {
+		    $votes->{$project}++;
+		} else {
+		    $votes->{$project} = 1;
+		}
+
+		$allvotes++;
+	    } else {
+		print STDERR ", unallocated\n" if $verbose;
+	    }
+	}
+
+	last if (($allvotes > 0) || !$anystrand);
     }
 
     my $bestproject;
@@ -189,7 +200,8 @@ while (my $line = <STDIN>) {
 }
 
 $sth_read2template->finish();
-$sth_template2readseq->finish();
+$sth_template2readseq_loose->finish();
+$sth_template2readseq_strict->finish();
 $sth_seq2contig->finish();
 
 $dbh->disconnect();
@@ -210,5 +222,6 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -verbose\t\tVerbose output\n";
-    print STDERR "    -samestrand\t\tPlace finishing reads with same-stranded shotgun read\n";
+    print STDERR "    -anystrand\t\tAllow finishing read to be placed with read from\n";
+    print STDERR "\t\t\topposite strand if no match can be found to same strand\n";
 }

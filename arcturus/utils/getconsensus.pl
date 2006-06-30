@@ -55,7 +55,7 @@ my $sth_sequence = $dbh->prepare($query);
 while(my $line = <STDIN>) {
     chop($line);
 
-    my ($contigid, $cstart, $cfinish, $junk) = split(/\s+/, $line);
+    my ($contigid, $cstart, $cfinish) = $line =~ /\s*(\d+)\s+(\d+)\s+(\d+)/;
 
     $sth_sequence->execute($contigid);
 
@@ -79,30 +79,22 @@ while(my $line = <STDIN>) {
 
 	print STDERR "\tRange: $range\n";
 
-	if ($cstart > $cfinish) {
+	my $revcomp = ($cstart > $cfinish) ? 1 : 0;
+
+	($cstart, $cfinish) = ($cfinish, $cstart) if $revcomp;
+
+	$cstart = 1 if ($cstart < 1);
+	$cfinish = $seqlen if ($cfinish > $seqlen);
+	    
+	$sequence = substr($sequence, $cstart - 1, 1 + $cfinish - $cstart);
+
+	if ($revcomp) {
 	    $sequence = reverse($sequence);
 
 	    $sequence =~ tr/ACGTacgt/TGCAtgca/;
-
-	    $cstart = $seqlen if ($cstart > $seqlen);
-	    $cfinish = 1 if ($cfinish < 1);
-
-	    my $rstart = $seqlen + 1 - $cfinish;
-	    my $rfinish = $seqlen + 1 - $cstart;
-
-	    print STDERR "\trstart=$rstart rfinish=$rfinish\n";
-
-	    $sequence = substr($sequence, $rstart - 1, 1 + $rfinish - $rstart);
-
-	    print STDERR "\tSubsequence has length " . length($sequence) . "\n";
-	} else {
-	    $cstart = 1 if ($cstart < 1);
-	    $cfinish = $seqlen if ($cfinish > $seqlen);
-	    
-	    $sequence = substr($sequence, $cstart - 1, 1 + $cfinish - $cstart);
-
-	    print STDERR "\tSubsequence has length " . length($sequence) . "\n";
 	}
+
+	print STDERR "\tSubsequence has length " . length($sequence) . "\n";
     }
 
     print ">$contigname";
