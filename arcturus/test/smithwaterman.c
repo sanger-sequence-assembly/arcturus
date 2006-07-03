@@ -306,7 +306,7 @@ int main(int argc, char **argv) {
 	      segments[nSegments-1].startB, segments[0].endB,
 	      nSegments);
     else
-      fprintf(stdout, "0:0,0:0,0");
+      fprintf(stdout, "0,0:0,0:0,0");
 
     for (iSeg = nSegments - 1; iSeg >= 0; iSeg--) {
       fprintf(stdout, ";%d:%d,%d:%d", segments[iSeg].startA, segments[iSeg].endA,
