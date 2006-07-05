@@ -297,9 +297,10 @@ sub getNamesFromFile {
         if ($name =~ /.*\/(\S+)$/) {
             $name = $1;
 	}
-# remove blanks in the readname
-        $name =~ s/\s+//g;
-        push @list, $name;
+# only collect the first word
+        if ($name =~ /^(\S+)\b/) {
+            push @list, $1;
+	}
     }
 
     return [@list];
