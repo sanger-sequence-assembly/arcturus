@@ -694,16 +694,17 @@ sub writeToString {
 }
 
 sub toString {
+# primarily for diagnostic purposes
     my $this = shift;
-    my $flags = shift || 0;
+    my %options = @_;
 
     $this->{contigrange} = undef;
-    my $mappingname = $this->getMappingName() || 'undefined';
+    my $mappingname = $this->getMappingName()      || 'undefined';
     my $direction = $this->getAlignmentDirection() || 'UNDEFINED';
 
     my $string = "Mapping: name=$mappingname, sense=$direction";
 
-    if (!$flags) {
+    unless ($options{norange}) {
 	my ($cstart, $cfinis) =  $this->getContigRange();
         $cstart = 'undef' unless defined $cstart;
         $cfinis = 'undef' unless defined $cfinis;
@@ -712,7 +713,36 @@ sub toString {
 
     $string .= "\n";
 
-    $string .= $this->writeToString();
+    unless ($options{template} || $options{sequence}) {
+        $string .= $this->writeToString($options{text});
+        return $string;
+    }
+
+# list the windows and the sequences
+
+    my $segments = $this->getSegments();
+
+    foreach my $segment (@$segments) {
+       my @segment = $segment->getSegment();
+# diagnostic output with mapped sequence segments
+        my $length = abs($segment[1] - $segment[0]) + 1;
+        if (my $template = $options{template}) {
+# segments already normalized on Y
+            my $k = ($segment[0] <= $segment[1]) ? 0 : 1;
+            $string .= sprintf("%7d",$segment[0])
+	    	    .  sprintf("%7d",$segment[1]);
+            my $substring = substr($template,$segment[$k]-1,$length);
+            $substring = reverse($substring)    if $k;
+            $substring =~ tr/acgtACGT/tgcaTGCA/ if $k;    
+            $string .= "  " . $substring ."\n";
+        }
+        if (my $sequence = $options{sequence}) {
+            $string .= sprintf("%7d",$segment[2])
+                    .  sprintf("%7d",$segment[3])
+		    .  "  " . substr($sequence,$segment[2]-1,$length);
+            $string .= "\n";
+ 	}
+    }
 
     return $string;
 }
