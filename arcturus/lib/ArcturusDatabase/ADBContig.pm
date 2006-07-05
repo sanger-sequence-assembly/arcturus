@@ -359,7 +359,7 @@ sub putContig {
 # inheritTags=>0/1/2  for generation depth of tag inheritance from parents
 # noload=>0/1         for testmode (everything except write to database)
 
-    my $setprojectby = $options{setprojectby} || 'none';
+    my $setprojectby = $options{setprojectby} || 'contiglength'; # 'none'
     if ($setprojectby eq 'project' && !$project) {
         return (0,"Missing Project instance as parameter when expected");
     }
