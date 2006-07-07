@@ -58,18 +58,42 @@ sub processRead {
 		      'TSR_UNIVERSAL_PRIMER',
 		      'TSR_CHEMISTRY',
 		      'TSR_CHEMISTRY_DESCRIPTION',
-		      'TSR_RUN_DATETIME') {
+		      'TSR_RUN_DATETIME',
+		      'TSR_STRATEGY',
+		      'TSR_STRATEGY_DESCRIPTION',
+		      'TSR_PROGRAM') {
 	my $value = $read->get_attribute($attr);
 	print "\t$attr = $value\n" if defined($value);
     }
 
     print "\tTraceArchiveID = $seq_id\n";
 
-    my $dna = $read->get_sequence()->get_dna();
+    my $seq = $read->get_sequence();
+
+    my $dna = $seq->get_dna();
 
     my $qual = $read->get_confidence()->get_phred();
 
     print "\tLength = ", length($dna), " " , length($qual), "\n";
+
+    my $numclips = $seq->get_num_clips();
+
+    print "\n\tCLIPPING\n" if ($numclips > 0);
+
+    for (my $jclip = 0; $jclip < $numclips; $jclip++) {
+	my $clip = $seq->get_clip($jclip);
+	print "\t\t",$clip->get_type()," ",$clip->get_start()," ",$clip->get_end(),"\n";
+    }
+
+    my $numtags = $seq->get_num_tags();
+
+    print "\n\tTAGS\n" if ($numtags > 0);
+
+    for (my $jtag = 0; $jtag < $numtags; $jtag++) {
+	my $tag = $seq->get_tag($jtag);
+	print "\t\t",$tag->get_type()," ",$tag->get_direction()," ",$tag->get_start()," ",
+	$tag->get_end()," \"",$tag->get_text(),"\"\n";
+    }
 
     my $indent = "\t";
 
