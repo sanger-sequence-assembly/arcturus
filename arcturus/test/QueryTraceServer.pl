@@ -52,6 +52,17 @@ sub processRead {
 
     print "\tDirection = $direction\n";
     print "\tChemistry = ",$read->get_chemistry(),"\n";
+
+    foreach my $attr ('TSR_PRIMER_NAME',
+		      'TSR_PRIMER_SEQUENCE',
+		      'TSR_UNIVERSAL_PRIMER',
+		      'TSR_CHEMISTRY',
+		      'TSR_CHEMISTRY_DESCRIPTION',
+		      'TSR_RUN_DATETIME') {
+	my $value = $read->get_attribute($attr);
+	print "\t$attr = $value\n" if defined($value);
+    }
+
     print "\tTraceArchiveID = $seq_id\n";
 
     my $dna = $read->get_sequence()->get_dna();
@@ -62,7 +73,9 @@ sub processRead {
 
     my $indent = "\t";
 
-    for (my $dnasrc = $read->get_dnasource(); defined($dnasrc); $dnasrc = $dnasrc->get_parent()) {
+    for (my $dnasrc = $read->get_dnasource();
+	 defined($dnasrc);
+	 $dnasrc = $dnasrc->get_parent()) {
 	my ($srcclass,$srcname) = split(/::/, $dnasrc->get_name());
 
 	print "\n";
