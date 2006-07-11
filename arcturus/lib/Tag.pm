@@ -339,6 +339,7 @@ sub remap {
 #           sequence, if provided used to generate a tagsequence, possibly 
 #                     with pads; in its absence a long comment is generated
 
+$options{debug} = 1;
 
     unless (ref($mapping) eq 'Mapping') {
         die "Tag->transpose expects a Mapping instance as parameter";
@@ -357,11 +358,18 @@ sub remap {
 # multiply by input mapping; the helper mapping may be masked
 # by the input mapping, which would result in a truncated tag
 
-#print STDOUT "Tag position: @currentposition \n";
+print STDOUT "Tag position: @currentposition \n" if $options{debug};
 
     my $maskedmapping = $helpermapping->multiply($mapping);
 
-#print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n";
+# trap problems with mapping by running again with debug option
+
+    $helpermapping->multiply($mapping,debug=>1) unless $maskedmapping;
+
+    return undef unless $maskedmapping; # something wrong with mapping
+   
+
+print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debug};
 
     return undef unless $maskedmapping->hasSegments(); # just in case
           
@@ -502,8 +510,10 @@ sub copy {
     $newtag->setPosition($this->getPosition());
     my $strand = $this->getStrand();
     if ($options{changestrand}) {
-        $strand = 'Reverse' if ($this->getStrand() eq 'Forward');         
-        $strand = 'Forward' if ($this->getStrand() eq 'Reverse');
+	my %inverse = (Forward => 'Reverse', Reverse => 'Forward');
+        $strand = $inverse{$strand} || 'Unknown';
+#        $strand = 'Reverse' if ($this->getStrand() eq 'Forward');         
+#        $strand = 'Forward' if ($this->getStrand() eq 'Reverse');
     } # 'Unknown' is unchanged
     $newtag->setStrand($strand);
     $newtag->setComment($this->getComment());
@@ -550,56 +560,62 @@ sub shiftTag {
 sub merge {
 # merge this tag and another (if possible)
     my $this = shift;
-    my $tag = shift;
+    my $otag = shift;
 
-    unless (ref($tag) eq 'Tag') {
+    unless (ref($otag) eq 'Tag') {
         die "Tag->merge expects another Tag instance as parameter";
     }
 
 # test thhe tag type
 
-    return undef unless ($this->getType() eq $tag->getType());
+    return undef unless ($this->getType() eq $otag->getType());
 
     my @thisposition = $this->getPosition();
-    my @atagposition =  $tag->getPosition();
+    my @otagposition = $otag->getPosition();
 
     my ($left,$right);
-    if ($thisposition[1] == $atagposition[0] - 1) {
-# tag is butting to the right of this
-        ($left,$right) = ($this,$tag); 
+    if ($thisposition[1] == $otagposition[0] - 1) {
+# other tag is butting to the right of this
+        ($left,$right) = ($this,$otag); 
     }
-    elsif ($thisposition[0] == $atagposition[1] + 1) {
-# this is butting to the right of tag
-        ($left,$right) = ($tag,$this); 
+    elsif ($thisposition[0] == $otagposition[1] + 1) {
+# this is butting to the right of other tag
+        ($left,$right) = ($otag,$this); 
     }
     else {
-print STDOUT "tag positions do not butt: @thisposition, @atagposition \n";
+#print STDOUT "tag positions do not butt: @thisposition, @otagposition \n";
 	return undef;
     }
-print STDOUT "tag positions DO butt: @thisposition, @atagposition \n";
+print STDOUT "tag positions DO butt: @thisposition, @otagposition \n";
 $left->writeToCaf(*STDOUT,annotag=>1);
 $right->writeToCaf(*STDOUT,annotag=>1);
 
-# accept if systematic IDs  and strand are identical
+# accept if systematic IDs and strand are identical
 
     return undef unless ($left->getSystematicID() eq $right->getSystematicID());
 
     return undef unless ($left->getStrand() eq $right->getStrand());
 
-# try to build a new tag
-
-    my $newtag = $this->new();
     my @lposition = $left->getPosition();
     my @rposition = $right->getPosition();
+    if ($left->getDNA() && $right->getDNA()) {
+        my $DNA = $left->getDNA() . $right->getDNA(); # combined
+print STDOUT "DNA merge: @lposition  @rposition \n";
+        return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
+    }
+
+# try to build a new tag to replace the two parts
+
+    my $newtag = $this->new();
     $newtag->setPosition($lposition[0],$rposition[1]);
     $newtag->setSystematicID($this->getSystematicID());
     $newtag->setStrand($this->getStrand());
-# get the new DNA and test against length 
+# get the new DNA and test against length
     my $DNA = $left->getDNA() . $right->getDNA();
-    return undef unless ($DNA && (length($DNA) == $rposition[1]-$lposition[0]+1));
-    $newtag->setDNA($DNA) if $DNA;
+    $newtag->setDNA($DNA) if ($DNA =~ /\S/);
 # merge the comment and tagcomment
 print STDOUT "TO BE COMPLETED\n";
+
 $newtag->writeToCaf(*STDOUT,annotag=>1);
     return $newtag;
 }
@@ -627,15 +643,19 @@ sub transposeDNA {
 
     return undef unless $string;
 
-    my $output = '';
-    my $length = length($string);
-    while ($length--) {
-        my $base = substr $string,$length,1;
-        $base =~ tr/ACGTacgt/TGCAtgca/;
-        $output .= $base;
-    }
-
+    my $output = inverse($string);
+    $output =~ tr/ACGTacgt/TGCAtgca/;
     return $output;
+
+#    my $output = '';
+#    my $length = length($string);
+#    while ($length--) {
+#        my $base = substr $string,$length,1;
+#        $base =~ tr/ACGTacgt/TGCAtgca/;
+#        $output .= $base;
+#    }
+
+#    return $output;
 }
 
 #----------------------------------------------------------------------
@@ -775,7 +795,7 @@ sub writeToCaf {
 # GAP4 NOTE tag, no position info
     }
     elsif ($type eq 'ANNO') {
-print STDOUT "$type ANNO tag\n";
+print STDOUT "ANNO tag\n";
 # generate two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
 # add the systematic ID
