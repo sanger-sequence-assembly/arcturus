@@ -339,8 +339,6 @@ sub remap {
 #           sequence, if provided used to generate a tagsequence, possibly 
 #                     with pads; in its absence a long comment is generated
 
-$options{debug} = 1;
-
     unless (ref($mapping) eq 'Mapping') {
         die "Tag->transpose expects a Mapping instance as parameter";
     }
@@ -364,8 +362,10 @@ print STDOUT "Tag position: @currentposition \n" if $options{debug};
 
 # trap problems with mapping by running again with debug option
 
+    print STDOUT "Tag position: @currentposition \n" unless $maskedmapping;
+    print $helpermapping->toString()."\n" unless $maskedmapping;    
+    print $mapping->toString()."\n" unless $maskedmapping; 
     $helpermapping->multiply($mapping,debug=>1) unless $maskedmapping;
-
     return undef unless $maskedmapping; # something wrong with mapping
    
 
@@ -561,6 +561,7 @@ sub merge {
 # merge this tag and another (if possible)
     my $this = shift;
     my $otag = shift;
+    my %options = @_;
 
     unless (ref($otag) eq 'Tag') {
         die "Tag->merge expects another Tag instance as parameter";
@@ -586,9 +587,12 @@ sub merge {
 #print STDOUT "tag positions do not butt: @thisposition, @otagposition \n";
 	return undef;
     }
-print STDOUT "tag positions DO butt: @thisposition, @otagposition \n";
-$left->writeToCaf(*STDOUT,annotag=>1);
-$right->writeToCaf(*STDOUT,annotag=>1);
+
+if ($options{debug}) {
+ print STDOUT "tag positions DO butt: @thisposition, @otagposition \n";
+ $left->writeToCaf(*STDOUT,annotag=>1);
+ $right->writeToCaf(*STDOUT,annotag=>1);
+}
 
 # accept if systematic IDs and strand are identical
 
@@ -600,7 +604,7 @@ $right->writeToCaf(*STDOUT,annotag=>1);
     my @rposition = $right->getPosition();
     if ($left->getDNA() && $right->getDNA()) {
         my $DNA = $left->getDNA() . $right->getDNA(); # combined
-print STDOUT "DNA merge: @lposition  @rposition \n";
+print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
         return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
     }
 
@@ -614,9 +618,9 @@ print STDOUT "DNA merge: @lposition  @rposition \n";
     my $DNA = $left->getDNA() . $right->getDNA();
     $newtag->setDNA($DNA) if ($DNA =~ /\S/);
 # merge the comment and tagcomment
-print STDOUT "TO BE COMPLETED\n";
+print STDOUT "TO BE COMPLETED\n" if $options{debug};
 
-$newtag->writeToCaf(*STDOUT,annotag=>1);
+$newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
     return $newtag;
 }
 
