@@ -565,7 +565,7 @@ print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf\n";
 }
-		exit;
+                return undef;
 	    }
 	}
 # begin of x window of R does not map to y inside the T window
@@ -585,7 +585,7 @@ print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf\n";
 }
-		exit;
+                return undef;
 	    }
 	}
 # both end points fall outside the T mapping; test if T falls inside R
@@ -604,7 +604,7 @@ print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
 }
-                exit;
+                return undef;
             }
         }
         else {
