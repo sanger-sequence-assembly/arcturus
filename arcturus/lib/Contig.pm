@@ -1382,7 +1382,7 @@ sub propagateTagsToContig {
 
     return 0 unless $parent->hasTags(1);
 
-print "propagateTagsToContig ".
+print STDOUT "propagateTagsToContig ".
 "parent $parent (".$parent->getContigID().")  target $target ("
 .$target->getContigID().")\n" if $DEBUG;
 
@@ -1399,15 +1399,15 @@ print "propagateTagsToContig ".
     if ($cparents && @$cparents && $target->hasContigToContigMappings(1)) {
 # there are mappings: hence the child is taken from the database (& has parents)
         foreach my $cparent (@$cparents) {
-print "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
+print STDOUT "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
 	    if ($cparent->getContigID() == $parent_id) {
 # yes, there is a parent child relation between the input Contigs
 # find the corresponding mapping using contig and mapping names
                 my $c2cmappings = $target->getContigToContigMappings();
                 foreach my $c2cmapping (@$c2cmappings) {
-print "mapping name ".$c2cmapping->getMappingName." contigname: "
+print STDOUT "mapping name ".$c2cmapping->getMappingName." contigname: "
                      .$parent->getContigName."\n" if $DEBUG;
-print "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
+print STDOUT "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
                      .$parent->getSequenceID()."\n" if $DEBUG;
 # we use the sequence IDs here because the mappings come from the database
 #  	            if ($c2cmapping->getMappingName eq $parent->getContigName) {
@@ -1420,14 +1420,14 @@ print "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
 	}
     }
 
-print "mapping found: ".($mapping || 'not found')."\n" if $DEBUG;
+print STDOUT "mapping: ".($mapping || 'not found')."\n" if $DEBUG;
 
 # if mapping is not defined here, we have to find it from scratch
 
     unless ($mapping) {
-print "Finding mappings from scratch \n" if $DEBUG;
+print STDOUT "Finding mappings from scratch \n" if $DEBUG;
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
-print "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
+print STDOUT "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
         return 0 unless $nrofsegments;
 # identify the mapping using parent contig and mapping name
         my $c2cmappings = $target->getContigToContigMappings();
@@ -1439,10 +1439,10 @@ print "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
             }
         }
 # protect against the mapping still not found, but this should not occur
-print "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
+print STDOUT "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
         return 0 unless $mapping;
     }
-print $mapping->assembledFromToString() if $DEBUG;
+# print STDOUT $mapping->assembledFromToString() if $DEBUG;
 
 # check if the length of the target contig is defined
 
@@ -1455,7 +1455,7 @@ print $mapping->assembledFromToString() if $DEBUG;
             return 0;
         }
     }
-print "Target contig length : $tlength \n" if $DEBUG;
+print STDOUT "Target contig length : $tlength \n" if $DEBUG;
 
 # ok, propagate the tags from parent to target
 
@@ -1482,11 +1482,13 @@ print "Target contig length : $tlength \n" if $DEBUG;
     foreach my $ptag (@$ptags) {
         my $tagtype = $ptag->getType();
         next unless ($tagtype eq 'ANNO');
-        my $tptags = $ptag->remap($mapping,break=>1); 
-        push @tags,@$tptags if $tptags; 
+print STDOUT "Processing ANNO tag for remapping ".$ptag->getPositionLeft()."\n" if $DEBUG;
+        my $tptags = $ptag->remap($mapping,break=>1,debug=>$DEBUG); 
+        push @tags,@$tptags if $tptags;
     }
 # if annotation tags found, sort according to start position
     if (@tags) {
+print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
         @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
 # test if some tags can be merged
         my ($i,$j) = (0,1);
@@ -1523,18 +1525,18 @@ print "Target contig length : $tlength \n" if $DEBUG;
 #        push @tags,@$tptags if $tptags; 
 
 # determine the segment(s) of the mapping with the tag's position
-print "processing tag $ptag (align $alignment) \n" if $DEBUG;
+print STDOUT "processing tag $ptag (align $alignment) \n" if $DEBUG;
 
         undef my @offset;
         my @position = $ptag->getPosition();
-print "tag position (on parent) @position \n" if $DEBUG;
+print STDOUT "tag position (on parent) @position \n" if $DEBUG;
         foreach my $segment (@$c2csegments) {
 # for the correct segment, getXforY returns true
             for my $i (0,1) {
-print "testing position $position[$i] \n" if $DEBUG;
+print STDOUT "testing position $position[$i] \n" if $DEBUG;
                 if ($segment->getXforY($position[$i])) {
                     $offset[$i] = $segment->getOffset();
-print "offset to be applied : $offset[$i] \n" if $DEBUG;
+print STDOUT "offset to be applied : $offset[$i] \n" if $DEBUG;
 # ensure that both offsets are defined; this line ensures definition in
 # case the counterpart falls outside any segment (i.e. outside the contig)
                     $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
@@ -1542,14 +1544,14 @@ print "offset to be applied : $offset[$i] \n" if $DEBUG;
             }
         }
 # accept the new tag only if the position offsets are defined
-print "offsets: @offset \n" if $DEBUG;
+print STDOUT "offsets: @offset \n" if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the tag on the parent contig
         my $tptag = $ptag->transpose($alignment,\@offset,$tlength);
 
 if ($DEBUG) {
-print "tag on parent :\n "; $ptag->dump;
-print "tag on target :\n "; $tptag->dump;
+print STDOUT "tag on parent :\n "; $ptag->dump;
+print STDOUT "tag on target :\n "; $tptag->dump;
 }
 
 # test if the transposed tag is not already present in the child;
@@ -1569,7 +1571,7 @@ print "tag on target :\n "; $tptag->dump;
 
 # the (transposed) tag from parent is not in the current contig: add it
 
-print "new tag added\n" if $DEBUG;
+print STDOUT "new tag added\n" if $DEBUG;
         $target->addTag($tptag);
     }
 }
@@ -1943,22 +1945,53 @@ sub writeToEMBL {
 # collect length and print header record
 
 	my $length = length($dna);
-	print $DFILE "ID   $identifier  standard; Genomic DNA; CON; $length BP\n";
+	print $DFILE "ID   $identifier  standard; Genomic DNA; CON; "
+                   . "$length BP\n";
         print $DFILE "XX\n";
 
 # the tag section (if any)
 
         my $feature = 0;
-        if ($this->hasTags(1)) {
-# termine which tags to export
+        if ($this->hasTags(1)) { # force delayed loading
+# determine which tags to export
             my $includetag = 'ANNO'; # default 
             if ($options{includetag}) {
                 $includetag = $options{includetag};
                 $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
                 $includetag =~ s/\W+/|/g; # put separators in include list
 	    }
-
-            my $tags = $this->getTags(); # force delayed loading
+            my $tags = $this->getTags();
+# test if there are tags with identical systematic ID; collect groups, if any
+            my $joinhash = {};
+            foreach my $tag (@$tags) {
+                my $tagtype     = $tag->getType();
+                next if (!$includetag || $tagtype !~ /$includetag/);
+                my $strand      = lc($tag->getStrand());
+                my $sysID       = $tag->getSystematicID();
+                $joinhash->{$sysID} = {} unless $joinhash->{$sysID};
+                unless ($joinhash->{$sysID}->{$strand}) {
+                    $joinhash->{$sysID}->{$strand} = [];
+                }
+		my $joinset = $joinhash->{$sysID}->{$strand};
+                push @$joinset, $tag;
+            }
+# if there are groups of tags, generate joins
+            my @joins;
+            foreach my $sysID (sort keys %$joinhash) {
+                my $strandhash = $joinhash->{$sysID};
+                foreach my $strand (keys %$strandhash) {
+                    my $joinset = $strandhash->{$strand};
+                    next unless (@$joinset > 1);
+                    my @joinpos;
+                    foreach my $tag (@$joinset) {
+                        my ($ps,$pf) = $tag->getPosition;
+                        push @joinpos, "$ps..$pf";
+                    }
+                    my $joinlist = "join (".join (',',@joinpos).")";
+                    push @joins,$joinlist;
+		}
+	    }
+# export the tags
             foreach my $tag (@$tags) {
                 my $tagtype     = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
@@ -1967,11 +2000,15 @@ sub writeToEMBL {
                 my $comment     = $tag->getComment();
                 my $tagcomment  = $tag->getTagComment();
                 my ($ps,$pf)    = $tag->getPosition;
+# on first encounter print the header and add joins, if any
+                my $sp17 = "                 "; # format spacer
                 unless ($feature) {
                     print $DFILE "FH   Key             Location/Qualifiers\nFH\n";
+                    foreach my $joinlist (@joins) {
+                        print $DFILE "FT $sp17 /$joinlist\n";
+		    }
                 }
                 $feature++;
-                my $sp17 = "                 "; # format spacer
                 print $DFILE "FT   TAG             $ps..$pf\n";
                 $tagtype =~ s/ANNO/annotation/ if $tagtype;
                 print $DFILE "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
@@ -2188,7 +2225,10 @@ print STDOUT $mapping->writeToString() if $options{debug};
         my $inverse = $mapping->inverse();
 # determine if the masked read is still in the contig
         my $product = $inverse->multiply($mask,repair=>1);
-        if ($product->hasSegments()) {
+# trap problems with multiplication for debugging purposes
+        $inverse->multiply($mask,repair=>1) unless $product;
+# if its a valid mapping, get the inverse and proceeed to the next
+        if ($product && $product->hasSegments()) {
             $mapping = $product->inverse();
             $mapping->analyseSegments();
             $mapping->setMappingName($mappingname);
