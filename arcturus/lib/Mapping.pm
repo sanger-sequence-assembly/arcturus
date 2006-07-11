@@ -559,8 +559,8 @@ print STDOUT "txs $txs  reverse maps to  bxs $tempbxs\n";
 	    else {
 		print STDOUT "Mapping->multiply: should not occur (1) !!\n";
 if ($options{debug}) {
-print STDOUT $thismap->writeToString()."\n";
-print STDOUT $mapping->writeToString()."\n";
+print STDOUT $thismap->toString()."\n";
+print STDOUT $mapping->toString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf\n";
@@ -579,10 +579,12 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             else {
 	        print STDOUT "Mapping->multiply: should not occur (2) !!\n";
 if ($options{debug}) {
-print STDOUT $thismap->writeToString()."\n";
-print STDOUT $mapping->writeToString()."\n";
+print STDOUT $thismap->toString()."\n";
+print STDOUT $mapping->toString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
+$mxs = 'undef' unless defined($mxs);
+$mxf = 'undef' unless defined($mxf);
 print STDOUT "mxs $mxs  mxf $mxf\n";
 }
                 return undef;
@@ -598,8 +600,8 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             else {
 	        print STDOUT "Mapping->multiply: should not occur (3) !!\n";
 if ($options{debug}) {
-print STDOUT $thismap->writeToString()."\n";
-print STDOUT $mapping->writeToString()."\n";
+print STDOUT $thismap->toString()."\n";
+print STDOUT $mapping->toString()."\n";
 print STDOUT "\nts $ts  rs $rs  txf $txf\n";
 print STDOUT "r: $rxs,$rxf,$rys,$ryf\nt: $txs,$txf,$tys,$tyf\n";
 print STDOUT "mxs $mxs  mxf $mxf  bxs $bxs bxf $bxf\n";
