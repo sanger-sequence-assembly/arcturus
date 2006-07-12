@@ -109,7 +109,7 @@ push @contigs,@$fofn if $fofn;
 foreach my $contig (@contigs) {
 # translate a name into an ID
     if ($contig =~ /\D/) {
-        my $contigs = $adb->getContigIDsforReadNames([($contig)]);
+        my $contigs = $adb->getContigIDsForReadNames([($contig)]);
         &showUsage("Unidentified contig $contig") unless @$contigs;
         $contig = $contigs->[0];
     }
