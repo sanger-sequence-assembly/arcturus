@@ -1,7 +1,9 @@
 #!/usr/local/bin/perl
 
-use ReadFactory::TraceServerReadFactory;
 use strict;
+
+use FileHandle;
+use ReadFactory::TraceServerReadFactory;
 
 print STDERR "Creating TraceServerReadFactory ...\n";
 
@@ -14,7 +16,7 @@ my $nreads = 0;
 while (my $readname = $factory->getNextReadName()) {
     my $read = $factory->getNextRead();
     print STDERR "$readname\n";
-    $read->dump();
+    $read->writeToCaf(*STDOUT);
     print STDERR "\n";
     $nreads++;
 }

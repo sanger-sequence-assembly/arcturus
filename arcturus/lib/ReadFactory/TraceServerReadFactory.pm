@@ -7,6 +7,7 @@ use TraceServer;
 use ReadFactory;
 
 use Read;
+use Tag;
 
 use vars qw(@ISA);
 
@@ -17,21 +18,21 @@ sub new {
 
     my $this = $type->SUPER::new();
 
-    my ($organism, $minreadid, $maxreads);
+    my ($group, $minreadid, $maxreads);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
 
-	$organism = shift if ($nextword eq 'organism');
+	$group = shift if ($nextword eq 'group');
 
 	$minreadid = shift if ($nextword eq 'minreadid');
 
 	$maxreads = shift if ($nextword eq 'maxreads');
     }
 
-    die "No organism specified" unless defined($organism);
+    die "No group specified" unless defined($group);
 
-    $this->{organism} = $organism;
+    $this->{group} = $group;
 
     my $ts = TraceServer->new(TS_DIRECT, TS_READ_ONLY, "");
 
@@ -39,11 +40,11 @@ sub new {
 
     $this->{traceserver} = $ts;
 
-    my $group = $ts->get_group($organism, 'PASS');
+    my $tsgroup = $ts->get_group($group, 'PASS');
 
-    die "Organism $organism not in trace server" unless defined($group);
+    die "Group $group not in trace server" unless defined($tsgroup);
 
-    my $grit = $group->get_iterator(1);
+    my $grit = $tsgroup->get_iterator(1);
 
     $grit->set($minreadid) if defined($minreadid);
 
@@ -71,6 +72,8 @@ sub getNextReadName {
     $this->{seq_id} = $seq_id;
 
     my ($read, $index) = $this->{traceserver}->get_read_by_seq_id($seq_id);
+
+    return undef unless defined($read);
 
     $this->{read} = $read;
 
@@ -128,7 +131,7 @@ sub getNextRead {
 
     my @asped = gmtime($asped);
 
-    my $asped = sprintf("%04d-%02d-%02d", 1900+$asped[5],1+$asped[4],$asped[3]);
+    $asped = sprintf("%04d-%02d-%02d", 1900+$asped[5],1+$asped[4],$asped[3]);
 
     $read->setAspedDate($asped);
 
@@ -207,8 +210,6 @@ sub getNextRead {
 
     my $numclips = $seq->get_num_clips();
 
-    print "\n\tCLIPPING\n" if ($numclips > 0);
-
     for (my $jclip = 0; $jclip < $numclips; $jclip++) {
 	my $clip = $seq->get_clip($jclip);
 
@@ -241,8 +242,6 @@ sub getNextRead {
     # Tags
 
     my $numtags = $seq->get_num_tags();
-
-    print "\n\tTAGS\n" if ($numtags > 0);
 
     for (my $jtag = 0; $jtag < $numtags; $jtag++) {
 	my $tstag = $seq->get_tag($jtag);
