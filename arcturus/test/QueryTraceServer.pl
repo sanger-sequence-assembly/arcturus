@@ -18,9 +18,9 @@ $grit->set($last_seqid);
 my $count = 0;
 
 while (my $seq_id = $grit->next()) {
-   my ($read, $index) = $ts->get_read_by_seq_id($seq_id);
+   my ($tsread, $index) = $ts->get_read_by_seq_id($seq_id);
 
-   &processRead($seq_id, $read);
+   &processRead($seq_id, $tsread);
 
 
    print "\n";
@@ -36,11 +36,11 @@ exit(0);
 
 sub processRead {
     my $seq_id = shift;
-    my $read = shift;
+    my $tsread = shift;
 
-    print "Readname = ",$read->get_name(),"\n";
+    print "Readname = ",$tsread->get_name(),"\n";
 
-    my $direction = $read->get_direction();
+    my $direction = $tsread->get_direction();
 
     if ($direction == TSR_FORWARD) {
 	$direction = 'Forward'
@@ -51,7 +51,7 @@ sub processRead {
 	}
 
     print "\tDirection = $direction\n";
-    print "\tChemistry = ",$read->get_chemistry(),"\n";
+    print "\tChemistry = ",$tsread->get_chemistry(),"\n";
 
     foreach my $attr ('TSR_PRIMER_NAME',
 		      'TSR_PRIMER_SEQUENCE',
@@ -62,17 +62,17 @@ sub processRead {
 		      'TSR_STRATEGY',
 		      'TSR_STRATEGY_DESCRIPTION',
 		      'TSR_PROGRAM') {
-	my $value = $read->get_attribute($attr);
+	my $value = $tsread->get_attribute($attr);
 	print "\t$attr = $value\n" if defined($value);
     }
 
     print "\tTraceArchiveID = $seq_id\n";
 
-    my $seq = $read->get_sequence();
+    my $seq = $tsread->get_sequence();
 
     my $dna = $seq->get_dna();
 
-    my $qual = $read->get_confidence()->get_phred();
+    my $qual = $tsread->get_confidence()->get_phred();
 
     print "\tLength = ", length($dna), " " , length($qual), "\n";
 
@@ -97,7 +97,7 @@ sub processRead {
 
     my $indent = "\t";
 
-    for (my $dnasrc = $read->get_dnasource();
+    for (my $dnasrc = $tsread->get_dnasource();
 	 defined($dnasrc);
 	 $dnasrc = $dnasrc->get_parent()) {
 	my ($srcclass,$srcname) = split(/::/, $dnasrc->get_name());
