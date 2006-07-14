@@ -7,6 +7,7 @@ use ArcturusDatabase;
 use ReadFactory::CAFReadFactory;
 use ReadFactory::OracleReadFactory;
 use ReadFactory::ExpFileReadFactory;
+use ReadFactory::TraceServerReadFactory;
 
 use FileHandle;
 use Logging;
@@ -38,7 +39,8 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
               . "filter|readnamelike|rootdir|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
-              . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test";
+              . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
+              . "group";
 
 my %PARS;
 
@@ -120,7 +122,9 @@ while (my $nextword = shift @ARGV) {
 
     $PARS{root}         = shift @ARGV  if ($nextword eq '-rootdir');
     $PARS{subdir}       = shift @ARGV  if ($nextword eq '-subdir');
-    $PARS{limit}        = shift @ARGV  if ($nextword eq '-limit');    
+    $PARS{limit}        = shift @ARGV  if ($nextword eq '-limit');
+
+    $PARS{group}        = shift @ARGV  if ($nextword eq '-group');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -139,7 +143,7 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 &showUsage("Undefined data source") unless $source;
 
-if ($source ne 'CAF' && $source ne 'Oracle' && $source ne 'Expfiles') {
+if ($source ne 'CAF' && $source ne 'Oracle' && $source ne 'Expfiles' && $source ne 'TraceServer') {
     &showUsage("Invalid data source '$source'");
 }
 
@@ -268,6 +272,12 @@ elsif ($source eq 'Expfiles') {
 
     my $rejects = $factory->getRejectedFiles();
     print "REJECTED files: @$rejects\n\n" if $rejects;
+}
+
+elsif ($source eq 'TraceServer') {
+    &showUsage("Missing group name for trace server") unless $PARS{group};
+
+    $factory = new TraceServerReadFactory(%PARS);
 }
 
 &showUsage("Unable to build a ReadFactory instance") unless $factory;
@@ -404,7 +414,7 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "Arcturus read loader from one of 3 source\n";
+    print STDERR "Arcturus read loader from multiple sources\n";
     print STDERR "Arcturus read-tag loader for reads already loaded\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code;
@@ -414,7 +424,7 @@ sub showUsage {
         print STDERR "\n";
         print STDERR "-organism\tArcturus database name\n" unless $organism;
         print STDERR "-instance\teither 'prod', 'dev' or 'test'\n" unless $instance;
-        print STDERR "-source\t\tEither 'CAF',' Oracle' or 'Expfiles'\n" unless $source;
+        print STDERR "-source\t\tEither 'CAF',' Oracle', 'Expfiles' or 'TraceServer'\n" unless $source;
     }
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
@@ -462,6 +472,14 @@ sub showUsage {
 	print STDERR "-limit\t\tlargest number of reads to be loaded\n";
 	print STDERR "\n";
     }
+    if (!$source || $source eq 'TraceServer') {
+	print STDERR "Parameters for TraceServer input:\n";
+	print STDERR "\n";
+	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
+	print STDERR "-minreadid\tminimum trace server read ID\n";
+	print STDERR "\n";
+    }
+
     print STDERR "Parameter input ERROR: $code\n\n" if $code;
     print STDERR "Define a data source!\n\n"  unless $source;
     
