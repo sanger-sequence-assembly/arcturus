@@ -1,5 +1,5 @@
 create temporary table currentcontigs as
-select CONTIG.contig_id,nreads,ncntgs,length,updated,project_id
+select CONTIG.contig_id,nreads,ncntgs,length,updated,created,project_id
   from CONTIG left join C2CMAPPING
   on CONTIG.contig_id = C2CMAPPING.parent_id
   where C2CMAPPING.parent_id is null;
@@ -74,3 +74,11 @@ select PROJECT.name,count(*) as contigs,
   from currentcontigs left join PROJECT using(project_id)
   where nreads > 2
   group by currentcontigs.project_id order by name asc;
+
+select 'CONTIG STATS BY MONTH';
+
+select year(created) as year, month(created) as month, count(*) as contigs,
+  sum(nreads) as reads, sum(length) as consensus
+  from currentcontigs
+  group by year, month
+  order by year asc, month asc;
