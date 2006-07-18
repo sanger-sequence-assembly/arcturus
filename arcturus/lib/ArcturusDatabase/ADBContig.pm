@@ -2514,7 +2514,8 @@ sub getContigIDsForReadNames {
     my $dbh = $this->getConnection();
 
     my $subselect = "select CONTIG.contig_id "
-                  . "  from CONTIG left join C2CMAPPING using (contig_id)"
+                  . "  from CONTIG left join C2CMAPPING "
+                  . "    on (CONTIG.contig_id = C2CMAPPING.parent_id)"
 		  . " where C2CMAPPING.parent_id is null";
 
     my $query = "select distinct CONTIG.contig_id,gap4name,readname"
