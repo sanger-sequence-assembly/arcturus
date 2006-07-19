@@ -33,6 +33,7 @@ my $pinclude;
 my $pexclude;
 my $usegapname = 1;
 my $ends = 0;
+my $padmapfile;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -62,6 +63,8 @@ while (my $nextword = shift @ARGV) {
     $padtox = 1 if ($nextword eq '-padtox');
 
     $depad = 1 if ($nextword eq '-depad');
+
+    $padmapfile = shift @ARGV if ($nextword eq '-padmap');
 
     $usegapname = 0 if ($nextword eq '-nogap4name');
 
@@ -111,6 +114,12 @@ if (defined($fastafile)) {
     if (! -d $destdir) {
 	die "Unable to create directory \"$destdir\"" unless mkdir($destdir);
     }
+}
+
+my $padfh;
+
+if (defined($padmapfile)) {
+    $padfh = new FileHandle($padmapfile, "w");
 }
 
 my $query = "select project_id,name from PROJECT";
@@ -186,6 +195,19 @@ while(my @ary = $sth->fetchrow_array()) {
 
     my $contigname = $usegapname && defined($gap4name) ? $gap4name : sprintf("contig%06d", $contigid);
 
+    if (defined($padfh)) {
+	my $mappings = &padMap($sequence, 'N');
+
+	print $padfh $contigname;
+
+	foreach my $segment (@{$mappings}) {
+	    my ($starta, $startb, $seglen) = @{$segment};
+	    print $padfh ";$starta,$startb,$seglen";
+	}
+
+	print $padfh "\n";
+    }
+
     if ($depad) {
 	# Depad
 	$sequence =~ s/[NnXx\*\-]//g;
@@ -249,6 +271,7 @@ $sth->finish();
 $dbh->disconnect();
 
 $fastafh->close() if defined($fastafh);
+$padfh->close() if defined($padfh);
 
 exit(0);
 
@@ -257,6 +280,34 @@ sub db_die {
     return unless $DBI::err;
     print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
     exit(0);
+}
+
+sub padMap {
+    my $string = shift;
+    my $pad = shift;
+
+    my $offset = 0;
+    my $delta = 0;
+    my $strlen = length($string);
+
+    my $mappings = [];
+
+    while (1) {
+	my $padpos = index($string, $pad, $offset);
+
+	if ($padpos < 0) {
+	    push @{$mappings}, [$offset+1, $offset-$delta+1, $strlen - $offset];
+
+	    return $mappings;
+	} else {
+	    push @{$mappings}, [$offset+1, $offset-$delta+1, $padpos - $offset]
+		if ($padpos > $offset);
+	    $offset = $padpos + 1;
+	    $delta++;
+	}
+    }
+
+    die "We should never get to this point";
 }
 
 sub showUsage {
@@ -273,6 +324,7 @@ sub showUsage {
     print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
     print STDERR "    -allcontigs\t\tSelect all contigs, not just from current set\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
+    print STDERR "    -padmap\t\tName of file for depadded-to-padded coordinate mapping\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
