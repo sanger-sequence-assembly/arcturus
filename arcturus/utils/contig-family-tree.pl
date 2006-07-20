@@ -111,7 +111,7 @@ foreach my $contig (@contigs) {
     if ($contig =~ /\D/) {
         my $contigs = $adb->getContigIDsForReadNames([($contig)]);
         &showUsage("Unidentified contig $contig") unless @$contigs;
-        $contig = $contigs->[0];
+        $contig = $contigs->[0]->[0];
     }
     &showUsage("Unidentified contig $contig") unless $contig;
 }
