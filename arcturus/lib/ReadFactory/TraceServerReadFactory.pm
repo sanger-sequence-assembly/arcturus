@@ -1,8 +1,7 @@
 package TraceServerReadFactory;
 
 use strict;
-use DataSource;
-use DBI;
+
 use TraceServer;
 use ReadFactory;
 
