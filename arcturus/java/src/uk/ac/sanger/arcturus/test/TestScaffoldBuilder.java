@@ -323,8 +323,10 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	public boolean isForward() { return forward; }
 
 	public String toString() {
-	    return "ContigBox[row=" + row + ", range=" + range.getStart() + ".." + range.getEnd() + ", " +
-		(forward ? "forward" : "reverse") + "]";
+	    return "ContigBox[contig=" + contig.getID() +
+		", row=" + row +
+		", range=" + range.getStart() + ".." + range.getEnd() +
+		", " + (forward ? "forward" : "reverse") + "]";
 	}
     }
     
