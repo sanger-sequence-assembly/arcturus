@@ -1,6 +1,6 @@
 #!/bin/csh
 
-set wrapper=perlWrapper
+set wrapper=../shared/perlWrapper
 
 if ( ! -f $wrapper ) then
     echo The Perl wrapper script $wrapper does not exist in this directory
