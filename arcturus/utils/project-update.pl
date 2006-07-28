@@ -137,15 +137,16 @@ else {
 
 # apply the changes to the project instance
 
-    $project->setProjectName($projectname)        if $projectname;
-    $project->setOwner($projectowner)             if $projectowner;
-    $project->setProjectStatus($projectstatus)    if $projectstatus;
+    $project->setProjectName($projectname)     if $projectname;
+    $project->setOwner($projectowner)          if $projectowner;
+    $projectstatus =~ s/\_|\-/ /g; # replace underscore/hyphen by blanks
+    $project->setProjectStatus($projectstatus) if $projectstatus;
 # special case
     if ($projectcomment && $extend && $project->getComment()) {
         my $currentcomment = $project->getComment();
         $projectcomment = $currentcomment." / ".$projectcomment;
     }
-    $project->setComment($projectcomment)         if $projectcomment;
+    $project->setComment($projectcomment)      if $projectcomment;
     
     $confirm = 0 unless $confirm;
 
@@ -177,6 +178,7 @@ $adb->disconnect();
 
 sub showUsage {
     my $code = shift || 0;
+    my $user = shift || 0;
 
     print STDERR "\n";
     print STDERR "Updating Project attributes\n";
@@ -208,6 +210,7 @@ sub showUsage {
     print STDERR "-status\t\tchange project status (may result in locking)\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value) \n";
+    print STDERR "-privilege\tuse privilege if project owned by someone else\n" if $user;
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
