@@ -274,7 +274,7 @@ sub processRepeatTag {
 
     my $tag = $this->{Tag} || return undef; # Missing Tag
 
-    my $tagtype = $tag->getTagType();
+    my $tagtype = $tag->getType();
 
     return undef unless ($tagtype eq 'REPT');
 
@@ -287,13 +287,13 @@ sub processRepeatTag {
     return 0; # no name found
 }
 
-sub processAddiTag {
+sub processAdditiveTag {
 # check position range
     my $this = shift;
 
     my $tag = $this->{Tag} || return undef;
 
-    my $tagtype = $tag->getTagType();
+    my $tagtype = $tag->getType();
 
     return undef unless ($tagtype eq 'ADDI');
 
