@@ -482,16 +482,70 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	    contentPane.add(scrollpane, BorderLayout.CENTER);
 
 	    panel.setBackground(Color.white);
-	    panel.setInsetsAndUserArea(new Insets(20, 20, 20, 20),
-				       new Dimension(200000, 1000));
+
+	    Dimension userarea = calculateUserArea(contigboxes);
+
+	    panel.setInsetsAndUserArea(new Insets(20, 20, 20, 20), userarea);
 
 	    populate(contigboxes, bridgeset);
 	}
 
 	protected void populate(ContigBox[] contigboxes, Set bridgeset) {
 	    int dragMode = DrawableFeature.DRAG_XY;
-	    
 
+	    HashMap contigmap = new HashMap();
+	    
+	    for (int i = 0; i < contigboxes.length; i++) {
+		ContigBox cb = contigboxes[i];
+
+		Contig contig = cb.getContig();
+
+		ContigFeature cf = new ContigFeature(contig,
+						     new Point(cb.getLeft(), (1 + cb.getRow()) * 30),
+						     cb.isForward());
+
+		contigmap.put(contig, cf);
+
+		panel.addFeature(cf, dragMode);
+	    }
+
+	    dragMode = DrawableFeature.DRAG_NONE;
+
+	    for (Iterator iter = bridgeset.iterator(); iter.hasNext();) {
+		Bridge bridge = (Bridge)iter.next();
+
+		Contig contiga = bridge.getContigA();
+		Contig contigb = bridge.getContigB();
+
+		ContigFeature cfa = (ContigFeature)contigmap.get(contiga);
+		ContigFeature cfb = (ContigFeature)contigmap.get(contigb);
+
+		BridgeFeature bf = new BridgeFeature(bridge, cfa, cfb);
+
+		panel.addFeature(bf, dragMode);
+	    }
+	}
+
+	protected Dimension calculateUserArea(ContigBox[] contigboxes) {
+	    int width = 0;
+	    int height = 0;
+
+	    for (int i = 0; i < contigboxes.length; i++) {
+		int right = contigboxes[i].getRight();
+
+		if (right > width)
+		    width = right;
+
+		int row = contigboxes[i].getRow();
+
+		if (row > height)
+		    height = row;
+	    }
+
+	    height += 1;
+	    height *= 30;
+
+	    return new Dimension(width, height);
 	}
     }
 
