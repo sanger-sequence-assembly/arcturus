@@ -7,6 +7,7 @@ import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class ContigFeaturePainter implements FeaturePainter {
     protected Font font = new Font("sansserif", Font.PLAIN, 12);
+    protected boolean showContigName = false;
 
     public void paintFeature(Graphics2D g, Feature f, Shape s) {
 	if (f instanceof ContigFeature) {
@@ -24,7 +25,7 @@ public class ContigFeaturePainter implements FeaturePainter {
 
 	    Contig contig = (Contig)cf.getClientObject();
 
-	    String name = contig.getName();
+	    String name = showContigName ? contig.getName() : "Contig " + contig.getID();
 
 	    g.setColor(Color.black);
 
