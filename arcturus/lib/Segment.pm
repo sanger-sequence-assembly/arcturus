@@ -27,7 +27,8 @@ sub new {
 # the interval covered by the x and y domains have to be identical
 
     if (abs($xf-$xs) != abs($yf-$ys)) {
-        die "Invalid segment sizes in Segment constructor: @_";
+        print STDOUT "Invalid segment sizes in Segment constructor: @_\n";
+	return undef;
     }
 
 # calculate the transformation between Y and X domains: X = d*Y + o
