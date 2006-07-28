@@ -62,19 +62,45 @@ sub getDNA {
     return &transposeDNA($this->{DNA});
 }
 
+# positions are stored as begin-end pairs (array or arrays)
+
 sub setPosition {
 # begin and end position in read or contig sequence
     my $this = shift;
+    my @position = (shift,shift);
+    my %options = @_;
 
-    my @pos = (shift, shift);
-    $this->{position} = [@pos];
+    @position = sort {$a <=> $b} @position; # ensure ordering
+# add this position pair to the buffer
+    undef $this->{position} unless $options{join};
+    unless (defined($this->{position})) {
+        $this->{position} = [];
+    }
+    my $positionpairs = $this->{position};
+
+    push @$positionpairs,[@position];
 }
 
 sub getPosition {
+# return the specified position, default the first pair
+    my $this = shift;
+    my $pair = shift || 0; # number of the pair
+
+    my $positionpairs = $this->{position};
+    return undef if ($pair < 0 || $pair >= @$positionpairs); # does not exist
+    
+    return @{$positionpairs->[$pair]};
+}
+
+sub isJoined {
+# returns number of position pairs
     my $this = shift;
 
-    $this->{position} = [] unless $this->{position};
-    return @{$this->{position}};
+    my $positionpairs = $this->{position};
+    return undef unless defined $positionpairs;
+# numericall sort the positions in the join (ensure ordering)
+    @$positionpairs = sort {$a->[0] <=> $b->[0]} @$positionpairs;
+    return scalar(@$positionpairs) - 1;    
 }
 
 sub getPositionLeft {
@@ -781,13 +807,12 @@ sub writeToCaf {
 # output for all tags, except ANNO tags (see Contig->writeToEMBL)
     my $this = shift;
     my $FILE = shift; # optional output file handle
-    my %options = @_; # option 'additag' allows override of default
+    my %options = @_; # option 'annotag' allows override of default
 
     my $type = $this->getType();
     my @pos  = $this->getPosition();
     my $tagcomment = $this->getTagComment();
     my $comment = $this->getComment();
-# print STDOUT "$type tag @_\n";
 
     return '' if ($type eq 'ANNO' && !$options{annotag});
 
@@ -819,13 +844,84 @@ print STDOUT "ANNO tag\n";
         $string .= "Tag INFO @pos $comment\n" if $comment;
     }
 
-#    my $descent = $this->getComment();
+    print $FILE $string if $FILE;
 
-#    my $string = "Tag $type ";
-#    $string .= "@pos " unless ($type eq "NOTE");
-#    $string .= "\"$tagcomment\"" if $tagcomment;
-#    $string .= "\n";
-#    $string .= "Tag INFO $descent\n" if $descent; # INFO tag only
+    return $string;
+}
+
+sub writeToEMBL {
+# write the tag in EMBL, i.p. annotation tags
+    my $this = shift;
+    my $FILE = shift; # optional output file handle
+    my %options = @_; # tagkey (CDS/TAG)
+
+    my $string = '';
+
+    my $tagtype    = $this->getType();
+    my $strand     = lc($this->getStrand());
+    my $sysID      = $this->getSystematicID();
+    my $comment    = $this->getComment();
+    my $tagcomment = $this->getTagComment();
+        
+    my $key = $options{tagkey} || 'CDS'; # get the key to be used for export
+    
+    my $sp17 = "                 "; # format spacer
+    if ($this->isJoined()) {
+# generate the join construct for composite tags
+        my @joinlist;
+        $string = "FT   ".sprintf("%3s",$key)."             ";
+        $string .= "complement(" if ($strand eq "reverse");
+        $string .= "join("; # always
+	my $pair = 0;
+        my $offsetposition = length($string);
+        while ($this->getPosition($pair)) {
+            my ($ps,$pf) = $this->getPosition($pair++);
+            last unless (defined($ps) && defined($pf));
+            my $substring = "$ps..$pf,";
+            if ($offsetposition+length($substring) > 80) {
+	        $string .= "\nFT $sp17 "; # start a new line
+                $offsetposition = 21;
+            }
+	    $string .= "$substring";
+            $offsetposition += length($substring);
+        }
+        chop $string; # remove the last comma
+        $string .= ")" if ($strand eq "reverse");
+        $string .= ")\n";
+    }
+    else {
+# just generate the (single) position pair
+        my ($ps,$pf) = $this->getPosition(0);
+        $string = "FT   ".sprintf("%3s",$key)."             $ps..$pf\n";
+    }
+
+    $tagtype =~ s/ANNO/annotation/ if $tagtype;
+    $string .= "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
+    $string .= "FT $sp17 /arcturus_feature_id=\"$sysID\"\n" if $sysID;
+    if ($strand eq 'U') {
+        $string .= "FT $sp17 /strand=\"no strand information\"\n";
+    }
+    else {
+        $string .= "FT $sp17 /strand=\"$strand\"\n";
+    }
+    $string .= "FT $sp17 /arcturus_comment=\"$comment\"\n" if $comment;
+# process tag comment; insert new line if it is too long
+    if ($tagcomment) {
+        my @tcparts = split /,/,$tagcomment;
+        my $cstring = "FT $sp17 /description=\"";
+        my $positionoffset = length($cstring);
+        foreach my $part (@tcparts) {
+            my $substring = "$part,";
+            if ($positionoffset + length($substring) >= 80) {
+	        $cstring .= "\nFT $sp17 "; # start a new line
+                $positionoffset = 21;
+            }
+	    $cstring .= $substring;
+            $positionoffset += length($substring);
+        }
+        chop $cstring; # remove trailing comma
+        $string .= $cstring . "\"\n";
+    }
 
     print $FILE $string if $FILE;
 
