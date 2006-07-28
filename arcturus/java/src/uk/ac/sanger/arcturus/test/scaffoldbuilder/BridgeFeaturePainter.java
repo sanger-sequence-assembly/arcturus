@@ -23,23 +23,40 @@ public class BridgeFeaturePainter implements FeaturePainter {
 	if (f instanceof BridgeFeature) {
 	    BridgeFeature bf = (BridgeFeature)f;
 
-	    Point l = bf.getLeftContigFeature().getRightEnd();
-	    Point r = bf.getRightContigFeature().getLeftEnd();
+	    ContigFeature cfa = bf.getLeftContigFeature();
+	    ContigFeature cfb = bf.getRightContigFeature();
 
-	    l = t.worldToView(l);
-	    r = t.worldToView(r);
+	    Bridge bridge = (Bridge)bf.getClientObject();
+
+	    int dx = 20;
+
+	    int enda = ((bridge.getEndA() == Bridge.RIGHT) ^ cfa.isForward()) ?
+		Bridge.LEFT : Bridge.RIGHT;
+
+	    Point pa = (enda == Bridge.LEFT) ? cfa.getLeftEnd() : cfa.getRightEnd();
+
+	    int dxa = (enda == Bridge.LEFT) ? -dx : dx;
+
+	    int endb = ((bridge.getEndB() == Bridge.RIGHT) ^ cfb.isForward()) ?
+		Bridge.LEFT : Bridge.RIGHT;
+
+	    Point pb = ((bridge.getEndB() == Bridge.RIGHT) ^ cfb.isForward()) ?
+		cfb.getLeftEnd() : cfb.getRightEnd();
+
+	    int dxb = (endb == Bridge.LEFT) ? -dx : dx;
+
+	    pa = t.worldToView(pa);
+	    pb = t.worldToView(pb);
 
 	    int links = ((Bridge)bf.getClientObject()).getLinkCount();
 
 	    if (links > 5)
 		links = 5;
 
-	    int dx = 20;
-
-	    Shape path = new CubicCurve2D.Double((double)l.x, (double)l.y,
-						 (double)(l.x + dx), (double)l.y,
-						 (double)(r.x - dx), (double)r.y,
-						 (double)r.x, (double)r.y);
+	    Shape path = new CubicCurve2D.Double((double)pa.x, (double)pa.y,
+						 (double)(pa.x + dxa), (double)pa.y,
+						 (double)(pb.x + dxb), (double)pb.y,
+						 (double)pb.x, (double)pb.y);
 
 	    Stroke stroke = new BasicStroke((float)links);
 
