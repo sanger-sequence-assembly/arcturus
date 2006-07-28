@@ -1951,7 +1951,6 @@ sub writeToEMBL {
 
 # the tag section (if any)
 
-        my $feature = 0;
         if ($this->hasTags(1)) { # force delayed loading
 # determine which tags to export
             my $includetag = 'ANNO'; # default 
@@ -1962,65 +1961,80 @@ sub writeToEMBL {
 	    }
             my $tags = $this->getTags();
 # test if there are tags with identical systematic ID; collect groups, if any
+            my @newtags;
             my $joinhash = {};
             foreach my $tag (@$tags) {
                 my $tagtype     = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
                 my $strand      = lc($tag->getStrand());
                 my $sysID       = $tag->getSystematicID();
+# if the tag is not an annotation tag, just add to local list
+                unless (defined($sysID)) {
+		    push @newtags,$tag;
+                    next;
+		}
+# the tag is annotation, build the join hash
                 $joinhash->{$sysID} = {} unless $joinhash->{$sysID};
                 unless ($joinhash->{$sysID}->{$strand}) {
                     $joinhash->{$sysID}->{$strand} = [];
                 }
 		my $joinset = $joinhash->{$sysID}->{$strand};
                 push @$joinset, $tag;
+#print STDOUT "*** ADDED for sysID $sysID  strand $strand : @$joinset\n";
             }
 # if there are groups of tags, generate joins
-            my @joins;
+            my $tagcommentformat = 'fragment\\s+([\\d\\,]+)\\s+of\\s+(\\d+)';
             foreach my $sysID (sort keys %$joinhash) {
                 my $strandhash = $joinhash->{$sysID};
                 foreach my $strand (keys %$strandhash) {
+#print STDOUT "*** sysID $sysID  strand $strand \n";
                     my $joinset = $strandhash->{$strand};
-                    next unless (@$joinset > 1);
-                    my @joinpos;
+                    my $newtag = shift @$joinset;
+                    push @newtags,$newtag;
+                    next unless @$joinset; # only one tag
+# for the remaining tags add the positions to the new tag
+                    my $positionoffset = 34; # 21 + 13
                     foreach my $tag (@$joinset) {
-                        my ($ps,$pf) = $tag->getPosition;
-                        push @joinpos, "$ps..$pf";
-                    }
-                    my $joinlist = "join (".join (',',@joinpos).")";
-                    push @joins,$joinlist;
+                        $newtag->setPosition($tag->getPosition(),join=>1);
+# concatenate the comments 
+                        my $tagcomment = $tag->getTagComment();
+                        my $newtagcomment = $newtag->getTagComment();
+                        my $concatenated = 0;
+                        if ($newtagcomment =~ /$tagcommentformat/) {
+                            my $parts = $1;
+                            my $count = $2;
+                            if ($tagcomment =~ /$tagcommentformat/) {
+                                $parts .= ",$1";
+                                if ($count == $2) {
+                                    my @count = split /,/,$parts;
+                                    if (scalar(@count) == $2) {
+# all original fragments represented
+                                        $newtagcomment = "$2 fragments of original tag";
+                                    }
+		  	            else {
+                                        $newtagcomment = "fragment $parts of $2";
+                                    }
+                                    $concatenated++;
+				}
+			    }
+                        }
+                        $newtagcomment .= " ".$tagcomment unless $concatenated;
+                        $newtag->setTagComment($newtagcomment);
+		    }
 		}
 	    }
 # export the tags
-            foreach my $tag (@$tags) {
+            my $feature;
+            foreach my $tag (@newtags) {
                 my $tagtype     = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
-                my $strand      = lc($tag->getStrand());
-                my $sysID       = $tag->getSystematicID();
-                my $comment     = $tag->getComment();
-                my $tagcomment  = $tag->getTagComment();
-                my ($ps,$pf)    = $tag->getPosition;
-# on first encounter print the header and add joins, if any
-                my $sp17 = "                 "; # format spacer
                 unless ($feature) {
-                    print $DFILE "FH   Key             Location/Qualifiers\nFH\n";
-                    foreach my $joinlist (@joins) {
-                        print $DFILE "FT $sp17 /$joinlist\n";
-		    }
+                    print $DFILE "FH   Key             Location/Qualifiers\n";
+                    print $DFILE "FH\n";
                 }
                 $feature++;
-                print $DFILE "FT   TAG             $ps..$pf\n";
-                $tagtype =~ s/ANNO/annotation/ if $tagtype;
-                print $DFILE "FT $sp17 /type=\"$tagtype\"\n" if $tagtype;
-                print $DFILE "FT $sp17 /arcturus_feature_id=\"$sysID\"\n" if $sysID;
-                if ($strand eq 'U') {
-                    print $DFILE "FT $sp17 /strand=\"no strand information\"\n";
-		}
-		else {
-                    print $DFILE "FT $sp17 /strand=\"$strand\"\n";
-		}
-                print $DFILE "FT $sp17 /arcturus_comment=\"$comment\"\n" if $comment;
-                print $DFILE "FT $sp17 /description=\"$tagcomment\"\n" if $tagcomment;
+
+                print $DFILE $tag->writeToEMBL(0,tagkey=>'TAG');
             }
             print $DFILE "XX\n" if $feature;
         }
