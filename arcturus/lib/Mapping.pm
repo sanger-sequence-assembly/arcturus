@@ -310,18 +310,21 @@ sub analyseSegments {
 # sort the segments according to increasing read position
 # determine/test alignment direction from the segments
     my $this = shift;
-    my $silent = shift;
+    my %options = @_;
+
+    my $silent = $options{silent};
 
     return 0 unless $this->hasSegments();
 
     my $segments = $this->getSegments();
 
-# ensure all segments are normalised on the read domain and sort on Ystart
+# ensure all segments are normalised on the Y (read) domain and sort on Ystart
+
+# default normalization and sort on Y position
 
     foreach my $segment (@$segments) {
         $segment->normaliseOnY();
     }
-
     @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
 # determine the alignment direction from the range covered by all segments
@@ -382,6 +385,16 @@ sub analyseSegments {
 # register the alignment direction
     
     $this->setAlignment($globalalignment);
+
+# reorder the alignments if normalisation on X is required (re: sub multiply)
+
+    if ($options{normaliseOnX}) {
+# non-standard normalisation and sort 
+        foreach my $segment (@$segments) {
+            $segment->normaliseOnX();
+        }
+        @$segments = sort { $a->getXstart() <=> $b->getXstart() } @$segments;
+    }
 
     return $segments;
 }
@@ -470,7 +483,9 @@ sub putSegment {
 
 # validity input is tested in Segment constructor
 
-    my $segment = new Segment(@_); 
+    my $segment = new Segment(@_);
+
+    return undef unless $segment; # process externally
 
     $this->{mySegments} = [] if !$this->{mySegments};
 
@@ -502,20 +517,20 @@ sub inverse {
 
     $mapping->analyseSegments();
 
-#    $segments = $mapping->getSegments();
-#    @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
-
     return $mapping;   
 }
 
 sub multiply {
-# return the product of this (mapping) and another mapping
-    my $thismap = shift;
-    my $mapping = shift;
-    my %options = @_;
+# return the product R x T of this (mapping) and another mapping
+    my $thismap = shift; # mapping R
+    my $mapping = shift; # mapping T
+    my %options = @_; # e.g. repair=>1; default 0
 
-    my $rsegments = $thismap->analyseSegments();
-    my $tsegments = $mapping->analyseSegments();
+# align the mappings such that the Y (mapped) domain of R and the 
+# X domain of T are both ordered according to segment position 
+
+    my $rsegments = $thismap->analyseSegments(normaliseOnY => 1);
+    my $tsegments = $mapping->analyseSegments(normaliseOnX => 1);
 
     my $rname = $thismap->getMappingName() || 'R';
     my $tname = $mapping->getMappingName() || 'T';
@@ -531,10 +546,10 @@ sub multiply {
 
         my ($rxs,$rxf,$rys,$ryf) = $rsegment->getSegment();
         my ($txs,$txf,$tys,$tyf) = $tsegment->getSegment();
-
+ 
 if ($options{debug}) {
-print STDOUT "this segment [$rs]  ($rxs,$rxf,$rys,$ryf)  @$rsegment\n";  
-print STDOUT " map segment [$ts]  ($txs,$txf,$tys,$tyf)  @$tsegment\n"; 
+print STDOUT "this segment [$rs]  ($rxs,$rxf,$rys,$ryf)\n";  
+print STDOUT " map segment [$ts]  ($txs,$txf,$tys,$tyf)\n"; 
 my $tempmxs = $tsegment->getYforX($rys) || 'undef';
 print STDOUT "rys $rys  maps to   mxs $tempmxs\n";
 my $tempmxf = $tsegment->getYforX($ryf) || 'undef';
@@ -558,6 +573,7 @@ print STDOUT "txs $txs  reverse maps to  bxs $tempbxs\n";
 	    }
 	    else {
 		print STDOUT "Mapping->multiply: should not occur (1) !!\n";
+
 if ($options{debug}) {
 print STDOUT $thismap->toString()."\n";
 print STDOUT $mapping->toString()."\n";
@@ -578,6 +594,7 @@ print STDOUT "mxs $mxs  mxf $mxf\n";
             }
             else {
 	        print STDOUT "Mapping->multiply: should not occur (2) !!\n";
+
 if ($options{debug}) {
 print STDOUT $thismap->toString()."\n";
 print STDOUT $mapping->toString()."\n";
@@ -616,6 +633,8 @@ print STDOUT "no segment matching or overlap\n" if $options{debug};
 	}
     }
 
+    $product->analyseSegments();
+
     $product->collate($options{repair});
 
     return $product;
@@ -637,11 +656,18 @@ sub collate {
         my $xdifference = $ts->getXstart() - $ls->getXfinis();
         my $ydifference = $ts->getYstart() - $ls->getYfinis();
         next unless (abs($xdifference) == abs($ydifference));
-        next if ($xdifference > $repair+1);
+        next if (abs($xdifference) > $repair);
 # replace the two segments ($i-2 and $i-1) by a single one
         splice @$segments, $i-2, 2;
-        $this->putSegment($ls->getXstart(), $ts->getXfinis(),
-			  $ls->getYstart(), $ts->getYfinis());
+        unless ($this->putSegment($ls->getXstart(), $ts->getXfinis(),
+			          $ls->getYstart(), $ts->getYfinis())) {
+            print STDOUT "Occurred in collate\n";
+            my @ls = $ls->getSegment(); my @ts = $ts->getSegment();
+            print STDOUT "segment (l) @ls  \n";
+            print STDOUT "segment (t) @ts  \n";
+            print STDOUT $this->toString()."\n";
+	}
+
         @$segments = sort {$a->getYstart <=> $b->getYstart} @$segments;
         $i = 1;
     }
@@ -698,7 +724,7 @@ sub writeToString {
 sub toString {
 # primarily for diagnostic purposes
     my $this = shift;
-    my %options = @_;
+    my %options = @_; # print STDOUT "options @_\n";
 
     $this->{contigrange} = undef;
     my $mappingname = $this->getMappingName()      || 'undefined';
@@ -715,35 +741,37 @@ sub toString {
 
     $string .= "\n";
 
-    unless ($options{template} || $options{sequence}) {
+    unless ($options{Xdomain} || $options{Ydomain}) {
         $string .= $this->writeToString($options{text});
         return $string;
     }
 
-# list the windows and the sequences
+# list the windows and the sequences 
 
     my $segments = $this->getSegments();
 
     foreach my $segment (@$segments) {
-       my @segment = $segment->getSegment();
+        my @segment = $segment->getSegment();
 # diagnostic output with mapped sequence segments
         my $length = abs($segment[1] - $segment[0]) + 1;
-        if (my $template = $options{template}) {
-# segments already normalized on Y
+        if (my $sequence = $options{Xdomain}) {
+            my $k = ($segment[2] <= $segment[3]) ? 2 : 3;
+            $string .= sprintf("%7d",$segment[2])
+		    .  sprintf("%7d",$segment[3]);
+            my $substring = substr($sequence,$segment[$k]-1,$length);
+            $substring = reverse($substring)    if ($k == 3);
+            $substring =~ tr/acgtACGT/tgcaTGCA/ if ($k == 3);    
+            $string .= "  " . $substring ."\n";
+ 	}
+        if (my $template = $options{Ydomain}) {
             my $k = ($segment[0] <= $segment[1]) ? 0 : 1;
             $string .= sprintf("%7d",$segment[0])
 	    	    .  sprintf("%7d",$segment[1]);
             my $substring = substr($template,$segment[$k]-1,$length);
-            $substring = reverse($substring)    if $k;
-            $substring =~ tr/acgtACGT/tgcaTGCA/ if $k;    
+            $substring = reverse($substring)    if ($k == 1);
+            $substring =~ tr/acgtACGT/tgcaTGCA/ if ($k == 1); 
             $string .= "  " . $substring ."\n";
         }
-        if (my $sequence = $options{sequence}) {
-            $string .= sprintf("%7d",$segment[2])
-                    .  sprintf("%7d",$segment[3])
-		    .  "  " . substr($sequence,$segment[2]-1,$length);
-            $string .= "\n";
- 	}
     }
 
     return $string;
