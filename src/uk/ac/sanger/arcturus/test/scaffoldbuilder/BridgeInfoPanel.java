@@ -9,8 +9,8 @@ import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 public class BridgeInfoPanel extends GenericInfoPanel {
     public BridgeInfoPanel(PopupManager myparent) {
 	super(myparent);
-	lines = new String[2];
-	labels =  new String[] {"BRIDGE", "Links:"};
+	labels = null;	    
+	valueOffset = 0;
     }
 
     public void setClientObject(Object o) throws InvalidClientObjectException {
@@ -25,8 +25,6 @@ public class BridgeInfoPanel extends GenericInfoPanel {
 	createStrings(bf);
 	
 	FontMetrics fm = getFontMetrics(boldFont);
-	    
-	valueOffset = fm.stringWidth(labels[0]) + fm.stringWidth("    ");
 
 	int txtheight = lines.length * fm.getHeight();
 
@@ -37,17 +35,22 @@ public class BridgeInfoPanel extends GenericInfoPanel {
 	    if (sw > txtwidth)
 		txtwidth = sw;
 	    if (j == 0)
-		fm = getFontMetrics(boldFont);
+		fm = getFontMetrics(plainFont);
 	}
 	
-	setPreferredSize(new Dimension(valueOffset + txtwidth, txtheight + 5));
+	setPreferredSize(new Dimension(txtwidth, txtheight + 5));
     }
     
     private void createStrings(BridgeFeature bf) {
 	Bridge bridge = (Bridge)bf.getClientObject();
 
-	lines[0] = "";
+	Template[] templates = bridge.getTemplates();
 
-	lines[1] = "" + bridge.getLinkCount();
+	lines = new String[1 + templates.length];
+
+	lines[0] = "BRIDGE";
+
+	for (int k = 0; k < templates.length; k++)
+	    lines[k+1] = templates[k].getName();
     }
 }
