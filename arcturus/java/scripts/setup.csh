@@ -64,14 +64,8 @@ set JNDI_OPTS="-Djava.naming.factory.initial=$JNDI_FACTORY -Djava.naming.provide
 # JAR file for Java look and feel graphics repository
 set JLFGR_JARS=${JAR_DIRECTORY}/jlfgr-1_0.jar
 
-# Set up the Apache Project's Java logging framework
-set LOG4J_VERSION=1.2.9
-set LOG4J_JARS=${JAR_DIRECTORY}/log4j-${LOG4J_VERSION}.jar
-
-#set LOG4J_CONFIGURATION=${ARCTURUS_HOME}/log4j.properties
-
 # Append any non-Arcturus JAR files to this list
-set EXTRAJARS=${CONNECTORJ_JARS}:${ORACLE_JDBC_JARS}:${JNDI_JARS}:${JLFGR_JARS}:${LOG4J_JARS}
+set EXTRAJARS=${CONNECTORJ_JARS}:${ORACLE_JDBC_JARS}:${JNDI_JARS}:${JLFGR_JARS}
 
 # Add the JAR files to the CLASSPATH environment variable
 if ( $?CLASSPATH ) then
