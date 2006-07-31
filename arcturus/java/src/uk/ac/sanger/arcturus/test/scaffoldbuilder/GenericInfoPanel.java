@@ -40,8 +40,12 @@ public abstract class GenericInfoPanel extends InfoPanel {
 	for (int j = 0; j < lines.length; j++) {
 	    int x = 0;
 	    int y = y0 + j * dy;
-	    g.drawString(labels[j], x, y);
+
+	    if (labels != null && j < labels.length)
+		g.drawString(labels[j], x, y);
+
 	    g.drawString(lines[j], valueOffset + x, y);
+
 	    if (j == 0) {
 		g.setFont(plainFont);
 		g.drawLine(0, y + 5, size.width, y + 5);

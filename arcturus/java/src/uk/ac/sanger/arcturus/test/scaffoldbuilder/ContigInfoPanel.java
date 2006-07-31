@@ -2,12 +2,14 @@ package scaffoldbuilder;
 
 import java.awt.*;
 import java.text.SimpleDateFormat;
+import java.text.DecimalFormat;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class ContigInfoPanel extends GenericInfoPanel {
-    protected SimpleDateFormat format = new SimpleDateFormat("yyyy MMM dd HH:mm");
+    protected SimpleDateFormat dateformat = new SimpleDateFormat("yyyy MMM dd HH:mm");
+    protected DecimalFormat decimalformat = new DecimalFormat();
 
     public ContigInfoPanel(PopupManager myparent) {
 	super(myparent);
@@ -60,11 +62,11 @@ public class ContigInfoPanel extends GenericInfoPanel {
 
 	lines[1] = contig.getName();
 
-	lines[2] = "" + contig.getLength();
+	lines[2] = decimalformat.format(contig.getLength());
 
-	lines[3] = "" + contig.getReadCount();
+	lines[3] = decimalformat.format(contig.getReadCount());
 
-	lines[4] = format.format(contig.getCreated());
+	lines[4] = dateformat.format(contig.getCreated());
 
 	Project project = contig.getProject();
 
