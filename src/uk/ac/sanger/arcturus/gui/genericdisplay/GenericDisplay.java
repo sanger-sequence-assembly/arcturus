@@ -191,7 +191,9 @@ public abstract class GenericDisplay extends JPanel
 
 	Dimension viewarea = worldToView(userarea);
 
-	g.fillRect(insets.left, insets.top, viewarea.width, viewarea.height);
+	g.fillRect(insets.left, insets.top,
+		   size.width - (insets.left + insets.right),
+		   size.height - (insets.top + insets.bottom));
 
 	Rectangle cliprect = g.getClipBounds();
 
