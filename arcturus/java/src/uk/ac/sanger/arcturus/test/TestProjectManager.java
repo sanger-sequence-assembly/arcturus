@@ -3,7 +3,7 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.*;
 
-import org.apache.log4j.*;
+import java.util.logging.*;
 
 import java.util.*;
 import java.io.*;
@@ -25,8 +25,8 @@ public class TestProjectManager {
 	lasttime = System.currentTimeMillis();
 
 	System.err.println("Creating a logger ...");
-	Logger logger = Logger.getLogger(TestProjectManager.class);
-	logger.setLevel(Level.DEBUG);
+	Logger logger = Logger.getLogger(TestProjectManager.class.getName());
+	logger.setLevel(Level.INFO);
 	System.err.println("Logger is class=" + logger.getClass().getName() + ", name=" + logger.getName() +
 			   ", level=" + logger.getLevel());
 
