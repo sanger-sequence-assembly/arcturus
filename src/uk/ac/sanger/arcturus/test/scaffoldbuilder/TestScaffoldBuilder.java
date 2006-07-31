@@ -11,6 +11,7 @@ import java.util.*;
 import java.io.*;
 import java.sql.*;
 import java.util.zip.DataFormatException;
+import java.util.logging.*;
 
 import javax.swing.*;
 
@@ -27,6 +28,8 @@ import java.awt.event.*;
 import javax.naming.Context;
 
 public class TestScaffoldBuilder implements ScaffoldBuilderListener {
+    private static Logger logger = Logger.getLogger(TestScaffoldBuilder.class.getName());
+
     private long lasttime;
     private Runtime runtime = Runtime.getRuntime();
    
@@ -54,9 +57,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
     public void execute(String args[]) {
 	lasttime = System.currentTimeMillis();
 
-	System.err.println("TestScaffoldBuilder");
-	System.err.println("===================");
-	System.err.println();
+	logger.info("TestScaffoldBuilder");
 
 	String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
 
@@ -102,13 +103,11 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	}
 
 	try {
-	    System.err.println("Creating an ArcturusInstance for " + instance);
-	    System.err.println();
+	    logger.info("Creating an ArcturusInstance for " + instance);
 
 	    ArcturusInstance ai = new ArcturusInstance(props, instance);
 
-	    System.err.println("Creating an ArcturusDatabase for " + organism);
-	    System.err.println();
+	    logger.info("Creating an ArcturusDatabase for " + organism);
 
 	    adb = ai.findArcturusDatabase(organism);
 
@@ -129,7 +128,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	    Set bs = sb.createScaffold(seedcontigid, this);
 
 	    if (bs != null) {
-		System.out.println("Bridge Set:" + bs);
+		logger.info("Bridge Set:" + bs);
 
 		Map layout = createLayout(bs);
 
@@ -137,10 +136,10 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 		Arrays.sort(contigBoxes, new ContigBoxComparator());
 
-		System.out.println("\n\nSCAFFOLD:\n\n");
+		logger.info("SCAFFOLD:");
 
 		for (int i = 0; i < contigBoxes.length; i++)
-		    System.out.println("" + contigBoxes[i]);
+		    logger.info("" + contigBoxes[i]);
 
 		TestFrame frame = new TestFrame(organism + " contig " + seedcontigid,
 						contigBoxes, bs);
@@ -154,7 +153,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		frame.setVisible(true);
 
 	    } else {
-		System.err.println("Seed contig " + seedcontigid + " cannot be scaffolded. ");
+		logger.info("Seed contig " + seedcontigid + " cannot be scaffolded. ");
 	    }
 	}
 	catch (Exception e) {
@@ -171,9 +170,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 	Collections.sort(bridgevector, new BridgeComparator());
 
-	System.out.println("Sorted graph:");
+	logger.info("Sorted graph:");
 	for (int j = 0; j < bridgevector.size(); j++)
-	    System.out.println("\t" + bridgevector.elementAt(j));
+	    logger.info("\t" + bridgevector.elementAt(j));
 	
 	Bridge bridge = (Bridge)bridgevector.firstElement();
 	bridgevector.removeElementAt(0);
@@ -193,9 +192,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	ContigBox cbb = calculateRelativePosition(cba, contiga, contigb, endcode, gapsize, rowranges);
 	layout.put(contigb, cbb);
 	
-	System.out.println("# Using " + bridge);
-	System.out.println("Laid out contig " + contiga.getID() + " at " + cba);
-	System.out.println("Laid out contig " + contigb.getID() + " at " + cbb);
+	logger.info("# Using " + bridge);
+	logger.info("Laid out contig " + contiga.getID() + " at " + cba);
+	logger.info("Laid out contig " + contigb.getID() + " at " + cbb);
 	
 	int ordinal = 1;
 	
@@ -222,9 +221,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	    }
 	    
 	    if (bridge != null) {
-		System.out.println("# Using " + bridge);
+		logger.info("# Using " + bridge);
 		if (hasa && hasb) {
-		    System.out.println("INCONSISTENCY : Both contig " + contiga.getID() + " and contig " +
+		    logger.info("INCONSISTENCY : Both contig " + contiga.getID() + " and contig " +
 				       contigb.getID() + " have been laid out already.");
 		} else {
 		    endcode = bridge.getEndCode();
@@ -236,7 +235,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			cbb = calculateRelativePosition(cba, contiga, contigb, endcode, gapsize, rowranges);
 			layout.put(contigb, cbb);
 			
-			System.out.println("Laid out contig " + contigb.getID() + " at " + cbb);
+			logger.info("Laid out contig " + contigb.getID() + " at " + cbb);
 		    } else {
 			cbb = (ContigBox)layout.get(contigb);
 			
@@ -246,11 +245,11 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			cba = calculateRelativePosition(cbb, contigb, contiga, endcode, gapsize, rowranges);
 			layout.put(contiga, cba);
 			
-			System.out.println("Laid out contig " + contiga.getID() + " at " + cba);
+			logger.info("Laid out contig " + contiga.getID() + " at " + cba);
 		    }
 		}
 	    } else {
-		System.out.println("INCONSISTENCY : Neither contig " + contiga.getID() + " nor contig " +
+		logger.info("INCONSISTENCY : Neither contig " + contiga.getID() + " nor contig " +
 				   contigb.getID() + " have been laid out yet.");
 		break;
 	    }
@@ -471,7 +470,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		    public void actionPerformed(ActionEvent e) {
 			JComboBox cb = (JComboBox)e.getSource();
 			DisplayMode dm = (DisplayMode)cb.getSelectedItem();
-			System.err.println("DisplayMode is " + dm.getMode() + " (" +
+			logger.info("DisplayMode is " + dm.getMode() + " (" +
 					   dm.toString() + ")");
 			panel.setDisplayMode(dm.getMode());
 		    }
@@ -550,7 +549,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
     }
 
     public void scaffoldUpdate(ScaffoldEvent event) {
-	System.err.println("ScaffoldEvent[mode=" + event.getMode() + ", description=" +
+	logger.info("ScaffoldEvent[mode=" + event.getMode() + ", description=" +
 			   event.getDescription() + "]");
     }
 
