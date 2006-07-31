@@ -1,6 +1,7 @@
 #!/usr/local/bin/perl
 
 use Net::LDAP;
+use Term::ReadKey;
 use DBI;
 
 while ($nextword = shift @ARGV) {
@@ -46,6 +47,14 @@ if ($listall) {
 }
 
 $ldap = Net::LDAP->new($url) or die "$@";
+
+if (defined($principal) && !defined($password)) {
+    print "Password: ";
+    ReadMode 'noecho';
+    $password = ReadLine 0;
+    ReadMode 'normal';
+    chop $password;
+}
  
 $mesg = (defined($principal) && defined($password)) ?
     $ldap->bind($principal, password => $password) : $ldap->bind;
