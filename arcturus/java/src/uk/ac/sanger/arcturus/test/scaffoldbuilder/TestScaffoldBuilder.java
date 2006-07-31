@@ -28,7 +28,7 @@ import java.awt.event.*;
 import javax.naming.Context;
 
 public class TestScaffoldBuilder implements ScaffoldBuilderListener {
-    private static Logger logger = Logger.getLogger(TestScaffoldBuilder.class.getName());
+    private static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
     private long lasttime;
     private Runtime runtime = Runtime.getRuntime();
