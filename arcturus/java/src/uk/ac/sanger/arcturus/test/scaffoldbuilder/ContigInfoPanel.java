@@ -1,15 +1,18 @@
 package scaffoldbuilder;
 
 import java.awt.*;
+import java.text.SimpleDateFormat;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class ContigInfoPanel extends GenericInfoPanel {
+    protected SimpleDateFormat format = new SimpleDateFormat("yyyy MMM dd HH:mm");
+
     public ContigInfoPanel(PopupManager myparent) {
 	super(myparent);
-	lines = new String[3];
-	labels = new String[] {"CONTIG", "Length:", "Position:"};
+	labels = new String[] {"CONTIG", "Name:", "Length:", "Reads:", "Created:", "Project:"};
+	lines = new String[labels.length];
     }
 
     public void setClientObject(Object o) throws InvalidClientObjectException {
@@ -24,8 +27,16 @@ public class ContigInfoPanel extends GenericInfoPanel {
 	createStrings(cf);
 	
 	FontMetrics fm = getFontMetrics(boldFont);
-	    
-	valueOffset = fm.stringWidth(labels[0]) + fm.stringWidth("    ");
+ 
+	valueOffset = 0;
+
+	for (int i = 1; i < labels.length; i++) {
+	    int k = fm.stringWidth(labels[i]);
+	    if (k > valueOffset)
+		valueOffset = k;
+	}
+
+	valueOffset += fm.stringWidth("    ");
 
 	int txtheight = lines.length * fm.getHeight();
 
@@ -45,12 +56,18 @@ public class ContigInfoPanel extends GenericInfoPanel {
     private void createStrings(ContigFeature cf) {
 	Contig contig = (Contig)cf.getClientObject();
 
-	lines[0] = contig.getName();
+	lines[0] = "" + contig.getID();
 
-	lines[1] = "" + contig.getLength();
+	lines[1] = contig.getName();
 
-	Point p = cf.getPosition();
+	lines[2] = "" + contig.getLength();
 
-	lines[2] = "" + p.x + ", " + p.y;
+	lines[3] = "" + contig.getReadCount();
+
+	lines[4] = format.format(contig.getCreated());
+
+	Project project = contig.getProject();
+
+	lines[5] = (project == null) ? "(unknown)" : project.getName();
     }
 }

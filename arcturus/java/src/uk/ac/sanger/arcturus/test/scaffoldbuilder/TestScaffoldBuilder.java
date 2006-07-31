@@ -141,8 +141,10 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		for (int i = 0; i < contigBoxes.length; i++)
 		    logger.info("" + contigBoxes[i]);
 
+		Contig seedcontig = adb.getContigByID(seedcontigid, ArcturusDatabase.CONTIG_BASIC_DATA);
+
 		TestFrame frame = new TestFrame(organism + " contig " + seedcontigid,
-						contigBoxes, bs);
+						contigBoxes, bs, seedcontig);
 		
 		frame.setDefaultLookAndFeelDecorated(true);
 	    
@@ -440,10 +442,12 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
     }
 
     class TestFrame extends JFrame {
-	protected GenericContigDisplayPanel panel = new GenericContigDisplayPanel();
+	protected GenericContigDisplayPanel panel;
 
-	public TestFrame(String title, ContigBox[] contigboxes, Set bridgeset) {
+	public TestFrame(String title, ContigBox[] contigboxes, Set bridgeset, Contig seedcontig) {
 	    super(title);
+
+	    panel = new GenericContigDisplayPanel(seedcontig);
 
 	    JScrollPane scrollpane = new JScrollPane(panel);
 

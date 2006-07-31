@@ -4,17 +4,22 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import javax.swing.*;
+
+import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class GenericContigDisplayPanel extends GenericDisplay
     implements Transformer, PopupManager {
-    protected FeaturePainter contigPainter = new ContigFeaturePainter();
+    protected FeaturePainter contigPainter;
     protected FeaturePainter bridgePainter = new BridgeFeaturePainter();
     protected ContigInfoPanel cip;
     protected BridgeInfoPanel bip;
+    protected Contig seedcontig;
 
-    public GenericContigDisplayPanel() {
+    public GenericContigDisplayPanel(Contig seedcontig) {
 	super();
+
+	contigPainter = new ContigFeaturePainter(seedcontig);
 
 	cip = new ContigInfoPanel(this);
 	bip = new BridgeInfoPanel(this);

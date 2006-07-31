@@ -8,6 +8,14 @@ import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 public class ContigFeaturePainter implements FeaturePainter {
     protected Font font = new Font("sansserif", Font.PLAIN, 12);
     protected boolean showContigName = false;
+    protected int seedprojectid;
+
+    public ContigFeaturePainter(Contig seedcontig) {
+	super();
+
+	Project seedproject = seedcontig.getProject();
+	seedprojectid = (seedproject == null) ? -1 : seedproject.getID();
+    }
 
     public void paintFeature(Graphics2D g, Feature f, Shape s) {
 	if (f instanceof ContigFeature) {
@@ -15,15 +23,22 @@ public class ContigFeaturePainter implements FeaturePainter {
 
 	    Color colour = cf.isForward() ? Color.blue : Color.red;
 
+	    Contig contig = (Contig)cf.getClientObject();
+
+	    Project project = contig.getProject();
+
+	    int projectid = (project == null) ? -1 : project.getID();
+
 	    Color oldcolour = g.getColor();
+
+	    if (projectid != seedprojectid)
+		colour = colour.darker();
 
 	    g.setColor(colour);
 
 	    g.fill(s);
 
 	    Rectangle rect = s.getBounds();
-
-	    Contig contig = (Contig)cf.getClientObject();
 
 	    String name = showContigName ? contig.getName() : "Contig " + contig.getID();
 
