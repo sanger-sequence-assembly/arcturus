@@ -101,12 +101,15 @@ set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI
 set HOSTNAME=`hostname -s`
 set EXTRA_OPTS="${EXTRA_OPTS} -Dhost.name=${HOSTNAME}"
 
-if ( $?LOG4J_CONFIGURATION ) then
-    echo Configuring log4j from ${LOG4J_CONFIGURATION}
-    set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${LOG4J_CONFIGURATION}"
+if ( $?LOGGING_PROPERTIES ) then
+    echo Configuring logging from ${LOGGING_PROPERTIES}
+    set EXTRA_OPTS="${EXTRA_OPTS} -Djava.util.logging.config.file=${LOGGING_PROPERTIES}"
 else
-    if ( -f ${ARCTURUS_HOME}/log4j.properties ) then
-	set EXTRA_OPTS="${EXTRA_OPTS} -Dlog4j.configuration=${ARCTURUS_HOME}/log4j.properties"
+    if ( -f ${ARCTURUS_HOME}/logging.properties ) then
+	echo Configuring logging from ${ARCTURUS_HOME}/logging.properties
+	set EXTRA_OPTS="${EXTRA_OPTS} -Djava.util.logging.config.file=${ARCTURUS_HOME}/logging.properties"
+    else
+	echo No logging configuration file specified
     endif
 endif
 
