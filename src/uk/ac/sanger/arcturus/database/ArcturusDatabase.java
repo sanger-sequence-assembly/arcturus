@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
-import org.apache.log4j.*;
+import java.util.logging.*;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
@@ -325,22 +325,22 @@ public class ArcturusDatabase {
     public CloneManager getCloneManager() { return cloneManager; }
 
     public Clone getCloneByName(String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getCloneByName(" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getCloneByName(" + name + ")");
 
 	return cloneManager.getCloneByName(name);
     }
 
     public Clone getCloneByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getCloneByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getCloneByID(" + id + ")");
 
 	return cloneManager.getCloneByID(id);
     }
 
     public void preloadAllClones() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllClones()");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllClones()");
 
 	cloneManager.preloadAllClones();
     }
@@ -358,22 +358,22 @@ public class ArcturusDatabase {
     public LigationManager getLigationManager() { return ligationManager; }
 
     public Ligation getLigationByName(String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getLigationByName(" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getLigationByName(" + name + ")");
 
 	return ligationManager.getLigationByName(name);
     }
 
     public Ligation getLigationByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getLigationByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getLigationByID(" + id + ")");
 
 	return ligationManager.getLigationByID(id);
     }
 
     public void preloadAllLigations() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllLigations()");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllLigations()");
 
 	ligationManager.preloadAllLigations();
     }
@@ -391,29 +391,29 @@ public class ArcturusDatabase {
     public TemplateManager getTemplateManager() { return templateManager; }
 
     public Template getTemplateByName(String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getTemplateByName(" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getTemplateByName(" + name + ")");
 
 	return templateManager.getTemplateByName(name);
     }
 
     public Template getTemplateByName(String name, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getTemplateByName(" + name + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getTemplateByName(" + name + ", " + autoload + ")");
 
 	return templateManager.getTemplateByName(name, autoload);
     }
 
     public Template getTemplateByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getTemplateByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getTemplateByID(" + id + ")");
 
 	return templateManager.getTemplateByID(id);
     }
 
     public Template getTemplateByID(int id, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getTemplateByID(" + id + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getTemplateByID(" + id + ", " + autoload + ")");
 
 	return templateManager.getTemplateByID(id, autoload);
     }
@@ -423,8 +423,8 @@ public class ArcturusDatabase {
     }
 
     public void preloadAllTemplates() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllTemplates()");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllTemplates()");
 
 	templateManager.preloadAllTemplates();
     }
@@ -446,36 +446,36 @@ public class ArcturusDatabase {
     public ReadManager getReadManager() { return readManager; }
 
     public Read getReadByName(String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getReadByName(" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getReadByName(" + name + ")");
 
 	return readManager.getReadByName(name);
     }
 
     public Read getReadByName(String name, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getReadByName(" + name + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getReadByName(" + name + ", " + autoload + ")");
 
 	return readManager.getReadByName(name, autoload);
     }
 
     public Read getReadByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getReadByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getReadByID(" + id + ")");
 
 	return readManager.getReadByID(id);
     }
 
     public Read getReadByID(int id, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getReadByID(" + id + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getReadByID(" + id + ", " + autoload + ")");
 
 	return readManager.getReadByID(id, autoload);
     }
 
     public int loadReadsByTemplate(int template_id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("loadReadsByTemplate(" + template_id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("loadReadsByTemplate(" + template_id + ")");
 
 	return readManager.loadReadsByTemplate(template_id);
     }
@@ -485,8 +485,8 @@ public class ArcturusDatabase {
     }
 
     public void preloadAllReads() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllReads()");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllReads()");
 
 	readManager.preloadAllReads();
     }
@@ -525,64 +525,64 @@ public class ArcturusDatabase {
     public SequenceManager getSequenceManager() { return sequenceManager; }
 
     public Sequence getSequenceByReadID(int readid) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getSequenceByReadID(" + readid + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getSequenceByReadID(" + readid + ")");
 
 	return sequenceManager.getSequenceByReadID(readid);
     }
 
     public Sequence getSequenceByReadID(int readid, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getSequenceByReadID(" + readid + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getSequenceByReadID(" + readid + ", " + autoload + ")");
 
 	return sequenceManager.getSequenceByReadID(readid, autoload);
     }
 
     public Sequence getFullSequenceByReadID(int readid) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getFullSequenceByReadID(" + readid + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getFullSequenceByReadID(" + readid + ")");
 
 	return sequenceManager.getFullSequenceByReadID(readid);
     }
 
     public Sequence getFullSequenceByReadID(int readid, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getFullSequenceByReadID(" + readid + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getFullSequenceByReadID(" + readid + ", " + autoload + ")");
 
 	return sequenceManager.getFullSequenceByReadID(readid, autoload);
     }
 
     public Sequence getSequenceBySequenceID(int seqid) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getSequenceBySequenceID(" + seqid + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getSequenceBySequenceID(" + seqid + ")");
 
 	return sequenceManager.getSequenceBySequenceID(seqid);
     }
 
     public Sequence getSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getSequenceBySequenceID(" + seqid + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getSequenceBySequenceID(" + seqid + ", " + autoload + ")");
 
 	return sequenceManager.getSequenceBySequenceID(seqid, autoload);
     }
 
     public Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getFullSequenceBySequenceID(" + seqid + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getFullSequenceBySequenceID(" + seqid + ")");
 
 	return sequenceManager.getFullSequenceBySequenceID(seqid);
     }
 
     public Sequence getFullSequenceBySequenceID(int seqid, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getFullSequenceBySequenceID(" + seqid + ", " + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getFullSequenceBySequenceID(" + seqid + ", " + autoload + ")");
 
 	return sequenceManager.getFullSequenceBySequenceID(seqid, autoload);
     }
 
     public void getDNAAndQualityForSequence(Sequence sequence) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getDNAAndQualityForSequence(seqid=" + sequence.getID() + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getDNAAndQualityForSequence(seqid=" + sequence.getID() + ")");
 
 	sequenceManager.getDNAAndQualityForSequence(sequence);
     }
@@ -612,8 +612,8 @@ public class ArcturusDatabase {
     public ContigManager getContigManager() { return contigManager; }
 
     public Contig getContigByID(int id, int options) throws SQLException, DataFormatException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigByID(" + id + ", options = " + options + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getContigByID(" + id + ", options = " + options + ")");
 
 	return contigManager.getContigByID(id, options);
     }
@@ -627,8 +627,8 @@ public class ArcturusDatabase {
     }
 
     public int countContigsByProject(int project_id, int minlen) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("countContigsByProject(" + project_id + ", " + minlen + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("countContigsByProject(" + project_id + ", " + minlen + ")");
 
 	return contigManager.countContigsByProject(project_id, minlen);
     }
@@ -639,8 +639,8 @@ public class ArcturusDatabase {
 
     public int processContigsByProject(int project_id, int options, int minlen, ContigProcessor processor)
 	throws SQLException, DataFormatException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("processContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("processContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
 
 	return contigManager.processContigsByProject(project_id, options, minlen, processor);
     }
@@ -651,8 +651,8 @@ public class ArcturusDatabase {
     }
 
     public Set getContigsByProject(int project_id, int options, int minlen) throws SQLException, DataFormatException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getContigsByProject(" + project_id + ", options=" + options + ", minlen=" + minlen + ")");
 
 	return contigManager.getContigsByProject(project_id, options, minlen);
     }
@@ -682,57 +682,57 @@ public class ArcturusDatabase {
     public ProjectManager getProjectManager() { return projectManager; }
 
     public Project getProjectByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getProjectByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getProjectByID(" + id + ")");
 
 	return projectManager.getProjectByID(id);
     }
 
     public Project getProjectByID(int id, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getProjectByID(" + id + ", autoload=" + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getProjectByID(" + id + ", autoload=" + autoload + ")");
 
 	return projectManager.getProjectByID(id, true);
     }
 
     public Project getProjectByName(Assembly assembly, String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getProjectByName(assembly=" + assembly.getName() + ", name=" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getProjectByName(assembly=" + assembly.getName() + ", name=" + name + ")");
 
 	return projectManager.getProjectByName(assembly, name);
     }
 
     public void preloadAllProjects() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllProjects");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllProjects");
 
 	projectManager.preloadAllProjects();
     }
 
     public Set getAllProjects() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getAllProjects");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getAllProjects");
 
 	return projectManager.getAllProjects();
     }
 
     public void refreshProject(Project project) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("refreshProject(" + project + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("refreshProject(" + project + ")");
 
 	projectManager.refreshProject(project);
     }
 
     public void refreshAllProject() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("refreshAllProjects");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("refreshAllProjects");
 
 	projectManager.refreshAllProjects();
     }
 
     public void setAssemblyForProject(Project project, Assembly assembly) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("setAssemblyForProject(" + project + ", " + assembly + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("setAssemblyForProject(" + project + ", " + assembly + ")");
 
 	projectManager.setAssemblyForProject(project, assembly);
     }
@@ -766,50 +766,50 @@ public class ArcturusDatabase {
     public AssemblyManager getAssemblyManager() { return assemblyManager; }
 
     public Assembly getAssemblyByID(int id) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getAssemblyByID(" + id + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getAssemblyByID(" + id + ")");
 
 	return assemblyManager.getAssemblyByID(id);
     }
 
     public Assembly getAssemblyByID(int id, boolean autoload) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getAssemblyByID(" + id + ", autoload=" + autoload + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getAssemblyByID(" + id + ", autoload=" + autoload + ")");
 
 	return assemblyManager.getAssemblyByID(id, true);
     }
 
     public Assembly getAssemblyByName(String name) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getAssemblyByName(" + name + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getAssemblyByName(" + name + ")");
 
 	return assemblyManager.getAssemblyByName(name);
     }
 
     public void preloadAllAssemblies() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("preloadAllProjects");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("preloadAllProjects");
 
 	assemblyManager.preloadAllAssemblies();
     }
 
     public Set getAllAssemblies() {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("getAllAssemblies");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("getAllAssemblies");
 
 	return assemblyManager.getAllAssemblies();
     }
 
     public void refreshAssembly(Assembly assembly) throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("refreshAssembly(" + assembly + ")");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("refreshAssembly(" + assembly + ")");
 
 	assemblyManager.refreshAssembly(assembly);
     }
 
     public void refreshAllAssemblies() throws SQLException {
-	if (logger != null && logger.isDebugEnabled())
-	    logger.debug("refreshAllAssemblies");
+	if (logger != null && logger.isLoggable(Level.INFO))
+	    logger.info("refreshAllAssemblies");
 
 	assemblyManager.refreshAllAssemblies();
     }
