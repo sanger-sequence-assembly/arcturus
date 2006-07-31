@@ -38,6 +38,10 @@ public class Bridge {
 
     public Map getLinks() { return links; }
 
+    public Template[] getTemplates() {
+	return (Template[])links.keySet().toArray(new Template[0]);
+    }
+
     public int getLinkCount() { return links.size(); }
 
     public void addLink(Template template, ReadMapping mappinga, ReadMapping mappingb, GapSize gapsize) {
