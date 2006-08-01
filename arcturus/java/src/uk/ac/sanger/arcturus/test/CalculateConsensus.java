@@ -8,6 +8,8 @@ import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
 
+import java.util.logging.*;
+
 import javax.naming.Context;
 
 public class CalculateConsensus {
@@ -53,6 +55,8 @@ public class CalculateConsensus {
     }
 
     public void execute(String args[]) {
+	Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+
 	lasttime = System.currentTimeMillis();
 
 	System.err.println("CalculateConsensus");
@@ -176,6 +180,8 @@ public class CalculateConsensus {
 		query += (allcontigs ? " where" : " and") + " project_id = " + project.getID();
 			  
 	    Statement stmt = conn.createStatement();
+
+	    logger.info(query);
 
 	    ResultSet rs = stmt.executeQuery(query);
 
