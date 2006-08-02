@@ -18,6 +18,7 @@ my $assembly;
 my $contig;
 my $focn;
 my $focpn;
+my $foccn;
 my $user;
 my $owner;
 my $request;
@@ -44,7 +45,7 @@ my $PROJECTINSTANCECACHE = {};
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe";
 
 my $validKeys = "organism|instance|$actions|"
-              . "contig|c|focn|fofn|project|p|focpn|assembly|a|openproject|"
+              . "contig|c|focn|fofn|project|p|focpn|foccn|assembly|a|openproject|"
               . "user|u|owner|o|request|r|comment|"
               . "list|longlist|ll|before|after|since|truncate|trun|full|"
               . "help|h|s|"
@@ -101,6 +102,7 @@ $action      = 'probe'      if ($nextword eq '-probe');      # separate script?
     $focn        = shift @ARGV  if ($nextword eq '-fofn');
 
     $focpn       = shift @ARGV  if ($nextword eq '-focpn');
+    $foccn       = shift @ARGV  if ($nextword eq '-foccn');
 
 $user        = shift @ARGV  if ($nextword eq '-user'); # ?
 $user        = shift @ARGV  if ($nextword eq '-u');    # ?
@@ -179,16 +181,20 @@ if ($since) {
 
 if ($action eq 'transfer') {
 # check on project and contig identifiers
-    unless ($project || defined($focpn)) {
+    unless ($project || defined($focpn) || defined($foccn)) {
         &showUsage("Missing project ID or projectname",0,$action);
     }
 
-    unless ($contig || defined($focn) || defined($focpn)) {
+    unless ($contig || defined($focn) || defined($focpn) || defined($foccn)) {
         &showUsage("Missing contig identifier or focn",0,$action);
     }
 
-    if (defined($focpn) && ($project || $contig)) {
+    if (defined($focpn) && ($project || $contig || $focn || $foccn)) {
         &showUsage("When using 'focpn' no contig or project can be specified ",0,$action);
+    }
+
+    if (defined($foccn) && ($project || $contig || $focn || $focpn)) {
+        &showUsage("When using 'foccn' no contig or project can be specified ",0,$action);
     }
 
 # perhaps more restrictive, here?
@@ -201,8 +207,8 @@ if ($action eq 'transfer') {
  }
 else {
 # focn may not be specified, but a contig ID is allowed
-    if (defined($focn) || defined($focpn)) {
-        &showUsage("Invalid key 'focn' or 'focpn' for '$action' action",0,$action);
+    if (defined($focn) || defined($focpn) || defined ($foccn)) {
+        &showUsage("Invalid key 'focn', 'focpn' or 'foccn' for '$action' action",0,$action);
     }
 }
 
@@ -248,9 +254,28 @@ if (defined($focpn)) {
     }
 }
 
+elsif (defined($foccn)) {
+
+    $logger->info("Reading from file $foccn");
+
+   ($cids,$ctophash) = &getProjectIdentifiersForContigs($foccn,$adb);
+# run through all contigs and collect the projects
+
+    foreach my $cid (@$cids) {
+        my $project = $ctophash->{$cid};
+	unless (&getCachedProject($adb,$project,$assembly)) {
+# invalid project/assembly specification (all cases); abort
+            $adb->disconnect();
+            &showUsage("Unknown project '$project' specified on file $foccn",0,$action);
+            exit 0;
+	}
+    }
+}
+
 elsif ($contig || defined($focn)) {
 
     $cids = &getContigIdentifiers($contig,$focn,$adb);
+
 }
 
 # if the project is defined on the command line (all cases, except with 'focpn')
@@ -727,7 +752,7 @@ sub getContigIdentifiers {
 }
 
 sub getContigProjectIdentifiers {
-
+# the input file has a contigname/ID and project name/ID per line
     my $focpn = shift; # filename with contig-project pairs
     my $adb = shift; # database handle
 
@@ -761,6 +786,67 @@ sub getContigProjectIdentifiers {
         }
 
         push @$cids,$contig;
+        $itophash->{$contig} = $project;
+    }
+
+    return $cids,$itophash;
+}
+
+#------------------------------------------------------------------------
+
+sub getProjectIdentifiersForContigs {
+# the input file has a contig name/ID and another contig name/ID per line;
+# the second name is a contig in the project to which the first contig is moved
+    my $focpn = shift; # filename with contig-contig pairs
+    my $adb = shift; # database handle
+
+    my ($contigs,$ctophash) = &getNamesFromFile($focpn,2);
+
+# identify the contigs, also if cids already is the contig ID to test existence
+# and collect the projects listed on the file with each contig
+
+    my $cids = [];
+    my $itophash = {}; # contig ID to project
+
+    foreach my $contig (@$contigs) {
+
+        next unless $contig;
+
+# grab project identifier
+
+        my $projectcontig = $ctophash->{$contig};
+
+# identify the contig if a name is provided (the first field)
+
+        if ($contig =~ /\D/) {
+# get contig ID from contig name
+            my $contig_id = $adb->hasContig(withRead=>$contig);
+# test its existence
+            unless ($contig_id) {
+                $logger->warning("contig with read $contig not found");
+                next;
+            }
+            $contig = $contig_id;
+        }
+# add to output list
+        push @$cids,$contig;
+
+# now find the project (from the contig name in the second field
+
+        my $project;
+
+        if ($projectcontig =~ /\D/) {
+# get project from the readname provided
+            my $resultlist = $adb->getProjectIDforReadName($projectcontig);
+            foreach my $cid (sort {$b <=> $a} keys %$resultlist) {
+		$project = $resultlist->{$cid};
+                last; # get the current contig
+            }
+        }
+        else {
+            $project = $adb->getProjectIDforContigID($projectcontig); 
+	}
+
         $itophash->{$contig} = $project;
     }
 
@@ -1287,6 +1373,9 @@ sub showUsage {
         print STDERR "-fofn\t\t(-focn) filename with list of contig IDs or names\n";
         print STDERR "-focpn\t\tfilename with list of contig ID/name and project ID/name";
         print STDERR " pairs\n";
+        print STDERR "-foccn\t\tfilename with list of two contig IDs/names per line, ";
+        print STDERR "the first\n";
+        print STDERR "\t\tof the contig to be moved to the project of the second\n";
         print STDERR "\n";
         print STDERR "OPTIONAL PARAMETERS:\n";
         print STDERR "\n";
