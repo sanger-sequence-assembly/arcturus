@@ -1141,7 +1141,7 @@ $compare->getContigName()."\n" if $DEBUG;
         if ($this->hasContigToContigMappings()) {
             my $c2cmaps = $this->getContigToContigMappings();
             foreach my $c2cmap (@$c2cmaps) {
-                my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,1);
+                my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,silent=>1);
                 next unless $isEqual;
                 next if ($mapping->getSequenceID() != $c2cmap->getSequenceID());
                 print STDERR "Duplicate mapping to parent " .
