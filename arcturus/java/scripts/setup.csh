@@ -101,6 +101,16 @@ set EXTRA_OPTS="-Djdbc.drivers=${CONNECTORJ_DRIVER}:${ORACLE_JDBC_DRIVER} ${JNDI
 set HOSTNAME=`hostname -s`
 set EXTRA_OPTS="${EXTRA_OPTS} -Dhost.name=${HOSTNAME}"
 
+# Create .arcturus directory if it does not exist
+if (! -d ${HOME}/.arcturus ) then
+    mkdir ${HOME}/.arcturus
+endif
+
+# Create logging directory if ti does not exist
+if (! -d ${HOME}/.arcturus/logging ) then
+    mkdir ${HOME}/.arcturus/logging
+endif
+
 if ( $?LOGGING_PROPERTIES ) then
     echo Configuring logging from ${LOGGING_PROPERTIES}
     set EXTRA_OPTS="${EXTRA_OPTS} -Djava.util.logging.config.file=${LOGGING_PROPERTIES}"
