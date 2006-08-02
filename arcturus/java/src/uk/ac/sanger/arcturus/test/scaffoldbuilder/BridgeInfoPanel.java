@@ -46,11 +46,17 @@ public class BridgeInfoPanel extends GenericInfoPanel {
 
 	Template[] templates = bridge.getTemplates();
 
-	lines = new String[1 + templates.length];
+	lines = new String[3 + templates.length];
 
 	lines[0] = "BRIDGE";
 
+	GapSize gapsize = bridge.getGapSize();
+
+	lines[1] = "Gap Size: " + gapsize.getMinimum() + " - " + gapsize.getMaximum();
+
+	lines[2] = "SUB-CLONES:";
+
 	for (int k = 0; k < templates.length; k++)
-	    lines[k+1] = templates[k].getName();
+	    lines[k+3] = templates[k].getName();
     }
 }
