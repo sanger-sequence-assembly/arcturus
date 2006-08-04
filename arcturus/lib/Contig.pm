@@ -497,7 +497,7 @@ sub importer {
     if (ref($Component) eq 'ARRAY') {
 # recursive use with scalar parameter
         while (scalar(@$Component)) {
-            $this->importer(shift @$Component,$class,$buffername,shift);
+            $this->importer(shift @$Component,$class,$buffername,@_);
         }
     }
     elsif ($Component) {
@@ -1456,6 +1456,10 @@ print STDOUT "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
         }
     }
 print STDOUT "Target contig length : $tlength \n" if $DEBUG;
+
+# if the mapping comes from Arcturus we have to use its inverse
+
+    $mapping = $mapping->inverse() unless $options{noinverse};
 
 # ok, propagate the tags from parent to target
 
