@@ -2781,7 +2781,8 @@ print STDOUT ">putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
         my $tagtype = $ctag->getType(); # must have a tag type
         unless ($tagtype) {
             my $tagcomment = $ctag->getTagComment() || "no description";
-            print STDERR "Invalid tag in contig $cid ($tagcomment)\n";
+            print STDERR "Invalid tag in contig $cid: missing tagtype "
+                       . "($tagcomment)\n";
             next;
         }
         $tags->{$ctag} = $ctag;
@@ -3001,7 +3002,7 @@ print STDOUT ">putContigTags for ".scalar(@$tags)." tags\n" if $DEBUG;
         $success++ if $rc;
     }
 
-print STDOUT ">putContigTags: EXIT putContigTags success $success $missed\n" if $DEBUG;
+print STDOUT ">putContigTags: EXIT putContigTags success $success missed $missed\n" if $DEBUG;
 
     return $success; 
 }
