@@ -588,12 +588,13 @@ sub merge {
     my $this = shift;
     my $otag = shift;
     my %options = @_;
+#$options{debug} = 1;
 
     unless (ref($otag) eq 'Tag') {
         die "Tag->merge expects another Tag instance as parameter";
     }
 
-# test thhe tag type
+# test the tag type
 
     return undef unless ($this->getType() eq $otag->getType());
 
@@ -610,11 +611,10 @@ sub merge {
         ($left,$right) = ($otag,$this); 
     }
     else {
-#print STDOUT "tag positions do not butt: @thisposition, @otagposition \n";
 	return undef;
     }
 
-if ($options{debug}) {
+if ($options{debug} && $options{debug}>1) {
  print STDOUT "tag positions DO butt: @thisposition, @otagposition \n";
  $left->writeToCaf(*STDOUT,annotag=>1);
  $right->writeToCaf(*STDOUT,annotag=>1);
@@ -637,6 +637,7 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
 # try to build a new tag to replace the two parts
 
     my $newtag = $this->new();
+    $newtag->setType($this->getType());
     $newtag->setPosition($lposition[0],$rposition[1]);
     $newtag->setSystematicID($this->getSystematicID());
     $newtag->setStrand($this->getStrand());
@@ -644,7 +645,8 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
     my $DNA = $left->getDNA() . $right->getDNA();
     $newtag->setDNA($DNA) if ($DNA =~ /\S/);
 # merge the comment and tagcomment
-print STDOUT "TO BE COMPLETED\n" if $options{debug};
+
+print STDOUT "merging of commenmts to be TO BE COMPLETED\n" if $options{debug};
 
 $newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
     return $newtag;
@@ -823,8 +825,8 @@ sub writeToCaf {
     if ($type eq 'NOTE') {
 # GAP4 NOTE tag, no position info
     }
-    elsif ($type eq 'ANNO') {
-print STDOUT "ANNO tag\n";
+    elsif ($type eq 'ANNO' ||$this->getSystematicID()) {
+#    elsif ($type eq 'ANNO') {
 # generate two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
 # add the systematic ID
@@ -832,7 +834,8 @@ print STDOUT "ANNO tag\n";
         $tagtext .= ' ' . $comment if $comment;               # ? tagcomment
         $string .= "\"$tagtext\"\n" ;
 # if comment available add an info tag
-        $string .= "Tag INFO @pos $tagcomment\n" if $tagcomment; # ? comment
+        $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
+#        $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
     }
     else {
 # standard output of tag with position and tag comment
