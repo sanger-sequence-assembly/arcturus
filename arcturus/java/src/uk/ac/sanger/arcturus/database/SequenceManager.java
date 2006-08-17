@@ -46,14 +46,15 @@ public class SequenceManager extends AbstractManager {
 
 	conn = adb.getConnection();
 
-	String query = "select seq_id,version from SEQ2READ where read_id = ? order by version desc limit 1";
+	String query = "select SEQ2READ.seq_id,version,length from SEQ2READ left join SEQUENCE using(seq_id)" +
+	    "where read_id = ? order by version desc limit 1";
 	pstmtByReadID = conn.prepareStatement(query);
 
 	query = "select SEQ2READ.seq_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)" +
 	    " where read_id = ? order by version desc limit 1";
 	pstmtFullByReadID = conn.prepareStatement(query);
 
-	query = "select read_id,version from SEQ2READ where seq_id = ?";
+	query = "select read_id,version,length from SEQ2READ left join SEQUENCE using(seq_id) where seq_id = ?";
 	pstmtBySequenceID = conn.prepareStatement(query);
 
 	query = "select read_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)" +
@@ -115,6 +116,7 @@ public class SequenceManager extends AbstractManager {
 	    Read read = adb.getReadByID(readid);
 	    int seqid = rs.getInt(1);
 	    int version = rs.getInt(2);
+	    int seqlen = rs.getInt(3);
 	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
 	}
 
@@ -160,7 +162,8 @@ public class SequenceManager extends AbstractManager {
 	if (rs.next()) {
 	    int seqid = rs.getInt(1);
 	    int version = rs.getInt(2);
-	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
+	    int seqlen = rs.getInt(3);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, seqlen);
 	}
 
 	rs.close();
@@ -254,7 +257,8 @@ public class SequenceManager extends AbstractManager {
 	    int readid = rs.getInt(1);
 	    Read read = adb.getReadByID(readid);
 	    int version = rs.getInt(2);
-	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
+	    int seqlen = rs.getInt(3);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, seqlen);
 	}
 
 	rs.close();
@@ -366,6 +370,21 @@ public class SequenceManager extends AbstractManager {
 
     private Sequence createAndRegisterNewSequence(int seqid, Read read, int version, byte[] dna, byte[] quality) {
 	Sequence sequence = new Sequence(seqid, read, dna, quality, version);
+	registerNewSequence(sequence);
+	return sequence;
+    }
+
+    /**
+     * Creates and registers a new Sequence object from the given parameters.
+     *
+     * @param seqid the sequence ID of the new sequence.
+     * @param read the Read object to which the new sequence belongs.
+     * @param version the version number of the new sequence.
+     * @param length the length of the sequence.
+     */
+
+    private Sequence createAndRegisterNewSequence(int seqid, Read read, int version, int length) {
+	Sequence sequence = new Sequence(seqid, read, length, version);
 	registerNewSequence(sequence);
 	return sequence;
     }
