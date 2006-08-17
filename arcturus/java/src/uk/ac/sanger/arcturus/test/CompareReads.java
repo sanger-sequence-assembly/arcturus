@@ -27,6 +27,7 @@ public class CompareReads {
     private static final String NULL2 = "NULL2";
 
     public CompareReads(String[] args) {
+	boolean cacheing = true;
 
 	for (int i = 0; i < args.length; i++) {
 	    if (args[i].equalsIgnoreCase("-instance"))
@@ -46,6 +47,9 @@ public class CompareReads {
 
 	    if (args[i].equalsIgnoreCase("-namelike"))
 		namelike = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-nocache"))
+		cacheing = false;
 	}
 
 	if (instance != null) {
@@ -66,6 +70,8 @@ public class CompareReads {
 	props.put(Context.INITIAL_CONTEXT_FACTORY, env.get(Context.INITIAL_CONTEXT_FACTORY));
 	props.put(Context.PROVIDER_URL, env.get(Context.PROVIDER_URL));
 
+	System.err.println("Cacheing is " + (cacheing ? "ON" : "OFF"));
+
 	try {
 	    System.err.println("Creating an ArcturusInstance for " + instance1);
 	    System.err.println();
@@ -77,8 +83,8 @@ public class CompareReads {
 
 	    adb1 = ai1.findArcturusDatabase(organism1);
 
-	    adb1.setReadCacheing(false);
-	    adb1.setSequenceCacheing(false);
+	    adb1.setReadCacheing(cacheing);
+	    adb1.setSequenceCacheing(cacheing);
 
 	    ArcturusInstance ai2;
 
@@ -96,8 +102,8 @@ public class CompareReads {
 
 	    adb2 = ai2.findArcturusDatabase(organism2);
 
-	    adb2.setReadCacheing(false);
-	    adb2.setSequenceCacheing(false);
+	    adb2.setReadCacheing(cacheing);
+	    adb2.setSequenceCacheing(cacheing);
 
 	    conn1 = adb1.getConnection();
 	    
@@ -236,6 +242,12 @@ public class CompareReads {
     }
 
     private void compareSequences(Sequence seq1, Sequence seq2, PrintStream ps) {
+	int seqlen1 = seq1.getLength();
+	int seqlen2 = seq2.getLength();
+
+	if (seqlen1 != seqlen2)
+	    reportMismatch(ps, "Sequence length: " + seqlen1 + " vs " + seqlen2);
+
 	Clipping qclip1 = seq1.getQualityClipping();
 	Clipping qclip2 = seq2.getQualityClipping();
 
