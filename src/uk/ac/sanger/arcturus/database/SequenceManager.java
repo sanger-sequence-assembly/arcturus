@@ -70,6 +70,7 @@ public class SequenceManager extends AbstractManager {
 	pstmtSequenceVectorClipping = conn.prepareStatement(query);
 
 	query = "select cvleft,cvright from CLONEVEC where seq_id = ?";
+	pstmtCloningVectorClipping = conn.prepareStatement(query);
 
 	hashByReadID = new HashMap();
 	hashBySequenceID = new HashMap();
