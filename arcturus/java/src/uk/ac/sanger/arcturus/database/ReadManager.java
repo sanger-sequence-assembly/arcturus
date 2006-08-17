@@ -176,8 +176,10 @@ public class ReadManager extends AbstractManager {
     }
 
     void registerNewRead(Read read) {
-	hashByName.put(read.getName(), read);
-	hashByID.put(new Integer(read.getID()), read);
+	if (cacheing) {
+	    hashByName.put(read.getName(), read);
+	    hashByID.put(new Integer(read.getID()), read);
+	}
     }
 
     public void preloadAllReads() throws SQLException {
