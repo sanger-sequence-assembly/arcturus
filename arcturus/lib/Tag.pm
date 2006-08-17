@@ -56,7 +56,7 @@ sub getDNA {
     my $this = shift;
     my %options = @_; # transpose
 
-    unless ($options->{transpose} && $this->getStrand() eq 'Reverse') {
+    unless ($options{transpose} && $this->getStrand() eq 'Reverse') {
         return $this->{DNA} || '';
     }
 
