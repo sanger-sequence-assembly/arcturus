@@ -40,6 +40,24 @@ public class Sequence extends Core {
     }
 
     /**
+     * Construct a Sequence object for the specified read.
+     *
+     * @param id the unique identifier of this sequence.
+     * @param read the Read object to which this sequence belongs.
+     * @param length the sequence length.
+     * @param version the sequence version number. A read may have several versions
+     * of its sequence if it is edited during finishing. Each sequence for a particular
+     * read has a distinct version number.
+     */
+
+    public Sequence(int id, Read read, int length, int version) {
+	this.ID = id;
+	this.read = read;
+	this.length = length;
+	this.version = version;
+    }
+
+    /**
      * Construct a Sequence object for the specified read. The DNA and base quality
      * are set to null and the version is set to UNKNOWN.
      *
