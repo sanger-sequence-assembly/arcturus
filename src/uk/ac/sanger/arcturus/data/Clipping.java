@@ -68,4 +68,22 @@ public class Clipping {
 
 	return cafstring;
     }
+
+    public boolean equals(Object obj) {
+	if (!(obj instanceof Clipping))
+	    return false;
+
+	Clipping that = (Clipping)obj;
+
+	if (this.type != that.type || this.left != that.left || this.right != that.right)
+	    return false;
+
+	if (this.name != null && that.name != null && !this.name.equalsIgnoreCase(that.name))
+	    return false;
+
+	if (! (this.name == null && that.name == null))
+	    return false;
+
+	return true;
+    }
 }
