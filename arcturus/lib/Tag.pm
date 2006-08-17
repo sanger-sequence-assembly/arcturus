@@ -16,7 +16,7 @@ sub new {
 
     bless $this, $class;
 
-    $this->{label} = shift;
+    $this->setHost(@_);
 
     return $this;
 }
@@ -51,18 +51,40 @@ sub setDNA {
 }
 
 sub getDNA {
-# transpose the dna if strand is reverse
+# the DNA string is assumed to correspond to the forward strand
+# reverse-complement the dna if strand is reverse AND if so specified
     my $this = shift;
-    my $dotranspose = shift;
+    my %options = @_; # transpose
 
-    unless ($dotranspose && $this->getStrand() ne 'Reverse') {
+    unless ($options->{transpose} && $this->getStrand() eq 'Reverse') {
         return $this->{DNA} || '';
     }
 
-    return &transposeDNA($this->{DNA});
+    my $dna = inverse($this->{DNA} || '');
+    $dna =~ tr/ACGTacgt/TGCAtgca/ if $dna;
+    return $dna;
 }
 
-# positions are stored as begin-end pairs (array or arrays)
+sub setHost {
+# instance of host object
+    my $this = shift;
+    $this->{host} = shift;
+}
+
+sub getHost {
+# return instance of host
+    my $this = shift;
+    return $this->{host};
+}
+
+sub getHostClass {
+# return type of host
+    my $this = shift;
+    my $host = $this->getHost();
+    return ref($host) || $host || '';
+}
+
+# positions are stored as begin-end pairs (array of arrays)
 
 sub setPosition {
 # begin and end position in read or contig sequence
@@ -275,6 +297,8 @@ sub transpose {
     my $offset = shift; # array length 2 with offset at begin and end
     my $window = shift || 1; # position in range 1 .. window
 
+print STDERR "Tag::transpose used\n";
+
 # transpose the position range using the offset info. An undefined offset
 # indicates a boundery outside the range 1 .. length; adjust accordingly
    
@@ -320,7 +344,7 @@ sub transpose {
 
 # get a systematic ID if not already defined
 
-    $this->composeName() unless $this->getSystematicID();
+    &composeName($this) unless $this->getSystematicID();
 
 # transport the comment; add import details, if any
 
@@ -332,7 +356,7 @@ sub transpose {
 
 # create (spawn) a new tag instance
 
-    my $newtag = $this->new($this->{label});
+    my $newtag = $this->new($this->getHost());
 
     $newtag->setTagID($this->getTagID());
 # TAG2CONTIG table items
@@ -351,315 +375,14 @@ sub transpose {
     return $newtag;
 }
 
-sub remap {
-# takes a mapping and transforms the tag positions to the mapped domain
-# returns an array of (one or more) new tags, or undef
-    my $this = shift;
-    my $mapping = shift;
-    my %options = @_;
-
-# options:  break = 1 to allow splitting of a tag straddling mapping segments
-#                     and return a separate tag for each segment
-#                   0 (default) to not allow that; if a sequence is provided
-#                     generate a tag sequence with pad(s)
-#           sequence, if provided used to generate a tagsequence, possibly 
-#                     with pads; in its absence a long comment is generated
-
-    unless (ref($mapping) eq 'Mapping') {
-        die "Tag->transpose expects a Mapping instance as parameter";
-    }
-
-# get current tag position
-
-    my @currentposition = $this->getPosition();
-
-# generate a helper 1-1 mapping
-
-    my $helpermapping = new Mapping('helper');
-# and add the one segment
-    $helpermapping->putSegment(@currentposition,@currentposition);
-
-# multiply by input mapping; the helper mapping may be masked
-# by the input mapping, which would result in a truncated tag
-
-print STDOUT "Tag position: @currentposition \n" if $options{debug};
-
-    my $maskedmapping = $helpermapping->multiply($mapping);
-
-# trap problems with mapping by running again with debug option
-
-    print STDOUT "Tag position: @currentposition \n" unless $maskedmapping;
-    print $helpermapping->toString()."\n" unless $maskedmapping;    
-    print $mapping->toString()."\n" unless $maskedmapping; 
-    $helpermapping->multiply($mapping,debug=>1) unless $maskedmapping;
-    return undef unless $maskedmapping; # something wrong with mapping
-   
-
-print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debug};
-
-    return undef unless $maskedmapping->hasSegments(); # just in case
-          
-    my $segments = $maskedmapping->getSegments();
-    my $numberofsegments = scalar(@$segments);
-    my $invert  = ($maskedmapping->getAlignment() < 0) ? 1 : 0;
-# input parameter definition takes precedence
-    $options{changestrand} = $invert unless defined $options{changestrand};
-
-# OK, here we have the mapping of the tag sorted
-
-# test if the tag is clipped
-
-    my @range = $maskedmapping->getContigRange();
-    my $lclip = $range[0] - $currentposition[0];
-    my $rclip = $currentposition[1] - $range[1];
-    my $truncated = ($lclip > 0 || $rclip < 0) ? 1 : 0; 
-    $truncated = "truncated (L:$lclip R:$rclip)" if $truncated; # used later
-
-# now output of transformed tags; consider three cases
-
-    my @tags;
-    
-    my $sequence = $options{sequence};
-#    my $sequence = $this->getDNA();
-#    $sequence = $options{sequence} if $options{sequence};
-
-    if ($numberofsegments == 1) { 
-# CASE 1: one shift for the whole tag
-        my $newtag = $this->copy(%options);
-        my @segment = $segments->[0]->getSegment();
-        my @newposition = ($segment[2],$segment[3]);
-        $newtag->setPosition(sort {$a <=> $b} @newposition);
-        $newtag->setDNA(substr $sequence,$segment[0],$segment[1]) if $sequence;
-        my $comment = $this->getComment() || '';
-# append a warning to the comment if the tag is truncated
-        if ($truncated && $comment !~ /truncated/) {
-            $newtag->setComment($truncated,append=>1);
-	}
-        push @tags,$newtag;
-    }
-
-    elsif ($options{break}) {
-# CASE 2 : more than one segment, generate multiple tags
-        my $number = 0;
-# XXX how do we handle clipping?
-        for (my $i = 0 ; $i < $numberofsegments ; $i++) {
-            my $newtag = $this->copy(%options);
-            my @segment = $segments->[$i]->getSegment();
-            my @newposition = ($segment[2],$segment[3]);
-            $newtag->setPosition(sort {$a <=> $b} @newposition);
-            my $tagcomment = $newtag->getTagComment() || '';
-# compose the sequence for this tag fragment
-            if ($sequence) {
-                my $fragment = substr $sequence,$segment[0],$segment[1];
-                $newtag->setDNA($fragment);
-	    }
-# add comment to possibly existing one
-	    $number++;
-            $tagcomment .= ' ' if $tagcomment;
-            $tagcomment .= "fragment $number of $numberofsegments";
-            $newtag->setTagComment($tagcomment);
-            my $comment = $newtag->getComment();
-            unless ($comment =~ /\bsplit\b/) {
-                $newtag->setComment("split!",append=>1);
-	    }
-            push @tags,$newtag;
-	}
-    }
-
-    else {
-# CASE 3 : more than one segment, but only one tag to be generated
-# copy whatever we already have about this tag
-        my $newtag = $this->copy(%options);
-# amend the comment to signal frame shifts and possible truncation
-        my $comment = $newtag->getComment() || '';
-        unless ($comment =~ /frame\s+shift/) {
-            $newtag->setComment("frame shifts!",append=>1);
-	}
-        if ($truncated && $comment !~ /truncated/) {
-            $newtag->setComment($truncated,append=>1);
-	}
-# generate a tag sequence with pads for this new tag
-        my $tagcomment = '';
-        my $tagsequence = '';
-        my ($spos,$fpos) = (0,0);
-        foreach my $segment (@$segments) {
-# either generate a sequence with pads, or a comment about pad positions
-            my @segment = $segment->getSegment();
-            if ($fpos > 0) {
-                my $length = $segment[1] - $segment[0] + 1;
-                my $gapsize = $segment[2] - 1 - $fpos;
-
-                if (my $sequence = $options{sequence}) {
-# add pads if gapsize > 0 (insertions)
-                    foreach my $i (1..$gapsize) {
-                        $tagsequence .= '-'; # add pads
-		    }
-# if gapsize < 0 there has been a deletion 
-                    if ($gapsize < 0) {
-print STDOUT "$gapsize : sequence deletion detected \n"; 
-# check for pads removed from the sequence, if so, no message
-########## TO BE COMPLETED ##########
-		    }
-# add sequence fragment
-                    $tagsequence .= substr $sequence,$segment[0]-1,$length;
-	        }
-                my $offset = $segment[2] - $spos;
-                $tagcomment .= ' ' if $tagcomment;
-                $tagcomment .= "pad by $gapsize at pos $offset";
-#?              $newtag->setTagComment("pad by $gapsize at pos $offset",append=>1);
-	    }
-# update the position
-            $spos = $segment[2] unless $spos;
-            $fpos = $segment[3];
-        }
-        $newtag->setPosition(sort {$a <=> $b} ($spos,$fpos));
-        $newtag->setDNA($tagsequence) if $tagsequence;
-        $newtag->setTagComment($tagcomment);
-# generate an new comment signaling frame shifts
-        push @tags,$newtag;
-    }
-
-    return [@tags];
-}
-
-sub copy {
-# return a copy of the current Tag instance
-    my $this = shift;
-    my %options = @_;
-
-# create (spawn) a new tag instance
-
-    my $newtag = $this->new($this->{label});
-
-    $newtag->setTagID($this->getTagID());
-# TAG2CONTIG table items
-    $newtag->setPosition($this->getPosition());
-    my $strand = $this->getStrand();
-    if ($options{changestrand}) {
-	my %inverse = (Forward => 'Reverse', Reverse => 'Forward');
-        $strand = $inverse{$strand} || 'Unknown';
-#        $strand = 'Reverse' if ($this->getStrand() eq 'Forward');         
-#        $strand = 'Forward' if ($this->getStrand() eq 'Reverse');
-    } # 'Unknown' is unchanged
-    $newtag->setStrand($strand);
-    $newtag->setComment($this->getComment());
-# CONTIGTAG table items
-    $newtag->setType($this->getType());
-    $newtag->setSystematicID($this->getSystematicID());
-    $newtag->setTagSequenceID($this->getTagSequenceID());
-    $newtag->setTagComment($this->getTagComment());
-# TAGSEQUENCE table items
-    $newtag->setTagSequenceName($this->getTagSequenceName()); 
-    my $DNA = $this->getDNA();
-    if ($options{changestrand} && $options{transposedna}) {
-        $DNA = &transpose($DNA);
-    }
-    $newtag->setDNA($DNA);
-
-    return $newtag;
-}
-
-sub mirror {
-# apply a mirror transform to the tag position
-    my $this = shift;
-    my $mirror = shift || 0; # the mirror position (e.g. contig_length + 1)
-
-    my @currentposition = $this->getPosition();
-
-    foreach my $position (@currentposition) {
-        $position = $mirror - $position;
-    }
-    $this->setPosition(@currentposition);
-}
-
-sub shiftTag {
-# apply a linear transform to the tag position
-    my $this = shift;
-    my $shift = shift;
-    my $start = shift; # begin of window
-    my $final = shift; #  end  of window
-
-
-    return undef;
-}
-
-sub merge {
-# merge this tag and another (if possible)
-    my $this = shift;
-    my $otag = shift;
-    my %options = @_;
-#$options{debug} = 1;
-
-    unless (ref($otag) eq 'Tag') {
-        die "Tag->merge expects another Tag instance as parameter";
-    }
-
-# test the tag type
-
-    return undef unless ($this->getType() eq $otag->getType());
-
-    my @thisposition = $this->getPosition();
-    my @otagposition = $otag->getPosition();
-
-    my ($left,$right);
-    if ($thisposition[1] == $otagposition[0] - 1) {
-# other tag is butting to the right of this
-        ($left,$right) = ($this,$otag); 
-    }
-    elsif ($thisposition[0] == $otagposition[1] + 1) {
-# this is butting to the right of other tag
-        ($left,$right) = ($otag,$this); 
-    }
-    else {
-	return undef;
-    }
-
-if ($options{debug} && $options{debug}>1) {
- print STDOUT "tag positions DO butt: @thisposition, @otagposition \n";
- $left->writeToCaf(*STDOUT,annotag=>1);
- $right->writeToCaf(*STDOUT,annotag=>1);
-}
-
-# accept if systematic IDs and strand are identical
-
-    return undef unless ($left->getSystematicID() eq $right->getSystematicID());
-
-    return undef unless ($left->getStrand() eq $right->getStrand());
-
-    my @lposition = $left->getPosition();
-    my @rposition = $right->getPosition();
-    if ($left->getDNA() && $right->getDNA()) {
-        my $DNA = $left->getDNA() . $right->getDNA(); # combined
-print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
-        return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
-    }
-
-# try to build a new tag to replace the two parts
-
-    my $newtag = $this->new();
-    $newtag->setType($this->getType());
-    $newtag->setPosition($lposition[0],$rposition[1]);
-    $newtag->setSystematicID($this->getSystematicID());
-    $newtag->setStrand($this->getStrand());
-# get the new DNA and test against length
-    my $DNA = $left->getDNA() . $right->getDNA();
-    $newtag->setDNA($DNA) if ($DNA =~ /\S/);
-# merge the comment and tagcomment
-
-print STDOUT "merging of commenmts to be TO BE COMPLETED\n" if $options{debug};
-
-$newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
-    return $newtag;
-}
-
 sub composeName {
 # compose a descriptive name from tag data
     my $this = shift;
 
     return undef unless $this->getSequenceID();
 
-    my $name = $this->{label} || '';
-    $name .= ":" if $name;
+    my $name = $this->getHostClass() || '';
+    $name .= "Tag:" if $name;
     $name .= sprintf ("%9d",$this->getSequenceID());
     my ($ps, $pf) = $this->getPosition();
     $name .= sprintf ("/%11d", $ps);
@@ -669,27 +392,8 @@ sub composeName {
     $this->setSystematicID($name);
 }
 
-sub transposeDNA {
-# reverse complement an input DNA sequence TO BE TESTED
-    my $string = shift;
-
-    return undef unless $string;
-
-    my $output = inverse($string);
-    $output =~ tr/ACGTacgt/TGCAtgca/;
-    return $output;
-
-#    my $output = '';
-#    my $length = length($string);
-#    while ($length--) {
-#        my $base = substr $string,$length,1;
-#        $base =~ tr/ACGTacgt/TGCAtgca/;
-#        $output .= $base;
-#    }
-
-#    return $output;
-}
-
+#----------------------------------------------------------------------
+# comparing tags
 #----------------------------------------------------------------------
 
 sub isEqual {
@@ -698,9 +402,11 @@ sub isEqual {
     my $tag  = shift;
     my %options = @_;
 
-# compare tag type
+# compare tag type and host type
 
     return 0 unless ($this->getType() eq $tag->getType());
+
+    return 0 unless ($this->getHostClass() eq $tag->getHostClass());
 
 # compare tag position range
 
@@ -787,7 +493,7 @@ sub isEqual {
 }
 
 sub cleanup {
-# private method cleanup comments 
+# private method cleanup for purpose of comparison of comments
     my $comment = shift;
     my $inop = shift; # special treatment for e.g. auto-generated oligo names
 
@@ -803,6 +509,8 @@ sub cleanup {
     return $comment;
 }
 
+#----------------------------------------------------------------------
+# output
 #----------------------------------------------------------------------
 
 sub writeToCaf {
@@ -825,7 +533,7 @@ sub writeToCaf {
     if ($type eq 'NOTE') {
 # GAP4 NOTE tag, no position info
     }
-    elsif ($type eq 'ANNO' ||$this->getSystematicID()) {
+    elsif ($type eq 'ANNO' || $this->getSystematicID()) {
 #    elsif ($type eq 'ANNO') {
 # generate two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
@@ -869,6 +577,9 @@ sub writeToEMBL {
     my $key = $options{tagkey} || 'CDS'; # get the key to be used for export
     
     my $sp17 = "                 "; # format spacer
+
+# composite tags have more than one position interval specified
+
     if ($this->isJoined()) {
 # generate the join construct for composite tags
         my @joinlist;
@@ -932,11 +643,12 @@ sub writeToEMBL {
 }
 
 sub dump {
+# listing poption for debugging purposes
     my $tag = shift;
     my $FILE = shift; # optional file handle
     my $skip = shift; # true to skip undefined items
 
-    my $report = "Tag instance $tag\n";
+    my $report = $tag->getHost() . "Tag instance $tag\n";
 
     my @line;
     push @line, "sequence ID       ".($tag->getSequenceID() || 0)."\n";
