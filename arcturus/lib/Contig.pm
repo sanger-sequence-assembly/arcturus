@@ -6,8 +6,14 @@ use Mapping;
 
 use Clipping;
 
+use TagFactory::ContigTagFactory;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
+#-----------------------------------------------------------------------------
+
+my $tagfactory; # class variable
+
 #-----------------------------------------------------------------------------
 
 sub new {
@@ -487,7 +493,7 @@ sub importer {
 # private generic method for importing objects into a Contig instance
     my $this = shift;
     my $Component = shift;
-    my $class = shift; # (obligatory) class of object to be stored
+    my $class = shift; # (obligatory) class name of object to be stored
     my $buffername = shift; # (optional) internal name of buffer
 
     $buffername = $class unless defined($buffername);
@@ -510,6 +516,8 @@ sub importer {
         push @{$this->{$buffername}}, $Component;
         return unless (my $sequence_id = shift);
         $Component->setSequenceID($sequence_id);
+# shouldn't this be doen for ChildContigs and Mappings and Reads as well?
+        $Component->setHost($this) if ($class eq 'Tag');
     }
     else {
 # reset option
@@ -603,11 +611,12 @@ sub getStatistics {
                 }
 # and apply shift to possible tags
                 if ($this->hasTags()) {
+                    $tagfactory = new ContigTagFactory() unless $tagfactory;
                     print STDERR "Adjusting tag positions (to be tested)\n";
                     my $tags = $this->getTags();
                     foreach my $tag (@$tags) {
-                        $tag->transpose(1,[($shift,$shift)],$cfinal-$shift);
-#                        $tag->shift($shift,1,$cfinal);
+                       $tagfactory->transpose($tag,1,[($shift,$shift)],$cfinal-$shift);
+#                       $tag->shift($shift,1,$cfinal);
                     }
 	        }
 # and redo the loop (as $pass > 0)
@@ -1295,32 +1304,13 @@ sub reverse {
         $tag->mirror($length+1);
     }
 
-# consensus sequence
+# replace the consensus sequence
 
     if (my $consensus = $this->getConsensus()) {
-        my $length = length($consensus);
-        my $newsensus = '';
-        while ($length--) {
-            my $base = substr $consensus,$length,1;
-            $base =~ tr/ACGTacgt/TGCAtgca/;
-            $newsensus .= $base;
-        }
+        my $newsensus = inverse($consensus);
+        $newsensus =~ tr/ACGTacgt/TGCAtgca/;
 	$this->setConsensus($newsensus);
     }
-}
-
-sub findMapping { # used NOWHERE
-    my $this = shift;
-    my $readname = shift;
-
-    return undef unless $this->hasMappings();
-
-    my $mappings = $this->getMappings();
-    foreach my $mapping (@$mappings) {
-        return $mapping if ($mapping->getMappingName() eq '$readname');
-    }
-
-    return undef;
 }
 
 #-------------------------------------------------------------------    
@@ -1487,18 +1477,20 @@ print STDOUT "Target contig length : $tlength \n" if $DEBUG;
         my $tagtype = $ptag->getType();
         next unless ($tagtype eq 'ANNO');
 print STDOUT "Processing ANNO tag for remapping ".$ptag->getPositionLeft()."\n" if $DEBUG;
-        my $tptags = $ptag->remap($mapping,break=>1,debug=>$DEBUG); 
+        $tagfactory = new ContigTagFactory() unless $tagfactory;
+        my $tptags = $tagfactory->remap($ptag,$mapping,break=>1,debug=>$DEBUG);
         push @tags,@$tptags if $tptags;
     }
 # if annotation tags found, sort according to start position
     if (@tags) {
 print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
+        $tagfactory = new ContigTagFactory() unless $tagfactory;
         @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
 # test if some tags can be merged
         my ($i,$j) = (0,1);
         while ($i < scalar(@tags) && $j < scalar(@tags)) {
 # test for possible merger of tags i and j
-            if (my $newtag = $tags[$i]->merge($tags[$j])) {
+            if (my $newtag = $tagfactory->merge($tags[$i],$tags[$j])) {
 # the tags are merged: replace tags i and j by the new one
                 splice @tags, $i, 2, $newtag;
 # keep the same values of i and j
@@ -1551,7 +1543,9 @@ print STDOUT "offset to be applied : $offset[$i] \n" if $DEBUG;
 print STDOUT "offsets: @offset \n" if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the tag on the parent contig
-        my $tptag = $ptag->transpose($alignment,\@offset,$tlength);
+        $tagfactory = new ContigTagFactory() unless $tagfactory;
+     my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
+#        my $tptag = $tagfactory->transpose($ptag,$alignment,\@offset,$tlength);
 
 if ($DEBUG) {
 print STDOUT "tag on parent :\n "; $ptag->dump;
@@ -2395,3 +2389,4 @@ sub setDEBUG {$DEBUG = 1;}
 sub setNoDEBUG {$DEBUG = 0;}
 
 1;
+
