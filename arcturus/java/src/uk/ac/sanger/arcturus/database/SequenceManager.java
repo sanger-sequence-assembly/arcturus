@@ -46,7 +46,7 @@ public class SequenceManager extends AbstractManager {
 
 	conn = adb.getConnection();
 
-	String query = "select SEQ2READ.seq_id,version,length from SEQ2READ left join SEQUENCE using(seq_id)" +
+	String query = "select SEQ2READ.seq_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id)" +
 	    "where read_id = ? order by version desc limit 1";
 	pstmtByReadID = conn.prepareStatement(query);
 
@@ -54,7 +54,7 @@ public class SequenceManager extends AbstractManager {
 	    " where read_id = ? order by version desc limit 1";
 	pstmtFullByReadID = conn.prepareStatement(query);
 
-	query = "select read_id,version,length from SEQ2READ left join SEQUENCE using(seq_id) where seq_id = ?";
+	query = "select read_id,version,seqlen from SEQ2READ left join SEQUENCE using(seq_id) where seq_id = ?";
 	pstmtBySequenceID = conn.prepareStatement(query);
 
 	query = "select read_id,version,seqlen,sequence,quality from SEQ2READ left join SEQUENCE using(seq_id)" +
