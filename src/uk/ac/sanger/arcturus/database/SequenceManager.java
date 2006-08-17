@@ -126,6 +126,51 @@ public class SequenceManager extends AbstractManager {
     }
 
     /**
+     * Creates a Sequence object without DNA and base quality data, identified by the parent
+     * read.
+     * <P>
+     * The Sequence thus created will be the one with the highest version number, corresponding
+     * to the most recently edited version of the read.
+     *
+     * @param read the parent read.
+     *
+     * @return the Sequence object corresponding to the given read. If more than one version
+     * exists for the given read, the sequence with the highest version number will be
+     * returned.
+     */
+
+    public Sequence getSequenceByRead(Read read) throws SQLException {
+	return getSequenceByRead(read, true);
+    }
+
+    public Sequence getSequenceByRead(Read read, boolean autoload) throws SQLException {
+	int readid = read.getID();
+	Object obj = hashByReadID.get(new Integer(readid));
+
+	return (obj == null && autoload) ? loadSequenceByRead(read) : (Sequence)obj;
+    }
+
+    private Sequence loadSequenceByRead(Read read) throws SQLException {
+	int readid = read.getID();
+	pstmtByReadID.setInt(1, readid);
+	ResultSet rs = pstmtByReadID.executeQuery();
+
+	Sequence sequence = null;
+
+	if (rs.next()) {
+	    int seqid = rs.getInt(1);
+	    int version = rs.getInt(2);
+	    sequence = createAndRegisterNewSequence(seqid, read, version, null, null);
+	}
+
+	rs.close();
+
+	setClippings(sequence);
+
+	return sequence;
+    }
+
+    /**
      * Creates a Sequence object with DNA and base quality data, identified by the parent
      * read ID.
      * <P>

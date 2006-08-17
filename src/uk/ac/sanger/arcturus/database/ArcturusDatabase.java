@@ -516,6 +516,14 @@ public class ArcturusDatabase {
 	readManager.clearCache();
     }
 
+    public void setReadCacheing(boolean cacheing) {
+	readManager.setCacheing(cacheing);
+    }
+
+    public boolean isReadCacheing() {
+	return readManager.isCacheing();
+    }
+
     /**
      * Returns the SequenceManager belonging to this ArcturusDatabase.
      *
@@ -601,6 +609,14 @@ public class ArcturusDatabase {
 
     public void clearSequenceCache() {
 	sequenceManager.clearCache();
+    }
+
+    public void setSequenceCacheing(boolean cacheing) {
+	sequenceManager.setCacheing(cacheing);
+    }
+
+    public boolean isSequenceCacheing() {
+	return sequenceManager.isCacheing();
     }
 
     /**
