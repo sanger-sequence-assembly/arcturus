@@ -397,8 +397,8 @@ sub assignContigToProject {
 
     &testParameterType($project,'Project','assignContigToProject');
 
-    my $contig_id  = $contig->getContigID()   || return (0,"Missing data");
-    my $project_id = $project->getProjectID() || return (0,"Missing data");
+    my $contig_id  = $contig->getContigID()   || return (0,"Missing contig ID");
+    my $project_id = $project->getProjectID() || return (0,"Missing project ID");
 
     return &linkContigIDsToProjectID($this->getConnection(),
                                      $this->getArcturusUser(),
