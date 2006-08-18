@@ -144,18 +144,20 @@ sub putArcturusUser {
 # determine the username from the system data
     my $this = shift;
 
-    $this->{ArcturusUser} = getpwuid($<);
+    my $user = getpwuid($<);
 
-# test against prohibited names (force login with own user name)
+    $this->{ArcturusUser} = $user;
 
-    foreach my $forbidden ('pathdb','pathsoft','yeasties','othernames') {
+# test against prohibited names (force login with own unix username)
 
-        if ($this->{ArcturusUser} eq $forbidden) {
+    my %forbidden = (pathdb => 1, pathsoft => 1, yeasties => 1,
+                     othernames => 1);
 
-            $this->disconnect();
+    if ($forbidden{$user}) {
 
-	    die "You cannot access Arcturus under username $forbidden";
-	}
+        $this->disconnect();
+
+	die "You cannot access Arcturus under username $user";
     }
 }
 
@@ -163,7 +165,21 @@ sub getArcturusUser {
 # return the username (as is)
     my $this = shift;
 
-    return $this->{ArcturusUser} || ''; 
+    return $this->{ArcturusUser} || '';
+}
+
+sub verifyArcturusUser {
+# test if the user exists in the USER table; print a warning if not
+    my $this = shift;
+
+    my $user = $this->getArcturusUser();
+
+    unless ($user && @{$this->getUserData($user)}) {
+        print STDERR "WARNING : user $user is unknown to Arcturus database " 
+	           . ($this->getURL() || "VOID") . "\n" if shift;
+        return 0;
+    }
+    return $user;
 }
 
 #-------------------------------------------------------------------------
@@ -205,12 +221,12 @@ sub userCanCreateProject {
 
     return undef unless @$userdatahash;
 
-    return undef unless ($userdatahash->[0]->{username} eq $user); 
+    return 0 unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_create_new_project} eq 'Y' ? 1 : 0);
 }
 
-sub userCanAssignProject {
+sub userCanAssignProject { # to a user?
     my $this = shift;
     my $user = shift;
 
@@ -224,12 +240,12 @@ sub userCanAssignProject {
 
     return undef unless @$userdatahash;
 
-    return undef unless ($userdatahash->[0]->{username} eq $user); 
+    return 0 unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_assign_project} eq 'Y' ? 1 : 0);
 }
 
-sub userCanMoveAnyContig {
+sub userCanMoveAnyContig { # between projects
     my $this = shift;
     my $user = shift;
 
@@ -243,7 +259,7 @@ sub userCanMoveAnyContig {
 
     return undef unless @$userdatahash;
 
-    return undef unless ($userdatahash->[0]->{username} eq $user); 
+    return 0 unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_move_any_contig} eq 'Y' ? 1 : 0);
 }
@@ -266,7 +282,7 @@ sub userCanGrantPrivilege {
 
     return undef unless @$userdatahash;
 
-    return undef unless ($userdatahash->[0]->{username} eq $user); 
+    return 0 unless ($userdatahash->[0]->{username} eq $user); 
 
     return ($userdatahash->[0]->{can_grant_privileges} eq 'Y' ? 1 : 0);
 }
@@ -387,35 +403,64 @@ sub fetchUserData {
 }
 
 #-----------------------------------------------------------------------------
-#
+# a rudimentary messaging system
 #-----------------------------------------------------------------------------
+
+my $MAIL = []; # class variable
 
 sub logMessage {
     my $this = shift;
-    my $user = shift;
+    my $user = shift;    # addressee
     my $project = shift; # project name
-    my $text = shift; # the message
+    my $text = shift;    # the message
 
 print STDOUT "message for user $user: $text \n";
+# add URL ?
 
-    $this->{messages} = [] unless defined $this->{messages};
+    push @$MAIL, [($user,$project,$text)]; # array of arrays
+}
 
-    my $log = $this->{messages};
+sub getMessageAddresses {
+# returns a list of addressees
+    my $this = shift;
 
-    push @$log, [($user,$project,$text)]; # array of arrays
+    @$MAIL = sort {$a->[1] cmp $b->[1]} @$MAIL if shift; # order by project
+
+    my %users;
+    
+    foreach my $entry (@$MAIL) {
+        $users{$entry->[0]}++;
+    }
+
+    my @users = keys %users;
+
+    return \@users;
+}
+
+sub getMessageForUser {
+# collates all messages for the given user
+    my $this = shift;
+    my $user = shift || return undef;
+
+    @$MAIL = sort {$a->[1] cmp $b->[1]} @$MAIL if shift; # order by project
+
+    my $message = '';
+
+    foreach my $entry (@$MAIL) {
+	next unless ($entry->[0] eq $user);
+        $message .= $entry->[2] . "\n";
+    }
+
+    return $message;
 }
 
 sub getMessage {
 # returns the next message (to be processed by calling script)
     my $this = shift;
 
-    return undef unless $this->{messages};
+    return 0 unless @$MAIL;
 
-    my $log = $this->{messages};
-
-    return 0 unless @$log;
-
-    return shift @$log; # array ref (user, project, text)
+    return shift @$MAIL; # array ref (user, project, text)
 }
     
 #-----------------------------------------------------------------------------
