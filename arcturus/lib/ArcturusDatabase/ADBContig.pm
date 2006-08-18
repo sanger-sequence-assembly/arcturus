@@ -332,7 +332,7 @@ sub getChildContigsForContig {
 
     foreach my $child_id (@$childids) {
         my $child = $this->getContig(ID=>$child_id, metaDataOnly=>1);
-print "contig $child for id=$child_id\n";
+print ">getChildContigsForContig: contig $child for id=$child_id\n" if $DEBUG;
         $contig->addChildContig($child) if $child;
     }
 }
@@ -635,7 +635,7 @@ print STDERR "putContig: line 449 assignContigToProject "
                                                             unassigned=>1);
         $message .= "; assigned to project ";
         $message .=  $project->getProjectName() if $success;
-        $message .= "ID = 0" unless $success;
+        $message .= "ID = 0 (failed assignment: $msg)" unless $success;
         $project = 0 unless $success;
 # compose messages for owners of contigs which have changed project
         my $messages = &informUsersOfChange($contig,$project,\@originalprojects);
