@@ -88,7 +88,11 @@ sub getNextRead {
 
     return undef unless defined($tsread);
 
-    my $read = new Read($tsread->get_name());
+    my $readname = $tsread->get_name();
+
+    my $traceid = $this->{seq_id};
+
+    my $read = new Read($readname);
 
     # Strand
 
@@ -128,11 +132,15 @@ sub getNextRead {
 
     my $asped = $tsread->get_attribute(TSR_RUN_DATETIME);
 
-    my @asped = gmtime($asped);
+    if (defined($asped)) {
+	my @asped = gmtime($asped);
 
-    $asped = sprintf("%04d-%02d-%02d", 1900+$asped[5],1+$asped[4],$asped[3]);
+	$asped = sprintf("%04d-%02d-%02d", 1900+$asped[5],1+$asped[4],$asped[3]);
 
-    $read->setAspedDate($asped);
+	$read->setAspedDate($asped);
+    } else {
+	print STDERR "Read $readname ($traceid) has no RUN_DATETIME\n";
+    }
 
     # Basecaller
 
@@ -177,9 +185,23 @@ sub getNextRead {
 	}
     }
 
-    $read->setTemplate($template) if defined($template);
-    $read->setLigation($ligation) if defined($ligation);
-    $read->setClone($clone) if defined($clone);
+    if (defined($template)) {
+	$read->setTemplate($template);
+    } else {
+	print STDERR "Read $readname ($traceid) has no template\n";
+    }
+
+    if (defined($ligation)) {
+	$read->setLigation($ligation);
+    } else {
+	print STDERR "Read $readname ($traceid) has no ligation\n";
+    }
+
+    if (defined($clone)) {
+	$read->setClone($clone);
+    } else {
+	print STDERR "Read $readname ($traceid) has no clone\n";
+    }
  
     if (defined($libsize)) {
 	my $imin = $libsize;
@@ -191,19 +213,30 @@ sub getNextRead {
 	}
 
 	$read->setInsertSize([$imin, $imax]);
+    } else {
+	print STDERR "Read $readname ($traceid) has no insert size\n";
     }
 
     # DNA and quality
 
     my $dna = $seq->get_dna();
 
+    my $seqlen = 0;
+
+    if (defined($dna)) {
+	$read->setSequence($dna);
+	$seqlen = length($dna);
+    } else {
+	print STDERR "Read $readname ($traceid) has no DNA\n";
+    }
+
     my $qual = $tsread->get_confidence()->get_phred();
 
-    $read->setSequence($dna);
-
-    $read->setBaseQuality([unpack("c*", $qual)]);
-
-    my $seqlen = length($dna);
+    if (defined($qual)) {
+	$read->setBaseQuality([unpack("c*", $qual)]);
+    } else {
+	print STDERR "Read $readname ($traceid) has no DNA\n";
+    }
 
     # Clipping
 
