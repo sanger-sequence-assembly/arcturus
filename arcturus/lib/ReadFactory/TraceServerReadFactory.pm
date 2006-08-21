@@ -182,6 +182,13 @@ sub getNextRead {
 		$clone = $srcname;
 		$clonevec = $dnasrc->get_library_vector();
 	    }
+	} elsif ($srctype eq 'pcr') {
+	    my ($srclibclass,$srclibname) = split(/::/, $dnasrc->get_pcr_name());
+	    $ligation = $srclibname;
+	    $libsize = 0;
+	    $read->setPrimer("Custom");
+	    my $junk;
+	    ($template, $junk) = split(/\./, $readname);
 	}
     }
 
