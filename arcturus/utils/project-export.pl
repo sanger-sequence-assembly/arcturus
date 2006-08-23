@@ -16,6 +16,7 @@ my $organism;
 my $instance;
 my $verbose;
 my $identifier;
+my $ignorename;
 my $assembly;
 my $batch;
 my $lock = 0;
@@ -38,19 +39,29 @@ my $clipsymbol;
 my $gap4name;
 my $preview;
 
-my $validKeys  = "organism|instance|project|assembly|fopn|padded|caf|maf|"
-               . "readsonly|fasta|quality|lock|minNX|preview|batch|verbose|"
-               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|gap4name|"
-               . "qct|qclipsymbol|qcs|endregiontrim|ert|g4n|debug|help";
+my $validKeys  = "organism|instance|project|assembly|fopn|ignore|caf|maf|"
+               . "readsonly|fasta|quality|lock|minNX|"
+               . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
+               . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
+               . "preview|confirm|batch|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
-    $instance    = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism    = shift @ARGV  if ($nextword eq '-organism');
+    }                                                                          
+
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $assembly    = shift @ARGV  if ($nextword eq '-assembly');
 
@@ -58,19 +69,29 @@ while (my $nextword = shift @ARGV) {
 
     $fopn        = shift @ARGV  if ($nextword eq '-fopn');
 
+    $ignorename  = shift @ARGV  if ($nextword eq '-ignore');
+
     $verbose     = 1            if ($nextword eq '-verbose');
 
     $verbose     = 2            if ($nextword eq '-debug');
 
     $preview     = 1            if ($nextword eq '-preview');
 
+    $preview     = 0            if ($nextword eq '-confirm');
+
     $padded      = 1            if ($nextword eq '-padded');
 
     $readsonly   = 1            if ($nextword eq '-readsonly');
 
-    $fastafile   = shift @ARGV  if ($nextword eq '-fasta');
-    $caffile     = shift @ARGV  if ($nextword eq '-caf');
-    $maffile     = shift @ARGV  if ($nextword eq '-maf');
+    if ($nextword eq '-fasta' || $nextword eq '-caf' || $nextword eq '-maf') {
+print STDOUT "next $nextword\n";
+        if (defined($fastafile) || defined($caffile) || defined($maffile)) {
+            &showUsage("You can only select one output format");
+        }
+        $fastafile   = shift @ARGV  if ($nextword eq '-fasta'); # '0' for STDOUT
+        $caffile     = shift @ARGV  if ($nextword eq '-caf');   # '0' for STDOUT
+        $maffile     = shift @ARGV  if ($nextword eq '-maf');   # cannot be '0'
+    }
 
     $minNX       = shift @ARGV  if ($nextword eq '-minNX');
 
@@ -124,7 +145,7 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing server instance") unless $instance;
 
-unless (defined($fastafile) || defined($caffile) || defined($maffile)) {
+unless (defined($fastafile) || defined($caffile) || $maffile) {
     &showUsage("Missing CAF, FASTA or MAF output file name") unless $preview;
 }
 
@@ -226,7 +247,7 @@ if (defined($assembly)) {
 }
 
 unless (@identifiers) {
-# no project name or ID is defined
+# no project name or ID is defined: get all project for specified assembly
     my ($projects,$message) = $adb->getProject(%selectoptions);
     if ($projects && @$projects) {
         push @projects, @$projects;
@@ -250,6 +271,8 @@ foreach my $identifier (@identifiers) {
         $logger->warning("Unknown project $identifier");
     }
 }
+
+# okay, here we have collected all projects to be exported
 
 my %exportoptions;
 $exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
@@ -279,9 +302,18 @@ $exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED
 
 my $errorcount = 0;
 
+$ignorename =~ s/\W+/|/g; # replace any separator by '|'
+
+@projects = sort {$a->getProjectName() cmp $b->getProjectName()} @projects;
+
 foreach my $project (@projects) {
 
     my $projectname = $project->getProjectName();
+
+    if ($ignorename && $projectname =~ /$ignorename/i) {
+        $logger->info("project $projectname is skipped");
+	next;
+    }
 
     my $numberofcontigs = $project->getNumberOfContigs();
 
@@ -290,7 +322,8 @@ foreach my $project (@projects) {
     my @emr;
 
     if ($preview) {
-        $logger->warning("Project $projectname to be exported");
+        $logger->warning("Project $projectname with $numberofcontigs "
+                        ."contigs is to be exported");
         next;
     }
     elsif (defined($caffile)) {
@@ -333,6 +366,8 @@ $adb->disconnect();
 $logger->warning("There were no errors") unless $errorcount;
 $logger->warning("$errorcount Errors found") if $errorcount;
 
+$logger->warning("To export these projects, use '-confirm'") if $preview;
+
 exit;
 
 #------------------------------------------------------------------------
@@ -346,21 +381,37 @@ sub showUsage {
     print STDERR "Export contigs in project(s) by ID/name or using a fopn with IDs or names\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n";
-    print STDERR "-instance\teither 'prod' or 'dev'\n\n";
+    unless ($organism && $instance) {
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-organism\tArcturus database name\n" unless $organism;
+        print STDERR "-instance\t'prod','dev','test'\n"    unless $instance;
+        print STDERR "\n";
+    }
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
-    print STDERR "-caf\t\tCAF output file name\n";
-    print STDERR "-fasta\t\tFASTA sequence output file name\n";
-    print STDERR "-maf\t\tMAF output file name root\n";
-    print STDERR "-preview\t(no value) show what's going to happen\n";
+    unless ($caffile) {
+        print STDERR "-caf\t\tCAF output file name ('0' for STDOUT)\n";
+    }
+    unless ($fastafile) {
+        print STDERR "-fasta\t\tFASTA sequence output file name ('0' for STDOUT)\n";
+    }
+    print STDERR "-maf\t\tMAF output file name root (not '0')\n" unless $maffile;
+    unless ($fastafile || $caffile || $maffile) {
+        print STDERR "\t\t***** CHOOSE AN OUTPUT FORMAT *****\n";
+    }
     print STDERR "\n";
     print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n\n";
-    print STDERR "-project\tProject ID or name\n";
+    print STDERR "-project\tProject ID or name; specify 'all' for everything\n";
     print STDERR "-fopn\t\tname of file with list of project IDs or names\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "\n";
+    if ($preview) {
+        print STDERR "-confirm\t(no value) go ahead\n";
+    }
+    else {
+        print STDERR "-preview\t(no value) show what's going to happen\n";
+    }
     print STDERR "\n";
     print STDERR "-quality\tFASTA quality output file name\n";
 #    print STDERR "-padded\t\t(no value) export contigs in padded (caf) format\n";
@@ -376,6 +427,25 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-lock\t\t(no value) acquire a lock on the project and , if "
                 . "successful,\n\t\t\t   export its contigs\n";
+    print STDERR "\n"; 
+    print STDERR "-mask\t\tlength of end regions of contig(s) to be exported, while "
+               . "the\n\t\tbases in the central part thereof will be replaced by a "
+               . "masking\n\t\tsymbol (to be specified separately)\n";
+    print STDERR "-symbol\t\tthe symbol used for the masking (default 'X')\n";
+
+    print STDERR "-shrink\t\tif specified, the size of the masked central part will "
+               . "be\n\t\ttruncated to size 'shrink'; longer contigs are then "
+               . "clipped\n\t\tto size '2*mask+shrink'; shrink values "
+               . "smaller than 'mask'\n\t\twill be reset to 'mask'\n";
+#    print STDERR "-padded\t\t(no value) export padded consensus sequence only\n";
+    print STDERR "\n";
+    print STDERR "-endregiontrim\ttrim low quality endregions at level\n";
+    print STDERR "\n";
+    print STDERR "-qualityclip\tRemove low quality pads (default '*')\n";
+    print STDERR "-qclipsymbol\t(qcs) use specified symbol as low quality pad\n";
+    print STDERR "-qclipthreshold\t(qct) clip quality values below threshold\n";
+    print STDERR "\n";
+    print STDERR "-minNX\t\treplace runs of at least minNX 'N's by 'X'-es\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
