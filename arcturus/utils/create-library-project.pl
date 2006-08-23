@@ -25,24 +25,35 @@ my $verbose;
 my $confirm;
 my $limit = 0;
 
-my $validKeys  = "organism|instance|project|pn|noreadload|nrl|ep|pe||nogap|"
+my $validKeys  = "organism|instance|project|pn|noreadload|nrl|ep|pe|nogap|"
                . "preview|confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
-    $instance   = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism   = shift @ARGV  if ($nextword eq '-organism');
+    }
+                                                                         
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }
 
     $project    = shift @ARGV  if ($nextword eq '-project');
     $project    = shift @ARGV  if ($nextword eq '-pn');
 
     $noproject  = 1            if ($nextword eq '-pe');
     $noproject  = 1            if ($nextword eq '-ep');
+
     $nosubmit   = 1            if ($nextword eq '-nogap');
+    $nosubmit   = 0            if ($nextword eq '-gap');
 
     $verbose    = 1            if ($nextword eq '-verbose');
  
@@ -189,7 +200,8 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-ep\t\tproject exists (and will not be created)\n";
-    print STDERR "-nogap\t\tno creation of GAP4 database\n";
+    print STDERR "-nogap\t\tno creation of GAP4 database\n" unless $nosubmit;
+    print STDERR "-gap\t\tcreate of GAP4 database\n" if $nosubmit;
     print STDERR "-nrl\t\t(noreadload) skip test for new reads\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value) to enter data into arcturus, else preview\n";
