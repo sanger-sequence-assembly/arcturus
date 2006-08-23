@@ -26,6 +26,7 @@ my $datafile;  # for list of tag ids and positions
 my $fastafile; # for the fasta fuile on which the annotation has been made 
 
 my $propagate;
+my $contig;
 
 my $verbose;
 my $confirm;
@@ -34,9 +35,10 @@ my $debug;
 my $swprog;
 my $nopads = 1;
 my $noembl = 1;
+my $emblfile;
 
-my $validKeys  = "organism|instance|filename|fn|propagate|fasta|swprog|"
-               . "embl|confirm|verbose|debug|help";
+my $validKeys  = "organism|instance|tagfile|tf|propagate|fasta|ff|swprog|"
+               . "embl|emblfile|ef|contig|confirm|dbload|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -56,10 +58,13 @@ while (my $nextword = shift @ARGV) {
         $organism     = shift @ARGV;
     }  
 
-    $datafile   = shift @ARGV  if ($nextword eq '-filename');
-    $datafile   = shift @ARGV  if ($nextword eq '-fn');
+    $datafile   = shift @ARGV  if ($nextword eq '-tagfile');
+    $datafile   = shift @ARGV  if ($nextword eq '-tf');
 
     $fastafile  = shift @ARGV  if ($nextword eq '-fasta');
+    $fastafile  = shift @ARGV  if ($nextword eq '-ff');
+
+    $contig     = shift @ARGV  if ($nextword eq '-contig');
 
     $propagate  = 1            if ($nextword eq '-propagate');
 
@@ -69,8 +74,12 @@ while (my $nextword = shift @ARGV) {
     $debug      = 1            if ($nextword eq '-debug');
 
     $confirm    = 1            if ($nextword eq '-confirm');
+    $confirm    = 1            if ($nextword eq '-dbload');
 
     $noembl     = 0            if ($nextword eq '-embl');
+
+    $emblfile   = shift @ARGV  if ($nextword eq '-emblfile');
+    $emblfile   = shift @ARGV  if ($nextword eq '-ef');
 
     $swprog     = shift @ARGV  if ($nextword eq '-swprog');
 
@@ -119,7 +128,8 @@ if ($swprog) {
 my $logger = new Logging('STDOUT');
  
 $logger->setFilter(2) if $verbose; # set reporting level
-$logger->setFilter(3) if $debug;  # fine reporting level
+
+$logger->setFilter(0) if ($verbose && $verbose > 1); # set reporting level
 
 #----------------------------------------------------------------
 # get the database connection
@@ -151,17 +161,21 @@ my $fastacontighash = {};
 
 if ($fastafile) {
 
-    my $FASTA = new FileHandle($fastafile,'r'); # open for read
-
-    $logger->severe("FAILED to open file $fastafile") unless $FASTA;
-
 # parse the file to load the sequence into Contig instances
 
-    my $fastacontigs = ContigFactory->fastaFileParser($FASTA,report=>1000000); # array
+    my $fastacontigs = ContigFactory->fastaFileParser($fastafile,report=>1000000);
+
+    unless (defined $fastacontigs) {
+# file not found
+        $logger->severe("FAILED to open file $fastafile");
+        $fastacontigs = []; # to have it defined
+    }
 
     $logger->warning(scalar(@$fastacontigs)." annotation contigs detected");
 
-# build the length hash
+#-----------------------------------------------------------------------
+# build the consensus length hash (if any contigs read)
+#-----------------------------------------------------------------------
 
     my $processed = 0;
     foreach my $contig (@$fastacontigs) {
@@ -186,7 +200,7 @@ if ($fastafile) {
 }
 
 #-----------------------------------------------------------------------
-# parse the file with annotation data and build tag data in a hash
+# parse the file with annotation data and build tag data hash
 #-----------------------------------------------------------------------
 
 my $FILE = new FileHandle($datafile,'r'); # open for read 
@@ -211,8 +225,10 @@ while ($FILE && defined(my $record = <$FILE>)) {
         $contigtaghash->{$contig} = [] unless $contigtaghash->{$contig};
         my $contigtaglist = $contigtaghash->{$contig}; # an array ref      
         my @tagdata = ($2,$3,$4);
-        push @$contigtaglist, \@tagdata;
-        $annotatedlength->{$contig} = $5;
+        unless ($3 == 1 && $4 == $5 || $2 =~ /source/i) {
+            push @$contigtaglist, \@tagdata;
+            $annotatedlength->{$contig} = $5;
+	}
     }
     elsif ($record =~ /(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s*$/) {
         my $contig = $1; # Arcturus contig number 
@@ -228,7 +244,20 @@ while ($FILE && defined(my $record = <$FILE>)) {
 
 $FILE->close() if $FILE;
 
-$logger->warning("$line records read from file $datafile");
+my $nc = scalar(keys %$contigtaghash);
+
+$logger->warning("data read for $nc contigs from file $datafile ($line lines)");
+
+#-----------------------------------------------------------------------
+# if the emblfile is defined, open it for writing
+#-----------------------------------------------------------------------
+
+my $EMBL;
+
+if ($emblfile) {
+    $EMBL = new FileHandle($emblfile,'w');
+    &showUsage("Failed to open EMBL file $emblfile") unless $EMBL;
+}
 
 #-----------------------------------------------------------------------
 # MAIN
@@ -236,14 +265,17 @@ $logger->warning("$line records read from file $datafile");
 
 # run through all the contigs
 
+my $currentcontigs;
+
 my $lengthmismatch = 0;
 my $fastamappinghash = {};
+my $numberprocessed = 0;
 
-foreach my $contigname (keys %$contigtaghash) {
+foreach my $contigname (sort keys %$contigtaghash) {
 
-    $logger->info("Processing contig $contigname");
+    $logger->info("Assembling tags for contig $contigname");
 
-    next unless ($contigname =~ /1926|0031/); # 2701 2103
+    next unless (!$contig || $contigname =~ /$contig/);
 
 # run through the tags and create a Tag object for each
 
@@ -283,6 +315,8 @@ foreach my $contigname (keys %$contigtaghash) {
         my $contig_id = $1;
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
     }
+    elsif ($contigname =~ /\b(\d+)\b/) {
+        $arcturuscontig = $adb->getContig(contig_id=>$contigname,metaDataOnly=>1);    }
     else {
         $arcturuscontig = $adb->getContig(withRead=>$contigname,metaDataOnly=>1);
     }
@@ -292,7 +326,9 @@ foreach my $contigname (keys %$contigtaghash) {
         next;
     }
 
-    $logger->info("contig $contigname: ".$arcturuscontig->getContigID());
+    $logger->info("contig $contigname identified as Arcturus contig: "
+                 . $arcturuscontig->getContigID());
+    &listtags($arcturuscontig,'arcturuscontig from database');
 
     my $alength = $arcturuscontig->getConsensusLength();
 
@@ -302,6 +338,14 @@ foreach my $contigname (keys %$contigtaghash) {
 # identify the fasta contig using the contig ID
         my $cid = $arcturuscontig->getContigID();
         my $fastacontig = $fastacontighash->{$cid};
+        unless ($fastacontig) {
+            $logger->warning("No contig provided on file $fastafile "
+                            ."for contig $contigname");
+            $annotatedlength->{$contigname} = 0;
+            next;
+	}
+        my $flength = $fastacontig->getConsensusLength();
+
         unless ($annotatedlength->{$contigname}) {
             $logger->warning("No annotated sequence length provided "
                             ."for contig $contigname");
@@ -311,8 +355,7 @@ foreach my $contigname (keys %$contigtaghash) {
         my $summary = "Annotated: "
                     . sprintf("%8d",$annotatedlength->{$contigname}) . "; "
                     . "Arcturus: " . sprintf("%8d",$alength) . "; "
-		    . "Fasta: "
-                    . sprintf("%8d",$fastacontig->getConsensusLength());
+		    . "Fasta: " . sprintf("%8d",$flength);
         $logger->warning("processing contig $contigname ($summary)");
 
 # determine the transformation from annotation contig to arcturus contig
@@ -321,24 +364,26 @@ foreach my $contigname (keys %$contigtaghash) {
         my $asequence = $arcturuscontig->getSequence();
         $logger->fine("Processing $contigname lengths: "
                       .length($asequence)." & ".length($fsequence));
+        &listtags($fastacontig,'fastacontig before alignment');
   
 # get the alignment from the annotated sequence to the sequence in arcturus
 
         my $mapping;
 
-# method 1 : Smith-Waterman alignment
+# METHOD 1 : Smith-Waterman alignment
 
-        if ($swprog && length($asequence) < 20000) {
+        if ($swprog && length($asequence) < 30000) {
 	    $logger->warning("Smith Waterman Alignment selected");
-            $mapping = &SmithWatermanAlignment($asequence,$fsequence);
+           ($mapping,my $s) = &SmithWatermanAlignment($asequence,$fsequence);
             unless ($mapping) {
-                print STDOUT "Failed SW mapping for $contigname\n\n";
+                print STDOUT "Failed SW mapping for $contigname ($s)\n\n";
 	    }
         }
 
-# method 2:  using pads in the quality data
+# METHOD 2:  using pads in the quality data
 
         unless ($mapping || $nopads) {
+# the part is EXPERIMENTAL and for TEST purposes
 	    $logger->warning("Low quality padding analysis selected");
 
 #$logger->warning("\n\n\n\n");
@@ -359,14 +404,15 @@ $logger->warning("Re-processing $contigname lengths: "
                                         %poptions);
 	}
 
-# method 3 : using the Alignment package version
+# METHOD 3 : if (still) no mapping, use the Alignment package version
 
-       unless ($mapping) {
+        unless ($mapping) {
 	    $logger->warning("Alignment.pm correlation selected");
 	    my $flength = $annotatedlength->{$contigname};
    	    my $peakdrift = $alength - $flength;
             my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
-            my $bandedwindow = 2.0 * sqrt($peakdrift); # generous minimum of 
+#            my $bandedwindow = 2.0 * sqrt($peakdrift); # generous minimum of 
+            my $bandedwindow = 4.0 * sqrt($peakdrift); # generous minimum of 
             $bandedwindow = $peakdrift/2 if ($peakdrift/2 < $bandedwindow);
 	    $logger->warning("peak drift: $peakdrift, window: $bandedwindow");
             my %options = (kmersize=>9,
@@ -379,86 +425,108 @@ $logger->warning("Re-processing $contigname lengths: "
 # experimental options
             $options{autoclip} = 0;
 	    $options{goldenpath} = 1; # not operational yet
-            my $fquality = $arcturuscontig->getBaseQuality();
-            $options{fquality} = $fquality;
-            $options{aquality} = 0;
+            my $aquality = $arcturuscontig->getBaseQuality();
+            $options{squality} = $aquality;
+            $options{tquality} = 0;
+ 
             my $output = $logger->getOutputDevice() || *STDOUT;
             $options{debug} = $output if $debug;
-#$logger->warning("ENTER CORRELATE");
+
             $mapping = Alignment->correlate($fsequence,0,$asequence,0,%options);
 	}
 
+# here we must have a mapping between the (original) arcturus contig and
+# the input (annotated) contig
+
+        unless ($mapping) {
+	    $logger->severe("Unable to determine a mapping!");
+	    next;
+        }
+
+# mapping determined: add the annotation as tags to fasta contig 
+
+	$mapping = $mapping->inverse();
         $mapping->setMappingName($contigname);
-        $logger->warning("Mapping : ".$mapping->toString() );
+        $logger->fine("Mapping : ".$mapping->toString() );
 
 # ok, here we have a mapping; put the tags on the fastacontig
 
+        my $tagcount = 0;
         foreach my $tag (@tags) {
+        my @pos = $tag->getPosition();
+            unless ($pos[0] > 0 && $pos[1] <= $flength) {
+                $logger->severe("Tag outside range for contig $contigname: "
+			       ."@pos  (1-$flength)");
+	        next;
+	    }
             $fastacontig->addTag($tag);
+            $tagcount++;
         }
+        $logger->warning("$tagcount tags found for contig $contigname");
+        &listtags($fastacontig,'fastacontig $tagcount tags added');
 
-# and make the arcturus contig its child
+# make the arcturus contig its child
+
+
 
         $mapping->setSequenceID(1);
         $fastacontig->setContigID(1);
-
-        $arcturuscontig->addParentContig($fastacontig);
         $arcturuscontig->addContigToContigMapping($mapping);
+
+
+      my $METHOD = 0;
+      if ($METHOD == 1) {
+        $arcturuscontig->addParentContig($fastacontig);
 
 # then propagate the tags from parent to child
 
-$fastacontig->writeToEMBL(*STDOUT) unless $noembl;
-$arcturuscontig->setDEBUG();
+#        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
+$arcturuscontig->setDEBUG() if $debug;
+
         $arcturuscontig->inheritTags();
-$arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
-last;
 
-# transform the tags accordingly
-
-        my %options;
-        $options{sequence} = $fsequence;
-        $options{break} = 1;
-
-        foreach my $tag (@tags) {
-            my $tags = $tag->remap($mapping,%options);
-            next unless $tags; # possibly outside range
-            foreach my $tag (@$tags) {
-                $arcturuscontig->addTag($tag);
-            }
-        }
-$fastacontig->writeToEMBL(*STDOUT) unless $noembl;
-
-$arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
+#        $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
+      }
+      else {
+# the other way around
+        $fastacontig->addChildContig($arcturuscontig);
+        $arcturuscontig->addContigToContigMapping($mapping);
+#        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
+        $fastacontig->propagateTags(break=>1); # noinverse=>1 ?
+#        $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
+      }
     }
-# warn if no annotated sequence length provided
-    elsif ($annotatedlength->{$contigname}) {
+
+    elsif (!$annotatedlength->{$contigname}) {
+# no annotated sequence length provided
         $logger->warning("No annotated sequence length provided for contig $contigname");
         $logger->warning("Contig assumed to be correctly identified");
-
+# in this case, we add the tag directly to the arcturus contig
+        my $tagcount = 0;
+        foreach my $tag (@tags) {
+        my @pos = $tag->getPosition();
+            unless ($pos[0] > 0 && $pos[1] <= $alength) {
+                $logger->severe("Tag outside range for contig $contigname: "
+			       ."@pos  (1-$alength)");
+	        next;
+	    }
+            $arcturuscontig->addTag($tag);
+            $tagcount++;
+        }
+        $logger->warning("$tagcount tags found for contig $contigname"); 
+        &listtags($arcturuscontig,'arcturuscontig $tagcount tags added');
     }
-# compare the length of the contig in Arcturus with that given with annotation
+
     elsif ($alength != $annotatedlength->{$contigname}) {
+# the length of the contig in Arcturus differs from that used for annotation
+# and we have no fasta contig provided: we cannot do the job for this contig
         my $summary = "Annotated: ".sprintf("%8d",$annotatedlength->{$contigname})."; "
                     . "Arcturus: " .sprintf("%8d",$alength);
         $logger->warning("Length mismatch for contig $contigname ($summary)");
         $logger->warning("-confirm switch is reset") if $confirm;
         $lengthmismatch++;
-        next; # contigname
+        next;
     }
-
-    my $tagcount = 0;
-    foreach my $tag (@tags) {
-        my @pos = $tag->getPosition();
-        unless ($pos[0] > 0 && $pos[1] <= $alength) {
-            $logger->severe("Tag outside range for contig $contigname: "
-			    ."@pos  (1-$alength)");
-	    next;
-	}
-        $arcturuscontig->addTag($tag);
-        $tagcount++;
-    }
-
-    $logger->warning("$tagcount tags found on contig $contigname");    
 
 # prepare for possible propagation of tags
 
@@ -473,21 +541,51 @@ $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
 #my $cid = $arcturuscontig->getContigID();
 #my $fastacontig = $fastacontighash->{$cid};
 #$arcturuscontig->addChildContig($fastacontig);
-# 
         $contigs = &propagate($arcturuscontig);
-	$logger->info("Contigs after propagation:");
+	$logger->info("Contigs after propagation of $contigname:");
+        foreach my $contig (@$contigs) {
+            my $cid = $contig->getContigID();
+            my $cnm = $contig->getContigName();
+            unless ($adb->isCurrentContigID($cid)) {
+		$logger->info($cnm);
+		next;
+	    }
+            $logger->warning("$cnm is a current contig");
+# test if it has tags (split contigs may not have them)
+            unless ($contig->hasTags()) {
+                $logger->warning("$cnm is ignored because it has no tags");
+		next;
+	    }
+# register the current contig the first time it is encountered, otherwise ..
+            if (my $currentcontig = $currentcontigs->{$cnm}) {
+# .. add the tags to the taglist of the contig instance we already have
+                my $additionaltags = $contig->getTags();
+                $currentcontig->addTag(@$additionaltags);
+            }
+            else { 
+                $currentcontigs->{$cnm} = $contig;
+	    }
+	}
+
+# load into the database
+
         unless ($confirm) {
             foreach my $contig (@$contigs) {
                 my $tags = $contig->getTags(); # as is, no delayed loading
                 $tags = [] unless $tags;
                 $logger->info("contig ".$contig->getContigName()
 			      ." has ".scalar(@$tags)." tags");
+                foreach my $tag (@$tags) {
+                    $logger->info($tag->writeToCaf(0,annotag=>1));
+		}
 	    }
 	}
     }
     else {
         push @$contigs,$arcturuscontig;
     }
+
+    $numberprocessed++;
 
     next unless $confirm;
 
@@ -510,14 +608,42 @@ $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
     }
 }
 
+# here we have a list of current contigs; write EMBL, if specified
+
+foreach my $cid (sort keys %$currentcontigs) {
+    my $contig = $currentcontigs->{$cid};
+    $contig->writeToEMBL(*STDOUT) unless $noembl;
+    $contig->writeToEMBL($EMBL) if $EMBL;
+}
+
+$EMBL->close() if $EMBL;
+
 if ($lengthmismatch && !$fastafile) {
+    $logger->skip();
     $logger->severe("You need to include the fasta file used for annotation");
+    $logger->skip();
+}
+elsif (!$numberprocessed) {
+    $logger->warning("NO contigs processed");
 }
 elsif (!$confirm) {
     $logger->warning("To load this stuff: repeat with '-confirm'");
 }
 
 $adb->disconnect();
+
+# generate a listing of the current contigs involved
+
+my @currentcontigs = sort (keys %$currentcontigs);
+
+$logger->skip();
+$logger->warning("NO current contigs found") unless @currentcontigs;
+$logger->warning("current contigs affected:")  if @currentcontigs;
+$logger->skip();
+
+foreach my $contig (@currentcontigs) {
+    print STDOUT "$contig \n";
+}
 
 exit;
 
@@ -576,6 +702,7 @@ sub SmithWatermanAlignment {
 # just one mapping expected
 
     my $mapping;
+    my $scoring = 0;
     while (my $line = <CHILD_RDR>) {
 # print STDOUT "line $line \n";
         last if ($line =~ /^\./);
@@ -585,6 +712,7 @@ sub SmithWatermanAlignment {
 
         if ($segs > 0 && $score > 50) {
             $goodread = 1;
+            $scoring = $score;
             $mapping = new Mapping();
             foreach my $i (1..$segs) {
                 my ($xs,$xf,$ys,$yf) = split /\:|\,/ , $words[$i];
@@ -597,10 +725,10 @@ sub SmithWatermanAlignment {
             }
         }
         else {
-            return undef;
+            $scoring = $score;
 	}
     }
-    return $mapping;
+    return $mapping,$scoring;
 }
 
 sub PaddedAlignment {
@@ -657,6 +785,20 @@ $logger->warning("segment $ss, $sf   $ts, $tf \na: $asub\nf: $fsub\n");
     return $mapping; 
 }
 
+sub listtags {
+    my $contig = shift;
+    my $label = shift || '';
+
+    my $tags = $contig->getTags(); # as is, no delayed loading
+    $tags = [] unless $tags;
+    $logger->fine("contig ".$contig->getContigName()
+		           ." has ".scalar(@$tags)." tags; $label");
+    foreach my $tag (@$tags) {
+        $logger->fine($tag->writeToCaf(0,annotag=>1));
+    }
+
+}
+
 #------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
@@ -665,7 +807,22 @@ sub showUsage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "Ad hoc tag sequence loader/retrieval test\n";
+    print STDERR "Annotation tag loader/remapper. Annotation is read from an ";
+    print STDERR "input file\nand put as tags on the corresponding contigs; ";
+    print STDERR "subsequently they are\nre-mapped to the current generation ";
+    print STDERR "of the assembly.\n";
+    print STDERR "\n";
+    print STDERR "If the annotated sequence is an edited version of the original ";
+    print STDERR "Arcturus\ncontig, that sequence has to be provided in fasta ";
+    print STDERR "format, on a separate\ninput file. The input tags are then ";
+    print STDERR "mapped back onto the original contig\nby determination of the ";
+    print STDERR "sequence alignment. Small contigs (length < 30000)\ncan be ";
+    print STDERR "handled by the Smith-Waterman program; larger contigs require ";
+    print STDERR "the\n(still experimental) Alignment package.\n";
+    print STDERR "\n";
+    print STDERR "Remapped tags can be loaded into arcturus, or written to an ";
+    print STDERR "output file.\n";
+    print STDERR "\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
@@ -673,16 +830,23 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n" unless $organism;
     print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
-    print STDERR "-filename\t(fn) file with tag info in records of 4 or 5 items :\n";
+    print STDERR "-tagfile\t(tf) file with tag info in records of 4 or 5 items :\n";
     print STDERR "\t\tcontigname, systematic name, position start & end , and\n";
     print STDERR "\t\toptionally [length of annotated sequence]\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-propagate\tpropagate contig tag(s) to the last generation\n";
+    print STDERR "\t\t(in its absence only map from edited to original sequence)\n";
     print STDERR "\n";
-    print STDERR "-fasta\t\tFasta file with contigs used for annotation\n";
-    print STDERR "-swprog\t\tuse Smith-Waterman alignment algorithm\n";
+    print STDERR "-fasta\t\t(ff) Fasta file with sequences used for annotation\n";
+    print STDERR "-swprog\t\t(optional) use Smith-Waterman alignment algorithm\n";
+    print STDERR "\n";
+    print STDERR "-confirm\t(dbload) store remapped tags into the database\n";
+    print STDERR "-embl\t\tlist contig & tags of the current generation in";
+    print STDERR " EMBL format\n";
+    print STDERR "-emblfile\t(ef) write contig & tags of the current generation";
+    print STDERR " to file\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "-debug\t\t(no value)\n";
