@@ -691,11 +691,21 @@ $logger->skip();
   
 $adb->disconnect();
 
+# send messages to users, if any
+
+my $addressees = $adb->getMessageAddresses(1);
+
+foreach my $user (@$addressees) {
+    my $message = $adb->getMessageForUser($user);
+    &sendMessage($user,$message) if $message;
+}
+
 exit 0;
 
 #------------------------------------------------------------------------
 # subroutines (ad hoc for this script only)
 #------------------------------------------------------------------------
+
 sub testdateformat {
     my $date = shift;
     unless ($date =~ /^\d{4}\-\d{2}-\d{2}$/) {
@@ -1121,7 +1131,7 @@ sub createContigTransferRequest {
 # update the comment (if any) and set the reviewer of the new request
         $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
                                                     reviewer => $cnames[2]);
-        &mailMessageToOwner($rqid,$cid,$cnames[0],$tnames[0],$cnames[2],$user,0);
+        &mailMessageToOwner($adb,$rqid,$cid,$cnames[0],$tnames[0],$cnames[2],$user,0);
     }
     else {
 # user has no privilege on the target project
@@ -1129,7 +1139,7 @@ sub createContigTransferRequest {
 # update the comment of the new request
         $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
                                                     reviewer => $tnames[2]);
-        &mailMessageToOwner($rqid,$cid,$cnames[0],$tnames[0],$tnames[2],$user,1);
+        &mailMessageToOwner($adb,$rqid,$cid,$cnames[0],$tnames[0],$tnames[2],$user,1);
     }
 
     return 1, "request $rqid was created for user $user ($status)"
@@ -1138,7 +1148,7 @@ sub createContigTransferRequest {
 
 sub mailMessageToOwner {
 # compose and submit a message to the owner of project 
-    my ($request,$contig,$cproject,$tproject,$owner,$requestor,$in) = @_;
+    my ($adb,$request,$contig,$cproject,$tproject,$owner,$requestor,$in) = @_;
 
     my $arcturusworkdir = `pfind -q $organism`;
     $arcturusworkdir .= "/arcturus";
@@ -1166,7 +1176,10 @@ sub mailMessageToOwner {
     $message .= "Most of these scripts come with additional options. Get a \n"
 	     .  "parameter list or synopsis with the '-h' or the '-s' switch\n\n";
 
-    &sendMessage($owner,$message);
+# add the message to the queue
+
+    $adb->logMessage($owner,$cproject,$message) unless $in;
+    $adb->logMessage($owner,$tproject,$message) if $in;
 }
 
 #-----------------------------------------------------------------------------
@@ -1179,7 +1192,7 @@ $user="ejz+$user"; # temporary redirect
 
     my $mail = new Mail::Send;
     $mail->to($user);
-    $mail->subject("your arcturus contig transfer request");
+    $mail->subject("Arcturus contig transfer requests");
     $mail->add("X-Arcturus", "contig-transfer-manager");
     my $handle = $mail->open;
     print $handle "$message\n";
