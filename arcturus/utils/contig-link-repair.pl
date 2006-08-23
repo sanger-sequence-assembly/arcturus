@@ -131,7 +131,7 @@ foreach my $contig_id (@contigs) {
 
 # get the parents from a database search
 
-    my $linked = $adb->getParentIDsForContig($contig,1); # exclude self
+    my $linked = $adb->getParentIDsForContig($contig); # exclude self
 
 # replace the parent ID by the parent Contig instance
 
@@ -146,6 +146,7 @@ foreach my $contig_id (@contigs) {
 
 # test the link for each of the parents, determine the mapping from scratch
 
+    my @rejectids; # for spurious links
     foreach my $parent (@$linked) {
 
         $logger->warning("\nTesting against parent ".$parent->getContigName);
@@ -155,10 +156,26 @@ foreach my $contig_id (@contigs) {
         my ($segments,$dealloc) = $contig->linkToContig($parent,
                                                         forcelink => $force,
                                                         strong => $strong);
-
-        unless (defined($segments)) {
-            $logger->severe("UNDEFINED output of Contig->linkToContig");
-            next;
+        unless ($segments) {
+            my $previous = $parent->getContigName();
+            $logger->warning("empty/spurious link detected to $previous");
+            push @rejectids, $parent->getContigID();
+            my $exclude = join ',',@rejectids;
+            my $newids = $adb->getParentIDsForContig($contig,exclude=>$exclude);
+# determine if any new contig ids are added to the list
+#	    $logger->warning("new IDs: @$newids");
+            my $parentidhash = {};
+            foreach my $parent (@$linked) {
+                my $pid = $parent->getContigID();
+                $parentidhash->{$pid}++;
+	    }
+# find the newly added parent IDs, if any, which do not occur in the parent ID hash
+            foreach my $pid (@$newids) {
+                next if $parentidhash->{$pid}; # already in list
+	        $logger->warning("Loading new parent $pid");
+                $parent = $adb->getContig(contig_id=>$pid);
+                push @$linked,$parent if $parent;
+            }
         }
  
         my $length = $parent->getConsensusLength();
