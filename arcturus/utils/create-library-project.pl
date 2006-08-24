@@ -19,13 +19,13 @@ my $project;
 my $noreadload;
 
 my $noproject; # if the project already exists
-my $nosubmit;  # test option
+my $submit = 0;
 
 my $verbose;
 my $confirm;
 my $limit = 0;
 
-my $validKeys  = "organism|instance|project|pn|noreadload|nrl|ep|pe|nogap|"
+my $validKeys  = "organism|instance|project|pn|noreadload|nrl|nogap|gap|"
                . "preview|confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -49,11 +49,8 @@ while (my $nextword = shift @ARGV) {
     $project    = shift @ARGV  if ($nextword eq '-project');
     $project    = shift @ARGV  if ($nextword eq '-pn');
 
-    $noproject  = 1            if ($nextword eq '-pe');
-    $noproject  = 1            if ($nextword eq '-ep');
-
-    $nosubmit   = 1            if ($nextword eq '-nogap');
-    $nosubmit   = 0            if ($nextword eq '-gap');
+    $submit     = 0            if ($nextword eq '-nogap');
+    $submit     = 1            if ($nextword eq '-gap');
 
     $verbose    = 1            if ($nextword eq '-verbose');
  
@@ -94,19 +91,31 @@ if (!$adb || $adb->errorStatus()) {
     &showUsage("Invalid organism '$organism' on server '$instance'");
 }
 
+$logger->info("Database $organism located succesfully");
+
+# identify the project; test if it exists
+
+my $projectname = uc($project);
+
+my $pids = $adb->getProjectIDsForProjectName($projectname);
+
+$noproject = 1 if (@$pids == 1); # exists
+
 $adb->disconnect();
 
-$logger->info("Database $organism located succesfully");
+&showUsage("project name $projectname is ambiguous") if (@$pids > 1);
 
 #----------------------------------------------------------------
 # MAIN
 #----------------------------------------------------------------
 
-my $projectname = uc($project);
-
 my $pwd = `pwd`;
 
 unless ($confirm) {
+
+    unless ($noproject) {
+        $logger->warning("A new project $projectname will be added for $organism");
+    }
 
     $logger->warning("Library project $projectname will be created "
 		 ."in directory $pwd");
@@ -166,7 +175,7 @@ unless ($rc || !$confirm) {
 
 # export the project in the directory
 
-unless ($rc || !$confirm || $nosubmit) {
+unless ($rc || !$confirm || !$submit) {
 
     $logger->warning("Exporting library project $projectname in $pwd"); 
 
@@ -199,10 +208,10 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-ep\t\tproject exists (and will not be created)\n";
-    print STDERR "-nogap\t\tno creation of GAP4 database\n" unless $nosubmit;
-    print STDERR "-gap\t\tcreate of GAP4 database\n" if $nosubmit;
     print STDERR "-nrl\t\t(noreadload) skip test for new reads\n";
+    print STDERR "\n";
+    print STDERR "-nogap\t\tdo not create a GAP4 database\n" if $submit;
+    print STDERR "-gap\t\tdo create GAP4 database\n" unless $submit;
     print STDERR "\n";
     print STDERR "-confirm\t(no value) to enter data into arcturus, else preview\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
