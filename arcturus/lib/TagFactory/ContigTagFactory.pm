@@ -56,7 +56,7 @@ sub verify {
     unless ($tag->getHostClass() eq 'Contig') {
         print STDERR "ContigTagFactory->$origin expects a "
                    . "tag of type ContigTag (instead of : "
-                   . ($tag->getHost() || "unknown type") 
+                   . ($tag->getHostClass() || "unknown type") 
                    . ")\n"; # if 0;
 #        return 0;      
         print STDERR $tag->dump() . "\n";
@@ -67,7 +67,7 @@ sub verify {
 
 #----------------------------------------------------------------------
 
-sub make {
+sub makeTag {
 # make a new contig Tag instance
     my $this = shift;
     my ($tagtype,$start,$final,%options) = @_;
@@ -293,7 +293,6 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
 
     if ($numberofsegments == 1) { 
 # CASE 1: one shift for the whole tag
-#        my $newtag = $tag->copy(%options);
         my $newtag = $this->copy($tag,%options);
         my @segment = $segments->[0]->getSegment();
         my @newposition = ($segment[2],$segment[3]);
@@ -310,13 +309,15 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
     elsif ($options{break}) {
 # CASE 2 : more than one segment, generate multiple tags
         my $number = 0;
+        my $minimumsegmentsize = $options{minimumsegmentsize} || 3;
 # XXX how do we handle clipping?
         for (my $i = 0 ; $i < $numberofsegments ; $i++) {
-#            my $newtag = $tag->copy(%options);
             my $newtag = $this->copy($tag,%options);
             my @segment = $segments->[$i]->getSegment();
-            my @newposition = ($segment[2],$segment[3]);
-            $newtag->setPosition(sort {$a <=> $b} @newposition);
+            my @newposition = sort {$a <=> $b} ($segment[2],$segment[3]);
+            my $segmentlength = $newposition[1] - $newposition[0] + 1;
+            next if ($segmentlength < $minimumsegmentsize);
+            $newtag->setPosition(@newposition);
             my $tagcomment = $newtag->getTagComment() || '';
 # compose the sequence for this tag fragment
             if ($sequence) {
@@ -339,7 +340,6 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
     else {
 # CASE 3 : more than one segment, but only one tag to be generated
 # copy whatever we already have about this tag
-#        my $newtag = $tag->copy(%options);
         my $newtag = $this->copy($tag,%options);
 # amend the comment to signal frame shifts and possible truncation
         my $comment = $newtag->getComment() || '';
@@ -400,14 +400,23 @@ sub merge {
     my $otag = shift;
     my %options = @_;
 
-    return undef unless &verify($atag,'merge first parameter');
-    return undef unless &verify($otag,'merge second parameter');
+# test input parameters
 
-$options{debug} = 2;
+    return undef unless &verify($atag,'merge (1-st parameter)');
 
-# test the tag type
+    return undef unless &verify($otag,'merge (2-nd parameter)');
 
-    return undef unless ($atag->getType() eq $otag->getType());
+# accept only if tag type, systematic ID and strand are identical
+
+    return undef unless ($atag->getType()         eq $otag->getType());
+
+    return undef unless ($atag->getSystematicID() eq $otag->getSystematicID());
+
+    return undef unless ($atag->getStrand()       eq $otag->getStrand());
+
+    return undef unless ($atag->getHost()         eq $otag->getHost());
+
+# analyse tag positions and determine the relative position of tags
 
     my @atagposition = $atag->getPosition();
     my @otagposition = $otag->getPosition();
@@ -422,9 +431,11 @@ $options{debug} = 2;
         ($left,$right) = ($otag,$atag); 
     }
     else {
+# the tag position do not match
 	return undef;
     }
 
+$options{debug} = 0;
 
 if ($options{debug} && $options{debug}>1) {
  print STDOUT "tag positions DO butt: @atagposition, @otagposition \n";
@@ -432,18 +443,14 @@ if ($options{debug} && $options{debug}>1) {
  $right->writeToCaf(*STDOUT,annotag=>1);
 }
 
-# accept if systematic IDs and strand are identical
-
-    return undef unless ($left->getSystematicID() eq $right->getSystematicID());
-
-    return undef unless ($left->getStrand() eq $right->getStrand());
-
     my @lposition = $left->getPosition();
     my @rposition = $right->getPosition();
     if ($left->getDNA() && $right->getDNA()) {
-        my $DNA = $left->getDNA() . $right->getDNA(); # combined
+        my $DNA = $left->getDNA(transpose => 1)
+                . $right->getDNA(transpose => 1); # combined
 print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
         return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
+        # for R strand, invert DNA
     }
 
 # try to build a new tag to replace the two parts
@@ -453,6 +460,7 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
     $newtag->setPosition($lposition[0],$rposition[1]);
     $newtag->setSystematicID($atag->getSystematicID());
     $newtag->setStrand($atag->getStrand());
+    $newtag->setHost($atag->getHost());
 # get the new DNA and test against length
     my $DNA = $left->getDNA() . $right->getDNA();
     $newtag->setDNA($DNA) if ($DNA =~ /\S/);
@@ -465,39 +473,24 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
         $comment = $left->getComment() . " " . $right->getComment();
     }
 # merge the tagcomments
-    my $atagcomment;
-    my @l = &unravelfragments( $left->getTagComment());
-    my @r = &unravelfragments($right->getTagComment());
-    if (@l && @r && $l[0] == $r[0]) {
-        my $total = $l[0];
-# we are dealing with fragments of a split tag; compose the new tagcomment
-        my @parts;
-        if ($r[1] == $l[$#l]+1) {
-            push @parts, @l;
-            $parts[$#l] = $r[$#r];
+    my $newcomment;
+    my $lcomment = $left->getTagComment();
+    my $rcomment = $right->getTagComment();
+    if ($newcomment = &mergetagcomments ($lcomment,$rcomment)) {
+# and check the new comment
+        my ($total,$frags) = &unravelfragments($newcomment);
+
+        if (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
+            $newcomment = 'rejoined after having been split!';
         }
-        elsif ($l[1] == $r[$#r]+1) {
-            push @parts, @r;
-            $parts[$#r] = $l[$#l];
-	}
-        else {
-            push @parts, @l;
-            push @parts, @r;
-	}
-        @parts = sort {$a <=> $b} @parts;
-        if (scalar(@parts) == 2 && $parts[0] == 1 && $parts[1] == $total) {
-            $comment = 'rejoined after having been split!';
-            undef @parts;
-	}
-        $atagcomment = &composefragments($total,@parts) if @parts;
     }
     else {
 # cannot handle the comments; just concatenate the two
-        $atagcomment = $left->getTagComment() . " " . $right->getTagComment();
+        $newcomment = $left->getTagComment() . " " . $right->getTagComment();
     }
 
     $newtag->setComment($comment) if $comment;
-    $newtag->setTagComment($atagcomment) if $atagcomment;
+    $newtag->setTagComment($newcomment) if $newcomment;
 
 $newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
     return $newtag;
@@ -558,11 +551,37 @@ sub composeName {
     $tag->setSystematicID($name);
 }
 
+sub mergetagcomments {
+# re-combine tag comments for fragments of a split tag
+    my ($leftc,$rightc) = @_;
+
+    my ($tl,$l) = &unravelfragments($leftc);
+
+    my ($tr,$r) = &unravelfragments($rightc);
+
+    my $tagcomment = '';
+# check the total number of fragments
+    if (@$l && @$r && $tl == $tr) {
+# we are dealing with fragments of a split tag; compose the new tagcomment
+        my $parts = [];
+        push @$parts, @$l;
+        push @$parts, @$r;
+# sort according to increasing begin number
+        @$parts = sort {$a->[0] <=> $b->[0]} @$parts;
+# and reassemble the list in a new fragment comment
+        $tagcomment = &composefragments($tl,$parts) if @$parts;
+    }
+
+    return $tagcomment;
+}
+
 sub unravelfragments {
 # decode fragment description for a split tag
     my $string = shift;
 
     return undef unless ($string =~ /fragment[s]?\s+([\d\,\-]+)\s+of\s+(\d+)/);
+
+# decodes string like: 'fragment N,M,K-L of T' (total number at end)
 
     my $parts = $1;
     my $total = $2;
@@ -573,21 +592,45 @@ sub unravelfragments {
         my @part = split /\-/,$interval;
 # complete single-number interval
         push @part, $interval if (scalar(@part) == 1);
-        push @parts,@part;
+        push @parts,[@part];
     }
 
-    return $total,@parts;
+    return $total,[@parts]; # total & array of arrays
 }
 
 sub composefragments {
 # encode a fragmented tag comment
     my $total = shift;
-    my @parts = @_;
+    my $parts = shift;
+
+# sort parts according to increasing begin number
+        
+    @$parts = sort {$a->[0] <=> $b->[0]} @$parts;
 
     my $tagcomment = "fragment ";
 
+# compose a string like: 'fragment N,M,K-L of T' (total number at end)
 
+    my @join;
+    my $fragmentstring = '';
+    for (my $i = 0 ; $i < scalar(@$parts) ; $i++) {
+	my $part = $parts->[$i];
+        @join = @$part unless (@join);
+        if ($part->[0] <= $join[1] + 1) {
+# the new interval overlaps with the previous
+            $join[1] = $part->[1];
+        }
+        if ($part->[0] > $join[1] + 1 || $i == scalar(@$parts) - 1) {
+# the previous interval is disconnected from the next
+# add the interval to the fragmentstring
+            $fragmentstring .= ',' if $fragmentstring;
+            $fragmentstring .= "$join[0]" if (@join == 1);
+            $fragmentstring .= "$join[0]-$join[1]" if (@join > 1);
+            @join = @$part;
+        }
+    }
 
+    $tagcomment .= $fragmentstring." of $total";
 
     return $tagcomment;
 }
