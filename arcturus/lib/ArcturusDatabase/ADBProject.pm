@@ -451,7 +451,6 @@ sub assignContigIDsToProjectID {
                                      $options{unassigned});
 }
 
-
 sub linkContigIDsToProjectID {
 # private method : allocate contig IDs to project ID
     my $dbh = shift;
@@ -468,10 +467,10 @@ sub linkContigIDsToProjectID {
 
     my $donotreleaselock;
 
-    my @lockinfo = &getLockedStatus($dbh,$project_id); # print "lockinfo @lockinfo\n";
+    my @lockinfo = &getLockedStatus($dbh,$project_id);
 
     if ($lockinfo[0] > 1) {
-        return (0,"Project $lockinfo[5] cannot be accessed");
+        return (0,"Project $lockinfo[5] is permanently locked or does not exist");
     }
 # lock also overrides the ownership of the project (if different from lockowner)
     elsif ($lockinfo[0] && $lockinfo[1] ne $user) {
@@ -483,7 +482,7 @@ sub linkContigIDsToProjectID {
 # acquire a lock on the project
 # (to acquire a lock requires ownership or overriding privilege): test lockowner
     elsif (!&setLockedStatus($dbh,$project_id,$user,1)) {
-        return (0,"Failed to acquire lock on project $lockinfo[5]");
+        return (0,"Failed to acquire lock on project $lockinfo[5] for user $user");
     }
 
 # now assign the contigs to this project, except for those contigs
