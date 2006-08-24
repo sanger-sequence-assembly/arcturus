@@ -631,12 +631,22 @@ print STDERR "putContig: line 449 assignContigToProject "
 # and assign the contig to the specified project
 
     if ($project) {
+        $message .= "; assigned to project ";
         my ($success,$msg) = $this->assignContigToProject($contig,$project,
                                                             unassigned=>1);
-        $message .= "; assigned to project ";
-        $message .=  $project->getProjectName() if $success;
-        $message .= "ID = 0 (failed assignment: $msg)" unless $success;
-        $project = 0 unless $success;
+# include can_move_any_contig in condition?                 privilege=>1
+        if ($success) {
+            $message .=  $project->getProjectName();
+        }
+	else {
+# here a test on the existence of the user, just in case
+            unless (defined $this->userCanMoveAnyContig()) {
+                $msg .= "; user does not exist";
+	    }
+# what about submitted a contig transfer request?
+            $message .= "ID = 0 (assignment failed: $msg)";
+            $project = 0;
+	}
 # compose messages for owners of contigs which have changed project
         my $messages = &informUsersOfChange($contig,$project,\@originalprojects);
         foreach my $message (@$messages) {
