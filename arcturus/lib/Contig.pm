@@ -1471,20 +1471,25 @@ print STDOUT "Target contig length : $tlength \n" if $DEBUG;
     my @tags;
     my $ptags = $parent->getTags(1);
 
+# get a handle to the tag factory, if not do earlier
+
+    $tagfactory = new ContigTagFactory() unless $tagfactory;
+
 # first attempt for ANNO tags (later to be used for others as well)
+
+    my %annotagoptions = (break=>1, debug=>$DEBUG);
+    $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize};
 
     foreach my $ptag (@$ptags) {
         my $tagtype = $ptag->getType();
         next unless ($tagtype eq 'ANNO');
 print STDOUT "Processing ANNO tag for remapping ".$ptag->getPositionLeft()."\n" if $DEBUG;
-        $tagfactory = new ContigTagFactory() unless $tagfactory;
-        my $tptags = $tagfactory->remap($ptag,$mapping,break=>1,debug=>$DEBUG);
+        my $tptags = $tagfactory->remap($ptag,$mapping,%annotagoptions);
         push @tags,@$tptags if $tptags;
     }
 # if annotation tags found, sort according to start position
     if (@tags) {
 print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
-        $tagfactory = new ContigTagFactory() unless $tagfactory;
         @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
 # test if some tags can be merged
         my ($i,$j) = (0,1);
@@ -1510,11 +1515,10 @@ print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
     my $alignment = $mapping->getAlignment();
 
     foreach my $ptag (@$ptags) {
-
 # apply include or exclude filter
-
         my $tagtype = $ptag->getType();
         next if ($tagtype eq 'ANNO');
+
 #        next if ($exclude && $tagtype =~ /\b$exclude\b/i);
 #        next if ($include && $tagtype !~ /\b$include\b/i);
 #        my $tptags = $ptag->remap($mapping,break=>0); 
@@ -1543,9 +1547,9 @@ print STDOUT "offset to be applied : $offset[$i] \n" if $DEBUG;
 print STDOUT "offsets: @offset \n" if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the tag on the parent contig
-        $tagfactory = new ContigTagFactory() unless $tagfactory;
      my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
 #        my $tptag = $tagfactory->transpose($ptag,$alignment,\@offset,$tlength);
+        next unless $tptag; # remapped tag out of boundaries
 
 if ($DEBUG) {
 print STDOUT "tag on parent :\n "; $ptag->dump;
@@ -1560,7 +1564,7 @@ print STDOUT "tag on target :\n "; $tptag->dump;
         my $ctags = $target->getTags(0);
         foreach my $ctag (@$ctags) {
 # test the transposed parent tag and port the tag_id / systematic ID
-            if ($tptag->isEqual($ctag,copy=>1,debug=>$DEBUG)) {
+            if ($tptag->isEqual($ctag,inherit=>1,debug=>$DEBUG)) {
                 $present = 1;
                 last;
 	    }
