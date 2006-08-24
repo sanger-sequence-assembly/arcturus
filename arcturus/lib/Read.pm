@@ -48,11 +48,15 @@ sub addTag {
     my $this = shift;
     my $tag  = shift;
 
-    die "Read->addTag expects a Tag instance as parameter" if (ref($tag) ne 'Tag');
+    unless (ref($tag) eq 'Tag') {
+        die "Read->addTag expects a Tag instance as parameter";
+    }
 
     $this->{Tags} = [] unless defined $this->{Tags};
 
     $tag->setSequenceID($this->getSequenceID()); # transfer seq_id, if any
+
+    $tag->setHost($this); # register as read tag
 
     push @{$this->{Tags}}, $tag;
 }
