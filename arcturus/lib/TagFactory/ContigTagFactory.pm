@@ -256,12 +256,14 @@ print STDOUT "Tag position: @currentposition \n" if $options{debug};
 
 # trap problems with mapping by running again with debug option
 
-    print STDOUT "Tag position: @currentposition \n" unless $maskedmapping;
-    print $helpermapping->toString()."\n" unless $maskedmapping;    
-    print $mapping->toString()."\n" unless $maskedmapping; 
-    $helpermapping->multiply($mapping,debug=>1) unless $maskedmapping;
-    return undef unless $maskedmapping; # something wrong with mapping
-   
+    unless ($maskedmapping) {
+# something wrong with mapping
+        print STDOUT "Tag position: @currentposition \n";
+        print STDOUT $helpermapping->toString()."\n";    
+        print STDOUT $mapping->toString()."\n"; 
+        $helpermapping->multiply($mapping,debug=>1);
+        return undef; 
+    }
 
 print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debug};
 
@@ -465,12 +467,11 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
     my $DNA = $left->getDNA() . $right->getDNA();
     $newtag->setDNA($DNA) if ($DNA =~ /\S/);
 # merge the comments
-    my $comment;
-    if ($left->getComment() eq $right->getComment()) {
-        $comment = $left->getComment();
-    }
-    else {
-        $comment = $left->getComment() . " " . $right->getComment();
+    my $comment = $left->getComment();
+    unless ($left->getComment() eq $right->getComment()) {
+        if ($comment !~ /$right->getComment()/) {
+            $comment .=  " " . $right->getComment();
+        }
     }
 # merge the tagcomments
     my $newcomment;
@@ -478,6 +479,7 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
     my $rcomment = $right->getTagComment();
     if ($newcomment = &mergetagcomments ($lcomment,$rcomment)) {
 # and check the new comment
+print STDOUT "l:'$lcomment' r:'$rcomment'\nn: '$newcomment'\n";
         my ($total,$frags) = &unravelfragments($newcomment);
 
         if (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
@@ -561,7 +563,7 @@ sub mergetagcomments {
 
     my $tagcomment = '';
 # check the total number of fragments
-    if (@$l && @$r && $tl == $tr) {
+    if ($l && $r && @$l && @$r && $tl == $tr) {
 # we are dealing with fragments of a split tag; compose the new tagcomment
         my $parts = [];
         push @$parts, @$l;
