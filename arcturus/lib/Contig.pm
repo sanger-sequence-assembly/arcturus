@@ -1477,6 +1477,7 @@ print STDOUT "Target contig length : $tlength \n" if $DEBUG;
 
 # first attempt for ANNO tags (later to be used for others as well)
 
+#FROM HERE could be a function of the tag factory
     my %annotagoptions = (break=>1, debug=>$DEBUG);
     $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize};
 
@@ -1508,6 +1509,7 @@ print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
         }
         $target->addTag([@tags]) if @tags;
     }
+#TO HERE
 
 # the remainder is for other tags using the old algorithm
 
@@ -1680,9 +1682,9 @@ sub writeToFasta {
 
     if ($options{qualityclip}) {
 # get a clipped version of the current consensus
-        my ($sequence,$quality) = &qualityclip($this->getSequence(),
-                                               $this->getBaseQuality(),
-					       %options);
+        my ($sequence,$quality,$map) = &qualityclip($this->getSequence(),
+                                                    $this->getBaseQuality(),
+			  		            %options);
         if ($sequence && $quality) {
             $this->setSequence($sequence);
             $this->setBaseQuality($quality);
@@ -1944,11 +1946,59 @@ sub writeToEMBL {
     }
     elsif (my $dna = $this->getSequence()) {
 
+# apply quality clipping, if so wanted, include tags
+# NOTE: much better: generate a clipped contig with a function on ContigFactory
+#*************************** to be place somewhere else
+        if (my $threshold = $options{qualityclip}) {
+# get a clipped version of the current consensus
+            my ($sequence,$quality,$map) = &qualityclip($this->getSequence(),
+                                                        $this->getBaseQuality(),
+	         				        qcthreshold=>$threshold);
+#	    print "map $map\n".$map->toString()."\n";
+# reload the clipped sequence datadata
+            if ($sequence && $quality) {
+                $dna = $sequence; # replace
+                $this->setSequence($sequence);
+                $this->setBaseQuality($quality);
+# and remap the tags on the sequence
+                $tagfactory = new ContigTagFactory() unless $tagfactory;
+                my $tags = $this->getTags();
+                foreach my $tag (@$tags) {
+                    my $tptag = $tagfactory->remap($tag,$map,break=>0);
+#print STDOUT "remapped tag $tag => $tptag->[0]\n";
+                    $tag = $tptag->[0] if (@$tptag == 1);
+		}
+# order the tags according to positions
+                @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @$tags;
+# test if some tags can be merged
+                my ($i,$j) = (0,1);
+                while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
+# test for possible merger of tags i and j
+#print STDOUT "attempt to merge tags $i $tags->[$i], $j $tags->[$j]\n";
+#print STDOUT "tag $i ".$tags->[$i]->writeToEMBL()
+#          ."\ntag $j ".$tags->[$j]->writeToEMBL()."\n" if ($j == 7 || $j == 6);
+                    if (my $newtag = $tagfactory->merge($tags->[$i],$tags->[$j])) {
+# the tags are merged: replace tags i and j by the new one
+                    splice @$tags, $i, 2, $newtag;
+# keep the same values of i and j
+	            }
+                    else {
+# tags cannot be merged: increase both i and j
+                        $i++;
+		        $j++;
+                    }
+	        }
+            }
+	}
+#*******************************
+
 # collect length and print header record
 
 	my $length = length($dna);
 	print $DFILE "ID   $identifier  standard; Genomic DNA; CON; "
                    . "$length BP\n";
+        print $DFILE "XX\n";
+        print $DFILE "AC   unknown;\n";
         print $DFILE "XX\n";
 
 # the tag section (if any)
@@ -2040,6 +2090,10 @@ sub writeToEMBL {
             }
             print $DFILE "XX\n" if $feature;
         }
+	else {
+            print $DFILE "FH   Key             Location/Qualifiers\n";
+            print $DFILE "FH\n";
+	}
   
 # the DNA section, count the base composition
 
@@ -2071,8 +2125,8 @@ sub writeToEMBL {
                 }
                 $offset = $length;
 	    }
-            $line =~ s/(.{1,10})/$1  /g; # insert double spaces
-            print $DFILE "     ". $line . "  " . sprintf('%8d',$offset) . "\n";
+            $line =~ s/(.{1,10})/$1 /g; # insert single space
+            print $DFILE "     ". $line . sprintf('%9d',$offset) . "\n"; # 80 
 	}
         print $DFILE "//\n";
     }
@@ -2158,24 +2212,27 @@ sub qualityclip {
 # remove low quality pad(s) from consensus (fasta export only)
     my $sequence = shift; # input consensus
     my $quality = shift;  # quality data
-    my %options = @_; # print STDOUT "options: @_\n";
+    my %options = @_;  print STDOUT "qualityclip options: @_\n";
 
-    my $symbol    = $options{qcsymbol} || "*";
+    my $symbol    = $options{qcsymbol} || "acgt";
     my $threshold = $options{qcthreshold} || 0;
 
-print STDERR "Clipping low quality pads ($symbol, $threshold)\n";
+#print STDERR "Clipping low quality pads ($symbol, $threshold)\n" if$DEBUG;
+#print STDERR "Clipping low quality pads ($symbol, $threshold)\n";
 
-    my $length = length($sequence);
+    my $mapping = new Mapping();
 
     my $pad = 0; # last pad position
 
     my $clipped = 0;
     my $newquality = [];
     my $newsequence = '';
+    my $length = length($sequence); print "length $length ".scalar(@$quality)."\n";
     for (my $i = 0 ; $i <= $length ; $i++) {
 # the last value results in adding the remainder, if any, to the output
         if ($i < $length) {
-            next unless (substr($sequence, $i, 1) =~ /^[$symbol]$/); # no-pad
+#            next if ($symbol && substr($sequence, $i, 1) !~ /[$symbol]$/i);
+            next unless (substr($sequence, $i, 1) =~ /^[$symbol]$/i); # no-pad
             next if ($threshold && $quality->[$i] >= $threshold);
             $clipped++;
 # deal with consecutive pads
@@ -2190,13 +2247,17 @@ print STDERR "Clipping low quality pads ($symbol, $threshold)\n";
 # the next pad is detected at position $i
         $newsequence .= substr($sequence, $pad, $i-$pad);
         push @$newquality, @$quality [$pad .. $i-1];
+# assemble the segment for the mapping
+        my $newlength = length($newsequence);
+        $mapping->putSegment($pad+1,$i,$newlength-($i-$pad)+1,$newlength);
 # adjust the last pad position
         $pad = $i+1;
     }
 
-print STDERR "$clipped values clipped\n";
+#print STDERR "$clipped values clipped\n" if $DEBUG;
+#print STDERR "$clipped values clipped\n";
 
-    return $newsequence, $newquality;
+    return $newsequence, $newquality, $mapping;
 }
 
 #----------------------------------------------------------------------------
@@ -2393,4 +2454,3 @@ sub setDEBUG {$DEBUG = 1;}
 sub setNoDEBUG {$DEBUG = 0;}
 
 1;
-
