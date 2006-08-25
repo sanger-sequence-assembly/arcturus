@@ -98,7 +98,7 @@ while (my $nextword = shift @ARGV) {
     $emblfile   = shift @ARGV  if ($nextword eq '-emblfile');
     $emblfile   = shift @ARGV  if ($nextword eq '-ef');
     if ($nextword eq '-qualityclip' || $nextword eq '-qc') {
-        $qclip   = 10; # fixed value
+        $qclip   = 20; # fixed value
         $confirm = 0;
     }
 
@@ -647,8 +647,11 @@ $arcturuscontig->setDEBUG() if $debug;
 
 foreach my $cid (sort keys %$currentcontigs) {
     my $contig = $currentcontigs->{$cid};
-    $contig->writeToEMBL(*STDOUT,qualityclip=>$qclip) unless $noembl;
-    $contig->writeToEMBL($EMBL  ,qualityclip=>$qclip) if $EMBL;
+    $contig->writeToEMBL(*STDOUT,0,qualityclip=>$qclip) unless $noembl;
+    $contig->writeToEMBL($EMBL  ,0,qualityclip=>$qclip) if $EMBL;
+#    $contig = ContigFactory->qualityclip($contig,%qcoptions) if $qclip;
+#    $contig->writeToEMBL(*STDOUT) unless $noembl;
+#    $contig->writeToEMBL($EMBL  ) if $EMBL;
 }
 
 $EMBL->close() if $EMBL;
@@ -661,7 +664,7 @@ if ($lengthmismatch && !$fastafile) {
 elsif (!$numberprocessed) {
     $logger->warning("NO contigs processed");
 }
-elsif (!$confirm) {
+elsif ( !defined($confirm) ) {
     $logger->warning("To load this stuff: repeat with '-confirm'");
 }
 
@@ -940,8 +943,10 @@ sub showUsage {
     print STDERR "-emblfile\t(ef) write contig & tags of the current generation";
     print STDERR " to file\n";
     unless (defined($qclip)) {
-        print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped sequence\n";
+#        print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped sequence\n";
     }
+    print STDERR "\n";
+    print STDERR "-contig\t\tselect a particular contig by ID\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "-debug\t\t(no value)\n" unless defined($debug);
