@@ -12,6 +12,8 @@ use Tag;
 
 use TagFactory::ReadTagFactory;
 
+use TagFactory::ContigTagFactory;
+
 use Logging;
 
 # ----------------------------------------------------------------------------
@@ -178,9 +180,11 @@ sub cafFileParser {
     my $DNASequence = '';
     my $BaseQuality = '';
 
-# set up the read tag factory
+# set up the read tag factory and contig tag factory
 
-    my $readtagfactory = new ReadTagFactory();
+    my $rtf = new ReadTagFactory();
+
+    my $ctf = new ContigTagFactory();
 
     $LOG->info("Parsing CAF file $caffile");
 
@@ -457,20 +461,22 @@ sub cafFileParser {
 
 # build a new read Tag instance
 
-                my $tag = new Tag('readtag');
-                $tag->setType($type);
-                $tag->setPosition($trps,$trpf);
-                $tag->setStrand('Forward');
-                $tag->setTagComment($info);
+		my $tag = $rtf->makeTag($type,$trps,$trpf,TagComment => $info);
+
+#                my $tag = new Tag('readtag');
+#                $tag->setType($type);
+#                $tag->setPosition($trps,$trpf);
+#                $tag->setStrand('Forward');
+#                $tag->setTagComment($info);
 
 # the tag now contains the raw data read from the CAF file
 # invoke ReadTagFactory to process, cleanup and test the tag info
 
-                $readtagfactory->importTag($tag);
-                $readtagfactory->cleanup(); # clean-up the tag info
+#                $rtf->importTag($tag);
+                $rtf->cleanup($tag); # clean-up the tag info
                 if ($type eq 'OLIG' || $type eq 'AFOL') {        
 # oligo, staden(AFOL) or gap4 (OLIG)
-                    my ($warning,$report) = $readtagfactory->processOligoTag();
+                    my ($warning,$report) = $rtf->processOligoTag($tag);
                     $LOG->fine($report) if $warning;
                     unless ($tag->getTagSequenceName()) {
 		        $LOG->warning("Missing oligo name in read tag for "
@@ -480,19 +486,25 @@ sub cafFileParser {
 	        }
                 elsif ($type eq 'REPT') {
 # repeat read tags
-                    unless ($readtagfactory->processRepeatTag()) {
-	                $LOG->info("Missing repeat name in read tag for ".
-                                       $read->getReadName());
+                    unless ($rtf->processRepeatTag($tag)) {
+	                $LOG->info("Missing repeat name in read tag for "
+                                  . $read->getReadName()." (line $lineCount)");
                     }
                 }
 	        elsif ($type eq 'ADDI') {
 # chemistry read tag
-                    unless ($readtagfactory->processAdditiveTag()) {
-                        $LOG->info("Invalid ADDI tag ignored for ".
-                                       $read->getReadName());
+                    unless ($rtf->processAdditiveTag($tag)) {
+                        $LOG->info("Invalid ADDI tag ignored for "
+                                  . $read->getReadName()." (line $lineCount)");
                         next; # don't accept this tag
                     }
  	        }
+# test the comment; ignore empty comment tags
+                unless ($tag->getComment() =~ /\S/) {
+		    $LOG->severe("Empty $type read tag ignored for "
+                                . $read->getReadName()." (line $lineCount)");
+		    next; # don't accept this tag
+		}
 
                 $read->addTag($tag);
             }
@@ -597,14 +609,17 @@ sub cafFileParser {
                 }
                 $LOG->info("CONTIG tag detected: $record\n"
                         . "'$type' '$tcps' '$tcpf' '$info'");
-                my $tag = new Tag('contigtag');
                 if ($type eq 'ANNO') {
                     $info =~ s/expresion/expression/;
                     $type = 'COMM';
 		}
-                $tag->setType($type);
-                $tag->setPosition($tcps,$tcpf);
-                $tag->setStrand('Unknown');
+
+                my $tag = $ctf->makeTag($type,$tcps,$tcpf);
+
+#                my $tag = new Tag('contigtag');
+#                $tag->setType($type);
+#                $tag->setPosition($tcps,$tcpf);
+#                $tag->setStrand('Unknown');
                 $tag->setTagComment($info);
                 if ($info =~ /([ACGT]{5,})/) {
                     $tag->setDNA($1);
