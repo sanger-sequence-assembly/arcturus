@@ -297,7 +297,7 @@ sub transpose {
     my $offset = shift; # array length 2 with offset at begin and end
     my $window = shift || 1; # position in range 1 .. window
 
-print STDERR "Tag::transpose used\n";
+# print STDERR "Tag::transpose used\n";
 
 # transpose the position range using the offset info. An undefined offset
 # indicates a boundery outside the range 1 .. length; adjust accordingly
@@ -474,9 +474,9 @@ sub isEqual {
                          $this->getStrand() eq $tag->getStrand());
     }
 
-# the tags are identical
+# the tags are identical; inherit possible undefined data
 
-    if ($options{copy}) {
+    if ($options{copy} || $options{inherit}) {
 # copy tag ID, tag sequence ID and systematic ID, if not already defined
         unless ($tag->getTagID()) {
             $tag->setTagID($this->getTagID());
@@ -622,7 +622,7 @@ sub writeToEMBL {
 # process tag comment; insert new line if it is too long
     if ($tagcomment) {
         my @tcparts = split /,/,$tagcomment;
-        my $cstring = "FT $sp17 /description=\"";
+        my $cstring = "FT $sp17 /arcturus_description=\"";
         my $positionoffset = length($cstring);
         foreach my $part (@tcparts) {
             my $substring = "$part,";
