@@ -37,10 +37,12 @@ my $swprog;
 my $nopads = 1;
 my $noembl = 1;
 my $emblfile;
+my $qclip;
+
 
 my $validKeys  = "organism|instance|tagfile|tf|propagate|fasta|ff|swprog|"
-               . "embl|emblfile|ef|contig|tag|confirm|dbload|verbose|"
-               . "debug|help";
+               . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|"
+               . "qualityclip|qc|verbose|debug|nodebug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -74,24 +76,44 @@ while (my $nextword = shift @ARGV) {
 
     $verbose    = 1            if ($nextword eq '-verbose');
 
-    $verbose    = 2            if ($nextword eq '-debug');
-    $debug      = 1            if ($nextword eq '-debug');
+    if ($nextword eq '-debug') {
+        if (defined($debug) && !$debug) {
+            &showUsage("Option '$nextword' has been disabled");
+        }
+        $verbose = 2;
+        $debug   = 1;
+    }
+    $debug       = 0            if ($nextword eq '-nodebug');
 
-    $confirm    = 1            if ($nextword eq '-confirm');
-    $confirm    = 1            if ($nextword eq '-dbload');
+    if ($nextword eq '-confirm' || $nextword eq '-dbload') { 
+        if (defined($confirm) && !$confirm) {
+            &showUsage("Option '$nextword' has been disabled");
+        }
+        $confirm = 1;
+    }
+    $confirm    = 0            if ($nextword eq '-noload');
+
 
     $noembl     = 0            if ($nextword eq '-embl');
-
     $emblfile   = shift @ARGV  if ($nextword eq '-emblfile');
     $emblfile   = shift @ARGV  if ($nextword eq '-ef');
+    if ($nextword eq '-qualityclip' || $nextword eq '-qc') {
+        $qclip   = 10; # fixed value
+        $confirm = 0;
+    }
 
-    $swprog     = shift @ARGV  if ($nextword eq '-swprog');
+    if ($nextword eq '-swprog') {
+        if (defined($swprog) && !$swprog) {
+            &showUsage("Option '$nextword' has been disabled");
+        }
+        $swprog  = shift @ARGV;
+    }
 
     &showUsage(0) if ($nextword eq '-help');
 }
 
 #----------------------------------------------------------------
-# use forking if Smith=-Waterman alignment is to be used
+# use forking if Smith-Waterman alignment is to be used
 #----------------------------------------------------------------
 
 if ($swprog) {
@@ -625,15 +647,15 @@ $arcturuscontig->setDEBUG() if $debug;
 
 foreach my $cid (sort keys %$currentcontigs) {
     my $contig = $currentcontigs->{$cid};
-    $contig->writeToEMBL(*STDOUT) unless $noembl;
-    $contig->writeToEMBL($EMBL) if $EMBL;
+    $contig->writeToEMBL(*STDOUT,qualityclip=>$qclip) unless $noembl;
+    $contig->writeToEMBL($EMBL  ,qualityclip=>$qclip) if $EMBL;
 }
 
 $EMBL->close() if $EMBL;
 
 if ($lengthmismatch && !$fastafile) {
     $logger->skip();
-    $logger->severe("You need to include the fasta file used for annotation");
+    $logger->severe("!! You need to provide the fasta file used for annotation");
     $logger->skip();
 }
 elsif (!$numberprocessed) {
@@ -894,26 +916,37 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n" unless $organism;
     print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
-    print STDERR "-tagfile\t(tf) file with tag info in records of 4 or 5 items :\n";
+    print STDERR "-tagfile\t(tf) input file with tag info in records of 4 or 5 items :\n";
     print STDERR "\t\tcontigname, systematic name, position start & end , and\n";
     print STDERR "\t\toptionally [length of annotated sequence]\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-propagate\tpropagate contig tag(s) to the last generation\n";
-    print STDERR "\t\t(in its absence only map from edited to original sequence)\n";
+    unless (defined($propagate)) {
+        print STDERR "-propagate\tpropagate contig tag(s) to the last generation\n";
+        print STDERR "\t\t(in its absence only map from edited to original sequence)\n";
+        print STDERR "\n";
+    }
+    print STDERR "-fasta\t\t(ff) input fasta file with sequences used for annotation\n";
+    unless (defined($swprog)) {
+        print STDERR "-swprog\t\t(optional) use Smith-Waterman alignment algorithm\n";
+    }
     print STDERR "\n";
-    print STDERR "-fasta\t\t(ff) Fasta file with sequences used for annotation\n";
-    print STDERR "-swprog\t\t(optional) use Smith-Waterman alignment algorithm\n";
-    print STDERR "\n";
-    print STDERR "-confirm\t(dbload) store remapped tags into the database\n";
-    print STDERR "-embl\t\tlist contig & tags of the current generation in";
-    print STDERR " EMBL format\n";
+    unless (defined($confirm)) {
+        print STDERR "-confirm\t(dbload) store remapped tags into the database\n";
+    }
+    print STDERR "-embl\t\t(no value) list current contig & tags in EMBL";
+    print STDERR " format on STDOUT\n";
     print STDERR "-emblfile\t(ef) write contig & tags of the current generation";
     print STDERR " to file\n";
+    unless (defined($qclip)) {
+        print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped sequence\n";
+    }
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
-    print STDERR "-debug\t\t(no value)\n";
+    print STDERR "-debug\t\t(no value)\n" unless defined($debug);
+    print STDERR "\n";
+    print STDERR "**** Parameter input ERROR: $code ****\n" if $code; 
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
