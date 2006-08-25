@@ -27,6 +27,7 @@ my $fastafile; # for the fasta fuile on which the annotation has been made
 
 my $propagate;
 my $contig;
+my $testtag;
 
 my $verbose;
 my $confirm;
@@ -38,7 +39,8 @@ my $noembl = 1;
 my $emblfile;
 
 my $validKeys  = "organism|instance|tagfile|tf|propagate|fasta|ff|swprog|"
-               . "embl|emblfile|ef|contig|confirm|dbload|verbose|debug|help";
+               . "embl|emblfile|ef|contig|tag|confirm|dbload|verbose|"
+               . "debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -65,6 +67,8 @@ while (my $nextword = shift @ARGV) {
     $fastafile  = shift @ARGV  if ($nextword eq '-ff');
 
     $contig     = shift @ARGV  if ($nextword eq '-contig');
+
+    $testtag    = shift @ARGV  if ($nextword eq '-tag');
 
     $propagate  = 1            if ($nextword eq '-propagate');
 
@@ -265,7 +269,8 @@ if ($emblfile) {
 
 # run through all the contigs
 
-my $currentcontigs;
+my $currentcontigs = {};
+my$acdestinations = {}; # original contig destinations
 
 my $lengthmismatch = 0;
 my $fastamappinghash = {};
@@ -538,16 +543,21 @@ $arcturuscontig->setDEBUG() if $debug;
 
     if ($propagate) {
 # test set up for propagation to offspring
-#my $cid = $arcturuscontig->getContigID();
+        my $acid = $arcturuscontig->getContigID();
 #my $fastacontig = $fastacontighash->{$cid};
 #$arcturuscontig->addChildContig($fastacontig);
         $contigs = &propagate($arcturuscontig);
 	$logger->info("Contigs after propagation of $contigname:");
+        if (my $fastacontig = $fastacontighash->{$acid}) {
+  	    &listtagsequence($fastacontig,$testtag) if $testtag;
+        }
+#	&listtagsequence($arcturuscontig,$testtag) if $testtag;
         foreach my $contig (@$contigs) {
             my $cid = $contig->getContigID();
             my $cnm = $contig->getContigName();
+	    &listtagsequence($contig,$testtag) if $testtag;
             unless ($adb->isCurrentContigID($cid)) {
-		$logger->info($cnm);
+		$logger->info("$cnm is intermediate");
 		next;
 	    }
             $logger->warning("$cnm is a current contig");
@@ -565,6 +575,9 @@ $arcturuscontig->setDEBUG() if $debug;
             else { 
                 $currentcontigs->{$cnm} = $contig;
 	    }
+# also register the destination of tags from the original contig
+            $acdestinations->{$acid} = [] unless $acdestinations->{$acid};
+            push @{$acdestinations->{$acid}},$cid;
 	}
 
 # load into the database
@@ -641,9 +654,23 @@ $logger->warning("NO current contigs found") unless @currentcontigs;
 $logger->warning("current contigs affected:")  if @currentcontigs;
 $logger->skip();
 
-foreach my $contig (@currentcontigs) {
-    print STDOUT "$contig \n";
+if (@currentcontigs) {
+# list contigs and mapping of originals to new ones
+    foreach my $contig (@currentcontigs) {
+        $logger->warning("$contig");
+    }
+
+    $logger->skip();
+    $logger->warning("mappings from original contigs to current contigs");
+    $logger->skip();
+
+    foreach my $acid (sort {$a <=> $b} keys %$acdestinations) {
+        my $destinations = $acdestinations->{$acid};
+        $logger->warning("contig $acid  => @$destinations");
+    }
+    $logger->skip();
 }
+
 
 exit;
 
@@ -795,6 +822,43 @@ sub listtags {
 		           ." has ".scalar(@$tags)." tags; $label");
     foreach my $tag (@$tags) {
         $logger->fine($tag->writeToCaf(0,annotag=>1));
+    }
+
+}
+
+sub listtagsequence {
+    my $contig = shift;
+    my $tag_id = shift;
+
+    return unless $contig->hasTags();
+
+    my $tags = $contig->getTags();
+
+# identify the tag (could be more than one)
+
+    my @tags;
+    foreach my $tag (@$tags) {
+        my $sys_id = $tag->getSystematicID();
+        next unless ($sys_id =~ /$tag_id/);
+        push @tags,$tag;
+    }
+
+    return unless @tags;
+
+    my $sequence = $contig->getSequence();
+    my $contigname = $contig->getContigName();
+
+    foreach my $tag (@tags) {
+        my ($start,$final) = $tag->getPosition();
+        my $tagsequence = substr $sequence,$start-1,$final-$start+1;
+        my $strand = $tag->getStrand();
+        if ($strand eq 'Reverse') {
+            $tagsequence = reverse($tagsequence);
+            $tagsequence =~ tr/ACGTacgt/TGCAtgca/;
+        }
+        my $sys_id = $tag->getSystematicID();
+        $logger->warning("tag $sys_id : $start - $final  $strand  on $contigname");
+        $logger->warning($tagsequence);
     }
 
 }
