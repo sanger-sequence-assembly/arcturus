@@ -211,15 +211,15 @@ public class ArcturusInstance implements Iterator {
      */
 
     public Vector getAllOrganisms() throws NamingException {
-	NamingEnumeration enum = context.listBindings("");
+	NamingEnumeration enumeration = context.listBindings("");
 
-	if (enum == null)
+	if (enumeration == null)
 	    return null;
 
 	Vector zoo = new Vector();
 
-	while (enum.hasMore()) {
-	    Binding bd = (Binding)enum.next();
+	while (enumeration.hasMore()) {
+	    Binding bd = (Binding)enumeration.next();
 
 	    String name = bd.getName();
 
