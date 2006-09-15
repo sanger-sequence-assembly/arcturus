@@ -28,6 +28,7 @@ my $fastadir;
 my $c2sfile;
 my $fastaminlen = 5000;
 my $nogap4name = 0;
+my $depad = 0;
 
 ###
 ### Parse arguments
@@ -66,6 +67,8 @@ while (my $nextword = shift @ARGV) {
     $c2sfile = shift @ARGV if ($nextword eq '-contigmap');
 
     $nogap4name = 1 if ($nextword eq '-nogap4name');
+
+    $depad = 1 if ($nextword eq '-depad');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -169,6 +172,10 @@ while (my ($project_id, $projectname) = $sth->fetchrow_array()) {
 
 $sth->finish();
 
+my $myprojectid;
+
+$myprojectid = $projectname2id->{$myproject} if defined($myproject);
+
 ###
 ### Enumerate the list of active contigs, excluding singletons and
 ### ordering them by size, largest first.
@@ -180,8 +187,15 @@ my @contiglist;
 my $project = {};
 
 if (defined($onlyproject)) {
+    my $onlyprojectid = $projectname2id->{$onlyproject};
+
+    unless (defined($onlyprojectid)) {
+	print STDERR "Project $onlyproject not known (specified as \"-onlyproject $onlyproject\")\n";
+	exit(1);
+    }
+
     $sth = $statements->{'currentcontigsfromproject'};
-    $sth->execute($onlyproject, $minlen);
+    $sth->execute($onlyprojectid, $minlen);
 } else {
     $sth = $statements->{'currentcontigs'};
     $sth->execute($minlen);
@@ -244,7 +258,7 @@ foreach my $contigid (@contiglist) {
 	printf STDERR $format, $done, $alldone;
     }
 
-    next if (defined($myproject) && $myproject != $project->{$contigid});
+    next if (defined($myprojectid) && $myprojectid != $project->{$contigid});
 
     if ($updateproject) {
 	$sth_setproject->execute(0, $contigid);
@@ -371,7 +385,7 @@ foreach my $contigid (@contiglist) {
 		$stmt->finish();
 		if (defined($ctgseq)) {
 		    $ctgseq = uncompress($ctgseq);
-		    $ctgseq =~ s/[\-\*]//g;
+		    $ctgseq =~ s/[N\-\*]//g if $depad;
 		    if ($contigdir eq 'R') {
 			$ctgseq = reverse($ctgseq);
 			$ctgseq =~ tr/ACGTacgt/TGCAtgca/;
@@ -1227,6 +1241,7 @@ sub showUsage {
     print STDERR "-onlyproject\tUse only contigs from this project (implies -project option)\n";
     print STDERR "-seedcontig\tUse this contig as the seed for pUC scaffolding\n";
     print STDERR "-fastadir\tDirectory for FASTA output of scaffold sequences\n";
+    print STDERR "-depad\t\tDepad the FASTA sequences\n";
     print STDERR "-fastaminlen\tMinimum scaffold length for FASTA output\n";
     print STDERR "-contigmap\tScaffold-contig mapping file\n";
     print STDERR "-nogap4name\tUse contig IDs as contig names instead of Gap4 names\n";
