@@ -13,6 +13,8 @@ import java.util.logging.*;
 import javax.naming.Context;
 
 public class CalculateConsensus {
+    private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
+
     private long lasttime;
     private Runtime runtime = Runtime.getRuntime();
 
@@ -35,7 +37,7 @@ public class CalculateConsensus {
     private boolean quiet = false;
     private boolean allcontigs = false;
 
-    private int mode = Gap4BayesianConsensus.MODE_NO_PAD;
+    private int mode = defaultPaddingMode;
     
     private String assemblyname = null;
     private String projectname = null;
@@ -250,9 +252,39 @@ public class CalculateConsensus {
 	ps.println("\t-project\tName of project for contigs");
 	ps.println();
 	ps.println("OPTIONS");
-	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs", "-pad_is_n", "-pad_is_star", "-no_pad"};
+	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs"};
+
 	for (int i = 0; i < options.length; i++)
 	    ps.println("\t" + options[i]);
+
+	ps.println();
+	ps.print("PADDING MODES");
+
+	ps.print(" (default mode is ");
+	switch (defaultPaddingMode) {
+	case Gap4BayesianConsensus.MODE_PAD_IS_N:
+	    ps.print("-pad_is_n");
+	    break;
+
+	case Gap4BayesianConsensus.MODE_PAD_IS_STAR:
+	    ps.print("-pad_is_star");
+	    break;
+
+	case Gap4BayesianConsensus.MODE_NO_PAD:
+	    ps.print("-no_pad");
+	    break;
+
+	default:
+	    ps.print("unknown");
+	    break;
+	}
+	ps.println(")");
+
+	String[] padmodes = {"-pad_is_n", "-pad_is_star", "-no_pad"};
+
+	for (int i = 0; i < padmodes.length; i++)
+	    ps.println("\t" + padmodes[i]);
+
     }
 
     public boolean calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
