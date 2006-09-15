@@ -7,6 +7,9 @@ import java.util.HashMap;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
+import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+import oracle.jdbc.pool.OracleDataSource;
+
 import java.util.logging.*;
 
 import uk.ac.sanger.arcturus.data.*;
@@ -187,8 +190,7 @@ public class ArcturusDatabase {
     public static DataSource createMysqlDataSource(String hostname, int port, String database,
 						   String username, String password)
 	throws SQLException {
-	com.mysql.jdbc.jdbc2.optional.MysqlDataSource mysqlds =
-	    new com.mysql.jdbc.jdbc2.optional.MysqlDataSource();
+	MysqlDataSource mysqlds = new MysqlDataSource();
 
 	mysqlds.setServerName(hostname);
 	mysqlds.setDatabaseName(database);
@@ -222,8 +224,7 @@ public class ArcturusDatabase {
     public static DataSource createOracleDataSource(String hostname, int port, String database,
 						    String username, String password)
 	throws SQLException {
-	oracle.jdbc.pool.OracleDataSource oracleds =
-	    new oracle.jdbc.pool.OracleDataSource();
+	OracleDataSource oracleds = new OracleDataSource();
 
 	oracleds.setServerName(hostname);
 	oracleds.setDatabaseName(database);
