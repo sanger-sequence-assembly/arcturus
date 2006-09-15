@@ -13,458 +13,434 @@ import java.util.logging.*;
 import javax.naming.Context;
 
 public class CalculateConsensus {
-	private long lasttime;
+    private long lasttime;
+    private Runtime runtime = Runtime.getRuntime();
 
-	private Runtime runtime = Runtime.getRuntime();
+    private Consensus consensus = new Consensus();
+   
+    private String instance = null;
+    private String organism = null;
+    
+    private String objectname = null;
+    
+    private String algname = null;
 
-	private Consensus consensus = new Consensus();
+    private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS;
 
-	private String instance = null;
+    private ArcturusDatabase adb = null;
+    private Connection conn = null;
 
-	private String organism = null;
+    private boolean debug = false;
+    private boolean lowmem = false;
+    private boolean quiet = false;
+    private boolean allcontigs = false;
 
-	private String algname = null;
+    private int mode = Gap4BayesianConsensus.MODE_NO_PAD;
+    
+    private String assemblyname = null;
+    private String projectname = null;
+    
+    private ConsensusAlgorithm algorithm = null;
 
-	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS;
+    private PreparedStatement insertStmt = null;
+    private PreparedStatement updateStmt = null;
 
-	private ArcturusDatabase adb = null;
+    private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
-	private Connection conn = null;
+    private String consensustable = null;
+ 
+    public static void main(String args[]) {
+	CalculateConsensus cc = new CalculateConsensus();
+	cc.execute(args);
+    }
 
-	private boolean debug = false;
+    public void execute(String args[]) {
+	Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
 
-	private boolean lowmem = false;
+	lasttime = System.currentTimeMillis();
 
-	private boolean quiet = false;
+	System.err.println("CalculateConsensus");
+	System.err.println("==================");
+	System.err.println();
 
-	private boolean allcontigs = false;
+	String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
 
-	private int mode = Gap4BayesianConsensus.MODE_NO_PAD;
+	String separator = "                    --------------------                    ";
 
-	private String projectname = null;
+	Properties props = new Properties();
 
-	private ConsensusAlgorithm algorithm = null;
+	Properties env = System.getProperties();
 
-	private PreparedStatement insertStmt = null;
+	props.put(Context.INITIAL_CONTEXT_FACTORY, env.get(Context.INITIAL_CONTEXT_FACTORY));
+	props.put(Context.PROVIDER_URL, ldapURL);
 
-	private PreparedStatement updateStmt = null;
+	for (int i = 0; i < args.length; i++) {
+	    if (args[i].equalsIgnoreCase("-instance"))
+		instance = args[++i];
 
-	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
+	    if (args[i].equalsIgnoreCase("-organism"))
+		organism = args[++i];
 
-	private String consensustable = null;
+	    if (args[i].equalsIgnoreCase("-algorithm"))
+		algname = args[++i];
 
-	public static void main(String args[]) {
-		CalculateConsensus cc = new CalculateConsensus();
-		cc.execute(args);
+	    if (args[i].equalsIgnoreCase("-consensustable"))
+		consensustable = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-debug"))
+		debug = true;
+
+	    if (args[i].equalsIgnoreCase("-lowmem"))
+		lowmem = true;
+
+	    if (args[i].equalsIgnoreCase("-quiet"))
+		quiet = true;
+
+	    if (args[i].equalsIgnoreCase("-allcontigs"))
+		allcontigs = true;
+
+	    if (args[i].equalsIgnoreCase("-project"))
+		projectname = args[++i];
+
+	    if (args[i].equalsIgnoreCase("-pad_is_n"))
+		mode = Gap4BayesianConsensus.MODE_PAD_IS_N;
+
+	    if (args[i].equalsIgnoreCase("-pad_is_star"))
+		mode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
+
+	    if (args[i].equalsIgnoreCase("-no_pad"))
+		mode = Gap4BayesianConsensus.MODE_NO_PAD;
 	}
 
-	public void execute(String args[]) {
-		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+	if (instance == null || organism == null) {
+	    printUsage(System.err);
+	    System.exit(1);
+	}
 
-		lasttime = System.currentTimeMillis();
+	if (consensustable == null)
+	    consensustable = "CONSENSUS";
 
-		System.err.println("CalculateConsensus");
-		System.err.println("==================");
-		System.err.println();
+	if (algname == null)
+	    algname = System.getProperty("arcturus.default.algorithm");
 
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
+	try {
+	    System.err.println("Creating an ArcturusInstance for " + instance);
+	    System.err.println();
 
-		Properties props = new Properties();
+	    ArcturusInstance ai = new ArcturusInstance(props, instance);
 
-		Properties env = System.getProperties();
+	    System.err.println("Creating an ArcturusDatabase for " + organism);
+	    System.err.println();
 
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
+	    adb = ai.findArcturusDatabase(organism);
 
-		for (int i = 0; i < args.length; i++) {
-			if (args[i].equalsIgnoreCase("-instance"))
-				instance = args[++i];
+	    Project project = (projectname == null) ? null : adb.getProjectByName(null, projectname);
 
-			if (args[i].equalsIgnoreCase("-organism"))
-				organism = args[++i];
+	    if (lowmem)
+		adb.getSequenceManager().setCacheing(false);
 
-			if (args[i].equalsIgnoreCase("-algorithm"))
-				algname = args[++i];
+	    conn = adb.getConnection();
 
-			if (args[i].equalsIgnoreCase("-consensustable"))
-				consensustable = args[++i];
+	    if (conn == null) {
+		System.err.println("Connection is undefined");
+		printUsage(System.err);
+		System.exit(1);
+	    }
 
-			if (args[i].equalsIgnoreCase("-debug"))
-				debug = true;
+	    if (!quiet)
+		adb.addContigManagerEventListener(new MyListener());
 
-			if (args[i].equalsIgnoreCase("-lowmem"))
-				lowmem = true;
+	    Class algclass = Class.forName(algname);
+	    algorithm = (ConsensusAlgorithm)algclass.newInstance();
 
-			if (args[i].equalsIgnoreCase("-quiet"))
-				quiet = true;
+	    if (algorithm instanceof Gap4BayesianConsensus) {
+		Gap4BayesianConsensus g4bc = (Gap4BayesianConsensus)algorithm;
 
-			if (args[i].equalsIgnoreCase("-allcontigs"))
-				allcontigs = true;
+		if (debug)
+		    g4bc.setDebugPrintStream(System.out);
 
-			if (args[i].equalsIgnoreCase("-project"))
-				projectname = args[++i];
+		g4bc.setMode(mode);
+	    }
 
-			if (args[i].equalsIgnoreCase("-pad_is_n"))
-				mode = Gap4BayesianConsensus.MODE_PAD_IS_N;
+	    int sequenceCounter = 0;
+	    int nContigs = 0;
+	    long peakMemory = 0;
 
-			if (args[i].equalsIgnoreCase("-pad_is_star"))
-				mode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
+	    insertStmt = conn.prepareStatement("insert into " + consensustable + " (contig_id,sequence,length,quality)" +
+					       " VALUES(?,?,?,?)");
 
-			if (args[i].equalsIgnoreCase("-no_pad"))
-				mode = Gap4BayesianConsensus.MODE_NO_PAD;
+	    updateStmt = conn.prepareStatement("update " + consensustable + " set sequence=?,length=?,quality=? where contig_id=?");
+
+
+	    String query = allcontigs ?
+		"select CONTIG.contig_id,length(sequence) from CONTIG left join "  + consensustable + " using(contig_id)":
+		"select CONTIG.contig_id from CONTIG left join " + consensustable + " using(contig_id) where sequence is null";
+
+	    if (project != null)
+		query += (allcontigs ? " where" : " and") + " project_id = " + project.getID();
+			  
+	    Statement stmt = conn.createStatement();
+
+	    logger.info(query);
+
+	    ResultSet rs = stmt.executeQuery(query);
+
+	    while (rs.next()) {
+		int contig_id = rs.getInt(1);
+
+		boolean doUpdate = false;
+
+		if (allcontigs) {
+		    int seqlen = rs.getInt(2);
+		    doUpdate = !rs.wasNull();
 		}
 
-		if (instance == null || organism == null) {
-			printUsage(System.err);
-			System.exit(1);
+		calculateConsensusForContig(contig_id, doUpdate);
+		nContigs++;
+	    }
+
+	    System.err.println(nContigs + " contigs were processed");
+	}
+	catch (Exception e) {
+	    e.printStackTrace();
+	    System.exit(1);
+	}
+    }
+
+    public void calculateConsensusForContig(int contig_id, boolean doUpdate) throws SQLException, DataFormatException {
+	long clockStart = System.currentTimeMillis();
+	    
+	Contig contig = adb.getContigByID(contig_id, flags);
+
+	PrintStream debugps = debug ? System.out : null;
+	    
+	if (calculateConsensus(contig, algorithm, consensus, debugps)) {
+	    long usedMemory = (runtime.totalMemory() - runtime.freeMemory())/1024;
+	    long clockStop = System.currentTimeMillis() - clockStart;
+	    System.err.print("CONTIG " + contig_id + ": " + contig.getLength() + " bp, " +
+			       contig.getReadCount() + " reads, " +  clockStop + " ms, " + usedMemory + " kb");
+	    storeConsensus(contig_id, consensus, doUpdate);
+	    System.err.println(doUpdate ? "    UPDATED" : "    STORED");
+	} else
+	    System.err.println("Data missing, operation abandoned");
+	
+	if (lowmem)
+	    contig.setMappings(null);
+    }
+
+    public void report() {
+	long timenow = System.currentTimeMillis();
+
+	System.out.println("******************** REPORT ********************");
+	System.out.println("Time: " + (timenow - lasttime));
+
+	System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()/1024 + "/" + runtime.totalMemory()/1024);
+	System.out.println("************************************************");
+	System.out.println();
+    }
+
+    public void printUsage(PrintStream ps) {
+	ps.println("MANDATORY PARAMETERS:");
+	ps.println("\t-instance\tName of instance");
+	ps.println("\t-organism\tName of organism");
+	ps.println();
+	ps.println("OPTIONAL PARAMETERS");
+	ps.println("\t-algorithm\tName of class for consensus algorithm");
+	ps.println("\t-consensustable\tName of consensus table");
+	ps.println("\t-project\tName of project for contigs");
+	ps.println();
+	ps.println("OPTIONS");
+	String[] options = {"-debug", "-lowmem", "-quiet", "-allcontigs", "-pad_is_n", "-pad_is_star", "-no_pad"};
+	for (int i = 0; i < options.length; i++)
+	    ps.println("\t" + options[i]);
+    }
+
+    public boolean calculateConsensus(Contig contig, ConsensusAlgorithm algorithm, Consensus consensus,
+				      PrintStream debugps) {
+	if (contig == null || contig.getMappings() == null)
+	    return false;
+
+	Mapping[] mappings = contig.getMappings();
+	int nreads = mappings.length;
+	int cpos, rdleft, rdright, oldrdleft, oldrdright;
+	int maxleft = -1, maxright = -1, maxdepth = -1;
+
+	int cstart = mappings[0].getContigStart();
+	int cfinal = mappings[0].getContigFinish();
+
+	for (int i = 0; i < mappings.length; i++) {
+	    if (mappings[i].getSequence() == null || mappings[i].getSequence().getDNA() == null ||
+		mappings[i].getSequence().getQuality() == null || mappings[i].getSegments() == null)
+		return false;
+
+	    if (mappings[i].getContigStart() < cstart)
+		cstart = mappings[i].getContigStart();
+	    
+	    if (mappings[i].getContigFinish() > cfinal)
+		cfinal = mappings[i].getContigFinish();
+	}
+	
+	int truecontiglength = 1 + cfinal - cstart;
+
+	byte[] sequence = new byte[truecontiglength];
+	byte[] quality = new byte[truecontiglength];
+
+	for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1;
+	     cpos <= cfinal;
+	     cpos++) {
+	    while ((rdleft < nreads) && (mappings[rdleft].getContigFinish() < cpos))
+		rdleft++;
+
+	    while ((rdright < nreads - 1) && (mappings[rdright+1].getContigStart() <= cpos))
+		rdright++;
+
+	    int depth = 1 + rdright - rdleft;
+
+	    if (rdleft != oldrdleft || rdright != oldrdright) {
+		if (depth > maxdepth) {
+		    maxdepth = depth;
+		    maxleft = cpos;
 		}
+	    }
 
-		if (consensustable == null)
-			consensustable = "CONSENSUS";
+	    if (depth == maxdepth)
+		maxright = cpos;
 
-		if (algname == null)
-			algname = System.getProperty("arcturus.default.algorithm");
+	    oldrdleft = rdleft;
+	    oldrdright = rdright;
 
-		try {
-			System.err.println("Creating an ArcturusInstance for " + instance);
-			System.err.println();
+	    if (debugps != null) {
+		debugps.println("CONSENSUS POSITION: " + (1 + cpos - cstart));
+	    }
 
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+	    algorithm.reset();
 
-			System.err.println("Creating an ArcturusDatabase for " + organism);
-			System.err.println();
+	    for (int rdid = rdleft; rdid <= rdright; rdid++) {
+		int rpos = mappings[rdid].getReadOffset(cpos);
+		Read read = mappings[rdid].getSequence().getRead();
+		int read_id = read.getID();
 
-			adb = ai.findArcturusDatabase(organism);
+		if (rpos >= 0) {
+		    char base = mappings[rdid].getBase(rpos);
+		    int qual = mappings[rdid].getQuality(rpos);
 
-			Project project = (projectname == null) ? null : adb
-					.getProjectByName(null, projectname);
+		    //if (debugps != null)
+		    //debugps.println("  MAPPING " + rdid + ", READ " + read_id + " : position=" + rpos +
+		    //			", base=" + base + ", quality=" + qual);
 
-			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
-
-			conn = adb.getConnection();
-
-			if (conn == null) {
-				System.err.println("Connection is undefined");
-				printUsage(System.err);
-				System.exit(1);
-			}
-
-			if (!quiet)
-				adb.addContigManagerEventListener(new MyListener());
-
-			Class algclass = Class.forName(algname);
-			algorithm = (ConsensusAlgorithm) algclass.newInstance();
-
-			if (algorithm instanceof Gap4BayesianConsensus) {
-				Gap4BayesianConsensus g4bc = (Gap4BayesianConsensus) algorithm;
-
-				if (debug)
-					g4bc.setDebugPrintStream(System.out);
-
-				g4bc.setMode(mode);
-			}
-
-			int nContigs = 0;
-			insertStmt = conn.prepareStatement("insert into " + consensustable
-					+ " (contig_id,sequence,length,quality)"
-					+ " VALUES(?,?,?,?)");
-
-			updateStmt = conn.prepareStatement("update " + consensustable
-					+ " set sequence=?,length=?,quality=? where contig_id=?");
-
-			String query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
-					+ consensustable + " using(contig_id)"
-					: "select CONTIG.contig_id from CONTIG left join "
-							+ consensustable
-							+ " using(contig_id) where sequence is null";
-
-			if (project != null)
-				query += (allcontigs ? " where" : " and") + " project_id = "
-						+ project.getID();
-
-			Statement stmt = conn.createStatement();
-
-			logger.info(query);
-
-			ResultSet rs = stmt.executeQuery(query);
-
-			while (rs.next()) {
-				int contig_id = rs.getInt(1);
-
-				boolean doUpdate = false;
-
-				if (allcontigs) {
-					rs.getInt(2);
-					doUpdate = !rs.wasNull();
-				}
-
-				calculateConsensusForContig(contig_id, doUpdate);
-				nContigs++;
-			}
-
-			System.err.println(nContigs + " contigs were processed");
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-	}
-
-	public void calculateConsensusForContig(int contig_id, boolean doUpdate)
-			throws SQLException, DataFormatException {
-		long clockStart = System.currentTimeMillis();
-
-		Contig contig = adb.getContigByID(contig_id, flags);
-
-		PrintStream debugps = debug ? System.out : null;
-
-		if (calculateConsensus(contig, algorithm, consensus, debugps)) {
-			long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024;
-			long clockStop = System.currentTimeMillis() - clockStart;
-			System.err.print("CONTIG " + contig_id + ": " + contig.getLength()
-					+ " bp, " + contig.getReadCount() + " reads, " + clockStop
-					+ " ms, " + usedMemory + " kb");
-			storeConsensus(contig_id, consensus, doUpdate);
-			System.err.println(doUpdate ? "    UPDATED" : "    STORED");
-		} else
-			System.err.println("Data missing, operation abandoned");
-
-		if (lowmem)
-			contig.setMappings(null);
-	}
-
-	public void report() {
-		long timenow = System.currentTimeMillis();
-
-		System.out.println("******************** REPORT ********************");
-		System.out.println("Time: " + (timenow - lasttime));
-
-		System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()
-				/ 1024 + "/" + runtime.totalMemory() / 1024);
-		System.out.println("************************************************");
-		System.out.println();
-	}
-
-	public void printUsage(PrintStream ps) {
-		ps.println("MANDATORY PARAMETERS:");
-		ps.println("\t-instance\tName of instance");
-		ps.println("\t-organism\tName of organism");
-		ps.println();
-		ps.println("OPTIONAL PARAMETERS");
-		ps.println("\t-algorithm\tName of class for consensus algorithm");
-		ps.println("\t-consensustable\tName of consensus table");
-		ps.println("\t-project\tName of project for contigs");
-		ps.println();
-		ps.println("OPTIONS");
-		String[] options = { "-debug", "-lowmem", "-quiet", "-allcontigs",
-				"-pad_is_n", "-pad_is_star", "-no_pad" };
-		for (int i = 0; i < options.length; i++)
-			ps.println("\t" + options[i]);
-	}
-
-	public boolean calculateConsensus(Contig contig,
-			ConsensusAlgorithm algorithm, Consensus consensus,
-			PrintStream debugps) {
-		if (contig == null || contig.getMappings() == null)
-			return false;
-
-		Mapping[] mappings = contig.getMappings();
-		int nreads = mappings.length;
-		int cpos, rdleft, rdright, oldrdleft, oldrdright;
-		int maxdepth = -1;
-
-		int cstart = mappings[0].getContigStart();
-		int cfinal = mappings[0].getContigFinish();
-
-		for (int i = 0; i < mappings.length; i++) {
-			if (mappings[i].getSequence() == null
-					|| mappings[i].getSequence().getDNA() == null
-					|| mappings[i].getSequence().getQuality() == null
-					|| mappings[i].getSegments() == null)
-				return false;
-
-			if (mappings[i].getContigStart() < cstart)
-				cstart = mappings[i].getContigStart();
-
-			if (mappings[i].getContigFinish() > cfinal)
-				cfinal = mappings[i].getContigFinish();
-		}
-
-		int truecontiglength = 1 + cfinal - cstart;
-
-		byte[] sequence = new byte[truecontiglength];
-		byte[] quality = new byte[truecontiglength];
-
-		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
-			while ((rdleft < nreads)
-					&& (mappings[rdleft].getContigFinish() < cpos))
-				rdleft++;
-
-			while ((rdright < nreads - 1)
-					&& (mappings[rdright + 1].getContigStart() <= cpos))
-				rdright++;
-
-			int depth = 1 + rdright - rdleft;
-
-			if (rdleft != oldrdleft || rdright != oldrdright) {
-				if (depth > maxdepth) {
-					maxdepth = depth;
-				}
-			}
-
-			if (depth == maxdepth) {
-			}
-
-			oldrdleft = rdleft;
-			oldrdright = rdright;
-
-			if (debugps != null) {
-				debugps.println("CONSENSUS POSITION: " + (1 + cpos - cstart));
-			}
-
-			algorithm.reset();
-
-			for (int rdid = rdleft; rdid <= rdright; rdid++) {
-				int rpos = mappings[rdid].getReadOffset(cpos);
-				Read read = mappings[rdid].getSequence().getRead();
-				if (rpos >= 0) {
-					char base = mappings[rdid].getBase(rpos);
-					int qual = mappings[rdid].getQuality(rpos);
-
-					// if (debugps != null)
-					// debugps.println(" MAPPING " + rdid + ", READ " + read_id
-					// + " : position=" + rpos +
-					// ", base=" + base + ", quality=" + qual);
-
-					if (qual > 0)
-						algorithm.addBase(base, qual, read.getStrand(), read
-								.getChemistry());
-				} else {
-					int qual = mappings[rdid].getPadQuality(cpos);
-
-					// if (debugps != null)
-					// debugps.println(" MAPPING " + rdid + ", READ " + read_id
-					// + " : pad quality=" + qual);
-
-					if (qual > 0)
-						algorithm.addBase('*', qual, read.getStrand(), read
-								.getChemistry());
-				}
-			}
-
-			try {
-				sequence[cpos - cstart] = (byte) algorithm.getBestBase();
-				if (debugps != null)
-					debugps.print("RESULT --> " + algorithm.getBestBase());
-			} catch (ArrayIndexOutOfBoundsException e) {
-				System.err.println("Sequence array overflow: " + cpos
-						+ " (base=" + cstart + ")");
-			}
-
-			try {
-				quality[cpos - cstart] = (byte) algorithm.getBestScore();
-				if (debugps != null)
-					debugps.println(" [" + algorithm.getBestScore() + "]");
-			} catch (ArrayIndexOutOfBoundsException e) {
-				System.err.println("Quality array overflow: " + cpos
-						+ " (base=" + cstart + ")");
-			}
-		}
-
-		consensus.setDNA(sequence);
-		consensus.setQuality(quality);
-
-		return true;
-	}
-
-	public void storeConsensus(int contig_id, Consensus consensus,
-			boolean doUpdate) throws SQLException {
-		byte[] sequence = consensus.getDNA();
-		byte[] quality = consensus.getQuality();
-
-		int seqlen = sequence.length;
-
-		byte[] buffer = new byte[12 + (5 * seqlen) / 4];
-
-		compresser.reset();
-		compresser.setInput(sequence);
-		compresser.finish();
-		int compressedSequenceLength = compresser.deflate(buffer);
-		byte[] compressedSequence = new byte[compressedSequenceLength];
-		for (int i = 0; i < compressedSequenceLength; i++)
-			compressedSequence[i] = buffer[i];
-
-		compresser.reset();
-		compresser.setInput(quality);
-		compresser.finish();
-		int compressedQualityLength = compresser.deflate(buffer);
-		byte[] compressedQuality = new byte[compressedQualityLength];
-		for (int i = 0; i < compressedQualityLength; i++)
-			compressedQuality[i] = buffer[i];
-
-		if (doUpdate) {
-			updateStmt.setInt(4, contig_id);
-			updateStmt.setBytes(1, compressedSequence);
-			updateStmt.setInt(2, seqlen);
-			updateStmt.setBytes(3, compressedQuality);
-			updateStmt.executeUpdate();
+		    if (qual > 0)
+			algorithm.addBase(base, qual, read.getStrand(), read.getChemistry());
 		} else {
-			insertStmt.setInt(1, contig_id);
-			insertStmt.setBytes(2, compressedSequence);
-			insertStmt.setInt(3, seqlen);
-			insertStmt.setBytes(4, compressedQuality);
-			insertStmt.executeUpdate();
+		    int qual = mappings[rdid].getPadQuality(cpos);
+
+		    //if (debugps != null)
+		    //debugps.println("  MAPPING " + rdid + ", READ " + read_id + " : pad quality=" + qual);
+
+		    if (qual > 0)
+			algorithm.addBase('*', qual, read.getStrand(), read.getChemistry());
 		}
+	    }
+
+	    try {
+		sequence[cpos-cstart] = (byte)algorithm.getBestBase();
+		if (debugps != null)
+		    debugps.print("RESULT --> " + algorithm.getBestBase());
+	    }
+	    catch (ArrayIndexOutOfBoundsException e) {
+		System.err.println("Sequence array overflow: " + cpos + " (base=" + cstart + ")");
+	    }
+
+	    try {
+		quality[cpos-cstart] = (byte)algorithm.getBestScore();
+		if (debugps != null)
+		    debugps.println(" [" + algorithm.getBestScore() + "]");
+	    }
+	    catch (ArrayIndexOutOfBoundsException e) {
+		System.err.println("Quality array overflow: " + cpos + " (base=" + cstart + ")");
+	    }
 	}
+	
+	consensus.setDNA(sequence);
+	consensus.setQuality(quality);
 
-	private class Consensus {
-		protected byte[] dna = null;
+	return true;
+    }
 
-		protected byte[] quality = null;
+    public void storeConsensus(int contig_id, Consensus consensus, boolean doUpdate) throws SQLException {
+	byte[] sequence = consensus.getDNA();
+	byte[] quality = consensus.getQuality();
 
-		public void setDNA(byte[] dna) {
-			this.dna = dna;
-		}
+	int seqlen = sequence.length;
 
-		public byte[] getDNA() {
-			return dna;
-		}
+	byte[] buffer = new byte[12 + (5*seqlen)/4];
 
-		public void setQuality(byte[] quality) {
-			this.quality = quality;
-		}
+	compresser.reset();
+	compresser.setInput(sequence);
+	compresser.finish();
+	int compressedSequenceLength = compresser.deflate(buffer);
+	byte[] compressedSequence = new byte[compressedSequenceLength];
+	for (int i = 0; i < compressedSequenceLength; i++)
+	    compressedSequence[i] = buffer[i];
 
-		public byte[] getQuality() {
-			return quality;
-		}
+	compresser.reset();
+	compresser.setInput(quality);
+	compresser.finish();
+	int compressedQualityLength = compresser.deflate(buffer);
+	byte[] compressedQuality = new byte[compressedQualityLength];
+	for (int i = 0; i < compressedQualityLength; i++)
+	    compressedQuality[i] = buffer[i];
+
+	if (doUpdate) {
+	    updateStmt.setInt(4, contig_id);
+	    updateStmt.setBytes(1, compressedSequence);
+	    updateStmt.setInt(2, seqlen);
+	    updateStmt.setBytes(3, compressedQuality);
+	    updateStmt.executeUpdate();
+	} else {
+	    insertStmt.setInt(1, contig_id);
+	    insertStmt.setBytes(2, compressedSequence);
+	    insertStmt.setInt(3, seqlen);
+	    insertStmt.setBytes(4, compressedQuality);
+	    insertStmt.executeUpdate();
 	}
+    }
 
-	class MyListener implements ManagerEventListener {
-		private long clock;
+    private class Consensus {
+	protected byte[] dna = null;
+	protected byte[] quality = null;
 
-		private Runtime runtime = Runtime.getRuntime();
+	public void setDNA(byte[] dna) { this.dna = dna; }
 
-		public void managerUpdate(ManagerEvent event) {
-			switch (event.getState()) {
-			case ManagerEvent.START:
-				System.err.println("START -- " + event.getMessage());
-				clock = System.currentTimeMillis();
-				break;
+	public byte[] getDNA() { return dna; }
 
-			case ManagerEvent.WORKING:
-				// System.err.print('.');
-				break;
+	public void setQuality(byte[] quality) { this.quality = quality; }
 
-			case ManagerEvent.END:
-				// System.err.println();
-				clock = System.currentTimeMillis() - clock;
-				System.err.println("END   -- " + clock + " ms");
-				System.err.println("MEM      FREE=" + runtime.freeMemory()
-						/ 1024 + ", TOTAL=" + runtime.totalMemory() / 1024);
-				System.err.println();
-				break;
-			}
-		}
+	public byte[] getQuality() { return quality; }
+    }
+
+    class MyListener implements ManagerEventListener {
+	private long clock;
+	private Runtime runtime = Runtime.getRuntime();
+	
+	public void managerUpdate(ManagerEvent event) {
+	    switch (event.getState()) {
+	    case ManagerEvent.START:
+		System.err.println("START -- " + event.getMessage());
+		clock = System.currentTimeMillis();
+		break;
+		
+	    case ManagerEvent.WORKING:
+		//System.err.print('.');
+		break;
+		
+	    case ManagerEvent.END:
+		//System.err.println();
+		clock = System.currentTimeMillis() - clock;
+		System.err.println("END   -- " + clock + " ms");
+		System.err.println("MEM      FREE=" + runtime.freeMemory()/1024 + ", TOTAL=" + runtime.totalMemory()/1024);
+		System.err.println();
+		break;
+	    }
 	}
+    }
 }
