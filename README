@@ -64,3 +64,6 @@ bridge between Arcturus and external source of read data.
 
 uk.ac.sanger.arcturus.gui contains classes which implement the GUI
 client software, called Minerva.
+
+uk.ac.sanger.arcturus.test contains test programs which are not generally
+intended to be part of the production Arcturus system.
