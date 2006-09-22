@@ -65,7 +65,7 @@ public class ContigTableFrame extends MinervaFrame
 	    });
 
         panel.add(scrollPane, BorderLayout.CENTER);
-	panel.setPreferredSize(new Dimension(600, 530));
+	panel.setPreferredSize(new Dimension(900, 530));
 
 	setContentPane(panel);
 
