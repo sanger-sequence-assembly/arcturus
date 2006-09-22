@@ -1,4 +1,4 @@
-package contigdisplay;
+package uk.ac.sanger.arcturus.test.contigdisplay;
 
 import java.awt.Point;
 import java.awt.Dimension;

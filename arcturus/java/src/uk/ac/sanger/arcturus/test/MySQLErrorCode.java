@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 public class MySQLErrorCode {
     public final static int ER_ERROR_MESSAGES                        = 303;
     public final static int ER_HASHCHK                               = 1000;

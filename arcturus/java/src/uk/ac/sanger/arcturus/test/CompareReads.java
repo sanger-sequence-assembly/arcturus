@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 import java.util.Properties;
 import javax.naming.Context;
 

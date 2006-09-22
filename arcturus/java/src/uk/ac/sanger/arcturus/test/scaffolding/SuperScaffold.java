@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 class SuperScaffold extends Core {
     private int id = -1;

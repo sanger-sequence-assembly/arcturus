@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 class Contig {
     private int id = -1;

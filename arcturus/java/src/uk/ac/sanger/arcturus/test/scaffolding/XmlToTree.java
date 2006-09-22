@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 import org.xml.sax.*;
 import org.xml.sax.helpers.DefaultHandler;

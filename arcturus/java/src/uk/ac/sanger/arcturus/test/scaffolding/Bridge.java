@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 class Bridge extends SuperBridge {
     private int gapsize = -1;

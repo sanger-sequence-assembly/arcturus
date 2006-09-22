@@ -1,4 +1,4 @@
-package contigdisplay;
+package uk.ac.sanger.arcturus.test.contigdisplay;
 
 public class Bridge {
     protected int score;
