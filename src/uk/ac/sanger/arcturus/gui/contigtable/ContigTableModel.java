@@ -67,6 +67,13 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	}
     }
 
+    public Object[] getLongValues() {
+	Object[] objs = {"XXXXXX", "XXXXXXXXXXXXXXXX", "XXXXXXXX",
+			 new Integer(88888888), new Integer(88888888), new java.util.Date()};
+
+	return objs;
+    }
+
     public Class getColumnClass(int col) {
         switch (col) {
 	case COLUMN_ID:

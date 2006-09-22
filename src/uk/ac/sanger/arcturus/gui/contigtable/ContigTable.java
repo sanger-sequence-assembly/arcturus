@@ -19,9 +19,6 @@ public class ContigTable extends SortableTable {
 
     public ContigTable(SortableTableModel stm) {
 	super(stm);
-	setDefaultRenderer(java.util.Date.class,
-			   new ISODateRenderer());
-	getColumnModel().getColumn(4).setPreferredWidth(150);
     }
 
     public void setHowToColour(int how) {
