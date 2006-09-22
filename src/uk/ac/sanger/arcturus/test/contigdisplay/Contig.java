@@ -1,4 +1,4 @@
-package contigdisplay;
+package uk.ac.sanger.arcturus.test.contigdisplay;
 
 public class Contig {
     protected String name;

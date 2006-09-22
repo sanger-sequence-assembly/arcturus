@@ -1,4 +1,4 @@
-package scaffoldbuilder;
+package uk.ac.sanger.arcturus.test.scaffoldbuilder;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;

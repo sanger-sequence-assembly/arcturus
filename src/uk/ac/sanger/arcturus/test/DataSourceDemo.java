@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 import java.sql.Connection;
 import javax.sql.DataSource;
 import javax.naming.Context;

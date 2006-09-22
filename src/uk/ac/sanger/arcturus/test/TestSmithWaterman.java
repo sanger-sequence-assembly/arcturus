@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 import uk.ac.sanger.arcturus.utils.*;
 
 public class TestSmithWaterman {

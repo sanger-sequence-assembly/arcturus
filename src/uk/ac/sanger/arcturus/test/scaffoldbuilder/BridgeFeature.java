@@ -1,4 +1,4 @@
-package scaffoldbuilder;
+package uk.ac.sanger.arcturus.test.scaffoldbuilder;
 
 import java.awt.Point;
 import java.awt.Dimension;

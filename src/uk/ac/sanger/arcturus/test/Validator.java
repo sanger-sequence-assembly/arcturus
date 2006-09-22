@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 /*
  * @(#)Validator.java 1.5 99/02/09
  *

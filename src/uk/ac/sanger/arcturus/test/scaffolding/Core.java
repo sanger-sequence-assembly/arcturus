@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 import java.util.Vector;
 import java.util.Enumeration;

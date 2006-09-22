@@ -1,4 +1,4 @@
-package scaffolding;
+package uk.ac.sanger.arcturus.test.scaffolding;
 
 class SuperBridge extends Core {
     protected int template_id = -1;

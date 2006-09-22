@@ -1,3 +1,5 @@
+package uk.ac.sanger.arcturus.test;
+
 import javax.swing.*;
 import javax.imageio.*;
 import java.awt.*;
