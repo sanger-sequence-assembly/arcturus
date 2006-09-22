@@ -15,7 +15,6 @@
   <property name="build.dir" value="build"/>
   <property name="build.classes" value="${build.dir}/classes"/>
   <property name="build.lib" value="${build.dir}/lib"/>
-  <property name="build.test" value="${build.dir}/test"/>
 
   <!-- Documents directory -->
   <property name="javadoc.dir" value="${build.dir}/docs"/>
@@ -33,7 +32,6 @@
     <mkdir dir="${build.classes}"/>
     <mkdir dir="${build.lib}"/>
     <mkdir dir="${javadoc.dir}"/>
-    <mkdir dir="${build.test}"/>
   </target>
 
   <target name="clean" description="Remove all generated files.">
@@ -69,14 +67,5 @@
 	     protected="no"
 	     package="no"
              packagenames="${package.prefix}.${project.name}.*,${package.prefix}.${project.name}.*.*"/>
-  </target>
-
-  <target name="test" depends="jar"
-          description="Compile the suite of test classes">
-    <javac srcdir="${testsrc.dir}" destdir="${build.test}"
-           source="${build.target}"
-           target="${build.target}"
-           debug="true"
-	   classpath="${build.lib}/${project.name}.jar" />
   </target>
 </project>
