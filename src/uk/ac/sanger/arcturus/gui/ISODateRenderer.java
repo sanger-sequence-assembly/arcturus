@@ -4,7 +4,7 @@ import javax.swing.table.*;
 import java.text.*;
 
 public class ISODateRenderer extends DefaultTableCellRenderer {
-    private final DateFormat formatter= new SimpleDateFormat("yyyy-MMM-dd HH:mm:ss");
+    private final DateFormat formatter= new SimpleDateFormat("yyyy MMM dd HH:mm");
 
     public void setValue(Object value) {
         setText((value == null) ? "" : formatter.format(value));
