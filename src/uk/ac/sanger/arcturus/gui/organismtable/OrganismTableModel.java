@@ -47,6 +47,12 @@ class OrganismTableModel extends AbstractTableModel implements SortableTableMode
 	}
     }
 
+    public Object[] getLongValues() {
+	Object[] objs = {"XXXXXXXXXXXX","XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"};
+
+	return objs;
+    }
+
     public Class getColumnClass(int col) {
         switch (col) {
 	case 0:
