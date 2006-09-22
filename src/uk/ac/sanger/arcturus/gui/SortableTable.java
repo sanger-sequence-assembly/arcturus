@@ -47,40 +47,6 @@ public class SortableTable extends JTable {
      * cells.
      */
 
-    private void initColumnSizes2() {
-        SortableTableModel model = (SortableTableModel)getModel();
-        TableColumn column = null;
-        Component comp = null;
-        int headerWidth = 0;
-        int cellWidth = 0;
-        Object[] longValues = model.getLongValues();
-        TableCellRenderer headerRenderer =
-            getTableHeader().getDefaultRenderer();
-
-	int colcount = model.getColumnCount();
-
-        for (int i = 0; i < colcount; i++) {
-            column = getColumnModel().getColumn(i);
-
-            comp = headerRenderer.getTableCellRendererComponent(null, column.getHeaderValue(),
-								false, false, 0, 0);
-            headerWidth = comp.getPreferredSize().width;
-
-            comp = getDefaultRenderer(model.getColumnClass(i)).
-		getTableCellRendererComponent(this, longValues[i],
-					      false, false, 0, i);
-
-            cellWidth = comp.getPreferredSize().width;
-
-	    //System.err.println("Set width of column " + i +
-	    //	       " (class=" + model.getColumnClass(i).getName() +
-	    //	       ", long value=\"" + longValues[i] + "\") to " + cellWidth +
-	    //	       " pixels.");
-
-            column.setPreferredWidth(Math.max(headerWidth, cellWidth));
-        }
-    }
-
     private void initColumnSizes() {
         SortableTableModel model = (SortableTableModel)getModel();
 	TableCellRenderer headerRenderer =
