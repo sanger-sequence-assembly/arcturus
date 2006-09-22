@@ -5,4 +5,4 @@ setenv JAVA_OPTS "-Djava.awt.headless=true"
 set basedir=`dirname $0`
 source ${basedir}/setup.csh
 
-java ${JAVA_OPTS} CalculateConsensus $*
+java ${JAVA_OPTS} ${ARCTURUS_TEST_PACKAGE}.CalculateConsensus $*

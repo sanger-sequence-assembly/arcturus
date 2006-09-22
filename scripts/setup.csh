@@ -13,8 +13,11 @@ set JAR_DIRECTORY=/nfs/pathsoft/minerva/jars
 # This is the Arcturus JAR file
 set ARCTURUS_JAR=${ARCTURUS_HOME}/../build/lib/arcturus.jar
 
-# This is the test class directory
-set ARCTURUS_TEST_CLASSES=${ARCTURUS_HOME}/../build/test
+# This is the Arcturus root package name
+set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
+
+# This is the test package
+set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
 # JAR file and driver name for MySQL Connector/J
 #set CONNECTORJ_VER=3.0.14-stable
@@ -69,9 +72,9 @@ set EXTRAJARS=${CONNECTORJ_JARS}:${ORACLE_JDBC_JARS}:${JNDI_JARS}:${JLFGR_JARS}
 
 # Add the JAR files to the CLASSPATH environment variable
 if ( $?CLASSPATH ) then
-    setenv CLASSPATH ${CLASSPATH}:${EXTRAJARS}:${ARCTURUS_TEST_CLASSES}:${ARCTURUS_JAR}
+    setenv CLASSPATH ${CLASSPATH}:${EXTRAJARS}:${ARCTURUS_JAR}
 else
-    setenv CLASSPATH ${EXTRAJARS}:${ARCTURUS_TEST_CLASSES}:${ARCTURUS_JAR}
+    setenv CLASSPATH ${EXTRAJARS}:${ARCTURUS_JAR}
 endif
 
 # Specify minimum heap size
