@@ -91,6 +91,14 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 	}
     }
 
+    public Object[] getLongValues() {
+	Object[] objs = {"XXXXXXXXXXXX", "XXXXXXXXXXXX", new Integer(88888888),
+			 new Integer(888888), new Integer(88888888), new Integer(88888888),
+			 new java.util.Date(), "XXXXXXXX"};
+
+	return objs;
+    }
+
     public Class getColumnClass(int col) {
         switch (col) {
 	case 0:

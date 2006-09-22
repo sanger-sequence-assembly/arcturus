@@ -25,9 +25,6 @@ public class ProjectTable extends SortableTable {
     public ProjectTable(ProjectTableModel ptm) {
 	super((SortableTableModel)ptm);
 
-	setDefaultRenderer(java.util.Date.class,
-			   new ISODateRenderer());
-
 	getColumnModel().getColumn(5).setPreferredWidth(150);
 
 	addMouseListener(new MouseAdapter() {
