@@ -26,7 +26,7 @@ public class ProjectTableFrame extends MinervaFrame {
 	JPanel panel = new JPanel(new BorderLayout());
 
 	panel.add(scrollpane, BorderLayout.CENTER);
-	panel.setPreferredSize(new Dimension(700, 530));
+	panel.setPreferredSize(new Dimension(900, 530));
 
 	setContentPane(panel);
 
