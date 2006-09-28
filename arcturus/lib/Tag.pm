@@ -92,7 +92,7 @@ sub setPosition {
     my @position = (shift,shift);
     my %options = @_;
 
-    @position = sort {$a <=> $b} @position; # ensure ordering
+    @position = sort {$a <=> $b} @position; # ensure ordering of segment
 # add this position pair to the buffer
     undef $this->{position} unless $options{join};
     unless (defined($this->{position})) {
@@ -144,6 +144,39 @@ sub getSequenceID {
 
     return $this->{seq_id} || '';
 }
+
+# measures of tag size
+
+sub getSize {
+# returns total sequence length occupied by tag 
+    my $this = shift;
+
+    my $part = $this->isJoined();
+    return undef unless defined($part);
+
+    $part++;
+    my $size = 0.0;
+    while ($part--) {
+        my @segment = $this->getPosition($part);
+        $size += ($segment[1] - $segment[0] + 1);
+    }
+
+    return $size;
+} 
+
+sub getSpan {
+# returns the total distance on the sequence occupied by the tag  
+    my $this = shift;
+
+    my $part = $this->isJoined();
+    return undef unless defined($part);
+
+    my @pf = $this->getPosition(0);     # first segment;
+    my @pl = $this->getPosition($part); # last  segment;
+    return $pl[1] - $pf[0] + 1;
+}
+
+# orientation
 
 sub setStrand {
     my $this = shift;
