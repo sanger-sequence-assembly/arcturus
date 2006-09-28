@@ -4,6 +4,8 @@ use strict;
 
 use ArcturusDatabase;
 
+use ContigFactory::ContigFactory;
+
 use Logging;
 
 #----------------------------------------------------------------
@@ -31,12 +33,13 @@ my $qualityclip;
 my $clipthreshold;
 my $clipsymbol;
 my $endregiontrim;
+my $endregiononly;
 my $gap4name;
 
 my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
                . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
-               . "endregiontrim|gap4name|g4n|ert|verbose|help";
+               . "endregiontrim|ert|endegiononly|ero|erbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -63,7 +66,8 @@ while (my $nextword = shift @ARGV) {
     $fofn          = shift @ARGV  if ($nextword eq '-focn'); # file of names/IDs
 
     if ($nextword eq '-caf' || $nextword eq '-fasta' || $nextword eq '-embl') {
-        die "You can not select more than one output format (CAF, fasta or embl)"         if (defined($caffile) || defined($fastafile) || defined($emblfile));
+        die "You can not select more than one output format (CAF, fasta or embl)"
+         if (defined($caffile) || defined($fastafile) || defined($emblfile));
     }
 
     $caffile       = shift @ARGV  if ($nextword eq '-caf');
@@ -91,6 +95,9 @@ while (my $nextword = shift @ARGV) {
 
     $endregiontrim = shift @ARGV  if ($nextword eq '-endregiontrim');
     $endregiontrim = shift @ARGV  if ($nextword eq '-ert');
+
+    $endregiononly = shift @ARGV  if ($nextword eq '-endregiononly');
+    $endregiononly = shift @ARGV  if ($nextword eq '-ero');
 
     $gap4name      = 1            if ($nextword eq '-gap4name');
     $gap4name      = 1            if ($nextword eq '-g4n');
@@ -202,6 +209,7 @@ if (defined($fastafile) && $fastafile) {
 }
 elsif (defined($fastafile)) {
     $fhDNA = *STDOUT;
+    $fhQTY = *STDOUT if defined($qualityfile);
 }
 
 # EMBL format
@@ -247,7 +255,8 @@ if (defined($fastafile)) {
         $woptions{qualitymask} = $msymbol if $msymbol; # overrides
     }
     else {
-        $woptions{endregiononly} = $masking if defined($masking);
+# NOTE: use other parameter here
+        $woptions{endregiononly} = $endregiononly if defined($endregiononly);
         $woptions{maskingsymbol} = $msymbol || 'X';
         $woptions{shrink} = $mshrink if defined($mshrink);
 
@@ -291,12 +300,30 @@ foreach my $identifier (@contigs) {
 
     next unless $contig;
 
+    if ($endregiononly) {
+# replace contig by an endregion masked 
+	$woptions{qfill} = 50 if $endregiontrim; # test
+        $contig = ContigFactory->endRegionOnly($contig,%woptions);
+        next unless $contig;
+    }
+#    elsif ($endregiontrim) {
     if ($endregiontrim) {
-        my ($ql,$qr) = $contig->endregiontrim(cliplevel=>$endregiontrim);
-        $logger->warning("end region clipping $endregiontrim clipped range $ql, $qr");
+print STDOUT "endregiontrim=$endregiontrim\n";
+        my %toptions = (cliplevel=>$endregiontrim);
+        my ($clipped,$cstatus) = ContigFactory->endRegionTrim($contig,%toptions);
+        $logger->warning($cstatus);
+        next unless $clipped;
+        $contig = $clipped;
+$logger->skip();
+#        my ($ql,$qr) = $contig->endregiontrim(cliplevel=>$endregiontrim);
+#        $logger->warning("end region clipping $endregiontrim clipped range $ql, $qr");
+#        next unless $contig;
     }
 
-#    $contig->toPadded() if $padded;
+    if ($padded) {
+#       $contig = ContigFactory->toPadded($contig);
+       next unless $contig;
+    }
 
     my $err;
 
