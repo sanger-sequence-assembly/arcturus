@@ -27,6 +27,7 @@ use strict;
 # and the comment; a modified tag may subsequently replace the original one
 # in Arcturus (using a specialized script)
 #
+# ----------------------------------------------------------------------------
 
 my $readtagfactory; # class variable
 
@@ -38,7 +39,7 @@ sub new {
 # constructor
     my $class = shift;
 
-# we want only one instance per process
+# the following ensures only one instance per process
 
     my $this = $readtagfactory; 
 
@@ -51,36 +52,69 @@ sub new {
         $readtagfactory = $this;
     }
 
-    $this->importTag(@_) if @_; # import a Tag instance, if specified 
-
     return $this;
+}
+
+#----------------------------------------------------------------------
+
+sub verify {
+# private: verify the correct input type of a tag
+    my $tag = shift;
+    my $origin = shift;
+
+# test the instance signature 
+
+    unless (ref($tag) eq 'Tag') {
+        print STDERR "ReadTagFactory->$origin expects a "
+                   . "Tag instance as parameter\n";
+	return 0;
+    }
+
+# test the tag type by interogating about its host class, if any
+
+    unless ($tag->getHostClass() eq 'Read') {
+        print STDERR "ReadTagFactory->$origin expects a "
+                   . "tag of type ReadTag (instead of : "
+                   . ($tag->getHostClass() || "unknown type") 
+                   . ")\n";
+#        return 0;      
+        print STDERR $tag->dump() . "\n";
+    }
+
+    return 1;
+}
+
+#----------------------------------------------------------------------
+
+sub makeTag {
+# make a new read tag
+    my $this = shift;
+    my ($tagtype,$start,$final,%options) = @_;
+
+    my $newtag = new Tag ('Read');
+
+    $newtag->setType($tagtype);
+    $newtag->setPosition($start,$final);
+    $newtag->setStrand('Forward');
+
+    foreach my $item (keys %options) {
+        my $value = $options{$item};
+        eval("\$newtag->set$item(\$value)");
+    }
+
+    return $newtag;
 }
 
 #-----------------------------------------------------------------------------
 # public method to cleanup/reformat/analyse tag info and if needed standardize
 #-----------------------------------------------------------------------------
 
-sub importTag {
-# import a read Tag Instance
-    my $this = shift;
-    my $rtag = shift; # a read tag instance
-
-    die "importTag expects a Tag instance" unless (ref($rtag) eq 'Tag');
-
-    die "importTag expects a read tag" unless ($rtag->{label} eq 'readtag');
-
-    $this->{Tag} = $rtag;
-
-    return;
-}
-
-#-----------------------------------------------------------------------------
-
 sub cleanup {
 # clean the tag info by removing clutter, double info and redundent new line
     my $this = shift;
-    
-    my $tag = $this->{Tag} || return undef; # Missing Tag
+    my $tag  = shift;
+
+    return undef unless &verify($tag,'cleanup');
 
     my $info = $tag->getTagComment();
 
@@ -98,9 +132,10 @@ sub cleanup {
 sub processOligoTag {
 # test/complete oligo information
     my $this = shift;
+    my $tag  = shift;
     my %options = @_; # used in repair mode
  
-    my $tag = $this->{Tag} || return undef; # Missing Tag
+    return undef unless &verify($tag,'processOligoTag');
 
     my $tagtype = $tag->getType();
 
@@ -271,8 +306,9 @@ sub processOligoTag {
 sub processRepeatTag {
 # check repeat tags for presence of tag sequence name
     my $this = shift;
+    my $tag  = shift;
 
-    my $tag = $this->{Tag} || return undef; # Missing Tag
+    return undef unless &verify($tag,'processRepeatTag');
 
     my $tagtype = $tag->getType();
 
@@ -290,8 +326,9 @@ sub processRepeatTag {
 sub processAdditiveTag {
 # check position range
     my $this = shift;
+    my $tag  = shift;
 
-    my $tag = $this->{Tag} || return undef;
+    return undef unless &verify($tag,'processAdditiveTag');
 
     my $tagtype = $tag->getType();
 
@@ -502,6 +539,8 @@ sub cleanup_comment {
 
     $changes++ if ($comment =~ s/^\s+|\s+$//); # remove leading/trailing blanks
 
+    $changes++ if ($comment =~ s/\n+/\\n\\/g); # replace new line by \n\
+
     $changes++ if ($comment =~ s/\\n\\\s*$//); # delete trailing newline
 
     $changes++ if ($comment =~ s/\s+(\\n\\)/$1/g); # delete blanks before \n\
@@ -517,6 +556,42 @@ sub cleanup_comment {
     $changes++ if ($comment =~ /^\s*\\\s*/); # remove a single backslash
 
     return $changes,$comment;
+}
+
+#----------------------------------------------------------------------
+
+sub processTagPlaceHolderName {
+# substitute (possible) placeholder name of the tag sequence & comment
+    my $this = shift;
+    my $tag  = shift;
+
+    my $seq_id = $tag->getSequenceID();
+    return undef unless $seq_id; # seq_id must be defined
+
+# a placeholder name is specified with a sequence name value like '<name>'
+
+    my $name = $tag->getTagSequenceName();
+    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form '<name>'
+print STDOUT "processTagPlaceHolderName: $name \n";
+
+    $name = $1; # get the name root between the bracket 
+
+# replace the tag sequence name by one generated from 'name' & the sequence ID
+
+    my $randomnumber = int(rand(100)); # from 0 to 99 
+    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
+# ok, adopt the new name as tag sequence name
+    $tag->setTagSequenceName($newname);
+
+# and similarly, if the place holder appears in the comment, substitute
+ 
+    if (my $comment = $tag->getTagComment()) {
+        if ($comment =~ s/\<$name\>/$newname/) {
+            $tag->setTagComment($comment);
+	}
+    }
+
+    return 1;
 }
 
 #----------------------------------------------------------------------------
