@@ -135,6 +135,8 @@ $DEBUG = $debug if $debug;
 
 &showUsage("Missing data file with read info") unless $datafile;
 
+&showUsage("Missing Smith Waterman algorithm executable") unless $swprog;
+
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
@@ -260,11 +262,11 @@ foreach my $contigname (sort keys %$contigreadhash) {
     my $arcturuscontig;
 
     if ($contigname =~ /\w+\.(\d+)/) {
-        my $contig_id = $1;
+        my $contig_id = $1 + 0;
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
     }
-    elsif ($contigname =~ /contig(\d+)/i) {
-        my $contig_id = $1;
+    elsif ($contigname =~ /[contig]?(\d+)/i) {
+        my $contig_id = $1 + 0;
         $logger->warning("getting contig $contig_id");
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
     }
@@ -279,7 +281,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
 # test if it is a current contig
 
-    my $contig_id = $contig->getContigID();
+    my $contig_id = $arcturuscontig->getContigID();
 
     unless ($adb->isCurrentContigID($contig_id)){
         $logger->severe("Contig $contigname is not a current contig");
@@ -296,7 +298,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
 # test the project status
 
-    my $project_id = $contig->getProject();
+    my $project_id = $arcturuscontig->getProject();
     my ($projects,$status) = $adb->getProject(project_id=>$project_id);
     unless ($projects->[0] && $status eq 'OK') {
        ($projects,$status) = $adb->getProject(projectname=>'BIN');
@@ -310,7 +312,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
     if ($cleanup) {
         $logger->warning("Removing readmappings shorter than $cleanup");
-        my $newcontig = ContigFactor->removeShortReads($arcturuscontig);
+        my $newcontig = ContigFactory->removeShortReads($arcturuscontig);
         $logger->severe("Failed to return a valid contig") unless $newcontig;
         $arcturuscontig = $newcontig if $newcontig;
     }
@@ -336,6 +338,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
     my $readhash = {};
     my $readscore = {};
     my $readmapping = {};
+    my $placedreads = 0;
     foreach my $bacreadinfo (@$bacendreads) {
 
         my ($name,$strand,$cstart,$cfinal) = @$bacreadinfo;
@@ -424,6 +427,7 @@ $logger->warning($mapping->toString(Xdomain=>$csubstring,
 		$logger->warning("Low mapping range (r: $rlength  c: $clength)");
                 $logger->warning($mapping->toString(Xdomain=>$csubstring,Ydomain=>$rsubstring));
             }
+ 	    $placedreads++;
         }
 	else {
             print STDERR "No alignment method specified\n";
@@ -458,8 +462,8 @@ $logger->warning($mapping->toString(Xdomain=>$csubstring,
 
 # here the mappings have been determined; add them (and reads) to contig
 
-    if ($newread) {
-	$logger->warning("$newread new reads placed for contig $contigname");
+    if ($placedreads) {
+	$logger->warning("$placedreads new reads placed for contig $contigname");
     }
     else {
 	$logger->warning("No new reads placed for contig $contigname");
@@ -583,16 +587,11 @@ sub reversecomplement {
 
     my $length = length($sequence);
 
-    my $inverse;
-    for my $i (1 .. $length) {
-        my $j = $length - $i;
-        my $base = substr $sequence, $j, 1;
-        $inverse .= $base;
-    }
+    my $reverse = reverse($sequence);
 
-    $inverse =~ tr/atcgATCG/tagcTAGC/;
+    $reverse =~ tr/atcgATCG/tagcTAGC/;
 
-    return $inverse;
+    return $reverse;
 }
 
 sub mappingrange {
