@@ -926,8 +926,6 @@ unless ($cpaligned || $compare->getNumberOfReads() > 1) {
     my $mapping = new Mapping($compare->getContigName());
     $mapping->setSequenceID($compare->getContigID());
 
-print STDOUT "mapping between contigs:".$mapping->toString() if $DEBUG;
-
 # determine guillotine; accept only alignments with a minimum number of reads 
 
     my $guillotine = 0;
@@ -1166,6 +1164,7 @@ if ($DEBUG) {
             }
         }
         $this->addContigToContigMapping($mapping);
+# what about the parent?
     }
 
 # and return the number of segments, which could be 0
@@ -1269,50 +1268,6 @@ sub isValidMapping {
     return 1,$report;
 }
 
-# -----------------------------------------------------
-
-sub reverse {
-# inverts all read alignments
-    my $this = shift;
-
-    my $length = $this->getContigLength();
-
-# the read mappings
-
-    if ($this->getMappings()) {
-        my $mappings = $this->getMappings();
-        foreach my $mapping (@$mappings) {
-            $mapping->applyMirrorTransform($length+1);
-        }
-# and sort the mappings according to increasing contig position
-        @$mappings = sort {$a->getContigStart <=> $b->getContigStart} @$mappings;
-    }
-
-# possible parent contig mappings
-
-    if ($this->getContigToContigMappings()) {
-        my $mappings = $this->getContigToContigMappings();
-        foreach my $mapping (@$mappings) {
-            $mapping->applyMirrorTransform($length+1);
-        }
-    }
-
-# tags
-
-    my $tags = $this->getTags();
-    foreach my $tag (@$tags) {
-        $tag->mirror($length+1);
-    }
-
-# replace the consensus sequence
-
-    if (my $consensus = $this->getConsensus()) {
-        my $newsensus = inverse($consensus);
-        $newsensus =~ tr/ACGTacgt/TGCAtgca/;
-	$this->setConsensus($newsensus);
-    }
-}
-
 #-------------------------------------------------------------------    
 # Tags
 #-------------------------------------------------------------------    
@@ -1329,7 +1284,7 @@ sub inheritTags {
 
     $depth = 1 unless defined($depth);
 
-# get the parents
+# get the parents; if none present, (try to) get them from the database
 
     my $parents = $this->getParentContigs(1);
 
@@ -1355,7 +1310,7 @@ sub propagateTags {
 # propagate the tags from this contig to its child(ren)
     my $this = shift;
 
-# get the child(ren) of this contig
+# get the child(ren); if none present, (try to) get them from the database
 
     my $children = $this->getChildContigs(1);
 
@@ -1365,16 +1320,16 @@ sub propagateTags {
 }
 
 sub propagateTagsToContig {
-# propagate tags FROM this (parent) TO target contig
+# propagate tags FROM this (parent) TO the specified target contig
     my $parent = shift;
     my $target = shift;
     my %options = @_;
 
     return 0 unless $parent->hasTags(1);
 
-print STDOUT "propagateTagsToContig ".
+$DEBUG->info("ENTER propagateTagsToContig ".
 "parent $parent (".$parent->getContigID().")  target $target ("
-.$target->getContigID().")\n" if $DEBUG;
+.$target->getContigID().")") if $DEBUG;
 
 # check the parent-child relation: is there a mapping between them and
 # is the ID of the one of the parents identical to to the input $parent?
@@ -1382,25 +1337,28 @@ print STDOUT "propagateTagsToContig ".
 
     my $mapping;
 
-    my $cparents = $target->getParentContigs(1);
-
     my $parent_id = $parent->getContigID();
 
-    if ($cparents && @$cparents && $target->hasContigToContigMappings(1)) {
-# there are mappings: hence the child is taken from the database (& has parents)
+    my $dl = $options{delayedloading};
+    $dl = 1 unless defined ($dl);
+
+    if ($target->hasContigToContigMappings($dl)) {
+
+# if parents are provided, then screen this ($parent) against them
+# if this parent is not among the ones listed, ignored
+# if no parents are provided, adopt this one
+ 
+        my $cparents = $target->getParentContigs($dl) || [];
+        push @$cparents,$parent unless ($cparents && @$cparents);
+# we scan the parent(s) provided, to ensure that $this parent is among them
         foreach my $cparent (@$cparents) {
-print STDOUT "comparing IDs : ".$cparent->getContigID()." ($parent_id)\n" if $DEBUG;
 	    if ($cparent->getContigID() == $parent_id) {
 # yes, there is a parent child relation between the input Contigs
 # find the corresponding mapping using contig and mapping names
                 my $c2cmappings = $target->getContigToContigMappings();
                 foreach my $c2cmapping (@$c2cmappings) {
-print STDOUT "mapping name ".$c2cmapping->getMappingName." contigname: "
-                     .$parent->getContigName."\n" if $DEBUG;
-print STDOUT "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
-                     .$parent->getSequenceID()."\n" if $DEBUG;
-# we use the sequence IDs here because the mappings come from the database
-#  	            if ($c2cmapping->getMappingName eq $parent->getContigName) {
+$DEBUG->info("Testing mapping ".$parent->getSequenceID()) if $DEBUG;
+# we use the sequence IDs here, assuming the mappings come from the database
 		    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
                         $mapping = $c2cmapping;
                         last;
@@ -1410,14 +1368,14 @@ print STDOUT "mapping seqID ".$c2cmapping->getSequenceID()." contig seqID: "
 	}
     }
 
-print STDOUT "mapping: ".($mapping || 'not found')."\n" if $DEBUG;
+$DEBUG->info("mapping: ".($mapping || 'not found')) if $DEBUG;
 
 # if mapping is not defined here, we have to find it from scratch
 
     unless ($mapping) {
-print STDOUT "Finding mappings from scratch \n" if $DEBUG;
+$DEBUG->info("Finding mappings from scratch") if $DEBUG;
         my ($nrofsegments,$deallocated) = $target->linkToContig($parent);
-print STDOUT "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG;
+$DEBUG->info("number of mapping segments : ".($nrofsegments || 0)) if $DEBUG;
         return 0 unless $nrofsegments;
 # identify the mapping using parent contig and mapping name
         my $c2cmappings = $target->getContigToContigMappings();
@@ -1429,10 +1387,10 @@ print STDOUT "number of mapping segments : ",($nrofsegments || 0)."\n" if $DEBUG
             }
         }
 # protect against the mapping still not found, but this should not occur
-print STDOUT "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
+$DEBUG->info("mapping identified: ".($mapping || 'not found')) if $DEBUG;
         return 0 unless $mapping;
     }
-# print STDOUT $mapping->assembledFromToString() if $DEBUG;
+$DEBUG->warning($mapping->assembledFromToString()) if $DEBUG;
 
 # check if the length of the target contig is defined
 
@@ -1441,15 +1399,16 @@ print STDOUT "mapping identified: ".($mapping || 'not found')."\n" if $DEBUG;
         $target->getStatistics(1); # no zeropoint shift; use contig as is
         $tlength = $target->getConsensusLength();
         unless ($tlength) {
-            print STDOUT "Undefined length in (child) contig\n";
+            $DEBUG->warning("Undefined length in (child) contig");
             return 0;
         }
     }
-print STDOUT "Target contig length : $tlength \n" if $DEBUG;
+$DEBUG->warning("Target contig length : $tlength ") if $DEBUG;
 
 # if the mapping comes from Arcturus we have to use its inverse
 
-    $mapping = $mapping->inverse() unless $options{noinverse};
+#    $mapping = $mapping->inverse() unless $options{noinverse};
+    $mapping = $mapping->inverse();
 
 # ok, propagate the tags from parent to target
 
@@ -1479,24 +1438,31 @@ print STDOUT "Target contig length : $tlength \n" if $DEBUG;
 
 #FROM HERE could be a function of the tag factory
     my %annotagoptions = (break=>1, debug=>$DEBUG);
-    $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize};
+    $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
+    $annotagoptions{changestrand} = ($mapping->getAlignment() < 0) ? 1 : 0;
+# activate speedup for mapping multiplication by defining nzt option as hash
+    $annotagoptions{nonzerostart} = {} if $options{speedmode};
+$annotagoptions{timer} = $options{timer};
+
+    my %moptions = (overlap => $options{overlap});
 
     foreach my $ptag (@$ptags) {
         my $tagtype = $ptag->getType();
         next unless ($tagtype eq 'ANNO');
-print STDOUT "Processing ANNO tag for remapping ".$ptag->getPositionLeft()."\n" if $DEBUG;
+# remapping is SLOW for large number of tags
+$DEBUG->warning("Processing ANNO tag for remapping ".$ptag->getPositionLeft()) if $DEBUG;
         my $tptags = $tagfactory->remap($ptag,$mapping,%annotagoptions);
         push @tags,@$tptags if $tptags;
     }
 # if annotation tags found, sort according to start position
     if (@tags) {
-print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
+$DEBUG->warning("Processing ".scalar(@tags)." ANNO tags for merge") if $DEBUG;
         @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
 # test if some tags can be merged
         my ($i,$j) = (0,1);
         while ($i < scalar(@tags) && $j < scalar(@tags)) {
 # test for possible merger of tags i and j
-            if (my $newtag = $tagfactory->merge($tags[$i],$tags[$j])) {
+            if (my $newtag = $tagfactory->merge($tags[$i],$tags[$j],%moptions)) {
 # the tags are merged: replace tags i and j by the new one
                 splice @tags, $i, 2, $newtag;
 # keep the same values of i and j
@@ -1508,6 +1474,7 @@ print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
             }
         }
         $target->addTag([@tags]) if @tags;
+$DEBUG->warning("DONE") if $DEBUG;
     }
 #TO HERE
 
@@ -1527,18 +1494,18 @@ print STDOUT "Processing ".scalar(@tags)." ANNO tags for merge\n" if $DEBUG;
 #        push @tags,@$tptags if $tptags; 
 
 # determine the segment(s) of the mapping with the tag's position
-print STDOUT "processing tag $ptag (align $alignment) \n" if $DEBUG;
+$DEBUG->warning("processing tag $ptag (align $alignment)") if $DEBUG;
 
         undef my @offset;
         my @position = $ptag->getPosition();
-print STDOUT "tag position (on parent) @position \n" if $DEBUG;
+$DEBUG->warning("tag position (on parent) @position") if $DEBUG;
         foreach my $segment (@$c2csegments) {
 # for the correct segment, getXforY returns true
             for my $i (0,1) {
-print STDOUT "testing position $position[$i] \n" if $DEBUG;
+$DEBUG->warning("testing position $position[$i]") if $DEBUG;
                 if ($segment->getXforY($position[$i])) {
                     $offset[$i] = $segment->getOffset();
-print STDOUT "offset to be applied : $offset[$i] \n" if $DEBUG;
+$DEBUG->warning("offset to be applied : $offset[$i]") if $DEBUG;
 # ensure that both offsets are defined; this line ensures definition in
 # case the counterpart falls outside any segment (i.e. outside the contig)
                     $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
@@ -1546,7 +1513,7 @@ print STDOUT "offset to be applied : $offset[$i] \n" if $DEBUG;
             }
         }
 # accept the new tag only if the position offsets are defined
-print STDOUT "offsets: @offset \n" if $DEBUG;
+$DEBUG->warning("offsets: @offset") if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the tag on the parent contig
      my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
@@ -1554,8 +1521,8 @@ print STDOUT "offsets: @offset \n" if $DEBUG;
         next unless $tptag; # remapped tag out of boundaries
 
 if ($DEBUG) {
-print STDOUT "tag on parent :\n "; $ptag->dump;
-print STDOUT "tag on target :\n "; $tptag->dump;
+$DEBUG->warning("tag on parent :". $ptag->dump);
+$DEBUG->warning("tag on target :". $tptag->dump);
 }
 
 # test if the transposed tag is not already present in the child;
@@ -1575,7 +1542,7 @@ print STDOUT "tag on target :\n "; $tptag->dump;
 
 # the (transposed) tag from parent is not in the current contig: add it
 
-print STDOUT "new tag added\n" if $DEBUG;
+$DEBUG->warning("new tag added") if $DEBUG;
         $target->addTag($tptag);
     }
 }
@@ -1946,52 +1913,6 @@ sub writeToEMBL {
     }
     elsif (my $dna = $this->getSequence()) {
 
-# apply quality clipping, if so wanted, include tags
-# NOTE: much better: generate a clipped contig with a function on ContigFactory
-#*************************** to be place somewhere else
-        if (my $threshold = $options{qualityclip}) {
-# get a clipped version of the current consensus
-            my ($sequence,$quality,$map) = &qualityclip($this->getSequence(),
-                                                        $this->getBaseQuality(),
-	         				        qcthreshold=>$threshold);
-#	    print "map $map\n".$map->toString()."\n";
-# reload the clipped sequence datadata
-            if ($sequence && $quality) {
-                $dna = $sequence; # replace
-                $this->setSequence($sequence);
-                $this->setBaseQuality($quality);
-# and remap the tags on the sequence
-                $tagfactory = new ContigTagFactory() unless $tagfactory;
-                my $tags = $this->getTags();
-                foreach my $tag (@$tags) {
-                    my $tptag = $tagfactory->remap($tag,$map,break=>0);
-#print STDOUT "remapped tag $tag => $tptag->[0]\n";
-                    $tag = $tptag->[0] if (@$tptag == 1);
-		}
-# order the tags according to positions
-                @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @$tags;
-# test if some tags can be merged
-                my ($i,$j) = (0,1);
-                while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
-# test for possible merger of tags i and j
-#print STDOUT "attempt to merge tags $i $tags->[$i], $j $tags->[$j]\n";
-#print STDOUT "tag $i ".$tags->[$i]->writeToEMBL()
-#          ."\ntag $j ".$tags->[$j]->writeToEMBL()."\n" if ($j == 7 || $j == 6);
-                    if (my $newtag = $tagfactory->merge($tags->[$i],$tags->[$j])) {
-# the tags are merged: replace tags i and j by the new one
-                    splice @$tags, $i, 2, $newtag;
-# keep the same values of i and j
-	            }
-                    else {
-# tags cannot be merged: increase both i and j
-                        $i++;
-		        $j++;
-                    }
-	        }
-            }
-	}
-#*******************************
-
 # collect length and print header record
 
 	my $length = length($dna);
@@ -2005,12 +1926,11 @@ sub writeToEMBL {
 
         if ($this->hasTags(1)) { # force delayed loading
 # determine which tags to export
-            my $includetag = 'ANNO'; # default 
-            if ($options{includetag}) {
-                $includetag = $options{includetag};
-                $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
-                $includetag =~ s/\W+/|/g; # put separators in include list
-	    }
+            $options{includetag} = 'ANNO' unless $options{includetag};
+            my $includetag = $options{includetag};
+            $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
+            $includetag =~ s/\W+/|/g; # put separators in include list
+
             my $tags = $this->getTags();
 # test if there are tags with identical systematic ID; collect groups, if any
             my @newtags;
@@ -2032,53 +1952,25 @@ sub writeToEMBL {
                 }
 		my $joinset = $joinhash->{$sysID}->{$strand};
                 push @$joinset, $tag;
-#print STDOUT "*** ADDED for sysID $sysID  strand $strand : @$joinset\n";
             }
-# if there are groups of tags, generate joins
-            my $tagcommentformat = 'fragment\\s+([\\d\\,]+)\\s+of\\s+(\\d+)';
+
+# if there are groups of tags or tag fragments, generate joins
+
             foreach my $sysID (sort keys %$joinhash) {
                 my $strandhash = $joinhash->{$sysID};
                 foreach my $strand (keys %$strandhash) {
-#print STDOUT "*** sysID $sysID  strand $strand \n";
                     my $joinset = $strandhash->{$strand};
-                    my $newtag = shift @$joinset;
-                    push @newtags,$newtag;
-                    next unless @$joinset; # only one tag
-# for the remaining tags add the positions to the new tag
-                    my $positionoffset = 34; # 21 + 13
-                    foreach my $tag (@$joinset) {
-                        $newtag->setPosition($tag->getPosition(),join=>1);
-# concatenate the comments 
-                        my $tagcomment = $tag->getTagComment();
-                        my $newtagcomment = $newtag->getTagComment();
-                        my $concatenated = 0;
-                        if ($newtagcomment =~ /$tagcommentformat/) {
-                            my $parts = $1;
-                            my $count = $2;
-                            if ($tagcomment =~ /$tagcommentformat/) {
-                                $parts .= ",$1";
-                                if ($count == $2) {
-                                    my @count = split /,/,$parts;
-                                    if (scalar(@count) == $2) {
-# all original fragments represented
-                                        $newtagcomment = "$2 fragments of original tag";
-                                    }
-		  	            else {
-                                        $newtagcomment = "fragment $parts of $2";
-                                    }
-                                    $concatenated++;
-				}
-			    }
-                        }
-                        $newtagcomment .= " ".$tagcomment unless $concatenated;
-                        $newtag->setTagComment($newtagcomment);
-		    }
-		}
+                    $tagfactory = new ContigTagFactory() unless $tagfactory;
+                    my $newtag = $tagfactory->makeCompositeTag($joinset);
+                    push @newtags,$newtag if $newtag;
+	        }
 	    }
+
 # export the tags
+
             my $feature;
             foreach my $tag (@newtags) {
-                my $tagtype     = $tag->getType();
+                my $tagtype = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
                 unless ($feature) {
                     print $DFILE "FH   Key             Location/Qualifiers\n";
@@ -2094,6 +1986,7 @@ sub writeToEMBL {
             print $DFILE "FH   Key             Location/Qualifiers\n";
             print $DFILE "FH\n";
 	}
+return if $options{tagsonly}; # debug option
   
 # the DNA section, count the base composition
 
@@ -2169,193 +2062,6 @@ sub replaceNbyX {
     return 0;
 }
 
-sub endregionmask {
-# replace the central part of the consensus sequence by X-s (re: crossmatch)
-    my $sequence = shift || return;
-    my %moptions = @_;
-
-# get options
-
-    my $unmask = $moptions{endregiononly}; # unmasked length at either end
-    my $symbol = $moptions{maskingsymbol}; # replacement symbol for remainder
-    my $shrink = $moptions{shrink}; # replace centre with fixed length string
-
-# apply lower limit, if shrink option active
-
-    $shrink = $unmask if ($shrink and $shrink < $unmask);
-
-    my $length = length($sequence);
-
-    if ($unmask > 0 && $symbol && $length > 2*$unmask) {
-
-        my $begin  = substr $sequence,0,$unmask;
-        my $centre = substr $sequence,$unmask,$length-2*$unmask;
-        my $end = substr $sequence,$length-$unmask,$unmask;
-
-        if ($shrink && $length-2*$unmask >= $shrink) {
-            $centre = '';
-            while ($shrink--) {
-                $centre .= $symbol;
-            }
-        }
-	else {
-            $centre =~ s/./$symbol/g;
-	}
-
-        $sequence = $begin.$centre.$end;
-    }
-
-    return $sequence;
-}
-
-sub qualityclip {
-# remove low quality pad(s) from consensus (fasta export only)
-    my $sequence = shift; # input consensus
-    my $quality = shift;  # quality data
-    my %options = @_;  print STDOUT "qualityclip options: @_\n";
-
-    my $symbol    = $options{qcsymbol} || "acgt";
-    my $threshold = $options{qcthreshold} || 0;
-
-#print STDERR "Clipping low quality pads ($symbol, $threshold)\n" if$DEBUG;
-#print STDERR "Clipping low quality pads ($symbol, $threshold)\n";
-
-    my $mapping = new Mapping();
-
-    my $pad = 0; # last pad position
-
-    my $clipped = 0;
-    my $newquality = [];
-    my $newsequence = '';
-    my $length = length($sequence); print "length $length ".scalar(@$quality)."\n";
-    for (my $i = 0 ; $i <= $length ; $i++) {
-# the last value results in adding the remainder, if any, to the output
-        if ($i < $length) {
-#            next if ($symbol && substr($sequence, $i, 1) !~ /[$symbol]$/i);
-            next unless (substr($sequence, $i, 1) =~ /^[$symbol]$/i); # no-pad
-            next if ($threshold && $quality->[$i] >= $threshold);
-            $clipped++;
-# deal with consecutive pads
-            if ($i == $pad) {
-                $pad++;
-                next; 
-	    }
-	}
-        elsif (!$clipped) {
-            last;
-        }
-# the next pad is detected at position $i
-        $newsequence .= substr($sequence, $pad, $i-$pad);
-        push @$newquality, @$quality [$pad .. $i-1];
-# assemble the segment for the mapping
-        my $newlength = length($newsequence);
-        $mapping->putSegment($pad+1,$i,$newlength-($i-$pad)+1,$newlength);
-# adjust the last pad position
-        $pad = $i+1;
-    }
-
-#print STDERR "$clipped values clipped\n" if $DEBUG;
-#print STDERR "$clipped values clipped\n";
-
-    return $newsequence, $newquality, $mapping;
-}
-
-#----------------------------------------------------------------------------
-
-sub endregiontrim {
-# trim low quality data from the end of the contig
-    my $this = shift;
-    my %options = @_;
-
-    my $cliplevel = $options{cliplevel} || return 0;
-
-    my $sequence = $this->getSequence();
-    my $quality = $this->getBaseQuality();
-
-    unless ($quality) {
-        print STDERR "Can't do trimming: missing consensus quality data in "
-                   . $this->getContigName()."\n";
-        return undef;
-    }
-
-# clipping algorithm for the moment taken from Asp
-
-    my ($QL,$QR) = Clipping->phred_clip($cliplevel, $quality);
-
-# adjust the sequence and quality data
-
-    $this->setSequence (substr($sequence,$QL-1,$QR-$QL+1));
-    $this->setBaseQuality ([ @$quality [$QL-1 .. $QR-1] ]);
-
-    my $mask = new Mapping ("Contig Mask");
-    $mask->putSegment($QL,$QR,$QL,$QR);
-
-    my $mappings = $this->getMappings(1);
-
-print "masking existing read mappings for ".$this->getContigName()."\n" if $options{debug};
-
-    my @toberemoved;
-    foreach my $mapping (@$mappings) {
-        my $mappingname = $mapping->getMappingName();
-print STDOUT "processing mapping $mappingname\n" if $options{debug};
-print STDOUT $mapping->writeToString() if $options{debug};
-        my $inverse = $mapping->inverse();
-# determine if the masked read is still in the contig
-        my $product = $inverse->multiply($mask,repair=>1);
-# trap problems with multiplication for debugging purposes
-        $inverse->multiply($mask,repair=>1) unless $product;
-# if its a valid mapping, get the inverse and proceeed to the next
-        if ($product && $product->hasSegments()) {
-            $mapping = $product->inverse();
-            $mapping->analyseSegments();
-            $mapping->setMappingName($mappingname);
-print STDOUT $mapping->writeToString()."\n" if $options{debug};
-            next;
-	}
-# the product is empty: remove this mapping and read from the list
-        push @toberemoved,$mapping->getMappingName();
-    }
-
-# if there are reads to be removed:
-
-    foreach my $read (@toberemoved) {
-	print STDERR "read $read to be removed\n";
-        my $s = $this->removeRead($read);
-        print STDERR "unidentified read or mapping $read\n" unless ($s == 2);
-    }
-
-    $this->getStatistics(2);    
-  
-    return ($QL,$QR);
-}
-
-sub removeRead {
-# remove a named read from the Read and Mapping stock
-    my $this = shift;
-    my $read = shift;
-
-    my $spliced = 0;
-
-    my $reads = $this->getReads(1);
-    for (my $i = 0 ; $i < scalar(@$reads) ; $i++) {
-        next unless ($reads->[$i]->getReadName() eq $read);
-        splice @$reads,$i,1;
-        $this->setNumberOfReads(scalar(@$reads));
-        $spliced++;
-        last;
-    }
-            
-    my $mapps = $this->getMappings(1);
-    for (my $i = 0 ; $i < scalar(@$mapps) ; $i++) {
-        next unless ($mapps->[$i]->getMappingName() eq $read);
-        splice @$mapps,$i,1;
-        $spliced++;
-        last;
-    }
-
-    return $spliced;
-}
-
 #---------------------------
 # Pad status TO BE DEVELOPED
 #---------------------------
@@ -2412,7 +2118,7 @@ sub writeToCafPadded {
         my $readname = $mapping->getMappingName();
         my $paddedread = $readnamehash->{$readname};
         unless ($paddedread) {
-            print STDOUT "Missing padded read $readname\n";
+            $DEBUG->warning("Missing padded read $readname");
             next; 
         }
         my $afm = $paddedread->toPadded($mapping); # out: one segment mapping
@@ -2450,7 +2156,7 @@ sub writeToCafPadded {
 # 
 #-------------------------------------------------------------------    
 
-sub setDEBUG {$DEBUG = 1;}
+sub setDEBUG {shift;$DEBUG = shift;} # pass the logger module
 sub setNoDEBUG {$DEBUG = 0;}
 
 1;
