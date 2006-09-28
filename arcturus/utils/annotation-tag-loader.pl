@@ -16,6 +16,8 @@ use Tag;
 
 use Logging;
 
+use MyTimer;
+
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
@@ -26,12 +28,15 @@ my $datafile;  # for list of tag ids and positions
 my $fastafile; # for the fasta fuile on which the annotation has been made 
 
 my $propagate;
+my $reanalyze;
+
 my $contig;
 my $testtag;
 
 my $verbose;
 my $confirm;
 my $debug;
+my $override;
 
 my $swprog;
 my $nopads = 1;
@@ -40,9 +45,10 @@ my $emblfile;
 my $qclip;
 
 
-my $validKeys  = "organism|instance|tagfile|tf|propagate|fasta|ff|swprog|"
+my $validKeys  = "organism|instance|tagfile|tf|fasta|ff|swprog|"
                . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|"
-               . "qualityclip|qc|verbose|debug|nodebug|help";
+               . "propagate|reanalyze|qualityclip|qc|"
+               . "override|verbose|debug|nodebug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -73,6 +79,8 @@ while (my $nextword = shift @ARGV) {
     $testtag    = shift @ARGV  if ($nextword eq '-tag');
 
     $propagate  = 1            if ($nextword eq '-propagate');
+    $propagate  = 1            if ($nextword eq '-reanalyze');
+    $reanalyze  = 1            if ($nextword eq '-reanalyze');
 
     $verbose    = 1            if ($nextword eq '-verbose');
 
@@ -108,6 +116,8 @@ while (my $nextword = shift @ARGV) {
         }
         $swprog  = shift @ARGV;
     }
+
+    $override    = 1            if ($nextword eq '-override');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -292,7 +302,8 @@ if ($emblfile) {
 # run through all the contigs
 
 my $currentcontigs = {};
-my$acdestinations = {}; # original contig destinations
+my $acdestinations = {}; # original contig destinations
+my $ccontigorigins = {}; # current contigs origins contig
 
 my $lengthmismatch = 0;
 my $fastamappinghash = {};
@@ -379,11 +390,19 @@ foreach my $contigname (sort keys %$contigtaghash) {
             $annotatedlength->{$contigname} = 0;
 	}
 # test the three lengthes (annotation contig, annotatedlength and length)
-        my $summary = "Annotated: "
-                    . sprintf("%8d",$annotatedlength->{$contigname}) . "; "
+        my $nlength = $annotatedlength->{$contigname};
+        my $summary = "Annotated: ". sprintf("%8d",$nlength) . "; "
                     . "Arcturus: " . sprintf("%8d",$alength) . "; "
 		    . "Fasta: " . sprintf("%8d",$flength);
         $logger->warning("processing contig $contigname ($summary)");
+        unless ($nlength && $nlength == $flength || $override) {
+            $logger->severe("SKIPPED $contigname: incompatible contig lengths");
+            next;
+	}
+
+# clip low quality pads
+
+        ContigFactory->replaceLowQualityBases($arcturuscontig);
 
 # determine the transformation from annotation contig to arcturus contig
 
@@ -407,38 +426,13 @@ foreach my $contigname (sort keys %$contigtaghash) {
 	    }
         }
 
-# METHOD 2:  using pads in the quality data
-
-        unless ($mapping || $nopads) {
-# the part is EXPERIMENTAL and for TEST purposes
-	    $logger->warning("Low quality padding analysis selected");
-
-#$logger->warning("\n\n\n\n");
-#$fastacontig->writeDNA(*STDOUT);
-#$logger->warning("\n\n\n\n");
-#$arcturuscontig->writeDNA(*STDOUT);
-#$logger->warning("\n\n\n\n");
-
-my $mismatch = length($asequence) - length($fsequence);
-$logger->warning("Re-processing $contigname lengths: "
-         .length($asequence)." & ".length($fsequence)." $mismatch" );
-
-            my $quality = $arcturuscontig->getBaseQuality();
-
-            my %poptions = (threshold=>15 , window=>7);
-
-            $mapping = &PaddedAlignment($asequence,$quality,$fsequence,
-                                        %poptions);
-	}
-
-# METHOD 3 : if (still) no mapping, use the Alignment package version
+# METHOD 2 : if (still) no mapping, use the Alignment package version
 
         unless ($mapping) {
 	    $logger->warning("Alignment.pm correlation selected");
-	    my $flength = $annotatedlength->{$contigname};
+#	    my $flength = $annotatedlength->{$contigname};
    	    my $peakdrift = $alength - $flength;
             my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
-#            my $bandedwindow = 2.0 * sqrt($peakdrift); # generous minimum of 
             my $bandedwindow = 4.0 * sqrt($peakdrift); # generous minimum of 
             $bandedwindow = $peakdrift/2 if ($peakdrift/2 < $bandedwindow);
 	    $logger->warning("peak drift: $peakdrift, window: $bandedwindow");
@@ -453,8 +447,8 @@ $logger->warning("Re-processing $contigname lengths: "
             $options{autoclip} = 0;
 	    $options{goldenpath} = 1; # not operational yet
             my $aquality = $arcturuscontig->getBaseQuality();
-            $options{squality} = $aquality;
-            $options{tquality} = 0;
+#            $options{squality} = $aquality;
+#            $options{tquality} = 0;
  
             my $output = $logger->getOutputDevice() || *STDOUT;
             $options{debug} = $output if $debug;
@@ -498,29 +492,29 @@ $logger->warning("Re-processing $contigname lengths: "
 
         $mapping->setSequenceID(1);
         $fastacontig->setContigID(1);
-        $arcturuscontig->addContigToContigMapping($mapping);
 
 
       my $METHOD = 0;
       if ($METHOD == 1) {
         $arcturuscontig->addParentContig($fastacontig);
+        $arcturuscontig->addContigToContigMapping($mapping);
 
 # then propagate the tags from parent to child
 
 #        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
-$arcturuscontig->setDEBUG() if $debug;
+#$contig->setDEBUG($logger);
+$arcturuscontig->setDEBUG($logger) if $debug;
 
         $arcturuscontig->inheritTags();
 
-#        $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
       }
       else {
 # the other way around
+#$fastacontig->setDEBUG($logger);
         $fastacontig->addChildContig($arcturuscontig);
         $arcturuscontig->addContigToContigMapping($mapping);
-#        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
-        $fastacontig->propagateTags(break=>1); # noinverse=>1 ?
-#        $arcturuscontig->writeToEMBL(*STDOUT) unless $noembl;
+        $fastacontig->propagateTags(break=>1);
+$fastacontig->setDEBUG();
       }
     }
 
@@ -559,52 +553,51 @@ $arcturuscontig->setDEBUG() if $debug;
 
     $logger->info("Processing contig ".$arcturuscontig->getContigName());
 
-    $arcturuscontig->setDEBUG(1) if $debug;
+# $arcturuscontig->setDEBUG(1) if $debug;
 
     my $contigs = [];
 
     if ($propagate) {
 # test set up for propagation to offspring
         my $acid = $arcturuscontig->getContigID();
-#my $fastacontig = $fastacontighash->{$cid};
-#$arcturuscontig->addChildContig($fastacontig);
         $contigs = &propagate($arcturuscontig);
 	$logger->info("Contigs after propagation of $contigname:");
         if (my $fastacontig = $fastacontighash->{$acid}) {
   	    &listtagsequence($fastacontig,$testtag) if $testtag;
         }
-#	&listtagsequence($arcturuscontig,$testtag) if $testtag;
         foreach my $contig (@$contigs) {
-            my $cid = $contig->getContigID();
-            my $cnm = $contig->getContigName();
+            my $ccid = $contig->getContigID();
+            my $ccnm = $contig->getContigName();
 	    &listtagsequence($contig,$testtag) if $testtag;
-            unless ($adb->isCurrentContigID($cid)) {
-		$logger->info("$cnm is intermediate");
+            unless ($adb->isCurrentContigID($ccid)) {
+		$logger->info("$ccnm is intermediate");
 		next;
 	    }
-            $logger->warning("$cnm is a current contig");
+            $logger->warning("$ccnm is a current contig");
 # test if it has tags (split contigs may not have them)
             unless ($contig->hasTags()) {
-                $logger->warning("$cnm is ignored because it has no tags");
+                $logger->warning("$ccnm is ignored because it has no tags");
 		next;
 	    }
 # register the current contig the first time it is encountered, otherwise ..
-            if (my $currentcontig = $currentcontigs->{$cnm}) {
+            if (my $currentcontig = $currentcontigs->{$ccnm}) {
 # .. add the tags to the taglist of the contig instance we already have
                 my $additionaltags = $contig->getTags();
                 $currentcontig->addTag(@$additionaltags);
             }
             else { 
-                $currentcontigs->{$cnm} = $contig;
+                $currentcontigs->{$ccnm} = $contig;
 	    }
-# also register the destination of tags from the original contig
+# register the destination of tags from the original arcturus contig
             $acdestinations->{$acid} = [] unless $acdestinations->{$acid};
-            push @{$acdestinations->{$acid}},$cid;
-	}
+            push @{$acdestinations->{$acid}},$ccid;
+            $ccontigorigins->{$ccid} = [] unless $ccontigorigins->{$ccid};
+            push @{$ccontigorigins->{$ccid}},$arcturuscontig;
+	} 
 
-# load into the database
+# list summary of result if not loading tags or other export 
 
-        unless ($confirm) {
+        unless ($confirm || !$noembl || $EMBL) {
             foreach my $contig (@$contigs) {
                 my $tags = $contig->getTags(); # as is, no delayed loading
                 $tags = [] unless $tags;
@@ -621,40 +614,110 @@ $arcturuscontig->setDEBUG() if $debug;
     }
 
     $numberprocessed++;
+}
 
-    next unless $confirm;
+# here all tags have gone through the propagation using Arcturus info
 
-# load the data into the database
+# RE-DO mode: erase all tags from CCs and remap directly from AC contigs
 
+if ($reanalyze) {
+# for each CC: get link to original ACs directly
+    $logger->warning("Re-analyzing contig links to ancestors");
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $contig = $currentcontigs->{$ccnm};
+        my $ccid = $contig->getContigID();
+        $logger->warning("Processing current contig $ccid");
+# skip if the current contig is the originally annotated one
+        if ($acdestinations->{$ccid}) {
+            $logger->warning("Contig $ccid is the original annotated contig");
+            next;
+	}
+# remove tags, parents, children and links, if any
+        $contig->addChildContig();
+        $contig->addParentContig();
+        $contig->addContigToContigMapping();
+        $contig->addTag();
+# ensure that the mappings are defined
+        $contig->hasMappings(1); # use delayed loading
+# get the original arcturus contig(s)
+
+        my $ancestors = $ccontigorigins->{$ccid};
+        unless ($ancestors) {
+            $logger->severe("contig $ccid unexpectedly has no original");
+            next;
+	}
+# get link to each ancestor and import the tags (two methods for comparison)
+        my $method = 0;
+        foreach my $ancestor (@$ancestors) {
+            $contig->addParentContig($ancestor);
+            $ancestor->hasMappings(1); # ensure read mappings are loaded
+            unless ($method) {
+# each ancestor individually
+                $ancestor->propagateTagsToContig($contig, delayedloading=>0);
+	        next;
+	    }
+# the alternative: get mapping beforehand (allows testing it here)
+            my ($status,$deallocated) = $contig->linkToContig($ancestor);
+            unless ($status) {
+                my $acid = $ancestor->getContigID();
+                $logger->severe("contig $ccid unexpectedly has no link to $acid");
+		next;
+	    }
+        }
+
+        $contig->inheritTags() if $method;
+    }
+}
+
+# here we have a list of current contigs
+
+if (!$noembl || $EMBL) {
+
+    my $timer = new MyTimer();
+
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $contig = $currentcontigs->{$ccnm};
+        if ($qclip) {
+            my %qcoptions = (threshold => $qclip, newcontig => 1,
+                             exportaschild => 1);
+            my ($newcontig,$status) = ContigFactory->deleteLowQualityBases
+                                                     ($contig,%qcoptions);
+            if ($status) {
+print STDOUT "begin Inherit tags\n";
+$timer->timer('propagate',0);
+                $contig->propagateTagsToContig($newcontig,speedmode=>1,timer=>$timer,overlap=>1);
+$timer->timer('propagate',1);
+print STDOUT "DONE Inherit tags\n";
+# next;
+                $contig = $newcontig;
+	    }
+        }
+        $contig->writeToEMBL(*STDOUT,0,tagsonly=>0) unless $noembl;
+        $contig->writeToEMBL($EMBL  ) if $EMBL;
+    }
+}
+
+$EMBL->close() if $EMBL;
+
+if ($confirm) { # AND not in redo mode!
+# load the data for the current contigs into the database
     my %options;
     $options{debug} = 1 if $debug;
 
-    foreach my $contig (@$contigs) {
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $contig = $currentcontigs->{$ccnm};
 
+#        my $ccid = $contig->getContigID();
         my $tags = $contig->getTags(); # as is, no delayed loading
         $tags = [] unless $tags;
         $logger->info("contig ".$contig->getContigName() .
-		      " has " . scalar(@$tags)." tags");
-
+		          " has " . scalar(@$tags)." tags");
         my $success = $adb->enterTagsForContig($contig,%options);
-
         $logger->warning("enterTagsForContig " . $contig->getContigName()
                         ." : success = $success");
     }
 }
 
-# here we have a list of current contigs; write EMBL, if specified
-
-foreach my $cid (sort keys %$currentcontigs) {
-    my $contig = $currentcontigs->{$cid};
-    $contig->writeToEMBL(*STDOUT,0,qualityclip=>$qclip) unless $noembl;
-    $contig->writeToEMBL($EMBL  ,0,qualityclip=>$qclip) if $EMBL;
-#    $contig = ContigFactory->qualityclip($contig,%qcoptions) if $qclip;
-#    $contig->writeToEMBL(*STDOUT) unless $noembl;
-#    $contig->writeToEMBL($EMBL  ) if $EMBL;
-}
-
-$EMBL->close() if $EMBL;
 
 if ($lengthmismatch && !$fastafile) {
     $logger->skip();
@@ -695,7 +758,6 @@ if (@currentcontigs) {
     }
     $logger->skip();
 }
-
 
 exit;
 
@@ -781,60 +843,6 @@ sub SmithWatermanAlignment {
 	}
     }
     return $mapping,$scoring;
-}
-
-sub PaddedAlignment {
-# find alignment, using low quality pads
-    my $asequence = shift;
-    my $aquality  = shift;
-    my $fsequence = shift;
-    my %options = @_;
-
-    my $threshold = $options{threshold} || 15;
-    my $window = $options{window} || 5;
-    my $lgt = 2 * int(($window-1)/2) + 1; # ensure odd value
-
-    my $mismatch = length($asequence) - length($fsequence);
-
-    my @pads;
-    for (my $i = 2 ; $i < @$aquality ; $i++) {
-# trigger investigation by detection of minimum
-        next unless ($aquality->[$i] > $aquality->[$i-1]);
-        my $reference = $aquality->[$i-2] + $aquality->[$i]; 
-        next unless ($aquality->[$i - 1] < $reference/2 - $threshold);
-# at i-1 a deep minumum was found which may be a pad
-
-$logger->warning("possible pad at $i  $aquality->[$i-2], $aquality->[$i-1], $aquality->[$i]");
-my $asub = substr $asequence, $i-1-int($lgt/2), $lgt;
-my $j = $i - scalar(@pads); 
-my $fsub = substr $fsequence, $j-1-int($lgt/2), $lgt;
-$logger->warning("a: $asub    f: $fsub");
-
-        next if ($asub eq $fsub);
-        push @pads, ($i-1);
-    }
-# compare the number of pads with the length mismatch
-$logger->warning("Pads ".scalar(@pads)." $mismatch");
-
-    my $mapping;
-    if ($mismatch == scalar(@pads)) {
-# ok, here we most likely have the original pads recovered
-        push @pads,length($asequence); # add ficticious pad at end
-        my ($ss,$sf,$ts,$tf) = (1,0,1,0);
-        $mapping = new Mapping('recovered pads');
-        for (my $i = 0 ; $i < @pads ; $i++) {
-            $tf = $pads[$i];
-            $sf = $ss + ($tf - $ts);
-            my $lgt = $tf - $ts + 1;
-my $asub = substr $asequence, $ts-1, $lgt;
-my $fsub = substr $fsequence, $ss-1, $lgt;
-$logger->warning("segment $ss, $sf   $ts, $tf \na: $asub\nf: $fsub\n");
-# add segment
-            $ss = $tf - $i + 1;
-            $ts = $tf + 2;
-	}
-    }
-    return $mapping; 
 }
 
 sub listtags {
@@ -926,10 +934,12 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     unless (defined($propagate)) {
-        print STDERR "-propagate\tpropagate contig tag(s) to the last generation\n";
+        print STDERR "-propagate\t(no value) propagate contig tag(s) to the last generation\n";
         print STDERR "\t\t(in its absence only map from edited to original sequence)\n";
         print STDERR "\n";
     }
+    print STDERR "-reanalyze\t(no value) re-do mapping from original to current";
+    print STDERR " generation\n\t\tfrom scratch\n";
     print STDERR "-fasta\t\t(ff) input fasta file with sequences used for annotation\n";
     unless (defined($swprog)) {
         print STDERR "-swprog\t\t(optional) use Smith-Waterman alignment algorithm\n";
@@ -943,7 +953,7 @@ sub showUsage {
     print STDERR "-emblfile\t(ef) write contig & tags of the current generation";
     print STDERR " to file\n";
     unless (defined($qclip)) {
-#        print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped sequence\n";
+        print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped\n\t\t sequence\n";
     }
     print STDERR "\n";
     print STDERR "-contig\t\tselect a particular contig by ID\n";
