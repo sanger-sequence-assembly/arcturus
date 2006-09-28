@@ -7,10 +7,10 @@ use Tag;
 use Mapping;
 
 #----------------------------------------------------------------------
-#
+# class variables
 #----------------------------------------------------------------------
 
-my $contigtagfactory; # class variable
+my $contigtagfactory;
 
 #----------------------------------------------------------------------
 # constructor and initialisation
@@ -241,6 +241,8 @@ sub remap {
 
     my @currentposition = $tag->getPosition();
 
+    my $tagsequencespan = $tag->getSpan();
+
 # generate a helper 1-1 mapping
 
     my $helpermapping = new Mapping('helper');
@@ -252,7 +254,18 @@ sub remap {
 
 print STDOUT "Tag position: @currentposition \n" if $options{debug};
 
-    my $maskedmapping = $helpermapping->multiply($mapping);
+# the next block initializes start position for searching the mappings
+
+    if (my $nzs = $options{nonzerostart}) {
+# initialize the starting positions if that has not been done
+        $nzs->{tstart} = 0 unless defined $nzs->{tstart}; # count along
+print STDOUT " previous positions : $nzs->{tstart}\n" if $options{debug};
+        $nzs->{tstart}-- if ($nzs->{tstart} > 0); # skip one back
+        $nzs->{rstart} = 0; # always reset
+print STDOUT " starting positions : $nzs->{rstart},$nzs->{tstart}\n" if $options{debug};
+    }
+
+    my $maskedmapping = $helpermapping->multiply($mapping,%options);
 
 # trap problems with mapping by running again with debug option
 
@@ -311,7 +324,7 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
     elsif ($options{break}) {
 # CASE 2 : more than one segment, generate multiple tags
         my $number = 0;
-        my $minimumsegmentsize = $options{minimumsegmentsize} || 3;
+        my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
 # XXX how do we handle clipping?
         for (my $i = 0 ; $i < $numberofsegments ; $i++) {
             my $newtag = $this->copy($tag,%options);
@@ -333,7 +346,7 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
             $newtag->setTagComment($tagcomment);
             my $comment = $newtag->getComment();
             unless ($comment =~ /\bsplit\b/) {
-                $newtag->setComment("split!",append=>1);
+                $newtag->setComment("split! ($tagsequencespan)",append=>1);
 	    }
             push @tags,$newtag;
 	}
@@ -396,7 +409,7 @@ print STDOUT "$gapsize : sequence deletion detected \n";
 }
 
 sub merge {
-# merge a tag fragment and a neighbouring tag fragment (if possible)
+# merge two tags (fragments), if possible
     my $this = shift;
     my $atag = shift;
     my $otag = shift;
@@ -414,44 +427,75 @@ sub merge {
 
     return undef unless ($atag->getSystematicID() eq $otag->getSystematicID());
 
-    return undef unless ($atag->getStrand()       eq $otag->getStrand());
-
     return undef unless ($atag->getHost()         eq $otag->getHost());
+
+    if ($atag->getSize() > 1 && $otag->getSize() > 1) {
+# only test strand if tag (segment) has a meaningful length
+        return undef unless ($atag->getStrand()   eq $otag->getStrand());
+    }
 
 # analyse tag positions and determine the relative position of tags
 
     my @atagposition = $atag->getPosition();
-    my @otagposition = $otag->getPosition();
+    my @otagposition = $otag->getPosition();     
 
-    my ($left,$right);
+    my ($left,$right,$overlap);
     if ($atagposition[1] == $otagposition[0] - 1) {
-# other tag is butting to the right of this
+# other tag is butting to the right of this tag
         ($left,$right) = ($atag,$otag); 
     }
     elsif ($atagposition[0] == $otagposition[1] + 1) {
-# this is butting to the right of other tag
+# this tag is butting to the right of other tag
         ($left,$right) = ($otag,$atag); 
     }
+    elsif ($options{overlap}) {
+# the tag positions do not match; here test if they overlap
+        if ($otagposition[0] >= $atagposition[0]) {
+            if ($atagposition[1] >= $otagposition[0]) {
+# other tag is overlapping at the right end of this tag
+               ($left,$right) = ($atag,$otag);
+	        $right = $atag if ($atagposition[1] >= $otagposition[1]);
+            }
+	    else {
+                return undef; # no overlap
+	    }
+	}
+        elsif ($otagposition[1] >= $atagposition[0]) {
+# this tag is overlapping at the right end of other tag
+           ($left,$right) = ($otag,$atag);
+            $right = $otag if ($otagposition[1] >= $atagposition[1]);
+        }
+        else {
+            return undef; # no overlap
+	}
+# test if the intervals extend
+        $overlap = 1;
+    }
     else {
-# the tag position do not match
+# the tag positions do not match
 	return undef;
     }
 
+    my @lposition = $left->getPosition();
+    my @rposition = $right->getPosition();
+   
+    my $newdna;
+    if ($left->getDNA() && $right->getDNA()) {
+        $newdna = $left->getDNA(transpose => 1);
+        if ($overlap) {
+	    print STDERR "DNA sequence in overlapping tag to be COMPLETED\n";
 $options{debug} = 0;
-
 if ($options{debug} && $options{debug}>1) {
  print STDOUT "tag positions DO butt: @atagposition, @otagposition \n";
  $left->writeToCaf(*STDOUT,annotag=>1);
  $right->writeToCaf(*STDOUT,annotag=>1);
 }
-
-    my @lposition = $left->getPosition();
-    my @rposition = $right->getPosition();
-    if ($left->getDNA() && $right->getDNA()) {
-        my $DNA = $left->getDNA(transpose => 1)
-                . $right->getDNA(transpose => 1); # combined
-print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
-        return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
+	}
+	else {
+            $newdna .= $right->getDNA(transpose => 1);
+	}
+#print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
+#        return undef unless (length($DNA) == $rposition[1]-$lposition[0]+1);
         # for R strand, invert DNA
     }
 
@@ -463,40 +507,168 @@ print STDOUT "DNA merge: @lposition  @rposition \n" if $options{debug};
     $newtag->setSystematicID($atag->getSystematicID());
     $newtag->setStrand($atag->getStrand());
     $newtag->setHost($atag->getHost());
-# get the new DNA and test against length
-    my $DNA = $left->getDNA() . $right->getDNA();
-    $newtag->setDNA($DNA) if ($DNA =~ /\S/);
+# get the new DNA
+    $newtag->setDNA($newdna) if $newdna;
 # merge the comments
-    my $comment = $left->getComment();
-    unless ($left->getComment() eq $right->getComment()) {
-        if ($comment !~ /$right->getComment()/) {
-            $comment .=  " " . $right->getComment();
+    my $comment = $atag->getComment();
+    unless ($atag->getComment() eq $otag->getComment()) {
+        if ($comment !~ /$otag->getComment()/) {
+            $comment .=  " " . $otag->getComment();
         }
     }
 # merge the tagcomments
     my $newcomment;
-    my $lcomment = $left->getTagComment();
-    my $rcomment = $right->getTagComment();
+    my $lcomment = $atag->getTagComment();
+    my $rcomment = $otag->getTagComment();
     if ($newcomment = &mergetagcomments ($lcomment,$rcomment)) {
 # and check the new comment
-print STDOUT "l:'$lcomment' r:'$rcomment'\nn: '$newcomment'\n";
         my ($total,$frags) = &unravelfragments($newcomment);
 
         if (@$frags == 1 && $frags->[0]->[0] == 1 && $frags->[0]->[1] == $total) {
-            $newcomment = 'rejoined after having been split!';
+            $comment = 'rejoined intermediate tag fragments';
+            $newcomment = 'original tag';
         }
     }
     else {
 # cannot handle the comments; just concatenate the two
-        $newcomment = $left->getTagComment() . " " . $right->getTagComment();
+        $newcomment = $atag->getTagComment() . " " . $otag->getTagComment();
     }
 
     $newtag->setComment($comment) if $comment;
     $newtag->setTagComment($newcomment) if $newcomment;
 
 $newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
+
     return $newtag;
 }
+
+sub mergeTags {
+# merge tags from a list of input tags, where possible
+    my $this = shift;
+    my $tags = shift; # array reference
+    my %options = @_;
+
+# build an inventory of tag types
+
+    my $tagtypehash = {};
+
+    foreach my $tag (@$tags) {
+        next unless &verify($tag,'mergeTags');
+        my $tagtype = $tag->getType() || next; # ignore undefined types
+        $tagtypehash->{$tagtype} = [] unless $tagtypehash->{$tagtype};
+        push @{$tagtypehash->{$tagtype}},$tag; # add tag to list
+    }
+
+# now merge eligible tags from each subset
+
+    my @tags; # output list
+
+    my $mergetaglist = $options{mergetags} || 'ANNO';
+    $mergetaglist =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
+    $mergetaglist =~ s/\W+/|/g;
+
+    foreach my $tagtype (keys %$tagtypehash) {
+        my $tags = $tagtypehash->{$tagtype};
+        unless ($tagtype =~ /$mergetaglist/) {
+            push @tags,@$tags;
+	    next;
+	}
+# sort subset of tags according to position
+        @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @$tags;
+# test if some tags can be merged
+        my ($i,$j) = (0,1);
+        while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
+# test for possible merger of tags i and j
+            if (my $newtag = $this->merge($tags->[$i],$tags->[$j])) {
+# the tags are merged: replace tags i and j by the new one
+                splice @$tags, $i, 2, $newtag;
+# keep the same values of i and j
+	    }
+            else {
+# tags cannot be merged: increase both i and j
+                $i++;
+	        $j++;
+            }
+        }
+# add the left-over tags to the output list
+        push @tags,@$tags;    
+    }
+
+# sort all according to position
+
+    @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
+
+    return [@tags];
+}
+
+sub makeCompositeTag {
+# join tags in the input list to make a composite tag
+    my $this = shift;
+    my $tags = shift;
+
+    my $newtag = shift @$tags; # take the first in the list
+
+    return $newtag unless @$tags; # there is only one tag
+
+# for the remaining tags add the positions to the new tag and concatenate
+# the tag comments if they conform to comment for fragmented annotation tags
+
+    my $tagcommentformat = 'fragment\\s+([\\d\\,]+)\\s+of\\s+(\\d+)';
+
+    foreach my $tag (@$tags) {
+# add the position
+        $newtag->setPosition($tag->getPosition(), join => 1);
+# concatenate the comments 
+        my $tagcomment = $tag->getTagComment();
+        my $newtagcomment = $newtag->getTagComment();
+        my $concatenated = 0;
+        if ($newtagcomment =~ /$tagcommentformat/) {
+            my $parts = $1;
+            my $count = $2;
+            if ($tagcomment =~ /$tagcommentformat/) {
+                $parts .= ",$1";
+                if ($count == $2) {
+                    my @count = split /,/,$parts;
+                    if (scalar(@count) == $2) {
+# all original fragments are represented
+                        $newtagcomment = "$2 fragments of original tag";
+                    }
+		    else {
+                        $newtagcomment = "fragment $parts of $2";
+                    }
+                    $concatenated++;
+	     	}
+	    }
+        }
+        $newtagcomment .= " ".$tagcomment unless $concatenated;
+
+# apply an ad hoc filter to remove repetition
+
+        $newtagcomment =~ s/\s+of\s+(\d+)\s+fragment[s]?\s+([\d\,\-]+)\s+of/, $2 of/g;
+
+        $newtag->setTagComment($newtagcomment);
+    }
+
+# test if a "split" is indicated in the comment
+
+    my $comment = $newtag->getComment();
+    if ($comment =~ /split\!\D+(\d+)\D/) {
+        my $oldspan = $1;
+        my $newspan = $newtag->getSpan();
+        if ($oldspan == $newspan) {
+            $newtag->setComment("original length preserved",append=>1);
+	}
+        else {
+            $newtag->setComment("; frameshifts! ($newspan)",append=>1);
+        }
+    }
+
+    return $newtag;
+}
+
+#----------------------------------------------------------------------------
+# PERHAPS THESE two should not be here but remain in Tag ?
+#----------------------------------------------------------------------------
 
 sub mirror {
 # apply a mirror transform to the tag position
@@ -513,6 +685,7 @@ print STDERR "ContigTagFactory::mirror used\n";
         $position = $mirror - $position;
     }
     $tag->setPosition(@currentposition);
+# ? strand ?
 }
 
 sub positionshift {
@@ -609,8 +782,6 @@ sub composefragments {
         
     @$parts = sort {$a->[0] <=> $b->[0]} @$parts;
 
-    my $tagcomment = "fragment ";
-
 # compose a string like: 'fragment N,M,K-L of T' (total number at end)
 
     my @join;
@@ -632,7 +803,7 @@ sub composefragments {
         }
     }
 
-    $tagcomment .= $fragmentstring." of $total";
+    my $tagcomment = "fragment " . $fragmentstring." of $total";
 
     return $tagcomment;
 }
