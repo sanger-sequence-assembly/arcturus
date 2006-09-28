@@ -4,8 +4,7 @@ use strict;
 
 use Mapping;
 
-# use Exporter;
-# my @ISA = qw
+use Segment;
 
 #--------------------------------------------------------------------------
 # class variables
@@ -42,6 +41,7 @@ sub correlate {
 #            autoclip   require subsegments larger than value x average length; e.g. 0.3  
 #            tquality   reference to quality array for template data
 #            squality   reference to quality array for sequence data
+#            clip       clip low quality data according to some model
 
 $DEBUG = $options{debug} || 0;
 
@@ -194,6 +194,10 @@ print $DEBUG "Getting alignment segments\n" if $DEBUG;
 
     my $segments = &getAlignmentSegments($samplehash,$minimum);
 
+# filter segments
+
+    @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
+
 # extend segments by half of kmersize
 
 print $DEBUG "Extend alignment segments\n" if $DEBUG;
@@ -207,10 +211,16 @@ print $DEBUG "Cleanup/Shrink alignment segments\n" if $DEBUG;
     if ($options{fullrange}) {
 # do a cleanup only (but keep possible overlaps)
         &cleanupSegments($segments,$reverse);
+        &filterOffsets($segments);
     }
     else {
 # do a detailed analysis to find the best series of non-overlapping segments 
-        &goldenPath($segments,$options{tquality},$options{squality},$reverse);
+        my %gpoptions;
+        $gpoptions{tquality} = $options{tquality} if $options{tquality};
+        $gpoptions{squality} = $options{squality} if $options{squality};
+      $gpoptions{template} = $template; # temp
+      $gpoptions{sequence} = $sequence; # temp
+        &goldenPath($segments,$reverse,%gpoptions);
     }
 
 # iterate to fill the remaining gaps
@@ -274,6 +284,7 @@ print $DEBUG "No segments found\n" if (!$shash && $DEBUG);
             my $newsegments = &getAlignmentSegments($shash);
 print $DEBUG scalar(@$newsegments)." segments found\n" if $DEBUG;
 
+
             if (@$newsegments) {
                 &extendSegments($newsegments,$kmersize,$reverse);
                 push @$segments,@$newsegments;
@@ -291,23 +302,15 @@ print $DEBUG scalar(@$newsegments)." segments found\n" if $DEBUG;
 
     my $mapping = new Mapping();
 
-#    $mapping->setMappingName($mappingname);
+# define a mapping name outside this method
 
     foreach my $segment (sort {$a->[0] <=> $b->[0]} @$segments) {
-if ($DEBUG) {
-#my $length = ($segment->[1] - $segment->[0] + 1);
-#print $DEBUG "segment: @$segment    ($length)\n";
-#print $DEBUG "f:".substr($template,$segment->[0]-1,$length)." "
-#                 . (substr($template,$segment->[1], 1) || 'e')."\n";
-#print $DEBUG "a:".substr($sequence,$segment->[2]-1,$length)." "
-#                 . (substr($sequence,$segment->[3], 1) || 'e')."\n";
-}
-if (abs($segment->[1] - $segment->[0]) != abs($segment->[3] - $segment->[2])) {
-    print STDOUT "INVALID segment @$segment\n";
-#    next;
-}
-        $mapping->putSegment(@$segment);
+        unless ($mapping->putSegment(@$segment)) {
+            print STDERR "Alignment->correlate: INVALID segment @$segment\n";
+	}
     }
+
+    $mapping->analyseSegments();
 
     return $mapping;
 }
@@ -375,13 +378,13 @@ sub getKmerHash {
 #--------------------------------------------------------------------------
 
 sub verifyAccess {
-# test if reference of parameter is not package name
+# test if reference of parameter is not this package name
     my $caller = shift;
     my $origin = shift || 'verifyAccess';
 
-    return unless (ref($caller) eq 'Correlate');
+    return unless (ref($caller) eq 'Alignment');
 	
-    die "Invalid usage of private method '$origin' in package Corralate";
+    die "Invalid usage of private method '$origin' in package Alignment";
 }
  
 sub buildKmerHash {
@@ -743,10 +746,88 @@ sub cleanupSegments {
     return;
 }
 
+sub filterOffsets {
+    my $segments = shift;
+    my %options = @_;
+
+# build a scratch table of offset versus segment position
+
+    my $alignmenthash = {};
+
+    foreach my $segmentdata (@$segments) {
+        my $segment = new Segment(@$segmentdata);
+        my $alignment = $segment->getAlignment();
+        $alignmenthash->{$alignment} = {} unless defined $alignmenthash->{$alignment};
+        my $alignmentdata = $alignmenthash->{$alignment};
+        $alignmentdata->{offset} = [] unless defined $alignmentdata->{offset};
+        $alignmentdata->{posits} = [] unless defined $alignmentdata->{posits};
+#$alignmentdata->{length} = [] unless defined $alignmentdata->{length};
+        my $offset = $alignmentdata->{offset}; # array reference
+        push @$offset, $segment->getOffset();
+        my $posits = $alignmentdata->{posits};
+        push @$posits, ($segment->getXstart() + $segment->getXfinis())/2;
+#my $length = $alignmentdata->{length};
+#push @$length, $segment->getXfinis() - $segment->getXstart() + 1;
+    }
+
+    $options{medianwindow} = 5 unless defined $options{medianwindow}; 
+    my $window = $options{medianwindow};
+    $options{threshold} = 10 unless defined $options{threshold};
+    my $threshold = $options{threshold};
+
+    my $deleted = 0;
+    foreach my $alignment (keys %$alignmenthash) {
+        my $offset = $alignmenthash->{$alignment}->{offset}; # array ref
+        my $posits = $alignmenthash->{$alignment}->{posits}; # array ref
+        my $deviationhash = {};
+        my $delete = []; # list of elements to be removed
+        my $m = scalar(@$offset) - 1;
+        for (my $i = 0 ; $i < @$offset ; $i++) {
+            my $js = $i - $window; $js = 0  if ($js < 0);
+            my $jf = $i + $window; $jf = $m if ($jf > $m);
+            my @slice = sort {$a <=> $b} @$offset[$js .. $jf];
+            my $reference = $slice[int(($jf-$js)/2 + 0.5)];
+            my $deviation = abs(int($reference - $offset->[$i]));
+            if ($deviation > $threshold) {
+                push @$delete, $i if ($deviation > $threshold);
+                $deviationhash->{$deviation}++;
+            }
+	}
+
+        if ($options{list}) {
+            print STDOUT "DH deviation hash\n";
+            foreach my $deviation (sort {$a <=> $b} keys %$deviationhash) {
+                print STDOUT "DH $deviation $deviationhash->{$deviation}\n";
+	    }
+	}
+
+        @$delete = sort {$b <=> $a} @$delete; # reverse order
+
+        foreach my $delete (@$delete) {
+            splice @$segments,$delete,1;
+	    $deleted++;
+        }
+    }
+
+# warning section for badly conditioned input
+
+    if (scalar(keys %$alignmenthash) > 1) {
+        print STDERR "Multiple alignment directions found:\n";
+        foreach my $alignment (sort {$a <=> $b} keys %$alignmenthash) {
+            my $counts = scalar(@{$alignmenthash->{$alignment}});
+            print STDERR "alignment direction $alignment : counted $counts\n" 
+	}
+    }
+
+    return $deleted,$alignmenthash;   
+}
+
 sub shrinkSegments {
 # helper method for 'correlate': clip ends of segments if they overlap
     my $segments = shift;
     my $inverted = shift;
+
+    my ($tq,$sq,$ts,$ss) = @_;
 
     &verifyAccess($segments,'shrinkSegments');
 
@@ -760,6 +841,35 @@ sub shrinkSegments {
 # get the (possible) overlap between successive segments
         my $overlap = $segments->[$i]->[1] + 1 - $segments->[$i+1]->[0];
         if ($overlap > 0) {
+# *** debug block
+print STDOUT "SS regular overlap $overlap \n";
+my $segmenti = $segments->[$i];
+my $segmentj = $segments->[$i+1];
+#        my $start = $segments->[$i+1]->[0] + 1;
+#        my $final = $segments->[$i+1]->[1] - 1;
+#        my $begin = $segments->[$i]->[3] + 1;
+#        my $end   = $segments->[$i+1]->[2] - 1;
+my $start = $segments->[$i+1]->[0];
+my $final = $segments->[$i]->[1];
+my $begin = $segments->[$i+1]->[2];
+my $end   = $segments->[$i]->[3];
+my $loff = $segments->[$i]->[2] - $segments->[$i]->[0];
+my $roff = $segments->[$i+1]->[2] - $segments->[$i+1]->[0];
+if ($overlap >= 2 || abs($loff-$roff) > 1) {
+print STDOUT "SS start $start  final $final  loffset $loff  roffset $roff\n";
+print STDOUT "SS segment $i @$segmenti  $i+1 @$segmentj \n";
+    if ($tq && @$tq) {
+        my @tquality = @$sq [($start-3) .. ($final+1)];
+        print STDOUT "SS tq $start-$final  @tquality \n";
+    }
+    if ($sq && @$sq) {
+	my $sstring = substr $ss,$begin-2-1,$end-$begin+1+4;
+        my $tstring = substr $ts,$start-2-1,$final-$start+1+4;
+        my @squality = @$sq [($begin-3) .. ($end+1)];
+        print STDOUT "SS sq $begin-$end   @squality   $sstring  $tstring\n";
+    }
+}
+# *** end debug block
             $segments->[$i]->[1] -= $overlap;
             $segments->[$i]->[3] -= $overlap unless $inverted;
             $segments->[$i]->[2] += $overlap if $inverted;
@@ -768,10 +878,76 @@ sub shrinkSegments {
         $overlap = $segments->[$i]->[3] + 1 - $segments->[$i+1]->[2] unless $inverted;
         $overlap = $segments->[$i+1]->[3] + 1 - $segments->[$i]->[2] if $inverted;
         if ($overlap > 0) {
-            $segments->[$i]->[1] -= $overlap;
-            $segments->[$i]->[3] -= $overlap unless $inverted;
-            $segments->[$i]->[2] += $overlap if $inverted;
+print STDOUT "SS complementary overlap $overlap \n";
+#            $segments->[$i]->[1] -= $overlap;
+#            $segments->[$i]->[3] -= $overlap unless $inverted;
+#            $segments->[$i]->[2] += $overlap if $inverted;
         }
+    }
+}
+
+sub mergeSegments {
+# helper method to goldenpath
+# combine segments if the sequence inbetween (is low quality but) matches
+    my $segments = shift;
+    my $inverted = shift;
+    my $template = shift;
+    my $sequence = shift;
+    my %options = @_;
+
+    &verifyAccess($segments,'mergeSegments');
+
+    @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
+
+    my $ns = scalar(@$segments);
+
+    my $k = $inverted ? 3 : 2;
+
+    my $window = $options{window} || 1; # overflow
+
+    my $symbol = $options{lowqsymbol};
+
+    my $i = $ns-1;
+    while (--$i >= 0) {
+# get the gaps between successive segments
+        my ($tgap,$sgap);
+        $tgap = $segments->[$i+1]->[0]  - $segments->[$i]->[1]; # - 1 for actual size
+        $sgap = $segments->[$i+1]->[$k] - $segments->[$i]->[5-$k]; # apart from sign!
+        next if ($tgap <= 1 || $tgap != abs($sgap));
+# gaps on both template and sequence are of equal size
+# get the sequence in the gap on both sides, possibly with some overflow
+        my $tstart = $segments->[$i]->[1] + 1;
+        my $tfinal = $segments->[$i+1]->[0] - 1;
+        my $tstring = substr $template,$tstart-1-$window,$tfinal-$tstart+1+2*$window;
+        my $sstart = $segments->[$i]->[5-$k] + 1;
+        my $sfinal = $segments->[$i+1]->[$k] - 1;
+        my $sstring = substr $sequence,$sstart-1-$window,$sfinal-$sstart+1+2*$window;
+# test the two sequence fragments against one another
+
+my $squality = $options{squality}; # debug mode
+if ($squality && @$squality) {
+    print STDOUT "start $tstart  final $tfinal    begin $sstart  end $sfinal\n";
+    my $segmenti = $segments->[$i];
+    my $segmentj = $segments->[$i+1];
+    print STDOUT "gap $sgap  segment $i @$segmenti  $i+1 @$segmentj \n";
+    print STDOUT "sq $sstart-$sfinal  $sstring  $tstring\n";
+    my @squality = @$squality [($sstart-1-$window) .. ($sfinal-1+$window)];
+    print STDOUT "sq $sstart-$sfinal   @squality \n";
+}
+
+# test the two sequence fragments against one another and see if they are compatible
+# if no symbol is specified, compare case only; if (low quality) pad symbols are
+# provided (e.g. N, X, *, -), generate a regular expression from the template sequence 
+        if (defined($symbol)) {
+            $tstring =~ s/(\w)/[$1$symbol]/g; # generate a regexp 
+	}
+
+        if ($sstring =~ /^$tstring$/i) {
+# the sequence in the gap matches: merge the two segments
+            my @segment = ($segments->[$i]->[0] ,$segments->[$i+1]->[1],
+                           $segments->[$i]->[$k],$segments->[$i+1]->[5-$k]);
+            splice @$segments,$i,2,[@segment];
+        }    
     }
 }
 
@@ -786,15 +962,13 @@ sub inverseSegments {
 sub goldenPath {
 # cleanup and shrink segments TO BE DEVELOPED
     my $segments = shift;
-    my $tquality = shift;
-    my $squality = shift;
     my $reverse = shift;
-#    my %options = @_;
+    my %options = @_;
 
 # NOTE: cleanup and shrink could be combined into one method, also using quality
 # NOTE: data to better handle the treatment of ambiguity in overlapping segments
 
-# TO BE DEVELOPED, for the moment we use  cleanup and shrink
+# TO BE DEVELOPED, for the moment we use  cleanup, filter and shrink
 
 print $DEBUG "Cleanup alignment segments\n" if $DEBUG;
 
@@ -808,7 +982,22 @@ print $DEBUG "Cleanup alignment segments\n" if $DEBUG;
 
 print $DEBUG "Shrink alignment segments\n" if $DEBUG;
 
-    &shrinkSegments($segments,$reverse);
+    &filterOffsets($segments);
+
+    my $tquality = $options{tquality};
+    my $squality = $options{squality};
+    my $template = $options{template};
+    my $sequence = $options{sequence};
+
+    &shrinkSegments($segments,$reverse,$tquality,$squality,$template,$sequence);
+
+    my %moptions;
+    $options{window} =  1  unless defined $options{window};
+    $moptions{window} = $options{window};
+    $options{symbol} = 'N' unless defined $options{symbol};
+    $moptions{lowqsymbol} = $options{symbol};
+#    $moptions{squality} = $options{squality} if $options{squality};
+    &mergeSegments($segments,$reverse,$template,$sequence,%moptions);
 }
 
 sub gapSegments {
@@ -865,13 +1054,14 @@ sub complement {
 # helper method for 'buildCorrelationHash': return inverse complement of input sequence
     my $sequence = shift;
 
-
     &verifyAccess($sequence,'complement');
 
-
-    my $length = length($sequence);
+#    my $inverse = inverse($sequence);
+#    $inverse =~ tr/ACGTacgt/TGCAtgca/;
 
     my $inverse;
+
+    my $length = length($sequence);
 
     for my $i (1 .. $length) {
         my $j = $length - $i;
