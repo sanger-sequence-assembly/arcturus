@@ -1,6 +1,8 @@
 package Project;
  
 use strict;
+
+use ContigFactory::ContigFactory;
  
 #-------------------------------------------------------------------
 # Constructor new
@@ -276,9 +278,14 @@ sub writeContigsToCaf {
             next;
         }
 
-        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
+        if ($options{endregiontrim}) {
+            my %eoption = (cliplevel=>$options{endregiontrim});
+            $contig = ContigFactory->endregiontrim($contig,%eoption);
+	}
 
-        $contig->toPadded() if $options{padded};
+        if ($options{padded}) {
+            $contig = ContigFactory->toPadded($contig);
+	}
 
         if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
             $report .= "FAILED to export contig $contig_id\n";
