@@ -25,7 +25,7 @@ public class ProjectTable extends SortableTable {
     public ProjectTable(ProjectTableModel ptm) {
 	super((SortableTableModel)ptm);
 
-	getColumnModel().getColumn(5).setPreferredWidth(150);
+	//getColumnModel().getColumn(5).setPreferredWidth(150);
 
 	addMouseListener(new MouseAdapter() {
 		public void mouseClicked(MouseEvent e) {
