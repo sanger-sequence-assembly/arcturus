@@ -5,6 +5,7 @@ import javax.swing.table.*;
 import java.awt.event.*;
 import java.awt.Point;
 import java.awt.Component;
+import java.awt.Dimension;
 
 public class SortableTable extends JTable {
     public SortableTable(SortableTableModel stm) {
@@ -16,10 +17,12 @@ public class SortableTable extends JTable {
 		}
 	    });
 
+	//setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+
 	setDefaultRenderer(java.util.Date.class,
 			   new ISODateRenderer());
 
-	initColumnSizes();
+	initColumnSizes(5);
     }
 
     private void handleHeaderMouseClick(MouseEvent event) {
@@ -47,13 +50,15 @@ public class SortableTable extends JTable {
      * cells.
      */
 
-    private void initColumnSizes() {
+    private void initColumnSizes(int padding) {
         SortableTableModel model = (SortableTableModel)getModel();
 	TableCellRenderer headerRenderer =
 	    getTableHeader().getDefaultRenderer();
 
 	int colcount = model.getColumnCount();
 	int rowcount = model.getRowCount();
+
+	int fullWidth = 0;
     
 	for (int i = 0; i < colcount; i++) {
 	    TableColumn column = getColumnModel().getColumn(i);
@@ -79,13 +84,31 @@ public class SortableTable extends JTable {
 		}
 	    }
 
-	    //System.err.println("Ideal width of column " + i +
-	    //	       " (class=" + model.getColumnClass(i).getName() +
-	    //	       ", largest object=" + largest + ") is " + cellWidth +
-	    //	       " pixels (header is " + headerWidth + " pixels).");
+
+	    System.err.println("Column " + i + ":" +
+	    	       "\n\tclass=" + model.getColumnClass(i).getName() +
+	    	       "\n\tlargest object=\"" + largest + "\" is " + cellWidth +
+	    	       " pixels wide\n\theader is " + headerWidth + " pixels wide");
 	    
-	    column.setPreferredWidth(Math.max(headerWidth, cellWidth));
-	    //column.setMinWidth(Math.max(headerWidth, cellWidth));
+	    int bestWidth = (headerWidth > cellWidth ? headerWidth : cellWidth) + padding;
+
+	    column.setPreferredWidth(bestWidth);
+	    column.setMinWidth(bestWidth);
+
+	    fullWidth += bestWidth;
 	}
+
+	doLayout();
+
+	System.err.println("fullWidth = " + fullWidth + ", preferred width =" + getPreferredSize().width);
+	for (int i = 0; i < colcount; i++) {
+	    TableColumn column = getColumnModel().getColumn(i);
+	    System.err.println("Column " + i + " preferred width = " + column.getPreferredWidth() +
+			       ", actual width = " + column.getWidth());
+	}
+    }
+
+    public Dimension getPreferredScrollableViewportSize() {
+	return getPreferredSize();
     }
 }
