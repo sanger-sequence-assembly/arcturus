@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui;
 
 import javax.swing.JTable;
 import javax.swing.table.*;
+import javax.swing.event.*;
 import java.awt.event.*;
 import java.awt.Point;
 import java.awt.Component;
@@ -17,12 +18,14 @@ public class SortableTable extends JTable {
 		}
 	    });
 
-	//setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
-
 	setDefaultRenderer(java.util.Date.class,
 			   new ISODateRenderer());
 
-	initColumnSizes(5);
+	stm.addTableModelListener(new TableModelListener() {
+		public void tableChanged(TableModelEvent e) {
+		    initColumnSizes(2);
+		}
+	    });
     }
 
     private void handleHeaderMouseClick(MouseEvent event) {
@@ -83,12 +86,6 @@ public class SortableTable extends JTable {
 		    largest = model.getValueAt(x, i);
 		}
 	    }
-
-
-	    System.err.println("Column " + i + ":" +
-	    	       "\n\tclass=" + model.getColumnClass(i).getName() +
-	    	       "\n\tlargest object=\"" + largest + "\" is " + cellWidth +
-	    	       " pixels wide\n\theader is " + headerWidth + " pixels wide");
 	    
 	    int bestWidth = (headerWidth > cellWidth ? headerWidth : cellWidth) + padding;
 
@@ -99,13 +96,6 @@ public class SortableTable extends JTable {
 	}
 
 	doLayout();
-
-	System.err.println("fullWidth = " + fullWidth + ", preferred width =" + getPreferredSize().width);
-	for (int i = 0; i < colcount; i++) {
-	    TableColumn column = getColumnModel().getColumn(i);
-	    System.err.println("Column " + i + " preferred width = " + column.getPreferredWidth() +
-			       ", actual width = " + column.getWidth());
-	}
     }
 
     public Dimension getPreferredScrollableViewportSize() {
