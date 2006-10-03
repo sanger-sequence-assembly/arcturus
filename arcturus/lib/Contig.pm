@@ -1579,13 +1579,13 @@ sub writeToCaf {
         print $FILE $mapping->assembledFromToString();
     }
 
-# write tags, if any are loaded (take as is, no delayed loading)
+# write tags, if any are loaded (if no tags, use delayed loading)
 
-    if ($this->hasTags()) {
+    if (!$options{notags} && $this->hasTags(1)) {
         my $tags = $this->getTags();
 # decide on which tags to export; default no annotation (assembly export)
         my $includetag;
-        my $excludetag = 'ANNO'; 
+        my $excludetag = 'ANNO';
         if ($options{alltags}) {
             undef $excludetag;
         }
@@ -1603,8 +1603,8 @@ sub writeToCaf {
         foreach my $tag (@$tags) {
             my $tagtype = $tag->getType();
             next if ($includetag && $tagtype !~ /$includetag/);
-            next if ($excludetag && $tagtype !~ /$excludetag/);
-            $tag->writeToCaf($FILE);
+            next if ($excludetag && $tagtype =~ /$excludetag/); 
+            $tag->writeToCaf($FILE,annotag=>1);
         }
     }
 
