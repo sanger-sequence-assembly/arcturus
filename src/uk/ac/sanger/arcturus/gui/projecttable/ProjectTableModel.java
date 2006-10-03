@@ -176,7 +176,7 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
     public boolean isCellEditable(int row, int col) { return false; }
 
     public boolean isColumnSortable(int col) {
-	return (col > 1);
+	return (col > 0);
     }
 
     public void sortOnColumn(int col, boolean ascending) {
@@ -186,6 +186,10 @@ class ProjectTableModel extends AbstractTableModel implements SortableTableModel
 
     public void sortOnColumn(int col) {
 	switch (col) {
+	case 1:
+	    comparator.setType(ProjectComparator.BY_NAME);
+	    break;
+
 	case 2:
 	    comparator.setType(ProjectComparator.BY_TOTAL_LENGTH);
 	    break;

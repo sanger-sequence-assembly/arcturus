@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 
 import java.util.Comparator;
 import java.util.Date;
+import java.util.regex.*;
 
 public class ProjectComparator implements Comparator {
     public static final int BY_TOTAL_LENGTH = 1;
@@ -12,9 +13,12 @@ public class ProjectComparator implements Comparator {
     public static final int BY_OWNER = 6;
     public static final int BY_CONTIG_UPDATED_DATE = 7;
     public static final int BY_PROJECT_UPDATED_DATE = 8;
+    public static final int BY_NAME = 9;
 
     protected boolean ascending;
     protected int type;
+
+    protected Pattern pattern;
 
     public ProjectComparator() {
 	this(BY_TOTAL_LENGTH, true);
@@ -23,6 +27,7 @@ public class ProjectComparator implements Comparator {
     public ProjectComparator(int type, boolean ascending) {
 	this.type = type;
 	this.ascending = ascending;
+	pattern = Pattern.compile("^(.*\\D+)(\\d+)$");
     }
 
     public void setType(int type) {
@@ -70,6 +75,9 @@ public class ProjectComparator implements Comparator {
 
 	case BY_OWNER:
 	    return compareByOwner(p1, p2);
+
+	case BY_NAME:
+	    return compareByName(p1, p2);
 
 	default:
 	    return compareByMaximumLength(p1, p2);
@@ -186,6 +194,42 @@ public class ProjectComparator implements Comparator {
 	    return -1;
 
 	int diff = p2.getOwner().compareTo(p1.getOwner());
+
+	return ascending ? diff : -diff;
+    }
+
+    protected int compareByName(ProjectProxy p1, ProjectProxy p2) {
+	if (p1 == null && p2 == null)
+	    return 0;
+
+	if (p1 == null || p1.getName() == null)
+	    return 1;
+
+	if (p2 == null || p2.getName() == null)
+	    return -1;
+
+	String name1 = p1.getName();
+	String name2 = p2.getName();
+
+	Matcher matcher1 = pattern.matcher(name1);
+	Matcher matcher2 = pattern.matcher(name2);
+
+	int diff;
+
+	if (matcher1.find() && matcher2.find()) {
+	    String stem1 = matcher1.group(1);
+	    String stem2 = matcher2.group(1);
+
+	    diff = stem2.compareTo(stem1);
+
+	    if (diff == 0) {
+		int suffix1 = Integer.parseInt(matcher1.group(2));
+		int suffix2 = Integer.parseInt(matcher2.group(2));
+
+		diff = suffix2 - suffix1;
+	    }
+	} else 
+	    diff = name2.compareTo(name1);
 
 	return ascending ? diff : -diff;
     }
