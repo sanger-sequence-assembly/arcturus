@@ -44,7 +44,7 @@ sub new {
 
     my $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
 
-    my $ldap = Net::LDAP->new($url) or die "$@";
+    my $ldap = Net::LDAP->new($url) or die "Cannot connect to LDAP server: $@";
 
     # An anonymous bind
     my $mesg = $ldap->bind;
