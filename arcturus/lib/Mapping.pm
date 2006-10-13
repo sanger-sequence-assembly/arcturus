@@ -375,12 +375,14 @@ sub analyseSegments {
     $localalignment = $globalalignment unless $localalignment;
 
     if ($localalignment == 0 || $localalignment != $globalalignment) {
-        print STDERR "Anomalous alignment in mapping "
-                   . ($this->getMappingName || $this->getSequenceID)
-	           . " ($localalignment $globalalignment) :\n"
-                   .  $this->assembledFromToString unless $silent;
+        unless ($silent) {
+            print STDERR "Anomalous alignment in mapping "
+                       . ($this->getMappingName || $this->getSequenceID)
+	               . " ($localalignment $globalalignment) :\n"
+                       .  $this->writeToString('segment',extended=>1);
+        }
         $globalalignment = $localalignment;
-     }
+    }
 
 # finally, counter align unit-length alignments if mapping is counter-aligned
 
@@ -746,13 +748,14 @@ sub assembledFromToString {
 
     my $text = "Assembled_from ".$this->getMappingName()." ";
 
-    return $this->writeToString($text);
+    return $this->writeToString($text,@_);
 }
 
 sub writeToString {
 # write alignments as (block of) "$text" records
     my $this = shift;
     my $text = shift || '';
+    my %options = @_;
 
     my $segments = $this->getSegments();
 
@@ -761,7 +764,12 @@ sub writeToString {
         $segment->normaliseOnY(); # ensure rstart <= rfinish # ??
 #  interferes with normalization status ??
         my @segment = $segment->getSegment();
-        $string .= $text." @segment\n";
+        $string .= $text." @segment";
+        if ($options{extended}) {
+            $string .= " ".($segment->getAlignment() || 'a:undef');
+            $string .= " ".($segment->getOffset()    || 'o:undef');
+	}
+        $string .= "\n";
     }
 
     $string = $text." is undefined\n" unless $string; 
@@ -772,7 +780,7 @@ sub writeToString {
 sub toString {
 # primarily for diagnostic purposes
     my $this = shift;
-    my %options = @_; # print STDOUT "options @_\n";
+    my %options = @_; # text=>...  extended=>...  norange=>...
 
     $this->{contigrange} = undef;
     my $mappingname = $this->getMappingName()      || 'undefined';
@@ -790,7 +798,7 @@ sub toString {
     $string .= "\n";
 
     unless ($options{Xdomain} || $options{Ydomain}) {
-        $string .= $this->writeToString($options{text});
+        $string .= $this->writeToString($options{text},%options);
         return $string;
     }
 
