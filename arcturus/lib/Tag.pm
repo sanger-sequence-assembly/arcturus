@@ -435,6 +435,11 @@ sub isEqual {
     my $tag  = shift;
     my %options = @_;
 
+    if ($options{debug}) {
+        print STDOUT $this->dump();
+	print STDOUT $tag->dump();
+    }
+
 # compare tag type and host type
 
     return 0 unless ($this->getType() eq $tag->getType());
@@ -561,13 +566,49 @@ sub writeToCaf {
 
 # various types of tag, NOTE and ANNO are two special cases
 
+    my $host = $this->getHostClass();
+$host = 0;
+
     my $string = "Tag $type ";
 
     if ($type eq 'NOTE') {
 # GAP4 NOTE tag, no position info
     }
-    elsif ($type eq 'ANNO' || $this->getSystematicID()) {
-#    elsif ($type eq 'ANNO') {
+    elsif ($host eq 'Read') {
+# standard output of tag with position and tag comment
+        $string .= "@pos "; 
+        $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
+        $string .= "\"$tagcomment\"" if $tagcomment;
+        $string .= "\n";
+    }
+    elsif ($host eq 'Contig') {
+# annotation tags have special status
+        if ($type eq 'ANNO') {
+# generate two tags, ANNO contains the systematic ID and comment
+            $string .= "@pos ";
+# add the systematic ID
+            my $tagtext = $this->getSystematicID() || 'unspecified'; 
+            $tagtext .= ' ' . $comment if $comment;
+            $string .= "\"$tagtext\"\n" ;
+# if also a comment available add an info tag
+            $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
+#            $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
+        }
+        else {
+# standard output of tag with position and tag comment
+            $string .= "@pos "; 
+            $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
+            $string .= "\"$tagcomment\"" if $tagcomment;
+            $string .= "\n";
+# if comment available add an INFO tag
+            $string .= "Tag INFO @pos $comment\n" if $comment;
+	}
+    }
+#    else {
+#        print STDERR "Unknown host type in tag\n";
+#    }
+
+    elsif ($type eq 'ANNO') {
 # generate two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
 # add the systematic ID
@@ -698,6 +739,7 @@ sub dump {
     push @line, "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
     push @line, "tag sequence name ".($tag->getTagSequenceName() || 'undef')."\n";
     push @line, "sequence          ".($tag->getDNA() || 'undef')."\n";
+    push @line, "tag host class    ".($tag->getHostClass() || 'undef')."\n";
 
     foreach my $line (@line) {
 	next if ($skip && $line =~ /undef/);
