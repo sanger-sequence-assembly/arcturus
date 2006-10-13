@@ -1260,8 +1260,7 @@ sub getReadNamesLike {
 
 # else search the whole database
 
-    print "getReadNamesLike: TO BE IMPLEMENTED\n";
-
+    return $this->getListOfReadNames(readNameLike=>$name,%options);
 }
 
 #------------------------------------------------------------------------------
@@ -1473,6 +1472,7 @@ sub getTraceArchiveIdentifier {
 sub getListOfReadNames {
 # returns an array of (all) readnames occurring in the database 
     my $this = shift;
+    my %options = @_;
 
 # decode extra  input
 
@@ -1489,13 +1489,25 @@ sub getListOfReadNames {
 
     my $query = "select readname from READS ";
 
-    if ($noTraceRef) {
+    if ($options{noTraceRef}) {
         $query .= "left join TRACEARCHIVE as TA using (read_id) 
                    where TA.read_id IS NULL ";
     }
-    if ($onlySanger) {
-        $query .= "and readname like \"%.%\"";
-        $query =~ s/\band\b/where/ if ($query !~ /\bwhere\b/);
+
+    if ($options{onlySanger}) {
+        $query .= "where " unless ($query =~ /where/);
+       $query .= "and " if ($query =~ /where\s+\w+/);
+         $query .= "readname like \"%.%\"";
+    }
+
+    if ($options{readNameLike}) {
+        $query .= "where " unless ($query =~ /where/);
+        $query .= "and " if ($query =~ /where\s+\w+/);
+        $query .= "readname like '$options{readNameLike}'";
+    }
+
+    if ($options{limit}) {
+	$query .= "limit $options{limit}";
     }
 
     my $dbh = $this->getConnection();
@@ -2536,8 +2548,8 @@ sub getTagsForSequenceIDs {
     $sth->execute() || &queryFailed($query) && exit;
 
     while (my @ary = $sth->fetchrow_array()) {
-# create a new Tag instance
-        my $tag = new Tag('readtag');
+# create a new Tag instance 
+        my $tag = new Tag('Read'); # assign host class (re: putTagsForReads)
 # and define its contents
         $tag->setSequenceID      (shift @ary); # seq_id
         $tag->setType            (shift @ary); # tagtype
@@ -2615,6 +2627,7 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
     my %isequaloptions = (ignoreblankcomment=>1);
     $isequaloptions{ignorenameofpattern} = "oligo\\w+";
+$isequaloptions{debug} = 1 if $DEBUG;    
 
     while ($scounter < @sids && $tcounter < @$existingtags) {
  
@@ -2638,12 +2651,8 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
                 next if $ignore->{$rtag};
 # process possible placeholder names (to enable the name comparison)
                 &processTagPlaceHolderName($rtag);
-# and compare the tag with the current existing tag
+# and compare the tag with the current existing tag (including host class)
                 $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
-#                if ($rtag->isEqual($etag,%isequaloptions)) {
-#                    $ignore->{$rtag}++;
-#                    next;
-#                }
             }
             $tcounter++;
         }
