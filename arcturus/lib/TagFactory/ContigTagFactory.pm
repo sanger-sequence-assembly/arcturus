@@ -548,38 +548,34 @@ sub mergeTags {
     my $tags = shift; # array reference
     my %options = @_;
 
-# build an inventory of tag types
+# build an inventory of tag types & systematic ID (if defined)
 
     my $tagtypehash = {};
 
     foreach my $tag (@$tags) {
         next unless &verify($tag,'mergeTags');
         my $tagtype = $tag->getType() || next; # ignore undefined types
+        my $systematicid = $tag->getSystematicID();
+        $tagtype .= $systematicid if defined($systematicid);
         $tagtypehash->{$tagtype} = [] unless $tagtypehash->{$tagtype};
         push @{$tagtypehash->{$tagtype}},$tag; # add tag to list
     }
 
 # now merge eligible tags from each subset
 
-    my @tags; # output list
+    my @mtags; # output list of (merged) tags
 
-    my $mergetaglist = $options{mergetags} || 'ANNO';
-    $mergetaglist =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
-    $mergetaglist =~ s/\W+/|/g;
+    my %option = (overlap => ($options{overlap} || 0));
 
     foreach my $tagtype (keys %$tagtypehash) {
         my $tags = $tagtypehash->{$tagtype};
-        unless ($tagtype =~ /$mergetaglist/) {
-            push @tags,@$tags;
-	    next;
-	}
 # sort subset of tags according to position
         @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @$tags;
 # test if some tags can be merged
         my ($i,$j) = (0,1);
         while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
 # test for possible merger of tags i and j
-            if (my $newtag = $this->merge($tags->[$i],$tags->[$j])) {
+            if (my $newtag = $this->merge($tags->[$i],$tags->[$j],%option)) {
 # the tags are merged: replace tags i and j by the new one
                 splice @$tags, $i, 2, $newtag;
 # keep the same values of i and j
@@ -591,14 +587,14 @@ sub mergeTags {
             }
         }
 # add the left-over tags to the output list
-        push @tags,@$tags;    
+        push @mtags,@$tags;    
     }
 
 # sort all according to position
 
-    @tags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @tags;
+    @mtags = sort {$a->getPositionLeft <=> $b->getPositionLeft()} @mtags;
 
-    return [@tags];
+    return [@mtags];
 }
 
 sub makeCompositeTag {
