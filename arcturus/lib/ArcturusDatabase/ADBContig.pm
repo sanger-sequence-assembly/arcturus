@@ -449,7 +449,8 @@ sub putContig {
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
             $message = "Contig $contigname is identical to contig "
-                     .  $previous->getContigName();
+                     .  $previous->getContigName() . " ("
+		     .  $previous->getProject() . ")";
 # 'prohibitparent' is an option used by assignReadAsContigToProject
             return 0,$message if $options{prohibitparent};
  
@@ -2724,7 +2725,7 @@ print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
 
     while (my @ary = $sth->fetchrow_array()) {
 # create a new Tag instance
-        my $tag = new Tag('contigtag');
+        my $tag = new Tag('Contig');
 
         $tag->setSequenceID      (shift @ary); # contig_id
         $tag->setTagID           (shift @ary); # tag ID ?
