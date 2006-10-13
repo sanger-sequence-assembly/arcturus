@@ -142,10 +142,10 @@ foreach my $identifier (@$cids) {
 # identifer can be a number or the name of a read in it
 
     if ($identifier =~ /\D/) {
-        $contig = $adb->getContig(withRead=>$contig,metadataonly=>1);
+        $contig = $adb->getContig(withRead=>$identifier,metadataonly=>1);
     }
     else {
-        $contig = $adb->getContig(contig_id=>$contig,metadataonly=>1);
+        $contig = $adb->getContig(contig_id=>$identifier,metadataonly=>1);
     }
 
 # test existence
@@ -160,7 +160,7 @@ foreach my $identifier (@$cids) {
     my $contig_id = $contig->getContigID();
 
     unless ($adb->isCurrentContigID($contig_id)){
-	$logger->severe("Contig $identifier is not a current contig");
+	$logger->severe("Contig $identifier ($contig_id) is not a current contig");
         next;
     }
 
@@ -173,14 +173,19 @@ foreach my $identifier (@$cids) {
     else {
        ($projects,$status) = $adb->getProject(projectname=>'BIN');
     }
+    
+    $logger->info("Checking mappings");
 
     $contig->getMappings(1); # delayed loading
+
+    $logger->info("Checking reads");
 
     $contig->getReads(1); # delayed loading
 
     my $msg = '';
     if ($group == 1) {
         my %option = (threshold => $minimum-1);
+	$logger->info("Removing short reads (length < $minimum)");
         $contig = ContigFactory->removeShortReads($contig,%option);
     }
     elsif ($group == 2) {
@@ -200,7 +205,7 @@ foreach my $identifier (@$cids) {
 
 # present the contig to the database
 
-    $logger->info("Testing contig $contig");
+    $logger->info("Testing/loading contig $contig");
 
    (my $added,$msg) = $adb->putContig($contig, $projects->[0], %loadoptions);
 
