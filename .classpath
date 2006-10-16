@@ -5,5 +5,6 @@
 	<classpathentry kind="lib" path="/.automount/babel/root/nfs/team81/adh/java/jars/mysql-connector-java-3.1.13-bin.jar"/>
 	<classpathentry kind="lib" path="/.automount/babel/root/nfs/team81/adh/java/jars/oracle-jdbc.jar"/>
 	<classpathentry kind="lib" path="/.automount/babel/root/nfs/team81/adh/java/jars/jlfgr-1_0.jar"/>
+	<classpathentry kind="lib" path="/.automount/babel/root/nfs/team81/adh/java/jars/minerva-icons.jar"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
