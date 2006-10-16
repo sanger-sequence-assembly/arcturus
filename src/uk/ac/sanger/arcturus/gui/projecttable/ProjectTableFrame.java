@@ -10,79 +10,91 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class ProjectTableFrame extends MinervaFrame {
-    protected ProjectTable table = null;
-    protected ProjectTableModel model = null;
-    protected JMenu projectMenu = null;
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 1351208181264915551L;
+	protected ProjectTable table = null;
+	protected ProjectTableModel model = null;
+	protected JMenu projectMenu = null;
 
-    public ProjectTableFrame(Minerva minerva, ArcturusDatabase adb) {
-	super(minerva, "Project List : " +  adb.getName());
+	public ProjectTableFrame(Minerva minerva, ArcturusDatabase adb) {
+		super(minerva, "Project List : " + adb.getName());
 
-	model = new ProjectTableModel(adb);
+		model = new ProjectTableModel(adb);
 
-	table = new ProjectTable(model);
+		table = new ProjectTable(model);
 
-	JScrollPane scrollpane = new JScrollPane(table);
+		JScrollPane scrollpane = new JScrollPane(table);
 
-	JPanel panel = new JPanel(new BorderLayout());
+		JPanel panel = new JPanel(new BorderLayout());
 
-	panel.add(scrollpane, BorderLayout.CENTER);
-	panel.setPreferredSize(new Dimension(900, 530));
+		panel.add(scrollpane, BorderLayout.CENTER);
+		panel.setPreferredSize(new Dimension(900, 530));
 
-	setContentPane(panel);
+		setContentPane(panel);
 
-	projectMenu = new JMenu("Project");
-	menubar.add(projectMenu);
+		projectMenu = new JMenu("Project");
+		menubar.add(projectMenu);
 
-	projectMenu.add(new ViewProjectAction("View selected project(s)"));
+		projectMenu.add(new ViewProjectAction("View selected project(s)"));
 
-	projectMenu.addSeparator();
+		projectMenu.addSeparator();
 
-	ButtonGroup group = new ButtonGroup();
+		ButtonGroup group = new ButtonGroup();
 
-	JRadioButtonMenuItem rbShowProjectDate = new JRadioButtonMenuItem("Show project date");
-	group.add(rbShowProjectDate);
-	projectMenu.add(rbShowProjectDate);
+		JRadioButtonMenuItem rbShowProjectDate = new JRadioButtonMenuItem(
+				"Show project date");
+		group.add(rbShowProjectDate);
+		projectMenu.add(rbShowProjectDate);
 
-	rbShowProjectDate.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent e) {
-		    model.setDateColumn(ProjectTableModel.PROJECT_UPDATED_DATE);
-		}
-	    });
+		rbShowProjectDate.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.setDateColumn(ProjectTableModel.PROJECT_UPDATED_DATE);
+			}
+		});
 
-	JRadioButtonMenuItem rbShowContigCreated = new JRadioButtonMenuItem("Show contig creation date");
-	group.add(rbShowContigCreated);
-	projectMenu.add(rbShowContigCreated);
+		JRadioButtonMenuItem rbShowContigCreated = new JRadioButtonMenuItem(
+				"Show contig creation date");
+		group.add(rbShowContigCreated);
+		projectMenu.add(rbShowContigCreated);
 
-	rbShowContigCreated.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent e) {
-		    model.setDateColumn(ProjectTableModel.CONTIG_CREATED_DATE);
-		}
-	    });
+		rbShowContigCreated.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.setDateColumn(ProjectTableModel.CONTIG_CREATED_DATE);
+			}
+		});
 
-	JRadioButtonMenuItem rbShowContigUpdated = new JRadioButtonMenuItem("Show contig updated date");
-	group.add(rbShowContigUpdated);
-	projectMenu.add(rbShowContigUpdated);
+		JRadioButtonMenuItem rbShowContigUpdated = new JRadioButtonMenuItem(
+				"Show contig updated date");
+		group.add(rbShowContigUpdated);
+		projectMenu.add(rbShowContigUpdated);
 
-	rbShowContigUpdated.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent e) {
-		    model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
-		}
-	    });
+		rbShowContigUpdated.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
+			}
+		});
 
-	model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
-	rbShowContigUpdated.setSelected(true);
+		model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
+		rbShowContigUpdated.setSelected(true);
 
-	pack();
-	setVisible(true);
-    }
-
-    class ViewProjectAction extends AbstractAction {
-	public ViewProjectAction(String name) {
-	    super(name);
+		pack();
+		setVisible(true);
 	}
 
-	public void actionPerformed(ActionEvent event) {
-	    table.displaySelectedProjects();
+	class ViewProjectAction extends AbstractAction {
+		/**
+		 * 
+		 */
+		private static final long serialVersionUID = 4286787816579294056L;
+
+		public ViewProjectAction(String name) {
+			super(name);
+		}
+
+		public void actionPerformed(ActionEvent event) {
+			table.displaySelectedProjects();
+		}
 	}
-    }
 }

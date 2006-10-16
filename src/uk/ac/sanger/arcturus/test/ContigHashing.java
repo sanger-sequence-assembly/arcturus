@@ -5,258 +5,280 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 
 import java.util.*;
-import java.io.*;
-import java.sql.*;
-
 import javax.naming.Context;
 
 public class ContigHashing {
-    private static long lasttime;
+	private static long lasttime;
 
-    public static void main(String args[]) {
-	lasttime = System.currentTimeMillis();
+	public static void main(String args[]) {
+		lasttime = System.currentTimeMillis();
 
-	int option = ArcturusDatabase.CONTIG_CONSENSUS;
+		int option = ArcturusDatabase.CONTIG_CONSENSUS;
 
-	System.out.println("ContigHashing");
-	System.out.println("=============");
-	System.out.println();
+		System.out.println("ContigHashing");
+		System.out.println("=============");
+		System.out.println();
 
-	String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
+		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
 
-	String separator = "                    --------------------                    ";
+		Properties props = new Properties();
 
-	Properties props = new Properties();
+		Properties env = System.getProperties();
 
-	Properties env = System.getProperties();
+		props.put(Context.INITIAL_CONTEXT_FACTORY, env
+				.get(Context.INITIAL_CONTEXT_FACTORY));
+		props.put(Context.PROVIDER_URL, ldapURL);
 
-	props.put(Context.INITIAL_CONTEXT_FACTORY, env.get(Context.INITIAL_CONTEXT_FACTORY));
-	props.put(Context.PROVIDER_URL, ldapURL);
+		String instance = null;
+		String organism = null;
+		if (args.length < 3) {
+			System.out
+					.println("Argument(s) missing: instance organism kmer-size");
+			System.exit(1);
+		}
 
-	String instance = null;
-	String organism = null;
-	String objectname = null;
+		instance = args[0];
+		organism = args[1];
+		int kmersize = Integer.parseInt(args[2]);
 
-	if (args.length < 3) {
-	    System.out.println("Argument(s) missing: instance organism kmer-size");
-	    System.exit(1);
-	}
+		int cutoff = Integer.getInteger("cutoff", 20).intValue();
 
-	instance = args[0];
-	organism = args[1];
-	int kmersize = Integer.parseInt(args[2]);
+		HashMap kmers = new HashMap(2 << kmersize);
 
-	int cutoff = Integer.getInteger("cutoff", 20).intValue();
+		try {
+			System.out.println("Creating an ArcturusInstance for " + instance);
+			System.out.println();
 
-	Connection conn = null;
-	PreparedStatement pstmt = null;
+			ArcturusInstance ai = new ArcturusInstance(props, instance);
 
-	HashMap kmers = new HashMap(2 << kmersize);
+			System.out.println("Creating an ArcturusDatabase for " + organism);
+			System.out.println();
 
-	try {
-	    System.out.println("Creating an ArcturusInstance for " + instance);
-	    System.out.println();
+			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-	    ArcturusInstance ai = new ArcturusInstance(props, instance);
+			int[] contigIdList = adb.getCurrentContigIDList();
 
-	    System.out.println("Creating an ArcturusDatabase for " + organism);
-	    System.out.println();
+			for (int i = 0; i < contigIdList.length; i++) {
+				int id = contigIdList[i];
 
-	    ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+				Contig contig = adb.getContigByID(id, option);
 
-	    int[] contigIdList = adb.getCurrentContigIDList();
+				byte[] dna = contig.getDNA();
 
-	    for (int i = 0; i < contigIdList.length; i++) {
-		int id = contigIdList[i];
+				int maxoffset = dna.length - kmersize;
 
-		Contig contig = adb.getContigByID(id, option);
+				for (int offset = 0; offset < maxoffset; offset += kmersize) {
+					int kmer = 0;
 
-		byte[] dna = contig.getDNA();
+					for (int j = 0; j < kmersize; j++) {
+						int val = 0;
 
-		int maxoffset = dna.length - kmersize;
+						switch (dna[offset + j]) {
+							case 'a':
+							case 'A':
+								val = 0;
+								break;
+							case 'c':
+							case 'C':
+								val = 1;
+								break;
+							case 'g':
+							case 'G':
+								val = 2;
+								break;
+							case 't':
+							case 'T':
+								val = 3;
+								break;
+							default:
+								val = 0;
+								break;
+						}
 
-		for (int offset = 0; offset < maxoffset; offset += kmersize) {
-		    int kmer = 0;
+						kmer <<= 2;
+						kmer |= val;
+					}
 
-		    for (int j = 0; j < kmersize; j++) {
-			int val = 0;
+					Integer iKmer = new Integer(kmer);
 
-			switch (dna[offset + j]) {
-			case 'a': case 'A': val = 0; break;
-			case 'c': case 'C': val = 1; break;
-			case 'g': case 'G': val = 2; break;
-			case 't': case 'T': val = 3; break;
-			default: val = 0; break;
+					Kmer head = (Kmer) kmers.get(iKmer);
+
+					Kmer newHead = new Kmer(offset, kmer, head);
+
+					kmers.put(iKmer, newHead);
+				}
 			}
 
-			kmer <<= 2;
-			kmer |= val;
-		    }
+			report("GENERATED KMERS");
 
-		    Integer iKmer = new Integer(kmer);
+			Set entries = kmers.entrySet();
 
-		    Kmer head = (Kmer)kmers.get(iKmer);
+			Iterator iter = entries.iterator();
 
-		    Kmer newHead = new Kmer(offset, kmer, head);
+			int nEntries = 0;
+			int maxCount = 0;
+			int sumCount = 0;
+			int nTrimmedEntries = 0;
 
-		    kmers.put(iKmer, newHead);
-		}
-	    }
+			while (iter.hasNext()) {
+				Map.Entry mapentry = (Map.Entry) iter.next();
 
-	    report("GENERATED KMERS");
+				Kmer head = (Kmer) mapentry.getValue();
 
-	    Set entries = kmers.entrySet();
+				int headCount = 0;
 
-	    Iterator iter = entries.iterator();
+				while (head != null) {
+					headCount++;
+					head = head.getNext();
+				}
 
-	    int nEntries = 0;
-	    int maxCount = 0;
-	    int sumCount = 0;
-	    int nTrimmedEntries = 0;
+				if (headCount > 0) {
+					nEntries++;
+					sumCount += headCount;
+					if (headCount > maxCount)
+						maxCount = headCount;
 
-	    while (iter.hasNext()) {
-		Map.Entry mapentry = (Map.Entry)iter.next();
-
-		Integer iKmer = (Integer)mapentry.getKey();
-
-		Kmer head = (Kmer)mapentry.getValue();
-
-		int headCount = 0;
-
-		while (head != null) {
-		    headCount++;
-		    head = head.getNext();
-		}
-
-		if (headCount > 0) {
-		    nEntries++;
-		    sumCount += headCount;
-		    if (headCount > maxCount)
-			maxCount = headCount;
-
-		    if (headCount > cutoff) {
-			iter.remove();
-		    } else {
-			nTrimmedEntries++;
-		    }
-		}
-	    }
-
-	    float average = (float)sumCount/(float)nEntries;
-
-	    System.err.println("There are " + nEntries + " distinct kmers, and " + nTrimmedEntries +
-			       " after trimming to " + cutoff);
-	    System.err.println("The average cardinality is " + average);
-	    System.err.println("The maximum cardinality is " + maxCount);
-
-	    report("ANALYSED KMER STATISTICS");
-
-	    int[] readIdList = adb.getUnassembledReadIDList();
-
-	    System.out.println("There are " + readIdList.length + " unassembled reads");
-
-	    report("LOADED UNASSEMBLED READS");
-
-	    int hits = 0;
-
-	    for (int i = 0; i < readIdList.length; i++) {
-		if (i%1000 == 0)
-		    report("HASHED " + i + " READS");
-
-		int readid = readIdList[i];
-		Sequence seq = adb.getFullSequenceByReadID(readid);
-
-		byte[] dna = seq.getDNA();
-
-		int maxoffset = dna.length - kmersize;
-
-		for (int offset = 0; offset < maxoffset; offset += kmersize) {
-		    int kmer = 0;
-
-		    for (int j = 0; j < kmersize; j++) {
-			int val = 0;
-
-			switch (dna[offset + j]) {
-			case 'a': case 'A': val = 0; break;
-			case 'c': case 'C': val = 1; break;
-			case 'g': case 'G': val = 2; break;
-			case 't': case 'T': val = 3; break;
-			default: val = 0; break;
+					if (headCount > cutoff) {
+						iter.remove();
+					} else {
+						nTrimmedEntries++;
+					}
+				}
 			}
 
-			kmer <<= 2;
-			kmer |= val;
-		    }
+			float average = (float) sumCount / (float) nEntries;
 
-		    Integer iKmer = new Integer(kmer);
+			System.err.println("There are " + nEntries
+					+ " distinct kmers, and " + nTrimmedEntries
+					+ " after trimming to " + cutoff);
+			System.err.println("The average cardinality is " + average);
+			System.err.println("The maximum cardinality is " + maxCount);
 
-		    Kmer head = (Kmer)kmers.get(iKmer);
+			report("ANALYSED KMER STATISTICS");
 
-		    while (head != null) {
-			int contigid = head.getContigID();
-			int contigoffset = head.getOffset();
-			hits++;
-			//System.out.println(kmer + " " + contigid + " " + contigoffset + " " + readid + " " + offset);
-			head = head.getNext();
-		    }
+			int[] readIdList = adb.getUnassembledReadIDList();
+
+			System.out.println("There are " + readIdList.length
+					+ " unassembled reads");
+
+			report("LOADED UNASSEMBLED READS");
+
+			int hits = 0;
+
+			for (int i = 0; i < readIdList.length; i++) {
+				if (i % 1000 == 0)
+					report("HASHED " + i + " READS");
+
+				int readid = readIdList[i];
+				Sequence seq = adb.getFullSequenceByReadID(readid);
+
+				byte[] dna = seq.getDNA();
+
+				int maxoffset = dna.length - kmersize;
+
+				for (int offset = 0; offset < maxoffset; offset += kmersize) {
+					int kmer = 0;
+
+					for (int j = 0; j < kmersize; j++) {
+						int val = 0;
+
+						switch (dna[offset + j]) {
+							case 'a':
+							case 'A':
+								val = 0;
+								break;
+							case 'c':
+							case 'C':
+								val = 1;
+								break;
+							case 'g':
+							case 'G':
+								val = 2;
+								break;
+							case 't':
+							case 'T':
+								val = 3;
+								break;
+							default:
+								val = 0;
+								break;
+						}
+
+						kmer <<= 2;
+						kmer |= val;
+					}
+
+					Integer iKmer = new Integer(kmer);
+
+					Kmer head = (Kmer) kmers.get(iKmer);
+
+					while (head != null) {
+						hits++;
+						head = head.getNext();
+					}
+				}
+			}
+
+			System.err.println("Found " + hits
+					+ " kmer matches between contigs and reads");
+
+			report("FINISHED");
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(1);
 		}
-	    }
-
-	    System.err.println("Found " + hits + " kmer matches between contigs and reads");
-
-	    report("FINISHED");
-	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	    System.exit(1);
-	}
-    }
-
-
-    public static void report(String message) {
-	long timenow = System.currentTimeMillis();
-
-	System.out.println("******************** REPORT ********************");
-	System.out.println("Message: " + message);
-	System.out.println("Time: " + (timenow - lasttime));
-
-	lasttime = timenow;
-
-	Runtime runtime = Runtime.getRuntime();
-
-	System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()/1024 + "/" + runtime.totalMemory()/1024);
-	System.out.println("************************************************");
-	System.out.println();
-    }
-
-    byte[] KmerToSequence(int kmer, int kmerlength) {
-	byte[] alphabet = {'A','C','G','T'};
-	byte[] chars = new byte[kmerlength];
-
-	for (int i = 0; i < kmerlength; i++) {
-	    int code = kmer % 4;
-	    chars[kmerlength - i] = (byte)code;
-	    kmer >>>= 2;
 	}
 
-	return chars;
-    }
+	public static void report(String message) {
+		long timenow = System.currentTimeMillis();
+
+		System.out.println("******************** REPORT ********************");
+		System.out.println("Message: " + message);
+		System.out.println("Time: " + (timenow - lasttime));
+
+		lasttime = timenow;
+
+		Runtime runtime = Runtime.getRuntime();
+
+		System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()
+				/ 1024 + "/" + runtime.totalMemory() / 1024);
+		System.out.println("************************************************");
+		System.out.println();
+	}
+
+	byte[] KmerToSequence(int kmer, int kmerlength) {
+		byte[] chars = new byte[kmerlength];
+
+		for (int i = 0; i < kmerlength; i++) {
+			int code = kmer % 4;
+			chars[kmerlength - i] = (byte) code;
+			kmer >>>= 2;
+		}
+
+		return chars;
+	}
 }
 
 class Kmer {
-    Kmer next;
-    int contig_id;
-    int offset;
+	Kmer next;
+	int contig_id;
+	int offset;
 
-    public Kmer(int contig_id, int offset, Kmer next) {
-	this.contig_id = contig_id;
-	this.offset = offset;
-	this.next = next;
-    }
+	public Kmer(int contig_id, int offset, Kmer next) {
+		this.contig_id = contig_id;
+		this.offset = offset;
+		this.next = next;
+	}
 
-    public int getContigID() { return contig_id; }
+	public int getContigID() {
+		return contig_id;
+	}
 
-    public int getOffset() { return offset; }
+	public int getOffset() {
+		return offset;
+	}
 
-    public Kmer getNext() { return next; }
+	public Kmer getNext() {
+		return next;
+	}
 }

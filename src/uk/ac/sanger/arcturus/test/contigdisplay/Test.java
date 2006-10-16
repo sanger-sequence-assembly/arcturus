@@ -13,109 +13,109 @@ import javax.swing.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class Test extends JFrame {
-    protected GenericContigDisplayPanel panel = new GenericContigDisplayPanel();
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 5776704365847673931L;
+	protected GenericContigDisplayPanel panel = new GenericContigDisplayPanel();
 
-    public Test(String title) {
-	super(title);
+	public Test(String title) {
+		super(title);
 
-	JScrollPane scrollpane = new JScrollPane(panel);
+		JScrollPane scrollpane = new JScrollPane(panel);
 
-	Container contentPane = getContentPane();
+		Container contentPane = getContentPane();
 
-	contentPane.setLayout(new BorderLayout());
+		contentPane.setLayout(new BorderLayout());
 
-	JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
-	topPanel.add(new JLabel("Mode: "));
+		topPanel.add(new JLabel("Mode: "));
 
-	JComboBox cb = new JComboBox();
+		JComboBox cb = new JComboBox();
 
-	cb.addItem(new DisplayMode(DisplayMode.INFO));
-	cb.addItem(new DisplayMode(DisplayMode.DRAG));
-	cb.addItem(new DisplayMode(DisplayMode.ZOOM_IN));
-	cb.addItem(new DisplayMode(DisplayMode.ZOOM_OUT));
+		cb.addItem(new DisplayMode(DisplayMode.INFO));
+		cb.addItem(new DisplayMode(DisplayMode.DRAG));
+		cb.addItem(new DisplayMode(DisplayMode.ZOOM_IN));
+		cb.addItem(new DisplayMode(DisplayMode.ZOOM_OUT));
 
-	cb.setSelectedIndex(0);
+		cb.setSelectedIndex(0);
 
-	topPanel.add(cb);
+		topPanel.add(cb);
 
-	cb.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent e) {
-		    JComboBox cb = (JComboBox)e.getSource();
-		    DisplayMode dm = (DisplayMode)cb.getSelectedItem();
-		    System.err.println("DisplayMode is " + dm.getMode() + " (" +
-				       dm.toString() + ")");
-		    panel.setDisplayMode(dm.getMode());
-		}
-	    });
+		cb.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				JComboBox cb = (JComboBox) e.getSource();
+				DisplayMode dm = (DisplayMode) cb.getSelectedItem();
+				System.err.println("DisplayMode is " + dm.getMode() + " ("
+						+ dm.toString() + ")");
+				panel.setDisplayMode(dm.getMode());
+			}
+		});
 
-	contentPane.add(topPanel, BorderLayout.NORTH);
+		contentPane.add(topPanel, BorderLayout.NORTH);
 
-	contentPane.add(scrollpane, BorderLayout.CENTER);
+		contentPane.add(scrollpane, BorderLayout.CENTER);
 
-	panel.setBackground(Color.white);
-	panel.setInsetsAndUserArea(new Insets(20, 20, 20, 20),
-				   new Dimension(200000, 1000));
+		panel.setBackground(Color.white);
+		panel.setInsetsAndUserArea(new Insets(20, 20, 20, 20), new Dimension(
+				200000, 1000));
 
-	populate(panel);
-    }
+		populate(panel);
+	}
 
-    protected void populate(GenericContigDisplayPanel panel) {
-	int dragMode = DrawableFeature.DRAG_XY;
+	protected void populate(GenericContigDisplayPanel panel) {
+		int dragMode = DrawableFeature.DRAG_XY;
 
-	ContigFeature cf1 = new ContigFeature(new Contig("dinah", 40000),
-					      new Point(1000, 100),
-					      true);
+		ContigFeature cf1 = new ContigFeature(new Contig("dinah", 40000),
+				new Point(1000, 100), true);
 
-	panel.addFeature(cf1, dragMode);
+		panel.addFeature(cf1, dragMode);
 
-	ContigFeature cf2 = new ContigFeature(new Contig("molly", 20000),
-					      new Point(15000, 200),
-					      false);
+		ContigFeature cf2 = new ContigFeature(new Contig("molly", 20000),
+				new Point(15000, 200), false);
 
-	panel.addFeature(cf2, dragMode);
+		panel.addFeature(cf2, dragMode);
 
-	ContigFeature cf3 = new ContigFeature(new Contig("kitty", 10000),
-					      new Point(8000, 150),
-					      true);
+		ContigFeature cf3 = new ContigFeature(new Contig("kitty", 10000),
+				new Point(8000, 150), true);
 
-	panel.addFeature(cf3, dragMode);
+		panel.addFeature(cf3, dragMode);
 
-	ContigFeature cf4 = new ContigFeature(new Contig("bonnie", 15000),
-					      new Point(12000, 180),
-					      false);
+		ContigFeature cf4 = new ContigFeature(new Contig("bonnie", 15000),
+				new Point(12000, 180), false);
 
-	panel.addFeature(cf4, dragMode);
+		panel.addFeature(cf4, dragMode);
 
-	BridgeFeature bf1 = new BridgeFeature(new Bridge(3), cf1, cf2);
+		BridgeFeature bf1 = new BridgeFeature(new Bridge(3), cf1, cf2);
 
-	panel.addFeature(bf1, DrawableFeature.DRAG_NONE);
+		panel.addFeature(bf1, DrawableFeature.DRAG_NONE);
 
-	BridgeFeature bf2 = new BridgeFeature(new Bridge(5), cf1, cf3);
+		BridgeFeature bf2 = new BridgeFeature(new Bridge(5), cf1, cf3);
 
-	panel.addFeature(bf2, DrawableFeature.DRAG_NONE);
+		panel.addFeature(bf2, DrawableFeature.DRAG_NONE);
 
-	BridgeFeature bf3 = new BridgeFeature(new Bridge(2), cf4, cf1);
+		BridgeFeature bf3 = new BridgeFeature(new Bridge(2), cf4, cf1);
 
-	panel.addFeature(bf3, DrawableFeature.DRAG_NONE);
-    }
+		panel.addFeature(bf3, DrawableFeature.DRAG_NONE);
+	}
 
-    private static void createAndShowGUI() {
-        JFrame.setDefaultLookAndFeelDecorated(true);
+	private static void createAndShowGUI() {
+		JFrame.setDefaultLookAndFeelDecorated(true);
 
-        JFrame frame = new Test("Test Frame");
-        frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+		JFrame frame = new Test("Test Frame");
+		frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
 
-        frame.pack();
-	frame.setSize(800,800);
-        frame.setVisible(true);
-    }
+		frame.pack();
+		frame.setSize(800, 800);
+		frame.setVisible(true);
+	}
 
-    public static void main(String[] args) {
-        javax.swing.SwingUtilities.invokeLater(new Runnable() {
-            public void run() {
-		createAndShowGUI();
-            }
-        });
-    }
+	public static void main(String[] args) {
+		javax.swing.SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				createAndShowGUI();
+			}
+		});
+	}
 }

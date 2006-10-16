@@ -15,117 +15,114 @@ import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ProjectTable extends SortableTable {
-    protected final Color paleYellow = new Color(255, 255, 238);
-    protected final Color VIOLET1 = new Color(245, 245, 255);
-    protected final Color VIOLET2 = new Color(238, 238, 255);
-    protected final Color VIOLET3 = new Color(226, 226, 255);
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -6687174884203004659L;
+	protected final Color paleYellow = new Color(255, 255, 238);
+	protected final Color VIOLET1 = new Color(245, 245, 255);
+	protected final Color VIOLET2 = new Color(238, 238, 255);
+	protected final Color VIOLET3 = new Color(226, 226, 255);
 
-    protected JPopupMenu popupMenu;
+	protected JPopupMenu popupMenu;
 
-    public ProjectTable(ProjectTableModel ptm) {
-	super((SortableTableModel)ptm);
+	public ProjectTable(ProjectTableModel ptm) {
+		super((SortableTableModel) ptm);
 
-	//getColumnModel().getColumn(5).setPreferredWidth(150);
+		// getColumnModel().getColumn(5).setPreferredWidth(150);
 
-	addMouseListener(new MouseAdapter() {
-		public void mouseClicked(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-		public void mousePressed(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-		public void mouseReleased(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-	    });
+		addMouseListener(new MouseAdapter() {
+			public void mouseClicked(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
 
-	popupMenu = new JPopupMenu();
-	JMenuItem display = new JMenuItem("Display");
-	popupMenu.add(display);
-	display.addActionListener(new ActionListener() {
-		public void actionPerformed(ActionEvent event) {
-		    displaySelectedProjects();
-		}
-	    });
-    }
+			public void mousePressed(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
 
-    private void handleCellMouseClick(MouseEvent event) {
-	Point point = event.getPoint();
-	int row = rowAtPoint(point);
-	int col = columnAtPoint(point);
-	int modelcol = convertColumnIndexToModel(col);
+			public void mouseReleased(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
+		});
 
-	if (event.isPopupTrigger()) {
-	    popupMenu.show(event.getComponent(), event.getX(), event.getY());
+		popupMenu = new JPopupMenu();
+		JMenuItem display = new JMenuItem("Display");
+		popupMenu.add(display);
+		display.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				displaySelectedProjects();
+			}
+		});
 	}
 
-	if (event.getID() == MouseEvent.MOUSE_CLICKED &&
-	    event.getButton() == MouseEvent.BUTTON1 &&
-	    event.getClickCount() == 2) {
-	    //ProjectTableModel ptm = (ProjectTableModel)getModel();
-	    //ProjectProxy project = (ProjectProxy)ptm.elementAt(row);
-	    displaySelectedProjects();
-	}
-    }
-
-    public Component prepareRenderer(TableCellRenderer renderer,
-				     int rowIndex, int vColIndex) {
-	Component c = super.prepareRenderer(renderer, rowIndex, vColIndex);
-
-	if (isCellSelected(rowIndex, vColIndex)) {
-	    c.setBackground(getBackground());
-	    c.setForeground(Color.RED);
-	} else {
-	    if (rowIndex % 2 == 0) {
-		c.setBackground(VIOLET1);
-	    } else {
-		c.setBackground(VIOLET2);
-	    }
-	    c.setForeground(Color.BLACK);
+	private void handleCellMouseClick(MouseEvent event) {
+		if (event.isPopupTrigger()) {
+			popupMenu.show(event.getComponent(), event.getX(), event.getY());
+		} else if (event.getID() == MouseEvent.MOUSE_CLICKED
+				&& event.getButton() == MouseEvent.BUTTON1
+				&& event.getClickCount() == 2) {
+			displaySelectedProjects();
+		}
 	}
 
-	return c;
-    }
+	public Component prepareRenderer(TableCellRenderer renderer, int rowIndex,
+			int vColIndex) {
+		Component c = super.prepareRenderer(renderer, rowIndex, vColIndex);
 
-    public ProjectList getSelectedValues() {
-	int[] indices = getSelectedRows();
-	ProjectTableModel ptm = (ProjectTableModel)getModel();
-	ProjectList clist = new ProjectList();
-	for (int i = 0; i < indices.length; i++)
-	    clist.add(ptm.elementAt(indices[i]));
+		if (isCellSelected(rowIndex, vColIndex)) {
+			c.setBackground(getBackground());
+			c.setForeground(Color.RED);
+		} else {
+			if (rowIndex % 2 == 0) {
+				c.setBackground(VIOLET1);
+			} else {
+				c.setBackground(VIOLET2);
+			}
+			c.setForeground(Color.BLACK);
+		}
 
-	return clist;
-    }
-
-    public void displaySelectedProjects() {
-	int[] indices = getSelectedRows();
-	ProjectTableModel ptm = (ProjectTableModel)getModel();
-
-	Set contigs = new HashSet();
-
-	String title = "Contig List:";
-
-	for (int i = 0; i < indices.length; i++) {
-	    ProjectProxy proxy = (ProjectProxy)ptm.elementAt(indices[i]);
-	    Project project = proxy.getProject();
-
-	    title += ((i > 0) ? "," : " ") + project.getName();
-
-	    try {
-		Set contigsForProject = project.getContigs(true);
-		contigs.addAll(contigsForProject);
-	    }
-	    catch (SQLException sqle) {
-		sqle.printStackTrace();
-	    }
+		return c;
 	}
 
-	Minerva minerva = Minerva.getInstance();
+	public ProjectList getSelectedValues() {
+		int[] indices = getSelectedRows();
+		ProjectTableModel ptm = (ProjectTableModel) getModel();
+		ProjectList clist = new ProjectList();
+		for (int i = 0; i < indices.length; i++)
+			clist.add(ptm.elementAt(indices[i]));
 
-	ArcturusDatabase adb = ptm.getArcturusDatabase();
+		return clist;
+	}
 
-	ContigTableFrame frame = new ContigTableFrame(minerva, title, adb, contigs);
+	public void displaySelectedProjects() {
+		int[] indices = getSelectedRows();
+		ProjectTableModel ptm = (ProjectTableModel) getModel();
 
-	minerva.displayNewFrame(frame);
-    }
+		Set contigs = new HashSet();
+
+		String title = "Contig List:";
+
+		for (int i = 0; i < indices.length; i++) {
+			ProjectProxy proxy = (ProjectProxy) ptm.elementAt(indices[i]);
+			Project project = proxy.getProject();
+
+			title += ((i > 0) ? "," : " ") + project.getName();
+
+			try {
+				Set contigsForProject = project.getContigs(true);
+				contigs.addAll(contigsForProject);
+			} catch (SQLException sqle) {
+				sqle.printStackTrace();
+			}
+		}
+
+		Minerva minerva = Minerva.getInstance();
+
+		ArcturusDatabase adb = ptm.getArcturusDatabase();
+
+		ContigTableFrame frame = new ContigTableFrame(minerva, title, adb,
+				contigs);
+
+		minerva.displayNewFrame(frame);
+	}
 }

@@ -1,156 +1,149 @@
 package uk.ac.sanger.arcturus.gui.contigtable;
 
-import java.sql.*;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.net.*;
-import java.util.Comparator;
-import java.util.Arrays;
 import java.util.Set;
-import javax.swing.plaf.metal.MetalLookAndFeel;
-
 import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.gui.MinervaFrame;
 
-import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
-public class ContigTableFrame extends MinervaFrame
-    implements ActionListener, ItemListener {
-    static final private String PREVIOUS = "previous";
-    static final private String UP = "up";
-    static final private String NEXT = "next";
+public class ContigTableFrame extends MinervaFrame implements ActionListener,
+		ItemListener {
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -7452550307617586529L;
+	ContigTable contigTable;
+	JPopupMenu popupMenu;
+	JTableHeader tableHeader;
+	JCheckBox checkColourByProject;
+	JCheckBox checkGroupByProject;
 
-    //protected final static ContigListTransferHandler contigListHandler = new ContigListTransferHandler();
+	public ContigTableFrame(Minerva minerva, String title,
+			ArcturusDatabase adb, Set contigs) {
+		super(minerva, title);
 
-    ContigTable contigTable;
-    JPopupMenu popupMenu;
-    JTableHeader tableHeader;
-    JCheckBox checkColourByProject;
-    JCheckBox checkGroupByProject;
+		JPanel panel = new JPanel(new BorderLayout());
 
-    public ContigTableFrame(Minerva minerva, String title, ArcturusDatabase adb, Set contigs) {
-	super(minerva, title);
+		JToolBar toolBar = new JToolBar();
+		addButtons(toolBar);
+		toolBar.setFloatable(false);
+		toolBar.setRollover(true);
 
-	JPanel panel = new JPanel(new BorderLayout());
+		panel.add(toolBar, BorderLayout.PAGE_START);
 
-	JToolBar toolBar = new JToolBar();
-	addButtons(toolBar);
-	toolBar.setFloatable(false);
-        toolBar.setRollover(true);
+		ContigTableModel ctm = new ContigTableModel(adb, contigs);
 
-	panel.add(toolBar, BorderLayout.PAGE_START);
+		contigTable = new ContigTable(ctm);
 
-	ContigTableModel ctm = new ContigTableModel(adb, contigs);
+		// contigTable.setTransferHandler(contigListHandler);
+		// contigTable.setDragEnabled(true);
 
-	contigTable = new ContigTable(ctm);
+		JScrollPane scrollPane = new JScrollPane(contigTable);
 
-	//contigTable.setTransferHandler(contigListHandler);
-	//contigTable.setDragEnabled(true);
+		contigTable.addMouseListener(new MouseAdapter() {
+			public void mouseClicked(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
 
-	JScrollPane scrollPane = new JScrollPane(contigTable);
+			public void mousePressed(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
 
-	contigTable.addMouseListener(new MouseAdapter() {
-		public void mouseClicked(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-		public void mousePressed(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-		public void mouseReleased(MouseEvent e) {
-		    handleCellMouseClick(e);
-		}
-	    });
+			public void mouseReleased(MouseEvent e) {
+				handleCellMouseClick(e);
+			}
+		});
 
-        panel.add(scrollPane, BorderLayout.CENTER);
-	panel.setPreferredSize(new Dimension(900, 530));
+		panel.add(scrollPane, BorderLayout.CENTER);
+		panel.setPreferredSize(new Dimension(900, 530));
 
-	setContentPane(panel);
+		setContentPane(panel);
 
-	popupMenu = new JPopupMenu();
-	popupMenu.add(new JMenuItem("Select"));
-	popupMenu.add(new JMenuItem("Delete"));
-	popupMenu.addSeparator();
-	popupMenu.add(new JMenuItem("Display"));
-    }
-
-    protected void addButtons(JToolBar toolBar) {
-	checkColourByProject = new JCheckBox("Colour by project");
-        checkColourByProject.addItemListener(this);
-        toolBar.add(checkColourByProject);
-	checkGroupByProject = new JCheckBox("Group by project");
-        checkGroupByProject.addItemListener(this);
-        toolBar.add(checkGroupByProject);
-    }
-
-    protected JButton makeNavigationButton(String imageName,
-                                           String actionCommand,
-                                           String toolTipText,
-                                           String altText) {
-        //Look for the image.
-        String imgLocation = "/toolbarButtonGraphics/navigation/"
-                             + imageName
-                             + ".gif";
-        URL imageURL = getClass().getResource(imgLocation);
-
-        //Create and initialize the button.
-        JButton button = new JButton();
-        button.setActionCommand(actionCommand);
-        button.setToolTipText(toolTipText);
-        button.addActionListener(this);
-
-        if (imageURL != null) {                      //image found
-            button.setIcon(new ImageIcon(imageURL, altText));
-        } else {                                     //no image found
-            button.setText(altText);
-            System.err.println("Resource not found: "
-                               + imgLocation);
-        }
-
-        return button;
-    }
-
-    public void actionPerformed(ActionEvent e) {
-        String cmd = e.getActionCommand();
-    }
-
-    public void itemStateChanged(ItemEvent e) {
-	Object source = e.getItemSelectable();
-
-	if (source instanceof JCheckBox) {
-	    JCheckBox checkbox = (JCheckBox)source;
-
-	    if (checkbox == checkColourByProject) {
-		if (e.getStateChange() == ItemEvent.SELECTED)
-		    contigTable.setHowToColour(ContigTable.BY_PROJECT);
-		else
-		    contigTable.setHowToColour(ContigTable.BY_ROW_NUMBER);
-	    }
-
-	    if (checkbox == checkGroupByProject) {
-		ContigTableModel ctm = (ContigTableModel)contigTable.getModel();
-		ctm.setGroupByProject(e.getStateChange() == ItemEvent.SELECTED);
-	    }
-	}
-    }
-
-    private void handleCellMouseClick(MouseEvent event) {
-	Point point = event.getPoint();
-	int row = contigTable.rowAtPoint(point);
-	int col = contigTable.columnAtPoint(point);
-	int modelcol = contigTable.convertColumnIndexToModel(col);
-
-	if (event.isPopupTrigger()) {
-	    System.err.println("popup triggered at row " + row + ", view column " + col + ", model column " + modelcol);
-	    popupMenu.show(event.getComponent(), event.getX(), event.getY());
+		popupMenu = new JPopupMenu();
+		popupMenu.add(new JMenuItem("Select"));
+		popupMenu.add(new JMenuItem("Delete"));
+		popupMenu.addSeparator();
+		popupMenu.add(new JMenuItem("Display"));
 	}
 
-	if (event.getID() == MouseEvent.MOUSE_CLICKED &&
-	    event.getButton() == MouseEvent.BUTTON1 &&
-	    event.getClickCount() == 2) {
-	    System.err.println("Double click at row " + row + ", view column " + col + ", model column " + modelcol);
+	protected void addButtons(JToolBar toolBar) {
+		checkColourByProject = new JCheckBox("Colour by project");
+		checkColourByProject.addItemListener(this);
+		toolBar.add(checkColourByProject);
+		checkGroupByProject = new JCheckBox("Group by project");
+		checkGroupByProject.addItemListener(this);
+		toolBar.add(checkGroupByProject);
 	}
-    }
+
+	protected JButton makeNavigationButton(String imageName,
+			String actionCommand, String toolTipText, String altText) {
+		// Look for the image.
+		String imgLocation = "/toolbarButtonGraphics/navigation/" + imageName
+				+ ".gif";
+		URL imageURL = getClass().getResource(imgLocation);
+
+		// Create and initialize the button.
+		JButton button = new JButton();
+		button.setActionCommand(actionCommand);
+		button.setToolTipText(toolTipText);
+		button.addActionListener(this);
+
+		if (imageURL != null) { // image found
+			button.setIcon(new ImageIcon(imageURL, altText));
+		} else { // no image found
+			button.setText(altText);
+			System.err.println("Resource not found: " + imgLocation);
+		}
+
+		return button;
+	}
+
+	public void actionPerformed(ActionEvent e) {
+	}
+
+	public void itemStateChanged(ItemEvent e) {
+		Object source = e.getItemSelectable();
+
+		if (source instanceof JCheckBox) {
+			JCheckBox checkbox = (JCheckBox) source;
+
+			if (checkbox == checkColourByProject) {
+				if (e.getStateChange() == ItemEvent.SELECTED)
+					contigTable.setHowToColour(ContigTable.BY_PROJECT);
+				else
+					contigTable.setHowToColour(ContigTable.BY_ROW_NUMBER);
+			}
+
+			if (checkbox == checkGroupByProject) {
+				ContigTableModel ctm = (ContigTableModel) contigTable
+						.getModel();
+				ctm.setGroupByProject(e.getStateChange() == ItemEvent.SELECTED);
+			}
+		}
+	}
+
+	private void handleCellMouseClick(MouseEvent event) {
+		Point point = event.getPoint();
+		int row = contigTable.rowAtPoint(point);
+		int col = contigTable.columnAtPoint(point);
+		int modelcol = contigTable.convertColumnIndexToModel(col);
+
+		if (event.isPopupTrigger()) {
+			System.err.println("popup triggered at row " + row
+					+ ", view column " + col + ", model column " + modelcol);
+			popupMenu.show(event.getComponent(), event.getX(), event.getY());
+		}
+
+		if (event.getID() == MouseEvent.MOUSE_CLICKED
+				&& event.getButton() == MouseEvent.BUTTON1
+				&& event.getClickCount() == 2) {
+			System.err.println("Double click at row " + row + ", view column "
+					+ col + ", model column " + modelcol);
+		}
+	}
 }

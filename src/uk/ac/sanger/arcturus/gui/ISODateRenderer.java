@@ -4,15 +4,20 @@ import javax.swing.table.*;
 import java.text.*;
 
 public class ISODateRenderer extends DefaultTableCellRenderer {
-    private final DateFormat formatter= new SimpleDateFormat("yyyy MMM dd HH:mm");
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -4674507936665605972L;
+	private final DateFormat formatter = new SimpleDateFormat(
+			"yyyy MMM dd HH:mm");
 
-    public ISODateRenderer() {
-	super();
+	public ISODateRenderer() {
+		super();
 
-	setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
-    }
+		setHorizontalAlignment(DefaultTableCellRenderer.CENTER);
+	}
 
-    public void setValue(Object value) {
-        setText((value == null) ? "" : formatter.format(value));
-    }
+	public void setValue(Object value) {
+		setText((value == null) ? "" : formatter.format(value));
+	}
 }
