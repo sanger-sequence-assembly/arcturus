@@ -5,45 +5,44 @@ import java.awt.geom.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class BridgeFeaturePainter implements FeaturePainter {
-    
-    public void paintFeature(Graphics2D g, Feature f, Shape s) {
-	Color oldcolour = g.getColor();
 
-	g.setColor(Color.black);
+	public void paintFeature(Graphics2D g, Feature f, Shape s) {
+		Color oldcolour = g.getColor();
 
-	g.fill(s);
+		g.setColor(Color.black);
 
-	g.setColor(oldcolour);
-    }
+		g.fill(s);
 
-    public Shape calculateBoundingShape(Feature f, Transformer t) {
-	if (f instanceof BridgeFeature) {
-	    BridgeFeature bf = (BridgeFeature)f;
+		g.setColor(oldcolour);
+	}
 
-	    Point l = bf.getLeftContigFeature().getRightEnd();
-	    Point r = bf.getRightContigFeature().getLeftEnd();
+	public Shape calculateBoundingShape(Feature f, Transformer t) {
+		if (f instanceof BridgeFeature) {
+			BridgeFeature bf = (BridgeFeature) f;
 
-	    l = t.worldToView(l);
-	    r = t.worldToView(r);
+			Point l = bf.getLeftContigFeature().getRightEnd();
+			Point r = bf.getRightContigFeature().getLeftEnd();
 
-	    int links = ((Bridge)bf.getClientObject()).getScore();
+			l = t.worldToView(l);
+			r = t.worldToView(r);
 
-	    if (links > 5)
-		links = 5;
+			int links = ((Bridge) bf.getClientObject()).getScore();
 
-	    int dx = 20;
+			if (links > 5)
+				links = 5;
 
-	    Shape path = new CubicCurve2D.Double((double)l.x, (double)l.y,
-						 (double)(l.x + dx), (double)l.y,
-						 (double)(r.x - dx), (double)r.y,
-						 (double)r.x, (double)r.y);
+			int dx = 20;
 
-	    Stroke stroke = new BasicStroke((float)links);
+			Shape path = new CubicCurve2D.Double((double) l.x, (double) l.y,
+					(double) (l.x + dx), (double) l.y, (double) (r.x - dx),
+					(double) r.y, (double) r.x, (double) r.y);
 
-	    Shape outline = stroke.createStrokedShape(path);
+			Stroke stroke = new BasicStroke((float) links);
 
-	    return outline;
-	} else
-	    return null;
-    }
+			Shape outline = stroke.createStrokedShape(path);
+
+			return outline;
+		} else
+			return null;
+	}
 }

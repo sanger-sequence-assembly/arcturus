@@ -18,72 +18,71 @@ import java.util.Properties;
 // java $JNDI_OPTS ... DataSourceDemo args ...
 
 public class DataSourceDemo {
-    public static void main(String args) {
-	try {
-	    // 0. Create an LDAP context using parameters specified in the run-time
-	    // properties.
+	public static void main(String args) {
+		try {
+			// 0. Create an LDAP context using parameters specified in the
+			// run-time
+			// properties.
 
-	    Properties env = System.getProperties();
+			Properties env = System.getProperties();
 
-	    Context ctx = new InitialContext(env);
+			Context ctx = new InitialContext(env);
 
-	    // 1. Create and bind a data source
-	    
-	    boolean useMysql = Boolean.getBoolean("mysql");
+			// 1. Create and bind a data source
 
-	    String alias;
-	    DataSource ds1;
+			boolean useMysql = Boolean.getBoolean("mysql");
 
-	    if (useMysql) {
-		com.mysql.jdbc.jdbc2.optional.MysqlDataSource mysqlds =
-		    new com.mysql.jdbc.jdbc2.optional.MysqlDataSource();
+			String alias;
+			DataSource ds1;
 
-		mysqlds.setServerName("pcs3");
-		mysqlds.setDatabaseName("EIMER");
-		mysqlds.setPort(14642);
-		mysqlds.setUser("arcturus");
-		mysqlds.setPassword("myPassword");
-		
-		alias = "cn=EIMER";
-		ds1 = mysqlds;
-	    } else {
-		oracle.jdbc.pool.OracleDataSource oracleds =
-		    new oracle.jdbc.pool.OracleDataSource();
+			if (useMysql) {
+				com.mysql.jdbc.jdbc2.optional.MysqlDataSource mysqlds = new com.mysql.jdbc.jdbc2.optional.MysqlDataSource();
 
-		oracleds.setServerName("ocs2");
-		oracleds.setDatabaseName("wgs");
-		oracleds.setPortNumber(1522);
-		oracleds.setUser("pathlook");
-		oracleds.setPassword("pathlook");
-		oracleds.setDriverType("thin");
+				mysqlds.setServerName("pcs3");
+				mysqlds.setDatabaseName("EIMER");
+				mysqlds.setPort(14642);
+				mysqlds.setUser("arcturus");
+				mysqlds.setPassword("myPassword");
 
-		alias = "cn=WGS";
-		ds1 = oracleds;
-	    }
+				alias = "cn=EIMER";
+				ds1 = mysqlds;
+			} else {
+				oracle.jdbc.pool.OracleDataSource oracleds = new oracle.jdbc.pool.OracleDataSource();
 
-	    ctx.bind(alias, ds1);
+				oracleds.setServerName("ocs2");
+				oracleds.setDatabaseName("wgs");
+				oracleds.setPortNumber(1522);
+				oracleds.setUser("pathlook");
+				oracleds.setPassword("pathlook");
+				oracleds.setDriverType("thin");
 
-	    // 2. Lookup the data source
+				alias = "cn=WGS";
+				ds1 = oracleds;
+			}
 
-	    DataSource ds2 = (DataSource)ctx.lookup(alias);
+			ctx.bind(alias, ds1);
 
-	    // 3. Establish a connection to the database
+			// 2. Lookup the data source
 
-	    Connection conn1 = ds2.getConnection();
+			DataSource ds2 = (DataSource) ctx.lookup(alias);
 
-	    // 4. Establish a second connection, over-riding the default username and
-	    // password
+			// 3. Establish a connection to the database
 
-	    Connection conn2 = ds2.getConnection("dba", "adminpassword");
+			Connection conn1 = ds2.getConnection();
 
-	    // 5. Close the connections.
+			// 4. Establish a second connection, over-riding the default
+			// username and
+			// password
 
-	    conn1.close();
-	    conn2.close();
+			Connection conn2 = ds2.getConnection("dba", "adminpassword");
+
+			// 5. Close the connections.
+
+			conn1.close();
+			conn2.close();
+		} catch (Exception e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
 	}
-	catch (Exception e) {
-	    e.printStackTrace();
-	    System.exit(1);
-	}
-    }
 }

@@ -1,7 +1,12 @@
 package uk.ac.sanger.arcturus.gui.genericdisplay;
 
 public class InvalidClientObjectException extends Exception {
-    public InvalidClientObjectException(String message) {
-	super(message);
-    }
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = -3022743618232579418L;
+
+	public InvalidClientObjectException(String message) {
+		super(message);
+	}
 }

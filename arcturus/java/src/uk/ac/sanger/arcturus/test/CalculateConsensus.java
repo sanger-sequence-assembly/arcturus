@@ -265,21 +265,21 @@ public class CalculateConsensus {
 
 		ps.print(" (default mode is ");
 		switch (defaultPaddingMode) {
-		case Gap4BayesianConsensus.MODE_PAD_IS_N:
-			ps.print("-pad_is_n");
-			break;
+			case Gap4BayesianConsensus.MODE_PAD_IS_N:
+				ps.print("-pad_is_n");
+				break;
 
-		case Gap4BayesianConsensus.MODE_PAD_IS_STAR:
-			ps.print("-pad_is_star");
-			break;
+			case Gap4BayesianConsensus.MODE_PAD_IS_STAR:
+				ps.print("-pad_is_star");
+				break;
 
-		case Gap4BayesianConsensus.MODE_NO_PAD:
-			ps.print("-no_pad");
-			break;
+			case Gap4BayesianConsensus.MODE_NO_PAD:
+				ps.print("-no_pad");
+				break;
 
-		default:
-			ps.print("unknown");
-			break;
+			default:
+				ps.print("unknown");
+				break;
 		}
 		ps.println(")");
 
@@ -461,23 +461,23 @@ public class CalculateConsensus {
 
 		public void managerUpdate(ManagerEvent event) {
 			switch (event.getState()) {
-			case ManagerEvent.START:
-				System.err.println("START -- " + event.getMessage());
-				clock = System.currentTimeMillis();
-				break;
+				case ManagerEvent.START:
+					System.err.println("START -- " + event.getMessage());
+					clock = System.currentTimeMillis();
+					break;
 
-			case ManagerEvent.WORKING:
-				// System.err.print('.');
-				break;
+				case ManagerEvent.WORKING:
+					// System.err.print('.');
+					break;
 
-			case ManagerEvent.END:
-				// System.err.println();
-				clock = System.currentTimeMillis() - clock;
-				System.err.println("END   -- " + clock + " ms");
-				System.err.println("MEM      FREE=" + runtime.freeMemory()
-						/ 1024 + ", TOTAL=" + runtime.totalMemory() / 1024);
-				System.err.println();
-				break;
+				case ManagerEvent.END:
+					// System.err.println();
+					clock = System.currentTimeMillis() - clock;
+					System.err.println("END   -- " + clock + " ms");
+					System.err.println("MEM      FREE=" + runtime.freeMemory()
+							/ 1024 + ", TOTAL=" + runtime.totalMemory() / 1024);
+					System.err.println();
+					break;
 			}
 		}
 	}

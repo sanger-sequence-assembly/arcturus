@@ -5,21 +5,22 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
 public abstract class InfoPanel extends JPanel {
-    protected PopupManager manager;
-    
-    public InfoPanel(PopupManager mymanager) {
-	this.manager = mymanager;
+	protected PopupManager manager;
 
-	addMouseListener(new MouseAdapter() {
-		public void mousePressed(MouseEvent event) {
-		    manager.hidePopup();
-		}
+	public InfoPanel(PopupManager mymanager) {
+		this.manager = mymanager;
 
-		public void mouseExited(MouseEvent event) {
-		    manager.hidePopup();
-		}
-	    });
-    }
+		addMouseListener(new MouseAdapter() {
+			public void mousePressed(MouseEvent event) {
+				manager.hidePopup();
+			}
 
-    public abstract void setClientObject(Object o) throws InvalidClientObjectException;
+			public void mouseExited(MouseEvent event) {
+				manager.hidePopup();
+			}
+		});
+	}
+
+	public abstract void setClientObject(Object o)
+			throws InvalidClientObjectException;
 }

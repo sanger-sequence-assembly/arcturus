@@ -4,9 +4,11 @@ import java.awt.Point;
 import java.awt.Dimension;
 
 public interface Transformer {
-    public Point viewToWorld(Point p);
-    public Point worldToView(Point p);
+	public Point viewToWorld(Point p);
 
-    public Dimension viewToWorld(Dimension d);
-    public Dimension worldToView(Dimension d);
+	public Point worldToView(Point p);
+
+	public Dimension viewToWorld(Dimension d);
+
+	public Dimension worldToView(Dimension d);
 }

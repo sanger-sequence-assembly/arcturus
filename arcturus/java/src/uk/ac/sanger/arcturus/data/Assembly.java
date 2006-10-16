@@ -10,107 +10,139 @@ import java.sql.SQLException;
  */
 
 public class Assembly extends Core {
-    protected Date updated = null;
-    protected Date created = null;
-    protected String creator = null;
+	protected Date updated = null;
+	protected Date created = null;
+	protected String creator = null;
 
-    protected Set projects = null;
+	protected Set projects = null;
 
-    /**
-     * Constructs a Assembly which does not yet have an ID.
-     * This constructor will typically be used to create a Assembly
-     * <EM>ab initio</EM> prior to putting it into an Arcturus database.
-     */
+	/**
+	 * Constructs a Assembly which does not yet have an ID. This constructor
+	 * will typically be used to create a Assembly <EM>ab initio</EM> prior to
+	 * putting it into an Arcturus database.
+	 */
 
-    public Assembly() {
-	super();
-    }
+	public Assembly() {
+		super();
+	}
 
-    /**
-     * Constructs a Assembly which has an ID.
-     * This constructor will typically be used when a Assembly
-     * is retrieved from an Arcturus database.
-     *
-     * @param ID the ID of the Assembly.
-     * @param adb the Arcturus database to which this Assembly belongs.
-     */
+	/**
+	 * Constructs a Assembly which has an ID. This constructor will typically be
+	 * used when a Assembly is retrieved from an Arcturus database.
+	 * 
+	 * @param ID
+	 *            the ID of the Assembly.
+	 * @param adb
+	 *            the Arcturus database to which this Assembly belongs.
+	 */
 
-    public Assembly(int ID, ArcturusDatabase adb) {
-	super(ID, adb);
-    }
+	public Assembly(int ID, ArcturusDatabase adb) {
+		super(ID, adb);
+	}
 
-    /**
-     * Constructs a Assembly with basic properties.
-     * This constructor will typically be used when a Assembly
-     * is retrieved from an Arcturus database.
-     *
-     * @param name the name of the Assembly.
-     * @param ID the ID of the Assembly.
-     * @param updated the date and time whne this Assembly was last updated.
-     * @param created the date and time when this Assembly was created.
-     * @param creator the creator of this Assembly.
-     * @param adb the Arcturus database to which this Assembly belongs.
-     */
+	/**
+	 * Constructs a Assembly with basic properties. This constructor will
+	 * typically be used when a Assembly is retrieved from an Arcturus database.
+	 * 
+	 * @param name
+	 *            the name of the Assembly.
+	 * @param ID
+	 *            the ID of the Assembly.
+	 * @param updated
+	 *            the date and time whne this Assembly was last updated.
+	 * @param created
+	 *            the date and time when this Assembly was created.
+	 * @param creator
+	 *            the creator of this Assembly.
+	 * @param adb
+	 *            the Arcturus database to which this Assembly belongs.
+	 */
 
-    public Assembly(String name, int ID, Date updated, Date created, String creator,
-		   ArcturusDatabase adb) {
-	super(name, ID, adb);
+	public Assembly(String name, int ID, Date updated, Date created,
+			String creator, ArcturusDatabase adb) {
+		super(name, ID, adb);
 
-	this.updated = updated;
-	this.created = created;
-	this.creator = creator;
-    }
+		this.updated = updated;
+		this.created = created;
+		this.creator = creator;
+	}
 
-    public String getName() { return name; }
+	public String getName() {
+		return name;
+	}
 
-    public void setName(String name) { this.name = name; }
+	public void setName(String name) {
+		this.name = name;
+	}
 
-    public Date getUpdated() { return updated; }
+	public Date getUpdated() {
+		return updated;
+	}
 
-    public void setUpdated(Date updated) { this.updated = updated; }
+	public void setUpdated(Date updated) {
+		this.updated = updated;
+	}
 
-    public Date getCreated() { return created; }
+	public Date getCreated() {
+		return created;
+	}
 
-    public void setCreated(Date created) { this.created = created; }
+	public void setCreated(Date created) {
+		this.created = created;
+	}
 
-    public String getCreator() { return creator; }
+	public String getCreator() {
+		return creator;
+	}
 
-    public void setCreator(String creator) { this.creator = creator; }
+	public void setCreator(String creator) {
+		this.creator = creator;
+	}
 
-    /**
-     * Returns the number of projects currently contained in this Assembly object.
-     *
-     * @return the number of projects currently contained in this Assembly object.
-     */
+	/**
+	 * Returns the number of projects currently contained in this Assembly
+	 * object.
+	 * 
+	 * @return the number of projects currently contained in this Assembly
+	 *         object.
+	 */
 
-    public int getProjectCount() { return (projects == null) ? 0 : projects.size(); }
+	public int getProjectCount() {
+		return (projects == null) ? 0 : projects.size();
+	}
 
-    /**
-     * Returns the Vector containing the projects currently in this Assembly object.
-     *
-     * @return the Vector containing the projects currently in this Assembly object.
-     */
+	/**
+	 * Returns the Vector containing the projects currently in this Assembly
+	 * object.
+	 * 
+	 * @return the Vector containing the projects currently in this Assembly
+	 *         object.
+	 */
 
-    public Set getProjects() { return projects; }
+	public Set getProjects() {
+		return projects;
+	}
 
-    public void setProjects(Set projects) { this.projects = projects; }
+	public void setProjects(Set projects) {
+		this.projects = projects;
+	}
 
-    public void addProject(Project project) {
-	if (projects == null)
-	    projects = new HashSet();
+	public void addProject(Project project) {
+		if (projects == null)
+			projects = new HashSet();
 
-	projects.add(project);
-    }
+		projects.add(project);
+	}
 
-    public boolean removeProject(Project project) {
-	if (projects == null)
-	    return false;
-	else
-	    return projects.remove(project);
-    }
+	public boolean removeProject(Project project) {
+		if (projects == null)
+			return false;
+		else
+			return projects.remove(project);
+	}
 
-    public void refresh() throws SQLException {
-	if (adb != null)
-	    adb.refreshAssembly(this);
-    }
+	public void refresh() throws SQLException {
+		if (adb != null)
+			adb.refreshAssembly(this);
+	}
 }
