@@ -11,6 +11,7 @@ import java.io.*;
 import java.util.logging.*;
 
 import javax.swing.*;
+import javax.swing.border.*;
 
 import java.awt.Container;
 import java.awt.BorderLayout;
@@ -479,29 +480,65 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 			JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
-			topPanel.add(new JLabel("Mode: "));
-
-			JComboBox cb = new JComboBox();
-
-			cb.addItem(new DisplayMode(DisplayMode.INFO));
-			cb.addItem(new DisplayMode(DisplayMode.DRAG));
-			cb.addItem(new DisplayMode(DisplayMode.ZOOM_IN));
-			cb.addItem(new DisplayMode(DisplayMode.ZOOM_OUT));
-
-			cb.setSelectedIndex(0);
-
-			topPanel.add(cb);
-
-			cb.addActionListener(new ActionListener() {
+			ButtonGroup group = new ButtonGroup();
+			
+			JRadioButton btnInfo = new JRadioButton("Info");
+			
+			btnInfo.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					JComboBox cb = (JComboBox) e.getSource();
-					DisplayMode dm = (DisplayMode) cb.getSelectedItem();
-					logger.info("DisplayMode is " + dm.getMode() + " ("
-							+ dm.toString() + ")");
-					panel.setDisplayMode(dm.getMode());
+					panel.setDisplayMode(DisplayMode.INFO);
 				}
 			});
-
+			
+			group.add(btnInfo);
+					
+			JRadioButton btnDrag= new JRadioButton("Drag contigs");
+			
+			btnDrag.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent e) {
+					panel.setDisplayMode(DisplayMode.DRAG);
+				}
+			});
+			
+			group.add(btnDrag);
+			
+			JRadioButton btnZoomIn= new JRadioButton("Zoom in");
+			
+			btnZoomIn.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent e) {
+					panel.setDisplayMode(DisplayMode.ZOOM_IN);
+				}
+			});
+			
+			group.add(btnZoomIn);
+			
+			JRadioButton btnZoomOut= new JRadioButton("Zoom out");
+			
+			btnZoomOut.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent e) {
+					panel.setDisplayMode(DisplayMode.ZOOM_OUT);
+				}
+			});
+			
+			group.add(btnZoomOut);
+			
+			Border loweredetched = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
+			TitledBorder border = BorderFactory.createTitledBorder(
+				       loweredetched, "Mode");
+			border.setTitleJustification(TitledBorder.LEFT);
+			
+			JPanel modePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+			modePanel.setBorder(border);
+			
+			modePanel.add(btnInfo);
+			modePanel.add(btnDrag);
+			modePanel.add(btnZoomIn);
+			modePanel.add(btnZoomOut);
+			
+			topPanel.add(modePanel);
+			
+			btnInfo.setSelected(true);
+			
 			contentPane.add(topPanel, BorderLayout.NORTH);
 
 			contentPane.add(scrollpane, BorderLayout.CENTER);
