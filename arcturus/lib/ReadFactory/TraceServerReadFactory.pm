@@ -172,7 +172,7 @@ sub getNextRead {
 	if ($srctype eq 'clone') {
 	    my ($srclibclass,$srclibname) = split(/::/, $dnasrc->get_library_name());
 
-	    if ($srcclass eq 'SUBCLONE') {
+	    if ($srcclass eq 'SUBCLONE' && !defined($template)) {
 		$template = $srcname;
 		$ligation = $srclibname;
 		$libsize = $dnasrc->get_library_size();
