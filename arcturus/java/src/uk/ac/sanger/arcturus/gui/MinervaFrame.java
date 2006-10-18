@@ -22,7 +22,7 @@ public class MinervaFrame extends JFrame {
 	protected JMenu toolMenu = null;
 	protected JMenu windowMenu = null;
 
-	private Action newAction = null;
+	private Action quitAction = null;
 
 	public MinervaFrame(Minerva minerva) {
 		this(minerva, "MinervaFrame#" + counter);
@@ -41,19 +41,27 @@ public class MinervaFrame extends JFrame {
 	}
 
 	private void createActions() {
-		newAction = new MyAbstractAction("New",
-				createImageIcon("general/New24"), "New window", new Integer(
-						KeyEvent.VK_N), KeyStroke.getKeyStroke(KeyEvent.VK_N,
-						ActionEvent.ALT_MASK)) {
-			/**
-							 * 
-							 */
-							private static final long serialVersionUID = -8639285371442350829L;
+		quitAction = new MyAbstractAction("Quit", null, "Quit", new Integer(
+				KeyEvent.VK_Q), KeyStroke.getKeyStroke(KeyEvent.VK_Q,
+				ActionEvent.CTRL_MASK)) {
+			private static final long serialVersionUID = -8639285371442350829L;
 
 			public void actionPerformed(ActionEvent e) {
-				createNewWindow();
+				exitMinerva();
 			}
 		};
+	}
+
+	private void exitMinerva() {
+		Object[] options = { "Yes", "No" };
+		int rc = JOptionPane.showOptionDialog(this,
+				"Do you really want to quit Minerva?", "You are about to quit Minerva",
+				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
+				options, options[1]);
+		
+		if (rc == JOptionPane.YES_OPTION) {
+				System.exit(0);
+		}
 	}
 
 	private void createMenus() {
@@ -61,7 +69,8 @@ public class MinervaFrame extends JFrame {
 
 		fileMenu = new JMenu("File");
 
-		fileMenu.add(newAction);
+		fileMenu.addSeparator();
+		fileMenu.add(quitAction);
 
 		menubar.add(fileMenu);
 
@@ -122,15 +131,6 @@ public class MinervaFrame extends JFrame {
 
 	public JMenu getToolMenu() {
 		return toolMenu;
-	}
-
-	private void createNewWindow() {
-		MinervaFrame frame = new MinervaFrame(minerva);
-		Point p = getLocation();
-		p.x += 40;
-		p.y += 40;
-		frame.setLocation(p);
-		minerva.displayNewFrame(frame);
 	}
 
 	protected ImageIcon createImageIcon(String imageName) {
