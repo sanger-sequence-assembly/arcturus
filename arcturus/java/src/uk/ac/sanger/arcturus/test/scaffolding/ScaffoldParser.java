@@ -29,7 +29,7 @@ public class ScaffoldParser {
 		}
 
 		if (displayclassname == null)
-			displayclassname = "scaffolding.ScaffoldTable";
+			displayclassname = "uk.ac.sanger.arcturus.test.scaffolding.ScaffoldTable";
 
 		Constructor displayconstructor = null;
 
