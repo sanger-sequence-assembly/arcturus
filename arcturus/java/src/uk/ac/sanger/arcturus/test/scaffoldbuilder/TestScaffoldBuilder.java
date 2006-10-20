@@ -549,10 +549,10 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 			panel.setInsetsAndUserArea(new Insets(20, 20, 20, 20), userarea);
 
-			populate(contigboxes, bridgeset);
+			populate(contigboxes, bridgeset, seedcontig);
 		}
 
-		protected void populate(ContigBox[] contigboxes, Set bridgeset) {
+		protected void populate(ContigBox[] contigboxes, Set bridgeset, Contig seedcontig) {
 			int dragMode = DrawableFeature.DRAG_XY;
 
 			HashMap contigmap = new HashMap();
@@ -562,8 +562,10 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 				Contig contig = cb.getContig();
 
+				boolean isSeedContig = contig.equals(seedcontig);
+				
 				ContigFeature cf = new ContigFeature(contig, new Point(cb
-						.getLeft(), (1 + cb.getRow()) * 30), cb.isForward());
+						.getLeft(), (1 + cb.getRow()) * 30), cb.isForward(), isSeedContig);
 
 				contigmap.put(contig, cf);
 

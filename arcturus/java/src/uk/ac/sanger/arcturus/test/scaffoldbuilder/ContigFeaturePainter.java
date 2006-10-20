@@ -21,7 +21,7 @@ public class ContigFeaturePainter implements FeaturePainter {
 		if (f instanceof ContigFeature) {
 			ContigFeature cf = (ContigFeature) f;
 
-			Color colour = cf.isForward() ? Color.blue : Color.red;
+			Color fillColour = cf.isForward() ? Color.blue : Color.red;
 
 			Contig contig = (Contig) cf.getClientObject();
 
@@ -32,11 +32,17 @@ public class ContigFeaturePainter implements FeaturePainter {
 			Color oldcolour = g.getColor();
 
 			if (projectid != seedprojectid)
-				colour = colour.darker();
+				fillColour = fillColour.darker();
 
-			g.setColor(colour);
+			g.setColor(fillColour);
 
 			g.fill(s);
+			
+			if (cf.isSeedContig()){
+				g.setColor(Color.black);
+				g.setStroke(new BasicStroke(2.0f));
+				g.draw(s);
+			}
 
 			Rectangle rect = s.getBounds();
 

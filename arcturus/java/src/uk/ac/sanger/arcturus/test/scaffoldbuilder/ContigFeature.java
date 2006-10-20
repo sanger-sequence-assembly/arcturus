@@ -14,13 +14,15 @@ public class ContigFeature implements Feature {
 	protected Point position;
 	protected Dimension size;
 	protected boolean forward;
+	protected boolean seed;
 	protected Set bridgeSet = new HashSet();
 	protected DrawableFeature parent;
 
-	public ContigFeature(Contig contig, Point position, boolean forward) {
+	public ContigFeature(Contig contig, Point position, boolean forward, boolean seed) {
 		this.contig = contig;
 		this.position = position;
 		this.forward = forward;
+		this.seed = seed;
 		this.size = new Dimension(contig.getLength(), 20);
 	}
 
@@ -43,6 +45,10 @@ public class ContigFeature implements Feature {
 
 	public boolean isForward() {
 		return forward;
+	}
+	
+	public boolean isSeedContig() {
+		return seed;
 	}
 
 	public String toString() {
