@@ -177,4 +177,12 @@ public class Contig extends Core {
 	public Vector getTags() {
 		return tags;
 	}
+	
+	public boolean equals(Object o) {
+		if (o instanceof Contig) {
+			Contig that = (Contig) o;
+			return (that != null && that.getID() == ID);
+		} else
+			return false;
+	}
 }
