@@ -272,4 +272,10 @@ class ProjectTableModel extends AbstractTableModel implements
 	public ArcturusDatabase getArcturusDatabase() {
 		return adb;
 	}
+
+	public void showMultiReadContigs() {
+	}
+
+	public void showAllContigs() {
+	}
 }

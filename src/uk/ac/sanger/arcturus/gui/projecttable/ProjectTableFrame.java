@@ -79,6 +79,35 @@ public class ProjectTableFrame extends MinervaFrame {
 		model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
 		rbShowContigUpdated.setSelected(true);
 
+		projectMenu.addSeparator();
+
+		group = new ButtonGroup();
+
+		JRadioButtonMenuItem rbShowAllContigs = new JRadioButtonMenuItem(
+				"Show all contigs");
+		group.add(rbShowAllContigs);
+		projectMenu.add(rbShowAllContigs);
+
+		rbShowAllContigs.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.showAllContigs();
+			}
+		});
+
+		JRadioButtonMenuItem rbShowMultiReadContigs = new JRadioButtonMenuItem(
+				"Show contigs with more than one read");
+		group.add(rbShowMultiReadContigs);
+		projectMenu.add(rbShowMultiReadContigs);
+
+		rbShowMultiReadContigs.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.showMultiReadContigs();
+			}
+		});
+
+		model.showAllContigs();
+		rbShowAllContigs.setSelected(true);
+
 		pack();
 		setVisible(true);
 	}
