@@ -92,8 +92,8 @@ public class TestConnection implements ActionListener {
 
 	public void actionPerformed(ActionEvent e) {
 		try {
-			Connection conn = adb.getUniqueConnection();
-		
+			Connection conn = adb.getConnection();
+
 			Task task1 = new Task(conn, pbTask1, columns, tablename);
 			Thread thread1 = new Thread(task1);
 			thread1.start();
@@ -120,6 +120,7 @@ public class TestConnection implements ActionListener {
 		public Task(Connection conn, JProgressBar pb, String columns, String tablename) {
 			this.pb = pb;
 			this.conn = conn;
+			this.columns = columns;
 			this.tablename = tablename;
 		}
 		
@@ -127,8 +128,16 @@ public class TestConnection implements ActionListener {
 			try {
 				String query = "select count(*) from " + tablename;
 
-				Statement stmt = conn.createStatement();
-			
+				Statement stmt;
+				
+				if (Boolean.getBoolean("onerow")) {
+					stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+							java.sql.ResultSet.CONCUR_READ_ONLY);
+					stmt.setFetchSize(Integer.MIN_VALUE);		
+				
+				} else
+					stmt = conn.createStatement();
+		
 				ResultSet rs = stmt.executeQuery(query);
 				rs.next();
 				
