@@ -45,7 +45,7 @@ public class ProjectManager extends AbstractManager {
 		query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created),max(updated) from "
 				+ " CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id"
 				+ " where C2CMAPPING.parent_id is null "
-				+ " and project_id = ? and length >= ?";
+				+ " and project_id = ? and length >= ? and nreads >= ?";
 		pstmtProjectSummary = conn.prepareStatement(query);
 
 	}
@@ -241,12 +241,13 @@ public class ProjectManager extends AbstractManager {
 		}
 	}
 
-	public void getProjectSummary(Project project, int minlen,
+	public void getProjectSummary(Project project, int minlen, int minreads,
 			ProjectSummary summary) throws SQLException {
 		int project_id = project.getID();
 
 		pstmtProjectSummary.setInt(1, project_id);
 		pstmtProjectSummary.setInt(2, minlen);
+		pstmtProjectSummary.setInt(3, minreads);
 
 		ResultSet rs = pstmtProjectSummary.executeQuery();
 
@@ -267,20 +268,29 @@ public class ProjectManager extends AbstractManager {
 
 	public void getProjectSummary(Project project, ProjectSummary summary)
 			throws SQLException {
-		getProjectSummary(project, 0, summary);
+		getProjectSummary(project, 0, 0, summary);
+	}
+
+	public ProjectSummary getProjectSummary(Project project)
+			throws SQLException {
+		return getProjectSummary(project, 0, 0);
 	}
 
 	public ProjectSummary getProjectSummary(Project project, int minlen)
 			throws SQLException {
 		ProjectSummary summary = new ProjectSummary();
 
-		getProjectSummary(project, minlen, summary);
+		getProjectSummary(project, minlen, 0, summary);
 
 		return summary;
 	}
 
-	public ProjectSummary getProjectSummary(Project project)
-			throws SQLException {
-		return getProjectSummary(project, 0);
+	public ProjectSummary getProjectSummary(Project project, int minlen, int minreads)
+		throws SQLException {
+		ProjectSummary summary = new ProjectSummary();
+
+		getProjectSummary(project, minlen, minreads, summary);
+
+		return summary;
 	}
 }

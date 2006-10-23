@@ -840,9 +840,19 @@ public class ArcturusDatabase {
 		projectManager.setAssemblyForProject(project, assembly);
 	}
 
+	public void getProjectSummary(Project project, int minlen, int minreads,
+			ProjectSummary summary) throws SQLException {
+		projectManager.getProjectSummary(project, minlen, minreads, summary);
+	}
+
+	public ProjectSummary getProjectSummary(Project project, int minlen, int minreads)
+		throws SQLException {
+		return projectManager.getProjectSummary(project, minlen, minreads);
+	}
+
 	public void getProjectSummary(Project project, int minlen,
 			ProjectSummary summary) throws SQLException {
-		projectManager.getProjectSummary(project, minlen, summary);
+		projectManager.getProjectSummary(project, minlen, 0, summary);
 	}
 
 	public void getProjectSummary(Project project, ProjectSummary summary)

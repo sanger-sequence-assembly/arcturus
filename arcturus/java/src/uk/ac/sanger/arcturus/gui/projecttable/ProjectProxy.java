@@ -13,6 +13,7 @@ public class ProjectProxy {
 	protected Project project = null;
 	protected ProjectSummary summary = null;
 	protected int minlen = 0;
+	protected int minreads = 0;
 
 	public ProjectProxy(Project project) throws SQLException {
 		this.project = project;
@@ -26,6 +27,12 @@ public class ProjectProxy {
 
 	public void refreshSummary() throws SQLException {
 		summary = project.getProjectSummary(minlen);
+	}
+	
+	public void refreshSummary(int minlen, int minreads) throws SQLException {
+		this.minlen = minlen;
+		this.minreads = minreads;
+		summary = project.getProjectSummary(minlen, minreads);
 	}
 
 	public String getName() {

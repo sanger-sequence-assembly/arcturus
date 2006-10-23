@@ -25,7 +25,14 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected ArcturusDatabase adb = null;
 	protected int dateColumnType = CONTIG_UPDATED_DATE;
 
+	protected static final int ASSEMBLY_COLUMN = 0;
+	protected static final int PROJECT_COLUMN = 1;
+	protected static final int TOTAL_LENGTH_COLUMN = 2;
+	protected static final int CONTIG_COUNT_COLUMN = 3;
+	protected static final int MAXIMUM_LENGTH_COLUMN = 4;
+	protected static final int READ_COUNT_COLUMN = 5;
 	protected static final int DATE_COLUMN = 6;
+	protected static final int OWNER_COLUMN = 7;
 
 	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
@@ -43,7 +50,7 @@ class ProjectTableModel extends AbstractTableModel implements
 			}
 
 			comparator.setAscending(false);
-			sortOnColumn(2);
+			sortOnColumn(TOTAL_LENGTH_COLUMN);
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
 			System.exit(1);
@@ -52,22 +59,22 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	public String getColumnName(int col) {
 		switch (col) {
-			case 0:
+			case ASSEMBLY_COLUMN:
 				return "Assembly";
 
-			case 1:
+			case PROJECT_COLUMN:
 				return "Project";
 
-			case 2:
+			case TOTAL_LENGTH_COLUMN:
 				return "Total length";
 
-			case 3:
+			case CONTIG_COUNT_COLUMN:
 				return "Contigs";
 
-			case 4:
+			case MAXIMUM_LENGTH_COLUMN:
 				return "Max length";
 
-			case 5:
+			case READ_COUNT_COLUMN:
 				return "Reads";
 
 			case DATE_COLUMN:
@@ -85,7 +92,7 @@ class ProjectTableModel extends AbstractTableModel implements
 						return "UNKNOWN";
 				}
 
-			case 7:
+			case OWNER_COLUMN:
 				return "Owner";
 
 			default:
@@ -95,15 +102,15 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	public Class getColumnClass(int col) {
 		switch (col) {
-			case 0:
-			case 1:
-			case 7:
+			case ASSEMBLY_COLUMN:
+			case PROJECT_COLUMN:
+			case OWNER_COLUMN:
 				return String.class;
 
-			case 2:
-			case 3:
-			case 4:
-			case 5:
+			case TOTAL_LENGTH_COLUMN:
+			case CONTIG_COUNT_COLUMN:
+			case MAXIMUM_LENGTH_COLUMN:
+			case READ_COUNT_COLUMN:
 				return Integer.class;
 
 			case DATE_COLUMN:
@@ -191,23 +198,23 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	public void sortOnColumn(int col) {
 		switch (col) {
-			case 1:
+			case PROJECT_COLUMN:
 				comparator.setType(ProjectComparator.BY_NAME);
 				break;
 
-			case 2:
+			case TOTAL_LENGTH_COLUMN:
 				comparator.setType(ProjectComparator.BY_TOTAL_LENGTH);
 				break;
 
-			case 3:
+			case CONTIG_COUNT_COLUMN:
 				comparator.setType(ProjectComparator.BY_CONTIGS);
 				break;
 
-			case 4:
+			case MAXIMUM_LENGTH_COLUMN:
 				comparator.setType(ProjectComparator.BY_MAXIMUM_LENGTH);
 				break;
 
-			case 5:
+			case READ_COUNT_COLUMN:
 				comparator.setType(ProjectComparator.BY_READS);
 				break;
 
@@ -230,7 +237,7 @@ class ProjectTableModel extends AbstractTableModel implements
 				}
 				break;
 
-			case 7:
+			case OWNER_COLUMN:
 				comparator.setType(ProjectComparator.BY_OWNER);
 				break;
 		}
@@ -274,8 +281,22 @@ class ProjectTableModel extends AbstractTableModel implements
 	}
 
 	public void showMultiReadContigs() {
+		setMinimumReads(2);
 	}
 
 	public void showAllContigs() {
+		setMinimumReads(0);
+	}
+	
+	protected void setMinimumReads(int minreads) {
+		for (Enumeration e = projects.elements(); e.hasMoreElements();) {
+			ProjectProxy proxy = (ProjectProxy) e.nextElement();
+			try {
+				proxy.refreshSummary(0, minreads);
+			}
+			catch (SQLException sqle) {}
+		}
+
+		sortOnColumn(lastSortColumn);	
 	}
 }

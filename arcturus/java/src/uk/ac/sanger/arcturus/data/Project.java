@@ -249,12 +249,19 @@ public class Project extends Core {
 
 	public ProjectSummary getProjectSummary(int minlen) throws SQLException {
 		if (adb != null)
-			return adb.getProjectSummary(this, minlen);
+			return adb.getProjectSummary(this, minlen, 0);
 		else
 			return null;
 	}
 
 	public ProjectSummary getProjectSummary() throws SQLException {
 		return getProjectSummary(0);
+	}
+
+	public ProjectSummary getProjectSummary(int minlen, int minreads) throws SQLException {
+		if (adb != null)
+			return adb.getProjectSummary(this, minlen, minreads);
+		else
+			return null;
 	}
 }
