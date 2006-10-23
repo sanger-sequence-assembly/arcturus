@@ -132,7 +132,9 @@ public class ArcturusDatabase {
 
 	/**
 	 * Establishes a JDBC connection to a database, using the parameters stored
-	 * in this object's DataSource, and the specified username and password.
+	 * in this object's DataSource.  After the first call to this method, the
+	 * Connection object will be cached.  The second and subsequent calls will
+	 * return the cached object.
 	 * 
 	 * @return a java.sql.Connection which can be used to communicate with the
 	 *         database.
@@ -150,8 +152,27 @@ public class ArcturusDatabase {
 	}
 
 	/**
+	 * Establishes a unique (non-cached) JDBC connection to a database, using
+	 * the parameters stored in this object's DataSource.
+	 * 
+	 * @return a java.sql.Connection which can be used to communicate with the
+	 *         database.
+	 * 
+	 * @throws SQLException
+	 *             in the event of an error when establishing a connection with
+	 *             the database.
+	 */
+
+	public Connection getUniqueConnection() throws SQLException {
+		return ds.getConnection();
+	}
+
+	/**
 	 * Establishes a JDBC connection to a database, using the parameters stored
-	 * in this object's DataSource.
+	 * in this object's DataSource, and the specified username and password.
+	 * After the first call to this method, the Connection object will be cached.
+	 * The second and subsequent calls which specify the same username will
+	 * return the cached object.
 	 * 
 	 * @param username
 	 *            the username which should be used to connect to the database.
@@ -182,6 +203,32 @@ public class ArcturusDatabase {
 			namedConnections.put(username, conn);
 
 		return conn;
+	}
+
+	/**
+	 * Establishes a unique (non-cached) JDBC connection to a database, using
+	 * the parameters stored in this object's DataSource, and the specified username
+	 * and password.
+	 * 
+	 * @param username
+	 *            the username which should be used to connect to the database.
+	 *            This overrides the username, if any, in the DataSource object.
+	 * 
+	 * @param password
+	 *            the pasword which should be used to connect to the database.
+	 *            This overrides the password, if any, in the DataSource object.
+	 * 
+	 * @return a java.sql.Connection which can be used to communicate with the
+	 *         database.
+	 * 
+	 * @throws SQLException
+	 *             in the event of an error when establishing a connection with
+	 *             the database.
+	 */
+
+	public Connection getUniqueConnection(String username, String password)
+			throws SQLException {
+		return ds.getConnection(username, password);
 	}
 
 	/**
