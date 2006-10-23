@@ -64,15 +64,15 @@ public class CalculateConsensus {
 		System.err.println("==================");
 		System.err.println();
 
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
 		Properties props = new Properties();
 
 		Properties env = System.getProperties();
 
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
+		props.put(Context.INITIAL_CONTEXT_FACTORY,
+					env.get(Context.INITIAL_CONTEXT_FACTORY));
+		
+		props.put(Context.PROVIDER_URL,
+					env.get(Context.PROVIDER_URL));
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
