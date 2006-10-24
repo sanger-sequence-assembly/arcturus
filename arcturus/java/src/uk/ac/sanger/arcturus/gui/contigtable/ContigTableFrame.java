@@ -38,7 +38,7 @@ public class ContigTableFrame extends MinervaFrame implements ActionListener,
 
 		ContigTableModel ctm = new ContigTableModel(adb, contigs);
 
-		contigTable = new ContigTable(ctm);
+		contigTable = new ContigTable(this, ctm);
 
 		// contigTable.setTransferHandler(contigListHandler);
 		// contigTable.setDragEnabled(true);

@@ -20,8 +20,8 @@ public class ContigTable extends SortableTable {
 
 	protected int howToColour = BY_ROW_NUMBER;
 
-	public ContigTable(SortableTableModel stm) {
-		super(stm);
+	public ContigTable(ContigTableFrame frame, SortableTableModel stm) {
+		super(frame, stm);
 	}
 
 	public void setHowToColour(int how) {

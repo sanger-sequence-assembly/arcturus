@@ -13,9 +13,13 @@ public class SortableTable extends JTable {
 	 * 
 	 */
 	private static final long serialVersionUID = 6686950946133273774L;
+	
+	protected MinervaFrame frame;
 
-	public SortableTable(SortableTableModel stm) {
+	public SortableTable(MinervaFrame frame, SortableTableModel stm) {
 		super((TableModel) stm);
+		
+		this.frame = frame;
 
 		getTableHeader().addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent event) {
@@ -101,5 +105,9 @@ public class SortableTable extends JTable {
 
 	public Dimension getPreferredScrollableViewportSize() {
 		return getPreferredSize();
+	}
+	
+	public MinervaFrame getFrame() {
+		return frame;
 	}
 }
