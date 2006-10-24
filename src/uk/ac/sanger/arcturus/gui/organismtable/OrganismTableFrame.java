@@ -20,7 +20,7 @@ public class OrganismTableFrame extends MinervaFrame {
 
 		OrganismTableModel model = new OrganismTableModel(instance);
 
-		table = new OrganismTable(model);
+		table = new OrganismTable(this, model);
 
 		JScrollPane scrollpane = new JScrollPane(table);
 

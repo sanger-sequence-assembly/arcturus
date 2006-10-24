@@ -23,7 +23,7 @@ public class ProjectTableFrame extends MinervaFrame {
 
 		model = new ProjectTableModel(adb);
 
-		table = new ProjectTable(model);
+		table = new ProjectTable(this, model);
 
 		JScrollPane scrollpane = new JScrollPane(table);
 

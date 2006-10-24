@@ -4,9 +4,12 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.*;
-import uk.ac.sanger.arcturus.gui.*;
+import java.sql.SQLException;
 
+import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.data.Organism;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
 
 public class OrganismTable extends SortableTable {
 	/**
@@ -20,8 +23,8 @@ public class OrganismTable extends SortableTable {
 
 	protected JPopupMenu popupMenu;
 
-	public OrganismTable(OrganismTableModel ptm) {
-		super((SortableTableModel) ptm);
+	public OrganismTable(OrganismTableFrame frame, OrganismTableModel ptm) {
+		super(frame, (SortableTableModel) ptm);
 
 		addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
@@ -82,7 +85,15 @@ public class OrganismTable extends SortableTable {
 
 		for (int i = 0; i < indices.length; i++) {
 			Organism organism = (Organism) ptm.elementAt(indices[i]);
-			System.err.println("Display organism " + organism);
+			try {
+				ArcturusDatabase adb = new ArcturusDatabase(organism);
+				Minerva minerva = Minerva.getInstance();
+				MinervaFrame frame = new ProjectTableFrame(minerva, adb);
+				minerva.displayNewFrame(frame);
+			}
+			catch (SQLException sqle) {
+				sqle.printStackTrace();
+			}
 		}
 	}
 }

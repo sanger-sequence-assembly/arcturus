@@ -26,8 +26,8 @@ public class ProjectTable extends SortableTable {
 
 	protected JPopupMenu popupMenu;
 
-	public ProjectTable(ProjectTableModel ptm) {
-		super((SortableTableModel) ptm);
+	public ProjectTable(ProjectTableFrame frame, ProjectTableModel ptm) {
+		super(frame, (SortableTableModel) ptm);
 
 		// getColumnModel().getColumn(5).setPreferredWidth(150);
 
