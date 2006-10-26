@@ -13,6 +13,8 @@ import uk.ac.sanger.arcturus.database.*;
 public class TestConnection implements ActionListener {
 	JProgressBar pbTask1 = new JProgressBar();
 	JProgressBar pbTask2 = new JProgressBar();
+	JCheckBox cbxTwoConn = new JCheckBox("Two Connections", true);
+	JCheckBox cbxNoBatch = new JCheckBox("No Batch", true);
 	ArcturusDatabase adb;
 	String columns;
 	String tablename;
@@ -77,9 +79,16 @@ public class TestConnection implements ActionListener {
 		
 		mainPanel.add(panel, BorderLayout.CENTER);
 		
+		JPanel controlPanel = new JPanel(new FlowLayout());
+		
 		JButton btnGo = new JButton("Go!");
-		mainPanel.add(btnGo, BorderLayout.SOUTH);
 		btnGo.addActionListener(this);
+		
+		controlPanel.add(btnGo);
+		controlPanel.add(cbxTwoConn);
+		controlPanel.add(cbxNoBatch);
+
+		mainPanel.add(controlPanel, BorderLayout.SOUTH);
 		
 		frame.setContentPane(mainPanel);
 		
@@ -93,15 +102,18 @@ public class TestConnection implements ActionListener {
 	public void actionPerformed(ActionEvent e) {
 		try {
 			Connection conn = adb.getConnection();
+			
+			boolean noBatch = cbxNoBatch.isSelected();
 
-			Task task1 = new Task(conn, pbTask1, columns, tablename);
+			Task task1 = new Task(conn, pbTask1, columns, tablename, noBatch);
 			Thread thread1 = new Thread(task1);
 			thread1.start();
 			
-			if (Boolean.getBoolean("twoconn"))
+			if (cbxTwoConn.isSelected())
 				conn = adb.getUniqueConnection();
 		
-			Task task2 = new Task(conn, pbTask2, columns, tablename);
+			Task task2 = new Task(conn, pbTask2, columns, tablename, noBatch);
+			
 			Thread thread2 = new Thread(task2);
 			thread2.start();
 		}
@@ -115,13 +127,15 @@ public class TestConnection implements ActionListener {
 		Connection conn;
 		String columns;
 		String tablename;
+		boolean noBatch;
 		Random rand = new Random();
 		
-		public Task(Connection conn, JProgressBar pb, String columns, String tablename) {
+		public Task(Connection conn, JProgressBar pb, String columns, String tablename, boolean noBatch) {
 			this.pb = pb;
 			this.conn = conn;
 			this.columns = columns;
 			this.tablename = tablename;
+			this.noBatch = noBatch; 
 		}
 		
 		public void run() {
@@ -130,7 +144,7 @@ public class TestConnection implements ActionListener {
 
 				Statement stmt;
 				
-				if (Boolean.getBoolean("onerow")) {
+				if (noBatch) {
 					stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 							java.sql.ResultSet.CONCUR_READ_ONLY);
 					stmt.setFetchSize(Integer.MIN_VALUE);		
