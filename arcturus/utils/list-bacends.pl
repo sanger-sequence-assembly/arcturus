@@ -75,12 +75,12 @@ my @conditions = ("MAPPING.seq_id = SEQ2READ.seq_id",
 		  "TEMPLATE.ligation_id = LIGATION.ligation_id",
 		  "LIGATION.clone_id = CLONE.clone_id");
 
-my $joins = join(' and ', @conditions);
+my $conditions = join(' and ', @conditions);
 
 $query = "select TEMPLATE.template_id,READS.read_id,readname,cstart,cfinish,direction,LIGATION.sihigh" .
     " from MAPPING,SEQ2READ,READS,TEMPLATE,LIGATION,CLONE" .
     " where contig_id = ?" .
-    " and $joins and CLONE.name=? order by template_id asc,cstart asc";
+    " and $conditions and CLONE.name=? order by template_id asc,cstart asc";
 
 $stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
@@ -127,10 +127,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "  -instance\t\tName of instance\n";
     print STDERR "  -organism\t\tName of organism\n";
-    print STDERR "  -contig\t\t\tID of contig to analyse\n";
-    print STDERR "  -clone\t\t\tName of clone for BAC/fosmid ends\n";
+    print STDERR "  -clone\t\tName of clone for BAC/fosmid ends\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "  -contig\t\t\tID of contig to analyse\n";
-    print STDERR "  -minlen\t\t\tMinimum length for contig scan\n";
+    print STDERR "  -contig\t\tID of contig to analyse\n";
+    print STDERR "  -minlen\t\tMinimum length for contigs scan\n";
 }

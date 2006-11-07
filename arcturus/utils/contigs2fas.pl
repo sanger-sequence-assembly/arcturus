@@ -351,7 +351,7 @@ sub getProjectIDs {
 	}
     }
 
-    my $projectlist = join(',', @projectids);
+    my $projectlist = scalar(@projectids) > 0 ? join(',', @projectids) : undef;
 
     return $projectlist;
 }
