@@ -354,7 +354,8 @@ public class CalculateQualityClipping {
 		stmt.close();
 		pstmt.close();
 
-	}
+		System.out.println("Processed " + nDone + " sequences, found " + nMismatch + " mismatches");
+	} 
 
 	public static void main(String args[]) {
 		CalculateQualityClipping cqc = new CalculateQualityClipping();
