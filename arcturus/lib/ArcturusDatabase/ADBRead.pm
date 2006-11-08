@@ -1806,19 +1806,23 @@ sub putSequenceForRead {
 
 # Insert quality clipping
 
-    $query = "insert into QUALITYCLIP(seq_id, qleft, qright) VALUES(?,?,?)";
+    my $lqleft = $read->getLowQualityLeft();
+    my $lqright = $read->getLowQualityRight();
 
-    $sth = $dbh->prepare_cached($query);
+    if (defined($lqleft) && defined($lqright)) {
+	$query = "insert into QUALITYCLIP(seq_id, qleft, qright) VALUES(?,?,?)";
 
-    $rc = $sth->execute($seqid, $read->getLowQualityLeft(), $read->getLowQualityRight());
+	$sth = $dbh->prepare_cached($query);
+
+	$rc = $sth->execute($seqid, $lqleft, $lqright);
 
 # shouldn't we undo the insert in READS? if it fails
 
-    return (0, "failed to insert quality clipping data for $readname ($readid);" .
-	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
+	return (0, "failed to insert quality clipping data for $readname ($readid);" .
+		"DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
 
-    $sth->finish();
-
+	$sth->finish();
+    }
 
 # insert sequencing vector data, if any
 
@@ -2079,12 +2083,6 @@ sub checkReadForCompleteness {
     return (0, "undefined base-quality")
         unless defined($read->getBaseQuality());
 
-    return (0, "undefined low-quality-left")
-	unless defined($read->getLowQualityLeft());
-
-    return (0, "undefined low-quality-right")
-	unless defined($read->getLowQualityRight());
-
     return (0, "undefined strand")
 	unless defined($read->getStrand());
 
@@ -2094,6 +2092,14 @@ sub checkReadForCompleteness {
 
         return (0, "undefined asped-date")
 	    unless defined($read->getAspedDate());
+    }
+
+    unless ($options{skipqualityclipcheck}) {
+	return (0, "undefined low-quality-left")
+	    unless defined($read->getLowQualityLeft());
+
+	return (0, "undefined low-quality-right")
+	    unless defined($read->getLowQualityRight());
     }
 
     unless ($options{skipligationcheck}) {

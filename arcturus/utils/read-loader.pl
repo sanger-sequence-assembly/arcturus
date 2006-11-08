@@ -26,6 +26,7 @@ my $noexclude = 0;         # re: suppresses check against already loaded reads
 my $noloading = 0;         # re: test mode without read loading
 
 my $skipaspedcheck = 0;
+my $skipqualityclipcheck = 0;
 my $consensus_read = 0;
 my $acceptlikeyeast = 0;
 
@@ -40,7 +41,7 @@ my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
-              . "group";
+              . "group|skipqualityclipcheck";
 
 my %PARS;
 
@@ -79,6 +80,11 @@ while (my $nextword = shift @ARGV) {
 # us to load external reads, which lack this information.
 
     $skipaspedcheck   = 1            if ($nextword eq '-skipaspedcheck');
+
+# Do not check Read objects for the presence of quality clipping.  This allows
+# us to load reads which have been resurrected by zombie.
+
+    $skipqualityclipcheck = 1        if ($nextword eq '-skipqualityclipcheck');
 
     $consensus_read   = 1            if ($nextword eq '-isconsensusread');
     $consensus_read   = 1            if ($nextword eq '-icr');
@@ -296,6 +302,7 @@ $loadoptions{skipaspedcheck}     = 1 if $consensus_read;
 $loadoptions{skipligationcheck}  = 1 if $consensus_read;
 $loadoptions{skipchemistrycheck} = 1 if $consensus_read;
 $loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
+$loadoptions{skipqualityclipcheck} = 1 if $skipqualityclipcheck;
 
 while (my $readname = $factory->getNextReadName()) {
 
@@ -439,6 +446,7 @@ sub showUsage {
     print STDERR "\t\t.. -source Expfiles -onlyloadtags -subdir ETC [-verbose -noload]\n";
     print STDERR "\n";
     print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
+    print STDERR "-skipqualityclipcheck\t (for reads without quality clipping)\n";
     print STDERR "-isconcensusread (-icr; for artificial reads) \n";
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
