@@ -7,7 +7,6 @@ import java.util.*;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
-import java.text.*;
 
 import java.util.logging.*;
 
@@ -34,11 +33,7 @@ public class CalculateQualityClipping {
 
 	private PreparedStatement pstmtInsert;
 	private PreparedStatement pstmtUpdate;
-	
-	private static final DecimalFormat fmt_i4 = new DecimalFormat("####");
-	private static final DecimalFormat fmt_i6 = new DecimalFormat("######");
-	private static final DecimalFormat fmt_i8 = new DecimalFormat("########");
-	
+
 	public void execute(String[] args) {
 		int thresh = DEFAULT_THRESH;
 
@@ -187,11 +182,12 @@ public class CalculateQualityClipping {
 
 			if (debug)
 				System.err.println("Clipping for sequence " + seq_id);
-			
+
 			int[] qclip = calculateClipping(quality, thresh);
-			
+
 			if (debug)
-				System.err.println("\n---------------------------------------------------------------\n");
+				System.err
+						.println("\n---------------------------------------------------------------\n");
 
 			boolean success = insertClipping(seq_id, qclip[0], qclip[1]);
 
@@ -231,7 +227,7 @@ public class CalculateQualityClipping {
 		int Right = N - 1;
 
 		int[] cright = new int[N];
-		cright[N - 1] = q[N-1] > 0 ? q[N-1] : 0;
+		cright[N - 1] = q[N - 1] > 0 ? q[N - 1] : 0;
 
 		int[] r = new int[N];
 		r[N - 1] = Right;
@@ -256,23 +252,6 @@ public class CalculateQualityClipping {
 			if (best < s) {
 				best = s;
 				coord = i;
-			}
-		}
-		
-		if (debug) {
-			for (int i = 0; i < N; i++) {
-				System.err.print(fmt_i4.format(i));
-				System.err.print("  ");
-				System.err.print(fmt_i4.format(q[i]));
-				System.err.print("  ");
-				System.err.print(fmt_i6.format(cleft[i]));
-				System.err.print("  ");
-				System.err.print(fmt_i6.format(l[i]));
-				System.err.print("  ");
-				System.err.print(fmt_i6.format(cright[i]));
-				System.err.print("  ");
-				System.err.print(fmt_i6.format(r[i]));
-				System.err.println();
 			}
 		}
 
@@ -319,6 +298,61 @@ public class CalculateQualityClipping {
 
 	private void calculateAndUpdateAll(Connection conn, int thresh,
 			boolean update) throws SQLException {
+		int nDone = 0;
+		int nMismatch = 0;
+		
+		String query = "select seq_id from SEQUENCE";
+
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs_seqid = stmt.executeQuery(query);
+
+		query = "select seqlen,quality,qleft,qright"
+				+ " from SEQUENCE left join QUALITYCLIP using(seq_id) where SEQUENCE.seq_id=?";
+
+		PreparedStatement pstmt = conn.prepareStatement(query);
+
+		while (rs_seqid.next()) {
+			int seq_id = rs_seqid.getInt(1);
+			
+			pstmt.setInt(1, seq_id);
+			ResultSet rs = pstmt.executeQuery();
+			
+			rs.next();
+			
+			int seqlen = rs.getInt(1);
+			byte[] quality = decodeCompressedData(rs.getBytes(2), seqlen);
+			int oldqleft = rs.getInt(3);
+			if (rs.wasNull())
+				oldqleft = -1;
+			int oldqright = rs.getInt(4);
+			if (rs.wasNull())
+				oldqright = -1;
+
+			int[] qclip = calculateClipping(quality, thresh);
+			
+			nDone++;
+
+			if (oldqleft != qclip[0] || oldqright != qclip[1]) {
+				System.out.println(seq_id + " " + oldqleft + " " + qclip[0] + " "
+						+ oldqright + " " + qclip[1]);
+				nMismatch++;
+			}
+			
+			if (debug && (nDone %100) == 0)
+				System.err.println("Done " + nDone + ", " + nMismatch + " mismatches");
+
+			if (update) {
+				boolean success = updateClipping(seq_id, qclip[0], qclip[1]);
+
+				if (success)
+					System.err.println("Updated quality clipping for seq_id = "
+							+ seq_id + " : " + qclip[0] + " " + qclip[1]);
+			}
+		}
+		
+		stmt.close();
+		pstmt.close();
 
 	}
 
