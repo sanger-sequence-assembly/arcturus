@@ -16,14 +16,16 @@ use Tag;
 
 use Logging;
 
-use MyTimer;
-
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
 
 my $organism;
 my $instance;
+
+my $project;
+my $assembly;
+
 my $datafile;  # for list of tag ids and positions
 my $fastafile; # for the fasta fuile on which the annotation has been made 
 
@@ -44,11 +46,12 @@ my $noembl = 1;
 my $emblfile;
 my $qclip;
 
+my $minimumnrofreads = 2;
 
-my $validKeys  = "organism|instance|tagfile|tf|fasta|ff|swprog|"
-               . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|"
-               . "propagate|reanalyze|qualityclip|qc|"
-               . "override|verbose|debug|nodebug|help";
+my $validKeys  = "organism|instance|project|assembly|tagfile|tf|fasta|ff|"
+               . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|swprog|"
+               . "propagate|reanalyze|qualityclip|qc|qualityclipall|qca|"
+               . "override|minimumnrofreads|mnor|verbose|debug|nodebug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -79,7 +82,6 @@ while (my $nextword = shift @ARGV) {
     $testtag    = shift @ARGV  if ($nextword eq '-tag');
 
     $propagate  = 1            if ($nextword eq '-propagate');
-    $propagate  = 1            if ($nextword eq '-reanalyze');
     $reanalyze  = 1            if ($nextword eq '-reanalyze');
 
     $verbose    = 1            if ($nextword eq '-verbose');
@@ -110,12 +112,24 @@ while (my $nextword = shift @ARGV) {
         $confirm = 0;
     }
 
+    if ($nextword eq '-qualityclipall' || $nextword eq '-qca') {
+        $qclip   = 'all';
+        $confirm = 0;
+    }
+
     if ($nextword eq '-swprog') {
         if (defined($swprog) && !$swprog) {
             &showUsage("Option '$nextword' has been disabled");
         }
         $swprog  = shift @ARGV;
     }
+
+    if ($nextword eq 'minimumnrofreads' || $nextword eq 'mnor') {
+	$minimumnrofreads = shift @ARGV;
+    }
+
+    $project     = shift @ARGV  if ($nextword eq '-project');
+    $assembly    = shift @ARGV  if ($nextword eq '-assembly');
 
     $override    = 1            if ($nextword eq '-override');
 
@@ -188,6 +202,42 @@ if (!$adb || $adb->errorStatus()) {
 my $URL = $adb->getURL;
 
 $logger->info("Database $URL opened succesfully");
+
+#-----------------------------------------------------------------------
+# get the current contigs for project if so specified
+#-----------------------------------------------------------------------
+
+my @ccids;
+if (defined($project)) {
+# get all currentcontigs for a given project
+    my %selectoptions;
+    $selectoptions{project_id}  = $project if ($project !~ /\D/);
+    $selectoptions{projectname} = $project if ($project =~ /\D/);
+    if (defined($assembly)) {
+        $selectoptions{assembly_id}  = $assembly if ($assembly !~ /\D/);
+        $selectoptions{assemblyname} = $assembly if ($assembly =~ /\D/);
+    }
+    
+    my ($projects,$message) = $adb->getProject(%selectoptions);
+    unless ($projects && @$projects) {
+        $logger->warning("No projects found like '$project' ($message)");
+        $adb->disconnect();
+	exit 1;
+    }
+   
+# get the project IDs
+
+    my @pids;
+    foreach my $project (@$projects) {
+        push @pids,$project->getProjectID();
+    }
+
+    $logger->warning("Projects to be exported : @pids");
+    my $projectspec = join ',',@pids; # allows several projects
+    my $ccids = $adb->getCurrentContigIDs(project_id=>$projectspec);
+    @ccids = @$ccids if $ccids;
+    $logger->info("Current contigs for project $projectspec :\n @ccids");
+}
 
 #-----------------------------------------------------------------------
 # if fasta file defined, build a list of annotation contigs
@@ -303,15 +353,23 @@ if ($emblfile) {
 
 my $currentcontigs = {};
 my $acdestinations = {}; # original contig destinations
-my $ccontigorigins = {}; # current contigs origins contig
+my $ccontigorigins = {}; # current contigs origins
+my $ccancestors = {}; # current contigs ancester contigs
 
 my $lengthmismatch = 0;
 my $fastamappinghash = {};
 my $numberprocessed = 0;
 
+my %inputtagids;
+my %remappedtags;
+
+my @ancestorcontigs;
+
 foreach my $contigname (sort keys %$contigtaghash) {
 
-    $logger->info("Assembling tags for contig $contigname");
+    $logger->info("Assembling tags for contig $contigname ($annotatedlength->{$contigname})");
+
+
 
     next unless (!$contig || $contigname =~ /$contig/);
 
@@ -364,6 +422,8 @@ foreach my $contigname (sort keys %$contigtaghash) {
         next;
     }
 
+    push @ancestorcontigs,$arcturuscontig;
+
     $logger->info("contig $contigname identified as Arcturus contig: "
                  . $arcturuscontig->getContigID());
     &listtags($arcturuscontig,'arcturuscontig from database');
@@ -397,10 +457,11 @@ foreach my $contigname (sort keys %$contigtaghash) {
         $logger->warning("processing contig $contigname ($summary)");
         unless ($nlength && $nlength == $flength || $override) {
             $logger->severe("SKIPPED $contigname: incompatible contig lengths");
+            $logger->warning("contig with ".scalar(@tags)." tags ignored");
             next;
 	}
 
-# clip low quality pads
+# substitute low quality pads (to guide the alignment algorithm)
 
         ContigFactory->replaceLowQualityBases($arcturuscontig);
 
@@ -410,7 +471,6 @@ foreach my $contigname (sort keys %$contigtaghash) {
         my $asequence = $arcturuscontig->getSequence();
         $logger->fine("Processing $contigname lengths: "
                       .length($asequence)." & ".length($fsequence));
-        &listtags($fastacontig,'fastacontig before alignment');
   
 # get the alignment from the annotated sequence to the sequence in arcturus
 
@@ -419,7 +479,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # METHOD 1 : Smith-Waterman alignment
 
         if ($swprog && length($asequence) < 30000) {
-	    $logger->warning("Smith Waterman Alignment selected");
+	    $logger->fine("Smith Waterman Alignment selected");
            ($mapping,my $s) = &SmithWatermanAlignment($asequence,$fsequence);
             unless ($mapping) {
                 print STDOUT "Failed SW mapping for $contigname ($s)\n\n";
@@ -429,13 +489,12 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # METHOD 2 : if (still) no mapping, use the Alignment package version
 
         unless ($mapping) {
-	    $logger->warning("Alignment.pm correlation selected");
-#	    my $flength = $annotatedlength->{$contigname};
+	    $logger->fine("Alignment.pm correlation selected");
    	    my $peakdrift = $alength - $flength;
             my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
             my $bandedwindow = 4.0 * sqrt($peakdrift); # generous minimum of 
             $bandedwindow = $peakdrift/2 if ($peakdrift/2 < $bandedwindow);
-	    $logger->warning("peak drift: $peakdrift, window: $bandedwindow");
+	    $logger->fine("peak drift: $peakdrift, window: $bandedwindow");
             my %options = (kmersize=>9,
                            coaligned=>1,
                            peakdrift=>$peakdrift,
@@ -444,14 +503,16 @@ foreach my $contigname (sort keys %$contigtaghash) {
                            bandedoffset=>0.0,
                            list=>1);
 # experimental options
-            $options{autoclip} = 0;
+            $options{autoclip} = 1;
 	    $options{goldenpath} = 1; # not operational yet
-            my $aquality = $arcturuscontig->getBaseQuality();
-#            $options{squality} = $aquality;
-#            $options{tquality} = 0;
+            my $kmersize = int((log($flength)/log(10))*4 + 0.5) - 7;
+            $kmersize++ unless ($kmersize%2);
+	    $kmersize = 7 if ($kmersize < 7);
+            $options{kmersize} = $kmersize;
+# $options{squality} = $arcturuscontig->getBaseQuality();
  
-            my $output = $logger->getOutputDevice() || *STDOUT;
-            $options{debug} = $output if $debug;
+#            my $output = $logger->getOutputDevice() || *STDOUT;
+#            $options{debug} = $output if $debug;
 
             $mapping = Alignment->correlate($fsequence,0,$asequence,0,%options);
 	}
@@ -468,13 +529,14 @@ foreach my $contigname (sort keys %$contigtaghash) {
 
 	$mapping = $mapping->inverse();
         $mapping->setMappingName($contigname);
-        $logger->fine("Mapping : ".$mapping->toString() );
+        $logger->fine("Mapping : ".$mapping->toString(extended=>1,text=>'Seg'));
+#next if $debug;
 
 # ok, here we have a mapping; put the tags on the fastacontig
 
         my $tagcount = 0;
         foreach my $tag (@tags) {
-        my @pos = $tag->getPosition();
+            my @pos = $tag->getPosition();
             unless ($pos[0] > 0 && $pos[1] <= $flength) {
                 $logger->severe("Tag outside range for contig $contigname: "
 			       ."@pos  (1-$flength)");
@@ -482,13 +544,14 @@ foreach my $contigname (sort keys %$contigtaghash) {
 	    }
             $fastacontig->addTag($tag);
             $tagcount++;
+# add tag to the input list of tags actually added
+            my $sysid = $tag->getSystematicID();
+            $inputtagids{$sysid}++;
         }
         $logger->warning("$tagcount tags found for contig $contigname");
-        &listtags($fastacontig,'fastacontig $tagcount tags added');
+#        &listtags($fastacontig,'fastacontig $tagcount tags added');
 
 # make the arcturus contig its child
-
-
 
         $mapping->setSequenceID(1);
         $fastacontig->setContigID(1);
@@ -553,83 +616,152 @@ $fastacontig->setDEBUG();
 
     $logger->info("Processing contig ".$arcturuscontig->getContigName());
 
-# $arcturuscontig->setDEBUG(1) if $debug;
+# OK, $arcturuscontig is the original database version of the annotated contig
+# find its offspring in the current generation
 
     my $contigs = [];
 
     if ($propagate) {
-# test set up for propagation to offspring
+# test set up for propagation to offspring (of current tags only)
         my $acid = $arcturuscontig->getContigID();
-        $contigs = &propagate($arcturuscontig);
+        $logger->warning("propagating contig $acid to current generation");
+        $contigs = &propagate($arcturuscontig,$contigs,notagload=>1);
 	$logger->info("Contigs after propagation of $contigname:");
         if (my $fastacontig = $fastacontighash->{$acid}) {
   	    &listtagsequence($fastacontig,$testtag) if $testtag;
         }
-        foreach my $contig (@$contigs) {
+# collect the current contig(s) and register for each the original arcturus contigs
+        foreach my $contig (@$contigs) { # all contigs of the inheritance tree
             my $ccid = $contig->getContigID();
             my $ccnm = $contig->getContigName();
-	    &listtagsequence($contig,$testtag) if $testtag;
+            my $tags = $contig->getTags() || [];
+            my $noft = scalar(@$tags);
             unless ($adb->isCurrentContigID($ccid)) {
-		$logger->info("$ccnm is intermediate");
+		$logger->info("$ccnm ($contig, $noft) is intermediate");
 		next;
 	    }
-            $logger->warning("$ccnm is a current contig");
+            $logger->warning("$ccnm ($contig, $noft) is a current contig");
 # test if it has tags (split contigs may not have them)
             unless ($contig->hasTags()) {
-                $logger->warning("$ccnm is ignored because it has no tags");
-		next;
+                $logger->warning("$ccnm has no tags");
+#		next unless $reanalyze;
 	    }
 # register the current contig the first time it is encountered, otherwise ..
             if (my $currentcontig = $currentcontigs->{$ccnm}) {
 # .. add the tags to the taglist of the contig instance we already have
                 my $additionaltags = $contig->getTags();
-                $currentcontig->addTag(@$additionaltags);
+                if ($additionaltags && @$additionaltags) {
+my $nadd = scalar(@$additionaltags);
+                    $currentcontig->addTag($additionaltags);
+my $ntags = $currentcontig->getTags() || [];
+$logger->warning("$nadd added to $ccnm to yield ".scalar(@$ntags));
+	        }
             }
-            else { 
+            else {
+# add first encountered contig to current contig list
                 $currentcontigs->{$ccnm} = $contig;
 	    }
 # register the destination of tags from the original arcturus contig
-            $acdestinations->{$acid} = [] unless $acdestinations->{$acid};
-            push @{$acdestinations->{$acid}},$ccid;
-            $ccontigorigins->{$ccid} = [] unless $ccontigorigins->{$ccid};
-            push @{$ccontigorigins->{$ccid}},$arcturuscontig;
-	} 
-
-# list summary of result if not loading tags or other export 
-
-        unless ($confirm || !$noembl || $EMBL) {
-            foreach my $contig (@$contigs) {
-                my $tags = $contig->getTags(); # as is, no delayed loading
-                $tags = [] unless $tags;
-                $logger->info("contig ".$contig->getContigName()
-			      ." has ".scalar(@$tags)." tags");
-                foreach my $tag (@$tags) {
-                    $logger->info($tag->writeToCaf(0,annotag=>1));
-		}
-	    }
+            $acdestinations->{$acid} = {} unless $acdestinations->{$acid};
+            $acdestinations->{$acid}->{$ccid}++;
+            $ccontigorigins->{$ccid} = {} unless $ccontigorigins->{$ccid};
+            $ccontigorigins->{$ccid}->{$acid}++;
+# register the actual contig instances
+            $ccancestors->{$ccid} = {} unless $ccancestors->{$ccid};
+            $ccancestors->{$ccid}->{$arcturuscontig} = $arcturuscontig;
 	}
     }
     else {
-        push @$contigs,$arcturuscontig;
-    }
-
+        $logger->warning("no propagation active");
+    } # end propagate
     $numberprocessed++;
 }
 
-# here all tags have gone through the propagation using Arcturus info
+# if the tags have gone through the propagation using Arcturus info; count them
+
+if ($propagate) {
+# collect mapped tags based on systematic ID
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $currentcontig = $currentcontigs->{$ccnm};
+        my $tags = $currentcontig->getTags() || [];
+        foreach my $tag (@$tags) {
+	    my $sysid = $tag->getSystematicID();
+            $remappedtags{$sysid}++;    
+        }
+    }
+    $logger->warning(scalar(keys %remappedtags) . " remapped tags after propagate");
+}
 
 # RE-DO mode: erase all tags from CCs and remap directly from AC contigs
 
 if ($reanalyze) {
+
+# if not propagated: get ancestor - current contig relation from database
+
+    $logger->skip();
+    $logger->warning("Re-analyzing direct contig links to ancestors");
+
+    unless ($propagate) {
+        my @acids;
+        foreach my $ancestorcontig (@ancestorcontigs) {
+            push @acids, $ancestorcontig->getContigID();
+        }
+        my $actocc = [];
+        $actocc = $adb->getCurrentContigIDsForAncestorIDs(\@acids) if @acids;
+        foreach my $result (@$actocc) {
+            my ($ccid,$acid) = @$result;
+# register the destination of tags from the original arcturus contig
+            $acdestinations->{$acid} = {} unless $acdestinations->{$acid};
+            $acdestinations->{$acid}->{$ccid}++;
+            $ccontigorigins->{$ccid} = {} unless $ccontigorigins->{$ccid};
+            $ccontigorigins->{$ccid}->{$acid}++;
+        }
+# register the actual ancestor contig instances
+        foreach my $ancestorcontig (@ancestorcontigs) {
+            my $acid = $ancestorcontig->getContigID();
+            my $destinations = $acdestinations->{$acid};
+            foreach my $ccid (keys %$destinations) {
+                $ccancestors->{$ccid} = {} unless $ccancestors->{$ccid};
+                $ccancestors->{$ccid}->{$ancestorcontig} = $ancestorcontig;
+	    }
+        }
+# register the actual current contig instances
+        foreach my $ccid (keys %$ccontigorigins) {
+            if ($ccontigorigins->{$ccid}->{$ccid}) {
+                my $ancestorhash = $ccancestors->{$ccid};
+                my ($key,$ancestor) = each %$ancestorhash; # the only one
+    	        my $ccnm = $ancestor->getContigName();
+                $currentcontigs->{$ccnm} = $ancestor; # the Contig instance
+		next;
+	    }
+            my $currentcontig = $adb->getContig(contig_id=>$ccid,metadataonly=>1);
+	    my $ccnm = $currentcontig->getContigName();
+            $currentcontigs->{$ccnm} = $currentcontig;
+	}
+    }
+
 # for each CC: get link to original ACs directly
-    $logger->warning("Re-analyzing contig links to ancestors");
+
+    undef %remappedtags;
     foreach my $ccnm (sort keys %$currentcontigs) {
         my $contig = $currentcontigs->{$ccnm};
         my $ccid = $contig->getContigID();
-        $logger->warning("Processing current contig $ccid");
+        $logger->skip();
+        $logger->warning("Processing current contig $ccid ($contig)");
 # skip if the current contig is the originally annotated one
         if ($acdestinations->{$ccid}) {
             $logger->warning("Contig $ccid is the original annotated contig");
+            if ($contig->hasTags()) {
+                my $tags = $contig->getTags();
+                $logger->warning(scalar(@$tags)." tags found on contig $ccid");
+                foreach my $tag (@$tags) {
+                    my $sysid = $tag->getSystematicID();
+                    $remappedtags{$sysid}++ if $sysid;
+		}
+	    }
+	    else {
+                $logger->warning("Unexpectedly no tags found on contig $ccid");
+	    }
             next;
 	}
 # remove tags, parents, children and links, if any
@@ -640,78 +772,197 @@ if ($reanalyze) {
 # ensure that the mappings are defined
         $contig->hasMappings(1); # use delayed loading
 # get the original arcturus contig(s)
-
-        my $ancestors = $ccontigorigins->{$ccid};
-        unless ($ancestors) {
-            $logger->severe("contig $ccid unexpectedly has no original");
+        my $ancestors = $ccancestors->{$ccid};
+	my @ancestorkeys = keys %$ancestors;
+        unless (@ancestorkeys) {
+            $logger->severe("contig $ccid unexpectedly has no ancestors");
             next;
 	}
 # get link to each ancestor and import the tags (two methods for comparison)
         my $method = 0;
-        foreach my $ancestor (@$ancestors) {
+#$method=1;
+        my %ptoptions = (noparentload => 1, notagload => 1, overlap => 1);
+
+        foreach my $ancestorkey (@ancestorkeys) {
+            my $ancestor = $ancestors->{$ancestorkey};
+            my $acnm = $ancestor->getContigName();
+            $logger->info("Ancestor $acnm ($ancestor)  for current contig $ccid ($contig)");
             $contig->addParentContig($ancestor);
             $ancestor->hasMappings(1); # ensure read mappings are loaded
             unless ($method) {
-# each ancestor individually
-                $ancestor->propagateTagsToContig($contig, delayedloading=>0);
+# each ancestor individually (implicitly determines the parent-current mapping)
+                $ancestor->propagateTagsToContig($contig, %ptoptions);
+		my $tags = $contig->getTags() || [];
+                $logger->warning("After propagation from $acnm: ".scalar(@$tags)." tags");
 	        next;
 	    }
-# the alternative: get mapping beforehand (allows testing it here)
-            my ($status,$deallocated) = $contig->linkToContig($ancestor);
+# the alternative: get parent-current mapping beforehand (allows testing here)
+
+#$logger->setFilter(0);
+            my %loptions = (debug=>$logger,offsetwindow=>70);
+            my ($status,$deallocated) = $contig->linkToContig($ancestor,%loptions);
+#$logger->setFilter(3);
             unless ($status) {
                 my $acid = $ancestor->getContigID();
                 $logger->severe("contig $ccid unexpectedly has no link to $acid");
+                my $tags = $contig->getTags();
+                $logger->warning(scalar(@$tags) . " tags on $ccid") if $tags;
+                $logger->warning("NO tags found on $ccid") unless $tags;
 		next;
 	    }
         }
 
         $contig->inheritTags() if $method;
+
+# count the tags on the (new) contig
+
+        if (my $tags = $contig->getTags()) {
+            $logger->warning("After propagation : ".scalar(@$tags)." tags on $ccid");
+            foreach my $tag (@$tags) {
+                my $sysid = $tag->getSystematicID();
+                $remappedtags{$sysid}++ if $sysid;
+	    }
+        }
+	else {
+            $logger->warning("NO tags found on current contig $ccid");
+	}
+    }
+
+    $logger->skip();
+    $logger->warning(scalar(keys %remappedtags)." remapped tags after reanalyze");
+    foreach my $sysid (sort keys %inputtagids) {
+        next if $remappedtags{$sysid};
+        $logger->info("Missing from output tags: $sysid");
+    }
+    $logger->skip();
+} # end reanalyze
+
+# list summary of result if not loading tags or other export 
+
+unless ($confirm || !$noembl || $EMBL || $qclip) {
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $currentcontig = $currentcontigs->{$ccnm};
+        my $tags = $currentcontig->getTags(); # as is, no delayed loading
+        $tags = [] unless $tags;
+        $logger->warning("contig ".$currentcontig->getContigName()
+                ." has ".scalar(@$tags)." tags");
+        foreach my $tag (@$tags) {
+            $logger->warning($tag->writeToCaf(0,annotag=>1));
+	}
+    }
+}
+
+# supplement the current contigs found with the empty ones if a project is defined
+
+if (defined($project)) {
+# add the current contigs for the project which do not appear in the list of 
+# contigs with remapped tags
+    my %cidhash;
+    foreach my $ccnm (sort keys %$currentcontigs) {
+        my $currentcontig = $currentcontigs->{$ccnm};
+        my $ccid = $currentcontig->getContigID();
+        $cidhash{$ccid}++;
+    }
+
+    foreach my $ccid (@ccids) {
+        next if $cidhash{$ccid};
+        my $currentcontig = $adb->getContig(contig_id=>$ccid,metadataonly=>1);
+        unless ($currentcontig) {
+	    $logger->warning("Failed to retrieve current contig $ccid");
+	    next;
+	}
+        next unless ($currentcontig->getNumberOfReads() > $minimumnrofreads);
+	my $ccnm = $currentcontig->getContigName();
+        $currentcontigs->{$ccnm} = $currentcontig;
+        $logger->warning("Contig $ccnm added to output list");
     }
 }
 
 # here we have a list of current contigs
 
-if (!$noembl || $EMBL) {
+if (!$noembl || $EMBL || $qclip) {
 
-    my $timer = new MyTimer();
+    $logger->warning("exporting current generation");
 
+    my %qcoptions = (newcontig => 1, exportaschild => 1);
+    my %ptoptions = (speedmode => 1, notagload => 1, overlap => 1);
+
+    if (defined($qclip)) {
+# treat all non-base symbols as low quality
+        if ($qclip eq 'all') {
+            $qcoptions{lqpm} = 0;
+	}
+        else {
+            $qcoptions{threshold} = $qclip;
+	}
+    }
+
+$ptoptions{debug} = $logger;
+
+    undef %remappedtags;
     foreach my $ccnm (sort keys %$currentcontigs) {
         my $contig = $currentcontigs->{$ccnm};
+        $logger->skip();
+	$logger->warning("Processing current contig $ccnm");
+        unless ($contig->hasTags()) {
+	    $logger->warning("contig $ccnm has no annotation");
+	    next unless $project;
+	}
+# memorize the contig ID
+        my $contig_id = $contig->getContigID();
+# do the quality clipping here
         if ($qclip) {
-            my %qcoptions = (threshold => $qclip, newcontig => 1,
-                             exportaschild => 1);
+            $logger->warning("quality clipping contig $ccnm");
             my ($newcontig,$status) = ContigFactory->deleteLowQualityBases
                                                      ($contig,%qcoptions);
-            if ($status) {
-print STDOUT "begin Inherit tags\n";
-$timer->timer('propagate',0);
-                $contig->propagateTagsToContig($newcontig,speedmode=>1,timer=>$timer,overlap=>1);
-$timer->timer('propagate',1);
-print STDOUT "DONE Inherit tags\n";
-# next;
+            if ($status + 0) {
+                $ccnm = $newcontig->getContigName();
+                $logger->warning("propagating tags to cleaned contig $ccnm");
+                $contig->propagateTagsToContig($newcontig,%ptoptions);
                 $contig = $newcontig;
 	    }
+            elsif ($status) {
+                $logger->warning("no low quality found on contig $ccnm");
+	    }
+            else {
+		$logger->severe("quality clipping error for $ccnm");
+	    }
         }
-        $contig->writeToEMBL(*STDOUT,0,tagsonly=>0) unless $noembl;
-        $contig->writeToEMBL($EMBL  ) if $EMBL;
+# count again the tags on the (new) contig
+        my $tags = $contig->getTags();
+        foreach my $tag (@$tags) {
+            my $sysid = $tag->getSystematicID();
+            $remappedtags{$sysid}++;
+        }
+# get the left-hand and right-hand readnames
+        my ($l,$r) = $adb->getEndReadsForContigID($contig_id);
+        $contig->setReadOnLeft($l);
+        $contig->setReadOnRight($r);
+        my %eoptions = (gap4name=>2);
+        $contig->writeToEMBL(*STDOUT,0,tagsonly=>0,%eoptions) unless $noembl;
+        $contig->writeToEMBL($EMBL,0,%eoptions) if $EMBL;
     }
+    $logger->warning(scalar(keys %remappedtags)." remapped tags after quality clipping");
+    foreach my $sysid (sort keys %inputtagids) {
+        next if $remappedtags{$sysid};
+        $logger->warning("Missing from output tags: $sysid");
+    }
+    $logger->skip();
 }
 
 $EMBL->close() if $EMBL;
 
-if ($confirm) { # AND not in redo mode!
+if ($confirm) { # AND not in reanalyze mode!
 # load the data for the current contigs into the database
     my %options;
     $options{debug} = 1 if $debug;
 
     foreach my $ccnm (sort keys %$currentcontigs) {
         my $contig = $currentcontigs->{$ccnm};
-
-#        my $ccid = $contig->getContigID();
         my $tags = $contig->getTags(); # as is, no delayed loading
         $tags = [] unless $tags;
         $logger->info("contig ".$contig->getContigName() .
-		          " has " . scalar(@$tags)." tags");
+		          " ($ccnm) has " . scalar(@$tags)." tags");
         my $success = $adb->enterTagsForContig($contig,%options);
         $logger->warning("enterTagsForContig " . $contig->getContigName()
                         ." : success = $success");
@@ -742,6 +993,8 @@ $logger->warning("NO current contigs found") unless @currentcontigs;
 $logger->warning("current contigs affected:")  if @currentcontigs;
 $logger->skip();
 
+# list the origins and destinations of the mapped contigs
+
 if (@currentcontigs) {
 # list contigs and mapping of originals to new ones
     foreach my $contig (@currentcontigs) {
@@ -753,10 +1006,39 @@ if (@currentcontigs) {
     $logger->skip();
 
     foreach my $acid (sort {$a <=> $b} keys %$acdestinations) {
-        my $destinations = $acdestinations->{$acid};
-        $logger->warning("contig $acid  => @$destinations");
+        my $destinations = $acdestinations->{$acid}; # itself a hash
+        my @destinations = sort {$a <=> $b} keys(%$destinations);
+        $logger->warning("contig $acid  => @destinations");
     }
     $logger->skip();
+    $logger->warning("mappings from current contigs to original contigs");
+    $logger->skip();
+
+    foreach my $acid (sort {$a <=> $b} keys %$ccontigorigins) {
+        my $origins = $ccontigorigins->{$acid}; # itself a hash
+        my @origins = sort {$a <=> $b} keys(%$origins);
+        $logger->warning("contig $acid  <= @origins") if (@origins > 1);
+    }
+    $logger->skip();
+}
+
+# check the inventory of tags
+
+if (my $in=scalar(keys(%inputtagids))) {
+    my $ex=scalar(keys(%remappedtags));
+    $logger->warning("$in original tags mapped to $ex new tags");
+    foreach my $sysid (sort keys %inputtagids) {
+        next if $remappedtags{$sysid};
+        $logger->warning("Missing from output tags: $sysid");
+    }
+    foreach my $sysid (sort keys %remappedtags) {
+        next if $inputtagids{$sysid};
+        $logger->warning("Missing from  input tags: $sysid");
+    }
+    $logger->skip();
+}
+else {
+    $logger->warning("There are no input tags");
 }
 
 exit;
@@ -767,21 +1049,22 @@ sub propagate {
 # recursively propagate tags down the generations
     my $contig = shift;
     my $cstack = shift;
+    my %options = @_;
 
     $cstack = [] unless defined $cstack;
 
-print "propagating parent ".$contig->getContigName()."\n" if $debug;
+$logger->info("PG propagating parent ".$contig->getContigName());
     push @$cstack, $contig;
 
-    $contig->propagateTags();
+    $contig->propagateTags(%options); # also loads the children
     
     return $cstack unless $contig->hasChildContigs();
 
     my $children = $contig->getChildContigs();
 
     foreach my $child (@$children) {
-print "propagating child  ".$child->getContigName()."\n" if $debug;
-        &propagate($child, $cstack);
+$logger->info("PG propagating child  ".$child->getContigName());
+        &propagate($child, $cstack,%options);
     }
 
     return $cstack;    
@@ -891,7 +1174,7 @@ sub listtagsequence {
         }
         my $sys_id = $tag->getSystematicID();
         $logger->warning("tag $sys_id : $start - $final  $strand  on $contigname");
-        $logger->warning($tagsequence);
+        $logger->warning("DNA ".$tagsequence);
     }
 
 }
@@ -954,7 +1237,11 @@ sub showUsage {
     print STDERR " to file\n";
     unless (defined($qclip)) {
         print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped\n\t\t sequence\n";
-    }
+        print STDERR "-qualityclipall\t(qca, no value) to remove all low quality from re-mapped\n\t\t sequence\n";    }
+    print STDERR "\n";
+    print STDERR "-project\tto add current contigs without tags for this project\n";
+    print STDERR "-assembly\tin case '-project' is not unique\n";
+    print STDERR "\n";
     print STDERR "\n";
     print STDERR "-contig\t\tselect a particular contig by ID\n";
     print STDERR "\n";
