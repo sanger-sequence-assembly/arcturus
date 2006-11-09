@@ -549,7 +549,7 @@ print STDERR "putContig: line 449 assignContigToProject "
 
 # inherit the tags
 
-#        $contig->inheritTags(excludeTagType=>'REPT') if $inheritTags;
+#        $contig->inheritTags(excludetag=>'REPT|ANNO') if $inheritTags;
         $contig->inheritTags() if $inheritTags;
 
 # determine the project_id unless it's already specified (with options)
@@ -1415,6 +1415,7 @@ sub putMappingsForContig {
         }
 # dump the accumulated query if a number of inserts has been reached
         if ($accumulated >= $block || ($accumulated && $mapping eq $lastMapping)) {
+print STDOUT "Insert mapping block $accumulated \n";
             $sth = $dbh->prepare($accumulatedQuery); 
             my $rc = $sth->execute() || &queryFailed($squery);
             $success = 0 unless $rc;
@@ -1477,6 +1478,54 @@ sub updateMappingsForContig {
     $sth->finish();
 
     return $report;
+}
+
+sub getEndReadsForContigID {
+# returns left-most and right-most read names
+    my $this = shift;
+    my $contig_id = shift;
+
+    my $query = "select Rl.readname, Rr.readname"
+              . "  from READS as Rl, READS as Rr,"
+              . "       SEQ2READ as SRl, SEQ2READ as SRr,"
+              . "       MAPPING as Ml, MAPPING as Mr,"
+              . "       CONTIG"
+              . " where Rl.read_id=SRl.read_id"
+              . "   and Rr.read_id=SRr.read_id"
+              . "   and Ml.seq_id=SRl.seq_id"
+              . "   and Mr.seq_id=SRr.seq_id"
+              . "   and Ml.contig_id=CONTIG.contig_id"
+              . "   and Mr.contig_id=CONTIG.contig_id"
+              . "   and Ml.cstart=1"
+              . "   and Mr.cfinish=CONTIG.length"
+              . "   and CONTIG.contig_id=?"
+	      . " order by Ml.cfinish,Mr.cstart";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+           
+    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
+
+# the most  left-hand read is the first name of the first row returned
+# the most right-hand read is the  last name of the  last row returned
+
+    my ($left,$right);
+    while (my ($l,$r) = $sth->fetchrow_array()) {
+        $left = $l unless defined($left);
+        $right = $r;
+    }
+
+    $sth->finish();
+
+    return $left,$right;
+
+#    my (@l,@r);
+#    while (my ($l,$r) = $sth->fetchrow_array()) {
+#        push @l,$l if ($l ne $l[$#l]);
+#        push @r,$r if ($r ne $r[$#r]);
+#    }
+#    
 }
 
 #--------------------------------------------------------------------------
@@ -2362,7 +2411,6 @@ sub rebuildHistoryTree {
 
 # step 2: get all contig_ids of age 0
 
-#   my $contigids = $this->getCurrentContigIDs(singleton=>1);
     my $contigids = &getCurrentContigs($dbh,singleton=>1);
 
 # step 3: each contig id is the starting point for tree build from the top
@@ -2445,6 +2493,8 @@ sub getCurrentContigs {
         $query .= "  and CONTIG.nreads > 1" unless $singleton;
     }
 
+    $query .= " and project_id in ($option{project_id})" if $option{project_id};
+
     $query .= " order by contig_id";
 
     my $sth = $dbh->prepare_cached($query);
@@ -2455,6 +2505,8 @@ sub getCurrentContigs {
     while (my ($contig_id) = $sth->fetchrow_array()) {
         push @contigids, $contig_id;
     }
+
+    $sth->finish();
 
     return [@contigids]; # always return array, may be empty
 }
@@ -2483,6 +2535,8 @@ sub getCurrentParentIDs {
     while (my ($contig_id) = $sth->fetchrow_array()) {
         push @contigids, $contig_id;
     }
+
+    $sth->finish();
 
     return [@contigids];
 } 
@@ -2514,7 +2568,43 @@ sub getInitialContigIDs {
         push @contigids, $contig_id;
     }
 
+    $sth->finish();
+
     return [@contigids];
+}
+
+sub getCurrentContigIDsForAncestorIDs {
+# returns a list of current contig ID - ancestor ID   pairs
+    my $this = shift;
+    my $acid = shift; # array ref, ancestor IDs 
+
+    my $dbh = $this->getConnection();
+
+    my $ccid = &getCurrentContigs($dbh);
+
+    my $query = "select distinct M1.contig_id as cc, M2.contig_id as ac"
+              . "  from MAPPING as M1,  SEQ2READ as S1,"
+              . "       MAPPING as M2,  SEQ2READ as S2 "
+              . " where M1.seq_id  = S1.seq_id"
+              . "   and M2.seq_id  = S2.seq_id"
+              . "   and S1.read_id = S2.read_id"
+              . "   and M1.contig_id in (" . join(',',@$ccid) . ")"
+              . "   and M2.contig_id in (" . join(',',@$acid) . ")"
+	      . "   order by cc,ac";
+#print STDOUT "$query\n";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    undef my @results;
+    while (my @cids = $sth->fetchrow_array()) {
+        push @results, [@cids];
+    }
+
+    $sth->finish();
+
+    return [@results];
 }
 
 sub getContigIDsForReadNames {
@@ -2596,6 +2686,7 @@ sub getContigIDsForContigProperty {
     while (my ($cid) = $sth->fetchrow_array()) {
         push @cids,$cid;
     }
+
     $sth->finish();
 
     return [@cids];
