@@ -684,11 +684,16 @@ sub unlinkContigID {
 
 # should change be allowed by the lock owner?
 
-    my @lockinfo = &getLockedStatus($dbh,$contig_id,1);
+    my ($lockstatus,@lockinfo) = &getLockedStatus($dbh,$contig_id,1);
 
 # check privilege, check lockstatus
 
-    return (0,"Contig $contig_id is locked by user $lockinfo[1]") if $lockinfo[0];
+    if ($lockstatus == 3) {
+        return (0,"Contig $contig_id is not allocated to any project");
+    }
+    elsif ($lockstatus) {
+        return (0,"Contig $contig_id is locked by user $lockinfo[0]");
+    }
 
     return (1,"OK") unless $confirm; # preview option   
 
@@ -1108,9 +1113,9 @@ sub getProjectIDforContigID {
 
 # use the join to ensure the project exists
 
-    my $query = "select CONTIG.project_id,PROJECT.lockdate" .
-                "  from CONTIG join PROJECT using (project_id)" .
-                " where contig_id=?";
+    my $query = "select CONTIG.project_id,PROJECT.lockdate"
+              . "  from CONTIG join PROJECT using (project_id)"
+              . " where contig_id=?";
 
     my $dbh = $this->getConnection();
 
@@ -1125,7 +1130,7 @@ sub getProjectIDforContigID {
 
     $sth->finish();
 
-    return $project_id;  
+    return $project_id; # ? $islocked  
 }
 
 sub getProjectIDforReadName {
@@ -1256,6 +1261,8 @@ sub getNamesForProjectID {
               . "select PROJECT.name as pname, 'undefined', owner"
               . "  from PROJECT"
               . " where project_id = ?"
+              . " union "
+              . "select 'undefined','undefined','arcturus'"
 	      . " limit 1 ";
 
     my $dbh = $this->getConnection();
