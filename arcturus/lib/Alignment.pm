@@ -38,10 +38,10 @@ sub correlate {
 
 # experimental/not yet implemented
 #             iterate   through gaps between segments
-#            autoclip   require subsegments larger than value x average length; e.g. 0.3  
-#            tquality   reference to quality array for template data
-#            squality   reference to quality array for sequence data
-#            clip       clip low quality data according to some model
+#            autoclip   require subsegments larger than value x average length
+#?            tquality   reference to quality array for template data
+#?            squality   reference to quality array for sequence data
+#?            clip       clip low quality data according to some model
 
 $DEBUG = $options{debug} || 0;
 
@@ -182,21 +182,60 @@ print $DEBUG "Sampling correlation hash\n" if $DEBUG;
 
 print $DEBUG "Getting alignment segments\n" if $DEBUG;
 
-    my $minimum;
+    my $segments = &getAlignmentSegments($samplehash); # raw scan
+            
+    my %ceasoptions = (reverse => $reverse);
+    my %cosoptions  = (reverse => $reverse, extend => ($halfkmersize-1));
+
+    $options{autoclip} = 1 unless defined($options{autoclip}); # default
+    $options{iterate}  = 1 unless defined($options{iterate}); # default
     my $iterate = $options{iterate};
+
+    my $minimum = 1;
+    my $overlap = 0;
     if ($options{autoclip}) {
 # determine the minimum acceptable length for an interval
         my $average = 0.5*($templatelength + $sequencelength)/$peakdrift;
-        $minimum = $options{autoclip} * $average;
-# activate iteration to fill in gaps
-        $iterate = $kmersize unless $iterate; 
+        $minimum = $options{autoclip} * $average; # starting value
+
+        while ($minimum) {
+print $DEBUG "number of segments ".scalar(@$segments)." \n" if $DEBUG;
+print $DEBUG "minimum segment-length required: $minimum \n" if $DEBUG;
+
+            $ceasoptions{minimumlength} = int($minimum+0.5);
+            my $removed = &cleanupEmbeddedAndShortSegments($segments,%ceasoptions);
+
+print $DEBUG "$removed segments removed with cleanup\n" if $DEBUG;
+print $DEBUG &listSegments($segments,"minimized selection")."\n" if $DEBUG;
+
+            $overlap = &cleanupOverlappingSegments($segments,%cosoptions);
+print $DEBUG "$overlap overlapping segments\n" if $DEBUG; 
+            unless ($overlap && @$segments > 2 && $minimum < $templatelength/3) {
+                $minimum /= 2;
+                last;
+	    }
+# there are overlapping segments, try an increased minimumlength
+            $minimum *= 1.1;
+        }
+    }
+    else {
+# no selection on minimum length, first cleanup
+        my $removed = &cleanupEmbeddedAndShortSegments($segments,%ceasoptions);
+print $DEBUG "$removed segments removed on initial cleanup\n" if $DEBUG;
+        $overlap = &cleanupOverlappingSegments($segments,%cosoptions);
+print $DEBUG "$overlap overlapping segments\n" if $DEBUG; 
+# filter segments
+        @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
+        &filterOffsets($segments);
     }
 
-    my $segments = &getAlignmentSegments($samplehash,$minimum);
+print $DEBUG &listSegments($segments,"minimized selection")."\n" if $DEBUG;
 
 # filter segments
 
     @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
+    
+    &filterOffsets($segments); # more sophysticated ... if $overlap? or always?
 
 # extend segments by half of kmersize
 
@@ -206,42 +245,27 @@ print $DEBUG "Extend alignment segments\n" if $DEBUG;
 
 # remove redundent segments and test the segments for overlap
 
-print $DEBUG "Cleanup/Shrink alignment segments\n" if $DEBUG;
-
-    if ($options{fullrange}) {
-# do a cleanup only (but keep possible overlaps)
-        &cleanupSegments($segments,$reverse);
-        &filterOffsets($segments);
-    }
-    else {
+#    unless ($options{fullrange}) {
 # do a detailed analysis to find the best series of non-overlapping segments 
-        my %gpoptions;
-        $gpoptions{tquality} = $options{tquality} if $options{tquality};
-        $gpoptions{squality} = $options{squality} if $options{squality};
-      $gpoptions{template} = $template; # temp
-      $gpoptions{sequence} = $sequence; # temp
-        &goldenPath($segments,$reverse,%gpoptions);
-    }
+#        my %gpoptions = (reverse => $reverse, extend => 0);
+#        $gpoptions{tquality} = $options{tquality} if $options{tquality};
+#        $gpoptions{squality} = $options{squality} if $options{squality};
+#      $gpoptions{template} = $template; # temp
+#      $gpoptions{sequence} = $sequence; # temp
+#print $DEBUG "Cleanup/Shrink alignment segments\n" if $DEBUG;
+#        &goldenPath($segments,%gpoptions);# may be redundent?
+#    }
 
 # iterate to fill the remaining gaps
 
     my $offsetlowerbound = $offset - $peakdrift; # default setting
     my $offsetupperbound = $offset + $peakdrift; # default setting
 
-# test for gaps 
-
-    unless ($iterate) {
-# activate iteration if gaps are found to try to fill in
-        my $gaps = &gapSegments($segments,$reverse,[@borders]);
-print $DEBUG scalar(@$gaps)." gaps found\n" if $DEBUG; 
-        $iterate = 1 if @$gaps;
-    }
-
-    while ($iterate && $kmersize > $iterate) {
+    while ($iterate && $kmersize > $iterate || $minimum > 1) {
 # determine gaps
         my $gaps = &gapSegments($segments,$reverse,[@borders]);
 
-        $kmersize -= 2; # decrease 
+        $kmersize -= 2 if ($kmersize > 2); # decrease 
 
 print $DEBUG "Doing kmersize $kmersize on ".scalar(@$gaps)." gaps\n" if $DEBUG;
 
@@ -261,6 +285,7 @@ print $DEBUG "Doing kmersize $kmersize on ".scalar(@$gaps)." gaps\n" if $DEBUG;
                 $offsets[$i] += $gap->[3-$i] if $reverse;
 	    }
             @offsets = sort {$a <=> $b} @offsets;
+            my $toffset = ($offsets[0] + $offsets[1]) / 2; # nominal target
             $offsets[0] = $offsetlowerbound if ($offsets[0] < $offsetlowerbound);
             $offsets[1] = $offsetupperbound if ($offsets[1] > $offsetupperbound);
 print $DEBUG "kmer $kmersize;  gap @$gap;   offsets @offsets\n" if $DEBUG;
@@ -269,8 +294,9 @@ print $DEBUG "kmer $kmersize;  gap @$gap;   offsets @offsets\n" if $DEBUG;
                 $offsets[0]--;
                 $offsets[1]++;
 	    }
+print $DEBUG "kmer $kmersize;  gap @$gap;   offsets @offsets\n" if $DEBUG;
 
-# we do an un-banded search because its a very limited search domain
+# we do an un-banded search because it's a very limited search domain
 
             my %roptions = (reverse=>$reverse,
                             offsetlowerbound=>$offsets[0], 
@@ -281,22 +307,41 @@ print $DEBUG "No segments found\n" if (!$shash && $DEBUG);
 
 # add new segments to the existing segments
 
-            my $newsegments = &getAlignmentSegments($shash);
-print $DEBUG scalar(@$newsegments)." segments found\n" if $DEBUG;
+            my $newsegments = &getAlignmentSegments($shash,
+                                                    minimumlength=>$minimum);
+print $DEBUG scalar(@$newsegments)." segments found for $minimum\n" if $DEBUG;
 
 
             if (@$newsegments) {
+print $DEBUG &listSegments($newsegments,"minimized selection")."\n" if $DEBUG;
+                my %ceasoptions = (reverse => $reverse, targetoffset => $toffset);
+                my $removed = &cleanupEmbeddedAndShortSegments($newsegments,
+                                                               %ceasoptions);
+print $DEBUG "$removed segments removed with gap cleanup\n" if $DEBUG;
+
                 &extendSegments($newsegments,$kmersize,$reverse);
                 push @$segments,@$newsegments;
 # &joinSegments?
             }
+            @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
+#            &filterOffsets($segments,threshold=>$kmersize);
         }
-#        $gaps = &cleanupSegments($segments,$reverse,[@borders]);
+        $minimum = int($minimum/2);
     }
 
 # do a final cleanup, just in case (no gap determination)
 
-    &cleanupSegments($segments,$reverse);
+#    &cleanupEmbeddedAndShortSegments($segments,%soptions);
+
+    my %moptions = (lowqsymbol => 'NX\*\-', window => 1);
+    $moptions{window}     = $options{window} if $options{window};
+    $moptions{lowqsymbol} = $options{symbol} if $options{symbol};    
+    &mergeSegments($segments,$reverse,$template,$sequence,%moptions);
+
+# and analyze remaining gaps
+        
+    my $gaps = &gapSegments($segments,$reverse,[@borders]);
+print $DEBUG scalar(@$gaps)." gaps found\n" if $DEBUG; 
 
 # export the segments as a Mapping
 
@@ -639,12 +684,14 @@ sub sampleCorrelationHash {
 sub getAlignmentSegments {
 # helper method for 'correlate': return a list of alignment segments
     my $correlationhash = shift;
-    my $minimum = shift;
+    my %options = @_;
 
 # a segment consists of contiguous matching positions without constraints
 # on the boundaries; however, a minimum length can be specified 
 
     &verifyAccess($correlationhash,'getAlignmentSegments');
+
+    my $minimumlength = $options{minimumlength} || 1;
 
     my $segments = [];
     foreach my $offset (sort {$a <=> $b} keys %$correlationhash) {
@@ -653,12 +700,14 @@ sub getAlignmentSegments {
         my $segmenthash = $correlationhash->{$offset};
 # run through positions and record the uninterrupted sequences
         my @positions = sort {$a <=> $b} keys %$segmenthash;
-        next if ($minimum && scalar(@positions) < $minimum);
 
+        next if (scalar(@positions) < $minimumlength);
+
+        my $segmentlength = 0;
         foreach my $position (@positions) {
 # if there is a discontinuity: complete previous segment and initiate a new one
             if (defined($segment) && $position > ($segment->[1]+1)) {
-                push @$segments,$segment;
+                push @$segments,$segment if ($segmentlength >= $minimumlength);
                 undef $segment; # initiate a new alignment segment
             }
 # on starting a new interval (undefined segment)
@@ -669,8 +718,11 @@ sub getAlignmentSegments {
             }
             $segment->[1] = $position; # final on this
             $segment->[3] = $segmenthash->{$position}; # final on read     
+            $segmentlength = $segment->[1] - $segment->[0] + 1;
         }
-        push @$segments,$segment if defined($segment);
+        if (defined($segment)) {
+            push @$segments,$segment if ($segmentlength >= $minimumlength);
+	}
     }
 
 # return an array of segment mappings (4 numbers each)
@@ -701,12 +753,16 @@ sub extendSegments {
     }
 }
 
-sub cleanupSegments {
-# helper method for 'correlate': remove segments which are completely embedded in others
+sub cleanupEmbeddedAndShortSegments {
+# helper method: remove segments which are completely embedded in others
     my $segments = shift;
-    my $reverse = shift;
+    my %options = @_;
 
-    &verifyAccess($segments,'cleanupSegments');
+    &verifyAccess($segments,'cleanupEmbeddedAndShortSegments');
+
+    my $reverse = $options{reverse} || 0;
+
+    my $minimum = $options{minimumlength} || 0;
 
 # order the segments with start position
 
@@ -717,38 +773,80 @@ sub cleanupSegments {
     my %remove;
     my $ns = scalar(@$segments);
     for (my $i = 0 ; $i < $ns ; $i++) {
-        next if $remove{$i};
         my $si = $segments->[$i];
-        for (my $j = $i+1 ; $j < $ns ; $j++) {
-            next if $remove{$j};
+        my $li = abs($si->[1] - $si->[0]) + 1;
+	$remove{$i}++ if ($minimum && $li < $minimum);
+        next if $remove{$i};
+        for (my $j = 0 ; $j < $ns ; $j++) {
+            next if ($j == $i);
             my $sj = $segments->[$j];
-# test if segment j is inside segment i on this read
+            my $lj = abs($sj->[1] - $sj->[0]) + 1;
+  	    $remove{$j}++ if ($minimum && $lj < $minimum);
+            next if $remove{$j};
+# optionally skip embedded test
+            next if $options{minimumonly};
+# test if segment j is inside segment i 
+            my $isembedded = 0;
             if ($si->[0] <= $sj->[0] && $si->[1] >= $sj->[1]) {
-                $remove{$j}++;
+                $isembedded = 1;
 	    }
 # test if segment j is inside segment i on the matching read
             elsif ( $reverse && $si->[2] >= $sj->[2] && $si->[3] <= $sj->[3]) {
-                $remove{$j}++;
+                $isembedded = 1;
 	    }
             elsif (!$reverse && $si->[2] <= $sj->[2] && $si->[3] >= $sj->[3]) {
-                $remove{$j}++;
+                $isembedded = 1;
 	    }
-            next if $remove{$j}; # try next $j for same $i
+# if segment j is embedded in segment i decide if i or j or both have to be deleted
+            if ($isembedded) {
+#print $DEBUG "segment $j (@$sj; $lj) is embedded in $i (@$si, $li) \n" if $DEBUG;
+                unless ($li == $lj) {
+# segment j is the smaller one and is deleted
+                    $remove{$j}++;
+                    next; # next $j for same $i
+		}
+# the segments are of equal length
+                unless ($options{targetoffset}) {
+                    $remove{$j}++;
+                    $remove{$i}++;
+                    last; # next $i
+                }
+# delete whichever segment has the most discreapant offset
+                my $toffset = $options{targetoffset};
+                my $ioffset = abs( ($si->[0] - $si->[2]) - $toffset);
+                my $joffset = abs( ($sj->[0] - $sj->[2]) - $toffset);
+#print $DEBUG "segment $j (@$sj; $lj) is embedded in $i (@$si, $li) \n" if $DEBUG;
+#print $DEBUG "offset test: jo $joffset vs io $ioffset vs  $toffset\n" if $DEBUG;
+                $remove{$i}++ if ($ioffset >= $joffset);
+                $remove{$j}++ if ($ioffset <= $joffset);
+                last if ($ioffset == $joffset); # next $i
+                next; #  try next $j for same $i
+	    }
+# $i and $j are disjunct
             next if ($sj->[0] <= $si->[1]); # this segment may mask the next
             last; # intervals $i and $j are disconnected: next $i
         }
     }
 
+    my $removed = scalar(keys %remove);
+
+    return 0 unless $removed;
+
     foreach my $j (sort {$b <=> $a} keys %remove) { # reverse order!
         splice @$segments, $j, 1;
     }
 
-    return;
+#    if ($options{recursive}) {
+#        $removed += &cleanupEmbeddedAndShortSegments($segments,%options);
+#    }
+
+    return $removed;
 }
 
 sub filterOffsets {
+# filter segment offsets with a median filter
     my $segments = shift;
-    my %options = @_;
+    my %options = @_; # medianwindow => ...  threshold => ...  list => ...
 
 # build a scratch table of offset versus segment position
 
@@ -761,13 +859,10 @@ sub filterOffsets {
         my $alignmentdata = $alignmenthash->{$alignment};
         $alignmentdata->{offset} = [] unless defined $alignmentdata->{offset};
         $alignmentdata->{posits} = [] unless defined $alignmentdata->{posits};
-#$alignmentdata->{length} = [] unless defined $alignmentdata->{length};
         my $offset = $alignmentdata->{offset}; # array reference
         push @$offset, $segment->getOffset();
         my $posits = $alignmentdata->{posits};
         push @$posits, ($segment->getXstart() + $segment->getXfinis())/2;
-#my $length = $alignmentdata->{length};
-#push @$length, $segment->getXfinis() - $segment->getXstart() + 1;
     }
 
     $options{medianwindow} = 5 unless defined $options{medianwindow}; 
@@ -822,14 +917,12 @@ sub filterOffsets {
     return $deleted,$alignmenthash;   
 }
 
-sub shrinkSegments {
+sub cleanupOverlappingSegments {
 # helper method for 'correlate': clip ends of segments if they overlap
     my $segments = shift;
-    my $inverted = shift;
+    my %options = @_;
 
-    my ($tq,$sq,$ts,$ss) = @_;
-
-    &verifyAccess($segments,'shrinkSegments');
+    &verifyAccess($segments,'cleanupOverlappingSegments');
 
     @$segments = sort {$a->[0] <=> $b->[0]} @$segments;
 
@@ -837,12 +930,30 @@ sub shrinkSegments {
 
 # NOTE: REVERSE case still to be tested
 
+    my $extend = $options{extend};
+
+    my $inverted = $options{reverse};
+
+    my $ts = $options{tsequence};
+    my $ss = $options{ssequence};
+    my $tq = $options{tquality};
+    my $sq = $options{squality};
+
+    my $overlapcount = 0;
+
+my $DEBUG = $options{debug};
+print $DEBUG "SS looking for overlapping segments ($extend)\n" if $DEBUG;
+
     for (my $i = 0 ; $i < $ns-1 ; $i++) {
 # get the (possible) overlap between successive segments
         my $overlap = $segments->[$i]->[1] + 1 - $segments->[$i+1]->[0];
+        if ($overlap + 2*$extend > 0) {
+print $DEBUG "SS regular overlap $overlap (extend $extend)\n" if $DEBUG;
+	}
         if ($overlap > 0) {
+
 # *** debug block
-print STDOUT "SS regular overlap $overlap \n";
+print $DEBUG "SS regular overlap $overlap @{$segments->[$i]} : @{$segments->[$i+1]}\n" if $DEBUG;
 my $segmenti = $segments->[$i];
 my $segmentj = $segments->[$i+1];
 #        my $start = $segments->[$i+1]->[0] + 1;
@@ -856,34 +967,38 @@ my $end   = $segments->[$i]->[3];
 my $loff = $segments->[$i]->[2] - $segments->[$i]->[0];
 my $roff = $segments->[$i+1]->[2] - $segments->[$i+1]->[0];
 if ($overlap >= 2 || abs($loff-$roff) > 1) {
-print STDOUT "SS start $start  final $final  loffset $loff  roffset $roff\n";
-print STDOUT "SS segment $i @$segmenti  $i+1 @$segmentj \n";
+print $DEBUG "SS start $start  final $final  loffset $loff  roffset $roff\n" if $DEBUG;
+print $DEBUG "SS segment $i @$segmenti  $i+1 @$segmentj \n" if $DEBUG;
     if ($tq && @$tq) {
         my @tquality = @$sq [($start-3) .. ($final+1)];
-        print STDOUT "SS tq $start-$final  @tquality \n";
+        print $DEBUG "SS tq $start-$final  @tquality \n" if $DEBUG;
     }
     if ($sq && @$sq) {
 	my $sstring = substr $ss,$begin-2-1,$end-$begin+1+4;
         my $tstring = substr $ts,$start-2-1,$final-$start+1+4;
         my @squality = @$sq [($begin-3) .. ($end+1)];
-        print STDOUT "SS sq $begin-$end   @squality   $sstring  $tstring\n";
+        print $DEBUG "SS sq $begin-$end   @squality   $sstring  $tstring\n" if $DEBUG;
     }
 }
 # *** end debug block
-            $segments->[$i]->[1] -= $overlap;
-            $segments->[$i]->[3] -= $overlap unless $inverted;
-            $segments->[$i]->[2] += $overlap if $inverted;
-	}
-# same but now for the complementary domain
-        $overlap = $segments->[$i]->[3] + 1 - $segments->[$i+1]->[2] unless $inverted;
-        $overlap = $segments->[$i+1]->[3] + 1 - $segments->[$i]->[2] if $inverted;
-        if ($overlap > 0) {
-print STDOUT "SS complementary overlap $overlap \n";
+
+            $overlapcount++;
 #            $segments->[$i]->[1] -= $overlap;
 #            $segments->[$i]->[3] -= $overlap unless $inverted;
 #            $segments->[$i]->[2] += $overlap if $inverted;
+	}
+# same but now for the complementary domain
+        $overlap = $segments->[$i]->[3] + 1 - $segments->[$i+1]->[2] unless $inverted;
+        $overlap = $segments->[$i+1]->[2] + 1 - $segments->[$i]->[3] if $inverted;
+        if ($overlap > 0) {
+print $DEBUG "SS complementary overlap $overlap @{$segments->[$i]} : @{$segments->[$i+1]}\n" if $DEBUG;
+#            $segments->[$i]->[1] -= $overlap;
+#            $segments->[$i]->[3] -= $overlap unless $inverted;
+#            $segments->[$i]->[2] += $overlap if $inverted;
+            $overlapcount++;
         }
     }
+    return $overlapcount;
 }
 
 sub mergeSegments {
@@ -903,9 +1018,9 @@ sub mergeSegments {
 
     my $k = $inverted ? 3 : 2;
 
-    my $window = $options{window} || 1; # overflow
+    my $window = $options{window} || 1; 
 
-    my $symbol = $options{lowqsymbol};
+    my $symbol = $options{lowqsymbol} || 'N';
 
     my $i = $ns-1;
     while (--$i >= 0) {
@@ -938,6 +1053,7 @@ if ($squality && @$squality) {
 # test the two sequence fragments against one another and see if they are compatible
 # if no symbol is specified, compare case only; if (low quality) pad symbols are
 # provided (e.g. N, X, *, -), generate a regular expression from the template sequence 
+
         if (defined($symbol)) {
             $tstring =~ s/(\w)/[$1$symbol]/g; # generate a regexp 
 	}
@@ -962,7 +1078,6 @@ sub inverseSegments {
 sub goldenPath {
 # cleanup and shrink segments TO BE DEVELOPED
     my $segments = shift;
-    my $reverse = shift;
     my %options = @_;
 
 # NOTE: cleanup and shrink could be combined into one method, also using quality
@@ -970,26 +1085,28 @@ sub goldenPath {
 
 # TO BE DEVELOPED, for the moment we use  cleanup, filter and shrink
 
-print $DEBUG "Cleanup alignment segments\n" if $DEBUG;
-
-    &cleanupSegments($segments,$reverse);
+    my $c = &cleanupEmbeddedAndShortSegments($segments,%options);
 
     &inverseSegments($segments);
 
-    &cleanupSegments($segments,$reverse);
+    my $d = &cleanupEmbeddedAndShortSegments($segments,%options);
 
     &inverseSegments($segments);
 
-print $DEBUG "Shrink alignment segments\n" if $DEBUG;
+print $DEBUG "Cleanup alignment segments $c , $d\n" if $DEBUG;
 
-    &filterOffsets($segments);
+    my @f = &filterOffsets($segments,%options);
 
-    my $tquality = $options{tquality};
-    my $squality = $options{squality};
+print $DEBUG "Median filter @f\n" if $DEBUG;
+
+#    my $tquality = $options{tquality};
+#    my $squality = $options{squality};
     my $template = $options{template};
     my $sequence = $options{sequence};
+    
+    my $e = &cleanupOverlappingSegments($segments,%options);
 
-    &shrinkSegments($segments,$reverse,$tquality,$squality,$template,$sequence);
+print $DEBUG "cleanupOverlappingSegments $e\n" if $DEBUG;
 
     my %moptions;
     $options{window} =  1  unless defined $options{window};
@@ -997,8 +1114,9 @@ print $DEBUG "Shrink alignment segments\n" if $DEBUG;
     $options{symbol} = 'N' unless defined $options{symbol};
     $moptions{lowqsymbol} = $options{symbol};
 #    $moptions{squality} = $options{squality} if $options{squality};
-    &mergeSegments($segments,$reverse,$template,$sequence,%moptions);
+    &mergeSegments($segments,$options{reverse},$template,$sequence,%moptions);
 }
+
 
 sub gapSegments {
 # helper method for 'correlate': find gaps between segments
@@ -1180,7 +1298,18 @@ print $DEBUG "\n";
 
     return ($maximum,$peakcount);
 }
-    
+ 
+sub listSegments {
+    my $segments = shift;
+
+    my $mapping = new Mapping(@_);
+    foreach my $segment (@$segments) {
+        $mapping->putSegment(@$segment);
+    }
+    $mapping->analyseSegments();
+    return $mapping->writeToString("segment",extended=>1);
+}
+   
 #--------------------------------------------------------------------------
 
 1;
