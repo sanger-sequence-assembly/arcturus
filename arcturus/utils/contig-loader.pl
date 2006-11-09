@@ -767,7 +767,21 @@ if ($inew && $debug) {
 # detected a contig TAG
             my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-#$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
+# test for a continuation mark (\n\); if so, read until no continuation mark
+                while ($info =~ /\\n\\\s*$/) {
+                    if (defined($record = <$CAF>)) {
+                        chomp $record;
+                        $info .= $record;
+                        $lineCount++;
+                    }
+                    else {
+                        $info .= '"'; # closing quote
+                    }
+                }
+                $logger->warning("CONTIG tag detected: $record\n"
+#                $logger->info("CONTIG tag detected: $record\n"
+                        . "'$type' '$tcps' '$tcpf' '$info'");
+ #$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
             my $tag = new Tag('contigtag');
             $contig->addTag($tag);
             $tag->setType($type);
@@ -1010,8 +1024,9 @@ sub tagList {
     my @FTAGS = ('FINL','FINR','ANNO','FICM','RCMP','POLY','STSP',
                  'STSF','STSX','STSG','COMM','RP20','TELO','REPC',
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
-                 'CpGI','NNNN','SILR','IRPT','LINE','REPA','REPY',
-                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON');
+                 'CpGI','NNNN','SIL' ,'IRPT','LINE','REPA','REPY',
+                 'REPZ','FICM','VARD','VARS','CSED','CONS','EXON',
+                 'SILR');
 
 # software TAGS
 
