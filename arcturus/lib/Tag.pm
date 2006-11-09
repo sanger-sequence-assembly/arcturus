@@ -640,8 +640,6 @@ sub writeToEMBL {
     my $FILE = shift; # optional output file handle
     my %options = @_; # tagkey (CDS/TAG)
 
-    my $string = '';
-
     my $tagtype    = $this->getType();
     my $strand     = lc($this->getStrand());
     my $sysID      = $this->getSystematicID();
@@ -654,10 +652,10 @@ sub writeToEMBL {
 
 # composite tags have more than one position interval specified
 
+    my $string  = "FT   ".sprintf("%3s",$key)."             ";
     if ($this->isJoined()) {
 # generate the join construct for composite tags
         my @joinlist;
-        $string = "FT   ".sprintf("%3s",$key)."             ";
         $string .= "complement(" if ($strand eq "reverse");
         $string .= "join("; # always
 	my $pair = 0;
@@ -680,7 +678,10 @@ sub writeToEMBL {
     else {
 # just generate the (single) position pair
         my ($ps,$pf) = $this->getPosition(0);
-        $string = "FT   ".sprintf("%3s",$key)."             $ps..$pf\n";
+        $string .= "complement(" if ($strand eq "reverse");
+        $string .= "$ps..$pf";
+        $string .= ")" if ($strand eq "reverse");
+        $string .= "\n";
     }
 
     $tagtype =~ s/ANNO/annotation/ if $tagtype;
