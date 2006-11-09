@@ -419,7 +419,7 @@ $logger->warning($mapping->toString(Xdomain=>$csubstring,
             else {
 	        $logger->severe("Failed read placement : "
                               ."($name,$strand,$cstart,$cfinal)");
-	        $logger->warning("score $score for lengths: r: $rlength  c:$clength");
+	        $logger->warning("score $score for lengths: r: $rlength  c:$clength\n$rsubstring\n$csubstring");
 	        next;
 	    }
 
