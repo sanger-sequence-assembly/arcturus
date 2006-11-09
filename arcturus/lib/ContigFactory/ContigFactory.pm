@@ -134,7 +134,9 @@ sub cafFileParser {
     my $contigtaglist = $options{contigtaglist};
     $contigtaglist =~ s/\W/|/g if ($contigtaglist && $contigtaglist !~ /\\/);
     $contigtaglist = '\w{3,4}' unless $contigtaglist; # default
-    $LOGGER->fine("Contig tags to be processed: $contigtaglist");
+    $LOGGER->info("Contig tags to be processed: $contigtaglist");
+
+    my $ignoretaglist = $options{ingoretaglist};
 
     my $edittags = $options{edittags} || 'EDIT';
 
@@ -497,10 +499,11 @@ sub cafFileParser {
                         next; # don't accept this tag
                     }
  	        }
-# test the comment; ignore empty comment tags
-                unless ($tag->getComment() =~ /\S/) {
+# test the comment; ignore tags with empty comment
+                unless ($tag->getTagComment() =~ /\S/) {
 		    $LOGGER->severe("Empty $type read tag ignored for "
                                 . $read->getReadName()." (line $lineCount)");
+                    $LOGGER->warning($tag->writeToCaf(0));
 		    next; # don't accept this tag
 		}
 
@@ -605,7 +608,8 @@ sub cafFileParser {
                         $info .= '"'; # closing quote
                     }
                 }
-                $LOGGER->info("CONTIG tag detected: $record\n"
+                $LOGGER->warning("CONTIG tag detected: $record\n"
+#                $LOGGER->info("CONTIG tag detected: $record\n"
                         . "'$type' '$tcps' '$tcpf' '$info'");
                 if ($type eq 'ANNO') {
                     $info =~ s/expresion/expression/;
@@ -642,10 +646,16 @@ sub cafFileParser {
 		}
 
 	    }
+            elsif ($ignoretaglist 
+                && $record =~ /Tag\s+($ignoretaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+                $LOGGER->info("CONTIG tag ignored: ($lineCount) $record");
+	    }
             elsif ($record =~ /Tag/) {
+$LOGGER->warning("CONTIG tag not recognized: ($lineCount) $record");
                 $LOGGER->info("CONTIG tag not recognized: ($lineCount) $record");
             }
             else {
+$LOGGER->warning("ignored: ($lineCount) $record");
                 $LOGGER->info("ignored: ($lineCount) $record");
             }
         }
@@ -791,7 +801,14 @@ $LOGGER->("ENTER deleteLowQualityBases @_") if $LOGGER;
 
     my $pads = &findlowquality($contig->getSequence(),
                                $contig->getBaseQuality(),
+# options: symbols (ACTG), threshold (20), minimum (15), window (9), lqpm (30)
                                %options);
+
+    unless ($pads) {
+        my $cnm = $contig->getContigName();
+        print STDERR "Missing DNA or quality data in $cnm\n"; 
+        return $contig, 0; # no low quality stuff found
+    }
 
 # step 2: remove low quality pads from the sequence & quality;
 
@@ -804,6 +821,7 @@ $LOGGER->("ENTER deleteLowQualityBases @_") if $LOGGER;
 $LOGGER->("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED')) if $LOGGER;
 
     unless ($sequence && $quality && $ori2new) {
+        my $cnm = $contig->getContigName();
         print STDERR "Failed to determine new DNA or quality data\n";
         return undef;
     }
@@ -813,7 +831,7 @@ $LOGGER->("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED')) if $LOGGER;
         my $segment = $segments->[0];
         my $length = $segment->[1] - $segment->[0];
         if ($length == length($contig->getSequence())) {
-            return $contig, 0; # no bases clipped
+            return $contig, 0.0; # no bases clipped
         }
     }
 
@@ -821,15 +839,17 @@ $LOGGER->("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED')) if $LOGGER;
 
     my $clippedcontig = new Contig();
 
-# add name and sequence
+# add descriptors and sequence
 
-    my $contigname = $contig->getContigName() || '';
-    $contigname .= "-low_quality_removed";
-    $clippedcontig->setContigName($contigname);
+    $clippedcontig->setContigName($contig->getContigName);
+                
+    $clippedcontig->setGap4Name($contig->getGap4Name);
                 
     $clippedcontig->setSequence($sequence);
                 
     $clippedcontig->setBaseQuality($quality);
+
+    $clippedcontig->addContigNote("low_quality_removed");
 
 # either treat the new contig as a child of the input contig
 
@@ -866,9 +886,9 @@ sub replaceLowQualityBases {
     my $sequence = $contig->getSequence();
     my $quality  = $contig->getBaseQuality();
 
-    my $length = length($sequence);
-
     return undef unless ($sequence && $quality && @$quality);
+
+    my $length = length($sequence);
 
     return undef unless ($length && $length == scalar(@$quality));
 
@@ -898,7 +918,7 @@ sub replaceLowQualityBases {
 
     my $pads = &findlowquality(0,$quality,%options); # array of pad positions
 
-    if (@$pads) {
+    if ($pads && @$pads) {
 # there are low quality bases
         my @dna = split //,$sequence;
 
@@ -908,11 +928,13 @@ sub replaceLowQualityBases {
 	}
 # reconstruct the sequence
         $sequence = join '',@dna;
-# amend contigname
-        $contigname .= "-low_quality_marked";
-        $contigname .= "[$padsymbol]" unless $lowercase;
-        $contigname .= "[lc]" if $lowercase;
-        $contig->setContigName($contigname);
+# amend contignote
+        if ($lowercase) {
+            $contig->addContigNote("[lc] low_quality_marked");
+	}
+	else {
+            $contig->addContigNote("[$padsymbol] low_quality_marked");
+	}
     }
 
     $contig->setSequence($sequence);
@@ -1133,7 +1155,7 @@ sub removeShortReads {
 
     return undef if $delete; # the mappings do not match the reads
 
-    $LOGGER->info("Number of deleted reads match removed mapping(s) on contig "
+    $LOGGER->info("Number of deleted reads matches removed mapping(s) on contig "
                 .  $contig->getContigName()) if $LOGGER;
 
     return $contig;
@@ -1157,10 +1179,11 @@ print STDOUT "ENTER endRegionOnly\n";
 # create a new output contig
 
     my $newcontig = new Contig();
-    my $contigname = $contig->getContigName() . "-endregionmasked";
-    $newcontig->setContigName($contigname);
+    $newcontig->setContigName($contig->getContigName);
     $newcontig->setSequence($sequence);
     $newcontig->setBaseQuality($quality);
+    $newcontig->addContigNote("endregiononly");
+    $newcontig->setGap4Name($contig->getGap4Name);
 
     return $newcontig;
 }
@@ -1250,13 +1273,12 @@ print STDOUT "ENTER endRegionTrim\n";
 # create a new contig
 
     my $clippedcontig = new Contig();
-    my $contigname = $contig->getContigName() || '';
-    $contigname .= "-endregionclipped[$options{cliplevel}]";
-    $clippedcontig->setContigName($contigname);
 
     $clippedcontig->setSequence($sequence);
 
     $clippedcontig->setBaseQuality($quality);
+
+    $clippedcontig->setContigNote("endregiontrimmed [$options{cliplevel}]");
 
 # and port the components, if any, to the newly created clipped contig
 
@@ -1318,6 +1340,7 @@ sub copy {
     if ($options{includeIDs}) {
         $newcontig->setContigName($contig->getContigName());
         $newcontig->setContigID($contig->getContigID());
+        $newcontig->setGap4Name($contig->getGap4Name());
     }
 
 # always add consensus data
@@ -1325,6 +1348,8 @@ sub copy {
     $newcontig->setSequence($contig->getSequence);
                 
     $newcontig->setBaseQuality($contig->getBaseQuality);
+
+    $newcontig->setContigNote($contig->getContigNote); # if any
 
 # (optionally) copy the arrays of references to any other components
 
@@ -1346,14 +1371,16 @@ sub findlowquality {
 # scan quality data and/or dna data; return an array of low quality positions
     my $sequence = shift;
     my $quality = shift;
-    my %options = @_;
+    my %options = @_; # print STDOUT "findlowquality options @_\n";
 
     &verifyPrivate($sequence,'findlowquality');
 
-# check input
+# check input; return undef if data missing or inconsistent
+
+    return undef unless $quality;
 
     my $length = scalar(@$quality);
-$LOGGER->warning("ENTER findlowquality ($length) @_") if $LOGGER;
+#$LOGGER->warning("ENTER findlowquality ($length) @_") if $LOGGER;
 
     if ($sequence) {
         return undef unless ($length == length($sequence));
@@ -1362,14 +1389,16 @@ $LOGGER->warning("ENTER findlowquality ($length) @_") if $LOGGER;
 # get control parameters
 
     my $symbols   = $options{symbols} || 'ACGT';
-    my $threshold = $options{threshold} || 20;
-    my $minimum   = $options{minimum}   || 15;
-# ensure an odd window length
+# finding low quality from data
+    my $threshold = $options{threshold} || 20; # lower than reference level 
+    my $minimum   = $options{minimum}   || 15; # but higher than this minimum
+# judging if low-quality pad symbol (eg N,X) already present is significant
+    $options{lqpm} = 30 unless defined($options{lqpm});
+    my $lowqualitypadminimum = $options{lqpm};
+# ensure an odd window length for default reference level determination
     my $fwindow   = $options{window}    ||  9;
     my $hwindow = int($fwindow/2);
     $options{window} = 2 * $hwindow + 1;
-# require minimum significance for low quality pads already present as e.g. N or X
-    my $lowqualitypadminimum = $options{lqpm} || 30; 
 
 # ok, scan the quality array/dna to locate low quality pads
 
@@ -1380,11 +1409,12 @@ $LOGGER->warning("ENTER findlowquality ($length) @_") if $LOGGER;
     for (my $i = $hwindow ; $i <= $length - $hwindow ; $i++) {
 # test the base
         if ($sequence && substr($sequence, $i, 1) !~ /[$symbols]$/) {
-#print STDOUT "alien symbol found: ". substr($sequence, $i, 1) . " $quality->[$i]\n";
-            next unless ($quality->[$i] > $lowqualitypadminimum);
+# print STDERR "alien symbol found: ". substr($sequence, $i, 1) . " $quality->[$i]\n";
+            next if ($quality->[$i] < $lowqualitypadminimum);
             push @$pads, $i; # zeropoint 0
             next;
 	}
+# there's a base at this position; test the quality 
 # if no reference level provided use a default mean filter
         unless ($reference && $reference->[$i]) {
             $reference->[$i] = ($quality->[$i-2] + $quality->[$i+2]) / 2;
@@ -1464,7 +1494,7 @@ sub removepads {
     my $sequence = shift; # string
     my $quality = shift; # array ref
     my $pads = shift; # array ref
-#print STDOUT "ENTER removepads @_\n";
+#print STDERR "ENTER removepads @_\n";
 #print STDOUT "PADS @$pads \n";
 
     &verifyPrivate($sequence,'removepads');
@@ -1473,7 +1503,7 @@ sub removepads {
     @$sorted = sort {$a <=> $b} @$pads;
 # extend the array with an opening and closing pad (pads start counting at 1)
     push @$sorted, length($sequence)+1;
-    unshift @$sorted, 0;
+    unshift @$sorted, -1;
 
     my $newquality = [];
     my $newsequence = '';
