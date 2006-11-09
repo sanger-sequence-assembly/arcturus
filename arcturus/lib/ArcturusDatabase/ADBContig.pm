@@ -1417,7 +1417,7 @@ sub putMappingsForContig {
         if ($accumulated >= $block || ($accumulated && $mapping eq $lastMapping)) {
 print STDOUT "Insert mapping block $accumulated \n";
             $sth = $dbh->prepare($accumulatedQuery); 
-            my $rc = $sth->execute() || &queryFailed($squery);
+            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
             $success = 0 unless $rc;
             $accumulatedQuery = $squery;
             $accumulated = 0;
