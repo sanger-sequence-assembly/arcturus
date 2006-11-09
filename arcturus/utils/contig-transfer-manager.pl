@@ -42,10 +42,12 @@ my $PROJECTINSTANCECACHE = {};
 # ingest command line parameters
 #----------------------------------------------------------------
 
-my $actions = "transfer|grant|wait|defer|cancel|reject|execute|reschedule|probe";
+my $actions = "transfer|grant|wait|defer|cancel|reject|execute|"
+            . "reschedule|probe";
 
 my $validKeys = "organism|instance|$actions|"
-              . "contig|c|focn|fofn|project|p|focpn|foccn|assembly|a|openproject|"
+              . "contig|c|focn|fofn|project|p|focpn|foccn|assembly|a|"
+              . "openproject|"
               . "user|u|owner|o|request|r|comment|"
               . "list|longlist|ll|before|after|since|truncate|trun|full|"
               . "help|h|s|"
@@ -328,6 +330,7 @@ if ($action eq 'transfer') {
     $options{open} = $openproject;
 #$options{user} = $user if $user; # what does this, check
     $options{requester_comment} = $comment if $comment;
+    $options{ignore_project} = 1 if $force;
 
     foreach my $contig (@$cids) {
 
@@ -575,6 +578,7 @@ elsif ($action eq 'execute') {
 # requests the user has nothing to do with)
     unless ($options{projectids}) {
         my $projectids = $adb->getAccessibleProjects();
+#        push @$projectids, 0 if $force;
         $options{projectids} = join ',',@$projectids  if @$projectids;
 # if this user has no access to any project add owner if not already done
         unless (@$projectids || $options{requester}) {
@@ -610,7 +614,7 @@ elsif ($action eq 'execute') {
 
         my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
 
-        unless ($pid == $cpid) {
+        unless (defined($cpid) && $pid == $cpid) {
 # translate project IDs into project names
             my $cur_project = &getCachedProject($adb,$cpid);
             $pid  = $old_project->getProjectName() if $old_project;
@@ -1040,7 +1044,9 @@ sub createContigTransferRequest {
     my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
 
     unless (defined($cpid)) {
-        return 0,"contig $cid does not exist";
+        my $message = "contig $cid does not exist or has an invalid project";
+        return 0,$message unless $options{ignore_project};
+        $cpid = 0;
     }
 
     if ($cpid == $tpid) {
@@ -1091,8 +1097,9 @@ sub createContigTransferRequest {
     }
   
     unless ($confirm) {
-        my $report = "contig $cid may be moved from project "
-                   . "$cnames[0] ($cnames[1]) to project $tnames[0] ($tnames[1])";
+        my $report = "contig $cid may be moved "
+                   . "from project $cnames[0] ($cnames[1]) "
+                   . "to project $tnames[0] ($tnames[1])";
         $report =~ s/\s\([^\)]+\)//g if ($cnames[1] eq $tnames[1]);
         return 2, $report;
     }
