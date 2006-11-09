@@ -39,11 +39,13 @@ my $clipsymbol;
 my $gap4name;
 my $preview;
 
+my $METHOD = 1; # test construction
+
 my $validKeys  = "organism|instance|project|assembly|fopn|ignore|caf|maf|"
                . "readsonly|fasta|quality|lock|minNX|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
-               . "preview|confirm|batch|verbose|debug|help";
+               . "preview|confirm|batch|verbose|debug|help|test";
 
 while (my $nextword = shift @ARGV) {
 
@@ -84,8 +86,11 @@ while (my $nextword = shift @ARGV) {
     $readsonly   = 1            if ($nextword eq '-readsonly');
 
     if ($nextword eq '-fasta' || $nextword eq '-caf' || $nextword eq '-maf') {
-print STDOUT "next $nextword\n";
-        if (defined($fastafile) || defined($caffile) || defined($maffile)) {
+#print STDOUT "next $nextword\n";
+        if (defined($fastafile) && $nextword ne '-fasta'
+         || defined($caffile)   && $nextword ne '-caf'
+         || defined($maffile)   && $nextword ne '-maf') {
+#        if (defined($fastafile) || defined($caffile) || defined($maffile)) {
             &showUsage("You can only select one output format");
         }
         $fastafile   = shift @ARGV  if ($nextword eq '-fasta'); # '0' for STDOUT
@@ -121,6 +126,8 @@ print STDOUT "next $nextword\n";
     $lock        = 1            if ($nextword eq '-lock');
 
     $batch       = 1            if ($nextword eq '-batch');
+
+    $METHOD      = 0            if ($nextword eq '-test');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -184,41 +191,44 @@ if ($padded && (defined($fastafile) || defined($maffile))) {
 
 my ($fhDNA, $fhQTY, $fhRDS);
 
-if (defined($caffile) && $caffile) {
-    $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
-    $fhDNA = new FileHandle($caffile, "w");
-    &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
-}
-elsif (defined($caffile)) {
-    $fhDNA = *STDOUT;
-}
+unless ($preview) {
 
-if (defined($fastafile) && $fastafile) {
-    $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
-    $fhDNA = new FileHandle($fastafile, "w");
-    &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhDNA;
-    if (defined($qualityfile)) {
-        $fhQTY = new FileHandle($qualityfile, "w");
-	&showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQTY;
+    if (defined($caffile) && $caffile) {
+        $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
+        $fhDNA = new FileHandle($caffile, "w");
+        &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
     }
-    elsif ($fastafile eq '/dev/null') {
-        $fhQTY = $fhDNA;
+    elsif (defined($caffile)) {
+        $fhDNA = *STDOUT;
     }
-}
-elsif (defined($fastafile)) {
-    $fhDNA = *STDOUT;
-}
 
-if (defined($maffile)) {
-    my $file = "$maffile.contigs.bases";
-    $fhDNA = new FileHandle($file,"w");
-    &showUsage("Failed to create MAF output file \"$file\"") unless $fhDNA;
-    $file = "$maffile.contigs.quals";
-    $fhQTY = new FileHandle($file,"w");
-    &showUsage("Failed to create MAF output file \"$file\"") unless $fhQTY;
-    $file = "$maffile.reads.placed";
-    $fhRDS = new FileHandle($file,"w");
-    &showUsage("Failed to create MAF output file \"$file\"") unless $fhRDS;
+    if (defined($fastafile) && $fastafile) {
+        $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
+        $fhDNA = new FileHandle($fastafile, "w");
+        &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhDNA;
+        if (defined($qualityfile)) {
+            $fhQTY = new FileHandle($qualityfile, "w"); 
+  	    &showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQTY;
+        }
+        elsif ($fastafile eq '/dev/null') {
+            $fhQTY = $fhDNA;
+        }
+    }
+    elsif (defined($fastafile)) {
+        $fhDNA = *STDOUT;
+    }
+
+    if (defined($maffile)) {
+        my $file = "$maffile.contigs.bases";
+        $fhDNA = new FileHandle($file,"w");
+        &showUsage("Failed to create MAF output file \"$file\"") unless $fhDNA;
+        $file = "$maffile.contigs.quals";
+        $fhQTY = new FileHandle($file,"w");
+        &showUsage("Failed to create MAF output file \"$file\"") unless $fhQTY;
+        $file = "$maffile.reads.placed";
+        $fhRDS = new FileHandle($file,"w");
+        &showUsage("Failed to create MAF output file \"$file\"") unless $fhRDS;
+    }
 }
 
 # get project(s) to be exported
@@ -293,6 +303,10 @@ elsif (defined($fastafile)) {
     $exportoptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
     $exportoptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
     $exportoptions{gap4name} = 1 if $gap4name;
+    if ($qualityclip) {
+        $exportoptions{lqpm} = 30;
+        $exportoptions{lqpm} = $clipthreshold if defined($clipthreshold);
+    }
 }
 elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
@@ -302,7 +316,7 @@ $exportoptions{'notacquirelock'} = 1 - $lock; # TO BE TESTED
 
 my $errorcount = 0;
 
-$ignorename =~ s/\W+/|/g; # replace any separator by '|'
+$ignorename =~ s/\W+/|/g if $ignorename; # replace any separator by '|'
 
 @projects = sort {$a->getProjectName() cmp $b->getProjectName()} @projects;
 
@@ -319,21 +333,47 @@ foreach my $project (@projects) {
 
     $logger->info("processing project $projectname with $numberofcontigs contigs");
 
-    my @emr;
-
     if ($preview) {
         $logger->warning("Project $projectname with $numberofcontigs "
                         ."contigs is to be exported");
         next;
     }
-    elsif (defined($caffile)) {
+
+    my @emr;
+
+    if ($METHOD) {
+
+      if (defined($caffile)) {
         @emr = $project->writeContigsToCaf($fhDNA,%exportoptions);
-    }
-    elsif (defined($fastafile)) {
+      }
+      elsif (defined($fastafile)) {
         @emr = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
-    }
-    elsif (defined($maffile)) {
+      }
+      elsif (defined($maffile)) {
         @emr = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
+      }
+# end METHOD 1
+    }
+    else {
+# to be tested
+      my $contigs = $project->fetchContigIDs(1-$lock) || [];
+
+      foreach my $contig (@$contigs) {
+    
+        my $err = 0;
+        if (defined($caffile)) {
+#            $err = $project->writeContigsToCaf($fhDNA,%exportoptions);
+        }
+        elsif (defined($fastafile)) {
+#            $err = $project->writeContigsToFasta($fhDNA,$fhQTY,%exportoptions);
+        }
+        elsif (defined($maffile)) {
+#            $err = $project->writeContigsToMaf($fhDNA,$fhQTY,$fhRDS,%exportoptions);
+        }
+        $emr[0]++ unless $err;
+        $emr[1]++ if $err;
+      }
+# end METHOD 0
     }
 
 # error reporting section
@@ -363,10 +403,13 @@ $fhRDS->close() if $fhRDS;
 
 $adb->disconnect();
 
-$logger->warning("There were no errors") unless $errorcount;
-$logger->warning("$errorcount Errors found") if $errorcount;
-
-$logger->warning("To export these projects, use '-confirm'") if $preview;
+if ($preview) {
+    $logger->warning("To export these projects, use '-confirm'");
+}
+else {
+    $logger->warning("There were no errors") unless $errorcount;
+    $logger->warning("$errorcount Errors found") if $errorcount;
+}
 
 exit;
 
