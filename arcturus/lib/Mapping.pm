@@ -578,8 +578,10 @@ sub multiply {
     my ($rs,$ts) = (0,0);
 # option to start the search at a different position
     my $nzs = $options{nonzerostart};
-    $rs = $nzs->{rstart} if ($nzs && $nzs->{rstart} && $nzs->{rstart} > 0);
-    $ts = $nzs->{tstart} if ($nzs && $nzs->{tstart} && $nzs->{tstart} > 0);
+    if ($nzs && ref($nzs) eq 'HASH') {
+        $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
+        $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
+    }
 
     while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
 
@@ -677,8 +679,10 @@ print STDOUT "no segment matching or overlap\n" if $options{debug};
 
 # adjust the non-zero start parameters if that option is active
 
-    $nzs->{rstart} = $rs if $nzs;
-    $nzs->{tstart} = $ts if $nzs;
+    if ($nzs && ref($nzs) eq 'HASH') {
+        $nzs->{rstart} = $rs;
+        $nzs->{tstart} = $ts;
+    }
 
 # cleanup and analyse the segments
 
@@ -762,12 +766,13 @@ sub writeToString {
     my $string = '';
     foreach my $segment (@$segments) {
         $segment->normaliseOnY(); # ensure rstart <= rfinish # ??
-#  interferes with normalization status ??
+#  interferes with normalization status ?? (USE OPTION ?)
         my @segment = $segment->getSegment();
         $string .= $text." @segment";
         if ($options{extended}) {
-            $string .= " ".($segment->getAlignment() || 'a:undef');
-            $string .= " ".($segment->getOffset()    || 'o:undef');
+            $string .= " a:".($segment->getAlignment() || 'undef');
+            $string .= " o:".($segment->getOffset()    || 'undef');
+            $string .= " l:". (abs($segment[1] - $segment[0])+1);
 	}
         $string .= "\n";
     }
