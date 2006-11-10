@@ -1392,7 +1392,6 @@ sub putMappingsForContig {
     my $success = 1;
     my $accumulated = 0;
     my $accumulatedQuery = $squery;
-#    my $lastMapping = $mappings->[@$mappings-1];
     foreach my $mapping (@$mappings) {
 # test existence of segments
         next unless $mapping->hasSegments();
@@ -1408,9 +1407,10 @@ sub putMappingsForContig {
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
 # dump the accumulated query if a number of inserts has been reached
                 if ($accumulated >= $block) {
-print STDOUT "Insert mapping block (segment loop) $accumulated  ($block)\n";
+# print STDOUT "Insert mapping block (segment loop) $accumulated  ($block)\n";
                     $sth = $dbh->prepare($accumulatedQuery); 
                     my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+                    $sth->finish();
                     $success = 0 unless $rc;
                     $accumulatedQuery = $squery;
                     $accumulated = 0;
@@ -1425,9 +1425,10 @@ print STDOUT "Insert mapping block (segment loop) $accumulated  ($block)\n";
     }
 # dump any remaining accumulated query after the last mapping has been processed
     if ($accumulated) {
-print STDOUT "Insert mapping block (mapping loop) $accumulated  ($block)\n";
+# print STDOUT "Insert mapping block (mapping loop) $accumulated  ($block)\n";
         $sth = $dbh->prepare($accumulatedQuery); 
         my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+        $sth->finish();
         $success = 0 unless $rc;
     }
 
