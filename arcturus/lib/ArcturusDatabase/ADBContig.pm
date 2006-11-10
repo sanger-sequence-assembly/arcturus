@@ -1392,7 +1392,7 @@ sub putMappingsForContig {
     my $success = 1;
     my $accumulated = 0;
     my $accumulatedQuery = $squery;
-    my $lastMapping = $mappings->[@$mappings-1];
+#    my $lastMapping = $mappings->[@$mappings-1];
     foreach my $mapping (@$mappings) {
 # test existence of segments
         next unless $mapping->hasSegments();
@@ -1406,23 +1406,31 @@ sub putMappingsForContig {
                 my $rstart = $segment->getYstart();
                 $accumulatedQuery .= "," if $accumulated++;
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
+# dump the accumulated query if a number of inserts has been reached
+                if ($accumulated >= $block) {
+print STDOUT "Insert mapping block (segment loop) $accumulated  ($block)\n";
+                    $sth = $dbh->prepare($accumulatedQuery); 
+                    my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+                    $success = 0 unless $rc;
+                    $accumulatedQuery = $squery;
+                    $accumulated = 0;
+		}
             }
         }
         else {
             print STDERR "Mapping ".$mapping->getMappingName().
-		" has no mapping_id\n";
+		" unexpectedly has no mapping_id\n";
             $success = 0;
         }
-# dump the accumulated query if a number of inserts has been reached
-        if ($accumulated >= $block || ($accumulated && $mapping eq $lastMapping)) {
-print STDOUT "Insert mapping block $accumulated \n";
-            $sth = $dbh->prepare($accumulatedQuery); 
-            my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
-            $success = 0 unless $rc;
-            $accumulatedQuery = $squery;
-            $accumulated = 0;
-        }
     }
+# dump any remaining accumulated query after the last mapping has been processed
+    if ($accumulated) {
+print STDOUT "Insert mapping block (mapping loop) $accumulated  ($block)\n";
+        $sth = $dbh->prepare($accumulatedQuery); 
+        my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+        $success = 0 unless $rc;
+    }
+
 
 # we now update the contig-to-contig mappings by adding the parent range
 # this is kept separate from the basic inserts because this is derived data
