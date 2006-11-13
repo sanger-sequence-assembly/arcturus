@@ -20,7 +20,7 @@
   <property name="javadoc.dir" value="${build.dir}/docs"/>
 
   <!-- Resources directory -->
-  <property name="resources.dir" value="resources" />
+  <property name="resources.dir" value="${src.dir}/resources" />
 
   <!-- Target version of Java -->
   <property name="build.target" value="1.4" />
@@ -48,9 +48,10 @@
 
   <target name="jar" depends="compile"
           description="Generates the JAR file.">
-    <jar jarfile="${build.lib}/${project.name}.jar">
+    <jar jarfile="${build.lib}/${project.name}.jar"
+         manifest="${src.dir}/MANIFEST.MF">
         <fileset dir="${build.classes}" />
-	<fileset dir="${resources.dir}" />
+	<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/*.props"/>
     </jar>
   </target>
 
