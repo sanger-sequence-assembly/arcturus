@@ -7,6 +7,8 @@ import javax.naming.directory.*;
 import javax.swing.ImageIcon;
 import java.awt.GraphicsEnvironment;
 
+import uk.ac.sanger.arcturus.gui.Minerva;
+
 public class PeopleManager {
 	protected static DirContext ctx = null;
 
@@ -17,18 +19,18 @@ public class PeopleManager {
 			"departmentnumber", "jpegphoto" };
 
 	static {
-		Properties sysprops = System.getProperties();
+		Properties minervaProps = Minerva.getInstance().getProperties();
 
-		Properties env = new Properties();
+		Properties props = new Properties();
 
-		env.put(Context.INITIAL_CONTEXT_FACTORY, sysprops
+		props.put(Context.INITIAL_CONTEXT_FACTORY, minervaProps
 				.get(Context.INITIAL_CONTEXT_FACTORY));
 
-		env.put(Context.PROVIDER_URL, sysprops
+		props.put(Context.PROVIDER_URL, minervaProps
 				.get("arcturus.naming.people.url"));
 
 		try {
-			ctx = new InitialDirContext(env);
+			ctx = new InitialDirContext(props);
 		} catch (NamingException ne) {
 			ne.printStackTrace();
 			ctx = null;
