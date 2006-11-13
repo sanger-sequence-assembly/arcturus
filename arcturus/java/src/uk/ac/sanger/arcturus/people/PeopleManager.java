@@ -19,7 +19,7 @@ public class PeopleManager {
 			"departmentnumber", "jpegphoto" };
 
 	static {
-		Properties minervaProps = Minerva.getInstance().getProperties();
+		Properties minervaProps = Minerva.getProperties();
 
 		Properties props = new Properties();
 

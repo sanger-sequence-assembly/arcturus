@@ -2,15 +2,12 @@ package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
+import uk.ac.sanger.arcturus.gui.Minerva;
 
 import java.util.*;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
-
-import java.util.logging.*;
-
-import javax.naming.Context;
 
 public class CalculateQualityClipping {
 	private final int DEFAULT_THRESH = 15;
@@ -37,23 +34,12 @@ public class CalculateQualityClipping {
 	public void execute(String[] args) {
 		int thresh = DEFAULT_THRESH;
 
-		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
-
 		lasttime = System.currentTimeMillis();
 
 		System.err.println("CalculateQualityClipping");
 		System.err.println("========================");
 		System.err.println();
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-
-		props.put(Context.PROVIDER_URL, env.get(Context.PROVIDER_URL));
-
+		
 		int mode = MODE_UPDATE_NULLS;
 
 		for (int i = 0; i < args.length; i++) {
@@ -85,6 +71,8 @@ public class CalculateQualityClipping {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
+			Properties props = Minerva.getProperties();
+			
 			ArcturusInstance ai = new ArcturusInstance(props, instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
