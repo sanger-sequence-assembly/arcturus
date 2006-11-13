@@ -4,10 +4,10 @@ import java.awt.event.*;
 import javax.swing.*;
 import java.util.*;
 import javax.naming.NamingException;
-import javax.naming.Context;
 import java.sql.SQLException;
 import java.awt.Color;
 import java.util.prefs.*;
+import java.io.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.*;
@@ -24,7 +24,7 @@ public class Minerva implements WindowListener {
 	private static Minerva instance = null;
 
 	protected Vector activeFrames = new Vector();
-	protected Properties ldapProps = new Properties();
+	protected Properties minervaProps = new Properties(System.getProperties());
 	protected HashMap databases = new HashMap();
 	protected HashMap instances = new HashMap();
 
@@ -38,11 +38,18 @@ public class Minerva implements WindowListener {
 	}
 
 	private Minerva() {
-		Properties env = System.getProperties();
-
-		ldapProps.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		ldapProps.put(Context.PROVIDER_URL, env.get(Context.PROVIDER_URL));
+		InputStream is = getClass().getResourceAsStream("/resources/minerva.props");
+		
+		if (is != null) {
+			try {
+				minervaProps.load(is);
+				is.close();
+			}
+			catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+		} else
+			System.err.println("Unable to open resource /resources/minerva.props as stream");
 	}
 
 	private ArcturusDatabase createArcturusDatabase(String instance,
@@ -50,14 +57,15 @@ public class Minerva implements WindowListener {
 		ArcturusInstance ai = (ArcturusInstance) instances.get(instance);
 
 		if (ai == null) {
-			ai = new ArcturusInstance(ldapProps, instance);
+			ai = new ArcturusInstance(minervaProps, instance);
 			instances.put(instance, ai);
 		}
 
 		if (ai != null) {
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
-			databases.put(organism, adb);
+			if (adb != null)
+				databases.put(instance + "/" + organism, adb);
 
 			return adb;
 		} else
@@ -66,14 +74,10 @@ public class Minerva implements WindowListener {
 
 	public ArcturusDatabase getArcturusDatabase(String instance, String organism)
 			throws NamingException, SQLException {
-		ArcturusDatabase adb = (ArcturusDatabase) databases.get(organism);
+		ArcturusDatabase adb = (ArcturusDatabase) databases.get(instance + "/" + organism);
 
-		if (adb == null) {
+		if (adb == null)
 			adb = createArcturusDatabase(instance, organism);
-
-			if (adb != null)
-				databases.put(organism, adb);
-		}
 
 		return adb;
 	}
@@ -172,7 +176,7 @@ public class Minerva implements WindowListener {
 							.get(instance);
 
 					if (ai == null) {
-						ai = new ArcturusInstance(ldapProps, instance);
+						ai = new ArcturusInstance(minervaProps, instance);
 						instances.put(instance, ai);
 					}
 
@@ -207,6 +211,10 @@ public class Minerva implements WindowListener {
 				return args[i + 1];
 
 		return null;
+	}
+	
+	public Properties getProperties() {
+		return minervaProps;
 	}
 
 	public static void main(String[] args) {
