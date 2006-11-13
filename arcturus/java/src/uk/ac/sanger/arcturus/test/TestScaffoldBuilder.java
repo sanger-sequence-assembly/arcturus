@@ -3,11 +3,11 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.scaffold.*;
 
 import java.util.*;
 import java.io.*;
-import javax.naming.Context;
 
 public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	private String instance = null;
@@ -30,16 +30,6 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		System.err.println("TestScaffoldBuilder");
 		System.err.println("===================");
 		System.err.println();
-
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -79,6 +69,8 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
+			Properties props = Minerva.getProperties();
+			
 			ArcturusInstance ai = new ArcturusInstance(props, instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
