@@ -3,3 +3,4 @@ java.naming.provider.url=ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,o
 java.util.logging.config.class=uk.ac.sanger.arcturus.logging.Config
 arcturus.naming.people.url=ldap://ldap.internal.sanger.ac.uk/ou=people,dc=sanger,dc=ac,dc=uk
 arcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus
+arcturus.default.instance=dev
