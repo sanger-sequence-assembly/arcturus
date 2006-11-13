@@ -50,53 +50,27 @@ public abstract class GenericDisplay extends JPanel implements Transformer,
 			}
 		});
 
-		Toolkit tk = Toolkit.getDefaultToolkit();
-
-		URL url = getClass().getResource("/icons/zoomin.png");
-
-		Image cursorImage = tk.getImage(url);
-
-		if (cursorImage != null)
-			csrZoomIn = tk.createCustomCursor(cursorImage, new Point(7, 7),
-					"zoom in");
-		else
-			System.err
-					.println("Unable to create cursor from image at /icons/zoomin.png");
-
-		url = getClass().getResource("/icons/zoomout.png");
-
-		cursorImage = tk.getImage(url);
-
-		if (cursorImage != null)
-			csrZoomOut = tk.createCustomCursor(cursorImage, new Point(7, 7),
-					"zoom out");
-		else
-			System.err
-					.println("Unable to create cursor from image at /icons/zoomout.png");
-
-		url = getClass().getResource("/icons/white_fleur.gif");
-
-		cursorImage = tk.getImage(url);
-
-		if (cursorImage != null)
-			csrDrag = tk.createCustomCursor(cursorImage, new Point(7, 7),
-					"drag");
-		else
-			System.err
-					.println("Unable to create cursor from image at /icons/white_fleur.gif");
-
-		url = getClass().getResource("/icons/help-cursor.gif");
-
-		cursorImage = tk.getImage(url);
-
-		if (cursorImage != null)
-			csrInfo = tk.createCustomCursor(cursorImage, new Point(1, 1),
-					"info");
-		else
-			System.err
-					.println("Unable to create cursor from image at /icons/help-cursor.gif");
+		csrZoomIn = findCursor("/resources/icons/zoomin.png", new Point(7, 7), "zoom in");
+		csrZoomOut = findCursor("/resources/icons/zoomout.png", new Point(7, 7), "zoom out");
+		csrDrag = findCursor("/resources/icons/white_fleur.gif", new Point(7, 7), "drag");
+		csrInfo = findCursor("/resources/icons/help-cursor.gif", new Point(1, 1), "info");
 
 		setDisplayMode(DisplayMode.INFO);
+	}
+	
+	private Cursor findCursor(String path, Point hotspot, String name) {
+		URL url = getClass().getResource(path);
+		
+		Toolkit tk = Toolkit.getDefaultToolkit();
+		
+		Image cursorImage = (url == null) ? null : tk.getImage(url);
+
+		if (cursorImage != null)
+			return tk.createCustomCursor(cursorImage, hotspot, name);
+		else {
+			System.err.println("Unable to create cursor from image at " + path);
+			return null;
+		}
 	}
 
 	public abstract DrawableFeature addFeature(Feature f, int dragMode);
