@@ -4,6 +4,7 @@ import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.*;
+import uk.ac.sanger.arcturus.gui.Minerva;
 
 import java.util.*;
 import java.util.zip.*;
@@ -11,8 +12,6 @@ import java.io.*;
 import java.sql.*;
 
 import java.util.logging.*;
-
-import javax.naming.Context;
 
 public class CalculateConsensus {
 	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
@@ -64,16 +63,6 @@ public class CalculateConsensus {
 		System.err.println("==================");
 		System.err.println();
 
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY,
-					env.get(Context.INITIAL_CONTEXT_FACTORY));
-		
-		props.put(Context.PROVIDER_URL,
-					env.get(Context.PROVIDER_URL));
-
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
 				instance = args[++i];
@@ -121,11 +110,13 @@ public class CalculateConsensus {
 			consensustable = "CONSENSUS";
 
 		if (algname == null)
-			algname = System.getProperty("arcturus.default.algorithm");
+			algname = Minerva.getProperty("arcturus.default.algorithm");
 
 		try {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
+
+			Properties props = Minerva.getProperties();
 
 			ArcturusInstance ai = new ArcturusInstance(props, instance);
 

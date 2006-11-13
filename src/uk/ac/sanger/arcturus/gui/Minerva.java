@@ -22,9 +22,24 @@ import uk.ac.sanger.arcturus.gui.organismtable.OrganismTableFrame;
 
 public class Minerva implements WindowListener {
 	private static Minerva instance = null;
+	protected static Properties minervaProps = new Properties(System.getProperties());
 
+	static {
+		InputStream is = Minerva.class.getResourceAsStream("/resources/minerva.props");
+		
+		if (is != null) {
+			try {
+				minervaProps.load(is);
+				is.close();
+			}
+			catch (IOException ioe) {
+				ioe.printStackTrace();
+			}
+		} else
+			System.err.println("Unable to open resource /resources/minerva.props as stream");
+	}
+	
 	protected Vector activeFrames = new Vector();
-	protected Properties minervaProps = new Properties(System.getProperties());
 	protected HashMap databases = new HashMap();
 	protected HashMap instances = new HashMap();
 
@@ -38,18 +53,6 @@ public class Minerva implements WindowListener {
 	}
 
 	private Minerva() {
-		InputStream is = getClass().getResourceAsStream("/resources/minerva.props");
-		
-		if (is != null) {
-			try {
-				minervaProps.load(is);
-				is.close();
-			}
-			catch (IOException ioe) {
-				ioe.printStackTrace();
-			}
-		} else
-			System.err.println("Unable to open resource /resources/minerva.props as stream");
 	}
 
 	private ArcturusDatabase createArcturusDatabase(String instance,
@@ -213,8 +216,12 @@ public class Minerva implements WindowListener {
 		return null;
 	}
 	
-	public Properties getProperties() {
+	public static Properties getProperties() {
 		return minervaProps;
+	}
+	
+	public static String getProperty(String key) {
+		return minervaProps.getProperty(key);
 	}
 
 	public static void main(String[] args) {
