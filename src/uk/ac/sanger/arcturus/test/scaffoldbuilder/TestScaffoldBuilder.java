@@ -4,6 +4,7 @@ import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.scaffold.*;
+import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 import java.util.*;
@@ -22,8 +23,6 @@ import java.awt.Dimension;
 import java.awt.Color;
 
 import java.awt.event.*;
-
-import javax.naming.Context;
 
 public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	private static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
@@ -46,16 +45,6 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 	public void execute(String args[]) {
 		logger.info("TestScaffoldBuilder");
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY,
-					env.get(Context.INITIAL_CONTEXT_FACTORY));
-		
-		props.put(Context.PROVIDER_URL, 
-					env.get(Context.PROVIDER_URL));
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -94,6 +83,8 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		try {
 			logger.info("Creating an ArcturusInstance for " + instance);
 
+			Properties props = Minerva.getProperties();
+			
 			ArcturusInstance ai = new ArcturusInstance(props, instance);
 
 			logger.info("Creating an ArcturusDatabase for " + organism);
@@ -116,7 +107,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 			Set bs = sb.createScaffold(seedcontigid, this);
 
-			if (bs != null) {
+			if (bs != null && bs.size() > 0) {
 				logger.info("Bridge Set:" + bs);
 
 				Map layout = createLayout(bs);
