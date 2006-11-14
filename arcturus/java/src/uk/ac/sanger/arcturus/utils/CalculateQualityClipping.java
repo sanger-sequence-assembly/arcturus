@@ -2,9 +2,7 @@ package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
-import uk.ac.sanger.arcturus.gui.Minerva;
 
-import java.util.*;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
@@ -70,10 +68,8 @@ public class CalculateQualityClipping {
 		try {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
-
-			Properties props = Minerva.getProperties();
 			
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();
