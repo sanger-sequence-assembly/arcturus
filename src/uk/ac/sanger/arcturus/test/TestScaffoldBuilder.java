@@ -3,7 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.gui.Minerva;
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.scaffold.*;
 
 import java.util.*;
@@ -69,7 +69,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
-			Properties props = Minerva.getProperties();
+			Properties props = Arcturus.getProperties();
 			
 			ArcturusInstance ai = new ArcturusInstance(props, instance);
 

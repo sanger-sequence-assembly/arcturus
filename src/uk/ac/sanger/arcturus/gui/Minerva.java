@@ -7,9 +7,9 @@ import javax.naming.NamingException;
 import java.sql.SQLException;
 import java.awt.Color;
 import java.util.prefs.*;
-import java.io.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
@@ -22,26 +22,12 @@ import uk.ac.sanger.arcturus.gui.organismtable.OrganismTableFrame;
 
 public class Minerva implements WindowListener {
 	private static Minerva instance = null;
-	protected static Properties minervaProps = new Properties(System.getProperties());
-
-	static {
-		InputStream is = Minerva.class.getResourceAsStream("/resources/minerva.props");
-		
-		if (is != null) {
-			try {
-				minervaProps.load(is);
-				is.close();
-			}
-			catch (IOException ioe) {
-				ioe.printStackTrace();
-			}
-		} else
-			System.err.println("Unable to open resource /resources/minerva.props as stream");
-	}
 	
 	protected Vector activeFrames = new Vector();
 	protected HashMap databases = new HashMap();
 	protected HashMap instances = new HashMap();
+	
+	protected Properties arcturusProps = Arcturus.getProperties(); 
 
 	protected Preferences appPrefs = Preferences.userNodeForPackage(getClass());
 
@@ -60,7 +46,7 @@ public class Minerva implements WindowListener {
 		ArcturusInstance ai = (ArcturusInstance) instances.get(instance);
 
 		if (ai == null) {
-			ai = new ArcturusInstance(minervaProps, instance);
+			ai = Arcturus.getArcturusInstance(instance);
 			instances.put(instance, ai);
 		}
 
@@ -173,7 +159,7 @@ public class Minerva implements WindowListener {
 		String organism = getStringParameter(args, "-organism");
 
 		if (instance == null)
-			instance = Minerva.getProperty("arcturus.default.instance");
+			instance = Arcturus.getProperty("arcturus.default.instance");
 		
 		if (instance != null) {
 			if (organism == null) {
@@ -182,7 +168,7 @@ public class Minerva implements WindowListener {
 							.get(instance);
 
 					if (ai == null) {
-						ai = new ArcturusInstance(minervaProps, instance);
+						ai = Arcturus.getArcturusInstance(instance);
 						instances.put(instance, ai);
 					}
 
@@ -217,14 +203,6 @@ public class Minerva implements WindowListener {
 				return args[i + 1];
 
 		return null;
-	}
-	
-	public static Properties getProperties() {
-		return minervaProps;
-	}
-	
-	public static String getProperty(String key) {
-		return minervaProps.getProperty(key);
 	}
 
 	public static void main(String[] args) {

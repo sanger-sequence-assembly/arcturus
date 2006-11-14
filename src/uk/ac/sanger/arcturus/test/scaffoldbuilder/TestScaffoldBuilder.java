@@ -4,7 +4,7 @@ import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.scaffold.*;
-import uk.ac.sanger.arcturus.gui.Minerva;
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 import java.util.*;
@@ -82,10 +82,8 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 		try {
 			logger.info("Creating an ArcturusInstance for " + instance);
-
-			Properties props = Minerva.getProperties();
 			
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			logger.info("Creating an ArcturusDatabase for " + organism);
 
