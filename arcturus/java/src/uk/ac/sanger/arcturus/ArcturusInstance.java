@@ -21,7 +21,7 @@ public class ArcturusInstance implements Iterator {
 
 	/**
 	 * Constructs an Arcturus instance using LDAP parameters specified from the
-	 * system properties.
+	 * Arcturus global properties.
 	 * 
 	 * @param name
 	 *            the name of the LDAP sub-directory, relative to the root
@@ -40,7 +40,7 @@ public class ArcturusInstance implements Iterator {
 	 * @param props
 	 *            the Properties object which contains the LDAP parameters
 	 *            java.naming.provider.url and java.naming.factory.initial. If
-	 *            this is null, then the system properties will be used instead.
+	 *            this is null, then the Arctrus global properties will be used instead.
 	 * 
 	 * @param name
 	 *            the name of the LDAP sub-directory, relative to the root
@@ -50,7 +50,7 @@ public class ArcturusInstance implements Iterator {
 	protected ArcturusInstance(Properties props, String name)
 			throws NamingException {
 		if (props == null)
-			props = System.getProperties();
+			props = Arcturus.getProperties();
 
 		DirContext rootcontext = new InitialDirContext(props);
 
@@ -244,8 +244,7 @@ public class ArcturusInstance implements Iterator {
 				String description = getDescription(name);
 
 				if (description != null)
-					zoo
-							.add(new Organism(name, description,
+					zoo.add(new Organism(name, description,
 									(DataSource) object));
 			}
 		}
