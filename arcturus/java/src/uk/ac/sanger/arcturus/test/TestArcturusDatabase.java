@@ -18,23 +18,13 @@ public class TestArcturusDatabase {
 		System.out.println("====================");
 		System.out.println();
 
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
 		String separator = "                    --------------------                    ";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
 
 		try {
 			System.out.println("TEST 0: Creating an ArcturusInstance");
 			System.out.println();
 
-			ArcturusInstance ai = new ArcturusInstance(props, "dev");
+			ArcturusInstance ai = Arcturus.getArcturusInstance("dev");
 
 			System.out.println("Created " + ai);
 
@@ -66,9 +56,11 @@ public class TestArcturusDatabase {
 					.println("TEST 3: Creating and binding a new ArcturusDatabase");
 			System.out.println();
 
+			Properties props = Arcturus.getProperties();
+			
 			setLDAPCredentials(props);
 
-			ai = new ArcturusInstance(props, "test");
+			ai = Arcturus.getArcturusInstance("test");
 
 			System.out.println("Created " + ai);
 

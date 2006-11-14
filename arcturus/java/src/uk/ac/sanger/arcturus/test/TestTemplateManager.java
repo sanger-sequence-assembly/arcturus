@@ -4,24 +4,11 @@ import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
 
-import java.util.*;
-import javax.naming.Context;
-
 public class TestTemplateManager {
 	public static void main(String args[]) {
 		System.out.println("TestTemplateManager");
 		System.out.println("===================");
 		System.out.println();
-
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
 
 		String instance = null;
 		String organism = null;
@@ -52,7 +39,7 @@ public class TestTemplateManager {
 			System.out.println("Creating an ArcturusInstance for " + instance);
 			System.out.println();
 
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.out.println("Creating an ArcturusDatabase for " + organism);
 			System.out.println();

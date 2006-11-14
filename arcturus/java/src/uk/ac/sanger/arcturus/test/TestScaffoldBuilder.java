@@ -68,10 +68,8 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		try {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
-
-			Properties props = Arcturus.getProperties();
 			
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();

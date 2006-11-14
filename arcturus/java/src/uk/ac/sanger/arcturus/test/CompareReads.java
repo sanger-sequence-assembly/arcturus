@@ -1,11 +1,9 @@
 package uk.ac.sanger.arcturus.test;
 
-import java.util.Properties;
-import javax.naming.Context;
-
 import java.sql.*;
 import java.io.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.*;
@@ -65,21 +63,13 @@ public class CompareReads {
 			System.exit(1);
 		}
 
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, env.get(Context.PROVIDER_URL));
-
 		System.err.println("Cacheing is " + (cacheing ? "ON" : "OFF"));
 
 		try {
 			System.err.println("Creating an ArcturusInstance for " + instance1);
 			System.err.println();
 
-			ArcturusInstance ai1 = new ArcturusInstance(props, instance1);
+			ArcturusInstance ai1 = Arcturus.getArcturusInstance(instance1);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism1);
 			System.err.println();
@@ -98,7 +88,7 @@ public class CompareReads {
 						+ instance2);
 				System.err.println();
 
-				ai2 = new ArcturusInstance(props, instance2);
+				ai2 = Arcturus.getArcturusInstance(instance2);
 			}
 
 			System.err.println("Creating an ArcturusDatabase for " + organism2);
