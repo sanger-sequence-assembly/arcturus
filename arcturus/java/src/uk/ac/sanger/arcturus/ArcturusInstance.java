@@ -29,7 +29,7 @@ public class ArcturusInstance implements Iterator {
 	 *            property.
 	 */
 
-	public ArcturusInstance(String name) throws NamingException {
+	protected ArcturusInstance(String name) throws NamingException {
 		this(null, name);
 	}
 
@@ -47,7 +47,7 @@ public class ArcturusInstance implements Iterator {
 	 *            context specified via the java.naming.provider.url property.
 	 */
 
-	public ArcturusInstance(Properties props, String name)
+	protected ArcturusInstance(Properties props, String name)
 			throws NamingException {
 		if (props == null)
 			props = System.getProperties();
