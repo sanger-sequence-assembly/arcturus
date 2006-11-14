@@ -32,6 +32,9 @@ public class Arcturus {
 	}
 
 	public static ArcturusInstance getArcturusInstance(String instance) throws NamingException {
+		if (instance == null)
+			instance = arcturusProps.getProperty("arcturus.default.instance");
+		
 		return new ArcturusInstance(arcturusProps, instance);
 	}
 }
