@@ -8,8 +8,6 @@ import uk.ac.sanger.arcturus.utils.*;
 import java.util.*;
 import java.io.*;
 
-import javax.naming.Context;
-
 public class TestContigManager4 {
 	private static long lasttime;
 	private static Runtime runtime = Runtime.getRuntime();
@@ -22,16 +20,6 @@ public class TestContigManager4 {
 		System.err.println("TestContigManager4");
 		System.err.println("==================");
 		System.err.println();
-
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
 
 		String instance = null;
 		String organism = null;
@@ -104,7 +92,7 @@ public class TestContigManager4 {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();

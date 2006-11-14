@@ -9,8 +9,6 @@ import java.util.logging.*;
 import java.util.*;
 import java.io.*;
 
-import javax.naming.Context;
-
 public class TestContigManager {
 	private static long lasttime;
 
@@ -53,16 +51,6 @@ public class TestContigManager {
 		System.out.println("=================");
 		System.out.println();
 
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
-
 		String instance = null;
 		String organism = null;
 		String contiglist = null;
@@ -91,7 +79,7 @@ public class TestContigManager {
 			System.out.println("Creating an ArcturusInstance for " + instance);
 			System.out.println();
 
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.out.println("Creating an ArcturusDatabase for " + organism);
 			System.out.println();

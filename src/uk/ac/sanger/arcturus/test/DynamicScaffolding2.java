@@ -10,8 +10,6 @@ import java.io.*;
 import java.sql.*;
 import java.util.zip.DataFormatException;
 
-import javax.naming.Context;
-
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -51,16 +49,6 @@ public class DynamicScaffolding2 {
 		System.err.println("DynamicScaffolding2");
 		System.err.println("===================");
 		System.err.println();
-
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -108,7 +96,7 @@ public class DynamicScaffolding2 {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();

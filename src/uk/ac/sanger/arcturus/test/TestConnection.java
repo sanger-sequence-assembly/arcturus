@@ -5,7 +5,6 @@ import java.sql.*;
 import java.awt.*;
 import java.util.*;
 import java.awt.event.*;
-import javax.naming.Context;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
@@ -35,19 +34,9 @@ public class TestConnection implements ActionListener {
 		String organism = args[1];
 		String columns = args[2];
 		String tablename = args[3];
-		
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY,
-					env.get(Context.INITIAL_CONTEXT_FACTORY));
-		
-		props.put(Context.PROVIDER_URL,
-					env.get(Context.PROVIDER_URL));
 
 		try {
-			ArcturusInstance ai = new ArcturusInstance(props, instance);
+			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();

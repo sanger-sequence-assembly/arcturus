@@ -5,7 +5,6 @@ import uk.ac.sanger.arcturus.database.*;
 
 import javax.naming.*;
 import java.sql.*;
-import java.util.*;
 import java.util.zip.*;
 
 public class TestDecompress {
@@ -14,18 +13,8 @@ public class TestDecompress {
 		System.out.println("==============");
 		System.out.println();
 
-		String ldapURL = "ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk";
-
-		Properties props = new Properties();
-
-		Properties env = System.getProperties();
-
-		props.put(Context.INITIAL_CONTEXT_FACTORY, env
-				.get(Context.INITIAL_CONTEXT_FACTORY));
-		props.put(Context.PROVIDER_URL, ldapURL);
-
 		try {
-			ArcturusInstance ai = new ArcturusInstance(props, "dev");
+			ArcturusInstance ai = Arcturus.getArcturusInstance("dev");
 
 			ArcturusDatabase adb = ai.findArcturusDatabase("EIMER");
 
