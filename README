@@ -14,10 +14,11 @@ applications and test suites.
 There is an Ant build file named build.xml which puts compiled classes
 in build/classes and the main Arcturus JAR file in build/lib.
 
+REQUIRED JAR FILES
+
 Shared JAR files are kept in /nfs/pathsoft/minerva/jars. When you run
 Ant, remember to include this directory via the -lib option, as it
-contains things like the JDBC drivers for MySQL and Oracle and Sun's
-reference implementation of the JNDI LDAP provider.
+contains things like the JDBC driver for MySQL.
 
 You may find it convenient to create a soft link with a command such as
 
@@ -26,6 +27,14 @@ You may find it convenient to create a soft link with a command such as
 which allows you to invoke Ant with a command such as
 
   ant -lib lib <target>
+  
+Arcturus currently requires the following external JAR files:
+
+  * The MySQL JDBC library.
+  
+  * The Oracle JDBC library.
+  
+  * The Java Look-and-Feel Graphics Repository library.
 
 A NOTE ON THE WRAPPER SCRIPTS
 
