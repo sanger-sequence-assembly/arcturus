@@ -46,7 +46,7 @@ public class Minerva implements WindowListener {
 		ArcturusInstance ai = (ArcturusInstance) instances.get(instance);
 
 		if (ai == null) {
-			ai = Arcturus.getArcturusInstance(instance);
+			ai = ArcturusInstance.getInstance(instance);
 			instances.put(instance, ai);
 		}
 
@@ -168,7 +168,7 @@ public class Minerva implements WindowListener {
 							.get(instance);
 
 					if (ai == null) {
-						ai = Arcturus.getArcturusInstance(instance);
+						ai = ArcturusInstance.getInstance(instance);
 						instances.put(instance, ai);
 					}
 

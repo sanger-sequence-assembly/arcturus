@@ -24,7 +24,7 @@ public class TestArcturusDatabase {
 			System.out.println("TEST 0: Creating an ArcturusInstance");
 			System.out.println();
 
-			ArcturusInstance ai = Arcturus.getArcturusInstance("dev");
+			ArcturusInstance ai = ArcturusInstance.getInstance("dev");
 
 			System.out.println("Created " + ai);
 
@@ -60,7 +60,7 @@ public class TestArcturusDatabase {
 			
 			setLDAPCredentials(props);
 
-			ai = Arcturus.getArcturusInstance("test");
+			ai = ArcturusInstance.getInstance("test");
 
 			System.out.println("Created " + ai);
 

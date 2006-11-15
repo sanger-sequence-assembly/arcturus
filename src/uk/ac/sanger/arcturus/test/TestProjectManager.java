@@ -64,7 +64,7 @@ public class TestProjectManager {
 			System.out.println("Creating an ArcturusInstance for " + instance);
 			System.out.println();
 
-			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
+			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 			System.out.println("Creating an ArcturusDatabase for " + organism);
 			System.out.println();

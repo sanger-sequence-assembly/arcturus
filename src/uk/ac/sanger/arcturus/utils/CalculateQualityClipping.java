@@ -69,7 +69,7 @@ public class CalculateQualityClipping {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 			
-			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
+			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();
