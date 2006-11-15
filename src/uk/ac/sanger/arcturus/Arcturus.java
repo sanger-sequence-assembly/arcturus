@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
-import javax.naming.NamingException;
 
 public class Arcturus {
 	protected static Properties arcturusProps = new Properties(System.getProperties());
@@ -29,12 +28,5 @@ public class Arcturus {
 	
 	public static String getProperty(String key) {
 		return arcturusProps.getProperty(key);
-	}
-
-	public static ArcturusInstance getArcturusInstance(String instance) throws NamingException {
-		if (instance == null)
-			instance = arcturusProps.getProperty("arcturus.default.instance");
-		
-		return new ArcturusInstance(arcturusProps, instance);
 	}
 }
