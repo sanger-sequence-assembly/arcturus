@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.test;
 import java.sql.*;
 import java.io.*;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.*;

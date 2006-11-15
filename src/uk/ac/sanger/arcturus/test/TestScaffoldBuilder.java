@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.scaffold.*;
 
 import java.util.*;
