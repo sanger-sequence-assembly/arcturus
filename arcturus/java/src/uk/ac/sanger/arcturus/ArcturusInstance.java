@@ -61,6 +61,22 @@ public class ArcturusInstance implements Iterator {
 	}
 
 	/**
+	 * Returns an Arcturus instance using LDAP parameters specified from the
+	 * Arcturus global properties.
+	 * 
+	 * @param name
+	 *            the name of the LDAP sub-directory, relative to the root
+	 *            context specified via the java.naming.provider.url system
+	 *            property.
+	 * 
+	 * @return a new ArcturusDatabaseArcturusInstance object.
+	 */
+
+        public static ArcturusInstance getInstance(String name) throws NamingException {
+	    return Arcturus.getArcturusInstance(name);
+        }
+
+	/**
 	 * Returns the name which was used to create this object.
 	 * 
 	 * @return the name which was used to create this object.
