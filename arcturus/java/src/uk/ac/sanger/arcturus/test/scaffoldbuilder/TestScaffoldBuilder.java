@@ -83,7 +83,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		try {
 			logger.info("Creating an ArcturusInstance for " + instance);
 			
-			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
+			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 			logger.info("Creating an ArcturusDatabase for " + organism);
 

@@ -69,7 +69,7 @@ public class CompareReads {
 			System.err.println("Creating an ArcturusInstance for " + instance1);
 			System.err.println();
 
-			ArcturusInstance ai1 = Arcturus.getArcturusInstance(instance1);
+			ArcturusInstance ai1 = ArcturusInstance.getInstance(instance1);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism1);
 			System.err.println();
@@ -88,7 +88,7 @@ public class CompareReads {
 						+ instance2);
 				System.err.println();
 
-				ai2 = Arcturus.getArcturusInstance(instance2);
+				ai2 = ArcturusInstance.getInstance(instance2);
 			}
 
 			System.err.println("Creating an ArcturusDatabase for " + organism2);

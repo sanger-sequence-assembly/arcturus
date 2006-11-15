@@ -36,7 +36,7 @@ public class TestConnection implements ActionListener {
 		String tablename = args[3];
 
 		try {
-			ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
+			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();

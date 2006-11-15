@@ -14,7 +14,7 @@ public class TestDecompress {
 		System.out.println();
 
 		try {
-			ArcturusInstance ai = Arcturus.getArcturusInstance("dev");
+			ArcturusInstance ai = ArcturusInstance.getInstance("dev");
 
 			ArcturusDatabase adb = ai.findArcturusDatabase("EIMER");
 

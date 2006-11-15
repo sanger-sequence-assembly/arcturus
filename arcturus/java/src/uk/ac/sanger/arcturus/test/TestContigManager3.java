@@ -67,7 +67,7 @@ public class TestContigManager3 {
 						+ instance);
 				System.err.println();
 
-				ArcturusInstance ai = Arcturus.getArcturusInstance(instance);
+				ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 				System.err.println("Creating an ArcturusDatabase for "
 						+ organism);
