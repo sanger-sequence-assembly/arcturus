@@ -185,4 +185,13 @@ public class Contig extends Core {
 		} else
 			return false;
 	}
+	
+	public String toString() {
+		return "Contig[ID=" + ID +
+		", name=" + name + 
+		", length=" + length +
+		", reads=" + nreads +
+		", created=" + created +
+		"]";
+	}
 }
