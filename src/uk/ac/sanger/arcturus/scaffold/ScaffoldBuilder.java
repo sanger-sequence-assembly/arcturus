@@ -124,7 +124,7 @@ public class ScaffoldBuilder {
 			return null;
 		}
 
-		Vector contigset = new Vector();
+		SortedSet contigset = new TreeSet(new ContigLengthComparator());
 
 		if (listener != null)
 			listener.scaffoldUpdate(new ScaffoldEvent(this,
@@ -149,7 +149,7 @@ public class ScaffoldBuilder {
 		return subgraph;
 	}
 
-	protected BridgeSet processContigSet(Vector contigset,
+	public BridgeSet processContigSet(SortedSet contigset,
 			ScaffoldBuilderListener listener) throws SQLException,
 			DataFormatException {
 		BridgeSet bridgeset = new BridgeSet();
@@ -161,10 +161,13 @@ public class ScaffoldBuilder {
 				listener.scaffoldUpdate(new ScaffoldEvent(this,
 						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size",
 						contigset.size()));
-
-			Contig contig = (Contig) contigset.elementAt(0);
-			contigset.removeElementAt(0);
-
+			Contig contig = null;
+			
+			synchronized (contigset) {
+				contig = (Contig) contigset.first();
+				contigset.remove(contig);
+			}
+			
 			if (processed.contains(contig))
 				continue;
 
@@ -305,14 +308,22 @@ public class ScaffoldBuilder {
 				Contig link_contig = (Contig) iterator.next();
 
 				for (int endcode = 0; endcode < 4; endcode++)
-					if (bridgeset
-							.getTemplateCount(contig, link_contig, endcode) >= minbridges
+					if (bridgeset.getTemplateCount(contig, link_contig, endcode) >= minbridges
 							&& !processed.contains(link_contig))
 						contigset.add(link_contig);
 			}
 		}
 
 		return bridgeset;
+	}
+
+	class ContigLengthComparator implements Comparator {
+		public int compare(Object o1, Object o2) {
+			Contig c1 = (Contig) o1;
+			Contig c2 = (Contig) o2;
+
+			return c2.getLength() - c1.getLength();
+		}
 	}
 
 }
