@@ -15,7 +15,7 @@ public class ScaffoldBuilder {
 	protected PreparedStatement pstmtTemplate;
 	protected PreparedStatement pstmtLigation;
 	protected PreparedStatement pstmtLinkReads;
-	protected PreparedStatement pstmtMappings;
+	protected PreparedStatement pstmtMapping;
 
 	protected int minlen = 0;
 	protected int puclimit = 8000;
@@ -95,9 +95,11 @@ public class ScaffoldBuilder {
 
 		pstmtLinkReads = conn.prepareStatement(query);
 
-		query = "select contig_id,cstart,cfinish,direction from MAPPING where seq_id = ?";
+		query = "select MAPPING.contig_id,MAPPING.cstart,MAPPING.cfinish,MAPPING.direction"
+				+ " from MAPPING left join C2CMAPPING on MAPPING.contig_id = C2CMAPPING.parent_id"
+				+ " where seq_id = ? and C2CMAPPING.parent_id is null";
 
-		pstmtMappings = conn.prepareStatement(query);
+		pstmtMapping = conn.prepareStatement(query);
 	}
 
 	protected boolean isCurrentContig(int contigid) throws SQLException {
@@ -157,8 +159,9 @@ public class ScaffoldBuilder {
 		while (!contigset.isEmpty()) {
 			if (listener != null)
 				listener.scaffoldUpdate(new ScaffoldEvent(this,
-						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size", contigset.size()));
-			
+						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size",
+						contigset.size()));
+
 			Contig contig = (Contig) contigset.elementAt(0);
 			contigset.removeElementAt(0);
 
@@ -198,7 +201,7 @@ public class ScaffoldBuilder {
 
 				while (rs.next()) {
 					int readid = rs.getInt(1);
-					//int seqid = rs.getInt(2);
+					// int seqid = rs.getInt(2);
 					int cstart = rs.getInt(3);
 					int cfinish = rs.getInt(4);
 					String direction = rs.getString(5);
@@ -248,11 +251,11 @@ public class ScaffoldBuilder {
 						int link_readid = rs2.getInt(1);
 						int link_seqid = rs2.getInt(2);
 
-						pstmtMappings.setInt(1, link_seqid);
+						pstmtMapping.setInt(1, link_seqid);
 
-						ResultSet rs3 = pstmtMappings.executeQuery();
+						ResultSet rs3 = pstmtMapping.executeQuery();
 
-						while (rs3.next()) {
+						if (rs3.next()) {
 							int link_contigid = rs3.getInt(1);
 							int link_cstart = rs3.getInt(2);
 							int link_cfinish = rs3.getInt(3);
@@ -262,31 +265,29 @@ public class ScaffoldBuilder {
 									link_readid, link_cstart, link_cfinish,
 									link_direction.equalsIgnoreCase("Forward"));
 
-							if (isCurrentContig(link_contigid)) {
-								Contig link_contig = adb.getContigByID(
-										link_contigid, flags);
+							Contig link_contig = adb.getContigByID(
+									link_contigid, flags);
 
-								int link_contiglength = link_contig.getLength();
+							int link_contiglength = link_contig.getLength();
 
-								boolean link_forward = link_direction
-										.equalsIgnoreCase("Forward");
+							boolean link_forward = link_direction
+									.equalsIgnoreCase("Forward");
 
-								int gapsize = link_forward ? overhang
-										- (link_contiglength - link_cstart)
-										: overhang - link_cfinish;
+							int gapsize = link_forward ? overhang
+									- (link_contiglength - link_cstart)
+									: overhang - link_cfinish;
 
-								int myendcode = endcode;
+							int myendcode = endcode;
 
-								if (link_forward)
-									myendcode++;
+							if (link_forward)
+								myendcode++;
 
-								if (contig != link_contig && gapsize > 0) {
-									bridgeset.addBridge(contig, link_contig,
-											myendcode, template, mappinga,
-											link_mapping, new GapSize(gapsize));
+							if (contig != link_contig && gapsize > 0) {
+								bridgeset.addBridge(contig, link_contig,
+										myendcode, template, mappinga,
+										link_mapping, new GapSize(gapsize));
 
-									linkedContigs.add(link_contig);
-								}
+								linkedContigs.add(link_contig);
 							}
 						}
 
