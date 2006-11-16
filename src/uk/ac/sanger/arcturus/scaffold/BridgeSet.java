@@ -128,6 +128,6 @@ public class BridgeSet {
 			contigsToProcess.addAll(newContigs);
 		}
 
-		return subgraph;
+		return subgraph.isEmpty() ? null : subgraph;
 	}
 }
