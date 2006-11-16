@@ -155,6 +155,10 @@ public class ScaffoldBuilder {
 		Set processed = new HashSet();
 
 		while (!contigset.isEmpty()) {
+			if (listener != null)
+				listener.scaffoldUpdate(new ScaffoldEvent(this,
+						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size", contigset.size()));
+			
 			Contig contig = (Contig) contigset.elementAt(0);
 			contigset.removeElementAt(0);
 
