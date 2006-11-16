@@ -602,7 +602,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 	public void scaffoldUpdate(ScaffoldEvent event) {
 		logger.info("ScaffoldEvent[mode=" + event.getMode() + ", description="
-				+ event.getDescription() + "]");
+				+ event.getDescription() +
+				((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value=" + event.getIntegerValue() : "")
+				+ "]");
 	}
 
 	protected void printUsage(PrintStream ps) {
