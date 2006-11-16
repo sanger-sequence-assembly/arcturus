@@ -17,6 +17,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	private int minlen = -1;
 	private int puclimit = -1;
 	private int minbridges = 2;
+	private String projectname = null;
 
 	protected ArcturusDatabase adb = null;
 
@@ -49,6 +50,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			if (args[i].equalsIgnoreCase("-contig"))
 				seedcontigid = Integer.parseInt(args[++i]);
 
+			if (args[i].equalsIgnoreCase("-project"))
+				projectname = args[++i];
+
 			if (args[i].equalsIgnoreCase("-debug")) {
 			}
 
@@ -59,7 +63,8 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			}
 		}
 
-		if (instance == null || organism == null || seedcontigid <= 0) {
+		if (instance == null || organism == null
+				|| (seedcontigid <= 0 && projectname == null)) {
 			printUsage(System.err);
 			System.exit(1);
 		}
@@ -67,7 +72,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		try {
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
-			
+
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
 			System.err.println("Creating an ArcturusDatabase for " + organism);
@@ -89,26 +94,82 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			if (minbridges > 0)
 				sb.setMinimumBridges(minbridges);
 
-			Set bs = sb.createScaffold(seedcontigid, this);
+			if (projectname != null) {
+				Project project = adb.getProjectByName(null, projectname);
+				
+				if (project != null) {
+					Set cs = adb.getContigsByProject(project.getID(), ArcturusDatabase.CONTIG_BASIC_DATA);
+					
+					SortedSet contigset = new TreeSet(new ContigLengthComparator());
+					
+					contigset.addAll(cs);
+					
+					SortedSet savedset = new TreeSet(contigset);
+					
+					System.out.println("INITIAL CONTIG SET:");
+					for (Iterator iterator = contigset.iterator(); iterator.hasNext();)
+						System.out.println(iterator.next());
+					System.out.println();
+					
+					BridgeSet bs = sb.processContigSet(contigset, this);
+					
+					bs.dump(System.out, 2);
+					
+					Set subgraphs = new HashSet();
+					
+					contigset = savedset;
+					
+					System.out.println();
+					System.out.println("SUB-GRAPHS:");
+					
+					for (Iterator iterator = contigset.iterator(); iterator.hasNext();) {
+						Contig contig = (Contig) iterator.next();
+						
+						Set subgraph = bs.getSubgraph(contig, 2);
 
-			if (bs != null) {
-				System.out.println("Bridge Set:" + bs);
-
-				Map layout = createLayout(bs);
-
-				ContigBox[] contigBoxes = (ContigBox[]) layout.values()
-						.toArray(new ContigBox[0]);
-
-				Arrays.sort(contigBoxes, new ContigBoxComparator());
-
-				System.out.println("\n\nSCAFFOLD:\n\n");
-
-				for (int i = 0; i < contigBoxes.length; i++)
-					System.out.println("" + contigBoxes[i]);
-
+						System.out.println();								
+					
+						if (subgraph == null || subgraph.isEmpty()) {
+							System.out.println("Contig " + contig.getID() +
+									" is not in a scaffold");					
+						} else {
+							if (subgraphs.contains(subgraph)) {
+								System.out.println("Contig " + contig.getID() +
+										" is in a previously-seen scaffold");
+							} else {
+								System.out.println("Scaffold for Contig " + contig.getID() + ":");
+								
+								for (Iterator iterator2 = subgraph.iterator(); iterator2.hasNext();)
+									System.out.println(iterator2.next());
+								
+								subgraphs.add(subgraph);
+							}
+						}
+					}
+				} else
+					System.err.println("Could not find a project named " + projectname);
 			} else {
-				System.err.println("Seed contig " + seedcontigid
-						+ " cannot be scaffolded. ");
+				Set bs = sb.createScaffold(seedcontigid, this);
+
+				if (bs != null) {
+					System.out.println("Bridge Set:" + bs);
+
+					Map layout = createLayout(bs);
+
+					ContigBox[] contigBoxes = (ContigBox[]) layout.values()
+							.toArray(new ContigBox[0]);
+
+					Arrays.sort(contigBoxes, new ContigBoxComparator());
+
+					System.out.println("\n\nSCAFFOLD:\n\n");
+
+					for (int i = 0; i < contigBoxes.length; i++)
+						System.out.println("" + contigBoxes[i]);
+
+				} else {
+					System.err.println("Seed contig " + seedcontigid
+							+ " cannot be scaffolded. ");
+				}
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -420,16 +481,30 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		}
 	}
 
+	class ContigLengthComparator implements Comparator {
+		public int compare(Object o1, Object o2) {
+			Contig c1 = (Contig) o1;
+			Contig c2 = (Contig) o2;
+
+			return c2.getLength() - c1.getLength();
+		}
+	}
+
 	public void scaffoldUpdate(ScaffoldEvent event) {
-		System.err.println("ScaffoldEvent[mode=" + event.getMode()
-				+ ", description=" + event.getDescription() + "]");
+		System.err.println("ScaffoldEvent[mode=" + event.getMode() + ", description="
+				+ event.getDescription() +
+				((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value=" + event.getIntegerValue() : "")
+				+ "]");
 	}
 
 	protected void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
-		ps.println("\t-contig\t\tContig ID");
+		ps.println();
+		ps.println("MANDATORY EXCLUSIVE PARAMETERS:");
+		ps.println("\t-contig\t\tSeed contig ID");
+		ps.println("\t-project\t\tProject name for initial contig set");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
 		ps.println("\t-minlen\t\tMinimum contig length");
