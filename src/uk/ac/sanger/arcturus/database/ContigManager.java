@@ -35,6 +35,9 @@ public class ContigManager extends AbstractManager {
 
 	protected PreparedStatement pstmtCountContigsByProject = null;
 	protected PreparedStatement pstmtContigsByProject = null;
+	
+	protected PreparedStatement pstmtCountCurrentContigs = null;
+	protected PreparedStatement pstmtCurrentContigs = null;
 
 	protected ManagerEvent event = null;
 
@@ -164,6 +167,20 @@ public class ContigManager extends AbstractManager {
 				+ " where C2CMAPPING.parent_id is null and project_id = ? and length > ?";
 
 		pstmtContigsByProject = conn.prepareStatement(query);
+
+		query = "select count(*) "
+			+ "  from CONTIG left join C2CMAPPING"
+			+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
+			+ " where length > ? and C2CMAPPING.parent_id is null";
+
+		pstmtCountCurrentContigs = conn.prepareStatement(query);
+
+		query = "select CONTIG.contig_id,gap4name,length,nreads,created,updated,project_id "
+				+ "  from CONTIG left join C2CMAPPING"
+				+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
+				+ " where length > ? and C2CMAPPING.parent_id is null";
+
+		pstmtCurrentContigs = conn.prepareStatement(query);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1006,6 +1023,82 @@ public class ContigManager extends AbstractManager {
 		return ids;
 	}
 
+	public int countCurrentContigs(int minlen) throws SQLException {
+		pstmtCountCurrentContigs.setInt(1, minlen);
+		
+		ResultSet rs = pstmtCountCurrentContigs.executeQuery();
+
+		int nContigs = rs.next() ? rs.getInt(1) : 0;
+		
+		rs.close();
+		
+		return nContigs;
+	}
+
+	public Set getCurrentContigs(int options, int minlen)
+			throws SQLException, DataFormatException {
+		ContigSetBuilder csb = new ContigSetBuilder();
+
+		processCurrentContigs(options, minlen, csb);
+
+		return csb.getContigSet();
+	}
+
+	public int processCurrentContigs(int options, int minlen,
+			ContigProcessor processor) throws SQLException, DataFormatException {
+		int nContigs = countCurrentContigs(minlen);
+
+		if (nContigs == 0)
+			return 0;
+
+		event.begin("Processing contigs with minlen=" + minlen, nContigs);
+		fireEvent(event);
+
+		pstmtCurrentContigs.setInt(1, minlen);
+		
+		ResultSet rs = pstmtCurrentContigs.executeQuery();
+
+		int count = 0;
+		int processed = 0;
+
+		while (rs.next()) {
+			int contig_id = rs.getInt(1);
+
+			Contig contig = (Contig) hashByID.get(new Integer(contig_id));
+
+			if (contig == null) {
+				String gap4name = rs.getString(2);
+				int ctglen = rs.getInt(3);
+				int nreads = rs.getInt(4);
+				java.util.Date created = rs.getTimestamp(5);
+				java.util.Date updated = rs.getTimestamp(6);
+				int project_id = rs.getInt(7);
+				
+				Project project = adb.getProjectByID(project_id);
+
+				contig = new Contig(gap4name, contig_id, ctglen, nreads,
+						created, updated, project, adb);
+
+				registerNewContig(contig);
+			}
+
+			updateContig(contig, options);
+
+			if (processor.processContig(contig))
+				processed++;
+
+			event.working(++count);
+			fireEvent(event);
+		}
+
+		rs.close();
+
+		event.end();
+		fireEvent(event);
+
+		return processed;		
+	}
+	
 	class SortableSegment implements Comparable {
 		public int seq_id;
 		public int cstart;
