@@ -14,12 +14,17 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 	private boolean lowmem = false;
 	private int seedcontigid = -1;
-	private int minlen = -1;
+	private int minlen = 0;
 	private int puclimit = -1;
 	private int minbridges = 2;
 	private String projectname = null;
+	
+	boolean quiet = false;
 
 	protected ArcturusDatabase adb = null;
+
+	private Runtime runtime = Runtime.getRuntime();
+	private long lasttime = System.currentTimeMillis();
 
 	public static void main(String args[]) {
 		TestScaffoldBuilder ds = new TestScaffoldBuilder();
@@ -60,11 +65,11 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 				lowmem = true;
 
 			if (args[i].equalsIgnoreCase("-quiet")) {
+				quiet = true;
 			}
 		}
 
-		if (instance == null || organism == null
-				|| (seedcontigid <= 0 && projectname == null)) {
+		if (instance == null || organism == null) {
 			printUsage(System.err);
 			System.exit(1);
 		}
@@ -85,7 +90,7 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 
 			ScaffoldBuilder sb = new ScaffoldBuilder(adb);
 
-			if (minlen >= 0)
+			if (minlen > 0)
 				sb.setMinimumLength(minlen);
 
 			if (puclimit >= 0)
@@ -94,60 +99,87 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			if (minbridges > 0)
 				sb.setMinimumBridges(minbridges);
 
-			if (projectname != null) {
-				Project project = adb.getProjectByName(null, projectname);
-				
-				if (project != null) {
-					Set cs = adb.getContigsByProject(project.getID(), ArcturusDatabase.CONTIG_BASIC_DATA);
-					
-					SortedSet contigset = new TreeSet(new ContigLengthComparator());
-					
-					contigset.addAll(cs);
-					
-					SortedSet savedset = new TreeSet(contigset);
-					
-					System.out.println("INITIAL CONTIG SET:");
-					for (Iterator iterator = contigset.iterator(); iterator.hasNext();)
-						System.out.println(iterator.next());
-					System.out.println();
-					
-					BridgeSet bs = sb.processContigSet(contigset, this);
-					
-					bs.dump(System.out, 2);
-					
-					Set subgraphs = new HashSet();
-					
-					contigset = savedset;
-					
-					System.out.println();
-					System.out.println("SUB-GRAPHS:");
-					
-					for (Iterator iterator = contigset.iterator(); iterator.hasNext();) {
-						Contig contig = (Contig) iterator.next();
-						
-						Set subgraph = bs.getSubgraph(contig, 2);
+			if (seedcontigid < 0) {
+				Set cs = null;
 
-						System.out.println();								
-					
-						if (subgraph == null || subgraph.isEmpty()) {
-							System.out.println("Contig " + contig.getID() +
-									" is not in a scaffold");					
-						} else {
-							if (subgraphs.contains(subgraph)) {
-								System.out.println("Contig " + contig.getID() +
-										" is in a previously-seen scaffold");
-							} else {
-								System.out.println("Scaffold for Contig " + contig.getID() + ":");
-								
-								for (Iterator iterator2 = subgraph.iterator(); iterator2.hasNext();)
-									System.out.println(iterator2.next());
-								
-								subgraphs.add(subgraph);
+				startClock();
+
+				if (projectname != null) {
+					Project project = adb.getProjectByName(null, projectname);
+
+					if (project != null)
+						cs = adb.getContigsByProject(project.getID(),
+								ArcturusDatabase.CONTIG_BASIC_DATA, minlen);
+
+					report("getContigsByProject", System.err);
+				} else {
+					cs = adb.getCurrentContigs(ArcturusDatabase.CONTIG_BASIC_DATA, minlen);
+					report("getCurrentContigs", System.err);
+				}
+
+				SortedSet contigset = new TreeSet(new ContigLengthComparator());
+
+				contigset.addAll(cs);
+
+				SortedSet savedset = new TreeSet(contigset);
+
+				System.out.println("INITIAL CONTIG SET:");
+				for (Iterator iterator = contigset.iterator(); iterator
+						.hasNext();)
+					System.out.println(iterator.next());
+				System.out.println();
+
+				BridgeSet bs = sb.processContigSet(contigset, this);
+
+				report("processContigSet", System.err);
+
+				bs.dump(System.out, 2);
+
+				Set subgraphs = new HashSet();
+
+				contigset = savedset;
+
+				System.out.println();
+				System.out.println("SUB-GRAPHS:");
+
+				for (Iterator iterator = contigset.iterator(); iterator
+						.hasNext();) {
+					Contig contig = (Contig) iterator.next();
+
+					Set subgraph = bs.getSubgraph(contig, 2);
+
+					if (subgraph == null || subgraph.isEmpty()) {
+						if (!quiet) {
+							System.out.println();
+							System.out.println("Contig " + contig.getID()
+								+ " is not in a scaffold");
+						}
+					} else {
+						if (subgraphs.contains(subgraph)) {
+							if (!quiet) {
+								System.out.println();
+								System.out.println("Contig " + contig.getID()
+									+ " is in a previously-seen scaffold");
 							}
+						} else {
+							System.out.println();
+							System.out.println("Scaffold for Contig "
+									+ contig.getID() + ":");
+
+							for (Iterator iterator2 = subgraph.iterator(); iterator2
+									.hasNext();)
+								System.out.println(iterator2.next());
+							
+							Set css = getContigSet(subgraph);
+							int totlen = getContigSetLength(css);
+							System.out.println("TOTAL CONTIG LENGTH: " + totlen);
+
+							subgraphs.add(subgraph);
 						}
 					}
-				} else
-					System.err.println("Could not find a project named " + projectname);
+				}
+
+				report("Extracted sub-graphs", System.err);
 			} else {
 				Set bs = sb.createScaffold(seedcontigid, this);
 
@@ -175,6 +207,55 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 			e.printStackTrace();
 			System.exit(1);
 		}
+	}
+
+	private void startClock() {
+		lasttime = System.currentTimeMillis();
+	}
+
+	private void report(String text, PrintStream ps) {
+		long timenow = System.currentTimeMillis();
+
+		ps.println("******************** REPORT ********************");
+		ps.println(text);
+		ps.println("Time: " + (timenow - lasttime));
+
+		long freeMemory = runtime.freeMemory();
+		long totalMemory = runtime.totalMemory();
+		long usedMemory = totalMemory - freeMemory;
+
+		ps.println("Memory (kb): (used/free/total) " + usedMemory / 1024 + "/"
+				+ freeMemory / 1024 + "/" + totalMemory / 1024);
+		ps.println("************************************************");
+		ps.println();
+
+	}
+	
+	protected Set getContigSet(Set bs) {
+		Set cs = new HashSet();
+		
+		for (Iterator iterator = bs.iterator(); iterator.hasNext();) {
+			Bridge bridge = (Bridge) iterator.next();
+			
+			Contig contiga = bridge.getContigA();
+			cs.add(contiga);
+			
+			Contig contigb = bridge.getContigB();
+			cs.add(contigb);
+		}
+		
+		return cs;
+	}
+	
+	protected int getContigSetLength(Set cs) {
+		int totlen = 0;
+		
+		for (Iterator iterator = cs.iterator(); iterator.hasNext();) {
+			Contig contig = (Contig) iterator.next();
+			totlen += contig.getLength();
+		}
+		
+		return totlen;
 	}
 
 	protected Map createLayout(Set bridges) {
@@ -491,10 +572,14 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	}
 
 	public void scaffoldUpdate(ScaffoldEvent event) {
-		System.err.println("ScaffoldEvent[mode=" + event.getMode() + ", description="
-				+ event.getDescription() +
-				((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value=" + event.getIntegerValue() : "")
-				+ "]");
+		System.err
+				.println("ScaffoldEvent[mode="
+						+ event.getMode()
+						+ ", description="
+						+ event.getDescription()
+						+ ((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value="
+								+ event.getIntegerValue()
+								: "") + "]");
 	}
 
 	protected void printUsage(PrintStream ps) {
@@ -502,11 +587,9 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
 		ps.println();
-		ps.println("MANDATORY EXCLUSIVE PARAMETERS:");
-		ps.println("\t-contig\t\tSeed contig ID");
-		ps.println("\t-project\t\tProject name for initial contig set");
-		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
+		ps.println("\t-contig\t\tSeed contig ID");
+		ps.println("\t-project\tProject name for initial contig set");
 		ps.println("\t-minlen\t\tMinimum contig length");
 		ps.println("\t-puclimit\tAssumed maximum pUC insert size");
 		ps
