@@ -132,8 +132,8 @@ public class ArcturusDatabase {
 
 	/**
 	 * Establishes a JDBC connection to a database, using the parameters stored
-	 * in this object's DataSource.  After the first call to this method, the
-	 * Connection object will be cached.  The second and subsequent calls will
+	 * in this object's DataSource. After the first call to this method, the
+	 * Connection object will be cached. The second and subsequent calls will
 	 * return the cached object.
 	 * 
 	 * @return a java.sql.Connection which can be used to communicate with the
@@ -170,9 +170,9 @@ public class ArcturusDatabase {
 	/**
 	 * Establishes a JDBC connection to a database, using the parameters stored
 	 * in this object's DataSource, and the specified username and password.
-	 * After the first call to this method, the Connection object will be cached.
-	 * The second and subsequent calls which specify the same username will
-	 * return the cached object.
+	 * After the first call to this method, the Connection object will be
+	 * cached. The second and subsequent calls which specify the same username
+	 * will return the cached object.
 	 * 
 	 * @param username
 	 *            the username which should be used to connect to the database.
@@ -207,8 +207,8 @@ public class ArcturusDatabase {
 
 	/**
 	 * Establishes a unique (non-cached) JDBC connection to a database, using
-	 * the parameters stored in this object's DataSource, and the specified username
-	 * and password.
+	 * the parameters stored in this object's DataSource, and the specified
+	 * username and password.
 	 * 
 	 * @param username
 	 *            the username which should be used to connect to the database.
@@ -761,6 +761,34 @@ public class ArcturusDatabase {
 		return contigManager.getCurrentContigIDList();
 	}
 
+	public int countCurrentContigs(int minlen) throws SQLException {
+		return contigManager.countCurrentContigs(minlen);
+	}
+
+	public int countCurrentContigs() throws SQLException {
+		return contigManager.countCurrentContigs(0);
+	}
+
+	public int processCurrentContigs(int options, int minlen,
+			ContigProcessor processor) throws SQLException, DataFormatException {
+		return contigManager.processCurrentContigs(options, minlen, processor);
+	}
+
+	public int processCurrentContigs(int options, ContigProcessor processor)
+			throws SQLException, DataFormatException {
+		return contigManager.processCurrentContigs(options, 0, processor);
+	}
+
+	public Set getCurrentContigs(int options, int minlen) throws SQLException,
+			DataFormatException {
+		return contigManager.getCurrentContigs(options, minlen);
+	}
+
+	public Set getCurrentContigs(int options) throws SQLException,
+			DataFormatException {
+		return contigManager.getCurrentContigs(options, 0);
+	}
+
 	public int countContigsByProject(int project_id, int minlen)
 			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
@@ -892,8 +920,8 @@ public class ArcturusDatabase {
 		projectManager.getProjectSummary(project, minlen, minreads, summary);
 	}
 
-	public ProjectSummary getProjectSummary(Project project, int minlen, int minreads)
-		throws SQLException {
+	public ProjectSummary getProjectSummary(Project project, int minlen,
+			int minreads) throws SQLException {
 		return projectManager.getProjectSummary(project, minlen, minreads);
 	}
 
