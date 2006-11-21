@@ -64,6 +64,9 @@ public class ScaffoldComparator implements Comparator {
 	protected int compareByContigCount(Scaffold scaffold1, Scaffold scaffold2) {
 		int diff = scaffold1.getContigCount() - scaffold2.getContigCount();
 
-		return ascending ? diff : -diff;
+		if (diff != 0)
+			return ascending ? diff : -diff;
+		else
+			return compareByLength(scaffold1, scaffold2);
 	}
 }
