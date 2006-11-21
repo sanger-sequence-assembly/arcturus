@@ -572,14 +572,17 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	}
 
 	public void scaffoldUpdate(ScaffoldEvent event) {
+		Object object = event.getValue();
+		
+		int value = (object instanceof Integer) ? ((Integer) object).intValue() : -1;
+		
 		System.err
 				.println("ScaffoldEvent[mode="
 						+ event.getMode()
 						+ ", description="
 						+ event.getDescription()
 						+ ((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value="
-								+ event.getIntegerValue()
-								: "") + "]");
+								+ value : "") + "]");
 	}
 
 	protected void printUsage(PrintStream ps) {

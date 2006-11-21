@@ -601,9 +601,13 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 	}
 
 	public void scaffoldUpdate(ScaffoldEvent event) {
+		Object object = event.getValue();
+		
+		int value = (object instanceof Integer) ? ((Integer) object).intValue() : -1;
+		
 		logger.info("ScaffoldEvent[mode=" + event.getMode() + ", description="
 				+ event.getDescription() +
-				((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value=" + event.getIntegerValue() : "")
+				((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value=" + value : "")
 				+ "]");
 	}
 
