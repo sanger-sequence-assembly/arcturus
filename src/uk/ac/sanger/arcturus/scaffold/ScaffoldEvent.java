@@ -8,6 +8,7 @@ public class ScaffoldEvent extends EventObject {
 	public static final int FINISH = 9999;
 	public static final int BEGIN_CONTIG = 1;
 	public static final int CONTIG_SET_INFO = 2;
+	public static final int FINDING_SUBGRAPHS = 3;
 
 	protected int mode;
 	protected String description;
@@ -30,6 +31,31 @@ public class ScaffoldEvent extends EventObject {
 
 	public int getMode() {
 		return mode;
+	}
+	
+	public String getModeAsString() {
+		switch (mode) {
+			case UNKNOWN:
+				return "UNKNOWN";
+				
+			case START:
+				return "START";
+				
+			case FINISH:
+				return "FINISH";
+				
+			case BEGIN_CONTIG:
+				return "BEGIN CONTIG";
+				
+			case CONTIG_SET_INFO:
+				return "CONTIG SET INFO";
+				
+			case FINDING_SUBGRAPHS:
+				return "FINDING SUBGRAPHS";
+				
+			default:
+				return "UNKNOWN MODE (" + mode + ")";				
+		}
 	}
 
 	public String getDescription() {
