@@ -147,17 +147,7 @@ class ScaffoldSetTask implements Runnable {
 			Set subgraph = bs.getSubgraph(contig, 2);
 
 			if (subgraph != null && !subgraph.isEmpty()) {
-				if (!subgraphs.contains(subgraph)) {
-					System.out.println();
-					System.out.println("Scaffold for Contig " + contig.getID()
-							+ ":");
-
-					for (Iterator iterator2 = subgraph.iterator(); iterator2
-							.hasNext();)
-						System.out.println(iterator2.next());
-
-					subgraphs.add(subgraph);
-				}
+				subgraphs.add(subgraph);
 			}
 		}
 
@@ -183,8 +173,6 @@ class ScaffoldSetTask implements Runnable {
 		public ScaffoldBuilderMonitor(int nContigs) {
 			this.nContigs = nContigs;
 
-			System.err.println("NCONTIGS=" + nContigs);
-
 			monitor = new ProgressMonitor(null, "Creating scaffolds",
 					"Initialising...", 0, 2 * nContigs);
 		}
@@ -202,9 +190,8 @@ class ScaffoldSetTask implements Runnable {
 				case ScaffoldEvent.CONTIG_SET_INFO:
 					if (intvalue > 0) {
 						final int value = nContigs - intvalue;
-						System.err.println(event.getModeAsString() + " " + value);
 						SwingUtilities.invokeLater(new Runnable() {
-							public void run() {					
+							public void run() {
 								monitor.setProgress(value);
 							}
 						});
@@ -214,9 +201,8 @@ class ScaffoldSetTask implements Runnable {
 				case ScaffoldEvent.FINDING_SUBGRAPHS:
 					if (intvalue > 0) {
 						final int value = nContigs + intvalue;
-						System.err.println(event.getModeAsString() + " " + value);
 						SwingUtilities.invokeLater(new Runnable() {
-							public void run() {					
+							public void run() {
 								monitor.setProgress(value);
 							}
 						});
@@ -226,7 +212,8 @@ class ScaffoldSetTask implements Runnable {
 		}
 
 		public void closeProgressMonitor() {
-			monitor.close();
+			if (monitor != null)
+				monitor.close();
 		}
 	}
 }

@@ -21,7 +21,6 @@ class ScaffoldTableModel extends AbstractTableModel implements
 	protected void populateScaffoldsArray(Set scaffoldSet) {
 		for (Iterator iterator = scaffoldSet.iterator(); iterator.hasNext();) {
 			Set bs = (Set) iterator.next();
-			System.err.println(bs);
 			Scaffold scaffold = new Scaffold(bs);
 			scaffolds.add(scaffold);
 			comparator.setAscending(false);
