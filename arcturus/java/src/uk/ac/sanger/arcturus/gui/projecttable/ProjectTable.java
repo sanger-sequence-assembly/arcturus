@@ -155,8 +155,6 @@ public class ProjectTable extends SortableTable {
 			projects.add(project);
 			
 			title += ((i > 0) ? "," : " ") + project.getName();
-			
-			System.err.println(project.getName());
 		}
 		
 		Minerva minerva = Minerva.getInstance();
