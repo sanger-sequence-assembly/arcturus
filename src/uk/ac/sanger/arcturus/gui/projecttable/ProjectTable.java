@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import uk.ac.sanger.arcturus.gui.*;
 
 import uk.ac.sanger.arcturus.gui.contigtable.ContigTableFrame;
+import uk.ac.sanger.arcturus.gui.scaffoldtable.ScaffoldTableFrame;
 
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -46,11 +47,20 @@ public class ProjectTable extends SortableTable {
 		});
 
 		popupMenu = new JPopupMenu();
+		
 		JMenuItem display = new JMenuItem("Display");
 		popupMenu.add(display);
 		display.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent event) {
 				displaySelectedProjects();
+			}
+		});
+		
+		JMenuItem scaffold = new JMenuItem("Scaffold");
+		popupMenu.add(scaffold);
+		scaffold.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				scaffoldSelectedProjects();
 			}
 		});
 	}
@@ -96,6 +106,10 @@ public class ProjectTable extends SortableTable {
 
 	public void displaySelectedProjects() {
 		int[] indices = getSelectedRows();
+		
+		if (indices.length == 0)
+			return;
+		
 		ProjectTableModel ptm = (ProjectTableModel) getModel();
 
 		Set contigs = new HashSet();
@@ -123,6 +137,37 @@ public class ProjectTable extends SortableTable {
 		ContigTableFrame frame = new ContigTableFrame(minerva, title, adb,
 				contigs);
 
+		minerva.displayNewFrame(frame);
+	}
+	
+	public void scaffoldSelectedProjects() {
+		int[] indices = getSelectedRows();
+		
+		if (indices.length == 0)
+			return;
+
+		String title = "Scaffold:";
+
+		ProjectTableModel ptm = (ProjectTableModel) getModel();
+
+		Set projects = new HashSet();
+		
+		for (int i = 0; i < indices.length; i++) {
+			ProjectProxy proxy = (ProjectProxy) ptm.elementAt(indices[i]);
+			Project project = proxy.getProject();
+			projects.add(project);
+			
+			title += ((i > 0) ? "," : " ") + project.getName();
+			
+			System.err.println(project.getName());
+		}
+		
+		Minerva minerva = Minerva.getInstance();
+
+		ArcturusDatabase adb = ptm.getArcturusDatabase();
+
+		ScaffoldTableFrame frame = new ScaffoldTableFrame(minerva, title, adb, projects);
+		
 		minerva.displayNewFrame(frame);
 	}
 }

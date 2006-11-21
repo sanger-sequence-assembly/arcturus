@@ -10,10 +10,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class ProjectTableFrame extends MinervaFrame {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 1351208181264915551L;
 	protected ProjectTable table = null;
 	protected ProjectTableModel model = null;
 	protected JMenu projectMenu = null;
@@ -38,6 +34,8 @@ public class ProjectTableFrame extends MinervaFrame {
 		menubar.add(projectMenu);
 
 		projectMenu.add(new ViewProjectAction("View selected project(s)"));
+		
+		projectMenu.add(new ScaffoldProjectAction("Scaffold selected projects"));
 
 		projectMenu.addSeparator();
 
@@ -113,17 +111,22 @@ public class ProjectTableFrame extends MinervaFrame {
 	}
 
 	class ViewProjectAction extends AbstractAction {
-		/**
-		 * 
-		 */
-		private static final long serialVersionUID = 4286787816579294056L;
-
 		public ViewProjectAction(String name) {
 			super(name);
 		}
 
 		public void actionPerformed(ActionEvent event) {
 			table.displaySelectedProjects();
+		}
+	}
+
+	class ScaffoldProjectAction extends AbstractAction {
+		public ScaffoldProjectAction(String name) {
+			super(name);
+		}
+
+		public void actionPerformed(ActionEvent event) {
+			table.scaffoldSelectedProjects();
 		}
 	}
 }
