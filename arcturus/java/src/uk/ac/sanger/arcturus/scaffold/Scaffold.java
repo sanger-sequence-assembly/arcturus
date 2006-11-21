@@ -45,4 +45,8 @@ public class Scaffold {
 	public boolean containsContig(Contig contig) {
 		return contigSet.contains(contig);
 	}
+	
+	public String toString() {
+		return "Scaffold[contigs=" + contigCount + ", total length=" + totalLength + "]";
+	}
 }
