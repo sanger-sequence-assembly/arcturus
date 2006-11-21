@@ -14,15 +14,15 @@ public class ScaffoldEvent extends EventObject {
 	protected String description;
 	protected Object value;
 
-	ScaffoldEvent(Object source) {
+	public ScaffoldEvent(Object source) {
 		this(source, UNKNOWN, null, null);
 	}
 	
-	ScaffoldEvent(Object source, int mode, String description) {
+	public ScaffoldEvent(Object source, int mode, String description) {
 		this(source, mode, description, null);
 	}
 	
-	ScaffoldEvent(Object source, int mode, String description, Object value) {
+	public ScaffoldEvent(Object source, int mode, String description, Object value) {
 		super(source);
 		this.mode = mode;
 		this.description = description;

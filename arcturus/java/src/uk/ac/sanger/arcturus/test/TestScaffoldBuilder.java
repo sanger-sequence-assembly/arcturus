@@ -577,11 +577,11 @@ public class TestScaffoldBuilder implements ScaffoldBuilderListener {
 		int value = (object instanceof Integer) ? ((Integer) object).intValue() : -1;
 		
 		System.err
-				.println("ScaffoldEvent[mode="
-						+ event.getMode()
-						+ ", description="
+				.println("ScaffoldEvent[mode=\""
+						+ event.getModeAsString()
+						+ "\", description="
 						+ event.getDescription()
-						+ ((event.getMode() == ScaffoldEvent.CONTIG_SET_INFO) ? ", value="
+						+ ((value >= 0) ? ", value="
 								+ value : "") + "]");
 	}
 
