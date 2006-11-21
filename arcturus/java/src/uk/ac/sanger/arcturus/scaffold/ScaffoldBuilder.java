@@ -160,7 +160,7 @@ public class ScaffoldBuilder {
 			if (listener != null)
 				listener.scaffoldUpdate(new ScaffoldEvent(this,
 						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size",
-						contigset.size()));
+						new Integer(contigset.size())));
 			Contig contig = null;
 			
 			synchronized (contigset) {
