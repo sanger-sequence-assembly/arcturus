@@ -13,10 +13,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class ContigTableFrame extends MinervaFrame implements ActionListener,
 		ItemListener {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = -7452550307617586529L;
 	ContigTable contigTable;
 	JPopupMenu popupMenu;
 	JTableHeader tableHeader;
@@ -145,5 +141,12 @@ public class ContigTableFrame extends MinervaFrame implements ActionListener,
 			System.err.println("Double click at row " + row + ", view column "
 					+ col + ", model column " + modelcol);
 		}
+	}
+	
+	public static void createAndShowFrame(Minerva minerva, String title,
+			ArcturusDatabase adb, Set contigs) {
+		ContigTableFrame frame = new ContigTableFrame(minerva, title, adb, contigs);
+		
+		minerva.displayNewFrame(frame);
 	}
 }
