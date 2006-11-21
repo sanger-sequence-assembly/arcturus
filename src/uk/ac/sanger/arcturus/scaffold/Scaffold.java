@@ -7,7 +7,7 @@ public class Scaffold {
 	protected int totalLength = 0;
 	protected int contigCount = 0;
 	protected Set bridgeSet = null;
-	protected Set contigSet = null;
+	protected Set contigSet = new HashSet();
 	
 	public Scaffold(Set bridgeSet) {
 		this.bridgeSet = bridgeSet;
