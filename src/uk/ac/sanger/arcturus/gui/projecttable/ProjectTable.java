@@ -134,10 +134,7 @@ public class ProjectTable extends SortableTable {
 
 		ArcturusDatabase adb = ptm.getArcturusDatabase();
 
-		ContigTableFrame frame = new ContigTableFrame(minerva, title, adb,
-				contigs);
-
-		minerva.displayNewFrame(frame);
+		ContigTableFrame.createAndShowFrame(minerva, title, adb, contigs);
 	}
 	
 	public void scaffoldSelectedProjects() {
@@ -166,8 +163,6 @@ public class ProjectTable extends SortableTable {
 
 		ArcturusDatabase adb = ptm.getArcturusDatabase();
 
-		ScaffoldTableFrame frame = new ScaffoldTableFrame(minerva, title, adb, projects);
-		
-		minerva.displayNewFrame(frame);
+		ScaffoldTableFrame.createAndShowFrame(minerva, title, adb, projects);
 	}
 }
