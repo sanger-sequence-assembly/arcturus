@@ -20,6 +20,8 @@ public class ScaffoldBuilder {
 	protected int minlen = 0;
 	protected int puclimit = 8000;
 	protected int minbridges = 2;
+	
+	ScaffoldEvent event = new ScaffoldEvent(this);
 
 	protected int flags = ArcturusDatabase.CONTIG_BASIC_DATA
 			| ArcturusDatabase.CONTIG_TAGS;
@@ -117,18 +119,22 @@ public class ScaffoldBuilder {
 	public Set createScaffold(int seedcontigid, ScaffoldBuilderListener listener)
 			throws SQLException, DataFormatException {
 		if (!adb.isCurrentContig(seedcontigid)) {
-			if (listener != null)
-				listener.scaffoldUpdate(new ScaffoldEvent(this,
-						ScaffoldEvent.FINISH, "Not a current contig"));
+			if (listener != null) {
+				event.setState(ScaffoldEvent.FINISH, "Not a current contig");
+				
+				listener.scaffoldUpdate(event);
+			}
 
 			return null;
 		}
 
 		SortedSet contigset = new TreeSet(new ContigLengthComparator());
 
-		if (listener != null)
-			listener.scaffoldUpdate(new ScaffoldEvent(this,
-					ScaffoldEvent.START, "Initialising scaffold"));
+		if (listener != null) {
+			event.setState(ScaffoldEvent.START, "Initialising scaffold");
+			
+			listener.scaffoldUpdate(event);
+		}
 
 		Contig seedcontig = adb.getContigByID(seedcontigid, flags);
 
@@ -142,9 +148,11 @@ public class ScaffoldBuilder {
 			subgraph = bs.getSubgraph(seedcontig, minbridges);
 		}
 
-		if (listener != null)
-			listener.scaffoldUpdate(new ScaffoldEvent(this,
-					ScaffoldEvent.FINISH, "Scaffold is complete"));
+		if (listener != null) {
+			event.setState(ScaffoldEvent.FINISH, "Scaffold is complete");
+			
+			listener.scaffoldUpdate(event);
+		}
 
 		return subgraph;
 	}
@@ -157,10 +165,14 @@ public class ScaffoldBuilder {
 		Set processed = new HashSet();
 
 		while (!contigset.isEmpty()) {
-			if (listener != null)
-				listener.scaffoldUpdate(new ScaffoldEvent(this,
-						ScaffoldEvent.CONTIG_SET_INFO, "Contig set size",
-						new Integer(contigset.size())));
+			if (listener != null) {
+				event.setState(ScaffoldEvent.CONTIG_SET_INFO,
+						"Contig set size",
+						new Integer(contigset.size()));
+				
+				listener.scaffoldUpdate(event);
+			}
+			
 			Contig contig = null;
 			
 			synchronized (contigset) {
@@ -179,10 +191,15 @@ public class ScaffoldBuilder {
 			if (!isCurrentContig(contig.getID()))
 				continue;
 
-			if (listener != null)
-				listener.scaffoldUpdate(new ScaffoldEvent(this,
-						ScaffoldEvent.BEGIN_CONTIG, "Processing contig "
-								+ contig.getID()));
+			if (listener != null) {
+				int contigid = contig.getID();
+				
+				event.setState(ScaffoldEvent.BEGIN_CONTIG,
+						"Processing contig " + contigid,
+						new Integer(contigid));
+				
+				listener.scaffoldUpdate(event);
+			}
 
 			int contiglength = contig.getLength();
 
