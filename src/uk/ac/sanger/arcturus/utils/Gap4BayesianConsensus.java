@@ -10,8 +10,7 @@ import java.text.DecimalFormat;
 // definitive version.
 
 public class Gap4BayesianConsensus implements ConsensusAlgorithm {
-	private static int[] dependent_table = { 0, 0, 8, 16, 24, 31, 38, 44, 48,
-			51, 52 };
+	private static int[] dependent_table = { 0, 0, 7, 14, 21, 28, 35, 41, 45, 58, 49 };
 	private static String basecodes = "ACGT*N";
 
 	private static final int BASE_A = 0;
@@ -45,7 +44,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	public void setDebugPrintStream(PrintStream debugps) {
 		this.debugps = debugps;
 		if (debugps != null && decimal == null) {
-			decimal = new DecimalFormat("0.000000");
+			decimal = new DecimalFormat("0.0000000000");
 		}
 	}
 
