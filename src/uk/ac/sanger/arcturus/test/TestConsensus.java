@@ -27,8 +27,6 @@ public class TestConsensus {
 	private PreparedStatement pstmtMappingsByPosition = null;
 	private PreparedStatement pstmtSegmentsForMapping = null;
 
-	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
-
 	public static void main(String args[]) {
 		TestConsensus tc = new TestConsensus();
 		tc.execute(args);
