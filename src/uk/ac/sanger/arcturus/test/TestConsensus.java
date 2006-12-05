@@ -17,6 +17,8 @@ public class TestConsensus {
 
 	private String algname = null;
 
+	private boolean quiet = false;
+
 	private int flags = ArcturusDatabase.CONTIG_BASIC_DATA;
 
 	private ArcturusDatabase adb = null;
@@ -31,18 +33,18 @@ public class TestConsensus {
 		TestConsensus tc = new TestConsensus();
 		tc.execute(args);
 	}
-	
+
 	private void prepareStatements() throws SQLException {
-		String query = "select MAPPING.seq_id,cstart,cfinish,direction,mapping_id,readname,strand,chemistry " +
-			" from MAPPING,SEQ2READ,READS " + 
-			" where contig_id = ? and cstart <= ? and cfinish >= ? " +
-				" and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id " +
-				" order by cstart asc";
-		
+		String query = "select MAPPING.seq_id,cstart,cfinish,direction,mapping_id,readname,strand,chemistry "
+				+ " from MAPPING,SEQ2READ,READS "
+				+ " where contig_id = ? and cstart <= ? and cfinish >= ? "
+				+ " and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id "
+				+ " order by cstart asc";
+
 		pstmtMappingsByPosition = conn.prepareStatement(query);
-				
+
 		query = "select cstart,rstart,length from SEGMENT where mapping_id = ?";
-		
+
 		pstmtSegmentsForMapping = conn.prepareStatement(query);
 	}
 
@@ -60,6 +62,9 @@ public class TestConsensus {
 
 			if (args[i].equalsIgnoreCase("-algorithm"))
 				algname = args[++i];
+
+			if (args[i].equalsIgnoreCase("-quiet"))
+				quiet = true;
 		}
 
 		if (instance == null || organism == null) {
@@ -102,14 +107,15 @@ public class TestConsensus {
 
 				g4bc.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
 			}
-		
+
 			prepareStatements();
 
 			BufferedReader br = new BufferedReader(new InputStreamReader(
 					System.in));
 
 			while (true) {
-				System.out.print("Contig>");
+				if (!quiet)
+					System.out.print("Contig>");
 
 				String line = br.readLine();
 
@@ -136,11 +142,13 @@ public class TestConsensus {
 				System.out.println("Contig " + contig_id + " : "
 						+ contig.getLength() + " bp, " + contig.getReadCount()
 						+ " reads, created " + contig.getCreated());
-				
+
 				int contiglen = contig.getLength();
 
 				while (true) {
-					System.out.print("  Position>");
+					if (!quiet)
+						System.out.print("  Position>");
+
 					line = br.readLine();
 
 					if (line == null || line.length() == 0)
@@ -155,13 +163,14 @@ public class TestConsensus {
 								+ "\" did not parse to an integer");
 						continue;
 					}
-					
+
 					if (position < 1 || position > contiglen) {
-						System.err.println("Position " + position + " is outside the valid range (1 to " +
-								contiglen + ")");
+						System.err.println("Position " + position
+								+ " is outside the valid range (1 to "
+								+ contiglen + ")");
 						continue;
 					}
-					
+
 					calculateConsensus(contig, position);
 				}
 			}
@@ -169,85 +178,93 @@ public class TestConsensus {
 			e.printStackTrace();
 		}
 	}
-	
-	private char[] allbases = {'A', 'C', 'G', 'T', '*'};
-	
+
+	private char[] allbases = { 'A', 'C', 'G', 'T', '*' };
+
 	private void calculateConsensus(Contig contig, int position)
-		throws SQLException, DataFormatException {
-		System.out.println("Starting consensus calculation for contig " + contig.getID() +
-				" position " + position);
-		
+			throws SQLException, DataFormatException {
+		System.out.println("Starting consensus calculation for contig "
+				+ contig.getID() + " position " + position);
+
 		algorithm.reset();
-		
+
 		pstmtMappingsByPosition.setInt(1, contig.getID());
 		pstmtMappingsByPosition.setInt(2, position);
 		pstmtMappingsByPosition.setInt(3, position);
-		
+
 		ResultSet rsMappings = pstmtMappingsByPosition.executeQuery();
-		
+
 		while (rsMappings.next()) {
 			int seq_id = rsMappings.getInt(1);
 			int cstart = rsMappings.getInt(2);
 			int cfinish = rsMappings.getInt(3);
-			boolean direction = rsMappings.getString(4).equalsIgnoreCase("Forward");
+			boolean direction = rsMappings.getString(4).equalsIgnoreCase(
+					"Forward");
 			int mapping_id = rsMappings.getInt(5);
 			String readname = rsMappings.getString(6);
 			String str_strand = rsMappings.getString(7);
 			int strand = ReadManager.parseStrand(str_strand);
 			String str_chemistry = rsMappings.getString(8);
 			int chemistry = ReadManager.parseChemistry(str_chemistry);
-			
-			System.out.println("Read: " + readname);
-			System.out.println("  seq_id = " + seq_id);
-			System.out.println("  mapping = " + cstart + " - " + cfinish + " " +
-					(direction ? "F" : "R") + " (mapping " + mapping_id + ")");
-			System.out.println("  strand = " + str_strand + " (" + strand + ")");
-			System.out.println("  chemistry = " + str_chemistry + " (" + chemistry + ")");
-			
+
+			if (!quiet) {
+				System.out.println("Read: " + readname);
+				System.out.println("  seq_id = " + seq_id);
+				System.out.println("  mapping = " + cstart + " - " + cfinish
+						+ " " + (direction ? "F" : "R") + " (mapping "
+						+ mapping_id + ")");
+				System.out.println("  strand = " + str_strand + " (" + strand
+						+ ")");
+				System.out.println("  chemistry = " + str_chemistry + " ("
+						+ chemistry + ")");
+			}
 			char cStrand = '?';
-			
+
 			switch (strand) {
 				case Read.FORWARD:
 					cStrand = 'F';
 					break;
-					
+
 				case Read.REVERSE:
 					cStrand = 'R';
 					break;
 			}
-			
+
 			char cChemistry = '?';
-			
+
 			switch (chemistry) {
 				case Read.DYE_PRIMER:
 					cChemistry = 'P';
 					break;
-					
+
 				case Read.DYE_TERMINATOR:
 					cChemistry = 'T';
 					break;
 			}
-			
+
 			Sequence sequence = adb.getFullSequenceBySequenceID(seq_id);
-			
+
 			Segment[] segments = getSegments(mapping_id);
-			
-			Mapping mapping = new Mapping(sequence, cstart, cfinish, direction, segments);
-			
+
+			Mapping mapping = new Mapping(sequence, cstart, cfinish, direction,
+					segments);
+
 			int rpos = mapping.getReadOffset(position);
 
 			if (rpos >= 0) {
 				char base = mapping.getBase(rpos);
 				int qual = mapping.getQuality(rpos);
-				
-				System.out.println("  base = " + base + " " + qual + " " + cStrand + " " + cChemistry);
+
+				System.out.println("  base = " + base + " " + qual + " "
+						+ cStrand + " " + cChemistry);
 
 				if (qual > 0)
 					algorithm.addBase(base, qual, strand, chemistry);
 			} else {
 				int qual = mapping.getPadQuality(position);
-				
-				System.out.println("  base = * " + qual + " " + cStrand + " " + cChemistry);
+
+				System.out.println("  base = * " + qual + " " + cStrand + " "
+						+ cChemistry);
 
 				if (qual > 0)
 					algorithm.addBase('*', qual, strand, chemistry);
@@ -255,39 +272,39 @@ public class TestConsensus {
 
 			System.out.println();
 		}
-		
+
 		char bestbase = algorithm.getBestBase();
 		int bestscore = algorithm.getBestScore();
-		
+
 		System.out.println("BEST BASE = " + bestbase + "(" + bestscore + ")");
 
 		System.out.println();
-		
+
 		for (int i = 0; i < allbases.length; i++)
-			System.out.println("Score for " + allbases[i] + " is " +
-					algorithm.getScoreForBase(allbases[i]));
-			
-		System.out.println();		
+			System.out.println("Score for " + allbases[i] + " is "
+					+ algorithm.getScoreForBase(allbases[i]));
+
+		System.out.println();
 	}
-	
+
 	private final Segment[] emptySegmentArray = new Segment[0];
-	
+
 	private Segment[] getSegments(int mapping_id) throws SQLException {
 		pstmtSegmentsForMapping.setInt(1, mapping_id);
-		
+
 		ResultSet rsSegments = pstmtSegmentsForMapping.executeQuery();
-		
+
 		Vector vSegs = new Vector();
-		
+
 		while (rsSegments.next()) {
 			int cstart = rsSegments.getInt(1);
 			int rstart = rsSegments.getInt(2);
 			int length = rsSegments.getInt(3);
-			
+
 			vSegs.add(new Segment(cstart, rstart, length));
 		}
-		
-		return (Segment[])vSegs.toArray(emptySegmentArray);
+
+		return (Segment[]) vSegs.toArray(emptySegmentArray);
 	}
 
 	public void printUsage(PrintStream ps) {
