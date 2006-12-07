@@ -24,6 +24,7 @@ my $pexclude;
 my $percontig = 0;
 my $usegap4name = 0;
 my $rawfilename;
+my $showpadrate = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -46,6 +47,8 @@ while (my $nextword = shift @ARGV) {
     $usegap4name = 1 if ($nextword eq '-usegap4name');
 
     $rawfilename = shift @ARGV if ($nextword eq '-raw');
+
+    $showpadrate = 1 if ($nextword eq '-showpadrate');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -174,12 +177,12 @@ while(my @ary = $sth->fetchrow_array()) {
 	print $rawfh chr($base)," ",$qual,"\n" if defined($rawfh);
     }
 
-    &reportStats($contigname, $cqstats) if $percontig;
+    &reportStats($contigname, $cqstats, $showpadrate) if $percontig;
 }
 
 $rawfh->close() if defined($rawfh);
 
-&reportStats("ALL CONTIGS", $qstats);
+&reportStats("ALL CONTIGS", $qstats, $showpadrate);
 
 $sth->finish();
 
@@ -205,7 +208,9 @@ sub registerBaseAndQuality {
 }
 
 sub reportStats {
-    my ($name, $hash, $junk) = @_;
+    my ($name, $hash, $showpadrate, $junk) = @_;
+    my $padcount = 0;
+    my $nonpadcount = 0;
 
     foreach my $basecode (sort numeric keys(%{$hash})) {
 	my $base = chr($basecode);
@@ -228,6 +233,17 @@ sub reportStats {
 	my $rms = sqrt($sumsq/$n - $avg * $avg);
 
 	printf "%-20s %s %8d %4.1f %4.1f\n", $name, $base, $n, $avg, $rms;
+
+	if ($base eq 'N') {
+	    $padcount = $n;
+	} else {
+	    $nonpadcount += $n;
+	}
+    }
+
+    if ($showpadrate) {
+	my $padrate = ($padcount > 0) ? sprintf("%.2lf", $nonpadcount/$padcount) : "INFINITY";
+	printf "%-20s PAD RATE = %s\n", $name, $padrate;
     }
 }
 
@@ -244,6 +260,7 @@ sub showUsage {
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
     print STDERR "    -percontig\t\tDisplay statistics per contig\n";
     print STDERR "    -usegap4name\tUse Gap4 names for contigs\n";
+    print STDERR "    -showpadrate\tShow the pad rate i.e. ratio non-pads:pads\n";
 }
 
 sub numeric($$) {
