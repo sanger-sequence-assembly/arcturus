@@ -800,6 +800,8 @@ for (my $seedscaffoldid = 1; $seedscaffoldid <= $maxscaffoldid; $seedscaffoldid+
 
 			my $contigname = $shownames ? "name=\"$contigname->{$contigid}\"" : "";
 
+			$projid = $projectid2name->{$projid} if $shownames;
+
 			print $xmlfh "\t\t\t<contig id=\"$contigid\" $contigname size=\"$ctglen\"" .
 			    " project=\"$projid\" sense=\"$sense\" />\n";
 		    } else {
