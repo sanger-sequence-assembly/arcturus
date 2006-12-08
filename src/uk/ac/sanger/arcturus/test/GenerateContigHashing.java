@@ -100,7 +100,7 @@ public class GenerateContigHashing {
 				System.exit(1);
 			}
 			
-			conn2 = adb.getUniqueConnection();
+			conn2 = oneRowMode ? adb.getUniqueConnection() : conn1;
 			
 			if (conn2 == null) {
 				System.err.println("Connection 2 is undefined");
