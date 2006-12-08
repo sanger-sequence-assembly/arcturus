@@ -29,13 +29,14 @@ public class GenerateContigHashing {
 	}
 
 	public void execute(String args[]) {
-		System.err.println("GenerateContigHash");
-		System.err.println("==================");
+		System.err.println("GenerateContigHashing");
+		System.err.println("=====================");
 		System.err.println();
 		
 		int hashsize = 10;
 		int minlen = -1;
 		boolean allContigs = false;
+		boolean oneRowMode = false;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -58,6 +59,9 @@ public class GenerateContigHashing {
 			
 			if (args[i].equalsIgnoreCase("-allcontigs"))
 				allContigs = true;
+			
+			if (args[i].equalsIgnoreCase("-onerowmode"))
+				oneRowMode = true;
 		}
 		
 		if (minlen < 0)
@@ -120,7 +124,8 @@ public class GenerateContigHashing {
 			Statement stmt = conn1.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 		              java.sql.ResultSet.CONCUR_READ_ONLY);
 			
-			stmt.setFetchSize(Integer.MIN_VALUE);
+			if (oneRowMode)
+				stmt.setFetchSize(Integer.MIN_VALUE);
 			
 			ResultSet rs = stmt.executeQuery(allContigs ? queryAll : queryCurrent);
 
