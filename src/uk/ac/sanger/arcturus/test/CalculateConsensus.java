@@ -340,19 +340,24 @@ public class CalculateConsensus {
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
 				Read read = mappings[rdid].getSequence().getRead();
+				
+				// In the Gap4 consensus algorithm, "strand" refers to the read-to-contig
+				// alignment direction, not the physical strand from which the read has
+				// been sequenced.
+				int strand = mappings[rdid].isForward() ? Read.FORWARD : Read.REVERSE;
 
 				if (rpos >= 0) {
 					char base = mappings[rdid].getBase(rpos);
 					int qual = mappings[rdid].getQuality(rpos);
 
 					if (qual > 0)
-						algorithm.addBase(base, qual, read.getStrand(), read
+						algorithm.addBase(base, qual, strand, read
 								.getChemistry());
 				} else {
 					int qual = mappings[rdid].getPadQuality(cpos);
 
 					if (qual > 0)
-						algorithm.addBase('*', qual, read.getStrand(), read
+						algorithm.addBase('*', qual, strand, read
 								.getChemistry());
 				}
 			}

@@ -220,6 +220,11 @@ public class TestConsensus {
 			}
 			char cStrand = '?';
 
+			// In the Gap4 consensus algorithm, "strand" refers to the read-to-contig
+			// alignment direction, not the physical strand from which the read has
+			// been sequenced.
+			strand = direction ? Read.FORWARD : Read.REVERSE;
+			
 			switch (strand) {
 				case Read.FORWARD:
 					cStrand = 'F';
