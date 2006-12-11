@@ -172,8 +172,6 @@ public class CalculateConsensus {
 
 			Statement stmt = conn.createStatement();
 
-			logger.info(query);
-
 			ResultSet rs = stmt.executeQuery(query);
 
 			while (rs.next()) {
