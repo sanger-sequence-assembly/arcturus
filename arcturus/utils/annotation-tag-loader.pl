@@ -12,6 +12,8 @@ use Alignment;
 
 use Mapping;
 
+# use MappingFactory;
+
 use Tag;
 
 use Logging;
@@ -34,6 +36,8 @@ my $reanalyze;
 
 my $contig;
 my $testtag;
+my $iscurrent;
+my $cc;
 
 my $verbose;
 my $confirm;
@@ -44,13 +48,19 @@ my $swprog;
 my $nopads = 1;
 my $noembl = 1;
 my $emblfile;
-my $qclip;
+
+my $qclip = 0;
+my $clipminimum;
+my $clipthreshold;
+my $cliphqpm;
 
 my $minimumnrofreads = 2;
 
 my $validKeys  = "organism|instance|project|assembly|tagfile|tf|fasta|ff|"
                . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|swprog|"
-               . "propagate|reanalyze|qualityclip|qc|qualityclipall|qca|"
+               . "currentcontig|cc|propagate|reanalyze|"
+               . "clipoption|co|simplequalityclip|sqc|baseclip|bqc|qualityclip|qc|"
+               . "qcminimimum|qcm|qcthreshold|qct|qchqpm|"
                . "override|minimumnrofreads|mnor|verbose|debug|nodebug|help";
 
 while (my $nextword = shift @ARGV) {
@@ -77,7 +87,12 @@ while (my $nextword = shift @ARGV) {
     $fastafile  = shift @ARGV  if ($nextword eq '-fasta');
     $fastafile  = shift @ARGV  if ($nextword eq '-ff');
 
-    $contig     = shift @ARGV  if ($nextword eq '-contig');
+    if ($nextword eq '-contig' || $nextword eq '-currentcontig' 
+                               || $nextword eq '-cc') {
+        $contig    = shift @ARGV;
+        $iscurrent = 1  unless ($nextword eq '-contig');
+    }
+    
 
     $testtag    = shift @ARGV  if ($nextword eq '-tag');
 
@@ -107,15 +122,28 @@ while (my $nextword = shift @ARGV) {
     $noembl     = 0            if ($nextword eq '-embl');
     $emblfile   = shift @ARGV  if ($nextword eq '-emblfile');
     $emblfile   = shift @ARGV  if ($nextword eq '-ef');
-    if ($nextword eq '-qualityclip' || $nextword eq '-qc') {
-        $qclip   = 20; # fixed value
-        $confirm = 0;
-    }
 
-    if ($nextword eq '-qualityclipall' || $nextword eq '-qca') {
-        $qclip   = 'all';
-        $confirm = 0;
+# quality clipping
+
+    if ($nextword eq '-clipoption' || $nextword eq '-co') {
+        $qclip = shift @ARGV;
+        unless ($qclip >= 0 && $qclip <= 3) {
+            &showUsage("Invalid clip option $qclip");
+	}
     }
+    $qclip = 1 if ($nextword eq '-simplequalityclip' || $nextword eq '-sqc'); 
+    $qclip = 2 if ($nextword eq '-baseclip' || $nextword eq '-bqc');
+    $qclip = 3 if ($nextword eq '-qualityclip' || $nextword eq '-qc');
+# quality clipping control
+    if ($nextword eq '-qcminimum' || $nextword eq '-qcm') {
+        $clipminimum = shift @ARGV;
+    }    
+    if ($nextword eq '-qcthreshold' || $nextword eq '-qct') {
+        $clipthreshold = shift @ARGV; 
+    }
+    $cliphqpm   = shift @ARGV  if ($nextword eq '-qchqpm');
+
+# 
 
     if ($nextword eq '-swprog') {
         if (defined($swprog) && !$swprog) {
@@ -135,6 +163,8 @@ while (my $nextword = shift @ARGV) {
 
     &showUsage(0) if ($nextword eq '-help');
 }
+        
+$confirm = 0 if $qclip; # disable storage in arcturus
 
 #----------------------------------------------------------------
 # use forking if Smith-Waterman alignment is to be used
@@ -179,7 +209,7 @@ my $logger = new Logging('STDOUT');
  
 $logger->setFilter(2) if $verbose; # set reporting level
 
-$logger->setFilter(0) if ($verbose && $verbose > 1); # set reporting level
+$logger->setFilter(0) if $debug;   # set reporting level
 
 #----------------------------------------------------------------
 # get the database connection
@@ -202,6 +232,27 @@ if (!$adb || $adb->errorStatus()) {
 my $URL = $adb->getURL;
 
 $logger->info("Database $URL opened succesfully");
+
+#-----------------------------------------------------------------------
+# if the current contig is specified, collect the ancestors to include
+#-----------------------------------------------------------------------
+
+if ($iscurrent) {
+    if (defined($project)) {
+        $logger->warning("Redundant project specification ignored");
+        undef $project;
+    }
+    my $cids = $adb->getAncestorIDsForContigID($contig);
+    if ($cids && @$cids) {
+        $cc = $contig;
+        $contig = '';
+        foreach my $cid (@$cids) {
+	    $contig .= '|' if $contig;
+            $contig .= sprintf("%06d",$cid);
+        }
+        $logger->info("ancestor contigs: @$cids");
+    }
+}
 
 #-----------------------------------------------------------------------
 # get the current contigs for project if so specified
@@ -232,7 +283,7 @@ if (defined($project)) {
         push @pids,$project->getProjectID();
     }
 
-    $logger->warning("Projects to be exported : @pids");
+    $logger->warning("Project(s) to be exported : pid = @pids");
     my $projectspec = join ',',@pids; # allows several projects
     my $ccids = $adb->getCurrentContigIDs(project_id=>$projectspec);
     @ccids = @$ccids if $ccids;
@@ -268,11 +319,12 @@ if ($fastafile) {
         my $length = $contig->getConsensusLength();
         my $contigname = $contig->getContigName();
 # extract the contig ID if the name contains a number and put back in
-        if ($contigname =~ /\b(\d+)\b/) {
+        if ($contigname =~ /[\D\b](\d+)\b/) {
             $contig->setContigID($1+0);
         }
 # extract the contig ID, if any
         my $contigid = $contig->getContigID();
+#	print STDOUT "cn: $contigname  $contigid\n";
         if ($contigid > 0) { 
       	    $fastacontighash->{$contigid} = $contig;
 	    $processed++;
@@ -289,50 +341,28 @@ if ($fastafile) {
 # parse the file with annotation data and build tag data hash
 #-----------------------------------------------------------------------
 
-my $FILE = new FileHandle($datafile,'r'); # open for read 
-
-$logger->severe("FAILED to open file $datafile") unless $FILE;
-
 my $contigtaghash = {};
 
-# collect tags and store as a hash of arrays of arrays keyed on contig name
-
-my $line = 0;
-
 my $annotatedlength = {};
-while ($FILE && defined(my $record = <$FILE>)) {
 
-    $line++;
-
-    next unless ($record =~ /\S/);
-
-    if ($record =~ /(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/) {
-        my $contig = $1; # Arcturus contig number 
-        $contigtaghash->{$contig} = [] unless $contigtaghash->{$contig};
-        my $contigtaglist = $contigtaghash->{$contig}; # an array ref      
-        my @tagdata = ($2,$3,$4);
-        unless ($3 == 1 && $4 == $5 || $2 =~ /source/i) {
-            push @$contigtaglist, \@tagdata;
-            $annotatedlength->{$contig} = $5;
-	}
-    }
-    elsif ($record =~ /(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s*$/) {
-        my $contig = $1; # Arcturus contig number 
-        $contigtaghash->{$contig} = [] unless $contigtaghash->{$contig};
-        my $contigtaglist = $contigtaghash->{$contig}; # an array ref      
-        my @tagdata = ($2,$3,$4);
-        push @$contigtaglist, \@tagdata;
-    }
-    else {
-        $logger->warning("invalid input on file $datafile line $line:\n".$record);
+my $lines = 0;
+if ($datafile =~ /\*|\?/) {
+# wild card provided in filename; get all files of that description
+    my @datafiles = `ls $datafile`;
+    foreach my $datafile (@datafiles) {
+        chomp $datafile;
+        $lines += &readtags($datafile,$contigtaghash,$annotatedlength);
     }
 }
-
-$FILE->close() if $FILE;
+else {
+# a single file is specifified
+    $lines = &readtags($datafile,$contigtaghash,$annotatedlength);
+}
 
 my $nc = scalar(keys %$contigtaghash);
 
-$logger->warning("data read for $nc contigs from file $datafile ($line lines)");
+$logger->warning("data read for $nc contigs from file(s) $datafile "
+                ."($lines lines)");
 
 #-----------------------------------------------------------------------
 # if the emblfile is defined, open it for writing
@@ -367,11 +397,10 @@ my @ancestorcontigs;
 
 foreach my $contigname (sort keys %$contigtaghash) {
 
-    $logger->info("Assembling tags for contig $contigname ($annotatedlength->{$contigname})");
-
-
-
     next unless (!$contig || $contigname =~ /$contig/);
+
+    $logger->info("Assembling tags for contig $contigname "
+                 ."(l: $annotatedlength->{$contigname})");
 
 # run through the tags and create a Tag object for each
 
@@ -408,7 +437,13 @@ foreach my $contigname (sort keys %$contigtaghash) {
     my $arcturuscontig;
 
     if ($contigname =~ /\w+\.(\d+)/) {
-        my $contig_id = $1;
+        my $contig_id = $1 + 0;
+# print STDOUT "1 cn: $contigname  $contig_id\n";
+        $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
+    }
+    elsif ($contigname =~ /(\d+)/) {
+        my $contig_id = $1 + 0;
+# print STDOUT "2 cn: $contigname  $contig_id\n";
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
     }
     elsif ($contigname =~ /\b(\d+)\b/) {
@@ -463,14 +498,25 @@ foreach my $contigname (sort keys %$contigtaghash) {
 
 # substitute low quality pads (to guide the alignment algorithm)
 
+        my $csequence = $arcturuscontig->getSequence();
         ContigFactory->replaceLowQualityBases($arcturuscontig);
 
 # determine the transformation from annotation contig to arcturus contig
 
         my $fsequence = $fastacontig->getSequence();
         my $asequence = $arcturuscontig->getSequence();
+        unless ($fsequence) {
+            $logger->severe("undefined fasta contig sequence");
+	    next;
+	}
+        unless ($asequence) {
+            $logger->severe("undefined arcturus contig sequence");
+	    next;
+	}
         $logger->fine("Processing $contigname lengths: "
                       .length($asequence)." & ".length($fsequence));
+# restore the original sequence
+        $arcturuscontig->setSequence($csequence);
   
 # get the alignment from the annotated sequence to the sequence in arcturus
 
@@ -489,7 +535,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # METHOD 2 : if (still) no mapping, use the Alignment package version
 
         unless ($mapping) {
-	    $logger->fine("Alignment.pm correlation selected");
+	    $logger->info("Alignment.pm correlation selected");
    	    my $peakdrift = $alength - $flength;
             my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
             my $bandedwindow = 4.0 * sqrt($peakdrift); # generous minimum of 
@@ -505,14 +551,14 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # experimental options
             $options{autoclip} = 1;
 	    $options{goldenpath} = 1; # not operational yet
-            my $kmersize = int((log($flength)/log(10))*4 + 0.5) - 7;
+            my $kmersize = int((log($alength)/log(10))*4 + 0.5) - 7;
             $kmersize++ unless ($kmersize%2);
 	    $kmersize = 7 if ($kmersize < 7);
             $options{kmersize} = $kmersize;
 # $options{squality} = $arcturuscontig->getBaseQuality();
  
-#            my $output = $logger->getOutputDevice() || *STDOUT;
-#            $options{debug} = $output if $debug;
+            my $output = $logger->getOutputDevice() || *STDOUT;
+            $options{debug} = $output if $debug;
 
             $mapping = Alignment->correlate($fsequence,0,$asequence,0,%options);
 	}
@@ -566,7 +612,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 
 #        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
 #$contig->setDEBUG($logger);
-$arcturuscontig->setDEBUG($logger) if $debug;
+$arcturuscontig->setDEBUG($logger) if $verbose;
 
         $arcturuscontig->inheritTags();
 
@@ -700,6 +746,9 @@ if ($reanalyze) {
 
     $logger->skip();
     $logger->warning("Re-analyzing direct contig links to ancestors");
+    unless (@ancestorcontigs) {
+        $logger->warning("There are NO ancestral contigs with tags");
+    }
 
     unless ($propagate) {
         my @acids;
@@ -746,6 +795,7 @@ if ($reanalyze) {
     foreach my $ccnm (sort keys %$currentcontigs) {
         my $contig = $currentcontigs->{$ccnm};
         my $ccid = $contig->getContigID();
+        next if ($cc && $ccid != $cc);
         $logger->skip();
         $logger->warning("Processing current contig $ccid ($contig)");
 # skip if the current contig is the originally annotated one
@@ -783,10 +833,11 @@ if ($reanalyze) {
 #$method=1;
         my %ptoptions = (noparentload => 1, notagload => 1, overlap => 1);
 
-        foreach my $ancestorkey (@ancestorkeys) {
+$contig->setDEBUG($logger) if $verbose;
+         foreach my $ancestorkey (@ancestorkeys) {
             my $ancestor = $ancestors->{$ancestorkey};
             my $acnm = $ancestor->getContigName();
-            $logger->info("Ancestor $acnm ($ancestor)  for current contig $ccid ($contig)");
+            $logger->info("Ancestor $acnm ($ancestor) for current contig $ccid ($contig)");
             $contig->addParentContig($ancestor);
             $ancestor->hasMappings(1); # ensure read mappings are loaded
             unless ($method) {
@@ -800,7 +851,8 @@ if ($reanalyze) {
 
 #$logger->setFilter(0);
             my %loptions = (debug=>$logger,offsetwindow=>70);
-            my ($status,$deallocated) = $contig->linkToContig($ancestor,%loptions);
+# my ($mapping,$status,$deallocated) = MappingFactory->linkToContig($contig,$ancestor,%loptions);
+            my ($status,$deallocated) = $contig->newlinkToContig($ancestor,%loptions);
 #$logger->setFilter(3);
             unless ($status) {
                 my $acid = $ancestor->getContigID();
@@ -846,8 +898,9 @@ unless ($confirm || !$noembl || $EMBL || $qclip) {
         $tags = [] unless $tags;
         $logger->warning("contig ".$currentcontig->getContigName()
                 ." has ".scalar(@$tags)." tags");
+        @$tags = sort {$a->getPositionLeft <=> $b->getPositionLeft} @$tags;
         foreach my $tag (@$tags) {
-            $logger->warning($tag->writeToCaf(0,annotag=>1));
+            $logger->info($tag->writeToCaf(0,annotag=>1));
 	}
     }
 }
@@ -887,15 +940,24 @@ if (!$noembl || $EMBL || $qclip) {
     my %qcoptions = (newcontig => 1, exportaschild => 1);
     my %ptoptions = (speedmode => 1, notagload => 1, overlap => 1);
 
-    if (defined($qclip)) {
-# treat all non-base symbols as low quality
-        if ($qclip eq 'all') {
-            $qcoptions{lqpm} = 0;
-	}
-        else {
-            $qcoptions{threshold} = $qclip;
-	}
+    if ($qclip == 1) {
+# simple clipping: treat all non-base symbols as low quality
+        $qcoptions{hqpm} = 0; # delete all "high" quality pads (non ACGT)
+# $qcoptions{hqpm} = 15; # delete all "high" quality pads (non ACGT)
+        $qcoptions{minimum} = 0; # and keep all low quality bases
     }
+    elsif ($qclip == 2) {
+# simple clip: treat all non-base symbols as low quality and some low quality bases
+        $qcoptions{hqpm} = 0; # delete all "high" quality pads (non ACGT)
+        $qcoptions{minimum} = $clipminimum     if defined($clipminimum); # deflt 15
+    }
+    elsif ($qclip == 3) {
+# the full monty, all three parameters can be defined
+        $qcoptions{threshold} = $clipthreshold if defined($clipthreshold);
+        $qcoptions{hqpm} = $cliphqpm           if defined($cliphqpm);  # default 15 
+        $qcoptions{minimum} = $clipminimum     if defined($clipminimum); # deflt 15
+    }
+$logger->warning("quality clip option $qclip");
 
 $ptoptions{debug} = $logger;
 
@@ -918,6 +980,7 @@ $ptoptions{debug} = $logger;
             if ($status + 0) {
                 $ccnm = $newcontig->getContigName();
                 $logger->warning("propagating tags to cleaned contig $ccnm");
+# rephrase and use MappingFactory->
                 $contig->propagateTagsToContig($newcontig,%ptoptions);
                 $contig = $newcontig;
 	    }
@@ -1044,6 +1107,71 @@ else {
 exit;
 
 #------------------------------------------------------------------------
+
+sub readtags {
+# read tag data from input file
+    my ($datafile,$contigtaghash,$annotatedlength) = @_;
+
+    my $FILE = new FileHandle($datafile,'r'); # open for read 
+
+    $logger->severe("FAILED to open file $datafile") unless $FILE;
+
+# collect tags and store as a hash of arrays of arrays keyed on contig name
+
+    my @existingcontigs = keys %$contigtaghash;
+    my $existingcontigs = {};
+    while (my $contig = shift @existingcontigs) {
+        $existingcontigs->{$contig}++;
+    }
+
+    my $line = 0;
+    while ($FILE && defined(my $record = <$FILE>)) {
+
+        $line++;
+
+        next unless ($record =~ /\S/);
+
+        if ($record =~ /(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/) {
+            my $contig = $1; # Arcturus contig number
+            
+            if ($existingcontigs->{$contig}) {
+		$logger->severe("Duplicate contig $contig on file $datafile "
+                               ."($line)");
+                delete $existingcontigs->{$contig};
+            } 
+            $contigtaghash->{$contig} = [] unless $contigtaghash->{$contig};
+            my $contigtaglist = $contigtaghash->{$contig}; # an array ref      
+            my @tagdata = ($2,$3,$4);
+            unless ($3 == 1 && $4 == $5 || $2 =~ /source/i) {
+                $annotatedlength->{$contig} = $5;
+# test contig ID and consistency
+                my $contig_id = $contig;
+                $contig_id =~ s/^[\D0]+//;
+                unless ($tagdata[0] =~ /$contig_id/) {
+                    $logger->fine("Inconsistent data ignored for contig "
+                                  ."$contig ($tagdata[0])"); 
+	            next;
+	        }
+                push @$contigtaglist, \@tagdata;
+	    }
+        }
+        elsif ($record =~ /(\S+)\s+(\S+)\s+(\d+)\s+(\d+)\s*$/) {
+            my $contig = $1; # Arcturus contig number 
+            $contigtaghash->{$contig} = [] unless $contigtaghash->{$contig};
+            my $contigtaglist = $contigtaghash->{$contig}; # an array ref      
+            my @tagdata = ($2,$3,$4);
+            push @$contigtaglist, \@tagdata;
+        }
+        else {
+            $logger->warning("invalid input on file $datafile line $line:\n"
+                            .$record);
+        }
+    }
+
+    $FILE->close() if $FILE;
+
+    return $line;
+}
 
 sub propagate {
 # recursively propagate tags down the generations
@@ -1235,6 +1363,17 @@ sub showUsage {
     print STDERR " format on STDOUT\n";
     print STDERR "-emblfile\t(ef) write contig & tags of the current generation";
     print STDERR " to file\n";
+    print STDERR "\n";
+    print STDERR "-clipoption\t(-co) on EMBL export, remove low quality data from\n";
+    print STDERR "\t\tsequence (both high quality pads and low quality bases):n";
+    print STDERR "\t\t= 0 : no clipping, write the raw data\n";
+    print STDERR "\t\t= 1 : remove all high-quality pads & keep low-quality bases\n";
+
+    print STDERR "\t\t= 2 : remove all high-quality pads & some low-quality bases\n";
+    print STDERR "\t\t= 3 : remove some high-quality pads & some low-quality bases\n";
+    print STDERR "\t\tshorthand: sqc for co 1, bqc for co 2, qc for co 3\n";
+    print STDERR "\n";
+
     unless (defined($qclip)) {
         print STDERR "-qualityclip\t(qc, no value) to remove low quality pads from re-mapped\n\t\t sequence\n";
         print STDERR "-qualityclipall\t(qca, no value) to remove all low quality from re-mapped\n\t\t sequence\n";    }
