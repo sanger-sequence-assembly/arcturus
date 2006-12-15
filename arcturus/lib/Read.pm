@@ -437,6 +437,16 @@ sub getReadName {
     return $this->{readname};
 }
 
+# aliases
+
+sub setName() {
+    return &setReadName(@_);
+}
+
+sub getName() {
+    return &getReadName(@_);
+}
+
 #-----------------
 
 sub setSequence {
