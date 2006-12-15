@@ -140,6 +140,8 @@ my $logger = new Logging($outputFile);
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
+my $errorlog = $logger->getOutputDevice();
+
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
@@ -155,6 +157,8 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
+
+$adb->setErrorLog($errorlog); # if redirect?
 
 $adb->setRDEBUG(1) if $debug;
 
@@ -505,8 +509,8 @@ while (defined($record = <$CAF>)) {
 # no, don't want it; does the read already exist?
             $read = $reads{$objectName};
             if ($read && $lowMemory) {
-                $read->DESTROY;
                 delete $reads{$objectName};
+                undef $read;
             } 
             $objectType = 0;
         }
@@ -820,7 +824,7 @@ $logger->info("TagSequenceName $1") if $noload;
             $read = $reads{$1};
             if ($read && $lowMemory) {
                 delete $reads{$1};
-                $read->DESTROY;
+                undef $read;
             }
         }
     }
@@ -925,10 +929,12 @@ foreach my $identifier (keys %contigs) {
 # what about tags? better in ADBContig
         delete $contigs{$identifier};
         $lastinsertedcontig = $added;
+        undef $contig;
     }
     else {
 #        $adb->clearLastContig();
     }
+    
 }
 
 # test again
@@ -1026,7 +1032,7 @@ sub tagList {
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SIL' ,'IRPT','LINE','REPA','REPY',
                  'REPZ','FICM','VARD','VARS','CSED','CONS','EXON',
-                 'SILR');
+                 'SILR','DIFF');
 
 # software TAGS
 
