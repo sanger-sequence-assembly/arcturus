@@ -43,7 +43,7 @@ sub fastaFileParser {
 
         $line++;
         if ($report && ($line%$report == 0)) {
-            print STDERR "processing line $line\n";
+            print STDERR "processing line $line\r";
 	}
 
         if ($record !~ /\S/) {
@@ -75,7 +75,10 @@ sub fastaFileParser {
 	}
     }
 # add the last one to the stack 
-    push @$fastacontigs, $contig if $contig;
+    if ($contig && $sequence) {
+        $contig->setSequence($sequence);
+        push @$fastacontigs, $contig;
+    }
 
     $FASTA->close();
 
@@ -87,6 +90,249 @@ sub fastaFileParser {
 #-----------------------------------------------------------------------------
 
 my $LOGGER; # class variable
+
+my $RTF; # read   tag factory
+my $CTF; # contig tag factory
+
+sub cafFileInventory {
+# build an inventory of objects in the CAF file
+    my $class = shift;
+    my $caffile = shift; # caf file name or 0 
+    my %options = @_;
+
+# register file positions of keywords Sequence, DNA, BaseQuality
+# check Is_contig, Is_read, Unpadded/Padded etc
+
+    my $CAF = new FileHandle($caffile,"r");
+
+    unless ($CAF) {
+	$LOGGER->severe("Invalid CAF file specification $caffile");
+        return undef;
+    }
+
+# control options
+
+    my ($filesize,$progress);
+    if ($options{progress}) {
+# get number of lines in the file
+        $LOGGER->warning("Building inventory for CAF file $caffile") if $LOGGER;
+        my $counts = `wc $caffile`;
+        $counts =~ s/^\s+|\s+$//g;
+        my @counts = split /\s+/,$counts;
+        $progress = int ($counts[0]/20);
+        $filesize = $counts[0];
+        $LOGGER->warning("$caffile is a $counts[2] byte file with $counts[0] lines") if $LOGGER;
+    }
+
+    my $linelimit = $options{linelimit} || 0;
+
+# MAIN
+
+    my $inventory = {};
+    $inventory->{caffilename} = $caffile;
+
+    my $datatype;
+    my $identifier;
+    my $linecount = 0;
+    my $location = tell($CAF);
+
+    while (defined(my $record = <$CAF>)) {
+        $linecount++;
+        if ($progress && !($linecount%$progress)) {
+            my $objectcount = scalar(keys %$inventory);
+            my $fraction = sprintf ("%5.2f", $linecount/$filesize);           
+            print STDERR "$fraction completed ..... $objectcount objects\r";
+	}
+        last if ($linelimit && $linecount >= $linelimit);
+        chomp $record;
+# decode the record info
+        if ($record !~ /\S/) {
+# blank line indicates end of current object
+            undef $identifier;
+	}
+
+        elsif ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+# check that identifier is undefined
+            if ($identifier) {
+                print STDERR "l:$linecount Missing blank after previous object\n";
+            }
+            $datatype = $1;
+            $identifier = $2;
+# ok, store the file position keyed on identifier/datatype
+            $inventory->{$identifier} = {} unless defined $inventory->{$identifier};
+            if ($inventory->{$identifier}->{$datatype}) {
+                print STDERR "l:$linecount Multiple $datatype entry for $identifier\n";
+	    }
+            my @filelocation = ($location,$linecount);
+            $inventory->{$identifier}->{$datatype} = \@filelocation;
+        }
+        elsif ($record =~ /(Is_[read|contig])/) {
+            my $objecttype = $1;
+# check if this is inside a valid block on the file
+            if ($identifier && $datatype && $datatype eq 'Sequence') {
+                $inventory->{$identifier}->{Is} = $objecttype;
+	    }
+	    else {
+		print STDERR "l:$linecount Unexpected $objecttype specification\n";
+	    }
+        }
+        elsif ($record =~ /Ass\w+from\s+(\S+)\s/) {
+            my $read = $1; # ? not used now
+            if ($identifier && $datatype && $datatype eq 'Sequence') {
+                $inventory->{$identifier}->{segments}++;
+	    }
+	    else {
+		print STDERR "l:$linecount Unexpected 'Assembled_from' specification\n";
+	    }
+        }        
+        $location = tell($CAF);
+    }
+
+    $CAF->close() if $CAF;
+
+    return $inventory;
+}
+
+sub contigExtractor {
+    my $class = shift;
+#    my $caffile = shift; # caf file name or 0 
+    my $contignames = shift; # array with contigs to be extracted
+    my $inventory = shift; # inventory HASH made with cafFileInventory method
+    my %options = @_;
+
+# options: contig tags / read tags /
+
+    my $caffile = $inventory->{caffilename};
+
+    my $CAF = new FileHandle($caffile,"r");
+
+    unless ($CAF) {
+	$LOGGER->severe("Invalid CAF file specification $caffile");
+        return undef;
+    }
+
+# initiate output list; use hash to filter out double entries
+
+    my %contigs;
+
+# build a table, sorted according to file position, of contig data to be collected
+
+    my @contigstack;
+    my @contigitems = ('Sequence');
+    push @contigitems,'DNA','BaseQuality' if $options{consensus};
+    my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2);
+
+    foreach my $contigname (@$contignames) {
+        my $cinventory = $inventory->{$contigname};
+        unless ($cinventory) {
+	    print STDERR "Missing contig $contigname\n";
+	    next;
+	}
+        next if $contigs{$contigname}; # duplicate entry
+        my $contig = new Contig($contigname);
+        $contigs{$contigname} = $contig; # add to output stack
+        foreach my $item (@contigitems) {
+            my $itemlocation = $cinventory->{$item};
+            next unless $itemlocation;
+            push @contigstack,[($contig,$components{$item},@$itemlocation)];
+	}
+    }
+
+# run through each contig in turn and collect the required data and read names
+
+    my @readstack;
+    my @readitems = ('Sequence');
+    push @readitems,'DNA','BaseQuality' if $options{completeread};
+
+    my ($status,$line);
+    foreach my $stack (sort {$a->[2] <=> $b->[2]} @contigstack) {
+        my ($contig,$type,$fileposition,$line) = @$stack;
+        seek $CAF, $fileposition, 00; # position the file 
+       ($status,$line) = &parseContig      ($CAF,$contig,$line,%options) if ($type == 0);
+       ($status,$line) = &parseDNA         ($CAF,$contig,$line)          if ($type == 1);
+       ($status,$line) = &parseBaseQuality ($CAF,$contig,$line)          if ($type == 2);
+        next if $type;
+# and collect the readnames in this contig
+        my $reads = $contig->getReads();
+        unless ($reads && @$reads) {
+	    print STDERR "contig ". $contig->getContigName()." has no reads specified\n";
+            next;
+	}
+        next if $options{skipreads};
+        foreach my $read (@$reads) {
+            my $readname = $read->getReadName();
+            my $rinventory = $inventory->{$readname};
+            unless ($rinventory) {
+	        print STDERR "Missing read $readname in inventory\n";
+	        next;
+   	    }
+            foreach my $item (@readitems) {
+                my $itemlocation = $rinventory->{$item};
+                next unless $itemlocation;
+                push @readstack,[($read,$components{$item},@$itemlocation)];
+	    }
+	}        
+    }
+
+# and collect all the required read items
+
+    foreach my $stack (sort {$a->[2] <=> $b->[2]} @readstack) {
+        my ($read,$type,$fileposition,$line) = @$stack;
+        seek $CAF, $fileposition, 00; # position the file 
+       ($status,$line) = &parseRead        ($CAF,$read,$line,%options) if ($type == 0);
+       ($status,$line) = &parseDNA         ($CAF,$read,$line)          if ($type == 1);
+       ($status,$line) = &parseBaseQuality ($CAF,$read,$line)          if ($type == 2);
+        unless ($status) {
+            my $readname = $read->getReadName();
+	    print STDERR "Failed to extract data for read $readname\n";
+	    next;
+	}
+        next if $type;
+        next unless $read->isEdited();
+        next if $options{completeread};
+# add here the DNA and Quality data for this read
+        my $readname = $read->getReadName();
+        my $rinventory = $inventory->{$readname};
+        foreach my $item ('DNA','BaseQuality') {
+            my $positions = $rinventory->{$item};
+            unless ($positions) {
+		print STDERR "No $item available for edited read $readname\n";
+		next;
+	    }
+           ($fileposition,$line) = @$positions;
+            seek $CAF, $fileposition, 00; # position the file 
+            $type = $components{$item};
+           ($status,$line) = &parseDNA         ($CAF,$read,$line) if ($type == 1);
+           ($status,$line) = &parseBaseQuality ($CAF,$read,$line) if ($type == 2);
+            next if $status;
+	    print STDERR "Failed to extract $item data for read $readname\n";     
+        }     
+    }
+
+    my @contigs;
+    foreach my $contigname (sort keys %contigs) {
+        push @contigs, $contigs{$contigname};
+    }
+
+    $CAF->close() if $CAF;
+
+    return \@contigs;
+}
+
+sub extractContig {
+    my $class = shift;
+    my $contigname = shift;
+
+    my $contigs = $class->contigExtractor([($contigname)],@_);
+
+    return $contigs->[0] if $contigs->[0];
+
+    return undef;
+}
+
+#-------------------------------------------------------------------------------------
+# sequencial caf file parser (small files)
+#-------------------------------------------------------------------------------------
 
 sub cafFileParser {
 # build contig objects from a Fasta file 
@@ -115,14 +361,25 @@ sub cafFileParser {
     }
 
 #-----------------------------------------------------------------------------
-# colect options   
+# collect options   
 #-----------------------------------------------------------------------------
 
     my $lineLimit = $options{linelimit}    || 0; # test purposes
     my $progress  = $options{progress}     || 0; # true or false progress (on STDERR)
     my $usePadded = $options{acceptpadded} || 0; # true or false allow padded contigs
-    my $consensus = $options{consensus}    || 0; # true of false build consensus
-    my $lowMemory = $options{lowmemory}    || 0; # true or false minimise memory
+    my $consensus = $options{consensus}    || 0; # true or false build consensus
+
+    my $readlimit = $options{readlimit};
+
+my $lowMemory = $options{lowmemory}    || 0; # true or false minimise memory
+
+# object name filters
+
+    my $contignamefilter = $options{contignamefilter} || ''; 
+my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
+
+    my $blockobject = $options{blockobject};
+    $blockobject = {} if (ref($blockobject) ne 'HASH');
 
 # set-up tag selection
 
@@ -140,12 +397,6 @@ sub cafFileParser {
 
     my $edittags = $options{edittags} || 'EDIT';
 
-# object filters
-
-    my $contignamefilter = $options{contignamefilter} || ''; 
-
-    my $readnameblocker  = $options{readnameblocker}  || ''; # test purposes
-
 #----------------------------------------------------------------------
 # allocate basic objects and object counters
 #----------------------------------------------------------------------
@@ -154,11 +405,10 @@ sub cafFileParser {
 
     my (%contigs, %reads, %mappings);
 
-    my $readblockhash = {}; # (internal) tracking of reads to be blocked (low memory)
-
 # control switches
 
     my $lineCount = 0;
+    my $listCount = 0;
     my $truncated = 0;
     my $isUnpadded = 1; # default require unpadded data
     $isUnpadded = 0 if $usePadded; # allow padded, set pad status to unknown (0) 
@@ -199,14 +449,16 @@ sub cafFileParser {
 #-------------------------------------------------------------------------
 
         $lineCount++;
-        if ($progress && !($lineCount%$progress)) {
+#        if ($progress && !($lineCount%$progress)) {
+        if ($progress && ($lineCount >= $listCount)) {
             my $fraction = sprintf ("%5.2f", $lineCount/$fileSize);           
             print STDERR "$fraction completed .....\r";
+            $listCount += $progress;
 	}
 
 # deal with (possible) line limit
 
-        if ($lineLimit && $lineCount > $lineLimit) {
+        if ($lineLimit && ($lineCount > $lineLimit)) {
             $LOGGER->warning("Scanning terminated because of line limit $lineLimit");
             $truncated = 1;
             $lineCount--;
@@ -247,8 +499,110 @@ sub cafFileParser {
 #            = 2 : a contig  is being parsed currently
 #---------------------------------------------------------------------------
 
-#$LOGGER->warning("TAG detected ($lineCount): $record") if ($record =~ /\bTag/);
+        if ($record =~ /^\s*(DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+# a new data block is detected
+            my $newObjectType = $1;
+            my $newObjectName = $2;
+# close the previous object, if there is one
+            if ($objectType == 2) {
+                $LOGGER->fine("END scanning Contig $objectName");
+                if ($readlimit && scalar(keys %reads) >= $readlimit) {
+                    $truncated = 1;
+                    last;
+                }
+            }
+            $objectType = 0; # preset
+            my $objectInstance;
+            if ($newObjectName =~ /contig/i) {
+# it's a contig; decide if the new object has to be built
+                next unless $consensus;
+                next if $blockobject->{$newObjectName};
+                unless ($objectInstance = $contigs{$newObjectName}) {
+                    $objectInstance = new Contig($newObjectName);
+                    $contigs{$newObjectName} = $objectInstance;
+		}
+            }
+	    else {
+# the new data relate to a read
+                next if $blockobject->{$newObjectName};
+                unless ($objectInstance = $reads{$newObjectName}) {
+                    $objectInstance = new Read($newObjectName);
+                    $reads{$newObjectName} = $objectInstance;
+		}
+	    }
+# now read the file to the next blank line and accumulate the sequence or quality 
+            my $sequencedata = $record;
+$LOGGER->fine("Building DNA for $newObjectName");
+            while (defined(my $nextrecord = <$CAF>)) {
+                $lineCount++;
+                chomp $nextrecord;
+                last unless ($nextrecord =~ /\S/); # blank line
+                if ($nextrecord =~ /Sequence|DNA|BaseQuality/) {
+                    print STDERR "Missing blank after DNA or Quality block ($lineCount)\n";
+		    last;
+		}
+                $sequencedata .= $nextrecord;
+            }
+$LOGGER->fine("DONE DNA for $newObjectName");
+# store the sequence data in the 
+            if ($newObjectType eq 'DNA') {
+                $sequencedata =~ s/\s+//g; # remove all blank space
+                $objectInstance->setSequence($sequencedata);
+	    }
+	    elsif ($newObjectType eq 'BaseQuality') {
+                $BaseQuality =~ s/\s+/ /g; # clear redundent blank space
+                $BaseQuality =~ s/^\s|\s$//g; # remove leading/trailing
+                my @BaseQuality = split /\s/,$BaseQuality;
+                $objectInstance->setBaseQuality (\@BaseQuality);
+	    }
+	    else {
+		print STDERR "This should not occur ($lineCount)\n";
+	    }
+            next;
+	}
 
+        if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
+# a new object is detected
+            my $objectName = $1;
+# close the previous object, if there is one
+#          closeContig($objectName);
+            if ($objectType == 2) {
+                $LOGGER->fine("END scanning Contig $objectName");
+            }
+            $objectType = 0; # preset
+
+# THIS SHOULD GO BELOW
+            if ($objectName =~ /contig/i) {
+# it's a contig; decide if the new object has to be built
+                if ($blockobject->{$objectName}) {
+                    $objectType = -2; # forced discarding read objects
+                    if ($readlimit && scalar(keys %reads) >= $readlimit) {
+                        $truncated = 1;
+                        last;
+                    }
+                    next;
+                }
+                unless ($contig = $contigs{$objectName}) {
+                    $contig = new Contig($objectName);
+                    $contigs{$objectName} = $contig;
+		}
+                $objectType = 2; # activate processing contig data 
+            }
+	    else {
+# the new data relate to a read
+                next if $blockobject->{$objectName};
+                unless ($read = $reads{$objectName}) {
+                    $read = new Read($objectName);
+                    $reads{$objectName} = $read;
+		}
+                $objectType = 1; # activate processing read data
+	    }
+# TO HERE
+	}
+
+# REMOVE from HERE ?
+#$LOGGER->warning("TAG detected ($lineCount): $record") if ($record =~ /\bTag/);
+    my $IGNORETHIS = 0; unless ($IGNORETHIS) {
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
 # a new object is detected
             my $newObjectType = $1;
@@ -328,19 +682,26 @@ sub cafFileParser {
 #                                && ($aligntotracemapping->hasSegments() == 1));
                 }
 # for DNA and Quality 
-                elsif ($readblockhash->{$objectName}) {
+                elsif ($blockobject->{$objectName}) {
                     $objectType = 0;
 	        }
             }
             next;
         }
+    } # end IGNORETHIS
+#remove up to HERE
+
        
 # the next block handles a special case where 'Is_contig' is defined after 'assembled'
 
         if ($objectName =~ /contig/i && $record =~ /assemble/i 
                                      && abs($objectType) != 2) {
 # decide if this contig is to be included
-             if ($contignamefilter !~ /\S/ || $objectName =~ /$contignamefilter/) {
+            my $include = 1;
+            $include = 0 if ($contignamefilter && $objectName =~ /$contignamefilter/);
+            $include = 0 if ($blockobject && $blockobject->{$objectName});
+            if ($include) {
+#        if ($contignamefilter !~ /\S/ || $objectName =~ /$contignamefilter/) {
                 $LOGGER->fine("NEW contig $objectName: ($lineCount) $record");
                 if (!($contig = $contigs{$objectName})) {
 # create a new Contig instance and add it to the Contigs inventory
@@ -379,11 +740,10 @@ sub cafFileParser {
 
         elsif ($record =~ /Is_read/) {
 # decide if this read is to be included
-            if ($readblockhash->{$objectName}) {
+            if ($blockobject->{$objectName}) {
 # no, don't want it; does the read already exist?
                 $read = $reads{$objectName};
                 if ($read && $lowMemory) {
-                    $read->DESTROY;
                     delete $reads{$objectName};
                 } 
                 $objectType = 0;
@@ -573,8 +933,8 @@ sub cafFileParser {
                     my $entry = $mapping->addAssembledFrom(@positions); 
 # $entry returns number of alignments: add Mapping and Read for first
                     if ($entry == 1) {
-                        unless ($readnameblocker && 
-                                $read->getReadName =~ /$readnameblocker/) {
+                        unless ($readnamefilter && 
+                                $read->getReadName =~ /$readnamefilter/) {
                             $contig->addMapping($mapping);
                             $contig->addRead($read);
                         }
@@ -629,9 +989,14 @@ sub cafFileParser {
 # pickup repeat name
                 if ($type eq 'REPT') {
                     $contig->addTag($tag);
+                    $info =~ s/\s*\=\s*/=/g;
 		    if ($info =~ /^\s*(\S+)\s+from/i) {
-                        $tag->setTagSequenceName($1);
+                        my $tagname = $1;
+                        $tagname =~ s/r\=/REPT/i;
+                        $tag->setTagSequenceName($tagname);
 	            }
+#		    elsif ($info =~ /^\s*(\S+)\s+from/i) {
+#		    }
                     else {
 		        $LOGGER->info("Missing repeat name in contig tag for ".
                              $contig->getContigName().": ($lineCount) $record");
@@ -663,13 +1028,12 @@ $LOGGER->warning("ignored: ($lineCount) $record");
         elsif ($objectType == -2) {
 # processing a contig which has to be ignored: inhibit its reads to save memory
             if ($record =~ /Ass\w+from\s(\S+)\s(.*)$/) {
-                $readblockhash->{$1}++; # add read in this contig to the block list
-                $LOGGER->finest("read $1 blocked") unless (keys %$readblockhash)%100;
+                $blockobject->{$1}++; # add read in this contig to the block list
+                $LOGGER->finest("read $1 blocked") unless (keys %$blockobject)%100;
 # remove existing Read instance
                 $read = $reads{$1};
                 if ($read && $lowMemory) {
                     delete $reads{$1};
-                    $read->DESTROY;
                 }
             }
         }
@@ -707,18 +1071,567 @@ $LOGGER->warning("ignored: ($lineCount) $record");
 
 # return array references for contigs and reads 
 
-    my $contigs = [];
+    my $objects = [];
     foreach my $key (keys %contigs) {
-        push @$contigs, $contigs{$key};
+        my $contig = $contigs{$key};
+        push @$objects, $contig;
+        my $creads = $contig->getReads();
+        foreach my $read (@$creads) {
+            delete $reads{$read->getReadName()};
+        }
     }
-
+#add any remaining reads
     my $reads = [];
     foreach my $key (keys %reads) {
-        push @$reads, $reads{$key};
+        push @$objects, $reads{$key};
     }
 
-    return $contigs,$reads;
+    return $objects,$truncated;
 }
+
+sub parseDNA {
+# read DNA block from the file handle; the file must be positioned at the right
+# position before invoking this method: either before the line with DNA keyword
+# or at the start of the actual data block
+    my $CAF  = shift;
+    my $object = shift; # Read or Contig
+    my $line = shift; # starting line in the file (re: error reporting)
+    my %options = @_;
+
+    &verifyPrivate($CAF,'parseDNA');
+
+# test if it is indeed the start of a DNA block
+
+    my $record;
+
+    unless ($options{nolinetest}) {
+
+# test for the line with DNA keyword; cross check the object name
+
+        $record = <$CAF>;
+        chomp $record;
+
+        if ($record =~ /^\s*DNA\s*\:?\s*(\S+)/) {
+            my $objectname = $1;
+            my $name = $object->getName();
+            if ($name && $objectname ne $name) {
+                $LOGGER->severe("Incompatible object names ($line: $name $objectname)");
+                return 0;
+            }
+            elsif (!$name) {
+                $object->setName($objectname);
+            }
+	}
+        else {
+            $LOGGER->severe("Position error on CAF file ($line: $record)");
+            return 0;
+        }
+    }
+
+    $LOGGER->fine("Building DNA for ".$object->getName());
+
+# read the data block
+    
+    my $sequencedata = '';
+    while (defined($record = <$CAF>)) {
+        $line++;
+        chomp $record;
+        last unless ($record =~ /\S/); # blank line
+        if ($record =~ /Sequence|DNA|BaseQuality/) {
+            print STDERR "Missing blank after DNA block ($line)\n";
+	    last;
+	}
+        $sequencedata .= $record;
+    }
+
+# add the DNA to the object provided
+
+    if ($sequencedata) {
+        $sequencedata =~ s/\s+//g; # remove all blank space
+        $object->setSequence($sequencedata);
+    }
+    else {
+        $LOGGER->warning("$line: empty DNA block detected for ".$object->getName());
+    }
+
+    return $line;
+}
+
+sub parseBaseQuality {
+# read BaseQuality block from the file handle; the file must be positioned at the
+# correct position before invoking this method: either before the line with BaseQuality
+# keyword or at the start of the actual data block
+    my $CAF  = shift;
+    my $object = shift; # Read or Contig
+    my $line = shift; # starting line in the file (re: error reporting)
+    my %options = @_;
+
+    &verifyPrivate($CAF,'parseBaseQuality');
+
+# test if it is indeed the start of a base quality block
+
+    my $record;
+
+    unless ($options{nolinetest}) {
+
+# test for the line with DNA keyword; cross check the object name
+
+        $record = <$CAF>;
+        chomp $record;
+        $line++;
+
+        if ($record =~ /^\s*BaseQuality\s*\:?\s*(\S+)/) {
+            my $objectname = $1;
+            my $name = $object->getName();
+            if ($name && $objectname ne $name) {
+                $LOGGER->severe("Incompatible object names ($line: $name $objectname)");
+                return 0,$line;
+            }
+            elsif (!$name) {
+                $object->setName($objectname);
+            }
+	}
+        else {
+            $LOGGER->severe("Position error on CAF file ($line: $record)");
+            return 0,$line;
+        }
+    }
+
+    $LOGGER->fine("Building Base Quality for ".$object->getName());
+
+# read the data block
+    
+    my $qualitydata = '';
+    while (defined($record = <$CAF>)) {
+        $line++;
+        chomp $record;
+        last unless ($record =~ /\S/); # blank line
+        if ($record =~ /Sequence|DNA|BaseQuality/) {
+            print STDERR "Missing blank after DNA block ($line)\n";
+	    last;
+	}
+        $qualitydata .= $record;
+    }
+
+# add the BaseQuality to the object provided
+
+    if ($qualitydata) {
+        $qualitydata =~ s/^\s+|\s+$//g; # remove leading/trailing
+        my @BaseQuality = split /\s+/,$qualitydata;
+        $object->setBaseQuality (\@BaseQuality);
+   }
+    else {
+        $LOGGER->warning("$line: empty Base Quality block detected for ".$object->getName());
+    }
+
+    return 1,$line;
+}
+
+sub parseContig {
+# read Read data block from the file handle; the file must be positioned at the
+# correct position before invoking this method: either before the line with Sequence
+# keyword or at the start of the actual data block
+    my $CAF  = shift;
+    my $contig = shift; # Contig instance with contigname defined
+    my $line = shift; # starting line in the file (re: error reporting)
+    my %options = @_;
+
+    &verifyPrivate($CAF,'parseContig');
+
+# test if it is indeed the start of a sequence block
+
+    my $record;
+    my $contigname;
+
+    unless ($options{nolinetest}) {
+
+# test for the line with DNA keyword; cross check the object name
+
+        $record = <$CAF>;
+        chomp $record;
+        $line++;
+
+        if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
+            $contigname = $1;
+            my $name = $contig->getContigName();
+            if ($name && $contigname ne $name) {
+                $LOGGER->severe("l:$line Incompatible object names ($name $contigname)");
+                return 0,$line;
+            }
+            elsif (!$name) {
+                $contig->setContigName($contigname);
+            }
+            $LOGGER->fine("l:$line Opening record verified: $record");
+	}
+        else {
+            $LOGGER->severe("Position error on CAF file ($line: $record)");
+            return 0,$line;
+        }
+    }
+
+# parse the file until the next blank record
+
+    my $contigtaglist = $options{contigtags} || '';
+    my $ignoretaglist = $options{ignoretags} || '';
+
+    $CTF = new ContigTagFactory() unless defined $CTF;
+
+    my $isUnpadded = 1;
+    my $readnamehash = {};
+    while (defined($record = <$CAF>)) {
+        $line++;
+        chomp $record;
+# check presence and compatibility of keywords
+        last unless ($record =~ /\S/); # blank line
+        if ($record =~ /Sequence|DNA|BaseQuality/) {
+            print STDERR "l:$line Missing blank line after Contig block\n";
+	    last;
+	}
+    
+        elsif ($record =~ /Is_read/) {
+            print STDERR "l:$line \"Is_read\" keyword incompatible with Contig block\n";
+            return 0,$line;
+        }
+        elsif ($record =~ /Is_contig/) {
+            $LOGGER->finest("l:$line NEW Contig $contigname: $record");
+            next;
+
+	}
+        elsif ($record =~ /Unpadded/) {
+	    next;
+	}
+        elsif ($record =~ /Is_padded/) {
+            unless ($options{allowpadded}) {
+                $LOGGER->severe("l:$line padded data not allowed");
+                return 0,$line;
+	    }
+            $isUnpadded = 0;
+        }
+
+# process 'Assembled_from' specification get constituent reads and mapping
+
+        if ($record =~ /Ass\w+from\s+(\S+)\s+(.*)$/) {
+# an Assembled from alignment
+            my $readname = $1;
+            my $readdata = $readnamehash->{$readname};
+            unless (defined($readdata)) {
+# on first encounter create the Mapping and Read for this readname
+                $readdata = []; # array (length 2)
+                $readdata->[0] = new Read($readname);
+                $readdata->[1] = new Mapping($readname);
+                $readnamehash->{$readname} = $readdata;
+                $contig->addMapping($readdata->[1]);
+                $contig->addRead($readdata->[0]);
+	    }            
+# add the alignment to the Mapping
+            my $mapping = $readdata->[1];
+            my @positions = split /\s+/,$2;
+            if (scalar @positions == 4) {
+# an asssembled from record; $entry returns number of alignments
+                my $entry = $mapping->addAssembledFrom(@positions); 
+# test number of alignments: a padded contig allows only one record per read
+                if (!$isUnpadded && $entry > 1) {
+                    $LOGGER->severe("l:$line Multiple 'assembled_from' records in "
+				    ."padded contig $contigname");
+                    next;
+                }
+            }
+        }
+
+# process contig tags
+ 
+        elsif ($record =~ /Tag\s+($contigtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+# detected a contig TAG
+            my $type = $1; my $tcps = $2; my $tcpf = $3; 
+            my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
+# test for a continuation mark (\n\); if so, read until no continuation mark
+            while ($info =~ /\\n\\\s*$/) {
+                if (defined($record = <$CAF>)) {
+                    chomp $record;
+                    $info .= $record;
+                    $line++;
+                }
+                else {
+                    $info .= '"'; # closing quote
+                }
+            }
+            $LOGGER->warning("CONTIG tag detected: $record\n"
+#           $LOGGER->info("CONTIG tag detected: $record\n"
+                           . "'$type' '$tcps' '$tcpf' '$info'");
+
+            if ($type eq 'ANNO') {
+                $info =~ s/expresion/expression/;
+                $type = 'COMM';
+	    }
+
+            my $tag = $CTF->makeTag($type,$tcps,$tcpf);
+
+            $tag->setTagComment($info);
+            if ($info =~ /([ACGT]{5,})/) {
+                $tag->setDNA($1);
+            }
+# pickup repeat name
+            if ($type eq 'REPT') {
+                $contig->addTag($tag);
+                $info =~ s/\s*\=\s*/=/g;
+		if ($info =~ /^\s*(\S+)\s+from/i) {
+                    my $tagname = $1;
+                    $tagname =~ s/r\=/REPT/i;
+                    $tag->setTagSequenceName($tagname);
+                }
+                else {
+		    $LOGGER->info("l:$line Missing repeat name in contig tag for "
+                                 ."$contigname: $record");
+                }
+            }
+            elsif ($info) {
+                $contig->addTag($tag);
+         	$LOGGER->fine($tag->writeToCaf());
+            }
+            else {
+	        $LOGGER->warning("l:$line Empty $type contig tag ignored");
+	    }
+       }
+       elsif ($ignoretaglist && $record =~ /Tag\s+($ignoretaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+                $LOGGER->info("l:$line CONTIG tag ignored: $record");
+	    }
+            elsif ($record =~ /Tag/) {
+$LOGGER->warning("l:$line CONTIG tag not recognized: $record");
+                $LOGGER->info("l:$line CONTIG tag not recognized: $record");
+            }
+            else {
+                $LOGGER->info("l:$line Ignored: $record");
+            }
+        }
+}
+
+sub parseRead {
+# read Read data block from the file handle; the file must be positioned at the
+# correct position before invoking this method: either before the line with Sequence
+# keyword or at the start of the actual data block
+    my $CAF  = shift;
+    my $read = shift; # Read instance with readname defined
+    my $line = shift; # starting line in the file (re: error reporting)
+    my %options = @_;
+
+    &verifyPrivate($CAF,'parseRead');
+
+# test if it is indeed the start of a sequence block
+
+    my $record;
+    my $readname;
+
+    unless ($options{nolinetest}) {
+
+# test for the line with DNA keyword; cross check the object name
+
+        $record = <$CAF>;
+        chomp $record;
+        $line++;
+
+        if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
+            $readname = $1;
+            my $name = $read->getReadName();
+            if ($name && $readname ne $name) {
+                $LOGGER->severe("l:$line Incompatible object names ($name $readname)");
+                return 0,$line;
+            }
+            elsif (!$name) {
+                $read->setReadName($readname);
+            }
+	}
+        else {
+            $LOGGER->severe("Position error on CAF file ($line: $record)");
+            return 0,$line;
+        }
+    }
+
+# parse the file until the next blank record
+
+    my $readtaglist = $options{readtags} || '';
+    my $edittaglist = $options{edittags} || '';
+
+    $RTF = new ReadTagFactory() unless defined $RTF;
+
+    my $isUnpadded = 1;
+    while (defined($record = <$CAF>)) {
+        $line++;
+        chomp $record;
+# check presence and compatibility of keywords
+        last unless ($record =~ /\S/); # blank line
+        if ($record =~ /Sequence|DNA|BaseQuality/) {
+            print STDERR "Missing blank line after Read block ($line)\n";
+	    last;
+	}
+    
+        elsif ($record =~ /Is_contig/) {
+            print STDERR "\"Is_contig\" keyword incompatible with Read block\n";
+            return 0,$line;
+        }
+        elsif ($record =~ /Is_read/) {
+            $LOGGER->finest("NEW Read $readname: ($line) $record");
+            next;
+
+	}
+        elsif ($record =~ /Unpadded/) {
+	    next;
+	}
+        elsif ($record =~ /Is_padded/) {
+            unless ($options{allowpadded}) {
+                $LOGGER->severe("l:$line padded data not allowed");
+                return 0,$line;
+	    }
+            $isUnpadded = 0;
+        }
+
+# processing a read, test for Alignments and Quality specification
+
+        if ($record =~ /Align\w+\s+((\d+)\s+(\d+)\s+(\d+)\s+(\d+))\s*$/) {
+# AlignToSCF for both padded and unpadded files
+            my @positions = split /\s+/,$1;
+            if (scalar @positions == 4) {
+                my $entry = $read->addAlignToTrace([@positions]);
+                if ($isUnpadded && $entry == 2) {
+                    $LOGGER->info("Edited read $readname detected ($line)");
+                }
+            }
+            else {
+                $LOGGER->severe("Invalid alignment: ($line) $record",2);
+                $LOGGER->severe("positions: @positions",2);
+            }
+        }
+    
+        elsif ($record =~ /Clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
+# low quality boundaries $1 $2
+            $read->setLowQualityLeft($1);
+            $read->setLowQualityRight($2);
+        }
+        elsif ($record =~ /Clipping\sphrap\s+(\d+)\s+(\d+)/i) {
+# should be a special testing method on Reads?, or maybe here
+#            $read->setLowQualityLeft($1); # was level 1 is not low quality!
+#            $read->setLowQualityRight($2);
+        }
+        elsif ($record =~ /Seq_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
+            $read->addSequencingVector([$4, $2, $3]);
+        }
+        elsif ($record =~ /Clone_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
+            $read->addCloningVector([$4, $2, $3]);
+        }
+
+# further processing a read Read TAGS and EDITs
+
+        elsif ($record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
+
+            my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
+# test for a continuation mark (\n\); if so, read until no continuation mark
+            while ($info =~ /\\n\\\s*$/) {
+                if (defined($record = <$CAF>)) {
+                    chomp $record;
+                    $info .= $record;
+                    $line++;
+                }
+                else {
+                    $info .= '"'; # closing quote
+                }
+            }
+# build a new read Tag instance
+	    my $tag = $RTF->makeTag($type,$trps,$trpf,TagComment => $info);
+
+#                my $tag = new Tag('readtag');
+#                $tag->setType($type);
+#                $tag->setPosition($trps,$trpf);
+#                $tag->setStrand('Forward');
+#                $tag->setTagComment($info);
+
+# the tag now contains the raw data read from the CAF file
+# invoke ReadTagFactory to process, cleanup and test the tag info
+#                $RTF->importTag($tag);
+
+            $RTF->cleanup($tag); # clean-up the tag info
+            if ($type eq 'OLIG' || $type eq 'AFOL') {        
+# oligo, staden(AFOL) or gap4 (OLIG)
+                my ($warning,$report) = $RTF->processOligoTag($tag);
+                $LOGGER->fine($report) if $warning;
+                unless ($tag->getTagSequenceName()) {
+		$LOGGER->warning("Missing oligo name in read tag for "
+                                . $read->getReadName()." (l:$line)");
+                        next; # don't load this tag
+	        }
+	    }
+            elsif ($type eq 'REPT') {
+# repeat read tags
+                unless ($RTF->processRepeatTag($tag)) {
+	        $LOGGER->info("Missing repeat name in read tag for "
+                             . $read->getReadName()." (l:$line)");
+                }
+            }
+            elsif ($type eq 'ADDI') {
+# chemistry read tag
+                unless ($RTF->processAdditiveTag($tag)) {
+                    $LOGGER->info("Invalid ADDI tag ignored for "
+                                 . $read->getReadName()." (l:$line)");
+                    next; # don't accept this tag
+                }
+ 	    }
+# test the comment; ignore tags with empty comment
+            unless ($tag->getTagComment() =~ /\S/) {
+	        $LOGGER->severe("Empty $type read tag ignored for "
+                               . $read->getReadName()." (l:$line)");
+                $LOGGER->warning($tag->writeToCaf(0));
+	        next; # don't accept this tag
+	    }
+# tag processing finished
+            $read->addTag($tag);
+        }
+
+# most of the following is not operational
+
+        elsif ($record =~ /Tag/ && $record =~ /$edittaglist/) {
+            $LOGGER->fine("READ EDIT tag detected but not processed: $record");
+        }
+        elsif ($record =~ /Tag/) {
+            $LOGGER->info("READ tag not recognized: $record");
+        }
+# EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
+        elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
+            $LOGGER->warning("readtag error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
+            my $tag = new Tag('edittag');
+            $tag->editReplace($5,$3.$4);
+            $read->addTag($tag);
+        }
+        elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
+            $LOGGER->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
+            my $tag = new Tag('edittag');
+	    $tag->editDelete($4,$3); # delete signalled by uc ATCG
+            $read->addTag($tag);
+        }
+        elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
+            $LOGGER->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
+            my $tag = new Tag('edittag');
+	    $tag->editDelete($4,$3); # insert signalled by lc atcg
+            $read->addTag($tag);
+        }
+     
+        elsif ($record =~ /Note\sINFO\s(.*)$/) {
+
+	    my $trpf = $read->getSequenceLength();
+#            my $tag = new Tag('readtag');
+#            $tag->setType($type);
+#            $tag->setPosition($trps,$trpf);
+#            $tag->setStrand('Forward');
+#            $tag->setTagComment($info);
+  	    $LOGGER->info("NOTE detected but not processed ($line): $record");
+        }
+# finally
+        elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
+            $LOGGER->warning("not recognized ($line): $record");
+        }
+    }
+
+    return 1,$line;
+}
+
+
 
 #-----------------------------------------------------------------------------
 # methods which take a Contig instance as input and (can) return a new Contig 
@@ -801,7 +1714,7 @@ $LOGGER->("ENTER deleteLowQualityBases @_") if $LOGGER;
 
     my $pads = &findlowquality($contig->getSequence(),
                                $contig->getBaseQuality(),
-# options: symbols (ACTG), threshold (20), minimum (15), window (9), lqpm (30)
+# options: symbols (ACTG), threshold (20), minimum (15), window (9), hqpm (30)
                                %options);
 
     unless ($pads) {
@@ -878,6 +1791,7 @@ sub replaceLowQualityBases {
     my $class = shift;
     my $contig = shift;
     my %options = @_;
+# print STDOUT "replaceLowQualityBases @_\n";
 
     &verifyParameter($contig,'replaceLowQualityBases');
 
@@ -1371,7 +2285,8 @@ sub findlowquality {
 # scan quality data and/or dna data; return an array of low quality positions
     my $sequence = shift;
     my $quality = shift;
-    my %options = @_; # print STDOUT "findlowquality options @_\n";
+    my %options = @_; 
+#print STDOUT "findlowquality options @_\n";
 
     &verifyPrivate($sequence,'findlowquality');
 
@@ -1386,17 +2301,21 @@ sub findlowquality {
         return undef unless ($length == length($sequence));
     }
 
-# get control parameters
+# get control parameters (minimum,threshold,hqpm)
 
     my $symbols   = $options{symbols} || 'ACGT';
-# finding low quality from data
-    my $threshold = $options{threshold} || 20; # lower than reference level 
-    my $minimum   = $options{minimum}   || 15; # but higher than this minimum
+# finding low quality from data using quality reference level and threshold 
+    $options{threshold} = 20 unless defined($options{threshold});
+    my $threshold = $options{threshold};
+# but use a quality higher than this minimum (re: low quality regions)
+    $options{minimum} = 15 unless defined($options{minimum});
+    my $minimum = $options{minimum}; 
 # judging if low-quality pad symbol (eg N,X) already present is significant
-    $options{lqpm} = 30 unless defined($options{lqpm});
-    my $lowqualitypadminimum = $options{lqpm};
+    $options{hqpm} = 30 unless defined($options{hqpm});
+    my $highqualitypadminimum = $options{hqpm};
 # ensure an odd window length for default reference level determination
-    my $fwindow   = $options{window}    ||  9;
+    $options{window} = 9 unless $options{window};
+    my $fwindow = $options{window};
     my $hwindow = int($fwindow/2);
     $options{window} = 2 * $hwindow + 1;
 
@@ -1407,21 +2326,22 @@ sub findlowquality {
     my $reference = &slidingmeanfilter($quality,$fwindow) || [];
 
     for (my $i = $hwindow ; $i <= $length - $hwindow ; $i++) {
-# test the base
+# test the base against accepted symbols ("high" quality pads)
         if ($sequence && substr($sequence, $i, 1) !~ /[$symbols]$/) {
-# print STDERR "alien symbol found: ". substr($sequence, $i, 1) . " $quality->[$i]\n";
-            next if ($quality->[$i] < $lowqualitypadminimum);
+# setting $highqualitypadminimum to 0 accepts ALL (non) matches as "real" pad
+            next unless ($quality->[$i] >= $highqualitypadminimum); # NOT LQ
             push @$pads, $i; # zeropoint 0
             next;
 	}
-# there's a base at this position; test the quality 
-# if no reference level provided use a default mean filter
+# there's a base at this position; test the quality against a reference level
+# if no reference level provided determine it using a default mean filter
         unless ($reference && $reference->[$i]) {
             $reference->[$i] = ($quality->[$i-2] + $quality->[$i+2]) / 2;
 	}
-# test the quality
-        if ($quality->[$i] < $reference->[$i] - $threshold) {
-            next if ($quality->[$i] >= $minimum);
+# test the quality: LQ when deviation is larger than the threshold
+        if ($reference->[$i] - $quality->[$i] > $threshold) {
+# but itself not too high; setting minimum to 0 accepts NONE as low quality pad
+            next if ($quality->[$i] >= $minimum); 
             push @$pads, $i; # zeropoint 0
 	}
     }
