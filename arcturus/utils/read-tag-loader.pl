@@ -158,8 +158,23 @@ foreach my $Read (@Reads) {
     elsif ($tagtext eq 'clone') {
 	$tagtext = "CN ".$Read->getClone();
     }
+    elsif ($tagtext eq 'cvector' || $tagtext eq 'cloningvector') {
+	$tagtext = "CV ".$Read->getCloningVector();
+    }
+    elsif ($tagtext eq 'svector' || $tagtext eq 'sequencingvector') {
+	$tagtext = "CV ".$Read->getCloningVector();
+    }
     elsif ($tagtext eq 'all') {
-        $tagtext = "CN ".$Read->getClone()."  LI ".$Read->getLigation();
+        $tagtext  = "CN ".$Read->getClone()."  LI ".$Read->getLigation();
+        if (my $vector = $Read->getSequencingVector()) {
+	    $tagtext .= " SV $vector->[0]->[0]";
+        } 
+        if (my $vector = $Read->getCloningVector()) {
+	    $tagtext .= " CV $vector->[0]->[0]";
+        } 
+    }
+    elsif ($tagtext) {
+#	$logger->severe("Invalid tagtext $tagtext");
     }
     $tag->setTagComment($tagtext);
 
