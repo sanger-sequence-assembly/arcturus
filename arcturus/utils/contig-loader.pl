@@ -158,7 +158,7 @@ if (!$adb || $adb->errorStatus()) {
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
 
-$adb->setErrorLog($errorlog); # if redirect?
+#$adb->setErrorLog($errorlog); # if redirect?
 
 $adb->setRDEBUG(1) if $debug;
 
