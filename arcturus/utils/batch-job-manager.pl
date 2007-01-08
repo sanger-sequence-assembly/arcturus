@@ -17,6 +17,8 @@ my $project;
 my $assembly;
 my $fopn;
 
+my $subdir;
+
 my $ioport;
 my $delayed;
 my $batch;
@@ -25,7 +27,8 @@ my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|instance|project|assembly|fopn|import|export|"
-               . "batch|nobatch|delayed|verbose|debug|confirm|submit|help";
+               . "batch|nobatch|delayed|subdir|sd|r|"
+               . "verbose|debug|confirm|submit|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -50,6 +53,10 @@ while (my $nextword = shift @ARGV) {
     $fopn         = shift @ARGV    if ($nextword eq '-fopn');
 
     $delayed      = 1              if ($nextword eq '-delayed');
+
+    $subdir       = 1              if ($nextword eq '-subdir');
+    $subdir       = 1              if ($nextword eq '-sd');
+    $subdir       = 1              if ($nextword eq '-r');
 
     if ($nextword eq '-import' || $nextword eq '-export') {
         &showUsage("Invalid input parameter $nextword") if ($ioport);
@@ -136,6 +143,11 @@ elsif ($fopn) {
 
 #----------------------------------------------------------------
 
+# det get current directory
+
+my $pwd = `pwd`;
+chomp $pwd;
+
 # get the repository position
 
 my $work_dir = `pfind -q $organism`;
@@ -155,6 +167,16 @@ $work_dir .= "/arcturus/import-export"; # full work directory
 my $date = `date +%Y%m%d`; $date =~ s/\s//g;
 
 foreach my $project (@projects) {
+
+    if ($subdir) {
+        my $subdir = "$pwd/$project";
+        chdir ($subdir);
+        my $newpwd = `pwd`;
+        chomp $newpwd;
+        unless ($newpwd eq $subdir) {
+            $logger->warning("FAILED to find subdir $project");
+	}
+    }
 
     if ($batch) {
 # export by batch job
@@ -211,6 +233,8 @@ foreach my $project (@projects) {
             $logger->severe("failed to ${ioport} project $project");
         }
     }
+
+    chdir ($pwd) if $subdir;
 }
 
 exit 0;
