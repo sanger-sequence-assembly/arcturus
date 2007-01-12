@@ -43,7 +43,6 @@ public class Arcturus {
 			if (file.exists() && file.canRead()) {
 				try {
 					FileInputStream fis = new FileInputStream(file);
-					arcturusProps = new Properties(arcturusProps);
 					arcturusProps.load(fis);
 					fis.close();
 					found = true;
