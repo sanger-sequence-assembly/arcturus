@@ -176,6 +176,7 @@ foreach my $project (@projects) {
         unless ($newpwd eq $subdir) {
             $logger->warning("FAILED to find subdir $project");
 	}
+        $logger->info("Project directory $newpwd used");
     }
 
     if ($batch) {
