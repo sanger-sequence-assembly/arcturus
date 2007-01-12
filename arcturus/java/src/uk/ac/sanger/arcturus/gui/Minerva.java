@@ -159,7 +159,7 @@ public class Minerva implements WindowListener {
 		String organism = getStringParameter(args, "-organism");
 
 		if (instance == null)
-			instance = Arcturus.getProperty("arcturus.default.instance");
+			instance = Arcturus.getDefaultInstance();
 		
 		if (instance != null) {
 			if (organism == null) {
