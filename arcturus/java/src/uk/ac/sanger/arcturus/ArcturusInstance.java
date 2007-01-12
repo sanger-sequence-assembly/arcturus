@@ -68,15 +68,19 @@ public class ArcturusInstance implements Iterator {
 	 * @param name
 	 *            the name of the LDAP sub-directory, relative to the root
 	 *            context specified via the java.naming.provider.url system
-	 *            property.  If this is null, then the Arcturus global property
-	 *            arcturus.default.instance will be used instead.  If that
-	 *            property is null, then null is returned.
+	 *            property.  If this is null, then the Arcturus global properties
+	 *            arcturus.instance or arcturus.default.instance will be examined.
+	 *            If either of these properties is defined, it will be used.
+	 *            Otherwise, null is returned.
 	 * 
-	 * @return a new ArcturusDatabaseArcturusInstance object.
+	 * @return a new ArcturusInstance object.
 	 */
 
 	public static ArcturusInstance getInstance(String name)
 			throws NamingException {
+		if (name == null)
+			name = Arcturus.getProperty("arcturus.instance");
+
 		if (name == null)
 			name = Arcturus.getProperty("arcturus.default.instance");
 
@@ -86,6 +90,18 @@ public class ArcturusInstance implements Iterator {
 		Properties arcturusProps = Arcturus.getProperties();
 
 		return new ArcturusInstance(arcturusProps, name);
+	}
+	
+	/**
+	 * Returns an ArcturusInstance object using the name defined in either
+	 * the arcturus.instance or arcturus.default.instance global properties.
+	 * If neither of these is defined, null is returned.
+	 * 
+	 * @return a new ArcturusInstance object.
+	 * @throws NamingException
+	 */
+	public static ArcturusInstance getDefaultInstance() throws NamingException {
+		return getInstance(null);
 	}
 
 	/**
@@ -110,6 +126,9 @@ public class ArcturusInstance implements Iterator {
 
 	public ArcturusDatabase findArcturusDatabase(String name)
 			throws NamingException, SQLException {
+		if (name == null)
+			return null;
+		
 		String cn = "cn=" + name;
 
 		DataSource ds = (DataSource) context.lookup(cn);
@@ -117,6 +136,23 @@ public class ArcturusInstance implements Iterator {
 		String description = getDescription(name);
 
 		return new ArcturusDatabase(ds, description, name);
+	}
+	
+	/**
+	 * Creates a new ActurusDatabase object using the organism name specified
+	 * in the Arcturus global property "arcturus.organism".  If this property is
+	 * not defined, then null is returned.
+	 * 
+	 * @return a new ArcturusDatabase object.
+	 * @throws NamingException
+	 * @throws SQLException
+	 */
+	
+	public ArcturusDatabase getDefaultDatabase()
+		throws NamingException, SQLException {
+		String organism = Arcturus.getProperty("arcturus.organism");
+
+		return findArcturusDatabase(organism);
 	}
 
 	private String getDescription(String name) throws NamingException {
