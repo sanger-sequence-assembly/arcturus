@@ -15,6 +15,7 @@ my $organism;
 
 my $project;
 my $subdir = '';
+my $recursive;
 
 my $filter;
 
@@ -26,7 +27,7 @@ my $info;
 # parse the command line input; options overwrite eachother; order is important
 #------------------------------------------------------------------------------
 
-my $validkeys = "project|p|verify|v|status|s|subdir|sd|filter|f";
+my $validkeys = "project|p|verify|v|status|s|subdir|sd|filter|f|recursive|r";
 
 while (my $nextword = shift @ARGV) {
 
@@ -57,6 +58,8 @@ while (my $nextword = shift @ARGV) {
     $subdir  = shift @ARGV  if ($nextword eq '-subdir'  || $nextword eq '-sd');
 
     $filter  = shift @ARGV  if ($nextword eq '-filter'  || $nextword eq '-f');
+
+    $recursive = 1        if ($nextword eq '-recursive' || $nextword eq '-r');
 
     &showUsage(0)           if ($nextword eq '-help'    || $nextword eq '-h');
 }
@@ -116,7 +119,27 @@ print STDOUT "inv:  $invocation\n";
 else {
 # status analysis: get the projects in the current directory
 
-    my ($projects,$msg) = &findprojects($project,$subdir);
+    my $projects = [];
+    my $msg;
+
+    if ($recursive) {
+        my $pwd = `pwd`;
+        chomp $pwd;
+        opendir DIR, $pwd || die "serious problems: $!";
+        my @files = readdir DIR;
+        closedir DIR;
+        foreach my $file (@files) {
+            next unless (-d $file);
+            next if ($filter && $file !~ /$filter/);
+           (my $list,$msg) = &findprojects($project,$file);
+            foreach my $entry (@$list) {
+                push @$projects,"$file/$entry";
+	    }
+	}
+    }
+    else {
+        ($projects,$msg) = &findprojects($project,$subdir);
+    }
 
     &showUsage($msg) unless (@$projects);
 
@@ -174,9 +197,17 @@ sub findprojects {
 
     my @projects = sort keys %$projecthash;
 
-    return [@projects], "OK" if @projects; 
+    if (@projects) {
 
-    return [@projects], "project $project not found in $pwd" unless @projects;
+        return [@projects], "OK";
+    }
+    elsif ($project) {
+ 
+        return [@projects], "project $project not found in $pwd";
+    }
+    else {
+        return [@projects], "no project found in $pwd";
+    }
 }
 
 sub showUsage {
