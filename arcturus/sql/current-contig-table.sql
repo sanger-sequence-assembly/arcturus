@@ -8,7 +8,7 @@ create temporary table currentcontigs (
   updated datetime not null,
   project_id int unsigned not null,
   primary key (contig_id),
-  unique key (gap4name),
+  key (gap4name),
   key (project_id)
 );
 
