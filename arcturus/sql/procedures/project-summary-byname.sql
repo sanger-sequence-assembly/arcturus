@@ -3,7 +3,8 @@ DELIMITER $
 DROP PROCEDURE IF EXISTS procProjectSummaryByName$
 
 CREATE PROCEDURE procProjectSummaryByName(IN minContigSize INT, IN projectName VARCHAR(30))
-    READS SQL DATA
+  READS SQL DATA
+  SQL SECURITY INVOKER
 BEGIN
   DECLARE intProjectId INT;
   DECLARE intProjectNotFound INT DEFAULT 0;

@@ -3,7 +3,8 @@ DELIMITER $
 DROP PROCEDURE IF EXISTS procProjectSummary$
 
 CREATE PROCEDURE procProjectSummary(IN minContigSize INT)
-    READS SQL DATA
+  READS SQL DATA
+  SQL SECURITY INVOKER
 BEGIN
   select PROJECT.name, count(*) as contigs,
     sum(nreads) as nreads, sum(length) as length,
