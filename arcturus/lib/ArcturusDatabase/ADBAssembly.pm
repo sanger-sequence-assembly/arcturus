@@ -22,6 +22,8 @@ sub new {
     return $this;
 }
 
+my $READS = 'READS'; # class variable TO REPLACED BY 'READINFO'
+
 #-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------
 
@@ -63,6 +65,7 @@ sub putAssembly {
 }
 
 #-----------------------------------------------------------------------------
+# 
 #-----------------------------------------------------------------------------
 
 sub getAssembly {
@@ -91,7 +94,8 @@ sub getAssembly {
             $query .= " ASSEMBLY.name like ?"     if ($key eq 'assemblyname');
         }
 	else {
-            print STDERR " invalid input for 'getAssembly'\n";
+            my $log = $this->verifyLogger("getAssembly");
+            $log->error("Invalid option $key");
 	}
     }
 
@@ -174,12 +178,12 @@ sub getAssemblyDataforReadName {
     my $projectitems = "PROJECT.name,PROJECT.owner,assembly_id";
 
     my $query = "select distinct $contig_items,$projectitems,CONTIG.nreads"
-              . "  from READS,SEQ2READ,MAPPING,CONTIG,PROJECT"
+              . "  from $READS,SEQ2READ,MAPPING,CONTIG,PROJECT"
               . " where CONTIG.project_id = PROJECT.project_id"
               . "   and CONTIG.contig_id = MAPPING.contig_id"
 	      . "   and MAPPING.seq_id = SEQ2READ.seq_id"
-	      . "   and SEQ2READ.read_id = READS.read_id"
-	      . "   and READS.$readitem = ?"
+	      . "   and SEQ2READ.read_id = $READS.read_id"
+	      . "   and $READS.$readitem = ?"
               . " order by contig_id DESC";
 
     my $dbh = $this->getConnection();
