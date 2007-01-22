@@ -11,134 +11,450 @@ use FileHandle;
 my $linebreak;
 
 #-------------------------------------------------------
-# Constructor always defines a filehandle
+# Constructor always sets to 'info' filter level
 #-------------------------------------------------------
 
 sub new {
-# second parameter passed on to setOutputDevice 
+# optional parameter interpreted as standard output device
     my $class  = shift;
 
     my $this = {};
 
     bless $this, $class;
 
-    $this->setOutputDevice(@_);
+# allocate a list of hashes for stream parameters (4 handles)
 
-    $this->{filter} = 3; # default cut at warning level
+    my @streams;
+    $this->{STREAMS} = \@streams;
+    for my $i (0 .. 4) {
+        my $stream = {};
+        $stream->{handle} = 0;  # for the e.g. file handle
+        $stream->{device} = 0;  # for the device name
+        $stream->{blocked} = 0; # for the blocked status
+        $stream->{method} = 0;
+        push @streams,$stream;       
+    }
 
-    $linebreak = $ENV{REQUEST_METHOD} ? "<br>" : "\n";
+    $this->setStandardFilter('warning');
+
+    $this->setStandardStream(@_) if @_;
+
+    $linebreak = $ENV{REQUEST_METHOD} ? "<br>" : "\n"; # class variable
 
     return $this;
 }
 
-sub setOutputDevice {
+#---------------------------------------------------------
+# methods that write to the various output devices
+#---------------------------------------------------------
 
-    my $this   = shift;
-    my $output = shift;
-
-    if (defined($output) && $output =~ /STDOUT|STDERR/) {
-        $this->{output} = new FileHandle(">&${output}");
-    }
-    elsif (defined($output)) {
-        $this->{output} = new FileHandle($output,"w");
-#print "output device: $this->{output}\n";
-    }
-    else {
-        $this->{output} = new FileHandle(">&STDERR");
-    }
+sub severe {
+# write message to the standard log
+    my $this = shift;
+ 
+    return unless $this->testStandardFilter(4);
+    &write(&getOutputStream($this->{STREAMS},0),@_);
 }
 
-sub getOutputDevice {
+sub warning {
+# write message to the standard log
+    my $this = shift;
 
-    my $this   = shift;
-
-    return $this->{output};
+    return unless $this->testStandardFilter(3);
+    &write(&getOutputStream($this->{STREAMS},0),@_);
 }
+
+sub info {
+# write message to the standard log
+    my $this = shift;
+
+    return unless $this->testStandardFilter(2);
+    &write(&getOutputStream($this->{STREAMS},0),@_);
+}
+
+sub fine {
+# write message to the standard log
+    my $this = shift;
+
+    return unless $this->testStandardFilter(1);
+    &write(&getOutputStream($this->{STREAMS},0),@_);
+}
+
+sub finest {
+# write message to the standard log
+    my $this = shift;
+
+    return unless $this->testStandardFilter(0);
+    &write(&getOutputStream($this->{STREAMS},0),@_);
+}
+
+sub error {
+# write message to the error log
+    my $this = shift;
+    my $text = shift;
+    my %options = @_;
+
+    $options{prefix} = $this->getPrefix() unless defined($options{prefix});
+
+    &write(&getOutputStream($this->{STREAMS},1),$text,%options);
+}
+
+sub special {
+# write message to special log
+    my $this = shift;
+    my $text = shift;
+
+    &write(&getOutputStream($this->{STREAMS},2),$text,@_);
+}
+
+sub debug {
+# write message to the debug log
+    my $this = shift;
+    my $text = shift;
+    my %options = @_;
+
+    $options{prefix} = $this->getPrefix() unless defined($options{prefix});
+
+    &write(&getOutputStream($this->{STREAMS},3),$text,%options);
+}
+
+#--------------------------------------------------------------
+# standard output stream filter setting blocks all levels below  
+# e.g. level 'info' lets through: 'info','warning' and 'severe'
+#                   but cuts out: 'fine' and 'finest'
+# e.g. level 'severe' will only print that level
+#--------------------------------------------------------------
 
 sub setFilter {
+print STDERR "Logging->setFilter TO BE DEPRECATED\n"; 
+&setStandardFilter(@_); # alias TO BE DEPRECATED
+}
 
+sub setStandardFilter {
+# define filter level either by number (0 ... 5) or by name
     my $this = shift;
     my $clip = shift;
+
+    if ($clip && $clip =~ /\D/) {
+        my %level = ( finest => 0,   fine => 1,    info => 2, 
+                     warning => 3, severe => 4, suspend => 5);
+        $clip = $level{$clip};
+    }
+
+    $clip = 2 unless defined $clip; # default 'info' level
 
     $this->{filter} = $clip;
 }
 
-sub log {
-
+sub testStandardFilter {
     my $this = shift;
-    my $line = shift;
-    my $clip = shift;
+    my $test = shift;
 
-    $clip = 0 unless defined($clip);
-
-    return if ($clip < $this->{filter});
-
-    return unless (defined($line) && $line =~ /\S/);
-
-    my $OUTPUT = $this->{output} || return; # the file handle
-
-    $line =~ s/\s+$//; # remove trailing blank space
-
-    print $OUTPUT "$line$linebreak";
+   ($this->{filter} <= $test) ? return 1 : return 0;
 }
 
-sub skip {
+#-----------------------------------------------------------------------
+# Output Stream definitions
+#-----------------------------------------------------------------------
+
+sub setStandardStream {
+# define explicitly the standard output stream
     my $this = shift;
+    my $file = shift;
+    my %options = @_;
 
-    my $OUTPUT = $this->{output} || return; # the file handle
-
-    print $OUTPUT "$linebreak";
+    return &setStream($this->{STREAMS},0,$file,alias=>'standard',@_);
 }
 
-sub severe {
-# level 4
+sub setErrorStream {
+# define explicitly the error output stream
     my $this = shift;
+    my $file = shift;
+    my %options = @_;
 
-    $this->log(shift,4);
+    return &setStream($this->{STREAMS},1,$file,alias=>'error',@_);
 }
 
-sub warning {
-# level 3
+sub setSpecialStream {
+# define explicitly the special output stream
     my $this = shift;
+    my $file = shift;
+    my %options = @_; # append=>, list=>, [type=> and db specs]
 
-    $this->log(shift,3);
+    return &setStream($this->{STREAMS},2,$file,alias=>'special',@_);
 }
 
-sub info {
-# level 2
+sub setDebugStream {
+# define explicitly the special output stream
     my $this = shift;
+    my $file = shift;
+    my %options = @_;
 
-    $this->log(shift,2);
-
+    return &setStream($this->{STREAMS},3,$file,alias=>'debug',@_);
 }
 
-sub fine {
-# level 1
+sub closeStreams {
+# close the file handles
     my $this = shift;
 
-    $this->log(shift,1);
+    my $streams = $this->{STREAMS};
+
+    my %closed;
+    foreach my $stream (@$streams) {
+        my $handle = $stream->{handle};
+        next unless $handle;
+# redirected streams need to be closed only once
+        &closeDevice($handle) unless($closed{$handle}++); 
+        $stream = {};
+    }
 }
 
-sub finest {
-# level 0
+#-----------------------------------------------------------------------
+
+sub setPrefix {
     my $this = shift;
 
-    $this->log(shift,0);
+    $this->{prefix} = shift;
 }
 
-sub close {
-# close the file handle
+sub getPrefix {
     my $this = shift;
 
-    my $OUTPUT = $this->{output} || return; # the file handle
-
-    $OUTPUT->close();
-
-    delete $this->{output};    
+    return $this->{prefix};
 }
 
-#-------------------------------------------------------
+#-----------------------------------------------------------------------
+#  private methods and helper methods 
+#-----------------------------------------------------------------------
+
+sub openDevice {
+    my $device = shift || return undef;
+    my $append = shift;
+
+    &verifyPrivate($device,'openDevice');
+
+    my $handle = new FileHandle();
+
+    if ($device =~ /^STDOUT|STDERR$/) {
+        $handle = new FileHandle(">&${device}");
+    }
+    elsif ($append) {
+        $handle = new FileHandle($device,"a");
+    }
+    else {
+        $handle = new FileHandle($device,"w");
+    }
+
+    return $handle;
+}
+
+sub closeDevice {
+# close the deviice, if it exists
+    my $device = shift || return;
+
+    &verifyPrivate($device,'closeDevice');
+
+    return unless (ref($device) eq 'FileHandle');
+
+    $device->flush();
+    $device->close();
+}
+
+#-----------------------------------------------------------------
+
+sub setStream {
+    my $streams = shift; # array of stream hashes
+    my $number = shift;
+    my $device = shift; # device name (e.g. filename)
+    my %options = @_; # type=>, append=>, alias=>, list =>
+
+# verify input parameters
+
+    &verifyPrivate($streams,'setStream');
+
+    return 0 unless defined ($streams->[$number]); # invalid stream number
+
+    return 0 unless $device; # missing device
+
+# check if the device already exists, if so copy the handle
+
+    for (my $i = 0 ; $i < scalar(@$streams) ; $i++) {
+        my $stream = $streams->[$i];
+        next unless ($stream->{device} && $device eq $stream->{device});
+# the named device is already open for writing; if so redirect and unblock
+        return 1 if ($i == $number); # same device and stream
+        print STDOUT "Re-directing stream '$options{alias}' to existing "
+                   . "stream on $device\n" if $options{list};
+        foreach my $key ('handle','device','type') {
+            $streams->[$number]->{$key} = $stream->{$key};
+        }
+        $streams->[$number]->{blocked} = 0;
+        return 1;
+    }
+
+# the device is new
+
+    my $stream = $streams->[$number];
+    if (ref($device) eq 'FileHandle') {
+# the device is an externally defined file handle
+        $stream->{handle} = $device; # the FileHandle
+        $stream->{device} = $device; # the FileHandle
+        $stream->{blocked} = 0;
+        $stream->{method} = 'print';
+    }
+    elsif (ref($device)) {
+# it's e.g. a database handle
+        $stream->{handle} = $device;
+        $stream->{device} = $device->getURL() if $options{url};
+        $stream->{device} = $device       unless $options{url};
+        $stream->{blocked} = 0;
+        $stream->{method} = $options{method} || 'write';
+    }
+    else {
+# it's a string, to be taken as filename
+        return &setOutputStream($streams->[$number],$device,@_);
+    }
+}
+
+sub setOutputStream {
+# open an output stream to a FileHandle
+    my $stream = shift; # a hash
+    my $device = shift || 0; # a name
+    my %options = @_; # alias=> , list=> , append=>
+
+    &verifyPrivate($stream,'setOutputStream');
+
+    my $handle = $stream->{handle};
+    &closeDevice($handle) if $handle;
+    $stream->{handle} = &openDevice($device,$options{append});
+    $stream->{device} = $device;
+    $stream->{blocked} = 0;
+    $stream->{method} = 'print';
+
+    my $alias = $options{alias};
+    unless ($stream->{handle}) {
+        print STDERR "Failed to open $device for $alias output ($!)\n";
+        return 0;
+    } 
+
+    print STDOUT "$device opened for $alias output stream\n" if $options{list};
+    return 1;
+}
+
+sub getOutputStream {
+# return the numbered output stream with default provision
+    my $streams = shift; # array of stream hashes
+    my $number = shift; # stream number
+#print STDERR "getOutputStream: streams $streams n: $number\n";
+
+    &verifyPrivate($streams,'getOutputStream');
+
+    my $stream = $streams->[$number];
+#print STDERR "getOutputStream: stream $stream \n";
+
+    unless ($stream->{handle}) {
+        if ($number == 0) { # set up STDOUT
+print STDERR "getOutputStream: auto install STDOUT\n";
+            &setOutputStream($streams->[0],"STDOUT",alias=>"standard");
+        }
+        elsif ($number == 1) { # set up STDERR
+print STDERR "getOutputStream: auto install STDERR\n";
+            &setOutputStream($streams->[1],"STDERR",alias=>"error");
+        }
+        elsif ($number < 4) { # default to STDOUT or STDERR
+print STDERR "getOutputStream: defaulting\n";
+            $stream = &getOutputStream($streams,$number-2);
+            $streams->[$number] = $stream;
+            $stream->{blocked} = 0;
+        }
+        else {
+            print STDERR "Invalid stream number $number\n";
+	}
+        
+    }
+
+    return $stream;
+}
+
+sub write {
+# private, write text to the handle (file or otherwise) of the given stream
+    my $stream = shift; # stream hash
+    my $text = shift;
+    my %options = @_;
+
+    return unless $stream;
+
+    &verifyPrivate($stream,'write');
+
+    return if $stream->{blocked};
+
+    my $message = '';
+
+    if ($options{xml}) {
+# to be added: XML formatting
+    }
+    else {
+        $message .= $linebreak if $options{preskip};
+        $message .= "!! " if $options{emphasis};
+        $message .= "$options{prefix} : " if $options{prefix};
+        $message .= $text if ($text && length($text) > 0);
+        $message .= $linebreak unless ($options{nobreak} || $options{bs});
+        $message .= "\r" if $options{bs};
+        my $skip = $options{skip} || 0;
+        while ($skip-- > 0) {
+            $message .= $linebreak;
+        }
+    }
+
+# ok, write the message to the output stream
+
+    my $handle = $stream->{handle};
+    my $method = $stream->{method};
+
+# print STDERR "handle: $handle  method: $method  msg:'$text'\n";
+
+#    eval("\$handle->$method(\$message)") if $method; # will do nicely
+
+    if ($method eq 'print') {
+# to a file handle
+        $handle->print($message);
+    }
+    elsif ($method eq 'write') {
+# to a default write method of e.g. a database handle
+print STDERR "handle: $handle  method: $method  msg:'$text'\n";
+        $handle->write($message);
+    }
+    elsif ($method) {
+# use the specified method on the stream handle
+        eval("\$handle->$method(\$message)");
+    }
+}
+
+#---------------------------------------------------------------------------
+
+sub verifyPrivate {
+    my $caller = shift;
+    my $method = shift;
+
+    if (ref($caller) eq 'Logging') {
+        die "Invalid use of private Logging->$method";
+    }
+}
+ 
+#-----------------------------------------------------------------------
+# close streams on destruction  
+#-----------------------------------------------------------------------
+ 
+sub DESTROY {
+    my $this = shift;
+    $this->closeStreams();
+}
+
+#-----------------------------------------------------------------------
+
+sub skip { # DEPRECATED
+my $this = shift;
+$this->warning("  skip to be deprecated ");
+}
 
 1;
-
-
