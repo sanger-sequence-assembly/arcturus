@@ -1319,13 +1319,13 @@ sub getProjectStatisticsForProject {
 
 # get the number of contigs and reads in this project
 
-    my $query = "select count(CONTIG.contig_id) as contigs,"
-              .       " sum(nreads) as reads,"
-              .       " sum(length) as tlength,"
-              .       " min(length) as minlength,"
-              .       " max(length) as maxlength,"
-              .       " round(avg(length)) as avglength,"
-              .       " round(std(length)) as stdlength,"
+    my $query = "select count(CONTIG.contig_id),"
+              .       " sum(nreads),"
+              .       " sum(length),"
+              .       " min(length),"
+              .       " max(length),"
+              .       " round(avg(length)),"
+              .       " round(std(length)),"
               .       " max(updated) as maxdate"
               . "  from CONTIG left join C2CMAPPING"
               . "    on CONTIG.contig_id = C2CMAPPING.parent_id"
