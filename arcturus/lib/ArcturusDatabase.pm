@@ -5,6 +5,7 @@ use strict;
 use DBI;
 use DataSource;
 use ArcturusDatabase::ADBAssembly;
+use Logging;
 
 our @ISA = qw(ArcturusDatabase::ADBAssembly);
 
@@ -495,6 +496,51 @@ sub logQuery {
     }
 
     push @$log, [@entry]; # build array of arrays
+}
+
+#-----------------------------------------------------------------------------
+# log file
+#-----------------------------------------------------------------------------
+
+my $LOGGER; # class variable
+
+sub verifyLogger {
+# test the logging unit; if not found, build a default logging module
+    my $this = shift;
+    my $prefix = shift;
+
+#print "verifyLogger 1: '$LOGGER'  pre: $prefix\n";
+
+    if ($LOGGER && ref($LOGGER) eq 'Logging') {
+
+        $LOGGER->setPrefix($prefix) if defined($prefix);
+
+        return $LOGGER; 
+    }
+
+# no (valid) logging unit is defined, create a default object
+
+    $LOGGER = new Logging();
+
+    $prefix = 'ArcturusDatabase' unless defined($prefix);
+
+#print "verifyLogger 2: '$LOGGER'  pre: $prefix\n";
+    $LOGGER->setPrefix($prefix);
+#print "DONE\n";
+
+    return $LOGGER;
+}
+
+sub setLogger {
+# assign a Logging object 
+    my $this = shift;
+    my $logger = shift;
+
+    return if ($logger && ref($logger) ne 'Logging'); # protection
+
+    $LOGGER = $logger;
+
+    &verifyLogger(); # creates a default if $logger undefined
 }
 
 #-----------------------------------------------------------------------------
