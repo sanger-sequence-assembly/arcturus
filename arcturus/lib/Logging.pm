@@ -30,8 +30,10 @@ sub new {
         my $stream = {};
         $stream->{handle} = 0;  # for the e.g. file handle
         $stream->{device} = 0;  # for the device name
-        $stream->{blocked} = 0; # for the blocked status
+        $stream->{blocked} = 0 if ($i < 3); # for the blocked status
+        $stream->{blocked} = 1 if ($i >= 3); # default debug is blocked
         $stream->{method} = 0;
+        $stream->{stamp} = 0;
         push @streams,$stream;       
     }
 
@@ -203,6 +205,7 @@ sub closeStreams {
     foreach my $stream (@$streams) {
         my $handle = $stream->{handle};
         next unless $handle;
+        &timestamp($stream,'close') if $stream->{stamp};
 # redirected streams need to be closed only once
         &closeDevice($handle) unless($closed{$handle}++); 
         $stream = {};
@@ -221,6 +224,30 @@ sub getPrefix {
     my $this = shift;
 
     return $this->{prefix};
+}
+
+#-----------------------------------------------------------------------
+
+my %streams = (standard => 0, error => 1, special => 2, debug => 3);
+
+sub setBlock {
+# block or unblock an output stream, EXCEPT when 'unblock' option is given 
+    my $this = shift;
+    my $stream = shift;
+    my %options = @_;
+
+    my $number = $streams{$stream};
+
+    unless ($number) {
+        $this->error("Invalid stream specification $stream in setBlock");
+        return;
+    }
+
+#    $stream = &getOutputStream($this->{STREAMS},$number); # ?
+
+    $stream = $this->{STREAMS}->[$number]; 
+
+    $stream->{blocked} = ($options{unblock} ? 0 : 1);
 }
 
 #-----------------------------------------------------------------------
@@ -285,7 +312,7 @@ sub setStream {
         return 1 if ($i == $number); # same device and stream
         print STDOUT "Re-directing stream '$options{alias}' to existing "
                    . "stream on $device\n" if $options{list};
-        foreach my $key ('handle','device','type') {
+        foreach my $key ('handle','device','method') {
             $streams->[$number]->{$key} = $stream->{$key};
         }
         $streams->[$number]->{blocked} = 0;
@@ -337,7 +364,14 @@ sub setOutputStream {
         return 0;
     } 
 
-    print STDOUT "$device opened for $alias output stream\n" if $options{list};
+    if ($options{list}) {
+        my $pwd = `pwd`; chomp $pwd; # include the current directory
+        print STDOUT "$device opened for $alias output stream\n";
+        print STDOUT "(current directory $pwd)\n" unless ($device =~ /STD/);
+    }
+
+    &timestamp($stream,'open') if $options{timestamp};
+
     return 1;
 }
 
@@ -345,27 +379,28 @@ sub getOutputStream {
 # return the numbered output stream with default provision
     my $streams = shift; # array of stream hashes
     my $number = shift; # stream number
-#print STDERR "getOutputStream: streams $streams n: $number\n";
 
     &verifyPrivate($streams,'getOutputStream');
 
     my $stream = $streams->[$number];
-#print STDERR "getOutputStream: stream $stream \n";
 
     unless ($stream->{handle}) {
-        if ($number == 0) { # set up STDOUT
-print STDERR "getOutputStream: auto install STDOUT\n";
+# redirect and/or auto install 
+        if ($number == 0) { 
+# auto install STDOUT
             &setOutputStream($streams->[0],"STDOUT",alias=>"standard");
         }
-        elsif ($number == 1) { # set up STDERR
-print STDERR "getOutputStream: auto install STDERR\n";
+        elsif ($number == 1) { 
+# auto install STDERR
             &setOutputStream($streams->[1],"STDERR",alias=>"error");
         }
         elsif ($number < 4) { # default to STDOUT or STDERR
-print STDERR "getOutputStream: defaulting\n";
-            $stream = &getOutputStream($streams,$number-2);
-            $streams->[$number] = $stream;
-            $stream->{blocked} = 0;
+# redirect and copy the stream settings from the parent stream
+            my $stdstream = &getOutputStream($streams,$number-2);
+            foreach my $key ('handle','device','method') {
+                $stream->{$key} = $stdstream->{$key};
+            }
+#            $stream->{blocked} = 0;
         }
         else {
             print STDERR "Invalid stream number $number\n";
@@ -428,7 +463,23 @@ print STDERR "handle: $handle  method: $method  msg:'$text'\n";
 # use the specified method on the stream handle
         eval("\$handle->$method(\$message)");
     }
+    else {
+        print STDERR "missing writing method on output stream $handle\n";
+    }
 }
+
+sub timestamp {
+    my $stream = shift;
+    my $marker = shift || 'open';
+
+    &verifyPrivate($stream,'timestamp');
+
+    my $timestamp = scalar(localtime);
+
+    &write($stream,"$marker : $timestamp",skip=>1,preskip=>1);
+
+    $stream->{stamp} = 1;
+}    
 
 #---------------------------------------------------------------------------
 
