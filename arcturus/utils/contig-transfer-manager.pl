@@ -153,9 +153,9 @@ $user        = shift @ARGV  if ($nextword eq '-u');    # ?
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging('STDOUT');
+my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # test input parameters
@@ -224,12 +224,12 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 if (!$adb || $adb->errorStatus()) {
     &showUsage("Invalid organism '$organism' on server '$instance'",0,$action);
 }
+
+$adb->setLogger($logger);
  
 my $URL = $adb->getURL;
 
-$logger->info("Database $URL opened succesfully");
-    
-$logger->skip();
+$logger->info("Database $URL opened succesfully",skip=>1);
 
 #----------------------------------------------------------------
 # preliminaries: get (possible) contig and/or project info
@@ -407,9 +407,7 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
                 . "requests involving user $user";
     }
 
-    $logger->skip();
-    $logger->warning($header);
-    $logger->skip();
+    $logger->warning($header, preskip=>1, skip=>1);
 
     foreach my $request (@$requestsfound) {
         my $rd = $adb->getContigTransferRequestData($request);
@@ -429,13 +427,13 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
                 $comment  = "AWAITING approval";
                 $comment .= " by $rd->{reviewer}" if ($rd->{reviewer} ne $user);
 	    }
-#            my $line = sprintf("%3d %7d %2d > %-2d %6s %19s %19s %6s %10s %-40s",
+
             my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s",
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
         	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
 	               $rd->{reviewed},$rd->{reviewer},$rd->{status});
             $line .= sprintf("  %-40s",$comment) unless $truncate;
-            $logger->warning($line);
+            $logger->warning($line,skip=>1);
 	}
         else {
             unless ($rd->{reviewer_comment} || $rd->{status} ne 'pending') {
@@ -452,13 +450,11 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
                 my $line = sprintf("%20s : %-40s",$key,$rd->{$key});
                 $logger->warning($line);
             }
-            $logger->skip();
 	}
     }
 
     if ($requestsfound && @$requestsfound && $action !~ /list/) {
-        $logger->skip();
-        $logger->warning("** Provide the '-request N' key to select a request **");
+        $logger->warning("** Provide the '-request N' key to select a request **",preskip=>1);
     }
 }
 
@@ -613,8 +609,9 @@ elsif ($action eq 'execute') {
         my $pid = $rd->{old_project_id};
 
         my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
+        $cpid = 0 unless defined($cpid); # assign project ID 0
 
-        unless (defined($cpid) && $pid == $cpid) {
+        unless ($pid == $cpid) {
 # translate project IDs into project names
             my $cur_project = &getCachedProject($adb,$cpid);
             $pid  = $old_project->getProjectName() if $old_project;
@@ -681,8 +678,7 @@ elsif ($action eq 'execute') {
 	}
     }
 
-    $logger->skip();
-    $logger->warning("no transfer requests processed") unless $processed;            
+    $logger->warning("no transfer requests processed",preskip=>1) unless $processed;            
 }
 
 
@@ -690,10 +686,10 @@ elsif ($action eq 'execute') {
 elsif ($action eq 'probe') {
 # ? separate script?
 }
-    
-$logger->skip();
   
 $adb->disconnect();
+    
+$logger->warning("Processing user mail (if any)",preskip=>1,skip=>1);
 
 # send messages to users, if any
 
@@ -1044,7 +1040,8 @@ sub createContigTransferRequest {
     my $cpid = $adb->getProjectIDforContigID($cid); # current project ID
 
     unless (defined($cpid)) {
-        my $message = "contig $cid does not exist or has an invalid project";
+        my $message = "contig $cid does not exist or has an invalid "
+                    . "project reference";
         return 0,$message unless $options{ignore_project};
         $cpid = 0;
     }
@@ -1084,7 +1081,7 @@ sub createContigTransferRequest {
     my $tpp = $adb->getAccessibleProjects(project=>$tpid,user=>$user);
     $tpp = (@$tpp ? $tpp->[0] : 0); # replace reference by value
 
-    my @cnames = $adb->getNamesForProjectID($cpid);
+    my @cnames = $adb->getNamesForProjectID($cpid) || ('UNDEF','UNDEF',$user);
     my @tnames = $adb->getNamesForProjectID($tpid);
 
     return 0,"invalid project ID: project $tpid does not exist" unless $tnames[2];
@@ -1195,6 +1192,9 @@ sub sendMessage {
     my ($user,$message) = @_;
 
     print STDOUT "message to be emailed to user $user:\n$message\n\n";
+
+    $user = 'ejz' if ($user eq 'arcturus');
+
 $user="ejz+$user"; # temporary redirect
 
     my $mail = new Mail::Send;

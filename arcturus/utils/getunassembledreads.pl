@@ -34,7 +34,7 @@ my $excludelist;
 
 my $threshold;  # only with clipmethod
 my $clipmethod;
-my $minimumrange = 32;
+my $minimumrange;
 
 my $outputFile;            # default STDERR
 my $logLevel;              # default log warnings and errors only
@@ -122,7 +122,9 @@ while (my $nextword = shift @ARGV) {
 
 my $logger = new Logging($outputFile);
 
-$logger->setFilter($logLevel) if defined $logLevel; # set reporting level
+$logger->setStandardFilter($logLevel) if defined $logLevel; # reporting level
+
+$logger->setBlock('debug',unblock=>1) if $debug;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -139,6 +141,7 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 
 &showUsage("Unknown organism '$organism'") unless $adb;
 
+$adb->setLogger($logger);
 
 #----------------------------------------------------------------
 # MAIN
