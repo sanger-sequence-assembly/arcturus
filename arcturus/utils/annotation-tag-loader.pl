@@ -514,7 +514,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 	    next;
 	}
         $logger->fine("Processing $contigname lengths: "
-                      .length($asequence)." & ".length($fsequence));
+                      .length($fsequence)." & ".length($asequence));
 # restore the original sequence
         $arcturuscontig->setSequence($csequence);
   
@@ -1026,8 +1026,8 @@ if ($confirm) { # AND not in reanalyze mode!
         $tags = [] unless $tags;
         $logger->info("contig ".$contig->getContigName() .
 		          " ($ccnm) has " . scalar(@$tags)." tags");
-        my $success = $adb->enterTagsForContig($contig,%options);
-        $logger->warning("enterTagsForContig " . $contig->getContigName()
+        my $success = $adb->putTagsForContig($contig,%options);
+        $logger->warning("putTagsForContig " . $contig->getContigName()
                         ." : success = $success");
     }
 }
