@@ -85,7 +85,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging('STDOUT');
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -107,9 +107,9 @@ if (!$adb || $adb->errorStatus()) {
     &showUsage("Invalid organism '$organism' on server '$instance'");
 }
 
-&showUsage("Missing database instance") unless $instance;
-
 $logger->info("Database ".$adb->getURL." opened succesfully");
+
+$adb->setLogger($logger);
 
 #----------------------------------------------------------------
 # identify the project
