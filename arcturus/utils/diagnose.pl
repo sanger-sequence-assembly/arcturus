@@ -49,19 +49,19 @@ while (my $nextword = shift @ARGV) {
 #        $verify = 1;
     }
 
-    $invocation = 0         if ($nextword eq '-verify'  || $nextword eq '-v');
+    $invocation = 0        if ($nextword eq '-verify'    || $nextword eq '-v');
 
-    $invocation = 1         if ($nextword eq '-status'  || $nextword eq '-s');
+    $invocation = 1        if ($nextword eq '-status'    || $nextword eq '-s');
 
-    $project = shift @ARGV  if ($nextword eq '-project' || $nextword eq '-p');
+    $project = shift @ARGV if ($nextword eq '-project'   || $nextword eq '-p');
 
-    $subdir  = shift @ARGV  if ($nextword eq '-subdir'  || $nextword eq '-sd');
+    $subdir  = shift @ARGV if ($nextword eq '-subdir'   || $nextword eq '-sd');
 
-    $filter  = shift @ARGV  if ($nextword eq '-filter'  || $nextword eq '-f');
+    $filter  = shift @ARGV if ($nextword eq '-filter'    || $nextword eq '-f');
 
-    $recursive = 1        if ($nextword eq '-recursive' || $nextword eq '-r');
+    $recursive = 1         if ($nextword eq '-recursive' || $nextword eq '-r');
 
-    &showUsage(0)           if ($nextword eq '-help'    || $nextword eq '-h');
+    &showUsage(0)          if ($nextword eq '-help'      || $nextword eq '-h');
 }
 
 #---------------------------------------------------------------------------
@@ -119,13 +119,13 @@ print STDOUT "inv:  $invocation\n";
 else {
 # status analysis: get the projects in the current directory
 
+    my $pwd = `pwd`;
+    chomp $pwd;
     my $projects = [];
     my $msg;
 
     if ($recursive) {
-        my $pwd = `pwd`;
-        chomp $pwd;
-        opendir DIR, $pwd || die "serious problems: $!";
+         opendir DIR, $pwd || die "serious problems: $!";
         my @files = readdir DIR;
         closedir DIR;
         foreach my $file (@files) {
@@ -148,11 +148,12 @@ else {
 # and run each project through the diagnostic shell script
 
     $subdir .= "/" if $subdir;
+    $logger->warning("Status of projects in/under $pwd",skip=>1);
     foreach my $project (@$projects) {
         my $msg = `$root/projectstatus -project $subdir$project` || 'FAILED';
         next if ($filter && $msg !~ /$filter/i);
-        $logger->skip();
-        $logger->warning("$msg");
+        chomp $msg;
+        $logger->warning($msg,skip=>1);
     }
     $logger->skip();
 }
@@ -216,6 +217,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "$code\n" if $code;
     print STDERR "\n";
+
+
+
 
     print STDERR "\n";
     print STDERR "$code\n" if $code;
