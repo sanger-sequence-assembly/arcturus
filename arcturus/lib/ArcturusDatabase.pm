@@ -138,6 +138,26 @@ sub disconnect {
 }
 
 #-----------------------------------------------------------------------------
+# version
+#-----------------------------------------------------------------------------
+
+sub dbVersion {
+    my $this = shift;
+
+    my $dbh = $this->getConnection();
+ 
+    my $sth = $dbh->prepare("select version()");
+
+    $sth->execute();
+
+    my $version = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    return $version;
+}
+
+#-----------------------------------------------------------------------------
 # arcturus user information
 #-----------------------------------------------------------------------------
 
@@ -509,8 +529,6 @@ sub verifyLogger {
     my $this = shift;
     my $prefix = shift;
 
-#print "verifyLogger 1: '$LOGGER'  pre: $prefix\n";
-
     if ($LOGGER && ref($LOGGER) eq 'Logging') {
 
         $LOGGER->setPrefix($prefix) if defined($prefix);
@@ -524,9 +542,7 @@ sub verifyLogger {
 
     $prefix = 'ArcturusDatabase' unless defined($prefix);
 
-#print "verifyLogger 2: '$LOGGER'  pre: $prefix\n";
     $LOGGER->setPrefix($prefix);
-#print "DONE\n";
 
     return $LOGGER;
 }
