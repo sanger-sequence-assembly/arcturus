@@ -2,12 +2,11 @@ package ArcturusDatabase::ADBRead;
 
 use strict;
 
-use Exporter;
+#use Exporter;
 
 use ArcturusDatabase::ADBRoot;
 
 use ArcturusDatabase::ADBContig;
-#use ArcturusDatabase::ADBContig qw(getCurrentContigs);
 
 use Compress::Zlib;
 
@@ -17,9 +16,13 @@ use Tag;
 
 our @ISA = qw(ArcturusDatabase::ADBRoot Exporter);
 
-our @EXPORT = qw(getTagSequenceIDsForTags);
+#our @EXPORT = qw(getTagSequenceIDsForTags);
+
+# ----------------------------------------------------------------------------
 
 my $DEBUG = 0;
+
+my $READINFO = 'READS'; # class variable TO BE REPLACED by 'READINFO'
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -35,12 +38,6 @@ sub new {
     return $this;
 }
 
-sub setRDEBUG {
-    $DEBUG = shift || 0;
-    print STDOUT "DEBUG mode ADBRead switched ON\n" if $DEBUG;
-    print STDOUT "DEBUG mode ADBRead switched OFF\n" unless $DEBUG;
-}
-
 # ----------------------------------------------------------------------------
 # methods dealing with READs
 #-----------------------------------------------------------------------------
@@ -49,7 +46,7 @@ sub defineReadMetaData {
     my $this = shift;
 
     $this->{read_attributes} = 
-           "readname,asped,READS.strand,primer,chemistry,basecaller,status";
+           "readname,asped,$READINFO.strand,primer,chemistry,basecaller,status";
     $this->{template_addons} = 
            "TEMPLATE.name as template,TEMPLATE.ligation_id";
 }
@@ -150,6 +147,8 @@ sub populateLoadingDictionaries {
 sub createDictionary {
     my ($dbh, $table, $pkey, $vals, $where, $junk)  = @_;
 
+    &verifyPrivate($dbh,'createDictionary');
+
     my $query = "SELECT $pkey,$vals FROM $table";
 
     $query .= " $where" if defined($where);
@@ -211,6 +210,8 @@ sub translateDictionaryReadItems {
     my $this = shift;
     my $hashref = shift;
 
+    &verifyParameter($hashref,'translateDictionaryReadItems','HASH');
+
     $hashref->{'insertsize'} = $hashref->{'ligation'};
     $hashref->{'clone'}      = $hashref->{'ligation'};
 
@@ -241,33 +242,33 @@ sub countReadDictionaryItem {
     my $query = "select count(*) as count,";
 
     if ($item eq 'ligation') {
-        $query .= "TEMPLATE.ligation_id from READS,TEMPLATE 
-                   where READS.template_id=TEMPLATE.template_id 
+        $query .= "TEMPLATE.ligation_id from $READINFO,TEMPLATE 
+                   where $READINFO.template_id=TEMPLATE.template_id 
                    group by ligation_id";
     }
     elsif ($item eq 'clone') {
 # build the clone names dictionary on clone_id (different from the one on ligation_id)
         $this->{Dictionary}->{clonename} =
 	       &createDictionary($dbh, 'CLONE','clone_id', 'name');
-        $query .= "LIGATION.clone_id from READS,TEMPLATE,LIGATIONS 
-                   where READS.template_id=TEMPLATE.template_id 
+        $query .= "LIGATION.clone_id from $READINFO,TEMPLATE,LIGATIONS 
+                   where $READINFO.template_id=TEMPLATE.template_id 
                      and TEMPLATE.ligation_id=LIGATION.ligation_id 
                    group by clone_id";
         $item = 'clonename';
     }
     elsif ($item =~ /\b(strand|primer|chemistry|basecaller|status)\b/) {
-        $query .= "$item from READS group by $item";
+        $query .= "$item from $READINFO group by $item";
     }
     elsif ($item eq 'svector') {
-        $query .= "SEQVEC.svector_id, from READS,SEQ2READ,SEQVEC
-                   where READS.read_id = SEQ2READ.read_id
+        $query .= "SEQVEC.svector_id, from $READINFO,SEQ2READ,SEQVEC
+                   where $READINFO.read_id = SEQ2READ.read_id
                    and   SEQ2READ.seq_id = SEQVEC.seq_id
                    and   SEQ2READ.version = 0
                    group by svector_id";
     }
     elsif ($item eq 'cvector') {
-        $query .= "CLONEVEC.cvector_id, from READS,SEQ2READ,CLONEVEC
-                   where READS.read_id = SEQ2READ.read_id
+        $query .= "CLONEVEC.cvector_id, from $READINFO,SEQ2READ,CLONEVEC
+                   where $READINFO.read_id = SEQ2READ.read_id
                    and   SEQ2READ.seq_id = CLONEVEC.seq_id
                    and   SEQ2READ.version = 0
                    group by cvector_id";
@@ -306,11 +307,13 @@ sub getRead {
 
 # compose the query
 
-    my $query = "select READS.read_id,SEQ2READ.seq_id,
+$this->defineReadMetaData(); # unless $this->{read_attributes};
+
+    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,
                  $this->{read_attributes},$this->{template_addons}
-                  from READS,SEQ2READ,TEMPLATE 
-                 where READS.read_id = SEQ2READ.read_id
-                   and READS.template_id = TEMPLATE.template_id ";
+                  from $READINFO,SEQ2READ,TEMPLATE 
+                 where $READINFO.read_id = SEQ2READ.read_id
+                   and $READINFO.template_id = TEMPLATE.template_id ";
 #$query .= " xxx ";
     my $nextword;
     my $readitem;
@@ -322,12 +325,12 @@ sub getRead {
             $readitem = shift;
         }
         elsif ($nextword eq 'read_id') {
-            $query .= "and READS.read_id = ?";
+            $query .= "and $READINFO.read_id = ?";
             $readitem = shift;
             $version = 0 unless defined($version); # define default
         }
         elsif ($nextword eq 'readname') {
-            $query .= "and READS.readname like ?";
+            $query .= "and $READINFO.readname like ?";
             $readitem = shift;
             $version = 0 unless defined($version); # define default
         }
@@ -420,6 +423,8 @@ sub addMetaDataForRead {
     my $read = shift; # Read instance
     my ($readname,$asped,$strand,$primer,$chemistry,$basecaller_id,$status_id,$template,$ligation_id) = @_;
 
+    &verifyParameter($read,'addMetaDataForRead');
+
     $read->setReadName($readname);
 
     $read->setAspedDate($asped);
@@ -454,6 +459,8 @@ sub addSequenceMetaDataForRead {
 # private method : add sequence vector and cloning vector data to Read
     my $this = shift;
     my $read = shift; # Read instance
+
+    &verifyParameter($read,'addSequenceMetaDataForRead');
 
     my $dbh = $this->getConnection() || return;
 
@@ -635,15 +642,15 @@ sub getReadsByReadID {
 # returns array of Read instances (meta data only) for input array of read IDs 
     my $this    = shift;
     my $readids = shift; # array ref
-    my $blocksize = shift || 10000;
+    my %options = @_;
 
-    if (ref($readids) ne 'ARRAY') {
-        die "'getReadsByReadID' method expects an array of readIDs";
-    }
+    &verifyParameter($readids,'getReadsByReadID','ARRAY');
 
     my @reads;
 
     return \@reads unless scalar(@$readids); # return ref to empty array
+
+    my $blocksize = $options{blocksize} || 10000;
 
     while (my $block = scalar(@$readids)) {
 
@@ -653,7 +660,7 @@ sub getReadsByReadID {
 
         my $range = join ',',sort {$a <=> $b} @block;
 
-        my $constraints = "READS.read_id in ($range) and version = 0";
+        my $constraints = "$READINFO.read_id in ($range) and version = 0";
 
         my $reads = $this->getReadsForCondition($constraints);
 
@@ -672,11 +679,13 @@ sub getReadsForCondition {
 
 # retrieve version 0 (un-edited reads only, the raw data)
 
-    my $query = "select READS.read_id,SEQ2READ.seq_id,"
+$this->defineReadMetaData(); # unless $this->{read_attributes};
+
+    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,"
               .        "$this->{read_attributes},$this->{template_addons}"
-              . "  from READS,SEQ2READ,TEMPLATE $tables"
-              . " where READS.read_id = SEQ2READ.read_id"
-              . "   and READS.template_id = TEMPLATE.template_id";
+              . "  from $READINFO,SEQ2READ,TEMPLATE $tables"
+              . " where $READINFO.read_id = SEQ2READ.read_id"
+              . "   and $READINFO.template_id = TEMPLATE.template_id";
 # add the other conditions
     $query   .= "    and $condition" if $condition;
 
@@ -729,8 +738,8 @@ sub getSequenceIDForRead {
     my $query;
 
     if ($idtype eq 'readname') {
-	$query = "select seq_id from READS left join SEQ2READ using (read_id) " .
-                 "where READS.readname=? " .
+	$query = "select seq_id from $READINFO left join SEQ2READ using (read_id) " .
+                 "where $READINFO.readname=? " .
 	         "and version=?";
     } else {
 	$query = "select seq_id from SEQ2READ where read_id=? and version=?";
@@ -754,9 +763,7 @@ sub getReadsBySequenceID {
     my $this = shift;
     my $seqids = shift; # array ref
 
-    if (ref($seqids) ne 'ARRAY') {
-        die "'getReadsBySequenceID' method expects an array of seqIDs";
-    }
+    &verifyParameter($seqids,'getReadsBySequenceID','ARRAY');
 
 # prepare the range list
 
@@ -766,11 +773,13 @@ sub getReadsBySequenceID {
 
 # retrieve version 0 (un-edited reads only, the raw data)
 
-    my $query = "select READS.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
+$this->defineReadMetaData(); # unless $this->{read_attributes};
+
+    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
                 "$this->{read_attributes},$this->{template_addons}" .
-                " from SEQ2READ,READS,TEMPLATE ".
-                "where READS.read_id = SEQ2READ.read_id".
-                "  and READS.template_id = TEMPLATE.template_id". 
+                " from SEQ2READ,$READINFO,TEMPLATE ".
+                "where $READINFO.read_id = SEQ2READ.read_id".
+                "  and $READINFO.template_id = TEMPLATE.template_id". 
                 "  and SEQ2READ.seq_id in ($range)";
 
     my $sth = $dbh->prepare($query);
@@ -809,7 +818,7 @@ sub getReadsForContig {
     my $contig = shift; # Contig instance
     my %options = @_;
 
-    die "getReadsForContig expects a Contig instance" unless (ref($contig) eq 'Contig');
+    &verifyParameter($contig,'getReadsForContig','Contig');
 
     return if $contig->hasReads(); # only 'empty' instance allowed
 
@@ -817,13 +826,13 @@ sub getReadsForContig {
 
 # NOTE: this query is to be TESTED may have to be optimized
 
-    my $query = "select READS.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
+    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
                 "$this->{read_attributes},$this->{template_addons}" .
-                " from MAPPING,SEQ2READ,READS,TEMPLATE " .
+                " from MAPPING,SEQ2READ,$READINFO,TEMPLATE " .
                 "where MAPPING.contig_id = ?" .
                 "  and MAPPING.seq_id = SEQ2READ.seq_id" .
-                "  and SEQ2READ.read_id = READS.read_id" .
-                "  and READS.template_id = TEMPLATE.template_id";
+                "  and SEQ2READ.read_id = $READINFO.read_id" .
+                "  and $READINFO.template_id = TEMPLATE.template_id";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -834,7 +843,6 @@ sub getReadsForContig {
     my @reads;
 
     while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
-# print STDERR "results: $read_id, $seq_id, $version, @attributes\n";
 	my $read = new Read();
 
         $read->setReadID($read_id);
@@ -895,6 +903,8 @@ sub getUnassembledReads {
     my $this = shift;
     my $item = shift;
     my %options = @_;
+
+    &verifyPrivate($dbh,'getUnassembledReads');
 
 # options: method (standard,subquery,temporarytables)
 #          after  / aspedafter  (after and equal!)
@@ -970,7 +980,7 @@ sub getUnassembledReads {
 # first get a list of current generation contigs (those that are not parents)
 
         my $query  = "create temporary table CURCTG as "
-                   . "select CONTIG.contig_id"
+                   . "select CONTIG.contig_id,CONTIG.project_id"
                    . "  from CONTIG left join C2CMAPPING "
                    . "    on CONTIG.contig_id = C2CMAPPING.parent_id "
                    . " where C2CMAPPING.parent_id is null";
@@ -1003,8 +1013,8 @@ sub getUnassembledReads {
         if ($method eq 'intemporarytable') {
 
             $query  = "create temporary table FREEREAD as "
-                    . "select READS.read_id"
-                    . "  from READS left join CURREAD using(read_id)"
+                    . "select $READINFO.read_id"
+                    . "  from $READINFO left join CURREAD using(read_id)"
                     . " where seq_id is null";
             $query .= "   and ".join(" and ",@constraint) if @constraint;
 
@@ -1014,8 +1024,8 @@ sub getUnassembledReads {
         }
 
         else {
-            $query  = "select READS.$item"
-                    . "  from READS left join CURREAD using(read_id)"
+            $query  = "select $READINFO.$item"
+                    . "  from $READINFO left join CURREAD using(read_id)"
                     . " where seq_id is null";
             $query .= "   and ".join(" and ",@constraint) if @constraint;
             $query .= " limit $limit" if $limit;
@@ -1050,7 +1060,7 @@ sub getUnassembledReads {
     if (($method && $method eq 'usesubselect') || !@$contigids) {
 # step 2: if there are no contigs, only a possible constraint applies; if there
 # are current contigs use a subselect to get the complement of their reads
-        my $query  = "select READS.$item from READS ";
+        my $query  = "select $READINFO.$item from $READINFO ";
         $query    .= " where " if (@constraint || @$contigids);
         $query    .=  join(" and ", @constraint) if @constraint;
         $query    .= " and " if (@constraint && @$contigids);
@@ -1091,7 +1101,7 @@ sub getUnassembledReads {
 
     if (!scalar(@tempids)) {
 # no reads found (should not happen except for empty assembly)
-        $query  = "select READS.$item from READS";
+        $query  = "select $READINFO.$item from $READINFO";
         $query .= " where ".join(" and ", @constraint) if @constraint;
         $query .= " limit $limit" if $limit;
   
@@ -1113,7 +1123,7 @@ sub getUnassembledReads {
             my $ridfinal = $readblock[$#readblock];
             $ridfinal = 0 unless @tempids; # last block no upper limit
 
-            $query  = "select READS.$item from READS";
+            $query  = "select $READINFO.$item from $READINFO";
             $query .= " where read_id > $ridstart ";
             $query .= "   and read_id <= $ridfinal" if $ridfinal;
             $query .= "   and ".join(" and ", @constraint) if @constraint;
@@ -1159,10 +1169,10 @@ sub isUnassembledRead {
 	        . " where SEQ2READ.read_id = ?";
     }
     elsif ($readitem eq 'readname') {
-        $query .= ",SEQ2READ,READS"
+        $query .= ",SEQ2READ,$READINFO"
                 . " where MAPPING.seq_id = SEQ2READ.seq_id"
-                . "   and SEQ2READ.read_id = READS.read_id"
-	        . "   and READS.readname = ?";
+                . "   and SEQ2READ.read_id = $READINFO.read_id"
+	        . "   and $READINFO.readname = ?";
     }
     else {
         return undef;
@@ -1193,6 +1203,9 @@ sub isUnassembledRead {
 sub testReadAllocation {
 # return a list of doubly allocated reads
     my $this = shift;
+#    my %options = @_;
+
+    return &newtestReadAllocation($this,@_) if @_;
 
 # build temporary tables to faciltate easy search
 
@@ -1240,6 +1253,118 @@ sub testReadAllocation {
     return ($rows+0),$resulthash;
 }
 
+sub newtestReadAllocation {
+# return a list of doubly allocated reads
+    my $this = shift;
+    my %options = @_;
+
+    my $logger = $this->verifyLogger('newtestReadAllocation');
+    $logger->setBlock('debug',unblock=>1);
+    $logger->debug("options  @_");
+
+# build temporary tables to faciltate easy search
+
+    my $dbh = $this->getConnection();
+
+# first get a list of current generation contigs (those that are not parents)
+
+    my $create = "create temporary table CURCTGL ("
+               . "contig_id mediumint(8) unsigned not null default '0',"
+               . "project_id mediumint(8) unsigned not null default '0',"
+	       . "key contig_id (contig_id) )";
+
+    $dbh->do($create) || &queryFailed($create) && return undef;
+
+ 
+    my $query  = "insert into CURCTGL (contig_id,project_id) "
+               . "select CONTIG.contig_id,CONTIG.project_id"
+               . "  from CONTIG left join C2CMAPPING "
+               . "    on CONTIG.contig_id = C2CMAPPING.parent_id "
+	       . " where C2CMAPPING.parent_id is null";
+
+    $dbh->do($query) || &queryFailed($query) && return undef;
+
+# and make a copy as CURCTGR
+   
+    $create = "create temporary table CURCTGR ("
+            . "contig_id mediumint(8) unsigned not null default '0',"
+            . "project_id mediumint(8) unsigned not null default '0',"
+            . "key contig_id (contig_id) )";
+
+    $dbh->do($create) || &queryFailed($create) && return undef;
+ 
+    $query  = "insert into CURCTGR (contig_id,project_id) "
+            . "select CURCTGL.contig_id,CURCTGL.project_id"
+	    . "  from CURCTGL";
+# here we do the project selection as well
+    if (defined($options{project_id})) {
+        $query .= " where project_id = $options{project_id} ";
+    }
+    if (defined($options{projectname})) {
+# requires an extra join with PROJECT table
+        $query .= ", PROJECT where CURCTGL.project_id = PROJECT.project_id"
+               .  " and name like '$options{projectname}'";
+$logger->debug("query: $query");
+    }
+ 
+    $dbh->do($query) || &queryFailed($query) && return undef;
+
+# do a complex query on the temporary tables
+
+    $query = "select LSR.read_id, "
+           . "       LC.contig_id, LC.project_id, "    
+           . "       RC.contig_id, RC.project_id  " 
+           . "  from CURCTGL as LC, MAPPING as LM, SEQ2READ as LSR,"
+           . "       CURCTGR as RC, MAPPING as RM, SEQ2READ as RSR"
+           . " where LC.contig_id = LM.contig_id" 
+           . "   and LM.seq_id = LSR.seq_id"
+           . "   and RC.contig_id = RM.contig_id" 
+           . "   and RM.seq_id = RSR.seq_id"
+           . "   and LC.contig_id != RC.contig_id"  # different contigs
+	   . "   and LSR.read_id = RSR.read_id";    # but same read
+
+# add (optional) project selection
+
+    if ($options{insideprojects} && !$options{betweenprojects}) {
+# requires only a line to specify project selection
+        $query .= " and LC.project_id = RC.project_id";
+    }
+    if (!$options{insideprojects} && $options{betweenprojects}) {
+# requires only a line to specify project selection
+        $query .= " and LC.project_id != RC.project_id";
+    }
+#    if ($options{projectname}) {
+# requires an extra join with PROJECT table
+#        $query =~ s/ from / from PROJECT, /;
+#        $query .= " and LC.project_id = PROJECT.project_id"
+#               .  " and name = ? ";
+#       push @data,$options{projectname};
+#print STDERR "query: $query\n";
+#    }
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $rows = $sth->execute() || &queryFailed($query);
+
+    my $resulthash = {};
+
+#    return ($rows+0),$resulthash unless ($rows+0);
+
+    while (my ($read,$lc,$lp,$rc,$rp) = $sth->fetchrow_array()) {
+$logger->debug("result $read,$lc,$lp    $rc,$rp");
+        $resulthash->{$read} = [] unless $resulthash->{$read};
+        push @{$resulthash->{$read}}, $lc, $rc;
+        my $contiglist = $resulthash->{$read};
+$logger->debug("accumulated @$contiglist");
+    }
+
+    $sth->finish();
+
+# this query should return an even number of rows (twice the number of reads)
+
+    return ($rows+0),$resulthash;
+}
+
 sub getReadNamesLike {
 # returns a list of readnames matching a pattern or name
     my $this = shift;
@@ -1273,10 +1398,9 @@ sub getSequenceForReads {
     my $reads = shift; # array of Reads objects
     my $blocksize = shift || 10000;
 
-    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
-        print STDERR "getSequenceForReads expects an array of Read objects\n";
-        return undef;
-    }
+    &verifyParameter($reads,"getSequenceForReads",'ARRAY');
+
+    &verifyParameter($reads->[0],"getSequenceForReads");
 
     my $dbh = $this->getConnection();
 
@@ -1369,11 +1493,11 @@ sub getSequenceForRead {
     }
     elsif ($key eq 'name' || $key eq 'readname') {
         $version = 0 unless defined($version);
-	$query .= "SEQUENCE,SEQ2READ,READS " .
+	$query .= "SEQUENCE,SEQ2READ,$READINFO " .
                   "where SEQUENCE.seq_id=SEQ2READ.seq_id" .
                   "  and SEQ2READ.version = $version" .
-                  "  and READS.read_id = SEQ2READ.read_id" .
-                  "  and READS.readname = ?";
+                  "  and $READINFO.read_id = SEQ2READ.read_id" .
+                  "  and $READINFO.readname = ?";
     }
 # print STDERR "getSequenceForRead: $query ($value)\n";
 
@@ -1414,7 +1538,7 @@ sub getCommentForRead {
 	$query .= "READCOMMENT where read_id=?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READS left join READCOMMENT using(read_id) where readname=?";
+	$query .= "$READINFO left join READCOMMENT using(read_id) where readname=?";
     }
 
     my $dbh = $this->getConnection();
@@ -1446,7 +1570,7 @@ sub getTraceArchiveIdentifier {
 	$query .= "TRACEARCHIVE where read_id=?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READS left join TRACEARCHIVE using(read_id) 
+	$query .= "$READINFO left join TRACEARCHIVE using(read_id) 
                    where readname=?";
     }
 
@@ -1487,7 +1611,7 @@ sub getListOfReadNames {
 
 # compose the query
 
-    my $query = "select readname from READS ";
+    my $query = "select readname from $READINFO ";
 
     if ($options{noTraceRef}) {
         $query .= "left join TRACEARCHIVE as TA using (read_id) 
@@ -1556,7 +1680,7 @@ sub hasRead {
 
     my $dbh = $this->getConnection();
    
-    my $query = "select read_id from READS where readname=?";
+    my $query = "select read_id from $READINFO where readname=?";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1579,10 +1703,7 @@ sub areReadsNotInDatabase {
     my $this      = shift;
     my $readnames = shift; # array reference with readnames to be tested
 
-    if (ref($readnames) ne 'ARRAY') {
-        print STDERR "areReadsNotInDatabase expects an array of readnames\n";
-        return undef;
-    }
+    &verifyParameter($readnames,"areReadsNotInDatabase",'ARRAY');
 
     my %namehash;
     foreach my $name (@$readnames) {
@@ -1591,7 +1712,7 @@ sub areReadsNotInDatabase {
 
     my $dbh = $this->getConnection();
    
-    my $query = "select readname from READS 
+    my $query = "select readname from $READINFO 
                  where  readname in ('".join ("','",@$readnames)."')";
 
     my $sth = $dbh->prepare($query);
@@ -1619,9 +1740,7 @@ sub putRead {
     my $read = shift;
     my %options = @_;
 
-    if (ref($read) ne 'Read') {
-        return (0,"putRead expects an instance of the Read class");
-    }
+    &verifyParameter($read,'putRead');
 
 # a) test consistency and completeness
 
@@ -1714,7 +1833,7 @@ sub putRead {
     my $readname = $read->getReadName();
 
     my $query = "insert into" .
-	" READS(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
+	" $READINFO(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
 	    " VALUES(?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
@@ -1728,7 +1847,7 @@ sub putRead {
 			$basecaller,
                         $status);
 
-    return (0, "failed to insert readname and core data into READS table;DBI::errstr=$DBI::errstr")
+    return (0, "failed to insert readname and core data into $READINFO table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
 
     my $readid = $dbh->{'mysql_insertid'};
@@ -1761,6 +1880,8 @@ sub putSequenceForRead {
     my $this = shift;
     my $read = shift; # Read instance
     my $version = shift || 0;
+
+    &verifyParameter($read,'putSequenceForRead');
 
     my $readid = $read->getReadID();
 
@@ -1797,7 +1918,7 @@ sub putSequenceForRead {
 
     $rc = $sth->execute($seqid, $read->getSequenceLength(), $sequence, $basequality);
 
-# shouldn't we undo the insert in READS? if it fails
+# shouldn't we undo the insert in $READINFO? if it fails
 
     return (0, "failed to insert sequence and base-quality for $readname ($readid);" .
 	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
@@ -1816,7 +1937,7 @@ sub putSequenceForRead {
 
 	$rc = $sth->execute($seqid, $lqleft, $lqright);
 
-# shouldn't we undo the insert in READS? if it fails
+# shouldn't we undo the insert in $READINFO? if it fails
 
 	return (0, "failed to insert quality clipping data for $readname ($readid);" .
 		"DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
@@ -1938,8 +2059,7 @@ sub putNewSequenceForRead {
     my $read = shift; # a Read instance
     my $noload = shift; # optional
 
-    die "ArcturusDatabase->putNewSequenceForRead expects a Read instance " .
-        "as parameter" unless (ref($read) eq 'Read');
+    &verifyParameter($read,'putNewSequenceForRead');
 
 # a) test if the readname already occurs in the database
 
@@ -1963,8 +2083,7 @@ sub putNewSequenceForRead {
 
     my $alignToSCF = $read->getAlignToTrace();
     if (ref($alignToSCF) eq 'Mapping' && $alignToSCF->hasSegments() <= 1) { 
-print STDOUT "using Mapping\n" if $DEBUG;
-        return (0,"insufficient alignment information");
+        return (0,"insufficient alignment information (using Mapping)");
     }
 # old representation; to be removed after update to Read.pm
     elsif (ref($alignToSCF) eq 'ARRAY' && scalar(@$alignToSCF) <= 1) {
@@ -2006,7 +2125,8 @@ print STDOUT "using Mapping\n" if $DEBUG;
 
 # f) load this new version of the sequence
 
-print STDOUT "new sequence version detected ($version) for read $readname\n" if $DEBUG;
+my $logger = $this->verifyLogger('putNewSequenceForRead');
+$logger->debug("new sequence version detected ($version) for read $readname");
 
     my ($seq_id,$errmsg) = $this->putSequenceForRead($read,$version); 
     return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
@@ -2047,8 +2167,7 @@ sub testRead {
     my $this = shift;
     my $read = shift;
 
-    return (0, "checkRead expects a Read instance as parameter")
-	unless (defined($read) && ref($read) && ref($read) eq 'Read');
+    &verifyParameter($read,'testRead');
 
     my $report = '';
 
@@ -2073,6 +2192,7 @@ sub checkReadForCompleteness {
     my $read = shift;
     my %options = @_;
 
+    &verifyPrivate($read,'checkReadForCompleteness');
 
     return (0, "undefined readname")
 	unless defined($read->getReadName());
@@ -2131,6 +2251,8 @@ sub checkReadForConsistency {
     my $read = shift;
     my %options = @_;
 
+    &verifyPrivate($read,'checkReadForConsistency');
+
 # check process status 
 
     if (my $status = $read->getProcessStatus()) {
@@ -2185,6 +2307,8 @@ sub getReadAttributeID {
     my $select_sth = shift;
     my $insert_sth = shift;
     my $extra_data = shift;
+
+    &verifyPrivate($identifier,'getReadAttributeID');
 
 # ALTERNATIVE?
 # sub getReadAttributeID {
@@ -2257,6 +2381,8 @@ sub putTraceArchiveIdentifierForRead {
     my $this = shift;
     my $read = shift; # a Read instance
 
+    &verifyParameter($read,'putTraceArchiveIdentifierForRead');
+
     my $TAI = $read->getTraceArchiveIdentifier() || return;
 
     my $readid = $read->getReadID() || return; # must have readid defined
@@ -2322,24 +2448,28 @@ sub deleteRead { # TO BE TESTED
 
 # remove for readid from all tables it could be in (should be separate cleanup?)
 
+my $logger = $this->verifyLogger("deleteRead");
+
     my @stables = ('SEQVEC','CLONEVEC','SEQUENCE','QUALITYCLIP','READTAG');
 
     my $delete = 0;
 # delete seq_id items
     foreach my $table (@stables) {
         $query = "delete $table from $table left join SEQ2READ using (seq_id) where read_id=?";
-print "$query\n"; next; # test this query!
+$logger->debug("$query"); next; # test this query!
+
         $sth = $dbh->prepare_cached($query);
 #        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
         $sth->finish();
     }
 
-    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','READS');
+    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','$READINFO');
 # delete read_id items
     foreach my $table (@stables) {
         $query = "delete from $table where read_id=?";
-print "$query\n"; next;
+$logger->debug("$query"); next; # test this query!
+
         $sth = $dbh->prepare_cached($query);
 #        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
@@ -2351,9 +2481,9 @@ print "$query\n"; next;
 
 sub deleteReadsLike { # TO BE TESTED
     my $this = shift;
-    my $name = shift;
+    my $name = shift || return 0,undef;
 
-    my $query = "select read_id from READS where readname like ?";
+    my $query = "select read_id from $READINFO where readname like ?";
 
     $query =~ s/like/=/ unless ($name =~ /\%/);
 
@@ -2390,6 +2520,12 @@ sub getSequenceIDsForReads {
     my $reads = shift; # array ref
     my $noload = shift; # flag inhibiting insertion of new read sequence
 
+    &verifyParameter($reads,"getSequenceIDForReads",'ARRAY');
+
+    &verifyParameter($reads->[0],"getSequenceIDForReads");
+	
+    my $log = $this->verifyLogger('getSequenceIDForReads');
+
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
 # version(s) already in the database with method putNewSequenceForRead
@@ -2404,7 +2540,8 @@ sub getSequenceIDsForReads {
 	}
         elsif ($read->isEdited) {
             my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
-	    print STDERR "$errmsg\n" unless $added;
+	    $log->info("Edited $added $errmsg") if $added;
+	    $log->info("$errmsg") unless $added;
             $success = 0 unless $added;
         }
         else {
@@ -2426,8 +2563,8 @@ sub getSequenceIDsForReads {
 
         my @names = splice @readnames, 0, $block;
 
-        my $query = "select READS.read_id,readname,seq_id" .
-                    "  from READS left join SEQ2READ using (read_id) " .
+        my $query = "select $READINFO.read_id,readname,seq_id" .
+                    "  from $READINFO left join SEQ2READ using (read_id) " .
                     " where readname in ('".join("','",@names)."')" .
 	            "   and version = 0";
 
@@ -2449,8 +2586,12 @@ sub getSequenceIDsForReads {
 # have we collected all of them? then %unedited should be empty
 
     if (keys %$unedited) {
-        print STDERR "Sequence ID not found for reads: " .
-	              join(',',sort keys %$unedited) . "\n";
+        my $log = $this->verifyLogger('getSequenceIDsForReads');
+        $log->error("Sequence ID not found for reads: "
+	            . join(',',sort keys %$unedited));
+        foreach my $key (keys %$unedited) {
+            $log->special("Missing sequence ID for read : $key");
+	}
         $success = 0;
     }
 
@@ -2466,10 +2607,9 @@ sub getTagsForReads {
     my $this = shift;
     my $reads = shift; # array of Read instances
 
-    if (ref($reads) ne 'ARRAY' or ref($reads->[0]) ne 'Read') {
-        print STDERR "getTagsForReads expects an array of Read objects\n";
-        return undef;
-    }
+    &verifyParameter($reads,"getTagsForReads",'ARRAY');
+
+    &verifyParameter($reads->[0],"getTagsForReads");
 
 # build a list of sequence IDs (all sequence IDs must be defined)
 
@@ -2481,8 +2621,9 @@ sub getTagsForReads {
         }
         else {
 # warning message
-            print STDERR "getTagsForReads: Missing sequence identifier ".
-                         "in read ".$read->getReadName."\n";
+            my $logger = $this->verifyLogger("getTagsForReads");
+            $logger->error("getTagsForReads: Missing sequence identifier ".
+                           "in read ".$read->getReadName());
         }
     }
 
@@ -2511,6 +2652,8 @@ sub getReadTagsForSequenceIDs {
     my $seqIDs = shift; # array ref; array will be emptied
     my $blocksize = shift || 1000;
 
+    &verifyPrivate($dbh,"getReadTagsForSequenceIDs");
+
     my @tags;
     while (my $block = scalar(@$seqIDs)) {
 
@@ -2531,6 +2674,8 @@ sub getTagsForSequenceIDs {
     my $dbh = shift;
     my $sequenceIDs = shift; # array of seq IDs
     my %options = @_;
+
+    &verifyPrivate($dbh,"getTagsForSequenceIDs");
 
 # compose query: use left join to retrieve data also if none in TAGSEQUENCE
 
@@ -2579,20 +2724,20 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-# my $autoload = shift; # autoload tag names and sequences if not present
-    my %options = @_;
+    my %options = @_; # autoload=> 
 
-my $DEBUG = $options{debug};
-print "ENTER putTagsForReads\n" if $DEBUG;
+    &verifyParameter($reads,'putTagsForReads','ARRAY');
 
-    if (ref($reads) ne 'ARRAY' or (@$reads && ref($reads->[0]) ne 'Read')) {
-        print STDERR "putTagsForReads expects an array of Read objects\n";
-        return undef;
-    }
+    &verifyParameter($reads->[0],'putTagsForReads');
 
-print "ENTER getSequenceIDsForReads \n" if $DEBUG;
+    my $logger = $this->verifyLogger("putTagsForReads");
+
+$logger->debug("ENTER getSequenceIDsForRead");
+
     my $success = $this->getSequenceIDsForReads($reads,1); # noload flag set
-print "AFTER getSequenceIDsForReads \n" if $DEBUG;
+
+$logger->setPrefix("putTagsForReads");
+$logger->debug("AFTER getSequenceIDsForRead");
 
 # build a list of sequence IDs in tags (all sequence IDs must be defined)
 
@@ -2603,8 +2748,8 @@ print "AFTER getSequenceIDsForReads \n" if $DEBUG;
             $readlist->{$seq_id} = $read;
         }         
         else {
-            print STDERR "putTagsForReads: missing sequence identifier ".
-                         "in read ".$read->getReadName."\n";
+            $logger->error("putTagsForReads: missing sequence identifier ".
+                           "in read ".$read->getReadName());
         }
     }
 
@@ -2618,9 +2763,11 @@ print "AFTER getSequenceIDsForReads \n" if $DEBUG;
 
     my $dbh = $this->getConnection();
 
-print "ENTER getReadTagsForSequenceIDs sids: ".scalar(@sids)."\n" if $DEBUG;
+$logger->debug("ENTER getReadTagsForSequenceIDs sids: ".scalar(@sids));
+
     my $existingtags = &getReadTagsForSequenceIDs($dbh,\@sids,1000); # empties @sids
-print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" if $DEBUG;
+
+$logger->debug("AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags));
 
 # run through both reads and existing tags to weed out tags to be ignored
 
@@ -2633,7 +2780,8 @@ print "AFTER getReadTagsForSequenceIDs existing: ".scalar(@$existingtags)."\n" i
 
     my %isequaloptions = (ignoreblankcomment=>1);
     $isequaloptions{ignorenameofpattern} = "oligo\\w+";
-$isequaloptions{debug} = 1 if $DEBUG;    
+
+$isequaloptions{logger} = $logger; # test purposes   
 
     while ($scounter < @sids && $tcounter < @$existingtags) {
  
@@ -2654,11 +2802,14 @@ $isequaloptions{debug} = 1 if $DEBUG;
 
             foreach my $rtag (@$rtags) {
 # skip if the tag is already marked
+$logger->debug("processing tag $rtag");
                 next if $ignore->{$rtag};
+$logger->debug("testing tag $rtag");
 # process possible placeholder names (to enable the name comparison)
-                &processTagPlaceHolderName($rtag);
+                &processTagPlaceHolderName($rtag,$logger);
 # and compare the tag with the current existing tag (including host class)
                 $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
+$logger->setPrefix("putTagsForReads");
             }
             $tcounter++;
         }
@@ -2671,33 +2822,42 @@ $isequaloptions{debug} = 1 if $DEBUG;
         next unless $read->hasTags();
 #        next unless $read->getSequenceID();
         my $rtags = $read->getTags();
-        foreach my $tag (@$rtags) {
-            next if $ignore->{$tag};
+        foreach my $rtag (@$rtags) {
+            next if $ignore->{$rtag};
 # process possible placeholder names (again! there may be no existing tags)
-            &processTagPlaceHolderName($tag);
-            push @tags,$tag;
+            &processTagPlaceHolderName($rtag,$logger);
+            push @tags,$rtag;
 	}
     }
 
 # here we have a list of new tags which have to be loaded
 
-print "new tags to be loaded : ".scalar(@tags)."\n" if $DEBUG;
+$logger->setPrefix("putTagsForReads");
+$logger->debug("new tags to be loaded : ".scalar(@tags));
 
     return '0.0' unless @tags; # returns True for success but empty
 
-    &getTagSequenceIDsForTags($dbh,\@tags,$options{autoload});
+    my $autoload = $options{autoload} || 0;
+    $this->getTagSequenceIDsForTags(\@tags, autoload => $autoload);
 
     return [@tags] if $options{noload}; # test option
 
     return &putReadTags($dbh,\@tags);
 }
 
-sub processTagPlaceHolderName {
+sub processTagPlaceHolderName { # DEPRECATE ? should go to TagFactory ??
 # private method, substitute (possible) placeholder name of the tag sequence
     my $tag = shift;
 
+my $logger = shift;
+$logger->setPrefix("processTagPlaceHolderName");
+
+    &verifyPrivate($tag,'processTagPlaceHolderName');
+
     my $name = $tag->getTagSequenceName();
-print STDOUT "DEBUG processTagPlaceHolderName: $name \n" if $DEBUG;
+
+$logger->debug("input '$name'");
+
     return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
 
 # generate a generic name from the place holder name and sequence ID
@@ -2707,12 +2867,12 @@ print STDOUT "DEBUG processTagPlaceHolderName: $name \n" if $DEBUG;
     my $seq_id = $tag->getSequenceID();
     my $randomnumber = int(rand(100)); # from 0 to 99 
     my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
-print STDOUT "new tag name $newname   placeholder '$name'\n" if $DEBUG;
+$logger->debug("new tag name $newname   placeholder '$name'");
 # check/replace if the place holder appears in the comment as well 
     my $comment = $tag->getTagComment();
-print STDOUT "comment:\n$comment\n" if $DEBUG;
+$logger->debug("comment:\n$comment");
     $comment =~ s/\<$name\>/$newname/ if $comment;
-print STDOUT "new comment:\n$comment\n" if $DEBUG;
+$logger->debug("new comment:\n$comment");
 
     $tag->setTagSequenceName($newname);
     $tag->setTagComment($comment);
@@ -2721,14 +2881,22 @@ print STDOUT "new comment:\n$comment\n" if $DEBUG;
 }
 
 sub getTagSequenceIDsForTags {
-# private (generic) method only
-    my $dbh = shift;
+# add tag sequence IDs to input tags
+    my $this = shift;
     my $tags = shift;
-    my $autoload = shift; # of missing tag names and sequences
+    my %options = @_; # print STDERR "getTagSequenceIDsForTags: @_\n";
+
+# check input
+
+    &verifyParameter($tags,'getTagSequenceIDsForTags','ARRAY');
+
+    &verifyParameter($tags->[0],'getTagSequenceIDsForTags','Tag');
 
     my $tagIDhash = {};
 
     return $tagIDhash unless ($tags && @$tags); # return empty hash
+
+    my $logger = $this->verifyLogger("getTagSequenceIDsForTags");
 
 # get tag_seq_id using tagseqname for link with the TAGSEQUENCE reference list
 
@@ -2742,7 +2910,7 @@ sub getTagSequenceIDsForTags {
 
     if (my @tagseqnames = keys %tagdata) {
 
-print "tagseqnames: @tagseqnames to be identified\n" if $DEBUG; 
+$logger->debug("tagseqnames: @tagseqnames to be identified");
 
         my $tagSQhash = {};
 
@@ -2752,6 +2920,8 @@ print "tagseqnames: @tagseqnames to be identified\n" if $DEBUG;
 	          . " where tagseqname = ?";
 # my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
 #           . " where tagseqname in ('".join("','",@tagseqnames)."')";
+
+        my $dbh = $this->getConnection();
 
         my $sth = $dbh->prepare_cached($query);
 
@@ -2774,10 +2944,10 @@ print "tagseqnames: @tagseqnames to be identified\n" if $DEBUG;
             next unless $tagseqname;
 	    my $sequence = $tag->getDNA();
             if (!$tagIDhash->{$tagseqname}) {
-                print STDERR "Missing tag name $tagseqname ("
-                            . ($sequence || 'no sequence available')
-                            . ") in TAGSEQUENCE list\n";
-                next unless $autoload; # allow sequence to be null
+                $logger->error("Missing tag name $tagseqname ("
+                              . ($sequence || 'no sequence available')
+                              . ") in TAGSEQUENCE list");
+                next unless $options{autoload}; # allow sequence to be null
 # add tag name and sequence, if any, to TAGSEQUENCE list
 	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
          	if ($tag_seq_id) {
@@ -2808,114 +2978,8 @@ print "tagseqnames: @tagseqnames to be identified\n" if $DEBUG;
 		}
 # if the sequence was not found, then generate a new entry with a related name
                 unless ($sequence eq $tagSQhash->{$tagseqname}) {
-                    print STDERR "Tag sequence mismatch for tag $tagseqname : ".
-                       "(tag) $sequence  (taglist) $tagSQhash->{$tagseqname}\n";
-# generate a new tag sequence name by appending a random string
-                    my $randomnumber = int(rand(100)); # from 0 to 99
-                    $tagseqname .= sprintf ('n%02d',$randomnumber);
-# add tag name and sequence, if any, to TAGSEQUENCE list
-	            my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
-         	    if ($tag_seq_id) {
-                        $tagIDhash->{$tagseqname} = $tag_seq_id;                
-                        $tagSQhash->{$tagseqname} = $sequence if $sequence;
-                        $tag->setTagSequenceName($tagseqname); # replace
-                    }
-		}
-	    }
-# add the tag sequence ID to the tag object
-            $tag->setTagSequenceID($tagIDhash->{$tagseqname});
-        }
-    }
-}
-
-sub newgetTagSequenceIDsForTags {
-# private (generic) method only
-    my $dbh = shift;
-    my $tags = shift;
-    my $autoload = shift; # of missing tag names and sequences
-
-    my $tagIDhash = {};
-
-    return $tagIDhash unless ($tags && @$tags); # return empty hash
-
-# get tag_seq_id using tagseqname for link with the TAGSEQUENCE reference list
-
-    my %tagdata;
-    foreach my $tag (@$tags) {
-        my $tagseqname = $tag->getTagSequenceName();
-        $tagdata{$tagseqname}++ if $tagseqname;
-    }
-
-# build the tag ID hash keyed on (unique) tag sequence name
-
-    if (my @tagseqnames = keys %tagdata) {
-
-        my $tagSQhash = {};
-
-# get tag_seq_id, tagsequence for tagseqnames
-
-        my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
-	          . " where tagseqname = ?";
-# my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
-#           . " where tagseqname in ('".join("','",@tagseqnames)."')";
-
-        my $sth = $dbh->prepare_cached($query);
-
-        foreach my $tagseqname (@tagseqnames) {
-
-            $sth->execute($tagseqname) || &queryFailed($query,$tagseqname);
-
-            while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
-                $tagIDhash->{$tagseqname} = $tag_seq_id;
-                $tagSQhash->{$tagseqname} = $sequence;
-            }
-
-            $sth->finish();
-	}
-
-# test the sequence against the one specified in the tags
-
-        foreach my $tag (@$tags) {
-            my $tagseqname = $tag->getTagSequenceName();
-            next unless $tagseqname;
-	    my $sequence = $tag->getDNA();
-            if (!$tagIDhash->{$tagseqname}) {
-                print STDERR "Missing tag name $tagseqname ("
-                            . ($sequence || 'no sequence available')
-                            . ") in TAGSEQUENCE list\n";
-                next unless $autoload; # allow sequence to be null
-# add tag name and sequence, if any, to TAGSEQUENCE list
-	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
-         	if ($tag_seq_id) {
-                    $tagIDhash->{$tagseqname} = $tag_seq_id;                
-                    $tagSQhash->{$tagseqname} = $sequence if $sequence;
-                }
-            }
-# test for a possible mismatch of sequence with the one in the database
-            elsif ($sequence && $sequence ne $tagSQhash->{$tagseqname}) {
-# test if the sequence is already in the database for another name (with a query)
-                my $query = "select tag_seq_id,tagseqname,sequence"
-                          . "  from TAGSEQUENCE"
-	                  . " where sequence = '$sequence'";
-                my $sth = $dbh->prepare($query);  
- 
-                $sth->execute() || &queryFailed($query);
-                while (my ($tag_seq_id,$tagseqname,$sequence) = $sth->fetchrow_array()) {
-                    $tagIDhash->{$tagseqname} = $tag_seq_id;
-                    $tagSQhash->{$tagseqname} = $sequence;
-                }
-                $sth->finish();
-                foreach my $name (keys %$tagSQhash) {
-                    next unless defined($tagSQhash->{$name});
-                    next unless ($tagSQhash->{$name} eq $sequence);
-                    $tag->setTagSequenceName($name); # replace
-                    $tagseqname = $name;
-                    last;
-		}
-# if the sequence was not found, then generate a new entry with a related name
-                unless ($sequence eq $tagSQhash->{$tagseqname}) {
-                    print STDERR "Tag sequence mismatch for tag $tagseqname : ".
-                       "(tag) $sequence  (taglist) $tagSQhash->{$tagseqname}\n";
+                    $logger->error("Tag sequence mismatch for tag $tagseqname : (tag) ".
+                                   "$sequence  (taglist) $tagSQhash->{$tagseqname}");
 # generate a new tag sequence name by appending a random string
                     my $randomnumber = int(rand(100)); # from 0 to 99
                     $tagseqname .= sprintf ('n%02d',$randomnumber);
@@ -2938,6 +3002,8 @@ sub putReadTags {
 # use as private method only
     my $dbh = shift;
     my $tags = shift;
+
+    &verifyPrivate($dbh,"putReadTags");
 
     return undef unless ($tags && @$tags);
 
@@ -3010,6 +3076,8 @@ sub insertTagSequence {
     my $tagseqname = shift || return undef;
     my $sequence = shift;
     my $update = shift;
+
+    &verifyPrivate($dbh,"insertTagSequence");
 
 # test if an update needs to be made
 
@@ -3091,6 +3159,30 @@ sub insertTagSequence {
     $sth->finish();
 
     return $tag_seq_id;
+}
+
+#------------------------------------------------------------------------------
+# verification of method parameter and access mode
+#------------------------------------------------------------------------------
+
+sub verifyParameter {
+    my $object = shift;
+    my $method = shift || 'UNDEFINED';
+    my $class  = shift || 'Read';
+
+    return if ($object && ref($object) eq $class);
+    print STDOUT "method 'ADBRead->$method' expects a $class instance as parameter\n";
+    exit 1;
+}
+
+sub verifyPrivate {
+    my $caller = shift;
+    my $method = shift;
+
+    if (ref($caller) eq 'Arcturusdatabase' || $caller =~ /^ADB\w+/) {
+        print STDOUT "Invalid use of private method ADBRead->$method\n";
+	exit 1;
+    }
 }
 
 #-----------------------------------------------------------------------------
