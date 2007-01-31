@@ -26,13 +26,13 @@ public class ReadManager extends AbstractManager {
 
 		conn = adb.getConnection();
 
-		String query = "select readname,template_id,asped,strand,primer,chemistry from READS where read_id = ?";
+		String query = "select readname,template_id,asped,strand,primer,chemistry from READINFO where read_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
-		query = "select read_id,template_id,asped,strand,primer,chemistry from READS where readname = ?";
+		query = "select read_id,template_id,asped,strand,primer,chemistry from READINFO where readname = ?";
 		pstmtByName = conn.prepareStatement(query);
 
-		query = "select read_id,readname,asped,strand,primer,chemistry from READS where template_id = ?";
+		query = "select read_id,readname,asped,strand,primer,chemistry from READINFO where template_id = ?";
 		pstmtByTemplate = conn.prepareStatement(query);
 
 		hashByID = new HashMap();
@@ -189,7 +189,7 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public void preloadAllReads() throws SQLException {
-		String query = "select read_id,readname,template_id,asped,strand,primer,chemistry from READS";
+		String query = "select read_id,readname,template_id,asped,strand,primer,chemistry from READINFO";
 
 		Statement stmt = conn.createStatement();
 
@@ -246,7 +246,7 @@ public class ReadManager extends AbstractManager {
 						+ " select read_id,SEQ2READ.seq_id from CURSEQ left join SEQ2READ using(seq_id)",
 
 				"create temporary table FREEREAD as"
-						+ " select READS.read_id from READS left join CURREAD using(read_id)"
+						+ " select READINFO.read_id from READINFO left join CURREAD using(read_id)"
 						+ " where seq_id is null" };
 
 		for (int i = 0; i < queries.length; i++) {

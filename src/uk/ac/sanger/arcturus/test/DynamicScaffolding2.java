@@ -145,7 +145,7 @@ public class DynamicScaffolding2 {
 
 		pstmtRightEndReads = conn.prepareStatement(query);
 
-		query = "select template_id,strand from READS where read_id = ?";
+		query = "select template_id,strand from READINFO where read_id = ?";
 
 		pstmtTemplate = conn.prepareStatement(query);
 
@@ -154,7 +154,7 @@ public class DynamicScaffolding2 {
 
 		pstmtLigation = conn.prepareStatement(query);
 
-		query = "select READS.read_id,seq_id from READS left join SEQ2READ using(read_id)"
+		query = "select READINFO.read_id,seq_id from READINFO left join SEQ2READ using(read_id)"
 				+ " where template_id = ? and strand != ?";
 
 		pstmtLinkReads = conn.prepareStatement(query);

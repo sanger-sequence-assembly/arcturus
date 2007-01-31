@@ -100,7 +100,7 @@ public class CompareReads {
 
 			conn1 = adb1.getConnection();
 
-			String query = "select readname from READS";
+			String query = "select readname from READINFO";
 
 			if (namelike != null)
 				query += " where readname like ?";
