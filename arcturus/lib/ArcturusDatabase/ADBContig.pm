@@ -11,14 +11,15 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 use Contig;
 use Mapping;
+#use MappingFactory;
 
 our @ISA = qw(ArcturusDatabase::ADBRead Exporter);
 
-our @EXPORT = qw(getCurrentContigs);
+our @EXPORT = qw(getCurrentContigs); # DEPRECATE when view can be used
 
 use ArcturusDatabase::ADBRoot qw(queryFailed);
 
-# ----------------------------------------------------------------------------
+#-----------------------------------------------------------------------------
 # constructor and initialisation via constructor of superclass
 #-----------------------------------------------------------------------------
 
@@ -30,9 +31,7 @@ sub new {
     return $this;
 }
 
-my $DEBUG;
-sub cDebug   { $DEBUG = shift || 1; }
-sub cNoDebug { $DEBUG = 0; }
+my $READINFO = 'READS'; # class variable TO BE REPLACED by 'READINFO'
 
 #------------------------------------------------------------------------------
 # methods for exporting CONTIGs or CONTIG attributes
@@ -69,11 +68,11 @@ sub getContig {
 
     if ($options{withRead}) {
 # returns the highest contig_id, i.e. most recent contig with this read
-        $query .= "  from CONTIG, MAPPING, SEQ2READ, READS "
+        $query .= "  from CONTIG, MAPPING, SEQ2READ, $READINFO "
                . " where CONTIG.contig_id = MAPPING.contig_id "
                . "   and MAPPING.seq_id = SEQ2READ.seq_id "
-               . "   and SEQ2READ.read_id = READS.read_id "
-	       . "   and READS.readname like ? ";
+               . "   and SEQ2READ.read_id = $READINFO.read_id "
+	       . "   and $READINFO.readname like ? ";
 	push @values, $options{withRead};
 
     }
@@ -227,8 +226,9 @@ sub getSequenceAndBaseQualityForContigID {
     if (defined($sequence)) {
         $sequence = uncompress($sequence);
         unless ($sequence) {
-	    print STDERR "uncompress FAILED in contig_id=$contig_id : ";
-            print STDERR "undefined sequence\n";
+            my $log = $this->verifyLogger("getSequenceAndBaseQualityForContigID");
+            $log->error("uncompress FAILED in contig_id=$contig_id : "
+                       ."undefined sequence");
         }
     }
 
@@ -242,8 +242,9 @@ sub getSequenceAndBaseQualityForContigID {
 # the decompression failed, probably due to a bug in the Perl Z-lib module
             my $length = 0;
             $length = length($sequence) if $sequence;
-	    print STDERR "uncompress FAILED in contig_id=$contig_id : ";
-            print STDERR "undefined quality (sequence length $length)\n";
+            my $log = $this->verifyLogger("getSequenceAndBaseQualityForContigID");
+            $log->error("uncompress FAILED in contig_id=$contig_id : "
+                       ."undefined quality (sequence length $length)");
 # try to recover by faking an array of low quality data
             my @qualarray;
             while ($length--) {
@@ -278,6 +279,8 @@ sub getParentContigsForContig {
     my $this = shift;
     my $contig = shift;
 
+    &verifyParameter($contig,"getParentContigsForContig");
+
     return if $contig->hasParentContigs(); # already done
 
 # get the parent IDs; try ContigToContig mappings first
@@ -297,7 +300,8 @@ sub getParentContigsForContig {
     }
 # or, if no contig_id available, get the parents from read comparison
     else {
-print ">getParentContigsForContig: searching parents from scratch\n" if $DEBUG; 
+my $log = $this->verifyLogger('getParentContigsForContig');
+$log->debug("searching parents from scratch");
         my $parents = $this->getParentIDsForContig($contig);
         @parentids = @$parents if $parents;        
     }
@@ -316,6 +320,8 @@ sub getChildContigsForContig {
     my $this = shift;
     my $contig = shift;
 
+    &verifyParameter($contig,"getChildContigsForContig");
+
     return if $contig->hasChildContigs(); # already done
 
 # get the IDs from the database given contig_id
@@ -330,9 +336,10 @@ sub getChildContigsForContig {
 
 # build the Contig instances (metadata only) and add to the input Contig object
 
+my $log = $this->verifyLogger('getChildContigsForContig');
     foreach my $child_id (@$childids) {
         my $child = $this->getContig(ID=>$child_id, metaDataOnly=>1);
-print ">getChildContigsForContig: contig $child for id=$child_id\n" if $DEBUG;
+$log->debug("contig $child for id=$child_id");
         $contig->addChildContig($child) if $child;
     }
 }
@@ -348,10 +355,11 @@ sub putContig {
     my $project = shift; # Project instance or '0' or undef
     my %options = @_;
 
-    die "ArcturusDatabase->putContig expects a Contig instance ".
-        "as parameter" unless (ref($contig) eq 'Contig');
-    die "ArcturusDatabase->putContig expects a Project instance ".
-        "as parameter" if ($project && ref($project) ne 'Project');
+    &verifyParameter($contig,"getParentContigsForContig");
+
+    &verifyParameter($project,"getParentContigsForContig",'Project');
+
+    my $log = $this->verifyLogger('putContig');
 
 # optional input parameters: 
 # setprojectby        for choice of method used for project inheritance
@@ -396,20 +404,24 @@ sub putContig {
 
     my @seqids;
     my %seqids;
+    my $missing = 0;
     foreach my $read (@$reads) {
         my $seqid = $read->getSequenceID();
 # extra check on read sequence presence, just to be sure
         unless ($seqid) {
-            print STDERR "undefined sequence ID for read ".
-		$read->getReadName."\n";
-            unless ($noload) {
-                return (0,"Missing sequence IDs for contig $contigname");
-            }
+            $log->error("undefined sequence ID for read ".$read->getReadName);
+            $missing++;
+	    next;
 	}
         my $readname = $read->getReadName();
         $seqids{$readname} = $seqid;
         push @seqids,$seqid;
     }
+# abort if any missing sequence IDs
+    unless (!$missing || $noload) {
+        return (0,"$missing Missing sequence IDs for contig $contigname");
+    }
+
 # and put the sequence IDs into the Mapping instances
     my $mappings = $contig->getMappings();
     foreach my $mapping (@$mappings) {
@@ -445,11 +457,12 @@ sub putContig {
 # pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
         if ($contig->isSameAs($previous)) {
+#        if ($contig->isEqual($previous)) {
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
             $message = "Contig $contigname is identical to contig "
-                     .  $previous->getContigName() . " ("
+                     .  $previous->getContigName() . " (p:"
 		     .  $previous->getProject() . ")";
 # 'prohibitparent' is an option used by assignReadAsContigToProject
             return 0,$message if $options{prohibitparent};
@@ -465,9 +478,9 @@ sub putContig {
                     my $newproject = $project->getProjectID();
                     my $oldproject = $previous->getProject();
 # determine old project for contig, generate message system?
-print STDERR "putContig: line 449 assignContigToProject "
-           .  $project->getProjectName()."\n";
-# what about message? get project allocated for contig, test if pid changed
+
+# TODO what about message? get project allocated for contig, test if pid changed
+# TODO BETTER: add entry to the contigtransfer table
                     $this->assignContigToProject($previous,$project);
                     $project->addContigID($contigid);
                 }
@@ -475,9 +488,9 @@ print STDERR "putContig: line 449 assignContigToProject "
 # check / import tags for this contig
 
                 if ($contig->hasTags() && $inheritTags) {
-                    my $dbh = $this->getConnection();
+# TODO any selection of tags ?
                     $message .= "\nWarning: no tags inserted for $contigname"
-                    unless &putTagsForContig($dbh,$contig,1);
+                    unless $this->putTagsForContig($contig); # test existing tags
                 }
 	    }
 
@@ -509,13 +522,14 @@ print STDERR "putContig: line 449 assignContigToProject "
             my $parent = $this->getContig(ID=>$parentid,metaDataOnly=>1);
             unless ($parent) {
 # protection against missing parent contig from CONTIG table
-                print STDERR "Parent $parentid for $contigname not found ".
-		             "(possibly corrupted MAPPING table?)\n";
+                $log->error("Parent $parentid for $contigname not found ".
+		            "(possibly corrupted MAPPING table?)");
                 next;
             }
             $this->getReadMappingsForContig($parent);
-#$contig->setDEBUG();
-            $contig->setArcturusDatabase($this); # re: link recovery
+
+            $contig->setArcturusDatabase($this); # re: enables link recovery
+#            my ($mapping,$linked,$deallocated) = MappingFactory->crossmatch($contig,$parent);
             my ($linked,$deallocated) = $contig->linkToContig($parent);
 # add parent to contig, later import tags from parent(s)
             my $previous = $parent->getContigName();
@@ -549,7 +563,7 @@ print STDERR "putContig: line 449 assignContigToProject "
 
 # inherit the tags
 
-#        $contig->inheritTags(excludetag=>'REPT|ANNO') if $inheritTags;
+#TODO        $contig->inheritTags(excludetag=>'REPT|ANNO') if $inheritTags;
         $contig->inheritTags() if $inheritTags;
 
 # determine the project_id unless it's already specified (with options)
@@ -613,17 +627,19 @@ print STDERR "putContig: line 449 assignContigToProject "
 # then load the overall mappings (and put the mapping ID's in the instances)
 
     return 0, "Failed to insert read-to-contig mappings for $contigname"
-      unless &putMappingsForContig($dbh,$contig,type=>'read');
+        unless &putMappingsForContig($dbh,$contig,$log,type=>'read');
 
 # the CONTIG2CONTIG mappings
 
     return 0, "Failed to insert contig-to-contig mappings for $contigname"
-      unless &putMappingsForContig($dbh,$contig,type=>'contig');
+        unless &putMappingsForContig($dbh,$contig,$log,type=>'contig');
 
 # and contig tags?
 
+    my %ctoptions = (notestexisting => 1); # it's a new contig
+# TODO ? add tagtype selection ?
     return 0, "Failed to insert tags for $contigname"
-      unless &putTagsForContig($dbh,$contig);
+        unless $this->putTagsForContig($contig,%ctoptions);
 
 # update the age counter in C2CMAPPING table (at very end of this insert)
 
@@ -649,7 +665,7 @@ print STDERR "putContig: line 449 assignContigToProject "
             $project = 0;
 	}
 # compose messages for owners of contigs which have changed project
-        my $messages = &informUsersOfChange($contig,$project,\@originalprojects);
+        my $messages = &informUsersOfChange($contig,$project,\@originalprojects,$log);
         foreach my $message (@$messages) {
             $this->logMessage(@$message); # owner, projects, text
         }
@@ -669,12 +685,13 @@ sub inheritProject {
 
 # test input parameters and contents
 
-    die "method 'inheritProject' expects a Contig instance as parameter" 
-    unless ($contig && ref($contig) eq 'Contig');
+    &verifyParameter($contig,"inheritProject");
 
     unless ($contig->hasParentContigs()) {
         return 0,"has no parents; project ID = 0 assigned";
     }
+
+    my $log = $this->verifyLogger('inheritProject');
 
 # test inheritance model specification and other options
 
@@ -733,11 +750,11 @@ sub inheritProject {
         }
     }
     else {
-#print "putContig 451: getProject parentids= @parentids\n" if $DEBUG;
+$log->debug(" before getProject parentids= @parentids");
         my ($projects,$msg) = $this->getProject(contig_id=>[@parentids]);
 #                                               lockcheck=>$lockcheck);
-#print "Projects found @$projects $msg\n" if @$projects;
-#print "No Projects found $msg\n" unless @$projects;
+$log->debug("Projects found @$projects $msg") if @$projects;
+$log->debug("No Projects found $msg") unless @$projects;
         @projects = @$projects if ($projects && @$projects);
     }
 
@@ -771,8 +788,8 @@ sub inheritProject {
         my $largestscore = 0;
 	foreach my $testproject (@projects) {
 	    my $contigids = $testproject->getContigIDs();
-print ">inheritProjectProject: ".$testproject->getProjectID()." ".
-$testproject->getProjectName()." contigs: @$contigids\n" if $DEBUG;
+$log->debug($testproject->getProjectID()." ".$testproject->getProjectName().
+            " contigs: @$contigids");
             my $measure = $options{measure} || 0;
             my $score = 0;
             foreach my $contigid (@$contigids) {
@@ -786,7 +803,7 @@ $testproject->getProjectName()." contigs: @$contigids\n" if $DEBUG;
                     $score += $consensussize{$contigid};
                 }
             }
-print ">inheritProject: Score $score ($largestscore)\n" if $DEBUG;
+$log->debug("Score $score ($largestscore)");
             if (!$largestscore || $score > $largestscore) {
                 $largestscore = $score;
                 $project = $testproject;
@@ -815,6 +832,11 @@ sub informUsersOfChange {
     my $contig = shift; # the contig instance
     my $newproject = shift; # Project instance or 0 for 'bin'
     my $oldprojects = shift; # array of Project instances
+    my $log = shift;
+
+    &verifyPrivate($contig,"informUsersOfChange");
+
+    $log->setPrefix("informUsersOfChange");
 
     my $newpid = 0;
     $newpid = $newproject->getProjectID() if $newproject;
@@ -824,9 +846,8 @@ sub informUsersOfChange {
     foreach my $oldproject (@$oldprojects) {
 # test if a project has changed using the project ID
         next if ($oldproject->getProjectID() == $newpid);
-print STDOUT "Diagnostic message: enter ADBContig->informUsersOfChange "
-           . "($newpid, ".$oldproject->getProjectID()
-           . ", ".$oldproject->getProjectName().")\n";
+        $log->debug("($newpid, ".$oldproject->getProjectID().", "
+                   . $oldproject->getProjectName().")");
         next if ($oldproject->getProjectName() eq "BIN");
  
         my $oldprojectname = $oldproject->getProjectName();
@@ -857,6 +878,8 @@ sub putMetaDataForContig {
     my $contig = shift; # Contig instance
     my $readhash = shift;
     my $userid = shift;
+
+    &verifyPrivate($dbh,"informUsersOfChange");
 
     my $query = "insert into CONTIG "
               . "(gap4name,length,ncntgs,nreads,newreads,cover,userid"
@@ -889,6 +912,12 @@ sub getSequenceIDForAssembledReads {
     my $this = shift;
     my $reads = shift;
 
+    &verifyParameter($reads,"getSequenceIDForAssembledReads",'ARRAY');
+
+    &verifyParameter($reads->[0],"getSequenceIDForAssembledReads",'Read');
+	
+    my $log = $this->verifyLogger('getSequenceIDForAssembledReads');
+
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
 # version(s) already in the database with method addNewSequenceForRead
@@ -900,8 +929,8 @@ sub getSequenceIDForAssembledReads {
     foreach my $read (@$reads) {
         if ($read->isEdited) {
             my ($added,$errmsg) = $this->putNewSequenceForRead($read);
-	    print STDERR "Edited $added $errmsg\n";
-	    print STDERR "$errmsg\n" unless $added;
+	    $log->info("Edited $added $errmsg") if $added;
+	    $log->info("$errmsg") unless $added;
             $success = 0 unless $added;
         }
         else {
@@ -916,8 +945,8 @@ sub getSequenceIDForAssembledReads {
 
     return unless $range;
 
-    my $query = "select READS.read_id,readname,seq_id" .
-                "  from READS left join SEQ2READ using(read_id) " .
+    my $query = "select $READINFO.read_id,readname,seq_id" .
+                "  from $READINFO left join SEQ2READ using(read_id) " .
                 " where readname in ('$range')" .
 	        "   and version = 0";
 
@@ -941,8 +970,11 @@ sub getSequenceIDForAssembledReads {
 # have we collected all of them? then %unedited should be empty
 
     if (keys %$unedited) {
-        print STDERR "Sequence ID not found for reads: " .
-	              join(',',sort keys %$unedited) . "\n";
+        $log->error("Sequence ID not found for reads: "
+	            . join(',',sort keys %$unedited));
+        foreach my $key (keys %$unedited) {
+            $log->special("Missing sequence ID for read : $key");
+	}
         $success = 0;
     }
     return $success;
@@ -962,6 +994,10 @@ sub testContig {
     my $contig = shift || return undef; # Contig instance
     my $level = shift;
 
+    &verifyParameter($contig,"testContig");
+
+    my $log = $this->verifyLogger('testContig');
+
 # level 0 for export, test number of reads against mappings and metadata    
 # for export: test reads against mappings using the sequence ID
 # for import: test reads against mappings using the readname
@@ -980,21 +1016,20 @@ sub testContig {
             $ID = $read->getReadName()   if  $level; # import
 	    $ID = $read->getSequenceID() if !$level;
             if (!defined($ID)) {
-                print STDERR "Missing identifier in Read ".$read->getReadName."\n";
+                $log->error("Missing identifier in Read ".$read->getReadName);
                 $success = 0;
             }
             $identifier{$ID} = $read;
 # test presence of sequence and quality data
             if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
-                print STDERR "Missing DNA or BaseQuality in Read ".
-                              $read->getReadName."\n";
+                $log->error("Missing DNA or BaseQuality in Read ".$read->getReadName);
                 $success = 0;
             }
         }
         return 0 unless $success;       
     }
     else {
-        print STDERR "Contig ".$contig->getContigName." has no Reads\n";
+        $log->error("Contig ".$contig->getContigName." has no Reads");
         return 0;
     }
 
@@ -1010,30 +1045,30 @@ sub testContig {
 	        $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
                 if (!$identifier{$ID}) {
-                    print STDERR "Missing Read for Mapping ".
-                            $mapping->getMappingName." ($ID)\n";
+                    $log->error("Missing Read for Mapping ".
+                                 $mapping->getMappingName." ($ID)");
                     $success = 0;
                 }
                 delete $identifier{$ID}; # delete the key
             }
 	    else {
-                print STDERR "Mapping ".$mapping->getMappingName().
-                         " for Contig ".$contig->getContigName().
-                         " has no Segments\n";
+                $log->error("Mapping ".$mapping->getMappingName().
+                            " for Contig ".$contig->getContigName().
+                            " has no Segments");
                 $success = 0;
             }
         }
         return 0 unless $success;       
     } 
     else {
-        print STDERR "Contig ".$contig->getContigName." has no Mappings\n";
+        $log->error("Contig ".$contig->getContigName." has no Mappings");
         return 0;
     }
 # now there should be no keys left (when Reads and Mappings correspond 1-1)
     if (scalar(keys %identifier)) {
         foreach my $ID (keys %identifier) {
             my $read = $identifier{$ID};
-            print STDERR "Missing Mapping for Read ".$read->getReadName." ($ID)\n";
+           $log->error("Missing Mapping for Read ".$read->getReadName." ($ID)");
         }
         return 0;
     }
@@ -1044,12 +1079,12 @@ sub testContig {
         my $reads = $contig->getReads();
         my $nreads =  scalar(@$reads);
         if ($nreads != $numberOfReads) {
-	    print STDERR "Read count error for contig ".$contig->getContigName.
-                         " (actual $nreads, metadata $numberOfReads)\n";
+	    $log->error("Read count error for contig ".$contig->getContigName.
+                        " (actual $nreads, metadata $numberOfReads)");
         }
     }
     elsif (!$level) {
-        print STDERR "Missing metadata for ".contig->getContigName."\n";
+        $log->error("Missing metadata for ".contig->getContigName);
     }
     return 1;
 }
@@ -1171,18 +1206,16 @@ sub getReadMappingsForContig {
     my $this = shift;
     my $contig = shift;
 
-    unless (ref($contig) eq 'Contig') {
-        die "getReadMappingsForContig expects a Contig instance as parameter";
-    } 
+    &verifyParameter($contig,"getReadMappingsForContig");
 
     return if $contig->hasMappings(); # already has its mappings
 
     my $mquery = "select readname,SEQ2READ.seq_id,mapping_id,".
                  "       cstart,cfinish,direction" .
-                 "  from MAPPING, SEQ2READ, READS" .
+                 "  from MAPPING, SEQ2READ, $READINFO" .
                  " where contig_id = ?" .
                  "   and MAPPING.seq_id = SEQ2READ.seq_id" .
-                 "   and SEQ2READ.read_id = READS.read_id" .
+                 "   and SEQ2READ.read_id = $READINFO.read_id" .
                  " order by cstart";
 
     my $squery = "select SEGMENT.mapping_id,SEGMENT.cstart,"
@@ -1228,7 +1261,8 @@ sub getReadMappingsForContig {
         }
         else {
 # what if not? (should not occur at all)
-            print STDERR "Missing Mapping instance for ID $mappingid\n";
+            my $log = $this->verifyLogger("getReadMappingsForContig");
+            $log->error("Missing Mapping instance for ID $mappingid");
         }
     }
 
@@ -1243,11 +1277,11 @@ sub getContigMappingsForContig {
     my $contig = shift;
     my %options = @_;
 
-    unless (ref($contig) eq 'Contig') {
-        die "getContigMappingsForContig expects a Contig instance";
-    }
+    &verifyParameter($contig,"getContigMappingsForContig");
                 
     return if $contig->hasContigToContigMappings(); # already done
+
+    my $log = $this->verifyLogger("getContigMappingsForContig");
 
     my $mquery = "select age,parent_id,mapping_id," .
                  "       cstart,cfinish,direction" .
@@ -1290,7 +1324,7 @@ sub getContigMappingsForContig {
 # do an age consistence check for this mapping
         $generation = $age unless defined ($generation);
         next if ($generation == $age);
-        print STDOUT "Inconsistent generation in links for contig $cid\n";
+        $log->error("Inconsistent generation in links for contig $cid");
     }
     $sth->finish();
 
@@ -1307,7 +1341,7 @@ sub getContigMappingsForContig {
         }
         else {
 # what if not? (should not occur at all)
-            print STDERR "Missing Mapping instance for ID $mappingid\n";
+            $log->error("Missing Mapping instance for ID $mappingid");
         }
     }
 
@@ -1322,13 +1356,18 @@ sub putMappingsForContig {
 # private method, write mapping contents to (C2C)MAPPING & (C2C)SEGMENT tables
     my $dbh = shift; # database handle
     my $contig = shift;
+    my $log = shift;
     my %option = @_;
+
+    &verifyPrivate($dbh,"putMappingsForContig");
 
 # this is a dual-purpose method writing mappings to the MAPPING and SEGMENT
 # tables (read-to-contig mappings) or the C2CMAPPING and CSCSEGMENT tables 
 # (contig-to-contig mapping) depending on the parameters option specified
 
-# this method inserts mappinmg segments in blocks of 100
+# this method inserts mapping segments in blocks of 100
+           
+    $log->setPrefix("putMappingsForContig $option{type}");
 
 # define the queries and the mapping source
 
@@ -1354,8 +1393,11 @@ sub putMappingsForContig {
         $squery = "insert into C2CSEGMENT " .
                   " (mapping_id,cstart,pstart,length) values ";
     }
-
-    die "Missing 'type' parameter for ->putMappingsForContig" unless $mappings;
+    else {
+        $option{type} = 'missing' unless $option{type};
+        $log->error("Missing or invalid 'type' parameter $option{type}");
+        return 0; # or die ?
+    }
 
     $mquery .= "values (?,?,?,?,?)";
 
@@ -1406,8 +1448,8 @@ sub putMappingsForContig {
                 $accumulatedQuery .= "," if $accumulated++;
                 $accumulatedQuery .= "($mappingid,$cstart,$rstart,$length)";
 # dump the accumulated query if a number of inserts has been reached
+# $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
                 if ($accumulated >= $block) {
-# print STDOUT "Insert mapping block (segment loop) $accumulated  ($block)\n";
                     $sth = $dbh->prepare($accumulatedQuery); 
                     my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
                     $sth->finish();
@@ -1418,20 +1460,19 @@ sub putMappingsForContig {
             }
         }
         else {
-            print STDERR "Mapping ".$mapping->getMappingName().
-		" unexpectedly has no mapping_id\n";
+            $log->error("Mapping ".$mapping->getMappingName().
+		        " unexpectedly has no mapping_id");
             $success = 0;
         }
     }
 # dump any remaining accumulated query after the last mapping has been processed
     if ($accumulated) {
-# print STDOUT "Insert mapping block (mapping loop) $accumulated  ($block)\n";
+# $log->debug("Insert mapping block (mapping loop) $accumulated\n($block)");
         $sth = $dbh->prepare($accumulatedQuery); 
         my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
         $sth->finish();
         $success = 0 unless $rc;
     }
-
 
 # we now update the contig-to-contig mappings by adding the parent range
 # this is kept separate from the basic inserts because this is derived data
@@ -1448,6 +1489,8 @@ sub addMappingsForContig {
     my $contig = shift;
     my %options = @_;
 
+    &verifyParameter($contig,"addMappingsForContig");
+
     my $mappings = $contig->getContigToContigMappings();
 
     my $dbh = $this->getConnection();
@@ -1459,6 +1502,8 @@ sub updateMappingsForContig {
     my $dbh = shift;
     my $mappings = shift || return;
     my $replace = shift;
+
+    &verifyPrivate($dbh,"updateMappingsForContig");
 
 # default query inserts when pstart or pfinish field undefined
 
@@ -1495,7 +1540,7 @@ sub getEndReadsForContigID {
     my $contig_id = shift;
 
     my $query = "select Rl.readname, Rr.readname"
-              . "  from READS as Rl, READS as Rr,"
+              . "  from $READINFO as Rl, $READINFO as Rr,"
               . "       SEQ2READ as SRl, SEQ2READ as SRr,"
               . "       MAPPING as Ml, MAPPING as Mr,"
               . "       CONTIG"
@@ -1551,6 +1596,8 @@ sub retireContig {
         return 0,"Contig $c_id is not in the current generation";
     }   
 
+    my $log = $this->verify("retireContig");
+
 # get the project ID and test if the user has access to the project
 
     my @lockinfo = $this->getLockedStatusForContigID($c_id);
@@ -1583,7 +1630,7 @@ sub retireContig {
 # add a link for this contig ID marking it as parent of contig 0
 # this (virtual) link removes the contig from the current contig list
  
-    unless (&markAsVirtualParent($this->getConnection(),$c_id)) {
+    unless (&markAsVirtualParent($this->getConnection(),$c_id,$log)) {
         return 0, "Failed to update database";
     }
 
@@ -1595,6 +1642,7 @@ sub markAsVirtualParent {
 # this virtual link removes the contig from the current contig list
     my $adb = shift;
     my $parent_id = shift || return 0;
+    my $log = shift;
 
     return 0 unless $parent_id;
 
@@ -1616,7 +1664,7 @@ sub markAsVirtualParent {
 
     my %options = (type=>'contig',allowemptymapping=>1);
 
-    return &putMappingsForContig($adb,$contig,%options);
+    return &putMappingsForContig($adb,$contig,$log,%options);
 }
 
 #-----------------------------------------------------------------------------
@@ -1649,6 +1697,8 @@ sub cleanupMappingTables {
     my $dbh = shift;
     my $preview = shift;
     my $full = shift; # include testing parent IDs
+
+    &verifyPrivate($dbh,"cleanupMappingTables");
 
     my $query;
     my $report = '';
@@ -1691,6 +1741,8 @@ sub cleanupSegmentTables {
     my $dbh = shift;
     my $preview = shift;
 
+    &verifyPrivate($dbh,"cleanupSegmentTables");
+
     my $query;
     my $report = '';
     foreach my $table ('','C2C') {
@@ -1720,6 +1772,8 @@ sub deleteContigToContigMapping {
     my $dbh = shift;
 # input: mapping ID, contig ID & parent ID, in that order
 
+    &verifyPrivate($dbh,"deleteContigToContigMapping");
+
     my $delete = "delete from C2CMAPPING"
 	       . " where mapping_id = ?"
                . "   and contig_id = ?"
@@ -1738,11 +1792,15 @@ sub repairContigToContigMappings {
     my $contig = shift;
     my %options = @_;
 
+    &verifyParameter($contig,"repairContigToContigMappings");
+
 # contig ID must be defined
 
     my $contig_id = $contig->getContigID();
 
     return 0,"Missing contig ID" unless $contig_id;
+
+    my $log = $this->verifyLogger('repairContigToContigMappings');
 
 # 1) retrieve the existing C2C mappings for the given contig_id:
 #  - first copy the (new) mappings into a temporary buffer;
@@ -1826,7 +1884,7 @@ sub repairContigToContigMappings {
     my $dbh = $this->getConnection();
 
     $message .= "\n";
-#print "deletemappings  @deletemappings  $message\n" if $DEBUG;
+#   $log->debug("deletemappings  @deletemappings  $message");
     foreach my $existingmapping (@deletemappings) {
         next if $options{nodelete};
         my $parent_id = $existingmapping->getSequenceID();
@@ -1857,7 +1915,7 @@ sub repairContigToContigMappings {
 
     if ($nm && $options{confirm}) {
         $message .= "Insert contig-to-contig mappings for $contig_id ..";
-        if (&putMappingsForContig($dbh,$contig,type=>'contig')) {
+        if (&putMappingsForContig($dbh,$contig,$log,type=>'contig')) {
             $message .= ".. DONE\n";
 # update the age of the mapping, if > 0
             if ($age) {
@@ -1883,114 +1941,6 @@ sub repairContigToContigMappings {
 # methods dealing with generations and age tree
 #-----------------------------------------------------------------------------
 
-sub oldgetParentIDsForContig {
-# returns a list contig IDs of parents for input Contig based on 
-# its reads sequence IDs and the sequence-to-contig MAPPING data
-# search from scratch for new contigs (no ID!) and existing contigs
-    my $this = shift;
-    my $contig = shift; # Contig Instance
-
-    return undef unless $contig->hasReads();
-
-    my $reads = $contig->getReads();
-
-# get the sequenceIDs (from Read instances)
-
-    my @seqids;
-    foreach my $read (@$reads) {
-        push @seqids,$read->getSequenceID();
-    }
-
-# we find the parent contigs in two steps: first we collect all contigs
-# in which the sequenceIDs are referenced; subsequently we eliminate
-# from that list those contigs which do have a child IN THE LIST, i.e.
-# select from the list those which are NOT parent of a child in the list.
-# This strategy will deal with split parent contigs as well as "normal" 
-# parents and does only rely on the fact that all contigIDs also occur
-# as parentIDs except for those in the previous generation for $contig
-
-# step 1: get all (potential) parents
-
-    my $contig_id = $contig->getContigID();
-
-    my $query = "select distinct contig_id from MAPPING"
-	      . " where seq_id in (".join(',',@seqids).")";
-# add an exclusion of the contig itself if its ID is defined
-    $query .= " and contig_id < $contig_id" if $contig_id;
-
-$DEBUG = 0;
-print STDOUT ">oldgetParentIDsForContig query 1: \n$query\n" if $DEBUG;
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    my %contigids;
-    while (my ($contig_id) = $sth->fetchrow_array()) {
-        $contigids{$contig_id}++;
-    }
-
-    $sth->finish();
-
-    my @contigids = keys %contigids;
-
-    if (scalar(@contigids)) {
-
-print STDOUT ">oldgetParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
-
-# step 2 : remove the parents of the contigs found in step 1 from the list
-# THERE MAY BE A PROBLEM HERE: INVESTIGATE!
-
-        $query = "select age,contig_id, parent_id from C2CMAPPING"
-	       . " where contig_id in (".join(',',@contigids).")";
-print STDOUT ">oldgetParentIDsForContig: $query \n" if $DEBUG;
-
-        $sth = $dbh->prepare($query);
-
-        $sth->execute() || &queryFailed($query);
-
-        my %ageprofile;
-        while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
-# the parent_id is removed because it is not the last in the chain
-print STDOUT ">oldgetParentIDsForContig: $age,$contig_id,$parent_id\n" if $DEBUG; 
-            delete $contigids{$parent_id};
-            $ageprofile{$contig_id} = $age; 
-        }
-
-        $sth->finish();
-
-# ok, the keys of %contigids are the IDs of the possible parents
-
-        @contigids = keys %contigids;
-
-print STDOUT ">oldgetParentIDsForContig: Possible parents found : @contigids\n" if $DEBUG;
-
-# However, this list still may contain spurious parents due to 
-# misassembled reads in early contigs which are picked up in the
-# first step of the search; these are weeded out by selecting on
-# the age: true parents have age 0 ("regular" parent) or 1 (split contigs)
-# NOTE: this applies only to newly added contigs, i.e. without contig_id
-
-        unless ($contig_id) {
-            foreach my $contig_id (keys %contigids) {
-                next unless defined($ageprofile{$contig_id});
-                delete $contigids{$contig_id} if ($ageprofile{$contig_id} > 1);
-	    }
-        }
-    }
-
-# those keys left are the true parent(s)
-
-    @contigids = keys %contigids;
-
-print STDOUT ">oldgetParentIDsForContig: Confirmed parents found : @contigids\n" if $DEBUG;
-exit if $DEBUG;
-
-    return [@contigids];
-}
-
 sub getParentIDsForContig {
 # returns a list contig IDs of parents for input Contig based on 
 # its reads sequence IDs and the sequence-to-contig MAPPING data
@@ -1999,6 +1949,8 @@ sub getParentIDsForContig {
     my $contig = shift; # Contig Instance
     my %options = @_;   # for exclude list
 
+    &verifyParameter($contig,"getParentIDsForContig");
+
     return undef unless $contig->hasReads();
 
     my $reads = $contig->getReads();
@@ -2017,6 +1969,8 @@ sub getParentIDsForContig {
 # This strategy will deal with split parent contigs as well as "normal" 
 # parents and does only rely on the fact that all contigIDs also occur
 # as parentIDs except for those in the previous generation for $contig
+        
+my $log = $this->verifyLogger('getParentIDsForContig');
 
 # step 1: get all (potential) parents
 
@@ -2050,7 +2004,7 @@ sub getParentIDsForContig {
                 $excludelist = join ',',@exclude;
 	    }
             $query .= " and contig_id not in ($excludelist)";
-print "Diagnostic message: exclude list active:\nQ: $query\n" if $options{debug};
+$log->debug("exclude list active:\nQ: $query");
         }
 
         my $sth = $dbh->prepare($query);
@@ -2068,8 +2022,8 @@ print "Diagnostic message: exclude list active:\nQ: $query\n" if $options{debug}
 
     if (scalar(@contigids)) {
 
-$DEBUG=0;
-print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $DEBUG;
+$log->debug("Linked contigs found : @contigids");
+
         my $ageoffset = 0;
         push @contigids,$contigID if $contigID;
 
@@ -2077,7 +2031,7 @@ print STDOUT ">getParentIDsForContig: Linked contigs found : @contigids\n" if $D
 
         my $query = "select age,contig_id, parent_id from C2CMAPPING"
         	  . " where contig_id in (".join(',',@contigids).")";
-print STDOUT ">getParentIDsForContig: $query \n" if $DEBUG;
+$log->debug("age query: $query");
 
         my $sth = $dbh->prepare($query);
 
@@ -2086,7 +2040,7 @@ print STDOUT ">getParentIDsForContig: $query \n" if $DEBUG;
         my %ageprofile;
         while (my ($age,$contig_id,$parent_id) = $sth->fetchrow_array()) {
 # the parent_id is removed because it is not the last in the chain
-print STDOUT ">getParentIDsForContig: $age,$contig_id,$parent_id\n" if $DEBUG;
+            $log->debug("result: $age,$contig_id,$parent_id");
             if ($contigID && $contig_id == $contigID) {
                 $ageoffset = $age;
                 next;
@@ -2094,7 +2048,7 @@ print STDOUT ">getParentIDsForContig: $age,$contig_id,$parent_id\n" if $DEBUG;
             delete $contigids{$parent_id};
             $ageprofile{$contig_id} = $age;
         }
-print STDOUT "ageoffset $ageoffset \n" if $DEBUG;
+        $log->debug("ageoffset $ageoffset");
 
         $sth->finish();
 
@@ -2102,7 +2056,7 @@ print STDOUT "ageoffset $ageoffset \n" if $DEBUG;
 
         @contigids = keys %contigids;
 
-print STDOUT ">getParentIDsForContig: Possible parents found : @contigids\n" if $DEBUG;
+$log->debug("Possible parents found : @contigids");
 
 # However, this list still may contain spurious parents due to 
 # misassembled reads in early contigs which are picked up in the
@@ -2123,8 +2077,7 @@ print STDOUT ">getParentIDsForContig: Possible parents found : @contigids\n" if 
 
     @contigids = keys %contigids;
 
-print STDOUT ">getParentIDsForContig: Confirmed parents found : @contigids\n" if $DEBUG;
-#exit if $DEBUG;
+$log->debug("Confirmed parents found : @contigids");
 
     return [@contigids];
 }
@@ -2134,6 +2087,8 @@ sub getParentIDsForContigID {
 # using the C2CMAPPING table; i.e for contigs already loaded
     my $dbh = shift;
     my $contig_id = shift;
+
+    &verifyPrivate($dbh,"getParentIDsForContigID");
 
     my $query = "select distinct(parent_id) from C2CMAPPING".
 	        " where contig_id = ?";
@@ -2158,6 +2113,8 @@ sub getChildIDsForContigID {
     my $contig_id = shift;
     my %options = @_;
 
+    &verifyPrivate($dbh,"getChildIDsForContigID");
+
     my $query = "select distinct(contig_id) from C2CMAPPING"
 	      . " where parent_id = ?";
     $query   .= "   and contig_id > 0" if $options{notnull};
@@ -2180,13 +2137,16 @@ sub getSingleReadParentIDs {
 # get contigs which are parents and have one read only, i.e. a read which
 # is assembled in a larger contig of the next generation
     my $this = shift;
-    my %options = @_;  print "options @_\n";
+    my %options = @_;
 
     my $linktype = $options{linktype} || 0;
 
 # linktype = 0 for all parents (default)
 #          = 1 for parents with links listed in C2CMAPPING
 #          = 2 for parents without such links
+# options : parent=>ID contig=>ID mincid=>ID maxcid=>ID
+#           contigname=>gap4N   parentname=>gap4N 
+#          (contig)project=>ID  parentproject=>ID
 
     my @data;
     my @constraint;
@@ -2288,7 +2248,7 @@ sub getSingleReadParentIDs {
     if ($linktype != 1) {
 # select contigs that do not occur as single-read parents in C2CMAPPING table
 # but do occur in the MAPPING table; this part uses temporary tables
-# the result list has all single read contigs contigs without links
+# the result list has all single read contigs without contig links
         my $temporaryitems = "contig_id integer not null,"
 	                   . "project_id integer not null";
         my $create = "create temporary table absentparent "
@@ -2299,16 +2259,6 @@ sub getSingleReadParentIDs {
 		   . "   and C2CMAPPING.parent_id is null";
 
         my $rw = $dbh->do($create) || &queryFailed($create);
-
-my $TEST=0; if ($TEST) {
-print "rw=$rw\n";
-my $testquery = "select contig_id from absentparent";
-my $tsth = $dbh->prepare_cached($testquery);
-$tsth->execute() || &queryFailed($testquery);
-while (my $pid = $tsth->fetchrow_array()) {push @pids, $pid;}
-print "IDs found: @pids\n";
-undef @pids;
-}
 
 # now find those parent IDs which are linked to contigs via the MAPPING table
         my $query = "select distinct absentparent.contig_id "
@@ -2435,6 +2385,8 @@ sub updateMappingAge {
     my $cid = shift;
     my $age = shift;
 
+    &verifyPrivate($dbh,"updateMappingAge");
+
     my $query = "update C2CMAPPING set age=$age where contig_id=$cid";
 
     return $dbh->do($query) || &queryFailed($query);
@@ -2458,6 +2410,8 @@ sub getCurrentContigs {
 # private: returns list of contig_ids of some age (default 0, top of the tree)
     my $dbh = shift;
     my %option = @_;
+
+    &verifyPrivate($dbh,"getCurrentContigs");
 
 # parse options (default long look-up excluding singleton contigs)
 
@@ -2600,7 +2554,6 @@ sub getCurrentContigIDsForAncestorIDs {
               . "   and M1.contig_id in (" . join(',',@$ccid) . ")"
               . "   and M2.contig_id in (" . join(',',@$acid) . ")"
 	      . "   order by cc,ac";
-#print STDOUT "$query\n";
 
     my $sth = $dbh->prepare($query);
 
@@ -2616,10 +2569,43 @@ sub getCurrentContigIDsForAncestorIDs {
     return [@results];
 }
 
+sub getAncestorIDsForContigID {
+# returns list of IDs of all contigs linked to input contig_id
+    my $this = shift;
+    my $cid = shift || 0; # input contig ID
+
+    my $dbh = $this->getConnection();
+
+    my $query = "select distinct M2.contig_id as ac"
+              . "  from MAPPING as M1,  SEQ2READ as S1,"
+              . "       MAPPING as M2,  SEQ2READ as S2 "
+              . " where M1.seq_id  = S1.seq_id"
+              . "   and M2.seq_id  = S2.seq_id"
+              . "   and S1.read_id = S2.read_id"
+	      . "   and M2.contig_id < M1.contig_id"
+	      . "   and M1.contig_id = ?"
+              . " order by ac";
+ 
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($cid) || &queryFailed($query,$cid);
+
+    undef my @results;
+    while (my $cid = $sth->fetchrow_array()) {
+        push @results, $cid;
+    }
+
+    $sth->finish();
+
+    return [@results];
+}
+
 sub getContigIDsForReadNames {
 # returns a list of contigids (in generation 0) for input readname(s)
     my $this = shift;
     my $reads = shift; # array ref
+
+    &verifyParameter($reads,"getContigIDsForReadNames","ARRAY");
 
     my $dbh = $this->getConnection();
 
@@ -2629,10 +2615,10 @@ sub getContigIDsForReadNames {
 		  . " where C2CMAPPING.parent_id is null";
 
     my $query = "select distinct CONTIG.contig_id,gap4name,readname"
-              . "  from READS,CONTIG,SEQ2READ,MAPPING"
-              . " where READS.read_id = SEQ2READ.read_id"
+              . "  from $READINFO,CONTIG,SEQ2READ,MAPPING"
+              . " where $READINFO.read_id = SEQ2READ.read_id"
               . "   and SEQ2READ.seq_id = MAPPING.seq_id"
-              . "   and READS.readname in ('".join("','",@$reads)."')"
+              . "   and $READINFO.readname in ('".join("','",@$reads)."')"
               . "   and CONTIG.contig_id = MAPPING.contig_id"
 	      . "   and CONTIG.contig_id in ($subselect)";
 
@@ -2757,8 +2743,7 @@ sub getTagsForContig {
     my $this = shift;
     my $contig = shift; # Contig instance
 
-    die "getTagsForContig expects a Contig instance" 
-        unless (ref($contig) eq 'Contig');
+    &verifyParameter($contig,"getTagsForContig");
 
     return 0 if $contig->hasTags(); # only 'empty' instance allowed
 
@@ -2766,7 +2751,9 @@ sub getTagsForContig {
 
     my $dbh = $this->getConnection();
 
-    my $tags = &fetchTagsForContigIDs($dbh,[($cid)]);
+my $log = $this->verifyLogger('getTagsForContig');
+
+    my $tags = &fetchTagsForContigIDs($dbh,[($cid)],$log);
 
     foreach my $tag (@$tags) {
         $contig->addTag($tag);
@@ -2789,9 +2776,11 @@ sub fetchTagsForContigIDs {
 # private method
     my $dbh = shift;
     my $cids = shift; # reference to array of contig IDs
+my $log = shift;
 
-    die "fetchTagsForContigIDs expects an array as parameter"
-    unless (ref($cids) eq 'ARRAY');
+    &verifyPrivate($dbh,"fetchTagsForContigIDs");
+
+    &verifyParameter($cids,"fetchTagsForContigIDs","ARRAY");
 
 # compose query (note, this query uses the UNION construct to cater
 # for the case tag_id > 0 tag_seq_id = 0)
@@ -2815,7 +2804,7 @@ sub fetchTagsForContigIDs {
 #              . "   and deprecated != 'Y'" # no table column now
               . " order by contig_id";
 
-print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
+$log->debug("retrieve tags for @$cids") if $log;
 
     my @tag;
 
@@ -2842,40 +2831,45 @@ print ">fetchTagsForContigIDs: retrieve tags for @$cids \n" if $DEBUG;
         push @tag, $tag;
     }
 
-print ">fetchTagsForContigIDs tags found: ".scalar(@tag)."\n" if $DEBUG;
+$log->debug("Tags found: ".scalar(@tag)) if $log;
 
     return [@tag];
 }
 
 # ---------------
 
-sub enterTagsForContig {
+sub enterTagsForContig { # DEPRECTATED
 # public method for test purposes
     my $this = shift;
     my $contig = shift;
     my %options = @_;
 
-$DEBUG=$options{debug};
+#    die "enterTagsForContigPublic expects a Contig instance"
+#     unless (ref($contig) eq 'Contig');
 
-    die "enterTagsForContigPublic expects a Contig instance"
-     unless (ref($contig) eq 'Contig');
+#    my $dbh = $this->getConnection();
 
-    my $dbh = $this->getConnection();
+#    my $log = $this->verifyLogger('enterTagsForContig');
 
-    return &putTagsForContig($dbh,$contig,1);
+    return &putTagsForContig($this,$contig,@_);
+#    return &putTagsForContig($dbh,$contig,$log,1);
 }
 
 sub putTagsForContig {
-# private method
-    my $dbh = shift;
+# public method
+    my $this = shift;
     my $contig = shift;
-    my $testexistence = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,"putTagsForContig");
 
     return 1 unless $contig->hasTags(); # no tags
 
+    my $logger = $this->verifyLogger("putTagsForContig");
+
     my $cid = $contig->getContigID();
 
-print STDOUT ">putTagsForContig: contig ID = $cid\n" if $DEBUG;
+$logger->debug("contig ID = " . ($cid|'undefined'));
 
     return undef unless defined $cid; # missing contig ID
 
@@ -2883,7 +2877,7 @@ print STDOUT ">putTagsForContig: contig ID = $cid\n" if $DEBUG;
 
     my $ctags = $contig->getTags();
 
-print STDOUT ">putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
+$logger->debug("ctags $ctags ".scalar(@$ctags));
 
 # construct a hash table for tag instance names
 
@@ -2892,8 +2886,7 @@ print STDOUT ">putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
         my $tagtype = $ctag->getType(); # must have a tag type
         unless ($tagtype) {
             my $tagcomment = $ctag->getTagComment() || "no description";
-            print STDERR "Invalid tag in contig $cid: missing tagtype "
-                       . "($tagcomment)\n";
+$logger->debug("Invalid tag in contig $cid: missing tagtype ($tagcomment)");
             next;
         }
         $tags->{$ctag} = $ctag;
@@ -2901,17 +2894,21 @@ print STDOUT ">putTagsForContig: ctags $ctags ".scalar(@$ctags)."\n" if $DEBUG;
 
 # test contig instance tags against possible tags (already) in database
 
+    my $dbh = $this->getConnection();
+
+    my $testexistence = ($options{noexistencetest} ? 0 : 1);
+
     if ($testexistence && keys %$tags) {
 
-print STDOUT ">putTagsForContig: testing for existing Tags\n" if $DEBUG;
+$logger->debug("testing for existing Tags");
 
         my $existingtags = &fetchTagsForContigIDs($dbh,[($cid)]);
 
 # delete the existing tags from the hash
 
         foreach my $etag (@$existingtags) {
-print STDOUT "\nTesting existing tag\n" if $DEBUG;
-$etag->dump(*STDOUT,1) if $DEBUG;
+$logger->debug("Testing existing tag",preskip=>1);
+$logger->debug($etag->dump(0,1));
             foreach my $key (keys %$tags) {
                 my $ctag = $tags->{$key};
                 if ($ctag->isEqual($etag)) {
@@ -2921,8 +2918,7 @@ $etag->dump(*STDOUT,1) if $DEBUG;
             }
         }
 
-print STDOUT ">putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
-
+$logger->debug("end testing for existing Tags");
     }
 
 # collect the tags left
@@ -2934,17 +2930,15 @@ print STDOUT ">putTagsForContig:  end testing for existing Tags\n" if $DEBUG;
     }
     $ctags = [@tags];
 
-print STDOUT ">putTagsForContig: new tags ".scalar(@tags)."\n" if $DEBUG;
+$logger->debug("new tags ".scalar(@tags));
 
     return 0 unless @tags; # no tags because of tag errors
     
-    &getTagSequenceIDsForTags($dbh,$ctags,1); # autoload active (-> ADBRead)
+    $this->getTagSequenceIDsForTags($ctags,autoload => 1); # ->ADBRead
 
-    &getTagIDsForTags($dbh,$ctags);
+    &getTagIDsForTags($dbh,$ctags,$logger);
 
-#return 0,"DEBUG abort" if $DEBUG;
-
-    return &putContigTags($dbh,$ctags);
+    return &putContigTags($dbh,$ctags,$logger);
 }
 
 
@@ -2952,8 +2946,12 @@ sub getTagIDsForTags {
 # use as private method only: get tag IDs for tags with undefined tag_id
     my $dbh = shift;
     my $tags = shift; # ref to array with Tags
+    my $log = shift;
 
-print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
+    &verifyPrivate($dbh,"getTagIDsForTags");
+
+$log->setPrefix('getTagIDsForTags');
+$log->debug("get tag IDs for ".scalar(@$tags)." tags");
 
     return undef unless ($tags && @$tags);
 
@@ -2993,23 +2991,23 @@ print STDOUT ">getTagIDsForTags for ".scalar(@$tags)." tags\n" if $DEBUG;;
 
         if ($rc > 0) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $sth->fetchrow_array();
-print STDOUT ">getTagIDsForTags: tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)\n" if $DEBUG;
+$log->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
 # now a) test consistency of tag ID and tag seq ID
             my $existingtagid = $tag->getTagID();
             if ($existingtagid && $existingtagid != $tag_id) {
-                print STDERR "Inconsistent tag ID ($existingtagid ".
-                             "vs $tag_id for '$tagcomment')\n";
+                $log->error("Inconsistent tag ID ($existingtagid "
+                           ."vs $tag_id for '$tagcomment')");
             }
             $tag->setTagID($tag_id);
             my $existingseqid = $tag->getTagSequenceID();
             if ($existingseqid && $existingseqid != $tag_seq_id) {
-                print STDERR "Inconsistent tag sequence ID ($existingseqid ".
-                             "vs $tag_seq_id for '$tagcomment')\n";
+                $log->error("Inconsistent tag sequence ID ($existingseqid ".
+                             "vs $tag_seq_id for '$tagcomment')");
             }
             $tag->setTagSequenceID($tag_seq_id);
 # and flag an update to sys ID
             $sIDupdate{$tag}++ unless $systematic_id;
-$tag->dump(*STDOUT,1) if $DEBUG;
+$log->debug($tag->dump(0,1));
 	}
         $sth->finish();
     }
@@ -3030,7 +3028,7 @@ $tag->dump(*STDOUT,1) if $DEBUG;
     foreach my $tag (@$tags) {
 # skip a tag if the ID is already defined
         next if $tag->getTagID();
-print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
+$log->debug("inserting into CONTIGTAG");
         my $tagtype        = $tag->getType();
         next unless $tagtype; # invalid tag
         my @data = ($tagtype,
@@ -3042,7 +3040,7 @@ print STDOUT ">getTagIDsForTags: inserting into CONTIGTAG \n" if $DEBUG;
         if ($rc > 0) {
             my $tag_id = $dbh->{'mysql_insertid'};
             $tag->setTagID($tag_id);
-print STDOUT ">getTagIDsForTags: ID $tag_id added\n" if $DEBUG;
+$log->debug("ID $tag_id added");
         }
         else {
             $failed++;
@@ -3064,12 +3062,12 @@ print STDOUT ">getTagIDsForTags: ID $tag_id added\n" if $DEBUG;
 #            my $tag_id = $tag->getTagID();
 #            my $systematic_id = $tag->getSystematicID();
             my @binddata = ($tag->getTagID(),$tag->getSystematicID());
-print STDOUT ">getTagIDsForTags: systematic ID added (@binddata)\n" if $DEBUG; 
+$log->debug("systematic ID added (@binddata)");
             $sth->execute(@binddata) || &queryFailed($update,@binddata);
 	}
     }
 
-print STDOUT ">getTagIDsForTags: EXIT getTagIDsForTags $failed\n" if $DEBUG;;
+$log->debug("EXIT, failed = $failed");
     return $failed;
 }
 
@@ -3078,8 +3076,12 @@ sub putContigTags {
 # use as private method only
     my $dbh = shift;
     my $tags = shift; # ref to array with Tags
+my $log = shift;
 
-print STDOUT ">putContigTags for ".scalar(@$tags)." tags\n" if $DEBUG;
+    &verifyPrivate($dbh,"getTagIDsForTags");
+
+$log->setPrefix("putContigTags") if $log;
+$log->debug("put Tags for ".scalar(@$tags)." tags") if $log;
 
     return undef unless ($tags && @$tags);
 
@@ -3113,9 +3115,33 @@ print STDOUT ">putContigTags for ".scalar(@$tags)." tags\n" if $DEBUG;
         $success++ if $rc;
     }
 
-print STDOUT ">putContigTags: EXIT putContigTags success $success missed $missed\n" if $DEBUG;
+$log->debug("EXIT putContigTags success $success missed $missed") if $log;
 
     return $success; 
+}
+
+#------------------------------------------------------------------------------
+# verification of method parameter and access mode
+#------------------------------------------------------------------------------
+
+sub verifyParameter {
+    my $object = shift;
+    my $method = shift || 'UNDEFINED';
+    my $class  = shift || 'Contig';
+
+    return if ($object && ref($object) eq $class);
+    print STDERR "method 'ADBContig->$method' expects a $class instance as parameter\n";
+    exit 1; 
+}
+
+sub verifyPrivate {
+    my $caller = shift;
+    my $method = shift;
+
+    if (ref($caller) eq 'Arcturusdatabase' || $caller =~ /^ADB\w+/) {
+        print STDERR "Invalid use of private method ADBContig->$method\n";
+	exit 1;
+    }
 }
 
 #------------------------------------------------------------------------------
