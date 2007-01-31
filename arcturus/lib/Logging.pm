@@ -212,6 +212,11 @@ sub closeStreams {
     }
 }
 
+sub close {
+# alias for closeStreams
+    &closeStreams(@_);
+}
+
 #-----------------------------------------------------------------------
 
 sub setPrefix {
