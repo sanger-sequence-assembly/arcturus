@@ -26,7 +26,7 @@ sub new {
     return $this;
 }
 
-my $READS = 'READS'; # class variable TO BE REPLACED by 'READINFO'
+my $READINFO = 'READS'; # to be rplaced by READINFO
 
 #------------------------------------------------------------------------------
 # methods dealing with Projects
@@ -96,12 +96,12 @@ sub getProject {
         elsif ($nextword eq "contigname") { 
             return (0,"only contig name can be specified") if ($query =~ /where/);
             $query =~ s/comment/comment,CONTIG.contig_id/;
-            $query .= ",CONTIG,MAPPING,SEQ2READ,$READS"
+            $query .= ",CONTIG,MAPPING,SEQ2READ,$READINFO"
                     . " where CONTIG.project_id = PROJECT.project_id"
                     . "   and MAPPING.contig_id = CONTIG.contig_id"
                     . "   and SEQ2READ.seq_id = MAPPING.seq_id"
-                    . "   and $READS.read_id = SEQ2READ.read_id"
-		    . "   and $READS.readname = ? ";
+                    . "   and $READINFO.read_id = SEQ2READ.read_id"
+		    . "   and $READINFO.readname = ? ";
             push @data, $datum;
             $usecontigid = 1;
         }
@@ -1150,11 +1150,11 @@ sub getProjectIDforReadName {
     my $readname = shift;
 
     my $query = "select distinct CONTIG.contig_id,CONTIG.project_id"
-              . "  from $READS,SEQ2READ,MAPPING,CONTIG"
+              . "  from $READINFO,SEQ2READ,MAPPING,CONTIG"
               . " where CONTIG.contig_id = MAPPING.contig_id"
               . "   and MAPPING.seq_id = SEQ2READ.seq_id"
-              . "   and SEQ2READ.read_id = $READS.read_id"
-	      . "   and $READS.readname = ?"
+              . "   and SEQ2READ.read_id = $READINFO.read_id"
+	      . "   and $READINFO.readname = ?"
 	      . " order by contig_id DESC";
 #   $query   .= " limit 1" if $options{current};
 
@@ -1986,8 +1986,9 @@ sub verifyParameter {
     my $method = shift || 'UNDEFINED';
     my $class  = shift || 'Project';
 
-    die "method 'ADBProject->$method' expects a $class instance as parameter" 
-    unless ($object && ref($object) eq $class);
+    return if ($object && ref($object) eq $class);
+    print STDOUT "method 'ADBProject->$method' expects a $class instance as parameter\n";
+    exit 1; 
 }
 
 sub verifyPrivate {
@@ -1995,7 +1996,8 @@ sub verifyPrivate {
     my $method = shift;
 
     if (ref($caller) eq 'Arcturusdatabase' || $caller =~ /^ADB\w+/) {
-        die "Invalid use of private method ADBProject->$method";
+        print STDERR "Invalid use of private method ADBProject->$method\n";
+	exit 1;
     }
 }
 
