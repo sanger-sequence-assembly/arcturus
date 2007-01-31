@@ -85,17 +85,17 @@ my $nfound = 0;
 
 my $query = "SELECT read_id,readname,asped,strand,primer,chemistry,basecaller," .
     "status,lqleft,lqright,svector,svleft,svright,cvector,cvleft,cvright," .
-    "slength,sequence,quality FROM READS LEFT JOIN SEQUENCE USING (read_id)";
+    "slength,sequence,quality FROM READINFO LEFT JOIN SEQUENCE USING (read_id)";
 
-$query .= defined($readids) ? " WHERE READS.read_id=?" : " WHERE asped > ?";
+$query .= defined($readids) ? " WHERE READINFO.read_id=?" : " WHERE asped > ?";
 
 $query .= " AND pstatus=0";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed on $dsn");
 
-my $tmplquery = "SELECT name,ligation_id FROM READS LEFT JOIN TEMPLATE USING (template_id)" .
-    " WHERE READS.read_id=?";
+my $tmplquery = "SELECT name,ligation_id FROM READINFO LEFT JOIN TEMPLATE USING (template_id)" .
+    " WHERE READINFO.read_id=?";
 
 my $tmplsth = $dbh->prepare($tmplquery);
 &db_die("prepare($tmplquery) failed on $dsn");

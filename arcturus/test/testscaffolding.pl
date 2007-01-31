@@ -592,14 +592,14 @@ sub createStatements {
 		   " and cstart > ? and direction = 'Forward'",
 	
 		   "template",
-		   "select template_id,strand from READS where read_id = ?",
+		   "select template_id,strand from READINFO where read_id = ?",
 		   
 		   "ligation",
 		   "select silow,sihigh from TEMPLATE left join LIGATION using(ligation_id)" .
 		   " where template_id = ?",
 
 		   "linkreads",
-		   "select READS.read_id,seq_id from READS left join SEQ2READ using(read_id)" .
+		   "select READINFO.read_id,seq_id from READINFO left join SEQ2READ using(read_id)" .
 		   " where template_id = ? and strand != ?",
 
 		   "mappings",

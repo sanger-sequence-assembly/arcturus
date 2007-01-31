@@ -73,11 +73,11 @@ if ($finishing) {
     # returns reads that are older than the named read, on the assumption that it is
     # being presented with the names of finishing/re-sequenced reads.
     $query = "select ra.readname,ra.read_id" .
-	" from READS as ra,READS as rb" .
+	" from READINFO as ra,READINFO as rb" .
 	" where rb.readname=? and ra.template_id=rb.template_id and ra.strand=rb.strand" .
 	"   and ra.read_id!=rb.read_id and ra.asped<rb.asped";
 } else {
-    $query = "select readname,read_id from READS where readname like ? order by readname asc";
+    $query = "select readname,read_id from READINFO where readname like ? order by readname asc";
 }
 
 my $stmt_readname = $dbh->prepare($query);

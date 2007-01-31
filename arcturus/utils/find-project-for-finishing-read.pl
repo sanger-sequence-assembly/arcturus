@@ -83,13 +83,13 @@ $rc = $dbh->do($query);
 
 print STDERR "temporary table currentcontigs created with $rc rows\n" if $verbose;
 
-$query = "select read_id,template_id,strand from READS where readname = ?";
+$query = "select read_id,template_id,strand from READINFO where readname = ?";
 
 my $sth_read2template = $dbh->prepare($query);
 &db_die("failed to prepare \"$query\"");
 
-$query = "select READS.read_id,seq_id,readname" .
-    " from READS left join SEQ2READ using(read_id)" .
+$query = "select READINFO.read_id,seq_id,readname" .
+    " from READINFO left join SEQ2READ using(read_id)" .
     " where template_id = ?";
 
 my $sth_template2readseq_loose =  $dbh->prepare($query);

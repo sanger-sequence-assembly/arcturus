@@ -45,8 +45,8 @@ sub findOligoInReads {
 
     print STDERR "Searching reads ...\n";
 
-    my $query = "select readname,sequence from READS,SEQ2READ,SEQUENCE where" .
-	" READS.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id";
+    my $query = "select readname,sequence from READINFO,SEQ2READ,SEQUENCE where" .
+	" READINFO.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id";
 
     my $sth = $dbh->prepare($query);
     &db_die("Failed to create query \"$query\"");

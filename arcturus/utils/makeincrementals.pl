@@ -46,7 +46,7 @@ die "Failed to create ArcturusDatabase" unless $adb;
 
 my $dbh = $adb->getConnection();
 
-my $query = "select date_add(asped, interval 1 day) as thedate,count(*) from READS group by thedate order by thedate asc";
+my $query = "select date_add(asped, interval 1 day) as thedate,count(*) from READINFO group by thedate order by thedate asc";
 
 my $stmt = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");

@@ -22,7 +22,7 @@ sub new {
     return $this;
 }
 
-my $READINFO = 'READS'; # to be replaced by READINFO
+my $READINFO = 'READINFO'; # to be replaced by READINFO
 
 #-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------

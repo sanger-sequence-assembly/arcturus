@@ -31,7 +31,7 @@ sub new {
     return $this;
 }
 
-my $READINFO = 'READS'; # class variable TO BE REPLACED by 'READINFO'
+my $READINFO = 'READINFO'; # class variable TO BE REPLACED by 'READINFO'
 
 #------------------------------------------------------------------------------
 # methods for exporting CONTIGs or CONTIG attributes

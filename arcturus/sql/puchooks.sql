@@ -34,10 +34,10 @@ create temporary table hooks2 as
 drop temporary table hooks1;
 
 create temporary table hooks as
-	select contig_id,hooks2.read_id,strand,READS.template_id,sihigh,pos,end
-	from hooks2,READS,TEMPLATE,LIGATION
-	where hooks2.read_id = READS.read_id
-		and READS.template_id = TEMPLATE.template_id
+	select contig_id,hooks2.read_id,strand,READINFO.template_id,sihigh,pos,end
+	from hooks2,READINFO,TEMPLATE,LIGATION
+	where hooks2.read_id = READINFO.read_id
+		and READINFO.template_id = TEMPLATE.template_id
 		and TEMPLATE.ligation_id = LIGATION.ligation_id;
 
 drop temporary table hooks2;

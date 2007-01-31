@@ -64,17 +64,17 @@ $stmt->finish();
 print STDERR "Found $ncontigs contigs\n" if $verbose;
 
 my %queries = ("candidatereads",
-	       "select readname from READS where readname like ?",
+	       "select readname from READINFO where readname like ?",
 
 	       "targetreadmapping",
 	       "select MAPPING.contig_id,MAPPING.seq_id,cstart,cfinish,direction" .
-	       " from currentcontigs,MAPPING,SEQ2READ,READS" .
+	       " from currentcontigs,MAPPING,SEQ2READ,READINFO" .
 	       " where currentcontigs.contig_id = MAPPING.contig_id and MAPPING.seq_id = SEQ2READ.seq_id" .
-	       " and SEQ2READ.read_id = READS.read_id and readname = ?",
+	       " and SEQ2READ.read_id = READINFO.read_id and readname = ?",
     
 	       "overlapmappings",
-	       "select readname,cstart,cfinish,direction from MAPPING,SEQ2READ,READS" .
-	       " where contig_id = ? and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id" .
+	       "select readname,cstart,cfinish,direction from MAPPING,SEQ2READ,READINFO" .
+	       " where contig_id = ? and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id" .
 	       " and ((cstart>? and cstart<?) or (cfinish>? and cfinish<?) or (cstart<=? and cfinish>=?))" .
 	       " order by cstart asc"
 	       );

@@ -63,7 +63,7 @@ select PROJECT.name,count(*) as contigs,
   where length >= 100000
   group by currentcontigs.project_id order by name asc;
 
-select 'CONTIGS WITH 3 OR MORE READS';
+select 'CONTIGS WITH 3 OR MORE READINFO';
 
 select PROJECT.name,count(*) as contigs,
   sum(nreads) as reads,

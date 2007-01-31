@@ -69,7 +69,7 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select READS.read_id,trace from READS left join TRACE using(read_id) where readname = ?";
+my $query = "select READINFO.read_id,trace from READINFO left join TRACE using(read_id) where readname = ?";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");

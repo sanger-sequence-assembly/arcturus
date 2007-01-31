@@ -19,9 +19,9 @@ select CONTIG.contig_id,gap4name,nreads,ncntgs,length,created,updated,project_id
   where C2CMAPPING.parent_id is null;
 
 select gap4name,MAPPING.contig_id,readname,cstart,cfinish,direction,PROJECT.name
-  from currentcontigs,MAPPING,SEQ2READ,READS,PROJECT
+  from currentcontigs,MAPPING,SEQ2READ,READINFO,PROJECT
   where currentcontigs.contig_id = MAPPING.contig_id
     and MAPPING.seq_id = SEQ2READ.seq_id
-    and SEQ2READ.read_id = READS.read_id
+    and SEQ2READ.read_id = READINFO.read_id
     and currentcontigs.project_id = PROJECT.project_id
     order by MAPPING.contig_id asc,cstart asc;

@@ -22,7 +22,7 @@ our @ISA = qw(ArcturusDatabase::ADBRoot Exporter);
 
 my $DEBUG = 0;
 
-my $READINFO = 'READS'; # class variable TO BE REPLACED by 'READINFO'
+my $READINFO = 'READINFO'; # class variable TO BE REPLACED by 'READINFO'
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation

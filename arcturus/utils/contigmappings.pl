@@ -44,7 +44,7 @@ $query = "SELECT cstart,rstart,length FROM SEGMENT WHERE mapping_id = ? ORDER BY
 my $seg_stmt =  $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
-$query = "SELECT readname,READS.read_id FROM SEQ2READ LEFT JOIN READS USING(read_id) WHERE seq_id = ?";
+$query = "SELECT readname,READINFO.read_id FROM SEQ2READ LEFT JOIN READINFO USING(read_id) WHERE seq_id = ?";
 
 my $read_stmt =  $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");

@@ -61,7 +61,7 @@ while (my ($projid,$projname) = $stmt->fetchrow_array()) {
 
 $stmt->finish();
 
-$query = "select seq_id from READS left join SEQ2READ using(read_id) where readname = ?";
+$query = "select seq_id from READINFO left join SEQ2READ using(read_id) where readname = ?";
 
 my $stmt_read2seq = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");

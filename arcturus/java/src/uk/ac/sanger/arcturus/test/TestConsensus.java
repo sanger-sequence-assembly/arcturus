@@ -36,9 +36,9 @@ public class TestConsensus {
 
 	private void prepareStatements() throws SQLException {
 		String query = "select MAPPING.seq_id,cstart,cfinish,direction,mapping_id,readname,strand,chemistry "
-				+ " from MAPPING,SEQ2READ,READS "
+				+ " from MAPPING,SEQ2READ,READINFO "
 				+ " where contig_id = ? and cstart <= ? and cfinish >= ? "
-				+ " and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READS.read_id "
+				+ " and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id "
 				+ " order by cstart asc";
 
 		pstmtMappingsByPosition = conn.prepareStatement(query);

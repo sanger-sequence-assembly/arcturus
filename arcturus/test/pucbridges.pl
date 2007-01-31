@@ -64,7 +64,7 @@ my $sth_endread =  $dbh->prepare($query_endread);
 
 # Query to find the template and strand of a read
 
-my $query_template = "SELECT template_id,strand FROM READS WHERE read_id = ?";
+my $query_template = "SELECT template_id,strand FROM READINFO WHERE read_id = ?";
 
 my $sth_template = $dbh->prepare($query_template);
 &db_die($query_template);
@@ -76,7 +76,7 @@ my $query_ligation = "SELECT silow,sihigh FROM TEMPLATE LEFT JOIN LIGATION USING
 my $sth_ligation = $dbh->prepare($query_ligation);
 &db_die($query_ligation);
 
-my $query_linkreads = "SELECT READS.read_id,seq_id FROM READS LEFT JOIN SEQ2READ USING(read_id)" .
+my $query_linkreads = "SELECT READINFO.read_id,seq_id FROM READINFO LEFT JOIN SEQ2READ USING(read_id)" .
     " WHERE template_id = ? and strand != ?";
 
 my $sth_linkreads = $dbh->prepare($query_linkreads);

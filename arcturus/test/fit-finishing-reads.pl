@@ -72,7 +72,7 @@ my @queries = (
 	       " using(seq_id)",
 
 	       "create temporary table FREEREAD as" .
-	       " select READS.read_id from READS left join CURREAD using(read_id)" .
+	       " select READINFO.read_id from READINFO left join CURREAD using(read_id)" .
 	       " where seq_id is null"
 	       );
 
@@ -103,7 +103,7 @@ if ($fofn) {
 
     close(FOFN);
 } else {
-    my $query =  "select readname from FREEREAD left join READS using(read_id)" .
+    my $query =  "select readname from FREEREAD left join READINFO using(read_id)" .
 	" where readname like '%.____%'";
 
     my $sth = $dbh->prepare($query);
@@ -123,12 +123,12 @@ if ($fofn) {
 
 my $nreads = scalar(@finishing_reads);
 
-my $query = "select read_id from READS where readname = ?";
+my $query = "select read_id from READINFO where readname = ?";
 
 my $sth_readid = $dbh->prepare($query);
 &db_die("prepare($query) failed");
 
-$query = "select seq_id from READS left join SEQ2READ using(read_id) where readname = ?";
+$query = "select seq_id from READINFO left join SEQ2READ using(read_id) where readname = ?";
 
 my $sth_seqid = $dbh->prepare($query);
 &db_die("prepare($query) failed");

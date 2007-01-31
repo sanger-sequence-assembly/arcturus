@@ -11,7 +11,7 @@ my $adb = new ArcturusDatabase(-instance => $instance,
 
 my $dbh = $adb->getConnection();
 
-my $query = "select readname from SEQ2READ left join READS using(read_id) where seq_id = ?";
+my $query = "select readname from SEQ2READ left join READINFO using(read_id) where seq_id = ?";
 
 my $sth_readname = $dbh->prepare($query);
 

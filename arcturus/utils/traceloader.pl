@@ -55,7 +55,7 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select read_id from READS where readname = ?";
+my $query = "select read_id from READINFO where readname = ?";
 
 my $sth_readid = $dbh->prepare($query);
 &db_die("prepare($query) failed");

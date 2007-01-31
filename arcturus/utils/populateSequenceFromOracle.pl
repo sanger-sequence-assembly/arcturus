@@ -51,7 +51,7 @@ unless (defined($oradbh)) {
 
 print STDERR "Making list of reads in Arcturus ...\n";
 
-$query = "select read_id,readname,slength from READS";
+$query = "select read_id,readname,slength from READINFO";
 
 $query .= " LIMIT $limit" if defined($limit);
 

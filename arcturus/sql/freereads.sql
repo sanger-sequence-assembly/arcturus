@@ -12,5 +12,5 @@ create temporary table CURREAD
   select read_id,SEQ2READ.seq_id,contig_id from CURSEQ left join SEQ2READ using(seq_id);
 
 create temporary table FREEREAD as
-  select READS.read_id from READS left join CURREAD using(read_id)
+  select READINFO.read_id from READINFO left join CURREAD using(read_id)
   where seq_id is null;

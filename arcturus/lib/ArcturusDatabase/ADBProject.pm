@@ -26,7 +26,7 @@ sub new {
     return $this;
 }
 
-my $READINFO = 'READS'; # to be rplaced by READINFO
+my $READINFO = 'READINFO'; # to be rplaced by READINFO
 
 #------------------------------------------------------------------------------
 # methods dealing with Projects

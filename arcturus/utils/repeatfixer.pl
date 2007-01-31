@@ -82,13 +82,13 @@ while (my ($contigid,$repstart, $repfinish, $repcomment) = $stmt->fetchrow_array
 $stmt->finish();
 
 my %queries = ( "repeatreads",
-		"select MAPPING.seq_id,cstart,cfinish,readname,READS.read_id,strand,template_id" .
-		"  from MAPPING,SEQ2READ,READS" .
+		"select MAPPING.seq_id,cstart,cfinish,readname,READINFO.read_id,strand,template_id" .
+		"  from MAPPING,SEQ2READ,READINFO" .
 		"  where contig_id=? and cstart>=? and cfinish<=? and MAPPING.seq_id=SEQ2READ.seq_id" .
-		"  and SEQ2READ.read_id=READS.read_id order by cstart asc",
+		"  and SEQ2READ.read_id=READINFO.read_id order by cstart asc",
 
 		"partnerreads",
-		"select readname,READS.read_id,seq_id from READS left join SEQ2READ using(read_id)" .
+		"select readname,READINFO.read_id,seq_id from READINFO left join SEQ2READ using(read_id)" .
 		"  where template_id=? and strand !=?",
 
 		"ligations",

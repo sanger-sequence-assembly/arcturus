@@ -70,15 +70,15 @@ if (defined($contigid)) {
 }
 
 my @conditions = ("MAPPING.seq_id = SEQ2READ.seq_id",
-		  "SEQ2READ.read_id = READS.read_id",
-		  "READS.template_id = TEMPLATE.template_id",
+		  "SEQ2READ.read_id = READINFO.read_id",
+		  "READINFO.template_id = TEMPLATE.template_id",
 		  "TEMPLATE.ligation_id = LIGATION.ligation_id",
 		  "LIGATION.clone_id = CLONE.clone_id");
 
 my $conditions = join(' and ', @conditions);
 
-$query = "select TEMPLATE.template_id,READS.read_id,readname,cstart,cfinish,direction,LIGATION.sihigh" .
-    " from MAPPING,SEQ2READ,READS,TEMPLATE,LIGATION,CLONE" .
+$query = "select TEMPLATE.template_id,READINFO.read_id,readname,cstart,cfinish,direction,LIGATION.sihigh" .
+    " from MAPPING,SEQ2READ,READINFO,TEMPLATE,LIGATION,CLONE" .
     " where contig_id = ?" .
     " and $conditions and CLONE.name=? order by template_id asc,cstart asc";
 

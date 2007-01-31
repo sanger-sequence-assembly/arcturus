@@ -34,7 +34,7 @@ $query = "update TEMPLATE set forward=0,reverse=0";
 $sth = $dbh->prepare($query);
 $sth->execute();
 
-$query = "select template_id,STRANDS.direction from READS left join STRANDS" .
+$query = "select template_id,STRANDS.direction from READINFO left join STRANDS" .
     " using (strand) where pstatus=0";
 
 $sth = $dbh->prepare($query);

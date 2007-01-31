@@ -68,7 +68,7 @@ while (my ($projid,$projname) = $stmt->fetchrow_array()) {
 
 $stmt->finish();
 
-$query = "select readname,read_id from READS where readname = ?";
+$query = "select readname,read_id from READINFO where readname = ?";
 
 my $stmt_readname = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
