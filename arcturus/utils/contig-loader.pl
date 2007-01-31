@@ -140,7 +140,7 @@ my $logger = new Logging($outputFile);
 
 $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
-my $errorlog = $logger->getOutputDevice();
+# my $errorlog = $logger->getOutputDevice();
 
 #----------------------------------------------------------------
 # get the database connection
@@ -160,7 +160,7 @@ if (!$adb || $adb->errorStatus()) {
 
 #$adb->setErrorLog($errorlog); # if redirect?
 
-$adb->setRDEBUG(1) if $debug;
+#$adb->setRDEBUG(1) if $debug;
 
 #----------------------------------------------------------------
 # test the CAF file name
