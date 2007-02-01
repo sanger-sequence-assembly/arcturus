@@ -16,7 +16,9 @@ BEGIN
   IF (intProjectNotFound = 0) THEN
     select projectName as name, count(*) as contigs,
       sum(nreads) as nreads, sum(length) as length,
-      round(avg(length)) as avglen, round(std(length)) as stdlen, max(length) as maxlen
+      round(avg(length)) as avglen, round(std(length)) as stdlen,
+      max(length) as maxlen, max(CURRENTCONTIGS.created) as newestcontig,
+      max(PROJECT.updated) as projectupdated
     from CURRENTCONTIGS
     where project_id = intProjectId AND length >= minContigSize;
   END IF;
