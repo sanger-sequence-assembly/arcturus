@@ -68,7 +68,7 @@ while (my $nextword = shift @ARGV) {
 # logging
 #---------------------------------------------------------------------------
 
-my $logger = new Logging('STDOUT');
+my $logger = new Logging();
 
 #---------------------------------------------------------------------------
 # in verify mode require full project name
@@ -85,7 +85,8 @@ unless (-e $root) {
 
 unless ($invocation != 0) {
 
-print STDOUT "inv:  $invocation\n";
+$logger->info("invocation:  $invocation"); # experimental
+
 #    &showUsage("Missing organism database") unless $organism;
 
 #    &showUsage("Missing database instance") unless $instance;
@@ -143,7 +144,7 @@ else {
 
     &showUsage($msg) unless (@$projects);
 
-# print STDOUT "project(s) @$projects\n";
+$logger->info("project(s) @$projects");
 
 # and run each project through the diagnostic shell script
 
@@ -155,7 +156,6 @@ else {
         chomp $msg;
         $logger->warning($msg,skip=>1);
     }
-    $logger->skip();
 }
 
 exit 0;
@@ -227,3 +227,6 @@ sub showUsage {
 
     exit;
 }
+
+
+
