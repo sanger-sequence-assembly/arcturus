@@ -22,8 +22,6 @@ our @ISA = qw(ArcturusDatabase::ADBRoot Exporter);
 
 my $DEBUG = 0;
 
-my $READINFO = 'READINFO'; # class variable TO BE REPLACED by 'READINFO'
-
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -46,7 +44,7 @@ sub defineReadMetaData {
     my $this = shift;
 
     $this->{read_attributes} = 
-           "readname,asped,$READINFO.strand,primer,chemistry,basecaller,status";
+           "readname,asped,READINFO.strand,primer,chemistry,basecaller,status";
     $this->{template_addons} = 
            "TEMPLATE.name as template,TEMPLATE.ligation_id";
 }
@@ -242,33 +240,33 @@ sub countReadDictionaryItem {
     my $query = "select count(*) as count,";
 
     if ($item eq 'ligation') {
-        $query .= "TEMPLATE.ligation_id from $READINFO,TEMPLATE 
-                   where $READINFO.template_id=TEMPLATE.template_id 
+        $query .= "TEMPLATE.ligation_id from READINFO,TEMPLATE 
+                   where READINFO.template_id=TEMPLATE.template_id 
                    group by ligation_id";
     }
     elsif ($item eq 'clone') {
 # build the clone names dictionary on clone_id (different from the one on ligation_id)
         $this->{Dictionary}->{clonename} =
 	       &createDictionary($dbh, 'CLONE','clone_id', 'name');
-        $query .= "LIGATION.clone_id from $READINFO,TEMPLATE,LIGATIONS 
-                   where $READINFO.template_id=TEMPLATE.template_id 
+        $query .= "LIGATION.clone_id from READINFO,TEMPLATE,LIGATIONS 
+                   where READINFO.template_id=TEMPLATE.template_id 
                      and TEMPLATE.ligation_id=LIGATION.ligation_id 
                    group by clone_id";
         $item = 'clonename';
     }
     elsif ($item =~ /\b(strand|primer|chemistry|basecaller|status)\b/) {
-        $query .= "$item from $READINFO group by $item";
+        $query .= "$item from READINFO group by $item";
     }
     elsif ($item eq 'svector') {
-        $query .= "SEQVEC.svector_id, from $READINFO,SEQ2READ,SEQVEC
-                   where $READINFO.read_id = SEQ2READ.read_id
+        $query .= "SEQVEC.svector_id, from READINFO,SEQ2READ,SEQVEC
+                   where READINFO.read_id = SEQ2READ.read_id
                    and   SEQ2READ.seq_id = SEQVEC.seq_id
                    and   SEQ2READ.version = 0
                    group by svector_id";
     }
     elsif ($item eq 'cvector') {
-        $query .= "CLONEVEC.cvector_id, from $READINFO,SEQ2READ,CLONEVEC
-                   where $READINFO.read_id = SEQ2READ.read_id
+        $query .= "CLONEVEC.cvector_id, from READINFO,SEQ2READ,CLONEVEC
+                   where READINFO.read_id = SEQ2READ.read_id
                    and   SEQ2READ.seq_id = CLONEVEC.seq_id
                    and   SEQ2READ.version = 0
                    group by cvector_id";
@@ -309,11 +307,11 @@ sub getRead {
 
 $this->defineReadMetaData(); # unless $this->{read_attributes};
 
-    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,
                  $this->{read_attributes},$this->{template_addons}
-                  from $READINFO,SEQ2READ,TEMPLATE 
-                 where $READINFO.read_id = SEQ2READ.read_id
-                   and $READINFO.template_id = TEMPLATE.template_id ";
+                  from READINFO,SEQ2READ,TEMPLATE 
+                 where READINFO.read_id = SEQ2READ.read_id
+                   and READINFO.template_id = TEMPLATE.template_id ";
 #$query .= " xxx ";
     my $nextword;
     my $readitem;
@@ -325,12 +323,12 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
             $readitem = shift;
         }
         elsif ($nextword eq 'read_id') {
-            $query .= "and $READINFO.read_id = ?";
+            $query .= "and READINFO.read_id = ?";
             $readitem = shift;
             $version = 0 unless defined($version); # define default
         }
         elsif ($nextword eq 'readname') {
-            $query .= "and $READINFO.readname like ?";
+            $query .= "and READINFO.readname like ?";
             $readitem = shift;
             $version = 0 unless defined($version); # define default
         }
@@ -660,7 +658,7 @@ sub getReadsByReadID {
 
         my $range = join ',',sort {$a <=> $b} @block;
 
-        my $constraints = "$READINFO.read_id in ($range) and version = 0";
+        my $constraints = "READINFO.read_id in ($range) and version = 0";
 
         my $reads = $this->getReadsForCondition($constraints);
 
@@ -681,11 +679,11 @@ sub getReadsForCondition {
 
 $this->defineReadMetaData(); # unless $this->{read_attributes};
 
-    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,"
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,"
               .        "$this->{read_attributes},$this->{template_addons}"
-              . "  from $READINFO,SEQ2READ,TEMPLATE $tables"
-              . " where $READINFO.read_id = SEQ2READ.read_id"
-              . "   and $READINFO.template_id = TEMPLATE.template_id";
+              . "  from READINFO,SEQ2READ,TEMPLATE $tables"
+              . " where READINFO.read_id = SEQ2READ.read_id"
+              . "   and READINFO.template_id = TEMPLATE.template_id";
 # add the other conditions
     $query   .= "    and $condition" if $condition;
 
@@ -738,8 +736,8 @@ sub getSequenceIDForRead {
     my $query;
 
     if ($idtype eq 'readname') {
-	$query = "select seq_id from $READINFO left join SEQ2READ using (read_id) " .
-                 "where $READINFO.readname=? " .
+	$query = "select seq_id from READINFO left join SEQ2READ using (read_id) " .
+                 "where READINFO.readname=? " .
 	         "and version=?";
     } else {
 	$query = "select seq_id from SEQ2READ where read_id=? and version=?";
@@ -775,11 +773,11 @@ sub getReadsBySequenceID {
 
 $this->defineReadMetaData(); # unless $this->{read_attributes};
 
-    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
                 "$this->{read_attributes},$this->{template_addons}" .
-                " from SEQ2READ,$READINFO,TEMPLATE ".
-                "where $READINFO.read_id = SEQ2READ.read_id".
-                "  and $READINFO.template_id = TEMPLATE.template_id". 
+                " from SEQ2READ,READINFO,TEMPLATE ".
+                "where READINFO.read_id = SEQ2READ.read_id".
+                "  and READINFO.template_id = TEMPLATE.template_id". 
                 "  and SEQ2READ.seq_id in ($range)";
 
     my $sth = $dbh->prepare($query);
@@ -826,13 +824,13 @@ sub getReadsForContig {
 
 # NOTE: this query is to be TESTED may have to be optimized
 
-    my $query = "select $READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
                 "$this->{read_attributes},$this->{template_addons}" .
-                " from MAPPING,SEQ2READ,$READINFO,TEMPLATE " .
+                " from MAPPING,SEQ2READ,READINFO,TEMPLATE " .
                 "where MAPPING.contig_id = ?" .
                 "  and MAPPING.seq_id = SEQ2READ.seq_id" .
-                "  and SEQ2READ.read_id = $READINFO.read_id" .
-                "  and $READINFO.template_id = TEMPLATE.template_id";
+                "  and SEQ2READ.read_id = READINFO.read_id" .
+                "  and READINFO.template_id = TEMPLATE.template_id";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1013,8 +1011,8 @@ sub getUnassembledReads {
         if ($method eq 'intemporarytable') {
 
             $query  = "create temporary table FREEREAD as "
-                    . "select $READINFO.read_id"
-                    . "  from $READINFO left join CURREAD using(read_id)"
+                    . "select READINFO.read_id"
+                    . "  from READINFO left join CURREAD using(read_id)"
                     . " where seq_id is null";
             $query .= "   and ".join(" and ",@constraint) if @constraint;
 
@@ -1024,8 +1022,8 @@ sub getUnassembledReads {
         }
 
         else {
-            $query  = "select $READINFO.$item"
-                    . "  from $READINFO left join CURREAD using(read_id)"
+            $query  = "select READINFO.$item"
+                    . "  from READINFO left join CURREAD using(read_id)"
                     . " where seq_id is null";
             $query .= "   and ".join(" and ",@constraint) if @constraint;
             $query .= " limit $limit" if $limit;
@@ -1060,7 +1058,7 @@ sub getUnassembledReads {
     if (($method && $method eq 'usesubselect') || !@$contigids) {
 # step 2: if there are no contigs, only a possible constraint applies; if there
 # are current contigs use a subselect to get the complement of their reads
-        my $query  = "select $READINFO.$item from $READINFO ";
+        my $query  = "select READINFO.$item from READINFO ";
         $query    .= " where " if (@constraint || @$contigids);
         $query    .=  join(" and ", @constraint) if @constraint;
         $query    .= " and " if (@constraint && @$contigids);
@@ -1101,7 +1099,7 @@ sub getUnassembledReads {
 
     if (!scalar(@tempids)) {
 # no reads found (should not happen except for empty assembly)
-        $query  = "select $READINFO.$item from $READINFO";
+        $query  = "select READINFO.$item from READINFO";
         $query .= " where ".join(" and ", @constraint) if @constraint;
         $query .= " limit $limit" if $limit;
   
@@ -1123,7 +1121,7 @@ sub getUnassembledReads {
             my $ridfinal = $readblock[$#readblock];
             $ridfinal = 0 unless @tempids; # last block no upper limit
 
-            $query  = "select $READINFO.$item from $READINFO";
+            $query  = "select READINFO.$item from READINFO";
             $query .= " where read_id > $ridstart ";
             $query .= "   and read_id <= $ridfinal" if $ridfinal;
             $query .= "   and ".join(" and ", @constraint) if @constraint;
@@ -1169,10 +1167,10 @@ sub isUnassembledRead {
 	        . " where SEQ2READ.read_id = ?";
     }
     elsif ($readitem eq 'readname') {
-        $query .= ",SEQ2READ,$READINFO"
+        $query .= ",SEQ2READ,READINFO"
                 . " where MAPPING.seq_id = SEQ2READ.seq_id"
-                . "   and SEQ2READ.read_id = $READINFO.read_id"
-	        . "   and $READINFO.readname = ?";
+                . "   and SEQ2READ.read_id = READINFO.read_id"
+	        . "   and READINFO.readname = ?";
     }
     else {
         return undef;
@@ -1493,11 +1491,11 @@ sub getSequenceForRead {
     }
     elsif ($key eq 'name' || $key eq 'readname') {
         $version = 0 unless defined($version);
-	$query .= "SEQUENCE,SEQ2READ,$READINFO " .
+	$query .= "SEQUENCE,SEQ2READ,READINFO " .
                   "where SEQUENCE.seq_id=SEQ2READ.seq_id" .
                   "  and SEQ2READ.version = $version" .
-                  "  and $READINFO.read_id = SEQ2READ.read_id" .
-                  "  and $READINFO.readname = ?";
+                  "  and READINFO.read_id = SEQ2READ.read_id" .
+                  "  and READINFO.readname = ?";
     }
 # print STDERR "getSequenceForRead: $query ($value)\n";
 
@@ -1538,7 +1536,7 @@ sub getCommentForRead {
 	$query .= "READCOMMENT where read_id=?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "$READINFO left join READCOMMENT using(read_id) where readname=?";
+	$query .= "READINFO left join READCOMMENT using(read_id) where readname=?";
     }
 
     my $dbh = $this->getConnection();
@@ -1570,7 +1568,7 @@ sub getTraceArchiveIdentifier {
 	$query .= "TRACEARCHIVE where read_id=?";
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "$READINFO left join TRACEARCHIVE using(read_id) 
+	$query .= "READINFO left join TRACEARCHIVE using(read_id) 
                    where readname=?";
     }
 
@@ -1611,7 +1609,7 @@ sub getListOfReadNames {
 
 # compose the query
 
-    my $query = "select readname from $READINFO ";
+    my $query = "select readname from READINFO ";
 
     if ($options{noTraceRef}) {
         $query .= "left join TRACEARCHIVE as TA using (read_id) 
@@ -1680,7 +1678,7 @@ sub hasRead {
 
     my $dbh = $this->getConnection();
    
-    my $query = "select read_id from $READINFO where readname=?";
+    my $query = "select read_id from READINFO where readname=?";
 
     my $sth = $dbh->prepare_cached($query);
 
@@ -1712,7 +1710,7 @@ sub areReadsNotInDatabase {
 
     my $dbh = $this->getConnection();
    
-    my $query = "select readname from $READINFO 
+    my $query = "select readname from READINFO 
                  where  readname in ('".join ("','",@$readnames)."')";
 
     my $sth = $dbh->prepare($query);
@@ -1833,7 +1831,7 @@ sub putRead {
     my $readname = $read->getReadName();
 
     my $query = "insert into" .
-	" $READINFO(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
+	" READINFO(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
 	    " VALUES(?,?,?,?,?,?,?,?)";
 
     my $sth = $dbh->prepare_cached($query);
@@ -1847,7 +1845,7 @@ sub putRead {
 			$basecaller,
                         $status);
 
-    return (0, "failed to insert readname and core data into $READINFO table;DBI::errstr=$DBI::errstr")
+    return (0, "failed to insert readname and core data into READINFO table;DBI::errstr=$DBI::errstr")
 	unless (defined($rc) && $rc == 1);
 
     my $readid = $dbh->{'mysql_insertid'};
@@ -1918,7 +1916,7 @@ sub putSequenceForRead {
 
     $rc = $sth->execute($seqid, $read->getSequenceLength(), $sequence, $basequality);
 
-# shouldn't we undo the insert in $READINFO? if it fails
+# shouldn't we undo the insert in READINFO? if it fails
 
     return (0, "failed to insert sequence and base-quality for $readname ($readid);" .
 	    "DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
@@ -1937,7 +1935,7 @@ sub putSequenceForRead {
 
 	$rc = $sth->execute($seqid, $lqleft, $lqright);
 
-# shouldn't we undo the insert in $READINFO? if it fails
+# shouldn't we undo the insert in READINFO? if it fails
 
 	return (0, "failed to insert quality clipping data for $readname ($readid);" .
 		"DBI::errstr=$DBI::errstr") unless (defined($rc) && $rc == 1);
@@ -2464,7 +2462,7 @@ $logger->debug("$query"); next; # test this query!
         $sth->finish();
     }
 
-    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','$READINFO');
+    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','READINFO');
 # delete read_id items
     foreach my $table (@stables) {
         $query = "delete from $table where read_id=?";
@@ -2483,7 +2481,7 @@ sub deleteReadsLike { # TO BE TESTED
     my $this = shift;
     my $name = shift || return 0,undef;
 
-    my $query = "select read_id from $READINFO where readname like ?";
+    my $query = "select read_id from READINFO where readname like ?";
 
     $query =~ s/like/=/ unless ($name =~ /\%/);
 
@@ -2563,8 +2561,8 @@ sub getSequenceIDsForReads {
 
         my @names = splice @readnames, 0, $block;
 
-        my $query = "select $READINFO.read_id,readname,seq_id" .
-                    "  from $READINFO left join SEQ2READ using (read_id) " .
+        my $query = "select READINFO.read_id,readname,seq_id" .
+                    "  from READINFO left join SEQ2READ using (read_id) " .
                     " where readname in ('".join("','",@names)."')" .
 	            "   and version = 0";
 

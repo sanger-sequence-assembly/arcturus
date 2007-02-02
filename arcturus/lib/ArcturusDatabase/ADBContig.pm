@@ -31,8 +31,6 @@ sub new {
     return $this;
 }
 
-my $READINFO = 'READINFO'; # class variable TO BE REPLACED by 'READINFO'
-
 #------------------------------------------------------------------------------
 # methods for exporting CONTIGs or CONTIG attributes
 #------------------------------------------------------------------------------
@@ -68,11 +66,11 @@ sub getContig {
 
     if ($options{withRead}) {
 # returns the highest contig_id, i.e. most recent contig with this read
-        $query .= "  from CONTIG, MAPPING, SEQ2READ, $READINFO "
+        $query .= "  from CONTIG, MAPPING, SEQ2READ, READINFO "
                . " where CONTIG.contig_id = MAPPING.contig_id "
                . "   and MAPPING.seq_id = SEQ2READ.seq_id "
-               . "   and SEQ2READ.read_id = $READINFO.read_id "
-	       . "   and $READINFO.readname like ? ";
+               . "   and SEQ2READ.read_id = READINFO.read_id "
+	       . "   and READINFO.readname like ? ";
 	push @values, $options{withRead};
 
     }
@@ -945,8 +943,8 @@ sub getSequenceIDForAssembledReads {
 
     return unless $range;
 
-    my $query = "select $READINFO.read_id,readname,seq_id" .
-                "  from $READINFO left join SEQ2READ using(read_id) " .
+    my $query = "select READINFO.read_id,readname,seq_id" .
+                "  from READINFO left join SEQ2READ using(read_id) " .
                 " where readname in ('$range')" .
 	        "   and version = 0";
 
@@ -1212,10 +1210,10 @@ sub getReadMappingsForContig {
 
     my $mquery = "select readname,SEQ2READ.seq_id,mapping_id,".
                  "       cstart,cfinish,direction" .
-                 "  from MAPPING, SEQ2READ, $READINFO" .
+                 "  from MAPPING, SEQ2READ, READINFO" .
                  " where contig_id = ?" .
                  "   and MAPPING.seq_id = SEQ2READ.seq_id" .
-                 "   and SEQ2READ.read_id = $READINFO.read_id" .
+                 "   and SEQ2READ.read_id = READINFO.read_id" .
                  " order by cstart";
 
     my $squery = "select SEGMENT.mapping_id,SEGMENT.cstart,"
@@ -1540,7 +1538,7 @@ sub getEndReadsForContigID {
     my $contig_id = shift;
 
     my $query = "select Rl.readname, Rr.readname"
-              . "  from $READINFO as Rl, $READINFO as Rr,"
+              . "  from READINFO as Rl, READINFO as Rr,"
               . "       SEQ2READ as SRl, SEQ2READ as SRr,"
               . "       MAPPING as Ml, MAPPING as Mr,"
               . "       CONTIG"
@@ -2615,10 +2613,10 @@ sub getContigIDsForReadNames {
 		  . " where C2CMAPPING.parent_id is null";
 
     my $query = "select distinct CONTIG.contig_id,gap4name,readname"
-              . "  from $READINFO,CONTIG,SEQ2READ,MAPPING"
-              . " where $READINFO.read_id = SEQ2READ.read_id"
+              . "  from READINFO,CONTIG,SEQ2READ,MAPPING"
+              . " where READINFO.read_id = SEQ2READ.read_id"
               . "   and SEQ2READ.seq_id = MAPPING.seq_id"
-              . "   and $READINFO.readname in ('".join("','",@$reads)."')"
+              . "   and READINFO.readname in ('".join("','",@$reads)."')"
               . "   and CONTIG.contig_id = MAPPING.contig_id"
 	      . "   and CONTIG.contig_id in ($subselect)";
 

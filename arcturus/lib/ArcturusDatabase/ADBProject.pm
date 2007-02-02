@@ -26,8 +26,6 @@ sub new {
     return $this;
 }
 
-my $READINFO = 'READINFO'; # to be rplaced by READINFO
-
 #------------------------------------------------------------------------------
 # methods dealing with Projects
 #------------------------------------------------------------------------------
@@ -96,12 +94,12 @@ sub getProject {
         elsif ($nextword eq "contigname") { 
             return (0,"only contig name can be specified") if ($query =~ /where/);
             $query =~ s/comment/comment,CONTIG.contig_id/;
-            $query .= ",CONTIG,MAPPING,SEQ2READ,$READINFO"
+            $query .= ",CONTIG,MAPPING,SEQ2READ,READINFO"
                     . " where CONTIG.project_id = PROJECT.project_id"
                     . "   and MAPPING.contig_id = CONTIG.contig_id"
                     . "   and SEQ2READ.seq_id = MAPPING.seq_id"
-                    . "   and $READINFO.read_id = SEQ2READ.read_id"
-		    . "   and $READINFO.readname = ? ";
+                    . "   and READINFO.read_id = SEQ2READ.read_id"
+		    . "   and READINFO.readname = ? ";
             push @data, $datum;
             $usecontigid = 1;
         }
@@ -1150,11 +1148,11 @@ sub getProjectIDforReadName {
     my $readname = shift;
 
     my $query = "select distinct CONTIG.contig_id,CONTIG.project_id"
-              . "  from $READINFO,SEQ2READ,MAPPING,CONTIG"
+              . "  from READINFO,SEQ2READ,MAPPING,CONTIG"
               . " where CONTIG.contig_id = MAPPING.contig_id"
               . "   and MAPPING.seq_id = SEQ2READ.seq_id"
-              . "   and SEQ2READ.read_id = $READINFO.read_id"
-	      . "   and $READINFO.readname = ?"
+              . "   and SEQ2READ.read_id = READINFO.read_id"
+	      . "   and READINFO.readname = ?"
 	      . " order by contig_id DESC";
 #   $query   .= " limit 1" if $options{current};
 
