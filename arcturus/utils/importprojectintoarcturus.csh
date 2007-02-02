@@ -72,7 +72,9 @@ if ( $#argv > 4 ) then
     set repair = mtp
 endif
 
-set arcturus_home=/nfs/pathsoft/arcturus
+set basedir=`dirname $0`
+
+set arcturus_home=${basedir}/..
 
 set padded=/tmp/${projectname}.$$.padded.caf
 

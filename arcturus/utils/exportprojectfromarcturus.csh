@@ -8,7 +8,8 @@
 #             no 4 = indicates 64 bit version or 32 bit
 #             no 5 = flag for skipping consensus update (skipped if == true)
   
-set arcturus_home = /nfs/pathsoft/arcturus
+set basedir=`dirname $0`
+set arcturus_home = ${basedir}/..
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
