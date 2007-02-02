@@ -2,8 +2,6 @@ package ArcturusDatabase::ADBRead;
 
 use strict;
 
-#use Exporter;
-
 use ArcturusDatabase::ADBRoot;
 
 use ArcturusDatabase::ADBContig;
@@ -14,13 +12,7 @@ use Read;
 
 use Tag;
 
-our @ISA = qw(ArcturusDatabase::ADBRoot Exporter);
-
-#our @EXPORT = qw(getTagSequenceIDsForTags);
-
-# ----------------------------------------------------------------------------
-
-my $DEBUG = 0;
+our @ISA = qw(ArcturusDatabase::ADBRoot);
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
