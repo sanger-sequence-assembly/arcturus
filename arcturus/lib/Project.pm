@@ -328,7 +328,10 @@ sub writeContigsToFasta {
             next;
         }
 
-        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
+        if ($options{endregiontrim}) {
+            my %eoption = (cliplevel=>$options{endregiontrim});
+            $contig = ContigFactory->endregiontrim($contig,%eoption);
+	}
 
         if ($contig->writeToFasta($DFILE,$QFILE,%options)) {
 # writeToFasta returns 0 for no errors
@@ -373,7 +376,10 @@ sub writeContigsToMaf {
             next;
         }
 
-        $contig->endregiontrim(cliplevel=>$options{endregiontrim});
+        if ($options{endregiontrim}) {
+            my %eoption = (cliplevel=>$options{endregiontrim});
+            $contig = ContigFactory->endregiontrim($contig,%eoption);
+	}
 
         my ($status,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,%options);
 
