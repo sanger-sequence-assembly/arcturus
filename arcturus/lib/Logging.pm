@@ -451,6 +451,11 @@ sub write {
     my $handle = $stream->{handle};
     my $method = $stream->{method};
 
+    unless ($handle) {
+        print STDERR "missing handle for $stream->{device} : $message\n";
+	return;
+    }    
+
 # print STDERR "handle: $handle  method: $method  msg:'$text'\n";
 
 #    eval("\$handle->$method(\$message)") if $method; # will do nicely
