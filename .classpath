@@ -2,8 +2,8 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
-	<classpathentry kind="lib" path="jlfgr-1_0.jar"/>
-	<classpathentry kind="lib" path="mysql-connector-java-5.0.4-bin.jar"/>
-	<classpathentry kind="lib" path="oracle-jdbc.jar"/>
+	<classpathentry kind="lib" path="jars/jlfgr-1_0.jar"/>
+	<classpathentry kind="lib" path="jars/mysql-connector-java-5.0.4-bin.jar"/>
+	<classpathentry kind="lib" path="jars/oracle-jdbc.jar"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
