@@ -16,18 +16,6 @@ in build/classes and the main Arcturus JAR file in build/lib.
 
 REQUIRED JAR FILES
 
-Shared JAR files are kept in /nfs/pathsoft/minerva/jars. When you run
-Ant, remember to include this directory via the -lib option, as it
-contains things like the JDBC driver for MySQL.
-
-You may find it convenient to create a soft link with a command such as
-
-  ln -s /nfs/pathsoft/minerva/jars lib
-
-which allows you to invoke Ant with a command such as
-
-  ant -lib lib <target>
-  
 Arcturus currently requires the following external JAR files:
 
   * The MySQL JDBC library.
@@ -35,6 +23,13 @@ Arcturus currently requires the following external JAR files:
   * The Oracle JDBC library.
   
   * The Java Look-and-Feel Graphics Repository library.
+
+They are kept in the "lib" sub-directory.  The manifest file for
+the Arcturus JAR file expects them to be in this location.
+
+You should invoke Ant with a command such as
+
+  ant -lib lib <target>
 
 A NOTE ON THE WRAPPER SCRIPTS
 
