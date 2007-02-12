@@ -1082,7 +1082,7 @@ sub createContigTransferRequest {
     $tpp = (@$tpp ? $tpp->[0] : 0); # replace reference by value
 
     my @cnames = $adb->getNamesForProjectID($cpid); 
-    @cnames = ('UNDEF','UNDEF',$user) unless $cnames->[2];
+    @cnames = ('UNDEF','UNDEF',$user) unless $cnames[2];
     my @tnames = $adb->getNamesForProjectID($tpid);
 
     return 0,"invalid project ID: project $tpid does not exist" unless $tnames[2];
