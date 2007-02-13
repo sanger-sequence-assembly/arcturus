@@ -65,9 +65,8 @@ public class ScaffoldBuilder {
 		String query;
 
 		query = "select length,gap4name,project_id"
-				+ "  from CONTIG  left join C2CMAPPING"
-				+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where CONTIG.contig_id = ? and C2CMAPPING.parent_id is null";
+				+ " from CURRENTCONTIGS"
+				+ " where contig_id = ?";
 
 		pstmtContigData = conn.prepareStatement(query);
 
@@ -185,12 +184,16 @@ public class ScaffoldBuilder {
 
 			processed.add(contig);
 
-			if (contig.getLength() < minlen)
+			if (contig.getLength() < minlen) {
 				continue;
+			}
 
-			if (!isCurrentContig(contig.getID()))
+			if (!isCurrentContig(contig.getID())) {
+				System.err.println("Contig " + contig.getID() + " is no longer current");
+			
 				continue;
-
+			}
+			
 			if (listener != null) {
 				int contigid = contig.getID();
 				
