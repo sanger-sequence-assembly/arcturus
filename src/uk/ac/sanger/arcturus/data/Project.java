@@ -17,6 +17,7 @@ public class Project extends Core {
 	protected Date updated = null;
 	protected Person owner = null;
 	protected Date lockdate = null;
+	protected Person lockowner = null;
 	protected Date created = null;
 	protected Person creator = null;
 
@@ -57,7 +58,7 @@ public class Project extends Core {
 	 */
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
-			Person owner, Date lockdate, Date created, Person creator,
+			Person owner, Date lockdate, Person lockowner, Date created, Person creator,
 			ArcturusDatabase adb) {
 		super(ID, adb);
 
@@ -70,6 +71,7 @@ public class Project extends Core {
 		this.updated = updated;
 		this.owner = owner;
 		this.lockdate = lockdate;
+		this.lockowner = lockowner;
 		this.created = created;
 		this.creator = creator;
 	}
@@ -85,7 +87,7 @@ public class Project extends Core {
 	 */
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
-			String owner, Date lockdate, Date created, String creator,
+			String owner, Date lockdate, String lockowner, Date created, String creator,
 			ArcturusDatabase adb) {
 		super(ID, adb);
 
@@ -98,6 +100,7 @@ public class Project extends Core {
 		this.updated = updated;
 		this.owner = findPerson(owner);
 		this.lockdate = lockdate;
+		this.lockowner = findPerson(lockowner);
 		this.created = created;
 		this.creator = findPerson(creator);
 	}
@@ -169,6 +172,18 @@ public class Project extends Core {
 
 	public boolean isLocked() {
 		return lockdate == null;
+	}
+	
+	public Person getLockOwner() {
+		return lockowner;
+	}
+	
+	public void setLockOwner(Person lockowner) {
+		this.lockowner = lockowner;
+	}
+	
+	public void setLockOwner(String lockowner) {
+		this.lockowner = findPerson(lockowner);
 	}
 
 	public Date getCreated() {

@@ -30,13 +30,13 @@ public class ProjectManager extends AbstractManager {
 
 		conn = adb.getConnection();
 
-		String query = "select assembly_id,name,updated,owner,lockdate,created,creator from PROJECT where project_id = ?";
+		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator from PROJECT where project_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,created,creator from PROJECT where assembly_id = ? and name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator from PROJECT where assembly_id = ? and name = ?";
 		pstmtByNameAndAssembly = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,created,creator from PROJECT where name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator from PROJECT where name = ?";
 		pstmtByName = conn.prepareStatement(query);
 
 		query = "update PROJECT set assembly_id = ? where project_id = ?";
@@ -80,13 +80,14 @@ public class ProjectManager extends AbstractManager {
 			java.util.Date updated = rs.getTimestamp(3);
 			String owner = rs.getString(4);
 			java.util.Date lockdate = rs.getTimestamp(5);
-			java.util.Date created = rs.getTimestamp(6);
-			String creator = rs.getString(7);
+			String lockowner = rs.getString(6);
+			java.util.Date created = rs.getTimestamp(7);
+			String creator = rs.getString(8);
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
 			project = createAndRegisterNewProject(id, assembly, name, updated,
-					owner, lockdate, created, creator);
+					owner, lockdate, lockowner, created, creator);
 		}
 
 		rs.close();
@@ -121,11 +122,12 @@ public class ProjectManager extends AbstractManager {
 				java.util.Date updated = rs.getTimestamp(2);
 				String owner = rs.getString(3);
 				java.util.Date lockdate = rs.getTimestamp(4);
-				java.util.Date created = rs.getTimestamp(5);
-				String creator = rs.getString(6);
+				String lockowner = rs.getString(5);
+				java.util.Date created = rs.getTimestamp(6);
+				String creator = rs.getString(7);
 
 				project = createAndRegisterNewProject(project_id, assembly,
-						name, updated, owner, lockdate, created, creator);
+						name, updated, owner, lockdate, lockowner, created, creator);
 			}
 		}
 
@@ -136,9 +138,9 @@ public class ProjectManager extends AbstractManager {
 
 	private Project createAndRegisterNewProject(int id, Assembly assembly,
 			String name, java.util.Date updated, String owner,
-			java.util.Date lockdate, java.util.Date created, String creator) {
+			java.util.Date lockdate, String lockowner, java.util.Date created, String creator) {
 		Project project = new Project(id, assembly, name, updated, owner,
-				lockdate, created, creator, adb);
+				lockdate, lockowner, created, creator, adb);
 
 		registerNewProject(project);
 
@@ -150,7 +152,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void preloadAllProjects() throws SQLException {
-		String query = "select project_id,assembly_id,name,updated,owner,lockdate,created,creator from PROJECT";
+		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator from PROJECT";
 
 		Statement stmt = conn.createStatement();
 
@@ -164,8 +166,9 @@ public class ProjectManager extends AbstractManager {
 			java.util.Date updated = rs.getTimestamp(4);
 			String owner = rs.getString(5);
 			java.util.Date lockdate = rs.getTimestamp(6);
-			java.util.Date created = rs.getTimestamp(7);
-			String creator = rs.getString(8);
+			String lockowner = rs.getString(7);
+			java.util.Date created = rs.getTimestamp(8);
+			String creator = rs.getString(9);
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -173,13 +176,14 @@ public class ProjectManager extends AbstractManager {
 
 			if (project == null)
 				createAndRegisterNewProject(id, assembly, name, updated, owner,
-						lockdate, created, creator);
+						lockdate, lockowner, created, creator);
 			else {
 				project.setAssembly(assembly);
 				project.setName(name);
 				project.setUpdated(updated);
 				project.setOwner(owner);
 				project.setLockdate(lockdate);
+				project.setLockOwner(lockowner);
 				project.setCreated(created);
 				project.setCreator(creator);
 			}
