@@ -82,10 +82,9 @@ public class ContigManager extends AbstractManager {
 
 		pstmtContigData = conn.prepareStatement(query);
 
-		query = "select gap4name,length,nreads,created,updated,project_id "
-				+ "  from CONTIG  left join C2CMAPPING"
-				+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where CONTIG.contig_id = ? and C2CMAPPING.parent_id is null";
+		query = "select gap4name,length,nreads,created,updated,project_id"
+				+ " from CURRENTCONTIGS"
+				+ " where contig_id = ?";
 
 		pstmtCurrentContigData = conn.prepareStatement(query);
 
@@ -155,30 +154,26 @@ public class ContigManager extends AbstractManager {
 
 		pstmtTags = conn.prepareStatement(query);
 
-		query = "select count(*) from CONTIG left join C2CMAPPING"
-				+ " on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where C2CMAPPING.parent_id is null and project_id = ? and length > ?";
+		query = "select count(*) from CURRENTCONTIGS"
+				+ " where project_id = ? and length > ?";
 
 		pstmtCountContigsByProject = conn.prepareStatement(query);
 
-		query = "select CONTIG.contig_id,gap4name,length,nreads,created,updated"
-				+ " from CONTIG left join C2CMAPPING"
-				+ " on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where C2CMAPPING.parent_id is null and project_id = ? and length > ?";
+		query = "select contig_id,gap4name,length,nreads,created,updated"
+				+ " from CURRENTCONTIGS"
+				+ " where project_id = ? and length > ?";
 
 		pstmtContigsByProject = conn.prepareStatement(query);
 
 		query = "select count(*) "
-			+ "  from CONTIG left join C2CMAPPING"
-			+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
-			+ " where length > ? and C2CMAPPING.parent_id is null";
+			+ " from CURRENTCONTIGS"
+			+ " where length > ?";
 
 		pstmtCountCurrentContigs = conn.prepareStatement(query);
 
-		query = "select CONTIG.contig_id,gap4name,length,nreads,created,updated,project_id "
-				+ "  from CONTIG left join C2CMAPPING"
-				+ "    on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where length > ? and C2CMAPPING.parent_id is null";
+		query = "select contig_id,gap4name,length,nreads,created,updated,project_id "
+				+ " from CURRENTCONTIGS"
+				+ " where length > ?";
 
 		pstmtCurrentContigs = conn.prepareStatement(query);
 	}
@@ -985,9 +980,7 @@ public class ContigManager extends AbstractManager {
 	}
 
 	public int[] getCurrentContigIDList() throws SQLException {
-		String query = "select count(*) from CONTIG left join C2CMAPPING"
-				+ " on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where C2CMAPPING.parent_id is null";
+		String query = "select count(*) from CURRENTCONTIGS";
 
 		Statement stmt = conn.createStatement();
 
@@ -1006,9 +999,7 @@ public class ContigManager extends AbstractManager {
 
 		int[] ids = new int[ncontigs];
 
-		query = "select CONTIG.contig_id from CONTIG left join C2CMAPPING"
-				+ " on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where C2CMAPPING.parent_id is null";
+		query = "select contig_id from CURRENTCONTIGS";
 
 		rs = stmt.executeQuery(query);
 

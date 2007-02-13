@@ -42,10 +42,9 @@ public class ProjectManager extends AbstractManager {
 		query = "update PROJECT set assembly_id = ? where project_id = ?";
 		pstmtSetAssemblyForProject = conn.prepareStatement(query);
 
-		query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created),max(updated) from "
-				+ " CONTIG left join C2CMAPPING on CONTIG.contig_id = C2CMAPPING.parent_id"
-				+ " where C2CMAPPING.parent_id is null "
-				+ " and project_id = ? and length >= ? and nreads >= ?";
+		query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created),max(updated)"
+				+ " from CURRENTCONTIGS"
+				+ " where project_id = ? and length >= ? and nreads >= ?";
 		pstmtProjectSummary = conn.prepareStatement(query);
 
 	}
