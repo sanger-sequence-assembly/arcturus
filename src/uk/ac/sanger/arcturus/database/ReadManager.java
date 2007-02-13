@@ -233,13 +233,8 @@ public class ReadManager extends AbstractManager {
 		Statement stmt = conn.createStatement();
 
 		String[] queries = {
-				"create temporary table CURCTG as"
-						+ " select CONTIG.contig_id from CONTIG left join C2CMAPPING"
-						+ " on CONTIG.contig_id = C2CMAPPING.parent_id"
-						+ " where C2CMAPPING.parent_id is null",
-
 				"create temporary table CURSEQ as"
-						+ " select seq_id from CURCTG left join MAPPING using(contig_id)",
+						+ " select seq_id from CURRENTCONTIGS left join MAPPING using(contig_id)",
 
 				"create temporary table CURREAD"
 						+ " (read_id integer not null, seq_id integer not null, key (read_id)) as"
