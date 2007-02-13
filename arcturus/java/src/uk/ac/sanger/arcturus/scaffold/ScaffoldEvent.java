@@ -75,4 +75,9 @@ public class ScaffoldEvent extends EventObject {
 	public void setState(int mode, String description) {
 		setState(mode, description, null);
 	}
+	
+	public String toString() {
+		return "ScaffoldEvent[mode=" + getModeAsString() + ", description=\"" + description +
+			"\", value=" + (value == null ? "null" : value) + "]";
+	} 
 }
