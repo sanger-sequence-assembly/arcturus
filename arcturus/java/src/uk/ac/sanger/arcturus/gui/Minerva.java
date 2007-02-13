@@ -156,10 +156,14 @@ public class Minerva implements WindowListener {
 
 	private void createNewSessions(String[] args) {
 		String instance = getStringParameter(args, "-instance");
+		
 		String organism = getStringParameter(args, "-organism");
 
 		if (instance == null)
 			instance = Arcturus.getDefaultInstance();
+		
+		if (organism == null)
+			organism = Arcturus.getDefaultOrganism();
 		
 		if (instance != null) {
 			if (organism == null) {

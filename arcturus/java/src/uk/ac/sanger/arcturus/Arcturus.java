@@ -71,4 +71,8 @@ public class Arcturus {
 		else
 			return getProperty("arcturus.default.instance");
 	}
+	
+	public static String getDefaultOrganism() {
+		return getProperty("arcturus.organism");
+	}
 }
