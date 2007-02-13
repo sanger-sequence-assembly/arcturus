@@ -33,6 +33,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected static final int READ_COUNT_COLUMN = 5;
 	protected static final int DATE_COLUMN = 6;
 	protected static final int OWNER_COLUMN = 7;
+	protected static final int LOCKED_COLUMN = 8;
 
 	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
@@ -94,6 +95,9 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case OWNER_COLUMN:
 				return "Owner";
+				
+			case LOCKED_COLUMN:
+				return "Lock status";
 
 			default:
 				return "UNKNOWN";
@@ -105,6 +109,7 @@ class ProjectTableModel extends AbstractTableModel implements
 			case ASSEMBLY_COLUMN:
 			case PROJECT_COLUMN:
 			case OWNER_COLUMN:
+			case LOCKED_COLUMN:
 				return String.class;
 
 			case TOTAL_LENGTH_COLUMN:
@@ -126,7 +131,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	}
 
 	public int getColumnCount() {
-		return 8;
+		return 9;
 	}
 
 	protected ProjectProxy getProjectAtRow(int row) {
@@ -137,22 +142,22 @@ class ProjectTableModel extends AbstractTableModel implements
 		ProjectProxy project = getProjectAtRow(row);
 
 		switch (col) {
-			case 0:
+			case ASSEMBLY_COLUMN:
 				return project.getAssemblyName();
 
-			case 1:
+			case PROJECT_COLUMN:
 				return project.getName();
 
-			case 2:
+			case TOTAL_LENGTH_COLUMN:
 				return new Integer(project.getTotalLength());
 
-			case 3:
+			case CONTIG_COUNT_COLUMN:
 				return new Integer(project.getContigCount());
 
-			case 4:
+			case MAXIMUM_LENGTH_COLUMN:
 				return new Integer(project.getMaximumLength());
 
-			case 5:
+			case READ_COUNT_COLUMN:
 				return new Integer(project.getReadCount());
 
 			case DATE_COLUMN:
@@ -170,13 +175,18 @@ class ProjectTableModel extends AbstractTableModel implements
 						return null;
 				}
 
-			case 7:
+			case OWNER_COLUMN:
 				Person owner = project.getOwner();
 				String name = owner.getName();
 				if (name == null)
 					name = owner.getUID();
 
 				return name;
+				
+			case LOCKED_COLUMN:
+				Person lockowner = project.getLockOwner();
+				return (lockowner == null || lockowner.getName() == null ?
+							null : "Locked by " + lockowner.getName());
 
 			default:
 				return null;

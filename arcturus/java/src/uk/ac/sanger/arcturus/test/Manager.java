@@ -236,7 +236,7 @@ public class Manager {
 	}
 
 	protected void preloadProjects() throws SQLException {
-		String query = "select project_id,assembly_id,name,updated,owner,locked,created,creator from PROJECT";
+		String query = "select project_id,assembly_id,name,updated,owner,locked,lockowner,created,creator from PROJECT";
 
 		Statement stmt = conn.createStatement();
 
@@ -253,13 +253,14 @@ public class Manager {
 				java.util.Date updated = rs.getTimestamp(4);
 				String owner = rs.getString(5);
 				java.util.Date locked = rs.getTimestamp(6);
-				java.util.Date created = rs.getTimestamp(7);
-				String creator = rs.getString(8);
+				String lockowner = rs.getString(7);
+				java.util.Date created = rs.getTimestamp(8);
+				String creator = rs.getString(9);
 
 				Assembly assembly = getAssemblyByID(assembly_id);
 
 				Project project = new Project(project_id, assembly, name,
-						updated, owner, locked, created, creator, null);
+						updated, owner, locked, lockowner, created, creator, null);
 
 				projectByID.put(id, project);
 			}
