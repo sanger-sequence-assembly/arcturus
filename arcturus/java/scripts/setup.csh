@@ -16,16 +16,9 @@ set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 # This is the test package
 set ARCTURUS_TEST_PACKAGE=${ARCTURUS_PACKAGE}.test
 
-# Add the JAR files to the CLASSPATH environment variable
-if ( $?CLASSPATH ) then
-    setenv CLASSPATH ${CLASSPATH}:${ARCTURUS_JAR}
-else
-    setenv CLASSPATH ${ARCTURUS_JAR}
-endif
-
 # Specify minimum heap size
 if ( ! $?JAVA_HEAP_SIZE) then
-    setenv JAVA_HEAP_SIZE -Xmx256M
+    setenv JAVA_HEAP_SIZE -Xmx512M
 endif
 
 # Determine our operating system, and alter the path to Java if we're running

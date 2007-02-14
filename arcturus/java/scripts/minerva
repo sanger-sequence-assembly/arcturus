@@ -3,4 +3,4 @@
 set basedir=`dirname $0`
 source ${basedir}/setup.csh
 
-java ${JAVA_OPTS} uk.ac.sanger.arcturus.gui.Minerva $*
+java ${JAVA_OPTS} -jar ${ARCTURUS_JAR} $*
