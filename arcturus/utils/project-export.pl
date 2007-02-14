@@ -142,7 +142,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -372,6 +372,7 @@ foreach my $project (@projects) {
         }
         $emr[0]++ unless $err;
         $emr[1]++ if $err;
+        undef $contig;
       }
 # end METHOD 0
     }
@@ -395,12 +396,6 @@ foreach my $project (@projects) {
     }
 }
 
-$fhDNA->close() if $fhDNA;
-
-$fhQTY->close() if $fhQTY;
-
-$fhRDS->close() if $fhRDS;
-
 $adb->disconnect();
 
 if ($preview) {
@@ -410,6 +405,12 @@ else {
     $logger->warning("There were no errors") unless $errorcount;
     $logger->warning("$errorcount Errors found") if $errorcount;
 }
+
+$fhDNA->close() if $fhDNA;
+
+$fhQTY->close() if $fhQTY;
+
+$fhRDS->close() if $fhRDS;
 
 exit;
 
