@@ -454,8 +454,8 @@ sub putContig {
     if ($previous) {
 # pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
-        if ($contig->isSameAs($previous)) {
-#        if ($contig->isEqual($previous)) {
+
+        if ($contig->isEqual($previous)) {
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
