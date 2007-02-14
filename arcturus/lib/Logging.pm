@@ -375,7 +375,12 @@ sub setOutputStream {
         print STDOUT "(current directory $pwd)\n" unless ($device =~ /STD/);
     }
 
-    &timestamp($stream,'open') if $options{timestamp};
+    if (my $label = $options{timestamplabel}) {
+        &timestamp($stream,"open on $label");
+    }
+    elsif ($options{timestamp}) {
+        &timestamp($stream,'open');
+    }
 
     return 1;
 }
@@ -489,7 +494,7 @@ sub timestamp {
     &write($stream,"$marker : $timestamp",skip=>1,preskip=>1);
 
     $stream->{stamp} = 1;
-}    
+}
 
 #---------------------------------------------------------------------------
 
