@@ -1191,127 +1191,29 @@ sub isUnassembledRead {
 }
 
 sub testReadAllocation {
-# return a list of doubly allocated reads
-    my $this = shift;
-#    my %options = @_;
-
-    return &newtestReadAllocation($this,@_) if @_;
-
-# build temporary tables to faciltate easy search
-
-    return 0, "Failed to build temporary tables" unless
-        $this->getIDsForUnassembledReads(method=>'intemporarytable',
-                                         nosingleton=>1);
-
-# now search the CURREAD table for double reads
-
-    my $query = "select read_id,count(read_id) as counts,contig_id"
-              . "  from CURREAD"
-              . " group by read_id having counts > 1"; 
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $rows = $sth->execute() || &queryFailed($query);
-
-    my $resulthash = {};
-
-    return ($rows+0),$resulthash unless ($rows+0);
-
-    my $reads = [];
-    while (my ($read,$count,$contig) = $sth->fetchrow_array()) {
-        push @$reads,$read;
-    }
-
-    $sth->finish();
-
-    $query = "select read_id,contig_id from CURREAD"
-	   . " where read_id in (".join(',',@$reads).")";
-
-    $sth = $dbh->prepare_cached($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    while (my ($read,$contig) = $sth->fetchrow_array()) {
-        $resulthash->{$read} = [] unless $resulthash->{$read};
-        push @{$resulthash->{$read}}, $contig;
-    }
-
-    $sth->finish();
-
-    return ($rows+0),$resulthash;
-}
-
-sub newtestReadAllocation {
-# return a list of doubly allocated reads
+# return a list of doubly allocated reads using MySQL5 view CURRENTCONTIGS
     my $this = shift;
     my %options = @_;
 
-    my $logger = $this->verifyLogger('newtestReadAllocation');
-    $logger->setBlock('debug',unblock=>1);
-    $logger->debug("options  @_");
+    my $logger = $this->verifyLogger('testReadAllocation');
 
 # build temporary tables to faciltate easy search
 
     my $dbh = $this->getConnection();
 
-# first get a list of current generation contigs (those that are not parents)
+# do a complex query on the CURRENTCONTIG views
 
-    my $create = "create temporary table CURCTGL ("
-               . "contig_id mediumint(8) unsigned not null default '0',"
-               . "project_id mediumint(8) unsigned not null default '0',"
-	       . "key contig_id (contig_id) )";
-
-    $dbh->do($create) || &queryFailed($create) && return undef;
-
- 
-    my $query  = "insert into CURCTGL (contig_id,project_id) "
-               . "select CONTIG.contig_id,CONTIG.project_id"
-               . "  from CONTIG left join C2CMAPPING "
-               . "    on CONTIG.contig_id = C2CMAPPING.parent_id "
-	       . " where C2CMAPPING.parent_id is null";
-
-    $dbh->do($query) || &queryFailed($query) && return undef;
-
-# and make a copy as CURCTGR
-   
-    $create = "create temporary table CURCTGR ("
-            . "contig_id mediumint(8) unsigned not null default '0',"
-            . "project_id mediumint(8) unsigned not null default '0',"
-            . "key contig_id (contig_id) )";
-
-    $dbh->do($create) || &queryFailed($create) && return undef;
- 
-    $query  = "insert into CURCTGR (contig_id,project_id) "
-            . "select CURCTGL.contig_id,CURCTGL.project_id"
-	    . "  from CURCTGL";
-# here we do the project selection as well
-    if (defined($options{project_id})) {
-        $query .= " where project_id = $options{project_id} ";
-    }
-    if (defined($options{projectname})) {
-# requires an extra join with PROJECT table
-        $query .= ", PROJECT where CURCTGL.project_id = PROJECT.project_id"
-               .  " and name like '$options{projectname}'";
-$logger->debug("query: $query");
-    }
- 
-    $dbh->do($query) || &queryFailed($query) && return undef;
-
-# do a complex query on the temporary tables
-
-    $query = "select LSR.read_id, "
-           . "       LC.contig_id, LC.project_id, "    
-           . "       RC.contig_id, RC.project_id  " 
-           . "  from CURCTGL as LC, MAPPING as LM, SEQ2READ as LSR,"
-           . "       CURCTGR as RC, MAPPING as RM, SEQ2READ as RSR"
-           . " where LC.contig_id = LM.contig_id" 
-           . "   and LM.seq_id = LSR.seq_id"
-           . "   and RC.contig_id = RM.contig_id" 
-           . "   and RM.seq_id = RSR.seq_id"
-           . "   and LC.contig_id != RC.contig_id"  # different contigs
-	   . "   and LSR.read_id = RSR.read_id";    # but same read
+    my $query = "select LSR.read_id, "
+              . "       LC.contig_id, LC.project_id, "    
+              . "       RC.contig_id, RC.project_id  " 
+              . "  from CURRENTCONTIGS as LC, MAPPING as LM, SEQ2READ as LSR,"
+              . "       CURRENTCONTIGS as RC, MAPPING as RM, SEQ2READ as RSR"
+              . " where LC.contig_id = LM.contig_id" 
+              . "   and LM.seq_id = LSR.seq_id"
+              . "   and RC.contig_id = RM.contig_id" 
+              . "   and RM.seq_id = RSR.seq_id"
+              . "   and LC.contig_id != RC.contig_id"  # different contigs
+    	      . "   and LSR.read_id = RSR.read_id";    # but same read
 
 # add (optional) project selection
 
@@ -1323,36 +1225,35 @@ $logger->debug("query: $query");
 # requires only a line to specify project selection
         $query .= " and LC.project_id != RC.project_id";
     }
-#    if ($options{projectname}) {
+    my @data;
+    if ($options{project_id}) {
+# requires only a line to specify project selection
+        $query .= " and LC.project_id = ?";
+        push @data,$options{project_id};
+    }
+    if ($options{projectname}) {
 # requires an extra join with PROJECT table
-#        $query =~ s/ from / from PROJECT, /;
-#        $query .= " and LC.project_id = PROJECT.project_id"
-#               .  " and name = ? ";
-#       push @data,$options{projectname};
-#print STDERR "query: $query\n";
-#    }
+        $query =~ s/ where/, PROJECT where/;
+        $query .= " and LC.project_id = PROJECT.project_id"
+               .  " and name = ? ";
+        push @data,$options{projectname};
+    }
 
     my $sth = $dbh->prepare_cached($query);
 
-    my $rows = $sth->execute() || &queryFailed($query);
+    my $rows = $sth->execute(@data) || &queryFailed($query,@data);
 
     my $resulthash = {};
-
-#    return ($rows+0),$resulthash unless ($rows+0);
 
     while (my ($read,$lc,$lp,$rc,$rp) = $sth->fetchrow_array()) {
 $logger->debug("result $read,$lc,$lp    $rc,$rp");
         $resulthash->{$read} = [] unless $resulthash->{$read};
         push @{$resulthash->{$read}}, $lc, $rc;
-        my $contiglist = $resulthash->{$read};
-$logger->debug("accumulated @$contiglist");
     }
 
     $sth->finish();
 
-# this query should return an even number of rows (twice the number of reads)
-
-    return ($rows+0),$resulthash;
+    return $resulthash;
 }
 
 sub getReadNamesLike {
