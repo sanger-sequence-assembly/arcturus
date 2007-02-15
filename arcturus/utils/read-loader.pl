@@ -35,6 +35,9 @@ my $onlyloadtags;          # Exp files only
 my $outputFile;            # default STDOUT
 my $logLevel;              # default log warnings and errors only
 
+my $readstoload;
+my $readstoskip;
+
 my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
               . "limit|filter|source|exclude|info|help|asped|"
               . "filter|readnamelike|rootdir|"
@@ -66,7 +69,7 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-source') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $source;
-        $source       = shift @ARGV;
+        $source       = lc(shift @ARGV);
     }
 
 # exclude defines if reads already loaded are to be ignored (default = Y) 
@@ -111,8 +114,8 @@ while (my $nextword = shift @ARGV) {
     $PARS{caf}          = shift @ARGV  if ($nextword eq '-caf');
     $PARS{caf}          = 'default'    if ($nextword eq '-cafdefault');
 
-    $PARS{include}      = shift @ARGV  if ($nextword eq '-fofn');
-    $PARS{include}      = shift @ARGV  if ($nextword eq '-forn');
+    $readstoload        = shift @ARGV  if ($nextword eq '-fofn');
+    $readstoload        = shift @ARGV  if ($nextword eq '-forn');
 
     $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
     $PARS{aspedbefore}  = shift @ARGV  if ($nextword eq '-aspedbefore');
@@ -149,7 +152,7 @@ $logger->setFilter($logLevel) if defined $logLevel; # set reporting level
 
 &showUsage("Undefined data source") unless $source;
 
-if ($source ne 'CAF' && $source ne 'Oracle' && $source ne 'Expfiles' && $source ne 'TraceServer') {
+if ($source ne 'caf' && $source ne 'oracle' && $source ne 'expfiles' && $source ne 'traceserver') {
     &showUsage("Invalid data source '$source'");
 }
 
@@ -185,7 +188,7 @@ $adb->populateLoadingDictionaries();
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
 
-$PARS{include} = &readNamesFromFile($PARS{include}) if $PARS{include};
+$readstoload = &readNamesFromFile($readstoload) if $readstoload;
 
 #----------------------------------------------------------------
 # ignore already loaded reads? then get them from the database
@@ -195,9 +198,15 @@ if (!$noexclude) {
 
     $logger->info("Collecting existing readnames");
 
-    $PARS{exclude} = $adb->getListOfReadNames; # array reference
+    my $readsloaded = $adb->getListOfReadNames; # array reference
 
-    my $nr = scalar(@{$PARS{exclude}});
+    my $nr = scalar(@{$readsloaded});
+
+    $readstoskip = {};
+
+    foreach my $readname (@{$readsloaded}) {
+	$readstoskip->{$readname} = 1;
+    }
 
     $logger->info("$nr readnames found in database $organism");
 }
@@ -208,7 +217,7 @@ if (!$noexclude) {
 
 my $factory;
 
-if ($source eq 'CAF') {
+if ($source eq 'caf') {
 
 # test CAF filename and open it
 
@@ -233,18 +242,18 @@ if ($source eq 'CAF') {
 
 # test for excess baggage; abort if present (force correct input)
 
-    my @valid = ('caf','include','exclude','log','readnamelike','filter');
+    my @valid = ('caf','include','log','readnamelike','filter');
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new CAFReadFactory(%PARS);
 }
 
-elsif ($source eq 'Oracle') {
+elsif ($source eq 'oracle') {
 
     &showUsage("Missing Oracle schema") unless $PARS{schema};
 
     my @valid = ('schema','projid','aspedafter','aspedbefore',
-		 'readnamelike','include','exclude','minreadid','maxreadid');
+		 'readnamelike','include','minreadid','maxreadid');
 
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
@@ -253,7 +262,7 @@ elsif ($source eq 'Oracle') {
     $factory = new OracleReadFactory(%PARS);
 }
 
-elsif ($source eq 'Expfiles') {
+elsif ($source eq 'expfiles') {
 # takes the root directory and optionally a subdir filter
     if (!$PARS{root}) {
         $logger->info("Finding repository root directory");
@@ -271,7 +280,7 @@ elsif ($source eq 'Expfiles') {
 # add logger to input PARS
     $PARS{log} = $logger;
 
-    my @valid = ('readnamelike','root','subdir','limit','include','exclude','log');
+    my @valid = ('readnamelike','root','subdir','limit','include','log');
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
     $factory = new ExpFileReadFactory(%PARS);
@@ -280,7 +289,7 @@ elsif ($source eq 'Expfiles') {
     print "REJECTED files: @$rejects\n\n" if $rejects;
 }
 
-elsif ($source eq 'TraceServer') {
+elsif ($source eq 'traceserver') {
     &showUsage("Missing group name for trace server") unless $PARS{group};
 
     $factory = new TraceServerReadFactory(%PARS);
@@ -304,11 +313,13 @@ $loadoptions{skipchemistrycheck} = 1 if $consensus_read;
 $loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
 $loadoptions{skipqualityclipcheck} = 1 if $skipqualityclipcheck;
 
-while (my $readname = $factory->getNextReadName()) {
+$readstoload = $factory->getReadNamesToLoad() unless defined($readstoload);
+
+foreach my $readname (@{$readstoload}) {
 
     next if (!$noloading && !$onlyloadtags && $adb->hasRead($readname)); # already stored
 
-    my $read = $factory->getNextRead();
+    my $read = $factory->getReadByName($readname);
 
     next if !defined($read); # do error listing inside factory
 
@@ -334,11 +345,11 @@ while (my $readname = $factory->getNextReadName()) {
 
     elsif ($noloading) {
 
-        $read->writeToCaf(*STDOUT) if ($noloading > 1);
-
         my $report = $adb->testRead($read,%loadoptions);
 
-        print STDOUT "$readname:\n$report\n";
+        print STDOUT "\n$readname: $report\n";
+
+	$read->writeCafSequence(*STDOUT) if ($noloading > 1);
 
         next;
     }
