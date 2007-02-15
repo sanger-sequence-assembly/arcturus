@@ -43,11 +43,7 @@ sub new {
 
     die "Group $group not in trace server" unless defined($tsgroup);
 
-    my $grit = $tsgroup->get_iterator(1);
-
-    $grit->set($minreadid) if defined($minreadid);
-
-    $this->{iterator} = $grit;
+    $this->{minreadid} = $minreadid;
 
     $this->{maxreads} = $maxreads;
 
@@ -56,41 +52,45 @@ sub new {
     return $this;
 }
 
-sub getNextReadName {
+sub getReadNamesToLoad {
     my $this = shift;
 
-    undef($this->{read});
+    my $ts = $this->{traceserver};
 
-    return undef if (defined($this->{maxreads}) &&
-		     ($this->{readcount} >= $this->{maxreads}));
+    my $group = $this->{group};
 
-    my $seq_id = $this->{iterator}->next();
+    my $tsgroup = $ts->get_group($group, 'PASS');
 
-    return undef unless defined($seq_id);
+    my $grit = $tsgroup->get_iterator(1);
 
-    $this->{seq_id} = $seq_id;
+    my $minreadid = $this->{minreadid};
 
-    my ($read, $index) = $this->{traceserver}->get_read_by_seq_id($seq_id);
+    $grit->set($minreadid) if defined($minreadid);
 
-    return undef unless defined($read);
+    my $readnames = [];
 
-    $this->{read} = $read;
+    while (my $seq_id = $grit->next()) {
+	my $read = $ts->get_read_by_seq_id($seq_id);
+	push @{$readnames}, $read->get_name();
+    }
 
-    $this->{readcount}++;
-
-    return $read->get_name();
+    return $readnames;
 }
 
-sub getNextRead {
+sub getReadByName {
     my $this = shift;
 
-    my $tsread = $this->{read};
+    my $readname = shift;
+
+    my $ts = $this->{traceserver};
+
+    my $tsread = $ts->get_read_by_name($readname);
 
     return undef unless defined($tsread);
 
-    my $readname = $tsread->get_name();
+    my $seq = $tsread->get_sequence();
 
-    my $traceid = $this->{seq_id};
+    my $traceid = $seq->get_id();
 
     my $read = new Read($readname);
 
@@ -149,10 +149,6 @@ sub getNextRead {
     # Process status
 
     $read->setProcessStatus("PASS");
-
-    # Sequence attributes
-
-    my $seq = $tsread->get_sequence();
 
     # Trace archive identifier
 

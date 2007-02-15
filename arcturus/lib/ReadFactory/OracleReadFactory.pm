@@ -17,29 +17,23 @@ sub new {
     my $this = $type->SUPER::new();
 
     my ($schema, $projid, $aspedafter, $aspedbefore,
-	$readnamelike, $includes, $excludes, $minreadid, $maxreadid);
+	$readnamelike, $minreadid, $maxreadid);
 
     while (my $nextword = shift) {
 	$nextword =~ s/^\-//;
 
 	$schema = shift if ($nextword eq 'schema');
 
-	$projid = shift if ($nextword eq 'projid');
+	$this->{projid}       = shift if ($nextword eq 'projid');
 
-	$aspedbefore = shift if ($nextword eq 'aspedbefore');
+	$this->{aspedbefore}  = shift if ($nextword eq 'aspedbefore');
 
-	$aspedafter = shift if ($nextword eq 'aspedafter');
+	$this->{aspedafter}   = shift if ($nextword eq 'aspedafter');
 
-	$readnamelike = shift if ($nextword eq 'readnamelike');
+	$this->{readnamelike} = shift if ($nextword eq 'readnamelike');
 
-	$includes = shift if ($nextword eq 'readnames' ||
-			      $nextword eq 'include' ||
-			      $nextword eq 'fofn');
-
-	$excludes = shift if ($nextword eq 'exclude');
-
-	$minreadid = shift if ($nextword eq 'minreadid');
-	$maxreadid = shift if ($nextword eq 'maxreadid');
+	$this->{minreadid}    = shift if ($nextword eq 'minreadid');
+	$this->{maxreadid}    = shift if ($nextword eq 'maxreadid');
     }
 
     die "No schema specified" unless defined($schema);
@@ -57,70 +51,6 @@ sub new {
 
     $this->{connection} = $dbh;
 
-    my $includeset = {};
-
-    if (defined($includes)) {
-	while (my $readname = shift @{$includes}) {
-	    $includeset->{$readname} = 1;
-	}
-    }
-
-    undef $includeset unless scalar(%{$includeset});
-
-    my $excludeset = {};
-
-    if (defined($excludes)) {
-	while (my $readname = shift @{$excludes}) {
-	    $excludeset->{$readname} = 1;
-	}
-    }
-
-    my $query = "select readname,readid from $schema.EXTENDED_READ";
-
-    my @conditions = ("processstatus = 'PASS'");
-
-    unshift @conditions, "projid = $projid"
-	if defined($projid);
-
-    unshift @conditions, "readid >= $minreadid"
-	if defined($minreadid);
-
-    unshift @conditions, "readid <= $maxreadid"
-	if defined($maxreadid);
-
-    unshift @conditions, "asped < '" . $aspedbefore . "'"
-	if defined($aspedbefore);
-
-    unshift @conditions, "asped > '" . $aspedafter . "'"
-	if defined($aspedafter);
-
-    unshift @conditions, "readname like '" . $readnamelike . "'"
-	if defined($readnamelike); 
-
-    $query .= " where " . join(' AND ', @conditions);
-
-#    print STDOUT "query $query\n";
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute();
-
-    my $readlist = [];
-
-    while (my @ary = $sth->fetchrow_array()) {
-	my ($readname, $readid) = @ary;
-
-	next if defined($excludeset->{$readname});
-
-	next if (defined($includeset) && !defined($includeset->{$readname}));
-
-	#print STDERR "  Adding ($readname, $readid)\n";
-
-	$this->addReadToList($readname, $readid);
-    }
-
-    $sth->finish();
-
     $this->setupPreparedStatements();
 
     return $this;
@@ -135,14 +65,14 @@ sub setupPreparedStatements {
     $this->{sth} = {};
 
     $this->{sth}->{read_info} = $dbh->prepare(qq[select
-						 clonename, lignumber, ligid,
+						 readid, clonename, lignumber, ligid,
 						 platename, templatename,
 						 strand, primer, dye, 
 						 to_char(asped, 'YYYY-MM-DD'),
 						 basecaller,
 						 processstatus, scfdir, scffile
 						 from $schema.extended_read
-						 where readid = ?]);
+						 where readname = ?]);
 
     $this->{sth}->{lig_info} = $dbh->prepare(qq[select insertsizemin, insertsizemax
 						from $schema.ligation where ligid = ?]);
@@ -182,24 +112,87 @@ sub setupPreparedStatements {
 					      where scfdirid = ?]);
 }
 
-sub getNextRead {
+sub getReadNamesToLoad {
     my $this = shift;
 
-    my $readid = $this->getNextReadAuxiliaryData();
+    my $schema = $this->{schema};
 
-    $this->{sth}->{read_info}->execute($readid);
-    $this->{sth}->{seq_id}->execute($readid);
+    my $query = "select readname from $schema.EXTENDED_READ";
 
-    my ($clone, $lig, $ligid,
+    my @conditions = ("processstatus = 'PASS'");
+
+    my $projid = $this->{projid};
+
+    unshift @conditions, "projid = $projid"
+	if defined($projid);
+
+    my $minreadid = $this->{minreadid};
+
+    unshift @conditions, "readid >= $minreadid"
+	if defined($minreadid);
+
+    my $maxreadid = $this->{maxreadid};
+
+    unshift @conditions, "readid <= $maxreadid"
+	if defined($maxreadid);
+
+    my $aspedbefore = $this->{aspedbefore};
+
+    unshift @conditions, "asped < '" . $aspedbefore . "'"
+	if defined($aspedbefore);
+
+    my $aspedafter = $this->{aspedafter};
+
+    unshift @conditions, "asped > '" . $aspedafter . "'"
+	if defined($aspedafter);
+
+    my $readnamelike = $this->{readnamelike};
+
+    unshift @conditions, "readname like '" . $readnamelike . "'"
+	if defined($readnamelike); 
+
+    $query .= " where " . join(' AND ', @conditions);
+
+    my $dbh = $this->{connection};
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    my $readlist = [];
+
+    while (my @ary = $sth->fetchrow_array()) {
+	my ($readname) = @ary;
+
+	push @{$readlist}, $readname;
+    }
+
+    $sth->finish();
+
+    return $readlist;
+}
+
+sub getReadByName {
+    my $this = shift;
+
+    my $readname = shift;
+
+    $this->{sth}->{read_info}->execute($readname);
+
+    my ($readid, $clone, $lig, $ligid,
 	$plate, $template, $strand,
 	$primer, $dye, $asped, $caller,
 	$ps, $scfdirid, $scf) = $this->{sth}->{read_info}->fetchrow_array();
 
+    return undef unless defined($readid);
+
+    $this->{sth}->{seq_id}->execute($readid);
+
     my ($seqid) = $this->{sth}->{seq_id}->fetchrow_array();
 
-    return undef unless ($seqid);
+    return undef unless defined($seqid);
 
-    my $read = new Read($this->getCurrentReadName());
+    my $read = new Read($readname);
 
     $read->setClone($clone);
     $read->setAspedDate($asped);
