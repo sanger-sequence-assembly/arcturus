@@ -2066,7 +2066,6 @@ sub testRead {
    ($status,$msg) = &checkReadForCompleteness($read,@_);
     $report .= 'completeness : '.($status ? 'passed' : 'FAILED');
     $report .= " ($msg)" unless $status;
-    $report .= "\n";
 
     return $report;
 
@@ -2075,7 +2074,6 @@ sub testRead {
     $report .= " ($msg)" unless $status;
     $report .= "\n";
 
-    return $report;
 }
 
 sub checkReadForCompleteness {
