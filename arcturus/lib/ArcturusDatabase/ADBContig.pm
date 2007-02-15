@@ -455,7 +455,8 @@ sub putContig {
 # pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
 
-        if ($contig->isEqual($previous)) {
+        if ($contig->isSameAs($previous)) {
+#        if ($contig->isEqual($previous)) {
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
@@ -485,13 +486,18 @@ sub putContig {
 
 # check / import tags for this contig
 
-                if ($contig->hasTags() && $inheritTags) {
+                if ($contig->hasTags()) {
+# test existing tags
+                    if ($inheritTags) {
 # TODO any selection of tags ?
-                    $message .= "\nWarning: no tags inserted for $contigname"
-                    unless $this->putTagsForContig($contig); # test existing tags
+                        $message .= "\n!!!: no tags inserted for $contigname"
+                        unless $this->putTagsForContig($contig);
+		    }
+		    else {
+                        $message .= "\npossible tags ignored for $contigname"
+		    }
                 }
 	    }
-
             return $contigid,$message;
         }
         $message .= "but is not identical; ";
@@ -2867,7 +2873,7 @@ sub putTagsForContig {
 
     my $cid = $contig->getContigID();
 
-$logger->debug("contig ID = " . ($cid|'undefined'));
+$logger->debug("contig ID = " . ($cid || 'undefined'));
 
     return undef unless defined $cid; # missing contig ID
 
@@ -2910,6 +2916,7 @@ $logger->debug($etag->dump(0,1));
             foreach my $key (keys %$tags) {
                 my $ctag = $tags->{$key};
                 if ($ctag->isEqual($etag)) {
+$logger->debug("tags are equal ".$ctag->dump(0,1));
                     delete $tags->{$ctag};
                     last;
 		}
