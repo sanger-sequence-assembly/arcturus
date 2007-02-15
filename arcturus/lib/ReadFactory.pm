@@ -8,9 +8,6 @@ sub new {
 
     my $this = {};
 
-    $this->{excludeList} = {};
-    $this->{readlist} = [];
-
     bless $this, $class;
 
     return $this;
@@ -65,63 +62,16 @@ sub loginfo {
     $Logging->info($text);
 }
 
-#----------------------------------------------------------------
-# add the next readname and attribute to the internal list
-#----------------------------------------------------------------
+# Sub-classes MUST override this method
 
-sub addReadToList {
-# add the input readname to the internal list
-    my $this = shift;
-    my ($readname, $object) = @_;
-
-    my $list = $this->{readlist};
-
-    push @$list, [$readname,$object];
-    
-    return 1;
-} 
-
-#----------------------------------------------------------------
-# return the next readname and attribute
-#----------------------------------------------------------------
-
-sub getNextReadName {
-# returns the next readname by shifting the internal list
-    my $this = shift;
-
-    my $list = $this->{readlist};
-
-# shift the next readname off the list and put into local buffer
-
-    $this->{readname} = shift @$list;
-
-# return readname or undef if no next readname found
-
-    return $this->getCurrentReadName();
+sub getReadNamesToLoad {
+    die "Sub-class did not override getReadNamesToLoad";
 }
 
-sub getCurrentReadName {
-# return the readname in the local buffer (after getNextReadName)
-    my $this = shift;
+# Sub-classes MUST override this method
 
-    return undef unless $this->{readname}; 
-
-    return $this->{readname}->[0];
+sub getReadByName {
+    die "Sub-class did not overrdide getReadByName";
 }
-
-sub getNextReadAuxiliaryData {
-# returns the auxilliary information stored in the local buffer
-    my $this = shift;
-
-# return undef if no data in local buffer found
-
-    return undef unless $this->{readname}; 
-
-# else return the Read, Oracle number or ExpFile name
-
-    return $this->{readname}->[1];
-}
-
-#----------------------------------------------------------------
 
 1;

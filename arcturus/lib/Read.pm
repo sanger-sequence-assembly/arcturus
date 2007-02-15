@@ -735,6 +735,22 @@ sub writeToCaf {
 
     die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
+# write the CAF sequence object
+
+    $this->writeCafSequence($FILE, @_);
+
+# to write the DNA and BaseQuality we use the two private methods
+
+    $this->writeDNA($FILE,"DNA : ",@_); # specifying the CAF marker
+
+    $this->writeBaseQuality($FILE,"BaseQuality : ");
+}
+
+sub writeCafSequence {
+    my $this = shift;
+    my $FILE = shift; # obligatory output file handle
+    my %option = @_;
+
     my $data = $this->{data};
 
 # first write the Sequence, then DNA, then BaseQuality
@@ -802,12 +818,6 @@ sub writeToCaf {
             $tag->writeToCaf($FILE);
         }
     }
-
-# to write the DNA and BaseQuality we use the two private methods
-
-    $this->writeDNA($FILE,"DNA : ",@_); # specifying the CAF marker
-
-    $this->writeBaseQuality($FILE,"BaseQuality : ");
 }
 
 sub writeToFasta {
