@@ -1,12 +1,12 @@
 #!/bin/csh
 
-# run script from your work directory
-
 # parameters: no 1 = database instance
 #             no 2 = organism name
 #             no 3 = gap4 project (database) name
-#             no 4 = indicates 64 bit version or 32 bit
-#             no 5 = problems project name (optional, default PROBLEMS)
+#             no 4 = (optional) name of problems project
+
+set basedir=`dirname $0`
+set arcturus_home=${basedir}/..
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
@@ -32,28 +32,11 @@ endif
 
 set projectname = $3
 
-if ( $#argv == 3 ) then
-  echo \!\! -- No bit version specified --
-  echo usage: $0 instance_name organism-name project_name bit_version \[1\]
-  exit 1
-else if ( $4 == 64 ) then
+set gap2caf_dir = /nfs/pathsoft/prod/WGSassembly/bin/64bit
 
-  set gap2caf_dir = /nfs/pathsoft/prod/WGSassembly/bin/64bit
-
-else if ( $4 == 32 ) then
-
-  set gap2caf_dir = /usr/local/badger/bin
-
-else
-  echo \!\! -- Invalid bit version \($4\) specified specified \(should be 32 or 64\) --
-  exit 1 
-endif
-
-# ok, here we go : go to the work directory and request memory for the big action
+# ok, here we go : request memory for the big action
 
 limit datasize 16000000
-
-# cd `pfind -q $organism`/arcturus # removed: run script from work directory
 
 if ( ! -f ${projectname}.0 ) then
   set pwd = `pwd`
@@ -63,18 +46,14 @@ endif
 
 # get problems project name, if any
 
-set repair = movetoproblems
+set repair = -movetoproblems
 
 set problemsproject = PROBLEMS
 
-if ( $#argv > 4 ) then
-    set problemsproject = $5
-    set repair = mtp
+if ( $#argv > 3 ) then
+    set problemsproject = $4
+    set repair = -mtp
 endif
-
-set basedir=`dirname $0`
-
-set arcturus_home=${basedir}/..
 
 set padded=/tmp/${projectname}.$$.padded.caf
 
@@ -137,13 +116,11 @@ ${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -ca
 
 echo Testing read-allocation for possible duplicates
 
-${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -$repair -project $problemsproject
+${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism $repair -project $problemsproject
 
 # calculating consensus sequence (for this project only)
 
-setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
-
-${arcturus_home}/java/scripts/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+${basedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
 
 echo Cleaning up
 
