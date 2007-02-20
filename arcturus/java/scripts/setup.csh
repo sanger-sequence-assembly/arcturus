@@ -27,6 +27,16 @@ endif
 if ( `uname -s` == 'OSF1' ) then
     setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
     setenv JAVA_HEAP_SIZE "-fast64 -Xmx4096M"
+    rehash
+endif
+
+# Test whether /software/java exists, and if it does, use this
+# version of Java
+
+if ( -d  /software/java ) then
+    setenv PATH /software/java/bin:${PATH}
+    echo Using Java in /software/java
+    rehash
 endif
 
 # Specify the additional run-time options for Java
