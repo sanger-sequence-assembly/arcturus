@@ -26,7 +26,6 @@ public class ProjectTableFrame extends MinervaFrame {
 		JPanel panel = new JPanel(new BorderLayout());
 
 		panel.add(scrollpane, BorderLayout.CENTER);
-		panel.setPreferredSize(new Dimension(900, 530));
 
 		setContentPane(panel);
 
@@ -105,8 +104,11 @@ public class ProjectTableFrame extends MinervaFrame {
 
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
+		
+		if (model.getRowCount() > 20)
+			panel.setPreferredSize(new Dimension(900, 500));
 
-		pack();
+		pack();		
 		setVisible(true);
 	}
 
