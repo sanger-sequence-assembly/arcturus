@@ -14,6 +14,8 @@ import java.util.logging.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
+import uk.ac.sanger.arcturus.people.Person;
+
 public class ArcturusDatabase {
 	public static final int MYSQL = 1;
 	public static final int ORACLE = 2;
@@ -395,6 +397,7 @@ public class ArcturusDatabase {
 	protected ContigManager contigManager;
 	protected ProjectManager projectManager;
 	protected AssemblyManager assemblyManager;
+	protected UserManager userManager;
 
 	private void createManagers() throws SQLException {
 		cloneManager = new CloneManager(this);
@@ -405,6 +408,7 @@ public class ArcturusDatabase {
 		contigManager = new ContigManager(this);
 		projectManager = new ProjectManager(this);
 		assemblyManager = new AssemblyManager(this);
+		userManager = new UserManager(this);
 	}
 
 	/**
@@ -1012,6 +1016,40 @@ public class ArcturusDatabase {
 
 	public void clearAssemblyCache() {
 		assemblyManager.clearCache();
+	}
+	
+	/**
+	 * Returns the UserManager belonging to this ArcturusDatabase.
+	 * 
+	 * @return the UserManager belonging to this ArcturusDatabase.
+	 */
+	
+	public UserManager getUserManager() {
+		return userManager;
+	}
+	
+	public String getRoleForUser(String username) throws SQLException {
+		return userManager.getRoleForUser(username);
+	}
+	
+	public String getRoleForUser(Person person) throws SQLException {
+		return userManager.getRoleForUser(person);
+	}
+	
+	public String[] getPrivilegesForUser(String username) throws SQLException {
+		return userManager.getPrivilegesForUser(username);
+	}
+	
+	public String[] getPrivilegesForUser(Person person) throws SQLException {
+		return userManager.getPrivilegesForUser(person);
+	}
+	
+	public boolean hasPrivilege(String username, String privilege) throws SQLException {
+		return userManager.hasPrivilege(username, privilege);
+	}
+	
+	public boolean hasPrivilege(Person person, String privilege) throws SQLException {
+		return userManager.hasPrivilege(person, privilege);
 	}
 
 	/**
