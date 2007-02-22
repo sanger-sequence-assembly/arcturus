@@ -1,3 +1,5 @@
+DROP TABLE IF EXISTS `PRIVILEGE`;
+
 CREATE TABLE `PRIVILEGE` (
   `username` char(8) NOT NULL,
   `privilege` char(32) NOT NULL,
@@ -17,4 +19,4 @@ insert into PRIVILEGE(username,privilege)
 insert into PRIVILEGE(username,privilege)
    select username,'grant_privileges' from USER where can_grant_privileges = 'Y';
 
-insert into PRIVILEGE(username,privilege) select distinct(username),'lock_project';
+insert into PRIVILEGE(username,privilege) select distinct(username),'lock_project' from USER;
