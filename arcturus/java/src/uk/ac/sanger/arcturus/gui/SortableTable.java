@@ -9,10 +9,8 @@ import java.awt.Component;
 import java.awt.Dimension;
 
 public class SortableTable extends JTable {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 6686950946133273774L;
+	public final static int MAX_VIEWPORT_HEIGHT = 800;
+	public final static int MIN_VIEWPORT_WIDTH = 500;
 	
 	protected MinervaFrame frame;
 
@@ -34,6 +32,8 @@ public class SortableTable extends JTable {
 				initColumnSizes(2);
 			}
 		});
+		
+		initColumnSizes(2);
 	}
 
 	private void handleHeaderMouseClick(MouseEvent event) {
@@ -102,11 +102,19 @@ public class SortableTable extends JTable {
 
 		doLayout();
 	}
-
-	public Dimension getPreferredScrollableViewportSize() {
-		return getPreferredSize();
-	}
 	
+    public Dimension getPreferredScrollableViewportSize() {
+        Dimension prefsize = getPreferredSize();
+       
+        if (prefsize.height > MAX_VIEWPORT_HEIGHT)
+            prefsize.height = MAX_VIEWPORT_HEIGHT;
+        
+        if (prefsize.width < MIN_VIEWPORT_WIDTH)
+        	prefsize.width = MIN_VIEWPORT_WIDTH;
+       
+        return prefsize;
+    }
+
 	public MinervaFrame getFrame() {
 		return frame;
 	}
