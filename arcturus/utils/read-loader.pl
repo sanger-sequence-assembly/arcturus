@@ -292,6 +292,47 @@ elsif ($source eq 'expfiles') {
 elsif ($source eq 'traceserver') {
     &showUsage("Missing group name for trace server") unless $PARS{group};
 
+    if (defined($PARS{'minreadid'}) && $PARS{'minreadid'} eq 'auto') {
+	print STDERR "Automatic minreadid invoked\n";
+	my $dbh = $adb->getConnection();
+
+	my $query = "select max(read_id) from TRACEARCHIVE";
+
+	my $sth = $dbh->prepare($query);
+	&db_die("prepare($query) failed");
+
+	$sth->execute();
+	&db_die("prepare($query) failed");
+
+	my ($maxreadid) =  $sth->fetchrow_array();
+
+	$sth->finish();
+
+	if (defined($maxreadid)) {
+	    print STDERR "\tMax read_id id $maxreadid\n";
+
+	    $query = "select traceref from TRACEARCHIVE where read_id = $maxreadid";
+
+	    $sth = $dbh->prepare($query);
+	    &db_die("prepare($query) failed");
+
+	    $sth->execute();
+	    &db_die("prepare($query) failed");
+
+	    my ($traceref) =  $sth->fetchrow_array();
+
+	    $sth->finish();
+
+	    if ($traceref =~ /^\d+$/) {
+		print STDERR "\tSetting minreadid to $traceref\n";
+		$PARS{'minreadid'} = $traceref;
+	    } else {
+		print STDERR "\tUndefining minreadid\n";
+		undef $PARS{'minreadid'};
+	    }
+	}
+    }
+
     $factory = new TraceServerReadFactory(%PARS);
 }
 
@@ -503,4 +544,11 @@ sub showUsage {
     print STDERR "Define a data source!\n\n"  unless $source;
     
     $code ? exit(1) : exit(0);
+}
+
+sub db_die {
+    my $msg = shift;
+    return unless $DBI::err;
+    print STDERR "MySQL error: $msg $DBI::err ($DBI::errstr)\n\n";
+    exit(0);
 }
