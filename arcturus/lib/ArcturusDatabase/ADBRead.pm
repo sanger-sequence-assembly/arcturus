@@ -2074,6 +2074,7 @@ sub testRead {
     $report .= " ($msg)" unless $status;
     $report .= "\n";
 
+    return $report;
 }
 
 sub checkReadForCompleteness {
@@ -3067,6 +3068,11 @@ sub verifyParameter {
 sub verifyPrivate {
     my $caller = shift;
     my $method = shift;
+
+    unless (defined($caller)) {
+	print STDOUT "ignore diagnostic on verifyPrivate: $method\n";
+	return;
+    }
 
     if (ref($caller) eq 'Arcturusdatabase' || $caller =~ /^ADB\w+/) {
         print STDOUT "Invalid use of private method ADBRead->$method\n";
