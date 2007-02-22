@@ -87,7 +87,7 @@ public class UserManager extends AbstractManager {
 			return false;
 		
 		pstmtHasPrivilege.setString(1, username);
-		pstmtHasPrivilege.setString(2, username);
+		pstmtHasPrivilege.setString(2, privilege);
 		
 		ResultSet rs = pstmtHasPrivilege.executeQuery();
 		
