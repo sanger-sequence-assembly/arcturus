@@ -24,12 +24,7 @@ public class OrganismTableFrame extends MinervaFrame {
 
 		JScrollPane scrollpane = new JScrollPane(table);
 
-		JPanel panel = new JPanel(new BorderLayout());
-
-		panel.add(scrollpane, BorderLayout.CENTER);
-		panel.setPreferredSize(new Dimension(700, 530));
-
-		setContentPane(panel);
+		getContentPane().add(scrollpane);
 
 		organismMenu = new JMenu("Organism");
 		menubar.add(organismMenu);

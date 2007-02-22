@@ -56,9 +56,10 @@ public class ContigTableFrame extends MinervaFrame implements ActionListener,
 		});
 
 		panel.add(scrollPane, BorderLayout.CENTER);
-		panel.setPreferredSize(new Dimension(900, 530));
 
 		setContentPane(panel);
+		
+		pack();
 
 		popupMenu = new JPopupMenu();
 		popupMenu.add(new JMenuItem("Select"));

@@ -23,12 +23,8 @@ public class ProjectTableFrame extends MinervaFrame {
 
 		JScrollPane scrollpane = new JScrollPane(table);
 
-		JPanel panel = new JPanel(new BorderLayout());
-
-		panel.add(scrollpane, BorderLayout.CENTER);
-
-		setContentPane(panel);
-
+		getContentPane().add(scrollpane);
+		
 		projectMenu = new JMenu("Project");
 		menubar.add(projectMenu);
 
@@ -104,9 +100,6 @@ public class ProjectTableFrame extends MinervaFrame {
 
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
-		
-		if (model.getRowCount() > 20)
-			panel.setPreferredSize(new Dimension(900, 500));
 
 		pack();		
 		setVisible(true);
