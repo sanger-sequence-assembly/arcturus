@@ -152,7 +152,7 @@ sub getReadByName {
 
     # Trace archive identifier
 
-    $read->setTraceArchiveIdentifier($this->{seq_id});
+    $read->setTraceArchiveIdentifier($traceid);
 
     # Ligation and clone data
 
