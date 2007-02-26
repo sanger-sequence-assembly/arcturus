@@ -190,7 +190,7 @@ public class CalculateConsensus {
 
 			System.err.println(nContigs + " contigs were processed");
 		} catch (Exception e) {
-			e.printStackTrace();
+			Arcturus.logSevere(e);
 			System.exit(1);
 		}
 	}
