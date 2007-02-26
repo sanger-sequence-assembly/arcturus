@@ -1,6 +1,5 @@
 java.naming.factory.initial=com.sun.jndi.ldap.LdapCtxFactory
 java.naming.provider.url=ldap://ldap.internal.sanger.ac.uk/cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk
-java.util.logging.FileHandler.pattern=%h/.arcturus/arcturus%u.%g.log
 arcturus.naming.people.url=ldap://ldap.internal.sanger.ac.uk/ou=people,dc=sanger,dc=ac,dc=uk
 arcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus
 arcturus.default.instance=dev
