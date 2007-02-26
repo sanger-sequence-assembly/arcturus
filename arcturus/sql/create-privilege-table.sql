@@ -11,7 +11,7 @@ insert into PRIVILEGE(username,privilege)
    select username,'move_any_contig' from USER where can_move_any_contig = 'Y';
 
 insert into PRIVILEGE(username,privilege)
-   select username,'create_new_project' from USER where can_create_new_project = 'Y';
+   select username,'create_project' from USER where can_create_new_project = 'Y';
 
 insert into PRIVILEGE(username,privilege)
    select username,'assign_project' from USER where can_assign_project = 'Y';
