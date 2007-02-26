@@ -6,8 +6,6 @@ import java.util.logging.Logger;
 
 public class LogTester {
 	public static void main(String[] args) {
-		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
-		
 		Arcturus.logWarning("Starting");
 
 		for (int j = 0; j < 3; j++) {
@@ -31,6 +29,8 @@ public class LogTester {
 				Arcturus.log(Level.SEVERE, "exception", e);
 			}
 		}
+		
+		System.exit(0);
 	}
 	
 	public static void doSomething(int i) throws Exception {
