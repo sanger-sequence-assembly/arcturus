@@ -181,7 +181,7 @@ public class Minerva implements WindowListener {
 						displayNewFrame(frame);
 					}
 				} catch (Exception e) {
-					e.printStackTrace();
+					Arcturus.logWarning(e);
 				}
 			} else {
 				try {
@@ -192,7 +192,7 @@ public class Minerva implements WindowListener {
 						displayNewFrame(frame);
 					}
 				} catch (Exception e) {
-					e.printStackTrace();
+					Arcturus.logWarning(e);
 				}
 			}
 		}

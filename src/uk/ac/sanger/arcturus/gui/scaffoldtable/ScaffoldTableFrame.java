@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.gui.scaffoldtable;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.scaffold.*;
 import uk.ac.sanger.arcturus.database.*;
@@ -11,7 +12,6 @@ import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 
 public class ScaffoldTableFrame extends MinervaFrame {
 	protected ScaffoldTable table = null;
@@ -99,6 +99,7 @@ class ScaffoldSetTask implements Runnable {
 
 				contigset.addAll(contigSet);
 			} catch (Exception e) {
+				Arcturus.logWarning(e);
 			}
 		}
 

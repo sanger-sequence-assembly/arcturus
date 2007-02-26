@@ -6,6 +6,7 @@ import javax.swing.*;
 import javax.swing.table.*;
 import java.sql.SQLException;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.data.Organism;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
@@ -92,7 +93,7 @@ public class OrganismTable extends SortableTable {
 				minerva.displayNewFrame(frame);
 			}
 			catch (SQLException sqle) {
-				sqle.printStackTrace();
+				Arcturus.logWarning(sqle);
 			}
 		}
 	}
