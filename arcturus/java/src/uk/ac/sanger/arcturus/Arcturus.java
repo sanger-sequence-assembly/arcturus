@@ -137,12 +137,20 @@ public class Arcturus {
 		logger.log(Level.WARNING, message);
 	}
 
+	public static void logWarning(Throwable throwable) {
+		logger.log(Level.WARNING, throwable.getMessage(), throwable);
+	}
+
 	public static void logWarning(String message, Throwable throwable) {
 		logger.log(Level.WARNING, message, throwable);
 	}
 
 	public static void logSevere(String message) {
 		logger.log(Level.SEVERE, message);
+	}
+
+	public static void logSevere(Throwable throwable) {
+		logger.log(Level.SEVERE, throwable.getMessage(), throwable);
 	}
 
 	public static void logSevere(String message, Throwable throwable) {
