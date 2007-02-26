@@ -8,7 +8,7 @@ import java.util.Properties;
 import java.util.logging.*;
 import java.awt.GraphicsEnvironment;
 
-import uk.ac.sanger.arcturus.logging.JDBCLogHandler;
+import uk.ac.sanger.arcturus.logging.*;
 
 public class Arcturus {
 	protected static final String PROJECT_PROPERTIES_FILE = ".arcturus.props";
@@ -91,8 +91,12 @@ public class Arcturus {
 
 		logger.setUseParentHandlers(false);
 
-		Handler warner = GraphicsEnvironment.isHeadless() ? new ConsoleHandler()
-				: new ConsoleHandler();
+		Handler warner = null;
+		
+		if (GraphicsEnvironment.isHeadless())
+			warner = new ConsoleHandler();
+		else
+			warner = new MessageDialogHandler();
 
 		warner.setLevel(Level.WARNING);
 
