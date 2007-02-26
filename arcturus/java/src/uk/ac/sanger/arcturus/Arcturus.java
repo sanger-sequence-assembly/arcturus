@@ -129,6 +129,10 @@ public class Arcturus {
 		logger.log(level, message);
 	}
 
+	public static void logInfo(String message) {
+		logger.log(Level.INFO, message);
+	}
+
 	public static void logWarning(String message) {
 		logger.log(Level.WARNING, message);
 	}
