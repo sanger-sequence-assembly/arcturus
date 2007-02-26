@@ -103,7 +103,7 @@ public class Arcturus {
 		logger.addHandler(warner);
 
 		try {
-			FileHandler filehandler = new FileHandler();
+			FileHandler filehandler = new FileHandler("%h/.arcturus/arcturus%u.%g.log");
 			filehandler.setLevel(Level.INFO);
 			filehandler.setFormatter(new SimpleFormatter());
 			logger.addHandler(filehandler);
