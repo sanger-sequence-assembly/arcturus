@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui.contigtable;
 
 import java.awt.*;
 import javax.swing.table.*;
+import javax.swing.ListSelectionModel;
 
 import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
@@ -18,6 +19,7 @@ public class ContigTable extends SortableTable {
 
 	public ContigTable(SortableTableModel stm) {
 		super(stm);
+		setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 	}
 
 	public void setHowToColour(int how) {
