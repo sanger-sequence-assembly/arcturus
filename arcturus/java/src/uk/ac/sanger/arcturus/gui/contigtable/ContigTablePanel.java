@@ -50,7 +50,7 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
 		menubar.add(fileMenu);
 		
-		fileMenu.add(new ViewContigAction("Open selected project(s)"));
+		fileMenu.add(new ViewContigAction("Open selected contig(s)"));
 		
 		fileMenu.addSeparator();
 				
@@ -64,12 +64,46 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	
 		fileMenu.addSeparator();
 		
+		fileMenu.add(new MinervaAbstractAction("Export as CAF", null, "Export contigs as CAF",
+				new Integer(KeyEvent.VK_E),
+				KeyStroke.getKeyStroke(KeyEvent.VK_E, ActionEvent.CTRL_MASK)) {
+					public void actionPerformed(ActionEvent e) {
+						exportAsCAF();
+					}			
+		});
+		
+		fileMenu.add(new MinervaAbstractAction("Export as FASTA", null, "Export contigs as FASTA",
+				new Integer(KeyEvent.VK_F),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
+					public void actionPerformed(ActionEvent e) {
+						exportAsFasta();
+					}			
+		});
+		
+		fileMenu.addSeparator();
+		
 		fileMenu.add(Minerva.getQuitAction());
 	}
 
 	private void closePanel() {
 		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
 		mtp.remove(this);
+	}
+	
+	private void exportAsCAF() {
+		JOptionPane.showMessageDialog(this,
+			    "The selected contigs will be exported as a CAF file",
+			    "Export as CAF",
+			    JOptionPane.INFORMATION_MESSAGE,
+			    null);
+	}
+	
+	private void exportAsFasta() {
+		JOptionPane.showMessageDialog(this,
+			    "The selected contigs will be exported as a FASTA file",
+			    "Export as FASTA",
+			    JOptionPane.INFORMATION_MESSAGE,
+			    null);		
 	}
 
 	private void createEditMenu() {
