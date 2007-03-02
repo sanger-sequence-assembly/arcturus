@@ -49,7 +49,6 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 		catch (SQLException sqle) {
 			Arcturus.logWarning(sqle);
 		}
-		sortOnColumn(COLUMN_LENGTH);
 	}
 	
 	public void refresh() throws SQLException {
@@ -57,6 +56,8 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 		
 		for (int i = 0; i < projects.length; i++)
 			contigs.addAll(projects[i].getContigs(true));
+		
+		resort();
 	}
 
 	public String getColumnName(int col) {
@@ -187,6 +188,10 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 		Collections.sort(contigs, comparator);
 
 		fireTableDataChanged();
+	}
+	
+	private void resort() {
+		sortOnColumn(lastSortColumn);
 	}
 
 	public void setGroupByProject(boolean groupByProject) {
