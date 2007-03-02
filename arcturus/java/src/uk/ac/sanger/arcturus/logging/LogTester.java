@@ -2,7 +2,6 @@ package uk.ac.sanger.arcturus.logging;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 
 public class LogTester {
 	public static void main(String[] args) {

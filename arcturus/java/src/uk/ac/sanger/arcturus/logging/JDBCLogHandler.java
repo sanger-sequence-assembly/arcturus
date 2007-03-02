@@ -93,7 +93,13 @@ public class JDBCLogHandler extends Handler {
 			pstmtInsertRecord.setString(5, record.getSourceClassName());
 			pstmtInsertRecord.setString(6, record.getSourceMethodName());
 			pstmtInsertRecord.setInt(7, record.getThreadID());
-			pstmtInsertRecord.setString(8, record.getMessage());
+			
+			String message = record.getMessage();
+			if (message == null)
+				message = "[NULL]";
+						
+			pstmtInsertRecord.setString(8, message);
+			
 			pstmtInsertRecord.setString(9, username);
 			
 			int rc = pstmtInsertRecord.executeUpdate();
@@ -108,7 +114,12 @@ public class JDBCLogHandler extends Handler {
 				Throwable thrown = record.getThrown();
 				
 				pstmtUpdateThrowableInfo.setString(1, thrown.getClass().getName());
-				pstmtUpdateThrowableInfo.setString(2, thrown.getMessage());
+				
+				String emessage = thrown.getMessage();
+				if (emessage == null)
+					emessage = "[NULL]";
+				
+				pstmtUpdateThrowableInfo.setString(2, emessage);
 				pstmtUpdateThrowableInfo.setInt(3, id);
 				
 				rc = pstmtUpdateThrowableInfo.executeUpdate();
