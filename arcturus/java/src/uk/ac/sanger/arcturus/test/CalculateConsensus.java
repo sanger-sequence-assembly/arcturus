@@ -10,8 +10,6 @@ import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
 
-import java.util.logging.*;
-
 public class CalculateConsensus {
 	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
 
@@ -54,8 +52,6 @@ public class CalculateConsensus {
 	}
 
 	public void execute(String args[]) {
-		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
-
 		lasttime = System.currentTimeMillis();
 
 		System.err.println("CalculateConsensus");
