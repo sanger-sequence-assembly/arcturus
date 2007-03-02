@@ -4,19 +4,12 @@ import java.awt.*;
 import java.awt.event.*;
 import javax.swing.*;
 import javax.swing.table.*;
-import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.data.Organism;
-import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
 
 public class OrganismTable extends SortableTable {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 71119080943717696L;
 	protected final Color paleYellow = new Color(255, 255, 238);
 	protected final Color VIOLET1 = new Color(245, 245, 255);
 	protected final Color VIOLET2 = new Color(238, 238, 255);
@@ -24,8 +17,8 @@ public class OrganismTable extends SortableTable {
 
 	protected JPopupMenu popupMenu;
 
-	public OrganismTable(OrganismTableFrame frame, OrganismTableModel ptm) {
-		super(frame, (SortableTableModel) ptm);
+	public OrganismTable(OrganismTableModel ptm) {
+		super((SortableTableModel) ptm);
 
 		addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
@@ -42,6 +35,10 @@ public class OrganismTable extends SortableTable {
 		});
 
 		popupMenu = new JPopupMenu();
+		
+		popupMenu.add(new JLabel("Organism"));
+		popupMenu.addSeparator();
+		
 		JMenuItem display = new JMenuItem("Display");
 		popupMenu.add(display);
 		display.addActionListener(new ActionListener() {
@@ -87,13 +84,10 @@ public class OrganismTable extends SortableTable {
 		for (int i = 0; i < indices.length; i++) {
 			Organism organism = (Organism) ptm.elementAt(indices[i]);
 			try {
-				ArcturusDatabase adb = new ArcturusDatabase(organism);
-				Minerva minerva = Minerva.getInstance();
-				MinervaFrame frame = new ProjectTableFrame(minerva, adb);
-				minerva.displayNewFrame(frame);
+				Minerva.getInstance().createOrganismDisplay(organism.getName());
 			}
-			catch (SQLException sqle) {
-				Arcturus.logWarning(sqle);
+			catch (Exception e) {
+				Arcturus.logWarning(e);
 			}
 		}
 	}

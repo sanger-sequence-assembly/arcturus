@@ -7,10 +7,6 @@ import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 public class ContigTable extends SortableTable {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = -5151666511676328720L;
 	public final static int BY_ROW_NUMBER = 1;
 	public final static int BY_PROJECT = 2;
 	protected final Color paleYellow = new Color(255, 255, 238);
@@ -20,8 +16,8 @@ public class ContigTable extends SortableTable {
 
 	protected int howToColour = BY_ROW_NUMBER;
 
-	public ContigTable(ContigTableFrame frame, SortableTableModel stm) {
-		super(frame, stm);
+	public ContigTable(SortableTableModel stm) {
+		super(stm);
 	}
 
 	public void setHowToColour(int how) {
@@ -33,32 +29,14 @@ public class ContigTable extends SortableTable {
 			int vColIndex) {
 		Component c = super.prepareRenderer(renderer, rowIndex, vColIndex);
 
-		switch (howToColour) {
-			case BY_ROW_NUMBER:
-				if (isCellSelected(rowIndex, vColIndex)) {
-					c.setBackground(getBackground());
-				} else {
-					if (rowIndex % 2 == 0) {
-						c.setBackground(VIOLET1);
-					} else {
-						c.setBackground(VIOLET2);
-					}
-				}
-				break;
-
-			case BY_PROJECT:
-				ContigTableModel ctm = (ContigTableModel) getModel();
-				//int project = ctm.getProjectIDAtRow(rowIndex);
-				if (isCellSelected(rowIndex, vColIndex)) {
-					c.setBackground(getBackground());
-				} else {
-					c.setBackground(ctm.getColourForRow(rowIndex));
-				}
-
-				break;
-
-			default:
-				break;
+		if (isCellSelected(rowIndex, vColIndex)) {
+			c.setBackground(getBackground());
+		} else {
+			if (rowIndex % 2 == 0) {
+				c.setBackground(VIOLET1);
+			} else {
+				c.setBackground(VIOLET2);
+			}
 		}
 
 		if (isCellSelected(rowIndex, vColIndex))

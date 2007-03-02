@@ -19,8 +19,8 @@ public class ScaffoldTable  extends SortableTable {
 
 	protected JPopupMenu popupMenu;
 
-	public ScaffoldTable(ScaffoldTableFrame frame, ScaffoldTableModel stm) {
-		super(frame, (SortableTableModel) stm);
+	public ScaffoldTable(ScaffoldTableModel stm) {
+		super((SortableTableModel) stm);
 
 		// getColumnModel().getColumn(5).setPreferredWidth(150);
 
