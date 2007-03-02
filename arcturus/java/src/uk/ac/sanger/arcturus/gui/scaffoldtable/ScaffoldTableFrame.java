@@ -20,11 +20,11 @@ public class ScaffoldTableFrame extends MinervaFrame {
 
 	public ScaffoldTableFrame(Minerva minerva, String title,
 			ArcturusDatabase adb, Set scaffoldSet) {
-		super(minerva, title);
+		super(minerva, title, null);
 
 		model = new ScaffoldTableModel(scaffoldSet);
 
-		table = new ScaffoldTable(this, model);
+		table = new ScaffoldTable(model);
 
 		JScrollPane scrollpane = new JScrollPane(table);
 
@@ -80,7 +80,7 @@ class ScaffoldSetTask implements Runnable {
 				ScaffoldTableFrame frame = new ScaffoldTableFrame(minerva,
 						title, adb, scaffoldSet);
 
-				minerva.displayNewFrame(frame);
+				//minerva.displayNewFrame(frame);
 			}
 		});
 	}

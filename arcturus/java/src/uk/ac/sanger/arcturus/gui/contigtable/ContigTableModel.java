@@ -3,20 +3,18 @@ package uk.ac.sanger.arcturus.gui.contigtable;
 import javax.swing.table.*;
 import java.awt.*;
 import java.util.*;
+import java.sql.SQLException;
+
+import uk.ac.sanger.arcturus.Arcturus;
+
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.data.Project;
-import uk.ac.sanger.arcturus.data.Assembly;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
-import uk.ac.sanger.arcturus.gui.Minerva;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 class ContigTableModel extends AbstractTableModel implements SortableTableModel {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = -7849790918619053593L;
 	public final int COLUMN_ID = 0;
 	public final int COLUMN_NAME = 1;
 	public final int COLUMN_PROJECT = 2;
@@ -25,6 +23,7 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	public final int COLUMN_CREATED = 5;
 
 	protected Vector contigs = new Vector();
+	protected Project[] projects;
 	protected ContigComparator comparator;
 	protected int lastSortColumn = COLUMN_LENGTH;
 	protected boolean garish;
@@ -36,11 +35,28 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 	protected final Color VIOLET2 = new Color(238, 238, 255);
 	protected final Color VIOLET3 = new Color(226, 226, 255);
 
-	public ContigTableModel(ArcturusDatabase adb, Set contigset) {
-		this.adb = adb;
+	public ContigTableModel(Project[] projects) {
+		this.adb = (projects.length > 0 && projects[0] != null) ?
+					projects[0].getArcturusDatabase() : null;
+					
+		this.projects = projects;
+		
 		comparator = new ContigComparator(ContigComparator.BY_LENGTH, false);
-		contigs.addAll(contigset);
+		
+		try {
+			refresh();
+		}
+		catch (SQLException sqle) {
+			Arcturus.logWarning(sqle);
+		}
 		sortOnColumn(COLUMN_LENGTH);
+	}
+	
+	public void refresh() throws SQLException {
+		contigs.clear();
+		
+		for (int i = 0; i < projects.length; i++)
+			contigs.addAll(projects[i].getContigs(true));
 	}
 
 	public String getColumnName(int col) {
@@ -132,20 +148,6 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 
 	public int getProjectIDAtRow(int row) {
 		return getContigAtRow(row).getProject().getID();
-	}
-
-	public Color getColourForRow(int row) {
-		Project project = getContigAtRow(row).getProject();
-
-		if (project == null)
-			return Color.WHITE;
-
-		Assembly assembly = project.getAssembly();
-
-		Color colour = Minerva.getInstance().getColourForProject(
-				assembly.getName(), project.getName());
-
-		return (colour == null) ? Color.WHITE : colour;
 	}
 
 	public boolean isColumnSortable(int col) {

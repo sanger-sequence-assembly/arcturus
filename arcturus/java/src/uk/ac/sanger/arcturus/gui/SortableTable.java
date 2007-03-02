@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui;
 
 import javax.swing.JTable;
+import javax.swing.ListSelectionModel;
 import javax.swing.table.*;
 import javax.swing.event.*;
 import java.awt.event.*;
@@ -11,13 +12,9 @@ import java.awt.Dimension;
 public class SortableTable extends JTable {
 	public final static int MAX_VIEWPORT_HEIGHT = 800;
 	public final static int MIN_VIEWPORT_WIDTH = 500;
-	
-	protected MinervaFrame frame;
 
-	public SortableTable(MinervaFrame frame, SortableTableModel stm) {
+	public SortableTable(SortableTableModel stm) {
 		super((TableModel) stm);
-		
-		this.frame = frame;
 
 		getTableHeader().addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent event) {
@@ -34,6 +31,8 @@ public class SortableTable extends JTable {
 		});
 		
 		initColumnSizes(2);
+		
+		setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 	}
 
 	private void handleHeaderMouseClick(MouseEvent event) {
@@ -114,8 +113,4 @@ public class SortableTable extends JTable {
        
         return prefsize;
     }
-
-	public MinervaFrame getFrame() {
-		return frame;
-	}
 }

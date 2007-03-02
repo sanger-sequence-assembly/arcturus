@@ -1,35 +1,26 @@
 package uk.ac.sanger.arcturus.gui;
 
-import java.awt.event.*;
-import javax.swing.*;
-import java.util.*;
-import javax.naming.NamingException;
 import java.sql.SQLException;
-import java.awt.Color;
-import java.util.prefs.*;
+import javax.naming.NamingException;
+
+import javax.swing.*;
+import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 
-import uk.ac.sanger.arcturus.gui.projecttable.ProjectTableFrame;
-import uk.ac.sanger.arcturus.gui.organismtable.OrganismTableFrame;
+import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
+import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
 
 /**
  * This class is the main class for all GUI applications. It manages the shared
  * ArcturusDatabase objects and maintains a list of all active frames.
  */
 
-public class Minerva implements WindowListener {
+public class Minerva {
 	private static Minerva instance = null;
-	
-	protected Vector activeFrames = new Vector();
-	protected HashMap databases = new HashMap();
-	protected HashMap instances = new HashMap();
-	
-	protected Properties arcturusProps = Arcturus.getProperties(); 
-
-	protected Preferences appPrefs = Preferences.userNodeForPackage(getClass());
+	private ArcturusInstance ai = null;
 
 	public static Minerva getInstance() {
 		if (instance == null)
@@ -41,120 +32,18 @@ public class Minerva implements WindowListener {
 	private Minerva() {
 	}
 
-	private ArcturusDatabase createArcturusDatabase(String instance,
-			String organism) throws NamingException, SQLException {
-		ArcturusInstance ai = (ArcturusInstance) instances.get(instance);
-
-		if (ai == null) {
-			ai = ArcturusInstance.getInstance(instance);
-			instances.put(instance, ai);
-		}
-
-		if (ai != null) {
-			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-
-			if (adb != null)
-				databases.put(instance + "/" + organism, adb);
-
-			return adb;
-		} else
+	private String getStringParameter(String[] args, String key) {
+		if (args == null || key == null)
 			return null;
-	}
 
-	public ArcturusDatabase getArcturusDatabase(String instance, String organism)
-			throws NamingException, SQLException {
-		ArcturusDatabase adb = (ArcturusDatabase) databases.get(instance + "/" + organism);
+		for (int i = 0; i < args.length - 1; i++)
+			if (args[i].equalsIgnoreCase(key) && !args[i + 1].startsWith("-"))
+				return args[i + 1];
 
-		if (adb == null)
-			adb = createArcturusDatabase(instance, organism);
-
-		return adb;
-	}
-
-	public Color getColourForProject(String assembly, String project) {
-		Preferences prefs = appPrefs.node(assembly);
-		prefs = prefs.node(project);
-
-		int icol = prefs.getInt("colour", -1);
-
-		return (icol < 0) ? null : new Color(icol);
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. It is a no-op
-	 * because we are not interested in this type of event.
-	 */
-	public void windowActivated(WindowEvent event) {
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. It is a no-op
-	 * because we are not interested in this type of event.
-	 */
-	public void windowDeactivated(WindowEvent event) {
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. It is a no-op
-	 * because we are not interested in this type of event.
-	 */
-	public void windowIconified(WindowEvent event) {
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. It is a no-op
-	 * because we are not interested in this type of event.
-	 */
-	public void windowDeiconified(WindowEvent event) {
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. It is a no-op
-	 * because we are not interested in this type of event.
-	 */
-	public void windowClosing(WindowEvent event) {
-	}
-
-	/**
-	 * This method is required by the WindowListener interface. We add the
-	 * window to the set of active frames.
-	 */
-	public void windowOpened(WindowEvent event) {
-		java.awt.Window window = (java.awt.Window) event.getSource();
-		activeFrames.add(window);
-	}
-
-	/**
-	 * This method is required by the WindowListener interface.
-	 */
-	public void windowClosed(WindowEvent event) {
-		java.awt.Window window = (java.awt.Window) event.getSource();
-		activeFrames.remove(window);
-	}
-
-	public Vector getActiveFrames() {
-		return (Vector) activeFrames.clone();
-	}
-
-	public void displayNewFrame(JFrame frame) {
-		frame.addWindowListener(this);
-		frame.pack();
-		frame.show();
+		return null;
 	}
 
 	public void run(final String[] args) {
-		SwingUtilities.invokeLater(new Runnable() {
-			public void run() {
-				restoreOldSessions();
-				createNewSessions(args);
-			}
-		});
-	}
-
-	private void restoreOldSessions() {
-	}
-
-	private void createNewSessions(String[] args) {
 		String instance = getStringParameter(args, "-instance");
 		
 		String organism = getStringParameter(args, "-organism");
@@ -165,48 +54,87 @@ public class Minerva implements WindowListener {
 		if (organism == null)
 			organism = Arcturus.getDefaultOrganism();
 		
-		if (instance != null) {
-			if (organism == null) {
-				try {
-					ArcturusInstance ai = (ArcturusInstance) instances
-							.get(instance);
+		if (instance == null) {
+			Arcturus.logWarning("No instance name was specified");
+			System.exit(1);
+		}
+		
+		try {
+			ai = ArcturusInstance.getInstance(instance);
+		
+			if (organism == null)
+				createInstanceDisplay(ai);
+			else
+				createOrganismDisplay(organism);
+		}
+		catch (Exception e) {
+			Arcturus.logWarning(e);
+			System.exit(1);
+		}
+	}
+	
+	private void createInstanceDisplay(ArcturusInstance ai) {
+		OrganismTablePanel panel = new OrganismTablePanel(ai);
+		
+		MinervaFrame frame = new MinervaFrame(this, ai.getName(), panel);
+		
+		frame.setJMenuBar(panel.getMenuBar());
+		frame.setToolBar(panel.getToolBar());
+		
+		frame.pack();
+		frame.show();
+	}
+	
+	public void createOrganismDisplay(String organism) throws SQLException, NamingException {
+		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
+		
+		ProjectTablePanel ptp = panel.addProjectTablePanel();
+		panel.setSelectedComponent(ptp);
+			
+		MinervaFrame frame = new MinervaFrame(this, adb.getName(), panel);
+		
+		frame.setJMenuBar(panel.getMenuBar());
+		frame.setToolBar(panel.getToolBar());
+		
+		frame.pack();
+		frame.show();	
+	}
 
-					if (ai == null) {
-						ai = ArcturusInstance.getInstance(instance);
-						instances.put(instance, ai);
-					}
+	public static Action getQuitAction() {
+		return new MinervaAbstractAction("Quit", null, "Quit", new Integer(
+				KeyEvent.VK_Q), KeyStroke.getKeyStroke(KeyEvent.VK_Q,
+				ActionEvent.CTRL_MASK)) {
 
-					if (ai != null) {
-						MinervaFrame frame = new OrganismTableFrame(this, ai);
-						displayNewFrame(frame);
-					}
-				} catch (Exception e) {
-					Arcturus.logWarning(e);
-				}
-			} else {
-				try {
-					ArcturusDatabase adb = getArcturusDatabase(instance,
-							organism);
-					if (adb != null) {
-						MinervaFrame frame = new ProjectTableFrame(this, adb);
-						displayNewFrame(frame);
-					}
-				} catch (Exception e) {
-					Arcturus.logWarning(e);
-				}
+			public void actionPerformed(ActionEvent e) {
+				Minerva.exitMinerva();
 			}
+		};
+	}
+
+	public static void exitMinerva() {
+		Object[] options = { "Yes", "No" };
+		int rc = JOptionPane.showOptionDialog(null,
+				"Do you really want to quit Minerva?",
+				"You are about to quit Minerva", JOptionPane.YES_NO_OPTION,
+				JOptionPane.WARNING_MESSAGE, null, options, options[1]);
+
+		if (rc == JOptionPane.YES_OPTION) {
+			System.exit(0);
 		}
 	}
 
-	private String getStringParameter(String[] args, String key) {
-		if (args == null || key == null)
+	public static ImageIcon createImageIcon(String imageName) {
+		String path = "/toolbarButtonGraphics/" + imageName + ".gif";
+
+		java.net.URL imgURL = Minerva.class.getResource(path);
+
+		if (imgURL != null) {
+			return new ImageIcon(imgURL);
+		} else {
+			System.err.println("Couldn't find file: " + path);
 			return null;
-
-		for (int i = 0; i < args.length - 1; i++)
-			if (args[i].equalsIgnoreCase(key) && !args[i + 1].startsWith("-"))
-				return args[i + 1];
-
-		return null;
+		}
 	}
 
 	public static void main(String[] args) {
