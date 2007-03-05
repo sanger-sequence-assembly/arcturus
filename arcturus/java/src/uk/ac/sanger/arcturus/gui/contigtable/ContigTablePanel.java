@@ -84,10 +84,6 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
-		
-		JMenu fileMenu = createMenu(projectlist, 0, projectlist);
-		menubar.add(fileMenu);
-		
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}

@@ -58,10 +58,6 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
-		
-		JMenu fileMenu = createMenu(adb.getName(), 0, adb.getName());
-		menubar.add(fileMenu);
-		
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
