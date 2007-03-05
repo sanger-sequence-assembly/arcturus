@@ -2,19 +2,26 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 
 import javax.swing.*;
 
-import java.awt.BorderLayout;
+import java.awt.*;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
 
-public class ProjectTablePanel extends JPanel implements MinervaClient {
+public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTable table = null;
 	private ProjectTableModel model = null;
 	private JMenuBar menubar = new JMenuBar();
 	
+	private MinervaAbstractAction actionClose;
+	private MinervaAbstractAction actionViewProject;
+	
+	ArcturusDatabase adb;
+
 	public ProjectTablePanel(ArcturusDatabase adb) {
 		super(new BorderLayout());
+		
+		this.adb = adb;
 		
 		model = new ProjectTableModel(adb);
 
@@ -24,13 +31,37 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 		
 		add(scrollpane, BorderLayout.CENTER);
 		
+		createActions();
+		
 		createMenus();
+	}
+	
+	private void createActions() {
+		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
+				new Integer(KeyEvent.VK_C),
+				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
+					public void actionPerformed(ActionEvent e) {
+						closePanel();
+					}			
+		};
+		
+		actionViewProject = new MinervaAbstractAction("Open selected project",
+				null, "Open selected project", new Integer(KeyEvent.VK_O),
+				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				viewSelectedProjects();
+			}
+		};
 	}
 	
 	private void createMenus() {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
+		
+		JMenu fileMenu = createMenu(adb.getName(), 0, adb.getName());
+		menubar.add(fileMenu);
+		
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
@@ -50,17 +81,11 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
 		menubar.add(fileMenu);
 		
-		fileMenu.add(new ViewProjectAction("Open selected project(s)"));
+		fileMenu.add(actionViewProject);
 		
 		fileMenu.addSeparator();
 				
-		fileMenu.add(new MinervaAbstractAction("Close", null, "Close this window",
-				new Integer(KeyEvent.VK_C),
-				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-					public void actionPerformed(ActionEvent e) {
-						closePanel();
-					}			
-		});
+		fileMenu.add(actionClose);
 		
 		fileMenu.addSeparator();
 		
@@ -68,16 +93,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 	}
 
 	private void closePanel() {
-		Object[] options = { "OK", "Cancel" };
-		
 		int rc = JOptionPane.showOptionDialog(this,
 				"Do you REALLY want to close the project list?",
 	    		 "Warning",
-	    		 JOptionPane.DEFAULT_OPTION,
+	    		 JOptionPane.OK_CANCEL_OPTION,
 	    		 JOptionPane.WARNING_MESSAGE,
-	    		 null, options, options[1]);
+	    		 null, null, null);
 
-		if (rc == JOptionPane.YES_OPTION) {
+		if (rc == JOptionPane.OK_OPTION) {
 			MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
 			mtp.remove(this);
 		}
@@ -92,7 +115,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
 
-		viewMenu.add(new ViewProjectAction("View selected project(s)"));
+		viewMenu.add(actionViewProject);
 
 		viewMenu.addSeparator();
 
@@ -169,14 +192,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 		menubar.add(helpMenu);		
 	}
 
-	class ViewProjectAction extends AbstractAction {
-		public ViewProjectAction(String name) {
-			super(name);
-		}
-
-		public void actionPerformed(ActionEvent event) {
-			table.displaySelectedProjects();
-		}
+	private void viewSelectedProjects() {
+		table.displaySelectedProjects();
 	}
 
 	public JMenuBar getMenuBar() {
@@ -185,5 +202,13 @@ public class ProjectTablePanel extends JPanel implements MinervaClient {
 
 	public JToolBar getToolBar() {
 		return null;
+	}
+	
+	public void closeResources() {
+		// Does nothing
+	}
+	
+	public String toString() {
+		return "ProjectTablePanel[organism=" + adb.getName() + "]";
 	}
 }

@@ -17,10 +17,18 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private MinervaAbstractAction actionExportAsCAF ;
 	private MinervaAbstractAction actionExportAsFasta;
 	private MinervaAbstractAction actionViewContigs;
+	
+	private String projectlist;
 
 	public ContigTablePanel(Project[] projects) {
 		super(new BorderLayout());
 
+		projectlist = (projects != null && projects.length > 0) ?
+				projects[0].getName() : "[null]";
+		
+		for (int i = 1; i < projects.length; i++)
+			projectlist += "," + projects[i].getName();
+		
 		model = new ContigTableModel(projects);
 
 		table = new ContigTable(model);
@@ -63,8 +71,8 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 
 		actionExportAsFasta.setEnabled(false);
 
-		actionViewContigs = new MinervaAbstractAction("View selected contigs",
-				null, "View selected contigs", new Integer(KeyEvent.VK_V),
+		actionViewContigs = new MinervaAbstractAction("Open selected contigs",
+				null, "Open selected contigs", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				viewSelectedContigs();
@@ -76,6 +84,10 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
+		
+		JMenu fileMenu = createMenu(projectlist, 0, projectlist);
+		menubar.add(fileMenu);
+		
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
@@ -162,4 +174,11 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		return null;
 	}
 
+	public void closeResources() {
+		// Does nothing
+	}
+	
+	public String toString() {
+		return "ContigTablePanel[projects=" + projectlist + "]";
+	}
 }
