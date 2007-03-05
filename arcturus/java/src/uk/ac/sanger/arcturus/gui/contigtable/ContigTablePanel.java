@@ -12,6 +12,8 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private ContigTable table = null;
 	private ContigTableModel model = null;
 	private JMenuBar menubar = new JMenuBar();
+	private MinervaAbstractAction actionExportAsCAF;
+	private MinervaAbstractAction actionExportAsFasta;
 	
 	public ContigTablePanel(Project[] projects) {
 		super(new BorderLayout());
@@ -64,21 +66,29 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	
 		fileMenu.addSeparator();
 		
-		fileMenu.add(new MinervaAbstractAction("Export as CAF", null, "Export contigs as CAF",
+		actionExportAsCAF = new MinervaAbstractAction("Export as CAF", null, "Export contigs as CAF",
 				new Integer(KeyEvent.VK_E),
 				KeyStroke.getKeyStroke(KeyEvent.VK_E, ActionEvent.CTRL_MASK)) {
 					public void actionPerformed(ActionEvent e) {
 						exportAsCAF();
 					}			
-		});
+		};
 		
-		fileMenu.add(new MinervaAbstractAction("Export as FASTA", null, "Export contigs as FASTA",
+		fileMenu.add(actionExportAsCAF);
+		
+		actionExportAsCAF.setEnabled(false);
+		
+		actionExportAsFasta = new MinervaAbstractAction("Export as FASTA", null, "Export contigs as FASTA",
 				new Integer(KeyEvent.VK_F),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
 					public void actionPerformed(ActionEvent e) {
 						exportAsFasta();
 					}			
-		});
+		};
+		
+		fileMenu.add(actionExportAsFasta);
+		
+		actionExportAsFasta.setEnabled(false);
 		
 		fileMenu.addSeparator();
 		
