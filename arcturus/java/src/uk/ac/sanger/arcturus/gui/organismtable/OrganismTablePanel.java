@@ -11,10 +11,13 @@ import uk.ac.sanger.arcturus.gui.*;
 public class OrganismTablePanel extends JPanel implements MinervaClient {
 	protected OrganismTable table = null;
 	protected JMenuBar menubar = new JMenuBar();
-
+	protected ArcturusInstance instance;
+	
 	public OrganismTablePanel(ArcturusInstance instance) {
 		super(new BorderLayout());
 
+		this.instance = instance;
+		
 		OrganismTableModel model = new OrganismTableModel(instance);
 
 		table = new OrganismTable(model);
@@ -89,5 +92,13 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 
 	public JToolBar getToolBar() {
 		return null;
+	}
+
+	public void closeResources() {
+		// Does nothing
+	}
+	
+	public String toString() {
+		return "OrganismTablePanel[instance=" + instance.getName() + "]";
 	}
 }

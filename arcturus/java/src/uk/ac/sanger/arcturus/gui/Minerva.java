@@ -78,8 +78,8 @@ public class Minerva {
 		
 		MinervaFrame frame = new MinervaFrame(this, ai.getName(), panel);
 		
-		frame.setJMenuBar(panel.getMenuBar());
-		frame.setToolBar(panel.getToolBar());
+		//frame.setJMenuBar(panel.getMenuBar());
+		//frame.setToolBar(panel.getToolBar());
 		
 		frame.pack();
 		frame.show();
@@ -88,14 +88,14 @@ public class Minerva {
 	public void createOrganismDisplay(String organism) throws SQLException, NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
-		
-		ProjectTablePanel ptp = panel.addProjectTablePanel();
-		panel.setSelectedComponent(ptp);
 			
 		MinervaFrame frame = new MinervaFrame(this, adb.getName(), panel);
 		
-		frame.setJMenuBar(panel.getMenuBar());
-		frame.setToolBar(panel.getToolBar());
+		ProjectTablePanel ptp = panel.addProjectTablePanel();
+		//panel.setSelectedComponent(ptp);
+		
+		//frame.setJMenuBar(panel.getMenuBar());
+		//frame.setToolBar(panel.getToolBar());
 		
 		frame.pack();
 		frame.show();	
