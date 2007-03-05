@@ -23,6 +23,8 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 		if (component instanceof JTabbedPane)
 			((JTabbedPane) component).addChangeListener(this);
 		
+		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+		
 		addWindowListener(new WindowAdapter() {
 			public void windowClosing(WindowEvent event) {
 				handleWindowClosing();
@@ -73,7 +75,7 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 		    		 JOptionPane.OK_CANCEL_OPTION,
 		    		 JOptionPane.WARNING_MESSAGE,
 		    		 null, null, null);
-
+			
 			if (rc == JOptionPane.OK_OPTION) {
 				MinervaClient client = (MinervaClient)component;
 				client.closeResources();
