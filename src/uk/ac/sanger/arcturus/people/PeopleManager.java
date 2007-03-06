@@ -13,6 +13,8 @@ public class PeopleManager {
 	protected static DirContext ctx = null;
 
 	protected static Map uidToPerson = new HashMap();
+	protected static final String myUid ;
+	protected static final Person me;
 
 	protected static final String[] attrs = { "cn", "sn", "givenname", "mail",
 			"telephonenumber", "homedirectory", "roomnumber",
@@ -33,6 +35,9 @@ public class PeopleManager {
 			ne.printStackTrace();
 			ctx = null;
 		}
+		
+		myUid = System.getProperty("user.name");
+		me = findPerson(myUid);
 	}
 
 	public static Person findPerson(String uid) {
@@ -112,9 +117,11 @@ public class PeopleManager {
 	}
 
 	public static Person findMe() {
-		String uid = System.getProperty("user.name");
-
-		return (uid == null) ? null : findPerson(uid);
+		return me;
+	}
+	
+	public static boolean isMe(Person person) {
+		return me.equals(person);
 	}
 
 	private static String getAttribute(Attributes attrs, String key) {
