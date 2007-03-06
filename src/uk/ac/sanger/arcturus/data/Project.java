@@ -161,6 +161,10 @@ public class Project extends Core {
 	public void setOwner(Person owner) {
 		this.owner = owner;
 	}
+	
+	public boolean isMine() {
+		return PeopleManager.isMe(owner);
+	}
 
 	public Date getLockdate() {
 		return lockdate;
@@ -184,6 +188,10 @@ public class Project extends Core {
 	
 	public void setLockOwner(String lockowner) {
 		this.lockowner = findPerson(lockowner);
+	}
+	
+	public boolean lockIsMine() {
+		return PeopleManager.isMe(lockowner);
 	}
 
 	public Date getCreated() {
