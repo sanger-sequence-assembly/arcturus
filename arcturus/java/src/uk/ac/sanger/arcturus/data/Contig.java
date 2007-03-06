@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.data;
 import uk.ac.sanger.arcturus.database.*;
 
 import java.util.*;
+import java.util.zip.DataFormatException;
+import java.sql.SQLException;
 
 /**
  * This class represents a contig.
@@ -193,5 +195,10 @@ public class Contig extends Core {
 		", reads=" + nreads +
 		", created=" + created +
 		"]";
+	}
+	
+	public void update(int options) throws SQLException,
+		DataFormatException {
+		adb.updateContig(this, options);
 	}
 }
