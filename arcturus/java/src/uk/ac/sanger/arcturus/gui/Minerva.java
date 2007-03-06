@@ -35,7 +35,7 @@ public class Minerva {
 
 	private Minerva() {
 		try {
-			InputStream is = getClass().getResourceAsStream("/buildtime.props");
+			InputStream is = getClass().getResourceAsStream("/resources/buildtime.props");
 
 			if (is != null) {
 				Properties myprops = new Properties();
