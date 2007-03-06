@@ -282,7 +282,7 @@ public class ContigManager extends AbstractManager {
 		hashByID.put(new Integer(contig.getID()), contig);
 	}
 
-	private void updateContig(Contig contig, int options) throws SQLException,
+	public void updateContig(Contig contig, int options) throws SQLException,
 			DataFormatException {
 		int contig_id = contig.getID();
 

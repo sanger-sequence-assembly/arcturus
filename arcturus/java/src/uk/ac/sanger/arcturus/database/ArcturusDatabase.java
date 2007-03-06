@@ -756,7 +756,12 @@ public class ArcturusDatabase {
 
 		return contigManager.getContigByID(id, options);
 	}
-
+	
+	public void updateContig(Contig contig, int options) throws SQLException,
+		DataFormatException {
+		contigManager.updateContig(contig, options);
+	}
+	
 	public boolean isCurrentContig(int contigid) throws SQLException {
 		return contigManager.isCurrentContig(contigid);
 	}
