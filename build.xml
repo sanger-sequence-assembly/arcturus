@@ -46,8 +46,14 @@
 	   debug="true"/>
   </target>
 
+  <tstamp>
+    <format property="build.time" pattern="yyyy MMM dd HH:mm" locale="en,UK"/>
+  </tstamp>
+
   <target name="jar" depends="compile"
           description="Generates the JAR file.">
+    <echo file="${src.dir}/resources/buildtime.props">BuildTime=${build.time}${line.separator}</echo>
+
     <jar jarfile="${project.name}.jar"
          manifest="${src.dir}/MANIFEST.MF">
         <fileset dir="${build.classes}" />
