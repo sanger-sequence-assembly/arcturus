@@ -191,11 +191,11 @@ sub newaddAlignToTrace {
 
     return unless defined($value);
 
-    unless (defined($this->{alignToTrace})) {
-        $this->{alignToTrace} = new Mapping('align-to-trace');
+    unless (defined($this->{alignToTraceMapping})) {
+        $this->{alignToTraceMapping} = new Mapping('align-to-trace');
     }
 
-    my $mapping = $this->{alignToTrace};
+    my $mapping = $this->{alignToTraceMapping};
 
     $mapping->addSegment(@$value);
 
@@ -206,7 +206,7 @@ sub newgetAlignToTrace {
 # export the trace-to-read mappings as a Mapping object
     my $this = shift;
 
-    my $mapping = $this->{alignToTrace};
+    my $mapping = $this->{alignToTraceMapping};
 
     return $mapping if defined($mapping);
     
@@ -633,6 +633,15 @@ sub setVersion {
 sub getVersion {
     my $this = shift;
     return $this->{data}->{version} || 0;
+}
+
+sub getOriginalVersion {
+# returns the original read, version 0
+    my $this = shift;
+    return $this unless $this->isEdited();
+    my $ADB = $this->{ADB} || return undef; # cannot acces database
+    my $read_id = $this->getReadID();
+    return $ADB->getRead(read_id=>$read_id);
 }
 
 #----------------------------------------------------------------------
