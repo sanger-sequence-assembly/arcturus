@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
 import javax.swing.*;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -12,12 +14,10 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTable table = null;
 	private ProjectTableModel model = null;
 	private JMenuBar menubar = new JMenuBar();
-	
-	private JCheckBoxMenuItem cbAllowMultipleProjectSelection =
-		new JCheckBoxMenuItem("Allow multiple projects to be selected");
 
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionViewProject;
+	private MinervaAbstractAction actionImportReads;
 	
 	ArcturusDatabase adb;
 
@@ -29,7 +29,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		model = new ProjectTableModel(adb);
 
 		table = new ProjectTable(model);
-
+		table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+		
 		JScrollPane scrollpane = new JScrollPane(table);
 		
 		add(scrollpane, BorderLayout.CENTER);
@@ -55,12 +56,21 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 				viewSelectedProjects();
 			}
 		};
+		
+		actionImportReads = new MinervaAbstractAction("Import reads into project",
+				null, "Import reads into project", new Integer(KeyEvent.VK_I),
+				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				importReadsIntoProject();
+			}
+		};
 	}
 	
 	private void createMenus() {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
+		createProjectMenu();
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
@@ -180,22 +190,28 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
-
-		viewMenu.addSeparator();
-		
-		viewMenu.add(cbAllowMultipleProjectSelection);
-		
-		cbAllowMultipleProjectSelection.setSelected(false);
-		
-		cbAllowMultipleProjectSelection.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				boolean multiple = cbAllowMultipleProjectSelection.getState();
-				table.setSelectionMode(multiple ?
-						ListSelectionModel.MULTIPLE_INTERVAL_SELECTION : ListSelectionModel.SINGLE_SELECTION);
-			}
-		});
 	}
 	
+	private void createProjectMenu() {
+		JMenu projectMenu = createMenu("Project", KeyEvent.VK_P, "Project");
+		menubar.add(projectMenu);
+		
+		projectMenu.add(actionImportReads);
+		
+		projectMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
+			public void popupMenuCanceled(PopupMenuEvent e) {
+			}
+
+			public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+			}
+
+			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+				actionImportReads.setEnabled(table.getSelectedRowCount() == 1);
+			}
+			
+		});
+	}
+
 	private void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
 		menubar.add(helpMenu);		
@@ -203,6 +219,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 
 	private void viewSelectedProjects() {
 		table.displaySelectedProjects();
+	}
+	
+	private void importReadsIntoProject() {
+		JOptionPane.showMessageDialog(
+				this,
+				"The user will be invited to import a set of reads into the selected project",
+				"Import reads", JOptionPane.INFORMATION_MESSAGE,
+				null);
 	}
 
 	public JMenuBar getMenuBar() {

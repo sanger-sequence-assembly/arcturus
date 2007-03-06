@@ -87,6 +87,14 @@ public class ProjectTable extends SortableTable {
 			}
 			c.setForeground(Color.BLACK);
 		}
+		
+		ProjectTableModel ptm = (ProjectTableModel) getModel();
+		ProjectProxy proxy = ptm.getProjectAtRow(rowIndex);
+		
+		if (proxy.isMine()) {
+			Font font = c.getFont().deriveFont(Font.BOLD);
+			c.setFont(font);
+		}
 
 		return c;
 	}

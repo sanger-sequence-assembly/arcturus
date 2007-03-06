@@ -134,7 +134,7 @@ class ProjectTableModel extends AbstractTableModel implements
 		return 9;
 	}
 
-	protected ProjectProxy getProjectAtRow(int row) {
+	public ProjectProxy getProjectAtRow(int row) {
 		return (ProjectProxy) projects.elementAt(row);
 	}
 
