@@ -12,6 +12,9 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private ContigTable table = null;
 	private ContigTableModel model = null;
 	private JMenuBar menubar = new JMenuBar();
+	
+	private JCheckBoxMenuItem cbGroupByProject =
+		new JCheckBoxMenuItem("Group by project");
 
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionExportAsCAF ;
@@ -40,6 +43,9 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		createActions();
 
 		createMenus();
+		
+		if (projects.length < 2)
+			cbGroupByProject.setEnabled(false);
 	}
 
 	private void createActions() {
@@ -146,7 +152,16 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
 
-		viewMenu.add(actionViewContigs);
+		viewMenu.add(cbGroupByProject);
+		
+		cbGroupByProject.setSelected(false);
+		
+		cbGroupByProject.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				boolean byProject = cbGroupByProject.getState();
+				model.setGroupByProject(byProject);
+			}
+		});
 	}
 
 	private void createHelpMenu() {

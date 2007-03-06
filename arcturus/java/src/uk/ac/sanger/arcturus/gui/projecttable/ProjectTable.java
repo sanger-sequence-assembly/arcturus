@@ -112,15 +112,22 @@ public class ProjectTable extends SortableTable {
 		Project[] projects = new Project[indices.length];
 		
 		String title = null;
+		
+		String names[] = new String[indices.length];
 
 		for (int i = 0; i < indices.length; i++) {
 			ProjectProxy proxy = (ProjectProxy) ptm.elementAt(indices[i]);
 			projects[i] = proxy.getProject();
-			
+			names[i] = projects[i].getName();
+		}
+		
+		Arrays.sort(names);
+		
+		for (int i = 0; i < names.length; i++) {
 			if (i == 0)
-				title = projects[i].getName();
+				title = names[i];
 			else
-				title += "," + projects[i].getName();
+				title += "," + names[i];
 		}
 
 		ContigTablePanel ctp = new ContigTablePanel(projects);

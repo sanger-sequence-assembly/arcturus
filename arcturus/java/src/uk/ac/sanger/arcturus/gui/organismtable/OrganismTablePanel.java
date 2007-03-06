@@ -12,12 +12,14 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	protected OrganismTable table = null;
 	protected JMenuBar menubar = new JMenuBar();
 	protected ArcturusInstance instance;
-	
+
+	private MinervaAbstractAction actionOpenOrganism;
+
 	public OrganismTablePanel(ArcturusInstance instance) {
 		super(new BorderLayout());
 
 		this.instance = instance;
-		
+
 		OrganismTableModel model = new OrganismTableModel(instance);
 
 		table = new OrganismTable(model);
@@ -26,7 +28,20 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 
 		add(scrollpane);
 
+		createActions();
+
 		createMenus();
+	}
+
+	private void createActions() {
+		actionOpenOrganism = new MinervaAbstractAction(
+				"Open selected organism", null, "Open selected organism",
+				new Integer(KeyEvent.VK_O), KeyStroke.getKeyStroke(
+						KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				openSelectedOrganism();
+			}
+		};
 	}
 
 	private void createMenus() {
@@ -52,7 +67,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
 		menubar.add(fileMenu);
 
-		fileMenu.add(new ViewOrganismAction("Open selected organism(s)"));
+		fileMenu.add(actionOpenOrganism);
 
 		fileMenu.addSeparator();
 
@@ -67,8 +82,6 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	private void createViewMenu() {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
-
-		viewMenu.add(new ViewOrganismAction("View selected organism(s)"));
 	}
 
 	private void createHelpMenu() {
@@ -76,14 +89,8 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 		menubar.add(helpMenu);
 	}
 
-	class ViewOrganismAction extends AbstractAction {
-		public ViewOrganismAction(String name) {
-			super(name);
-		}
-
-		public void actionPerformed(ActionEvent event) {
-			table.displaySelectedOrganisms();
-		}
+	public void openSelectedOrganism() {
+		table.displaySelectedOrganisms();
 	}
 
 	public JMenuBar getMenuBar() {
@@ -97,7 +104,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	public void closeResources() {
 		// Does nothing
 	}
-	
+
 	public String toString() {
 		return "OrganismTablePanel[instance=" + instance.getName() + "]";
 	}

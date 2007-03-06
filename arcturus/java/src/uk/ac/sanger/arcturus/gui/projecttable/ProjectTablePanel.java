@@ -13,6 +13,9 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTableModel model = null;
 	private JMenuBar menubar = new JMenuBar();
 	
+	private JCheckBoxMenuItem cbAllowMultipleProjectSelection =
+		new JCheckBoxMenuItem("Allow multiple projects to be selected");
+
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionViewProject;
 	
@@ -111,10 +114,6 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
 
-		viewMenu.add(actionViewProject);
-
-		viewMenu.addSeparator();
-
 		ButtonGroup group = new ButtonGroup();
 
 		JRadioButtonMenuItem rbShowProjectDate = new JRadioButtonMenuItem(
@@ -181,6 +180,20 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
+
+		viewMenu.addSeparator();
+		
+		viewMenu.add(cbAllowMultipleProjectSelection);
+		
+		cbAllowMultipleProjectSelection.setSelected(false);
+		
+		cbAllowMultipleProjectSelection.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				boolean multiple = cbAllowMultipleProjectSelection.getState();
+				table.setSelectionMode(multiple ?
+						ListSelectionModel.MULTIPLE_INTERVAL_SELECTION : ListSelectionModel.SINGLE_SELECTION);
+			}
+		});
 	}
 	
 	private void createHelpMenu() {
