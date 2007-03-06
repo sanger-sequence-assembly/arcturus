@@ -3,9 +3,14 @@ package uk.ac.sanger.arcturus.gui.contigtable;
 import java.awt.*;
 import javax.swing.table.*;
 import javax.swing.ListSelectionModel;
+import java.io.*;
 
 import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
+import uk.ac.sanger.arcturus.test.CAFWriter;
+import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.data.Contig;
 
 public class ContigTable extends SortableTable {
 	public final static int BY_ROW_NUMBER = 1;
@@ -57,5 +62,27 @@ public class ContigTable extends SortableTable {
 			clist.add(ctm.elementAt(indices[i]));
 
 		return clist;
+	}
+	
+	public void saveSelectedContigsAsCAF(File file) {
+		try {
+			PrintStream ps = new PrintStream(new FileOutputStream(file));
+			
+			CAFWriter cw = new CAFWriter(ps);
+			
+			int[] indices = getSelectedRows();
+			ContigTableModel ctm = (ContigTableModel) getModel();
+		
+			for (int i = 0; i < indices.length; i++) {
+				Contig contig = (Contig)ctm.elementAt(indices[i]);
+				contig.update(ArcturusDatabase.CONTIG_TO_GENERATE_CAF);
+				cw.writeContig(contig);
+			}
+			
+			ps.close();
+		}
+		catch (Exception e) {
+			Arcturus.logWarning(e);
+		}
 	}
 }

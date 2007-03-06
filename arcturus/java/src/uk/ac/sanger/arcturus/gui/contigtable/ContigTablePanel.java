@@ -15,6 +15,8 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	
 	private JCheckBoxMenuItem cbGroupByProject =
 		new JCheckBoxMenuItem("Group by project");
+	
+	private JFileChooser fileChooser = new JFileChooser();
 
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionExportAsCAF ;
@@ -65,7 +67,7 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 		};
 
-		actionExportAsCAF.setEnabled(false);
+		//actionExportAsCAF.setEnabled(false);
 
 		actionExportAsFasta = new MinervaAbstractAction("Export as FASTA",
 				null, "Export contigs as FASTA", new Integer(KeyEvent.VK_F),
@@ -132,9 +134,15 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	}
 
 	private void exportAsCAF() {
-		JOptionPane.showMessageDialog(this,
-				"The selected contigs will be exported as a CAF file",
-				"Export as CAF", JOptionPane.INFORMATION_MESSAGE, null);
+		//JOptionPane.showMessageDialog(this,
+		//		"The selected contigs will be exported as a CAF file",
+		//		"Export as CAF", JOptionPane.INFORMATION_MESSAGE, null);
+		
+		int rc = fileChooser.showSaveDialog(this);
+		
+		if (rc == JFileChooser.APPROVE_OPTION) {
+			table.saveSelectedContigsAsCAF(fileChooser.getSelectedFile());
+		}
 	}
 
 	private void exportAsFasta() {
