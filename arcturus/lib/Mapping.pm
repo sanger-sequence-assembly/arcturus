@@ -9,8 +9,10 @@ use Segment;
 #-------------------------------------------------------------------
 
 sub new {
-    my $class = shift;
+    my $prototype = shift;
     my $identifier = shift; # mapping number or name, optional
+
+    my $class = ref($prototype) || $prototype;
 
     my $this = {};
 
@@ -323,7 +325,8 @@ sub analyseSegments {
 
     if (my $normalization = $this->{normalization}) {
 # return if the normalization already matches the required one
-        my $requirement = ($options{normalizeOnX} ? 2 : 1);
+#print STDOUT "this normalisation ".($this->{normalization}||0)."\n";
+        my $requirement = ($options{normalizeOnX} ? 1 : 2);
         return $segments if ($normalization == $requirement);
     }
 
@@ -345,6 +348,11 @@ sub analyseSegments {
     my $globalalignment = 1; # overall alignment
     if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
         $globalalignment = -1;
+# counter align unit-length alignments if mapping is counter-aligned
+        foreach my $segment (@$segments) {
+# the counter align method only works for unit length intervals
+            $segment->counterAlignUnitLengthInterval();
+        }
     }
 
 # test consistency of alignments
@@ -385,13 +393,12 @@ sub analyseSegments {
     }
 
 # finally, counter align unit-length alignments if mapping is counter-aligned
-
-    if ($globalalignment == -1) {
+#    if ($globalalignment == -1) {
 # the counter align method only works for unit length intervals
-        foreach my $segment (@$segments) {
-            $segment->counterAlignUnitLengthInterval();
-        }
-    }
+#        foreach my $segment (@$segments) {
+#            $segment->counterAlignUnitLengthInterval();
+#        }
+#    }
 
 # register the alignment direction
     
@@ -724,6 +731,21 @@ sub collate {
         @$segments = sort {$a->getYstart <=> $b->getYstart} @$segments;
         $i = 1;
     }
+}
+
+sub copy {
+# return a complete copy of this mapping
+    my $this = shift;
+
+    my $copy = $this->new($this->getMappingName());
+
+    my $segments = $this->getSegments();
+    foreach my $segment (@$segments) {
+        $copy->putSegment($segment->getSegment());
+    }
+    $copy->analyseSegments();
+
+    return $copy;
 }
 
 #-------------------------------------------------------------------
