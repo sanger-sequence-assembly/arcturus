@@ -6,6 +6,9 @@ import javax.naming.NamingException;
 import javax.swing.*;
 import java.awt.event.*;
 
+import java.io.*;
+import java.util.*;
+
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
@@ -21,6 +24,7 @@ import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
 public class Minerva {
 	private static Minerva instance = null;
 	private ArcturusInstance ai = null;
+	private String buildtime;
 
 	public static Minerva getInstance() {
 		if (instance == null)
@@ -30,6 +34,26 @@ public class Minerva {
 	}
 
 	private Minerva() {
+		try {
+			InputStream is = getClass().getResourceAsStream("/buildtime.props");
+
+			if (is != null) {
+				Properties myprops = new Properties();
+
+				myprops.load(is);
+			
+				is.close();
+			
+				buildtime = myprops.getProperty("BuildTime");
+			}
+		}
+		catch (IOException ioe) {
+			// Do nothing
+		}
+	}
+	
+	public String getBuildTime() {
+		return buildtime;
 	}
 
 	private String getStringParameter(String[] args, String key) {
@@ -76,10 +100,11 @@ public class Minerva {
 	private void createInstanceDisplay(ArcturusInstance ai) {
 		OrganismTablePanel panel = new OrganismTablePanel(ai);
 		
-		MinervaFrame frame = new MinervaFrame(this, ai.getName(), panel);
-		
-		//frame.setJMenuBar(panel.getMenuBar());
-		//frame.setToolBar(panel.getToolBar());
+		String caption = "Minerva - " + ai.getName();
+		if (buildtime != null)
+			caption += " [Build " + buildtime + "]";
+
+		MinervaFrame frame = new MinervaFrame(this, caption, panel);
 		
 		frame.pack();
 		frame.show();
@@ -93,13 +118,13 @@ public class Minerva {
 		
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
 			
-		MinervaFrame frame = new MinervaFrame(this, adb.getName(), panel);
+		String caption = "Minerva - " + adb.getName();
+		if (buildtime != null)
+			caption += " [Build " + buildtime + "]";
+		
+		MinervaFrame frame = new MinervaFrame(this, caption, panel);
 		
 		ProjectTablePanel ptp = panel.addProjectTablePanel();
-		//panel.setSelectedComponent(ptp);
-		
-		//frame.setJMenuBar(panel.getMenuBar());
-		//frame.setToolBar(panel.getToolBar());
 		
 		frame.pack();
 		frame.show();	
