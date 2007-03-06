@@ -1,12 +1,15 @@
 <?xml version="1.0"?>
 
 <!-- build.xml - a simple Ant buildfile -->
-<project name="Simple Buildfile" default="compile" basedir=".">
+<project name="Simple Buildfile" default="jar" basedir=".">
   <property name="project.name" value="arcturus"/>
   <property name="package.prefix" value="uk.ac.sanger"/>
 
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
+
+  <!-- The directory containing libary JAR files -->
+  <property name="lib.dir" value="lib"/>
 
   <!-- The directory containing the test classes -->
   <property name="testsrc.dir" value="test"/>
@@ -59,6 +62,14 @@
         <fileset dir="${build.classes}" />
 	<fileset dir="${src.dir}" includes="resources/icons/*.*,resources/images/*.*,resources/*.props"/>
     </jar>
+  </target>
+
+  <target name="zip" depends="jar"
+          description="Generates a ZIP archive for Windows users">
+    <zip destfile="${project.name}.zip" compress="false">
+        <fileset dir="." includes="${project.name}.jar" />
+        <zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
+    </zip>
   </target>
 
   <target name="all" depends="clean,jar"
