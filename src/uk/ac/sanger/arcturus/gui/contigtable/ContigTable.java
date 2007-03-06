@@ -4,6 +4,7 @@ import java.awt.*;
 import javax.swing.table.*;
 import javax.swing.ListSelectionModel;
 import java.io.*;
+import java.text.*;
 
 import uk.ac.sanger.arcturus.gui.SortableTable;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
@@ -80,6 +81,41 @@ public class ContigTable extends SortableTable {
 			}
 			
 			ps.close();
+		}
+		catch (Exception e) {
+			Arcturus.logWarning(e);
+		}
+	}
+	
+	public void saveSelectedContigsAsFasta(File file) {
+		try {
+			PrintStream ps = new PrintStream(new FileOutputStream(file));
+			
+			DecimalFormat df = new DecimalFormat("000000");
+
+			int[] indices = getSelectedRows();
+			ContigTableModel ctm = (ContigTableModel) getModel();
+		
+			for (int i = 0; i < indices.length; i++) {
+				Contig contig = (Contig)ctm.elementAt(indices[i]);
+				contig.update(ArcturusDatabase.CONTIG_CONSENSUS);
+				byte[] dna = contig.getDNA();
+				if (dna != null) {
+					if (i > 0)
+						ps.print('\n');
+					
+					ps.println(">contig" + df.format(contig.getID()));
+					
+					for (int j = 0; j < dna.length; j += 50) {
+						int sublen = (j + 50 < dna.length) ? 50 : dna.length - j;
+						ps.write(dna, j, sublen);
+						ps.print('\n');
+					}
+				}
+			}
+			
+			ps.close();
+		
 		}
 		catch (Exception e) {
 			Arcturus.logWarning(e);

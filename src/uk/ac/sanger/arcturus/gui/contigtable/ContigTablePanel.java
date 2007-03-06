@@ -67,8 +67,6 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 		};
 
-		//actionExportAsCAF.setEnabled(false);
-
 		actionExportAsFasta = new MinervaAbstractAction("Export as FASTA",
 				null, "Export contigs as FASTA", new Integer(KeyEvent.VK_F),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
@@ -76,8 +74,6 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 				exportAsFasta();
 			}
 		};
-
-		actionExportAsFasta.setEnabled(false);
 
 		actionViewContigs = new MinervaAbstractAction("Open selected contigs",
 				null, "Open selected contigs", new Integer(KeyEvent.VK_O),
@@ -146,9 +142,15 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	}
 
 	private void exportAsFasta() {
-		JOptionPane.showMessageDialog(this,
-				"The selected contigs will be exported as a FASTA file",
-				"Export as FASTA", JOptionPane.INFORMATION_MESSAGE, null);
+		//JOptionPane.showMessageDialog(this,
+		//		"The selected contigs will be exported as a FASTA file",
+		//		"Export as FASTA", JOptionPane.INFORMATION_MESSAGE, null);
+		
+		int rc = fileChooser.showSaveDialog(this);
+		
+		if (rc == JFileChooser.APPROVE_OPTION) {
+			table.saveSelectedContigsAsFasta(fileChooser.getSelectedFile());
+		}
 	}
 
 	private void createEditMenu() {
