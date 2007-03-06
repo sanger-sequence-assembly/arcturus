@@ -87,6 +87,10 @@ public class Minerva {
 	
 	public void createOrganismDisplay(String organism) throws SQLException, NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+		adb.setReadCacheing(false);
+		adb.setSequenceCacheing(false);
+		
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
 			
 		MinervaFrame frame = new MinervaFrame(this, adb.getName(), panel);
