@@ -141,4 +141,11 @@ public class Person implements Comparable {
 
 		return uid.compareToIgnoreCase(that.uid);
 	}
+	
+	public boolean equals(Object that) {
+		if (that instanceof Person && that != null)
+			return ((Person)that).uid.equalsIgnoreCase(uid);
+		else
+			return false;
+	}
 }
