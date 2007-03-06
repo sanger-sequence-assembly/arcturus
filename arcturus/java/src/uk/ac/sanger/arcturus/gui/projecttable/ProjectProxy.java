@@ -87,4 +87,8 @@ public class ProjectProxy {
 	public Person getLockOwner() {
 		return project.getLockOwner();
 	}
+	
+	public boolean isMine() {
+		return project.isMine();
+	}
 }
