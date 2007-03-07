@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.contigtable;
 
 import javax.swing.*;
+import javax.swing.event.PopupMenuListener;
+import javax.swing.event.PopupMenuEvent;
 
 import java.awt.BorderLayout;
 import java.awt.event.*;
@@ -22,8 +24,12 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private MinervaAbstractAction actionExportAsCAF ;
 	private MinervaAbstractAction actionExportAsFasta;
 	private MinervaAbstractAction actionViewContigs;
-	
+	private MinervaAbstractAction actionImportReads;
+	private MinervaAbstractAction actionHelp;
+
 	private String projectlist;
+	
+	private boolean oneProject;
 
 	public ContigTablePanel(Project[] projects) {
 		super(new BorderLayout());
@@ -33,6 +39,8 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		
 		for (int i = 1; i < projects.length; i++)
 			projectlist += "," + projects[i].getName();
+		
+		oneProject = projects.length == 1;
 		
 		model = new ContigTableModel(projects);
 
@@ -82,12 +90,30 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 				viewSelectedContigs();
 			}
 		};
+		
+		actionImportReads = new MinervaAbstractAction("Import reads into project",
+				null, "Import reads into project", new Integer(KeyEvent.VK_I),
+				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				importReadsIntoProject();
+			}
+		};
+		
+		actionHelp = new MinervaAbstractAction("Help",
+				null, "Help", new Integer(KeyEvent.VK_H),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
+			public void actionPerformed(ActionEvent e) {
+				Minerva.displayHelp();
+			}
+		};
 	}
 
 	private void createMenus() {
 		createFileMenu();
 		createEditMenu();
 		createViewMenu();
+		createProjectMenu();
+		createContigMenu();
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
@@ -122,6 +148,19 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 		fileMenu.addSeparator();
 
 		fileMenu.add(Minerva.getQuitAction());
+		
+		fileMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
+			public void popupMenuCanceled(PopupMenuEvent e) {
+			}
+
+			public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+			}
+
+			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+				actionViewContigs.setEnabled(table.getSelectedRowCount() > 0);
+			}
+			
+		});
 	}
 
 	private void closePanel() {
@@ -173,10 +212,41 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 		});
 	}
+	
+	private void createProjectMenu() {
+		JMenu projectMenu = createMenu("Project", KeyEvent.VK_P, "Project");
+		menubar.add(projectMenu);
+		
+		projectMenu.add(actionImportReads);
+		
+		actionImportReads.setEnabled(oneProject);
+	}
+	
+	private void createContigMenu() {
+		JMenu contigMenu = createMenu("Contig", KeyEvent.VK_C, "Contig");
+		menubar.add(contigMenu);
+		
+		contigMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
+			public void popupMenuCanceled(PopupMenuEvent e) {
+			}
 
+			public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+			}
+
+			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+				actionViewContigs.setEnabled(table.getSelectedRowCount() > 0);
+			}
+			
+		});
+	
+		contigMenu.add(actionViewContigs);
+	}
+	
 	private void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
 		menubar.add(helpMenu);
+		
+		helpMenu.add(actionHelp);
 	}
 
 	private void viewSelectedContigs() {
@@ -185,6 +255,14 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 						"The selected contigs will be displayed in a colourful and informative way",
 						"Display contigs", JOptionPane.INFORMATION_MESSAGE,
 						null);
+	}
+	
+	private void importReadsIntoProject() {
+		JOptionPane.showMessageDialog(
+				this,
+				"The user will be invited to import a set of reads into the selected project",
+				"Import reads", JOptionPane.INFORMATION_MESSAGE,
+				null);
 	}
 
 	public JMenuBar getMenuBar() {
@@ -201,5 +279,9 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	
 	public String toString() {
 		return "ContigTablePanel[projects=" + projectlist + "]";
+	}
+	
+	public boolean isOneProject() {
+		return oneProject;
 	}
 }
