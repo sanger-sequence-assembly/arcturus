@@ -103,10 +103,17 @@ public class Arcturus {
 		logger.addHandler(warner);
 
 		try {
-			FileHandler filehandler = new FileHandler("%h/.arcturus/arcturus%u.%g.log");
-			filehandler.setLevel(Level.INFO);
-			filehandler.setFormatter(new SimpleFormatter());
-			logger.addHandler(filehandler);
+			File homedir = new File(System.getProperty("user.home"));
+			
+			File dotarcturus = new File(homedir, ".arcturus");
+			
+			if (dotarcturus.exists() || dotarcturus.mkdir()) {
+				FileHandler filehandler = new FileHandler("%h/.arcturus/arcturus%u.%g.log");
+				filehandler.setLevel(Level.INFO);
+				filehandler.setFormatter(new SimpleFormatter());
+				logger.addHandler(filehandler);
+			} else
+				throw new IOException(".arcturus directory could not be created");
 		} catch (IOException ioe) {
 			logger.log(Level.WARNING,
 					"Unable to create a FileHandler for logging", ioe);
