@@ -14,6 +14,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	protected ArcturusInstance instance;
 
 	private MinervaAbstractAction actionOpenOrganism;
+	private MinervaAbstractAction actionHelp;
 
 	public OrganismTablePanel(ArcturusInstance instance) {
 		super(new BorderLayout());
@@ -40,6 +41,14 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 						KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				openSelectedOrganism();
+			}
+		};
+		
+		actionHelp = new MinervaAbstractAction("Help",
+				null, "Help", new Integer(KeyEvent.VK_H),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
+			public void actionPerformed(ActionEvent e) {
+				Minerva.displayHelp();
 			}
 		};
 	}
@@ -87,6 +96,8 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	private void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
 		menubar.add(helpMenu);
+		
+		helpMenu.add(actionHelp);
 	}
 
 	public void openSelectedOrganism() {

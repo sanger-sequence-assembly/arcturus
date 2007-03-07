@@ -18,7 +18,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionViewProject;
 	private MinervaAbstractAction actionImportReads;
-	
+	private MinervaAbstractAction actionHelp;
+
 	ArcturusDatabase adb;
 
 	public ProjectTablePanel(ArcturusDatabase adb) {
@@ -62,6 +63,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				importReadsIntoProject();
+			}
+		};
+		
+		actionHelp = new MinervaAbstractAction("Help",
+				null, "Help", new Integer(KeyEvent.VK_H),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
+			public void actionPerformed(ActionEvent e) {
+				Minerva.displayHelp();
 			}
 		};
 	}
@@ -215,6 +224,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
 		menubar.add(helpMenu);		
+		
+		helpMenu.add(actionHelp);
 	}
 
 	private void viewSelectedProjects() {
