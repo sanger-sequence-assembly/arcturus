@@ -20,8 +20,6 @@ public class ProjectTable extends SortableTable {
 	protected final Color VIOLET2 = new Color(238, 238, 255);
 	protected final Color VIOLET3 = new Color(226, 226, 255);
 
-	protected JPopupMenu popupMenu;
-
 	public ProjectTable(ProjectTableModel ptm) {
 		super((SortableTableModel) ptm);
 
@@ -38,33 +36,11 @@ public class ProjectTable extends SortableTable {
 				handleCellMouseClick(e);
 			}
 		});
-
-		popupMenu = new JPopupMenu();
-		
-		popupMenu.add(new JLabel("Project"));
-		
-		popupMenu.addSeparator();
-		
-		JMenuItem display = new JMenuItem("Display");
-		popupMenu.add(display);
-		display.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent event) {
-				displaySelectedProjects();
-			}
-		});
-		
-		JMenuItem scaffold = new JMenuItem("Scaffold");
-		popupMenu.add(scaffold);
-		scaffold.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent event) {
-				scaffoldSelectedProjects();
-			}
-		});
 	}
 
 	private void handleCellMouseClick(MouseEvent event) {
 		if (event.isPopupTrigger()) {
-			popupMenu.show(event.getComponent(), event.getX(), event.getY());
+			// show popup?
 		} else if (event.getID() == MouseEvent.MOUSE_CLICKED
 				&& event.getButton() == MouseEvent.BUTTON1
 				&& event.getClickCount() == 2) {
