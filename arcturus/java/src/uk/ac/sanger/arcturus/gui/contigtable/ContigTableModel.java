@@ -43,19 +43,19 @@ class ContigTableModel extends AbstractTableModel implements SortableTableModel 
 		
 		comparator = new ContigComparator(ContigComparator.BY_LENGTH, false);
 		
+		refresh();
+	}
+	
+	public void refresh()  {
+		contigs.clear();
+		
 		try {
-			refresh();
+			for (int i = 0; i < projects.length; i++)
+				contigs.addAll(projects[i].getContigs(true));
 		}
 		catch (SQLException sqle) {
 			Arcturus.logWarning(sqle);
 		}
-	}
-	
-	public void refresh() throws SQLException {
-		contigs.clear();
-		
-		for (int i = 0; i < projects.length; i++)
-			contigs.addAll(projects[i].getContigs(true));
 		
 		resort();
 	}

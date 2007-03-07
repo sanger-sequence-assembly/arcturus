@@ -12,20 +12,27 @@ class ScaffoldTableModel extends AbstractTableModel implements
 	protected Vector scaffolds = new Vector();
 	protected ScaffoldComparator comparator;
 	protected int lastSortColumn = 0;
+	protected Set scaffoldSet;
 
 	public ScaffoldTableModel(Set scaffoldSet) {
+		this.scaffoldSet = scaffoldSet;
 		comparator = new ScaffoldComparator();
-		populateScaffoldsArray(scaffoldSet);
+		populateScaffoldsArray();
 	}
 
-	protected void populateScaffoldsArray(Set scaffoldSet) {
+	protected void populateScaffoldsArray() {
+		refresh();
+	}
+	
+	public void refresh() {
 		for (Iterator iterator = scaffoldSet.iterator(); iterator.hasNext();) {
 			Set bs = (Set) iterator.next();
 			Scaffold scaffold = new Scaffold(bs);
 			scaffolds.add(scaffold);
-			comparator.setAscending(false);
-			sortOnColumn(0);
 		}
+		
+		comparator.setAscending(false);
+		sortOnColumn(0);
 	}
 
 	public String getColumnName(int col) {

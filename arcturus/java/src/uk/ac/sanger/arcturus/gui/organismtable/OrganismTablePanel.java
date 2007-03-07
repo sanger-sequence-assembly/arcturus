@@ -15,6 +15,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 
 	private MinervaAbstractAction actionOpenOrganism;
 	private MinervaAbstractAction actionHelp;
+	private MinervaAbstractAction actionRefresh;
 
 	public OrganismTablePanel(ArcturusInstance instance) {
 		super(new BorderLayout());
@@ -44,6 +45,14 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 			}
 		};
 		
+		actionRefresh = new MinervaAbstractAction("Refresh",
+				null, "Refresh the display", new Integer(KeyEvent.VK_R),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
+			public void actionPerformed(ActionEvent e) {
+				table.refresh();
+			}
+		};
+	
 		actionHelp = new MinervaAbstractAction("Help",
 				null, "Help", new Integer(KeyEvent.VK_H),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
@@ -91,6 +100,8 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 	private void createViewMenu() {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
+		
+		viewMenu.add(actionRefresh);
 	}
 
 	private void createHelpMenu() {

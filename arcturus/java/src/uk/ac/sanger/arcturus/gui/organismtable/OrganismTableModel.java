@@ -10,30 +10,38 @@ import uk.ac.sanger.arcturus.gui.SortableTableModel;
 
 class OrganismTableModel extends AbstractTableModel implements
 		SortableTableModel {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = 3844125866171495024L;
+	public static final int ORGANISM_NAME = 0;
+	public static final int ORGANISM_DESCRIPTION= 1;
+	
 	protected Vector organisms = new Vector();
 	protected OrganismComparator comparator;
-	protected int lastSortColumn = 0;
+	protected int lastSortColumn;
 	protected ArcturusInstance instance = null;
 
 	public OrganismTableModel(ArcturusInstance instance) {
 		this.instance = instance;
 		comparator = new OrganismComparator();
+		comparator.setAscending(false);
 		populateOrganismsArray();
 	}
 
 	protected void populateOrganismsArray() {
+		refresh();
+		sortOnColumn(ORGANISM_NAME);
+	}
+	
+	public void refresh() {
 		try {
 			organisms = instance.getAllOrganisms();
-			comparator.setAscending(false);
-			sortOnColumn(0);
+			resort();
 		} catch (NamingException ne) {
 			ne.printStackTrace();
 			System.exit(1);
 		}
+	}
+	
+	private void resort() {
+		sortOnColumn(lastSortColumn);
 	}
 
 	public String getColumnName(int col) {
@@ -102,11 +110,11 @@ class OrganismTableModel extends AbstractTableModel implements
 
 	public void sortOnColumn(int col) {
 		switch (col) {
-			case 0:
+			case ORGANISM_NAME:
 				comparator.setType(OrganismComparator.BY_NAME);
 				break;
 
-			case 1:
+			case ORGANISM_DESCRIPTION:
 				comparator.setType(OrganismComparator.BY_DESCRIPTION);
 				break;
 		}

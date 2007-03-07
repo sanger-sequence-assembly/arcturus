@@ -113,4 +113,8 @@ public class SortableTable extends JTable {
        
         return prefsize;
     }
+    
+    public void refresh() {
+    	((SortableTableModel)getModel()).refresh();
+    }
 }
