@@ -41,13 +41,17 @@ public class PeopleManager {
 		myRealUid = System.getProperty("user.name");
 		realMe = findPerson(myRealUid);
 	
-		if (System.getProperty("user.alias") == null) {
+		if (System.getProperty("user.alias") == null || !isAllowedToMasquerade()) {
 			myUid = myRealUid;
 			me = realMe;
 		} else {
 			myUid = System.getProperty("user.alias");
 			me = findPerson(myUid);
 		}
+	}
+	
+	private static boolean isAllowedToMasquerade() {
+		return myRealUid.equalsIgnoreCase("adh") || myRealUid.equalsIgnoreCase("ejz");
 	}
 
 	public static Person findPerson(String uid) {
