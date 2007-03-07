@@ -15,6 +15,8 @@ public class PeopleManager {
 	protected static Map uidToPerson = new HashMap();
 	protected static final String myUid ;
 	protected static final Person me;
+	protected static final String myRealUid;
+	protected static final Person realMe;
 
 	protected static final String[] attrs = { "cn", "sn", "givenname", "mail",
 			"telephonenumber", "homedirectory", "roomnumber",
@@ -36,8 +38,16 @@ public class PeopleManager {
 			ctx = null;
 		}
 		
-		myUid = System.getProperty("user.name");
-		me = findPerson(myUid);
+		myRealUid = System.getProperty("user.name");
+		realMe = findPerson(myRealUid);
+	
+		if (System.getProperty("user.alias") == null) {
+			myUid = myRealUid;
+			me = realMe;
+		} else {
+			myUid = System.getProperty("user.alias");
+			me = findPerson(myUid);
+		}
 	}
 
 	public static Person findPerson(String uid) {
@@ -123,7 +133,19 @@ public class PeopleManager {
 	public static boolean isMe(Person person) {
 		return me.equals(person);
 	}
+	
+	public static Person findRealMe() {
+		return realMe;
+	}
 
+	public static boolean isRealMe(Person person) {
+		return realMe.equals(person);
+	}
+
+	public static boolean isMasquerading() {
+		return ! me.equals(realMe);
+	}
+	
 	private static String getAttribute(Attributes attrs, String key) {
 		try {
 			Attribute attr = attrs.get(key);
