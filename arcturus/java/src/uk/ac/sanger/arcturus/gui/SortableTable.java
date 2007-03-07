@@ -8,6 +8,7 @@ import java.awt.event.*;
 import java.awt.Point;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Font;
 
 public class SortableTable extends JTable {
 	public final static int MAX_VIEWPORT_HEIGHT = 800;
@@ -82,6 +83,9 @@ public class SortableTable extends JTable {
 				comp = getDefaultRenderer(model.getColumnClass(i))
 						.getTableCellRendererComponent(this,
 								model.getValueAt(x, i), false, false, x, i);
+
+				Font font = comp.getFont().deriveFont(Font.BOLD);
+				comp.setFont(font);
 
 				int myWidth = comp.getPreferredSize().width;
 
