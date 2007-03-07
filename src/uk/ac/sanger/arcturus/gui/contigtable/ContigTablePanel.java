@@ -25,6 +25,7 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private MinervaAbstractAction actionExportAsFasta;
 	private MinervaAbstractAction actionViewContigs;
 	private MinervaAbstractAction actionImportReads;
+	private MinervaAbstractAction actionRefresh;
 	private MinervaAbstractAction actionHelp;
 
 	private String projectlist;
@@ -99,6 +100,14 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 		};
 		
+		actionRefresh = new MinervaAbstractAction("Refresh",
+				null, "Refresh the display", new Integer(KeyEvent.VK_R),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
+			public void actionPerformed(ActionEvent e) {
+				table.refresh();
+			}
+		};
+
 		actionHelp = new MinervaAbstractAction("Help",
 				null, "Help", new Integer(KeyEvent.VK_H),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
@@ -200,6 +209,10 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private void createViewMenu() {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
+		
+		viewMenu.add(actionRefresh);
+
+		viewMenu.addSeparator();
 
 		viewMenu.add(cbGroupByProject);
 		

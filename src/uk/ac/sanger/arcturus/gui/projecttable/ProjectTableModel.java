@@ -11,10 +11,6 @@ import uk.ac.sanger.arcturus.people.Person;
 
 class ProjectTableModel extends AbstractTableModel implements
 		SortableTableModel {
-	/**
-	 * 
-	 */
-	private static final long serialVersionUID = -3721116652612453485L;
 	public static final int PROJECT_UPDATED_DATE = 1;
 	public static final int CONTIG_CREATED_DATE = 2;
 	public static final int CONTIG_UPDATED_DATE = 3;
@@ -38,10 +34,18 @@ class ProjectTableModel extends AbstractTableModel implements
 	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
 		comparator = new ProjectComparator();
+		comparator.setAscending(false);
 		populateProjectsArray();
 	}
 
 	protected void populateProjectsArray() {
+		refresh();
+		sortOnColumn(TOTAL_LENGTH_COLUMN);
+	}
+	
+	public void refresh() {
+		projects.clear();
+		
 		try {
 			Set projectset = adb.getAllProjects();
 
@@ -50,12 +54,15 @@ class ProjectTableModel extends AbstractTableModel implements
 				projects.add(new ProjectProxy(project));
 			}
 
-			comparator.setAscending(false);
-			sortOnColumn(TOTAL_LENGTH_COLUMN);
+			resort();
 		} catch (SQLException sqle) {
 			sqle.printStackTrace();
 			System.exit(1);
 		}
+	}
+	
+	private void resort() {
+		sortOnColumn(lastSortColumn);
 	}
 
 	public String getColumnName(int col) {
