@@ -129,6 +129,15 @@ public class Minerva {
 		frame.pack();
 		frame.show();	
 	}
+	
+	public static void displayHelp() {
+		JOptionPane.showMessageDialog(
+				null,
+				"The user will be shown some helpful information",
+				"Help!", JOptionPane.INFORMATION_MESSAGE,
+				null);
+
+	}
 
 	public static Action getQuitAction() {
 		return new MinervaAbstractAction("Quit", null, "Quit", new Integer(
