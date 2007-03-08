@@ -40,7 +40,7 @@ my $readstoskip;
 
 my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
               . "limit|filter|source|exclude|info|help|asped|"
-              . "filter|readnamelike|rootdir|"
+              . "filter|readnamelike|rootdir|status|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
@@ -110,6 +110,8 @@ while (my $nextword = shift @ARGV) {
     $logLevel         = 2            if ($nextword eq '-info'); 
 
 # source specific entries are imported in a hash
+
+    $PARS{status}       = shift @ARGV  if ($nextword eq '-status');
 
     $PARS{caf}          = shift @ARGV  if ($nextword eq '-caf');
     $PARS{caf}          = 'default'    if ($nextword eq '-cafdefault');
@@ -253,7 +255,7 @@ elsif ($source eq 'oracle') {
     &showUsage("Missing Oracle schema") unless $PARS{schema};
 
     my @valid = ('schema','projid','aspedafter','aspedbefore',
-		 'readnamelike','include','minreadid','maxreadid');
+		 'readnamelike','include','minreadid','maxreadid','status');
 
     &showUsage("Invalid parameter(s)") if &testForExcessInput(\%PARS,\@valid);
 
@@ -522,6 +524,7 @@ sub showUsage {
 	print STDERR "-aspedafter\tasped date guillotine\n";
 	print STDERR "-minreadid\tminimum Oracle read ID\n";
 	print STDERR "-maxreadid\tmaximum Oracle read ID\n";
+	print STDERR "-status\tAsp processing status (default is PASS)\n";
 	print STDERR "\n";
     }
     if (!$source || $source eq 'Expfiles') {
