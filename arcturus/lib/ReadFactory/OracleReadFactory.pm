@@ -34,6 +34,8 @@ sub new {
 
 	$this->{minreadid}    = shift if ($nextword eq 'minreadid');
 	$this->{maxreadid}    = shift if ($nextword eq 'maxreadid');
+
+	$this->{status}       = shift if ($nextword eq 'status');
     }
 
     die "No schema specified" unless defined($schema);
@@ -119,7 +121,9 @@ sub getReadNamesToLoad {
 
     my $query = "select readname from $schema.EXTENDED_READ";
 
-    my @conditions = ("processstatus = 'PASS'");
+    my $pstatus = $this->{status} || 'PASS';
+
+    my @conditions = $pstatus eq 'PASS' ? ("processstatus = '$pstatus'") : ("processstatus like '" . $pstatus . "%'");
 
     my $projid = $this->{projid};
 
@@ -202,7 +206,7 @@ sub getReadByName {
     $read->setStrand($strand);
     $read->setPrimer($primer);
     $read->setChemistry($dye);
-    $read->setProcessStatus('PASS');
+    $read->setProcessStatus($this->{'status'});
 
     my ($imin, $imax);
     if (exists($this->{ligations}->{$ligid})) {
