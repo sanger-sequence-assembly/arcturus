@@ -198,7 +198,7 @@ public class GenerateContigHashing {
 		int done = 0;
 
 		while (true) {
-			if (start_pos >= line.length)
+			if (start_pos >= linelen)
 				return;
 			
 			char c = (char)line[start_pos];
@@ -233,7 +233,8 @@ public class GenerateContigHashing {
 					System.err.print('\n');
 				
 				if (tiled) {
-					start_pos = end_pos;
+					start_pos = end_pos - 1;
+					end_pos = start_pos;
 					bases_in_hash = 0;
 				}
 			}
