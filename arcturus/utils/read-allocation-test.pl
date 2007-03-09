@@ -35,8 +35,9 @@ my $confirm;
 my $verbose;
 my $debug;
 
-my $validKeys  = "organism|instance|out|output|of|mail|movetoproblems|mtp|mark|"
-               . "repair|delete|problemproject|pp|project|assembly|workproject|wp|"
+my $validKeys  = "organism|instance|out|output|log|mail|movetoproblems|mtp|mark|"
+               . "repair|norepair|nr|delete|problemproject|pp|project|assembly|"
+               . "workproject|wp|"
                . "inside|ip|between|bp|force|noabort|lockenabled|la|"
                . "verbose|debug|confirm|help";
 
@@ -69,6 +70,10 @@ while (my $nextword = shift @ARGV) {
 
     $repair         = 3            if ($nextword eq '-repair');
     $force          = 1            if ($nextword eq '-repair');
+    
+    if ($nextword eq '-norepair' || $nextword eq '-nr') {
+        $repair = 0;
+    }
 
     $problemproject = shift @ARGV  if ($nextword eq '-project');
     $problemproject = shift @ARGV  if ($nextword eq '-problemproject');
@@ -92,7 +97,7 @@ while (my $nextword = shift @ARGV) {
 
     $confirm        = 1            if ($nextword eq '-confirm');
 
-    if ($nextword eq '-output' || $nextword eq '-out' || $nextword eq '-of') {
+    if ($nextword eq '-output' || $nextword eq '-out' || $nextword eq '-log') {
 	$output = shift @ARGV;
     }
 
@@ -176,10 +181,10 @@ elsif ($repair <= 1 && (!$projects || !@$projects)) {
 my $problemprojectid;
 my $problemprojectname;
 
-$problemproject = shift @$projects;   
-$problemprojectid = $problemproject->getProjectID();
-$problemprojectname = $problemproject->getProjectName();
-if ($repair <= 1) {
+if ($repair == 1) {
+    $problemproject = shift @$projects;   
+    $problemprojectid = $problemproject->getProjectID();
+    $problemprojectname = $problemproject->getProjectName();
     $logger->warning("Project $problemprojectname ($problemprojectid) used for recover mode");
 }
 
@@ -360,11 +365,11 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 
         my $project_id = $parent->getProject();
         
-        if ($repair <= 1 && $project_id == $problemprojectid) {
+        if ($repair == 1 && $project_id == $problemprojectid) {
             $logger->special("parent contig $parent_id is already allocated to "
 			    . "project $problemprojectname");
         }
-        elsif ($repair <= 1) {
+        elsif ($repair == 1) {
 # move the offending parent contig to the problems project
             $logger->special("Contig $parent_id will be allocated to "
 		   	   . "project $problemprojectname in recover mode");
@@ -419,8 +424,6 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 	}
     }
 }
-
-#$logger->warning("",skip => 1);
 
 # if problem project locked, unlock
 
