@@ -12,8 +12,6 @@ use Alignment;
 
 use Mapping;
 
-# use MappingFactory;
-
 use Tag;
 
 use Logging;
@@ -301,7 +299,7 @@ if ($fastafile) {
 # parse the file to load the sequence into Contig instances
 
     my $fastacontigs = ContigFactory->fastaFileParser($fastafile,report=>1000000);
-
+#    my $fastacontigs = ContigFactory->getContig(fasta=>$fastafile,report=>1000000);
     unless (defined $fastacontigs) {
 # file not found
         $logger->severe("FAILED to open file $fastafile");
@@ -499,7 +497,8 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # substitute low quality pads (to guide the alignment algorithm)
 
         my $csequence = $arcturuscontig->getSequence();
-        ContigFactory->replaceLowQualityBases($arcturuscontig);
+
+        $arcturuscontig->replaceLowQualityBases(nonew=>1);
 
 # determine the transformation from annotation contig to arcturus contig
 
@@ -850,9 +849,9 @@ $contig->setDEBUG($logger) if $verbose;
 # the alternative: get parent-current mapping beforehand (allows testing here)
 
 #$logger->setFilter(0);
-            my %loptions = (debug=>$logger,offsetwindow=>70);
-# my ($mapping,$status,$deallocated) = MappingFactory->linkToContig($contig,$ancestor,%loptions);
-            my ($status,$deallocated) = $contig->newlinkToContig($ancestor,%loptions);
+            my %loptions = (debug=>$logger,offsetwindow=>70,new=>1); # new to be removed
+
+            my ($status,$deallocated) = $contig->linkToContig($ancestor,%loptions);
 #$logger->setFilter(3);
             unless ($status) {
                 my $acid = $ancestor->getContigID();
@@ -975,8 +974,8 @@ $ptoptions{debug} = $logger;
 # do the quality clipping here
         if ($qclip) {
             $logger->warning("quality clipping contig $ccnm");
-            my ($newcontig,$status) = ContigFactory->deleteLowQualityBases
-                                                     ($contig,%qcoptions);
+
+            my ($newcontig,$status) = $contig->deleteLowQualityBases(%qcoptions);
             if ($status + 0) {
                 $ccnm = $newcontig->getContigName();
                 $logger->warning("propagating tags to cleaned contig $ccnm");
