@@ -4,7 +4,7 @@ use strict;
 
 use ArcturusDatabase;
 
-use ContigFactory::ContigFactory;
+use Contig;
 
 use FileHandle;
 
@@ -79,11 +79,11 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging('STDOUT');
+my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
 
-ContigFactory->logger($logger);
+Contig->setLogger($logger);
  
 #----------------------------------------------------------------
 # get the database connection
@@ -104,6 +104,8 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage("Invalid organism '$organism' on server '$instance'");
 }
+
+$adb->setLogger($logger);
  
 my $URL = $adb->getURL;
 
@@ -128,11 +130,8 @@ else {
 # MAIN
 #----------------------------------------------------------------
 
-my %options;
-
-$options{confirm} = 1 if $confirm;
-
 my %loadoptions = (noload=>1,setprojectby=>'readcount');
+
 $loadoptions{noload} = 0 if $confirm;
 
 foreach my $identifier (@$cids) {
@@ -186,16 +185,19 @@ foreach my $identifier (@$cids) {
     if ($group == 1) {
         my %option = (threshold => $minimum-1);
 	$logger->info("Removing short reads (length < $minimum)");
-        $contig = ContigFactory->removeShortReads($contig,%option);
+        $contig = $contig->removeShortReads(%option);
     }
     elsif ($group == 2) {
-        $contig = ContigFactory->removeLowQualityReads($contig);
+        $contig = $contig->removeLowQualityReads();
     }
     elsif ($group == 3) {
         my %option = (force => $force);
         my @reads = split /\D/,$readid;        
-       ($contig,$msg) = ContigFactory->deleteReads($contig,[@reads],%option);
+       ($contig,$msg) = $contig->deleteReads([@reads],%option);
         $logger->info("contig status returned: $msg");
+    }
+    elsif ($group == 4) {
+        $contig = $contig->undoReadEdits();
     }
 
     unless ($contig) {
