@@ -19,6 +19,7 @@ public class GenerateContigHashing {
 	protected int hashmask;
 	protected boolean noStore = false;
 	protected boolean tiled = false;
+	protected boolean noDisplay = false;
 	
 	protected DecimalFormat df = new DecimalFormat("########");
 
@@ -70,6 +71,9 @@ public class GenerateContigHashing {
 			
 			if (args[i].equalsIgnoreCase("-nostore"))
 				noStore = true;
+			
+			if (args[i].equalsIgnoreCase("-nodisplay"))
+				noDisplay = true;
 			
 			if (args[i].equalsIgnoreCase("-tiled"))
 				tiled = true;
@@ -213,7 +217,8 @@ public class GenerateContigHashing {
 					}
 				}
 
-				storeHash(contig_id, start_pos, hash, hashsize);
+				if (!noDisplay)
+					storeHash(contig_id, start_pos, hash, hashsize);
 				
 				done++;
 				
