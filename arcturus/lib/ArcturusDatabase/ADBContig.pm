@@ -449,14 +449,24 @@ sub putContig {
             $message .= " in an older generation; ";
             $previous = 0; # reject the match
 	}
+# test if the previous contig is valid
+        unless ($previous->getNumberOfReads() > 0 && 
+                $previous->getProject() > 0) {
+            my $msg = "Corrupted contig " . $previous->getContigID()
+                    . " detected (created " . $previous->getCreated()
+                    . ")";
+            $this->logMessage('ejz','contig-loader',$msg);
+            $log->error($msg);
+            undef $message;
+            $previous = 0;
+	}
     }
 
     if ($previous) {
 # pull out previous contig mappings and compare them one by one with contig's
         $this->getReadMappingsForContig($previous);
 
-        if ($contig->isSameAs($previous)) {
-#        if ($contig->isEqual($previous)) {
+        if ($contig->isEqual($previous)) {
 # add the contig ID to the contig
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
@@ -2577,6 +2587,7 @@ sub getAncestorIDsForContigID {
 # returns list of IDs of all contigs linked to input contig_id
     my $this = shift;
     my $cid = shift || 0; # input contig ID
+    my %options = @_;
 
     my $dbh = $this->getConnection();
 
@@ -2589,6 +2600,8 @@ sub getAncestorIDsForContigID {
 	      . "   and M2.contig_id < M1.contig_id"
 	      . "   and M1.contig_id = ?"
               . " order by ac";
+
+    $query =~ s/\</!=/ if $options{offspring};
  
     my $sth = $dbh->prepare_cached($query);
 
@@ -2660,20 +2673,24 @@ sub getContigIDsForContigProperty {
     foreach my $key (keys %options) {
 # get the relationship
         my $relation = "=";
-        $relation = "=>" if ($key =~ /^(minimum|after)/);
-        $relation = "=<" if ($key =~ /^(maximum|before)/);
+        $relation = ">="   if ($key =~ /^(minimum|after)/);
+        $relation = "<="   if ($key =~ /^(maximum|before)/);
+        $relation = "like" if ($key =~ /^(gap4|read)name/);
 # get the contig property
         my $property;
-        $property = "length"  if ($key =~ /^(min|max)imumlength$/);
-        $property = "nreads"  if ($key =~ /^(min|max)imumnumberofreads$/);
-        $property = "ncntgs"  if ($key =~ /^(min|max)imumnumberofparents$/);
-        $property = "cover"   if ($key =~ /^(min|max)imumcover$/);
-        $property = "created" if ($key =~ /^created(before|after)$/);
+        $property = "length"   if ($key =~ /^(min|max)imumlength$/);
+        $property = "nreads"   if ($key =~ /^(min|max)imumnumberofreads$/);
+        $property = "ncntgs"   if ($key =~ /^(min|max)imumnumberofparents$/);
+        $property = "cover"    if ($key =~ /^(min|max)imumcover$/);
+        $property = "created"  if ($key =~ /^created(before|after)$/);
+	$property = "gap4name" if ($key =~ /(gap4|read)name/);
+	$property = "project_id" if ($key =~ /project/);
         $property = $key unless $property; # e.g. origin
 # add the clause to the query
         $query .= " and $property $relation ?";
         push @data,$options{$key}; 
     }
+#    print "query  @data\n$query\n";
 
     $this->logQuery('getContigIDsForContigProperty',$query,@data); # for debugging
 
