@@ -6,8 +6,6 @@ use Alignment;
 
 use ArcturusDatabase;
 
-use ContigFactory::ContigFactory;
-
 use Mapping;
 
 use Logging;
@@ -312,7 +310,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
     if ($cleanup) {
         $logger->warning("Removing readmappings shorter than $cleanup");
-        my $newcontig = ContigFactory->removeShortReads($arcturuscontig);
+        my $newcontig = $arcturuscontig->removeShortReads();
         $logger->severe("Failed to return a valid contig") unless $newcontig;
         $arcturuscontig = $newcontig if $newcontig;
     }
