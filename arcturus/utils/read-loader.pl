@@ -97,7 +97,7 @@ while (my $nextword = shift @ARGV) {
 
 # special mode for tagloading only
 
-    if ($nextword eq '-onlyloadtags' || $nextword eq '-olt') {
+    if ($nextword eq '-onlyloadtags' ||  $nextword eq '-olt') {
         $noexclude    = 1;
         $onlyloadtags = 1;
     }
@@ -146,7 +146,7 @@ while (my $nextword = shift @ARGV) {
 
 my $logger = new Logging($outputFile);
 
-$logger->setFilter($logLevel) if defined $logLevel; # set reporting level
+$logger->setStandardFilter($logLevel) if defined $logLevel; # reporting level
 
 #----------------------------------------------------------------
 # check the data source
