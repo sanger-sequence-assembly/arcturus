@@ -313,7 +313,7 @@ sub analyseSegments {
 # sort the segments according to increasing read position
 # determine/test alignment direction from the segments
     my $this = shift;
-    my %options = @_;
+    my %options = @_; 
  
 # set up the required normalization status
 
@@ -325,7 +325,6 @@ sub analyseSegments {
 
     if (my $normalization = $this->{normalization}) {
 # return if the normalization already matches the required one
-#print STDOUT "this normalisation ".($this->{normalization}||0)."\n";
         my $requirement = ($options{normalizeOnX} ? 1 : 2);
         return $segments if ($normalization == $requirement);
     }
@@ -463,7 +462,9 @@ sub applyMirrorTransform {
 
     return 0 unless $this->hasSegments();
 
-# apply the mirror transformation (y = -x + m) all segments
+    $this->analyseSegments(); # must do, before the next transform
+
+# apply the mirror transformation (y = -x + m) to all segments
 
     my $segments = $this->getSegments();
     foreach my $segment (@$segments) {
@@ -471,6 +472,8 @@ sub applyMirrorTransform {
     }
 
 # invert alignment status
+
+#   $this->{orientation} = "inverted";
 
     $this->setAlignment(-$this->getAlignment());
 
