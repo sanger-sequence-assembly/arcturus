@@ -67,9 +67,9 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging('STDOUT');
+my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
