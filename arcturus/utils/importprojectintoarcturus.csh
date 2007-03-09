@@ -6,7 +6,8 @@
 #             no 4 = (optional) name of problems project
 
 set basedir=`dirname $0`
-set arcturus_home=${basedir}/..
+set arcturus_home = ${basedir}/..
+set loader_script = ${arcturus_home}/utils/contig-loader
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
@@ -55,9 +56,19 @@ if ( $#argv > 3 ) then
     set repair = -mtp
 endif
 
+if ( $#argv > 4 ) then
+    echo  \!\! -- contig loader $5 to be used --
+    set loader_script = $5
+endif
+
+
 set padded=/tmp/${projectname}.$$.padded.caf
 
 set depadded=/tmp/${projectname}.$$.depadded.caf
+
+set loading_log=/tmp/${projectname}.$$.loading.log
+
+set allocation_log=/tmp/${projectname}.$$.allocation.log
 
 echo Processing $projectname
 
@@ -84,12 +95,6 @@ else
   exit 1
 endif
 
-#echo Test abort
-#set pwd = `pwd`
-#echo d:$pwd i:$instance o:$organism p:$projectname tp:$problemsproject
-#exit 0
-
-
 echo Backing up version 0 to version B
 
 if ( -f ${projectname}.B ) then
@@ -106,17 +111,27 @@ echo Depadding CAF file
 
 caf_depad < $padded > $depadded
 
-echo Importing to Arcturus
+echo Importing to Arcturus ${arcturus_home}/utils
 
 # added 06/09/2005 default project name
 
-${arcturus_home}/utils/contig-loader -instance $instance -organism $organism -caf $depadded -defaultproject $projectname
+${loader_script} -instance $instance -organism $organism -caf $depadded -defaultproject $projectname
 
 # added 06/09/2005 read allocation test with assignment to PROBLEMS project
 
-echo Testing read-allocation for possible duplicates
+# added 13/02/2007 test split between inside project and between projects
 
-${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism $repair -project $problemsproject
+# use repair mode for inconsistencies inside the project
+
+echo Testing read-allocation for possible duplicates inside projects
+
+${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism $repair -problemproject $problemsproject -workproject $projectname -inside -log $allocation_log -mail ejz
+
+# no repair mode for inconsistencies between projects
+
+echo Testing read-allocation for possible duplicates between projects
+
+${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organism -nr -problemproject $problemsproject -workproject $projectname -between -log $allocation_log -mail ejz
 
 # calculating consensus sequence (for this project only)
 
@@ -124,18 +139,14 @@ ${basedir}/calculateconsensus -instance $instance -organism $organism -project $
 
 echo Cleaning up
 
+set allocationlog = ${organism}readallocation.log
+
+if ( ! -f $allocationlog) then
+     touch $allocationlog
+endif
+
+#cat $allocation_log >> $allocationlog
+
 rm -f $padded $depadded
 
 exit 0
-
-
-
-
-
-
-
-
-
-
-
-
