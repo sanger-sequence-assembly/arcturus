@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import java.io.PrintStream;
 import java.sql.*;
 import java.util.zip.*;
+import java.text.*;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
@@ -14,7 +15,12 @@ public class GenerateContigHashing {
 	private PreparedStatement pstmtInsertHash = null;
 	private boolean quiet = false;
 	private boolean progress = false;
+	private int hashsize = 10;
 	protected int hashmask;
+	protected boolean noStore = false;
+	protected boolean tiled = false;
+	
+	protected DecimalFormat df = new DecimalFormat("########");
 
 	private long lasttime;
 	private Runtime runtime = Runtime.getRuntime();
@@ -33,7 +39,6 @@ public class GenerateContigHashing {
 		System.err.println("=====================");
 		System.err.println();
 		
-		int hashsize = 10;
 		int minlen = -1;
 		boolean allContigs = false;
 		boolean oneRowMode = false;
@@ -62,6 +67,12 @@ public class GenerateContigHashing {
 			
 			if (args[i].equalsIgnoreCase("-onerowmode"))
 				oneRowMode = true;
+			
+			if (args[i].equalsIgnoreCase("-nostore"))
+				noStore = true;
+			
+			if (args[i].equalsIgnoreCase("-tiled"))
+				tiled = true;
 		}
 		
 		if (minlen < 0)
@@ -100,7 +111,7 @@ public class GenerateContigHashing {
 				System.exit(1);
 			}
 			
-			conn2 = oneRowMode ? adb.getUniqueConnection() : conn1;
+			conn2 = (oneRowMode && !noStore) ? adb.getUniqueConnection() : conn1;
 			
 			if (conn2 == null) {
 				System.err.println("Connection 2 is undefined");
@@ -110,8 +121,9 @@ public class GenerateContigHashing {
 
 			String query = "insert into HASHING(contig_id,offset,hash,hashsize) " +
 				"VALUES(?,?,?,?)";
-
-			pstmtInsertHash = conn2.prepareStatement(query);
+			
+			if (!noStore)
+				pstmtInsertHash = conn2.prepareStatement(query);
 			
 			String queryCurrent = "select CONSENSUS.contig_id,length,sequence" +
 					" from CONSENSUS left join C2CMAPPING " +
@@ -140,7 +152,7 @@ public class GenerateContigHashing {
 				byte[] sequence = rs.getBytes(3);
 				if (!quiet)
 					System.err.println("Processing contig " + contig_id + " (" + contiglen + " bp)");
-				processContig(contig_id, contiglen, sequence, hashsize);
+				processContig(contig_id, contiglen, sequence);
 				if (!quiet)
 					report("\nFinished", System.err);
 			}
@@ -151,10 +163,10 @@ public class GenerateContigHashing {
 		}
 	}
 	
-	private void processContig(int contig_id, int contiglen, byte[] sequence, int hashsize)
+	private void processContig(int contig_id, int contiglen, byte[] sequence)
 		throws SQLException, DataFormatException {
 		sequence = inflate(sequence, contiglen);
-		processLine(contig_id, sequence, hashsize);
+		processLine(contig_id, sequence);
 	}
 
 	private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
@@ -170,7 +182,7 @@ public class GenerateContigHashing {
 		return data;
 	}
 	
-	private void processLine(int contig_id, byte[] line, int hashsize) throws SQLException {
+	private void processLine(int contig_id, byte[] line) throws SQLException {
 		int start_pos = 0;
 		int end_pos = 0;
 		int bases_in_hash = 0;
@@ -179,6 +191,9 @@ public class GenerateContigHashing {
 		int done = 0;
 
 		while (true) {
+			if (start_pos >= line.length)
+				return;
+			
 			char c = (char)line[start_pos];
 
 			if (isValid(c)) {
@@ -199,6 +214,7 @@ public class GenerateContigHashing {
 				}
 
 				storeHash(contig_id, start_pos, hash, hashsize);
+				
 				done++;
 				
 				if (progress && ((done % 100) == 0))
@@ -206,6 +222,11 @@ public class GenerateContigHashing {
 				
 				if (progress && ((done % 8000) == 0))
 					System.err.print('\n');
+				
+				if (tiled) {
+					start_pos = end_pos;
+					bases_in_hash = 0;
+				}
 			}
 			
 			start_pos++;
@@ -215,6 +236,15 @@ public class GenerateContigHashing {
 	
 	private void storeHash(int contig_id, int offset, int hash, int hashsize)
 		throws SQLException {
+		if (noStore) {
+			System.out.print(df.format(contig_id));
+			System.out.print("  ");
+			System.out.print(df.format(offset));
+			System.out.print("  ");
+			System.out.println(df.format(hash));
+			return;
+		}
+		
 		pstmtInsertHash.setInt(1, contig_id);
 		pstmtInsertHash.setInt(2, offset);
 		pstmtInsertHash.setInt(3, hash);
