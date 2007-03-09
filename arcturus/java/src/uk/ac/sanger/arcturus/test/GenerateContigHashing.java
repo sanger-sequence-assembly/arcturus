@@ -20,6 +20,7 @@ public class GenerateContigHashing {
 	protected boolean noStore = false;
 	protected boolean tiled = false;
 	protected boolean noDisplay = false;
+	protected int allDone = 0;
 	
 	protected DecimalFormat df = new DecimalFormat("########");
 
@@ -160,6 +161,8 @@ public class GenerateContigHashing {
 				if (!quiet)
 					report("\nFinished", System.err);
 			}
+			
+			System.err.println("Generated " + allDone + " hashes");
 		}
 		catch (Exception e) {
 			e.printStackTrace();
@@ -221,6 +224,7 @@ public class GenerateContigHashing {
 					storeHash(contig_id, start_pos, hash, hashsize);
 				
 				done++;
+				allDone++;
 				
 				if (progress && ((done % 100) == 0))
 					System.err.print('.');
