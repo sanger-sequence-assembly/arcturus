@@ -4,6 +4,8 @@ import java.io.PrintStream;
 import java.sql.*;
 import java.util.zip.*;
 import java.text.*;
+import java.util.*;
+import java.io.*;
 
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
@@ -28,6 +30,7 @@ public class GenerateContigHashing {
 	private Connection conn = null;
 	
 	private HashEntry entries[];
+	private HashMap consensus = new HashMap();
 	
 	public static void main(String[] args) {
 		GenerateContigHashing gch = new GenerateContigHashing();
@@ -78,8 +81,6 @@ public class GenerateContigHashing {
 		}
 		
 		int entrysize = 1 << (2 * hashsize);
-		
-		System.err.println("HashEntry array for hashsize " + hashsize + " is " + entrysize);
 		
 		entries = new HashEntry[entrysize];
 
@@ -139,7 +140,53 @@ public class GenerateContigHashing {
 					report("\nFinished", System.err);
 			}
 			
-			System.err.println("Generated " + allDone + " hashes");
+			report("Generated " + allDone + " hashes", System.err);
+			
+			String oligo;
+			
+			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+			
+			while (true) {
+				System.out.print("Enter your oligo sequence: ");
+
+				try {
+					oligo = br.readLine();
+					
+					if (oligo == null || oligo.length() == 0)
+						break;
+					
+					int oligolen = oligo.length();
+					
+					if (oligolen < hashsize) {
+						System.err.println("The oligo is shorter than the hash size");
+						continue;
+					}
+					
+					for (int offset = 0; offset < oligolen - hashsize + 1; offset++) {
+						int oligohash = hash(oligo, offset);
+						
+						System.out.println("Oligo hash is " + oligohash);
+						
+						for (HashEntry entry = entries[oligohash]; entry != null; entry = entry.next()) {
+							int contigid = entry.getContigId();
+							int contigoffset = entry.getOffset();
+							String sequence = (String)consensus.get(new Integer(contigid));
+							
+							System.out.println("Hash match to contig " + contigid +
+									" offset " + contigoffset + " at oligo offset " + offset);
+							
+							contigoffset -= offset;
+							
+							String subseq = sequence.substring(contigoffset, contigoffset + oligolen);
+							
+							System.out.println(oligo);
+							System.out.println(subseq);
+						}
+					}
+				} catch (IOException ioe) {
+					System.exit(1);
+				}
+			}
 		}
 		catch (Exception e) {
 			e.printStackTrace();
@@ -147,11 +194,26 @@ public class GenerateContigHashing {
 		}
 	}
 	
+	private int hash(String oligo, int offset) {
+		int value = 0;
+		
+		for (int i = 0; i < hashsize; i++) {
+			value <<= 2;
+			value |= hashCode(oligo.charAt(offset + i));
+		}
+		
+		return value & hashmask;
+	}
+	
 	private void processContig(int contig_id, int contiglen, byte[] sequence)
 		throws SQLException, DataFormatException {
 		sequence = inflate(sequence, contiglen);
+		try {
+			consensus.put(new Integer(contig_id), new String(sequence, "US-ASCII"));
+		}
+		catch (UnsupportedEncodingException uce) { }
+	
 		processLine(contig_id, sequence);
-		report("Contig " + contig_id, System.err);
 	}
 
 	private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
@@ -232,27 +294,31 @@ public class GenerateContigHashing {
 				|| c == 'g' || c == 'T' || c == 't';
 	}
 
-	private int updateHash(int hash, char c) {
-		int value = -1;
-
+	private int hashCode(char c) {
 		switch (c) {
 			case 'A':
 			case 'a':
-				value = 0;
-				break;
+				return 0;
+			
 			case 'C':
 			case 'c':
-				value = 1;
-				break;
+				return 1;
+
 			case 'G':
 			case 'g':
-				value = 2;
-				break;
+				return 2;
+
 			case 'T':
 			case 't':
-				value = 3;
-				break;
+				return 3;
+
+			default:
+				return -1;
 		}
+	}
+	
+	private int updateHash(int hash, char c) {
+		int value = hashCode(c);
 		
 		hash <<= 2;
 		
@@ -279,8 +345,8 @@ public class GenerateContigHashing {
 	private void report(String caption, PrintStream ps) {
 		long timenow = System.currentTimeMillis();
 
-		//ps.println(caption);
-		//ps.println("\tTime: " + (timenow - lasttime));
+		ps.println(caption);
+		ps.println("\tTime: " + (timenow - lasttime));
 		
 		lasttime = timenow;
 		
@@ -292,26 +358,24 @@ public class GenerateContigHashing {
 		freemem  /= 1024;
 		usedmem  /= 1024;
 
-		//ps.println("\tMemory (kb): (used/free/total) " + usedmem + "/" + freemem + "/" + totalmem);
-		
-		ps.println(df.format(allDone) + "    " + df.format(usedmem));
+		ps.println("\tMemory (kb): (used/free/total) " + usedmem + "/" + freemem + "/" + totalmem);
 	}
 
 	class HashEntry {
 		private int contigid;
 		private int offset;
-		private HashEntry next;
+		private HashEntry nextEntry;
 		
-		public HashEntry(int contigid, int offset, HashEntry next) {
+		public HashEntry(int contigid, int offset, HashEntry nextEntry) {
 			this.contigid = contigid;
 			this.offset = offset;
-			this.next = next;
+			this.nextEntry = nextEntry;
 		}
 		
 		int getContigId() { return contigid; }
 		
 		int getOffset() { return offset; }
 		
-		HashEntry getNext() { return next; }
+		HashEntry next() { return nextEntry; }
 	}
 }
