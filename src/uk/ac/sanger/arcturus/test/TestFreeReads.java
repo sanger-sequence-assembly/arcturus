@@ -9,8 +9,6 @@ import java.io.*;
 public class TestFreeReads {
 	private String instance = null;
 	private String organism = null;
-	private String username = null;
-	private String password = null;
 	
 	private ArcturusDatabase adb = null;
 	private Connection conn = null;
@@ -31,12 +29,6 @@ public class TestFreeReads {
 
 			if (args[i].equalsIgnoreCase("-organism"))
 				organism = args[++i];
-			
-			if (args[i].equalsIgnoreCase("-username"))
-				username = args[++i];
-			
-			if (args[i].equalsIgnoreCase("-password"))
-				password = args[++i];
 		}
 
 		if (instance == null || organism == null) {
@@ -56,8 +48,7 @@ public class TestFreeReads {
 
 			adb = ai.findArcturusDatabase(organism);
 
-			conn = (username == null || password == null ) ?
-					adb.getConnection() : adb.getConnection(username, password);
+			conn = adb.getConnection();
 			
 			String sql = "{call procFreeReads}";
 			
