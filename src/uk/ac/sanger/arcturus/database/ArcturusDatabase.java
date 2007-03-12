@@ -16,6 +16,8 @@ import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import uk.ac.sanger.arcturus.people.Person;
 
+import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
+
 public class ArcturusDatabase {
 	public static final int MYSQL = 1;
 	public static final int ORACLE = 2;
@@ -53,7 +55,9 @@ public class ArcturusDatabase {
 	protected String description;
 	protected String name;
 	protected Connection defaultConnection;
-	protected HashMap namedConnections;
+
+	protected ConnectionPool connectionPool;
+	
 	protected Logger logger = null;
 
 	/**
@@ -97,7 +101,9 @@ public class ArcturusDatabase {
 	}
 
 	private void initialise() throws SQLException {
-		namedConnections = new HashMap();
+		connectionPool = new ConnectionPool(ds);
+		
+		defaultConnection = connectionPool.getConnection();
 
 		createManagers();
 	}
@@ -147,8 +153,8 @@ public class ArcturusDatabase {
 	 */
 
 	public Connection getConnection() throws SQLException {
-		if (defaultConnection == null)
-			defaultConnection = ds.getConnection();
+		if (defaultConnection == null || defaultConnection.isClosed())
+			defaultConnection = connectionPool.getConnection();
 
 		return defaultConnection;
 	}
@@ -165,72 +171,8 @@ public class ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public Connection getUniqueConnection() throws SQLException {
-		return ds.getConnection();
-	}
-
-	/**
-	 * Establishes a JDBC connection to a database, using the parameters stored
-	 * in this object's DataSource, and the specified username and password.
-	 * After the first call to this method, the Connection object will be
-	 * cached. The second and subsequent calls which specify the same username
-	 * will return the cached object.
-	 * 
-	 * @param username
-	 *            the username which should be used to connect to the database.
-	 *            This overrides the username, if any, in the DataSource object.
-	 * 
-	 * @param password
-	 *            the pasword which should be used to connect to the database.
-	 *            This overrides the password, if any, in the DataSource object.
-	 * 
-	 * @return a java.sql.Connection which can be used to communicate with the
-	 *         database.
-	 * 
-	 * @throws SQLException
-	 *             in the event of an error when establishing a connection with
-	 *             the database.
-	 */
-
-	public Connection getConnection(String username, String password)
-			throws SQLException {
-		Object obj = namedConnections.get(username);
-
-		if (obj != null)
-			return (Connection) obj;
-
-		Connection conn = ds.getConnection(username, password);
-
-		if (conn != null)
-			namedConnections.put(username, conn);
-
-		return conn;
-	}
-
-	/**
-	 * Establishes a unique (non-cached) JDBC connection to a database, using
-	 * the parameters stored in this object's DataSource, and the specified
-	 * username and password.
-	 * 
-	 * @param username
-	 *            the username which should be used to connect to the database.
-	 *            This overrides the username, if any, in the DataSource object.
-	 * 
-	 * @param password
-	 *            the pasword which should be used to connect to the database.
-	 *            This overrides the password, if any, in the DataSource object.
-	 * 
-	 * @return a java.sql.Connection which can be used to communicate with the
-	 *         database.
-	 * 
-	 * @throws SQLException
-	 *             in the event of an error when establishing a connection with
-	 *             the database.
-	 */
-
-	public Connection getUniqueConnection(String username, String password)
-			throws SQLException {
-		return ds.getConnection(username, password);
+	public Connection getPooledConnection() throws SQLException {
+		return connectionPool.getConnection();
 	}
 
 	/**
