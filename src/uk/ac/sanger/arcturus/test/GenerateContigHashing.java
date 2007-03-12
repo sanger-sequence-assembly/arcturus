@@ -18,9 +18,8 @@ public class GenerateContigHashing {
 	private boolean progress = false;
 	private int hashsize = 10;
 	protected int hashmask;
-	protected boolean tiled = false;
 	protected int allDone = 0;
-	
+
 	protected DecimalFormat df = new DecimalFormat("########");
 
 	private long lasttime;
@@ -28,10 +27,10 @@ public class GenerateContigHashing {
 
 	private ArcturusDatabase adb = null;
 	private Connection conn = null;
-	
+
 	private HashEntry entries[];
 	private HashMap consensus = new HashMap();
-	
+
 	public static void main(String[] args) {
 		GenerateContigHashing gch = new GenerateContigHashing();
 		gch.execute(args);
@@ -41,7 +40,7 @@ public class GenerateContigHashing {
 		System.err.println("GenerateContigHashing");
 		System.err.println("=====================");
 		System.err.println();
-		
+
 		int minlen = -1;
 		boolean allContigs = false;
 
@@ -57,31 +56,28 @@ public class GenerateContigHashing {
 
 			if (args[i].equalsIgnoreCase("-progress"))
 				progress = true;
-			
+
 			if (args[i].equalsIgnoreCase("-hashsize"))
 				hashsize = Integer.parseInt(args[++i]);
-			
+
 			if (args[i].equalsIgnoreCase("-minlen"))
 				minlen = Integer.parseInt(args[++i]);
-			
+
 			if (args[i].equalsIgnoreCase("-allcontigs"))
 				allContigs = true;
-			
-			if (args[i].equalsIgnoreCase("-tiled"))
-				tiled = true;
 		}
-		
+
 		if (minlen < 0)
-			minlen = allContigs ? 100000: 0;
+			minlen = allContigs ? 100000 : 0;
 
 		hashmask = 0;
 
 		for (int i = 0; i < hashsize; i++) {
 			hashmask |= 3 << (2 * i);
 		}
-		
+
 		int entrysize = 1 << (2 * hashsize);
-		
+
 		entries = new HashEntry[entrysize];
 
 		if (instance == null || organism == null) {
@@ -110,109 +106,144 @@ public class GenerateContigHashing {
 				printUsage(System.err);
 				System.exit(1);
 			}
-						
-			String queryCurrent = "select CONSENSUS.contig_id,length,sequence" +
-					" from CONSENSUS left join C2CMAPPING " +
-					" on CONSENSUS.contig_id = C2CMAPPING.parent_id" +
-					" where C2CMAPPING.parent_id is null and length >= " + minlen;
-			
-			String queryAll = "select contig_id,length,sequence" +
-				" from CONSENSUS where length >= " + minlen;
-			
-			Statement stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
-		              java.sql.ResultSet.CONCUR_READ_ONLY);
-			
-			ResultSet rs = stmt.executeQuery(allContigs ? queryAll : queryCurrent);
+
+			String queryCurrent = "select CONSENSUS.contig_id,length,sequence"
+					+ " from CONSENSUS left join C2CMAPPING "
+					+ " on CONSENSUS.contig_id = C2CMAPPING.parent_id"
+					+ " where C2CMAPPING.parent_id is null and length >= "
+					+ minlen;
+
+			String queryAll = "select contig_id,length,sequence"
+					+ " from CONSENSUS where length >= " + minlen;
+
+			Statement stmt = conn.createStatement(
+					java.sql.ResultSet.TYPE_FORWARD_ONLY,
+					java.sql.ResultSet.CONCUR_READ_ONLY);
+
+			ResultSet rs = stmt.executeQuery(allContigs ? queryAll
+					: queryCurrent);
 
 			lasttime = System.currentTimeMillis();
 
 			if (!quiet)
 				report("Starting", System.err);
-			
+
 			while (rs.next()) {
 				int contig_id = rs.getInt(1);
 				int contiglen = rs.getInt(2);
 				byte[] sequence = rs.getBytes(3);
 				if (!quiet)
-					System.err.println("Processing contig " + contig_id + " (" + contiglen + " bp)");
+					System.err.println("Processing contig " + contig_id + " ("
+							+ contiglen + " bp)");
 				processContig(contig_id, contiglen, sequence);
 				if (!quiet)
 					report("\nFinished", System.err);
 			}
-			
+
 			report("Generated " + allDone + " hashes", System.err);
-			
+
 			String oligo;
-			
-			BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-			
+
+			BufferedReader br = new BufferedReader(new InputStreamReader(
+					System.in));
+
 			while (true) {
 				System.out.print("Enter your oligo sequence: ");
 
 				try {
 					oligo = br.readLine();
-					
+
 					if (oligo == null || oligo.length() == 0)
 						break;
-					
+
 					int oligolen = oligo.length();
-					
+
 					if (oligolen < hashsize) {
-						System.err.println("The oligo is shorter than the hash size");
+						System.err
+								.println("The oligo is shorter than the hash size");
 						continue;
 					}
-					
-					for (int offset = 0; offset < oligolen - hashsize + 1; offset++) {
-						int oligohash = hash(oligo, offset);
-						
-						System.out.println("Oligo hash is " + oligohash);
-						
-						for (HashEntry entry = entries[oligohash]; entry != null; entry = entry.next()) {
-							int contigid = entry.getContigId();
-							int contigoffset = entry.getOffset();
-							String sequence = (String)consensus.get(new Integer(contigid));
-							
-							System.out.println("Hash match to contig " + contigid +
-									" offset " + contigoffset + " at oligo offset " + offset);
-							
-							contigoffset -= offset;
-							
-							String subseq = sequence.substring(contigoffset, contigoffset + oligolen);
-							
-							System.out.println(oligo);
-							System.out.println(subseq);
-						}
+
+					int oligohash = hash(oligo);
+
+					System.out.println("Oligo hash is " + oligohash);
+
+					for (HashEntry entry = entries[oligohash]; entry != null; entry = entry
+							.next()) {
+						int contigid = entry.getContigId();
+						int contigoffset = entry.getOffset();
+						String sequence = (String) consensus.get(new Integer(
+								contigid));
+
+						System.out.println("Hash match to contig " + contigid
+								+ " offset " + contigoffset);
+
+						String subseq = sequence.substring(contigoffset,
+								contigoffset + oligolen);
+
+						System.out.println(oligo);
+						System.out.print(subseq);
+						if (oligo.equalsIgnoreCase(subseq))
+							System.out.println("  *** MATCH");
+						else
+							System.out.println();
 					}
+
 				} catch (IOException ioe) {
 					System.exit(1);
 				}
 			}
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
 	}
-	
-	private int hash(String oligo, int offset) {
+
+	private int[] matchRange(String oligo, String contig, int contigoffset) {
+		int cfinish = contigoffset;
+
+		int olength = oligo.length();
+		int clength = contig.length();
+
+		// Scan forwards
+		for (int i = 0; i < olength && cfinish < clength; i++, cfinish++) {
+			int ocode = hashCode(oligo.charAt(i));
+
+			while (cfinish < clength && hashCode(contig.charAt(cfinish)) < 0)
+				cfinish++;
+
+			if (hashCode(contig.charAt(cfinish)) != ocode)
+				return null;
+		}
+
+		int range[] = new int[2];
+
+		range[0] = contigoffset;
+		range[1] = cfinish - 1;
+
+		return range;
+	}
+
+	private int hash(String oligo) {
 		int value = 0;
-		
+
 		for (int i = 0; i < hashsize; i++) {
 			value <<= 2;
-			value |= hashCode(oligo.charAt(offset + i));
+			value |= hashCode(oligo.charAt(i));
 		}
-		
+
 		return value & hashmask;
 	}
-	
+
 	private void processContig(int contig_id, int contiglen, byte[] sequence)
-		throws SQLException, DataFormatException {
+			throws SQLException, DataFormatException {
 		sequence = inflate(sequence, contiglen);
 		try {
-			consensus.put(new Integer(contig_id), new String(sequence, "US-ASCII"));
+			consensus.put(new Integer(contig_id), new String(sequence,
+					"US-ASCII"));
+		} catch (UnsupportedEncodingException uce) {
 		}
-		catch (UnsupportedEncodingException uce) { }
-	
+
 		processLine(contig_id, sequence);
 	}
 
@@ -228,8 +259,45 @@ public class GenerateContigHashing {
 
 		return data;
 	}
-	
-	private void processLine(int contig_id, byte[] line) throws SQLException {
+
+	private void processLine(int contig_id, byte[] line) {
+		int start_pos = 0;
+		int end_pos = 0;
+		int bases_in_hash = 0;
+		int hash = 0;
+		int linelen = line.length;
+
+		while (true) {
+			while (start_pos < linelen && !isValid((char) line[start_pos]))
+				start_pos++;
+			
+			char c = (char) line[start_pos];
+
+			while (bases_in_hash < hashsize) {
+				if (end_pos >= linelen)
+					return;
+
+				c = (char) line[end_pos];
+
+				end_pos++;
+
+				if (isValid(c)) {
+					hash = updateHash(hash, c);
+					bases_in_hash++;
+				}
+			}
+
+			if (bases_in_hash == hashsize) {
+				allDone++;
+				storeHash(contig_id, start_pos, hash);
+			}
+			
+			start_pos++;
+			bases_in_hash--;
+		}
+	}
+
+	private void processLine2(int contig_id, byte[] line) throws SQLException {
 		int start_pos = 0;
 		int end_pos = 0;
 		int bases_in_hash = 0;
@@ -240,17 +308,12 @@ public class GenerateContigHashing {
 		while (true) {
 			if (start_pos >= linelen)
 				return;
-			
-			char c = (char)line[start_pos];
+
+			char c = (char) line[start_pos];
 
 			if (isValid(c)) {
-				while (bases_in_hash < hashsize) {
-					if (end_pos >= linelen) {						
-						if (progress)
-							System.err.print('\n');
-						return;
-					}
-					c = (char)line[end_pos];
+				while (bases_in_hash < hashsize && end_pos < linelen) {
+					c = (char) line[end_pos];
 
 					end_pos++;
 
@@ -260,32 +323,28 @@ public class GenerateContigHashing {
 					}
 				}
 
-				storeHash(contig_id, start_pos, hash);
-				
-				done++;
-				allDone++;
-				
-				if (progress && ((done % 100) == 0))
-					System.err.print('.');
-				
-				if (progress && ((done % 8000) == 0))
-					System.err.print('\n');
-				
-				if (tiled) {
-					start_pos = end_pos - 1;
-					end_pos = start_pos;
-					bases_in_hash = 0;
+				if (bases_in_hash == hashsize) {
+					storeHash(contig_id, start_pos, hash);
+
+					done++;
+					allDone++;
+
+					if (progress && ((done % 100) == 0))
+						System.err.print('.');
+
+					if (progress && ((done % 8000) == 0))
+						System.err.print('\n');
 				}
 			}
-			
+
 			start_pos++;
 			bases_in_hash--;
 		}
 	}
-	
+
 	private void storeHash(int contig_id, int offset, int hash) {
 		HashEntry root = entries[hash];
-		
+
 		entries[hash] = new HashEntry(contig_id, offset, root);
 	}
 
@@ -299,7 +358,7 @@ public class GenerateContigHashing {
 			case 'A':
 			case 'a':
 				return 0;
-			
+
 			case 'C':
 			case 'c':
 				return 1;
@@ -316,15 +375,15 @@ public class GenerateContigHashing {
 				return -1;
 		}
 	}
-	
+
 	private int updateHash(int hash, char c) {
 		int value = hashCode(c);
-		
+
 		hash <<= 2;
-		
-		if (value >= 0)
+
+		if (value > 0)
 			hash |= value;
-		
+
 		return hash & hashmask;
 	}
 
@@ -347,35 +406,42 @@ public class GenerateContigHashing {
 
 		ps.println(caption);
 		ps.println("\tTime: " + (timenow - lasttime));
-		
-		lasttime = timenow;
-		
-		long totalmem = runtime.totalMemory();
-		long freemem  = runtime.freeMemory();
-		long usedmem  = totalmem - freemem;
-		
-		totalmem /= 1024;
-		freemem  /= 1024;
-		usedmem  /= 1024;
 
-		ps.println("\tMemory (kb): (used/free/total) " + usedmem + "/" + freemem + "/" + totalmem);
+		lasttime = timenow;
+
+		long totalmem = runtime.totalMemory();
+		long freemem = runtime.freeMemory();
+		long usedmem = totalmem - freemem;
+
+		totalmem /= 1024;
+		freemem /= 1024;
+		usedmem /= 1024;
+
+		ps.println("\tMemory (kb): (used/free/total) " + usedmem + "/"
+				+ freemem + "/" + totalmem);
 	}
 
 	class HashEntry {
 		private int contigid;
 		private int offset;
 		private HashEntry nextEntry;
-		
+
 		public HashEntry(int contigid, int offset, HashEntry nextEntry) {
 			this.contigid = contigid;
 			this.offset = offset;
 			this.nextEntry = nextEntry;
 		}
-		
-		int getContigId() { return contigid; }
-		
-		int getOffset() { return offset; }
-		
-		HashEntry next() { return nextEntry; }
+
+		int getContigId() {
+			return contigid;
+		}
+
+		int getOffset() {
+			return offset;
+		}
+
+		HashEntry next() {
+			return nextEntry;
+		}
 	}
 }
