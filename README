@@ -65,6 +65,10 @@ object persistence layer between data objects and the relational database.
 The only class that end-user programs need to know about is
 ArcturusDatabase.
 
+uk.ac.sanger.arcturus.pooledconnection contains classes which implement
+a simple connection pool, which ArcturusDatabase objects can use to
+acquire connections to the relational database.
+
 uk.ac.sanger.arcturus.gui contains classes which implement the GUI
 client software, called Minerva.
 
