@@ -99,7 +99,7 @@ public class TestConnection implements ActionListener {
 			thread1.start();
 			
 			if (cbxTwoConn.isSelected())
-				conn = adb.getUniqueConnection();
+				conn = adb.getPooledConnection();
 		
 			Task task2 = new Task(conn, pbTask2, columns, tablename, noBatch);
 			
