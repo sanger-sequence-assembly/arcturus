@@ -12,14 +12,11 @@ public class GenerateContigHashing {
 	private String instance = null;
 	private String organism = null;
 	private Inflater decompresser = new Inflater();
-	private PreparedStatement pstmtInsertHash = null;
 	private boolean quiet = false;
 	private boolean progress = false;
 	private int hashsize = 10;
 	protected int hashmask;
-	protected boolean noStore = false;
 	protected boolean tiled = false;
-	protected boolean noDisplay = false;
 	protected int allDone = 0;
 	
 	protected DecimalFormat df = new DecimalFormat("########");
@@ -28,8 +25,9 @@ public class GenerateContigHashing {
 	private Runtime runtime = Runtime.getRuntime();
 
 	private ArcturusDatabase adb = null;
-	private Connection conn1 = null;
-	private Connection conn2 = null;
+	private Connection conn = null;
+	
+	private HashEntry entries[];
 	
 	public static void main(String[] args) {
 		GenerateContigHashing gch = new GenerateContigHashing();
@@ -43,7 +41,6 @@ public class GenerateContigHashing {
 		
 		int minlen = -1;
 		boolean allContigs = false;
-		boolean oneRowMode = false;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -67,15 +64,6 @@ public class GenerateContigHashing {
 			if (args[i].equalsIgnoreCase("-allcontigs"))
 				allContigs = true;
 			
-			if (args[i].equalsIgnoreCase("-onerowmode"))
-				oneRowMode = true;
-			
-			if (args[i].equalsIgnoreCase("-nostore"))
-				noStore = true;
-			
-			if (args[i].equalsIgnoreCase("-nodisplay"))
-				noDisplay = true;
-			
 			if (args[i].equalsIgnoreCase("-tiled"))
 				tiled = true;
 		}
@@ -88,6 +76,12 @@ public class GenerateContigHashing {
 		for (int i = 0; i < hashsize; i++) {
 			hashmask |= 3 << (2 * i);
 		}
+		
+		int entrysize = 1 << (2 * hashsize);
+		
+		System.err.println("HashEntry array for hashsize " + hashsize + " is " + entrysize);
+		
+		entries = new HashEntry[entrysize];
 
 		if (instance == null || organism == null) {
 			printUsage(System.err);
@@ -108,28 +102,14 @@ public class GenerateContigHashing {
 
 			adb.getSequenceManager().setCacheing(false);
 
-			conn1 = adb.getConnection();
+			conn = adb.getConnection();
 
-			if (conn1 == null) {
-				System.err.println("Connection 1 is undefined");
+			if (conn == null) {
+				System.err.println("Connection is undefined");
 				printUsage(System.err);
 				System.exit(1);
 			}
-			
-			conn2 = (oneRowMode && !noStore) ? adb.getUniqueConnection() : conn1;
-			
-			if (conn2 == null) {
-				System.err.println("Connection 2 is undefined");
-				printUsage(System.err);
-				System.exit(1);
-			}
-
-			String query = "insert into HASHING(contig_id,offset,hash,hashsize) " +
-				"VALUES(?,?,?,?)";
-			
-			if (!noStore)
-				pstmtInsertHash = conn2.prepareStatement(query);
-			
+						
 			String queryCurrent = "select CONSENSUS.contig_id,length,sequence" +
 					" from CONSENSUS left join C2CMAPPING " +
 					" on CONSENSUS.contig_id = C2CMAPPING.parent_id" +
@@ -138,11 +118,8 @@ public class GenerateContigHashing {
 			String queryAll = "select contig_id,length,sequence" +
 				" from CONSENSUS where length >= " + minlen;
 			
-			Statement stmt = conn1.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
+			Statement stmt = conn.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY,
 		              java.sql.ResultSet.CONCUR_READ_ONLY);
-			
-			if (oneRowMode)
-				stmt.setFetchSize(Integer.MIN_VALUE);
 			
 			ResultSet rs = stmt.executeQuery(allContigs ? queryAll : queryCurrent);
 
@@ -174,6 +151,7 @@ public class GenerateContigHashing {
 		throws SQLException, DataFormatException {
 		sequence = inflate(sequence, contiglen);
 		processLine(contig_id, sequence);
+		report("Contig " + contig_id, System.err);
 	}
 
 	private byte[] inflate(byte[] cdata, int length) throws DataFormatException {
@@ -220,8 +198,7 @@ public class GenerateContigHashing {
 					}
 				}
 
-				if (!noDisplay)
-					storeHash(contig_id, start_pos, hash, hashsize);
+				storeHash(contig_id, start_pos, hash);
 				
 				done++;
 				allDone++;
@@ -244,27 +221,10 @@ public class GenerateContigHashing {
 		}
 	}
 	
-	private void storeHash(int contig_id, int offset, int hash, int hashsize)
-		throws SQLException {
-		if (noStore) {
-			System.out.print(df.format(contig_id));
-			System.out.print("  ");
-			System.out.print(df.format(offset));
-			System.out.print("  ");
-			System.out.println(df.format(hash));
-			return;
-		}
+	private void storeHash(int contig_id, int offset, int hash) {
+		HashEntry root = entries[hash];
 		
-		pstmtInsertHash.setInt(1, contig_id);
-		pstmtInsertHash.setInt(2, offset);
-		pstmtInsertHash.setInt(3, hash);
-		pstmtInsertHash.setInt(4, hashsize);
-
-		int rows = pstmtInsertHash.executeUpdate();
-		
-		if (rows != 1)
-			System.err.println("storeHash(" + contig_id + ", " + offset + ", " + hash + ", " +
-					hashsize + ") failed");
+		entries[hash] = new HashEntry(contig_id, offset, root);
 	}
 
 	private boolean isValid(char c) {
@@ -319,13 +279,39 @@ public class GenerateContigHashing {
 	private void report(String caption, PrintStream ps) {
 		long timenow = System.currentTimeMillis();
 
-		ps.println(caption);
-		ps.println("\tTime: " + (timenow - lasttime));
+		//ps.println(caption);
+		//ps.println("\tTime: " + (timenow - lasttime));
 		
 		lasttime = timenow;
+		
+		long totalmem = runtime.totalMemory();
+		long freemem  = runtime.freeMemory();
+		long usedmem  = totalmem - freemem;
+		
+		totalmem /= 1024;
+		freemem  /= 1024;
+		usedmem  /= 1024;
 
-		ps.println("\tMemory (kb): (free/total) " + runtime.freeMemory()
-				/ 1024 + "/" + runtime.totalMemory() / 1024);
+		//ps.println("\tMemory (kb): (used/free/total) " + usedmem + "/" + freemem + "/" + totalmem);
+		
+		ps.println(df.format(allDone) + "    " + df.format(usedmem));
 	}
 
+	class HashEntry {
+		private int contigid;
+		private int offset;
+		private HashEntry next;
+		
+		public HashEntry(int contigid, int offset, HashEntry next) {
+			this.contigid = contigid;
+			this.offset = offset;
+			this.next = next;
+		}
+		
+		int getContigId() { return contigid; }
+		
+		int getOffset() { return offset; }
+		
+		HashEntry getNext() { return next; }
+	}
 }
