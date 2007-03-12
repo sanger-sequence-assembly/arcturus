@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus;
 
 import java.io.IOException;
+import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.File;
@@ -22,9 +23,26 @@ public class Arcturus {
 	}
 	
 	private static void loadProperties() {
-		// Load the properties that are embedded in the JAR file
-
-		InputStream is = Arcturus.class.getResourceAsStream("/resources/arcturus.props");
+		// Load the properties in the user's private version of the properties file,
+		// if it exists.  If not, use the properties file in the JAR file.
+		
+		File userhome = new File(System.getProperty("user.home"));
+		File dotarcturus = new File(userhome, ".arcturus");
+		File privateprops = (dotarcturus != null && dotarcturus.isDirectory()) ?
+				new File(dotarcturus, "arcturus.props") : null;
+		
+		InputStream is = null;
+		
+		if (privateprops != null && privateprops.isFile() && privateprops.canRead()) {
+			try {
+				is = new FileInputStream(privateprops);
+			}
+			catch (FileNotFoundException fnfe) {
+				System.err.println("Failed to open properties file " + privateprops.getPath());
+				System.exit(1);
+			}
+		} else
+			is = Arcturus.class.getResourceAsStream("/resources/arcturus.props");
 
 		if (is != null) {
 			try {
@@ -33,9 +51,11 @@ public class Arcturus {
 			} catch (IOException ioe) {
 				ioe.printStackTrace();
 			}
-		} else
-			System.err.println("Unable to open resource /resources/arcturus.props as stream");
-
+		} else {
+			System.err.println("Unable to find a resource file");
+			System.exit(2);
+		}
+		
 		// Find the project-specific properties, if they exist, by walking up
 		// the
 		// directory tree from the application's current working directory,
