@@ -118,8 +118,6 @@ public class CalculateConsensus {
 			System.err.println();
 
 			adb = ai.findArcturusDatabase(organism);
-			
-			enumerateThreads();
 
 			Project project = (projectname == null) ? null : adb
 					.getProjectByName(null, projectname);
@@ -192,14 +190,6 @@ public class CalculateConsensus {
 			Arcturus.logSevere(e);
 			System.exit(1);
 		}
-	}
-
-	private void enumerateThreads() {
-		int threadcount = Thread.activeCount();
-		Thread[] threads = new Thread[threadcount];
-		int n = Thread.enumerate(threads);
-		for (int i = 0; i < n; i++)
-			System.err.println("Thread " + i + " : " + threads[i]);
 	}
 	
 	public void calculateConsensusForContig(int contig_id, boolean doUpdate)
