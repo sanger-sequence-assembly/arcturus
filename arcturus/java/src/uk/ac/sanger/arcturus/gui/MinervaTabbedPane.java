@@ -149,4 +149,8 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		
 		return null;
 	}
+
+	public void refresh() {
+		// Does nothing
+	}
 }
