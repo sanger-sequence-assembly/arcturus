@@ -49,6 +49,7 @@ public class CalculateConsensus {
 	public static void main(String args[]) {
 		CalculateConsensus cc = new CalculateConsensus();
 		cc.execute(args);
+		System.exit(0);
 	}
 
 	public void execute(String args[]) {
