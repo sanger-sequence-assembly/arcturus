@@ -49,7 +49,7 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
 			public void actionPerformed(ActionEvent e) {
-				table.refresh();
+				refresh();
 			}
 		};
 	
@@ -129,5 +129,9 @@ public class OrganismTablePanel extends JPanel implements MinervaClient {
 
 	public String toString() {
 		return "OrganismTablePanel[instance=" + instance.getName() + "]";
+	}
+
+	public void refresh() {
+		table.refresh();
 	}
 }

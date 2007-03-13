@@ -104,7 +104,7 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
 			public void actionPerformed(ActionEvent e) {
-				table.refresh();
+				refresh();
 			}
 		};
 
@@ -303,5 +303,9 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	
 	public boolean isOneProject() {
 		return oneProject;
+	}
+
+	public void refresh() {
+		table.refresh();
 	}
 }
