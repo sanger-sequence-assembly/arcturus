@@ -83,6 +83,7 @@ public class ConnectionPool {
 
 		ConnectionReaper(ConnectionPool pool) {
 			this.pool = pool;
+			setDaemon(true);
 		}
 
 		public void run() {
