@@ -20,7 +20,7 @@ public class ConnectionPool {
 		this.timeout = timeout;
 		this.dataSource = dataSource;
 		connections = new Vector(poolsize);
-		reaper = new ConnectionReaper(this);
+		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
 	}
 
@@ -79,10 +79,11 @@ public class ConnectionPool {
 
 	class ConnectionReaper extends Thread {
 		private ConnectionPool pool;
-		private final long delay = 300000;
+		private final long delay;
 
-		ConnectionReaper(ConnectionPool pool) {
+		ConnectionReaper(ConnectionPool pool, long delay) {
 			this.pool = pool;
+			this.delay = delay;
 			setDaemon(true);
 		}
 
