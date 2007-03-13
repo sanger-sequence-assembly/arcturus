@@ -71,7 +71,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
 			public void actionPerformed(ActionEvent e) {
-				table.refresh();
+				refresh();
 			}
 		};
 	
@@ -263,6 +263,10 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	
 	public void closeResources() {
 		// Does nothing
+	}
+	
+	public void refresh() {
+		table.refresh();
 	}
 	
 	public String toString() {
