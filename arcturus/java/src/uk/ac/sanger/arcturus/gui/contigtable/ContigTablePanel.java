@@ -150,12 +150,6 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 
 		fileMenu.addSeparator();
 
-		fileMenu.add(actionExportAsCAF);
-
-		fileMenu.add(actionExportAsFasta);
-
-		fileMenu.addSeparator();
-
 		fileMenu.add(Minerva.getQuitAction());
 		
 		fileMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
@@ -178,26 +172,30 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	}
 
 	private void exportAsCAF() {
-		//JOptionPane.showMessageDialog(this,
-		//		"The selected contigs will be exported as a CAF file",
-		//		"Export as CAF", JOptionPane.INFORMATION_MESSAGE, null);
+		if (table.getSelectedRowCount() > 0) {		
+			int rc = fileChooser.showSaveDialog(this);
 		
-		int rc = fileChooser.showSaveDialog(this);
-		
-		if (rc == JFileChooser.APPROVE_OPTION) {
-			table.saveSelectedContigsAsCAF(fileChooser.getSelectedFile());
+			if (rc == JFileChooser.APPROVE_OPTION) {
+				table.saveSelectedContigsAsCAF(fileChooser.getSelectedFile());
+			}
+		} else {
+			JOptionPane.showMessageDialog(this,
+					"Please select the contigs to export",
+					"No contigs selected", JOptionPane.WARNING_MESSAGE, null);		
 		}
 	}
 
 	private void exportAsFasta() {
-		//JOptionPane.showMessageDialog(this,
-		//		"The selected contigs will be exported as a FASTA file",
-		//		"Export as FASTA", JOptionPane.INFORMATION_MESSAGE, null);
+		if (table.getSelectedRowCount() > 0) {				
+			int rc = fileChooser.showSaveDialog(this);
 		
-		int rc = fileChooser.showSaveDialog(this);
-		
-		if (rc == JFileChooser.APPROVE_OPTION) {
-			table.saveSelectedContigsAsFasta(fileChooser.getSelectedFile());
+			if (rc == JFileChooser.APPROVE_OPTION) {
+				table.saveSelectedContigsAsFasta(fileChooser.getSelectedFile());
+			}
+		} else {
+			JOptionPane.showMessageDialog(this,
+					"Please select the contigs to export",
+					"No contigs selected", JOptionPane.WARNING_MESSAGE, null);			
 		}
 	}
 
@@ -247,12 +245,21 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 
 			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-				actionViewContigs.setEnabled(table.getSelectedRowCount() > 0);
+				boolean haveSelection = table.getSelectedRowCount() > 0;
+				actionViewContigs.setEnabled(haveSelection);
+				actionExportAsCAF.setEnabled(haveSelection);
+				actionExportAsFasta.setEnabled(haveSelection);
 			}
 			
 		});
 	
 		contigMenu.add(actionViewContigs);
+
+		contigMenu.addSeparator();
+
+		contigMenu.add(actionExportAsCAF);
+
+		contigMenu.add(actionExportAsFasta);
 	}
 	
 	private void createHelpMenu() {
