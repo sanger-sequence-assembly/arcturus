@@ -9,6 +9,7 @@ import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.importreads.*;
 
 public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTable table = null;
@@ -246,11 +247,28 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	}
 	
 	private void importReadsIntoProject() {
-		JOptionPane.showMessageDialog(
-				this,
-				"The user will be invited to import a set of reads into the selected project",
-				"Import reads", JOptionPane.INFORMATION_MESSAGE,
-				null);
+		int[] indices = table.getSelectedRows();
+		
+		if (indices.length != 1) {
+			JOptionPane.showMessageDialog(
+					null,
+					"Please select ONE project for this operation",
+					"Select only one project", JOptionPane.ERROR_MESSAGE,
+					null);
+			return;
+		}
+		
+		ProjectProxy proxy = (ProjectProxy) model.elementAt(indices[0]);
+		
+		String name = proxy.getName();
+		
+		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
+		
+		ImportReadsPanel irp = mtp.showImportReadsPanel();
+		
+		irp.setSelectedProject(name);
+		
+		mtp.setSelectedComponent(irp);
 	}
 
 	public JMenuBar getMenuBar() {
