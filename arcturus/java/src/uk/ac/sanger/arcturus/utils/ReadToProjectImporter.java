@@ -16,6 +16,7 @@ public class ReadToProjectImporter {
 	public static final int FAILED_TO_INSERT_CONSENSUS = 7;
 	public static final int FAILED_TO_VALIDATE_CONTIG = 8;
 	public static final int NO_CONNECTION_TO_DATABASE = 9;
+	public static final int ZERO_LENGTH = 10; 
 	
 	private Connection conn;
 
@@ -42,14 +43,12 @@ public class ReadToProjectImporter {
 
 	private void prepareStatements() throws SQLException {
 		pstmtReadToContig = conn
-				.prepareStatement("select CURRENTCONTIGS.contig_id,gap4name,PROJECT.name,"
-						+ "cstart,cfinish,direction"
-						+ " from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
+				.prepareStatement("select CURRENTCONTIGS.contig_id"
+						+ " from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS"
 						+ " where READINFO.readname = ?"
 						+ " and READINFO.read_id = SEQ2READ.read_id"
 						+ " and SEQ2READ.seq_id = MAPPING.seq_id"
-						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
-						+ " and CURRENTCONTIGS.project_id = PROJECT.project_id");
+						+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id");
 
 		pstmtReadID = conn
 				.prepareStatement("select read_id from READINFO where readname = ?");
@@ -169,6 +168,9 @@ public class ReadToProjectImporter {
 
 		int offset = rleft - 1;
 		int ctglen = rright - rleft + 1;
+		
+		if (ctglen <= 0)
+			return ZERO_LENGTH;
 
 		int contigid = insertNewContig(readname, ctglen, projectid);
 
@@ -320,7 +322,8 @@ public class ReadToProjectImporter {
 			throws SQLException {
 		pstmtNewMapping.setInt(1, contigid);
 		pstmtNewMapping.setInt(2, seqid);
-		pstmtNewMapping.setInt(3, ctglen);
+		pstmtNewMapping.setInt(3, 1);
+		pstmtNewMapping.setInt(4, ctglen);
 
 		if (pstmtNewMapping.executeUpdate() != 1)
 			return -1;
@@ -391,6 +394,9 @@ public class ReadToProjectImporter {
 				
 			case NO_CONNECTION_TO_DATABASE:
 				return "No connection to database";
+				
+			case ZERO_LENGTH:
+				return "The read had zero length after clipping";
 
 			default:
 				return "Unknown error code [" + code + "]";
