@@ -8,6 +8,7 @@ import java.awt.BorderLayout;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.importreads.*;
 import uk.ac.sanger.arcturus.data.*;
 
 public class ContigTablePanel extends JPanel implements MinervaClient {
@@ -278,11 +279,13 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	}
 	
 	private void importReadsIntoProject() {
-		JOptionPane.showMessageDialog(
-				this,
-				"The user will be invited to import a set of reads into the selected project",
-				"Import reads", JOptionPane.INFORMATION_MESSAGE,
-				null);
+		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
+		
+		ImportReadsPanel irp = mtp.showImportReadsPanel();
+		
+		irp.setSelectedProject(projectlist);
+		
+		mtp.setSelectedComponent(irp);
 	}
 
 	public JMenuBar getMenuBar() {
