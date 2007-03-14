@@ -124,7 +124,7 @@ public class Minerva {
 		
 		MinervaFrame frame = new MinervaFrame(this, caption, panel);
 		
-		ProjectTablePanel ptp = panel.addProjectTablePanel();
+		ProjectTablePanel ptp = panel.showProjectTablePanel();
 		
 		frame.pack();
 		frame.show();	
@@ -136,7 +136,6 @@ public class Minerva {
 				"The user will be shown some helpful information",
 				"Help!", JOptionPane.INFORMATION_MESSAGE,
 				null);
-
 	}
 
 	public static Action getQuitAction() {

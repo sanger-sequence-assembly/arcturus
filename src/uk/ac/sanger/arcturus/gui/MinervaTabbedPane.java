@@ -8,12 +8,16 @@ import java.sql.*;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
+import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ArcturusDatabase adb;
 	private ProjectTablePanel ptp;
+	private ImportReadsPanel irp;
 	private JMenuBar menubar = new JMenuBar();
+	
 	private MinervaAbstractAction actionShowProjectList;
+	private MinervaAbstractAction actionShowImportReadsPanel;
 	private MinervaAbstractAction actionClose;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
@@ -30,7 +34,15 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				null, "Open project list", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
-				addProjectTablePanel();
+				showProjectTablePanel();
+			}
+		};
+		
+		actionShowImportReadsPanel = new MinervaAbstractAction("Import reads",
+				null, "Open read import window", new Integer(KeyEvent.VK_I),
+				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showImportReadsPanel();
 			}
 		};
 		
@@ -98,7 +110,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			return null;
 	}
 
-	public ProjectTablePanel addProjectTablePanel() {
+	public ProjectTablePanel showProjectTablePanel() {
 		if (ptp == null)
 			ptp = new ProjectTablePanel(adb);
 
@@ -107,7 +119,17 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 		return ptp;
 	}
-	
+
+	public ImportReadsPanel showImportReadsPanel() {
+		if (irp == null)
+			irp = new ImportReadsPanel(adb);
+		
+		if (indexOfComponent(irp) < 0)
+			addTab("Import reads", null, irp, "Import reads");
+		
+		return irp;
+	}
+
 	public void closeResources() {
 		try {
 			adb.getConnection().close();
