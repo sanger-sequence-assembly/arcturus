@@ -17,7 +17,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private JMenuBar menubar = new JMenuBar();
 	
 	private MinervaAbstractAction actionShowProjectList;
-	private MinervaAbstractAction actionShowImportReadsPanel;
 	private MinervaAbstractAction actionClose;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
@@ -35,14 +34,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showProjectTablePanel();
-			}
-		};
-		
-		actionShowImportReadsPanel = new MinervaAbstractAction("Import reads",
-				null, "Open read import window", new Integer(KeyEvent.VK_I),
-				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showImportReadsPanel();
 			}
 		};
 		
@@ -127,7 +118,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		if (indexOfComponent(irp) < 0)
 			addTab("Import reads", null, irp, "Import reads");
 		
+		packFrame();
+		
 		return irp;
+	}
+	
+	private void packFrame() {
+		JFrame frame = (JFrame)SwingUtilities.getRoot(this);
+		frame.pack();
 	}
 
 	public void closeResources() {
