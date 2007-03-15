@@ -450,8 +450,8 @@ sub putContig {
             $previous = 0; # reject the match
 	}
 # test if the previous contig is valid
-        unless ($previous->getNumberOfReads() > 0 && 
-                $previous->getProject() > 0) {
+        unless (!$previous || $previous->getNumberOfReads() > 0 && 
+                              $previous->getProject() > 0) {
             my $msg = "Corrupted contig " . $previous->getContigID()
                     . " detected (created " . $previous->getCreated()
                     . ")";
