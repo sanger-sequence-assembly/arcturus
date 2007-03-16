@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import javax.naming.NamingException;
 
 import javax.swing.*;
+import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
 
@@ -14,12 +15,10 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 
-import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
 
 /**
- * This class is the main class for all GUI applications. It manages the shared
- * ArcturusDatabase objects and maintains a list of all active frames.
+ * This class is the main class for all GUI applications.
  */
 
 public class Minerva {
@@ -173,6 +172,8 @@ public class Minerva {
 
 			imageLabel = new JLabel(image);
 			getContentPane().add(imageLabel, BorderLayout.CENTER);
+			
+			imageLabel.setBorder(BorderFactory.createBevelBorder(BevelBorder.RAISED));
 
 			pack();
 		}
