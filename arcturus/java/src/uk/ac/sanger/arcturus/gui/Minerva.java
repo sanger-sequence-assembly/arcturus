@@ -4,6 +4,7 @@ import java.sql.SQLException;
 import javax.naming.NamingException;
 
 import javax.swing.*;
+import java.awt.*;
 import java.awt.event.*;
 
 import java.io.*;
@@ -25,6 +26,7 @@ public class Minerva {
 	private static Minerva instance = null;
 	private ArcturusInstance ai = null;
 	private String buildtime;
+	private SplashWindow splash = null;
 
 	public static Minerva getInstance() {
 		if (instance == null)
@@ -35,23 +37,23 @@ public class Minerva {
 
 	private Minerva() {
 		try {
-			InputStream is = getClass().getResourceAsStream("/resources/buildtime.props");
+			InputStream is = getClass().getResourceAsStream(
+					"/resources/buildtime.props");
 
 			if (is != null) {
 				Properties myprops = new Properties();
 
 				myprops.load(is);
-			
+
 				is.close();
-			
+
 				buildtime = myprops.getProperty("BuildTime");
 			}
-		}
-		catch (IOException ioe) {
+		} catch (IOException ioe) {
 			// Do nothing
 		}
 	}
-	
+
 	public String getBuildTime() {
 		return buildtime;
 	}
@@ -68,74 +70,119 @@ public class Minerva {
 	}
 
 	public void run(final String[] args) {
+		showSplashScreen();
+
 		String instance = getStringParameter(args, "-instance");
-		
+
 		String organism = getStringParameter(args, "-organism");
 
 		if (instance == null)
 			instance = Arcturus.getDefaultInstance();
-		
+
 		if (organism == null)
 			organism = Arcturus.getDefaultOrganism();
-		
+
 		if (instance == null) {
 			Arcturus.logWarning("No instance name was specified");
 			System.exit(1);
 		}
-		
+
 		try {
 			ai = ArcturusInstance.getInstance(instance);
-		
+
 			if (organism == null)
 				createInstanceDisplay(ai);
 			else
 				createOrganismDisplay(organism);
-		}
-		catch (Exception e) {
+
+			hideSplashScreen();
+		} catch (Exception e) {
 			Arcturus.logWarning(e);
 			System.exit(1);
 		}
 	}
-	
+
 	private void createInstanceDisplay(ArcturusInstance ai) {
 		OrganismTablePanel panel = new OrganismTablePanel(ai);
-		
+
 		String caption = "Minerva - " + ai.getName();
 		if (buildtime != null)
 			caption += " [Build " + buildtime + "]";
 
 		MinervaFrame frame = new MinervaFrame(this, caption, panel);
-		
+
 		frame.pack();
 		frame.show();
 	}
-	
-	public void createOrganismDisplay(String organism) throws SQLException, NamingException {
+
+	public void createOrganismDisplay(String organism) throws SQLException,
+			NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
 		adb.setReadCacheing(false);
 		adb.setSequenceCacheing(false);
-		
+
 		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
-			
+
 		String caption = "Minerva - " + adb.getName();
 		if (buildtime != null)
 			caption += " [Build " + buildtime + "]";
-		
+
 		MinervaFrame frame = new MinervaFrame(this, caption, panel);
-		
-		ProjectTablePanel ptp = panel.showProjectTablePanel();
-		
+
+		panel.showProjectTablePanel();
+
 		frame.pack();
-		frame.show();	
+		frame.show();
 	}
-	
+
+	private void showSplashScreen() {
+		if (splash == null)
+			splash = new SplashWindow();
+		
+		splash.showSplash();
+	}
+
+	private void hideSplashScreen() {
+		splash.hideSplash();
+	}
+
+	class SplashWindow extends JWindow {
+		public SplashWindow() {
+			super();
+
+			java.net.URL imgURL = getClass().getResource("/resources/images/minerva.jpg");
+			ImageIcon image = new ImageIcon(imgURL);
+
+			JLabel l = new JLabel(image);
+			getContentPane().add(l, BorderLayout.CENTER);
+			pack();
+			
+	        addMouseListener(new MouseAdapter() {
+                public void mousePressed(MouseEvent e)  {
+                    hideSplash();
+                }
+            });
+
+		}
+
+		public void showSplash() {
+			Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+			Dimension splashSize = getPreferredSize();
+
+			splash.setLocation(screenSize.width / 2 - (splashSize.width / 2),
+					screenSize.height / 2 - (splashSize.height / 2));
+			setVisible(true);
+			toFront();
+		}
+
+		public void hideSplash() {
+			setVisible(false);
+		}
+	}
+
 	public static void displayHelp() {
-		JOptionPane.showMessageDialog(
-				null,
-				"The user will be shown some helpful information",
-				"Help!", JOptionPane.INFORMATION_MESSAGE,
-				null);
+		Minerva.getInstance().showSplashScreen();
 	}
 
 	public static Action getQuitAction() {
