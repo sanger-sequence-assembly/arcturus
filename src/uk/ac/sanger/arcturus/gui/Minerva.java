@@ -178,6 +178,7 @@ public class Minerva {
 
 		public void hideSplash() {
 			setVisible(false);
+			dispose();
 		}
 	}
 
