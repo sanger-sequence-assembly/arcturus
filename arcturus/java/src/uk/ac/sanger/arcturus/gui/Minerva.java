@@ -70,7 +70,7 @@ public class Minerva {
 	}
 
 	public void run(final String[] args) {
-		showSplashScreen();
+		//showSplashScreen();
 
 		String instance = getStringParameter(args, "-instance");
 
@@ -95,7 +95,7 @@ public class Minerva {
 			else
 				createOrganismDisplay(organism);
 
-			hideSplashScreen();
+			//hideSplashScreen();
 		} catch (Exception e) {
 			Arcturus.logWarning(e);
 			System.exit(1);
@@ -148,14 +148,17 @@ public class Minerva {
 	}
 
 	class SplashWindow extends JWindow {
+		private JLabel imageLabel;
+		
 		public SplashWindow() {
 			super();
 
 			java.net.URL imgURL = getClass().getResource("/resources/images/minerva.jpg");
 			ImageIcon image = new ImageIcon(imgURL);
 
-			JLabel l = new JLabel(image);
-			getContentPane().add(l, BorderLayout.CENTER);
+			imageLabel = new JLabel(image);
+			getContentPane().add(imageLabel, BorderLayout.CENTER);
+			
 			pack();
 			
 	        addMouseListener(new MouseAdapter() {
