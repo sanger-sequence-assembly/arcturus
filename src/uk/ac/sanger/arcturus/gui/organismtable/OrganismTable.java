@@ -84,7 +84,7 @@ public class OrganismTable extends SortableTable {
 		for (int i = 0; i < indices.length; i++) {
 			Organism organism = (Organism) ptm.elementAt(indices[i]);
 			try {
-				Minerva.getInstance().createOrganismDisplay(organism.getName());
+				Minerva.getInstance().createAndShowOrganismDisplay(organism.getName());
 			}
 			catch (Exception e) {
 				Arcturus.logWarning(e);
