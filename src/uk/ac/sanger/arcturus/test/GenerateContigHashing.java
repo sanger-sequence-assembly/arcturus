@@ -175,18 +175,12 @@ public class GenerateContigHashing {
 						String sequence = (String) consensus.get(new Integer(
 								contigid));
 
-						System.out.println("Hash match to contig " + contigid
-								+ " offset " + contigoffset);
-
 						String subseq = sequence.substring(contigoffset,
 								contigoffset + oligolen);
 
-						System.out.println(oligo);
-						System.out.print(subseq);
 						if (oligo.equalsIgnoreCase(subseq))
-							System.out.println("  *** MATCH");
-						else
-							System.out.println();
+							System.out.println("Match to contig " + contigid
+									+ " offset " + contigoffset);
 					}
 
 				} catch (IOException ioe) {
@@ -197,31 +191,6 @@ public class GenerateContigHashing {
 			e.printStackTrace();
 			System.exit(1);
 		}
-	}
-
-	private int[] matchRange(String oligo, String contig, int contigoffset) {
-		int cfinish = contigoffset;
-
-		int olength = oligo.length();
-		int clength = contig.length();
-
-		// Scan forwards
-		for (int i = 0; i < olength && cfinish < clength; i++, cfinish++) {
-			int ocode = hashCode(oligo.charAt(i));
-
-			while (cfinish < clength && hashCode(contig.charAt(cfinish)) < 0)
-				cfinish++;
-
-			if (hashCode(contig.charAt(cfinish)) != ocode)
-				return null;
-		}
-
-		int range[] = new int[2];
-
-		range[0] = contigoffset;
-		range[1] = cfinish - 1;
-
-		return range;
 	}
 
 	private int hash(String oligo) {
@@ -292,51 +261,6 @@ public class GenerateContigHashing {
 				storeHash(contig_id, start_pos, hash);
 			}
 			
-			start_pos++;
-			bases_in_hash--;
-		}
-	}
-
-	private void processLine2(int contig_id, byte[] line) throws SQLException {
-		int start_pos = 0;
-		int end_pos = 0;
-		int bases_in_hash = 0;
-		int hash = 0;
-		int linelen = line.length;
-		int done = 0;
-
-		while (true) {
-			if (start_pos >= linelen)
-				return;
-
-			char c = (char) line[start_pos];
-
-			if (isValid(c)) {
-				while (bases_in_hash < hashsize && end_pos < linelen) {
-					c = (char) line[end_pos];
-
-					end_pos++;
-
-					if (isValid(c)) {
-						hash = updateHash(hash, c);
-						bases_in_hash++;
-					}
-				}
-
-				if (bases_in_hash == hashsize) {
-					storeHash(contig_id, start_pos, hash);
-
-					done++;
-					allDone++;
-
-					if (progress && ((done % 100) == 0))
-						System.err.print('.');
-
-					if (progress && ((done % 8000) == 0))
-						System.err.print('\n');
-				}
-			}
-
 			start_pos++;
 			bases_in_hash--;
 		}
