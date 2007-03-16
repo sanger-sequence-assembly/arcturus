@@ -89,13 +89,9 @@ public class Minerva {
 
 			SplashWindow splash = null;
 
-			String caption = "Minerva - "
-					+ ((organism == null) ? ai.getName() : organism);
+			String caption = (organism == null) ? ai.getName() : organism;
 
-			if (buildtime != null)
-				caption += " [Build " + buildtime + "]";
-
-			MinervaFrame frame = new MinervaFrame(this, caption);
+			MinervaFrame frame = createMinervaFrame(caption);
 
 			splash = new SplashWindow(frame);
 			splash.show();
@@ -115,11 +111,40 @@ public class Minerva {
 			System.exit(1);
 		}
 	}
+	
+	private MinervaFrame createMinervaFrame(String name) {
+		String caption = "Minerva - " + name;
+
+		if (buildtime != null)
+			caption += " [Build " + buildtime + "]";
+
+		return new MinervaFrame(this, caption);
+	}
+	
+	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
+		MinervaFrame frame = createMinervaFrame(ai.getName());
+		JComponent component = createInstanceDisplay(ai);
+		
+		frame.setComponent(component);
+
+		frame.pack();
+		frame.show();
+	}
 
 	private JComponent createInstanceDisplay(ArcturusInstance ai) {
 		return new OrganismTablePanel(ai);
 	}
 
+	public void createAndShowOrganismDisplay(String organism) throws SQLException, NamingException {
+		MinervaFrame frame = createMinervaFrame(organism);
+		JComponent component = createOrganismDisplay(organism);
+		
+		frame.setComponent(component);
+
+		frame.pack();
+		frame.show();
+		
+	}
 	public JComponent createOrganismDisplay(String organism)
 			throws SQLException, NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
