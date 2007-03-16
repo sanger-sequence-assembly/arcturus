@@ -10,18 +10,9 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 	protected JToolBar toolbar;
 	protected JComponent component;
 
-	public MinervaFrame(Minerva minerva, String title, JComponent component) {
+	public MinervaFrame(Minerva minerva, String title) {
 		super(title);
 		this.minerva = minerva;
-		this.component = component;
-		
-		this.getContentPane().setLayout(new BorderLayout());
-		this.getContentPane().add(component, BorderLayout.CENTER);
-		
-		setMenuForComponent(component);
-
-		if (component instanceof JTabbedPane)
-			((JTabbedPane) component).addChangeListener(this);
 		
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 		
@@ -30,6 +21,23 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 				handleWindowClosing();
 			}
 		});
+	}
+	
+	public MinervaFrame(Minerva minerva, String title, JComponent component) {
+		this(minerva, title);
+		setComponent(component);
+	}
+	
+	public void setComponent(JComponent component) {
+		this.component = component;
+		
+		this.getContentPane().setLayout(new BorderLayout());
+		this.getContentPane().add(component, BorderLayout.CENTER);
+		
+		setMenuForComponent(component);
+
+		if (component instanceof JTabbedPane)
+			((JTabbedPane) component).addChangeListener(this);	
 	}
 
 	public void setToolBar(JToolBar toolbar) {
