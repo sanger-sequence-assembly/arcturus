@@ -533,9 +533,9 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	
 	public static void main(String[] args) {
 		try {
-			String instance = "test";
+			String instance = args.length == 2 ? args[0] : "test";
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-			String organism = "TESTPKN";
+			String organism = args.length == 2 ? args[1] : "TESTPKN";
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 			
 			JFrame frame = new JFrame("Testing OligoFinderPanel");
