@@ -10,6 +10,8 @@ use Mapping;
 
 use TagFactory::ContigTagFactory;
 
+use Alignment;
+
 use Clipping;
 
 use Logging;
@@ -197,7 +199,9 @@ sub reverseComplement {
 
     my $logger = &verifyLogger('reverseComplement');
 
-    my %coptions;
+# optional: create copy of the input contig
+
+    my %coptions; # copy options
     $coptions{complete}     = 1 if $options{complete};
     $coptions{nocomponents} = 1 if $options{nocomponents};
     $contig = $contig->copy(%coptions) unless $options{nonew};
@@ -384,7 +388,7 @@ $log->debug("options  @_");
 
     my $contigname = $contig->getContigName() || '';
 
-    $contig = &copy($contig) if $options{new};
+    $contig = $contig->copy() if $options{new};
 
 # replace low quality bases by the chosen symbol
 
@@ -400,11 +404,11 @@ $log->debug("options  @_");
         $lowercase = 0;
     }
     else {
-# use lowercase for low quality stuff; hence switch high quality to UC
+# use lowercase for low quality stuff; hence first switch high quality to UC
         $sequence = uc($sequence);
     }
 
-    my $pads = &findlowquality(0,                   # no test DNA
+    my $pads = &findlowquality($sequence,           # ? no test DNA
                                $quality,
                                $options{symbols},   # default 'ACGT'
                                $options{threshold}, # default 20
@@ -427,7 +431,7 @@ $log->debug("options  @_");
             $contig->addContigNote("[lc] low_quality_marked");
 	}
 	else {
-            $contig->addContigNote("[$padsymbol] low_quality_marked");
+            $contig->addContigNote("low_quality_marked [$padsymbol]");
 	}
     }
 
@@ -440,16 +444,23 @@ $log->debug("options  @_");
 # removing reads from contigs
 #-----------------------------------------------------------------------------
 
-sub deleteReads {
+sub removeNamedReads {
 # remove a list of reads from a contig
     my $class  = shift;
     my $contig = shift;
     my $reads = shift;
     my %options = @_;
 
-    &verifyParameter($contig,'deleteReads');
+    &verifyParameter($contig,'removeNamedReads');
 
-    $contig = &copy($contig) if $options{new};
+# test for a read name/id or an array
+
+    &verifyParameter($reads,'removeNamedReads','ARRAY') if ref($reads);
+
+my $logger = &verifyLogger('removeNamedReads');
+$logger->debug("ENTER");
+
+    $contig = $contig->copy() if $options{new};
 
     my ($count,$parity,$total) = &removereads($contig,$reads);
 
@@ -504,7 +515,7 @@ $logger->debug("ENTER @_");
 
 # step 2: make a copy of the contig 
 
-    $contig = &copy($contig) unless $options{nonew};
+    $contig = $contig->copy() unless $options{nonew};
 
 # step 3: make an inventory of reads stradling the pad positions
 
@@ -593,7 +604,7 @@ sub removeShortReads {
 
     $contig->hasMappings(1); # delayed loading
 
-    $contig = &copy($contig,includeIDs=>1) unless $options{nonew};
+    $contig = $contig->copy(includeIDs=>1) unless $options{nonew};
 
 # determine clipping threshold
 
@@ -674,6 +685,8 @@ sub undoReadEdits {
 
     my $logger = &verifyLogger('undoReadEdits');
 
+$logger->warning("ENTER undoReadEdits: @_");
+
     my $reads = $contig->getReads(1); # delayed loading
 
     my $mappings = $contig->getMappings(1);
@@ -685,22 +698,31 @@ sub undoReadEdits {
     for (my $i = 0 ; $i < scalar(@$reads) ; $i++) {
         my $read = $reads->[$i];
         next unless $read->isEdited();
+$logger->warning("edited read detected : ".$read->getReadName());
         $readnamehash->{$read->getReadName()} = $read;
         $readrankhash->{$read} = $i;
     }
 
     return $contig unless scalar(keys %$readnamehash);
 
-    $contig = &copy($contig) unless $options{nonew};
+    $contig = $contig->copy() unless $options{nonew};
+
+&verifyLogger('undoReadEdits');
 
 # run throught the mappings to process the edited reads
 
-    my $adb = $options{ADB}; # may be needed (ACTUALLY, can run without?)
+    my $adb = $options{ADB}; # may be needed (ACTUALLY, can run without? if not in contig?)
+
+    my $padmapping = new Mapping();
+
     foreach my $mapping (@$mappings) {
         my $readname = $mapping->getMappingName();
+$logger->info("Testing $readname");
         if (my $read = $readnamehash->{$readname}) {
+
 # get for each edited read the original read (version 0)
 # note: is required because original may itself have an align to trace mapping
+
             my $original = $read->getOriginalVersion();
             if (!$original && $adb) { # recover if $read has no db handle
                 $original = $adb->getRead(readname=>$readname);
@@ -709,17 +731,38 @@ sub undoReadEdits {
                 $logger->error("failure to retrieve original read");
                 next; 
 	    }
+#$logger->debug("old mapping $mapping");
+#$logger->debug($mapping->toString());
+
 # translate the current mapping into a mapping to the original read
+
             my $edittotrace = $read->getAlignToTraceMapping();
+#$logger->debug($edittotrace->toString());
             my $readtotrace = $original->getAlignToTraceMapping();
-            my $interim = $readtotrace->multiply($edittotrace->inverse());
-            my $newmapping = $interim->multiply($mapping);
+#$logger->debug($readtotrace->toString());
+# new mapping C->R = C->E * E->T * (R->T)^-1
+            my $interim = $mapping->multiply($edittotrace); 
+#$logger->debug($interim->toString());
+            my $newmapping = $interim->multiply($readtotrace->inverse());
+$logger->debug("new mapping $newmapping");
+$logger->debug($newmapping->toString());
 # now replace the mapping and replace the edited read by the original
+            $newmapping->setMappingName($readname);
+            $newmapping->setSequenceID($read->getSequenceID());
             $mapping = $newmapping; # replaces array element
+
+# analyse this mapping to see if and where pad(s) have to be inserted; these
+# positions are charaterised by a gap on the read, but not on the contig
+
 	    my $rank = $readrankhash->{$read};
             $reads->[$rank] = $original;
 	}
     }
+
+# finally multiply all mappings by the padding transform (using repair=1)
+
+
+$logger->warning("EXIT undoReadEdits: @_");
 
     return $contig;
 }
@@ -854,7 +897,7 @@ $logger->debug("ENTER: @_");
 
     my $trimmedcontig = $contig;
 
-    $trimmedcontig = &copy($contig,includeIDs=>1,nocomponents=>1) if $options{new};
+    $trimmedcontig = $contig->copy(includeIDs=>1,nocomponents=>1) if $options{new};
 
     $trimmedcontig->setContigNote("endregiontrimmed [$options{cliplevel}]");
 
@@ -1003,11 +1046,15 @@ $logger->debug("ENTER ($qlength) $symbols,$threshold,$minimum,$highqualitypadmin
 
     my $reference = &slidingmeanfilter($quality,$fwindow) || [];
 
+$logger->debug("reference $reference  sequence \n$sequence");
+
     for (my $i = $hwindow ; $i <= $qlength - $hwindow ; $i++) {
 # test the base against accepted symbols ("high" quality pads)
         if ($sequence && substr($sequence, $i, 1) !~ /[$symbols]$/) {
 # setting $highqualitypadminimum to 0 accepts ALL (non) matches as "real" pad
+$logger->debug("base mismatch at $i");
             next unless ($quality->[$i] >= $highqualitypadminimum); # NOT LQ
+$logger->debug("pad at $i");
             push @$pads, $i; # zeropoint 0
             next;
 	}
@@ -1057,13 +1104,13 @@ $logger->debug("ENTER slidingmeanfilter $window");
 
     my $logtransform;
     my $offset = 10000.0;
-$logger->debug("begin LOG transform");
+# $logger->debug("begin LOG transform");
     foreach my $value (@$qinput) {
         my $logkey = int($value+$offset+0.5);
         unless ($logtransform = $loghash->{$logkey}) {
             $loghash->{$logkey} = log($logkey);
             $logtransform = $loghash->{$logkey};
-$logger->debug("creating log hash element for key $logkey"); 
+# $logger->debug("creating log hash element for key $logkey"); 
         }
         push @$qoutput,$logtransform;
     }
@@ -1275,9 +1322,10 @@ sub removereads {
     my $contig = shift;
     my $readrf = shift; # readid, array-ref or hash
 
-    &verifyPrivate($contig,"removeRead");
+    &verifyPrivate($contig,"removereads");
 
-    my $logger = &verifyLogger("removeRead");
+    my $logger = &verifyLogger("removereads");
+    $logger->debug("ENTER: $readrf");
 
 # get the readname hash
 
@@ -1358,8 +1406,10 @@ sub isEqual {
             return 0 if ($contig->getReadOnLeft() || $master->getReadOnLeft());
 	}
 # try the sequence
-# TO BE DEVELOPED 
 $logger->debug("Trying sequence comparison TO BE DEVELOPED");
+        my $mapping = Alignment->correlate(uc($master->getSequence()),undef,
+                                           uc($contig->getSequence()),undef); 
+# test mapping for length and orientation
         return 0;
     }
 
@@ -1439,20 +1489,23 @@ sub crossmatch {
 # returns the number of mapped segments; returns undef if 
 # incomplete Contig instances or missing sequence IDs in mappings
     my $class = shift;
-    my $this = shift;
-    my $that = shift; # Contig instance to be compared to $this
+    my $cthis = shift;
+    my $cthat = shift; # Contig instance to be compared to $thiscontig
     my %options = @_;
 
-    &verifyParameter($this,'crossmatch 1-st parameter');
+    &verifyParameter($cthis,'crossmatch 1-st parameter');
 
-    &verifyParameter($that,'crossmatch 2-nd parameter');
+    &verifyParameter($cthat,'crossmatch 2-nd parameter');
+# option strong       : set True for comparison at read mapping level
+# option readclipping : if set, require a minumum number of reads in C2C segment
 
     my $logger = &verifyLogger('crossmatch');
 $logger->debug("ENTER");
 
-    return &newLinkToContig($class,$this,$that,@_) if $options{new};
+# remove later from HERE
+    return &newLinkToContig($class,$cthis,$cthat,@_) if $options{new};
 
-    return &linkToContig($class,$this,$that,@_);
+    return &linkToContig($class,$cthis,$cthat,@_);
 $logger->debug("EXIT");
 }
 
@@ -1460,35 +1513,37 @@ $logger->debug("EXIT");
 sub newLinkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
 # adds a contig-to-contig Mapping instance with a list of mapping segments,
-# if any, mapping from $compare to $this contig
+# if any, mapping from $compare to $cthis contig
 # returns the number of mapped segments; returns undef if 
 # incomplete Contig instances or missing sequence IDs in mappings
     my $class = shift;
-    my $this = shift;
-    my $that = shift; # Contig instance to be compared to $this
+    my $cthis = shift;
+    my $cthat = shift; # Contig instance to be compared to $cthis
     my %options = @_;
 
 # option strong       : set True for comparison at read mapping level
 # option readclipping : if set, require a minumum number of reads in C2C segment
 
-    &verifyParameter($this,'newLink 1-st parameter');
+    &verifyParameter($cthis,'newLink 1-st parameter');
 
-    &verifyParameter($that,'newLink 2-nd parameter');
+    &verifyParameter($cthat,'newLink 2-nd parameter');
+# TO HERE
 
 my $DEBUG = &verifyLogger('newLinkToContig');
+
 $DEBUG->debug("ENTER");
 
 # test completeness
 
-    return undef unless $this->hasMappings(); 
-    return undef unless $that->hasMappings();
+    return undef unless $cthis->hasMappings(); 
+    return undef unless $cthat->hasMappings();
 
-# make the comparison using sequence ID; start by getting an inventory of $this
+# make the comparison using sequence ID; start by getting an inventory of $cthis
 # we build a hash on sequence ID values & one for back up on mapping(read)name
 
     my $sequencehash = {};
     my $readnamehash = {};
-    my $lmappings = $this->getMappings();
+    my $lmappings = $cthis->getMappings();
     foreach my $mapping (@$lmappings) {
         my $seq_id = $mapping->getSequenceID();
         $sequencehash->{$seq_id} = $mapping if $seq_id;
@@ -1496,14 +1551,14 @@ $DEBUG->debug("ENTER");
         $readnamehash->{$seq_id} = $mapping if $seq_id;
     }
 
-# make an inventory hash of (identical) alignments from $that to $this
+# make an inventory hash of (identical) alignments from $cthat to $cthis
 
     my $alignment = 0;
     my $inventory = {};
     my $accumulate = {};
     my $deallocated = 0;
     my $overlapreads = 0;
-    my $cmappings = $that->getMappings();
+    my $cmappings = $cthat->getMappings();
     foreach my $mapping (@$cmappings) {
         my $oseq_id = $mapping->getSequenceID();
         unless (defined($oseq_id)) {
@@ -1529,13 +1584,13 @@ $DEBUG->debug("ENTER");
 # trace file in order to find the contig-to-contig alignment defined by this read 
             my $eseq_id = $readnamematch->getSequenceID(); # (newly) edited sequence
 # check the existence of the database handle in order to get at the read versions
-            unless ($this->{ADB}) {
+            unless ($cthis->{ADB}) {
 		print STDERR "Unable to recover C2C link for read $readname "
                            . ": missing database handle\n";
 		next;
             }
 # get the versions of this read in a hash keyed on sequence IDs
-            my $reads = $this->{ADB}->getAllVersionsOfRead(readname=>$readname);
+            my $reads = $cthis->{ADB}->getAllVersionsOfRead(readname=>$readname);
 # test if both reads are found, just to be sure
             unless ($reads->{$oseq_id} && $reads->{$eseq_id}) {
 		print STDERR "Cannot recover sequence $oseq_id or $eseq_id "
@@ -1568,7 +1623,7 @@ print STDERR "sequences equated to one another (temporary fix)\n" unless $DEBUG;
 # count the number of reads in the overlapping area
         $overlapreads++;
 
-# this mapping/sequence in $that also figures in the current Contig
+# this mapping/sequence in $cthat also figures in the current Contig
 
         if ($options{strong}) {
 # strong comparison: test for identical mappings (apart from shift)
@@ -1597,9 +1652,9 @@ print STDERR "sequences equated to one another (temporary fix)\n" unless $DEBUG;
             my $cpmapping = $complement->compare($mapping);
             my $cpaligned = $cpmapping->getAlignment();
 
-unless ($cpaligned || $that->getNumberOfReads() > 1) {
+unless ($cpaligned || $cthat->getNumberOfReads() > 1) {
     print STDERR "Non-overlapping read segments for single-read parent contig ".
-                  $that->getContigID()."\n";
+                  $cthat->getContigID()."\n";
     if ($DEBUG) {
         print STDOUT "parent mapping:".$mapping->toString();
         print STDOUT "contig mapping:".$complement->toString();
@@ -1634,7 +1689,7 @@ unless ($cpaligned || $that->getNumberOfReads() > 1) {
     }
 
 # OK, here we have an inventory: the number of keys equals the number of 
-# different alignments between $this and $that. On each key we have an
+# different alignments between $cthis and $cthat. On each key we have an
 # array of arrays with the individual mapping data. For each alignment we
 # determine if the covered interval is contiguous. For each such interval
 # we add a (contig) Segment alignment to the output mapping
@@ -1703,12 +1758,12 @@ $DEBUG->warning("Correlation coefficient = $R  penalty $penalty") if $DEBUG;
         unless (abs($R) >= $threshold) {
 # relation offset-position looks messy
             print STDERR "Suspect correlation coefficient = $R : target "
-                       . $that->getContigName()." (penalty = $penalty)\n";
+                       . $cthat->getContigName()." (penalty = $penalty)\n";
 # accept the alignment if no penalties are incurred (monotonous alignment)
             if ($penalty > $defects) {
 # set up for offset masking
                 print STDOUT "Suspect correlation coefficient = $R : target "
-                            . $that->getContigName()." (penalty = $penalty)\n";
+                            . $cthat->getContigName()." (penalty = $penalty)\n";
 $DEBUG->warning("Offset masking activated") if $DEBUG;
                 my $partialsum = 0;
                 foreach my $offset (@offsets) { 
@@ -1828,16 +1883,16 @@ $DEBUG->warning(scalar(@c2csegments)." segments; before pruning") if $DEBUG;
     my $j =1;
     while ($j < @c2csegments) {
         my $i = $j - 1;
-        my $this = $c2csegments[$i];
+        my $cthis = $c2csegments[$i];
         my $next = $c2csegments[$j];
 # first remove segments which completely fall inside another
-        if ($this->[0] <= $next->[0] && $this->[1] >= $next->[1]) {
+        if ($cthis->[0] <= $next->[0] && $cthis->[1] >= $next->[1]) {
 # the next segment falls completely inside this segment; remove $next
             splice @c2csegments, $j, 1;
 #            next;
         }
-        elsif ($this->[0] >= $next->[0] && $this->[1] <= $next->[1]) {
-# this segment falls completely inside the next segment; remove $this
+        elsif ($cthis->[0] >= $next->[0] && $cthis->[1] <= $next->[1]) {
+# this segment falls completely inside the next segment; remove $cthis
             splice @c2csegments, $i, 1;
 #            next;
         }
@@ -1847,16 +1902,16 @@ $DEBUG->warning(scalar(@c2csegments)." segments; before pruning") if $DEBUG;
         }
         else {
 # this segment overlaps at the end with the beginning of the next segment: prune
-            while ($alignment > 0 && $this->[1] >= $next->[0]) {
-                $this->[1]--;
-                $this->[3]--;
+            while ($alignment > 0 && $cthis->[1] >= $next->[0]) {
+                $cthis->[1]--;
+                $cthis->[3]--;
                 $next->[0]++;
                 $next->[2]++;
   	    }
 # the counter-aligned case
-            while ($alignment < 0 && $this->[1] >= $next->[0]) {
-                $this->[1]--;
-                $this->[3]++;
+            while ($alignment < 0 && $cthis->[1] >= $next->[0]) {
+                $cthis->[1]--;
+                $cthis->[3]++;
                 $next->[0]++;
                 $next->[2]--;
 	    }
@@ -1868,8 +1923,8 @@ $DEBUG->warning(scalar(@c2csegments)." segments after pruning") if $DEBUG;
 
 # create an output Mapping enter the segments
 
-    my $mapping = new Mapping($that->getContigName());
-    $mapping->setSequenceID($that->getContigID());
+    my $mapping = new Mapping($cthat->getContigName());
+    $mapping->setSequenceID($cthat->getContigID());
 
     foreach my $segment (@c2csegments) {
 $DEBUG->warning("segment after filter @$segment") if $DEBUG;
@@ -1881,36 +1936,36 @@ $DEBUG->warning("segment after filter @$segment") if $DEBUG;
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
-        my ($isValid,$msg) = &isValidMapping($this,$that,$mapping,$overlapreads);
+        my ($isValid,$msg) = &isValidMapping($cthis,$cthat,$mapping,$overlapreads);
 $DEBUG->warning("\n isVALIDmapping $isValid\n$msg") if $DEBUG;
 # here possible recovery based on analysis of continuity of mapping segments
 
 # if still not valid, 
         if (!$isValid && !$options{forcelink}) {
-$DEBUG->warning("Spurious link detected to contig ".$that->getContigName()) if $DEBUG;
+$DEBUG->warning("Spurious link detected to contig ".$cthat->getContigName()) if $DEBUG;
             return 0, $overlapreads;
         }
 # in case of split contig
         elsif ($isValid == 2) {
-$DEBUG->warning("(Possibly) split parent contig ".$that->getContigName()) if $DEBUG;
+$DEBUG->warning("(Possibly) split parent contig ".$cthat->getContigName()) if $DEBUG;
             $deallocated = 0; # because we really don't know
         }
 # for a regular link
         else {
-            $deallocated = $that->getNumberOfReads() - $overlapreads; 
+            $deallocated = $cthat->getNumberOfReads() - $overlapreads; 
         }
 # store the Mapping as a contig-to-contig mapping (prevent duplicates)
-        if ($this->hasContigToContigMappings()) {
-            my $c2cmaps = $this->getContigToContigMappings();
+        if ($cthis->hasContigToContigMappings()) {
+            my $c2cmaps = $cthis->getContigToContigMappings();
             foreach my $c2cmap (@$c2cmaps) {
                 my ($isEqual,@dummy) = $mapping->isEqual($c2cmap,silent=>1);
                 next unless $isEqual;
                 next if ($mapping->getSequenceID() != $c2cmap->getSequenceID());
                 print STDERR "Duplicate mapping to parent " .
-		             $that->getContigName()." ignored\n";
+		             $cthat->getContigName()." ignored\n";
 if ($DEBUG) {
  $DEBUG->warning("Duplicate mapping to parent " .
-	       $that->getContigName()." ignored");
+	       $cthat->getContigName()." ignored");
  $DEBUG->warning("existing Mappings: @$c2cmaps");
  $DEBUG->warning("to be added Mapping: $mapping, tested against $c2cmap");
  $DEBUG->warning("equal mappings: \n".$mapping->toString()."\n".$c2cmap->toString());
@@ -1918,7 +1973,7 @@ if ($DEBUG) {
                 return $mapping->hasSegments(),$deallocated;
             }
         }
-        $this->addContigToContigMapping($mapping);
+        $cthis->addContigToContigMapping($mapping);
 # what about the parent?
     }
 
@@ -1967,8 +2022,8 @@ $DEBUG->debug("ENTER");
     foreach my $mapping (@$lmappings) {
         my $seq_id = $mapping->getSequenceID();
         $sequencehash->{$seq_id} = $mapping if $seq_id;
-        $seq_id = $mapping->getMappingName();
-        $readnamehash->{$seq_id} = $mapping if $seq_id;
+        my $map_id = $mapping->getMappingName();
+        $readnamehash->{$map_id} = $mapping if $map_id;
     }
 
 # make an inventory hash of (identical) alignments from $compare to $this
@@ -2070,6 +2125,7 @@ print STDERR "sequences equated to one another (temporary fix)\n" unless $DEBUG;
         else {
 # return the ** local ** contig-to-parent mapping as a Mapping object
             my $cpmapping = $complement->compare($mapping);
+            next unless $cpmapping;
             my $cpaligned = $cpmapping->getAlignment();
 
 unless ($cpaligned || $compare->getNumberOfReads() > 1) {
