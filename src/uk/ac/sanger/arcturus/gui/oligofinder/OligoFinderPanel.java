@@ -80,7 +80,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 
 		panel.add(scrollpane, BorderLayout.CENTER);
 		
-		panel.setBorder(etchedTitledBorder("Oligos to import"));
+		panel.setBorder(etchedTitledBorder("Oligos to search for"));
 		
 		topPanel.add(panel);
 
@@ -106,7 +106,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	
 		panel.add(btnFindOligos, BorderLayout.SOUTH);
 		
-		panel.setBorder(etchedTitledBorder("Projects"));
+		panel.setBorder(etchedTitledBorder("Projects to search"));
 
 		topPanel.add(panel);
 
@@ -119,6 +119,8 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 		add(panel);
 		
 		add(pbarTaskProgress);
+		
+		pbarTaskProgress.setStringPainted(true);
 	
 		scrollpane = new JScrollPane(txtMessages);
 
@@ -536,7 +538,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 			String organism = "TESTPKN";
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 			
-			JFrame frame = new JFrame("Testing FindOligosPanel");
+			JFrame frame = new JFrame("Testing OligoFinderPanel");
 			
 			OligoFinderPanel irp = new OligoFinderPanel(adb);
 			
