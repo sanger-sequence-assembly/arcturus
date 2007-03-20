@@ -301,7 +301,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		
 		//ofp.selectProjects(projects);
 		
-		mtp.add("Oligo finder", ofp);
+		mtp.addTab("Oligo finder", ofp);
 		
 		mtp.setSelectedComponent(ofp);
 	}
