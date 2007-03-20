@@ -392,7 +392,9 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 			case OligoFinderEvent.FOUND_MATCH:
 				postMessage("MATCH: " + event.getOligo().getName() + " to contig " +
 						event.getContig().getID() +
-						" at " + event.getOffset() + "\n");
+						" at " + event.getOffset() +
+						(event.isForward() ? "" : " REVERSED ") +
+						"\n");
 				break;
 				
 			case OligoFinderEvent.FINISH_CONTIG:
