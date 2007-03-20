@@ -150,6 +150,21 @@ public class OligoFinder {
 					listener.oligoFinderUpdate(event);
 				}						
 			}
+			
+			if (hash == oligos[i].getReverseHash()) {
+				if (listener != null) {
+					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i], contig, start_pos, false);
+					listener.oligoFinderUpdate(event);
+				}
+				
+				String subseq = sequence.substring(start_pos,
+						start_pos + oligos[i].getLength());
+
+				if (subseq.equalsIgnoreCase(oligos[i].getReverseSequence()) && listener != null) {
+					event.setEvent(OligoFinderEvent.FOUND_MATCH, oligos[i], contig, start_pos, false);
+					listener.oligoFinderUpdate(event);
+				}						
+			}
 		}	
 	}
 
