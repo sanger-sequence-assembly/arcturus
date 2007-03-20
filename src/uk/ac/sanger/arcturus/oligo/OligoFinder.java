@@ -71,7 +71,7 @@ public class OligoFinder {
 			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
 			listener.oligoFinderUpdate(event);
 		}
-		
+
 		closeConnection();
 
 		return found;
@@ -149,18 +149,7 @@ public class OligoFinder {
 					listener.oligoFinderUpdate(event);
 				}
 
-				int end_pos = start_pos + oligos[i].getLength();
-
-				if (end_pos <= sequence.length()) {
-					String subseq = sequence.substring(start_pos, end_pos);
-
-					if (subseq.equalsIgnoreCase(oligos[i].getSequence())
-							&& listener != null) {
-						event.setEvent(OligoFinderEvent.FOUND_MATCH, oligos[i],
-								contig, start_pos, true);
-						listener.oligoFinderUpdate(event);
-					}
-				}
+				testSequenceMatch(oligos[i], true, contig, sequence, start_pos);
 			}
 
 			if (hash == oligos[i].getReverseHash()) {
@@ -170,20 +159,49 @@ public class OligoFinder {
 					listener.oligoFinderUpdate(event);
 				}
 
-				int end_pos = start_pos + oligos[i].getLength();
-
-				if (end_pos <= sequence.length()) {
-					String subseq = sequence.substring(start_pos, end_pos);
-
-					if (subseq.equalsIgnoreCase(oligos[i].getReverseSequence())
-							&& listener != null) {
-						event.setEvent(OligoFinderEvent.FOUND_MATCH, oligos[i],
-								contig, start_pos, false);
-						listener.oligoFinderUpdate(event);
-					}
-				}
+				testSequenceMatch(oligos[i], false, contig, sequence, start_pos);
 			}
 		}
+	}
+
+	private void testSequenceMatch(Oligo oligo, boolean forward, Contig contig,
+			String sequence, int offset) {
+		String oligoseq = forward ? oligo.getSequence() : oligo
+				.getReverseSequence();
+
+		if (listener != null
+				&& comparePaddedSequence(oligoseq, sequence, offset)) {
+			event.setEvent(OligoFinderEvent.FOUND_MATCH, oligo, contig, offset,
+					forward);
+			listener.oligoFinderUpdate(event);
+		}
+	}
+
+	private boolean comparePaddedSequence(String oligoseq, String sequence,
+			int offset) {
+		int seqlen = sequence.length();
+		
+		if (offset + oligoseq.length() > seqlen)
+			return false;
+
+		for (int i = 0; i < oligoseq.length(); i++) {
+			char oc = Character.toUpperCase(oligoseq.charAt(i));
+			
+			while (offset < seqlen && !isValid(sequence.charAt(offset)))
+				offset++;
+			
+			if (offset < seqlen) {
+				char sc = Character.toUpperCase(sequence.charAt(offset));
+				
+				if (oc != sc)
+					return false;
+				
+				offset++;
+			} else
+				return false;
+		}
+		
+		return true;
 	}
 
 	public int findMatches(Oligo[] oligos, Project[] projects)
@@ -314,7 +332,7 @@ public class OligoFinder {
 	public void close() throws SQLException {
 		closeConnection();
 	}
-	
+
 	private void closeConnection() throws SQLException {
 		if (conn != null) {
 			conn.close();
