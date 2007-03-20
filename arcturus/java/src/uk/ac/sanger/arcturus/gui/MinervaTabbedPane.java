@@ -118,9 +118,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		if (indexOfComponent(irp) < 0)
 			addTab("Import reads", null, irp, "Import reads");
 		
-		packFrame();
-		
 		return irp;
+	}
+	
+	public void addTab(String title, Component component) {
+		addTab(title, null, component, title);
+	}
+	
+	public void addTab(String title, Icon icon, Component component, String tip) {
+		super.addTab(title, icon, component, tip);
+		packFrame();
 	}
 	
 	private void packFrame() {
