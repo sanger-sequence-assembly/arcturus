@@ -72,7 +72,7 @@ public class OligoFinder {
 			listener.oligoFinderUpdate(event);
 		}
 		
-		conn.close();
+		closeConnection();
 
 		return found;
 	}
@@ -312,6 +312,10 @@ public class OligoFinder {
 	}
 
 	public void close() throws SQLException {
+		closeConnection();
+	}
+	
+	private void closeConnection() throws SQLException {
 		if (conn != null) {
 			conn.close();
 			conn = null;
