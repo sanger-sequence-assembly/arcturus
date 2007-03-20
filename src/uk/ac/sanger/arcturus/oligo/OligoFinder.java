@@ -71,6 +71,8 @@ public class OligoFinder {
 			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
 			listener.oligoFinderUpdate(event);
 		}
+		
+		conn.close();
 
 		return found;
 	}
