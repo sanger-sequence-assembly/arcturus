@@ -8,8 +8,10 @@ import java.awt.*;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.importreads.*;
+import uk.ac.sanger.arcturus.gui.oligofinder.*;
 
 public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTable table = null;
@@ -19,6 +21,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionViewProject;
 	private MinervaAbstractAction actionImportReads;
+	private MinervaAbstractAction actionFindOligos; 
 	private MinervaAbstractAction actionHelp;
 	private MinervaAbstractAction actionRefresh;
 
@@ -68,6 +71,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 			}
 		};
 		
+		actionFindOligos = new MinervaAbstractAction("Find oligos in selected projects",
+				null, "Find oligos in selected projects", new Integer(KeyEvent.VK_L),
+				KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				findOligosInProjects();
+			}
+		};
+	
 		actionRefresh = new MinervaAbstractAction("Refresh",
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
@@ -221,6 +232,10 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		
 		projectMenu.add(actionImportReads);
 		
+		projectMenu.addSeparator();
+		
+		projectMenu.add(actionFindOligos);
+		
 		projectMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
 			public void popupMenuCanceled(PopupMenuEvent e) {
 			}
@@ -229,7 +244,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 			}
 
 			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-				actionImportReads.setEnabled(table.getSelectedRowCount() == 1);
+				int rowcount = table.getSelectedRowCount();
+				actionImportReads.setEnabled(rowcount == 1);
 			}
 			
 		});
@@ -269,6 +285,25 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		irp.setSelectedProject(name);
 		
 		mtp.setSelectedComponent(irp);
+	}
+	
+	private void findOligosInProjects() {
+		int[] indices = table.getSelectedRows();
+
+		Project[] projects = new Project[indices.length];
+		
+		for (int i = 0; i < indices.length; i++)
+			projects[i] = ((ProjectProxy) model.elementAt(indices[i])).getProject();
+		
+		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
+		
+		OligoFinderPanel ofp = new OligoFinderPanel(adb);
+		
+		//ofp.selectProjects(projects);
+		
+		mtp.add("Oligo finder", ofp);
+		
+		mtp.setSelectedComponent(ofp);
 	}
 
 	public JMenuBar getMenuBar() {
