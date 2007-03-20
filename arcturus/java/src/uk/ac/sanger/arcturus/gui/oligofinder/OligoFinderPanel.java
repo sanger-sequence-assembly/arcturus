@@ -278,11 +278,6 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	}
 
 	public void closeResources() {
-		try {
-			finder.close();
-		} catch (SQLException sqle) {
-			Arcturus.logWarning("Error closing importer", sqle);
-		}
 	}
 
 	private void getOligosFromFile() {
