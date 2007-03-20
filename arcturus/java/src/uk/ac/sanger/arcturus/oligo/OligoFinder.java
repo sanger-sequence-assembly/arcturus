@@ -92,53 +92,36 @@ public class OligoFinder {
 		int bases_in_hash = 0;
 		int hash = 0;
 		int sequencelen = sequence.length();
-
-		while (end_pos < sequencelen) {
-			while (start_pos < sequencelen - hashsize && !isValid(sequence.charAt(start_pos)))
-				start_pos++;
-			
+		
+		for (start_pos = 0; start_pos < sequencelen - hashsize + 1; start_pos++) {
 			char c = sequence.charAt(start_pos);
-
-			while (bases_in_hash < hashsize) {
-				if (end_pos >= sequencelen)
-					break;
-
-				c = sequence.charAt(end_pos);
-
-				end_pos++;
-
-				if (isValid(c)) {
-					hash = updateHash(hash, c);
-					bases_in_hash++;
-				}
-			}
-
-			if (bases_in_hash == hashsize) {
-				for (int i = 0; i < oligos.length; i++) {
-					if (oligos[i] == null)
-						continue;
+			
+			if (isValid(c)) {
+				while (end_pos < sequencelen && bases_in_hash < hashsize) {
+					char e = sequence.charAt(end_pos);
 					
-					if (hash == oligos[i].getHash()) {
-						if (listener != null) {
-							event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i], contig, start_pos, true);
-							listener.oligoFinderUpdate(event);
-						}
-						
-						String subseq = sequence.substring(start_pos,
-								start_pos + oligos[i].getLength());
-
-						if (subseq.equalsIgnoreCase(oligos[i].getSequence()) && listener != null) {
-							event.setEvent(OligoFinderEvent.FOUND_MATCH, oligos[i], contig, start_pos, true);
-							listener.oligoFinderUpdate(event);
-						}						
+					if (isValid(e)) {
+						hash = updateHash(hash, e);
+						bases_in_hash++;
 					}
+					
+					end_pos++;
 				}
+				
+				if (bases_in_hash == hashsize)
+					processHashMatch(oligos, contig, sequence, start_pos, hash);
+				
+				bases_in_hash--;
 			}
 			
-			start_pos++;
-			bases_in_hash--;
-		}
-	
+			if (bases_in_hash < 0)
+				bases_in_hash = 0;
+			
+			if (end_pos < start_pos) {
+				end_pos = start_pos;
+				bases_in_hash = 0;
+			}
+		}	
 		
 		if (listener != null) {
 			event.setEvent(OligoFinderEvent.FINISH_CONTIG, null, contig, contig.getLength(), false);
@@ -146,6 +129,28 @@ public class OligoFinder {
 		}
 		
 		return found;
+	}
+	
+	private void processHashMatch(Oligo[] oligos, Contig contig, String sequence, int start_pos, int hash) {
+		for (int i = 0; i < oligos.length; i++) {
+			if (oligos[i] == null)
+				continue;
+			
+			if (hash == oligos[i].getHash()) {
+				if (listener != null) {
+					event.setEvent(OligoFinderEvent.HASH_MATCH, oligos[i], contig, start_pos, true);
+					listener.oligoFinderUpdate(event);
+				}
+				
+				String subseq = sequence.substring(start_pos,
+						start_pos + oligos[i].getLength());
+
+				if (subseq.equalsIgnoreCase(oligos[i].getSequence()) && listener != null) {
+					event.setEvent(OligoFinderEvent.FOUND_MATCH, oligos[i], contig, start_pos, true);
+					listener.oligoFinderUpdate(event);
+				}						
+			}
+		}	
 	}
 
 	public int findMatches(Oligo[] oligos, Project[] projects) throws SQLException {
