@@ -1,6 +1,6 @@
 package uk.ac.sanger.arcturus.oligo;
 
-public class Oligo {
+public class Oligo implements Comparable {
 	private static int counter = 0;
 	
 	private String name;
@@ -59,5 +59,11 @@ public class Oligo {
 		}
 		
 		return new String(revchars);
+	}
+
+	public int compareTo(Object o) {
+		Oligo that = (Oligo)o;
+		
+		return name.compareTo(that.getName());
 	}
 }
