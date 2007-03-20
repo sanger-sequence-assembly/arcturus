@@ -399,7 +399,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 			case OligoFinderEvent.START:
 				bpdone = 0;
 				initProgressBar(offset);
-				postMessage("Starting oligo search ... (" + offset + " bp)\n\n");
+				postMessage("Starting oligo search in " + offset + " bp of contig consensus sequence\n");
 				break;
 
 			case OligoFinderEvent.START_CONTIG:
@@ -433,7 +433,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 
 			case OligoFinderEvent.FINISH:
 				setProgressBarToDone();
-				postMessage("FINISHED\n");
+				postMessage("Finished.\n");
 				reportMatches();
 				break;
 
@@ -495,7 +495,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 			
 			postMessage("    CONTIG " + contig.getID() + " (" + contig.getName() + ", " +
 					contig.getLength() + " bp, in " + contig.getProject().getName() + ")");
-			postMessage(" from " + matches[i].getOffset() + " in ");
+			postMessage(" from " + (matches[i].getOffset() + 1) + " in ");
 			postMessage(matches[i].isForward() ? "forward" : "reverse");
 			postMessage(" direction.\n");
 		}
