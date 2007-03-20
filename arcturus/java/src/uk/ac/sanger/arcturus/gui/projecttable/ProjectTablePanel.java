@@ -71,8 +71,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 			}
 		};
 		
-		actionFindOligos = new MinervaAbstractAction("Find oligos in selected projects",
-				null, "Find oligos in selected projects", new Integer(KeyEvent.VK_L),
+		actionFindOligos = new MinervaAbstractAction("Find oligos",
+				null, "Find oligos", new Integer(KeyEvent.VK_L),
 				KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				findOligosInProjects();
