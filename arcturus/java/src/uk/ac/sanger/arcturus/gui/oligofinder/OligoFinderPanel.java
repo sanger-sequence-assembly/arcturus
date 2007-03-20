@@ -27,7 +27,8 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	private JButton btnFindOligos;
 	private JButton btnClearMessages = new JButton("Clear messages");
 	private JProgressBar pbarTaskProgress = new JProgressBar();
-	
+	private JCheckBox cbSelectAll = new JCheckBox("All projects");
+
 	private ProjectListModel plm;
 	
 	private MinervaAbstractAction actionClose;
@@ -115,6 +116,24 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 		panel = new JPanel(new FlowLayout());
 		
 		panel.add(btnFindOligos);
+		
+		cbSelectAll.setSelected(false);
+		panel.add(cbSelectAll);
+		
+		cbSelectAll.addChangeListener(new ChangeListener() {
+			public void stateChanged(ChangeEvent e) {
+				if (cbSelectAll.isSelected()) {
+					int start = 0;
+				    int end = lstProjects.getModel().getSize()-1;
+				    if (end >= 0) {
+				        lstProjects.setSelectionInterval(start, end);   // A, B, C, D
+				    }
+				} else {
+					lstProjects.clearSelection();
+				}
+			
+			}			
+		});
 		
 		add(panel);
 		
