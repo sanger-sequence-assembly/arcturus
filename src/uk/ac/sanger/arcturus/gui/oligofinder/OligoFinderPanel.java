@@ -21,7 +21,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	private OligoFinder finder;
 	private JMenuBar menubar = new JMenuBar();
 
-	private JTextArea txtOligoList = new JTextArea(20, 32);
+	private JTextArea txtOligoList = new JTextArea(20, 60);
 	private JList lstProjects;
 	private JTextArea txtMessages = new JTextArea(20, 40);
 	private JButton btnFindOligos;
@@ -552,25 +552,24 @@ public class OligoFinderPanel extends JPanel implements MinervaClient, OligoFind
 	
 	public static void main(String[] args) {
 		try {
-			String instance = args.length == 2 ? args[0] : "test";
+			String instance = args.length == 2 ? args[0] : "pathogen";
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-			String organism = args.length == 2 ? args[1] : "TESTPKN";
+			String organism = args.length == 2 ? args[1] : "PKN";
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 			
 			JFrame frame = new JFrame("Testing OligoFinderPanel");
 			
-			OligoFinderPanel irp = new OligoFinderPanel(adb);
+			OligoFinderPanel ofp = new OligoFinderPanel(adb);
 			
-			frame.getContentPane().add(irp);
+			frame.getContentPane().add(ofp);
 			
-			frame.setJMenuBar(irp.getMenuBar());
+			frame.setJMenuBar(ofp.getMenuBar());
 			
 			frame.pack();
 			
 			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 			
-			irp.setSelectedProject("PKN13");
-			irp.setOligos("AACATTATTAC\nAGATTACATTA\nAGATACATTACCA\nTACATAGATACAGAT");
+			ofp.setOligos("TAATAAAAATTATTACGACTGTGATAAACTAACATTTAGTCGTATAGTGA");
 			
 			frame.setVisible(true);
 		}
