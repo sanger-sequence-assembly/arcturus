@@ -80,6 +80,16 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		JPanel panel = new JPanel(new BorderLayout());
 
 		panel.add(scrollpane, BorderLayout.CENTER);
+		
+		JButton btnClearOligos = new JButton("Clear oligos");
+		panel.add(btnClearOligos, BorderLayout.SOUTH);
+		
+		btnClearOligos.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				txtOligoList.selectAll();
+				txtOligoList.cut();
+			}
+		});
 
 		panel.setBorder(etchedTitledBorder("Oligos to search for"));
 
