@@ -86,8 +86,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		
 		btnClearOligos.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				txtOligoList.selectAll();
-				txtOligoList.cut();
+				txtOligoList.setText("");
 			}
 		});
 
@@ -163,8 +162,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 
 		btnClearMessages.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				txtMessages.selectAll();
-				txtMessages.cut();
+				txtMessages.setText("");
 			}
 		});
 
