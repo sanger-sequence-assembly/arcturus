@@ -68,6 +68,7 @@ public class ConnectionPool {
 
 		Connection conn = dataSource.getConnection();
 		c = new PooledConnection(conn, this);
+		c.setWaitTimeout(48*3600);
 		c.lease();
 		connections.addElement(c);
 		return c;
