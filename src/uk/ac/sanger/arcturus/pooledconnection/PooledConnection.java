@@ -233,4 +233,11 @@ public class PooledConnection implements Connection {
 	public void setTypeMap(Map map) throws SQLException {
 		conn.setTypeMap(map);
 	}
+
+	public void setWaitTimeout(int timeout) throws SQLException {
+		String sql = "set session wait_timeout = " + timeout;
+		Statement stmt = conn.createStatement();
+		stmt.execute(sql);
+		stmt.close();
+	}
 }
