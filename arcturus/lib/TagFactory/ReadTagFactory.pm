@@ -565,26 +565,32 @@ sub processTagPlaceHolderName {
     my $this = shift;
     my $tag  = shift;
 
+#print STDOUT "processTagPlaceHolderName:\n";
+
     my $seq_id = $tag->getSequenceID();
     return undef unless $seq_id; # seq_id must be defined
 
 # a placeholder name is specified with a sequence name value like '<name>'
 
-    my $name = $tag->getTagSequenceName();
+    my $name = $tag->getTagSequenceName(pskip=>1);
+#print STDOUT "processTagPlaceHolderName: name $name \n";
     return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form '<name>'
-print STDOUT "processTagPlaceHolderName: $name \n";
+
+#print STDOUT "processTagPlaceHolderName: $name \n";
 
     $name = $1; # get the name root between the bracket 
 
 # replace the tag sequence name by one generated from 'name' & the sequence ID
 
     my $randomnumber = int(rand(100)); # from 0 to 99 
+#print STDOUT "'$name'  r=$randomnumber  s:$seq_id\n";
     my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
 # ok, adopt the new name as tag sequence name
     $tag->setTagSequenceName($newname);
+#print STDOUT "new TagSequenceName $newname \n";
 
 # and similarly, if the place holder appears in the comment, substitute
- 
+
     if (my $comment = $tag->getTagComment()) {
         if ($comment =~ s/\<$name\>/$newname/) {
             $tag->setTagComment($comment);
