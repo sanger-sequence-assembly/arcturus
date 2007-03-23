@@ -4,6 +4,10 @@ use strict;
 
 use Mapping;
 
+use TagFactory::ReadTagFactory;
+
+use TagFactory::ContigTagFactory;
+
 #----------------------------------------------------------------------
 
 sub new {
@@ -93,25 +97,84 @@ sub setPosition {
     my %options = @_;
 
     @position = sort {$a <=> $b} @position; # ensure ordering of segment
+
+# clear position buffer and mapping unless otherwise specified
+
+    $this->{position} = [] unless $options{join};
+
+    undef $this->{mapping} unless $options{keep};
+
 # add this position pair to the buffer
-    undef $this->{position} unless $options{join};
-    unless (defined($this->{position})) {
-        $this->{position} = [];
-    }
+
+    $this->{position} = [] unless $this->{position};
+
     my $positionpairs = $this->{position};
 
     push @$positionpairs,[@position];
+
+    return $this->isJoined(); # sorts intervals, returns number of segments - 1
 }
 
 sub getPosition {
-# return the specified position, default the first pair
+# return the specified position segment, default the first pair
     my $this = shift;
     my $pair = shift || 0; # number of the pair
 
     my $positionpairs = $this->{position};
+
+    return undef unless $positionpairs;
+
     return undef if ($pair < 0 || $pair >= @$positionpairs); # does not exist
     
     return @{$positionpairs->[$pair]};
+}
+
+sub setPositionByMapping {
+# import positions as segments of a mapping; also keep the mapping itself
+    my $this = shift;
+    my $mapping = shift;
+
+    $this->{mapping} = $mapping;
+
+    return unless $mapping;
+
+    my $segments = $mapping->getSegments();
+
+    my %options = (keep=>1,join=>0);
+    foreach my $segment (@$segments) {
+# test on validity? x domain should be contiguous? or fill in gaps somehow?
+        $this->setPosition($segment->[2],$segment->[3],%options);
+        $options{join} = 1;
+    }
+}
+
+sub getPositionAsMapping {
+# export the positions as an alignment mapping
+    my $this = shift;
+    my %options = @_;
+
+    if (my $mapping = $this->{mapping}) {
+        return $mapping unless $options{new};
+    }
+
+    my $pairs = $this->isJoined(); # sort and test
+    return undef unless defined($pairs);
+
+# create a mapping FROM a (ficticious) tag sequence of length equal
+# to the sum total of position intervals TO the tagged sequence
+
+    my $mapping = new Mapping($this->getTagSequenceName() || $this->getTagID());
+
+    my $start = 1;
+    for (my $pair = 0 ; $pair <= $pairs ; $pair++) {
+        my @segment = $this->getPosition($pair);
+        my $segmentlength = $segment[1] - $segment[0];
+        my $final = $start + $segmentlength; 
+        $mapping->putSegment($start,$final,@segment);
+        $start = $final + 1;
+    }
+    
+    return $mapping;
 }
 
 sub isJoined {
@@ -128,8 +191,22 @@ sub isJoined {
 sub getPositionLeft {
     my $this = shift;
 
-    my @position = $this->getPosition();
+    my @position = $this->getPosition(0); # the first position pair
+
     return $position[0];
+}
+
+sub getPositionRange {
+    my $this = shift;
+
+    my $part = $this->isJoined();
+    return undef unless defined($part);
+
+
+    my @pf = $this->getPosition(0);     # first segment;
+    my @pl = $this->getPosition($part); # last  segment;
+
+    return $pf[0], $pl[1];
 }
 
 sub setSequenceID {
@@ -168,12 +245,9 @@ sub getSpan {
 # returns the total distance on the sequence occupied by the tag  
     my $this = shift;
 
-    my $part = $this->isJoined();
-    return undef unless defined($part);
+    my @range = $this->getPositionRange();
 
-    my @pf = $this->getPosition(0);     # first segment;
-    my @pl = $this->getPosition($part); # last  segment;
-    return $pl[1] - $pf[0] + 1;
+    return abs($range[1] - $range[0]) + 1;
 }
 
 # orientation
@@ -231,7 +305,11 @@ sub setTagComment {
 
 sub getTagComment {
     my $this = shift;
-
+    my %options = @_;
+# before export, process possible place holder (<name>)
+    if ($this->{tagcomment} && $this->{tagcomment} =~ /\</) {
+        ReadTagFactory->processTagPlaceHolderName($this) unless $options{pskip};
+    }
     return $this->{tagcomment} || '';
 }
 
@@ -267,7 +345,11 @@ sub setTagSequenceName {
 
 sub getTagSequenceName {
     my $this = shift;
-
+    my %options = @_;
+# before export, process possible place holder (<name>)
+    if ($this->{tsname} && $this->{tsname} =~ /\</) {
+        ReadTagFactory->processTagPlaceHolderName($this) unless $options{pskip};
+    }
     return $this->{tsname} || '';
 }
 
@@ -286,42 +368,52 @@ sub getType {
 
 #----------------------------------------------------------------------
 
-sub processTagPlaceHolderName {
-# substitute (possible) placeholder name of the tag sequence & comment
-    my $this = shift;
-
-    my $seq_id = $this->getSequenceID();
-    return undef unless $seq_id; # seq_id must be defined
-
-# a placeholder name is specified with a sequence name value like '<name>'
-
-    my $name = $this->getTagSequenceName();
-    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form '<name>'
-print STDOUT "processTagPlaceHolderName: $name \n";
-
-    $name = $1; # get the name root between the bracket 
-
-# replace the tag sequence name by one generated from 'name' & the sequence ID
-
-    my $randomnumber = int(rand(100)); # from 0 to 99 
-    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
-# ok, adopt the new name as tag sequence name
-    $this->setTagSequenceName($newname);
-
-# and similarly, if the place holder appears in the comment, substitute
- 
-    if (my $comment = $this->getTagComment()) {
-        if ($comment =~ s/\<$name\>/$newname/) {
-            $this->setTagComment($comment);
-	}
-    }
-
-    return 1;
-}
-
 #----------------------------------------------------------------------
 
 sub transpose {
+# transpose a tag by applying a linear transformation
+    my $this =shift;
+    my $align = shift;
+    my $offset = shift;
+my $dummy  = shift;
+    my $window = shift;
+
+    return $this->oldtranspose($align,$offset,$dummy,$window);
+
+    my %options = @_;
+
+# determine the multiplication mapping
+
+    my @segment = (1,$window);
+    foreach my $i (0,1) {
+        $segment[2+$i] = $segment[$i]*$align + $offset;
+    }
+
+    my $mapping = new Mapping();
+    $mapping->putSegment(@segment);    
+
+    return ContigTagFactory->remap($this,$mapping,%options);
+}
+
+sub mirror { # REDUNDENT?
+# invert the positions inside a specified interval 
+    my $this =shift;
+    my $wfinal = shift;
+    my $wstart = shift || 1;
+
+    return $this->transpose(-1,$wfinal+1, $wfinal,@_);
+}
+
+sub isequal {
+
+    my $this = shift;
+    my $tag  = shift;
+    my %options = @_; # 'ignorenameofpattern, includestrand, inherit
+  
+    return ContigTagFactory->isEqual($this,$tag,@_);  
+}
+
+sub oldtranspose {
 # transpose a tag by applying a linear transformation
 # (apply only to contig tags)
 # returns new Tag instance (or undef)
@@ -530,6 +622,28 @@ sub isEqual {
     return 1
 }
 
+sub copy {
+# spawn an exact copy of this tag
+    my $this = shift;
+
+    my $tag = $this->new();
+
+    my @items = ('Host',
+                 'Position', # to be replace by a copy mapping
+                 'Strand','Comment','SequenceID', #  TAG2CONTIG table items
+                 'TagID','Type','SystematicID',   #   CONTIGTAG table items
+                 'TagComment','TagSequenceID',    #   CONTIGTAG table items
+                 'TagSequenceName','DNA');        # TAGSEQUENCE table items
+
+    foreach my $item (@items) {
+        eval("\$tag->set$item(\$this->get$item())");
+        print STDERR "failed to copy $item ('$@')\n" if $@;
+#        $LOGGER->error("failed to copy $item ('$@')") if ($LOGGER && $@);
+    }
+
+    return $tag;
+}
+
 sub cleanup {
 # private method cleanup for purpose of comparison of comments
     my $comment = shift;
@@ -557,8 +671,23 @@ sub writeToCaf {
     my $FILE = shift; # optional output file handle
     my %options = @_; # option 'annotag' allows override of default
 
+    my $pair = $options{pair};
+
+    unless (defined($pair)) {
+# this recursion deals with tags having more than one position segment
+        if (my $pairs = $this->isJoined()) {
+            my $string = '';
+            for (my $pair = 0 ; $pair <= $pairs ; $pair++) {
+                $string .= $this->writeToCaf($FILE,pair=>$pair,@_);
+                $string .= "\n";
+	    }
+            return $string;
+        }        
+        $pair = 0;
+    }
+
     my $type = $this->getType();
-    my @pos  = $this->getPosition();
+    my @pos  = $this->getPosition($pair);
     my $tagcomment = $this->getTagComment();
     my $comment = $this->getComment();
 
@@ -567,13 +696,29 @@ sub writeToCaf {
 # various types of tag, NOTE and ANNO are two special cases
 
     my $host = $this->getHostClass();
-$host = 0;
+#$host = 0;
 
     my $string = "Tag $type ";
 
     if ($type eq 'NOTE') {
 # GAP4 NOTE tag, no position info
     }
+
+    elsif ($type eq 'ANNO') {
+# generate two tags, ANNO contains the systematic ID and comment
+        if (!$host || $host eq 'Contig') {
+# annotation tags have special status
+            $string .= "@pos ";
+# add the systematic ID
+            my $tagtext = $this->getSystematicID() || 'unspecified'; 
+            $tagtext .= ' ' . $comment if $comment;
+            $string .= "\"$tagtext\"\n" ;
+# if also a comment available add an info tag
+            $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
+#?          $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
+	}
+    }
+
     elsif ($host eq 'Read') {
 # standard output of tag with position and tag comment
         $string .= "@pos "; 
@@ -582,43 +727,21 @@ $host = 0;
         $string .= "\n";
     }
     elsif ($host eq 'Contig') {
-# annotation tags have special status
-        if ($type eq 'ANNO') {
-# generate two tags, ANNO contains the systematic ID and comment
-            $string .= "@pos ";
-# add the systematic ID
-            my $tagtext = $this->getSystematicID() || 'unspecified'; 
-            $tagtext .= ' ' . $comment if $comment;
-            $string .= "\"$tagtext\"\n" ;
-# if also a comment available add an info tag
-            $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
-#            $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
-        }
-        else {
 # standard output of tag with position and tag comment
-            $string .= "@pos "; 
-            $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
-            $string .= "\"$tagcomment\"" if $tagcomment;
-            $string .= "\n";
+        $string .= "@pos "; 
+        $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
+        $string .= "\"$tagcomment\"" if $tagcomment;
+        $string .= "\n";
 # if comment available add an INFO tag
-            $string .= "Tag INFO @pos $comment\n" if $comment;
+        if ($comment && $options{infotag}) {
+            $string .= "Tag INFO @pos \"$comment\"\n";
 	}
     }
-#    else {
-#        print STDERR "Unknown host type in tag\n";
-#    }
 
-    elsif ($type eq 'ANNO') {
-# generate two tags, ANNO contains the systematic ID and comment
-        $string .= "@pos ";
-# add the systematic ID
-        my $tagtext = $this->getSystematicID() || 'unspecified'; 
-        $tagtext .= ' ' . $comment if $comment;               # ? tagcomment
-        $string .= "\"$tagtext\"\n" ;
-# if comment available add an info tag
-        $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
-#        $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
+    elsif ($host) {
+        print STDERR "Unknown host type $host in tag\n";
     }
+
     else {
 # standard output of tag with position and tag comment
         $string .= "@pos "; 
@@ -626,7 +749,9 @@ $host = 0;
         $string .= "\"$tagcomment\"" if $tagcomment;
         $string .= "\n";
 # if comment available add an INFO tag
-        $string .= "Tag INFO @pos $comment\n" if $comment;
+        if ($comment && $options{infotag}) {
+            $string .= "Tag INFO @pos \"$comment\"\n";
+	}
     }
 
     print $FILE $string if $FILE;
@@ -721,24 +846,32 @@ sub dump {
 # listing poption for debugging purposes
     my $tag = shift;
     my $FILE = shift; # optional file handle
-    my $skip = shift; # true to skip undefined items
+    my %options = @_;
+
+    my $skip = $options{skip}; # true to skip undefined items
 
     my $report = $tag->getHost() . "Tag instance $tag\n";
 
     my @line;
     push @line, "sequence ID       ".($tag->getSequenceID() || 0)."\n";
     push @line, "tag ID            ".($tag->getTagID()   || 'undef')."\n";
-    my @position = $tag->getPosition();
-    push @line, "position          '@position'\n";
+    my $position;
+    my $pairs = $tag->isJoined();
+    foreach my $p (0 .. $tag->isJoined()) {
+        $position .= " ; " if $position;
+        my @position = $tag->getPosition($p);
+        $position .= "@position";
+    }
+    push @line, "position          $position\n";
     push @line, "strand            ".($tag->getStrand()  || 'undef')."\n";
     push @line, "comment           ".($tag->getComment() || 'undef')."\n\n";
     push @line, "tag ID            ".($tag->getTagID()   || 'undef')."\n";
     push @line, "tag type          ".($tag->getType()    || 'undef')."\n";
     push @line, "systematic ID     ".($tag->getSystematicID()  || 'undef')."\n";
     push @line, "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
-    push @line, "tag comment       ".($tag->getTagComment()    || 'undef')."\n\n";
+    push @line, "tag comment       ".($tag->getTagComment(@_)  || 'undef')."\n\n";
     push @line, "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
-    push @line, "tag sequence name ".($tag->getTagSequenceName() || 'undef')."\n";
+    push @line, "tag sequence name ".($tag->getTagSequenceName(@_) || 'undef')."\n";
     push @line, "sequence          ".($tag->getDNA() || 'undef')."\n";
     push @line, "tag host class    ".($tag->getHostClass() || 'undef')."\n";
 
