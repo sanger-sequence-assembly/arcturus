@@ -4,6 +4,8 @@ import java.sql.*;
 import java.util.*;
 import javax.sql.*;
 
+import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+
 public class ConnectionPool {
 	public final static long DEFAULT_TIMEOUT = 60000;
 	private Vector connections;
@@ -19,9 +21,19 @@ public class ConnectionPool {
 	public ConnectionPool(DataSource dataSource, long timeout) {
 		this.timeout = timeout;
 		this.dataSource = dataSource;
+		
+		initDataSource();
+		
 		connections = new Vector(poolsize);
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
+	}
+	
+	private void initDataSource() {
+		if (dataSource instanceof MysqlDataSource) {
+			MysqlDataSource mds = (MysqlDataSource)dataSource;
+			mds.setNoAccessToProcedureBodies(true);
+		}
 	}
 
 	public synchronized void reapConnections() {
