@@ -47,6 +47,9 @@ public class TestArcturusUpdater {
 			System.out.println("Unable to determine date of zip file JAR");
 		else
 			System.out.println("Zip JAR file last modified at " + zipjardate);
+		
+		if (jardate != null && zipjardate != null && zipjardate.compareTo(jardate) > 0)
+			System.out.println("There is a more recent version of Arcturus at " + locator);
 	}
 
 	private Date findZipJARDate(String locator) {
