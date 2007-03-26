@@ -9,10 +9,10 @@ import java.io.*;
 public class TestFreeReads {
 	private String instance = null;
 	private String organism = null;
-	
+
 	private ArcturusDatabase adb = null;
 	private Connection conn = null;
-	
+
 	public static void main(String[] args) {
 		TestFreeReads tfr = new TestFreeReads();
 		tfr.execute(args);
@@ -22,7 +22,7 @@ public class TestFreeReads {
 		System.err.println("TestFreeReads");
 		System.err.println("=============");
 		System.err.println();
-		
+
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
 				instance = args[++i];
@@ -37,45 +37,38 @@ public class TestFreeReads {
 		}
 
 		try {
-			System.err.println("Creating an ArcturusInstance for " + instance);
-			System.err.println();
+			System.out.println("Creating an ArcturusInstance for " + instance);
+			System.out.println();
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 
-			System.err.println("Creating an ArcturusDatabase for " + organism);
+			System.out.println("Creating an ArcturusDatabase for " + organism);
 			System.err.println();
 
-			System.err.flush();
+			System.out.flush();
 
 			adb = ai.findArcturusDatabase(organism);
 
 			conn = adb.getConnection();
-			
+
 			String sql = "{call procFreeReads}";
-			
+
 			CallableStatement cstmt = conn.prepareCall(sql);
-			
-			cstmt.execute();
-			
-			while (cstmt.getMoreResults() || cstmt.getUpdateCount() != -1) {
-				int updateCount = cstmt.getUpdateCount();
-				
-				if (updateCount == -1) {
+
+			if (cstmt.execute()) {
+				ResultSet rs = cstmt.getResultSet();
+
+				if (rs != null) {
 					int rows = 0;
-					
-					ResultSet rs = cstmt.getResultSet();
-					
+
 					while (rs.next())
 						rows++;
-					
+
 					System.out.println("ResultSet with " + rows + " rows");
-				} else {
-					System.out.println("Update count = " + updateCount);
 				}
 			}
 
 			conn.close();
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
