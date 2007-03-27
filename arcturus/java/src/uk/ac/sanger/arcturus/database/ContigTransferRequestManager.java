@@ -94,7 +94,7 @@ public class ContigTransferRequestManager {
 			ContigTransferRequest request = new ContigTransferRequest(requestId, contig,
 					oldProject, newProject, requester, requesterComment);
 		
-			request.setOpenedDate(rs.getDate(7));
+			request.setOpenedDate(rs.getTimestamp(7));
 			
 			String reviewerUid = rs.getString(8);
 			Person reviewer = reviewerUid != null ? PeopleManager.findPerson(reviewerUid) : null;
@@ -103,11 +103,11 @@ public class ContigTransferRequestManager {
 			
 			request.setReviewerComment(rs.getString(9));
 			
-			request.setReviewedDate(rs.getDate(10));
+			request.setReviewedDate(rs.getTimestamp(10));
 			
 			request.setStatusAsString(rs.getString(11));
 			
-			request.setClosedDate(rs.getDate(12));
+			request.setClosedDate(rs.getTimestamp(12));
 			
 			v.add(request);
 		}
