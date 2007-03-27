@@ -16,6 +16,8 @@ import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import uk.ac.sanger.arcturus.people.Person;
 
+import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
+
 import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 
 public class ArcturusDatabase {
@@ -50,6 +52,9 @@ public class ArcturusDatabase {
 			| CONTIG_SEQUENCE_DNA_AND_QUALITY
 			| CONTIG_SEQUENCE_AUXILIARY_DATA
 			| CONTIG_MAPPING_SEGMENTS;
+	
+	public static final int USER_IS_REQUESTER = 1;
+	public static final int USER_IS_CONTIG_OWNER = 2;
 
 	protected DataSource ds;
 	protected String description;
@@ -340,6 +345,7 @@ public class ArcturusDatabase {
 	protected ProjectManager projectManager;
 	protected AssemblyManager assemblyManager;
 	protected UserManager userManager;
+	protected ContigTransferRequestManager contigTransferRequestManager;
 
 	private void createManagers() throws SQLException {
 		cloneManager = new CloneManager(this);
@@ -351,6 +357,7 @@ public class ArcturusDatabase {
 		projectManager = new ProjectManager(this);
 		assemblyManager = new AssemblyManager(this);
 		userManager = new UserManager(this);
+		contigTransferRequestManager = new ContigTransferRequestManager(this);
 	}
 
 	/**
@@ -999,6 +1006,10 @@ public class ArcturusDatabase {
 		return userManager.hasPrivilege(person, privilege);
 	}
 
+	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user, int mode) throws SQLException {
+		return contigTransferRequestManager.getContigTransferRequestsByUser(user, mode);
+	}
+	
 	/**
 	 * Returns a text representation of this object.
 	 * 
