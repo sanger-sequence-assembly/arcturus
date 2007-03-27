@@ -50,7 +50,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		this.user = user;
 		this.mode = mode;
 
-		comparator = new RequestComparator(COLUMN_OPENED_DATE, false);
+		comparator = new RequestComparator(COLUMN_OPENED_DATE, mode, false);
 
 		refresh();
 	}
