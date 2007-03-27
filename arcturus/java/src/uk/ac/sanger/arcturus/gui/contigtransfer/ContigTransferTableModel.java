@@ -74,13 +74,13 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 				return "Contig";
 
 			case COLUMN_OLD_PROJECT:
-				return "Project";
+				return "Move from";
 
 			case COLUMN_NEW_PROJECT:
-				return "New project";
+				return "Move to";
 
 			case COLUMN_REQUESTER:
-				return "Requester";
+				return (mode == ArcturusDatabase.USER_IS_REQUESTER) ? "Owner" : "Requester";
 
 			case COLUMN_OPENED_DATE:
 				return "Opened";
@@ -158,14 +158,15 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 				return request.getNewProject().getName();
 
 			case COLUMN_REQUESTER:
-				return request.getRequester().getName();
+				return (mode == ArcturusDatabase.USER_IS_REQUESTER) ?
+						getContigOwnerName(request) : getRequesterName(request);
 
 			case COLUMN_OPENED_DATE:
 				return request.getOpenedDate();
 
 			case COLUMN_REVIEWER:
 				Person reviewer = request.getReviewer();
-				return reviewer != null ? reviewer.getName() : "[null]";
+				return reviewer != null ? reviewer.getName() : null;
 
 			case COLUMN_REVIEWED_DATE:
 				return request.getReviewedDate();
@@ -182,6 +183,29 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 			default:
 				return null;
 		}
+	}
+	
+	private String getContigOwnerName(ContigTransferRequest request) {
+		if (request == null)
+			return null;
+		
+		Project project = request.getOldProject();
+		
+		if (project == null)
+			return null;
+		
+		Person owner = project.getOwner();
+		
+		return (owner == null) ? null : owner.getName();
+	}
+	
+	private String getRequesterName(ContigTransferRequest request) {
+		if (request == null)
+			return null;
+		
+		Person requester = request.getRequester();
+		
+		return (requester == null) ? null : requester.getName();
 	}
 
 	public boolean isCellEditable(int row, int col) {
