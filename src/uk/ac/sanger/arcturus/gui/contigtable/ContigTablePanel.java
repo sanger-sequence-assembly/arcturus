@@ -8,6 +8,7 @@ import java.awt.BorderLayout;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.*;
 import uk.ac.sanger.arcturus.data.*;
 
@@ -26,6 +27,7 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 	private MinervaAbstractAction actionExportAsFasta;
 	private MinervaAbstractAction actionViewContigs;
 	private MinervaAbstractAction actionImportReads;
+	private MinervaAbstractAction actionShowContigTransfers;
 	private MinervaAbstractAction actionRefresh;
 	private MinervaAbstractAction actionHelp;
 
@@ -101,6 +103,16 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 			}
 		};
 		
+		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
+				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
+				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(ContigTablePanel.this);
+				ContigTransferTablePanel cttp = mtp.showContigTransferTablePanel();
+				mtp.setSelectedComponent(cttp);
+			}
+		};
+
 		actionRefresh = new MinervaAbstractAction("Refresh",
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
@@ -145,6 +157,10 @@ public class ContigTablePanel extends JPanel implements MinervaClient {
 
 		fileMenu.add(actionViewContigs);
 
+		fileMenu.addSeparator();
+		
+		fileMenu.add(actionShowContigTransfers);
+		
 		fileMenu.addSeparator();
 
 		fileMenu.add(actionClose);

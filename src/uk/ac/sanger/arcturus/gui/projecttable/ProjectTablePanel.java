@@ -10,6 +10,7 @@ import java.awt.event.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.*;
 
@@ -21,7 +22,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private MinervaAbstractAction actionClose;
 	private MinervaAbstractAction actionViewProject;
 	private MinervaAbstractAction actionImportReads;
-	private MinervaAbstractAction actionFindOligos; 
+	private MinervaAbstractAction actionFindOligos;
+	private MinervaAbstractAction actionShowContigTransfers;
 	private MinervaAbstractAction actionHelp;
 	private MinervaAbstractAction actionRefresh;
 
@@ -78,7 +80,17 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 				findOligosInProjects();
 			}
 		};
-	
+		
+		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
+				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
+				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(ProjectTablePanel.this);
+				ContigTransferTablePanel cttp = mtp.showContigTransferTablePanel();
+				mtp.setSelectedComponent(cttp);
+			}
+		};
+
 		actionRefresh = new MinervaAbstractAction("Refresh",
 				null, "Refresh the display", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
@@ -123,7 +135,11 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		fileMenu.add(actionViewProject);
 		
 		fileMenu.addSeparator();
-				
+		
+		fileMenu.add(actionShowContigTransfers);
+		
+		fileMenu.addSeparator();
+		
 		fileMenu.add(actionClose);
 		
 		fileMenu.addSeparator();
