@@ -207,6 +207,10 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		
 		return (requester == null) ? null : requester.getName();
 	}
+	
+	public Contig getContigForRow(int row) {
+		return requests[row].getContig();
+	}
 
 	public boolean isCellEditable(int row, int col) {
 		return false;
