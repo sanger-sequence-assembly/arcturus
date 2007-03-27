@@ -173,13 +173,14 @@ public class ProjectComparator implements Comparator {
 		if (d1 == null && d2 == null)
 			return 0;
 
+		int diff = 0;
+
 		if (d1 == null)
-			return 1;
-
-		if (d2 == null)
-			return -1;
-
-		int diff = d1.compareTo(d2);
+			diff = 1;
+		else if (d2 == null)
+			diff = -1;
+		else
+			diff = d1.compareTo(d2);
 
 		if (!ascending)
 			diff = -diff;
@@ -191,13 +192,14 @@ public class ProjectComparator implements Comparator {
 		if (p1 == null && p2 == null)
 			return 0;
 
+		int diff = 0;
+
 		if (p1 == null || p1.getOwner() == null)
-			return 1;
-
-		if (p2 == null || p2.getOwner() == null)
-			return -1;
-
-		int diff = p2.getOwner().compareTo(p1.getOwner());
+			diff = 1;
+		else if (p2 == null || p2.getOwner() == null)
+			diff = -1;
+		else
+			diff = p2.getOwner().compareTo(p1.getOwner());
 
 		return ascending ? diff : -diff;
 	}
@@ -206,34 +208,34 @@ public class ProjectComparator implements Comparator {
 		if (p1 == null && p2 == null)
 			return 0;
 
+		int diff = 0;
+
 		if (p1 == null || p1.getName() == null)
-			return 1;
+			diff = 1;
+		else if (p2 == null || p2.getName() == null)
+			diff = -1;
+		else {
+			String name1 = p1.getName();
+			String name2 = p2.getName();
 
-		if (p2 == null || p2.getName() == null)
-			return -1;
+			Matcher matcher1 = pattern.matcher(name1);
+			Matcher matcher2 = pattern.matcher(name2);
 
-		String name1 = p1.getName();
-		String name2 = p2.getName();
+			if (matcher1.find() && matcher2.find()) {
+				String stem1 = matcher1.group(1);
+				String stem2 = matcher2.group(1);
 
-		Matcher matcher1 = pattern.matcher(name1);
-		Matcher matcher2 = pattern.matcher(name2);
+				diff = stem2.compareTo(stem1);
 
-		int diff;
+				if (diff == 0) {
+					int suffix1 = Integer.parseInt(matcher1.group(2));
+					int suffix2 = Integer.parseInt(matcher2.group(2));
 
-		if (matcher1.find() && matcher2.find()) {
-			String stem1 = matcher1.group(1);
-			String stem2 = matcher2.group(1);
-
-			diff = stem2.compareTo(stem1);
-
-			if (diff == 0) {
-				int suffix1 = Integer.parseInt(matcher1.group(2));
-				int suffix2 = Integer.parseInt(matcher2.group(2));
-
-				diff = suffix2 - suffix1;
-			}
-		} else
-			diff = name2.compareTo(name1);
+					diff = suffix2 - suffix1;
+				}
+			} else
+				diff = name2.compareTo(name1);
+		}
 
 		return ascending ? diff : -diff;
 	}
