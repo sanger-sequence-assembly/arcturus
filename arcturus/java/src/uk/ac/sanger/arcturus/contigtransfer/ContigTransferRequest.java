@@ -81,7 +81,7 @@ public class ContigTransferRequest {
 	public Date getOpenedDate() { return openedDate; }
 	
 	public void setOpenedDate(Date openedDate) {
-		this.openedDate = (openedDate == null) ? new Date() : openedDate;
+		this.openedDate = openedDate;
 	}
 
 	public String getRequesterComment() {
@@ -105,7 +105,7 @@ public class ContigTransferRequest {
 	}
 	
 	public void setReviewedDate(Date reviewedDate) {
-		this.reviewedDate = (reviewedDate == null) ? new Date() : reviewedDate;
+		this.reviewedDate = reviewedDate;
 	}
 	
 	public String getReviewerComment() {
@@ -188,7 +188,7 @@ public class ContigTransferRequest {
 	}
 	
 	public void setClosedDate(Date closedDate) {
-		this.closedDate = (closedDate == null) ? new Date() : closedDate;
+		this.closedDate = closedDate;
 	}
 	
 	public boolean isClosed() {
