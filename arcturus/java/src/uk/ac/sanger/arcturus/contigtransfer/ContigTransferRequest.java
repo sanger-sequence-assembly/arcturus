@@ -100,7 +100,7 @@ public class ContigTransferRequest {
 		this.reviewer = reviewer;
 	}
 	
-	public Date getReviewed() {
+	public Date getReviewedDate() {
 		return reviewedDate;
 	}
 	
@@ -258,5 +258,11 @@ public class ContigTransferRequest {
 	
 	public ContigTransferRequestEventListener getContigTransferRequestEventListener() {
 		return listener;
+	}
+	
+	public String toString() {
+		return "ContigTransferRequest[id=" + request_id + ", contig_id=" + contig.getID() +
+			", old_project=" + oldProject.getName() + ", new_project=" + newProject.getName() +
+			", requester=" + requester.getName() + ", opened=" + openedDate + "]";
 	}
 }
