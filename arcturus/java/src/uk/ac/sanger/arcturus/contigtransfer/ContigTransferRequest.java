@@ -7,11 +7,11 @@ import java.util.Date;
 public class ContigTransferRequest {
 	public static final int UNKNOWN = -1;
 	public static final int PENDING = 0;
-	public static final int CANCELLED = 1;
+	public static final int APPROVED = 1;
 	public static final int DONE = 2;
-	public static final int FAILED = 3;
-	public static final int REFUSED = 4;
-	public static final int APPROVED = 5;
+	public static final int CANCELLED = 3;
+	public static final int FAILED = 4;
+	public static final int REFUSED = 5;
 
 	private int request_id;
 	private Contig contig;
@@ -64,6 +64,10 @@ public class ContigTransferRequest {
 
 	public Contig getContig() {
 		return contig;
+	}
+	
+	public Person getContigOwner() {
+		return oldProject.getOwner();
 	}
 
 	public Project getOldProject() {
