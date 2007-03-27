@@ -9,14 +9,19 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
+import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
+import uk.ac.sanger.arcturus.people.PeopleManager;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ArcturusDatabase adb;
 	private ProjectTablePanel ptp;
 	private ImportReadsPanel irp;
+	private ContigTransferTablePanel cttp;
+	
 	private JMenuBar menubar = new JMenuBar();
 	
 	private MinervaAbstractAction actionShowProjectList;
+	private MinervaAbstractAction actionShowContigTransfers;
 	private MinervaAbstractAction actionClose;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
@@ -34,6 +39,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showProjectTablePanel();
+			}
+		};
+		
+		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
+				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
+				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showContigTransferTablePanel();
 			}
 		};
 		
@@ -57,6 +70,8 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		menubar.add(fileMenu);
 		
 		fileMenu.add(actionShowProjectList);
+		
+		fileMenu.add(actionShowContigTransfers);
 		
 		fileMenu.addSeparator();
 				
@@ -119,6 +134,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			addTab("Import reads", null, irp, "Import reads");
 		
 		return irp;
+	}
+	
+	public ContigTransferTablePanel showContigTransferTablePanel() {
+		if (cttp == null)
+			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe());
+		
+		if (indexOfComponent(cttp) < 0)
+			addTab("Contig transfers", null, cttp, "Contig transfers");
+		
+		return cttp;
 	}
 	
 	public void addTab(String title, Component component) {
