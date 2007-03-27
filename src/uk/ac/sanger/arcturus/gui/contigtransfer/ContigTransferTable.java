@@ -48,9 +48,6 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		if (modelColumn != ContigTransferTableModel.COLUMN_CONTIG_ID)
 			return;
 
-		System.out.println("Mouse click at " + point + " --> row " + row
-				+ ", column " + column + "(model column " + modelColumn + ")");
-
 		Contig contig = ((ContigTransferTableModel) getModel())
 				.getContigForRow(row);
 		
