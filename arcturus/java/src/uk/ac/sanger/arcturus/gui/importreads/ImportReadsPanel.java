@@ -113,8 +113,6 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		panel.add(scrollpane, BorderLayout.CENTER);
 		
 		btnImportReads = new JButton(actionImportReads);
-	
-		panel.add(btnImportReads, BorderLayout.SOUTH);
 		
 		panel.setBorder(etchedTitledBorder("Projects"));
 
