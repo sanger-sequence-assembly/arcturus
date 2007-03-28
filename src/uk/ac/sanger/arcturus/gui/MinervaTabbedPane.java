@@ -10,18 +10,21 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
+import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ArcturusDatabase adb;
 	private ProjectTablePanel ptp;
 	private ImportReadsPanel irp;
+	private ReadFinderPanel rfp;
 	private ContigTransferTablePanel cttp;
 	
 	private JMenuBar menubar = new JMenuBar();
 	
 	private MinervaAbstractAction actionShowProjectList;
 	private MinervaAbstractAction actionShowContigTransfers;
+	private MinervaAbstractAction actionShowReadFinder;
 	private MinervaAbstractAction actionClose;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
@@ -39,6 +42,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showProjectTablePanel();
+			}
+		};
+		
+		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
+				null, "Show read finder", new Integer(KeyEvent.VK_F),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showReadFinderPanel();
 			}
 		};
 		
@@ -70,6 +81,8 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		menubar.add(fileMenu);
 		
 		fileMenu.add(actionShowProjectList);
+		
+		fileMenu.add(actionShowReadFinder);
 		
 		fileMenu.add(actionShowContigTransfers);
 		
@@ -134,6 +147,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			addTab("Import reads", null, irp, "Import reads");
 		
 		return irp;
+	}
+	
+	public ReadFinderPanel showReadFinderPanel() {
+		if (rfp == null)
+			rfp = new ReadFinderPanel(adb);
+		
+		if (indexOfComponent(rfp) < 0)
+			addTab("Find reads", null, rfp, "Find reads");
+		
+		return rfp;
 	}
 	
 	public ContigTransferTablePanel showContigTransferTablePanel() {
