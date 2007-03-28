@@ -81,6 +81,15 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 
 		panel.add(scrollpane, BorderLayout.CENTER);
 		
+		JButton btnClearReads = new JButton("Clear read list");
+		panel.add(btnClearReads, BorderLayout.SOUTH);
+		
+		btnClearReads.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				txtReadList.setText("");
+			}
+		});
+
 		panel.setBorder(etchedTitledBorder("Reads to import"));
 		
 		topPanel.add(panel);
