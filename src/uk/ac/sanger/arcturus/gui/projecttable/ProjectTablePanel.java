@@ -13,6 +13,7 @@ import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.*;
+import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 
 public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private ProjectTable table = null;
@@ -23,6 +24,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	private MinervaAbstractAction actionViewProject;
 	private MinervaAbstractAction actionImportReads;
 	private MinervaAbstractAction actionFindOligos;
+	private MinervaAbstractAction actionShowReadFinder;
 	private MinervaAbstractAction actionShowContigTransfers;
 	private MinervaAbstractAction actionHelp;
 	private MinervaAbstractAction actionRefresh;
@@ -81,6 +83,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 			}
 		};
 		
+		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
+				null, "Show read finder", new Integer(KeyEvent.VK_F),
+				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showReadFinderPanel();
+			}
+		};
+
 		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
 				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
 				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
@@ -133,6 +143,8 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		menubar.add(fileMenu);
 		
 		fileMenu.add(actionViewProject);
+		
+		fileMenu.add(actionShowReadFinder);
 		
 		fileMenu.addSeparator();
 		
@@ -320,6 +332,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		mtp.addTab("Oligo finder", ofp);
 		
 		mtp.setSelectedComponent(ofp);
+	}
+	
+	private void showReadFinderPanel() {
+		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
+		
+		ReadFinderPanel rfp = mtp.showReadFinderPanel();
+		
+		mtp.setSelectedComponent(rfp);
 	}
 
 	public JMenuBar getMenuBar() {
