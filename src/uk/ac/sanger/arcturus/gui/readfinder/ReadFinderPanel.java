@@ -81,7 +81,7 @@ public class ReadFinderPanel extends JPanel implements MinervaClient {
 			}
 		});
 
-		panel.setBorder(etchedTitledBorder("Reads to import"));
+		panel.setBorder(etchedTitledBorder("Reads to search for"));
 		
 		topPanel.add(panel);
 		
