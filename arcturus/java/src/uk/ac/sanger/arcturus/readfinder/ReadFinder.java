@@ -32,7 +32,8 @@ public class ReadFinder {
 	private void prepareStatements() throws SQLException {
 		pstmtReadNameToID = conn.prepareStatement("select read_id from READINFO where readname = ?");
 		
-		pstmtReadNameLikeToID = conn.prepareStatement("select read_id from READINFO where readname like ?");
+		pstmtReadNameLikeToID = conn.prepareStatement(
+				"select read_id from READINFO where readname like ? order by readname asc");
 		
 		pstmtReadToContig = conn
 				.prepareStatement("select CURRENTCONTIGS.contig_id,cstart,cfinish,direction"
