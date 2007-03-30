@@ -260,15 +260,33 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 		String regex = "\\s";
 		
 		String[] readnames = text.split(regex);
-
-		for (int i = 0; i < readnames.length; i++) {
-			try {
-				readFinder.findRead(readnames[i], this);
-			}
-			catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
-			}
+		
+		Task task = new Task(readFinder, readnames, this);
+		
+		task.start();
+	}
+	
+	class Task extends Thread {
+		private final String[] readnames;
+		private final ReadFinder readFinder;
+		private final ReadFinderEventListener listener;
+		
+		public Task(ReadFinder readFinder, String[] readnames, ReadFinderEventListener listener) {
+			this.readFinder = readFinder;
+			this.readnames = readnames;
+			this.listener = listener;
 		}
+		
+		public void run() {
+			for (int i = 0; i < readnames.length; i++) {
+				try {
+					readFinder.findRead(readnames[i], listener);
+				}
+				catch (SQLException sqle) {
+					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
+				}
+			}			
+		}	
 	}
 
 	public void readFinderUpdate(final ReadFinderEvent event) {
