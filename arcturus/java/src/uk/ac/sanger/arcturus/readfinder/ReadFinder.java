@@ -23,10 +23,6 @@ public class ReadFinder {
 	
 	public ReadFinder(ArcturusDatabase adb) throws SQLException {
 		this.adb = adb;
-		
-		conn = adb.getPooledConnection();
-
-		prepareStatements();
 	}
 
 	private void prepareStatements() throws SQLException {
@@ -62,6 +58,11 @@ public class ReadFinder {
 	}
 	
 	public void findRead(String readname, ReadFinderEventListener listener) throws SQLException {
+		if (conn == null) {
+			conn = adb.getPooledConnection();
+			prepareStatements();
+		}
+
 		if (listener != null) {
 			event.setPattern(readname);
 			event.setStatus(ReadFinderEvent.START);
