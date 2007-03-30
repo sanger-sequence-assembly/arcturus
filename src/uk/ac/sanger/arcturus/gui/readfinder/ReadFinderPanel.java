@@ -1,8 +1,9 @@
 package uk.ac.sanger.arcturus.gui.readfinder;
 
 import uk.ac.sanger.arcturus.gui.*;
-import uk.ac.sanger.arcturus.utils.*;
+import uk.ac.sanger.arcturus.readfinder.*;
 import uk.ac.sanger.arcturus.*;
+import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import javax.swing.*;
@@ -14,11 +15,11 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 
-public class ReadFinderPanel extends JPanel implements MinervaClient {
+public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinderEventListener {
 	private JMenuBar menubar = new JMenuBar();
 
 	private JTextArea txtReadList = new JTextArea(20, 32);
-	private JTextArea txtMessages = new JTextArea(20, 80);
+	private JTextArea txtMessages = new JTextArea(20, 100);
 	private JButton btnFindReads;
 	private JButton btnClearMessages = new JButton("Clear messages");
 	
@@ -259,42 +260,64 @@ public class ReadFinderPanel extends JPanel implements MinervaClient {
 		String regex = "\\s";
 		
 		String[] readnames = text.split(regex);
-		
-		txtMessages.append("There are " + readnames.length + " read names in the list\n");
 
 		for (int i = 0; i < readnames.length; i++) {
 			try {
-				txtMessages.append(readnames[i] + ": ");
-				
-				int rc = readFinder.findRead(readnames[i]);
-				
-				switch (rc) {
-					case ReadFinder.READ_DOES_NOT_EXIST:
-						txtMessages.append(" does not exist\n");
-						break;
-						
-					case ReadFinder.READ_IS_FREE:
-						txtMessages.append(" is free\n");
-						break;
-						
-					case ReadFinder.READ_IS_IN_CONTIG:
-						txtMessages.append(" is in contig " + readFinder.getContigID() +
-								" (" + readFinder.getGap4Name() + ", " + readFinder.getReadCount() +
-								" reads, " + readFinder.getContigLength() + " bp, updated " +
-								readFinder.getContigUpdated() +
-								") in project " +
-								readFinder.getProjectName() + " at " + readFinder.getContigStart() +
-								" to " + readFinder.getContigFinish() + " in " +
-								readFinder.getDirection() + " sense\n");
-				}
-				
-				txtMessages.append("\n");
+				readFinder.findRead(readnames[i], this);
 			}
 			catch (SQLException sqle) {
-				Arcturus.logWarning("An error occurred whilst making single-read contigs", sqle);
+				Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
 			}
 		}
 	}
+
+	public void readFinderUpdate(final ReadFinderEvent event) {
+		final String message;
+		
+		Read read = event.getRead();
+		String readname = (read == null) ? null : read.getName();
+		
+		switch (event.getStatus()) {
+			case ReadFinderEvent.START:
+				message = "----- Searching for \"" + event.getPattern() + "\" -----";
+				break;
+				
+			case ReadFinderEvent.READ_DOES_NOT_EXIST:
+				message = readname + " does not exist";
+				break;
+				
+			case ReadFinderEvent.READ_IS_FREE:
+				message = readname + " is free";
+				break;
+				
+			case ReadFinderEvent.READ_IS_IN_CONTIG:
+				Contig contig = event.getContig();
+				message = readname + " is in contig " + contig.getID() +
+				" (" + contig.getName() + ", " + contig.getReadCount() +
+				" reads, " + contig.getLength() + " bp, updated " +
+				contig.getUpdated() +
+				") in project " +
+				contig.getProject().getName() + " at " + event.getContigStart() +
+				" to " + event.getContigFinish() + " in " +
+				(event.isForward() ? "forward" : "reverse") + " sense";
+				break;
+				
+			case ReadFinderEvent.FINISH:
+				message = "";
+				break;
+				
+			default:
+				message = "has unknown status (" + event.getStatus() + ")";
+				break;
+		}
+		
+		SwingUtilities.invokeLater(new Runnable() {
+			public void run() {
+				txtMessages.append(message + "\n\n");
+			}
+		});
+	}
+
 
 	private void updateFindReadsButton() {
 		boolean haveReadsInList = txtReadList.getDocument().getLength() > 0;
@@ -329,5 +352,4 @@ public class ReadFinderPanel extends JPanel implements MinervaClient {
 		}
 		
 	}
-
 }
