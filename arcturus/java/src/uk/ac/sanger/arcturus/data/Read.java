@@ -6,7 +6,7 @@ import uk.ac.sanger.arcturus.database.*;
  * This class represents a sequence reading.
  */
 
-public class Read extends Core {
+public class Read extends Core implements DNASequence {
 	/**
 	 * A constant representing the forward strand of a sub-clone.
 	 */
@@ -63,6 +63,22 @@ public class Read extends Core {
 
 	public Read(String name) {
 		super(name);
+	}
+
+	/**
+	 * Constructs a Read which has a name and an ID.  This constructor may be used by
+	 * applications which do not need the other properties of the read object.
+	 * 
+	 * @param name
+	 *            the name of the object.
+	 * @param ID
+	 *            the ID of the Read.
+	 * @param adb
+	 *            the Arcturus database to which this Read belongs.
+	 */
+
+	public Read(String name, int ID, ArcturusDatabase adb) {
+		super(name, ID, adb);
 	}
 
 	/**
