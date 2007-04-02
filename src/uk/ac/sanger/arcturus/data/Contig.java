@@ -10,7 +10,7 @@ import java.sql.SQLException;
  * This class represents a contig.
  */
 
-public class Contig extends Core {
+public class Contig extends Core implements DNASequence {
 	protected int length;
 	protected int nreads;
 	protected Date updated = null;
