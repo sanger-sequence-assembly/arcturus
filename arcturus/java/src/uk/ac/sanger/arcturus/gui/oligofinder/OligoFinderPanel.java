@@ -15,6 +15,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.*;
 import java.io.*;
+import java.text.*;
 
 public class OligoFinderPanel extends JPanel implements MinervaClient,
 		OligoFinderEventListener {
@@ -45,8 +46,13 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	private boolean showHashMatch = false;
 	
 	private HashMap oligomatches = new HashMap();
+	
+	protected DecimalFormat df = new DecimalFormat();
 
 	public OligoFinderPanel(ArcturusDatabase adb) {
+		df.setGroupingSize(3);
+		df.setGroupingUsed(true);
+		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
 		finder = new OligoFinder(adb, this);
@@ -451,7 +457,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarContigProgress, value);
-				postMessage("Starting oligo search in " + value + " bp of sequence\n");
+				postMessage("\nStarting oligo search in " + df.format(value) + " bp of contig consensus sequence\n");
 				break;
 				
 			case OligoFinderEvent.ENUMERATING_FREE_READS:
@@ -462,7 +468,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarReadProgress, value);
-				postMessage("\nStarting oligo search in " + value + " free reads\n");
+				postMessage("\nStarting oligo search in " + df.format(value) + " free reads\n");
 				break;
 
 			case OligoFinderEvent.START_SEQUENCE:
@@ -560,14 +566,14 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 			
 			if (contig != null)
 				postMessage("    CONTIG " + contig.getID() + " (" + contig.getName() + ", " +
-						contig.getLength() + " bp, in " + contig.getProject().getName() + ")");
+						df.format(contig.getLength()) + " bp, in " + contig.getProject().getName() + ")");
 			
 			Read read = matches[i].getRead();
 			
 			if (read != null)
 				postMessage("    READ " + read.getName());
 			
-			postMessage(" from " + (matches[i].getOffset() + 1) + " in ");
+			postMessage(" from " + df.format(matches[i].getOffset() + 1) + " in ");
 			postMessage(matches[i].isForward() ? "forward" : "reverse");
 			postMessage(" direction.\n");
 		}
