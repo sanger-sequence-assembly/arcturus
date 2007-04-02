@@ -26,8 +26,10 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	private JTextArea txtMessages = new JTextArea(20, 40);
 	private JButton btnFindOligos;
 	private JButton btnClearMessages = new JButton("Clear messages");
-	private JProgressBar pbarTaskProgress = new JProgressBar();
+	private JProgressBar pbarContigProgress = new JProgressBar();
+	private JProgressBar pbarReadProgress = new JProgressBar();
 	private JCheckBox cbSelectAll = new JCheckBox("All projects");
+	private JCheckBox cbFreeReads = new JCheckBox("Scan free reads");
 
 	private ProjectListModel plm;
 
@@ -136,21 +138,58 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 					int start = 0;
 					int end = lstProjects.getModel().getSize() - 1;
 					if (end >= 0) {
-						lstProjects.setSelectionInterval(start, end); // A, B,
-																		// C, D
+						lstProjects.setSelectionInterval(start, end);
 					}
 				} else {
 					lstProjects.clearSelection();
 				}
-
 			}
 		});
+		
+		cbFreeReads.setSelected(false);
+		panel.add(cbFreeReads);
 
+		cbFreeReads.addChangeListener(new ChangeListener() {
+			public void stateChanged(ChangeEvent e) {
+				updateFindOligosButton();
+			}
+		});
+	
 		add(panel);
+		
+		panel = new JPanel(new GridBagLayout());
+		GridBagConstraints gbc = new GridBagConstraints();
+		
+		gbc.gridx = 0;
+		
+		panel.add(new JLabel("Contigs: "), gbc);
+		
+		gbc.gridx = GridBagConstraints.RELATIVE;
+		gbc.gridwidth = GridBagConstraints.REMAINDER;
+		
+		panel.add(pbarContigProgress, gbc);
 
-		add(pbarTaskProgress);
+		pbarContigProgress.setStringPainted(true);
+		
+		Dimension d = pbarContigProgress.getPreferredSize();
+		d.width = 600;
+		pbarContigProgress.setPreferredSize(d);
+		
+		gbc.gridx = 0;
+		gbc.gridwidth = 1;
+	
+		panel.add(new JLabel("Reads: "), gbc);
+		
+		gbc.gridx = GridBagConstraints.RELATIVE;
+		gbc.gridwidth = GridBagConstraints.REMAINDER;
+	
+		panel.add(pbarReadProgress, gbc);
 
-		pbarTaskProgress.setStringPainted(true);
+		pbarReadProgress.setStringPainted(true);
+		
+		pbarReadProgress.setPreferredSize(d);
+	
+		add(panel);
 
 		scrollpane = new JScrollPane(txtMessages);
 
@@ -343,7 +382,9 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 
 		oligomatches.clear();
 		
-		Task task = new Task(finder, oligos, projects);
+		boolean freereads = cbFreeReads.isSelected();
+		
+		Task task = new Task(finder, oligos, projects, freereads);
 
 		task.start();
 	}
@@ -352,16 +393,18 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		private final OligoFinder finder;
 		private final Oligo[] oligos;
 		private final Project[] projects;
+		private boolean freereads;
 
-		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects) {
+		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects, boolean freereads) {
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
+			this.freereads = freereads;
 		}
 
 		public void run() {
 			try {
-				finder.findMatches(oligos, projects);
+				finder.findMatches(oligos, projects, freereads);
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("An error occurred whilst finding matches",
 						sqle);
@@ -401,46 +444,60 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 
 	public void oligoFinderUpdate(OligoFinderEvent event) {
 		int type = event.getType();
-		int offset = event.getOffset();
+		int value = event.getValue();
 
 		switch (type) {
-			case OligoFinderEvent.START:
+			case OligoFinderEvent.START_CONTIGS:
+				oligomatches.clear();
 				bpdone = 0;
-				initProgressBar(offset);
-				postMessage("Starting oligo search in " + offset + " bp of contig consensus sequence\n");
+				initProgressBar(pbarContigProgress, value);
+				postMessage("Starting oligo search in " + value + " bp of sequence\n");
+				break;
+				
+			case OligoFinderEvent.ENUMERATING_FREE_READS:
+				postMessage("Making a list of free reads.  This may take some time.  Please be patient.\n");
+				break;
+				
+			case OligoFinderEvent.START_READS:
+				oligomatches.clear();
+				bpdone = 0;
+				initProgressBar(pbarReadProgress, value);
+				postMessage("\nStarting oligo search in " + value + " free reads\n");
 				break;
 
-			case OligoFinderEvent.START_CONTIG:
-				// postMessage("Scanning contig " + event.getContig().getID() +
-				// " (" + event.getContig().getLength() + " bp)\n\n");
+			case OligoFinderEvent.START_SEQUENCE:
 				break;
 
 			case OligoFinderEvent.HASH_MATCH:
 				if (showHashMatch)
 					postMessage("HASH MATCH: " + event.getOligo().getName()
 							+ " to contig " + event.getContig().getID()
-							+ " at " + event.getOffset()
+							+ " at " + event.getValue()
 							+ (event.isForward() ? "" : " REVERSED") + "\n");
 				break;
 
 			case OligoFinderEvent.FOUND_MATCH:
-				//postMessage("MATCH: " + event.getOligo().getName()
-				//		+ " to contig " + event.getContig().getID() + " at "
-				//		+ event.getOffset()
-				//		+ (event.isForward() ? "" : " REVERSED") + "\n");
-				
 				addMatch(event);
 				break;
 
-			case OligoFinderEvent.FINISH_CONTIG:
-				bpdone += offset;
-				incrementProgressBar(bpdone);
-				// postMessage("Finished contig " + event.getContig().getName()
-				// + "\n\n");
+			case OligoFinderEvent.FINISH_SEQUENCE:
+				if (event.isContig()) {
+					bpdone += value;
+					incrementProgressBar(pbarContigProgress, bpdone);
+				} else if (event.isRead()) {
+					bpdone++;
+					incrementProgressBar(pbarReadProgress, bpdone);
+				}
 				break;
 
-			case OligoFinderEvent.FINISH:
-				setProgressBarToDone();
+			case OligoFinderEvent.FINISH_CONTIGS:
+				setProgressBarToDone(pbarContigProgress);
+				postMessage("Finished.\n");
+				reportMatches();
+				break;
+
+			case OligoFinderEvent.FINISH_READS:
+				setProgressBarToDone(pbarReadProgress);
 				postMessage("Finished.\n");
 				reportMatches();
 				break;
@@ -453,8 +510,8 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	private void addMatch(OligoFinderEvent event) {
 		Oligo oligo = event.getOligo();
 		
-		OligoMatch match = new OligoMatch(oligo, event.getContig(),
-				event.getOffset(), event.isForward());
+		OligoMatch match = new OligoMatch(oligo, event.getDNASequence(),
+				event.getValue(), event.isForward());
 		
 		if (!oligomatches.containsKey(oligo))
 			oligomatches.put(oligo, new HashSet());
@@ -501,8 +558,15 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		for (int i = 0; i < matches.length; i++) {
 			Contig contig = matches[i].getContig();
 			
-			postMessage("    CONTIG " + contig.getID() + " (" + contig.getName() + ", " +
-					contig.getLength() + " bp, in " + contig.getProject().getName() + ")");
+			if (contig != null)
+				postMessage("    CONTIG " + contig.getID() + " (" + contig.getName() + ", " +
+						contig.getLength() + " bp, in " + contig.getProject().getName() + ")");
+			
+			Read read = matches[i].getRead();
+			
+			if (read != null)
+				postMessage("    READ " + read.getName());
+			
 			postMessage(" from " + (matches[i].getOffset() + 1) + " in ");
 			postMessage(matches[i].isForward() ? "forward" : "reverse");
 			postMessage(" direction.\n");
@@ -531,29 +595,29 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		});
 	}
 
-	private void initProgressBar(final int value) {
+	private void initProgressBar(final JProgressBar pbar, final int value) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				pbarTaskProgress.setMinimum(0);
-				pbarTaskProgress.setValue(0);
-				pbarTaskProgress.setMaximum(value);
+				pbar.setMinimum(0);
+				pbar.setValue(0);
+				pbar.setMaximum(value);
 			}
 		});
 	}
 
-	private void incrementProgressBar(final int value) {
+	private void incrementProgressBar(final JProgressBar pbar, final int value) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				pbarTaskProgress.setValue(value);
+				pbar.setValue(value);
 			}
 		});
 	}
 	
-	private void setProgressBarToDone() {
+	private void setProgressBarToDone(final JProgressBar pbar) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				int value = pbarTaskProgress.getMaximum();
-				pbarTaskProgress.setValue(value);
+				int value = pbar.getMaximum();
+				pbar.setValue(value);
 			}
 		});
 	
@@ -562,8 +626,9 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	private void updateFindOligosButton() {
 		boolean isProjectSelected = !lstProjects.isSelectionEmpty();
 		boolean haveOligosInList = txtOligoList.getDocument().getLength() > 0;
+		boolean scanFreeReads = cbFreeReads.isSelected();
 
-		actionFindOligos.setEnabled(isProjectSelected && haveOligosInList);
+		actionFindOligos.setEnabled((isProjectSelected || scanFreeReads) && haveOligosInList);
 	}
 
 	public boolean setSelectedProject(String name) {
@@ -674,7 +739,8 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 
 			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-			ofp.setOligos("TAATAAAAATTATTACGACTGTGATAAACTAACATTTAGTCGTATAGTGA");
+			ofp.setOligos("TAATAAAAATTATTACGACTGTGATAAACTAACATTTAGTCGTATAGTGA\n" +
+					"CAAAGCTTGCAAACTGGGGACTCTACACGCCACGAAC");
 
 			frame.setVisible(true);
 		} catch (Exception e) {
