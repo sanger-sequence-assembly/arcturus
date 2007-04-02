@@ -180,8 +180,6 @@ public class OligoFinder {
 						false);
 				listener.oligoFinderUpdate(event);
 			}
-
-			System.err.println("Done");
 		}
 
 		return found;
