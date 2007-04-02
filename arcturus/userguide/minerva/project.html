@@ -1,0 +1,195 @@
+<html>
+<head>
+<title>The Project List</title>
+</head>
+<body bgcolor="#ffffee">
+<h1>The Project List</h1>
+<p>
+The project list shows all of the projects in the selected assembly:
+<center>
+<img src="screenshots/projects1.png" width="689" height="251" />
+</center>
+<h2>What is a project?</h2>
+<p>
+In Arcturus, a project is a group of contigs which are being worked
+on by a finisher.
+</p>
+<p>
+In most cases, it's the same thing as a "split"
+database, although Arcturus allows you to create new projects to
+enable you to group your contigs in different ways, so you <em>could</em>
+have a "split" which contains several Arcturus projects, and  Minerva will
+display each project separately.
+
+<h2>What does the table show?</h2>
+<p>
+The table shows the state of the assembly as it is stored
+in Arcturus <em>at this moment</em>.
+<dl>
+<dt><strong><em>Assembly</em></strong></dt>
+<dd>The name of the assembly.  This will usually be the same as the
+name of the organism, but some organisms may have more than one
+assembly if the source DNA has been sequenced chromosome by chromosome.</dd>
+
+<dt><strong><em>Project</em></strong></dt>
+<dd>The name of the project.</dd>
+
+<dt><strong><em>Total length</em></strong></dt>
+<dd>The total consensus sequence length of all of the contigs in
+the project.</dd>
+
+<dt><strong><em>Contigs</em></strong></dt>
+<dd>The number of contigs in the project.  This includes single
+reads which have been assigned to the project.</dd>
+
+<dt><strong><em>Max length</em></strong></dt>
+<dd>The length of the biggest contig in the project.</dd>
+
+<dt><strong><em>Reads</em></strong></dt>
+<dd>The total number of reads in contigs in the project.  This
+includes single reads which have been assigned to the project.</dd>
+
+<dt><strong><em>Last contig update</em></strong></dt>
+<dd>The date and time of the most recent change to the project.</dd>
+
+<dt><strong><em>Owner</em></strong></dt>
+<dd>The name of the owner of the project.  If you own any of the projects, they will be shown in <strong>bold</strong>.</dd>
+
+<dt><strong><em>Lock status</em></strong></dt>
+<dd>Indicates whether the project is locked, and if so, who has locked it.
+Contigs cannot be moved into or out of a locked project.</dd>
+</dl>
+</p>
+
+<h2>Sorting the rows in the table</h2>
+<p>
+You can sort the table by clicking on the column header which you
+wish to sort, using the left mouse button.  For example, here is the
+previous display after clicking on the <code>Max length</code> column
+header:
+</p>
+<center>
+<img src="screenshots/projects6.png" width="689" height="251" />
+</center>
+<p>
+The table is now sorted in descending order of maximum contig length,
+with the largest at the top.
+</p>
+<p>
+Names are sorted alphabetically.  Numbers are sorted in decreasing order,
+largest first.  Dates are sorted in reverse date order, the most recent first.
+</p>
+<p>
+You can reverse the sorting order by holding down the SHIFT key whilst
+clicking on the column header.
+</p>
+
+<h2>Altering how the information is displayed</h2>
+<p>
+In addition to sorting the rows of the table, you can control how
+the information is displayed using options in the <strong>View</strong>
+menu:
+</p>
+<center>
+<img src="screenshots/projects3.png" width="689" height="251" />
+</center>
+
+<h3>Refreshing the display</h3>
+<p>
+Other programs may change the contents of a project whilst you are
+using Minerva.  For example, a Gap4 database may be imported into
+Arcturus, or contigs may be moved from one project to another.
+</p>
+<p>
+Minerva cannot automatically keep track of changes which are made by
+other programs.
+</p>
+<p>
+However, you can force Minerva to update the table to show the latest
+situation by selecting the <strong>Refresh</strong> option.  Alternatively,
+simply press the <strong>F5</strong> key at any time.
+</p>
+
+<h3>Single-read contigs</h3>
+<p>
+Minerva displays project summary information which includes all single
+reads which have been assigned to each project.  Arcturus stores these 
+reads as single-read contigs, just as Gap4 does.
+</p>
+<p>
+You may not want to include the single-read contigs in the project summary
+table.  To exclude them, select the <strong>Show contigs with more than
+one read</strong> option from the <strong>View</strong> menu.  Minerva
+will refresh the table, showing only contigs which contain two or more
+reads..
+</p>
+<p>
+To include the single-read contigs in the project summary table, select
+the <strong>Show all contigs</strong> option.
+</p>
+
+<h3>Project and contig dates</h3>
+<p>
+Arcturus stores several different kinds of date and time information
+about projects and contigs.  Minerva alows you to choose which kind
+of date and time to display in the project summary table.
+</p>
+<dl>
+<dt><strong><em>Project date</em></strong></dt>
+<dd>The table displays the last time that the ownership or
+lock status of the project was altered.</dd>
+
+<dt><strong><em>Contig creation date</em></strong></dt>
+<dd>The table displays the creation date of the newest contig in
+the project.</dd>
+
+<dt><strong><em>Contig updated date</em></strong></dt>
+<dd>Each contig has an "update" date as well as a "creation" date.
+When the contig is created, they are the same, but the "update"
+date changes whenever the contig is moved to a different project.
+The table displays the most recent "update" date of the contigs
+in the project.</dd>
+</dl>
+<p>
+Most users will not need to change this aspect of the project
+summary table.
+</p>
+
+<h2>What else can I do with Minerva?</h2>
+<p>
+The project summary table is the starting point for most of the
+tools which Minerva offers.  The <strong>File</strong> menu offers
+several useful options:
+</p>
+<center>
+<img src="screenshots/projects2.png" width="689" height="251" />
+</center>
+<p>
+So does the <strong>Project</strong> menu:
+</p>
+<center>
+<img src="screenshots/projects4.png" width="689" height="251" />
+</center>
+<p>
+Some options only become available when a project is selected:
+</p>
+<center>
+<img src="screenshots/projects5.png" width="689" height="251" />
+</center>
+<p>
+Each option opens a new tab in the organism window.  When several
+tools are in use at the same time, your organism window may look
+something like this:
+</p>
+<center>
+<img src="screenshots/many-open-tabs.png" width="723" height="369" />
+</center>
+<p>
+You can move from one tool to another by selecting the tab.
+</p>
+<hr />
+[<a href="organism.html">PREV: The Organism List</a>]
+[<a href="contig.html">NEXT: The Contig List</a>]
+<hr />
+</body>
+</html>
