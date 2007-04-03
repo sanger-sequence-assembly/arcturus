@@ -139,13 +139,13 @@ ${basedir}/calculateconsensus -instance $instance -organism $organism -project $
 
 echo Cleaning up
 
-set allocationlog = ${organism}readallocation.log
+set allocationlog = readallocation.log
 
 if ( ! -f $allocationlog) then
      touch $allocationlog
 endif
 
-#cat $allocation_log >> $allocationlog
+cat $allocation_log >> $allocationlog
 
 rm -f $padded $depadded
 
