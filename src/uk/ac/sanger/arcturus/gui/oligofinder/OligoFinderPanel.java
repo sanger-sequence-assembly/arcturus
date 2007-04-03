@@ -385,8 +385,6 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 						+ oligos[i].getSequence() + "\n");
 
 		txtMessages.append("\n\n");
-
-		oligomatches.clear();
 		
 		boolean freereads = cbFreeReads.isSelected();
 		
@@ -530,12 +528,16 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	private void reportMatches() {
 		Set oligoset = oligomatches.keySet();
 		
-		Oligo[] oligos = (Oligo[])oligoset.toArray(new Oligo[0]);
+		if (oligoset.isEmpty()) {
+			postMessage("\nNo oligo matches were found.\n");
+		} else {
+			Oligo[] oligos = (Oligo[])oligoset.toArray(new Oligo[0]);
+	
+			Arrays.sort(oligos);
 		
-		Arrays.sort(oligos);
-		
-		for (int i = 0; i < oligos.length; i++)
-			reportMatchesForOligo(oligos[i], (Set)oligomatches.get(oligos[i]));
+			for (int i = 0; i < oligos.length; i++)
+				reportMatchesForOligo(oligos[i], (Set)oligomatches.get(oligos[i]));
+		}
 	}
 	
 	private void reportMatchesForOligo(Oligo oligo, Set matchset) {
@@ -584,7 +586,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 			OligoMatch m1 = (OligoMatch)o1;
 			OligoMatch m2 = (OligoMatch)o2;
 			
-			int rc = m1.getContig().getID() - m2.getContig().getID();
+			int rc = m1.getID() - m2.getID();
 			
 			if (rc != 0)
 				return rc;
