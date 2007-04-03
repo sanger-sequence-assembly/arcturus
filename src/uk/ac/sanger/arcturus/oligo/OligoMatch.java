@@ -21,8 +21,26 @@ public class OligoMatch {
 		return (sequence != null && sequence instanceof Contig) ? (Contig)sequence : null;
 	}
 	
+	public boolean isContig() {
+		return (sequence != null && sequence instanceof Contig);
+	}
+	
 	public Read getRead() {
 		return (sequence != null && sequence instanceof Read) ? (Read)sequence : null;
+	}
+	
+	public boolean isRead() {
+		return (sequence != null && sequence instanceof Read);
+	}
+
+	public int getID() {
+		if (isContig())
+			return ((Contig)sequence).getID();
+		
+		if (isRead())
+			return ((Read)sequence).getID();
+			
+		return 0;
 	}
 	
 	public int getOffset() { return offset; }
