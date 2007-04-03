@@ -1,0 +1,97 @@
+<html>
+<head>
+<title>The Read Importer</title>
+</head>
+<body bgcolor="#ffffee">
+<h1>The Read Importer</h1>
+<p>
+In the <strong>Projects</strong> tab, choose a project and then select the
+<strong>Project</strong> menu:
+</p>
+<center>
+<img src="screenshots/importreads1.png" width="770" height="250" />
+</center>
+<p>
+When you select the <strong>Import reads into project</strong> option,
+Minerva displays a new tab:
+</p>
+<center>
+<img src="screenshots/importreads2.png" width="785" height="529" />
+</center>
+<p>
+The read importer enables you to assign one or more unassembled reads
+to a project.  Each read is converted into a single-read contig, and
+the contig is added to the project.
+</p>
+
+<h2>Specifying the reads</h2>
+<p>
+Read names are entered, one per line, into the <strong>Reads to import</strong>
+box.  Wildcards are <strong>not</strong> permitted.
+</p>
+<p>
+Wildcards are <strong>not</strong> permitted.  Each read name must identify a
+single read.
+</p>
+<p>
+You can also import a list of read names from a file using the <strong>Open
+file of read names</strong> menu option:
+</p>
+<center>
+<img src="screenshots/importreads3.png" width="785" height="529" />
+</center>
+
+<h2>Specifying the project</h2>
+<p>
+Minerva displays a list of projects to the right of the <strong>Reads to
+import</strong> box.  Use this list to select the project where you want
+Minerva to put the reads.
+</p>
+
+<h2>Importing the reads</h2>
+<p>
+When you press the <strong>Import reads</strong> button, Minerva will
+attempt to import each read in the list into the project you have
+specified.
+</p>
+<p>
+An import will fail if the read has not been loaded into Arcturus, or
+if the read is already in a current contig.  This includes single-read
+contigs, so you cannot use the read importer to move single-read contigs
+from one project to another.
+</p>
+<p>
+Each read is processed separately.  If one read cannot be imported, Minerva
+will report the reason, and proceed to try to import the next read in the
+list.
+<p>
+
+<h2>Reporting the results</h2>
+<p>
+Minerva reports the result of each attempted import in the <strong>Information</strong>
+box.  The example below shows the display after four reads have been successfully
+imported into a project:
+</p>
+<center>
+<img src="screenshots/importreads4.png" width="756" height="527" />
+</center>
+<p>
+The next example shows the display after the failure to import two reads.  One was already
+in a contig.
+</p>
+<p>
+The other was not known to Arcturus, perhaps because its name was mis-spelled
+or because it had not yet been loaded into Arcturus.  The <a href="readfinder.html">Read
+Finder</a> may be helpful in resolving this type of problem.
+</p>
+<center>
+<img src="screenshots/importreads5.png" width="756" height="527" />
+</center>
+
+<hr />
+[<a href="oligofinder.html">PREV: The Oligo Finder</a>]
+<!-- [<a href="importreads.html">NEXT: The Read Importer</a>] -->
+[<a href="index.html">HOME: Back to the first page</a>]
+<hr />
+</body>
+</html>
