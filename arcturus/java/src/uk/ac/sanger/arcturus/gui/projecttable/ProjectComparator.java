@@ -176,9 +176,9 @@ public class ProjectComparator implements Comparator {
 		int diff = 0;
 
 		if (d1 == null)
-			diff = 1;
-		else if (d2 == null)
 			diff = -1;
+		else if (d2 == null)
+			diff = 1;
 		else
 			diff = d1.compareTo(d2);
 
