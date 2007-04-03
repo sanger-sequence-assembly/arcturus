@@ -605,15 +605,19 @@ sub putContig {
             }
         }
 
-	if ($noload && $contig->hasContigToContigMappings()) {
-	    $message .= "Contig ".$contig->getContigName.":\n";
+# normally there should be at least one contig-contig mapping
+
+        if (!$contig->hasContigToContigMappings()) {
+	    $message .= "Contig ". $contig->getContigName
+	              . " has no valid contig-to-contig mappings\n";
+	}
+
+        elsif ($noload) {
+# better move this to the calling script?
+	    $message .= "\nContig ".$contig->getContigName.":\n";
 	    foreach my $mapping (@{$contig->getContigToContigMappings}) {
 	        $message .= ($mapping->assembledFromToString || "empty link\n");
 	    }
-	}
-        elsif ($noload) {
-	    $message .= "Contig ". $contig->getContigName
-	              . " has no valid contig-to-contig mappings\n";
 	}
     }
     else {
@@ -2929,11 +2933,11 @@ $logger->debug("testing for existing Tags");
 
         foreach my $etag (@$existingtags) {
 $logger->debug("Testing existing tag",preskip=>1);
-$logger->debug($etag->dump(0,1));
+$logger->debug($etag->dump(0,skip=>1));
             foreach my $key (keys %$tags) {
                 my $ctag = $tags->{$key};
                 if ($ctag->isEqual($etag)) {
-$logger->debug("tags are equal ".$ctag->dump(0,1));
+$logger->debug("tags are equal ".$ctag->dump(0,skip=>1));
                     delete $tags->{$ctag};
                     last;
 		}
@@ -3029,7 +3033,7 @@ $log->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
             $tag->setTagSequenceID($tag_seq_id);
 # and flag an update to sys ID
             $sIDupdate{$tag}++ unless $systematic_id;
-$log->debug($tag->dump(0,1));
+$log->debug($tag->dump(0,skip=>1));
 	}
         $sth->finish();
     }
