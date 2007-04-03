@@ -37,8 +37,11 @@ public class MessageDialogHandler extends Handler {
 			
 			StackTraceElement[] ste = throwable.getStackTrace();
 			
+			boolean showAll = ste.length <= 10;
+			
 			for (int i = 0; i < ste.length; i++)
-				sb.append("      " + ste[i] + "\n");
+				if (showAll || ste[i].getClassName().startsWith("uk.ac.sanger.arcturus"))
+					sb.append("  [" + i + "]: " + ste[i] + "\n");
 			
 			message = sb.toString();
 		}
