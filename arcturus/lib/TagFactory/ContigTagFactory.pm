@@ -36,34 +36,6 @@ sub new {
     return $this;
 }
 
-#----------------------------------------------------------------------
-
-sub verify {
-# private: verify the correct input type of a tag
-    my $tag = shift;
-    my $origin = shift;
-
-# test the instance signature 
-
-    unless (ref($tag) eq 'Tag') {
-        print STDERR "ContigTagFactory->$origin expects a "
-                   . "Tag instance as parameter\n";
-	return 0;
-    }
-
-# test the tag type by interogating about its host class, if any
-
-    unless ($tag->getHostClass() eq 'Contig') {
-        print STDERR "ContigTagFactory->$origin expects a "
-                   . "tag of type ContigTag (instead of : "
-                   . ($tag->getHostClass() || "unknown type") 
-                   . ")\n"; # if 0;
-#        return 0;      
-        print STDERR $tag->dump() . "\n";
-    }
-
-    return 1;
-}
 
 #----------------------------------------------------------------------
 
@@ -72,7 +44,7 @@ sub makeTag {
     my $this = shift;
     my ($tagtype,$start,$final,%options) = @_;
 
-print STDERR "ContigTagFactory::make used\n";
+# print STDERR "ContigTagFactory::make used\n";
 
     my $newtag = new Tag('Contig');
 
@@ -89,44 +61,247 @@ print STDERR "ContigTagFactory::make used\n";
 
 #----------------------------------------------------------------------
 
-sub copy {
-# return a copy of the input Tag instance
-    my $this = shift;
-    my $tag  = shift;
+sub isEqual {
+# compare this tag with input tag
+    my $class = shift;
+    my $atag = shift;
+    my $otag  = shift;
     my %options = @_;
 
-    return undef unless &verify($tag,'copy');
+print STDOUT "using ContigTagFactory->isEqual\n";
+    
+    return undef unless &verifyParameter($atag,'transpose 1-st parameter)');
 
-# create (spawn) a new tag instance
+    return undef unless &verifyParameter($otag,'transpose 2-nd parameter)');
 
-    my $newtag = $tag->new($tag->getHost());
+    if ($options{debug}) {
+        print STDOUT $atag->dump();
+	print STDOUT $otag->dump();
+    }
 
-    $newtag->setTagID($tag->getTagID());
-# TAG2CONTIG table items
-    $newtag->setPosition($tag->getPosition());
-    my $strand = $tag->getStrand();
-    if ($options{changestrand}) {
-	my %inverse = (Forward => 'Reverse', Reverse => 'Forward');
-        $strand = $inverse{$strand} || 'Unknown';
-    } # 'Unknown' is unchanged
-    $newtag->setStrand($strand);
-    $newtag->setComment($tag->getComment());
-# CONTIGTAG table items
-    $newtag->setType($tag->getType());
-    $newtag->setSystematicID($tag->getSystematicID());
-    $newtag->setTagSequenceID($tag->getTagSequenceID());
-    $newtag->setTagComment($tag->getTagComment());
-# TAGSEQUENCE table items
-    $newtag->setTagSequenceName($tag->getTagSequenceName()); 
-# DNA always relates to forward strand
-    $newtag->setDNA($tag->getDNA()); 
+# compare tag type and host type
 
-    return $newtag;
+    return 0 unless ($atag->getType() eq $otag->getType());
+
+    return 0 unless ($atag->getHostClass() eq $otag->getHostClass());
+
+# compare tag position(s) by looking at the mapping representation
+
+    my $amap = $atag->getPositionMapping();
+    my $omap = $otag->getPositionMapping();
+    my @equal = $amap->isEqual($omap);
+print STDOUT "$amap $omap equality test @equal \n";
+# insist on equality of position(s) with same alignment and no shift 
+    unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
+        return 0;
+    }
+
+#    my @spos = $atag->getPosition();
+#    my @tpos = $otag->getPosition();
+
+#    return 0 unless (scalar(@spos) && scalar(@spos) == scalar(@tpos));
+#    return 0 if ($spos[0] != $tpos[0]);
+#    return 0 if ($spos[1] != $tpos[1]);
+
+# compare tag comments
+
+    if ($atag->getTagComment() =~ /\S/ && $otag->getTagComment() =~ /\S/) {
+# both comments defined
+        unless ($atag->getTagComment() eq $otag->getTagComment()) {
+# tags may be different, do a more detailed comparison using a cleaned version
+            my $inop = $options{ignorenameofpattern}; # e.g.: oligo names
+            unless (&cleanup($atag->getTagComment(),$inop) eq
+                    &cleanup($otag->getTagComment(),$inop)) {
+   	        return 0;
+            }
+	}
+    }
+    elsif ($atag->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment where it is missing
+        $otag->setTagComment($atag->getTagComment()) if $options{copycom};
+    }
+    elsif  ($otag->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment where it is missing
+        $atag->setTagComment($otag->getTagComment()) if $options{copycom};
+    }
+
+# compare the tag sequence & name or (if no tag sequence name) systematic ID.
+# the tag sequence or name takes precedence over the systematic ID because 
+# in e.g. the case of repeat tags, a systematic ID could have been generated 
+# by the tag loading software
+
+    if ($atag->getDNA() || $otag->getDNA()) {
+# at least one of the tag DNA sequences is defined; then they must be equal 
+        return 0 unless ($atag->getDNA() eq $otag->getDNA());
+    }
+    elsif ($atag->getTagSequenceName() =~ /\S/ || 
+            $otag->getTagSequenceName() =~ /\S/) {
+# at least one of the tag sequence names is defined; then they must be equal
+	return 0 unless ($atag->getTagSequenceName() eq 
+                         $otag->getTagSequenceName());
+    }
+# neither tag has a tag sequence name defined, then consider the systematic ID
+    elsif ($atag->getSystematicID() =~ /\S/ || 
+            $otag->getSystematicID() =~ /\S/) {
+# at least one of the systematic IDs is defined; then they must be equal
+	return 0 unless ($atag->getSystematicID() eq $otag->getSystematicID());
+    }
+
+# compare strands (optional)
+
+    if ($options{includestrand}) {
+
+        return 0 unless ($otag->getStrand() eq 'Unknown' ||
+                         $atag->getStrand() eq 'Unknown' ||
+                         $atag->getStrand() eq $otag->getStrand());
+    }
+
+# the tags are identical; inherit possible undefined data
+
+    if ($options{copy} || $options{inherit}) {
+# copy tag ID, tag sequence ID and systematic ID, if not already defined
+        unless ($otag->getTagID()) {
+            $otag->setTagID($atag->getTagID());
+        }
+        unless ($otag->getTagSequenceID()) {
+            $otag->setTagSequenceID($atag->getTagSequenceID());
+        }
+        unless ($otag->getSystematicID()) {
+           $otag->setSystematicID($atag->getSystematicID());
+        }
+    }
+
+    return 1
 }
 
-#----------------------------------------------------------------------
+sub cleanup {
+# private method cleanup for purpose of comparison of comments
+    my $comment = shift;
+    my $inop = shift; # special treatment for e.g. auto-generated oligo names
+
+# remove quotes, '\n\' and shrink blankspace into a single blank
+
+    $comment =~ s/^\s*([\"\'])\s*(.*)\1\s*$/$2/; # remove quotes
+    $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
+    $comment =~ s/\\n\\/ /g; # replace by blank space
+    $comment =~ s/\s+/ /g; # shrink blank space
+
+    $comment =~ s/^$inop// if $inop; # remove if present at begin
+   
+    return $comment;
+}
+
+#---------------------------------------------------------------------------
 
 sub transpose {
+# apply a linear transformation to the tag position
+    my $class = shift;
+    my $tag   = shift;
+    my $align = shift;
+    my $offset = shift;
+    my %options = @_;
+
+print STDERR "ContigTagFactory:: (new) transpose used a:$align  o:$offset  @_\n";
+    
+    return undef unless &verifyParameter($tag,'transpose');
+
+    my $oldmapping = $tag->getPositionMapping();
+
+    $tag = $tag->copy() unless $options{nonew};
+
+# determine the multiplication mapping
+
+    my @csegment = $tag->getPositionRange();
+
+    foreach my $i (0,1) {
+        $csegment[2+$i] = $csegment[$i];       # from current contig range (y)
+        $csegment[$i]   = $csegment[$i]*$align + $offset; # to transformed (x)
+    }
+
+    my $mapping = new Mapping("linear mapping");
+    $mapping->putSegment(@csegment);
+
+    return undef unless &remapper($tag,$mapping,%options);
+
+# ok, we have a remapped tag here; now update strand and test for truncation 
+
+    my $newmapping = $tag->getPositionMapping();
+
+# compare the new with the old by testing for equality 
+    
+    my @isequal = $newmapping->isEqual($oldmapping); # if [0] == 0 frameshift
+
+    unless ($isequal[0] == 1) {
+# the tag is truncated 
+        my $newcomment = $tag->getComment() || '';
+        $newcomment .= ' ' if $newcomment;
+        $newcomment .= "(truncated)";
+        $tag->setComment($newcomment);
+    }
+
+# transpose the strand (if needed) (transpose DNA on export only)
+
+    my $strand = $tag->getStrand();
+    my $alignment = $mapping->getAlignment();
+    if ($alignment < 0) {
+        if ($strand eq 'Forward') {
+            $strand = 'Reverse';
+        }
+        elsif ($strand eq 'Reverse') {
+            $strand = 'Forward';
+        }
+        $tag->setStrand($strand);
+    }
+
+    return $tag;
+}
+
+sub remapper {
+# private, remap position of tag 
+    my $tag   = shift;
+    my $mapping = shift;
+    my %options = @_;
+
+    return undef unless &verifyPrivate($tag,'remapper');
+
+    my $newmapping = $tag->getPositionMapping();
+
+    if ($options{prewindowstart} || $options{prewindowfinal}) {
+        my @range = $tag->getPositionRange();
+        my $pws = $options{prewindowstart} || 1;
+        my $pwf = $options{prewindowfinal} || $range[1];
+        my $prefilter = new Mapping("prefilter");
+        $prefilter->putSegment($pws,$pwf,$pws,$pwf);
+        $newmapping = $prefilter->multiply($newmapping);
+        return undef unless $newmapping; # mapped tag out of range
+    }
+
+    $newmapping = $mapping->multiply($newmapping);
+    return undef unless $newmapping; # mapped tag out of range
+
+    if ($options{postwindowfinal}) {
+        my $pws = $options{postwindowstart} || 1;
+        my $pwf = $options{postwindowfinal};
+        my $postfilter = new Mapping("postfilter");
+        $postfilter->putSegment($pws,$pwf,$pws,$pwf);
+        $newmapping = $postfilter->multiply($newmapping);
+        return undef unless $newmapping; # mapped tag out of range
+    }
+    
+print STDOUT $newmapping->toString()."\n" if $options{list};
+
+    return undef unless $newmapping->hasSegments(); # mapped tag out of range
+
+    $tag->setPositionMapping($newmapping);
+
+    return 1;
+}
+
+sub oldtranspose { # used in Tag, ContigHelper
 # transpose a tag by applying a linear transformation
 # (apply only to contig tags)
 # returns new Tag instance (or undef)
@@ -136,9 +311,9 @@ sub transpose {
     my $offset = shift; # array length 2 with offset at begin and end
     my $window = shift || 1; # new position in range 1 .. window
 
-    return undef unless &verify($tag,'transpose');
+    return undef unless &verifyParameter($tag,'transpose');
 
-print STDERR "ContigTagFactory::transpose used\n";
+ print STDERR "ContigTagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
 
 # transpose the position range using the offset info. An undefined offset
 # indicates a boundery outside the range 1 .. length; adjust accordingly
@@ -191,7 +366,7 @@ print STDERR "ContigTagFactory::transpose used\n";
 
     my $newcomment = $tag->getComment() || '';
     $newcomment .= ' ' if $newcomment;
-    $newcomment .= "imported ".$tag->getSystematicID();
+    $newcomment .= "imported ".$tag->getSystematicID(); # ?
     $newcomment .= " truncated" if $truncated;
     $newcomment .= " frame-shifted" if ($offset->[0] != $offset->[1]);
 
@@ -213,14 +388,40 @@ print STDERR "ContigTagFactory::transpose used\n";
     $newtag->setTagSequenceName($tag->getTagSequenceName()); 
     $newtag->setDNA($tag->getDNA());
 
+#print STDOUT "transpose in  : ".$tag->writeToCaf();  
+#print STDOUT "transpose out : ".$newtag->writeToCaf();  
+
     return $newtag;
+}
+
+sub newremap {
+# returns an array of (one or more) new tags, or undef
+    my $class = shift;
+    my $tag   = shift;
+    my $mapping = shift;
+    my %options = @_;
+
+    return undef unless &verifyParameter($tag,'remap');
+
+    return undef unless &verifyParameter($mapping,'remap','Mapping');
+
+    my $oldposition = $tag->getPositionMapping();
+
+    $tag = $tag->copy() unless $options{nonew};
+
+print STDOUT $mapping->toString()."\n";
+print STDOUT $oldposition->toString()."\n";
+
+    return undef unless &remapper($tag,$mapping,%options);
+
+    return $tag;
 }
 
 sub remap {
 # takes a mapping and transforms the tag positions to the mapped domain
 # returns an array of (one or more) new tags, or undef
-    my $this = shift;
-    my $tag  = shift;
+    my $class = shift;
+    my $tag   = shift;
     my $mapping = shift;
     my %options = @_;
 
@@ -231,11 +432,11 @@ sub remap {
 #           sequence, if provided used to generate a tagsequence, possibly 
 #                     with pads; in its absence a long comment is generated
 
-    return undef unless &verify($tag,'remap');
+    return undef unless &verifyParameter($tag,'remap');
 
-    unless (ref($mapping) eq 'Mapping') {
-        die "ContigTagFactory->remap expects a Mapping instance as parameter";
-    }
+    return undef unless &verifyParameter($mapping,'remap','Mapping');
+
+print STDOUT "ContigTagFactory->remap used  @_\n";
 
 # get current tag position
 
@@ -308,7 +509,7 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
 
     if ($numberofsegments == 1) { 
 # CASE 1: one shift for the whole tag
-        my $newtag = $this->copy($tag,%options);
+        my $newtag = $tag->copy(%options);
         my @segment = $segments->[0]->getSegment();
         my @newposition = ($segment[2],$segment[3]);
         $newtag->setPosition(sort {$a <=> $b} @newposition);
@@ -327,7 +528,7 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
         my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
 # XXX how do we handle clipping?
         for (my $i = 0 ; $i < $numberofsegments ; $i++) {
-            my $newtag = $this->copy($tag,%options);
+            my $newtag = $tag->copy(%options);
             my @segment = $segments->[$i]->getSegment();
             my @newposition = sort {$a <=> $b} ($segment[2],$segment[3]);
             my $segmentlength = $newposition[1] - $newposition[0] + 1;
@@ -355,7 +556,7 @@ print STDOUT "Masked Mapping: ".$maskedmapping->toString()."\n" if $options{debu
     else {
 # CASE 3 : more than one segment, but only one tag to be generated
 # copy whatever we already have about this tag
-        my $newtag = $this->copy($tag,%options);
+        my $newtag = $tag->copy(%options);
 # amend the comment to signal frame shifts and possible truncation
         my $comment = $newtag->getComment() || '';
         unless ($comment =~ /frame\s+shift/) {
@@ -408,18 +609,18 @@ print STDOUT "$gapsize : sequence deletion detected \n";
     return [@tags];
 }
 
-sub merge {
+sub merge { # used in ContigHelper
 # merge two tags (fragments), if possible
-    my $this = shift;
+    my $class = shift;
     my $atag = shift;
     my $otag = shift;
     my %options = @_;
 
 # test input parameters
 
-    return undef unless &verify($atag,'merge (1-st parameter)');
+    return undef unless &verifyParameter($atag,'merge (1-st parameter)');
 
-    return undef unless &verify($otag,'merge (2-nd parameter)');
+    return undef unless &verifyParameter($otag,'merge (2-nd parameter)');
 
 # accept only if tag type, systematic ID and strand are identical
 
@@ -478,13 +679,18 @@ sub merge {
 
     my @lposition = $left->getPosition();
     my @rposition = $right->getPosition();
+
+#$options{debug} = 1 if ($left->getSystematicID() =~ /0520.+002/);
+$left->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
+$right->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
    
     my $newdna;
     if ($left->getDNA() && $right->getDNA()) {
         $newdna = $left->getDNA(transpose => 1);
         if ($overlap) {
 	    print STDERR "DNA sequence in overlapping tag to be COMPLETED\n";
-$options{debug} = 0;
+
+#$options{debug} = 0;
 if ($options{debug} && $options{debug}>1) {
  print STDOUT "tag positions DO butt: @atagposition, @otagposition \n";
  $left->writeToCaf(*STDOUT,annotag=>1);
@@ -515,6 +721,11 @@ if ($options{debug} && $options{debug}>1) {
         if ($comment !~ /$otag->getComment()/) {
             $comment .=  " " . $otag->getComment();
         }
+if ($options{debug} && $options{debug}>1) {
+   print STDOUT "comment a:'".$atag->getComment()."' o:'".$otag->getComment()
+               ."'\n". "com: '$comment'\n" if ($comment =~ /rejoin.*split/);
+}
+        $comment =~ s/(.{4,})\s+\1/$1/g; # remove possible duplicated info
     }
 # merge the tagcomments
     my $newcomment;
@@ -532,6 +743,10 @@ if ($options{debug} && $options{debug}>1) {
     else {
 # cannot handle the comments; just concatenate the two
         $newcomment = $atag->getTagComment() . " " . $otag->getTagComment();
+if ($options{debug} && $options{debug}>1) {
+   print STDOUT "tagcomment merging problem  l: '$lcomment'  r: '$rcomment'\nnew: '$newcomment'\n";
+}
+        $comment =~ s/(.{4,})\s+\1/$1/g; # remove possible duplicated info
     }
 
     $newtag->setComment($comment) if $comment;
@@ -544,16 +759,18 @@ $newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
 
 sub mergeTags {
 # merge tags from a list of input tags, where possible
-    my $this = shift;
+    my $class = shift;
     my $tags = shift; # array reference
     my %options = @_;
+
+my $DEBUG = $options{debug};
 
 # build an inventory of tag types & systematic ID (if defined)
 
     my $tagtypehash = {};
 
     foreach my $tag (@$tags) {
-        next unless &verify($tag,'mergeTags');
+        next unless &verifyParameter($tag,'mergeTags');
         my $tagtype = $tag->getType() || next; # ignore undefined types
         my $systematicid = $tag->getSystematicID();
         $tagtype .= $systematicid if defined($systematicid);
@@ -561,11 +778,14 @@ sub mergeTags {
         push @{$tagtypehash->{$tagtype}},$tag; # add tag to list
     }
 
+$DEBUG->warning(scalar(keys %$tagtypehash)." tag SIDs") if $DEBUG;
+
 # now merge eligible tags from each subset
 
     my @mtags; # output list of (merged) tags
 
     my %option = (overlap => ($options{overlap} || 0));
+
 
     foreach my $tagtype (keys %$tagtypehash) {
         my $tags = $tagtypehash->{$tagtype};
@@ -575,7 +795,7 @@ sub mergeTags {
         my ($i,$j) = (0,1);
         while ($i < scalar(@$tags) && $j < scalar(@$tags) ) {
 # test for possible merger of tags i and j
-            if (my $newtag = $this->merge($tags->[$i],$tags->[$j],%option)) {
+            if (my $newtag = $class->merge($tags->[$i],$tags->[$j],%option)) {
 # the tags are merged: replace tags i and j by the new one
                 splice @$tags, $i, 2, $newtag;
 # keep the same values of i and j
@@ -599,7 +819,7 @@ sub mergeTags {
 
 sub makeCompositeTag {
 # join tags in the input list to make a composite tag
-    my $this = shift;
+    my $class = shift;
     my $tags = shift;
 
     my $newtag = shift @$tags; # take the first in the list
@@ -660,45 +880,6 @@ sub makeCompositeTag {
     }
 
     return $newtag;
-}
-
-#----------------------------------------------------------------------------
-# PERHAPS THESE two should not be here but remain in Tag ?
-#----------------------------------------------------------------------------
-
-sub mirror {
-# apply a mirror transform to the tag position
-    my $this = shift;
-    my $tag  = shift;
-    my $mirror = shift || 0; # the mirror position (e.g. contig_length + 1)
-
-    return undef unless &verify($tag,'mirror');
-print STDERR "ContigTagFactory::mirror used\n";
-
-    my @currentposition = $tag->getPosition();
-
-    foreach my $position (@currentposition) {
-        $position = $mirror - $position;
-    }
-    $tag->setPosition(@currentposition);
-# ? strand ?
-}
-
-sub positionshift {
-# apply a linear transform to the tag position (to be completed)
-    my $this = shift;
-    my $tag  = shift;
-    my $shift = shift;
-    my $start = shift; # begin of window
-    my $final = shift; #  end  of window
-
-print STDERR "ContigTagFactory::shift used\n";
-
-    unless (ref($tag) eq 'Tag') {
-        die "ContigTagFactory->shift expects a Tag instance as parameter";
-    }
-
-    return undef;
 }
 
 #----------------------------------------------------------------------------
@@ -802,6 +983,50 @@ sub composefragments {
     my $tagcomment = "fragment " . $fragmentstring." of $total";
 
     return $tagcomment;
+}
+
+#-----------------------------------------------------------------------------
+# access protocol
+#-----------------------------------------------------------------------------
+
+sub verifyParameter {
+    my $object = shift;
+    my $method = shift || 'UNDEFINED';
+    my $class  = shift || 'Tag';
+
+    &verifyPrivate($object,'verifyParameter');
+
+    unless ($object && ref($object) eq $class) {
+        print STDERR "ContigTagFactory->$method expects a $class "
+                   . "instance as parameter\n";
+	return 0;
+    }
+
+    return 1 unless (ref($object) eq 'Tag');
+
+# test the tag type by interogating its host class, if any
+
+    unless ($object->getHostClass() eq 'Contig') {
+        print STDERR "ContigTagFactory->$method expects a "
+                   . "tag of type ContigTag (instead of : "
+                   . ($object->getHostClass() || "unknown type") 
+                   . ")\n"; # if 0;
+        return 0;      
+    }
+
+    return 1;
+}
+
+sub verifyPrivate {
+# test if reference of parameter is NOT this package name
+    my $caller = shift;
+    my $method = shift || 'verifyPrivate';
+
+    return 1 unless ($caller && ref($caller) eq 'ContigHelper');
+
+    print STDERR "Invalid usage of private method '$method' in package "
+               . "ContigTagFactory\n";
+    return 0;
 }
 
 #----------------------------------------------------------------------
