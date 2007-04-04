@@ -610,19 +610,19 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # then propagate the tags from parent to child
 
 #        $fastacontig->writeToEMBL(*STDOUT) unless $noembl;
-#$contig->setDEBUG($logger);
-$arcturuscontig->setDEBUG($logger) if $verbose;
+#$contig->setLogger($logger);
+$arcturuscontig->setLogger($logger) if $verbose;
 
         $arcturuscontig->inheritTags();
 
       }
       else {
 # the other way around
-#$fastacontig->setDEBUG($logger);
+#$fastacontig->setLogger($logger);
         $fastacontig->addChildContig($arcturuscontig);
         $arcturuscontig->addContigToContigMapping($mapping);
         $fastacontig->propagateTags(break=>1);
-$fastacontig->setDEBUG();
+$fastacontig->setLogger();
       }
     }
 
@@ -832,7 +832,7 @@ if ($reanalyze) {
 #$method=1;
         my %ptoptions = (noparentload => 1, notagload => 1, overlap => 1);
 
-$contig->setDEBUG($logger) if $verbose;
+$contig->setLogger($logger) if $verbose;
          foreach my $ancestorkey (@ancestorkeys) {
             my $ancestor = $ancestors->{$ancestorkey};
             my $acnm = $ancestor->getContigName();
