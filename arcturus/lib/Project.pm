@@ -1,8 +1,6 @@
 package Project;
  
 use strict;
-
-use ContigFactory::ContigFactory;
  
 #-------------------------------------------------------------------
 # Constructor new
@@ -280,11 +278,11 @@ sub writeContigsToCaf {
 
         if ($options{endregiontrim}) {
             my %eoption = (cliplevel=>$options{endregiontrim});
-            $contig = ContigFactory->endregiontrim($contig,%eoption);
+            $contig->endRegionTrim($contig,%eoption);
 	}
 
         if ($options{padded}) {
-            $contig = ContigFactory->toPadded($contig);
+            $contig = $contig->toPadded();
 	}
 
         if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
@@ -330,7 +328,7 @@ sub writeContigsToFasta {
 
         if ($options{endregiontrim}) {
             my %eoption = (cliplevel=>$options{endregiontrim});
-            $contig = ContigFactory->endregiontrim($contig,%eoption);
+            $contig->endRegionTrim(%eoption);
 	}
 
         if ($contig->writeToFasta($DFILE,$QFILE,%options)) {
@@ -378,7 +376,7 @@ sub writeContigsToMaf {
 
         if ($options{endregiontrim}) {
             my %eoption = (cliplevel=>$options{endregiontrim});
-            $contig = ContigFactory->endregiontrim($contig,%eoption);
+            $contig->endRegionTrim(%eoption);
 	}
 
         my ($status,$r) = $contig->writeToMaf($DFILE,$QFILE,$RFILE,%options);
