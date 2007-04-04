@@ -37,6 +37,7 @@ sub new {
 
 # NOTE: unit-length intervals get direction = 1 by default. If direction -1
 #       is required use method counterAlignUnitLengthInterval to invert
+#       however, either +/-1, but not 0, is required to calculate the offset
 
     my $offset = $xs - $direction * $ys;
 
@@ -58,6 +59,9 @@ sub normaliseOnY {
 # order Y interval, return Y start position
     my $this = shift;
 
+    my $length = $this->[3] - $this->[2];
+
+#   ($this->[2],$this->[3]) = ($this->[3],$this->[2]) if ($length < 0); 
     $this->invert() if ($this->[2] > $this->[3]);
 
     return $this->getYstart(); # (re: Mapping->analyseSegments)
@@ -69,7 +73,8 @@ sub normaliseOnX {
 
     my $length = $this->getXfinis() - $this->getXstart();
 
-    $this->invert() if ($length < 0);
+   ($this->[2],$this->[3]) = ($this->[3],$this->[2]) if ($length < 0); 
+#    $this->invert() if ($length < 0);
 
     return abs($length) + 1; # (re: ArcturusDatabase->putMappingsForContig)
 }
@@ -147,6 +152,11 @@ sub getOffset {
 # return linear transformation offset between X and Y domains
     my $this = shift;
     return $this->[1];
+}
+
+sub getSegmentLength {
+    my $this = shift;
+    return abs($this->getYfinis() - $this->getYstart()) + 1;
 }
 
 #----------------------------------------------------------------------
