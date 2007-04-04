@@ -90,7 +90,7 @@ sub isEqual {
     my $amap = $atag->getPositionMapping();
     my $omap = $otag->getPositionMapping();
     my @equal = $amap->isEqual($omap);
-print STDOUT "$amap $omap equality test @equal \n";
+# print STDOUT "$amap $omap equality test @equal \n";
 # insist on equality of position(s) with same alignment and no shift 
     unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
         return 0;
