@@ -35,6 +35,7 @@ sub getContigRange {
     unless ($range && @$range) {
 # no contig range defined, use (all) segments to find it
 	$range = &findContigRange($this->getSegments());
+        $this->{normalization} = 1;
 #        $range = &findXrange($this->getSegments()); # returns array-ref
 	return undef unless defined($range);
 	$this->{contigrange} = $range; # cache
@@ -53,6 +54,7 @@ sub getMappedRange {
     my $this = shift;
 #    my $range = &findYrange($this->getSegments());
     my $range = &findMappedRange($this->getSegments());
+    $this->{normalization} = 2;
     return @$range if $range;
 }
 
@@ -202,12 +204,21 @@ sub compare {
     my $this = shift;
     my $compare = shift;
 
+my %options = @_;
+
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
     }
 
+my $list = $options{list};
+
+print STDOUT "Enter Mapping compare $this  $compare @_\n" if $list;
+
+print STDOUT "analyse $this\n" if $list;
     my $tmaps = $this->analyseSegments(@_);    # also sorts segments
+print STDOUT "analyse $compare\n" if $list;
     my $cmaps = $compare->analyseSegments(@_); # also sorts segments
+print STDOUT "analyse end \n" if $list;
 
 #    return $this->multiply($compare->inverse()); # to be tested at some point
 #    return $compare->multiply($this->inverse()); # to be tested at some point
@@ -225,6 +236,8 @@ sub compare {
     my $it = 0;
     my $ic = 0;
 
+print STDOUT "entering segment comparison loop\n" if $list;
+
     my ($align,$shift);
     while ($it < @$tmaps && $ic < @$cmaps) {
 
@@ -236,10 +249,14 @@ sub compare {
         my $cs = $csegment->getYstart();
         my $cf = $csegment->getYfinis();
 
+print STDOUT "testing it=$it  ic=$ic    $ts,$tf,$cs,$cf \n" if $list;
+
 # determine if the intervals overlap by finding the overlapping region
 
         my $os = ($cs > $ts) ? $cs : $ts;
         my $of = ($cf < $tf) ? $cf : $tf;
+
+print STDOUT "of $of  os $os\n" if $list;
 
         if ($of >= $os) {
 # test at the segment level to obtain offset and alignment direction
@@ -283,10 +300,17 @@ sub compare {
             $it++;
         }
         elsif ($ts > $cf) {
-# no overlap, this segment to the right of compare
+# no overlap, this segment to the right of sub copy compare
             $ic++;
         }
+	else {
+            print STDERR "possible normalisation error detected for "
+                       . "mapping ".$this->getMappingName()."\n";
+            return undef;
+	}
     }
+
+print STDOUT "after segment test loop\n" if $list;
 
 # convert the segments into a Mapping object
 
@@ -306,14 +330,14 @@ sub compare {
 
     return $mapping unless (shift);
 
-    return $align,[@osegments]; # old system
+    return $align,[@osegments]; # old system, to be deprecated
 }
 
 sub analyseSegments {
 # sort the segments according to increasing read position
 # determine/test alignment direction from the segments
     my $this = shift;
-    my %options = @_; 
+    my %options = @_;
  
 # set up the required normalization status
 
@@ -336,6 +360,7 @@ sub analyseSegments {
     foreach my $segment (@$segments) {
         $segment->normaliseOnY();
     }
+
     @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
 # determine the alignment direction from the range covered by all segments
@@ -391,14 +416,6 @@ sub analyseSegments {
         $globalalignment = $localalignment;
     }
 
-# finally, counter align unit-length alignments if mapping is counter-aligned
-#    if ($globalalignment == -1) {
-# the counter align method only works for unit length intervals
-#        foreach my $segment (@$segments) {
-#            $segment->counterAlignUnitLengthInterval();
-#        }
-#    }
-
 # register the alignment direction
     
     $this->setAlignment($globalalignment);
@@ -427,6 +444,7 @@ sub analyseSegments {
 # set normalization status
         $this->{normalization} = 1;
     }
+# else keep current normalisation (on Y)
     else {
         $this->{normalization} = 2;
     }
@@ -534,6 +552,13 @@ sub putSegment {
 
     $this->{normalization} = 0; # set to undefined
 
+# assign a (possibly preliminary) alignment direction
+
+    unless ($segment->getSegmentLength() <= 1) {
+# no test for consistence (do that with analyseSegments afterwards)
+        $this->setAlignment($segment->getAlignment());
+    }
+
     return scalar(@{$this->{mySegments}});
 }
 
@@ -566,6 +591,7 @@ sub inverse {
 
 sub multiply {
 # return the product R x T of this (mapping) and another mapping
+# returns a mapping without segments if product is empty
     my $thismap = shift; # mapping R
     my $mapping = shift; # mapping T
     my %options = @_; # e.g. repair=>1; default 0
@@ -573,17 +599,15 @@ sub multiply {
 # align the mappings such that the Y (mapped) domain of R and the 
 # X domain of T are both ordered according to segment position 
 
-#$options{timer}->timer("mappinganalysis Y",0) if $options{timer};
     my $rsegments = $thismap->analyseSegments(normaliseOnY => 1);
-#$options{timer}->timer("mappinganalysis Y",1) if $options{timer};
-#$options{timer}->timer("mappinganalysis X",0) if $options{timer};
     my $tsegments = $mapping->analyseSegments(normaliseOnX => 1);
-#$options{timer}->timer("mappinganalysis X",1) if $options{timer};
 
     my $rname = $thismap->getMappingName() || 'R';
     my $tname = $mapping->getMappingName() || 'T';
 
     my $product = new Mapping("$rname x $tname");
+
+    return $product unless ($rsegments && $tsegments); # product empty 
 
     my ($rs,$ts) = (0,0);
 # option to start the search at a different position
@@ -592,6 +616,22 @@ sub multiply {
         $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
         $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
     }
+
+#    my ($rs,$ts,$nzs) = (0,0,0);
+# option to start the search at a different position
+#    if ($options{nonzerostart}) {
+#        unless ($this->{nonzerostart}) { 
+#            $this->{nonzerostart} = {};
+#            $nzs = $this->{nonzerostart};
+#?            $nzs->{mapping} = $mapping;
+#        }
+#        $nzs = $this->{nonzerostart};
+#        $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
+#        $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
+#    }
+#    else {
+#        undef $this->{nonzerostart};
+#    }
 
     while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
 
@@ -692,6 +732,14 @@ print STDOUT "no segment matching or overlap\n" if $options{debug};
     if ($nzs && ref($nzs) eq 'HASH') {
         $nzs->{rstart} = $rs;
         $nzs->{tstart} = $ts;
+# if $rs and $ts out of range: reset this 
+#        if ($rs < scalar(@$rsegments) || $ts < scalar(@$tsegments)) {
+#            $nzs->{rstart} = $rs;
+#            $nzs->{tstart} = $ts;
+#	}
+#	else { # run through both mappings completed
+#            undef $nzs;
+#	}
     }
 
 # cleanup and analyse the segments
@@ -742,10 +790,15 @@ sub copy {
 
     my $copy = $this->new($this->getMappingName());
 
+    $copy->setSequenceID($this->getSequenceID()); # if any
+
     my $segments = $this->getSegments();
+
     foreach my $segment (@$segments) {
-        $copy->putSegment($segment->getSegment());
+        my @copysegment = $segment->getSegment();
+        $copy->putSegment(@copysegment);
     }
+
     $copy->analyseSegments();
 
     return $copy;
@@ -790,14 +843,17 @@ sub writeToString {
 
     my $string = '';
     foreach my $segment (@$segments) {
-        $segment->normaliseOnY(); # ensure rstart <= rfinish # ??
-#  interferes with normalization status ?? (USE OPTION ?)
+# unless option asis use standard representation: align on Y
         my @segment = $segment->getSegment();
+        unless ($options{asis} || $segment[2] <= $segment[3]) {
+            ($segment[0],$segment[1]) = ($segment[1],$segment[0]);
+            ($segment[2],$segment[3]) = ($segment[3],$segment[2]);
+        }
         $string .= $text." @segment";
         if ($options{extended}) {
             $string .= " a:".($segment->getAlignment() || 'undef');
             $string .= " o:".($segment->getOffset()    || 'undef');
-            $string .= " l:". (abs($segment[1] - $segment[0])+1);
+            $string .= " l:". $segment->getSegmentLength();
 	}
         $string .= "\n";
     }
@@ -927,7 +983,7 @@ sub findXrange {
     foreach my $segment (@$segments) {
 # ensure the correct alignment xstart <= xfinish
         my ($xs,$xf) = ($segment->getXstart(),$segment->getXfinis());
-	($xs,$xf) = ($xf,$xs) if ($xf < $xs);
+        ($xs,$xf) = ($xf,$xs) if ($xf < $xs);
         $xstart = $xs if (!defined($xstart) || $xs < $xstart);
         $xfinal = $xf if (!defined($xfinal) || $xf > $xfinal);
     }
