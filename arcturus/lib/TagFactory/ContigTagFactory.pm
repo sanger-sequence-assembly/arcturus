@@ -68,7 +68,7 @@ sub isEqual {
     my $otag  = shift;
     my %options = @_;
 
-print STDOUT "using ContigTagFactory->isEqual\n";
+#print STDOUT "using ContigTagFactory->isEqual\n";
     
     return undef unless &verifyParameter($atag,'transpose 1-st parameter)');
 
@@ -205,7 +205,7 @@ sub transpose {
     my $offset = shift;
     my %options = @_;
 
-print STDERR "ContigTagFactory:: (new) transpose used a:$align  o:$offset  @_\n";
+#print STDERR "ContigTagFactory:: (new) transpose used a:$align  o:$offset  @_\n";
     
     return undef unless &verifyParameter($tag,'transpose');
 
@@ -403,7 +403,7 @@ sub newremap {
 
     return undef unless &verifyParameter($tag,'remap');
 
-    return undef unless &verifyParameter($mapping,'remap','Mapping');
+    return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
 
     my $oldposition = $tag->getPositionMapping();
 
@@ -434,9 +434,9 @@ sub remap {
 
     return undef unless &verifyParameter($tag,'remap');
 
-    return undef unless &verifyParameter($mapping,'remap','Mapping');
+    return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
 
-print STDOUT "ContigTagFactory->remap used  @_\n";
+#print STDOUT "ContigTagFactory->remap used  @_\n";
 
 # get current tag position
 
@@ -992,25 +992,32 @@ sub composefragments {
 sub verifyParameter {
     my $object = shift;
     my $method = shift || 'UNDEFINED';
-    my $class  = shift || 'Tag';
+    my %options = @_; # class, type
+
+    $options{class} = 'Tag' unless defined $options{class};
 
     &verifyPrivate($object,'verifyParameter');
 
-    unless ($object && ref($object) eq $class) {
-        print STDERR "ContigTagFactory->$method expects a $class "
+    unless ($object && ref($object) eq $options{class}) {
+        print STDERR "ContigTagFactory->$method expects a $options{class} "
                    . "instance as parameter\n";
 	return 0;
     }
 
-    return 1 unless (ref($object) eq 'Tag');
+    return 1 unless (ref($object) eq 'Tag'); # for objects different from Tag
 
 # test the tag type by interogating its host class, if any
 
-    unless ($object->getHostClass() eq 'Contig') {
-        print STDERR "ContigTagFactory->$method expects a "
-                   . "tag of type ContigTag (instead of : "
-                   . ($object->getHostClass() || "unknown type") 
-                   . ")\n"; # if 0;
+    return 1 unless $options{type};
+
+# test the tag type
+
+    my $hostclass = $object->getHostClass() || "unknown";
+
+    unless ($hostclass && $hostclass =~ /^(Contig|Read|contigtag|readtag)/
+                       && $hostclass =~ /$options{type}/i) {
+        print STDERR "ContigTagFactory->$method expects a tag of type "
+	             . "$options{type} (instead of '$hostclass')\n";
         return 0;      
     }
 
