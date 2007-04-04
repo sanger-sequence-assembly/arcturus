@@ -25,7 +25,7 @@ public class HamsterDance extends JComponent {
 
 		try {
 			URL url = ArcturusDatabase.class
-					.getResource("/icons/hamsterdance.jpg");
+					.getResource("/resources/icons/hamsterdance.jpg");
 
 			image = ImageIO.read(url);
 		} catch (Exception e) {
