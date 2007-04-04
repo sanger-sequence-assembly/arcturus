@@ -217,6 +217,20 @@ sub close {
     &closeStreams(@_);
 }
 
+sub flush {
+# close the file handles
+    my $this = shift;
+
+    my $streams = $this->{STREAMS};
+
+    foreach my $stream (@$streams) {
+        my $handle = $stream->{handle};
+        next unless $handle;
+        &timestamp($stream,'flush') if $stream->{stamp};
+        $handle->flush();
+    }
+}
+
 #-----------------------------------------------------------------------
 
 sub setPrefix {
