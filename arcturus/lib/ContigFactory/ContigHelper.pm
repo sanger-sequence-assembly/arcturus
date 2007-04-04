@@ -126,11 +126,10 @@ $logger->debug("pass $pass");
 # and apply shift to possible tags
                 if ($contig->hasTags()) {
                     $logger->fine("adjusting tag positions (to be tested)");
+                    my %options = (nonew => 1,postwindowfinal => $cfinal); # -$shift
                     my $tags = $contig->getTags();
                     foreach my $tag (@$tags) {
-#                      $tag = ContigTagFactory->transpose($tag,1,[($shift,$shift)],$cfinal-$shift);
-                        $tag->shift($shift,1,$cfinal); # keep method
-#                      $tag->transpose($shift,1,$cfinal); # keep method
+                        $tag->transpose(+1,$shift,%options);
                     }
 	        }
 # what about contig to contig mappings in parents and children?
@@ -596,7 +595,7 @@ sub removeShortReads {
 # remove reads spanning less than a minimum number of bases
     my $class = shift;
     my $contig = shift;
-    my %options = @_;
+    my %options = @_; #
 
     &verifyParameter($contig,'removeShortReads');
 
@@ -604,7 +603,7 @@ sub removeShortReads {
 
     $contig->hasMappings(1); # delayed loading
 
-    $contig = $contig->copy(includeIDs=>1) unless $options{nonew};
+    $contig = $contig->copy() unless $options{nonew};
 
 # determine clipping threshold
 
@@ -760,6 +759,8 @@ $logger->debug($newmapping->toString());
     }
 
 # finally multiply all mappings by the padding transform (using repair=1)
+
+$logger->warning("undoReadEdits TO BE COMPLETED");
 
 
 $logger->warning("EXIT undoReadEdits: @_");
@@ -2577,36 +2578,38 @@ sub cleanupsegmentlist {
     return $newsegmentlist;
 }
 
-#----------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 sub propagateTagsToContig {
     my $class = shift;
 # propagate tags FROM this (parent) TO the specified target contig
     my $parent = shift;
-    my $target = shift;
+    my $contig = shift;
     my %options = @_;
 
     &verifyParameter($parent,'propagateTagsToContig 1-st parameter');
 
-    &verifyParameter($target,'propagateTagsToContig 2-nd parameter');
+    &verifyParameter($contig,'propagateTagsToContig 2-nd parameter');
+
+    my $logger = &verifyLogger('propagateTagsToContig PT');
 
 # autoload tags unless tags are already defined
 
     $parent->getTags(1) unless $options{notagload};
 
-my $DEBUG = &verifyLogger('propagateTagsToContig');
-
-$DEBUG->warning("ENTER propagateTagsToContig ".
-"parent $parent (".$parent->getContigID().")  target $target ("
-.$target->getContigID().") PT");
+$logger->debug("ENTER");
+$logger->debug("parent $parent (".$parent->getContigID()
+        .")  target $contig (".$contig->getContigID().")");
+my $tags = $parent->getTags() || []; 
+$logger->debug("tags: ".scalar(@$tags));
 
     return 0 unless $parent->hasTags();
 
-$DEBUG->warning("parent $parent has tags PT ".scalar(@{$parent->getTags()}));
+$logger->debug("parent $parent has tags ".scalar(@{$parent->getTags()}));
 
 # check the parent-child relation: is there a mapping between them and
 # is the ID of the one of the parents identical to to the input $parent?
-# we do this by getting the parents on the $target and compare with $parent
+# we do this by getting the parents on the $contig and compare with $parent
 
     my $mapping;
 
@@ -2616,22 +2619,24 @@ $DEBUG->warning("parent $parent has tags PT ".scalar(@{$parent->getTags()}));
 
     my $dl = $options{noparentload} ? 0 : 1; # default 1
 
-    if ($target->hasContigToContigMappings($dl)) {
+    if ($contig->hasContigToContigMappings($dl)) {
 
 # if parents are provided, then screen this ($parent) against them
 # if this parent is not among the ones listed, ignored
 # if no parents are provided, adopt this one
+
+$logger->debug("Testing C2C mapping to find parent ".$parent->getSequenceID());
  
-        my $cparents = $target->getParentContigs($dl) || [];
+        my $cparents = $contig->getParentContigs($dl) || [];
         push @$cparents,$parent unless ($cparents && @$cparents);
 # we scan the parent(s) provided, to ensure that $this parent is among them
         foreach my $cparent (@$cparents) {
 	    if ($cparent->getContigID() == $parent_id) {
 # yes, there is a parent child relation between the input Contigs
 # find the corresponding mapping using contig and mapping names
-                my $c2cmappings = $target->getContigToContigMappings();
+                my $c2cmappings = $contig->getContigToContigMappings();
                 foreach my $c2cmapping (@$c2cmappings) {
-$DEBUG->fine("Testing mapping ".$parent->getSequenceID());
+$logger->debug("Testing mapping $c2cmapping ".$c2cmapping->getSequenceID());
 # we use the sequence IDs here, assuming the mappings come from the database
 		    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
                         $mapping = $c2cmapping;
@@ -2642,18 +2647,17 @@ $DEBUG->fine("Testing mapping ".$parent->getSequenceID());
 	}
     }
 
-$DEBUG->fine("mapping: ".($mapping || 'not found'));
+$logger->debug("mapping selected: ".($mapping || 'not found'));
 
 # if mapping is not defined here, we have to find it from scratch
 
     unless ($mapping) {
-$DEBUG->warning("Finding mappings from scratch");
-        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,
-                                                             debug=>$DEBUG);
-$DEBUG->warning("number of mapping segments : ".($nrofsegments || 0));
+$logger->debug("Finding mappings from scratch");
+        my ($nrofsegments,$deallocated) = $contig->linkToContig($parent);
+$logger->debug("number of mapping segments : ".($nrofsegments || 0));
         return 0 unless $nrofsegments;
 # identify the mapping using parent contig and mapping name
-        my $c2cmappings = $target->getContigToContigMappings();
+        my $c2cmappings = $contig->getContigToContigMappings();
         foreach my $c2cmapping (@$c2cmappings) {
 #	    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
 	    if ($c2cmapping->getMappingName eq $parent->getContigName) {
@@ -2662,23 +2666,24 @@ $DEBUG->warning("number of mapping segments : ".($nrofsegments || 0));
             }
         }
 # protect against the mapping still not found, but this should not occur
-$DEBUG->warning("mapping identified: ".($mapping || 'not found'));
+$logger->debug("mapping identified: ".($mapping || 'not found'));
         return 0 unless $mapping;
     }
-$DEBUG->fine($mapping->assembledFromToString());
+$logger->debug("\n".$mapping->assembledFromToString());
 
 # check if the length of the target contig is defined
 
-    my $tlength = $target->getConsensusLength();
+    my $tlength = $contig->getConsensusLength();
     unless ($tlength) {
-        $target->getStatistics(1); # no zeropoint shift; use contig as is
-        $tlength = $target->getConsensusLength();
+        $contig->getStatistics(1); # no zeropoint shift; use contig as is
+        $tlength = $contig->getConsensusLength();
         unless ($tlength) {
-            $DEBUG->warning("Undefined length in (child) contig");
+            $logger->warning("Undefined length in (child) contig");
             return 0;
         }
     }
-$DEBUG->fine("Target contig length : $tlength ");
+
+$logger->debug("Target contig length : $tlength ");
 
 # if the mapping comes from Arcturus we have to use its inverse
 
@@ -2703,6 +2708,9 @@ $DEBUG->fine("Target contig length : $tlength ");
 # get the tags in the parent (as they are)
 
     my $ptags = $parent->getTags();
+    next unless ($ptags && @$ptags); # just in case, but should not occur
+
+$logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
 
 # get a handle to the tag factory, if not do earlier
 
@@ -2711,7 +2719,7 @@ $DEBUG->fine("Target contig length : $tlength ");
 # first attempt for ANNO tags (later to be used for others as well)
 
     my %annotagoptions = (break=>1);
-#    my %annotagoptions = (break=>1, debug=>$DEBUG);
+#    my %annotagoptions = (break=>1, debug=>$logger);
     $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
     $annotagoptions{changestrand} = ($mapping->getAlignment() < 0) ? 1 : 0;
 
@@ -2731,37 +2739,39 @@ $DEBUG->fine("Target contig length : $tlength ");
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
         next unless ($tagtype eq 'ANNO');
 # remapping can be SLOW for large number of tags if not in speedmode
-$DEBUG->fine("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft());
+$logger->debug("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft());
         my $tptags = $tagfactory->remap($ptag,$mapping,%annotagoptions);
 #        my $tptags = ContigTagFactory->remap($ptag,$mapping,%annotagoptions);
 
         push @rtags,@$tptags if $tptags;
     }
-$DEBUG->warning("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input");# if annotation tags found, (try to) merge tag fragments
+$logger->debug("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input");# if annotation tags found, (try to) merge tag fragments
     if (@rtags) {
         my %moptions = (overlap => ($options{overlap} || 0));
-$moptions{debug} = $DEBUG;
+$moptions{debug} = $logger;
 #        my $newtags = ContigTagFactory->mergeTags(\@rtags,%moptions);
         my $newtags = $tagfactory->mergeTags(\@rtags,%moptions);
 
-my $oldttags = $target->getTags() || [];
-$DEBUG->warning(scalar(@$oldttags) . " existing tags on TARGET PT");
-$DEBUG->warning(scalar(@$newtags) . " added (merged) tags PT");
-        $target->addTag($newtags) if $newtags;
+my $oldttags = $contig->getTags() || [];
+$logger->debug(scalar(@$oldttags) . " existing tags on TARGET PT");
+$logger->debug(scalar(@$newtags) . " added (merged) tags PT");
+        $contig->addTag($newtags) if $newtags;
 
 #        @tags = @$newtags if $newtags;
-my $newttags = $target->getTags() || [];
-$DEBUG->warning(scalar(@$newttags) . " updated tags on TARGET PT");
+my $newttags = $contig->getTags() || [];
+$logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
     }
 else {
-$DEBUG->warning("NO REMAPPED TAGS FROM PARENT $parent_id");
+$logger->debug("NO REMAPPED ANNO TAGS FROM PARENT $parent_id");
 }
+#return 0;
 
 # the remainder is for other tags using the old algorithm
 
     my $c2csegments = $mapping->getSegments();
     my $alignment = $mapping->getAlignment();
 
+$logger->flush();
     foreach my $ptag (@$ptags) {
 # apply include or exclude filter
         my $tagtype = $ptag->getType();
@@ -2770,21 +2780,20 @@ $DEBUG->warning("NO REMAPPED TAGS FROM PARENT $parent_id");
         next if ($tagtype eq 'ANNO');
 
 #        my $tptags = $ptag->remap($mapping,break=>0); 
-#        $target->addTag($tptags) if $tptags;
-$DEBUG->warning("CC Collecting $tagtype tag for remapping ".$ptag->getPositionLeft());
+#        $contig->addTag($tptags) if $tptags;
+$logger->debug("CC Collecting $tagtype tag for remapping ".$ptag->getPositionLeft());
 # determine the segment(s) of the mapping with the tag's position
-$DEBUG->fine("processing tag $ptag (align $alignment)");
+$logger->debug("processing tag $ptag (align $alignment)");
 
         undef my @offset;
         my @position = $ptag->getPosition();
-$DEBUG->fine("tag position (on parent) @position");
+$logger->debug("tag position (on parent) @position");
+#$logger->flush();
         foreach my $segment (@$c2csegments) {
 # for the correct segment, getXforY returns true
             for my $i (0,1) {
-$DEBUG->fine("testing position $position[$i]");
                 if ($segment->getXforY($position[$i])) {
                     $offset[$i] = $segment->getOffset();
-$DEBUG->fine("offset to be applied : $offset[$i]");
 # ensure that both offsets are defined; this line ensures definition in
 # case the counterpart falls outside any segment (i.e. outside the contig)
                     $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
@@ -2792,26 +2801,34 @@ $DEBUG->fine("offset to be applied : $offset[$i]");
             }
         }
 # accept the new tag only if the position offsets are defined
-$DEBUG->fine("offsets: @offset");
+$logger->debug("offsets: @offset");
         next unless @offset;
+$logger->flush();
+$logger->setPrefix("Tag->transpose");
 # create a new tag by spawning from the tag on the parent contig
         my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
 #        my $tptag = ContigTagFactory->transpose($ptag,$alignment,\@offset,$tlength);
+$logger->setPrefix("CH->propagateTagsToContig");
         next unless $tptag; # remapped tag out of boundaries
 
-$DEBUG->fine("tag on parent :". $ptag->dump);
-$DEBUG->fine("tag on target :". $tptag->dump);
-
+if ($ptag eq $ptags->[0]) {
+$logger->debug("tag on parent :". $ptag->dump);
+$logger->debug("tag on child :". $tptag->dump);
+}
+$logger->flush();
+$logger->debug("Test presence of transposed Tag against existing tags");
 
 # test if the transposed tag is not already present in the child;
 # if it is, inherit any properties from the transposed parent tag
 # which are not defined in it (e.g. when ctag built from Caf file) 
 
         my $present = 0;
-        my $ctags = $target->getTags(0);
+        my $ctags = $contig->getTags(0);
+$logger->debug("Testing new ($tptag) against existing (@$ctags) tags") if $ctags;
         foreach my $ctag (@$ctags) {
+            my $debug = 0;
 # test the transposed parent tag and port the tag_id / systematic ID
-            if ($tptag->isEqual($ctag,inherit=>1,debug=>$DEBUG)) {
+            if ($tptag->isEqual($ctag,inherit=>1,debug=>$debug)) {
                 $present = 1;
                 last;
 	    }
@@ -2820,8 +2837,9 @@ $DEBUG->fine("tag on target :". $tptag->dump);
 
 # the (transposed) tag from parent is not in the current contig: add it
 
-$DEBUG->warning("new tag added");
-        $target->addTag($tptag);
+$logger->debug("new tag $tptag added to $contig");
+        $contig->addTag($tptag);
+#last;
     }
 }
 
