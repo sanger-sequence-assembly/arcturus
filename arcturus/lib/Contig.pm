@@ -12,8 +12,6 @@ use TagFactory::ContigTagFactory;
 # constructor and initialisation
 #-----------------------------------------------------------------------------
 
-my $tagfactory; # class variable
-
 my $LOGGER;
 
 #-----------------------------------------------------------------------------
@@ -78,8 +76,7 @@ sub importSequence {
 
     my $ADB = $this->{ADB} || return 0; # the parent database
 
-    my $cid = $this->getContigID() || return 0; 
-#print STDERR "$this  importing sequence\n";
+    my $cid = $this->getContigID() || return 0;
 
     my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForContigID($cid);
 
@@ -465,7 +462,6 @@ sub getTags {
     my $load = shift; # set 1 for loading by delayed instantiation
 
     if (!$this->{Tag} && $load && (my $ADB = $this->{ADB})) {
-$DEBUG->info("GT Getting TagsForContig ($load) ".$this->getContigName()) if $DEBUG;
         $ADB->getTagsForContig($this);
     }
     return $this->{Tag};
@@ -589,7 +585,7 @@ sub importer {
         push @{$this->{$buffername}}, $Component;
         return unless (my $sequence_id = shift);
         $Component->setSequenceID($sequence_id);
-# shouldn't this be doen for ChildContigs and Mappings and Reads as well?
+# shouldn't this be done for ChildContigs and Mappings and Reads as well?
         $Component->setHost($this) if ($class eq 'Tag');
     }
     else {
@@ -657,6 +653,7 @@ sub copy {
         $component =~ s/s$//;
         eval "\$copy->add$component(\$arraycopy)"; 
         $LOGGER->error("failed to copy $component ('$@')") if ($LOGGER && $@); 
+        print STDERR "failed to copy $component ('$@')\n" if (!$LOGGER && $@); 
     }
 
 # load components if they are not already present
@@ -680,10 +677,10 @@ sub getStatistics {
 # collect a number of contig statistics
     my $this = shift;
     my $pass = shift; # >= 2 allow adjustment of zeropoint, else not
-    my %options = @_;
 
+    my %options;
     $options{pass} = $pass if $pass;
-    &verifyKeys(\%options,'getStatistics','pass');
+#    &verifyKeys(\%options,'getStatistics','pass');
     return ContigHelper->statistics($this,%options);
 }
 
@@ -706,7 +703,7 @@ print STDERR "isSameAs method is deprecated\n";
 return &isEqual(@_);
 }
 
-sub linkToContig { # will be REDUNDENT
+sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
 # adds a contig-to-contig Mapping instance with a list of mapping segments,
 # if any, mapping from $compare to $this contig
@@ -716,8 +713,8 @@ sub linkToContig { # will be REDUNDENT
     my $compare = shift; # Contig instance to be compared to $this
     my %options = @_;
 
-    &verifyKeys(\%options,'inkToContig','sequenceonly',    'new',
-                                        'strong','readclipping'); # + others
+    &verifyKeys(\%options,'linkToContig','sequenceonly',    'new',
+                          'strong','readclipping'); # + others
     return ContigHelper->crossmatch($this,$compare,%options);
 }
 
@@ -726,7 +723,7 @@ sub linkToContig { # will be REDUNDENT
 #-------------------------------------------------------------------    
 
 sub inheritTags {
-# inherit tags from this contig's parents
+# inherit tags FROM this contig's parents
     my $this = shift;
     my %options = @_;
 # what about selected tags only?
@@ -751,16 +748,14 @@ sub inheritTags {
             $parent->inheritTags(%options);
         }
 # get the tags from the parent into this contig
-        next unless $parent->hasTags();
- # ContigHelper->propagateTagsToContig($parent,$this,%options);
+#        next unless $parent->hasTags();
+#       ContigHelper->propagateTagsToContig($parent,$this,%options);
         $parent->propagateTagsToContig($this,%options);
     }
-
-# $depth-- if $depth;
 }
 
 sub propagateTags {
-# propagate the tags from this contig to its child(ren)
+# propagate the tags from this contig TO its child(ren)
     my $this = shift;
     my %options = @_;
 
@@ -769,17 +764,32 @@ sub propagateTags {
     my $children = $this->getChildContigs(1);
 
     foreach my $child (@$children) {
- # ContigHelper->propagateTagsToContig($this,$child,%options);
+#       ContigHelper->propagateTagsToContig($this,$child,%options);
         $this->propagateTagsToContig($child,%options);
     }
 }
 
-
-sub propagateTagsToContig { # REMOVE TO: ContigHelper
+sub propagateTagsToContig {
 # propagate tags FROM this (parent) TO the specified target contig
-    my $parent = shift;
-    my $target = shift;
+    my $parent = shift; # this Contig instance
+    my $target = shift; # child
     my %options = @_;
+
+    my @validoptionkeys = ('depth',
+                           'notagload',    # take tags as is
+                           'noparentload', # take parent contig as is
+                           'speedmode',
+                           'includetag',
+                           'excludetag',
+                           'minimumsegmentsize', # re : anno tags
+                           'change strand',      # re : anno tags
+                           'overlap');           # re : anno tags
+my $ttags = $target->hasTags();
+$LOGGER->debug("Contig->propagateTagsToContig : target contig $target has tags: $ttags") if $LOGGER;
+
+    &verifyKeys(\%options,'propagateTags',@validoptionkeys);
+    return ContigHelper->propagateTagsToContig($parent,$target,%options);
+
 
 # autoload tags unless tags are already defined
 
@@ -896,10 +906,6 @@ $DEBUG->fine("Target contig length : $tlength ") if $DEBUG;
 
     my $ptags = $parent->getTags();
 
-# get a handle to the tag factory, if not do earlier
-
-    $tagfactory = new ContigTagFactory() unless $tagfactory;
-
 # first attempt for ANNO tags (later to be used for others as well)
 
     my %annotagoptions = (break=>1);
@@ -924,7 +930,7 @@ $DEBUG->fine("Target contig length : $tlength ") if $DEBUG;
         next unless ($tagtype eq 'ANNO');
 # remapping can be SLOW for large number of tags if not in speedmode
 $DEBUG->fine("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft()) if $DEBUG;
-        my $tptags = $tagfactory->remap($ptag,$mapping,%annotagoptions);
+        my $tptags = $ptag->remap($mapping,%annotagoptions);
 
         push @rtags,@$tptags if $tptags;
     }
@@ -932,7 +938,7 @@ $DEBUG->warning("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input") if
     if (@rtags) {
         my %moptions = (overlap => ($options{overlap} || 0));
 $moptions{debug} = $DEBUG if $DEBUG;
-        my $newtags = $tagfactory->mergeTags(\@rtags,%moptions);
+        my $newtags = ContigTagFactory->mergeTags(\@rtags,%moptions);
 
 my $oldttags = $target->getTags() || [];
 $DEBUG->warning(scalar(@$oldttags) . " existing tags on TARGET PT") if $DEBUG;
@@ -985,8 +991,7 @@ $DEBUG->fine("offset to be applied : $offset[$i]") if $DEBUG;
 $DEBUG->fine("offsets: @offset") if $DEBUG;
         next unless @offset;
 # create a new tag by spawning from the tag on the parent contig
-        my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
-#        my $tptag = $tagfactory->transpose($ptag,$alignment,\@offset,$tlength);
+        my $tptag = $ptag->transpose($alignment,\@offset,$tlength);
         next unless $tptag; # remapped tag out of boundaries
 
 if ($DEBUG) {
@@ -1026,6 +1031,9 @@ sub writeToCaf {
     my $FILE = shift; # obligatory file handle
     my %options = @_;
 
+    &verifyKeys(\%options,'writeToCaf','noreads','readsonly','notags',
+		                       'alltags','includetag','excludetag');
+
     return "Missing file handle for Caf output" unless $FILE;
 
     my $contigname = $this->getContigName();
@@ -1037,6 +1045,7 @@ sub writeToCaf {
         foreach my $read (@$reads) {
             $read->writeToCaf($FILE,%options); # transfer options, if any
         }
+        return 0 if $options{readsonly};
     }
 
 # write the overall maps for for the contig ("assembled from")
@@ -1095,6 +1104,8 @@ sub writeToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my %options = @_;
 
+    &verifyKeys(\%options,'writeToFasta','readsonly','gap4name','minNX');
+
     return "Missing file handle for Fasta output" unless $DFILE;
 
     if ($options{readsonly}) {
@@ -1107,6 +1118,7 @@ sub writeToFasta {
         return undef;
     }
 
+#to be deleted from HERE
 # apply end-region masking
 
     if ($options{endregiononly}) { # to be DEPRECATED
@@ -1124,6 +1136,7 @@ sub writeToFasta {
 	    print STDERR "No quality clipped for ".$this->getContigName()."\n";
         }
     }
+# TO HERE
 
     my $errors = $this->writeDNA($DFILE,%options);
 
@@ -1155,7 +1168,7 @@ sub writeDNA {
        print STDERR "Missing file handle for DNA sequence\n";
        return 1; # error status
     }
-    elsif (my $dna = $this->getSequence()) {
+    elsif (my $dna = $this->getSequence(@_)) {
 # output in blocks of 60 characters
 	print $DFILE "$marker$identifier\n";
 	my $offset = 0;
@@ -1209,80 +1222,6 @@ sub writeBaseQuality {
     return 0; # no errors
 }
 
-sub metaDataToString {
-# list the contig meta data
-    my $this = shift;
-    my $full = shift;
-
-    $this->getMappings(1) if $full; # load the read-to-contig maps
-
-    if (!$this->getReadOnLeft() && $this->hasMappings()) {
-        $this->getStatistics(1);
-    }
-
-    my $name     = $this->getContigName()            || "undefined";
-    my $gap4name = $this->getGap4Name();
-    my $created  = $this->{created}                  || "not known";
-    my $updated  = $this->{updated}                  || "not known";
-    my $project  = $this->{project}                  ||           0;
-    my $length   = $this->getConsensusLength()       ||   "unknown";
-    my $cover    = $this->getAverageCover()          ||   "unknown";
-    my $rleft    = $this->getReadOnLeft()            ||   "unknown";
-    my $right    = $this->getReadOnRight()           ||   "unknown";
-    my $nreads   = $this->getNumberOfReads()         || "undefined";
-    my $nwread   = $this->getNumberOfNewReads()      ||           0;
-    my $pcntgs   = $this->getNumberOfParentContigs() ||           0;
-
-# if the contig has parents, get their names by testing/loading the mappings
-
-    my $parentlist = '';
-    my @assembledfrom;
-    if ($pcntgs && (my $mappings = $this->getContigToContigMappings(1))) {
-        my @parents;
-        foreach my $mapping (@$mappings) {
-            push @parents, $mapping->getMappingName();
-            push @assembledfrom, $mapping->assembledFromToString(1);
-        }
-        $parentlist = "(".join(',',sort @parents).")" if @parents;
-    }
-
-    my $string = "Contig name     = $name\n"
-               . "Gap4 name       = $gap4name\n"
-               . "Created         : $created\n"
-               . "Last update     : $updated\n"
-               . "Project ID      = $project\n"
-               . "Number of reads = $nreads  (newly assembled : $nwread)\n"
-               . "Parent contigs  = $pcntgs $parentlist\n"
-               . "Consensuslength = $length\n"
-               . "Average cover   = $cover\n"   
-               . "End reads       : (L) $rleft   (R) $right\n\n";
-    foreach my $assembled (sort @assembledfrom) {
-        $string   .= $assembled;
-    }
-
-    return $string;
-}
-
-sub toString {
-# very brief summary
-    my $this = shift;
-
-    my $name     = $this->getContigName()            || "undefined";
-    my $gap4name = $this->getGap4Name();
-    my $nreads   = $this->getNumberOfReads()         || -1;
-    my $length   = $this->getConsensusLength()       || -1;
-    my $cover    = $this->getAverageCover()          || -1;
-    my $created  = $this->{created}                  || "undefined";
-    my $project  = $this->{project}                  || 0;
-
-    return sprintf 
-     ("%-14s = %-20s r:%-7d l:%-8d c:%4.2f %-19s %3d",
-      $name,$gap4name,$nreads,$length,$cover,$created,$project);
-}
-
-#-------------------------------------------------------------------    
-# non-standard output (e.g. for interaction with Phusion and Gap4)
-#-------------------------------------------------------------------    
 
 sub writeToMaf {
 # write the "reads.placed" read-contig mappings in Mullikin format
@@ -1291,6 +1230,8 @@ sub writeToMaf {
     my $QFILE = shift; # obligatory file handle for QualityData
     my $RFILE = shift; # obligatory file handle for Placed Reads
     my %options = @_;  # minNX=>n , supercontigname=> , contigzeropoint=> 
+
+    &verifyKeys(\%options,'writeToMaf','minNX','supercontigname');
 
     my $report = '';
 
@@ -1372,6 +1313,8 @@ sub writeToEMBL {
     my $QFILE = shift; # optional file handle for quality data
     my %options = @_;
 
+    &verifyKeys(\%options,'writeToEMBL','gap4name','includetag','tagkey');
+
 # compose identifier
 
     my $arcturusname = $this->getContigName();
@@ -1421,10 +1364,10 @@ sub writeToEMBL {
             my @newtags;
             my $joinhash = {};
             foreach my $tag (@$tags) {
-                my $tagtype     = $tag->getType();
+                my $tagtype = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
-                my $strand      = lc($tag->getStrand());
-                my $sysID       = $tag->getSystematicID();
+                my $strand  = lc($tag->getStrand());
+                my $sysID   = $tag->getSystematicID();
 # if the tag is not an annotation tag, just add to local list
                 unless (defined($sysID)) {
 		    push @newtags,$tag;
@@ -1445,20 +1388,19 @@ sub writeToEMBL {
                 my $strandhash = $joinhash->{$sysID};
                 foreach my $strand (keys %$strandhash) {
                     my $joinset = $strandhash->{$strand};
-                    $tagfactory = new ContigTagFactory() unless $tagfactory;
-                    my $newtag = $tagfactory->makeCompositeTag($joinset);
-#                    my $newtag = ContigTagFactory->makeCompositeTag($joinset);
+                    my $newtag = ContigTagFactory->makeCompositeTag($joinset);
                     push @newtags,$newtag if $newtag;
 	        }
 	    }
 
 # export the tags
 
+            my $tagkey = $options{tagkey}; # default CDS set in Tag class
             foreach my $tag (@newtags) {
                 my $tagtype = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
 
-                print $DFILE $tag->writeToEMBL(0,tagkey=>'TAG');
+                print $DFILE $tag->writeToEMBL(0,tagkey=>$tagkey);
             }
             print $DFILE "XX\n";
         }
@@ -1506,6 +1448,79 @@ sub writeToEMBL {
     return 0 unless $QFILE;
 
 # Quality printout to be completed
+}
+
+#-------------------------------------------------------------------    
+
+sub metaDataToString {
+# list the contig meta data
+    my $this = shift;
+    my $full = shift;
+
+    $this->getMappings(1) if $full; # load the read-to-contig maps
+
+    if (!$this->getReadOnLeft() && $this->hasMappings()) {
+        $this->getStatistics(1);
+    }
+
+    my $name     = $this->getContigName()            || "undefined";
+    my $gap4name = $this->getGap4Name();
+    my $created  = $this->{created}                  || "not known";
+    my $updated  = $this->{updated}                  || "not known";
+    my $project  = $this->{project}                  ||           0;
+    my $length   = $this->getConsensusLength()       ||   "unknown";
+    my $cover    = $this->getAverageCover()          ||   "unknown";
+    my $rleft    = $this->getReadOnLeft()            ||   "unknown";
+    my $right    = $this->getReadOnRight()           ||   "unknown";
+    my $nreads   = $this->getNumberOfReads()         || "undefined";
+    my $nwread   = $this->getNumberOfNewReads()      ||           0;
+    my $pcntgs   = $this->getNumberOfParentContigs() ||           0;
+
+# if the contig has parents, get their names by testing/loading the mappings
+
+    my $parentlist = '';
+    my @assembledfrom;
+    if ($pcntgs && (my $mappings = $this->getContigToContigMappings(1))) {
+        my @parents;
+        foreach my $mapping (@$mappings) {
+            push @parents, $mapping->getMappingName();
+            push @assembledfrom, $mapping->assembledFromToString(1);
+        }
+        $parentlist = "(".join(',',sort @parents).")" if @parents;
+    }
+
+    my $string = "Contig name     = $name\n"
+               . "Gap4 name       = $gap4name\n"
+               . "Created         : $created\n"
+               . "Last update     : $updated\n"
+               . "Project ID      = $project\n"
+               . "Number of reads = $nreads  (newly assembled : $nwread)\n"
+               . "Parent contigs  = $pcntgs $parentlist\n"
+               . "Consensuslength = $length\n"
+               . "Average cover   = $cover\n"   
+               . "End reads       : (L) $rleft   (R) $right\n\n";
+    foreach my $assembled (sort @assembledfrom) {
+        $string   .= $assembled;
+    }
+
+    return $string;
+}
+
+sub toString {
+# very brief summary
+    my $this = shift;
+
+    my $name     = $this->getContigName()            || "undefined";
+    my $gap4name = $this->getGap4Name();
+    my $nreads   = $this->getNumberOfReads()         || -1;
+    my $length   = $this->getConsensusLength()       || -1;
+    my $cover    = $this->getAverageCover()          || -1;
+    my $created  = $this->{created}                  || "undefined";
+    my $project  = $this->{project}                  || 0;
+
+    return sprintf 
+     ("%-14s = %-20s r:%-7d l:%-8d c:%4.2f %-19s %3d",
+      $name,$gap4name,$nreads,$length,$cover,$created,$project);
 }
 
 #-------------------------------------------------------------------    
@@ -1577,9 +1592,10 @@ sub removeShortReads {
 
 sub removeNamedReads {
     my $this = shift;
+    my $reads = shift; # array ref
     my %options = @_; 
-    &verifyKeys(\%options,'removeNamedReads','nonew');
-    return ContigHelper->removeNamedReads($this,%options);
+    &verifyKeys(\%options,'removeNamedReads','new');
+    return ContigHelper->removeNamedReads($this,$reads,%options);
 }
 
 sub undoReadEdits {
@@ -1618,7 +1634,7 @@ sub isPadded {
 sub verifyKeys {
 # test hash keys against a list of input keys
     my $hash = shift;
-    my $method = shift;
+    my $method = shift; # method name
 
     my %keys;
     foreach my $key (@_) {
@@ -1633,8 +1649,6 @@ sub verifyKeys {
     }
 }
 
-sub setDEBUG {&setLogger(@_)} # pass the logger module
-
 sub setLogger {
 # assign a Logging object 
     my $this = shift;
@@ -1648,5 +1662,6 @@ sub setLogger {
     ContigHelper->setLogger($logger);
 }
 
+#-------------------------------------------------------------------    
 
 1;
