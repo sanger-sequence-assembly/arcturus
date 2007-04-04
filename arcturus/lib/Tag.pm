@@ -457,8 +457,11 @@ sub isEqual {
     my $tag  = shift;
     my %options = @_; # 'ignorenameofpattern, includestrand, inherit
   
-    &verifyKeys(\%options,'isEqual','ignorenameofpattern','inop',
+    &verifyKeys(\%options,'isEqual','ignorenameofpattern',
+                                    'ignoreblankcomment',
 		                    'includestrand',
+                                    'copy','copycom',
+'list','logger', # temporary, to be removed
                                     'inherit');
 
     return ContigTagFactory->isEqual($this,$tag,%options);
