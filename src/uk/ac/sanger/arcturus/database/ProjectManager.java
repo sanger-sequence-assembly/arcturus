@@ -19,6 +19,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtByNameAndAssembly;
 	private PreparedStatement pstmtSetAssemblyForProject;
 	private PreparedStatement pstmtProjectSummary;
+	private PreparedStatement pstmtLastContigTransferOut;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -47,6 +48,8 @@ public class ProjectManager extends AbstractManager {
 				+ " where project_id = ? and length >= ? and nreads >= ?";
 		pstmtProjectSummary = conn.prepareStatement(query);
 
+		query = "select max(closed) from CONTIGTRANSFERREQUEST where old_project_id = ? and status = 'done'";
+		pstmtLastContigTransferOut = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -266,6 +269,14 @@ public class ProjectManager extends AbstractManager {
 		} else
 			summary.reset();
 
+		rs.close();
+		
+		pstmtLastContigTransferOut.setInt(1, project_id);
+		
+		rs = pstmtLastContigTransferOut.executeQuery();
+		
+		summary.setMostRecentContigTransferOut(rs.next() ? rs.getTimestamp(1) : null);
+		
 		rs.close();
 	}
 

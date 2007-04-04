@@ -14,6 +14,8 @@ public class ProjectComparator implements Comparator {
 	public static final int BY_CONTIG_UPDATED_DATE = 7;
 	public static final int BY_PROJECT_UPDATED_DATE = 8;
 	public static final int BY_NAME = 9;
+	
+	private final boolean useContigChange = true;
 
 	protected boolean ascending;
 	protected int type;
@@ -71,7 +73,9 @@ public class ProjectComparator implements Comparator {
 				return compareByNewestContigCreated(p1, p2);
 
 			case BY_CONTIG_UPDATED_DATE:
-				return compareByMostRecentContigUpdated(p1, p2);
+				return useContigChange ?
+						compareByMostRecentContigChange(p1, p2) :
+							compareByMostRecentContigUpdated(p1, p2);
 
 			case BY_PROJECT_UPDATED_DATE:
 				return compareByProjectUpdated(p1, p2);
@@ -150,6 +154,14 @@ public class ProjectComparator implements Comparator {
 	protected int compareByNewestContigCreated(ProjectProxy p1, ProjectProxy p2) {
 		Date d1 = (p1 == null) ? null : p1.getNewestContigCreated();
 		Date d2 = (p2 == null) ? null : p2.getNewestContigCreated();
+
+		return compareByDate(d1, d2);
+	}
+
+	protected int compareByMostRecentContigChange(ProjectProxy p1,
+			ProjectProxy p2) {
+		Date d1 = (p1 == null) ? null : p1.getMostRecentContigChange();
+		Date d2 = (p2 == null) ? null : p2.getMostRecentContigChange();
 
 		return compareByDate(d1, d2);
 	}
