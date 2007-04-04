@@ -176,7 +176,7 @@ class ProjectTableModel extends AbstractTableModel implements
 						return project.getNewestContigCreated();
 
 					case CONTIG_UPDATED_DATE:
-						return project.getMostRecentContigUpdated();
+						return project.getMostRecentContigChange();
 
 					default:
 						return null;

@@ -75,6 +75,20 @@ public class ProjectProxy {
 	public Date getMostRecentContigUpdated() {
 		return summary.getMostRecentContigUpdated();
 	}
+	
+	public Date getMostRecentContigTransferOut() {
+		return summary.getMostRecentContigTransferOut();
+	}
+	
+	public Date getMostRecentContigChange() {
+		Date contigUpdated = summary.getMostRecentContigUpdated();
+		Date transferOut = summary.getMostRecentContigTransferOut();
+		
+		if (contigUpdated != null && transferOut != null)
+			return contigUpdated.compareTo(transferOut) > 0 ? contigUpdated : transferOut;
+			
+		return (contigUpdated != null) ? contigUpdated : transferOut;
+	}
 
 	public Date getProjectUpdated() {
 		return project.getUpdated();
