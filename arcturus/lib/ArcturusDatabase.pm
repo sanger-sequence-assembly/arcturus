@@ -50,7 +50,8 @@ sub open {
 	$this->{DataSource} = $ds;
     }
     else {
-	$this->{DataSource} = new DataSource(@_);
+	$this->{DataSource} = new DataSource(&screen(@_));
+#	$this->{DataSource} = new DataSource(@_);
     }
 
     return undef unless $this->{DataSource};
@@ -135,6 +136,35 @@ sub disconnect {
         $dbh->disconnect;
         undef $this->{Connection};
     }
+}
+
+sub screen {
+# private
+    my %options = @_;
+
+    return @_ if ($options{instance} || $options{organism});
+
+# no organism or instance specified
+# try to retrieve data from .arcturus.props
+
+    my $file = ".arcturus.props";
+    for my $i (0,1,2) {
+        last if (-f $file);
+        return @_ if ($i == 2); # file not found
+        $file = "../".$file;   # go one level up
+    }
+
+# parse the file
+
+    my $FILE = new FileHandle($file,"r");
+    while (my $record = <$FILE>) {
+        $record =~ s/^\s+|\s+$//g;
+        next unless ($record =~ s/^arcturus\.//);
+        my @info = split /\W+/,$record;
+        next unless (scalar(@info) == 2); # invalid info
+        push @_,@info;
+    }
+    return @_;
 }
 
 #-----------------------------------------------------------------------------
