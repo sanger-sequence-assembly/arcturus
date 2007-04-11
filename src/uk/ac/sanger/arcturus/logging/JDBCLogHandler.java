@@ -54,7 +54,16 @@ public class JDBCLogHandler extends Handler {
 		return DriverManager.getConnection(url, username, password);
 	}
 
+	private void setWaitTimeout(int timeout) throws SQLException {
+		String sql = "set session wait_timeout = " + timeout;
+		Statement stmt = conn.createStatement();
+		stmt.execute(sql);
+		stmt.close();
+	}
+
 	private void prepareStatements() throws SQLException {
+		setWaitTimeout(5*24*3600);
+		
 		String query =
 			"INSERT INTO LOGRECORD(time,sequence,logger,level,class,method,thread,message,user,host,connid)" +
 			" VALUES(?,?,?,?,?,?,?,?,?,substring_index(user(),'@',-1),connection_id())";
