@@ -36,15 +36,15 @@ my $threshold;  # only with clipmethod
 my $clipmethod;
 my $minimumrange;
 
-my $outputFile;            # default STDERR
-my $logLevel;              # default log warnings and errors only
+my $logfile;            # default STDERR
+my $loglevel;           # default log warnings and errors only
 my $debug;
 
 my $validKeys  = "organism|instance|assembly|caf|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
                . "namenotlike|nnl|excludelist|el|mask|tags|all|fasta|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
-               . "info|verbose|debug|help";
+               . "info|verbose|debug|log|help";
 
 
 while (my $nextword = shift @ARGV) {
@@ -105,13 +105,15 @@ while (my $nextword = shift @ARGV) {
 
     $addtag           = 1            if ($nextword eq '-tags');
 
-    $logLevel         = 1            if ($nextword eq '-verbose'); 
-    $logLevel         = 1            if ($nextword eq '-info'); 
-    $logLevel         = 1            if ($nextword eq '-debug');
+    $loglevel         = 1            if ($nextword eq '-verbose'); 
+    $loglevel         = 1            if ($nextword eq '-info'); 
+    $loglevel         = 1            if ($nextword eq '-debug');
 
     $debug            = 1            if ($nextword eq '-debug'); 
 
     $number           = shift @ARGV  if ($nextword eq '-all');
+
+    $logfile          = shift @ARGV  if ($nextword eq '-log');
 
     &showUsage(0) if ($nextword eq '-help');
 }
@@ -120,9 +122,9 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
 
-my $logger = new Logging($outputFile);
+my $logger = new Logging($logfile);
 
-$logger->setStandardFilter($logLevel) if defined $logLevel; # reporting level
+$logger->setStandardFilter($loglevel) if defined $loglevel; # reporting level
 
 $logger->setBlock('debug',unblock=>1) if $debug;
 
@@ -356,6 +358,8 @@ sub showUsage {
     print STDOUT "-minimumqualityrange\tMinimum high quality length\n";
     print STDOUT "\n";
     print STDOUT "-info\t\t(no value) for some progress info\n";
+    print STDERR "\n";
+    print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
 
     $code ? exit(1) : exit(0);
