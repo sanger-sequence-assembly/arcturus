@@ -38,6 +38,8 @@ sub new {
 	$this->{status}       = shift if ($nextword eq 'status');
     }
 
+    $this->{status} = 'PASS' unless defined($this->{status});
+
     die "No schema specified" unless defined($schema);
 
     $this->{schema} = $schema;
