@@ -6,11 +6,11 @@ import java.io.*;
 import java.util.*;
 
 public class JDBCLogHandler extends Handler {
-	private Connection conn;
-	private PreparedStatement pstmtInsertRecord;
-	private PreparedStatement pstmtUpdateThrowableInfo;
-	private PreparedStatement pstmtInsertStackTrace;
-	private String username = System.getProperty("user.name");
+	protected Connection conn;
+	protected PreparedStatement pstmtInsertRecord;
+	protected PreparedStatement pstmtUpdateThrowableInfo;
+	protected PreparedStatement pstmtInsertStackTrace;
+	protected String username = System.getProperty("user.name");
 	
 	public JDBCLogHandler(String propsfile) throws SQLException, IOException, ClassNotFoundException {
 		conn = getConnection(propsfile);		
@@ -27,7 +27,7 @@ public class JDBCLogHandler extends Handler {
 		prepareStatements();
 	}
 
-	private Connection getConnection(String propsfile)
+	protected Connection getConnection(String propsfile)
 		throws SQLException, IOException, ClassNotFoundException {
 		InputStream is = getClass().getResourceAsStream(propsfile);
 		Properties myprops = new Properties();
@@ -37,7 +37,7 @@ public class JDBCLogHandler extends Handler {
 		return getConnection(myprops);
 	}
 	
-	private Connection getConnection(Properties props) throws SQLException, ClassNotFoundException {
+	protected Connection getConnection(Properties props) throws SQLException, ClassNotFoundException {
 		String host = props.getProperty("jdbcloghandler.host");
 		String port = props.getProperty("jdbcloghandler.port");
 		String database = props.getProperty("jdbcloghandler.database");
@@ -54,14 +54,14 @@ public class JDBCLogHandler extends Handler {
 		return DriverManager.getConnection(url, username, password);
 	}
 
-	private void setWaitTimeout(int timeout) throws SQLException {
+	protected void setWaitTimeout(int timeout) throws SQLException {
 		String sql = "set session wait_timeout = " + timeout;
 		Statement stmt = conn.createStatement();
 		stmt.execute(sql);
 		stmt.close();
 	}
 
-	private void prepareStatements() throws SQLException {
+	protected void prepareStatements() throws SQLException {
 		setWaitTimeout(5*24*3600);
 		
 		String query =
