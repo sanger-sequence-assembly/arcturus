@@ -96,9 +96,9 @@ endif
 
 if ( { ${arcturus_home}/utils/isolderthan ${projectname}.B ${projectname}.0 } ) then
 
-    echo -- version ${projectname}.0 will be deleted --
+    echo -- version ${projectname}.0 is deleted --
 
-#    rmdb ${projectname} 0
+    rmdb ${projectname} 0
 
 else
 
