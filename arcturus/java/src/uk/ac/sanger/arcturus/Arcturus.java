@@ -113,7 +113,7 @@ public class Arcturus {
 
 		Handler warner = null;
 		
-		if (GraphicsEnvironment.isHeadless())
+		if (GraphicsEnvironment.isHeadless() || Boolean.getBoolean("useConsoleLogHandler"))
 			warner = new ConsoleHandler();
 		else
 			warner = new MessageDialogHandler();
