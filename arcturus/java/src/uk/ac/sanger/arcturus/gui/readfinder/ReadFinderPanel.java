@@ -15,24 +15,22 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 
-public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinderEventListener {
-	private JMenuBar menubar = new JMenuBar();
+public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventListener {
+	protected JTextArea txtReadList = new JTextArea(20, 32);
+	protected JTextArea txtMessages = new JTextArea(20, 100);
+	protected JButton btnFindReads;
+	protected JButton btnClearMessages = new JButton("Clear messages");
+	
+	protected MinervaAbstractAction actionFindReads;
+	protected MinervaAbstractAction actionGetReadsFromFile;
+	
+	protected JFileChooser fileChooser = new JFileChooser();
 
-	private JTextArea txtReadList = new JTextArea(20, 32);
-	private JTextArea txtMessages = new JTextArea(20, 100);
-	private JButton btnFindReads;
-	private JButton btnClearMessages = new JButton("Clear messages");
+	protected ReadFinder readFinder;
 	
-	private MinervaAbstractAction actionClose;
-	private MinervaAbstractAction actionFindReads;
-	private MinervaAbstractAction actionGetReadsFromFile;
-	private MinervaAbstractAction actionHelp;
-	
-	private JFileChooser fileChooser = new JFileChooser();
-
-	private ReadFinder readFinder;
-	
-	public ReadFinderPanel(ArcturusDatabase adb) {
+	public ReadFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+		super(parent);
+		
 		try {
 			readFinder = new ReadFinder(adb);
 		} catch (SQLException sqle) {
@@ -116,15 +114,7 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 		add(panel);
 	}
 	
-	private void createActions() {
-		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
-				new Integer(KeyEvent.VK_C),
-				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-					public void actionPerformed(ActionEvent e) {
-						closePanel();
-					}			
-		};
-		
+	protected void createActions() {
 		actionGetReadsFromFile = new MinervaAbstractAction("Open file of read names",
 				null, "Open file of read names", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
@@ -142,93 +132,35 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 		};
 		
 		actionFindReads.setEnabled(false);
-	
-		actionHelp = new MinervaAbstractAction("Help",
-				null, "Help", new Integer(KeyEvent.VK_H),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				Minerva.displayHelp();
-			}
-		};
 	}
 
-	private void createMenus() {
-		createFileMenu();
-		createEditMenu();
-		createViewMenu();
-		menubar.add(Box.createHorizontalGlue());
-		createHelpMenu();
-	}
-
-	private JMenu createMenu(String name, int mnemonic, String description) {
-		JMenu menu = new JMenu(name);
-
-		menu.setMnemonic(mnemonic);
-
-		if (description != null)
-			menu.getAccessibleContext().setAccessibleDescription(description);
-
-		return menu;
-	}
-
-	private void createFileMenu() {
-		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
-		menubar.add(fileMenu);
+	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
+		menu.add(actionGetReadsFromFile);
 		
-		fileMenu.add(actionGetReadsFromFile);
-		
-		fileMenu.addSeparator();
-				
-		fileMenu.add(actionClose);
-		
-		fileMenu.addSeparator();
-		
-		fileMenu.add(Minerva.getQuitAction());
-	}
-	
-	private void createEditMenu() {
-		JMenu editMenu = createMenu("Edit", KeyEvent.VK_E, "Edit");
-		menubar.add(editMenu);
-	}
-	
-	private void createViewMenu() {
-		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
-		menubar.add(viewMenu);
+		return true;
 	}
 
-	private void createHelpMenu() {
-		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
-		menubar.add(helpMenu);		
-		
-		helpMenu.add(actionHelp);
+	protected void addClassSpecificViewMenuItems(JMenu menu) {
+		// Does nothing
 	}
-	
-	private Border etchedTitledBorder(String title) {
+
+	protected void createClassSpecificMenus() {
+		// Does nothing
+	}
+
+	protected Border etchedTitledBorder(String title) {
 		Border etched = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 		return BorderFactory.createTitledBorder(etched, title);
-	}
-
-	public JMenuBar getMenuBar() {
-		return menubar;
-	}
-
-	public JToolBar getToolBar() {
-		return null;
 	}
 
 	public void refresh() {
 		// Does nothing
 	}
 
-	private void closePanel() {
-		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		mtp.remove(this);
-	}
-
 	public void closeResources() {
 	}
 
-	private void getReadsFromFile() {
+	protected void getReadsFromFile() {
 		int rc = fileChooser.showOpenDialog(this);
 		
 		if (rc == JFileChooser.APPROVE_OPTION) {
@@ -236,7 +168,7 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 		}
 	}
 	
-	private void addReadsToList(File file) {
+	protected void addReadsToList(File file) {
 		try {
 			BufferedReader br = new BufferedReader(new FileReader(file));
 			
@@ -255,7 +187,7 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 	}
 
 
-	private void findReads() {
+	protected void findReads() {
 		String text = txtReadList.getText();
 		String regex = "\\s";
 		
@@ -267,9 +199,9 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 	}
 	
 	class Task extends Thread {
-		private final String[] readnames;
-		private final ReadFinder readFinder;
-		private final ReadFinderEventListener listener;
+		protected final String[] readnames;
+		protected final ReadFinder readFinder;
+		protected final ReadFinderEventListener listener;
 		
 		public Task(ReadFinder readFinder, String[] readnames, ReadFinderEventListener listener) {
 			this.readFinder = readFinder;
@@ -337,37 +269,13 @@ public class ReadFinderPanel extends JPanel implements MinervaClient, ReadFinder
 	}
 
 
-	private void updateFindReadsButton() {
+	protected void updateFindReadsButton() {
 		boolean haveReadsInList = txtReadList.getDocument().getLength() > 0;
 		
 		actionFindReads.setEnabled(haveReadsInList);
 	}
-		
-	public static void main(String[] args) {
-		try {
-			String instance = "pathogen";
-			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-			String organism = "PKN";
-			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-			
-			JFrame frame = new JFrame("Testing ReadFinderPanel");
-			
-			ReadFinderPanel rfp = new ReadFinderPanel(adb);
-			
-			frame.getContentPane().add(rfp);
-			
-			frame.setJMenuBar(rfp.getMenuBar());
-			
-			frame.pack();
-			
-			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-			
-			frame.setVisible(true);
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-		
+
+	protected boolean isRefreshable() {
+		return false;
 	}
 }

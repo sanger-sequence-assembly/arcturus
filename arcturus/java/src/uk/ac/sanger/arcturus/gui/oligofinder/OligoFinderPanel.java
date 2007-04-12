@@ -17,39 +17,38 @@ import java.util.*;
 import java.io.*;
 import java.text.*;
 
-public class OligoFinderPanel extends JPanel implements MinervaClient,
+public class OligoFinderPanel extends MinervaPanel implements 
 		OligoFinderEventListener {
-	private OligoFinder finder;
-	private JMenuBar menubar = new JMenuBar();
+	protected OligoFinder finder;
 
-	private JTextArea txtOligoList = new JTextArea(20, 60);
-	private JList lstProjects;
-	private JTextArea txtMessages = new JTextArea(20, 40);
-	private JButton btnFindOligos;
-	private JButton btnClearMessages = new JButton("Clear messages");
-	private JProgressBar pbarContigProgress = new JProgressBar();
-	private JProgressBar pbarReadProgress = new JProgressBar();
-	private JCheckBox cbSelectAll = new JCheckBox("All projects");
-	private JCheckBox cbFreeReads = new JCheckBox("Scan free reads");
+	protected JTextArea txtOligoList = new JTextArea(20, 60);
+	protected JList lstProjects;
+	protected JTextArea txtMessages = new JTextArea(20, 40);
+	protected JButton btnFindOligos;
+	protected JButton btnClearMessages = new JButton("Clear messages");
+	protected JProgressBar pbarContigProgress = new JProgressBar();
+	protected JProgressBar pbarReadProgress = new JProgressBar();
+	protected JCheckBox cbSelectAll = new JCheckBox("All projects");
+	protected JCheckBox cbFreeReads = new JCheckBox("Scan free reads");
 
-	private ProjectListModel plm;
+	protected ProjectListModel plm;
 
-	private MinervaAbstractAction actionClose;
-	private MinervaAbstractAction actionFindOligos;
-	private MinervaAbstractAction actionGetOligosFromFile;
-	private MinervaAbstractAction actionHelp;
+	protected MinervaAbstractAction actionFindOligos;
+	protected MinervaAbstractAction actionGetOligosFromFile;
 
-	private JFileChooser fileChooser = new JFileChooser();
+	protected JFileChooser fileChooser = new JFileChooser();
 
-	private int bpdone;
+	protected int bpdone;
 
-	private boolean showHashMatch = false;
+	protected boolean showHashMatch = false;
 	
-	private HashMap oligomatches = new HashMap();
+	protected HashMap oligomatches = new HashMap();
 	
 	protected DecimalFormat df = new DecimalFormat();
 
-	public OligoFinderPanel(ArcturusDatabase adb) {
+	public OligoFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+		super(parent);
+		
 		df.setGroupingSize(3);
 		df.setGroupingUsed(true);
 		
@@ -218,15 +217,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		showHashMatch = Boolean.getBoolean("showHashMatch");
 	}
 
-	private void createActions() {
-		actionClose = new MinervaAbstractAction("Close", null,
-				"Close this window", new Integer(KeyEvent.VK_C), KeyStroke
-						.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				closePanel();
-			}
-		};
-
+	protected void createActions() {
 		actionGetOligosFromFile = new MinervaAbstractAction(
 				"Open file of oligos", null, "Open file of oligos",
 				new Integer(KeyEvent.VK_O), KeyStroke.getKeyStroke(
@@ -245,78 +236,23 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		};
 
 		actionFindOligos.setEnabled(false);
-
-		actionHelp = new MinervaAbstractAction("Help", null, "Help",
-				new Integer(KeyEvent.VK_H), KeyStroke.getKeyStroke(
-						KeyEvent.VK_F1, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				Minerva.displayHelp();
-			}
-		};
 	}
 
-	private void createMenus() {
-		createFileMenu();
-		createEditMenu();
-		createViewMenu();
-		menubar.add(Box.createHorizontalGlue());
-		createHelpMenu();
+	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
+		menu.add(actionGetOligosFromFile);
+
+		return true;
 	}
 
-	private JMenu createMenu(String name, int mnemonic, String description) {
-		JMenu menu = new JMenu(name);
-
-		menu.setMnemonic(mnemonic);
-
-		if (description != null)
-			menu.getAccessibleContext().setAccessibleDescription(description);
-
-		return menu;
-	}
-
-	private void createFileMenu() {
-		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
-		menubar.add(fileMenu);
-
-		fileMenu.add(actionGetOligosFromFile);
-
-		fileMenu.addSeparator();
-
-		fileMenu.add(actionClose);
-
-		fileMenu.addSeparator();
-
-		fileMenu.add(Minerva.getQuitAction());
-	}
-
-	private void createEditMenu() {
-		JMenu editMenu = createMenu("Edit", KeyEvent.VK_E, "Edit");
-		menubar.add(editMenu);
-	}
-
-	private void createViewMenu() {
-		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
-		menubar.add(viewMenu);
-	}
-
-	private void createHelpMenu() {
-		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
-		menubar.add(helpMenu);
-
-		helpMenu.add(actionHelp);
-	}
-
-	private Border etchedTitledBorder(String title) {
+	protected Border etchedTitledBorder(String title) {
 		Border etched = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 		return BorderFactory.createTitledBorder(etched, title);
 	}
 
-	public JMenuBar getMenuBar() {
-		return menubar;
+	protected void addClassSpecificViewMenuItems(JMenu menu) {
 	}
 
-	public JToolBar getToolBar() {
-		return null;
+	protected void createClassSpecificMenus() {
 	}
 
 	public void refresh() {
@@ -331,15 +267,10 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 
-	private void closePanel() {
-		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		mtp.remove(this);
-	}
-
 	public void closeResources() {
 	}
 
-	private void getOligosFromFile() {
+	protected void getOligosFromFile() {
 		int rc = fileChooser.showOpenDialog(this);
 
 		if (rc == JFileChooser.APPROVE_OPTION) {
@@ -347,7 +278,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 
-	private void addOligosToList(File file) {
+	protected void addOligosToList(File file) {
 		try {
 			BufferedReader br = new BufferedReader(new FileReader(file));
 
@@ -365,7 +296,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 
-	private void findOligoMatches() {
+	protected void findOligoMatches() {
 		Object[] selected = lstProjects.getSelectedValues();
 
 		Project[] projects = new Project[selected.length];
@@ -394,10 +325,10 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	}
 
 	class Task extends Thread {
-		private final OligoFinder finder;
-		private final Oligo[] oligos;
-		private final Project[] projects;
-		private boolean freereads;
+		protected final OligoFinder finder;
+		protected final Oligo[] oligos;
+		protected final Project[] projects;
+		protected boolean freereads;
 
 		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects, boolean freereads) {
 			this.finder = finder;
@@ -416,7 +347,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 
-	private Oligo[] parseOligos(String text) {
+	protected Oligo[] parseOligos(String text) {
 		String[] lines = text.split("[\n\r]+");
 
 		Oligo[] oligos = new Oligo[lines.length];
@@ -511,7 +442,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 	
-	private void addMatch(OligoFinderEvent event) {
+	protected void addMatch(OligoFinderEvent event) {
 		Oligo oligo = event.getOligo();
 		
 		OligoMatch match = new OligoMatch(oligo, event.getDNASequence(),
@@ -525,7 +456,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		matchset.add(match);
 	}
 	
-	private void reportMatches() {
+	protected void reportMatches() {
 		Set oligoset = oligomatches.keySet();
 		
 		if (oligoset.isEmpty()) {
@@ -540,7 +471,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}
 	}
 	
-	private void reportMatchesForOligo(Oligo oligo, Set matchset) {
+	protected void reportMatchesForOligo(Oligo oligo, Set matchset) {
 		OligoMatch[] matches = (OligoMatch[])matchset.toArray(new OligoMatch[0]);
 		
 		Arrays.sort(matches, new OligoMatchComparator());
@@ -595,7 +526,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		}		
 	}
 
-	private void postMessage(final String message) {
+	protected void postMessage(final String message) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				txtMessages.append(message);
@@ -603,7 +534,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		});
 	}
 
-	private void initProgressBar(final JProgressBar pbar, final int value) {
+	protected void initProgressBar(final JProgressBar pbar, final int value) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				pbar.setMinimum(0);
@@ -613,7 +544,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		});
 	}
 
-	private void incrementProgressBar(final JProgressBar pbar, final int value) {
+	protected void incrementProgressBar(final JProgressBar pbar, final int value) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				pbar.setValue(value);
@@ -621,7 +552,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		});
 	}
 	
-	private void setProgressBarToDone(final JProgressBar pbar) {
+	protected void setProgressBarToDone(final JProgressBar pbar) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				int value = pbar.getMaximum();
@@ -631,7 +562,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	
 	}
 
-	private void updateFindOligosButton() {
+	protected void updateFindOligosButton() {
 		boolean isProjectSelected = !lstProjects.isSelectionEmpty();
 		boolean haveOligosInList = txtOligoList.getDocument().getLength() > 0;
 		boolean scanFreeReads = cbFreeReads.isSelected();
@@ -703,7 +634,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 	}
 
 	class ProjectProxy implements Comparable {
-		private final Project project;
+		protected final Project project;
 
 		public ProjectProxy(Project project) {
 			this.project = project;
@@ -728,33 +659,7 @@ public class OligoFinderPanel extends JPanel implements MinervaClient,
 		txtOligoList.setText(text);
 	}
 
-	public static void main(String[] args) {
-		try {
-			String instance = args.length == 2 ? args[0] : "pathogen";
-			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-			String organism = args.length == 2 ? args[1] : "PKN";
-			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-
-			JFrame frame = new JFrame("Testing OligoFinderPanel");
-
-			OligoFinderPanel ofp = new OligoFinderPanel(adb);
-
-			frame.getContentPane().add(ofp);
-
-			frame.setJMenuBar(ofp.getMenuBar());
-
-			frame.pack();
-
-			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-
-			ofp.setOligos("TAATAAAAATTATTACGACTGTGATAAACTAACATTTAGTCGTATAGTGA\n" +
-					"CAAAGCTTGCAAACTGGGGACTCTACACGCCACGAAC");
-
-			frame.setVisible(true);
-		} catch (Exception e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-
+	protected boolean isRefreshable() {
+		return true;
 	}
 }

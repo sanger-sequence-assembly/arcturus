@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
 import javax.swing.*;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
@@ -8,31 +10,19 @@ import java.awt.*;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.*;
-import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
-import uk.ac.sanger.arcturus.gui.importreads.*;
-import uk.ac.sanger.arcturus.gui.oligofinder.*;
-import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 
-public class ProjectTablePanel extends JPanel implements MinervaClient  {
-	private ProjectTable table = null;
-	private ProjectTableModel model = null;
-	private JMenuBar menubar = new JMenuBar();
+public class ProjectTablePanel extends MinervaPanel {
+	protected ProjectTable table = null;
+	protected ProjectTableModel model = null;
+	protected JMenuBar menubar = new JMenuBar();
 
-	private MinervaAbstractAction actionClose;
-	private MinervaAbstractAction actionViewProject;
-	private MinervaAbstractAction actionImportReads;
-	private MinervaAbstractAction actionFindOligos;
-	private MinervaAbstractAction actionShowReadFinder;
-	private MinervaAbstractAction actionShowContigTransfers;
-	private MinervaAbstractAction actionHelp;
-	private MinervaAbstractAction actionRefresh;
+	protected MinervaAbstractAction actionViewProject;
 
 	ArcturusDatabase adb;
 
-	public ProjectTablePanel(ArcturusDatabase adb) {
-		super(new BorderLayout());
+	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+		super(new BorderLayout(), parent);
 		
 		this.adb = adb;
 		
@@ -41,24 +31,25 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		table = new ProjectTable(model);
 		table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 		
+		table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
+			public void valueChanged(ListSelectionEvent e) {
+				updateActions();
+			}		
+		});
+		
 		JScrollPane scrollpane = new JScrollPane(table);
 		
 		add(scrollpane, BorderLayout.CENTER);
 		
-		createActions();
-		
+		createActions();		
 		createMenus();
+
+		actionCloseView.setEnabled(false);
+		
+		updateActions();
 	}
 	
-	private void createActions() {
-		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
-				new Integer(KeyEvent.VK_C),
-				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-					public void actionPerformed(ActionEvent e) {
-						closePanel();
-					}			
-		};
-		
+	protected void createActions() {
 		actionViewProject = new MinervaAbstractAction("Open selected project",
 				null, "Open selected project", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
@@ -66,132 +57,27 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 				viewSelectedProjects();
 			}
 		};
-		
-		actionImportReads = new MinervaAbstractAction("Import reads into project",
-				null, "Import reads into project", new Integer(KeyEvent.VK_I),
-				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				importReadsIntoProject();
-			}
-		};
-		
-		actionFindOligos = new MinervaAbstractAction("Find oligos",
-				null, "Find oligos", new Integer(KeyEvent.VK_L),
-				KeyStroke.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				findOligosInProjects();
-			}
-		};
-		
-		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
-				null, "Show read finder", new Integer(KeyEvent.VK_F),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showReadFinderPanel();
-			}
-		};
-
-		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
-				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
-				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(ProjectTablePanel.this);
-				ContigTransferTablePanel cttp = mtp.showContigTransferTablePanel();
-				mtp.setSelectedComponent(cttp);
-			}
-		};
-
-		actionRefresh = new MinervaAbstractAction("Refresh",
-				null, "Refresh the display", new Integer(KeyEvent.VK_R),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				refresh();
-			}
-		};
-	
-		actionHelp = new MinervaAbstractAction("Help",
-				null, "Help", new Integer(KeyEvent.VK_H),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				Minerva.displayHelp();
-			}
-		};
 	}
 	
-	private void createMenus() {
-		createFileMenu();
-		createEditMenu();
-		createViewMenu();
-		createProjectMenu();
-		menubar.add(Box.createHorizontalGlue());
-		createHelpMenu();
+	protected void updateActions() {
+		boolean noneSelected = table.getSelectionModel().isSelectionEmpty();
+		actionViewProject.setEnabled(!noneSelected);
 	}
 
-	private JMenu createMenu(String name, int mnemonic, String description) {
-		JMenu menu = new JMenu(name);
-
-		menu.setMnemonic(mnemonic);
-
-		if (description != null)
-			menu.getAccessibleContext().setAccessibleDescription(description);
-
-		return menu;
+	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
+		menu.add(actionViewProject);
+		return true;
 	}
 
-	private void createFileMenu() {
-		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
-		menubar.add(fileMenu);
-		
-		fileMenu.add(actionViewProject);
-		
-		fileMenu.add(actionShowReadFinder);
-		
-		fileMenu.addSeparator();
-		
-		fileMenu.add(actionShowContigTransfers);
-		
-		fileMenu.addSeparator();
-		
-		fileMenu.add(actionClose);
-		
-		fileMenu.addSeparator();
-		
-		fileMenu.add(Minerva.getQuitAction());
-	}
-
-	private void closePanel() {
-		int rc = JOptionPane.showOptionDialog(this,
-				"Do you REALLY want to close the project list?",
-	    		 "Warning",
-	    		 JOptionPane.OK_CANCEL_OPTION,
-	    		 JOptionPane.WARNING_MESSAGE,
-	    		 null, null, null);
-
-		if (rc == JOptionPane.OK_OPTION) {
-			MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-			mtp.remove(this);
-		}
-	}
-	
-	private void createEditMenu() {
-		JMenu editMenu = createMenu("Edit", KeyEvent.VK_E, "Edit");
-		menubar.add(editMenu);
-	}
-	
-	private void createViewMenu() {
-		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
-		menubar.add(viewMenu);
-		
-		viewMenu.add(actionRefresh);
-
-		viewMenu.addSeparator();
+	protected void addClassSpecificViewMenuItems(JMenu menu) {
+		menu.addSeparator();
 
 		ButtonGroup group = new ButtonGroup();
 
 		JRadioButtonMenuItem rbShowProjectDate = new JRadioButtonMenuItem(
 				"Show project date");
 		group.add(rbShowProjectDate);
-		viewMenu.add(rbShowProjectDate);
+		menu.add(rbShowProjectDate);
 
 		rbShowProjectDate.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -202,7 +88,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		JRadioButtonMenuItem rbShowContigCreated = new JRadioButtonMenuItem(
 				"Show contig creation date");
 		group.add(rbShowContigCreated);
-		viewMenu.add(rbShowContigCreated);
+		menu.add(rbShowContigCreated);
 
 		rbShowContigCreated.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -213,7 +99,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		JRadioButtonMenuItem rbShowContigUpdated = new JRadioButtonMenuItem(
 				"Show contig updated date");
 		group.add(rbShowContigUpdated);
-		viewMenu.add(rbShowContigUpdated);
+		menu.add(rbShowContigUpdated);
 
 		rbShowContigUpdated.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -224,14 +110,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		model.setDateColumn(ProjectTableModel.CONTIG_UPDATED_DATE);
 		rbShowContigUpdated.setSelected(true);
 
-		viewMenu.addSeparator();
+		menu.addSeparator();
 
 		group = new ButtonGroup();
 
 		JRadioButtonMenuItem rbShowAllContigs = new JRadioButtonMenuItem(
 				"Show all contigs");
 		group.add(rbShowAllContigs);
-		viewMenu.add(rbShowAllContigs);
+		menu.add(rbShowAllContigs);
 
 		rbShowAllContigs.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -242,7 +128,7 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		JRadioButtonMenuItem rbShowMultiReadContigs = new JRadioButtonMenuItem(
 				"Show contigs with more than one read");
 		group.add(rbShowMultiReadContigs);
-		viewMenu.add(rbShowMultiReadContigs);
+		menu.add(rbShowMultiReadContigs);
 
 		rbShowMultiReadContigs.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -253,16 +139,20 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
 	}
-	
-	private void createProjectMenu() {
+
+	protected void createClassSpecificMenus() {
+		createProjectMenu();
+	}
+
+	protected void createProjectMenu() {
 		JMenu projectMenu = createMenu("Project", KeyEvent.VK_P, "Project");
 		menubar.add(projectMenu);
 		
-		projectMenu.add(actionImportReads);
+		projectMenu.add(actionShowReadImporter);
 		
 		projectMenu.addSeparator();
 		
-		projectMenu.add(actionFindOligos);
+		projectMenu.add(actionShowOligoFinder);
 		
 		projectMenu.getPopupMenu().addPopupMenuListener(new PopupMenuListener() {
 			public void popupMenuCanceled(PopupMenuEvent e) {
@@ -273,81 +163,14 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 
 			public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
 				int rowcount = table.getSelectedRowCount();
-				actionImportReads.setEnabled(rowcount == 1);
+				actionShowReadImporter.setEnabled(rowcount == 1);
 			}
 			
 		});
 	}
 
-	private void createHelpMenu() {
-		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
-		menubar.add(helpMenu);		
-		
-		helpMenu.add(actionHelp);
-	}
-
-	private void viewSelectedProjects() {
+	protected void viewSelectedProjects() {
 		table.displaySelectedProjects();
-	}
-	
-	private void importReadsIntoProject() {
-		int[] indices = table.getSelectedRows();
-		
-		if (indices.length != 1) {
-			JOptionPane.showMessageDialog(
-					null,
-					"Please select ONE project for this operation",
-					"Select only one project", JOptionPane.ERROR_MESSAGE,
-					null);
-			return;
-		}
-		
-		ProjectProxy proxy = (ProjectProxy) model.elementAt(indices[0]);
-		
-		String name = proxy.getName();
-		
-		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		
-		ImportReadsPanel irp = mtp.showImportReadsPanel();
-		
-		irp.setSelectedProject(name);
-		
-		mtp.setSelectedComponent(irp);
-	}
-	
-	private void findOligosInProjects() {
-		int[] indices = table.getSelectedRows();
-
-		Project[] projects = new Project[indices.length];
-		
-		for (int i = 0; i < indices.length; i++)
-			projects[i] = ((ProjectProxy) model.elementAt(indices[i])).getProject();
-		
-		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		
-		OligoFinderPanel ofp = new OligoFinderPanel(adb);
-		
-		//ofp.selectProjects(projects);
-		
-		mtp.addTab("Oligo finder", ofp);
-		
-		mtp.setSelectedComponent(ofp);
-	}
-	
-	private void showReadFinderPanel() {
-		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		
-		ReadFinderPanel rfp = mtp.showReadFinderPanel();
-		
-		mtp.setSelectedComponent(rfp);
-	}
-
-	public JMenuBar getMenuBar() {
-		return menubar;
-	}
-
-	public JToolBar getToolBar() {
-		return null;
 	}
 	
 	public void closeResources() {
@@ -360,5 +183,9 @@ public class ProjectTablePanel extends JPanel implements MinervaClient  {
 	
 	public String toString() {
 		return "ProjectTablePanel[organism=" + adb.getName() + "]";
+	}
+
+	protected boolean isRefreshable() {
+		return true;
 	}
 }

@@ -7,6 +7,7 @@ import java.sql.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
+import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
@@ -19,6 +20,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ImportReadsPanel irp;
 	private ReadFinderPanel rfp;
 	private ContigTransferTablePanel cttp;
+	protected OligoFinderPanel ofp;
 	
 	private JMenuBar menubar = new JMenuBar();
 	
@@ -131,44 +133,64 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	public ProjectTablePanel showProjectTablePanel() {
 		if (ptp == null)
-			ptp = new ProjectTablePanel(adb);
+			ptp = new ProjectTablePanel(adb, this);
 
 		if (indexOfComponent(ptp) < 0)
 			insertTab("Projects", null, ptp, "All projects", 0);
 
+		setSelectedComponent(ptp);
+		
 		return ptp;
 	}
 
 	public ImportReadsPanel showImportReadsPanel() {
 		if (irp == null)
-			irp = new ImportReadsPanel(adb);
+			irp = new ImportReadsPanel(adb, this);
 		
 		if (indexOfComponent(irp) < 0)
 			addTab("Import reads", null, irp, "Import reads");
+		
+		setSelectedComponent(irp);
 		
 		return irp;
 	}
 	
 	public ReadFinderPanel showReadFinderPanel() {
 		if (rfp == null)
-			rfp = new ReadFinderPanel(adb);
+			rfp = new ReadFinderPanel(adb, this);
 		
 		if (indexOfComponent(rfp) < 0)
 			addTab("Find reads", null, rfp, "Find reads");
+		
+		setSelectedComponent(rfp);
 		
 		return rfp;
 	}
 	
 	public ContigTransferTablePanel showContigTransferTablePanel() {
 		if (cttp == null)
-			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe());
+			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this);
 		
 		if (indexOfComponent(cttp) < 0)
 			addTab("Contig transfers", null, cttp, "Contig transfers");
 		
+		setSelectedComponent(cttp);
+		
 		return cttp;
 	}
-	
+
+	public OligoFinderPanel showOligoFinderPanel() {
+		if (ofp == null)
+			ofp = new OligoFinderPanel(adb, this);
+		
+		if (indexOfComponent(ofp) < 0)
+			addTab("Oligo finder", null, ofp, "Oligo finder");
+		
+		setSelectedComponent(ofp);
+		
+		return ofp;
+	}
+
 	public void addTab(String title, Component component) {
 		addTab(title, null, component, title);
 	}

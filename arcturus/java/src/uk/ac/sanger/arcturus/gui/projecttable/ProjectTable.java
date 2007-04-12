@@ -113,11 +113,11 @@ public class ProjectTable extends SortableTable {
 			else
 				title += "," + names[i];
 		}
-
-		ContigTablePanel ctp = new ContigTablePanel(projects);
 		
 		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
-		
+
+		ContigTablePanel ctp = new ContigTablePanel(projects, mtp);
+	
 		mtp.add(title, ctp);
 		
 		JFrame frame = (JFrame)SwingUtilities.getRoot(mtp);
