@@ -16,29 +16,27 @@ import java.awt.event.*;
 import java.util.*;
 import java.io.*;
 
-public class ImportReadsPanel extends JPanel implements MinervaClient {
-	private ReadToProjectImporter importer;
-	private JMenuBar menubar = new JMenuBar();
+public class ImportReadsPanel extends MinervaPanel {
+	protected ReadToProjectImporter importer;
 
-	private JTextArea txtReadList = new JTextArea(20, 32);
-	private JList lstProjects;
-	private JTextArea txtMessages = new JTextArea(20, 40);
-	private JButton btnImportReads;
-	private JButton btnClearMessages = new JButton("Clear messages");
+	protected JTextArea txtReadList = new JTextArea(20, 32);
+	protected JList lstProjects;
+	protected JTextArea txtMessages = new JTextArea(20, 40);
+	protected JButton btnImportReads;
+	protected JButton btnClearMessages = new JButton("Clear messages");
 	
-	private ProjectListModel plm;
+	protected ProjectListModel plm;
 	
-	private MinervaAbstractAction actionClose;
-	private MinervaAbstractAction actionImportReads;
-	private MinervaAbstractAction actionGetReadsFromFile;
-	private MinervaAbstractAction actionHelp;
-	private MinervaAbstractAction actionRefresh;
+	protected MinervaAbstractAction actionImportReads;
+	protected MinervaAbstractAction actionGetReadsFromFile;
 	
-	private JFileChooser fileChooser = new JFileChooser();
+	protected JFileChooser fileChooser = new JFileChooser();
 
 	ArcturusDatabase adb;
 
-	public ImportReadsPanel(ArcturusDatabase adb) {
+	public ImportReadsPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
+		super(parent);
+		
 		this.adb = adb;
 		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -146,15 +144,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		add(panel);
 	}
 	
-	private void createActions() {
-		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
-				new Integer(KeyEvent.VK_C),
-				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-					public void actionPerformed(ActionEvent e) {
-						closePanel();
-					}			
-		};
-		
+	protected void createActions() {
 		actionGetReadsFromFile = new MinervaAbstractAction("Open file of read names",
 				null, "Open file of read names", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
@@ -172,93 +162,30 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		};
 		
 		actionImportReads.setEnabled(false);
+	}
+
+	protected boolean addClassSpecificFileMenuItems(JMenu menu) {		
+		menu.add(actionGetReadsFromFile);
 		
-		actionRefresh = new MinervaAbstractAction("Refresh",
-				null, "Refresh the display", new Integer(KeyEvent.VK_R),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F5, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				refresh();
-			}
-		};
-	
-		actionHelp = new MinervaAbstractAction("Help",
-				null, "Help", new Integer(KeyEvent.VK_H),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F1, 0)) {
-			public void actionPerformed(ActionEvent e) {
-				Minerva.displayHelp();
-			}
-		};
+		return true;
 	}
 
-	private void createMenus() {
-		createFileMenu();
-		createEditMenu();
-		createViewMenu();
-		menubar.add(Box.createHorizontalGlue());
-		createHelpMenu();
+	protected void addClassSpecificViewMenuItems(JMenu menu) {		
 	}
 
-	private JMenu createMenu(String name, int mnemonic, String description) {
-		JMenu menu = new JMenu(name);
-
-		menu.setMnemonic(mnemonic);
-
-		if (description != null)
-			menu.getAccessibleContext().setAccessibleDescription(description);
-
-		return menu;
+	protected void createClassSpecificMenus() {
 	}
 
-	private void createFileMenu() {
-		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
-		menubar.add(fileMenu);
-		
-		fileMenu.add(actionGetReadsFromFile);
-		
-		fileMenu.addSeparator();
-				
-		fileMenu.add(actionClose);
-		
-		fileMenu.addSeparator();
-		
-		fileMenu.add(Minerva.getQuitAction());
-	}
-	
-	private void createEditMenu() {
-		JMenu editMenu = createMenu("Edit", KeyEvent.VK_E, "Edit");
-		menubar.add(editMenu);
-	}
-	
-	private void createViewMenu() {
-		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
-		menubar.add(viewMenu);
-	}
-
-	private void createHelpMenu() {
-		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
-		menubar.add(helpMenu);		
-		
-		helpMenu.add(actionHelp);
-	}
-	
-	private Border etchedTitledBorder(String title) {
+	protected Border etchedTitledBorder(String title) {
 		Border etched = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 		return BorderFactory.createTitledBorder(etched, title);
-	}
-
-	public JMenuBar getMenuBar() {
-		return menubar;
-	}
-
-	public JToolBar getToolBar() {
-		return null;
 	}
 
 	public void refresh() {
 		// Does nothing
 	}
 
-	private void closePanel() {
+	protected void closePanel() {
 		MinervaTabbedPane mtp = MinervaTabbedPane.getTabbedPane(this);
 		mtp.remove(this);
 	}
@@ -271,7 +198,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		}
 	}
 
-	private void getReadsFromFile() {
+	protected void getReadsFromFile() {
 		int rc = fileChooser.showOpenDialog(this);
 		
 		if (rc == JFileChooser.APPROVE_OPTION) {
@@ -279,7 +206,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		}
 	}
 	
-	private void addReadsToList(File file) {
+	protected void addReadsToList(File file) {
 		try {
 			BufferedReader br = new BufferedReader(new FileReader(file));
 			
@@ -297,7 +224,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		}
 	}
 
-	private void importReadsIntoProject() {
+	protected void importReadsIntoProject() {
 		ProjectProxy proxy = (ProjectProxy)lstProjects.getSelectedValue();
 		
 		Project project = proxy.getProject();
@@ -322,7 +249,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 		}
 	}
 	
-	private void updateImportReadsButton() {
+	protected void updateImportReadsButton() {
 		boolean isProjectSelected = !lstProjects.isSelectionEmpty();
 		boolean haveReadsInList = txtReadList.getDocument().getLength() > 0;
 		
@@ -388,7 +315,7 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 	}
 
 	class ProjectProxy implements Comparable {
-		private final Project project;
+		protected final Project project;
 
 		public ProjectProxy(Project project) {
 			this.project = project;
@@ -407,34 +334,8 @@ public class ImportReadsPanel extends JPanel implements MinervaClient {
 			return project.getName().compareToIgnoreCase(that.project.getName());
 		}
 	}
-	
-	public static void main(String[] args) {
-		try {
-			String instance = "test";
-			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-			String organism = "TESTPKN";
-			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-			
-			JFrame frame = new JFrame("Testing ImportReadsPanel");
-			
-			ImportReadsPanel irp = new ImportReadsPanel(adb);
-			
-			frame.getContentPane().add(irp);
-			
-			frame.setJMenuBar(irp.getMenuBar());
-			
-			frame.pack();
-			
-			frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-			
-			irp.setSelectedProject("PKN13");
-			
-			frame.setVisible(true);
-		}
-		catch (Exception e) {
-			e.printStackTrace();
-			System.exit(1);
-		}
-		
+
+	protected boolean isRefreshable() {
+		return false;
 	}
 }
