@@ -79,6 +79,31 @@ echo Cleaning up
 
 rm -f $padded $depadded
 
+
+if ( ! (-e ${projectname}.B) ) then
+
+    echo \!\! -- version ${projectname}.0 kept because no back-up B version found --
+
+endif
+
+
+if ( -z ${projectname}.B ) then
+
+    echo \!\! -- version ${projectname}.0 kept because corrupted B version found --
+
+endif
+
+
+if ( { ${arcturus_home}/utils/isolderthan ${projectname}.B ${projectname}.0 } ) then
+
+    echo -- version ${projectname}.0 will be deleted --
+
+#    rmdb ${projectname} 0
+
+else
+
+    echo \!\! -- version ${projectname}.0 kept because no valid B version found --
+
+endif
+
 exit 0
-
-
