@@ -3,15 +3,11 @@ package uk.ac.sanger.arcturus.gui.contigtable;
 import javax.swing.*;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
-import javax.swing.event.PopupMenuListener;
-import javax.swing.event.PopupMenuEvent;
 
 import java.awt.BorderLayout;
 import java.awt.event.*;
 
 import uk.ac.sanger.arcturus.gui.*;
-import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
-import uk.ac.sanger.arcturus.gui.importreads.*;
 import uk.ac.sanger.arcturus.data.*;
 
 public class ContigTablePanel extends MinervaPanel {
