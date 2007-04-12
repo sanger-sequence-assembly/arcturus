@@ -4,8 +4,6 @@ import java.util.Comparator;
 import java.util.Date;
 
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
-import uk.ac.sanger.arcturus.data.Contig;
-import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 

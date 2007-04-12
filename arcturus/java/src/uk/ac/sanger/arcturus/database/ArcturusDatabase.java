@@ -2,7 +2,6 @@ package uk.ac.sanger.arcturus.database;
 
 import java.sql.*;
 import javax.sql.*;
-import java.util.HashMap;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
