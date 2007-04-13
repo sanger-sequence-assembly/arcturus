@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.Arcturus;
 
 class ProjectTableModel extends AbstractTableModel implements
 		SortableTableModel {
@@ -42,10 +43,10 @@ class ProjectTableModel extends AbstractTableModel implements
 		refresh();
 		sortOnColumn(TOTAL_LENGTH_COLUMN);
 	}
-	
+
 	public void refresh() {
 		projects.clear();
-		
+
 		try {
 			Set projectset = adb.getAllProjects();
 
@@ -56,11 +57,10 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			resort();
 		} catch (SQLException sqle) {
-			sqle.printStackTrace();
-			System.exit(1);
+			Arcturus.logWarning("Error whilst refreshing project table", sqle);
 		}
 	}
-	
+
 	private void resort() {
 		sortOnColumn(lastSortColumn);
 	}
@@ -102,7 +102,7 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case OWNER_COLUMN:
 				return "Owner";
-				
+
 			case LOCKED_COLUMN:
 				return "Lock status";
 
@@ -189,11 +189,11 @@ class ProjectTableModel extends AbstractTableModel implements
 					name = owner.getUID();
 
 				return name;
-				
+
 			case LOCKED_COLUMN:
 				Person lockowner = project.getLockOwner();
-				return (lockowner == null || lockowner.getName() == null ?
-							null : "Locked by " + lockowner.getName());
+				return (lockowner == null || lockowner.getName() == null ? null
+						: "Locked by " + lockowner.getName());
 
 			default:
 				return null;
@@ -304,16 +304,16 @@ class ProjectTableModel extends AbstractTableModel implements
 	public void showAllContigs() {
 		setMinimumReads(0);
 	}
-	
+
 	protected void setMinimumReads(int minreads) {
 		for (Enumeration e = projects.elements(); e.hasMoreElements();) {
 			ProjectProxy proxy = (ProjectProxy) e.nextElement();
 			try {
 				proxy.refreshSummary(0, minreads);
+			} catch (SQLException sqle) {
 			}
-			catch (SQLException sqle) {}
 		}
 
-		sortOnColumn(lastSortColumn);	
+		sortOnColumn(lastSortColumn);
 	}
 }
