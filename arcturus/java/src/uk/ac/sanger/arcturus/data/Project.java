@@ -141,6 +141,10 @@ public class Project extends Core {
 	public void setName(String name) {
 		this.name = name;
 	}
+	
+	public boolean isBin() {
+		return name.equalsIgnoreCase("BIN");
+	}
 
 	public Date getUpdated() {
 		return updated;
