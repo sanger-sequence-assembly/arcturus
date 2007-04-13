@@ -848,6 +848,10 @@ public class ArcturusDatabase {
 
 		return projectManager.getAllProjects();
 	}
+	
+	public Set getProjectsForOwner(Person owner) throws SQLException {
+		return projectManager.getProjectsForOwner(owner);
+	}
 
 	public void refreshProject(Project project) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
