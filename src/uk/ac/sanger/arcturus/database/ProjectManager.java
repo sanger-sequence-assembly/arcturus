@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.database;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import java.sql.*;
@@ -199,6 +200,20 @@ public class ProjectManager extends AbstractManager {
 	public Set getAllProjects() throws SQLException {
 		preloadAllProjects();
 		return new HashSet(hashByID.values());
+	}
+	
+	public Set getProjectsForOwner(Person owner) throws SQLException {
+		preloadAllProjects();
+		
+		HashSet set = new HashSet();
+		
+		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
+			Project project = (Project)iter.next();
+			if (project.getOwner().equals(owner))
+				set.add(project);
+		}
+		
+		return set;
 	}
 
 	public void refreshProject(Project project) throws SQLException {
