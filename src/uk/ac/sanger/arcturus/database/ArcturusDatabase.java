@@ -2,6 +2,8 @@ package uk.ac.sanger.arcturus.database;
 
 import java.sql.*;
 import javax.sql.*;
+
+import java.util.Map;
 import java.util.Set;
 import java.util.zip.DataFormatException;
 
@@ -904,6 +906,18 @@ public class ArcturusDatabase {
 	public ProjectSummary getProjectSummary(Project project)
 			throws SQLException {
 		return projectManager.getProjectSummary(project);
+	}
+	
+	public Map getProjectSummary(int minlen, int minreads) throws SQLException {
+		return projectManager.getProjectSummary(minlen, minreads);
+	}
+	
+	public Map getProjectSummary(int minlen) throws SQLException {
+		return projectManager.getProjectSummary(minlen);
+	}
+	
+	public Map getProjectSummary() throws SQLException {
+		return projectManager.getProjectSummary();
 	}
 
 	public void clearProjectCache() {
