@@ -12,39 +12,56 @@ import java.util.Date;
 public class ProjectProxy {
 	protected Project project = null;
 	protected ProjectSummary summary = null;
-	protected int minlen = 0;
-	protected int minreads = 0;
+	
+	public ProjectProxy(Project project, ProjectSummary summary) {
+		this.project = project;
+		this.summary = summary;
+	}
 
 	public ProjectProxy(Project project) throws SQLException {
 		this.project = project;
-		summary = project.getProjectSummary();
+		
+		if (project != null)
+			summary = project.getProjectSummary();
 	}
 
-	public void refreshSummary(int minlen) throws SQLException {
-		this.minlen = minlen;
-		summary = project.getProjectSummary(minlen);
+	public void refreshSummary(int minlen) throws SQLException {		
+		if (project != null)
+			summary = project.getProjectSummary(minlen);
 	}
 
 	public void refreshSummary() throws SQLException {
-		summary = project.getProjectSummary(minlen);
+		if (project != null)
+			summary = project.getProjectSummary();
 	}
 	
 	public void refreshSummary(int minlen, int minreads) throws SQLException {
-		this.minlen = minlen;
-		this.minreads = minreads;
-		summary = project.getProjectSummary(minlen, minreads);
+		if (project != null)
+			summary = project.getProjectSummary(minlen, minreads);
 	}
 
 	public String getName() {
-		return project.getName();
+		return (project == null) ? null : project.getName();
 	}
 
 	public int getID() {
-		return project.getID();
+		return (project == null) ? -1 : project.getID();
 	}
 
 	public Project getProject() {
 		return project;
+	}
+	
+	public void setProject(Project project) {
+		this.project = project;
+	}
+	
+	public ProjectSummary getSummary() {
+		return summary;
+	}
+	
+	public void setSummary(ProjectSummary summary) {
+		this.summary = summary;
 	}
 
 	public String getAssemblyName() {
@@ -53,34 +70,37 @@ public class ProjectProxy {
 	}
 
 	public int getContigCount() {
-		return summary.getNumberOfContigs();
+		return (summary == null) ? -1 : summary.getNumberOfContigs();
 	}
 
 	public int getMaximumLength() {
-		return summary.getMaximumConsensusLength();
+		return (summary == null) ? -1 : summary.getMaximumConsensusLength();
 	}
 
 	public int getTotalLength() {
-		return summary.getTotalConsensusLength();
+		return (summary == null) ? -1 : summary.getTotalConsensusLength();
 	}
 
 	public int getReadCount() {
-		return summary.getNumberOfReads();
+		return (summary == null) ? -1 : summary.getNumberOfReads();
 	}
 
 	public Date getNewestContigCreated() {
-		return summary.getNewestContigCreated();
+		return (summary == null) ? null : summary.getNewestContigCreated();
 	}
 
 	public Date getMostRecentContigUpdated() {
-		return summary.getMostRecentContigUpdated();
+		return (summary == null) ? null : summary.getMostRecentContigUpdated();
 	}
 	
 	public Date getMostRecentContigTransferOut() {
-		return summary.getMostRecentContigTransferOut();
+		return (summary == null) ? null : summary.getMostRecentContigTransferOut();
 	}
 	
 	public Date getMostRecentContigChange() {
+		if (summary == null)
+			return null;
+		
 		Date contigUpdated = summary.getMostRecentContigUpdated();
 		Date transferOut = summary.getMostRecentContigTransferOut();
 		
@@ -91,18 +111,18 @@ public class ProjectProxy {
 	}
 
 	public Date getProjectUpdated() {
-		return project.getUpdated();
+		return (project == null) ? null : project.getUpdated();
 	}
 
 	public Person getOwner() {
-		return project.getOwner();
+		return (project == null) ? null : project.getOwner();
 	}
 	
 	public Person getLockOwner() {
-		return project.getLockOwner();
+		return (project == null) ? null : project.getLockOwner();
 	}
 	
 	public boolean isMine() {
-		return project.isMine();
+		return (project == null) ? false : project.isMine();
 	}
 }

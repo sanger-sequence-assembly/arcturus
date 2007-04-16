@@ -8,6 +8,7 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.Arcturus;
 
 class ProjectTableModel extends AbstractTableModel implements
@@ -46,13 +47,18 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	public void refresh() {
 		projects.clear();
-
+		
 		try {
+			Map map = adb.getProjectSummary();
+
 			Set projectset = adb.getAllProjects();
 
 			for (Iterator iter = projectset.iterator(); iter.hasNext();) {
 				Project project = (Project) iter.next();
-				projects.add(new ProjectProxy(project));
+				
+				ProjectSummary summary = (ProjectSummary)map.get(new Integer(project.getID()));
+				
+				projects.add(new ProjectProxy(project, summary));
 			}
 
 			resort();
