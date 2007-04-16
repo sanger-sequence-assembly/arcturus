@@ -22,6 +22,8 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected int lastSortColumn = 3;
 	protected ArcturusDatabase adb = null;
 	protected int dateColumnType = CONTIG_UPDATED_DATE;
+	protected int minreads = 0;
+	protected int minlen = 0;
 
 	protected static final int ASSEMBLY_COLUMN = 0;
 	protected static final int PROJECT_COLUMN = 1;
@@ -44,12 +46,12 @@ class ProjectTableModel extends AbstractTableModel implements
 		refresh();
 		sortOnColumn(TOTAL_LENGTH_COLUMN);
 	}
-
+	
 	public void refresh() {
 		projects.clear();
 		
 		try {
-			Map map = adb.getProjectSummary();
+			Map map = adb.getProjectSummary(minlen, minreads);
 
 			Set projectset = adb.getAllProjects();
 
@@ -312,14 +314,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	}
 
 	protected void setMinimumReads(int minreads) {
-		for (Enumeration e = projects.elements(); e.hasMoreElements();) {
-			ProjectProxy proxy = (ProjectProxy) e.nextElement();
-			try {
-				proxy.refreshSummary(0, minreads);
-			} catch (SQLException sqle) {
-			}
-		}
-
-		sortOnColumn(lastSortColumn);
+		this.minreads = minreads;
+		refresh();
 	}
 }
