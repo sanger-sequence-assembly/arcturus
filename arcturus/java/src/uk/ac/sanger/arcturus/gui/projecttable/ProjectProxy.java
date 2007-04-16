@@ -70,19 +70,19 @@ public class ProjectProxy {
 	}
 
 	public int getContigCount() {
-		return (summary == null) ? -1 : summary.getNumberOfContigs();
+		return (summary == null) ? 0 : summary.getNumberOfContigs();
 	}
 
 	public int getMaximumLength() {
-		return (summary == null) ? -1 : summary.getMaximumConsensusLength();
+		return (summary == null) ? 0 : summary.getMaximumConsensusLength();
 	}
 
 	public int getTotalLength() {
-		return (summary == null) ? -1 : summary.getTotalConsensusLength();
+		return (summary == null) ? 0 : summary.getTotalConsensusLength();
 	}
 
 	public int getReadCount() {
-		return (summary == null) ? -1 : summary.getNumberOfReads();
+		return (summary == null) ? 0 : summary.getNumberOfReads();
 	}
 
 	public Date getNewestContigCreated() {
