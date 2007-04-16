@@ -19,7 +19,9 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtByName;
 	private PreparedStatement pstmtByNameAndAssembly;
 	private PreparedStatement pstmtSetAssemblyForProject;
+	private PreparedStatement pstmtProjectSummaryByID;
 	private PreparedStatement pstmtProjectSummary;
+	private PreparedStatement pstmtLastContigTransferOutByID;
 	private PreparedStatement pstmtLastContigTransferOut;
 
 	/**
@@ -47,9 +49,21 @@ public class ProjectManager extends AbstractManager {
 		query = "select count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created),max(updated)"
 				+ " from CURRENTCONTIGS"
 				+ " where project_id = ? and length >= ? and nreads >= ?";
+		pstmtProjectSummaryByID = conn.prepareStatement(query);
+
+		query = "select project_id,count(*),sum(nreads),sum(length),round(avg(length)),round(std(length)),max(length),max(created),max(updated)"
+				+ " from CURRENTCONTIGS"
+				+ " where length >= ? and nreads >= ?"
+				+ " group by project_id";
 		pstmtProjectSummary = conn.prepareStatement(query);
 
 		query = "select max(closed) from CONTIGTRANSFERREQUEST where old_project_id = ? and status = 'done'";
+		pstmtLastContigTransferOutByID = conn.prepareStatement(query);
+
+		query = "select old_project_id,max(closed) from CONTIGTRANSFERREQUEST"
+			+ " where status = 'done'"
+			+ " group by old_project_id";
+		
 		pstmtLastContigTransferOut = conn.prepareStatement(query);
 	}
 
@@ -266,11 +280,11 @@ public class ProjectManager extends AbstractManager {
 			ProjectSummary summary) throws SQLException {
 		int project_id = project.getID();
 
-		pstmtProjectSummary.setInt(1, project_id);
-		pstmtProjectSummary.setInt(2, minlen);
-		pstmtProjectSummary.setInt(3, minreads);
+		pstmtProjectSummaryByID.setInt(1, project_id);
+		pstmtProjectSummaryByID.setInt(2, minlen);
+		pstmtProjectSummaryByID.setInt(3, minreads);
 
-		ResultSet rs = pstmtProjectSummary.executeQuery();
+		ResultSet rs = pstmtProjectSummaryByID.executeQuery();
 
 		if (rs.next()) {
 			summary.setNumberOfContigs(rs.getInt(1));
@@ -286,9 +300,9 @@ public class ProjectManager extends AbstractManager {
 
 		rs.close();
 		
-		pstmtLastContigTransferOut.setInt(1, project_id);
+		pstmtLastContigTransferOutByID.setInt(1, project_id);
 		
-		rs = pstmtLastContigTransferOut.executeQuery();
+		rs = pstmtLastContigTransferOutByID.executeQuery();
 		
 		summary.setMostRecentContigTransferOut(rs.next() ? rs.getTimestamp(1) : null);
 		
@@ -321,5 +335,57 @@ public class ProjectManager extends AbstractManager {
 		getProjectSummary(project, minlen, minreads, summary);
 
 		return summary;
+	}
+	
+	public Map getProjectSummary(int minlen, int minreads) throws SQLException {
+		HashMap map = new HashMap();
+		
+		pstmtProjectSummary.setInt(1, minlen);
+		pstmtProjectSummary.setInt(2, minreads);
+
+		ResultSet rs = pstmtProjectSummary.executeQuery();
+
+		while (rs.next()) {
+			int project_id = rs.getInt(1);
+			
+			ProjectSummary summary = new ProjectSummary();
+				
+			summary.setNumberOfContigs(rs.getInt(2));
+			summary.setNumberOfReads(rs.getInt(3));
+			summary.setTotalConsensusLength(rs.getInt(4));
+			summary.setMeanConsensusLength(rs.getInt(5));
+			summary.setSigmaConsensusLength(rs.getInt(6));
+			summary.setMaximumConsensusLength(rs.getInt(7));
+			summary.setNewestContigCreated(rs.getTimestamp(8));
+			summary.setMostRecentContigUpdated(rs.getTimestamp(9));
+			summary.setMostRecentContigTransferOut(null);
+			
+			map.put(new Integer(project_id), summary);
+		}
+
+		rs.close();
+		
+		rs = pstmtLastContigTransferOut.executeQuery();
+		
+		while (rs.next()) {
+			int project_id = rs.getInt(1);
+			
+			ProjectSummary summary = (ProjectSummary)map.get(new Integer(project_id));
+			
+			if (summary != null)
+				summary.setMostRecentContigTransferOut(rs.getTimestamp(2));
+		}
+		
+		rs.close();
+
+		return map;
+	}
+	
+	public Map getProjectSummary(int minlen) throws SQLException {
+		return getProjectSummary(minlen, 0);
+	}
+	
+	public Map getProjectSummary() throws SQLException {
+		return getProjectSummary(0, 0);
 	}
 }
