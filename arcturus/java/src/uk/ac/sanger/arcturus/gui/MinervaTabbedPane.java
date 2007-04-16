@@ -10,7 +10,7 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
-import uk.ac.sanger.arcturus.gui.contigtransfer.ContigTransferTablePanel;
+import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 
