@@ -16,102 +16,123 @@ public class ContigTransferRequestManager {
 
 	protected PreparedStatement pstmtByRequester = null;
 	protected PreparedStatement pstmtByContigOwner = null;
-	
+
 	/**
-	 * Creates a new ContigTransferRequestManager to provide contig transfer request
-	 * management services to an ArcturusDatabase object.
+	 * Creates a new ContigTransferRequestManager to provide contig transfer
+	 * request management services to an ArcturusDatabase object.
 	 */
 
-	public ContigTransferRequestManager(ArcturusDatabase adb) throws SQLException {
+	public ContigTransferRequestManager(ArcturusDatabase adb)
+			throws SQLException {
 		this.adb = adb;
 
 		conn = adb.getConnection();
 
 		prepareStatements();
 	}
-	
+
 	private void prepareStatements() throws SQLException {
-		String columns= "request_id,contig_id,old_project_id,new_project_id,requester," +
-			"requester_comment,opened,reviewer,reviewer_comment,reviewed,CONTIGTRANSFERREQUEST.status,closed";
-		
+		String columns = "request_id,contig_id,old_project_id,new_project_id,requester,"
+				+ "requester_comment,opened,reviewer,reviewer_comment,reviewed,CONTIGTRANSFERREQUEST.status,closed";
+
 		String query;
 
-		query = "select " + columns +
-			" from CONTIGTRANSFERREQUEST" +
-			" where requester = ? and status = ?";
+		query = "select "
+				+ columns
+				+ " from CONTIGTRANSFERREQUEST left join PROJECT on new_project_id=project_id"
+				+ " where (requester = ? or owner = ?) and opened > date_sub(now(), interval 14 day)";
 
 		pstmtByRequester = conn.prepareStatement(query);
 
-		query = "select " + columns +
-			" from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id" +
-			" where owner = ? and CONTIGTRANSFERREQUEST.status = ?";
-		
+		query = "select "
+				+ columns
+				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
+				+ " where owner = ? and opened > date_sub(now(), interval 14 day)";
+
 		pstmtByContigOwner = conn.prepareStatement(query);
 	}
 
-	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user, int mode) throws SQLException {
-		PreparedStatement pstmt = (mode == ArcturusDatabase.USER_IS_REQUESTER) ? pstmtByRequester : pstmtByContigOwner;
-		
-		pstmt.setString(1, user.getUID());
-		pstmt.setString(2, "pending");
+	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user,
+			int mode) throws SQLException {
+		PreparedStatement pstmt;
+
+		if (mode == ArcturusDatabase.USER_IS_REQUESTER) {
+			pstmt = pstmtByRequester;
+			pstmt.setString(1, user.getUID());
+			pstmt.setString(2, user.getUID());
+		} else {
+			pstmt = pstmtByContigOwner;
+			pstmt.setString(1, user.getUID());
+		}
 		
 		ResultSet rs = pstmt.executeQuery();
-		
+
 		ContigTransferRequest[] transfers = getTransfersFromResultSet(rs);
-		
+
 		rs.close();
-		
+
 		return transfers;
 	}
-	
-	private ContigTransferRequest[] getTransfersFromResultSet(ResultSet rs) throws SQLException {
+
+	private ContigTransferRequest[] getTransfersFromResultSet(ResultSet rs)
+			throws SQLException {
 		Vector v = new Vector();
-		
+
 		Contig contig = null;
-		
+
 		while (rs.next()) {
 			int requestId = rs.getInt(1);
-			
+
 			int contigId = rs.getInt(2);
 			try {
-				contig = adb.getContigByID(contigId, ArcturusDatabase.CONTIG_BASIC_DATA);
+				contig = adb.getContigByID(contigId,
+						ArcturusDatabase.CONTIG_BASIC_DATA);
 			} catch (DataFormatException dfe) {
 				Arcturus.logWarning("Failed to get contig " + contigId, dfe);
 				contig = null;
 			}
 			
+			if (contig == null) {
+				System.err.println("Contig transfer request " + requestId +
+						" refers to a non-existent contig " + contigId);
+				continue;
+			}
+
 			int oldProjectId = rs.getInt(3);
 			Project oldProject = adb.getProjectByID(oldProjectId);
-			
+
 			int newProjectId = rs.getInt(4);
 			Project newProject = adb.getProjectByID(newProjectId);
-			
+
 			String requesterUid = rs.getString(5);
 			Person requester = PeopleManager.findPerson(requesterUid);
-			
+
 			String requesterComment = rs.getString(6);
-			
-			ContigTransferRequest request = new ContigTransferRequest(requestId, contig,
-					oldProject, newProject, requester, requesterComment);
-		
+
+			ContigTransferRequest request = new ContigTransferRequest(
+					requestId, contig, oldProject, newProject, requester,
+					requesterComment);
+
 			request.setOpenedDate(rs.getTimestamp(7));
-			
+
 			String reviewerUid = rs.getString(8);
-			Person reviewer = reviewerUid != null ? PeopleManager.findPerson(reviewerUid) : null;
-			
+			Person reviewer = reviewerUid != null ? PeopleManager
+					.findPerson(reviewerUid) : null;
+
 			request.setReviewer(reviewer);
-			
+
 			request.setReviewerComment(rs.getString(9));
-			
+
 			request.setReviewedDate(rs.getTimestamp(10));
-			
+
 			request.setStatusAsString(rs.getString(11));
-			
+
 			request.setClosedDate(rs.getTimestamp(12));
-			
+
 			v.add(request);
 		}
-		
-		return (ContigTransferRequest[])(v.toArray(new ContigTransferRequest[0]));
+
+		return (ContigTransferRequest[]) (v
+				.toArray(new ContigTransferRequest[0]));
 	}
 }
