@@ -12,3 +12,9 @@ jdbcloghandler.port=15001
 jdbcloghandler.database=arcturus
 jdbcloghandler.username=arcturus
 jdbcloghandler.password=***REMOVED***
+
+mail.smtp.host=mail.sanger.ac.uk
+mail.smtp.auth=false
+
+mailhandler.to=adh@sanger.ac.uk
+mailhandler.domain=sanger.ac.uk
