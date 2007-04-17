@@ -1,10 +1,18 @@
 package uk.ac.sanger.arcturus.logging;
 
 import uk.ac.sanger.arcturus.Arcturus;
-import java.util.logging.Level;
+import java.util.logging.*;
 
 public class LogTester {
 	public static void main(String[] args) {
+		Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+		
+		Handler mailhandler = new MailHandler(null);
+		
+		mailhandler.setLevel(Level.WARNING);
+		
+		logger.addHandler(mailhandler);
+		
 		Arcturus.logWarning("Starting");
 
 		for (int j = 0; j < 3; j++) {
