@@ -11,6 +11,7 @@ import javax.swing.border.*;
 import javax.swing.event.*;
 
 import java.sql.SQLException;
+import java.util.StringTokenizer;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
@@ -189,12 +190,15 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 
 	protected void findReads() {
 		String text = txtReadList.getText();
-		String regex = "\\s";
 		
-		String[] readnames = text.split(regex);
+		StringTokenizer st = new StringTokenizer(text);
 		
-		for (int i = 0; i < readnames.length; i++)
-			readnames[i] = readnames[i].trim();
+		int wordcount = st.countTokens();
+		
+		String[] readnames = new String[wordcount];
+		
+		for (int i = 0; i < wordcount; i++)
+			readnames[i] = st.nextToken();
 		
 		Task task = new Task(readFinder, readnames, this);
 		

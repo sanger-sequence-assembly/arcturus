@@ -230,12 +230,15 @@ public class ImportReadsPanel extends MinervaPanel {
 		Project project = proxy.getProject();
 		
 		String text = txtReadList.getText();
-		String regex = "\\s";
 		
-		String[] readnames = text.split(regex);
+		StringTokenizer st = new StringTokenizer(text);
 		
-		for (int i = 0; i < readnames.length; i++)
-			readnames[i] = readnames[i].trim();
+		int wordcount = st.countTokens();
+		
+		String[] readnames = new String[wordcount];
+		
+		for (int i = 0; i < wordcount; i++)
+			readnames[i] = st.nextToken();
 
 		txtMessages.append("There are " + readnames.length + " read names in the list\n");
 		txtMessages.append("They will be imported into " + project.getName() + "\n\n");
