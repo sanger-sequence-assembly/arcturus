@@ -181,6 +181,12 @@ public class OligoFinder {
 				listener.oligoFinderUpdate(event);
 			}
 		}
+		
+		if (listener != null) {
+			event.setEvent(OligoFinderEvent.FINISH, null, null, -1,
+					false);
+			listener.oligoFinderUpdate(event);
+		}
 
 		return found;
 	}

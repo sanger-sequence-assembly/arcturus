@@ -297,6 +297,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 	}
 
 	protected void findOligoMatches() {
+		actionFindOligos.setEnabled(false);
+		
 		Object[] selected = lstProjects.getSelectedValues();
 
 		Project[] projects = new Project[selected.length];
@@ -435,6 +437,17 @@ public class OligoFinderPanel extends MinervaPanel implements
 				setProgressBarToDone(pbarReadProgress);
 				postMessage("Finished.\n");
 				reportMatches();
+				break;
+
+			case OligoFinderEvent.FINISH:
+				SwingUtilities.invokeLater(new Runnable() {
+					public void run() {
+						actionFindOligos.setEnabled(true);
+						pbarContigProgress.setValue(0);
+						pbarReadProgress.setValue(0);
+					}
+				});
+				actionFindOligos.setEnabled(true);
 				break;
 
 			default:
