@@ -13,6 +13,7 @@ public class OligoFinderEvent {
 	public static final int FINISH_READS = 7; 
 	public static final int HASH_MATCH = 8;
 	public static final int ENUMERATING_FREE_READS = 9;
+	public static final int FINISH = 10;
 	
 	private OligoFinder source;
 	private int type = UNKNOWN;
