@@ -12,7 +12,7 @@ The "scripts" directory contains wrapper scripts which run the main
 applications and test suites.
 
 There is an Ant build file named build.xml which puts compiled classes
-in build/classes and the main Arcturus JAR file in build/lib.
+in build/classes and the main Arcturus JAR file in the top-level directory.
 
 REQUIRED JAR FILES
 
@@ -23,6 +23,10 @@ Arcturus currently requires the following external JAR files:
   * The Oracle JDBC library.
   
   * The Java Look-and-Feel Graphics Repository library.
+  
+  * The JavaMail library.
+  
+  * The Java Activation Framework library (used by JavaMail).
 
 They are kept in the "lib" sub-directory.  The manifest file for
 the Arcturus JAR file expects them to be in this location.
@@ -76,13 +80,17 @@ uk.ac.sanger.arcturus.test contains test programs which are not generally
 intended to be part of the production Arcturus system.
 
 uk.ac.sanger.arcturus.logging contains classes related to the Java logging
-framework.
+framework.  These include handlers which can log errors to a database,
+email a report to a user, and display a warning dialog on the screen.
 
 uk.ac.sanger.arcturus.scaffolding contains classes which build and
 manipulate contig scaffolds.
 
 uk.ac.sanger.arcturus.people contains classes which encapsulate the
 identity of people involved in assembly projects.
+
+uk.ac.sanger.arcturus.oligo contains a package which can be used to
+search reads and contigs for oligo sequences.
 
 uk.ac.sanger.arcturus.utils contains utility classes which do not neatly
 fit anywhere else in the framework.
