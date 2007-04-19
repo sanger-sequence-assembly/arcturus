@@ -56,18 +56,6 @@ if (! -d ${HOME}/.arcturus/logging ) then
     mkdir ${HOME}/.arcturus/logging
 endif
 
-if ( $?LOGGING_PROPERTIES ) then
-    echo Configuring logging from ${LOGGING_PROPERTIES}
-    set EXTRA_OPTS="${EXTRA_OPTS} -Djava.util.logging.config.file=${LOGGING_PROPERTIES}"
-else
-    if ( -f ${ARCTURUS_HOME}/logging.properties ) then
-	echo Configuring logging from ${ARCTURUS_HOME}/logging.properties
-	set EXTRA_OPTS="${EXTRA_OPTS} -Djava.util.logging.config.file=${ARCTURUS_HOME}/logging.properties"
-    else
-	echo No logging configuration file specified
-    endif
-endif
-
 set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.home=${ARCTURUS_HOME} -Darcturus.site.home=${ARCTURUS_SITE_HOME}"
 
 # Add the JDBC and JNDI options to the run-time options
