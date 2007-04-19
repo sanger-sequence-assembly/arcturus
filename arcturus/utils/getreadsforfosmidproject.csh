@@ -5,8 +5,10 @@ if ( $#argv < 2 ) then
   exit 1
 endif
 
+set mysql_home=/nfs/pathsoft/external/mysql-standard-4.1.13a/bin
+
 set db=$1
 set proj=$2
 
-mysql -h mcs1a -P 15001 -u arcturus --password=***REMOVED*** \
+${mysql_home}/mysql -h mcs1a -P 15001 -u arcturus --password=***REMOVED*** \
   --skip-column-names --batch -e "call procfreereadsbynamelike('${proj}%')" $db
