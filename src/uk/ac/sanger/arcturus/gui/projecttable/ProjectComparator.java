@@ -207,9 +207,9 @@ public class ProjectComparator implements Comparator {
 		int diff = 0;
 
 		if (p1 == null || p1.getOwner() == null)
-			diff = 1;
-		else if (p2 == null || p2.getOwner() == null)
 			diff = -1;
+		else if (p2 == null || p2.getOwner() == null)
+			diff = 1;
 		else
 			diff = p2.getOwner().compareTo(p1.getOwner());
 

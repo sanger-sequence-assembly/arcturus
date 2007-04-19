@@ -219,11 +219,15 @@ public class ProjectManager extends AbstractManager {
 	public Set getProjectsForOwner(Person owner) throws SQLException {
 		preloadAllProjects();
 		
+		if (owner == null)
+			return null;
+		
 		HashSet set = new HashSet();
 		
 		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
 			Project project = (Project)iter.next();
-			if (project.getOwner().equals(owner))
+			
+			if (owner.equals(project.getOwner()))
 				set.add(project);
 		}
 		
