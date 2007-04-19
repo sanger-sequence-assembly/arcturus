@@ -234,6 +234,9 @@ public class ImportReadsPanel extends MinervaPanel {
 		
 		String[] readnames = text.split(regex);
 		
+		for (int i = 0; i < readnames.length; i++)
+			readnames[i] = readnames[i].trim();
+
 		txtMessages.append("There are " + readnames.length + " read names in the list\n");
 		txtMessages.append("They will be imported into " + project.getName() + "\n\n");
 		
