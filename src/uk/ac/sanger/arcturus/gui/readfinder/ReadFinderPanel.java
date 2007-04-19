@@ -193,6 +193,9 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		String[] readnames = text.split(regex);
 		
+		for (int i = 0; i < readnames.length; i++)
+			readnames[i] = readnames[i].trim();
+		
 		Task task = new Task(readFinder, readnames, this);
 		
 		task.start();
