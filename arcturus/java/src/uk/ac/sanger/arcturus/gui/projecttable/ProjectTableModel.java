@@ -46,10 +46,10 @@ class ProjectTableModel extends AbstractTableModel implements
 		refresh();
 		sortOnColumn(TOTAL_LENGTH_COLUMN);
 	}
-	
+
 	public void refresh() {
 		projects.clear();
-		
+
 		try {
 			Map map = adb.getProjectSummary(minlen, minreads);
 
@@ -57,9 +57,10 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			for (Iterator iter = projectset.iterator(); iter.hasNext();) {
 				Project project = (Project) iter.next();
-				
-				ProjectSummary summary = (ProjectSummary)map.get(new Integer(project.getID()));
-				
+
+				ProjectSummary summary = (ProjectSummary) map.get(new Integer(
+						project.getID()));
+
 				projects.add(new ProjectProxy(project, summary));
 			}
 
@@ -192,11 +193,16 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case OWNER_COLUMN:
 				Person owner = project.getOwner();
-				String name = owner.getName();
-				if (name == null)
-					name = owner.getUID();
 
-				return name;
+				if (owner == null)
+					return null;
+				else {
+					String name = owner.getName();
+					if (name == null)
+						name = owner.getUID();
+
+					return name;
+				}
 
 			case LOCKED_COLUMN:
 				Person lockowner = project.getLockOwner();

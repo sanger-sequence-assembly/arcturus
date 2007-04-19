@@ -55,6 +55,9 @@ public class PeopleManager {
 	}
 
 	public static Person findPerson(String uid) {
+		if (uid == null)
+			return null;
+		
 		Person person = (Person) uidToPerson.get(uid);
 
 		if (person != null)
