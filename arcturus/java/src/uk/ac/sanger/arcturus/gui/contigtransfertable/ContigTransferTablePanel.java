@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.gui.contigtransfertable;
 
+import java.awt.BorderLayout;
+
 import javax.swing.*;
 import javax.swing.border.*;
 
@@ -17,7 +19,7 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	public ContigTransferTablePanel(ArcturusDatabase adb, Person user, MinervaTabbedPane mtp) {
 		super(mtp);
 		
-		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		setLayout(new BorderLayout());
 		
 		modelRequester = new ContigTransferTableModel(adb, user, ArcturusDatabase.USER_IS_REQUESTER);
 
@@ -28,8 +30,6 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		Border loweredetched1 = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
 		Border title1 = BorderFactory.createTitledBorder(loweredetched1, "Requests I have made");
 		scrollpane1.setBorder(title1);
-		
-		add(scrollpane1);
 
 		modelContigOwner = new ContigTransferTableModel(adb, user, ArcturusDatabase.USER_IS_CONTIG_OWNER);
 
@@ -41,7 +41,11 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		Border title2 = BorderFactory.createTitledBorder(loweredetched2, "Requests for contigs I own");
 		scrollpane2.setBorder(title2);
 		
-		add(scrollpane2);
+		JSplitPane splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollpane1, scrollpane2);
+		
+		add(splitpane, BorderLayout.CENTER);
+		
+		splitpane.setDividerLocation(0.5);
 		
 		createActions();
 
