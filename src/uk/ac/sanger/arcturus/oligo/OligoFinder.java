@@ -112,7 +112,7 @@ public class OligoFinder {
 		}
 	}
 
-	public int findMatches(Oligo[] oligos, Contig[] contigs,
+	public synchronized int findMatches(Oligo[] oligos, Contig[] contigs,
 			boolean searchFreeReads) throws SQLException {
 		int found = 0;
 		Task task = null;
