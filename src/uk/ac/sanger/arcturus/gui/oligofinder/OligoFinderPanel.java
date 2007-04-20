@@ -17,7 +17,7 @@ import java.util.*;
 import java.io.*;
 import java.text.*;
 
-public class OligoFinderPanel extends MinervaPanel implements 
+public class OligoFinderPanel extends MinervaPanel implements
 		OligoFinderEventListener {
 	protected OligoFinder finder;
 
@@ -36,22 +36,24 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected MinervaAbstractAction actionFindOligos;
 	protected MinervaAbstractAction actionGetOligosFromFile;
 
+	protected boolean searchInProgress = false;
+
 	protected JFileChooser fileChooser = new JFileChooser();
 
 	protected int bpdone;
 
 	protected boolean showHashMatch = false;
-	
+
 	protected HashMap oligomatches = new HashMap();
-	
+
 	protected DecimalFormat df = new DecimalFormat();
 
 	public OligoFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
 		super(parent);
-		
+
 		df.setGroupingSize(3);
 		df.setGroupingUsed(true);
-		
+
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
 		finder = new OligoFinder(adb, this);
@@ -87,10 +89,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 		JPanel panel = new JPanel(new BorderLayout());
 
 		panel.add(scrollpane, BorderLayout.CENTER);
-		
+
 		JButton btnClearOligos = new JButton("Clear oligos");
 		panel.add(btnClearOligos, BorderLayout.SOUTH);
-		
+
 		btnClearOligos.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				txtOligoList.setText("");
@@ -150,7 +152,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 				}
 			}
 		});
-		
+
 		cbFreeReads.setSelected(false);
 		panel.add(cbFreeReads);
 
@@ -159,41 +161,41 @@ public class OligoFinderPanel extends MinervaPanel implements
 				updateFindOligosButton();
 			}
 		});
-	
+
 		add(panel);
-		
+
 		panel = new JPanel(new GridBagLayout());
 		GridBagConstraints gbc = new GridBagConstraints();
-		
+
 		gbc.gridx = 0;
-		
+
 		panel.add(new JLabel("Contigs: "), gbc);
-		
+
 		gbc.gridx = GridBagConstraints.RELATIVE;
 		gbc.gridwidth = GridBagConstraints.REMAINDER;
-		
+
 		panel.add(pbarContigProgress, gbc);
 
 		pbarContigProgress.setStringPainted(true);
-		
+
 		Dimension d = pbarContigProgress.getPreferredSize();
 		d.width = 600;
 		pbarContigProgress.setPreferredSize(d);
-		
+
 		gbc.gridx = 0;
 		gbc.gridwidth = 1;
-	
+
 		panel.add(new JLabel("Reads: "), gbc);
-		
+
 		gbc.gridx = GridBagConstraints.RELATIVE;
 		gbc.gridwidth = GridBagConstraints.REMAINDER;
-	
+
 		panel.add(pbarReadProgress, gbc);
 
 		pbarReadProgress.setStringPainted(true);
-		
+
 		pbarReadProgress.setPreferredSize(d);
-	
+
 		add(panel);
 
 		scrollpane = new JScrollPane(txtMessages);
@@ -297,8 +299,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 	}
 
 	protected void findOligoMatches() {
-		actionFindOligos.setEnabled(false);
-		
+		txtOligoList.setEditable(false);
+		searchInProgress = true;
+		updateFindOligosButton();
+
 		Object[] selected = lstProjects.getSelectedValues();
 
 		Project[] projects = new Project[selected.length];
@@ -318,9 +322,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 						+ oligos[i].getSequence() + "\n");
 
 		txtMessages.append("\n\n");
-		
+
 		boolean freereads = cbFreeReads.isSelected();
-		
+
 		Task task = new Task(finder, oligos, projects, freereads);
 
 		task.start();
@@ -332,7 +336,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 		protected final Project[] projects;
 		protected boolean freereads;
 
-		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects, boolean freereads) {
+		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects,
+				boolean freereads) {
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
@@ -388,18 +393,20 @@ public class OligoFinderPanel extends MinervaPanel implements
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarContigProgress, value);
-				postMessage("\nStarting oligo search in " + df.format(value) + " bp of contig consensus sequence\n");
+				postMessage("\nStarting oligo search in " + df.format(value)
+						+ " bp of contig consensus sequence\n");
 				break;
-				
+
 			case OligoFinderEvent.ENUMERATING_FREE_READS:
 				postMessage("Making a list of free reads.  This may take some time.  Please be patient.\n");
 				break;
-				
+
 			case OligoFinderEvent.START_READS:
 				oligomatches.clear();
 				bpdone = 0;
 				initProgressBar(pbarReadProgress, value);
-				postMessage("\nStarting oligo search in " + df.format(value) + " free reads\n");
+				postMessage("\nStarting oligo search in " + df.format(value)
+						+ " free reads\n");
 				break;
 
 			case OligoFinderEvent.START_SEQUENCE:
@@ -445,98 +452,106 @@ public class OligoFinderPanel extends MinervaPanel implements
 						actionFindOligos.setEnabled(true);
 						pbarContigProgress.setValue(0);
 						pbarReadProgress.setValue(0);
+						searchInProgress = false;
+						updateFindOligosButton();
+						txtOligoList.setEditable(true);
 					}
 				});
-				actionFindOligos.setEnabled(true);
 				break;
 
 			default:
 				break;
 		}
 	}
-	
+
 	protected void addMatch(OligoFinderEvent event) {
 		Oligo oligo = event.getOligo();
-		
-		OligoMatch match = new OligoMatch(oligo, event.getDNASequence(),
-				event.getValue(), event.isForward());
-		
+
+		OligoMatch match = new OligoMatch(oligo, event.getDNASequence(), event
+				.getValue(), event.isForward());
+
 		if (!oligomatches.containsKey(oligo))
 			oligomatches.put(oligo, new HashSet());
-		
-		HashSet matchset = (HashSet)oligomatches.get(oligo);
-		
+
+		HashSet matchset = (HashSet) oligomatches.get(oligo);
+
 		matchset.add(match);
 	}
-	
+
 	protected void reportMatches() {
 		Set oligoset = oligomatches.keySet();
-		
+
 		if (oligoset.isEmpty()) {
 			postMessage("\nNo oligo matches were found.\n");
 		} else {
-			Oligo[] oligos = (Oligo[])oligoset.toArray(new Oligo[0]);
-	
+			Oligo[] oligos = (Oligo[]) oligoset.toArray(new Oligo[0]);
+
 			Arrays.sort(oligos);
-		
+
 			for (int i = 0; i < oligos.length; i++)
-				reportMatchesForOligo(oligos[i], (Set)oligomatches.get(oligos[i]));
+				reportMatchesForOligo(oligos[i], (Set) oligomatches
+						.get(oligos[i]));
 		}
 	}
-	
+
 	protected void reportMatchesForOligo(Oligo oligo, Set matchset) {
-		OligoMatch[] matches = (OligoMatch[])matchset.toArray(new OligoMatch[0]);
-		
+		OligoMatch[] matches = (OligoMatch[]) matchset
+				.toArray(new OligoMatch[0]);
+
 		Arrays.sort(matches, new OligoMatchComparator());
-		
+
 		String ordinal;
-		
+
 		switch (matches.length) {
 			case 1:
 				ordinal = "once";
 				break;
-				
+
 			case 2:
 				ordinal = "twice";
 				break;
-				
+
 			default:
 				ordinal = matches.length + " times";
 				break;
 		}
-		
-		postMessage("\n\nOligo " + oligo.getName() + " matches " + ordinal + "\n");
-		
+
+		postMessage("\n\nOligo " + oligo.getName() + " matches " + ordinal
+				+ "\n");
+
 		for (int i = 0; i < matches.length; i++) {
 			Contig contig = matches[i].getContig();
-			
+
 			if (contig != null)
-				postMessage("    CONTIG " + contig.getID() + " (" + contig.getName() + ", " +
-						df.format(contig.getLength()) + " bp, in " + contig.getProject().getName() + ")");
-			
+				postMessage("    CONTIG " + contig.getID() + " ("
+						+ contig.getName() + ", "
+						+ df.format(contig.getLength()) + " bp, in "
+						+ contig.getProject().getName() + ")");
+
 			Read read = matches[i].getRead();
-			
+
 			if (read != null)
 				postMessage("    READ " + read.getName());
-			
-			postMessage(" from " + df.format(matches[i].getOffset() + 1) + " in ");
+
+			postMessage(" from " + df.format(matches[i].getOffset() + 1)
+					+ " in ");
 			postMessage(matches[i].isForward() ? "forward" : "reverse");
 			postMessage(" direction.\n");
 		}
 	}
-	
+
 	class OligoMatchComparator implements Comparator {
 		public int compare(Object o1, Object o2) {
-			OligoMatch m1 = (OligoMatch)o1;
-			OligoMatch m2 = (OligoMatch)o2;
-			
+			OligoMatch m1 = (OligoMatch) o1;
+			OligoMatch m2 = (OligoMatch) o2;
+
 			int rc = m1.getID() - m2.getID();
-			
+
 			if (rc != 0)
 				return rc;
-			
+
 			return m1.getOffset() - m2.getOffset();
-		}		
+		}
 	}
 
 	protected void postMessage(final String message) {
@@ -564,7 +579,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 			}
 		});
 	}
-	
+
 	protected void setProgressBarToDone(final JProgressBar pbar) {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
@@ -572,7 +587,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 				pbar.setValue(value);
 			}
 		});
-	
+
 	}
 
 	protected void updateFindOligosButton() {
@@ -580,7 +595,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 		boolean haveOligosInList = txtOligoList.getDocument().getLength() > 0;
 		boolean scanFreeReads = cbFreeReads.isSelected();
 
-		actionFindOligos.setEnabled((isProjectSelected || scanFreeReads) && haveOligosInList);
+		actionFindOligos.setEnabled(!searchInProgress
+				&& (isProjectSelected || scanFreeReads) && haveOligosInList);
 	}
 
 	public boolean setSelectedProject(String name) {
