@@ -1,6 +1,9 @@
 #!/bin/csh -f
 
 set basedir=`dirname $0`
+
+setenv JAVA_OPTS "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8888 -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false"
+
 source ${basedir}/setup.csh
 
-java ${JAVA_OPTS} -jar ${ARCTURUS_JAR} $*
+/software/bin/java ${JAVA_OPTS} -jar ${ARCTURUS_JAR} $*
