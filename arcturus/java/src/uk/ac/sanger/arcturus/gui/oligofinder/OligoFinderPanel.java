@@ -327,6 +327,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 		Task task = new Task(finder, oligos, projects, freereads);
 
+		task.setName("OligoSearch");
 		task.start();
 	}
 

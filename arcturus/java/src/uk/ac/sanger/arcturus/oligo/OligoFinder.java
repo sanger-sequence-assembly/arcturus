@@ -119,6 +119,7 @@ public class OligoFinder {
 
 		if (searchFreeReads) {
 			task = new Task();
+			task.setName("OligoFinder:FreeReadSearch");
 			task.start();
 
 			if (listener != null) {
