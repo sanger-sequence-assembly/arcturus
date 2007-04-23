@@ -34,10 +34,17 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
 		
+		String name = "@" + Integer.toHexString(hashCode());
+		
+		if (dataSource instanceof MysqlDataSource) {
+			MysqlDataSource mds = (MysqlDataSource)dataSource;
+			name = mds.getDatabaseName();
+		}
+
 		ObjectName cpName = null;
 		
 		try {
-			cpName = new ObjectName("ConnectionPool");
+			cpName = new ObjectName("ConnectionPool:name=" + name);
 		} catch (MalformedObjectNameException e) {
 			Arcturus.logWarning("Failed to create ObjectName", e);
 		}
