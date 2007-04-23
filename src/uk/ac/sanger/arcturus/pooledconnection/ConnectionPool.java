@@ -6,7 +6,7 @@ import javax.sql.*;
 
 import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
-public class ConnectionPool {
+public class ConnectionPool implements ConnectionPoolMBean {
 	public final static long DEFAULT_TIMEOUT = 60000;
 	private Vector connections;
 	private DataSource dataSource;
@@ -109,5 +109,21 @@ public class ConnectionPool {
 				pool.reapConnections();
 			}
 		}
+	}
+
+	public synchronized int getActiveConnectionCount() {
+		int inuse = 0;
+		
+		for (int i = 0; i < connections.size(); i++) {
+			PooledConnection c = (PooledConnection) connections.elementAt(i);
+			if (c.inUse())
+				inuse++;
+		}
+
+		return inuse;
+	}
+
+	public synchronized int getConnectionCount() {
+		return connections.size();
 	}
 }
