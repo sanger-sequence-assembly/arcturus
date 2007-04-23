@@ -4,6 +4,12 @@ import java.sql.*;
 import java.util.*;
 import javax.sql.*;
 
+import javax.management.*;
+
+import uk.ac.sanger.arcturus.Arcturus;
+
+import java.lang.management.*;
+
 import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class ConnectionPool implements ConnectionPoolMBean {
@@ -27,6 +33,22 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		connections = new Vector(poolsize);
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
+		
+		ObjectName cpName = null;
+		
+		try {
+			cpName = new ObjectName("ConnectionPool");
+		} catch (MalformedObjectNameException e) {
+			Arcturus.logWarning("Failed to create ObjectName", e);
+		}
+		
+		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+		
+		try {
+			mbs.registerMBean(this, cpName);
+		} catch (Exception e) {
+			Arcturus.logWarning("Failed to register connection pool as MBean", e);
+		}
 	}
 	
 	private void initDataSource() {
