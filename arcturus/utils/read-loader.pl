@@ -213,10 +213,6 @@ if (!$noexclude) {
     $logger->info("$nr readnames found in database $organism");
 }
 
-unless ($PARS{maxreadid} || $PARS{aspedbefore} || $PARS{aspedafter}) {
-    $PARS{minreadid} = 'auto' unless defined($PARS{minreadid});
-}
-
 #----------------------------------------------------------------
 # Build the ReadFactory instance.
 #----------------------------------------------------------------
