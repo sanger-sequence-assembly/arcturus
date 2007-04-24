@@ -57,7 +57,7 @@ public class ContigTransferRequestManager {
 		pstmtByContigOwner = conn.prepareStatement(query);
 
 		query = "select " + columns
-				+ " from CONTIGTRANSFERREQUEST left join PROJECT"
+				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
 				+ " where request_id = ?";
 
 		pstmtByID = conn.prepareStatement(query);
@@ -67,7 +67,7 @@ public class ContigTransferRequestManager {
 
 		pstmtCountActiveRequestsByContigId = conn.prepareStatement(query);
 
-		query = "insert into CONTIGTRANSFERREQUEST(contig_id,old_project_id,new_project_id,requester,opened"
+		query = "insert into CONTIGTRANSFERREQUEST(contig_id,old_project_id,new_project_id,requester,opened)"
 				+ " values(?,?,?,?,NOW())";
 
 		pstmtInsertNewRequest = conn.prepareStatement(query,
@@ -273,10 +273,10 @@ public class ContigTransferRequestManager {
 	protected void checkCanUserTransferBetweenProjects(Person requester,
 			Project fromProject, Project toProject)
 			throws ContigTransferRequestException, SQLException {
-		if (fromProject.getOwner().equals(requester) && toProject.isBin())
+		if (requester.equals(fromProject.getOwner()) && toProject.isBin())
 			return;
 
-		if (toProject.getOwner().equals(requester))
+		if (requester.equals(toProject.getOwner()))
 			return;
 
 		if (adb.hasPrivilege(requester, "move_any_contig"))
