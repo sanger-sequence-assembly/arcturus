@@ -30,4 +30,44 @@ public class ContigTransferRequestException extends Exception {
 	public int getType() {
 		return type;
 	}
+	
+	public String getTypeAsString() {
+		switch (type) {
+			case USER_NOT_AUTHORISED:
+				return "User not authorised";
+				
+			case CONTIG_NOT_CURRENT:
+				return "Cntig not current";
+				
+			case NO_SUCH_CONTIG:
+				return "No such contig";
+				
+			case NO_SUCH_PROJECT:
+				return "No such project";
+				
+			case CONTIG_HAS_MOVED:
+				return "Contig has moved";
+				
+			case PROJECT_IS_LOCKED:
+				return "Project is locked";
+				
+			case CONTIG_ALREADY_REQUESTED:
+				return "Contig already requested";
+				
+			case NO_SUCH_REQUEST:
+				return "No such request";
+				
+			case USER_IS_NULL:
+				return "User is null";
+				
+			case SQL_INSERT_FAILED:
+				return "SQL INSERT failed";
+				
+			case SQL_UPDATE_FAILED:
+				return "SQL UPDATE failed";
+				
+			default:
+				return "Unknown (code=" + type + ")";
+		}
+	}
 }
