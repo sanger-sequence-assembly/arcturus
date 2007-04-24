@@ -49,7 +49,7 @@ Arcturus system from working.
 
 WHICH VERSION OF JAVA?
 
-The Arcturus Java classes require Java 1.4 or higher.
+The Arcturus Java classes require Java 1.5 or higher.
 
 You also need Apache Ant in order to build everything from scratch.
 
