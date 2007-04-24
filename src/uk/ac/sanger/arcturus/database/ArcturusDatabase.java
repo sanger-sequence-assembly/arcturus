@@ -1033,7 +1033,17 @@ public class ArcturusDatabase {
 	public boolean hasPrivilege(Person person, String privilege) throws SQLException {
 		return userManager.hasPrivilege(person, privilege);
 	}
+	
+	/**
+	 * Returns the ContigTransferRequestManager belonging to this ArcturusDatabase.
+	 * 
+	 * @return the ContigTransferRequestManager belonging to this ArcturusDatabase.
+	 */
 
+	public ContigTransferRequestManager getContigTransferRequestManager() {
+		return contigTransferRequestManager;
+	}
+	
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user, int mode) throws SQLException {
 		return contigTransferRequestManager.getContigTransferRequestsByUser(user, mode);
 	}
