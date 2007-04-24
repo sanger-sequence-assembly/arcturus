@@ -206,12 +206,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public void closeResources() {
-		try {
-			adb.getConnection().close();
-		}
-		catch (SQLException sqle) {
-			Arcturus.logWarning(sqle);
-		}
+			adb.closeConnectionPool();
 	}
 	
 	private void closeParentFrame() {
