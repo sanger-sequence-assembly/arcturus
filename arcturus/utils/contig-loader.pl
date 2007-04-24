@@ -596,7 +596,7 @@ while (defined($record = <$CAF>)) {
 
 #$logger->warning("READ tag: $type $trps $trpf $info") if $noload;
 
-            my $tag = new Tag('readtag');
+            my $tag = new Tag('read');
             $tag->setType($type);
             $tag->setPosition($trps,$trpf);
             $tag->setStrand('Forward');
@@ -692,26 +692,26 @@ if ($inew && $debug) {
 # EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
 	elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
 	    $tag->editReplace($5,$3.$4);
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
 	    $tag->editDelete($4,$3); # delete signalled by uc ATCG
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
 	    $tag->editDelete($4,$3); # insert signalled by lc atcg
             $read->addTag($tag);
         }
         elsif ($record =~ /Note\sINFO\s(.*)$/) {
 
 	    my $trpf = $read->getSequenceLength();
-#            my $tag = new Tag('readtag');
+#            my $tag = new Tag('read');
 #            $tag->setType($type);
 #            $tag->setPosition($trps,$trpf);
 #            $tag->setStrand('Forward');
@@ -785,8 +785,8 @@ if ($inew && $debug) {
                 $logger->warning("CONTIG tag detected: $record\n"
 #                $logger->info("CONTIG tag detected: $record\n"
                         . "'$type' '$tcps' '$tcpf' '$info'");
- #$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
-            my $tag = new Tag('contigtag');
+#$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
+            my $tag = new Tag('contig');
             $contig->addTag($tag);
             $tag->setType($type);
             $tag->setPosition($tcps,$tcpf);
@@ -930,6 +930,7 @@ foreach my $identifier (keys %contigs) {
         delete $contigs{$identifier};
         $lastinsertedcontig = $added;
         undef $contig;
+        $number++;
     }
     else {
 #        $adb->clearLastContig();
@@ -941,6 +942,9 @@ foreach my $identifier (keys %contigs) {
 
 $nc = scalar (keys %contigs);
 $logger->info("$nc contigs skipped") if $nc;
+$logger->info("$number contigs loaded");
+
+$adb->putImport($project);
 
 # add the Read tags
 
