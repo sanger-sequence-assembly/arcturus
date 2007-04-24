@@ -158,7 +158,7 @@ public class ContigTransferRequest {
 		this.status = stringToStatus(str);
 	}
 	
-	private int stringToStatus(String str) {
+	public static int stringToStatus(String str) {
 		if (str.equalsIgnoreCase("pending"))
 			return PENDING;
 		
