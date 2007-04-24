@@ -113,6 +113,17 @@ public class ArcturusDatabase {
 
 		createManagers();
 	}
+	
+	/**
+	 * Closes the connection pool belonging to this object.
+	 */
+	
+	public void closeConnectionPool() {
+		if (connectionPool != null) {
+			connectionPool.close();
+			connectionPool = null;
+		}
+	}
 
 	/**
 	 * Returns the DataSource which was used to create this object.

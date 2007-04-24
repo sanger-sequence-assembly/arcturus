@@ -19,6 +19,8 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	final private long timeout;
 	private ConnectionReaper reaper;
 	final private int poolsize = 10;
+	protected ObjectName mbeanName = null;
+	protected boolean closed = false;
 
 	public ConnectionPool(DataSource dataSource) {
 		this(dataSource, DEFAULT_TIMEOUT);
@@ -40,11 +42,9 @@ public class ConnectionPool implements ConnectionPoolMBean {
 			MysqlDataSource mds = (MysqlDataSource)dataSource;
 			name = mds.getDatabaseName();
 		}
-
-		ObjectName cpName = null;
 		
 		try {
-			cpName = new ObjectName("ConnectionPool:name=" + name);
+			mbeanName = new ObjectName("ConnectionPool:name=" + name);
 		} catch (MalformedObjectNameException e) {
 			Arcturus.logWarning("Failed to create ObjectName", e);
 		}
@@ -52,7 +52,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
 		
 		try {
-			mbs.registerMBean(this, cpName);
+			mbs.registerMBean(this, mbeanName);
 		} catch (Exception e) {
 			Arcturus.logWarning("Failed to register connection pool as MBean", e);
 		}
@@ -135,7 +135,29 @@ public class ConnectionPool implements ConnectionPoolMBean {
 					sleep(delay);
 				} catch (InterruptedException e) {
 				}
-				pool.reapConnections();
+				if (pool.isClosed())
+					return;
+				else
+					pool.reapConnections();
+			}
+		}
+	}
+	
+	public synchronized boolean isClosed() {
+		return closed;
+	}
+	
+	public synchronized void close() {
+		closed = true;
+		closeConnections();
+		
+		if (mbeanName != null) {
+			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+			
+			try {
+				mbs.unregisterMBean(mbeanName);
+			} catch (Exception e) {
+				Arcturus.logWarning("Failed to unregister connection pool as MBean", e);
 			}
 		}
 	}
