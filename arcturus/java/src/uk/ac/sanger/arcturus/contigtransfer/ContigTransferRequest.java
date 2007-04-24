@@ -67,7 +67,7 @@ public class ContigTransferRequest {
 	}
 	
 	public Person getContigOwner() {
-		return oldProject.getOwner();
+		return (oldProject == null) ? null : oldProject.getOwner();
 	}
 
 	public Project getOldProject() {
