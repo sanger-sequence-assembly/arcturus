@@ -101,9 +101,9 @@ public class Minerva {
 			frame.setComponent(component);
 
 			frame.pack();
-			frame.show();
+			frame.setVisible(true);
 
-			splash.hide();
+			splash.setVisible(false);
 			splash.dispose();
 		} catch (Exception e) {
 			Arcturus.logWarning(e);
@@ -127,7 +127,7 @@ public class Minerva {
 		frame.setComponent(component);
 
 		frame.pack();
-		frame.show();
+		frame.setVisible(true);
 	}
 
 	private JComponent createInstanceDisplay(ArcturusInstance ai) {
@@ -141,7 +141,7 @@ public class Minerva {
 		frame.setComponent(component);
 
 		frame.pack();
-		frame.show();
+		frame.setVisible(true);
 		
 	}
 	public JComponent createOrganismDisplay(String organism)
@@ -184,7 +184,7 @@ public class Minerva {
 
 			setLocation(screenSize.width / 2 - (splashSize.width / 2),
 					screenSize.height / 2 - (splashSize.height / 2));
-			super.show();
+			super.setVisible(true);
 			toFront();
 		}
 	}
