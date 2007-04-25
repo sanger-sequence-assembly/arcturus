@@ -44,6 +44,8 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		createMenus();
 		
+		getPrintAction().setEnabled(false);
+		
 		JPanel topPanel = new JPanel();
 		
 		topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.X_AXIS));
@@ -284,5 +286,9 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 
 	protected boolean isRefreshable() {
 		return false;
+	}
+
+	protected void doPrint() {
+		// Does nothing.
 	}
 }

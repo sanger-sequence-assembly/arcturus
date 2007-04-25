@@ -61,6 +61,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 		createActions();
 
 		createMenus();
+		
+		getPrintAction().setEnabled(false);
 
 		JPanel topPanel = new JPanel();
 
@@ -691,5 +693,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected boolean isRefreshable() {
 		return true;
+	}
+
+	protected void doPrint() {
+		// Do nothing.
 	}
 }
