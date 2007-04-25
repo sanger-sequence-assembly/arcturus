@@ -15,6 +15,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowOligoFinder;
 	protected MinervaAbstractAction actionShowReadFinder;
 	protected MinervaAbstractAction actionShowContigTransfers;
+	protected MinervaAbstractAction actionPrint;
 
 	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent) {
 		super(layoutManager);
@@ -46,6 +47,12 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected abstract boolean isRefreshable();
 
 	protected abstract void addClassSpecificViewMenuItems(JMenu menu);
+	
+	protected abstract void doPrint();
+	
+	protected Action getPrintAction() {
+		return actionPrint;
+	}
 
 	protected void createMenus() {
 		createFileMenu();
@@ -81,6 +88,18 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 
 		fileMenu.addSeparator();
 
+		actionPrint = new MinervaAbstractAction("Print...", null,
+				"Print this view", new Integer(KeyEvent.VK_P), KeyStroke
+						.getKeyStroke(KeyEvent.VK_P, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				doPrint();
+			}
+		};
+		
+		fileMenu.add(actionPrint);
+
+		fileMenu.addSeparator();
+
 		actionCloseView = new MinervaAbstractAction("Close", null,
 				"Close this view", new Integer(KeyEvent.VK_C), KeyStroke
 						.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
@@ -106,7 +125,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 			if (rc != JOptionPane.OK_OPTION)
 				return;
 		}
-		
+
 		parent.remove(this);
 	}
 

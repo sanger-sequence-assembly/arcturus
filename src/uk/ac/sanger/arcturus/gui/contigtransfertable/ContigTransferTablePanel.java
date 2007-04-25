@@ -50,6 +50,8 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		createActions();
 
 		createMenus();
+		
+		getPrintAction().setEnabled(false);
 	}
 
 	protected void createActions() {
@@ -76,5 +78,9 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	protected boolean isRefreshable() {
 		return true;
+	}
+
+	protected void doPrint() {
+		// Do nothing.
 	}
 }

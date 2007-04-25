@@ -69,6 +69,8 @@ public class ContigTablePanel extends MinervaPanel {
 		createActions();
 
 		createMenus();
+		
+		getPrintAction().setEnabled(false);
 
 		if (projects.length < 2)
 			cbGroupByProject.setEnabled(false);
@@ -254,5 +256,9 @@ public class ContigTablePanel extends MinervaPanel {
 
 	protected boolean isRefreshable() {
 		return true;
+	}
+
+	protected void doPrint() {
+		// Do nothing.
 	}
 }

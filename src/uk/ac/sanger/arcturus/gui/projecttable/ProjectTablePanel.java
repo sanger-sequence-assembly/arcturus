@@ -8,7 +8,9 @@ import javax.swing.event.PopupMenuListener;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.print.PrinterException;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
 
@@ -187,5 +189,13 @@ public class ProjectTablePanel extends MinervaPanel {
 
 	protected boolean isRefreshable() {
 		return true;
+	}
+
+	protected void doPrint() {
+		try {
+			table.print();
+		} catch (PrinterException e) {
+			Arcturus.logWarning("Error when attempting to print project table", e);
+		}
 	}
 }

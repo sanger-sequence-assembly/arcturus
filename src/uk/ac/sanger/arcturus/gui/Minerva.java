@@ -93,7 +93,7 @@ public class Minerva {
 			MinervaFrame frame = createMinervaFrame(caption);
 
 			splash = new SplashWindow(frame);
-			splash.show();
+			splash.showCentred();
 
 			JComponent component = (organism == null) ? createInstanceDisplay(ai)
 					: createOrganismDisplay(organism);
@@ -178,7 +178,7 @@ public class Minerva {
 			pack();
 		}
 
-		public void show() {
+		public void showCentred() {
 			Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
 			Dimension splashSize = getPreferredSize();
 
