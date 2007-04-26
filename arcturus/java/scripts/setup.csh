@@ -27,6 +27,8 @@ endif
 if ( `uname -s` == 'OSF1' ) then
     setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
     setenv JAVA_HEAP_SIZE "-fast64 -Xmx4096M"
+    set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus-for-java1.4.jar
+    echo Using the legacy \(Java 1.4\) version of arcturus.jar
     rehash
 endif
 
