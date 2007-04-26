@@ -4,7 +4,7 @@ set basedir=`dirname $0`
 
 setenv JAVA_HOME /software/jdk1.6.0_01
 
-setenv JAVA_OPTS "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=8888 -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false"
+setenv JAVA_OPTS "-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false"
 
 source ${basedir}/setup.csh
 
