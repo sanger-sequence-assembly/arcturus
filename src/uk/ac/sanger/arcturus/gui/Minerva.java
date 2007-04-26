@@ -112,10 +112,12 @@ public class Minerva {
 	}
 	
 	private MinervaFrame createMinervaFrame(String name) {
-		String caption = "Minerva - " + name;
+		String caption = "Minerva - " + name + " [";
 
 		if (buildtime != null)
-			caption += " [Build " + buildtime + "]";
+			caption += buildtime + ", ";
+		
+		caption += "Java " + System.getProperty("java.version") + "]";
 
 		return new MinervaFrame(this, caption);
 	}
