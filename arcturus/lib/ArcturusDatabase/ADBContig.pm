@@ -1186,12 +1186,13 @@ sub deleteContig {
 
     my $report = '';
     my $success = 1;
-    foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS') {
+    foreach my $table ('CONTIG','MAPPING','C2CMAPPING','CONSENSUS',
+                       'CONTIGTRANSFERREQUEST') {
         my $query = "delete from $table where contig_id = $cid"; 
         my $deleted = $dbh->do($query) || &queryFailed($query);
         $success = 0 if (!$deleted && $table eq 'CONTIG');
         $report .= "No delete done from $table for contig_id = $cid\n"
-        unless (($deleted+0) || $table eq 'C2CMAPPING');
+        unless (($deleted+0) || $table =~ /C2C|REQ/);
     }
 
 # if noparentcheck active, the deleted contig can be a (single-read) parent
@@ -1590,14 +1591,32 @@ sub getEndReadsForContigID {
 
     $sth->finish();
 
-    return $left,$right;
+    return $left,$right;  
+}
 
-#    my (@l,@r);
-#    while (my ($l,$r) = $sth->fetchrow_array()) {
-#        push @l,$l if ($l ne $l[$#l]);
-#        push @r,$r if ($r ne $r[$#r]);
-#    }
-#    
+sub getReadsInContigWindow {
+# return a list of seq_ids of read straddling a contig position (interval) 
+    my $this = shift;
+    my ($contig,$cstart,$cfinal) = @_;
+
+    my $query = "select seq_id from MAPPING"
+              . " where contig_id = ?"
+	      . "   and cfinish >= ?"  # cstart
+	      . "   and  cstart <= ?"; # cfinish
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute($contig,$cstart,$cfinal) || &queryFailed($query,@_);
+
+    my @seqids;
+    while (my ($seqid) = $sth->fetchrow_array()) {
+	push @seqids,$seqid;
+    }
+    $sth->finish();
+
+    return [@seqids];
 }
 
 #--------------------------------------------------------------------------
