@@ -7,9 +7,6 @@ set ARCTURUS_HOME=`dirname $0`
 # Specify the location of site-wide preferences and other files
 set ARCTURUS_SITE_HOME=/nfs/pathsoft/arcturus
 
-# This is the Arcturus JAR file
-set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
-
 # This is the Arcturus root package name
 set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 
@@ -21,25 +18,20 @@ if ( ! $?JAVA_HEAP_SIZE) then
     setenv JAVA_HEAP_SIZE -Xmx512M
 endif
 
-# Determine our operating system, and alter the path to Java if we're running
-# on an Alpha system.
+# Determine our operating system, and set JAVA_HOME accordingly.
 
 if ( `uname -s` == 'OSF1' ) then
-    setenv PATH /nfs/pathsoft/external/bio-soft/java/usr/opt/java142/bin:${PATH}
+    setenv JAVA_HOME /nfs/pathsoft/external/bio-soft/java/usr/opt/java142
     setenv JAVA_HEAP_SIZE "-fast64 -Xmx4096M"
     set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus-for-java1.4.jar
     echo Using the legacy \(Java 1.4\) version of arcturus.jar
-    rehash
+else
+    setenv JAVA_HOME /software/jdk1.6.0_01
+    set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 endif
 
-# Test whether /software/java exists, and if it does, use this
-# version of Java
-
-if ( -d  /software/java ) then
-    setenv PATH /software/java/bin:${PATH}
-    echo Using Java in /software/java
-    rehash
-endif
+echo Using Java in $JAVA_HOME 
+echo Arcturus JAR file is $ARCTURUS_JAR
 
 # Specify the additional run-time options for Java
 set EXTRA_OPTS="${JAVA_HEAP_SIZE}"
