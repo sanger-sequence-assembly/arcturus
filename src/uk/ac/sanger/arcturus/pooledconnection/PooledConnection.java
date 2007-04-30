@@ -21,11 +21,11 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	private boolean inuse;
 
 	private long timestamp;
-	
+
 	private long lastLeaseTime = Integer.MIN_VALUE;
-	
+
 	private long totalLeaseTime = 0;
-	
+
 	private Object owner = null;
 
 	protected ObjectName mbeanName = null;
@@ -39,46 +39,56 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		synchronized (pool) {
 			ID = ++counter;
 		}
-		
+
 		registerAsMBean();
 	}
-	
+
 	protected void registerAsMBean() {
 		try {
-			mbeanName = new ObjectName("PooledConnection:pool=" + pool.getName() + ",ID=" + ID);
+			mbeanName = new ObjectName("PooledConnection:pool="
+					+ pool.getName() + ",ID=" + ID);
 		} catch (MalformedObjectNameException e) {
 			Arcturus.logWarning("Failed to create ObjectName", e);
 		}
-		
+
 		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-		
+
 		try {
 			mbs.registerMBean(this, mbeanName);
 		} catch (Exception e) {
-			Arcturus.logWarning("Failed to register pooled connection as MBean", e);
+			Arcturus.logWarning(
+					"Failed to register pooled connection as MBean", e);
 		}
 	}
-	
+
 	protected void unregisterAsMBean() {
 		if (mbeanName != null) {
 			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-			
+
 			try {
 				mbs.unregisterMBean(mbeanName);
 				mbeanName = null;
 			} catch (Exception e) {
-				Arcturus.logWarning("Failed to unregister pooled connection as MBean", e);
+				Arcturus.logWarning(
+						"Failed to unregister pooled connection as MBean", e);
 			}
 		}
 	}
-	
+
 	protected void closeConnection() throws SQLException {
+		System.err.println("PooledConnection.closeConnection invoked on pool="
+				+ pool.getName() + ",ID=" + ID);
+		
 		if (conn != null && !conn.isClosed())
 			conn.close();
-		
+
 		conn = null;
 		
+		System.err.println("\tUnderlying connection closed and set to null");
+
 		unregisterAsMBean();
+		
+		System.err.println("\tMBean de-registered");
 	}
 
 	public synchronized boolean lease(Object owner) {
@@ -122,31 +132,31 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	public long getLastUse() {
 		return timestamp;
 	}
-	
+
 	public long getLastLeaseTime() {
 		return lastLeaseTime;
 	}
-	
+
 	public long getTotalLeaseTime() {
 		return totalLeaseTime + getCurrentLeaseTime();
 	}
-	
+
 	public long getCurrentLeaseTime() {
 		return inuse ? System.currentTimeMillis() - lastLeaseTime : 0;
 	}
-	
+
 	public long getIdleTime() {
 		return inuse ? 0 : System.currentTimeMillis() - timestamp;
 	}
-	
+
 	public Object getOwner() {
 		return owner;
 	}
-	
+
 	public String getOwnerClassName() {
 		return (owner == null) ? "[null]" : owner.getClass().getName();
 	}
-	
+
 	public ConnectionPool getConnectionPool() {
 		return pool;
 	}
@@ -326,7 +336,8 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		stmt.close();
 	}
 
-	public Array createArrayOf(String typeName, Object[] elements) throws SQLException {
+	public Array createArrayOf(String typeName, Object[] elements)
+			throws SQLException {
 		return conn.createArrayOf(typeName, elements);
 	}
 
@@ -346,7 +357,8 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return conn.createSQLXML();
 	}
 
-	public Struct createStruct(String typeName, Object[] attributes) throws SQLException {
+	public Struct createStruct(String typeName, Object[] attributes)
+			throws SQLException {
 		return conn.createStruct(typeName, attributes);
 	}
 
@@ -362,11 +374,13 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return conn.isValid(timeout);
 	}
 
-	public void setClientInfo(Properties properties) throws SQLClientInfoException {
+	public void setClientInfo(Properties properties)
+			throws SQLClientInfoException {
 		conn.setClientInfo(properties);
 	}
 
-	public void setClientInfo(String name, String value) throws SQLClientInfoException {
+	public void setClientInfo(String name, String value)
+			throws SQLClientInfoException {
 		conn.setClientInfo(name, value);
 	}
 
