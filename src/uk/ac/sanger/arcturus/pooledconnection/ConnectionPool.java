@@ -73,14 +73,17 @@ public class ConnectionPool implements ConnectionPoolMBean {
 
 	public synchronized void reapConnections() {
 		Enumeration connlist = connections.elements();
+		Vector toBeRemoved = new Vector();
 
 		while ((connlist != null) && (connlist.hasMoreElements())) {
 			PooledConnection conn = (PooledConnection) connlist.nextElement();
 
 			if ((!conn.inUse()) && (conn.getIdleTime() > timeout)) {
-				removeConnection(conn);
+				toBeRemoved.add(conn);
 			}
 		}
+		
+		connections.removeAll(toBeRemoved);
 	}
 
 	public synchronized void closeConnections() {
@@ -88,19 +91,13 @@ public class ConnectionPool implements ConnectionPoolMBean {
 
 		while ((connlist != null) && (connlist.hasMoreElements())) {
 			PooledConnection conn = (PooledConnection) connlist.nextElement();
-			removeConnection(conn);
+			try {
+				conn.closeConnection();
+			} catch (SQLException sqle) {
+				Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
+			}
+			conn.unregisterAsMBean();
 		}
-	}
-
-	private synchronized void removeConnection(PooledConnection conn) {
-		try {
-			conn.closeConnection();
-		} catch (SQLException sqle) {
-			Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
-		}
-
-		conn.unregisterAsMBean();
-		connections.removeElement(conn);
 	}
 
 	public synchronized Connection getConnection(Object owner) throws SQLException {

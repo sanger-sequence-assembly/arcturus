@@ -76,19 +76,12 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 	}
 
 	protected void closeConnection() throws SQLException {
-		System.err.println("PooledConnection.closeConnection invoked on pool="
-				+ pool.getName() + ",ID=" + ID);
-		
 		if (conn != null && !conn.isClosed())
 			conn.close();
 
 		conn = null;
-		
-		System.err.println("\tUnderlying connection closed and set to null");
 
 		unregisterAsMBean();
-		
-		System.err.println("\tMBean de-registered");
 	}
 
 	public synchronized boolean lease(Object owner) {
