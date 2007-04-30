@@ -17,6 +17,12 @@ public class PooledConnection implements Connection {
 	private boolean inuse;
 
 	private long timestamp;
+	
+	private long lastLeaseTime = Integer.MIN_VALUE;
+	
+	private long totalLeaseTime = 0;
+	
+	private Object owner = null;
 
 	public PooledConnection(Connection conn, ConnectionPool pool) {
 		this.conn = conn;
@@ -29,13 +35,15 @@ public class PooledConnection implements Connection {
 		}
 	}
 
-	public synchronized boolean lease() {
+	public synchronized boolean lease(Object owner) {
 		if (inuse) {
 			return false;
 		} else {
 			leaseCounter++;
 			inuse = true;
 			timestamp = System.currentTimeMillis();
+			lastLeaseTime = timestamp;
+			this.owner = owner;
 			return true;
 		}
 	}
@@ -64,14 +72,29 @@ public class PooledConnection implements Connection {
 	public long getLastUse() {
 		return timestamp;
 	}
-
-	public void close() throws SQLException {
-		timestamp = System.currentTimeMillis();
-		pool.returnConnection(this);
+	
+	public long getLastLeaseTime() {
+		return lastLeaseTime;
+	}
+	
+	public long getTotalLeaseTime() {
+		return totalLeaseTime;
+	}
+	
+	public Object getOwner() {
+		return owner;
+	}
+	
+	public ConnectionPool getConnectionPool() {
+		return pool;
 	}
 
-	protected void expireLease() {
+	public synchronized void close() throws SQLException {
+		timestamp = System.currentTimeMillis();
+		totalLeaseTime += (timestamp - lastLeaseTime);
+		owner = null;
 		inuse = false;
+		pool.returnConnection(this);
 	}
 
 	protected Connection getConnection() {

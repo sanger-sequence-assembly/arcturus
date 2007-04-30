@@ -36,7 +36,7 @@ public class ReadToProjectImporter {
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
 	public ReadToProjectImporter(ArcturusDatabase adb) throws SQLException {
-		conn = adb.getPooledConnection();
+		conn = adb.getPooledConnection(this);
 
 		prepareStatements();
 	}

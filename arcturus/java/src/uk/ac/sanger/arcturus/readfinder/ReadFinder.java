@@ -59,7 +59,7 @@ public class ReadFinder {
 	
 	public void findRead(String readname, ReadFinderEventListener listener) throws SQLException {
 		if (conn == null) {
-			conn = adb.getPooledConnection();
+			conn = adb.getPooledConnection(this);
 			prepareStatements();
 		}
 

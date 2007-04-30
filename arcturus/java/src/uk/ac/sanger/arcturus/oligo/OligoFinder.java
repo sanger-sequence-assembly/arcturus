@@ -40,7 +40,7 @@ public class OligoFinder {
 		this.listener = listener;
 
 		try {
-			conn = adb.getPooledConnection();
+			conn = adb.getPooledConnection(this);
 			prepareStatements();
 		} catch (SQLException sqle) {
 			Arcturus.logWarning("Error when opening or preparing connection",
@@ -76,7 +76,7 @@ public class OligoFinder {
 			Vector v = new Vector();
 
 			try {
-				conn = adb.getPooledConnection();
+				conn = adb.getPooledConnection(this);
 
 				pstmtFreeReads = conn.prepareCall(strFreeReads);
 

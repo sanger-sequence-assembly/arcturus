@@ -37,7 +37,7 @@ public class ContigCAFWriter {
 	private Inflater decompresser = new Inflater();
 
 	public ContigCAFWriter(ArcturusDatabase adb) throws SQLException {
-		conn = adb.getPooledConnection();
+		conn = adb.getPooledConnection(this);
 
 		prepareStatements();
 	}
