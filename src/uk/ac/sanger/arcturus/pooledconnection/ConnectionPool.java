@@ -14,13 +14,14 @@ import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class ConnectionPool implements ConnectionPoolMBean {
 	public final static long DEFAULT_TIMEOUT = 60000;
-	private Vector connections;
+	private HashSet connections;
 	private DataSource dataSource;
 	final private long timeout;
 	private ConnectionReaper reaper;
 	final private int poolsize = 10;
 	protected ObjectName mbeanName = null;
 	protected boolean closed = false;
+	protected long lastReaping = 0;
 
 	public ConnectionPool(DataSource dataSource) {
 		this(dataSource, DEFAULT_TIMEOUT);
@@ -32,7 +33,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		
 		initDataSource();
 		
-		connections = new Vector(poolsize);
+		connections = new HashSet(poolsize);
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
 		
@@ -72,49 +73,58 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	}
 
 	public synchronized void reapConnections() {
-		Enumeration connlist = connections.elements();
-		Vector toBeRemoved = new Vector();
+		reapConnections(timeout);
+	}
+	
+	public synchronized void reapConnections(long timeout) {
+		Iterator iter = connections.iterator();
 
-		while ((connlist != null) && (connlist.hasMoreElements())) {
-			PooledConnection conn = (PooledConnection) connlist.nextElement();
+		while ((iter != null) && (iter.hasNext())) {
+			PooledConnection conn = (PooledConnection) iter.next();
 
 			if ((!conn.inUse()) && (conn.getIdleTime() > timeout)) {
-				toBeRemoved.add(conn);
+				try {
+					conn.closeConnection();
+				} catch (SQLException sqle) {
+					Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
+				}
+				iter.remove();
 			}
 		}
 		
-		connections.removeAll(toBeRemoved);
+		lastReaping = System.currentTimeMillis();
 	}
 
 	public synchronized void closeConnections() {
-		Enumeration connlist = connections.elements();
+		Iterator iter = connections.iterator();
 
-		while ((connlist != null) && (connlist.hasMoreElements())) {
-			PooledConnection conn = (PooledConnection) connlist.nextElement();
+		while ((iter != null) && (iter.hasNext())) {
+			PooledConnection conn = (PooledConnection) iter.next();
 			try {
 				conn.closeConnection();
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
 			}
-			conn.unregisterAsMBean();
 		}
+		
+		connections.clear();
 	}
 
 	public synchronized Connection getConnection(Object owner) throws SQLException {
 		PooledConnection c;
 		
-		for (int i = 0; i < connections.size(); i++) {
-			c = (PooledConnection) connections.elementAt(i);
-			if (c.lease(owner)) {
+		for (Iterator iter = connections.iterator(); iter.hasNext();) {
+			c = (PooledConnection) iter.next();
+			
+			if (c.lease(owner))
 				return c;
-			}
 		}
 
 		Connection conn = dataSource.getConnection();
 		c = new PooledConnection(conn, this);
 		c.setWaitTimeout(5*24*3600);
 		c.lease(owner);
-		connections.addElement(c);
+		connections.add(c);
 		return c;
 	}
 
@@ -174,8 +184,8 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	public synchronized int getActiveConnectionCount() {
 		int inuse = 0;
 		
-		for (int i = 0; i < connections.size(); i++) {
-			PooledConnection c = (PooledConnection) connections.elementAt(i);
+		for (Iterator iter = connections.iterator(); iter.hasNext();) {
+			PooledConnection c = (PooledConnection) iter.next();
 			if (c.inUse())
 				inuse++;
 		}
