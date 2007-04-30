@@ -36,15 +36,12 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
 		
-		String name = "@" + Integer.toHexString(hashCode());
-		
-		if (dataSource instanceof MysqlDataSource) {
-			MysqlDataSource mds = (MysqlDataSource)dataSource;
-			name = mds.getDatabaseName();
-		}
-		
+		registerAsMBean();
+	}
+	
+	protected void registerAsMBean() {
 		try {
-			mbeanName = new ObjectName("ConnectionPool:name=" + name);
+			mbeanName = new ObjectName("ConnectionPool:name=" + getName());
 		} catch (MalformedObjectNameException e) {
 			Arcturus.logWarning("Failed to create ObjectName", e);
 		}
@@ -58,6 +55,15 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		}
 	}
 	
+	public String getName() {
+		if (dataSource instanceof MysqlDataSource) {
+			MysqlDataSource mds = (MysqlDataSource)dataSource;
+			return mds.getDatabaseName();
+		} else
+			return "@" + Integer.toHexString(hashCode());
+
+	}
+	
 	private void initDataSource() {
 		if (dataSource instanceof MysqlDataSource) {
 			MysqlDataSource mds = (MysqlDataSource)dataSource;
@@ -66,13 +72,12 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	}
 
 	public synchronized void reapConnections() {
-		long stale = System.currentTimeMillis() - timeout;
 		Enumeration connlist = connections.elements();
 
 		while ((connlist != null) && (connlist.hasMoreElements())) {
 			PooledConnection conn = (PooledConnection) connlist.nextElement();
 
-			if ((!conn.inUse()) && (stale > conn.getLastUse())) {
+			if ((!conn.inUse()) && (conn.getIdleTime() > timeout)) {
 				removeConnection(conn);
 			}
 		}
@@ -94,6 +99,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		} catch (SQLException sqle) {
 		}
 
+		conn.unregisterAsMBean();
 		connections.removeElement(conn);
 	}
 
@@ -152,7 +158,10 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	public synchronized void close() {
 		closed = true;
 		closeConnections();
+		unregisterAsMBean();
+	}
 		
+	protected void unregisterAsMBean() {
 		if (mbeanName != null) {
 			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
 			
