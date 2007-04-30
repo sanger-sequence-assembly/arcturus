@@ -94,9 +94,9 @@ public class ConnectionPool implements ConnectionPoolMBean {
 
 	private synchronized void removeConnection(PooledConnection conn) {
 		try {
-			if (!conn.getConnection().isClosed())
-				conn.getConnection().close();
+			conn.closeConnection();
 		} catch (SQLException sqle) {
+			Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
 		}
 
 		conn.unregisterAsMBean();
@@ -167,6 +167,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 			
 			try {
 				mbs.unregisterMBean(mbeanName);
+				mbeanName = null;
 			} catch (Exception e) {
 				Arcturus.logWarning("Failed to unregister connection pool as MBean", e);
 			}

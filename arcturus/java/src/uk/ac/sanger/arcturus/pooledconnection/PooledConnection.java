@@ -55,24 +55,34 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		try {
 			mbs.registerMBean(this, mbeanName);
 		} catch (Exception e) {
-			Arcturus.logWarning("Failed to register connection pool as MBean", e);
+			Arcturus.logWarning("Failed to register pooled connection as MBean", e);
 		}
 	}
 	
-	void unregisterAsMBean() {
+	protected void unregisterAsMBean() {
 		if (mbeanName != null) {
 			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
 			
 			try {
 				mbs.unregisterMBean(mbeanName);
+				mbeanName = null;
 			} catch (Exception e) {
-				Arcturus.logWarning("Failed to unregister connection pool as MBean", e);
+				Arcturus.logWarning("Failed to unregister pooled connection as MBean", e);
 			}
 		}
 	}
+	
+	protected void closeConnection() throws SQLException {
+		if (conn != null && !conn.isClosed())
+			conn.close();
+		
+		conn = null;
+		
+		unregisterAsMBean();
+	}
 
 	public synchronized boolean lease(Object owner) {
-		if (inuse) {
+		if (inuse || conn == null) {
 			return false;
 		} else {
 			leaseCounter++;
