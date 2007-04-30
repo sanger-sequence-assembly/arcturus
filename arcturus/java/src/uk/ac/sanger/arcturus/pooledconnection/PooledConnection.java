@@ -1,9 +1,13 @@
 package uk.ac.sanger.arcturus.pooledconnection;
 
+import java.lang.management.ManagementFactory;
 import java.sql.*;
 import java.util.*;
+import javax.management.*;
 
-public class PooledConnection implements Connection {
+import uk.ac.sanger.arcturus.Arcturus;
+
+public class PooledConnection implements Connection, PooledConnectionMBean {
 	private static int counter = 0;
 
 	private final int ID;
@@ -24,6 +28,8 @@ public class PooledConnection implements Connection {
 	
 	private Object owner = null;
 
+	protected ObjectName mbeanName = null;
+
 	public PooledConnection(Connection conn, ConnectionPool pool) {
 		this.conn = conn;
 		this.pool = pool;
@@ -32,6 +38,36 @@ public class PooledConnection implements Connection {
 
 		synchronized (pool) {
 			ID = ++counter;
+		}
+		
+		registerAsMBean();
+	}
+	
+	protected void registerAsMBean() {
+		try {
+			mbeanName = new ObjectName("PooledConnection:pool=" + pool.getName() + ",ID=" + ID);
+		} catch (MalformedObjectNameException e) {
+			Arcturus.logWarning("Failed to create ObjectName", e);
+		}
+		
+		MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+		
+		try {
+			mbs.registerMBean(this, mbeanName);
+		} catch (Exception e) {
+			Arcturus.logWarning("Failed to register connection pool as MBean", e);
+		}
+	}
+	
+	void unregisterAsMBean() {
+		if (mbeanName != null) {
+			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+			
+			try {
+				mbs.unregisterMBean(mbeanName);
+			} catch (Exception e) {
+				Arcturus.logWarning("Failed to unregister connection pool as MBean", e);
+			}
 		}
 	}
 
@@ -69,6 +105,10 @@ public class PooledConnection implements Connection {
 		return inuse;
 	}
 
+	public boolean isInUse() {
+		return inuse;
+	}
+
 	public long getLastUse() {
 		return timestamp;
 	}
@@ -78,11 +118,23 @@ public class PooledConnection implements Connection {
 	}
 	
 	public long getTotalLeaseTime() {
-		return totalLeaseTime;
+		return totalLeaseTime + getCurrentLeaseTime();
+	}
+	
+	public long getCurrentLeaseTime() {
+		return inuse ? System.currentTimeMillis() - lastLeaseTime : 0;
+	}
+	
+	public long getIdleTime() {
+		return inuse ? 0 : System.currentTimeMillis() - timestamp;
 	}
 	
 	public Object getOwner() {
 		return owner;
+	}
+	
+	public String getOwnerClassName() {
+		return (owner == null) ? "[null]" : owner.getClass().getName();
 	}
 	
 	public ConnectionPool getConnectionPool() {
