@@ -97,12 +97,12 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		connections.removeElement(conn);
 	}
 
-	public synchronized Connection getConnection() throws SQLException {
+	public synchronized Connection getConnection(Object owner) throws SQLException {
 		PooledConnection c;
 		
 		for (int i = 0; i < connections.size(); i++) {
 			c = (PooledConnection) connections.elementAt(i);
-			if (c.lease()) {
+			if (c.lease(owner)) {
 				return c;
 			}
 		}
@@ -110,13 +110,15 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		Connection conn = dataSource.getConnection();
 		c = new PooledConnection(conn, this);
 		c.setWaitTimeout(5*24*3600);
-		c.lease();
+		c.lease(owner);
 		connections.addElement(c);
 		return c;
 	}
 
 	public synchronized void returnConnection(PooledConnection conn) {
-		conn.expireLease();
+		// This method allows a pooled connection to notify its parent
+		// pool that it has been closed.  It does nothing in this
+		// implementation.
 	}
 
 	class ConnectionReaper extends Thread {

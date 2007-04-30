@@ -109,7 +109,7 @@ public class ArcturusDatabase {
 	private void initialise() throws SQLException {
 		connectionPool = new ConnectionPool(ds);
 		
-		defaultConnection = connectionPool.getConnection();
+		defaultConnection = connectionPool.getConnection(this);
 
 		createManagers();
 	}
@@ -171,7 +171,7 @@ public class ArcturusDatabase {
 
 	public Connection getConnection() throws SQLException {
 		if (defaultConnection == null || defaultConnection.isClosed())
-			defaultConnection = connectionPool.getConnection();
+			defaultConnection = connectionPool.getConnection(this);
 
 		return defaultConnection;
 	}
@@ -179,6 +179,8 @@ public class ArcturusDatabase {
 	/**
 	 * Establishes a unique (non-cached) JDBC connection to a database, using
 	 * the parameters stored in this object's DataSource.
+	 * 
+	 * @param owner the object which will own the connection.
 	 * 
 	 * @return a java.sql.Connection which can be used to communicate with the
 	 *         database.
@@ -188,8 +190,8 @@ public class ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public Connection getPooledConnection() throws SQLException {
-		return connectionPool.getConnection();
+	public Connection getPooledConnection(Object owner) throws SQLException {
+		return connectionPool.getConnection(owner);
 	}
 
 	/**
