@@ -22,6 +22,8 @@ public class ConnectionPool implements ConnectionPoolMBean {
 	protected ObjectName mbeanName = null;
 	protected boolean closed = false;
 	protected long lastReaping = 0;
+	protected int nCreated = 0;
+	protected int nReaped = 0;
 
 	public ConnectionPool(DataSource dataSource) {
 		this(dataSource, DEFAULT_TIMEOUT);
@@ -89,6 +91,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 					Arcturus.logWarning("An error occurred when closing a pooled connection", sqle);
 				}
 				iter.remove();
+				nReaped++;
 			}
 		}
 		
@@ -125,6 +128,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		c.setWaitTimeout(5*24*3600);
 		c.lease(owner);
 		connections.add(c);
+		nCreated++;
 		return c;
 	}
 
@@ -191,6 +195,14 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		}
 
 		return inuse;
+	}
+	
+	public synchronized int getCreatedConnectionCount() {
+		return nCreated;
+	}
+	
+	public synchronized int getReapedConnectionCount() {
+		return nReaped;
 	}
 
 	public synchronized int getConnectionCount() {
