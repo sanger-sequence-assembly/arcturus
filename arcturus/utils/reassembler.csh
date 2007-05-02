@@ -25,7 +25,7 @@ set workingdir=`dirname $0`
 cd ${workingdir}
 
 set dlimit=2000000
-set instance=dev
+set instance=pathogen
 set organism=$1
 
 shift
