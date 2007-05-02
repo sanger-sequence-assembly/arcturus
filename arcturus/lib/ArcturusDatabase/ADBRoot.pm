@@ -8,7 +8,7 @@ use Exporter;
 
 our @ISA = qw(Exporter);
 
-our @EXPORT = qw(queryFailed userRoles); # export to remote sub-classes
+our @EXPORT = qw(queryFailed); # export to remote sub-classes
 
 # ----------------------------------------------------------------------------
 # constructor
@@ -52,36 +52,8 @@ sub queryFailed {
 }
 
 #------------------------------------------------------------------------------
-#
-#------------------------------------------------------------------------------
-
-my $USERROLEHASH; # class variable
-
-sub userRoles {
-# experimental routine for user roles
-    my $boss = shift;
-    my $user = shift;
-
-# idea: load on first call a table with user roles
-# use that list to decide whether $boss is $user's boss
-
-    unless (defined($USERROLEHASH)) {
-# load stuff
-    }
-
-# THIS IS AD HOC for exploratory purposes
-
-    return 1 if ($boss eq $user || $boss eq 'ejz' || $boss eq 'adh');
-
-    return 1 if ($boss eq 'klb'); # temporary
-
-    return 0;
-}
-
-#------------------------------------------------------------------------------
-#
-#------------------------------------------------------------------------------
 
 1;
+
 
 
