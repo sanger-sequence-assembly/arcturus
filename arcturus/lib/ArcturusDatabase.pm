@@ -9,7 +9,7 @@ use Logging;
 
 our @ISA = qw(ArcturusDatabase::ADBAssembly);
 
-# use ArcturusDatabase::ADBRoot qw(queryFailed);
+use ArcturusDatabase::ADBRoot qw(queryFailed);
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -31,11 +31,6 @@ sub new {
     $this->populateDictionaries();
 
     $this->putArcturusUser(); # establish the username
-
-# define roles for the managers
-
-    $this->setArcturusUserRole('adh','dba');
-    $this->setArcturusUserRole('ejz','dba');
 
     return $this;
 }
@@ -191,13 +186,16 @@ sub dbVersion {
 # arcturus user information
 #-----------------------------------------------------------------------------
 
+my $ARCTURUSUSER;
+
 sub putArcturusUser {
 # determine the username from the system data
     my $this = shift;
 
     my $user = getpwuid($<);
 
-    $this->{ArcturusUser} = $user;
+$this->{ArcturusUser} = $user; # temp
+    $ARCTURUSUSER = $user;
 
 # test against prohibited names (force login with own unix username)
 
@@ -210,247 +208,367 @@ sub putArcturusUser {
 
 	die "You cannot access Arcturus under username $user";
     }
+
+# initialise the privileges hash
+
+    $this->{privilege} = {} unless $this->{privilege};
 }
 
 sub getArcturusUser {
 # return the username (as is)
     my $this = shift;
 
-    return $this->{ArcturusUser} || '';
+return $this->{ArcturusUser} || ''; # temp
+    return $ARCTURUSUSER || '';
 }
 
 sub verifyArcturusUser {
 # test if the user exists in the USER table; print a warning if not
     my $this = shift;
 
-    my $user = $this->getArcturusUser();
+    my $user = $this->getArcturusUser() || return undef;
 
-    unless ($user && @{$this->getUserData($user)}) {
-        print STDERR "WARNING : user $user is unknown to Arcturus database " 
-	           . ($this->getURL() || "VOID") . "\n" if shift;
+    my $userdatahash = &fetchUserPrivileges($this->getConnection(),user=>$user);
+
+    unless ($userdatahash->{$user}) {
+        my $logger = &verifyLogger('verifyArcturusUser');
+        $logger->error("user $user is unknown to Arcturus database " 
+	              . ($this->getURL() || "VOID")) if shift;
         return 0;
     }
+
     return $user;
 }
 
 #-------------------------------------------------------------------------
-# "roles" and privileges using USER table data ... TO BE DEVELOPED FURTHER
-#-------------------------------------------------------------------------
-
-sub setArcturusUserRole {
-    my $this = shift;
-    my ($user,$role) = @_;
-
-    $this->{userroles} = {} unless defined $this->{userroles};
-
-    my $userrolehash = $this->{userroles};
-
-    $userrolehash->{$user} = $role if $role;    
-}
-
-sub getArcturusUserRoles {
-    my $this = shift;
-
-    $this->{userroles} = {} unless defined $this->{userroles};
- 
-    return $this->{userroles};
-}
-
+# user privileges
 #-------------------------------------------------------------------------
 
 sub userCanCreateProject {
     my $this = shift;
-    my $user = shift;
 
-    $user = $this->getArcturusUser() unless $user;
+    my $privilege = &getPrivilegesForUser($this,shift); # port username, if any
 
-    return undef unless $user; # protection
-
-    my $userdatahash = &fetchUserData($this->getConnection(),$user);
-
-# require an exact match of the user name
-
-    return undef unless @$userdatahash;
-
-    return 0 unless ($userdatahash->[0]->{username} eq $user); 
-
-    return ($userdatahash->[0]->{can_create_new_project} eq 'Y' ? 1 : 0);
+    return ($privilege && $privilege->{create_project}) ? 1 : 0;
 }
 
-sub userCanAssignProject { # to a user?
+sub userCanAssignProject {
     my $this = shift;
-    my $user = shift;
 
-    $user = $this->getArcturusUser() unless $user;
+    my $privilege = &getPrivilegesForUser($this,shift); # port username, if any
 
-    return undef unless $user; # protection
-
-    my $userdatahash = &fetchUserData($this->getConnection(),$user);
-
-# require an exact match of the user name
-
-    return undef unless @$userdatahash;
-
-    return 0 unless ($userdatahash->[0]->{username} eq $user); 
-
-    return ($userdatahash->[0]->{can_assign_project} eq 'Y' ? 1 : 0);
-}
-
-sub userCanMoveAnyContig { # between projects
-    my $this = shift;
-    my $user = shift;
-
-    $user = $this->getArcturusUser() unless $user;
-
-    return undef unless $user; # protection
-
-    my $userdatahash = &fetchUserData($this->getConnection(),$user);
-
-# require an exact match of the user name
-
-    return undef unless @$userdatahash;
-
-    return 0 unless ($userdatahash->[0]->{username} eq $user); 
-
-    return ($userdatahash->[0]->{can_move_any_contig} eq 'Y' ? 1 : 0);
+    return ($privilege && $privilege->{assign_project})? 1 : 0;
 }
 
 sub userCanGrantPrivilege {
     my $this = shift;
+
+    my $privilege = &getPrivilegesForUser($this,shift); # port username, if any
+
+    return ($privilege && $privilege->{grant_privileges}) ? 1 : 0;
+}
+
+sub userCanMoveAnyContig {
+    my $this = shift;
+
+    my $privilege = &getPrivilegesForUser($this,shift); # port username, if any
+
+    return ($privilege && $privilege->{move_any_contig}) ? 1 : 0;
+}
+
+sub getPrivilegesForUser {
+# return the privileges for the specified user or the default user
+    my $this = shift;
     my $user = shift;
+    my %options = @_;
 
     $user = $this->getArcturusUser() unless $user;
 
-    return undef unless $user; # protection
+    my $privilege = $this->{privilege}->{$user};
 
-#print STDOUT "testing privilege of user $user\n";
+    unless ($privilege && !$options{refresh}) {
+        $privilege = &fetchUserPrivileges($this->getConnection(),user=>$user);
+        $this->{privilege}->{$user} = $privilege;
+    }
 
-    my $userdatahash = &fetchUserData($this->getConnection(),$user);
+    return $privilege;
+}
 
-# require an exact match of the user name
+sub getUserPrivileges {
+# public; refreshes and returns a hash with all users and privileges
+    my $this = shift;
+    my $user = shift; # optional, may contain wild card symbol
 
-#print STDOUT "testing privilege of user $user : $userdatahash->[0]->{can_grant_privileges}\n";
+    $this->{privilege} = &fetchUserPrivileges($this->getConnection,like=>$user);
 
-    return undef unless @$userdatahash;
+    return $this->{privilege};
+}
 
-    return 0 unless ($userdatahash->[0]->{username} eq $user); 
+sub fetchUserPrivileges {
+# private; returns a list of hashes with user privilege data keyed on user
+    my $dbh = shift;
+    my %option = @_; # either 'like' or 'user' or none
 
-    return ($userdatahash->[0]->{can_grant_privileges} eq 'Y' ? 1 : 0);
+    my $query = "select * from PRIVILEGE ";
+
+    my @bind;
+    if ($option{like}) { # allowing wild card
+        $query .= "where username like ?";
+	push @bind, $option{like};
+    }
+    elsif ($option{user}) { # exact match
+        $query .= "where username = ?";
+        push @bind, $option{user};
+    }
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute(@bind) || &queryFailed($query,@bind) && return undef;
+
+    my $privilege_hash = {};
+    while (my ($user,$privilege) = $sth->fetchrow_array()) {
+        $privilege = 'none' unless $privilege;
+        $privilege_hash->{$user} = {} unless $privilege_hash->{$user};
+        $privilege_hash->{$user}->{$privilege} = 1;
+    }
+
+    $sth->finish();
+
+    return $privilege_hash unless ($option{user}); # hash for all users
+
+    return $privilege_hash->{$bind[0]}; # sub hash for user
 }
 
 #-----------------------------------------------------------------------------
 # user administration
 #-----------------------------------------------------------------------------
 
-sub putNewUser {
-# add a new username to the USER table
+sub addUserPrivilege {
+# add the given privilege for the user
     my $this = shift;
-    my $user = shift;
+    my ($user,$privilege) = @_;
 
-    return 0 unless $this->userCanGrantPrivilege();
+    return 0, "missing parameters" unless ($user && $privilege);
 
-    my $query = "insert into USER (username) values (?)";
+    return 0, "invalid username provided" if ($user !~ /[\w\%\_]/); # if ($user =~ /\W/)
+
+    unless (&verifyPrivilege($privilege)) {
+        return 0, "Invalid privilege '$privilege' specified";
+    }
+
+# check if user privilege is already there
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $currentprivilege = &fetchUserPrivileges($dbh,user=>$user);
 
-    my $rc = $sth->execute($user) || 0;
+    if ($currentprivilege->{$privilege}) {   
+        return 0, "user '$user' already has privilege '$privilege'";   
+    }
 
+# test if the current user can do this operation
+
+    unless ($this->userCanGrantPrivilege()) {
+        return 0, "you do not have privilege for this operation";
+    }
+
+    unless ($this->userRole($user,privilege=>$privilege)) {
+        return 0, "you do not have privilege for this operation";
+    }
+
+# either update an existing empty privilege, or insert a new row
+
+    my ($query,$sth,$nrw);
+
+    if ($currentprivilege->{none}) {
+# there is 
+        $query = "update PRIVILEGE set privilege = ?"
+	       . " where username = ? and privilege = ''";
+        $sth = $dbh->prepare_cached($query);
+        $nrw = $sth->execute($privilege,$user) || &queryFailed($query,$privilege,$user);
+        $sth->finish();
+        return 1,"OK" if ($nrw+0);
+    }
+
+# insert a new row
+
+    $query = "insert into PRIVILEGE (username,privilege) values (?,?)";
+    $sth = $dbh->prepare_cached($query);
+    $nrw = $sth->execute($user,$privilege) || &queryFailed($query,@_);
     $sth->finish();
 
-    return ($rc + 0);
+    unless ($nrw+0) {
+	return  0, "failed to add privilege '$privilege' for user '$user'";
+    }
+ 
+    return 1, "privilege '$privilege' added for user '$user'";
 }
 
-sub updateUser {
-# alter user attribute(s)
+sub removeUserPrivilege {
+# remove the given privilege for the user
+    my $this = shift;
+    my $user = shift;
+    my $privilege = shift;
+    my %options = @_;
+
+    return 0, "missing parameters" unless ($user && $privilege);
+
+    return 0, "invalid username provided" if ($user !~ /[\w\%\_]/);
+
+    unless ($privilege eq 'none' || &verifyPrivilege($privilege)) {
+        return 0, "Invalid privilege '$privilege' specified";
+    }
+
+# get current privileges; check if user has privilege
+
+    my $dbh = $this->getConnection();
+
+    my $currentprivilege = &fetchUserPrivileges($dbh,user=>$user);
+
+    unless ($currentprivilege->{$privilege}) {
+        return 0, "user '$user' does not exist" unless keys %$currentprivilege;
+        return 0, "user '$user' does not have privilege '$privilege'";
+    }
+
+# test if the current user can do this operation
+
+    unless ($this->userCanGrantPrivilege()) {
+        return 0, "you do not have privilege for this operation";
+    }
+
+    unless ($this->userRole($user,privilege=>$privilege,seniority=>1)) {
+        return 0, "you do not have privilege for this operation";
+    }
+
+# check number of privileges left; can user be removed?
+
+    my $remainder = scalar(keys %$currentprivilege) - 1;
+
+    my $query;
+    unless ($remainder && $options{force}) {
+# update the record in order to keep the user name in the PRIVILEGE list
+        $query = "update PRIVILEGE set privilege = null"
+               . " where username = ? and privilege = ?";
+    }
+
+    if ($remainder || $options{force}) {
+# the privilege can be removed (at least one record for user will remain)
+        $query = "delete from PRIVILEGE where username = ? and privilege = ?";
+        $privilege = '' if ($privilege eq 'none');
+    }
+
+    my $sth = $dbh->prepare_cached($query);
+    my $nrw = $sth->execute($user,$privilege) || &queryFailed($query,@_);
+    $sth->finish();
+
+    unless ($nrw+0) {
+        return 0, "failed to (force) remove user '$user'" unless $privilege;
+        return 0, "failed to remove user '$user'" if ($privilege eq 'none');
+        return 0, "failed to remove privilege '$privilege' for user '$user'";
+    }
+
+    return 1, "privilege '$privilege' removed for user '$user'" if $privilege;
+    return 1, "user '$user' removed" unless $privilege;
+}
+
+sub deleteUser {
+# remove all privileges of user from USER table
     my $this = shift;
     my $user = shift;
     my %options = @_;
 
-    return 0 unless $this->userCanGrantPrivilege(); # the user running the script
+# get list of privileges
 
     my $dbh = $this->getConnection();
 
-    my @items = ('role',
-                 'can_create_new_project','can_assign_project',
-                 'can_move_any_contig','can_grant_privileges');
+    my $userprivileges = &fetchUserPrivileges($dbh,user=>$user);
 
-    my $success = 0;
-    foreach my $item (@items) {
-        next unless $options{$item};
-        $success++ if &changeUserData($dbh,$item,$options{$item},$user);
+    return 0, "user '$user' does not exist" unless keys %$userprivileges;
+
+    my $f = $options{force};
+
+    my ($status,$msg);
+    foreach my $privilege (keys %$userprivileges) {
+       ($status,$msg) = $this->removeUserPrivilege($user,$privilege,force => $f);
+        last unless $status;
     }
 
-    return $success;
+    return $status,$msg;
 }
 
-sub changeUserData {
-# private, update the user table
-    my $dbh  = shift;
-    my $item = shift;
+# userRole makes a decision about precedence of privilege when two users are involved
 
-    my $query = "update USER set $item = ? where username = ?";
-
-    my $sth = $dbh->prepare_cached($query);
-
-    my $rc = $sth->execute(@_) || 0;
-
-    $sth->finish();
-
-    return ($rc + 0);
-}
-
-sub deleteUser {
-# remove a user from USER table
+sub userRole {
+# test privileges of current arcturus user against input test user
+# returns a 1 if the current user's privilege weight stronger than those of test user
+# e.g. a user without grant privilege cannot weighs less than a user who does not
+# relative weight of users is based on their highest level privilege
     my $this = shift;
-    my $user = shift;
+    my $testuser = shift;
+    my %options = @_;
 
-    return 0 unless $this->userCanGrantPrivilege(); # or replace by multitable delete
+# determine the "grade" or "role" of the current user
 
-    my $query = "delete from USER where username = ?";
+    my $thisuserrole = &getHighestPrivilege($this->getPrivilegesForUser());
 
-    my $dbh = $this->getConnection();
+# if privilege is defined, the current use should have at least that same privilege 
 
-    my $sth = $dbh->prepare_cached($query);
+    if (my $privilege = $options{privilege}) {
 
-    my $rc = $sth->execute($user) || 0;
+        my $requiredgrade = &verifyPrivilege($privilege) || 0;
 
-    $sth->finish();
-
-    return ($rc + 0);
-}
-
-sub getUserData {
-# public interface to retrieve user data hash list
-    my $this = shift;
-
-    die "getUserData expects at most one parameter" if (@_ > 1);
-
-    undef @_ unless $_[0]; # to set the array length to 0
-
-    return &fetchUserData($this->getConnection(),@_);
-}
-
-sub fetchUserData {
-# return a list of hashes with requested userdata
-    my $dbh  = shift;
-
-    my $query = "select * from USER ";
-    $query .= "where username like ?" if @_;
-
-    my $sth = $dbh->prepare_cached($query);
-
-    $sth->execute(@_) || return undef;
-
-    my $arrayofhashes = [];
-    while (my $hashref = $sth->fetchrow_hashref()) {
-        push @$arrayofhashes, $hashref;
+        if ($options{seniority}) {
+# specifies that the grade of the current user should be larger than requiredgrade
+            return 0 unless ($thisuserrole > $requiredgrade);
+        }
+	else {
+# specifies that the grade of the current user should at least equal requiredgrade
+            return 0 if ($thisuserrole < $requiredgrade);
+	}
     }
 
-    $sth->finish();
+# now test the current user against the test user
 
-    return $arrayofhashes;
+    my $testuserrole = &getHighestPrivilege($this->getPrivilegesForUser($testuser));
+
+    return 0 if ($thisuserrole < $testuserrole); # require at least equality
+
+    return 1;
+}
+
+sub getHighestPrivilege {
+# private, helper method for userRole
+    my $userhash = shift;
+
+    my $privhash = &verifyPrivilege(); # get all valid privileges
+
+    my $level = 0;
+    foreach my $privilege (keys %$userhash) {
+        next unless $privhash->{$privilege};
+        $level = $privhash->{$privilege} if ($privhash->{$privilege} > $level);
+    }
+
+    return $level;    
+}
+
+#--------------------------------------------------------------------------------
+# current privileges
+#--------------------------------------------------------------------------------
+
+sub getValidPrivileges {
+    return &verifyPrivilege();
+}
+
+sub verifyPrivilege {
+    my $privilege = shift;
+
+    my %privileges = ('create_project'   => 2,'assign_project'  => 3,
+                      'grant_privileges' => 4,'move_any_contig' => 1,
+                      'lock_project'     => 1,'arcturus_dba'    => 5);
+
+    return $privileges{$privilege} if defined($privilege); # return true or false
+
+    return \%privileges; # return hash reference
 }
 
 #-----------------------------------------------------------------------------
@@ -465,8 +583,8 @@ sub logMessage {
     my $project = shift; # project name
     my $text = shift;    # the message
 
-print STDOUT "message for user $user: $text \n";
-# add URL ?
+    my $logger = &verifyLogger('logMessage');
+    $logger->debug("message for user $user: $text");
 
     push @$MAIL, [($user,$project,$text)]; # array of arrays
 }
