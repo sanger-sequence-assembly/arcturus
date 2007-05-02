@@ -291,4 +291,11 @@ public class Project extends Core {
 		else
 			return null;
 	}
+	
+	public boolean equals(Object o) {
+		if (o != null && o instanceof Project)
+			return ((Project)o).ID == this.ID;
+		else
+			return false;
+	}
 }
