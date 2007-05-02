@@ -124,7 +124,7 @@ public class ContigTransferRequest {
 		return status;
 	}
 	
-	public String getStatusString() {
+	public static String convertStatusToString(int status) {
 		switch(status) {
 			case PENDING:
 				return "pending";
@@ -149,16 +149,20 @@ public class ContigTransferRequest {
 		}
 	}
 	
+	public String getStatusString() {
+		return convertStatusToString(status);
+	}
+	
 	public void setStatusAsString(String str) {
-		int s = stringToStatus(str);
+		int s = convertStringToStatus(str);
 		
 		if (s == UNKNOWN)
 			throw new IllegalArgumentException("Status is invalid: \"" + str + "\"");
 		
-		this.status = stringToStatus(str);
+		this.status = convertStringToStatus(str);
 	}
 	
-	public static int stringToStatus(String str) {
+	public static int convertStringToStatus(String str) {
 		if (str.equalsIgnoreCase("pending"))
 			return PENDING;
 		

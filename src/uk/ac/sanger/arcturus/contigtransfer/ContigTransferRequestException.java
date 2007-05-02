@@ -15,6 +15,8 @@ public class ContigTransferRequestException extends Exception {
 	public static final int USER_IS_NULL = 9;
 	public static final int SQL_INSERT_FAILED = 10;
 	public static final int SQL_UPDATE_FAILED = 11;
+	public static final int INVALID_STATUS_CHANGE = 13;
+	public static final int CONTIG_ALREADY_IN_DESTINATION_PROJECT = 14;
 	
 	protected int type = UNKNOWN;
 	
@@ -37,7 +39,7 @@ public class ContigTransferRequestException extends Exception {
 				return "User not authorised";
 				
 			case CONTIG_NOT_CURRENT:
-				return "Cntig not current";
+				return "Contig not current";
 				
 			case NO_SUCH_CONTIG:
 				return "No such contig";
@@ -65,6 +67,12 @@ public class ContigTransferRequestException extends Exception {
 				
 			case SQL_UPDATE_FAILED:
 				return "SQL UPDATE failed";
+				
+			case INVALID_STATUS_CHANGE:
+				return "Invalid status change";
+				
+			case CONTIG_ALREADY_IN_DESTINATION_PROJECT:
+				return "Contig already in destination project";
 				
 			default:
 				return "Unknown (code=" + type + ")";

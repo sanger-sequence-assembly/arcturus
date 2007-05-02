@@ -84,65 +84,124 @@ public class TestContigTransferRequestManager {
 	}
 
 	protected void executeCommand(String[] words) {
-		if (words[0].equalsIgnoreCase("list"))
-			listRequests(words);
-		else if (words[0].equalsIgnoreCase("create"))
-			createRequest(words);
-		else if (words[0].equalsIgnoreCase("review"))
-			reviewRequest(words);
-		else
-			System.out.println("*** Unknown command verb \"" + words[0]
-					+ "\" ***");
+		String verb = words[0];
+		
+		if (verb.equalsIgnoreCase("list")) {
+			if (words.length > 1) {
+				for (int i = 1; i < words.length; i++)	
+					listRequests(words[i], false);
+			} else
+				System.err.println("list: expects one or more user names");
+			
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("listall")) {
+			if (words.length > 1) {
+				for (int i = 1; i < words.length; i++)	
+					listRequests(words[i], true);
+			} else
+				System.err.println("listall: expects one or more user names");
+			
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("create")) {
+			if (words.length == 4) {
+				createRequest(words[1], words[2], words[3]);
+			} else
+				System.err.println("create: expects contig_id to-project user");
+			
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("cancel")) {
+			if (words.length == 3) {
+				cancelRequest(words[1], words[2]);
+			} else
+				System.err.println("cancel: expects request_id user");
+			
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("approve")) {
+			if (words.length == 3) {
+				approveRequest(words[1], words[2]);
+			} else
+				System.err.println("approve: expects request_id user");
+			
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("refuse")) {
+			if (words.length == 3) {
+				refuseRequest(words[1], words[2]);
+			} else
+				System.err.println("refuse: expects request_id user");
+
+			return;
+		}
+		
+		if (verb.equalsIgnoreCase("execute")) {
+			if (words.length == 3) {
+				executeRequest(words[1], words[2]);
+			} else
+				System.err.println("execute: expects request_id user");
+
+			return;
+		}
+		
+		System.out.println("*** Unknown command verb \"" + verb
+				+ "\" ***");
 	}
 
-	protected void listRequests(String[] words) {
-		if (words.length < 2) {
-			System.out.println("*** Too few arguments: expected username ***");
-			return;
-		}
-
-		Person user = PeopleManager.findPerson(words[1]);
+	protected void listRequests(String username, boolean showall) {
+		Person user = PeopleManager.findPerson(username);
 
 		if (user == null) {
-			System.out.println("User \"" + words[1] + "\" not known");
+			System.out.println("User \"" + username + "\" not known");
 			return;
 		}
 
+		System.out.println("\n>>> Requests for user " + username + " <<<\n");
+		
 		try {
 			ContigTransferRequest[] requests = ctrm
 					.getContigTransferRequestsByUser(user,
 							ArcturusDatabase.USER_IS_REQUESTER);
 
-			for (int i = 0; i < requests.length; i++)
-				System.out.println("Request #" + i + " : \n" + prettyPrint(requests[i]));
+			int j = 0;
+			
+			for (int i = 0; i < requests.length; i++) {
+				boolean closed = requests[i].isClosed();
+				
+				if (showall || !closed) {
+					j++;
+					System.out.println("Request #" + j + " : \n" + prettyPrint(requests[i]));
+				}
+			}
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
 	}
 
-	protected void createRequest(String[] words) {
-		if (words.length < 4) {
-			System.out
-					.println("*** Too few arguments: expected contig_id project_name username ***");
-			return;
-		}
-
+	protected void createRequest(String strContigId, String projectname, String username) {
 		try {
-			int contig_id = Integer.parseInt(words[1]);
+			int contig_id = Integer.parseInt(strContigId);
 
-			Project toProject = adb.getProjectByName(null, words[2]);
+			Project toProject = adb.getProjectByName(null, projectname);
 			
 			if (toProject == null) {
-				System.out.println("Project \"" + words[2] + "\" not known");
+				System.out.println("Project \"" + projectname + "\" not known");
 				return;
 			}
 			
 			int to_project_id = toProject.getID();
 
-			Person requester = PeopleManager.findPerson(words[3]);
+			Person requester = PeopleManager.findPerson(username);
 
 			if (requester == null) {
-				System.out.println("User \"" + words[3] + "\" not known");
+				System.out.println("User \"" + username + "\" not known");
 				return;
 			}
 
@@ -157,16 +216,22 @@ public class TestContigTransferRequestManager {
 			e.printStackTrace();
 		}
 	}
-
-	protected void reviewRequest(String[] words) {
-		if (words.length < 4) {
-			System.out
-					.println("*** Too few arguments: expected request_id new_status username ***");
-			return;
-		}
-
+	
+	protected void cancelRequest(String strRequestId, String username) {
+		reviewRequest(strRequestId, username, ContigTransferRequest.CANCELLED);
+	}
+	
+	protected void approveRequest(String strRequestId, String username) {
+		reviewRequest(strRequestId, username, ContigTransferRequest.APPROVED);
+	}
+	
+	protected void refuseRequest(String strRequestId, String username) {
+		reviewRequest(strRequestId, username, ContigTransferRequest.REFUSED);
+	}
+	
+	protected void executeRequest(String strRequestId, String username) {
 		try {
-			int request_id = Integer.parseInt(words[1]);
+			int request_id = Integer.parseInt(strRequestId);
 			
 			ContigTransferRequest request = ctrm.findContigTransferRequest(request_id);
 			
@@ -177,17 +242,49 @@ public class TestContigTransferRequestManager {
 			
 			System.out.println("Before review: \n" + prettyPrint(request));
 			
-			Person reviewer = PeopleManager.findPerson(words[3]);
+			Person reviewer = PeopleManager.findPerson(username);
 
 			if (reviewer == null) {
-				System.out.println("User \"" + words[3] + "\" not known");
+				System.out.println("User \"" + username + "\" not known");
 				return;
 			}
+			
+			ctrm.executeContigTransferRequest(request, reviewer);
+			
+			request = ctrm.findContigTransferRequest(request_id);
+			
+			System.out.println("After review: \n" + prettyPrint(request));
+		}
+		catch (ContigTransferRequestException ctre) {
+			reportContigTransferRequestException(ctre);
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
 
-			int new_status = ContigTransferRequest.stringToStatus(words[2]);
+	protected void reviewRequest(String strRequestId, String username, int new_status) {
+		try {
+			int request_id = Integer.parseInt(strRequestId);
+			
+			ContigTransferRequest request = ctrm.findContigTransferRequest(request_id);
+			
+			if (request == null) {
+				System.out.println("Request #" + request_id + " not found");
+				return;
+			}
+			
+			System.out.println("Before review: \n" + prettyPrint(request));
+			
+			Person reviewer = PeopleManager.findPerson(username);
+
+			if (reviewer == null) {
+				System.out.println("User \"" + username + "\" not known");
+				return;
+			}
 			
 			if (new_status == ContigTransferRequest.UNKNOWN) {
-				System.out.println("Status \"" + words[2] + "\" not known");
+				System.out.println("Status \"" + new_status + "\" not known");
 				return;
 			}
 			
@@ -211,11 +308,13 @@ public class TestContigTransferRequestManager {
 		Person contigOwner = request.getContigOwner();
 		String ownerName = contigOwner == null ? "nobody" : contigOwner.getName();
 		
+		Contig contig = request.getContig();
+		
 		sb.append("ContigTransferRequest\n");
 		sb.append("\tID = " + request.getRequestID() + "\n");
-		sb.append("\tContig = " + request.getContig().getID() +
+		sb.append("\tContig = " + ((contig == null) ? 0 : contig.getID()) +
 				", owner " + ownerName +
-				", in project " + request.getContig().getProject().getName() +
+				", in project " + ((contig == null) ? "null" : contig.getProject().getName()) +
 				"\n");
 		
 		sb.append("\tRequester = " + request.getRequester().getName() + "\n");
@@ -255,7 +354,6 @@ public class TestContigTransferRequestManager {
 	}
 	
 	protected void reportContigTransferRequestException(ContigTransferRequestException ctre) {
-		System.err.println("ContigTransferRequestException : " + ctre.getTypeAsString());
-		ctre.printStackTrace();
+		System.out.println("ContigTransferRequestException : " + ctre.getTypeAsString());
 	}
 }
