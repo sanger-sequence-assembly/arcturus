@@ -22,11 +22,12 @@ my $subdir;
 my $ioport;
 my $delayed;
 my $batch;
+my $new;
 
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|instance|project|assembly|fopn|import|export|"
+my $validKeys  = "organism|instance|project|assembly|fopn|import|export|new|"
                . "batch|nobatch|delayed|subdir|sd|r|"
                . "verbose|debug|confirm|submit|help";
 
@@ -68,6 +69,7 @@ while (my $nextword = shift @ARGV) {
     $batch        = 1              if ($nextword eq '-delayed');
     $batch        = 1              if ($nextword eq '-batch');
     $batch        = 0              if ($nextword eq '-nobatch');
+    $new          = 1              if ($nextword eq '-new');
 
     $verbose      = 1              if ($nextword eq '-verbose');
 
@@ -185,7 +187,8 @@ foreach my $project (@projects) {
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
         if ($ioport eq 'import') {
-            $command .= "$work_dir/importintoarcturus.csh $project";
+            $command .= "$work_dir/importintoarcturus.csh $project" unless $new;
+            $command .= "$work_dir/newimportintoarcturus.csh $project" if $new;
 #        $command .= "$import_script $instance $organism $project 64 0"; # ?
 #        $command .= "$import_script -instance $instance -organism $organism -project $project -64bit -consensus "; # ?
         }
