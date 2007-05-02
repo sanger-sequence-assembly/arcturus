@@ -247,10 +247,22 @@ sub getUpdated {
 }
   
 #-------------------------------------------------------------------    
+
+sub setGap4Name {
+    my $this = shift;
+    $this->{data}->{gap4name} = shift;
+}
+
+sub getGap4Name {
+    my $this = shift;
+    return $this->{data}->{gap4name};
+}
+  
+#-------------------------------------------------------------------    
 # exporting of this project's contig as CAF or fasta file
 #-------------------------------------------------------------------    
   
-sub writeContigsToCaf {
+sub writeContigsToCaf { # TO BE DEPRECATED
 # write contigs to CAF
     my $this = shift;
     my $FILE = shift; # obligatory file handle
@@ -299,7 +311,7 @@ sub writeContigsToCaf {
     return $export,$errors,$report;
 }
 
-sub writeContigsToFasta {
+sub writeContigsToFasta { # TO BE DEPRECATED
 # write DNA of this read in FASTA format to FILE handle
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
@@ -346,7 +358,7 @@ sub writeContigsToFasta {
     return $export,$errors,$report;
 }
 
-sub writeContigsToMaf {
+sub writeContigsToMaf { # TO BE DEPRECATED
 # write contig bases, contig quality data, reads placed to specified directory
     my $this  = shift;
     my $DFILE = shift; # obligatory file handle for DNA
