@@ -22,6 +22,10 @@ public class ContigTransferRequestManager {
 
 	protected PreparedStatement pstmtInsertNewRequest = null;
 
+	protected PreparedStatement pstmtUpdateRequestStatus = null;
+	
+	protected PreparedStatement pstmtMarkRequestAsFailed = null;
+
 	/**
 	 * Creates a new ContigTransferRequestManager to provide contig transfer
 	 * request management services to an ArcturusDatabase object.
@@ -56,7 +60,8 @@ public class ContigTransferRequestManager {
 
 		pstmtByContigOwner = conn.prepareStatement(query);
 
-		query = "select " + columns
+		query = "select "
+				+ columns
 				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
 				+ " where request_id = ?";
 
@@ -72,6 +77,14 @@ public class ContigTransferRequestManager {
 
 		pstmtInsertNewRequest = conn.prepareStatement(query,
 				Statement.RETURN_GENERATED_KEYS);
+
+		query = "update CONTIGTRANSFERREQUEST set status=?,reviewer=?,reviewed=now() where request_id = ?";
+
+		pstmtUpdateRequestStatus = conn.prepareStatement(query);
+		
+		query = "update CONTIGTRANSFERREQUEST set status = 'failed', closed=NOW()  where request_id = ?";
+		
+		pstmtMarkRequestAsFailed = conn.prepareStatement(query);
 	}
 
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user,
@@ -112,12 +125,6 @@ public class ContigTransferRequestManager {
 			} catch (DataFormatException dfe) {
 				Arcturus.logWarning("Failed to get contig " + contigId, dfe);
 				contig = null;
-			}
-
-			if (contig == null) {
-				Arcturus.logWarning("Contig transfer request " + requestId
-						+ " refers to a non-existent contig " + contigId);
-				continue;
 			}
 
 			int oldProjectId = rs.getInt(3);
@@ -206,8 +213,12 @@ public class ContigTransferRequestManager {
 					ContigTransferRequestException.NO_SUCH_PROJECT,
 					"No such project with ID=" + toProjectId);
 
-		checkCanUserTransferBetweenProjects(requester, fromProject, toProject);
+		if (fromProject.equals(toProject))
+			throw new ContigTransferRequestException(
+					ContigTransferRequestException.CONTIG_ALREADY_IN_DESTINATION_PROJECT);
 
+		checkCanUserTransferBetweenProjects(requester, fromProject, toProject);
+		
 		return realCreateContigTransferRequest(requester, contig, toProject);
 	}
 
@@ -273,14 +284,25 @@ public class ContigTransferRequestManager {
 	protected void checkCanUserTransferBetweenProjects(Person requester,
 			Project fromProject, Project toProject)
 			throws ContigTransferRequestException, SQLException {
+		System.out.println("==> checkCanUserTransferBetweenProjects");
+
+		System.out
+				.println("Check for requester is from-project owner, transferring to bin");
+
 		if (requester.equals(fromProject.getOwner()) && toProject.isBin())
 			return;
+
+		System.out.println("Check for requester is to-project owner");
 
 		if (requester.equals(toProject.getOwner()))
 			return;
 
+		System.out.println("Check for user has move_any_contig privilege");
+
 		if (adb.hasPrivilege(requester, "move_any_contig"))
 			return;
+
+		System.out.println("Check for user has superuser status");
 
 		if (isSuperUser(requester))
 			return;
@@ -303,28 +325,69 @@ public class ContigTransferRequestManager {
 		return createContigTransferRequest(PeopleManager.findMe(), contigId,
 				toProjectId);
 	}
+	
+	protected boolean markRequestAsFailed(ContigTransferRequest request)
+		throws SQLException {
+		pstmtMarkRequestAsFailed.setInt(1, request.getRequestID());
+		return pstmtMarkRequestAsFailed.executeUpdate() == 1;
+	}
 
 	public void reviewContigTransferRequest(ContigTransferRequest request,
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
 		checkUser(reviewer);
-		checkIsCurrentContig(request.getContig().getID());
-
+		
+		try {
+			Contig contig = request.getContig();
+			int contig_id = contig == null ? 0 : contig.getID();
+			checkIsCurrentContig(contig_id);
+			checkContigProjectStillValid(request);
+		}
+		catch (ContigTransferRequestException ctre) {
+			markRequestAsFailed(request);
+			throw ctre;
+		}
+		
 		checkCanUserAlterRequestStatus(request, reviewer, newStatus);
 
+		checkStatusChangeIsAllowed(request, newStatus);
+
 		changeContigRequestStatus(request, reviewer, newStatus);
+	}
+
+	protected void checkContigProjectStillValid(ContigTransferRequest request)
+			throws ContigTransferRequestException, SQLException {
+		System.out.println("==> checkContigProjectStillValid");
+
+		Project fromProject = request.getOldProject();
+		Project contigProject = request.getContig().getProject();
+
+		if (fromProject != null && contigProject != null
+				&& fromProject.getID() == contigProject.getID())
+			return;
+		
+		throw new ContigTransferRequestException(
+				ContigTransferRequestException.CONTIG_HAS_MOVED);
 	}
 
 	protected void checkCanUserAlterRequestStatus(
 			ContigTransferRequest request, Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
+		System.out.println("==> checkCanUserAlterRequestStatus");
+
+		System.out.println("Check for cancellation by requester");
+
 		if (newStatus == ContigTransferRequest.CANCELLED
 				&& reviewer.equals(request.getRequester()))
 			return;
 
+		System.out.println("Check for refusal or approval by contig owner");
+
 		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
 				&& reviewer.equals(request.getContigOwner()))
 			return;
+
+		System.out.println("Check for superuser status");
 
 		if (isSuperUser(reviewer))
 			return;
@@ -333,10 +396,39 @@ public class ContigTransferRequestManager {
 				ContigTransferRequestException.USER_NOT_AUTHORISED);
 	}
 
+	protected void checkStatusChangeIsAllowed(ContigTransferRequest request,
+			int newStatus) throws ContigTransferRequestException {
+		int oldStatus = request.getStatus();
+
+		// PENDING --> APPROVED | REFUSED | CANCELLED
+		if (oldStatus == ContigTransferRequest.PENDING
+				&& (newStatus == ContigTransferRequest.APPROVED
+						|| newStatus == ContigTransferRequest.CANCELLED || newStatus == ContigTransferRequest.REFUSED))
+			return;
+
+		// APPROVED --> DONE
+		if (oldStatus == ContigTransferRequest.APPROVED
+				&& (newStatus == ContigTransferRequest.DONE || newStatus == ContigTransferRequest.CANCELLED))
+			return;
+
+		throw new ContigTransferRequestException(
+				ContigTransferRequestException.INVALID_STATUS_CHANGE);
+	}
+
 	protected void changeContigRequestStatus(ContigTransferRequest request,
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
+		String newStatusString = ContigTransferRequest
+				.convertStatusToString(newStatus);
+		pstmtUpdateRequestStatus.setString(1, newStatusString);
+		pstmtUpdateRequestStatus.setString(2, reviewer.getUID());
+		pstmtUpdateRequestStatus.setInt(3, request.getRequestID());
 
+		int rc = pstmtUpdateRequestStatus.executeUpdate();
+
+		if (rc != 1)
+			throw new ContigTransferRequestException(
+					ContigTransferRequestException.SQL_UPDATE_FAILED);
 	}
 
 	public void reviewContigTransferRequest(int requestId, Person reviewer,
@@ -352,21 +444,19 @@ public class ContigTransferRequestManager {
 	}
 
 	public void executeContigTransferRequest(ContigTransferRequest request,
-			Person reviewer, int newStatus)
+			Person reviewer)
 			throws ContigTransferRequestException, SQLException {
 		// XXX to be implemented
 	}
 
-	public void executeContigTransferRequest(int requestId, Person reviewer,
-			int newStatus) throws ContigTransferRequestException, SQLException {
+	public void executeContigTransferRequest(int requestId, Person reviewer) throws ContigTransferRequestException, SQLException {
 		ContigTransferRequest request = findContigTransferRequest(requestId);
-		executeContigTransferRequest(request, reviewer, newStatus);
+		executeContigTransferRequest(request, reviewer);
 	}
 
-	public void executeContigTransferRequest(int requestId, int newStatus)
+	public void executeContigTransferRequest(int requestId)
 			throws ContigTransferRequestException, SQLException {
-		executeContigTransferRequest(requestId, PeopleManager.findMe(),
-				newStatus);
+		executeContigTransferRequest(requestId, PeopleManager.findMe());
 	}
 
 }
