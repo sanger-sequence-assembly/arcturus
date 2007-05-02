@@ -78,7 +78,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -139,7 +139,8 @@ else {
 
     $project->setProjectName($projectname)     if $projectname;
     $project->setOwner($projectowner)          if $projectowner;
-    $projectstatus =~ s/\_|\-/ /g; # replace underscore/hyphen by blanks
+# replace underscore/hyphen by blanks
+    $projectstatus =~ s/\_|\-/ /g if $projectstatus;
     $project->setProjectStatus($projectstatus) if $projectstatus;
 # special case
     if ($projectcomment && $extend && $project->getComment()) {
@@ -156,18 +157,18 @@ else {
 
 # from here change
 
-    $logger->skip();
+    my %skips = (preskip=>1,skip=>1);
     if ($success == 2) {
-        $logger->warning($message);
+        $logger->warning($message,%skips);
     }
     elsif ($success == 1) {
-        $logger->warning($message." (=> use '-confirm')");
+        $logger->warning($message,preskip=>1);
+        $logger->warning("=> repeat command and add '-confirm'",skip=>1);
     }
     else {
         $message = "FAILED: ".$message if $confirm;
-        $logger->warning($message);
+        $logger->warning($message,%skips);
     }
-    $logger->skip();
 }
 
 $adb->disconnect();
