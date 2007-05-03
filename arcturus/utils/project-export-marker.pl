@@ -25,10 +25,18 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }
+ 
+    if ($nextword eq '-instance') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
-    $instance         = shift @ARGV  if ($nextword eq '-instance');
-
-    $organism         = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-organism') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
@@ -52,22 +60,35 @@ $logger->setStandardFilter($loglevel) if defined $loglevel;
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
 &showUsage("Missing project identifier") unless $project;
+
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+ 
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
+
 #----------------------------------------------------------------
-# if no project is defined, the loader allocates by inheritance
+# identify the project, which must be unique
 #----------------------------------------------------------------
 
 # collect project specification
