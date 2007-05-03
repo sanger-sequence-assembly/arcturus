@@ -73,17 +73,26 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
     &showUsage("Organism '$organism' not found on server '$instance'");
 }
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
  
 my $URL = $adb->getURL;
 
@@ -157,7 +166,8 @@ foreach my $project (@projects) {
 }
 
 if (@projects && !$longwriteup) {
-    print STDOUT "\nProject inventory for database $organism ";
+    print STDOUT "\nProject inventory for database $organism "
+               . "on instance $instance";
     print STDOUT "(assembly $assembly) " if defined($assembly);
 
     print STDOUT ":\n\n";
