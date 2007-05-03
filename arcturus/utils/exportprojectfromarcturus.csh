@@ -75,10 +75,13 @@ chmod g-w ${projectname}.A
 
 chmod g-w ${projectname}.A.aux
 
+echo Marking the project as exported
+
+${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -info
+
 echo Cleaning up
 
 rm -f $padded $depadded
-
 
 if ( ! (-e ${projectname}.B) ) then
 
