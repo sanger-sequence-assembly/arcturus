@@ -453,13 +453,18 @@ sub write {
 # to be added: XML formatting
     }
     else {
-        $message .= $linebreak if $options{preskip};
+# skip before (preskip/ps/ss), skip after (skip/ss), backspace (bs), nobreak (nb) 
+        if ($options{preskip} || $options{ps} || $options{ss}) {
+            $message .= $linebreak;
+        } 
         $message .= "!! " if $options{emphasis};
         $message .= "$options{prefix} : " if $options{prefix};
         $message .= $text if ($text && length($text) > 0);
-        $message .= $linebreak unless ($options{nobreak} || $options{bs});
+        unless ($options{nobreak} || $options{nb} || $options{bs}) {
+	    $message .= $linebreak;
+	}
         $message .= "\r" if $options{bs};
-        my $skip = $options{skip} || 0;
+        my $skip = $options{skip} || $options{ss} || 0;
         while ($skip-- > 0) {
             $message .= $linebreak;
         }
