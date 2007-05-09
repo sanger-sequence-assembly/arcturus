@@ -23,6 +23,7 @@ my $allcontigs = 0;
 my $pinclude;
 my $pexclude;
 my $usegapname = 1;
+my $showat = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -35,6 +36,8 @@ while (my $nextword = shift @ARGV) {
     $contigids = shift @ARGV if ($nextword eq '-contigs');
 
     $allcontigs = 1 if ($nextword eq '-allcontigs');
+
+    $showat = 1 if ($nextword eq '-showat');
 
     $pinclude = shift @ARGV if ($nextword eq '-include');
 
@@ -139,11 +142,11 @@ while(my @ary = $sth->fetchrow_array()) {
 
     $sequence =~ s/[GC]+//gi;
 
-    my $at = length($sequence);
+    my $at = 100.0 * length($sequence)/$contiglength;
 
-    my $gc = 100.0 * ($contiglength - $at)/$contiglength;
+    my $gc = 100.0 - $at;
 
-    printf "%-30s %6.2f %6.2f\n", $contigname, $cover, $gc;
+    printf "%-30s %6.2f %6.2f %8d\n", $contigname, $cover, ($showat ? $at : $gc), $contiglength;
 }
 
 $sth->finish();
@@ -171,6 +174,7 @@ sub showUsage {
     print STDERR "    -include\t\tInclude contigs in these projects\n";
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
     print STDERR "    -nogap4name\t\tUse contig ID as name, not Gap4 name\n";
+    print STDERR "    -showat\t\tDisplay A+T content instead of G+C\n";
 }
 
 sub getProjectIDs {
