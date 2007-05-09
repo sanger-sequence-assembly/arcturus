@@ -139,6 +139,10 @@ public class Contig extends Core implements DNASequence {
 	public Date getUpdated() {
 		return updated;
 	}
+	
+	public void setUpdated(Date updated) {
+		this.updated = updated;
+	}
 
 	public Project getProject() {
 		return project;

@@ -937,17 +937,21 @@ public class ContigManager extends AbstractManager {
 
 			Contig contig = (Contig) hashByID.get(new Integer(contig_id));
 
+			java.util.Date updated = rs.getTimestamp(6);
+
 			if (contig == null) {
 				String gap4name = rs.getString(2);
 				int ctglen = rs.getInt(3);
 				int nreads = rs.getInt(4);
 				java.util.Date created = rs.getTimestamp(5);
-				java.util.Date updated = rs.getTimestamp(6);
 
 				contig = new Contig(gap4name, contig_id, ctglen, nreads,
 						created, updated, project, adb);
 
 				registerNewContig(contig);
+			} else {
+				contig.setProject(project);
+				contig.setUpdated(updated);
 			}
 
 			updateContig(contig, options);
