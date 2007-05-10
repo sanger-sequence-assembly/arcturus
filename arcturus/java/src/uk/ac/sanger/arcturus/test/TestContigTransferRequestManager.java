@@ -310,7 +310,7 @@ public class TestContigTransferRequestManager {
 		
 		Contig contig = request.getContig();
 		
-		sb.append("ContigTransferRequest\n");
+		sb.append("ContigTransferRequest (" + request.hashCode() +  ")\n");
 		sb.append("\tID = " + request.getRequestID() + "\n");
 		sb.append("\tContig = " + ((contig == null) ? 0 : contig.getID()) +
 				", owner " + ownerName +
