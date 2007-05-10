@@ -166,6 +166,10 @@ public class Project extends Core {
 		this.owner = owner;
 	}
 	
+	public boolean isUnowned() {
+		return owner == null;
+	}
+	
 	public boolean isMine() {
 		return PeopleManager.isMe(owner);
 	}
