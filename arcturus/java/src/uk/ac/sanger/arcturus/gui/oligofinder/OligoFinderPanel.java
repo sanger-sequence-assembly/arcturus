@@ -140,28 +140,29 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 		cbSelectAll.setSelected(false);
 		panel.add(cbSelectAll);
-
-		cbSelectAll.addChangeListener(new ChangeListener() {
-			public void stateChanged(ChangeEvent e) {
-				if (cbSelectAll.isSelected()) {
+		
+		cbSelectAll.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
+				if (e.getStateChange() == ItemEvent.SELECTED) {
 					int start = 0;
 					int end = lstProjects.getModel().getSize() - 1;
 					if (end >= 0) {
 						lstProjects.setSelectionInterval(start, end);
-					}
+					}				
 				} else {
-					lstProjects.clearSelection();
+					lstProjects.clearSelection();				
 				}
 			}
+			
 		});
 
 		cbFreeReads.setSelected(false);
 		panel.add(cbFreeReads);
 
-		cbFreeReads.addChangeListener(new ChangeListener() {
-			public void stateChanged(ChangeEvent e) {
+		cbFreeReads.addItemListener(new ItemListener() {
+			public void itemStateChanged(ItemEvent e) {
 				updateFindOligosButton();
-			}
+			}			
 		});
 
 		add(panel);
