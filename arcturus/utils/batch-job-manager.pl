@@ -200,7 +200,7 @@ foreach my $project (@projects) {
 
     if ($batch) {
 # export by batch job
-        my $command = "bsub -q  babel1 -N ";
+        my $command = "bsub -q  babelq1 -N ";
 #        my $command = "bsub -q  pcs3q1 -N ";
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
