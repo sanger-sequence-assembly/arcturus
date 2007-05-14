@@ -27,29 +27,36 @@ my $new;
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|instance|project|assembly|fopn|import|export|new|"
+my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|"
+               . "import|export|new|"
                . "batch|nobatch|delayed|subdir|sd|r|"
-               . "verbose|debug|confirm|submit|help";
+               . "verbose|debug|confirm|submit|help|h";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }
-                                                                           
-    if ($nextword eq '-instance') {
-        &showUsage("You can't re-define instance") if $instance;
-        $instance = shift @ARGV;
-    }
-      
-    if ($nextword eq '-organism') {
-        &showUsage("You can't re-define organism") if $organism;
-        $organism = shift @ARGV; 
+
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
     }
 
-    $project      = shift @ARGV    if ($nextword eq '-project');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
-    $assembly     = shift @ARGV    if ($nextword eq '-assembly');
+    if ($nextword eq '-project'  || $nextword eq '-p') {
+        $project      = shift @ARGV;
+    }
+
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
 
     $fopn         = shift @ARGV    if ($nextword eq '-fopn');
 
@@ -78,7 +85,7 @@ while (my $nextword = shift @ARGV) {
     $confirm      = 1              if ($nextword eq '-confirm');
     $confirm      = 1              if ($nextword eq '-submit');
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
  
 #----------------------------------------------------------------
@@ -93,23 +100,34 @@ $logger->setStandardFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
 &showUsage("Missing project ID or fopn") unless ($project || $fopn);
 
 &showUsage("Missing import or export key") unless $ioport;
+
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
-$logger->info("Database ".$adb->getURL." opened succesfully");
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+ 
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
 
 $adb->setLogger($logger);
 
@@ -119,8 +137,9 @@ $adb->setLogger($logger);
 
 my @projects;
 
-if ($project) {
-    my $Projects = &getProjectInstance($project,$assembly,$adb,1); # allow multiple
+if ($project && $project !~ /\W/) {
+# project specificationmay include wildcard
+    my $Projects = &getProjectInstance($project,$assembly,$adb,1);
  
     &showUsage("Unknown project(s) $project") unless $Projects;
 
@@ -128,9 +147,15 @@ if ($project) {
         push @projects, $project->getProjectName();
     }
 }
-elsif ($fopn) {
-    my @ids;
+
+elsif ($fopn || $project =~ /\W/) {
+# try file
     $fopn = &getNamesFromFile($fopn);
+# try multiple projects on command line
+    if ($project) {
+	push @$fopn, split /\W/,$project;
+    }
+
     foreach my $project (@$fopn) {
         my $Projects = &getProjectInstance($project,$assembly,$adb); 
 # allow multiple projects (use wildcards)
@@ -145,7 +170,7 @@ elsif ($fopn) {
 
 #----------------------------------------------------------------
 
-# det get current directory
+# get current directory
 
 my $pwd = `pwd`;
 chomp $pwd;
@@ -153,14 +178,6 @@ chomp $pwd;
 # get the repository position
 
 my $work_dir = `pfind -q $organism`;
-
-#my $import_script = "/nfs/pathsoft/arcturus/utils/importprojectintoarcturus.csh";
-# temporary use test script
-#$import_script = "/nfs/team81/ejz/arcturus/dev/utils/importprojectintoarcturus.csh";
-
-#my $export_script = "/nfs/pathsoft/arcturus/utils/exportprojectfromarcturus.csh";
-# temporary use test script
-#$export_script = "/nfs/team81/ejz/arcturus/dev/utils/exportprojectfromarcturus.csh";
 
 &showUsage("Can't locate project directory for $organism") unless $work_dir;
 
@@ -183,7 +200,8 @@ foreach my $project (@projects) {
 
     if ($batch) {
 # export by batch job
-        my $command = "bsub -q  pcs3q1 -N ";
+        my $command = "bsub -q  babel1 -N ";
+#        my $command = "bsub -q  pcs3q1 -N ";
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
         if ($ioport eq 'import') {
