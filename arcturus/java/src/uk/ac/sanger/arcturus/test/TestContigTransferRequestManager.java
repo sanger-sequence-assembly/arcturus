@@ -23,7 +23,7 @@ public class TestContigTransferRequestManager {
 		System.err.println("TestContigTransferRequestManager");
 		System.err.println("================================");
 		System.err.println();
-
+		
 		try {
 			String instance = "test";
 
@@ -39,6 +39,7 @@ public class TestContigTransferRequestManager {
 			adb = ai.findArcturusDatabase(organism);
 			ctrm = adb.getContigTransferRequestManager();
 
+			ctrm.setDebugging(true);
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -177,7 +178,7 @@ public class TestContigTransferRequestManager {
 				
 				if (showall || !closed) {
 					j++;
-					System.out.println("Request #" + j + " : \n" + prettyPrint(requests[i]));
+					System.out.println("Request #" + j + " : \n" + ctrm.prettyPrint(requests[i]));
 				}
 			}
 		} catch (SQLException e) {
@@ -208,7 +209,7 @@ public class TestContigTransferRequestManager {
 			ContigTransferRequest request = ctrm.createContigTransferRequest(
 					requester, contig_id, to_project_id);
 			
-			System.out.println("Created new request: \n" + prettyPrint(request));
+			System.out.println("Created new request: \n" + ctrm.prettyPrint(request));
 		} catch (ContigTransferRequestException ctre) {
 			reportContigTransferRequestException(ctre);
 		}
@@ -240,7 +241,7 @@ public class TestContigTransferRequestManager {
 				return;
 			}
 			
-			System.out.println("Before review: \n" + prettyPrint(request));
+			System.out.println("Before review: \n" + ctrm.prettyPrint(request));
 			
 			Person reviewer = PeopleManager.findPerson(username);
 
@@ -253,7 +254,7 @@ public class TestContigTransferRequestManager {
 			
 			request = ctrm.findContigTransferRequest(request_id);
 			
-			System.out.println("After review: \n" + prettyPrint(request));
+			System.out.println("After review: \n" + ctrm.prettyPrint(request));
 		}
 		catch (ContigTransferRequestException ctre) {
 			reportContigTransferRequestException(ctre);
@@ -274,7 +275,7 @@ public class TestContigTransferRequestManager {
 				return;
 			}
 			
-			System.out.println("Before review: \n" + prettyPrint(request));
+			System.out.println("Before review: \n" + ctrm.prettyPrint(request));
 			
 			Person reviewer = PeopleManager.findPerson(username);
 
@@ -292,7 +293,7 @@ public class TestContigTransferRequestManager {
 			
 			request = ctrm.findContigTransferRequest(request_id);
 			
-			System.out.println("After review: \n" + prettyPrint(request));
+			System.out.println("After review: \n" + ctrm.prettyPrint(request));
 		}
 		catch (ContigTransferRequestException ctre) {
 			reportContigTransferRequestException(ctre);
@@ -300,57 +301,6 @@ public class TestContigTransferRequestManager {
 		catch (Exception e) {
 			e.printStackTrace();
 		}
-	}
-	
-	protected String prettyPrint(ContigTransferRequest request) {
-		StringBuffer sb = new StringBuffer(80);
-		
-		Person contigOwner = request.getContigOwner();
-		String ownerName = contigOwner == null ? "nobody" : contigOwner.getName();
-		
-		Contig contig = request.getContig();
-		
-		sb.append("ContigTransferRequest (" + request.hashCode() +  ")\n");
-		sb.append("\tID = " + request.getRequestID() + "\n");
-		sb.append("\tContig = " + ((contig == null) ? 0 : contig.getID()) +
-				", owner " + ownerName +
-				", in project " + ((contig == null) ? "null" : contig.getProject().getName()) +
-				"\n");
-		
-		sb.append("\tRequester = " + request.getRequester().getName() + "\n");
-		
-		sb.append("\tOpened on " + request.getOpenedDate() + "\n");
-		
-		String reqcomment = request.getRequesterComment();
-		if (reqcomment != null)
-			sb.append("\tRequester comment = " + reqcomment + "\n");
-		
-		Project fromProject = request.getOldProject();
-		Project toProject = request.getNewProject();
-		
-		sb.append("\t" + fromProject.getName() + " --> " + toProject.getName() + "\n");
-		
-		sb.append("\tStatus = " + request.getStatusString() + "\n");
-		
-		Person reviewer = request.getReviewer();
-		
-		if (reviewer != null) {
-			sb.append("\n\tReviewer = " + reviewer.getName() + "\n");
-			
-			java.util.Date revdate = request.getReviewedDate();
-			if (revdate != null)
-				sb.append("\tReviewed on " + revdate + "\n");
-			
-			String revcomment = request.getReviewerComment();
-			if (revcomment != null)
-				sb.append("\tReviewer comment = " + revcomment + "\n");
-		}
-		
-		java.util.Date closed = request.getClosedDate();
-		if (closed != null)
-			sb.append("\n\tClosed on " + closed + "\n");
-		
-		return sb.toString();
 	}
 	
 	protected void reportContigTransferRequestException(ContigTransferRequestException ctre) {
