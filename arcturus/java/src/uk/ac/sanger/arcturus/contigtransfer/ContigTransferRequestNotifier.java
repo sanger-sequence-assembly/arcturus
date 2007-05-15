@@ -91,7 +91,7 @@ public class ContigTransferRequestNotifier {
 
 		String requesterName = request.getRequester().getName();
 
-		sb.append("Dear " + person.getGivenName() + "\n\n");
+		sb.append("Dear " + person.getGivenName() + ",\n\n");
 
 		if (oldStatus == ContigTransferRequest.UNKNOWN) {
 			sb.append("A new contig transfer request has been created by "
@@ -104,7 +104,7 @@ public class ContigTransferRequestNotifier {
 					sb.append(requesterName + " has asked to move your contig "
 							+ contig.getID() + " (" + contig.getLength()
 							+ "bp, " + contig.getReadCount()
-							+ " reads)\nin project " + oldProject.getName()
+							+ " reads)\nfrom project " + oldProject.getName()
 							+ " to project " + newProject.getName() + "\n\n");
 					break;
 
@@ -112,7 +112,7 @@ public class ContigTransferRequestNotifier {
 					sb.append(requesterName + " has asked to move contig "
 							+ contig.getID() + " (" + contig.getLength()
 							+ "bp, " + contig.getReadCount()
-							+ " reads)\nin project " + oldProject.getName()
+							+ " reads)\nfrom project " + oldProject.getName()
 							+ " to your project " + newProject.getName()
 							+ "\n\n");
 					break;
@@ -130,7 +130,7 @@ public class ContigTransferRequestNotifier {
 			sb.append("This request is for contig " + contig.getID()
 							+ " (" + contig.getLength() + "bp, "
 							+ contig.getReadCount() + " reads) in project "
-							+ oldProject.getName() + "\nto be moved project "
+							+ oldProject.getName() + "\nto be moved to project "
 							+ newProject.getName() + ".\n\n");
 
 			switch (role) {
@@ -139,7 +139,9 @@ public class ContigTransferRequestNotifier {
 					break;
 
 				case AS_CONTIG_OWNER:
-					sb.append("You are the owner of the contig in question.\n\n");
+					verb = request.getStatus() == ContigTransferRequest.DONE ?
+							"were" : "are";
+					sb.append("You " + verb + " the owner of the contig in question.\n\n");
 					break;
 
 				case AS_DESTINATION_PROJECT_OWNER:

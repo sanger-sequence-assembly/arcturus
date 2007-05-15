@@ -491,9 +491,20 @@ public class ContigTransferRequestManager {
 		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
 				&& reviewer.equals(request.getContigOwner()))
 			return;
+
+		/*
+		 * The owner of the destination project can refuse or approve a transfer
+		 * from a bin project or an unowned project made by another user.
+		 */
+
+		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
+				&& !reviewer.equals(request.getRequester()) 
+				&& reviewer.equals(request.getNewProject().getOwner())
+				&& (request.getOldProject().isBin() || request.getOldProject().isUnowned()))
+			return;
 		
 		/*
-		 * The requester is allowed to approve a transfer from a bin project or an unowner project.
+		 * The requester is allowed to approve a transfer from a bin project or an unowned project.
 		 */
 		
 		if (newStatus == ContigTransferRequest.APPROVED && reviewer.equals(request.getRequester()) &&
