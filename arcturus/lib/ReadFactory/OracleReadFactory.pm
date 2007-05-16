@@ -161,6 +161,8 @@ sub getReadNamesToLoad {
 
     my $dbh = $this->{connection};
 
+    print STDERR "Preparing query: $query\n";
+
     my $sth = $dbh->prepare($query);
 
     $sth->execute();
