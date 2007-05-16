@@ -230,7 +230,7 @@ sub verifyArcturusUser {
 
     my $userdatahash = &fetchUserPrivileges($this->getConnection(),user=>$user);
 
-    unless ($userdatahash->{$user}) {
+    unless ($userdatahash && keys %$userdatahash) {
         my $logger = &verifyLogger('verifyArcturusUser');
         $logger->error("user $user is unknown to Arcturus database " 
 	              . ($this->getURL() || "VOID")) if shift;
@@ -309,39 +309,158 @@ sub fetchUserPrivileges {
     my $dbh = shift;
     my %option = @_; # either 'like' or 'user' or none
 
-    my $query = "select * from PRIVILEGE ";
+# first get all userdata from PRIVILEGE (also when user not in USER) 
 
-    my @bind;
+    my $query = "select PRIVILEGE.username,privilege,role"
+              . "  from PRIVILEGE left join USER using (username)";
+
+# then add user data in USER with user not in PRIVILEGE
+
+    my $union = "select USER.username,'none',role"
+              . "  from USER left join PRIVILEGE using (username)"
+	      . " where PRIVILEGE.username is null";
+ 
+    my @bind;    
     if ($option{like}) { # allowing wild card
-        $query .= "where username like ?";
-	push @bind, $option{like};
+        $query .= " where PRIVILEGE.username like ?";
+        $union .= "   and USER.username like ?";
+	push @bind, $option{like},$option{like};
     }
     elsif ($option{user}) { # exact match
-        $query .= "where username = ?";
-        push @bind, $option{user};
+        $query .= " where PRIVILEGE.username = ?";
+        $union .= "   and USER.username = ?";
+        push @bind, $option{user},$option{user};
     }
+
+    $query .= " union ".$union;
 
     my $sth = $dbh->prepare_cached($query);
 
     $sth->execute(@bind) || &queryFailed($query,@bind) && return undef;
 
     my $privilege_hash = {};
-    while (my ($user,$privilege) = $sth->fetchrow_array()) {
+    while (my ($username,$privilege,$role) = $sth->fetchrow_array()) {
         $privilege = 'none' unless $privilege;
-        $privilege_hash->{$user} = {} unless $privilege_hash->{$user};
-        $privilege_hash->{$user}->{$privilege} = 1;
+        $role      = 'none' unless $role; # 
+        $privilege_hash->{$username} = {} unless $privilege_hash->{$username};
+        $privilege_hash->{$username}->{$privilege} = $role;
     }
 
     $sth->finish();
 
     return $privilege_hash unless ($option{user}); # hash for all users
 
-    return $privilege_hash->{$bind[0]}; # sub hash for user
+    return $privilege_hash->{ $option{user} }; # sub hash for specific user
+}
+
+sub getRoleForUser {
+# return the privileges for the specified user or the default user
+    my $this = shift;
+    my $user = shift;
+    my %options = @_;
+
+    my $privilege = $this->getPrivilegesForUser($user,%options);
+
+    my ($dummy,$role) = each %$privilege; # the first pair
+
+    return $role;
 }
 
 #-----------------------------------------------------------------------------
 # user administration
 #-----------------------------------------------------------------------------
+
+sub addNewUser {
+# add a new user to the USER table
+    my $this = shift;
+    my $user = shift;
+    my $role = shift || 'finisher';
+
+    return 0, "invalid role '$role' specified" unless &verifyUserRole($role);
+
+# test privilege of the current arcturus user (both grant_privilege and seniority)
+
+    my $privilege = $this->getPrivilegesForUser(); # of current Arcturus user
+    my $userrole  = $privilege->{grant_privileges} || 0;
+    my $seniority = &verifyUserRole($userrole);
+# the current user can only allocate a role lower than or equal its own seniority 
+    unless ($seniority && $seniority >= &verifyUserRole($role)) {
+print STDERR "addNewUser seniority $seniority  role $role ". &verifyUserRole($role)."\n";
+        return 0, "you do not have privilege for this operation";
+    }
+
+# test that the user does not exist by testing the current privileges 
+
+    my $dbh = $this->getConnection();
+
+    my $userprivilege = &fetchUserPrivileges($dbh,user=>$user);
+    if (my @privileges = keys %$userprivilege) {
+        my $currentrole = $userprivilege->{$privileges[0]};  
+        return 0, "user '$user' already exists" if &verifyUserRole($currentrole);   
+    }
+
+# ok, $user is new and current Arcturus user can add to user administration
+
+    my $query = "insert into USER (username,role) values (?,?)";
+
+    my $sth = $dbh->prepare_cached($query);
+    my $nrw = $sth->execute($user,$role) || &queryFailed($query,$user,$role);
+    $sth->finish();
+
+    return 1,"new user $user ($role) added" if ($nrw+0);    
+
+    return 0,"failed to add user $user";        
+}
+
+sub updateUser {
+# change role of user in the USER table
+    my $this = shift;
+    my $user = shift;
+    my $role = shift || 'finisher';
+
+    return 0, "invalid role '$role' specified" unless &verifyUserRole($role);
+
+# test privilege of the current arcturus user (both grant_privilege and seniority)
+
+    my $privilege = $this->getPrivilegesForUser(); # of current Arcturus user
+    my $userrole  = $privilege->{grant_privileges} || 0;
+    my $seniority = &verifyUserRole($userrole);
+# the current user can only change a role lower than or equal its own seniority 
+    unless ($seniority && $seniority >= &verifyUserRole($role)) {
+print STDERR "updateUser seniority $seniority  role $role ". &verifyUserRole($role)."\n";
+        return 0, "you do not have privilege for this operation";
+    }
+
+# test that the user does exist by testing the current privileges 
+
+    my $dbh = $this->getConnection();
+
+    my $userprivilege = &fetchUserPrivileges($dbh,user=>$user);
+    if (my @privileges = keys %$userprivilege) {  
+        my $currentrole = $userprivilege->{$privileges[0]};  
+        return 0, "user '$user' does not exist" unless &verifyUserRole($currentrole);   
+        return 0, "user '$user' already has role $role" if ($currentrole eq $role);   
+    }
+
+# test the seniority of the current arcturus user 
+
+    unless ($this->userRole($user,role=>$role,seniority=>1)) {
+        return 0, "you do not have privilege for this operation";
+    }
+
+# ok, $user is new and current Arcturus user can make the change
+
+    my $query = "update USER set role = ? where username = ?";
+
+    my $sth = $dbh->prepare_cached($query);
+    my $nrw = $sth->execute($role,$user) || &queryFailed($query,$role,$user);
+    $sth->finish();
+
+    return 1,"new role '$role' assigned to user $user" if ($nrw+0);    
+
+    return 0,"failed to change role of user $user";        
+
+}
 
 sub addUserPrivilege {
 # add the given privilege for the user
@@ -383,25 +502,27 @@ sub addUserPrivilege {
     if ($currentprivilege->{none}) {
 # there is 
         $query = "update PRIVILEGE set privilege = ?"
-	       . " where username = ? and privilege = ''";
+	       . " where privilege = '' and username in "
+               . "(select username from USER where username = ?)";
         $sth = $dbh->prepare_cached($query);
         $nrw = $sth->execute($privilege,$user) || &queryFailed($query,$privilege,$user);
         $sth->finish();
-        return 1,"OK" if ($nrw+0);
     }
 
 # insert a new row
 
-    $query = "insert into PRIVILEGE (username,privilege) values (?,?)";
-    $sth = $dbh->prepare_cached($query);
-    $nrw = $sth->execute($user,$privilege) || &queryFailed($query,@_);
-    $sth->finish();
-
-    unless ($nrw+0) {
-	return  0, "failed to add privilege '$privilege' for user '$user'";
+    else {
+        $query = "insert into PRIVILEGE (username,privilege) "
+               . "select username, '$privilege' as privilege "
+               . "  from USER where username = ?";
+        $sth = $dbh->prepare_cached($query);
+        $nrw = $sth->execute($user) || &queryFailed($query,$user);
+        $sth->finish();
     }
- 
-    return 1, "privilege '$privilege' added for user '$user'";
+
+    return 1, "privilege '$privilege' added for user '$user'" if ($nrw+0);
+
+    return 0, "failed to add privilege '$privilege' for user '$user'";
 }
 
 sub removeUserPrivilege {
@@ -446,7 +567,8 @@ sub removeUserPrivilege {
 
     my $query;
     unless ($remainder && $options{force}) {
-# update the record in order to keep the user name in the PRIVILEGE list
+# update the record in order to keep the user name in the PRIVILEGE list, as it
+# may occur elsewhere in the database; also no join with USER here required
         $query = "update PRIVILEGE set privilege = null"
                . " where username = ? and privilege = ?";
     }
@@ -470,6 +592,8 @@ sub removeUserPrivilege {
     return 1, "privilege '$privilege' removed for user '$user'" if $privilege;
     return 1, "user '$user' removed" unless $privilege;
 }
+
+#---------------------------------------------------------------------------------
 
 sub deleteUser {
 # remove all privileges of user from USER table
@@ -500,36 +624,66 @@ sub deleteUser {
 
 sub userRole {
 # test privileges of current arcturus user against input test user
-# returns a 1 if the current user's privilege weight stronger than those of test user
-# e.g. a user without grant privilege cannot weighs less than a user who does not
+# returns a 1 if the current user's privilege weighs stronger than those of test user
+# e.g. a user without grant privilege cannot count less than a user who does not
 # relative weight of users is based on their highest level privilege
     my $this = shift;
     my $testuser = shift;
     my %options = @_;
 
+my $logger = &verifyLogger('userRole');
+$logger->debug("ArcturusDatabase->userRole ($testuser,@_)");
+
 # determine the "grade" or "role" of the current user
 
-    my $thisuserrole = &getHighestPrivilege($this->getPrivilegesForUser());
+    my $thisusergrade = &getHighestPrivilege($this->getPrivilegesForUser($options{user}));
 
-# if privilege is defined, the current use should have at least that same privilege 
+# (1) if privilege is specified, the current user should have at least that same privilege 
+
 
     if (my $privilege = $options{privilege}) {
-
+# test the privilege specified against the privilege of the current user
         my $requiredgrade = &verifyPrivilege($privilege) || 0;
 
         if ($options{seniority}) {
-# specifies that the grade of the current user should be larger than requiredgrade
-            return 0 unless ($thisuserrole > $requiredgrade);
+# specifies that the grade of the current user should be larger than required grade
+            return 0 unless ($thisusergrade > $requiredgrade);
         }
 	else {
-# specifies that the grade of the current user should at least equal requiredgrade
-            return 0 if ($thisuserrole < $requiredgrade);
+# specifies that the grade of the current user should at least equal required grade
+            return 0 if ($thisusergrade < $requiredgrade);
 	}
     }
 
-# now test the current user against the test user
+# now test the current user's grade against the test user
 
-    my $testuserrole = &getHighestPrivilege($this->getPrivilegesForUser($testuser));
+    my $testusergrade = &getHighestPrivilege($this->getPrivilegesForUser($testuser));
+
+    return 0 if ($thisusergrade < $testusergrade); # require at least equality
+
+
+# (2) if role is specified, the current user should have at least that same role 
+
+
+    my $thisuserrole = &verifyUserRole($this->getUserRole($options{user}));
+
+    if (my $role = $options{role}) {
+# test the role specified against the role of the current user
+        my $requiredrole = &verifyRole($role) || 0;
+
+        if ($options{seniority}) {
+# specifies that the role of the current user should supersede the one of testuser
+            return 0 unless ($thisuserrole > $requiredrole);
+        }
+        else {
+# specifies that the role of the current user should at least equal the one of testuser
+            return 0 if ($thisuserrole < $requiredrole);
+        }
+    }
+
+# now test the current user's role against the one of the test user
+
+    my $testuserrole = &verifyUserRole($this->getUserRole($testuser));
 
     return 0 if ($thisuserrole < $testuserrole); # require at least equality
 
@@ -552,7 +706,7 @@ sub getHighestPrivilege {
 }
 
 #--------------------------------------------------------------------------------
-# current privileges
+# current privileges and user roles
 #--------------------------------------------------------------------------------
 
 sub getValidPrivileges {
@@ -564,11 +718,27 @@ sub verifyPrivilege {
 
     my %privileges = ('create_project'   => 2,'assign_project'  => 3,
                       'grant_privileges' => 4,'move_any_contig' => 1,
-                      'lock_project'     => 1,'arcturus_dba'    => 5);
+                      'lock_project'     => 1);
 
     return $privileges{$privilege} if defined($privilege); # return true or false
 
     return \%privileges; # return hash reference
+}
+
+sub getValidUserRoles {
+    return &verifyUserRole();
+}
+
+sub verifyUserRole {
+    my $userrole = shift;
+
+    my %userroles = ('annotator'   => 0, 'finisher'      => 1,
+                     'team leader' => 3, 'administrator' => 4,
+                     'superuser'   => 5); # space for more
+
+    return $userroles{$userrole} if defined($userrole); # return seniority
+
+    return \%userroles; # return hash reference
 }
 
 #-----------------------------------------------------------------------------
