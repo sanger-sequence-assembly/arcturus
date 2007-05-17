@@ -103,9 +103,9 @@ public class RequestComparator  implements Comparator {
 		int diff = 0;
 		
 		if (person1  == null)
-			diff = 1;
-		else if (person2 == null)
 			diff = -1;
+		else if (person2 == null)
+			diff = 1;
 		else
 			diff = person2.compareTo(person1);
 		
