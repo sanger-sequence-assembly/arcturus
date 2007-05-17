@@ -15,6 +15,7 @@ public class ContigTransferRequest {
 
 	private int request_id;
 	private Contig contig;
+	private int contig_id;
 	private Project oldProject;
 	private Project newProject;
 
@@ -68,6 +69,17 @@ public class ContigTransferRequest {
 	
 	public Person getContigOwner() {
 		return (oldProject == null) ? null : oldProject.getOwner();
+	}
+	
+	public int getContigID() {
+		return contig != null ? contig.getID() : contig_id;
+	}
+	
+	public void setContigID(int contig_id) {
+		if (contig == null)
+			this.contig_id = contig_id;
+		else
+			throw new IllegalStateException("Cannot set an explicit contig ID when contig is not null");
 	}
 
 	public Project getOldProject() {

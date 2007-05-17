@@ -175,6 +175,9 @@ public class ContigTransferRequestManager {
 					requestId, contig, oldProject, newProject, requester,
 					requesterComment);
 				
+				if (contig == null)
+					request.setContigID(contigId);
+				
 				cache.put(requestId, request);
 			}
 			

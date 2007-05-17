@@ -50,13 +50,13 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 		Contig contig = ((ContigTransferTableModel) getModel())
 				.getContigForRow(row);
-		
+
 		try {
 			cip.setClientObject(contig);
 			displayPopup(cip, point);
 		} catch (InvalidClientObjectException e1) {
 			e1.printStackTrace();
-		}		
+		}
 	}
 
 	public Component prepareRenderer(TableCellRenderer renderer, int rowIndex,
@@ -70,10 +70,11 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 			JComponent jc = (JComponent) c;
 
-			String text = "Contig " + contig.getID() + "\n" + "  Name = "
-					+ contig.getName() + "\n" + "  Length = "
-					+ contig.getLength() + "bp\n" + "  Created "
-					+ formatter.format(contig.getCreated());
+			String text = contig == null ? "Contig no longer exists"
+					: "Contig " + contig.getID() + "\n" + "  Name = "
+							+ contig.getName() + "\n" + "  Length = "
+							+ contig.getLength() + "bp\n" + "  Created "
+							+ formatter.format(contig.getCreated());
 
 			jc.setToolTipText(text);
 		}
