@@ -14,7 +14,7 @@ public class ContigInfoPanel extends InfoPanel {
 	protected String[] labels;
 
 	protected SimpleDateFormat dateformat = new SimpleDateFormat(
-	"yyyy MMM dd HH:mm");
+			"yyyy MMM dd HH:mm");
 	protected DecimalFormat decimalformat = new DecimalFormat();
 
 	protected Font plainFont = new Font("SansSerif", Font.PLAIN, 14);
@@ -33,12 +33,11 @@ public class ContigInfoPanel extends InfoPanel {
 	}
 
 	public void setClientObject(Object o) throws InvalidClientObjectException {
-		if (o instanceof Contig)
-			setContig((Contig)o);
+		if (o instanceof Contig || o == null)
+			setContig((Contig) o);
 		else
-			throw new InvalidClientObjectException(
-					"Expecting a Contig, got "
-							+ ((o == null) ? "null" : o.getClass().getName()));
+			throw new InvalidClientObjectException("Expecting a Contig, got a "
+					+ o.getClass().getName());
 	}
 
 	protected void setContig(Contig contig) {
@@ -72,19 +71,25 @@ public class ContigInfoPanel extends InfoPanel {
 	}
 
 	private void createStrings(Contig contig) {
-		lines[0] = "" + contig.getID();
+		if (contig != null) {
+			lines[0] = "" + contig.getID();
 
-		lines[1] = contig.getName();
+			lines[1] = contig.getName();
 
-		lines[2] = decimalformat.format(contig.getLength());
+			lines[2] = decimalformat.format(contig.getLength());
 
-		lines[3] = decimalformat.format(contig.getReadCount());
+			lines[3] = decimalformat.format(contig.getReadCount());
 
-		lines[4] = dateformat.format(contig.getCreated());
+			lines[4] = dateformat.format(contig.getCreated());
 
-		Project project = contig.getProject();
+			Project project = contig.getProject();
 
-		lines[5] = (project == null) ? "(unknown)" : project.getName();
+			lines[5] = (project == null) ? "(unknown)" : project.getName();
+		} else {
+			lines[0] = "This contig no longer exists";
+			for (int i = 1; i < lines.length; i++)
+				lines[i] = "";
+		}
 	}
 
 	public void paintComponent(Graphics g) {

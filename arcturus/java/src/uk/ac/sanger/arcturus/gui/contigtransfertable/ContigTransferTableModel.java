@@ -149,7 +149,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 				return new Integer(request.getRequestID());
 
 			case COLUMN_CONTIG_ID:
-				return new Integer(request.getContig().getID());
+				return new Integer(request.getContigID());
 
 			case COLUMN_OLD_PROJECT:
 				return request.getOldProject().getName();
