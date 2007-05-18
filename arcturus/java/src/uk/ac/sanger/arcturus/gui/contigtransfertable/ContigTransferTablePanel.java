@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.contigtransfertable;
 
 import java.awt.BorderLayout;
+import java.awt.Dimension;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -15,7 +16,8 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	private ContigTransferTable tableContigOwner = null;
 	private ContigTransferTableModel modelContigOwner = null;
-
+	private JSplitPane splitpane;
+	
 	public ContigTransferTablePanel(ArcturusDatabase adb, Person user, MinervaTabbedPane mtp) {
 		super(mtp);
 		
@@ -41,7 +43,7 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		Border title2 = BorderFactory.createTitledBorder(loweredetched2, "Requests for contigs I own");
 		scrollpane2.setBorder(title2);
 		
-		JSplitPane splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollpane1, scrollpane2);
+		splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollpane1, scrollpane2);
 		
 		add(splitpane, BorderLayout.CENTER);
 		
@@ -82,5 +84,18 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	protected void doPrint() {
 		// Do nothing.
+	}
+	
+	public Dimension getPreferredSize() {
+		Dimension prefsize = super.getPreferredSize();
+		
+		if (prefsize.height > 800)
+			prefsize.height = 800;
+		
+		return prefsize;
+	}
+	
+	public void resetDivider() {
+		splitpane.setDividerLocation(0.5);
 	}
 }
