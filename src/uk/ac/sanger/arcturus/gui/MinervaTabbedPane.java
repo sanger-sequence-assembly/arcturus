@@ -176,6 +176,8 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		
 		setSelectedComponent(cttp);
 		
+		cttp.resetDivider();
+		
 		return cttp;
 	}
 
