@@ -26,12 +26,10 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 	public static final int COLUMN_NEW_PROJECT = 3;
 	public static final int COLUMN_REQUESTER = 4;
 	public static final int COLUMN_OPENED_DATE = 5;
-	public static final int COLUMN_REQUESTER_COMMENT = 6;
-	public static final int COLUMN_REVIEWER = 7;
-	public static final int COLUMN_REVIEWED_DATE = 8;
-	public static final int COLUMN_REVIEWER_COMMENT = 9;
-	public static final int COLUMN_STATUS = 10;
-	public static final int COLUMN_CLOSED_DATE = 11;
+	public static final int COLUMN_REVIEWER = 6;
+	public static final int COLUMN_REVIEWED_DATE = 7;
+	public static final int COLUMN_STATUS = 8;
+	public static final int COLUMN_CLOSED_DATE = 9;
 
 	protected ContigTransferRequest[] requests;
 	protected RequestComparator comparator;
@@ -80,22 +78,16 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 				return "Move to";
 
 			case COLUMN_REQUESTER:
-				return (mode == ArcturusDatabase.USER_IS_REQUESTER) ? "Owner" : "Requester";
+				return "Requester";
 
 			case COLUMN_OPENED_DATE:
 				return "Opened";
-
-			case COLUMN_REQUESTER_COMMENT:
-				return "Requester comment";
 
 			case COLUMN_REVIEWER:
 				return "Reviewer";
 
 			case COLUMN_REVIEWED_DATE:
 				return "Reviewed";
-
-			case COLUMN_REVIEWER_COMMENT:
-				return "Reviewer comment";
 
 			case COLUMN_STATUS:
 				return "Status";
@@ -113,9 +105,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 			case COLUMN_OLD_PROJECT:
 			case COLUMN_NEW_PROJECT:
 			case COLUMN_REQUESTER:
-			case COLUMN_REQUESTER_COMMENT:
 			case COLUMN_REVIEWER:
-			case COLUMN_REVIEWER_COMMENT:
 			case COLUMN_STATUS:
 				return String.class;
 
@@ -138,7 +128,7 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 	}
 
 	public int getColumnCount() {
-		return 12;
+		return 10;
 	}
 
 	public Object getValueAt(int row, int col) {
@@ -152,14 +142,13 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 				return new Integer(request.getContigID());
 
 			case COLUMN_OLD_PROJECT:
-				return request.getOldProject().getName();
+				return request.getOldProject().getNameAndOwner();
 
 			case COLUMN_NEW_PROJECT:
-				return request.getNewProject().getName();
+				return request.getNewProject().getNameAndOwner();
 
 			case COLUMN_REQUESTER:
-				return (mode == ArcturusDatabase.USER_IS_REQUESTER) ?
-						getContigOwnerName(request) : getRequesterName(request);
+				return getRequesterName(request);
 
 			case COLUMN_OPENED_DATE:
 				return request.getOpenedDate();
@@ -170,9 +159,6 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 
 			case COLUMN_REVIEWED_DATE:
 				return request.getReviewedDate();
-
-			case COLUMN_REVIEWER_COMMENT:
-				return request.getReviewerComment();
 
 			case COLUMN_STATUS:
 				return request.getStatusString();
@@ -206,6 +192,10 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 		Person requester = request.getRequester();
 		
 		return (requester == null) ? null : requester.getName();
+	}
+	
+	public ContigTransferRequest getRequestForRow(int row) {
+		return requests[row];
 	}
 	
 	public Contig getContigForRow(int row) {

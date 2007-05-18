@@ -7,6 +7,7 @@ import javax.swing.table.*;
 import javax.swing.ListSelectionModel;
 import java.text.*;
 
+import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.gui.SortableTable;
 
@@ -63,20 +64,37 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			int vColIndex) {
 		Component c = super.prepareRenderer(renderer, rowIndex, vColIndex);
 
-		if (vColIndex == ContigTransferTableModel.COLUMN_CONTIG_ID
-				&& c instanceof JComponent) {
-			Contig contig = ((ContigTransferTableModel) getModel())
-					.getContigForRow(rowIndex);
+		if (c instanceof JComponent) {
+			String text = null;
+			ContigTransferRequest request = ((ContigTransferTableModel) getModel())
+					.getRequestForRow(rowIndex);
 
-			JComponent jc = (JComponent) c;
+			switch (vColIndex) {
+				case ContigTransferTableModel.COLUMN_CONTIG_ID:
+					Contig contig = request.getContig();
+					;
 
-			String text = contig == null ? "Contig no longer exists"
-					: "Contig " + contig.getID() + "\n" + "  Name = "
-							+ contig.getName() + "\n" + "  Length = "
-							+ contig.getLength() + "bp\n" + "  Created "
-							+ formatter.format(contig.getCreated());
+					text = contig == null ? "Contig no longer exists"
+							: "Contig " + contig.getID() + "\n" + "  Name = "
+									+ contig.getName() + "\n" + "  Length = "
+									+ contig.getLength() + "bp\n"
+									+ "  Created "
+									+ formatter.format(contig.getCreated());
+					break;
 
-			jc.setToolTipText(text);
+				case ContigTransferTableModel.COLUMN_REQUESTER:
+				case ContigTransferTableModel.COLUMN_OPENED_DATE:
+					text = request.getRequesterComment();
+					break;
+
+				case ContigTransferTableModel.COLUMN_REVIEWER:
+				case ContigTransferTableModel.COLUMN_REVIEWED_DATE:
+				case ContigTransferTableModel.COLUMN_STATUS:
+					text = request.getReviewerComment();
+					break;
+			}
+
+			((JComponent) c).setToolTipText(text);
 		}
 
 		if (isCellSelected(rowIndex, vColIndex)) {
