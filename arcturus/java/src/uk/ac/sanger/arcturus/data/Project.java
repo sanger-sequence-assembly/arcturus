@@ -142,6 +142,13 @@ public class Project extends Core {
 		this.name = name;
 	}
 	
+	public String getNameAndOwner() {
+		if (owner == null)
+			return name;
+		else
+			return name + " (" + owner.getName() + ")"; 
+	}
+	
 	public boolean isBin() {
 		return name.equalsIgnoreCase("BIN");
 	}
