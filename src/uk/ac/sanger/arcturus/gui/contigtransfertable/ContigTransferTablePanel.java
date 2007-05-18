@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.gui.contigtransfertable;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Toolkit;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -30,7 +31,7 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		JScrollPane scrollpane1 = new JScrollPane(tableRequester);
 		
 		Border loweredetched1 = BorderFactory.createEtchedBorder(EtchedBorder.LOWERED);
-		Border title1 = BorderFactory.createTitledBorder(loweredetched1, "Requests I have made");
+		Border title1 = BorderFactory.createTitledBorder(loweredetched1, "Requests I have made, or to a project I own");
 		scrollpane1.setBorder(title1);
 
 		modelContigOwner = new ContigTransferTableModel(adb, user, ArcturusDatabase.USER_IS_CONTIG_OWNER);
@@ -87,10 +88,19 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	}
 	
 	public Dimension getPreferredSize() {
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		
+		// Some window managers don't take into account toolbars, menu bars etc.
+		screen.height -= 200;
+		screen.width -= 50;
+		
 		Dimension prefsize = super.getPreferredSize();
 		
-		if (prefsize.height > 800)
-			prefsize.height = 800;
+		if (prefsize.height > screen.height)
+			prefsize.height = screen.height;
+		
+		if (prefsize.width > screen.width)
+			prefsize.width = screen.width;
 		
 		return prefsize;
 	}
