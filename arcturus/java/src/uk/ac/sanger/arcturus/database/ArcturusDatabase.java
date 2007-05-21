@@ -1117,10 +1117,6 @@ public class ArcturusDatabase {
 		contigTransferRequestManager.executeContigTransferRequest(requestId);
 	}
 	
-	public static String prettyPrint(ContigTransferRequest request) {
-		return ContigTransferRequestManager.prettyPrint(request);
-	}
-	
 	public void setDebugging(boolean debugging) {
 		contigTransferRequestManager.setDebugging(debugging);
 	}
