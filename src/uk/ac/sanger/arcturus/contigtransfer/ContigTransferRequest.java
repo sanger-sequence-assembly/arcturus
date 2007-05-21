@@ -5,13 +5,15 @@ import uk.ac.sanger.arcturus.people.Person;
 import java.util.Date;
 
 public class ContigTransferRequest {
-	public static final int UNKNOWN = -1;
-	public static final int PENDING = 0;
-	public static final int APPROVED = 1;
-	public static final int DONE = 2;
-	public static final int CANCELLED = 3;
-	public static final int FAILED = 4;
-	public static final int REFUSED = 5;
+	public static final int ALL = -1;
+	public static final int ACTIVE = -2;
+	public static final int UNKNOWN = 0;
+	public static final int PENDING = 1;
+	public static final int APPROVED = 2;
+	public static final int DONE = 3;
+	public static final int CANCELLED = 4;
+	public static final int FAILED = 5;
+	public static final int REFUSED = 6;
 
 	private int request_id;
 	private Contig contig;
@@ -156,6 +158,9 @@ public class ContigTransferRequest {
 			case DONE:
 				return "done";
 				
+			case ACTIVE:
+				return "active (pending or approved)";
+				
 			default:
 				return "unknown";
 		}
@@ -201,6 +206,10 @@ public class ContigTransferRequest {
 			throw new IllegalArgumentException("Status is invalid: " + status);
 		
 		this.status = status;
+	}
+	
+	public boolean isActive() {
+		return status == PENDING || status == APPROVED;
 	}
 	
 	public Date getClosedDate() {
