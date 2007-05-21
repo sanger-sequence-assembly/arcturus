@@ -1075,6 +1075,17 @@ public class ArcturusDatabase {
 		return contigTransferRequestManager.createContigTransferRequest(contigId, toProjectId);
 	}
 	
+	public ContigTransferRequest createContigTransferRequest(Person requester,
+			Contig contig, Project project)
+			throws ContigTransferRequestException, SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(requester, contig, project);
+	}
+	
+	public ContigTransferRequest createContigTransferRequest(Contig contig, Project project)
+			throws ContigTransferRequestException, SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(contig, project);
+	}
+	
 	public void reviewContigTransferRequest(ContigTransferRequest request,
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {

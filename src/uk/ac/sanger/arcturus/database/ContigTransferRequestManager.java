@@ -13,8 +13,8 @@ import java.util.zip.DataFormatException;
 public class ContigTransferRequestManager {
 	protected ArcturusDatabase adb;
 	protected Connection conn;
-	
-	protected HashMap<Integer,ContigTransferRequest> cache = new HashMap<Integer,ContigTransferRequest>();
+
+	protected HashMap<Integer, ContigTransferRequest> cache = new HashMap<Integer, ContigTransferRequest>();
 
 	protected PreparedStatement pstmtByRequester = null;
 	protected PreparedStatement pstmtByContigOwner = null;
@@ -25,20 +25,21 @@ public class ContigTransferRequestManager {
 	protected PreparedStatement pstmtInsertNewRequest = null;
 
 	protected PreparedStatement pstmtUpdateRequestStatus = null;
-	
+
 	protected PreparedStatement pstmtMarkRequestAsFailed = null;
-	
+
 	protected PreparedStatement pstmtProjectIDForContig = null;
-	
+
 	protected PreparedStatement pstmtCheckProjectLock = null;
-	
+
 	protected PreparedStatement pstmtMoveContig = null;
-	
+
 	protected PreparedStatement pstmtMarkRequestAsDone = null;
-	
+
 	protected boolean debugging = false;
-	
-	protected ContigTransferRequestNotifier notifier = ContigTransferRequestNotifier.getInstance();
+
+	protected ContigTransferRequestNotifier notifier = ContigTransferRequestNotifier
+			.getInstance();
 
 	/**
 	 * Creates a new ContigTransferRequestManager to provide contig transfer
@@ -95,25 +96,25 @@ public class ContigTransferRequestManager {
 		query = "update CONTIGTRANSFERREQUEST set status=?,reviewer=?,reviewed=now() where request_id = ?";
 
 		pstmtUpdateRequestStatus = conn.prepareStatement(query);
-		
+
 		query = "update CONTIGTRANSFERREQUEST set status = 'failed', closed=NOW() where request_id = ?";
-		
+
 		pstmtMarkRequestAsFailed = conn.prepareStatement(query);
-		
+
 		query = "select project_id from CONTIG where contig_id = ?";
-		
+
 		pstmtProjectIDForContig = conn.prepareStatement(query);
-		
+
 		query = "select lockdate,lockowner from PROJECT where project_id = ?";
-		
+
 		pstmtCheckProjectLock = conn.prepareStatement(query);
-		
+
 		query = "update CONTIG set project_id = ? where contig_id = ? and project_id = ?";
-		
+
 		pstmtMoveContig = conn.prepareStatement(query);
-		
+
 		query = "update CONTIGTRANSFERREQUEST set status = 'done', closed=NOW() where request_id = ?";
-		
+
 		pstmtMarkRequestAsDone = conn.prepareStatement(query);
 	}
 
@@ -169,18 +170,17 @@ public class ContigTransferRequestManager {
 			String requesterComment = rs.getString(6);
 
 			ContigTransferRequest request = cache.get(requestId);
-			
+
 			if (request == null) {
-				request = new ContigTransferRequest(			
-					requestId, contig, oldProject, newProject, requester,
-					requesterComment);
-				
+				request = new ContigTransferRequest(requestId, contig,
+						oldProject, newProject, requester, requesterComment);
+
 				if (contig == null)
 					request.setContigID(contigId);
-				
+
 				cache.put(requestId, request);
 			}
-			
+
 			request.setOpenedDate(rs.getTimestamp(7));
 
 			String reviewerUid = rs.getString(8);
@@ -224,7 +224,7 @@ public class ContigTransferRequestManager {
 		/*
 		 * Ensure that the requester is a real person.
 		 */
-		
+
 		if (requester == null)
 			throw new ContigTransferRequestException(
 					ContigTransferRequestException.USER_IS_NULL);
@@ -232,13 +232,12 @@ public class ContigTransferRequestManager {
 		/*
 		 * Check that the transfer makes sense.
 		 * 
-		 * 1. Is the contig current?
-		 * 2. Is it already the subject of a current transfer request?
-		 * 3. Is the contig's current project valid?
-		 * 4. Is the destination project valid?
-		 * 5. Is the contig already in the destination project?
+		 * 1. Is the contig current? 2. Is it already the subject of a current
+		 * transfer request? 3. Is the contig's current project valid? 4. Is the
+		 * destination project valid? 5. Is the contig already in the
+		 * destination project?
 		 */
-		
+
 		checkIsCurrentContig(contigId);
 
 		checkForExistingRequests(contigId);
@@ -277,13 +276,13 @@ public class ContigTransferRequestManager {
 		/*
 		 * Check that the requester is authorised to create a request.
 		 */
-		
+
 		checkCanUserTransferBetweenProjects(requester, fromProject, toProject);
-		
+
 		/*
 		 * Create the request.
 		 */
-		
+
 		return realCreateContigTransferRequest(requester, contig, toProject);
 	}
 
@@ -303,11 +302,12 @@ public class ContigTransferRequestManager {
 			int requestId = rs.next() ? rs.getInt(1) : -1;
 
 			rs.close();
-			
+
 			ContigTransferRequest request = findContigTransferRequest(requestId);
-			
-			notifier.notifyRequestStatusChange(requester, request, ContigTransferRequest.UNKNOWN);
-			
+
+			notifier.notifyRequestStatusChange(requester, request,
+					ContigTransferRequest.UNKNOWN);
+
 			return request;
 		} else
 			throw new ContigTransferRequestException(
@@ -347,30 +347,31 @@ public class ContigTransferRequestManager {
 			Project fromProject, Project toProject)
 			throws ContigTransferRequestException, SQLException {
 		/*
-		 * Is the requester transferring a contig from her project to the bin? 
+		 * Is the requester transferring a contig from her project to the bin?
 		 */
-		
+
 		if (requester.equals(fromProject.getOwner()) && toProject.isBin())
 			return;
 
 		/*
 		 * Is the requester the owner of the destination project?
 		 */
-		
+
 		if (requester.equals(toProject.getOwner()))
 			return;
 
 		/*
 		 * Does the requester have the "mover_any_contig" privilege?
 		 */
-		
+
 		if (adb.hasPrivilege(requester, "move_any_contig"))
 			return;
 
 		/*
-		 * Does the requester have the "team leader", "administrator" or "superuser" role?
+		 * Does the requester have the "team leader", "administrator" or
+		 * "superuser" role?
 		 */
-		
+
 		if (hasFullPrivileges(requester))
 			return;
 
@@ -381,9 +382,9 @@ public class ContigTransferRequestManager {
 	protected boolean hasFullPrivileges(Person person) throws SQLException {
 		if (person == null)
 			return false;
-		
+
 		String role = adb.getRoleForUser(person);
-		
+
 		if (role == null)
 			return false;
 
@@ -398,9 +399,23 @@ public class ContigTransferRequestManager {
 		return createContigTransferRequest(PeopleManager.findMe(), contigId,
 				toProjectId);
 	}
-	
+
+	public ContigTransferRequest createContigTransferRequest(Person requester,
+			Contig contig, Project project)
+			throws ContigTransferRequestException, SQLException {
+		return createContigTransferRequest(requester, contig.getID(), project
+				.getID());
+	}
+
+	public ContigTransferRequest createContigTransferRequest(Contig contig,
+			Project project) throws ContigTransferRequestException,
+			SQLException {
+		return createContigTransferRequest(PeopleManager.findMe(), contig
+				.getID(), project.getID());
+	}
+
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
-		throws SQLException {
+			throws SQLException {
 		pstmtMarkRequestAsFailed.setInt(1, request.getRequestID());
 		if (pstmtMarkRequestAsFailed.executeUpdate() == 1) {
 			request.setStatus(ContigTransferRequest.FAILED);
@@ -415,7 +430,7 @@ public class ContigTransferRequestManager {
 		/*
 		 * Ensure that the requester is a real person.
 		 */
-		
+
 		if (reviewer == null)
 			throw new ContigTransferRequestException(
 					ContigTransferRequestException.USER_IS_NULL);
@@ -424,45 +439,45 @@ public class ContigTransferRequestManager {
 		 * Check that the contig is still current, and that it is still in the
 		 * project specified when the request was created.
 		 */
-		
+
 		try {
 			Contig contig = request.getContig();
 			int contig_id = contig == null ? 0 : contig.getID();
 			checkIsCurrentContig(contig_id);
 			checkContigProjectStillValid(request);
-		}
-		catch (ContigTransferRequestException ctre) {
+		} catch (ContigTransferRequestException ctre) {
 			markRequestAsFailed(request);
 			throw ctre;
 		}
 
 		/*
-		 * Check that the proposed new status is valid. 
+		 * Check that the proposed new status is valid.
 		 */
-		
+
 		checkStatusChangeIsAllowed(request, newStatus);
-	
+
 		/*
-		 * Check that the user is authorised to change the status of the request.
+		 * Check that the user is authorised to change the status of the
+		 * request.
 		 */
-		
+
 		checkCanUserAlterRequestStatus(request, reviewer, newStatus);
 
 		/*
 		 * Change the request status.
 		 */
-		
+
 		changeContigRequestStatus(request, reviewer, newStatus);
 	}
 
 	protected void checkContigProjectStillValid(ContigTransferRequest request)
 			throws ContigTransferRequestException, SQLException {
 		pstmtProjectIDForContig.setInt(1, request.getContig().getID());
-		
+
 		ResultSet rs = pstmtProjectIDForContig.executeQuery();
-		
+
 		int currentProjectID = rs.next() ? rs.getInt(1) : -1;
-		
+
 		rs.close();
 
 		Project fromProject = request.getOldProject();
@@ -471,7 +486,7 @@ public class ContigTransferRequestManager {
 		if (fromProject != null && contigProject != null
 				&& fromProject.getID() == currentProjectID)
 			return;
-		
+
 		throw new ContigTransferRequestException(
 				ContigTransferRequestException.CONTIG_HAS_MOVED);
 	}
@@ -480,9 +495,9 @@ public class ContigTransferRequestManager {
 			ContigTransferRequest request, Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
 		/*
-		 * The requester is allowed to cancel her own request. 
+		 * The requester is allowed to cancel her own request.
 		 */
-		
+
 		if (newStatus == ContigTransferRequest.CANCELLED
 				&& reviewer.equals(request.getRequester()))
 			return;
@@ -490,7 +505,7 @@ public class ContigTransferRequestManager {
 		/*
 		 * The owner of the contig can refuse or approve a request.
 		 */
-		
+
 		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
 				&& reviewer.equals(request.getContigOwner()))
 			return;
@@ -501,34 +516,39 @@ public class ContigTransferRequestManager {
 		 */
 
 		if ((newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.APPROVED)
-				&& !reviewer.equals(request.getRequester()) 
+				&& !reviewer.equals(request.getRequester())
 				&& reviewer.equals(request.getNewProject().getOwner())
-				&& (request.getOldProject().isBin() || request.getOldProject().isUnowned()))
-			return;
-		
-		/*
-		 * The requester is allowed to approve a transfer from a bin project or an unowned project.
-		 */
-		
-		if (newStatus == ContigTransferRequest.APPROVED && reviewer.equals(request.getRequester()) &&
-				(request.getOldProject().isBin() || request.getOldProject().isUnowned()))
-			return;
-		
-		/*
-		 * The request can be executed by the owner of the contig, the requester or the owner of
-		 * the destination project. 
-		 */
-		
-		if ((newStatus == ContigTransferRequest.DONE) &&
-				(reviewer.equals(request.getContigOwner()) || reviewer.equals(request.getRequester()) ||
-						reviewer.equals(request.getNewProject().getOwner())))
+				&& (request.getOldProject().isBin() || request.getOldProject()
+						.isUnowned()))
 			return;
 
 		/*
-		 * A reviewer who has the "team leader", "administrator" or "superuser" role can make
-		 * any change at all.
+		 * The requester is allowed to approve a transfer from a bin project or
+		 * an unowned project.
 		 */
-		
+
+		if (newStatus == ContigTransferRequest.APPROVED
+				&& reviewer.equals(request.getRequester())
+				&& (request.getOldProject().isBin() || request.getOldProject()
+						.isUnowned()))
+			return;
+
+		/*
+		 * The request can be executed by the owner of the contig, the requester
+		 * or the owner of the destination project.
+		 */
+
+		if ((newStatus == ContigTransferRequest.DONE)
+				&& (reviewer.equals(request.getContigOwner())
+						|| reviewer.equals(request.getRequester()) || reviewer
+						.equals(request.getNewProject().getOwner())))
+			return;
+
+		/*
+		 * A reviewer who has the "team leader", "administrator" or "superuser"
+		 * role can make any change at all.
+		 */
+
 		if (hasFullPrivileges(reviewer))
 			return;
 
@@ -543,7 +563,7 @@ public class ContigTransferRequestManager {
 		/*
 		 * A PENDING request can change to APPROVED or REFUSED or CANCELLED.
 		 */
-		
+
 		if (oldStatus == ContigTransferRequest.PENDING
 				&& (newStatus == ContigTransferRequest.APPROVED
 						|| newStatus == ContigTransferRequest.CANCELLED || newStatus == ContigTransferRequest.REFUSED))
@@ -552,7 +572,7 @@ public class ContigTransferRequestManager {
 		/*
 		 * An APPROVED request can change to DONE or CANCELLED.
 		 */
-		
+
 		if (oldStatus == ContigTransferRequest.APPROVED
 				&& (newStatus == ContigTransferRequest.DONE || newStatus == ContigTransferRequest.CANCELLED))
 			return;
@@ -565,7 +585,7 @@ public class ContigTransferRequestManager {
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
 		int oldStatus = request.getStatus();
-		
+
 		String newStatusString = ContigTransferRequest
 				.convertStatusToString(newStatus);
 		pstmtUpdateRequestStatus.setString(1, newStatusString);
@@ -577,10 +597,10 @@ public class ContigTransferRequestManager {
 		if (rc != 1)
 			throw new ContigTransferRequestException(
 					ContigTransferRequestException.SQL_UPDATE_FAILED);
-		
+
 		request.setStatus(newStatus);
 		request.setReviewer(reviewer);
-		
+
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
 	}
 
@@ -597,91 +617,93 @@ public class ContigTransferRequestManager {
 	}
 
 	public void executeContigTransferRequest(ContigTransferRequest request,
-			Person reviewer)
-			throws ContigTransferRequestException, SQLException {
+			Person reviewer) throws ContigTransferRequestException,
+			SQLException {
 		int oldStatus = request.getStatus();
-		
+
 		if (reviewer == null)
 			throw new ContigTransferRequestException(
 					ContigTransferRequestException.USER_IS_NULL);
-		
+
 		checkStatusChangeIsAllowed(request, ContigTransferRequest.DONE);
-		
+
 		try {
 			Contig contig = request.getContig();
 			int contig_id = contig == null ? 0 : contig.getID();
 			checkIsCurrentContig(contig_id);
 			checkContigProjectStillValid(request);
-		}
-		catch (ContigTransferRequestException ctre) {
+		} catch (ContigTransferRequestException ctre) {
 			markRequestAsFailed(request);
 			throw ctre;
 		}
-	
-		checkCanUserAlterRequestStatus(request, reviewer, ContigTransferRequest.DONE);
-		
+
+		checkCanUserAlterRequestStatus(request, reviewer,
+				ContigTransferRequest.DONE);
+
 		checkProjectsAreUnlocked(request);
 
 		executeRequest(request);
-		
+
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
 	}
 
 	protected void executeRequest(ContigTransferRequest request)
-		throws ContigTransferRequestException, SQLException {
+			throws ContigTransferRequestException, SQLException {
 		Contig contig = request.getContig();
-		
+
 		pstmtMoveContig.setInt(1, request.getNewProject().getID());
 		pstmtMoveContig.setInt(2, contig.getID());
 		pstmtMoveContig.setInt(3, request.getOldProject().getID());
-		
+
 		int rc = pstmtMoveContig.executeUpdate();
-		
+
 		if (rc == 1) {
 			pstmtMarkRequestAsDone.setInt(1, request.getRequestID());
-			
+
 			rc = pstmtMarkRequestAsDone.executeUpdate();
-			
+
 			if (rc == 1) {
 				request.setStatus(ContigTransferRequest.DONE);
 				contig.setProject(request.getNewProject());
 				return;
 			}
-		}	
-		
+		}
+
 		throw new ContigTransferRequestException(
 				ContigTransferRequestException.SQL_UPDATE_FAILED);
 	}
-	
+
 	protected void checkProjectsAreUnlocked(ContigTransferRequest request)
-		throws ContigTransferRequestException, SQLException {
+			throws ContigTransferRequestException, SQLException {
 		checkProjectIsUnlocked(request.getOldProject());
 		checkProjectIsUnlocked(request.getNewProject());
 	}
-	
+
 	protected void checkProjectIsUnlocked(Project project)
-		throws ContigTransferRequestException, SQLException {
+			throws ContigTransferRequestException, SQLException {
 		pstmtCheckProjectLock.setInt(1, project.getID());
-		
+
 		ResultSet rs = pstmtCheckProjectLock.executeQuery();
-		
+
 		rs.next();
-		
+
 		rs.getTimestamp(1);
 		boolean lockdateNull = rs.wasNull();
-		
+
 		rs.getString(2);
 		boolean lockownerNull = rs.wasNull();
-		
+
 		rs.close();
-		
+
 		if (lockdateNull && lockownerNull)
 			return;
 		else
-			throw new ContigTransferRequestException(ContigTransferRequestException.PROJECT_IS_LOCKED);
+			throw new ContigTransferRequestException(
+					ContigTransferRequestException.PROJECT_IS_LOCKED);
 	}
 
-	public void executeContigTransferRequest(int requestId, Person reviewer) throws ContigTransferRequestException, SQLException {
+	public void executeContigTransferRequest(int requestId, Person reviewer)
+			throws ContigTransferRequestException, SQLException {
 		ContigTransferRequest request = findContigTransferRequest(requestId);
 		executeContigTransferRequest(request, reviewer);
 	}
@@ -690,55 +712,57 @@ public class ContigTransferRequestManager {
 			throws ContigTransferRequestException, SQLException {
 		executeContigTransferRequest(requestId, PeopleManager.findMe());
 	}
-	
+
 	public static String prettyPrint(ContigTransferRequest request) {
 		StringBuffer sb = new StringBuffer(80);
-		
+
 		Person contigOwner = request.getContigOwner();
-		String ownerName = contigOwner == null ? "nobody" : contigOwner.getName();
-		
+		String ownerName = contigOwner == null ? "nobody" : contigOwner
+				.getName();
+
 		Contig contig = request.getContig();
-		
-		sb.append("ContigTransferRequest (" + request.hashCode() +  ")\n");
+
+		sb.append("ContigTransferRequest (" + request.hashCode() + ")\n");
 		sb.append("\tID = " + request.getRequestID() + "\n");
-		sb.append("\tContig = " + ((contig == null) ? 0 : contig.getID()) +
-				", owner " + ownerName +
-				", in project " + ((contig == null) ? "null" : contig.getProject().getName()) +
-				"\n");
-		
+		sb.append("\tContig = " + ((contig == null) ? 0 : contig.getID())
+				+ ", owner " + ownerName + ", in project "
+				+ ((contig == null) ? "null" : contig.getProject().getName())
+				+ "\n");
+
 		sb.append("\tRequester = " + request.getRequester().getName() + "\n");
-		
+
 		sb.append("\tOpened on " + request.getOpenedDate() + "\n");
-		
+
 		String reqcomment = request.getRequesterComment();
 		if (reqcomment != null)
 			sb.append("\tRequester comment = " + reqcomment + "\n");
-		
+
 		Project fromProject = request.getOldProject();
 		Project toProject = request.getNewProject();
-		
-		sb.append("\t" + fromProject.getName() + " --> " + toProject.getName() + "\n");
-		
+
+		sb.append("\t" + fromProject.getName() + " --> " + toProject.getName()
+				+ "\n");
+
 		sb.append("\tStatus = " + request.getStatusString() + "\n");
-		
+
 		Person reviewer = request.getReviewer();
-		
+
 		if (reviewer != null) {
 			sb.append("\n\tReviewer = " + reviewer.getName() + "\n");
-			
+
 			java.util.Date revdate = request.getReviewedDate();
 			if (revdate != null)
 				sb.append("\tReviewed on " + revdate + "\n");
-			
+
 			String revcomment = request.getReviewerComment();
 			if (revcomment != null)
 				sb.append("\tReviewer comment = " + revcomment + "\n");
 		}
-		
+
 		java.util.Date closed = request.getClosedDate();
 		if (closed != null)
 			sb.append("\n\tClosed on " + closed + "\n");
-		
+
 		return sb.toString();
 	}
 
