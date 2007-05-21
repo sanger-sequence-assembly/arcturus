@@ -714,12 +714,24 @@ public class ArcturusDatabase {
 
 	public Contig getContigByID(int id, int options) throws SQLException,
 			DataFormatException {
-		if (logger != null && logger.isLoggable(Level.INFO))
-			logger.info("getContigByID(" + id + ", options = " + options + ")");
-
 		return contigManager.getContigByID(id, options);
 	}
 	
+	public Contig getContigByID(int id) throws SQLException,
+		DataFormatException {
+		return contigManager.getContigByID(id);
+	}
+	
+	public Contig getContigByReadName(String readname, int options) throws SQLException,
+		DataFormatException {
+		return contigManager.getContigByReadName(readname, options);
+	}
+	
+	public Contig getContigByReadName(String readname) throws SQLException,
+		DataFormatException {
+		return contigManager.getContigByReadName(readname);
+	}
+
 	public void updateContig(Contig contig, int options) throws SQLException,
 		DataFormatException {
 		contigManager.updateContig(contig, options);

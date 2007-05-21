@@ -35,9 +35,11 @@ public class ContigManager extends AbstractManager {
 
 	protected PreparedStatement pstmtCountContigsByProject = null;
 	protected PreparedStatement pstmtContigsByProject = null;
-	
+
 	protected PreparedStatement pstmtCountCurrentContigs = null;
 	protected PreparedStatement pstmtCurrentContigs = null;
+	
+	protected PreparedStatement pstmtContigIDFromReadname = null;
 
 	protected ManagerEvent event = null;
 
@@ -83,8 +85,7 @@ public class ContigManager extends AbstractManager {
 		pstmtContigData = conn.prepareStatement(query);
 
 		query = "select gap4name,length,nreads,created,updated,project_id"
-				+ " from CURRENTCONTIGS"
-				+ " where contig_id = ?";
+				+ " from CURRENTCONTIGS" + " where contig_id = ?";
 
 		pstmtCurrentContigData = conn.prepareStatement(query);
 
@@ -165,17 +166,25 @@ public class ContigManager extends AbstractManager {
 
 		pstmtContigsByProject = conn.prepareStatement(query);
 
-		query = "select count(*) "
-			+ " from CURRENTCONTIGS"
-			+ " where length > ?";
+		query = "select count(*) " + " from CURRENTCONTIGS"
+				+ " where length > ?";
 
 		pstmtCountCurrentContigs = conn.prepareStatement(query);
 
 		query = "select contig_id,gap4name,length,nreads,created,updated,project_id "
-				+ " from CURRENTCONTIGS"
-				+ " where length > ?";
+				+ " from CURRENTCONTIGS" + " where length > ?";
 
 		pstmtCurrentContigs = conn.prepareStatement(query);
+		
+		query = " select CURRENTCONTIGS.contig_id"
+			+ " from READINFO,SEQ2READ,MAPPING,CURRENTCONTIGS,PROJECT"
+			+ " where READINFO.readname = ?"
+			+ " and READINFO.read_id = SEQ2READ.read_id"
+			+ " and SEQ2READ.seq_id = MAPPING.seq_id"
+			+ " and MAPPING.contig_id = CURRENTCONTIGS.contig_id"
+			+ " and CURRENTCONTIGS.project_id = PROJECT.project_id";
+		
+		pstmtContigIDFromReadname = conn.prepareStatement(query);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -220,6 +229,29 @@ public class ContigManager extends AbstractManager {
 		}
 
 		rs.close();
+	}
+
+	public Contig getContigByReadName(String readname) throws SQLException,
+		DataFormatException {
+		return getContigByReadName(readname, ArcturusDatabase.CONTIG_BASIC_DATA);
+	}
+	
+	public Contig getContigByReadName(String readname, int options) throws SQLException,
+		DataFormatException {
+		pstmtContigIDFromReadname.setString(1, readname);
+		
+		ResultSet rs = pstmtContigIDFromReadname.executeQuery();
+		
+		int contig_id = rs.next() ? rs.getInt(1) : -1;
+		
+		rs.close();
+		
+		return contig_id < 0 ? null : getContigByID(contig_id, options);
+	}
+	
+	public Contig getContigByID(int contig_id) throws SQLException,
+			DataFormatException {
+		return getContigByID(contig_id, ArcturusDatabase.CONTIG_BASIC_DATA);
 	}
 
 	public Contig getContigByID(int contig_id, int options)
@@ -1020,18 +1052,18 @@ public class ContigManager extends AbstractManager {
 
 	public int countCurrentContigs(int minlen) throws SQLException {
 		pstmtCountCurrentContigs.setInt(1, minlen);
-		
+
 		ResultSet rs = pstmtCountCurrentContigs.executeQuery();
 
 		int nContigs = rs.next() ? rs.getInt(1) : 0;
-		
+
 		rs.close();
-		
+
 		return nContigs;
 	}
 
-	public Set getCurrentContigs(int options, int minlen)
-			throws SQLException, DataFormatException {
+	public Set getCurrentContigs(int options, int minlen) throws SQLException,
+			DataFormatException {
 		ContigSetBuilder csb = new ContigSetBuilder();
 
 		processCurrentContigs(options, minlen, csb);
@@ -1050,7 +1082,7 @@ public class ContigManager extends AbstractManager {
 		fireEvent(event);
 
 		pstmtCurrentContigs.setInt(1, minlen);
-		
+
 		ResultSet rs = pstmtCurrentContigs.executeQuery();
 
 		int count = 0;
@@ -1068,7 +1100,7 @@ public class ContigManager extends AbstractManager {
 				java.util.Date created = rs.getTimestamp(5);
 				java.util.Date updated = rs.getTimestamp(6);
 				int project_id = rs.getInt(7);
-				
+
 				Project project = adb.getProjectByID(project_id);
 
 				contig = new Contig(gap4name, contig_id, ctglen, nreads,
@@ -1091,9 +1123,9 @@ public class ContigManager extends AbstractManager {
 		event.end();
 		fireEvent(event);
 
-		return processed;		
+		return processed;
 	}
-	
+
 	class SortableSegment implements Comparable {
 		public int seq_id;
 		public int cstart;
