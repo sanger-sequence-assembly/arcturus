@@ -71,7 +71,7 @@ public class ContigTransferRequestManager {
 		query = "select "
 				+ columns
 				+ " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
-				+ " where owner = ?";
+				+ " where owner = ? and requester != owner";
 
 		pstmtByContigOwner = conn.prepareStatement(query);
 
