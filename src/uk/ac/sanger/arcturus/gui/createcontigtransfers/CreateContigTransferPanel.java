@@ -261,6 +261,7 @@ public class CreateContigTransferPanel extends MinervaPanel {
 					appendMessage(lines[i]
 							+ " : Unable to find specified project");
 				} else {
+					appendMessage("--------------------------------------------------------------------------------");
 					appendMessage("Submitting request to transfer contig "
 							+ contig.getID() + " to project "
 							+ project.getName());
@@ -271,8 +272,8 @@ public class CreateContigTransferPanel extends MinervaPanel {
 						
 						appendMessage("New contig transfer request:" + ContigTransferRequestManager.prettyPrint(request));
 					} catch (ContigTransferRequestException e) {
-						appendMessage("Failed to create a contig transfer request: "
-								+ e.getMessage() + " " + e.getTypeAsString());
+						appendMessage("Unable to create a contig transfer request: "
+								+ e.getTypeAsString());
 					} catch (SQLException e) {
 						Arcturus
 								.logWarning(
