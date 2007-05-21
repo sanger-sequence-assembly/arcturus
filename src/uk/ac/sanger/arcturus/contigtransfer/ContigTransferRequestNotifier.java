@@ -3,11 +3,12 @@ package uk.ac.sanger.arcturus.contigtransfer;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ContigTransferRequestManager;
-import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.people.*;
 
 import javax.mail.*;
 import javax.mail.internet.*;
 
+import java.io.UnsupportedEncodingException;
 import java.util.Properties;
 
 public class ContigTransferRequestNotifier {
@@ -65,18 +66,51 @@ public class ContigTransferRequestNotifier {
 
 	protected void notify(Person person, int role, Person reviewer,
 			ContigTransferRequest request, int oldStatus) {
-		System.err
-				.println("================================================================================\n");
-		System.err.println("NOTIFICATION TO " + person.getName() + " <"
-				+ person.getMail() + "> as " + getRoleName(role) + "\n");
-
-		String message = createMessage(person, role, reviewer, request,
+		String text = createMessage(person, role, reviewer, request,
 				oldStatus);
-		System.err.println(message);
 
-		System.err
-				.println("================================================================================\n");
-		System.err.println("\n\n");
+		Message msg = new MimeMessage(session);
+
+		Person realme = PeopleManager.findRealMe();
+		Person me = PeopleManager.findMe();
+
+		InternetAddress realMeAddress = null;
+		InternetAddress meAddress = null;
+		InternetAddress recipient = null;
+
+		try {
+			realMeAddress = new InternetAddress(realme.getMail(), realme
+					.getName());
+
+			meAddress = new InternetAddress(me.getMail(), me.getName());
+
+			String email = PeopleManager.isMasquerading() ? realme.getUID()
+					+ "+" + person.getMail() : person.getMail();
+
+			try {
+				recipient = new InternetAddress(email, person.getName());
+			} catch (UnsupportedEncodingException e) {
+				e.printStackTrace();
+			}
+
+			msg.addRecipient(Message.RecipientType.TO, recipient);
+
+			msg.setFrom(realMeAddress);
+			
+			if (PeopleManager.isMasquerading())
+				msg.setSubject("[Arcturus] *** TEST *** New contig transfer request");
+			else
+				msg.setSubject("[Arcturus] New contig transfer request");
+			
+			msg.setText(text);
+
+			msg.setHeader("X-Mailer", "Arcturus-Notification");
+			msg.setSentDate(new java.util.Date());
+			
+			Transport.send(msg);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	protected String createMessage(Person person, int role, Person reviewer,
@@ -90,6 +124,7 @@ public class ContigTransferRequestNotifier {
 		String organism = contig.getArcturusDatabase().getName();
 
 		String requesterName = request.getRequester().getName();
+		String requesterGivenName = request.getRequester().getGivenName();
 
 		sb.append("Dear " + person.getGivenName() + ",\n\n");
 
@@ -101,7 +136,7 @@ public class ContigTransferRequestNotifier {
 
 			switch (role) {
 				case AS_CONTIG_OWNER:
-					sb.append(requesterName + " has asked to move your contig "
+					sb.append(requesterGivenName + " has asked to move your contig "
 							+ contig.getID() + " (" + contig.getLength()
 							+ "bp, " + contig.getReadCount()
 							+ " reads)\nfrom project " + oldProject.getName()
@@ -109,7 +144,7 @@ public class ContigTransferRequestNotifier {
 					break;
 
 				case AS_DESTINATION_PROJECT_OWNER:
-					sb.append(requesterName + " has asked to move contig "
+					sb.append(requesterGivenName + " has asked to move contig "
 							+ contig.getID() + " (" + contig.getLength()
 							+ "bp, " + contig.getReadCount()
 							+ " reads)\nfrom project " + oldProject.getName()
@@ -118,7 +153,8 @@ public class ContigTransferRequestNotifier {
 					break;
 			}
 
-			sb.append("Please use Minerva to view this request and approve or refuse it.");
+			sb
+					.append("Please use Minerva to view this request and approve or refuse it.");
 		} else {
 			String verb = request.getStatus() == ContigTransferRequest.DONE ? "executed"
 					: "reviewed";
@@ -127,11 +163,11 @@ public class ContigTransferRequestNotifier {
 					+ request.getRequestID() + " has been " + verb + " by "
 					+ reviewer.getName() + ".\n\n");
 
-			sb.append("This request is for contig " + contig.getID()
-							+ " (" + contig.getLength() + "bp, "
-							+ contig.getReadCount() + " reads) in project "
-							+ oldProject.getName() + "\nto be moved to project "
-							+ newProject.getName() + ".\n\n");
+			sb.append("This request is for contig " + contig.getID() + " ("
+					+ contig.getLength() + "bp, " + contig.getReadCount()
+					+ " reads) in project " + oldProject.getName()
+					+ "\nto be moved to project " + newProject.getName()
+					+ ".\n\n");
 
 			switch (role) {
 				case AS_REQUESTER:
@@ -139,9 +175,10 @@ public class ContigTransferRequestNotifier {
 					break;
 
 				case AS_CONTIG_OWNER:
-					verb = request.getStatus() == ContigTransferRequest.DONE ?
-							"were" : "are";
-					sb.append("You " + verb + " the owner of the contig in question.\n\n");
+					verb = request.getStatus() == ContigTransferRequest.DONE ? "were"
+							: "are";
+					sb.append("You " + verb
+							+ " the owner of the contig in question.\n\n");
 					break;
 
 				case AS_DESTINATION_PROJECT_OWNER:
@@ -155,17 +192,21 @@ public class ContigTransferRequestNotifier {
 
 			switch (request.getStatus()) {
 				case ContigTransferRequest.APPROVED:
-					sb.append("This means that permission has been granted to execute the request.\n");
-					sb.append("However, please note that for the moment, the contig is still in " 
-							+ oldProject.getName() + ".\n");
+					sb
+							.append("This means that permission has been granted to execute the request.\n");
+					sb
+							.append("However, please note that for the moment, the contig is still in "
+									+ oldProject.getName() + ".\n");
 					break;
 
 				case ContigTransferRequest.REFUSED:
-					sb.append("This means that permisson for this request was denied.\n");
+					sb
+							.append("This means that permisson for this request was denied.\n");
 					break;
 
 				case ContigTransferRequest.FAILED:
-					sb.append("This means that there was a problem with the request,\nand it was deleted.\n");
+					sb
+							.append("This means that there was a problem with the request,\nand it was deleted.\n");
 					break;
 
 				case ContigTransferRequest.DONE:
