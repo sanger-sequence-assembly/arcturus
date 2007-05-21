@@ -18,6 +18,7 @@ import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.people.Person;
 
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
+import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 
 import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 
@@ -1060,6 +1061,57 @@ public class ArcturusDatabase {
 	
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user, int mode) throws SQLException {
 		return contigTransferRequestManager.getContigTransferRequestsByUser(user, mode);
+	}
+	
+	public ContigTransferRequest createContigTransferRequest(Person requester,
+			int contigId, int toProjectId)
+			throws ContigTransferRequestException, SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(requester, contigId, toProjectId);
+	}
+	
+	public ContigTransferRequest createContigTransferRequest(int contigId,
+			int toProjectId) throws ContigTransferRequestException,
+			SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(contigId, toProjectId);
+	}
+	
+	public void reviewContigTransferRequest(ContigTransferRequest request,
+			Person reviewer, int newStatus)
+			throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.reviewContigTransferRequest(request, reviewer, newStatus);
+	}
+	
+	public void reviewContigTransferRequest(int requestId, Person reviewer,
+			int newStatus) throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.reviewContigTransferRequest(requestId, reviewer, newStatus);
+	}
+	
+	public void reviewContigTransferRequest(int requestId, int newStatus)
+		throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.reviewContigTransferRequest(requestId, newStatus);
+	}
+	
+	public void executeContigTransferRequest(ContigTransferRequest request,
+			Person reviewer)
+			throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.executeContigTransferRequest(request, reviewer);
+	}
+	
+	public void executeContigTransferRequest(int requestId, Person reviewer) throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.executeContigTransferRequest(requestId, reviewer);
+	}
+	
+	public void executeContigTransferRequest(int requestId)
+		throws ContigTransferRequestException, SQLException {
+		contigTransferRequestManager.executeContigTransferRequest(requestId);
+	}
+	
+	public static String prettyPrint(ContigTransferRequest request) {
+		return ContigTransferRequestManager.prettyPrint(request);
+	}
+	
+	public void setDebugging(boolean debugging) {
+		contigTransferRequestManager.setDebugging(debugging);
 	}
 	
 	/**
