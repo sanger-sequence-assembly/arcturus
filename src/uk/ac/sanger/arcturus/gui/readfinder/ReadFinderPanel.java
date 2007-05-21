@@ -107,8 +107,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		btnClearMessages.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				txtMessages.selectAll();
-				txtMessages.cut();
+				txtMessages.setText("");
 			}			
 		});
 		
