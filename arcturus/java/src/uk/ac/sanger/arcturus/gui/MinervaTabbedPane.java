@@ -11,6 +11,7 @@ import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
+import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 
@@ -21,12 +22,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ReadFinderPanel rfp;
 	private ContigTransferTablePanel cttp;
 	protected OligoFinderPanel ofp;
+	protected CreateContigTransferPanel cctp;
 	
 	private JMenuBar menubar = new JMenuBar();
 	
 	private MinervaAbstractAction actionShowProjectList;
 	private MinervaAbstractAction actionShowContigTransfers;
 	private MinervaAbstractAction actionShowReadFinder;
+	private MinervaAbstractAction actionShowCreateContigTransfer;
 	private MinervaAbstractAction actionClose;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
@@ -63,6 +66,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			}
 		};
 		
+		actionShowCreateContigTransfer = new MinervaAbstractAction("Create contig transfers",
+				null, "Create contig transfers", new Integer(KeyEvent.VK_R),
+				KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showCreateContigTransferPanel();
+			}
+		};
+	
 		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
 				new Integer(KeyEvent.VK_C),
 				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
@@ -87,6 +98,8 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		fileMenu.add(actionShowReadFinder);
 		
 		fileMenu.add(actionShowContigTransfers);
+		
+		fileMenu.add(actionShowCreateContigTransfer);
 		
 		fileMenu.addSeparator();
 				
@@ -179,6 +192,19 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		cttp.resetDivider();
 		
 		return cttp;
+	}
+
+	public CreateContigTransferPanel showCreateContigTransferPanel() {
+		if (cctp == null)
+			cctp = new CreateContigTransferPanel(adb, this);
+		
+		
+		if (indexOfComponent(cctp) < 0)
+			addTab("Create contig transfers", null, cctp, "Create contig transfers");
+		
+		setSelectedComponent(cctp);
+		
+		return cctp;
 	}
 
 	public OligoFinderPanel showOligoFinderPanel() {

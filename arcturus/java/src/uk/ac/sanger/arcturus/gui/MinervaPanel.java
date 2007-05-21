@@ -15,6 +15,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowOligoFinder;
 	protected MinervaAbstractAction actionShowReadFinder;
 	protected MinervaAbstractAction actionShowContigTransfers;
+	protected MinervaAbstractAction actionShowCreateContigTransfer;
 	protected MinervaAbstractAction actionPrint;
 
 	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent) {
@@ -171,6 +172,16 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		};
 
 		menu.add(actionShowContigTransfers);
+		
+		actionShowCreateContigTransfer = new MinervaAbstractAction("Create contig transfers",
+				null, "Create contig transfers", new Integer(KeyEvent.VK_R),
+				KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				parent.showCreateContigTransferPanel();
+			}
+		};
+		
+		menu.add(actionShowCreateContigTransfer);
 	}
 
 	protected void createEditMenu() {
