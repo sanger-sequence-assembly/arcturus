@@ -212,10 +212,19 @@ public class ContigTablePanel extends MinervaPanel {
 			for (int i = 0; i < myProjects.length; i++)
 				if (!myProjects[i].isBin())
 					xferMenu.add(new ContigTransferAction(table, myProjects[i]));
+			
+			Project bin = null;
 
-			xferMenu.addSeparator();
+			try {
+				bin = adb.getProjectByName(null, "BIN");
+			} catch (SQLException sqle) {
+				Arcturus.logWarning("Error whilst finding the BIN project", sqle);
+			}
 
-			xferMenu.add(new ContigTransferAction(table, null));
+			if (bin != null) {
+				xferMenu.addSeparator();
+				xferMenu.add(new ContigTransferAction(table, bin));
+			}
 		}
 	}
 

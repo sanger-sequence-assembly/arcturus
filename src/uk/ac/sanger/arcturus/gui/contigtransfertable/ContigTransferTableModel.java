@@ -290,4 +290,8 @@ public class ContigTransferTableModel extends AbstractTableModel implements
 
 		return true;
 	}
+
+	public ArcturusDatabase getArcturusDatabase() {
+		return adb;
+	}
 }
