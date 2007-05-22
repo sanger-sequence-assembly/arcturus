@@ -97,10 +97,13 @@ public class ContigTransferRequestNotifier {
 
 			msg.setFrom(realMeAddress);
 			
-			if (PeopleManager.isMasquerading())
-				msg.setSubject("[Arcturus] *** TEST *** New contig transfer request");
-			else
-				msg.setSubject("[Arcturus] New contig transfer request");
+			String organism = request.getContig().getArcturusDatabase().getName();
+			
+			String subject = "[Arcturus]" + (PeopleManager.isMasquerading()  ? " *** TEST ***" : "") +
+				(oldStatus == ContigTransferRequest.UNKNOWN ? " New " : " Update to") +
+				" contig transfer request " + organism + " #" + request.getRequestID();
+			
+			msg.setSubject(subject);
 			
 			msg.setText(text);
 
@@ -153,11 +156,10 @@ public class ContigTransferRequestNotifier {
 					break;
 			}
 
-			sb
-					.append("Please use Minerva to view this request and approve or refuse it.");
+			sb.append("Please use Minerva to view this request and approve or refuse it.");
 		} else {
 			String verb = request.getStatus() == ContigTransferRequest.DONE ? "executed"
-					: "reviewed";
+					: request.getStatusString();
 
 			sb.append("Contig transfer request " + organism + " #"
 					+ request.getRequestID() + " has been " + verb + " by "
