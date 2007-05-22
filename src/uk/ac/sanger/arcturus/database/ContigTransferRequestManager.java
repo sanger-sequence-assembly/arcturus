@@ -35,6 +35,8 @@ public class ContigTransferRequestManager {
 	protected PreparedStatement pstmtMoveContig = null;
 
 	protected PreparedStatement pstmtMarkRequestAsDone = null;
+	
+	protected PreparedStatement pstmtSetClosedDate = null;
 
 	protected boolean debugging = false;
 
@@ -116,6 +118,10 @@ public class ContigTransferRequestManager {
 		query = "update CONTIGTRANSFERREQUEST set status = 'done', closed=NOW() where request_id = ?";
 
 		pstmtMarkRequestAsDone = conn.prepareStatement(query);
+		
+		query = "update CONTIGTRANSFERREQUEST set closed=NOW() where request_id = ?";
+		
+		pstmtSetClosedDate = conn.prepareStatement(query);
 	}
 
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user,
@@ -477,7 +483,7 @@ public class ContigTransferRequestManager {
 		if (person.equals(srcOwner) && !requester.equals(srcOwner))
 			return true;
 		
-		if (person.equals(dstOwner) && !requester.equals(dstOwner) && 
+		if (person.equals(dstOwner) && 
 				(oldProject.isUnowned() || oldProject.isBin()))
 			return true;
 		
@@ -686,7 +692,12 @@ public class ContigTransferRequestManager {
 
 		request.setStatus(newStatus);
 		request.setReviewer(reviewer);
-
+		
+		if (newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.CANCELLED) {
+			pstmtSetClosedDate.setInt(1, request.getRequestID());
+			pstmtSetClosedDate.executeUpdate();
+		}
+		
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
 	}
 
