@@ -379,11 +379,18 @@ public class ContigTransferRequestManager {
 				ContigTransferRequestException.USER_NOT_AUTHORISED);
 	}
 
-	protected boolean hasFullPrivileges(Person person) throws SQLException {
+	protected boolean hasFullPrivileges(Person person) {
 		if (person == null)
 			return false;
 
-		String role = adb.getRoleForUser(person);
+		String role = null;
+		
+		try {
+			role = adb.getRoleForUser(person);
+		} catch (SQLException e) {
+			Arcturus.logWarning("Failed to get role for user " + person.getUID(), e);
+			return false;
+		}
 
 		if (role == null)
 			return false;
@@ -414,6 +421,85 @@ public class ContigTransferRequestManager {
 				.getID(), project.getID());
 	}
 
+	public boolean canCancelRequest(ContigTransferRequest request, Person person) {
+		if (request == null || person == null)
+			return false;
+		
+		int status = request.getStatus();
+
+		if (status == ContigTransferRequest.REFUSED
+				|| status == ContigTransferRequest.FAILED
+				|| status == ContigTransferRequest.DONE)
+			return false;
+
+		return request.getRequester().equals(person) || hasFullPrivileges(person);
+	}
+	
+	public boolean canRefuseRequest(ContigTransferRequest request, Person person) {
+		if (request == null || person == null)
+			return false;
+		
+		if (request.getStatus() != ContigTransferRequest.PENDING)
+			return false;
+		
+		Person requester = request.getRequester();
+		
+		Person srcOwner = request.getOldProject().getOwner();
+		Person dstOwner = request.getNewProject().getOwner();
+		
+		if (person.equals(srcOwner) && !requester.equals(srcOwner))
+			return true;
+		
+		if (person.equals(dstOwner) && !requester.equals(dstOwner))
+			return true;
+		
+		return hasFullPrivileges(person);
+	}
+		
+	public boolean canApproveRequest(ContigTransferRequest request, Person person) {
+		if (request == null || person == null)
+			return false;
+		
+		if (request.getStatus() != ContigTransferRequest.PENDING)
+			return false;
+		
+		Person requester = request.getRequester();
+		
+		Project oldProject = request.getOldProject();
+		Person srcOwner = oldProject.getOwner();
+		
+		Project newProject = request.getNewProject();
+		Person dstOwner = newProject.getOwner();
+		
+		if (person.equals(requester) && (newProject.isUnowned() || newProject.isBin()))
+			return true;
+		
+		if (person.equals(srcOwner) && !requester.equals(srcOwner))
+			return true;
+		
+		if (person.equals(dstOwner) && !requester.equals(dstOwner) && 
+				(oldProject.isUnowned() || oldProject.isBin()))
+			return true;
+		
+		return hasFullPrivileges(person);
+	}
+	
+	public boolean canExecuteRequest(ContigTransferRequest request, Person person) {
+		if (request == null || person == null)
+			return false;
+		
+		if (request.getStatus() != ContigTransferRequest.APPROVED)
+			return false;
+		
+		Person requester = request.getRequester();
+		
+		Person srcOwner = request.getOldProject().getOwner();
+		Person dstOwner = request.getNewProject().getOwner();
+	
+		return person.equals(requester) || person.equals(srcOwner) || person.equals(dstOwner) ||
+			hasFullPrivileges(person);
+	}
+	
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
 			throws SQLException {
 		pstmtMarkRequestAsFailed.setInt(1, request.getRequestID());

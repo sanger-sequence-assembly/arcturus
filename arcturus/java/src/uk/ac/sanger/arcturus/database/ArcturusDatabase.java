@@ -1121,6 +1121,22 @@ public class ArcturusDatabase {
 		contigTransferRequestManager.setDebugging(debugging);
 	}
 	
+	public boolean canCancelRequest(ContigTransferRequest request, Person person) {
+		return contigTransferRequestManager.canCancelRequest(request, person);
+	}
+	
+	public boolean canRefuseRequest(ContigTransferRequest request, Person person) {
+		return contigTransferRequestManager.canRefuseRequest(request, person);
+	}
+	
+	public boolean canApproveRequest(ContigTransferRequest request, Person person) {
+		return contigTransferRequestManager.canApproveRequest(request, person);
+	}
+	
+	public boolean canExecuteRequest(ContigTransferRequest request, Person person) {
+		return contigTransferRequestManager.canExecuteRequest(request, person);
+	}
+
 	/**
 	 * Returns a text representation of this object.
 	 * 
