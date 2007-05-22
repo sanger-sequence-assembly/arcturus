@@ -5,15 +5,16 @@ import uk.ac.sanger.arcturus.people.Person;
 import java.util.Date;
 
 public class ContigTransferRequest {
-	public static final int ALL = -1;
-	public static final int ACTIVE = -2;
 	public static final int UNKNOWN = 0;
 	public static final int PENDING = 1;
 	public static final int APPROVED = 2;
-	public static final int DONE = 3;
-	public static final int CANCELLED = 4;
-	public static final int FAILED = 5;
-	public static final int REFUSED = 6;
+	public static final int DONE = 4;
+	public static final int CANCELLED = 8;
+	public static final int FAILED = 16;
+	public static final int REFUSED = 32;
+	
+	public static final int ACTIVE = PENDING | APPROVED;
+	public static final int ALL = PENDING | APPROVED | DONE | CANCELLED | FAILED | REFUSED;
 
 	private int request_id;
 	private Contig contig;
