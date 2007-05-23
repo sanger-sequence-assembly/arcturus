@@ -45,7 +45,9 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		
 		try {
 			String role = adb.getRoleForUser(me);
-			administrator = role.equalsIgnoreCase("administrator") || role.equalsIgnoreCase("team leader");
+			administrator = role != null && (
+					role.equalsIgnoreCase("administrator") || 
+					role.equalsIgnoreCase("team leader"));
 		} catch (SQLException e) {
 			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
 		}

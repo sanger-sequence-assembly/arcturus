@@ -13,7 +13,7 @@ import java.sql.SQLException;
 
 public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected ArcturusDatabase adb;
-	
+
 	protected JMenuBar menubar = new JMenuBar();
 	protected JToolBar toolbar = null;
 	protected MinervaTabbedPane parent;
@@ -26,20 +26,24 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowAllContigTransfers;
 	protected MinervaAbstractAction actionShowCreateContigTransfer;
 	protected MinervaAbstractAction actionPrint;
-	
+
 	protected boolean administrator = false;
 
-	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent, ArcturusDatabase adb) {
+	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent,
+			ArcturusDatabase adb) {
 		super(layoutManager);
 		this.parent = parent;
 		this.adb = adb;
-		
+
 		try {
-			Person me = PeopleManager.findMe();	
+			Person me = PeopleManager.findMe();
 			String role = adb.getRoleForUser(me);
-			administrator = role.equalsIgnoreCase("administrator") || role.equalsIgnoreCase("team leader");
+			administrator = role != null
+					&& (role.equalsIgnoreCase("administrator") || 
+						role.equalsIgnoreCase("team leader"));
 		} catch (SQLException e) {
-			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
+			Arcturus.logWarning(
+					"An SQL exception occurred when trying to get my role", e);
 		}
 	}
 
@@ -68,9 +72,9 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected abstract boolean isRefreshable();
 
 	protected abstract void addClassSpecificViewMenuItems(JMenu menu);
-	
+
 	protected abstract void doPrint();
-	
+
 	protected Action getPrintAction() {
 		return actionPrint;
 	}
@@ -116,7 +120,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 				doPrint();
 			}
 		};
-		
+
 		fileMenu.add(actionPrint);
 
 		fileMenu.addSeparator();
@@ -192,26 +196,28 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		};
 
 		menu.add(actionShowContigTransfers);
-		
-		actionShowAllContigTransfers = new MinervaAbstractAction("Show all contigs transfers",
-				null, "Show all contig transfers", new Integer(KeyEvent.VK_K),
+
+		actionShowAllContigTransfers = new MinervaAbstractAction(
+				"Show all contigs transfers", null,
+				"Show all contig transfers", new Integer(KeyEvent.VK_K),
 				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				parent.showAdminContigTransferTablePanel();
 			}
 		};
-		
+
 		if (administrator)
 			menu.add(actionShowAllContigTransfers);
-	
-		actionShowCreateContigTransfer = new MinervaAbstractAction("Create contig transfers",
-				null, "Create contig transfers", new Integer(KeyEvent.VK_R),
-				KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+
+		actionShowCreateContigTransfer = new MinervaAbstractAction(
+				"Create contig transfers", null, "Create contig transfers",
+				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
+						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				parent.showCreateContigTransferPanel();
 			}
 		};
-		
+
 		menu.add(actionShowCreateContigTransfer);
 	}
 
