@@ -38,7 +38,6 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 			Person me = PeopleManager.findMe();	
 			String role = adb.getRoleForUser(me);
 			administrator = role.equalsIgnoreCase("administrator") || role.equalsIgnoreCase("team leader");
-			System.err.println("I am " + (administrator ? "" : "not ") + "an administrator");
 		} catch (SQLException e) {
 			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
 		}
