@@ -18,6 +18,8 @@ public class ContigTransferRequestManager {
 
 	protected PreparedStatement pstmtByRequester = null;
 	protected PreparedStatement pstmtByContigOwner = null;
+	protected PreparedStatement pstmtAllRequests = null;
+
 	protected PreparedStatement pstmtByID = null;
 
 	protected PreparedStatement pstmtCountActiveRequestsByContigId = null;
@@ -35,7 +37,7 @@ public class ContigTransferRequestManager {
 	protected PreparedStatement pstmtMoveContig = null;
 
 	protected PreparedStatement pstmtMarkRequestAsDone = null;
-	
+
 	protected PreparedStatement pstmtSetClosedDate = null;
 
 	protected boolean debugging = false;
@@ -76,6 +78,12 @@ public class ContigTransferRequestManager {
 				+ " where owner = ? and requester != owner";
 
 		pstmtByContigOwner = conn.prepareStatement(query);
+
+		query = "select " + columns + " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
+				+ " where name is not null"
+				+ " and (CONTIGTRANSFERREQUEST.status = 'pending' or CONTIGTRANSFERREQUEST.status = 'approved')";
+
+		pstmtAllRequests = conn.prepareStatement(query);
 
 		query = "select "
 				+ columns
@@ -118,9 +126,9 @@ public class ContigTransferRequestManager {
 		query = "update CONTIGTRANSFERREQUEST set status = 'done', closed=NOW() where request_id = ?";
 
 		pstmtMarkRequestAsDone = conn.prepareStatement(query);
-		
+
 		query = "update CONTIGTRANSFERREQUEST set closed=NOW() where request_id = ?";
-		
+
 		pstmtSetClosedDate = conn.prepareStatement(query);
 	}
 
@@ -128,13 +136,22 @@ public class ContigTransferRequestManager {
 			int mode) throws SQLException {
 		PreparedStatement pstmt;
 
-		if (mode == ArcturusDatabase.USER_IS_REQUESTER) {
-			pstmt = pstmtByRequester;
-			pstmt.setString(1, user.getUID());
-			pstmt.setString(2, user.getUID());
-		} else {
-			pstmt = pstmtByContigOwner;
-			pstmt.setString(1, user.getUID());
+		switch (mode) {
+			default:
+			case ArcturusDatabase.USER_IS_REQUESTER:
+				pstmt = pstmtByRequester;
+				pstmt.setString(1, user.getUID());
+				pstmt.setString(2, user.getUID());
+				break;
+
+			case ArcturusDatabase.USER_IS_CONTIG_OWNER:
+				pstmt = pstmtByContigOwner;
+				pstmt.setString(1, user.getUID());
+				break;
+
+			case ArcturusDatabase.USER_IS_ADMINISTRATOR:
+				pstmt = pstmtAllRequests;
+				break;
 		}
 
 		ResultSet rs = pstmt.executeQuery();
@@ -390,11 +407,12 @@ public class ContigTransferRequestManager {
 			return false;
 
 		String role = null;
-		
+
 		try {
 			role = adb.getRoleForUser(person);
 		} catch (SQLException e) {
-			Arcturus.logWarning("Failed to get role for user " + person.getUID(), e);
+			Arcturus.logWarning("Failed to get role for user "
+					+ person.getUID(), e);
 			return false;
 		}
 
@@ -430,7 +448,7 @@ public class ContigTransferRequestManager {
 	public boolean canCancelRequest(ContigTransferRequest request, Person person) {
 		if (request == null || person == null)
 			return false;
-		
+
 		int status = request.getStatus();
 
 		if (status == ContigTransferRequest.REFUSED
@@ -438,74 +456,78 @@ public class ContigTransferRequestManager {
 				|| status == ContigTransferRequest.DONE)
 			return false;
 
-		return request.getRequester().equals(person) || hasFullPrivileges(person);
+		return request.getRequester().equals(person)
+				|| hasFullPrivileges(person);
 	}
-	
+
 	public boolean canRefuseRequest(ContigTransferRequest request, Person person) {
 		if (request == null || person == null)
 			return false;
-		
+
 		if (request.getStatus() != ContigTransferRequest.PENDING)
 			return false;
-		
+
 		Person requester = request.getRequester();
-		
+
 		Person srcOwner = request.getOldProject().getOwner();
 		Person dstOwner = request.getNewProject().getOwner();
-		
+
 		if (person.equals(srcOwner) && !requester.equals(srcOwner))
 			return true;
-		
+
 		if (person.equals(dstOwner) && !requester.equals(dstOwner))
 			return true;
-		
+
 		return hasFullPrivileges(person);
 	}
-		
-	public boolean canApproveRequest(ContigTransferRequest request, Person person) {
+
+	public boolean canApproveRequest(ContigTransferRequest request,
+			Person person) {
 		if (request == null || person == null)
 			return false;
-		
+
 		if (request.getStatus() != ContigTransferRequest.PENDING)
 			return false;
-		
+
 		Person requester = request.getRequester();
-		
+
 		Project oldProject = request.getOldProject();
 		Person srcOwner = oldProject.getOwner();
-		
+
 		Project newProject = request.getNewProject();
 		Person dstOwner = newProject.getOwner();
-		
-		if (person.equals(requester) && (newProject.isUnowned() || newProject.isBin()))
+
+		if (person.equals(requester)
+				&& (newProject.isUnowned() || newProject.isBin()))
 			return true;
-		
+
 		if (person.equals(srcOwner) && !requester.equals(srcOwner))
 			return true;
-		
-		if (person.equals(dstOwner) && 
-				(oldProject.isUnowned() || oldProject.isBin()))
+
+		if (person.equals(dstOwner)
+				&& (oldProject.isUnowned() || oldProject.isBin()))
 			return true;
-		
+
 		return hasFullPrivileges(person);
 	}
-	
-	public boolean canExecuteRequest(ContigTransferRequest request, Person person) {
+
+	public boolean canExecuteRequest(ContigTransferRequest request,
+			Person person) {
 		if (request == null || person == null)
 			return false;
-		
+
 		if (request.getStatus() != ContigTransferRequest.APPROVED)
 			return false;
-		
+
 		Person requester = request.getRequester();
-		
+
 		Person srcOwner = request.getOldProject().getOwner();
 		Person dstOwner = request.getNewProject().getOwner();
-	
-		return person.equals(requester) || person.equals(srcOwner) || person.equals(dstOwner) ||
-			hasFullPrivileges(person);
+
+		return person.equals(requester) || person.equals(srcOwner)
+				|| person.equals(dstOwner) || hasFullPrivileges(person);
 	}
-	
+
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
 			throws SQLException {
 		pstmtMarkRequestAsFailed.setInt(1, request.getRequestID());
@@ -692,12 +714,13 @@ public class ContigTransferRequestManager {
 
 		request.setStatus(newStatus);
 		request.setReviewer(reviewer);
-		
-		if (newStatus == ContigTransferRequest.REFUSED || newStatus == ContigTransferRequest.CANCELLED) {
+
+		if (newStatus == ContigTransferRequest.REFUSED
+				|| newStatus == ContigTransferRequest.CANCELLED) {
 			pstmtSetClosedDate.setInt(1, request.getRequestID());
 			pstmtSetClosedDate.executeUpdate();
 		}
-		
+
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
 	}
 
