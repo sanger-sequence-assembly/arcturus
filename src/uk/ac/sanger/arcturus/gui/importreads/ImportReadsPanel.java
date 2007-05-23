@@ -32,12 +32,8 @@ public class ImportReadsPanel extends MinervaPanel {
 	
 	protected JFileChooser fileChooser = new JFileChooser();
 
-	ArcturusDatabase adb;
-
 	public ImportReadsPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(parent);
-		
-		this.adb = adb;
+		super(parent, adb);
 		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 
