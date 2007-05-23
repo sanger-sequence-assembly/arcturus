@@ -17,6 +17,7 @@ public class PeopleManager {
 	protected static final Person me;
 	protected static final String myRealUid;
 	protected static final Person realMe;
+	protected static final boolean masquerading;
 
 	protected static final String[] attrs = { "cn", "sn", "givenname", "mail",
 			"telephonenumber", "homedirectory", "roomnumber",
@@ -44,9 +45,11 @@ public class PeopleManager {
 		if (System.getProperty("user.alias") == null || !isAllowedToMasquerade()) {
 			myUid = myRealUid;
 			me = realMe;
+			masquerading = false;
 		} else {
 			myUid = System.getProperty("user.alias");
 			me = findPerson(myUid);
+			masquerading = true;
 		}
 	}
 	
@@ -150,7 +153,7 @@ public class PeopleManager {
 	}
 
 	public static boolean isMasquerading() {
-		return ! me.equals(realMe);
+		return masquerading;
 	}
 	
 	private static String getAttribute(Attributes attrs, String key) {
