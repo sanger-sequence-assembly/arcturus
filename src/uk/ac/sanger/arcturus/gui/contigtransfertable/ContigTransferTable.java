@@ -33,12 +33,24 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 	protected Popup popup;
 
-	protected ContigRequestPopupMenu popupMenu;
+	protected ContigRequestPopupMenu singleRequestPopupMenu;
 
 	protected JMenuItem itemCancelRequest = new JMenuItem("Cancel request...");
 	protected JMenuItem itemRefuseRequest = new JMenuItem("Refuse request...");
 	protected JMenuItem itemApproveRequest = new JMenuItem("Approve request...");
 	protected JMenuItem itemExecuteRequest = new JMenuItem("Execute request...");
+
+	protected JPopupMenu multipleRequestPopupMenu;
+
+	protected JMenuItem itemCancelMultipleRequests = new JMenuItem(
+			"Cancel selected requests...");
+	protected JMenuItem itemRefuseMultipleRequests = new JMenuItem(
+			"Refuse selected requests...");
+	protected JMenuItem itemApproveMultipleRequests = new JMenuItem(
+			"Approve selected requests...");
+	protected JMenuItem itemExecuteMultipleRequests = new JMenuItem(
+			"Execute selected requests...");
+
 	protected ArcturusDatabase adb;
 
 	protected Person me = PeopleManager.findMe();
@@ -48,7 +60,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 		adb = cttm.getArcturusDatabase();
 
-		setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 
 		addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
@@ -66,49 +78,82 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 		cip = new ContigInfoPanel(this);
 
-		createPopupMenu();
+		createPopupMenus();
 	}
 
-	private void createPopupMenu() {
-		popupMenu = new ContigRequestPopupMenu();
+	private void createPopupMenus() {
+		singleRequestPopupMenu = new ContigRequestPopupMenu();
 
-		popupMenu.add(itemCancelRequest);
+		singleRequestPopupMenu.add(itemCancelRequest);
 
-		popupMenu.addSeparator();
+		singleRequestPopupMenu.addSeparator();
 
-		popupMenu.add(itemRefuseRequest);
-		popupMenu.add(itemApproveRequest);
+		singleRequestPopupMenu.add(itemRefuseRequest);
+		singleRequestPopupMenu.add(itemApproveRequest);
 
-		popupMenu.addSeparator();
+		singleRequestPopupMenu.addSeparator();
 
-		popupMenu.add(itemExecuteRequest);
+		singleRequestPopupMenu.add(itemExecuteRequest);
 
 		itemCancelRequest.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent event) {
-				cancelRequest(popupMenu.getRequest());
+				cancelRequest(singleRequestPopupMenu.getRequest());
 			}
 		});
 
 		itemRefuseRequest.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent event) {
-				refuseRequest(popupMenu.getRequest());
+				refuseRequest(singleRequestPopupMenu.getRequest());
 			}
 		});
 
 		itemApproveRequest.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent event) {
-				approveRequest(popupMenu.getRequest());
+				approveRequest(singleRequestPopupMenu.getRequest());
 			}
 		});
 
 		itemExecuteRequest.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent event) {
-				executeRequest(popupMenu.getRequest());
+				executeRequest(singleRequestPopupMenu.getRequest());
+			}
+		});
+
+		multipleRequestPopupMenu = new JPopupMenu();
+
+		multipleRequestPopupMenu.add(itemCancelMultipleRequests);
+		multipleRequestPopupMenu.addSeparator();
+		multipleRequestPopupMenu.add(itemRefuseMultipleRequests);
+		multipleRequestPopupMenu.add(itemApproveMultipleRequests);
+		multipleRequestPopupMenu.addSeparator();
+		multipleRequestPopupMenu.add(itemExecuteMultipleRequests);
+
+		itemCancelMultipleRequests.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				cancelMultipleRequests();
+			}
+		});
+
+		itemRefuseMultipleRequests.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				refuseMultipleRequests();
+			}
+		});
+
+		itemApproveMultipleRequests.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				approveMultipleRequests();
+			}
+		});
+
+		itemExecuteMultipleRequests.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent event) {
+				executeMultipleRequests();
 			}
 		});
 	}
 
-	public void cancelRequest(ContigTransferRequest request) {
+	protected void cancelRequest(ContigTransferRequest request) {
 		Object[] options = { "Yes", "No" };
 
 		int rc = JOptionPane.showOptionDialog(this,
@@ -132,7 +177,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		}
 	}
 
-	public void refuseRequest(ContigTransferRequest request) {
+	protected void refuseRequest(ContigTransferRequest request) {
 		Object[] options = { "Yes", "No" };
 
 		int rc = JOptionPane.showOptionDialog(this,
@@ -156,7 +201,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		}
 	}
 
-	public void approveRequest(ContigTransferRequest request) {
+	protected void approveRequest(ContigTransferRequest request) {
 		Object[] options = { "Yes", "No" };
 
 		int rc = JOptionPane.showOptionDialog(this,
@@ -180,7 +225,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		}
 	}
 
-	public void executeRequest(ContigTransferRequest request) {
+	protected void executeRequest(ContigTransferRequest request) {
 		Object[] options = { "Yes", "No" };
 
 		int rc = JOptionPane.showOptionDialog(this,
@@ -195,10 +240,63 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(request, ContigTransferRequest.DONE, e);
 			} catch (SQLException e) {
-				Arcturus.logWarning(
+				Arcturus
+						.logWarning(
 								"SQL exception whilst executing a contig transfer request",
 								e);
 			}
+		}
+	}
+
+	protected void cancelMultipleRequests() {
+		processMultipleRequests(ContigTransferRequest.CANCELLED);
+	}
+
+	protected void refuseMultipleRequests() {
+		processMultipleRequests(ContigTransferRequest.REFUSED);
+	}
+
+	protected void approveMultipleRequests() {
+		processMultipleRequests(ContigTransferRequest.APPROVED);
+	}
+
+	protected void executeMultipleRequests() {
+		processMultipleRequests(ContigTransferRequest.DONE);
+	}
+
+	protected void processMultipleRequests(int newStatus) {
+		Object[] options = { "Yes", "No" };
+
+		String verb = ContigTransferRequest.getStatusVerb(newStatus);
+
+		int rc = JOptionPane.showOptionDialog(this, "Do you really want to "
+				+ verb + " these requests?", "Please confirm the command",
+				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
+				options, options[1]);
+
+		if (rc == JOptionPane.YES_OPTION) {
+			int[] rows = getSelectedRows();
+
+			for (int i = 0; i < rows.length; i++) {
+				ContigTransferRequest request = ((ContigTransferTableModel) getModel())
+						.getRequestForRow(rows[i]);
+
+				try {
+					if (newStatus == ContigTransferRequest.DONE)
+						adb.executeContigTransferRequest(request, me);
+					else
+						adb.reviewContigTransferRequest(request, me, newStatus);
+				} catch (ContigTransferRequestException e) {
+					notifyFailure(request, newStatus, e);
+				} catch (SQLException e) {
+					Arcturus
+							.logWarning(
+									"SQL exception whilst updating a contig transfer request",
+									e);
+				}
+			}
+			
+			refresh();
 		}
 	}
 
@@ -206,14 +304,12 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			ContigTransferRequestException e) {
 		String message = "Failed to change status of request "
 				+ request.getRequestID() + " to "
-				+ ContigTransferRequest.convertStatusToString(newStatus)
-				+ "\n"
+				+ ContigTransferRequest.convertStatusToString(newStatus) + "\n"
 				+ "The reason was " + e.getTypeAsString();
-		
-		JOptionPane.showMessageDialog(this,
-				message,
+
+		JOptionPane.showMessageDialog(this, message,
 				"Failed to update request", JOptionPane.WARNING_MESSAGE, null);
-		
+
 		System.err.println(message);
 	}
 
@@ -222,17 +318,43 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 		int row = rowAtPoint(point);
 
-		ContigTransferRequest request = ((ContigTransferTableModel) getModel())
-				.getRequestForRow(row);
+		if (isRowSelected(row) && getSelectedRowCount() > 1) {
+			int[] rows = getSelectedRows();
 
-		popupMenu.setRequest(request);
+			boolean canCancel = true;
+			boolean canRefuse = true;
+			boolean canApprove = true;
+			boolean canExecute = true;
 
-		itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
-		itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
-		itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
-		itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+			for (int i = 0; i < rows.length; i++) {
+				ContigTransferRequest request = ((ContigTransferTableModel) getModel())
+						.getRequestForRow(rows[i]);
 
-		popupMenu.show(e.getComponent(), e.getX(), e.getY());
+				canCancel &= adb.canCancelRequest(request, me);
+				canRefuse &= adb.canRefuseRequest(request, me);
+				canApprove &= adb.canApproveRequest(request, me);
+				canExecute &= adb.canExecuteRequest(request, me);
+			}
+
+			itemCancelMultipleRequests.setEnabled(canCancel);
+			itemRefuseMultipleRequests.setEnabled(canRefuse);
+			itemApproveMultipleRequests.setEnabled(canApprove);
+			itemExecuteMultipleRequests.setEnabled(canExecute);
+
+			multipleRequestPopupMenu.show(e.getComponent(), e.getX(), e.getY());
+		} else {
+			ContigTransferRequest request = ((ContigTransferTableModel) getModel())
+					.getRequestForRow(row);
+
+			singleRequestPopupMenu.setRequest(request);
+
+			itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
+			itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
+			itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
+			itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+
+			singleRequestPopupMenu.show(e.getComponent(), e.getX(), e.getY());
+		}
 	}
 
 	private void handleMouseEvent(MouseEvent e) {
