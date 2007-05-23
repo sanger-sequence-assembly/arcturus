@@ -2,10 +2,18 @@ package uk.ac.sanger.arcturus.gui;
 
 import javax.swing.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.people.PeopleManager;
+import uk.ac.sanger.arcturus.people.Person;
+
 import java.awt.LayoutManager;
 import java.awt.event.*;
+import java.sql.SQLException;
 
 public abstract class MinervaPanel extends JPanel implements MinervaClient {
+	protected ArcturusDatabase adb;
+	
 	protected JMenuBar menubar = new JMenuBar();
 	protected JToolBar toolbar = null;
 	protected MinervaTabbedPane parent;
@@ -15,16 +23,29 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowOligoFinder;
 	protected MinervaAbstractAction actionShowReadFinder;
 	protected MinervaAbstractAction actionShowContigTransfers;
+	protected MinervaAbstractAction actionShowAllContigTransfers;
 	protected MinervaAbstractAction actionShowCreateContigTransfer;
 	protected MinervaAbstractAction actionPrint;
+	
+	protected boolean administrator = false;
 
-	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent) {
+	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent, ArcturusDatabase adb) {
 		super(layoutManager);
 		this.parent = parent;
+		this.adb = adb;
+		
+		try {
+			Person me = PeopleManager.findMe();	
+			String role = adb.getRoleForUser(me);
+			administrator = role.equalsIgnoreCase("administrator") || role.equalsIgnoreCase("team leader");
+			System.err.println("I am " + (administrator ? "" : "not ") + "an administrator");
+		} catch (SQLException e) {
+			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
+		}
 	}
 
-	public MinervaPanel(MinervaTabbedPane parent) {
-		this((LayoutManager) null, parent);
+	public MinervaPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
+		this((LayoutManager) null, parent, adb);
 	}
 
 	public JMenuBar getMenuBar() {
@@ -173,6 +194,17 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 
 		menu.add(actionShowContigTransfers);
 		
+		actionShowAllContigTransfers = new MinervaAbstractAction("Show all contigs transfers",
+				null, "Show all contig transfers", new Integer(KeyEvent.VK_K),
+				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				parent.showAdminContigTransferTablePanel();
+			}
+		};
+		
+		if (administrator)
+			menu.add(actionShowAllContigTransfers);
+	
 		actionShowCreateContigTransfer = new MinervaAbstractAction("Create contig transfers",
 				null, "Create contig transfers", new Integer(KeyEvent.VK_R),
 				KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {

@@ -21,12 +21,8 @@ public class ProjectTablePanel extends MinervaPanel {
 
 	protected MinervaAbstractAction actionViewProject;
 
-	ArcturusDatabase adb;
-
 	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent);
-		
-		this.adb = adb;
+		super(new BorderLayout(), parent, adb);
 		
 		model = new ProjectTableModel(adb);
 

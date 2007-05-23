@@ -14,6 +14,7 @@ import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
+import uk.ac.sanger.arcturus.people.Person;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ArcturusDatabase adb;
@@ -21,6 +22,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private ImportReadsPanel irp;
 	private ReadFinderPanel rfp;
 	private ContigTransferTablePanel cttp;
+	protected ContigTransferTablePanel cttpAdmin;
 	protected OligoFinderPanel ofp;
 	protected CreateContigTransferPanel cctp;
 	
@@ -28,13 +30,26 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	
 	private MinervaAbstractAction actionShowProjectList;
 	private MinervaAbstractAction actionShowContigTransfers;
+	private MinervaAbstractAction actionShowAllContigTransfers;
 	private MinervaAbstractAction actionShowReadFinder;
 	private MinervaAbstractAction actionShowCreateContigTransfer;
 	private MinervaAbstractAction actionClose;
+	
+	private boolean administrator = false;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
 		this.adb = adb;
+		
+		Person me = PeopleManager.findMe();
+		
+		try {
+			String role = adb.getRoleForUser(me);
+			administrator = role.equalsIgnoreCase("administrator") || role.equalsIgnoreCase("team leader");
+			System.err.println("I am " + (administrator ? "" : "not ") + "an administrator");
+		} catch (SQLException e) {
+			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
+		}
 		
 		createActions();
 		
@@ -63,6 +78,14 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showContigTransferTablePanel();
+			}
+		};
+		
+		actionShowAllContigTransfers = new MinervaAbstractAction("Show all contigs transfers",
+				null, "Show all contig transfers", new Integer(KeyEvent.VK_K),
+				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showAdminContigTransferTablePanel();
 			}
 		};
 		
@@ -98,6 +121,9 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		fileMenu.add(actionShowReadFinder);
 		
 		fileMenu.add(actionShowContigTransfers);
+		
+		if (administrator)
+			fileMenu.add(actionShowAllContigTransfers);
 		
 		fileMenu.add(actionShowCreateContigTransfer);
 		
@@ -182,7 +208,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	
 	public ContigTransferTablePanel showContigTransferTablePanel() {
 		if (cttp == null)
-			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this);
+			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this, false);
 		
 		if (indexOfComponent(cttp) < 0)
 			addTab("Contig transfers", null, cttp, "Contig transfers");
@@ -192,6 +218,18 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		cttp.resetDivider();
 		
 		return cttp;
+	}
+	
+	public ContigTransferTablePanel showAdminContigTransferTablePanel() {
+		if (cttpAdmin == null)
+			cttpAdmin = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this, true);
+		
+		if (indexOfComponent(cttpAdmin) < 0)
+			addTab("All contig transfers", null, cttpAdmin, "All contig transfers");
+		
+		setSelectedComponent(cttpAdmin);
+		
+		return cttpAdmin;
 	}
 
 	public CreateContigTransferPanel showCreateContigTransferPanel() {

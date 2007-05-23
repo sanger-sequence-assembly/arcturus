@@ -20,46 +20,68 @@ public class ContigTransferTablePanel extends MinervaPanel {
 
 	private ContigTransferTable tableContigOwner = null;
 	private ContigTransferTableModel modelContigOwner = null;
+
 	private JSplitPane splitpane;
 
+	private ContigTransferTable tableAdmin = null;
+	private ContigTransferTableModel modelAdmin = null;
+
 	public ContigTransferTablePanel(ArcturusDatabase adb, Person user,
-			MinervaTabbedPane mtp) {
-		super(mtp);
+			MinervaTabbedPane mtp, boolean isAdmin) {
+		super(mtp, adb);
 
 		setLayout(new BorderLayout());
 
-		modelRequester = new ContigTransferTableModel(adb, user,
-				ArcturusDatabase.USER_IS_REQUESTER);
+		if (isAdmin) {
+			modelAdmin = new ContigTransferTableModel(adb, user,
+					ArcturusDatabase.USER_IS_ADMINISTRATOR);
+			
+			tableAdmin = new ContigTransferTable(modelAdmin);		
 
-		tableRequester = new ContigTransferTable(modelRequester);
+			JScrollPane scrollpane = new JScrollPane(tableAdmin);
 
-		JScrollPane scrollpane1 = new JScrollPane(tableRequester);
+			Border loweredetched1 = BorderFactory
+					.createEtchedBorder(EtchedBorder.LOWERED);
+			Border title1 = BorderFactory.createTitledBorder(loweredetched1,
+					"All requests");
+			
+			scrollpane.setBorder(title1);
 
-		Border loweredetched1 = BorderFactory
-				.createEtchedBorder(EtchedBorder.LOWERED);
-		Border title1 = BorderFactory.createTitledBorder(loweredetched1,
-				"Requests I have made, or to a project I own");
-		scrollpane1.setBorder(title1);
+			add(scrollpane, BorderLayout.CENTER);
+		} else {
+			modelRequester = new ContigTransferTableModel(adb, user,
+					ArcturusDatabase.USER_IS_REQUESTER);
 
-		modelContigOwner = new ContigTransferTableModel(adb, user,
-				ArcturusDatabase.USER_IS_CONTIG_OWNER);
+			tableRequester = new ContigTransferTable(modelRequester);
 
-		tableContigOwner = new ContigTransferTable(modelContigOwner);
+			JScrollPane scrollpane1 = new JScrollPane(tableRequester);
 
-		JScrollPane scrollpane2 = new JScrollPane(tableContigOwner);
+			Border loweredetched1 = BorderFactory
+					.createEtchedBorder(EtchedBorder.LOWERED);
+			Border title1 = BorderFactory.createTitledBorder(loweredetched1,
+					"Requests I have made, or to a project I own");
+			scrollpane1.setBorder(title1);
 
-		Border loweredetched2 = BorderFactory
-				.createEtchedBorder(EtchedBorder.LOWERED);
-		Border title2 = BorderFactory.createTitledBorder(loweredetched2,
-				"Requests for contigs I own");
-		scrollpane2.setBorder(title2);
+			modelContigOwner = new ContigTransferTableModel(adb, user,
+					ArcturusDatabase.USER_IS_CONTIG_OWNER);
 
-		splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollpane1,
-				scrollpane2);
+			tableContigOwner = new ContigTransferTable(modelContigOwner);
 
-		add(splitpane, BorderLayout.CENTER);
+			JScrollPane scrollpane2 = new JScrollPane(tableContigOwner);
 
-		splitpane.setDividerLocation(0.5);
+			Border loweredetched2 = BorderFactory
+					.createEtchedBorder(EtchedBorder.LOWERED);
+			Border title2 = BorderFactory.createTitledBorder(loweredetched2,
+					"Requests for contigs I own");
+			scrollpane2.setBorder(title2);
+
+			splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, scrollpane1,
+					scrollpane2);
+
+			add(splitpane, BorderLayout.CENTER);
+
+			splitpane.setDividerLocation(0.5);
+		}
 
 		createActions();
 
@@ -90,60 +112,70 @@ public class ContigTransferTablePanel extends MinervaPanel {
 		ButtonGroup group = new ButtonGroup();
 
 		int[] cutoffs = { 0, 7, 14, 28, 90 };
-		
+
 		JRadioButtonMenuItem rb = null;
 
 		for (int i = 0; i < cutoffs.length; i++) {
 			String caption = cutoffs[i] == 0 ? "Show full history"
 					: "Show requests made in last " + cutoffs[i] + " days";
-			
+
 			rb = new JRadioButtonMenuItem(caption);
 			group.add(rb);
 			menu.add(rb);
-			
+
 			final int n = cutoffs[i];
 
 			rb.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					modelContigOwner.setDateCutoff(n);
-					modelRequester.setDateCutoff(n);
+					if (modelContigOwner != null)
+						modelContigOwner.setDateCutoff(n);
+					
+					if (modelRequester != null)
+						modelRequester.setDateCutoff(n);
+					
+					if (modelAdmin != null)
+						modelAdmin.setDateCutoff(n);
 				}
 			});
-			
+
 			if (cutoffs[i] == 0)
 				rb.doClick();
 		}
-		
-		int[] status = {
-				ContigTransferRequest.ACTIVE,
-				ContigTransferRequest.FAILED,
-				ContigTransferRequest.REFUSED,
-				ContigTransferRequest.DONE,
-				ContigTransferRequest.ALL
-		};
+
+		int[] status = { ContigTransferRequest.ACTIVE,
+				ContigTransferRequest.FAILED, ContigTransferRequest.REFUSED,
+				ContigTransferRequest.DONE, ContigTransferRequest.ALL };
 
 		menu.addSeparator();
 
 		group = new ButtonGroup();
-	
+
 		for (int i = 0; i < status.length; i++) {
 			String caption = status[i] == ContigTransferRequest.ALL ? "Show all requests"
-					: "Show requests which are " + ContigTransferRequest.convertStatusToString(status[i]);
-			
+					: "Show requests which are "
+							+ ContigTransferRequest
+									.convertStatusToString(status[i]);
+
 			rb = new JRadioButtonMenuItem(caption);
 			group.add(rb);
 			menu.add(rb);
-			
+
 			final int n = status[i];
 
 			rb.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent e) {
-					modelContigOwner.setShowStatus(n);
-					modelRequester.setShowStatus(n);
+					if (modelContigOwner != null)
+						modelContigOwner.setShowStatus(n);
+
+					if (modelRequester != null)
+						modelRequester.setShowStatus(n);
+
+					if (modelAdmin != null)
+						modelAdmin.setShowStatus(n);
 				}
 			});
-			
-			if (status[i] == ContigTransferRequest.ACTIVE)		
+
+			if (status[i] == ContigTransferRequest.ACTIVE)
 				rb.doClick();
 		}
 	}

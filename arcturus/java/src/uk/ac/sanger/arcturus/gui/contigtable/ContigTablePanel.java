@@ -35,10 +35,8 @@ public class ContigTablePanel extends MinervaPanel {
 
 	protected boolean oneProject;
 
-	protected ArcturusDatabase adb;
-
 	public ContigTablePanel(Project[] projects, MinervaTabbedPane parent) {
-		super(new BorderLayout(), parent);
+		super(new BorderLayout(), parent, projects[0].getArcturusDatabase());
 
 		projectlist = (projects != null && projects.length > 0) ? projects[0]
 				.getName() : "[null]";
@@ -47,9 +45,6 @@ public class ContigTablePanel extends MinervaPanel {
 			projectlist += "," + projects[i].getName();
 
 		oneProject = projects.length == 1;
-
-		if (projects != null && projects.length > 0)
-			adb = projects[0].getArcturusDatabase();
 
 		model = new ContigTableModel(projects);
 
