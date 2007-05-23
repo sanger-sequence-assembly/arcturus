@@ -202,6 +202,25 @@ public class ContigTransferRequest {
 		return UNKNOWN;
 	}
 	
+	public static String getStatusVerb(int status) {
+		switch (status) {
+			case APPROVED:
+				return "approve";
+				
+			case REFUSED:
+				return "refuse";
+				
+			case CANCELLED:
+				return "cancel";
+				
+			case DONE:
+				return "execute";
+				
+			default:
+				return "ContigTransferRequest[UNKNOWN VERB CODE: " + status + "]";
+		}
+	}
+	
 	public void setStatus(int status) {
 		if (!isValidStatus(status))
 			throw new IllegalArgumentException("Status is invalid: " + status);
