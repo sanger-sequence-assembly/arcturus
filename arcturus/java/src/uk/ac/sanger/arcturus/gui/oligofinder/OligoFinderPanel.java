@@ -35,6 +35,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected MinervaAbstractAction actionFindOligos;
 	protected MinervaAbstractAction actionGetOligosFromFile;
+	protected MinervaAbstractAction actionGetConsensusFromFile;
 
 	protected boolean searchInProgress = false;
 
@@ -49,7 +50,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected DecimalFormat df = new DecimalFormat();
 
 	public OligoFinderPanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
-		super(parent);
+		super(parent, adb);
 
 		df.setGroupingSize(3);
 		df.setGroupingUsed(true);
@@ -61,7 +62,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 		createActions();
 
 		createMenus();
-		
+
 		getPrintAction().setEnabled(false);
 
 		JPanel topPanel = new JPanel();
@@ -72,7 +73,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 		JScrollPane scrollpane = new JScrollPane(txtOligoList,
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 
 		txtOligoList.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) {
@@ -140,7 +141,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 		cbSelectAll.setSelected(false);
 		panel.add(cbSelectAll);
-		
+
 		cbSelectAll.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
 				if (e.getStateChange() == ItemEvent.SELECTED) {
@@ -148,12 +149,12 @@ public class OligoFinderPanel extends MinervaPanel implements
 					int end = lstProjects.getModel().getSize() - 1;
 					if (end >= 0) {
 						lstProjects.setSelectionInterval(start, end);
-					}				
+					}
 				} else {
-					lstProjects.clearSelection();				
+					lstProjects.clearSelection();
 				}
 			}
-			
+
 		});
 
 		cbFreeReads.setSelected(false);
@@ -162,7 +163,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 		cbFreeReads.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
 				updateFindOligosButton();
-			}			
+			}
 		});
 
 		add(panel);
@@ -232,6 +233,15 @@ public class OligoFinderPanel extends MinervaPanel implements
 			}
 		};
 
+		actionGetConsensusFromFile = new MinervaAbstractAction(
+				"Import a consensus file", null, "Import a consensus file",
+				new Integer(KeyEvent.VK_C), KeyStroke.getKeyStroke(
+						KeyEvent.VK_C, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				getConsensusFromFile();
+			}
+		};
+
 		actionFindOligos = new MinervaAbstractAction("Find oligos", null,
 				"Find oligos in selected projects", new Integer(KeyEvent.VK_I),
 				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
@@ -245,6 +255,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
 		menu.add(actionGetOligosFromFile);
+		menu.add(actionGetConsensusFromFile);
 
 		return true;
 	}
@@ -279,25 +290,46 @@ public class OligoFinderPanel extends MinervaPanel implements
 		int rc = fileChooser.showOpenDialog(this);
 
 		if (rc == JFileChooser.APPROVE_OPTION) {
-			addOligosToList(fileChooser.getSelectedFile());
+			File file = fileChooser.getSelectedFile();
+			try {
+				BufferedReader br = new BufferedReader(new FileReader(file));
+
+				String line;
+
+				while ((line = br.readLine()) != null) {
+					txtOligoList.append(line);
+					txtOligoList.append("\n");
+				}
+
+				br.close();
+			} catch (IOException ioe) {
+				Arcturus.logWarning("Error encountered whilst reading file "
+						+ file.getPath(), ioe);
+			}
 		}
 	}
 
-	protected void addOligosToList(File file) {
-		try {
-			BufferedReader br = new BufferedReader(new FileReader(file));
+	protected void getConsensusFromFile() {
+		int rc = fileChooser.showOpenDialog(this);
 
-			String line;
+		if (rc == JFileChooser.APPROVE_OPTION) {
+			File file = fileChooser.getSelectedFile();
+			try {
+				BufferedReader br = new BufferedReader(new FileReader(file));
 
-			while ((line = br.readLine()) != null) {
-				txtOligoList.append(line);
+				String line;
+
+				while ((line = br.readLine()) != null) {
+					txtOligoList.append(line);
+				}
+
 				txtOligoList.append("\n");
-			}
 
-			br.close();
-		} catch (IOException ioe) {
-			Arcturus.logWarning("Error encountered whilst reading file "
-					+ file.getPath(), ioe);
+				br.close();
+			} catch (IOException ioe) {
+				Arcturus.logWarning("Error encountered whilst reading file "
+						+ file.getPath(), ioe);
+			}
 		}
 	}
 
