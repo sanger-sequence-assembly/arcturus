@@ -57,6 +57,7 @@ public class ArcturusDatabase {
 	
 	public static final int USER_IS_REQUESTER = 1;
 	public static final int USER_IS_CONTIG_OWNER = 2;
+	public static final int USER_IS_ADMINISTRATOR = 3;
 
 	protected DataSource ds;
 	protected String description;
