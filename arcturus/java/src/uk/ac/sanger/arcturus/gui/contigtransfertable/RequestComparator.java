@@ -9,16 +9,14 @@ import uk.ac.sanger.arcturus.contigtransfer.*;
 
 public class RequestComparator  implements Comparator {
 	protected boolean ascending;
-	protected int mode;
 	protected int type;
 
 	public RequestComparator(int mode) {
-		this(ContigTransferTableModel.COLUMN_OPENED_DATE, mode, true);
+		this(ContigTransferTableModel.COLUMN_OPENED_DATE,  true);
 	}
 
-	public RequestComparator(int type, int mode, boolean ascending) {
+	public RequestComparator(int type, boolean ascending) {
 		this.type = type;
-		this.mode = mode;
 		this.ascending = ascending;
 	}
 
@@ -56,9 +54,7 @@ public class RequestComparator  implements Comparator {
 				return compareStrings(req1.getNewProject().getName(), req2.getNewProject().getName());
 
 			case ContigTransferTableModel.COLUMN_REQUESTER:
-				return (mode == ArcturusDatabase.USER_IS_REQUESTER) ?
-						comparePersons(req1.getContigOwner(), req2.getContigOwner()) :
-						comparePersons(req1.getRequester(), req2.getRequester());
+				return comparePersons(req1.getContigOwner(), req2.getContigOwner());
 
 			case ContigTransferTableModel.COLUMN_OPENED_DATE:
 				return compareDates(req1.getOpenedDate(), req2.getOpenedDate());
