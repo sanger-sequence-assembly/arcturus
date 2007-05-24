@@ -13,7 +13,6 @@ import java.util.*;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.Arcturus;
 
 public class ContigTablePanel extends MinervaPanel {
@@ -188,7 +187,10 @@ public class ContigTablePanel extends MinervaPanel {
 		Set mypset = null;
 
 		try {
-			mypset = adb.getProjectsForOwner(me);
+			if (administrator)
+				mypset = adb.getAllProjects();
+			else
+				mypset = adb.getProjectsForOwner(me);
 		} catch (SQLException sqle) {
 			Arcturus.logWarning("Error whilst enumerating my projects", sqle);
 		}
@@ -197,6 +199,9 @@ public class ContigTablePanel extends MinervaPanel {
 			contigMenu.addSeparator();
 
 			xferMenu = new JMenu("Transfer selected contigs to");
+	        
+			VerticalGridLayout menuGrid = new VerticalGridLayout(40,0);   
+	        xferMenu.getPopupMenu().setLayout(menuGrid); 
 
 			contigMenu.add(xferMenu);
 			
