@@ -2,14 +2,13 @@ package uk.ac.sanger.arcturus.contigtransfer;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
-import uk.ac.sanger.arcturus.database.ContigTransferRequestManager;
 import uk.ac.sanger.arcturus.people.*;
 
 import javax.mail.*;
 import javax.mail.internet.*;
 
 import java.io.UnsupportedEncodingException;
-import java.util.Properties;
+import java.util.*;
 
 public class ContigTransferRequestNotifier {
 	public static final int AS_REQUESTER = 1;
@@ -19,6 +18,8 @@ public class ContigTransferRequestNotifier {
 	private static ContigTransferRequestNotifier instance = new ContigTransferRequestNotifier();
 
 	protected Session session = null;
+	
+	protected Map<Person, List<String>> messageQueues = new HashMap<Person, List<String>>();
 
 	private ContigTransferRequestNotifier() {
 		Properties props = Arcturus.getProperties();
@@ -66,26 +67,62 @@ public class ContigTransferRequestNotifier {
 
 	protected void notify(Person person, int role, Person reviewer,
 			ContigTransferRequest request, int oldStatus) {
-		String text = createMessage(person, role, reviewer, request,
+		String message = createMessage(person, role, reviewer, request,
 				oldStatus);
+		
+		enqueueMessage(person, message);
+	}
+	
+	protected synchronized void enqueueMessage(Person recipient, String message) {
+		List<String> messageList = messageQueues.get(recipient);
+		
+		if (messageList == null) {
+			messageList = new Vector<String>();
+			messageQueues.put(recipient, messageList);
+		}
+		
+		messageList.add(message);
+	}
+	
+	public synchronized void processAllQueues() {		
+		for (Person recipient: messageQueues.keySet())
+			processQueueForRecipient(recipient);
+	}
+	
+	protected synchronized void processQueueForRecipient(Person person) {
+		List<String> messages = messageQueues.get(person);
+		
+		if (messages == null || messages.isEmpty())
+			return;
+		
+		StringBuffer sb = new StringBuffer();
+
+		sb.append("Dear " + person.getGivenName() + ",\n\n");
+
+		String separator = "\n----------------------------------------"
+			+ "----------------------------------------\n\n";
+		
+		for (Iterator<String> iter = messages.iterator(); iter.hasNext();) {
+			sb.append(iter.next());
+			iter.remove();
+			sb.append(separator);
+		}
 
 		Message msg = new MimeMessage(session);
 
 		Person realme = PeopleManager.findRealMe();
 		Person me = PeopleManager.findMe();
 
-		InternetAddress realMeAddress = null;
-		InternetAddress meAddress = null;
-		InternetAddress recipient = null;
-
 		try {
-			realMeAddress = new InternetAddress(realme.getMail(), realme
+			InternetAddress realMeAddress = new InternetAddress(realme.getMail(), realme
 					.getName());
 
-			meAddress = new InternetAddress(me.getMail(), me.getName());
+			InternetAddress meAddress = new InternetAddress(me.getMail(), me.getName());
 
 			String email = PeopleManager.isMasquerading() ? realme.getUID()
 					+ "+" + person.getMail() : person.getMail();
+
+			InternetAddress recipient = null;
 
 			try {
 				recipient = new InternetAddress(email, person.getName());
@@ -97,15 +134,12 @@ public class ContigTransferRequestNotifier {
 
 			msg.setFrom(realMeAddress);
 			
-			String organism = request.getContig().getArcturusDatabase().getName();
-			
 			String subject = "[Arcturus]" + (PeopleManager.isMasquerading()  ? " *** TEST ***" : "") +
-				(oldStatus == ContigTransferRequest.UNKNOWN ? " New " : " Update to") +
-				" contig transfer request " + organism + " #" + request.getRequestID();
+				" Notification from the contig transfer request manager";
 			
 			msg.setSubject(subject);
 			
-			msg.setText(text);
+			msg.setText(sb.toString());
 
 			msg.setHeader("X-Mailer", "Arcturus-Notification");
 			msg.setSentDate(new java.util.Date());
@@ -128,8 +162,6 @@ public class ContigTransferRequestNotifier {
 
 		String requesterName = request.getRequester().getName();
 		String requesterGivenName = request.getRequester().getGivenName();
-
-		sb.append("Dear " + person.getGivenName() + ",\n\n");
 
 		if (oldStatus == ContigTransferRequest.UNKNOWN) {
 			sb.append("A new contig transfer request has been created by "

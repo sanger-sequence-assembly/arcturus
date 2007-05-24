@@ -10,8 +10,7 @@ import java.sql.SQLException;
 import java.text.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
-import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
-import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
+import uk.ac.sanger.arcturus.contigtransfer.*;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.SortableTable;
@@ -165,6 +164,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			try {
 				adb.reviewContigTransferRequest(request, me,
 						ContigTransferRequest.CANCELLED);
+				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(request, ContigTransferRequest.CANCELLED, e);
@@ -189,6 +189,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			try {
 				adb.reviewContigTransferRequest(request, me,
 						ContigTransferRequest.REFUSED);
+				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(request, ContigTransferRequest.REFUSED, e);
@@ -213,6 +214,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			try {
 				adb.reviewContigTransferRequest(request, me,
 						ContigTransferRequest.APPROVED);
+				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(request, ContigTransferRequest.APPROVED, e);
@@ -236,6 +238,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		if (rc == JOptionPane.YES_OPTION) {
 			try {
 				adb.executeContigTransferRequest(request, me);
+				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
 				notifyFailure(request, ContigTransferRequest.DONE, e);
@@ -295,7 +298,9 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 									e);
 				}
 			}
-			
+
+			ContigTransferRequestNotifier.getInstance().processAllQueues();
+
 			refresh();
 		}
 	}

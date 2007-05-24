@@ -8,6 +8,7 @@ import javax.swing.JOptionPane;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
+import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestNotifier;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
@@ -47,6 +48,7 @@ public class ContigTransferAction extends AbstractAction {
 			}
 		}
 
+		ContigTransferRequestNotifier.getInstance().processAllQueues();
 	}
 
 }
