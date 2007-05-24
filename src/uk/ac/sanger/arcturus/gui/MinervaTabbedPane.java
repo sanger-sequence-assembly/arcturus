@@ -25,38 +25,41 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ContigTransferTablePanel cttpAdmin;
 	protected OligoFinderPanel ofp;
 	protected CreateContigTransferPanel cctp;
-	
+
 	protected JMenuBar menubar = new JMenuBar();
-	
+
 	protected MinervaAbstractAction actionShowProjectList;
 	protected MinervaAbstractAction actionShowContigTransfers;
 	protected MinervaAbstractAction actionShowAllContigTransfers;
 	protected MinervaAbstractAction actionShowReadFinder;
 	protected MinervaAbstractAction actionShowCreateContigTransfer;
 	protected MinervaAbstractAction actionClose;
-	
+
 	protected boolean administrator = false;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
 		this.adb = adb;
-		
+
 		Person me = PeopleManager.findMe();
-		
+
 		try {
 			String role = adb.getRoleForUser(me);
-			administrator = role != null && (
-					role.equalsIgnoreCase("administrator") || 
-					role.equalsIgnoreCase("team leader"));
+			administrator = (role != null
+					&& (role.equalsIgnoreCase("administrator") || 
+						role.equalsIgnoreCase("team leader")) && 
+						!Boolean.getBoolean("minerva.noadmin"));
+
 		} catch (SQLException e) {
-			Arcturus.logWarning("An SQL exception occurred when trying to get my role", e);
+			Arcturus.logWarning(
+					"An SQL exception occurred when trying to get my role", e);
 		}
-		
+
 		createActions();
-		
+
 		createMenu();
 	}
-	
+
 	protected void createActions() {
 		actionShowProjectList = new MinervaAbstractAction("Open project list",
 				null, "Open project list", new Integer(KeyEvent.VK_O),
@@ -65,48 +68,51 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 				showProjectTablePanel();
 			}
 		};
-		
+
 		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
-				null, "Show read finder", new Integer(KeyEvent.VK_F),
-				KeyStroke.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
+				null, "Show read finder", new Integer(KeyEvent.VK_F), KeyStroke
+						.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showReadFinderPanel();
 			}
 		};
-		
-		actionShowContigTransfers = new MinervaAbstractAction("Show contigs transfers",
-				null, "Show contig transfers", new Integer(KeyEvent.VK_T),
-				KeyStroke.getKeyStroke(KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
+
+		actionShowContigTransfers = new MinervaAbstractAction(
+				"Show contigs transfers", null, "Show contig transfers",
+				new Integer(KeyEvent.VK_T), KeyStroke.getKeyStroke(
+						KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showContigTransferTablePanel();
 			}
 		};
-		
-		actionShowAllContigTransfers = new MinervaAbstractAction("Show all contigs transfers",
-				null, "Show all contig transfers", new Integer(KeyEvent.VK_K),
+
+		actionShowAllContigTransfers = new MinervaAbstractAction(
+				"Show all contigs transfers", null,
+				"Show all contig transfers", new Integer(KeyEvent.VK_K),
 				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showAdminContigTransferTablePanel();
 			}
 		};
-		
-		actionShowCreateContigTransfer = new MinervaAbstractAction("Create contig transfers",
-				null, "Create contig transfers", new Integer(KeyEvent.VK_R),
-				KeyStroke.getKeyStroke(KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+
+		actionShowCreateContigTransfer = new MinervaAbstractAction(
+				"Create contig transfers", null, "Create contig transfers",
+				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
+						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				showCreateContigTransferPanel();
 			}
 		};
-	
-		actionClose = new MinervaAbstractAction("Close", null, "Close this window",
-				new Integer(KeyEvent.VK_C),
-				KeyStroke.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
-					public void actionPerformed(ActionEvent e) {
-						closeParentFrame();
-					}			
+
+		actionClose = new MinervaAbstractAction("Close", null,
+				"Close this window", new Integer(KeyEvent.VK_C), KeyStroke
+						.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				closeParentFrame();
+			}
 		};
 	}
-	
+
 	protected void createMenu() {
 		createFileMenu();
 		menubar.add(Box.createHorizontalGlue());
@@ -116,30 +122,30 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected void createFileMenu() {
 		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
 		menubar.add(fileMenu);
-		
+
 		fileMenu.add(actionShowProjectList);
-		
+
 		fileMenu.add(actionShowReadFinder);
-		
-		fileMenu.add(actionShowContigTransfers);
-		
+
 		if (administrator)
 			fileMenu.add(actionShowAllContigTransfers);
-		
+		else
+			fileMenu.add(actionShowContigTransfers);
+
 		fileMenu.add(actionShowCreateContigTransfer);
-		
+
 		fileMenu.addSeparator();
-				
+
 		fileMenu.add(actionClose);
-		
+
 		fileMenu.addSeparator();
-		
+
 		fileMenu.add(Minerva.getQuitAction());
 	}
-	
+
 	protected void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
-		menubar.add(helpMenu);		
+		menubar.add(helpMenu);
 	}
 
 	protected JMenu createMenu(String name, int mnemonic, String description) {
@@ -179,110 +185,113 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			insertTab("Projects", null, ptp, "All projects", 0);
 
 		setSelectedComponent(ptp);
-		
+
 		return ptp;
 	}
 
 	public ImportReadsPanel showImportReadsPanel() {
 		if (irp == null)
 			irp = new ImportReadsPanel(adb, this);
-		
+
 		if (indexOfComponent(irp) < 0)
 			addTab("Import reads", null, irp, "Import reads");
-		
+
 		setSelectedComponent(irp);
-		
+
 		return irp;
 	}
-	
+
 	public ReadFinderPanel showReadFinderPanel() {
 		if (rfp == null)
 			rfp = new ReadFinderPanel(adb, this);
-		
+
 		if (indexOfComponent(rfp) < 0)
 			addTab("Find reads", null, rfp, "Find reads");
-		
+
 		setSelectedComponent(rfp);
-		
+
 		return rfp;
 	}
-	
+
 	public ContigTransferTablePanel showContigTransferTablePanel() {
 		if (cttp == null)
-			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this, false);
-		
+			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(),
+					this, false);
+
 		if (indexOfComponent(cttp) < 0)
 			addTab("Contig transfers", null, cttp, "Contig transfers");
-		
+
 		setSelectedComponent(cttp);
-		
+
 		cttp.resetDivider();
-		
+
 		return cttp;
 	}
-	
+
 	public ContigTransferTablePanel showAdminContigTransferTablePanel() {
 		if (cttpAdmin == null)
-			cttpAdmin = new ContigTransferTablePanel(adb, PeopleManager.findMe(), this, true);
-		
+			cttpAdmin = new ContigTransferTablePanel(adb, PeopleManager
+					.findMe(), this, true);
+
 		if (indexOfComponent(cttpAdmin) < 0)
-			addTab("All contig transfers", null, cttpAdmin, "All contig transfers");
-		
+			addTab("All contig transfers", null, cttpAdmin,
+					"All contig transfers");
+
 		setSelectedComponent(cttpAdmin);
-		
+
 		return cttpAdmin;
 	}
 
 	public CreateContigTransferPanel showCreateContigTransferPanel() {
 		if (cctp == null)
 			cctp = new CreateContigTransferPanel(adb, this);
-		
-		
+
 		if (indexOfComponent(cctp) < 0)
-			addTab("Create contig transfers", null, cctp, "Create contig transfers");
-		
+			addTab("Create contig transfers", null, cctp,
+					"Create contig transfers");
+
 		setSelectedComponent(cctp);
-		
+
 		return cctp;
 	}
 
 	public OligoFinderPanel showOligoFinderPanel() {
 		if (ofp == null)
 			ofp = new OligoFinderPanel(adb, this);
-		
+
 		if (indexOfComponent(ofp) < 0)
 			addTab("Oligo finder", null, ofp, "Oligo finder");
-		
+
 		setSelectedComponent(ofp);
-		
+
 		return ofp;
 	}
 
 	public void addTab(String title, Component component) {
 		addTab(title, null, component, title);
 	}
-	
+
 	public void addTab(String title, Icon icon, Component component, String tip) {
 		super.addTab(title, icon, component, tip);
 		packFrame();
 	}
-	
+
 	protected void packFrame() {
-		JFrame frame = (JFrame)SwingUtilities.getRoot(this);
+		JFrame frame = (JFrame) SwingUtilities.getRoot(this);
 		frame.pack();
 	}
 
 	public void closeResources() {
-			adb.closeConnectionPool();
+		adb.closeConnectionPool();
 	}
-	
+
 	protected void closeParentFrame() {
 		closeResources();
-		JFrame frame = (JFrame)SwingUtilities.getRoot(this);
+		JFrame frame = (JFrame) SwingUtilities.getRoot(this);
 		frame.setVisible(false);
 		frame.dispose();
 	}
-	
+
 	/**
 	 * Removes the specified Component from the JTabbedPane.
 	 * 
@@ -290,29 +299,29 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	 * Sun's implementation of JTabbedPane which fails to fire a StateChanged
 	 * event if the removed component is not the last tab.
 	 */
-	
+
 	public void remove(Component c) {
 		super.remove(c);
 		fireStateChanged();
 	}
-	
+
 	public static MinervaTabbedPane getTabbedPane(Component component) {
 		Container c = component.getParent();
-		
+
 		while (c != null && !(c instanceof Frame)) {
 			if (c instanceof MinervaTabbedPane)
-				return (MinervaTabbedPane)c;
-			
+				return (MinervaTabbedPane) c;
+
 			c = c.getParent();
 		}
-		
+
 		return null;
 	}
 
 	public void refresh() {
 		// Does nothing
 	}
-	
+
 	public ArcturusDatabase getArcturusDatabase() {
 		return adb;
 	}
