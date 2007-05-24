@@ -40,7 +40,8 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 			String role = adb.getRoleForUser(me);
 			administrator = role != null
 					&& (role.equalsIgnoreCase("administrator") || 
-						role.equalsIgnoreCase("team leader"));
+						role.equalsIgnoreCase("team leader")) && 
+						!Boolean.getBoolean("minerva.noadmin");
 		} catch (SQLException e) {
 			Arcturus.logWarning(
 					"An SQL exception occurred when trying to get my role", e);
@@ -195,8 +196,6 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 			}
 		};
 
-		menu.add(actionShowContigTransfers);
-
 		actionShowAllContigTransfers = new MinervaAbstractAction(
 				"Show all contigs transfers", null,
 				"Show all contig transfers", new Integer(KeyEvent.VK_K),
@@ -208,6 +207,8 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 
 		if (administrator)
 			menu.add(actionShowAllContigTransfers);
+		else
+			menu.add(actionShowContigTransfers);
 
 		actionShowCreateContigTransfer = new MinervaAbstractAction(
 				"Create contig transfers", null, "Create contig transfers",
