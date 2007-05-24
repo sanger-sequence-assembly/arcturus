@@ -88,6 +88,12 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 				MinervaClient client = (MinervaClient)component;
 				client.closeResources();
 				
+				if (component instanceof MinervaTabbedPane) {
+					MinervaTabbedPane mtp = (MinervaTabbedPane)component;
+					String name = mtp.getArcturusDatabase().getName();
+					Minerva.getInstance().unregisterFrame(name, this);
+				}
+				
 				setVisible(false);
 				dispose();
 			}

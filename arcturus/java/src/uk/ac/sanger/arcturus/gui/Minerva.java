@@ -23,8 +23,9 @@ import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
 
 public class Minerva {
 	private static Minerva instance = null;
-	private ArcturusInstance ai = null;
-	private String buildtime;
+	protected ArcturusInstance ai = null;
+	protected String buildtime;
+	protected Map<String, MinervaFrame> frames = new HashMap<String, MinervaFrame>();
 
 	public static Minerva getInstance() {
 		if (instance == null)
@@ -110,22 +111,33 @@ public class Minerva {
 			System.exit(1);
 		}
 	}
-	
+
 	private MinervaFrame createMinervaFrame(String name) {
 		String caption = "Minerva - " + name + " [";
 
 		if (buildtime != null)
 			caption += buildtime + ", ";
-		
+
 		caption += "Java " + System.getProperty("java.version") + "]";
 
-		return new MinervaFrame(this, caption);
+		MinervaFrame frame = new MinervaFrame(this, caption);
+		
+		frames.put(name, frame);
+		
+		return frame;
 	}
 	
+	public void unregisterFrame(String name, MinervaFrame frame) {
+		MinervaFrame frame2 = frames.get(name);
+		
+		if (frame.equals(frame2))
+			frames.remove(name);
+	}
+
 	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
 		MinervaFrame frame = createMinervaFrame(ai.getName());
 		JComponent component = createInstanceDisplay(ai);
-		
+
 		frame.setComponent(component);
 
 		frame.pack();
@@ -136,17 +148,26 @@ public class Minerva {
 		return new OrganismTablePanel(ai);
 	}
 
-	public void createAndShowOrganismDisplay(String organism) throws SQLException, NamingException {
-		MinervaFrame frame = createMinervaFrame(organism);
-		JComponent component = createOrganismDisplay(organism);
-		
-		frame.setComponent(component);
+	public void createAndShowOrganismDisplay(String organism)
+			throws SQLException, NamingException {
+		MinervaFrame frame = frames.get(organism);
 
-		frame.pack();
-		frame.setVisible(true);
-		
+		if (frame == null) {
+			frame = createMinervaFrame(organism);
+			MinervaTabbedPane component = createOrganismDisplay(organism);
+
+			frame.setComponent(component);
+
+			frame.pack();
+			frame.setVisible(true);
+		} else {
+			frame.setVisible(true);
+			frame.setState(JFrame.NORMAL);
+			frame.toFront();
+		}
 	}
-	public JComponent createOrganismDisplay(String organism)
+
+	public MinervaTabbedPane createOrganismDisplay(String organism)
 			throws SQLException, NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
@@ -174,8 +195,9 @@ public class Minerva {
 
 			imageLabel = new JLabel(image);
 			getContentPane().add(imageLabel, BorderLayout.CENTER);
-			
-			imageLabel.setBorder(BorderFactory.createBevelBorder(BevelBorder.RAISED));
+
+			imageLabel.setBorder(BorderFactory
+					.createBevelBorder(BevelBorder.RAISED));
 
 			pack();
 		}
