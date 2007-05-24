@@ -17,25 +17,25 @@ import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
-	private ArcturusDatabase adb;
-	private ProjectTablePanel ptp;
-	private ImportReadsPanel irp;
-	private ReadFinderPanel rfp;
-	private ContigTransferTablePanel cttp;
+	protected ArcturusDatabase adb;
+	protected ProjectTablePanel ptp;
+	protected ImportReadsPanel irp;
+	protected ReadFinderPanel rfp;
+	protected ContigTransferTablePanel cttp;
 	protected ContigTransferTablePanel cttpAdmin;
 	protected OligoFinderPanel ofp;
 	protected CreateContigTransferPanel cctp;
 	
-	private JMenuBar menubar = new JMenuBar();
+	protected JMenuBar menubar = new JMenuBar();
 	
-	private MinervaAbstractAction actionShowProjectList;
-	private MinervaAbstractAction actionShowContigTransfers;
-	private MinervaAbstractAction actionShowAllContigTransfers;
-	private MinervaAbstractAction actionShowReadFinder;
-	private MinervaAbstractAction actionShowCreateContigTransfer;
-	private MinervaAbstractAction actionClose;
+	protected MinervaAbstractAction actionShowProjectList;
+	protected MinervaAbstractAction actionShowContigTransfers;
+	protected MinervaAbstractAction actionShowAllContigTransfers;
+	protected MinervaAbstractAction actionShowReadFinder;
+	protected MinervaAbstractAction actionShowCreateContigTransfer;
+	protected MinervaAbstractAction actionClose;
 	
-	private boolean administrator = false;
+	protected boolean administrator = false;
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
@@ -57,7 +57,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		createMenu();
 	}
 	
-	private void createActions() {
+	protected void createActions() {
 		actionShowProjectList = new MinervaAbstractAction("Open project list",
 				null, "Open project list", new Integer(KeyEvent.VK_O),
 				KeyStroke.getKeyStroke(KeyEvent.VK_O, ActionEvent.CTRL_MASK)) {
@@ -107,13 +107,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		};
 	}
 	
-	private void createMenu() {
+	protected void createMenu() {
 		createFileMenu();
 		menubar.add(Box.createHorizontalGlue());
 		createHelpMenu();
 	}
 
-	private void createFileMenu() {
+	protected void createFileMenu() {
 		JMenu fileMenu = createMenu("File", KeyEvent.VK_F, "File");
 		menubar.add(fileMenu);
 		
@@ -137,12 +137,12 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		fileMenu.add(Minerva.getQuitAction());
 	}
 	
-	private void createHelpMenu() {
+	protected void createHelpMenu() {
 		JMenu helpMenu = createMenu("Help", KeyEvent.VK_H, "Help");
 		menubar.add(helpMenu);		
 	}
 
-	private JMenu createMenu(String name, int mnemonic, String description) {
+	protected JMenu createMenu(String name, int mnemonic, String description) {
 		JMenu menu = new JMenu(name);
 
 		menu.setMnemonic(mnemonic);
@@ -267,7 +267,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		packFrame();
 	}
 	
-	private void packFrame() {
+	protected void packFrame() {
 		JFrame frame = (JFrame)SwingUtilities.getRoot(this);
 		frame.pack();
 	}
@@ -276,7 +276,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			adb.closeConnectionPool();
 	}
 	
-	private void closeParentFrame() {
+	protected void closeParentFrame() {
 		closeResources();
 		JFrame frame = (JFrame)SwingUtilities.getRoot(this);
 		frame.setVisible(false);
@@ -311,5 +311,9 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	public void refresh() {
 		// Does nothing
+	}
+	
+	public ArcturusDatabase getArcturusDatabase() {
+		return adb;
 	}
 }
