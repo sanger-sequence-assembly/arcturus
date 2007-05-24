@@ -98,8 +98,14 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	}
 
 	public void refresh() {
-		tableRequester.refresh();
-		tableContigOwner.refresh();
+		if (tableRequester != null)
+			tableRequester.refresh();
+		
+		if (tableContigOwner != null)
+			tableContigOwner.refresh();
+		
+		if (tableAdmin != null)
+			tableAdmin.refresh();
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
