@@ -244,6 +244,14 @@ sub verifyArcturusUser {
 # user privileges
 #-------------------------------------------------------------------------
 
+sub userCanLockProject {
+    my $this = shift;
+
+    my $privilege = &getPrivilegesForUser($this,shift); # port username, if any
+
+    return ($privilege && $privilege->{lock_project})? 1 : 0;
+}
+
 sub userCanCreateProject {
     my $this = shift;
 
@@ -444,7 +452,7 @@ print STDERR "updateUser seniority $seniority  role $role ". &verifyUserRole($ro
 
 # test the seniority of the current arcturus user 
 
-    unless ($this->userRole($user,role=>$role,seniority=>1)) {
+    unless ($this->testUserRole($user,role=>$role,seniority=>1)) {
         return 0, "you do not have privilege for this operation";
     }
 
@@ -491,7 +499,7 @@ sub addUserPrivilege {
         return 0, "you do not have privilege for this operation";
     }
 
-    unless ($this->userRole($user,privilege=>$privilege)) {
+    unless ($this->testUserRole($user,privilege=>$privilege)) {
         return 0, "you do not have privilege for this operation";
     }
 
@@ -557,7 +565,7 @@ sub removeUserPrivilege {
         return 0, "you do not have privilege for this operation";
     }
 
-    unless ($this->userRole($user,privilege=>$privilege,seniority=>1)) {
+    unless ($this->testUserRole($user,privilege=>$privilege,seniority=>1)) {
         return 0, "you do not have privilege for this operation";
     }
 
@@ -620,9 +628,9 @@ sub deleteUser {
     return $status,$msg;
 }
 
-# userRole makes a decision about precedence of privilege when two users are involved
+# testUserRole makes a decision about precedence of privilege when two users are involved
 
-sub userRole {
+sub testUserRole {
 # test privileges of current arcturus user against input test user
 # returns a 1 if the current user's privilege weighs stronger than those of test user
 # e.g. a user without grant privilege cannot count less than a user who does not
@@ -631,8 +639,8 @@ sub userRole {
     my $testuser = shift;
     my %options = @_;
 
-my $logger = &verifyLogger('userRole');
-$logger->debug("ArcturusDatabase->userRole ($testuser,@_)");
+my $logger = &verifyLogger('testUserRole');
+$logger->debug("ArcturusDatabase->testUserRole ($testuser,@_)");
 
 # determine the "grade" or "role" of the current user
 
@@ -691,7 +699,7 @@ $logger->debug("ArcturusDatabase->userRole ($testuser,@_)");
 }
 
 sub getHighestPrivilege {
-# private, helper method for userRole
+# private, helper method for testUserRole
     my $userhash = shift;
 
     my $privhash = &verifyPrivilege(); # get all valid privileges
