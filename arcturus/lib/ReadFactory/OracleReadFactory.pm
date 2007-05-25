@@ -200,6 +200,8 @@ sub getReadByName {
 
     my $read = new Read($readname);
 
+    my ($pstat) = $ps =~ /^(\S+)/;
+
     $read->setClone($clone);
     $read->setAspedDate($asped);
     $read->setBaseCaller($caller);
@@ -208,7 +210,7 @@ sub getReadByName {
     $read->setStrand($strand);
     $read->setPrimer($primer);
     $read->setChemistry($dye);
-    $read->setProcessStatus($this->{'status'});
+    $read->setProcessStatus($pstat);
 
     my ($imin, $imax);
     if (exists($this->{ligations}->{$ligid})) {
