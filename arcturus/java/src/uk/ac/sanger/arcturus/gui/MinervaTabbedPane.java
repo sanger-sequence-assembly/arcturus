@@ -29,10 +29,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected JMenuBar menubar = new JMenuBar();
 
 	protected MinervaAbstractAction actionShowProjectList;
-	protected MinervaAbstractAction actionShowContigTransfers;
-	protected MinervaAbstractAction actionShowAllContigTransfers;
-	protected MinervaAbstractAction actionShowReadFinder;
-	protected MinervaAbstractAction actionShowCreateContigTransfer;
 	protected MinervaAbstractAction actionClose;
 
 	protected boolean administrator = false;
@@ -69,41 +65,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			}
 		};
 
-		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
-				null, "Show read finder", new Integer(KeyEvent.VK_F), KeyStroke
-						.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showReadFinderPanel();
-			}
-		};
-
-		actionShowContigTransfers = new MinervaAbstractAction(
-				"Show contigs transfers", null, "Show contig transfers",
-				new Integer(KeyEvent.VK_T), KeyStroke.getKeyStroke(
-						KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showContigTransferTablePanel();
-			}
-		};
-
-		actionShowAllContigTransfers = new MinervaAbstractAction(
-				"Show all contigs transfers", null,
-				"Show all contig transfers", new Integer(KeyEvent.VK_K),
-				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showAdminContigTransferTablePanel();
-			}
-		};
-
-		actionShowCreateContigTransfer = new MinervaAbstractAction(
-				"Create contig transfers", null, "Create contig transfers",
-				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
-						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				showCreateContigTransferPanel();
-			}
-		};
-
 		actionClose = new MinervaAbstractAction("Close", null,
 				"Close this window", new Integer(KeyEvent.VK_C), KeyStroke
 						.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
@@ -124,15 +85,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		menubar.add(fileMenu);
 
 		fileMenu.add(actionShowProjectList);
-
-		fileMenu.add(actionShowReadFinder);
-
-		if (administrator)
-			fileMenu.add(actionShowAllContigTransfers);
-		else
-			fileMenu.add(actionShowContigTransfers);
-
-		fileMenu.add(actionShowCreateContigTransfer);
 
 		fileMenu.addSeparator();
 
