@@ -199,9 +199,6 @@ public class ContigTablePanel extends MinervaPanel {
 			contigMenu.addSeparator();
 
 			xferMenu = new JMenu("Transfer selected contigs to");
-	        
-			VerticalGridLayout menuGrid = new VerticalGridLayout(40,0);   
-	        xferMenu.getPopupMenu().setLayout(menuGrid); 
 
 			contigMenu.add(xferMenu);
 			
@@ -224,6 +221,11 @@ public class ContigTablePanel extends MinervaPanel {
 			if (bin != null) {
 				xferMenu.addSeparator();
 				xferMenu.add(new ContigTransferAction(table, bin));
+			}
+			
+			if (xferMenu.getMenuComponentCount() > 40) {	        
+				VerticalGridLayout menuGrid = new VerticalGridLayout(40,0);   
+		        xferMenu.getPopupMenu().setLayout(menuGrid); 
 			}
 		}
 	}
