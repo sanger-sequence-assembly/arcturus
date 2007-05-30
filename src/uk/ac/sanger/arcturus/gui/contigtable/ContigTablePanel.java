@@ -5,6 +5,7 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
 import java.awt.BorderLayout;
+import java.awt.Point;
 import java.awt.event.*;
 
 import java.sql.SQLException;
@@ -27,8 +28,11 @@ public class ContigTablePanel extends MinervaPanel {
 	protected MinervaAbstractAction actionExportAsCAF;
 	protected MinervaAbstractAction actionExportAsFasta;
 	protected MinervaAbstractAction actionViewContigs;
+	protected MinervaAbstractAction actionScaffoldContig;
 	
 	protected JMenu xferMenu = null;
+	
+	protected JPopupMenu contigPopupMenu = new JPopupMenu();
 	
 	protected String projectlist;
 
@@ -55,6 +59,20 @@ public class ContigTablePanel extends MinervaPanel {
 						updateActions();
 					}
 				});
+		
+		table.addMouseListener(new MouseAdapter() {
+			public void mouseClicked(MouseEvent e) {
+				handleMouseEvent(e);
+			}
+
+			public void mousePressed(MouseEvent e) {
+				handleMouseEvent(e);
+			}
+
+			public void mouseReleased(MouseEvent e) {
+				handleMouseEvent(e);
+			}
+		});
 
 		JScrollPane scrollpane = new JScrollPane(table);
 
@@ -96,15 +114,27 @@ public class ContigTablePanel extends MinervaPanel {
 				viewSelectedContigs();
 			}
 		};
+
+		actionScaffoldContig = new MinervaAbstractAction("Scaffold the selected contig",
+				null, "Scaffold the selected contig", new Integer(KeyEvent.VK_S),
+				KeyStroke.getKeyStroke(KeyEvent.VK_S, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				scaffoldTheSelectedContig();
+			}
+		};
 	}
 
 	protected void updateActions() {
-		boolean noneSelected = table.getSelectionModel().isSelectionEmpty();
+		int nrows = table.getSelectedRowCount();
+		boolean noneSelected = nrows == 0;
+		
 		actionExportAsCAF.setEnabled(!noneSelected);
 		actionExportAsFasta.setEnabled(!noneSelected);
 		actionViewContigs.setEnabled(!noneSelected);
 		if (xferMenu != null)
 			xferMenu.setEnabled(!noneSelected);
+		
+		actionScaffoldContig.setEnabled(nrows == 1);
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
@@ -181,6 +211,10 @@ public class ContigTablePanel extends MinervaPanel {
 		contigMenu.add(actionExportAsCAF);
 
 		contigMenu.add(actionExportAsFasta);
+		
+		contigMenu.addSeparator();
+		
+		contigMenu.add(actionScaffoldContig);
 
 		Person me = PeopleManager.findMe();
 
@@ -228,6 +262,18 @@ public class ContigTablePanel extends MinervaPanel {
 		        xferMenu.getPopupMenu().setLayout(menuGrid); 
 			}
 		}
+		
+		contigPopupMenu.add(actionViewContigs);
+
+		contigPopupMenu.addSeparator();
+
+		contigPopupMenu.add(actionExportAsCAF);
+
+		contigPopupMenu.add(actionExportAsFasta);
+		
+		contigPopupMenu.addSeparator();
+		
+		contigPopupMenu.add(actionScaffoldContig);
 	}
 
 	class ProjectComparator implements Comparator {
@@ -240,6 +286,16 @@ public class ContigTablePanel extends MinervaPanel {
 
 	}
 
+	private void handleMouseEvent(MouseEvent e) {
+		if (e.isPopupTrigger()) {
+			displayPopupMenu(e);
+		}
+	}
+
+	protected void displayPopupMenu(MouseEvent e) {
+		contigPopupMenu.show(e.getComponent(), e.getX(), e.getY());
+	}
+	
 	protected void viewSelectedContigs() {
 		JOptionPane
 				.showMessageDialog(
@@ -247,6 +303,16 @@ public class ContigTablePanel extends MinervaPanel {
 						"The selected contigs will be displayed in a colourful and informative way",
 						"Display contigs", JOptionPane.INFORMATION_MESSAGE,
 						null);
+	}
+	
+	protected void scaffoldTheSelectedContig() {
+		JOptionPane
+		.showMessageDialog(
+				this,
+				"The selected contig will be scaffolded in a colourful and informative way",
+				"Scaffold the contig", JOptionPane.INFORMATION_MESSAGE,
+				null);
+	
 	}
 
 	public void closeResources() {
