@@ -362,7 +362,7 @@ sub fetchUserPrivileges {
 }
 
 sub getRoleForUser {
-# return the privileges for the specified user or the default user
+# return the role for the specified user or the default user
     my $this = shift;
     my $user = shift;
     my %options = @_;
@@ -628,19 +628,18 @@ sub deleteUser {
     return $status,$msg;
 }
 
-# testUserRole makes a decision about precedence of privilege when two users are involved
+# testUserRole makes a decision about precedence of privilege when 
+# two users are involved
 
 sub testUserRole {
 # test privileges of current arcturus user against input test user
-# returns a 1 if the current user's privilege weighs stronger than those of test user
-# e.g. a user without grant privilege cannot count less than a user who does not
-# relative weight of users is based on their highest level privilege
+# returns a 1 if the current user's privilege weighs stronger than 
+# those of test user; e.g. a user with grant privilege can't count 
+# less than a user who does not; the relative weight of users is 
+# based on their role and highest level privilege
     my $this = shift;
     my $testuser = shift;
     my %options = @_;
-
-my $logger = &verifyLogger('testUserRole');
-$logger->debug("ArcturusDatabase->testUserRole ($testuser,@_)");
 
 # determine the "grade" or "role" of the current user
 
@@ -673,7 +672,7 @@ $logger->debug("ArcturusDatabase->testUserRole ($testuser,@_)");
 # (2) if role is specified, the current user should have at least that same role 
 
 
-    my $thisuserrole = &verifyUserRole($this->getUserRole($options{user}));
+    my $thisuserrole = &verifyUserRole($this->getRoleForUser($options{user}));
 
     if (my $role = $options{role}) {
 # test the role specified against the role of the current user
@@ -691,7 +690,7 @@ $logger->debug("ArcturusDatabase->testUserRole ($testuser,@_)");
 
 # now test the current user's role against the one of the test user
 
-    my $testuserrole = &verifyUserRole($this->getUserRole($testuser));
+    my $testuserrole = &verifyUserRole($this->getRoleForUser($testuser));
 
     return 0 if ($thisuserrole < $testuserrole); # require at least equality
 
@@ -761,8 +760,8 @@ sub logMessage {
     my $project = shift; # project name
     my $text = shift;    # the message
 
-    my $logger = &verifyLogger('logMessage');
-    $logger->debug("message for user $user: $text");
+my $logger = &verifyLogger('logMessage');
+$logger->debug("message for user $user: $text");
 
     push @$MAIL, [($user,$project,$text)]; # array of arrays
 }
