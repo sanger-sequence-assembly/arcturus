@@ -45,7 +45,7 @@ my $PROJECTINSTANCECACHE = {};
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|"
             . "reschedule|probe";
 
-my $validKeys = "organism|instance|$actions|"
+my $validKeys = "organism|o|instance|i|$actions|"
               . "contig|c|focn|fofn|project|p|focpn|foccn|assembly|a|"
               . "openproject|"
               . "user|u|owner|o|request|r|comment|"
@@ -58,16 +58,18 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'",0,$action);
     }
+ 
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
- # the next die statement prevents redefinition when used with e.g. a wrapper script 
-
-    die "You can't re-define instance" if ($instance && $nextword eq '-instance');
-
-    $instance    = shift @ARGV  if ($nextword eq '-instance');
-
-    die "You can't re-define organism" if ($organism && $nextword eq '-organism');
-
-    $organism    = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
     die "You can't re-define action" if ($action && $nextword =~ /\-($actions)\b/);
 
@@ -163,10 +165,6 @@ $logger->setStandardFilter(0) if $verbose; # set reporting level
 
 $action = 'list' unless $action;
 
-&showUsage("Missing organism database",0,$action) unless $organism;
-
-&showUsage("Missing database instance",0,$action) unless $instance;
-
 &testdateformat($before) if $before;
 
 &testdateformat($after)  if $after;
@@ -218,12 +216,26 @@ else {
 # get the database connection
 #----------------------------------------------------------------
 
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
+
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
-    &showUsage("Invalid organism '$organism' on server '$instance'",0,$action);
+# abort with error message
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
 
 $adb->setLogger($logger);
  
@@ -347,10 +359,10 @@ if ($action eq 'transfer') {
                              $Project->getProjectName()." is queued : $message");
         }
         elsif ($status == 2) {
-            $logger->warning("$message  => use -confirm");
+            $logger->warning("$message  => use -confirm",preskip=>1);
 	}
         else {
-            $logger->warning("transfer request is REFUSED : $message");
+            $logger->warning("transfer request is REFUSED : $message",preskip=>1);
         }  
     }
 }
@@ -371,7 +383,7 @@ elsif ($action eq 'list' || $action eq 'longlist' || (!$request && $action ne 'e
     $options{after}  = $after  if $after;
     $options{since}  = $since  if $since;
 
-    unless ($options{projectids}) {
+    unless ($options{projectids} || $options{request_id}) {
 # default selection of projects to be used
         my $projectids = $adb->getAccessibleProjects();
         $options{projectids} = join ',',@$projectids  if @$projectids;
@@ -689,7 +701,7 @@ elsif ($action eq 'probe') {
   
 $adb->disconnect();
     
-$logger->warning("Processing user mail (if any)",preskip=>1,skip=>1);
+$logger->info("Processing user mail (if any)",preskip=>1,skip=>1);
 
 # send messages to users, if any
 
@@ -725,6 +737,12 @@ sub getContigIdentifiers {
 # get contig identifiers in array
         if ($contig && $contig =~ /\,/) {
             @contigs = split /\,/,$contig;
+        }
+        elsif ($contig && $contig =~ /\%|\_/) {
+            my %options = (maximumnumberofreads => 1, readname => $contig);
+$options{project} = 173;
+	    my $result = $adb->getContigIDsForContigProperty(%options);
+            @contigs = @$result if $result;
         }
         elsif ($contig) {
             push @contigs,$contig;
