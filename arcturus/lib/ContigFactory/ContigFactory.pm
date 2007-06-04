@@ -14,6 +14,8 @@ use TagFactory::ReadTagFactory;
 
 use TagFactory::ContigTagFactory;
 
+#use TagFactory::TagFactory;
+
 use Clipping;
 
 use Logging;
@@ -158,7 +160,8 @@ sub cafFileInventory {
             undef $identifier;
 	}
 
-        elsif ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+        elsif ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:\s*(\S+)/) {
+#        elsif ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
 # check that identifier is undefined
             if ($identifier) {
                 $logger->error("l:$linecount Missing blank after previous object");
@@ -256,9 +259,15 @@ sub contigExtractor {
     foreach my $stack (sort {$a->[2] <=> $b->[2]} @contigstack) {
         my ($contig,$type,$fileposition,$line) = @$stack;
         seek $CAF, $fileposition, 00; # position the file 
-       ($status,$line) = &parseContig      ($CAF,$contig,$line,%options) if ($type == 0);
-       ($status,$line) = &parseDNA         ($CAF,$contig,$line)          if ($type == 1);
-       ($status,$line) = &parseBaseQuality ($CAF,$contig,$line)          if ($type == 2);
+        if ($type == 0) {
+           ($status,$line) = &parseContig      ($CAF,$contig,$line,%options);
+        }
+        elsif ($type == 1) {
+           ($status,$line) = &parseDNA         ($CAF,$contig,$line);
+        }
+        elsif ($type == 2) {
+           ($status,$line) = &parseBaseQuality ($CAF,$contig,$line);
+        }
         next if $type;
 # and collect the readnames in this contig
         my $reads = $contig->getReads();
@@ -287,9 +296,15 @@ sub contigExtractor {
     foreach my $stack (sort {$a->[2] <=> $b->[2]} @readstack) {
         my ($read,$type,$fileposition,$line) = @$stack;
         seek $CAF, $fileposition, 00; # position the file 
-       ($status,$line) = &parseRead        ($CAF,$read,$line,%options) if ($type == 0);
-       ($status,$line) = &parseDNA         ($CAF,$read,$line)          if ($type == 1);
-       ($status,$line) = &parseBaseQuality ($CAF,$read,$line)          if ($type == 2);
+        if ($type == 0) {
+           ($status,$line) = &parseRead        ($CAF,$read,$line,%options);
+        }
+	elsif ($type == 1) {
+           ($status,$line) = &parseDNA         ($CAF,$read,$line);
+        }
+        elsif ($type == 2) {
+	   ($status,$line) = &parseBaseQuality ($CAF,$read,$line);
+        }
         unless ($status) {
             my $readname = $read->getReadName();
 	    $logger->error("Failed to extract data for read $readname");
@@ -310,8 +325,12 @@ sub contigExtractor {
            ($fileposition,$line) = @$positions;
             seek $CAF, $fileposition, 00; # position the file 
             $type = $components{$item};
-           ($status,$line) = &parseDNA         ($CAF,$read,$line) if ($type == 1);
-           ($status,$line) = &parseBaseQuality ($CAF,$read,$line) if ($type == 2);
+            if ($type == 1) {
+               ($status,$line) = &parseDNA         ($CAF,$read,$line);
+	    }
+	    elsif ($type == 2) {
+               ($status,$line) = &parseBaseQuality ($CAF,$read,$line);
+	    }
             next if $status;
 	    $logger->error("Failed to extract $item data for read $readname");
         }     
@@ -539,8 +558,8 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
 		}
 	    }
 # now read the file to the next blank line and accumulate the sequence or quality 
-            my $sequencedata = $record;
-$logger->fine("Building DNA for $newObjectName");
+            my $sequencedata = '';
+$logger->fine("Building $newObjectType for $newObjectName");
             while (defined(my $nextrecord = <$CAF>)) {
                 $lineCount++;
                 chomp $nextrecord;
@@ -551,16 +570,16 @@ $logger->fine("Building DNA for $newObjectName");
 		}
                 $sequencedata .= $nextrecord;
             }
-$logger->fine("DONE DNA for $newObjectName");
+$logger->fine("DONE $newObjectType for $newObjectName");
 # store the sequence data in the 
             if ($newObjectType eq 'DNA') {
                 $sequencedata =~ s/\s+//g; # remove all blank space
                 $objectInstance->setSequence($sequencedata);
 	    }
 	    elsif ($newObjectType eq 'BaseQuality') {
-                $BaseQuality =~ s/\s+/ /g; # clear redundent blank space
-                $BaseQuality =~ s/^\s|\s$//g; # remove leading/trailing
-                my @BaseQuality = split /\s/,$BaseQuality;
+                $sequencedata =~ s/\s+/ /g; # clear redundent blank space
+                $sequencedata =~ s/^\s|\s$//g; # remove leading/trailing
+                my @BaseQuality = split /\s/,$sequencedata;
                 $objectInstance->setBaseQuality (\@BaseQuality);
 	    }
 	    else {
@@ -887,19 +906,19 @@ $logger->fine("DONE DNA for $newObjectName");
 # EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
        	    elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
                 $logger->warning("readtag error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
-                my $tag = new Tag('edittag');
+                my $tag = new Tag('read');
 	        $tag->editReplace($5,$3.$4);
                 $read->addTag($tag);
             }
             elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
                 $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-                my $tag = new Tag('edittag');
+                my $tag = new Tag('read');
 	        $tag->editDelete($4,$3); # delete signalled by uc ATCG
                 $read->addTag($tag);
             }
             elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
                 $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-                my $tag = new Tag('edittag');
+                my $tag = new Tag('read');
 	        $tag->editDelete($4,$3); # insert signalled by lc atcg
                 $read->addTag($tag);
             }
@@ -1078,20 +1097,33 @@ $logger->warning("ignored: ($lineCount) $record");
 
 # return array references for contigs and reads 
 
+    my $er = 0;
     my $objects = [];
     foreach my $key (keys %contigs) {
         my $contig = $contigs{$key};
         push @$objects, $contig;
         my $creads = $contig->getReads();
+# remove the reads in this contig from the overall read list
         foreach my $read (@$creads) {
             delete $reads{$read->getReadName()};
+            $er++ if $read->isEdited();
         }
     }
-#add any remaining reads
+
+    $logger->info("$er Edited Reads found");
+
+#add any remaining reads, if any, to output object list
+
     my $reads = [];
     foreach my $key (keys %reads) {
         push @$objects, $reads{$key};
     }
+
+    $nr = scalar @$reads;
+
+    my $no = scalar @$objects;
+
+    $logger->info("$no Objects; $nr Reads (unassembled)");
 
     return $objects,$truncated;
 }
@@ -1288,6 +1320,7 @@ sub parseContig {
     my $ignoretaglist = $options{ignoretaglist} || '';
 
     $CTF = new ContigTagFactory() unless defined $CTF;
+#    $CTF = new TagHelper() unless defined $CTF;
 
     my $isUnpadded = 1;
     my $readnamehash = {};
@@ -1609,19 +1642,19 @@ sub parseRead {
 # EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("readtag error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
             $tag->editReplace($5,$3.$4);
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
 	    $tag->editDelete($4,$3); # delete signalled by uc ATCG
             $read->addTag($tag);
         }
         elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
             $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-            my $tag = new Tag('edittag');
+            my $tag = new Tag('read');
 	    $tag->editDelete($4,$3); # insert signalled by lc atcg
             $read->addTag($tag);
         }
