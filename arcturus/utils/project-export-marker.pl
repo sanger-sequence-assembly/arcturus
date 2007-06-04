@@ -16,9 +16,12 @@ my $organism;
 my $assembly;
 my $project;
 
+my $file;
+
 my $loglevel;
 
-my $validKeys  = "organism|instance|project|assembly|info|help";
+my $validKeys  = "organism|o|instance|i|project|p|assembly|a|file|f|"
+               . "info|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -26,26 +29,34 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
  
-    if ($nextword eq '-instance') {
+    if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
         $instance     = shift @ARGV;
     }
 
-    if ($nextword eq '-organism') {
+    if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
-    }  
+    }
 
-    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-project'  || $nextword eq '-p') {
+        $project      = shift @ARGV;
+    }
 
-    $project          = shift @ARGV  if ($nextword eq '-project');
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
+
+    if ($nextword eq '-file'     || $nextword eq '-f') {
+        $file         = shift @ARGV;
+    }
 
     $loglevel         = 2            if ($nextword eq '-info'); 
 
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 #----------------------------------------------------------------
@@ -121,9 +132,11 @@ $project = $projects->[0];
 # MAIN
 #----------------------------------------------------------------
 
+$project->setGap4Name($file) if $file;
+
 my $message = "Project '".$project->getProjectName."' verified";
 
-my $success = $adb->putExport($project);
+my $success = $project->markExport();
 
 $logger->info($message." and marked as exported") if $success;
 
@@ -131,7 +144,9 @@ $logger->severe($message."; FAILED to mark as exported") unless $success;
 
 $adb->disconnect();
 
-exit(0);
+exit 0 if $success;
+
+exit 1;
 
 #------------------------------------------------------------------------
 # HELP
@@ -152,7 +167,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-info\t(no value) for some progress info\n";
+    print STDERR "-assembly\tassembly ID or name\n";
+    print STDERR "\n";
+    print STDERR "-info\t\t(no value) for some progress info\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
