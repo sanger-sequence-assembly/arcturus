@@ -6,7 +6,7 @@ use Mapping;
 
 use ContigFactory::ContigHelper;
 
-use TagFactory::ContigTagFactory;
+use TagFactory::TagFactory;
 
 # ----------------------------------------------------------------------------
 # constructor and initialisation
@@ -454,16 +454,18 @@ sub hasMappings {
 
 # contig tags
 
-my $DEBUG;
-
 sub getTags {
 # return a reference to the array of Tag instances (can be empty)
     my $this = shift;
-    my $load = shift; # set 1 for loading by delayed instantiation
+    my $load = shift; # option for loading by delayed instantiation
+    my $sort = shift; # option for sorting tags with position
 
     if (!$this->{Tag} && $load && (my $ADB = $this->{ADB})) {
         $ADB->getTagsForContig($this);
     }
+
+    ContigHelper->sortTags($this) if $sort; # and remove duplicates
+
     return $this->{Tag};
 }
 
@@ -565,6 +567,8 @@ sub importer {
     my $class = shift; # (obligatory) class name of object to be stored
     my $buffername = shift; # (optional) internal name of buffer
 
+    return if ($this eq $Component); # protection, you can't import yourself
+
     $buffername = $class unless defined($buffername);
 
     die "Contig->importer expects a component type" unless $class;
@@ -605,10 +609,12 @@ sub copy {
 
 # option  nocomponents : discard any components other than sequence and quality
 # option  complete     : create a copy with all standard components
+# option  parent       : make the copy the parent of the current contig
+# option  child        : make the current contig the parent of the copy
 
 # if none of these is specified, copy existing components as they are
 
-    &verifyKeys(\%options,'copy','nocomponents','complete');
+    &verifyKeys(\%options,"copy",'nocomponents','complete','parent','child');
 
 # create a new instance
 
@@ -666,6 +672,16 @@ sub copy {
 
     $copy->getStatistics(1) if $copy->hasMappings();
 
+# export either as child or as parent of the original (or none)
+
+    if ($options{parent}) {
+        $this->addParentContig($copy);
+        $copy->addChildContig($this);
+    } elsif ($options{child}) {
+        $this->addChildContig($copy);
+        $copy->addParentContig($this);
+    }
+
     return $copy;
 }
 
@@ -698,11 +714,6 @@ sub isEqual {
 
 }
 
-sub isSameAs{
-print STDERR "isSameAs method is deprecated\n";
-return &isEqual(@_);
-}
-
 sub linkToContig {
 # compare two contigs using sequence IDs in their read-to-contig mappings
 # adds a contig-to-contig Mapping instance with a list of mapping segments,
@@ -727,6 +738,7 @@ sub inheritTags {
     my $this = shift;
     my %options = @_;
 # what about selected tags only?
+$LOGGER->debug("Contig->inheritTags: this $this ; opts: @_") if $LOGGER;
 #my $depth = shift;
 
     $options{depth} = 1 unless defined($options{depth});
@@ -749,7 +761,6 @@ sub inheritTags {
         }
 # get the tags from the parent into this contig
 #        next unless $parent->hasTags();
-#       ContigHelper->propagateTagsToContig($parent,$this,%options);
         $parent->propagateTagsToContig($this,%options);
     }
 }
@@ -764,7 +775,6 @@ sub propagateTags {
     my $children = $this->getChildContigs(1);
 
     foreach my $child (@$children) {
-#       ContigHelper->propagateTagsToContig($this,$child,%options);
         $this->propagateTagsToContig($child,%options);
     }
 }
@@ -785,240 +795,11 @@ sub propagateTagsToContig {
                            'change strand',      # re : anno tags
                            'overlap');           # re : anno tags
 my $ttags = $target->hasTags();
-$LOGGER->debug("Contig->propagateTagsToContig : target contig $target has tags: $ttags") if $LOGGER;
+#$LOGGER->setBlock('debug',unblock=>1) if $LOGGER;
+$LOGGER->debug("Contig->propagateTagsToContig : parent $parent target contig $target has tags: $ttags") if $LOGGER;
 
     &verifyKeys(\%options,'propagateTags',@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
-
-
-# autoload tags unless tags are already defined
-
-    $parent->getTags(1) unless $options{notagload};
-
-my $DEBUG;
-$DEBUG = $options{debug} if defined $options{debug};
-
-$DEBUG->warning("ENTER propagateTagsToContig ".
-"parent $parent (".$parent->getContigID().")  target $target ("
-.$target->getContigID().") PT") if $DEBUG;
-
-    return 0 unless $parent->hasTags();
-
-$DEBUG->warning("parent $parent has tags PT ".scalar(@{$parent->getTags()})) if $DEBUG;
-
-# check the parent-child relation: is there a mapping between them and
-# is the ID of the one of the parents identical to to the input $parent?
-# we do this by getting the parents on the $target and compare with $parent
-
-    my $mapping;
-
-    my $parent_id = $parent->getContigID();
-
-# define (delayed) autoload status: explicitly specify if not to be used 
-
-    my $dl = $options{noparentload} ? 0 : 1; # default 1
-
-    if ($target->hasContigToContigMappings($dl)) {
-
-# if parents are provided, then screen this ($parent) against them
-# if this parent is not among the ones listed, ignored
-# if no parents are provided, adopt this one
- 
-        my $cparents = $target->getParentContigs($dl) || [];
-        push @$cparents,$parent unless ($cparents && @$cparents);
-# we scan the parent(s) provided, to ensure that $this parent is among them
-        foreach my $cparent (@$cparents) {
-	    if ($cparent->getContigID() == $parent_id) {
-# yes, there is a parent child relation between the input Contigs
-# find the corresponding mapping using contig and mapping names
-                my $c2cmappings = $target->getContigToContigMappings();
-                foreach my $c2cmapping (@$c2cmappings) {
-$DEBUG->fine("Testing mapping ".$parent->getSequenceID()) if $DEBUG;
-# we use the sequence IDs here, assuming the mappings come from the database
-		    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
-                        $mapping = $c2cmapping;
-                        last;
-                    }
-                }
-	    }
-	}
-    }
-
-$DEBUG->fine("mapping: ".($mapping || 'not found')) if $DEBUG;
-
-# if mapping is not defined here, we have to find it from scratch
-
-    unless ($mapping) {
-$DEBUG->warning("Finding mappings from scratch") if $DEBUG;
-        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,
-                                                             debug=>$DEBUG);
-$DEBUG->warning("number of mapping segments : ".($nrofsegments || 0)) if $DEBUG;
-        return 0 unless $nrofsegments;
-# identify the mapping using parent contig and mapping name
-        my $c2cmappings = $target->getContigToContigMappings();
-        foreach my $c2cmapping (@$c2cmappings) {
-#	    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
-	    if ($c2cmapping->getMappingName eq $parent->getContigName) {
-                $mapping = $c2cmapping;
-                last;
-            }
-        }
-# protect against the mapping still not found, but this should not occur
-$DEBUG->warning("mapping identified: ".($mapping || 'not found')) if $DEBUG;
-        return 0 unless $mapping;
-    }
-$DEBUG->fine($mapping->assembledFromToString()) if $DEBUG;
-
-# check if the length of the target contig is defined
-
-    my $tlength = $target->getConsensusLength();
-    unless ($tlength) {
-        $target->getStatistics(1); # no zeropoint shift; use contig as is
-        $tlength = $target->getConsensusLength();
-        unless ($tlength) {
-            $DEBUG->warning("Undefined length in (child) contig") if $DEBUG;
-            return 0;
-        }
-    }
-$DEBUG->fine("Target contig length : $tlength ") if $DEBUG;
-
-# if the mapping comes from Arcturus we have to use its inverse
-
-#    $mapping = $mapping->inverse() unless $options{noinverse};
-    $mapping = $mapping->inverse();
-
-# ok, propagate the tags from parent to target
-
-    my $includetag = $options{includetag};
-    my $excludetag = $options{excludetag};
-    if ($options{includetag}) { # specified takes precedence
-        $includetag = $options{includetag};
-        $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $includetag =~ s/\W+/|/g; # put separators in include list
-    }
-    elsif ($options{excludetag}) {
-        $excludetag = $options{excludetag};
-        $excludetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $excludetag =~ s/\W+/|/g; # put separators in exclude list
-    }
-
-# get the tags in the parent (as they are)
-
-    my $ptags = $parent->getTags();
-
-# first attempt for ANNO tags (later to be used for others as well)
-
-    my %annotagoptions = (break=>1);
-#    my %annotagoptions = (break=>1, debug=>$DEBUG);
-    $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
-    $annotagoptions{changestrand} = ($mapping->getAlignment() < 0) ? 1 : 0;
-
-# activate speedup for mapping multiplication 
-
-    if ($options{speedmode}) {
-# will keep track of position in the mapping by defining nzt option as HASH
-        $annotagoptions{nonzerostart} = {};
-# but requires sorting according to tag position
-        @$ptags = sort {$a->getPositionLeft() <=> $b->getPositionLeft()} @$ptags;
-    }
-
-    my @rtags; # for (remapped) imported tags
-    foreach my $ptag (@$ptags) {
-        my $tagtype = $ptag->getType();
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next unless ($tagtype eq 'ANNO');
-# remapping can be SLOW for large number of tags if not in speedmode
-$DEBUG->fine("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft()) if $DEBUG;
-        my $tptags = $ptag->remap($mapping,%annotagoptions);
-
-        push @rtags,@$tptags if $tptags;
-    }
-$DEBUG->warning("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input") if $DEBUG;# if annotation tags found, (try to) merge tag fragments
-    if (@rtags) {
-        my %moptions = (overlap => ($options{overlap} || 0));
-$moptions{debug} = $DEBUG if $DEBUG;
-        my $newtags = ContigTagFactory->mergeTags(\@rtags,%moptions);
-
-my $oldttags = $target->getTags() || [];
-$DEBUG->warning(scalar(@$oldttags) . " existing tags on TARGET PT") if $DEBUG;
-$DEBUG->warning(scalar(@$newtags) . " added (merged) tags PT") if $DEBUG;
-        $target->addTag($newtags) if $newtags;
-
-#        @tags = @$newtags if $newtags;
-my $newttags = $target->getTags() || [];
-$DEBUG->warning(scalar(@$newttags) . " updated tags on TARGET PT") if $DEBUG;
-    }
-elsif ($DEBUG) {
-$DEBUG->warning("NO REMAPPED TAGS FROM PARENT $parent_id");
-}
-
-# the remainder is for other tags using the old algorithm
-
-    my $c2csegments = $mapping->getSegments();
-    my $alignment = $mapping->getAlignment();
-
-    foreach my $ptag (@$ptags) {
-# apply include or exclude filter
-        my $tagtype = $ptag->getType();
-        next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
-        next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next if ($tagtype eq 'ANNO');
-
-#        my $tptags = $ptag->remap($mapping,break=>0); 
-#        $target->addTag($tptags) if $tptags;
-$DEBUG->warning("CC Collecting $tagtype tag for remapping ".$ptag->getPositionLeft()) if $DEBUG;
-# determine the segment(s) of the mapping with the tag's position
-$DEBUG->fine("processing tag $ptag (align $alignment)") if $DEBUG;
-
-        undef my @offset;
-        my @position = $ptag->getPosition();
-$DEBUG->fine("tag position (on parent) @position") if $DEBUG;
-        foreach my $segment (@$c2csegments) {
-# for the correct segment, getXforY returns true
-            for my $i (0,1) {
-$DEBUG->fine("testing position $position[$i]") if $DEBUG;
-                if ($segment->getXforY($position[$i])) {
-                    $offset[$i] = $segment->getOffset();
-$DEBUG->fine("offset to be applied : $offset[$i]") if $DEBUG;
-# ensure that both offsets are defined; this line ensures definition in
-# case the counterpart falls outside any segment (i.e. outside the contig)
-                    $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
-                }
-            }
-        }
-# accept the new tag only if the position offsets are defined
-$DEBUG->fine("offsets: @offset") if $DEBUG;
-        next unless @offset;
-# create a new tag by spawning from the tag on the parent contig
-        my $tptag = $ptag->transpose($alignment,\@offset,$tlength);
-        next unless $tptag; # remapped tag out of boundaries
-
-if ($DEBUG) {
-$DEBUG->fine("tag on parent :". $ptag->dump);
-$DEBUG->fine("tag on target :". $tptag->dump);
-}
-
-# test if the transposed tag is not already present in the child;
-# if it is, inherit any properties from the transposed parent tag
-# which are not defined in it (e.g. when ctag built from Caf file) 
-
-        my $present = 0;
-        my $ctags = $target->getTags(0);
-        foreach my $ctag (@$ctags) {
-# test the transposed parent tag and port the tag_id / systematic ID
-            if ($tptag->isEqual($ctag,inherit=>1,debug=>$DEBUG)) {
-                $present = 1;
-                last;
-	    }
-        }
-        next if $present;
-
-# the (transposed) tag from parent is not in the current contig: add it
-
-$DEBUG->warning("new tag added") if $DEBUG;
-        $target->addTag($tptag);
-    }
 }
 
 #-------------------------------------------------------------------    
@@ -1120,22 +901,19 @@ sub writeToFasta {
 
 #to be deleted from HERE
 # apply end-region masking
-
-    if ($options{endregiononly}) { # to be DEPRECATED
+#    if ($options{endregiononly}) { # to be DEPRECATED
 # get a masked version of the current consensus TO BE REMOVED FROM THIS MODULE
-        $this->extractEndRegion(nonew=>1,%options);
-    }
-
+#        $this->extractEndRegion(nonew=>1,%options);
+#    }
 # apply quality clipping
-
-    if ($options{qualityclip}) { # to be DEPRECATED
+#    if ($options{qualityclip}) { # to be DEPRECATED
 # get a clipped version of the current consensus TO BE REMOVED FROM THIS MODULE
 #print STDERR "quality clipping ".$this->getContigName()."\n";
-        my ($contig,$status) = $this->deleteLowQualityBases(nonew=>1,%options);
-        unless ($contig && $status) {
-	    print STDERR "No quality clipped for ".$this->getContigName()."\n";
-        }
-    }
+#        my ($contig,$status) = $this->deleteLowQualityBases(nonew=>1,%options);
+#        unless ($contig && $status) {
+#	    print STDERR "No quality clipped for ".$this->getContigName()."\n";
+#        }
+#    }
 # TO HERE
 
     my $errors = $this->writeDNA($DFILE,%options);
@@ -1388,7 +1166,7 @@ sub writeToEMBL {
                 my $strandhash = $joinhash->{$sysID};
                 foreach my $strand (keys %$strandhash) {
                     my $joinset = $strandhash->{$strand};
-                    my $newtag = ContigTagFactory->makeCompositeTag($joinset);
+                    my $newtag = TagFactory->makeCompositeTag($joinset);
                     push @newtags,$newtag if $newtag;
 	        }
 	    }
@@ -1533,7 +1311,7 @@ sub reverse {
 # return the reverse complement of this contig (and its components)
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'reverse','nonew','complete','nocomponents');
+    &verifyKeys(\%options,"reverse",'nonew','complete','nocomponents','child');
     return ContigHelper->reverseComplement($this,@_);
 }
 
