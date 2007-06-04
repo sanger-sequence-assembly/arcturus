@@ -355,7 +355,7 @@ print $DEBUG scalar(@$gaps)." gaps found\n" if $DEBUG;
 	}
     }
 
-    $mapping->analyseSegments();
+    $mapping->normalise();
 
     return $mapping;
 }
@@ -1306,7 +1306,7 @@ sub listSegments {
     foreach my $segment (@$segments) {
         $mapping->putSegment(@$segment);
     }
-    $mapping->analyseSegments();
+    $mapping->normalise();
     return $mapping->writeToString("segment",extended=>1);
 }
    

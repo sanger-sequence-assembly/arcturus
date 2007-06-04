@@ -88,8 +88,7 @@ sub toPadded {
 
 # get the mapping segments ordered with read position
 
-    $mapping->analyseSegments();
-    my $segments = $mapping->getSegments();
+    my $segments = $mapping->normalise(); # on y
 
 # get coefficients of the contig-to-read transform from the first segment
 
