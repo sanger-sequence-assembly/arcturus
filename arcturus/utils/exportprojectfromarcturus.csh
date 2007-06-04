@@ -59,7 +59,7 @@ echo Processing $projectname
 
 echo Exporting from Arcturus to caffile $depadded
 
-${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $depadded
+${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $depadded  # ? -unlocked
 
 echo Padding CAF file
 
@@ -77,7 +77,9 @@ chmod g-w ${projectname}.A.aux
 
 echo Marking the project as exported
 
-${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -info
+set gap4dirname=`pwd`;
+
+${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -file ${gap4dirname}${projectname}.A 
 
 echo Cleaning up
 
