@@ -28,22 +28,36 @@ my $useprivilege;
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|instance|assembly|project|comment|pc|extend|"
+my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
+               . "comment|pc|extend|"
                . "owner|po|name|pn|status|ps|privilege|"
-               . "confirm|verbose|help";
+               . "confirm|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
-    $instance         = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism         = shift @ARGV  if ($nextword eq '-organism');
+    }                                                                          
+ 
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
-    $project          = shift @ARGV  if ($nextword eq '-project');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
-    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-project'  || $nextword eq '-p') {
+        $project      = shift @ARGV;
+    }
+
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
 
     $projectcomment   = shift @ARGV  if ($nextword eq '-comment');
     $projectcomment   = shift @ARGV  if ($nextword eq '-pc');
@@ -67,7 +81,7 @@ while (my $nextword = shift @ARGV) {
 
     $confirm          = 1            if ($nextword eq '-confirm');
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 &showUsage("Missing project name or ID") unless $project;
@@ -84,21 +98,32 @@ $logger->setStandardFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
 &showUsage("Missing project name or ID") unless $project;
+
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
-$logger->info("Database ".$adb->getURL." opened succesfully");
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+ 
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
 # MAIN
@@ -154,12 +179,12 @@ else {
     my %uoptions = (confirm => $confirm);
     $uoptions{useprivilege} = 1 if $useprivilege;
     my ($success,$message) = $adb->updateProjectAttribute($project,%uoptions);
+    $message =~ s/null//ig if $message;
 
 # from here change
 
-    my %skips = (preskip=>1,skip=>1);
     if ($success == 2) {
-        $logger->warning($message,%skips);
+        $logger->warning($message,ss=>1);
     }
     elsif ($success == 1) {
         $logger->warning($message,preskip=>1);
@@ -167,7 +192,7 @@ else {
     }
     else {
         $message = "FAILED: ".$message if $confirm;
-        $logger->warning($message,%skips);
+        $logger->warning($message,ss=>1);
     }
 }
 
