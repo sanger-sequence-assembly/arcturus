@@ -23,25 +23,38 @@ my $assembly;
 my $confirm;
 my $verbose;
 
-my $validKeys  = "organism|instance|username|password|project|assembly|"
-               . "confirm|verbose|help";
+my $validKeys  = "organism|o|instance|i|project|o|assembly|a|"
+               . "username|password|"
+               . "confirm|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
-        &showUsage(0,"Invalid keyword '$nextword'");
+        &showUsage("Invalid keyword '$nextword'");
     }                                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
+
+    if ($nextword eq '-project'  || $nextword eq '-p') {
+        $project      = shift @ARGV;
+    }
+
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
 
     $username     = shift @ARGV  if ($nextword eq '-username');
 
     $password     = shift @ARGV  if ($nextword eq '-password');
-
-    $project      = shift @ARGV  if ($nextword eq '-project');
-
-    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
 
     $confirm      = 1            if ($nextword eq '-confirm');
 
@@ -56,21 +69,22 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
-
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
 
 &showUsage("Missing project name or ID") unless $project;
 
 &showUsage("Missing arcturus username") unless $username;
 
 &showUsage("Missing arcturus password") unless $password;
+
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism,
@@ -79,11 +93,22 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Unknown organism '$organism' on server '$instance', "
-              ."or invalid username and password");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
-$logger->info("Database ".$adb->getURL." opened succesfully");
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+ 
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
+
+$adb->setLogger($logger);
 
 #----------------------------------------------------------------
 # MAIN
@@ -109,10 +134,10 @@ if ($projects && @$projects > 1) {
     $logger->warning("Non-unique project specification : $project (@namelist)");
     $logger->warning("Perhaps specify the assembly ?") unless defined($assembly);
 }
-elsif (!$projects || !@$projects) {
-    $logger->warning("Project $project not available : $message");
-}
 
+elsif (!$projects || !@$projects) {
+    $logger->warning("Project $project not available : $message",ss=>1);
+}
 
 else {
     my $project = shift @$projects;
@@ -123,17 +148,15 @@ else {
          
     my ($success,$message) = $adb->deleteProject($project,%options);
 
-    $logger->skip();
     if ($success == 2) {
-        $logger->warning($message);
+        $logger->warning($message,ss=>1);
     }
     elsif ($success == 1) {
-        $logger->warning($message." (=> use '-confirm')");
+        $logger->warning($message." (=> use '-confirm')",ss=>1);
     }
     else {
-        $logger->warning("FAILED to delete the project: ".$message);
+        $logger->warning("FAILED to delete the project: ".$message,ss=>1);
     }
-    $logger->skip();
 }
 
 $adb->disconnect();
@@ -150,17 +173,24 @@ sub showUsage {
     print STDERR "project name [& assembly].\nThe project must be empty and ";
     print STDERR "you must be able to acquire a lock on the project\n";
     print STDERR "i.e. the project is either unlocked or you own the lock; if ";
-    print STDERR "you do not own\nthe lock, acquire it with 'project-lock'";
+    print STDERR "you do not own\nthe lock, acquire it with 'project-lock\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
-    unless ($organism && $instance && $project) {
+    unless ($organism && $instance && $project && $username && $password) {
         print STDERR "MANDATORY PARAMETERS:\n";
         print STDERR "\n";
     }
     unless ($organism && $instance) {
         print STDERR "-organism\tArcturus database name\n"  unless $organism;
         print STDERR "-instance\t'prod', 'dev' or 'test'\n" unless $instance;
+        print STDERR "\n";
+    }
+    unless ($username && $password) {
+        unless ($username) {
+            print STDERR "-username\tDatabase username with delete privilege\n";
+	}
+        print STDERR "-password\tDatabase password\n" unless $password;
         print STDERR "\n";
     }
     unless ($project) {
@@ -180,3 +210,5 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
+
+
