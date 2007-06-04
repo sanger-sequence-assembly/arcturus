@@ -59,6 +59,8 @@ endif
 if ( $#argv > 4 ) then
     echo  \!\! -- contig loader $5 to be used --
     set loader_script = $5
+else
+    echo  \!\! -- default contig loader used --
 endif
 
 
@@ -111,7 +113,7 @@ echo Depadding CAF file
 
 caf_depad < $padded > $depadded
 
-echo Importing to Arcturus ${arcturus_home}/utils
+echo Importing into Arcturus # ${arcturus_home}/utils
 
 # added 06/09/2005 default project name
 
