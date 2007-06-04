@@ -19,8 +19,9 @@ my $owner;
 my $comment;
 my $verbose;
 
-my $validKeys  = "organism|instance|project_id|projectname|assembly|"
-               . "owner|comment|verbose|help";
+my $validKeys  = "organism|o|instance|i|project|p|pn|projectname|"
+               . "assembly|a|project_id|pid|"
+               . "owner|comment|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -28,31 +29,39 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
 
-    if ($nextword eq '-instance') {
+ 
+    if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
         $instance     = shift @ARGV;
     }
 
-    if ($nextword eq '-organism') {
+    if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
     }  
 
-    $project_id   = shift @ARGV  if ($nextword eq '-project_id');
+    if ($nextword eq '-project' || $nextword eq '-p' || 
+        $nextword eq '-projectname' ||  $nextword eq '-pn') {
+        $projectname  = shift @ARGV;
+    }
 
-    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
+
+    if ($nextword eq '-project_id' || $nextword eq '-pid') {
+        $project_id   = shift @ARGV;
+    }
 
     $owner        = shift @ARGV  if ($nextword eq '-owner');
 
     $comment      = shift @ARGV  if ($nextword eq '-comment');
 
-    $projectname  = shift @ARGV  if ($nextword eq '-projectname');
-
     $verbose      = 1            if ($nextword eq '-verbose');
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 &showUsage("Invalid data in parameter list: @ARGV") if @ARGV;
@@ -63,7 +72,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -71,17 +80,26 @@ $logger->setFilter(0) if $verbose; # set reporting level
 
 &showUsage("Missing projectname") unless $projectname;
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
  
 my $URL = $adb->getURL;
 
