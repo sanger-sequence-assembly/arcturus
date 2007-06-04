@@ -30,18 +30,27 @@ my $fofn;
 my $verbose;
 my $notags;
 
-my $validKeys  = "organism|instance|readname|read_id|seq_id|".
+my $validKeys  = "organism|o|instance|i|readname|read_id|seq_id|version|".
                  "unassembled|fofn|chemistry|caf|fasta|quality|".
-                 "clip|mask|screen|notags|verbose|help";
+                 "clip|mask|screen|notags|verbose|help|h";
 
 while (defined(my $nextword = shift @ARGV)) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                           
-    $instance    = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism    = shift @ARGV  if ($nextword eq '-organism');
+    }
+                                                                         
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
+
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
  
     $readname    = shift @ARGV  if ($nextword eq '-readname');
 
@@ -73,7 +82,7 @@ while (defined(my $nextword = shift @ARGV)) {
 
     $verbose     = 1            if ($nextword eq '-verbose');
 
-    &showUsage(0) if ($nextword eq '-help');
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 $SCFchem = 0 if ($fasta || $caf);
@@ -90,17 +99,26 @@ $logger->setFilter(0) if $verbose; # set reporting level
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
  
 my $URL = $adb->getURL;
 
@@ -163,9 +181,12 @@ my @items = ('read_id','readname','seq_id','version',
              'basecaller','lqleft','lqright','slength','sequence',
              'quality','align-to-SCF','pstatus');
 
-$logger->warning("No reads selected") if !@reads;
-
-$adb->getTagsForReads([@reads]) unless $notags;
+if (@reads) {
+    $adb->getTagsForReads([@reads]) unless $notags;
+}
+else {
+    $logger->warning("No reads selected",ss=>1);
+}
 
 my %option;
 $option{qualitymask} = $mask if $mask;
@@ -309,8 +330,9 @@ sub list {
 
     my $aligns = $read->getAlignToTrace();
     if ($aligns && scalar(@$aligns) > 1) {
+        print "\nAlign_to_SCF records:\n";
         foreach my $align (@$aligns) {
-            printf ("%12s  %4d - %4d     %4d - %4d $break",@$aligns);
+            printf (" %4d - %4d     %4d - %4d $break",@$align);
         }
     }
 
