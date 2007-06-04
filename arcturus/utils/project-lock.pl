@@ -21,7 +21,8 @@ my $confirm;
 my $forcing;
 my $newuser;
 
-my $validKeys  = "organism|instance|assembly|project|usurp|transfer|"
+my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
+               . "usurp|force|transfer|"
                . "confirm|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -29,17 +30,30 @@ while (my $nextword = shift @ARGV) {
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
     }                                                                           
-    $instance     = shift @ARGV  if ($nextword eq '-instance');
-      
-    $organism     = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
-    $project      = shift @ARGV  if ($nextword eq '-project');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }  
 
-    $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-project'  || $nextword eq '-p') {
+        $project      = shift @ARGV;
+    }
+
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
 
     $newuser      = shift @ARGV  if ($nextword eq '-transfer');
 
     $forcing      = 1            if ($nextword eq '-usurp');
+    $forcing      = 1            if ($nextword eq '-force');
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -52,29 +66,40 @@ while (my $nextword = shift @ARGV) {
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging('STDOUT');
+my $logger = new Logging(); # default STDOUT
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
 &showUsage("Missing project name or ID") unless $project;
+
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-    &showUsage("Unknown organism '$organism' on server '$instance'");
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
 
-$logger->info("Database ".$adb->getURL." opened succesfully");
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+ 
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
 # MAIN
@@ -99,75 +124,76 @@ if ($projects && @$projects > 1) {
     foreach my $project (@$projects) {
         push @namelist,$project->getProjectName();
     }
-    $logger->skip();
-    $logger->warning("Non-unique project specification : $project (@namelist)");
-    $logger->warning("Perhaps specify the assembly ?") unless defined($assembly);
-    $logger->skip();
+    $logger->warning("Non-unique project specification : $project (@namelist)",ss=>1);
+    unless (defined($assembly)) {
+        $logger->warning("Perhaps specify the assembly ?",skip=>1);
+    }
+
 }
 elsif (!$projects || !@$projects) {
-    $logger->skip();
-    $logger->warning("Project $project not available : $message");
-    $logger->skip();
+    $logger->warning("Project $project not available : $message", ss=>1);
 }
 
 else {
-# only one project found, continue
-    my $project = shift @$projects;
-    $logger->info($project->toStringLong); # project info if verbose
 
-    $logger->skip();
+# only one project found, continue
+
+    my $project = shift @$projects;
+    $logger->info($project->toStringLong,skip=>1); # project info if verbose
+
+    my %options = (confirm => 0);
+    $options{confirm} = 1 if $confirm;
+
     if ($forcing) {
 # used in case the project is already locked by someone else
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
-       ($success,$message) = $adb->transferLockOwnershipForProject($project,
-				                          confirm=>1,forcing=>1);
-        $logger->warning($message);
-        $logger->skip();
-    }
 
+       ($success,$message) = $project->transferLock(forcing=>1, %options);
+        $message =~ s/transfere?/acquire/;
+        $logger->warning($message,skip=>1);
+    }
 
     unless ($success) {
 # acquire the lock on the project (either by already having it, or when unlocked) 
-        my %options;
-        $options{confirm} = 1 if $confirm;
 
-       ($success,$message) = $adb->acquireLockForProject($project,%options);
+       ($success,$message) = $project->acquireLock(%options);
 
         if ($success == 2) {
-            $logger->warning($message);
+            $logger->warning($message,ss=>1);
         }
         elsif ($success == 1) {
-            $logger->warning($message." (=> use '-confirm')");
+            $logger->warning($message." (=> use '-confirm')",ss=>1);
+        }
+# no success
+        elsif ($newuser && $newuser eq $project->getLockOwner()) {
+            $logger->warning($message,ss=>1);
         }
         else {
-            $message .= "; you may have no privileges on database "
-                      . $organism if $confirm;
-            $logger->warning($message);
+            $message .= "; you may have no privileges on"
+                     .  " database $organism" if $confirm;
+            $logger->warning($message,ss=>1);
         }
-        $logger->skip();
     }
 
 # if the lock was acquired by this user, now change to a new user
 
     if ($success == 2 && $newuser) {
 
-        my %options = (newowner => $newuser);
-        $options{confirm} = 1 if $confirm;
-        
-       ($success,$message) = $adb->transferLockOwnershipForProject($project,%options);
+        $options{newowner} = $newuser;
+
+       ($success,$message) = $project->transferLock(%options);
 
         if ($success == 2) {
-            $logger->warning($message);
+            $logger->warning($message,ss=>1);
         }
         elsif ($success == 1) {
-            $logger->warning($message." (=> use '-confirm')");
+            $logger->warning($message." (=> use '-confirm')",ss=>1);
         }
         else {
             $message .= "; perhaps user '$newuser' has no privileges on database "
                       . $organism if $confirm;
-            $logger->warning($message);
+            $logger->warning($message,ss=>1);
         }
-        $logger->skip();
     }
 }
 
@@ -195,7 +221,7 @@ sub showUsage {
     }
     unless ($organism && $instance) {
         print STDERR "-organism\tArcturus database name\n"  unless $organism;
-        print STDERR "-instance\t'prod', 'dev' or 'test'\n" unless $instance;
+        print STDERR "-instance\tMySQL database instance\n" unless $instance;
         print STDERR "\n";
     }
     unless ($project) {
