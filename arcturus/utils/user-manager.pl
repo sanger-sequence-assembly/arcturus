@@ -15,6 +15,7 @@ my $instance;
 
 my $user;
 my $privilege;
+my $role;
 
 my $force;
 my $verbose;
@@ -25,8 +26,8 @@ my $verbose;
 
 my $validKeys = "organism|o|instance|i|"
               . "addprivilege|ap|removeprivilege|rp|deleteuser|du|force|"
-              . "user|privilege|list|"
-              . "verbose|help";
+              . "user|u|privilege|p|newuser|nu|newrole|nr|list|l|"
+              . "verbose|help|h";
  
 my $action = 0;
 
@@ -63,9 +64,19 @@ while (my $nextword = shift @ARGV) {
         $action    = 3;
     }
 
-    $action        = 0            if ($nextword eq '-list');
+    if ($nextword eq '-nu' || $nextword eq '-newuser') {
+        $user      = shift @ARGV;
+        $action    = 4;
+    }
 
-    $user          = shift @ARGV  if ($nextword eq '-user');
+    if ($nextword eq '-nr' || $nextword eq '-newrole') {
+        $role      = shift @ARGV;
+        $action    = 5;
+    }
+
+    if ($nextword eq '-u'  || $nextword eq '-user') {
+        $user      = shift @ARGV;
+    }
 
     $privilege     = shift @ARGV  if ($nextword eq '-privilege');
 
@@ -73,41 +84,59 @@ while (my $nextword = shift @ARGV) {
 
     $verbose       = 1            if ($nextword eq '-verbose');
 
-    &showUsage(0) if ($nextword eq '-help'); # long write up
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
 #----------------------------------------------------------------
                                                                                
-my $logger = new Logging('STDOUT');
+my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # test input parameters
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
-&showUsage("Missing user specification") if ($action && !$user);
+&showUsage("Missing user(name) specification") if ($action && !$user);
 
 if (($action == 1 || $action == 2) && !$privilege) {
     &showUsage("Missing privilege specification");
+}
+
+if ($action <= 3 && $role) {
+    &showUsage("Option '-role' is inconsistent with other selected options");
+}
+
+if ($action >  3 && $privilege) {
+    &showUsage("Redefined privilege is inconsistent with selected option");
 }
 
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
 
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
+
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
-    &showUsage("Invalid organism '$organism' on server '$instance'");
+# abort with error message
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
 }
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
  
 my $URL = $adb->getURL;
 
@@ -136,15 +165,37 @@ if ($privilege) {
 
     if ($privilege && !$privileges->{$privilege}) {
         unless ($privilege =~ /help|\?/) {
-            $logger->severe("Invalid privilege '$privilege' specified",preskip=>1);
+            $logger->severe("Invalid privilege '$privilege' specified",ss => 1);
 	}
-        $logger->warning("Valid privileges:",skip=>1,preskip=>1);
+        $logger->warning("Valid privileges:",ss => 1);
         foreach my $shortform (sort keys %shortforms) {
             my $privilege = $shortforms{$shortform};
             my $field = sprintf ("%-20s",$privilege)." ($shortform)";
             $logger->warning($field);
         }
+        $logger->warning("end list",preskip=>1,skip=>2);
+
+        $adb->disconnect();
+	exit 1;
+    }
+}
+
+if ($role) {
+# get the current set of valid privileges
+    my $roles = $adb->getValidUserRoles(); # returns a hash
+
+    if ($role && !$roles->{$role}) {
+        unless ($role =~ /help|\?/) {
+            $logger->severe("Invalid role '$role' specified",preskip=>1);
+	}
+        $logger->warning("Valid roles:",skip=>1,preskip=>1);
+        foreach my $role (sort keys %$roles) {
+            $logger->warning(sprintf ("%-20s",$role));
+        }
         $logger->warning("end list",preskip=>1,skip=>2);     
+
+        $adb->disconnect();
+	exit 1;
     }
 }
 
@@ -168,20 +219,22 @@ if (!$action) {
     }
 
     if (ref($list) eq 'HASH') {
-        my $header = "  user         privileges";
+        my $header = "user     role           privileges";
         my $head;
         foreach my $entry (sort keys %$list) {
             next if ($user && $entry !~ /$user/);           
             my $privileges = $list->{$entry};
             my %options = (nobreak=>1,preskip=>1);
-            my $usertext = sprintf("%-8s",$entry)."     ";
+            my $usertext = sprintf("%-8s",$entry);
             my $text;
             foreach my $userprivilege (sort keys %$privileges) {
+                my $role = $privileges->{$userprivilege};
                 next if ($privilege && $userprivilege ne $privilege);
                 $logger->warning($header,preskip=>1) unless $head;
+                $usertext .= sprintf(" %-14s",$role) unless $text;
                 $logger->warning($usertext,%options) unless $text;
-                $logger->warning(sprintf("%-24s",$userprivilege));
-                $logger->warning("             ",nobreak=>1);
+                $logger->warning(sprintf(" %-24s",$userprivilege));
+                $logger->warning(undef,space=>23,nobreak=>1);
                 $head = 1;
 		$text = 1;
             }
@@ -197,7 +250,7 @@ if (!$action) {
     }
 }
 
-# the other options require user to be defined
+# the options 1-3 require user to be defined
 
 elsif ($action >= 1 && $action <= 3) {
 
@@ -230,12 +283,21 @@ elsif ($action >= 1 && $action <= 3) {
     }
 }
 
+
+if ($action == 4 || $action == 5) {
+print STDERR "option $action to be develeoped\n";
+   ($status,$msg) = $adb->addNewUser($user,$role) if ($action == 4);
+   ($status,$msg) = $adb->updateUser($user,$role) if ($action == 5);
+    $success = 1 if $status;
+}
+
+
 if ($success) {
-    $logger->severe($msg,preskip=>1,skip=>1);    
+    $logger->severe($msg,ss => 1);    
 }
 else {
     $msg .= " (".($adb->errorStatus(1) || "no database errors").")";
-    $logger->severe($msg,preskip=>1,skip=>1);       
+    $logger->severe($msg,ss => 1);       
 }
 
 $adb->disconnect();
