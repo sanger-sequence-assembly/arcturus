@@ -35,6 +35,10 @@ sub setArcturusDatabase {
     }
 }
 
+#-------------------------------------------------------------------
+# lock status
+#-------------------------------------------------------------------
+
 sub getLockedStatus {
 # return the momentary lock status
     my $this = shift;
@@ -44,6 +48,82 @@ sub getLockedStatus {
     return $ADB->getLockedStatusForProject($this);
 }
 
+sub acquireLock {
+# acquire a lock on the project
+    my $this = shift;
+    my %options = @_; # user => ..  confirm => ..
+
+    my $ADB = $this->{ADB} || return undef;
+
+    $options{confirm} = 1 unless defined $options{confirm};
+
+    return $ADB->acquireLockForProject($this,%options);
+}
+
+sub releaseLock {
+# acquire a lock on the project
+    my $this = shift;
+    my %options = @_; # confirm => ..
+
+    my $ADB = $this->{ADB} || return undef;
+
+    $options{confirm} = 1 unless defined $options{confirm};
+
+    return $ADB->releaseLockForProject($this,%options);
+}
+
+sub transferLock {
+# transfer an existing lock on the project to another user
+    my $this = shift;
+    my %options = @_; # newowner => ...   confirm => ..
+
+    my $ADB = $this->{ADB} || return undef;
+
+    $options{confirm} = 1 unless defined $options{confirm};
+
+    return $ADB->transferLockOwnershipForProject($this,%options);
+}
+
+#-------------------------------------------------------------------
+# import-export status
+#-------------------------------------------------------------------
+
+sub getImportExportStatus {
+# get the I-E status the project
+    my $this = shift;
+    my %options = @_; # keys: import, export, changed, pending (default)
+
+    my $ADB = $this->{ADB} || return undef;
+
+    return $ADB->getLastImportOfProject($this) if $options{import};  # date
+
+    return $ADB->getLastExportOfProject($this) if $options{export};  # date
+
+    return $ADB->getLastChangeOfProject($this) if $options{changed}; # date
+
+    return $ADB->exportPendingOfProject($this); # default 0 or 1
+}
+
+sub markImport {
+# get the I-E status the project
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return undef;
+
+    return $ADB->putImportMarkForProject($this); # 0 or 1
+}
+
+sub markExport {
+# get the I-E status the project
+    my $this = shift;
+
+    my $ADB = $this->{ADB} || return undef;
+
+    return $ADB->putExportMarkForProject($this); # 0 or 1  
+}
+
+#-------------------------------------------------------------------
+# attributes
 #-------------------------------------------------------------------
   
 sub setAssemblyID {
@@ -203,7 +283,7 @@ sub setOwner {
   
 sub getOwner {
     my $this = shift;
-    return $this->{data}->{owner} || '';
+    return $this->{data}->{owner};
 }
   
 sub setProjectID {
@@ -246,6 +326,8 @@ sub getUpdated {
     return $this->{data}->{updated};
 }
   
+#-------------------------------------------------------------------    
+# gap 4 database corresponding to this project
 #-------------------------------------------------------------------    
 
 sub setGap4Name {
@@ -427,8 +509,7 @@ sub updateProjectData {
 sub getProjectData {
     my $this = shift;
 
-    # Make sure that the data are current
-    $this->updateProjectData();
+    $this->updateProjectData(); # Make sure that the data are current
 
     my $pd = {};
 
@@ -450,7 +531,7 @@ sub getProjectData {
 
     $pd->{'locked'} = $this->getLockedStatus();
 
-    $pd->{'owner'} = $this->getOwner();
+    $pd->{'owner'} = $this->getOwner() || 'no owner';
 
     $pd->{'status'} = $this->getProjectStatus();
 
@@ -479,7 +560,7 @@ sub toStringShort {
     push @line,($stats->[0] || 0); # total sequence length 
     push @line,($stats->[2] || 0); # largest contig
     my $locked = ($this->getLockedStatus() ? 'LOCKED' : ' free ');
-    push @line,($this->getOwner() || 'undef');
+    push @line,($this->getOwner() || 'no owner');
     push @line,($locked || '');
     my $comment = $this->getProjectStatus();
     $comment .= "  " if $comment;
@@ -501,7 +582,7 @@ sub toStringLong {
     $string .= "Project ID         ". $this->getProjectID()."\n";
     $string .= "Assembly           ".($this->getAssemblyID() || 0)."\n";
     $string .= "Project name       ". $this->getProjectName()."\n";
-    $string .= "Project owner      ".($this->getOwner() || 'undef')."\n";
+    $string .= "Project owner      ".($this->getOwner() || 'no owner')."\n";
 
     $string .= "Project status     ". $this->getProjectStatus()."\n";
 
