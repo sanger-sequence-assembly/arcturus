@@ -23,13 +23,14 @@ my $ioport;
 my $delayed;
 my $batch;
 my $new;
+my $babel;
 
 my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|"
                . "import|export|new|"
-               . "batch|nobatch|delayed|subdir|sd|r|"
+               . "batch|nobatch|delayed|subdir|sd|r|babel|"
                . "verbose|debug|confirm|submit|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -77,6 +78,8 @@ while (my $nextword = shift @ARGV) {
     $batch        = 1              if ($nextword eq '-batch');
     $batch        = 0              if ($nextword eq '-nobatch');
     $new          = 1              if ($nextword eq '-new');
+
+    $babel        = 1              if ($nextword eq '-babel');
 
     $verbose      = 1              if ($nextword eq '-verbose');
 
@@ -200,20 +203,19 @@ foreach my $project (@projects) {
 
     if ($batch) {
 # export by batch job
-        my $command = "bsub -q  babelq1 -N ";
-#        my $command = "bsub -q  pcs3q1 -N ";
+        my $command;
+        $command = "bsub -q  babelq1 -N " if $babel;;
+        $command = "bsub -q  pcs3q1 -N " unless $babel;
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
         if ($ioport eq 'import') {
             $command .= "$work_dir/importintoarcturus.csh $project" unless $new;
             $command .= "$work_dir/newimportintoarcturus.csh $project" if $new;
-#        $command .= "$import_script $instance $organism $project 64 0"; # ?
-#        $command .= "$import_script -instance $instance -organism $organism -project $project -64bit -consensus "; # ?
         }
         elsif ($ioport eq 'export') {
             $command .= "$work_dir/exportfromarcturus.csh $project";
 #        $command .= "$export_script $instance $organism $project 64 0"; # ?
-#        $command .= "$export_script -instance $instance -organism $organism -project $project -64bit -consensus "; # ?
+#        $command .= "$export_script -instance $instance -organism $organism -project $project -consensus "; # ?
         }
 
         unless ($confirm) {
@@ -373,6 +375,10 @@ sub showUsage {
     print STDERR "-gap4name\n";
     print STDERR "-delayed\n";
     print STDERR "\n";
+    print STDERR "-batch\n";
+    print STDERR "-nobatch\n";
+    print STDERR "\n";
+    print STDERR "-babel\telse execute on pcs3\n";
 
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
