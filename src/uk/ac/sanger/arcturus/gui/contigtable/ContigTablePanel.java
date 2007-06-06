@@ -12,6 +12,7 @@ import java.sql.SQLException;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.gui.scaffold.ScaffoldWorker;
 import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.Arcturus;
@@ -306,13 +307,14 @@ public class ContigTablePanel extends MinervaPanel {
 	}
 	
 	protected void scaffoldTheSelectedContig() {
-		JOptionPane
-		.showMessageDialog(
-				this,
-				"The selected contig will be scaffolded in a colourful and informative way",
-				"Scaffold the contig", JOptionPane.INFORMATION_MESSAGE,
-				null);
-	
+		int[] indices = table.getSelectedRows();
+		ContigTableModel ctm = (ContigTableModel) table.getModel();
+
+		Contig contig = (Contig)ctm.elementAt(indices[0]);
+
+		ScaffoldWorker worker = new ScaffoldWorker(contig, parent, adb);
+		
+		worker.execute();		
 	}
 
 	public void closeResources() {
