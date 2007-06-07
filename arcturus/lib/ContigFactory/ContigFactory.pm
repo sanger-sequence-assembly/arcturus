@@ -10,11 +10,7 @@ use Read;
 
 use Tag;
 
-use TagFactory::ReadTagFactory;
-
-use TagFactory::ContigTagFactory;
-
-#use TagFactory::TagFactory;
+use TagFactory::TagFactory;
 
 use Clipping;
 
@@ -24,7 +20,7 @@ use Logging;
 # class variable
 # ----------------------------------------------------------------------------
 
-#my $LOGGER;
+my $TF; # tag factory
 
 # ----------------------------------------------------------------------------
 # building Contig instances from a Fasta file
@@ -98,8 +94,6 @@ sub fastaFileParser {
 #-----------------------------------------------------------------------------
 # building Contigs from CAF file 
 #-----------------------------------------------------------------------------
-
-my ($CTF,$RTF); # contig & read tag factory
 
 sub cafFileInventory {
 # build an inventory of objects in the CAF file
@@ -459,9 +453,7 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
 
 # set up the read tag factory and contig tag factory
 
-    my $rtf = new ReadTagFactory();
-
-    my $ctf = new ContigTagFactory();
+    $TF = new TagFactory() unless $TF;
 
     $logger->info("Parsing CAF file $caffile");
 
@@ -848,22 +840,15 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 
 # build a new read Tag instance
 
-		my $tag = $rtf->makeTag($type,$trps,$trpf,TagComment => $info);
-
-#                my $tag = new Tag('readtag');
-#                $tag->setType($type);
-#                $tag->setPosition($trps,$trpf);
-#                $tag->setStrand('Forward');
-#                $tag->setTagComment($info);
+		my $tag = $TF->makeReadTag($type,$trps,$trpf,TagComment => $info);
 
 # the tag now contains the raw data read from the CAF file
-# invoke ReadTagFactory to process, cleanup and test the tag info
+# invoke TagFactory to process, cleanup and test the tag info
 
-#                $rtf->importTag($tag);
-                $rtf->cleanup($tag); # clean-up the tag info
+                $TF->cleanup($tag); # clean-up the tag info
                 if ($type eq 'OLIG' || $type eq 'AFOL') {        
 # oligo, staden(AFOL) or gap4 (OLIG)
-                    my ($warning,$report) = $rtf->processOligoTag($tag);
+                    my ($warning,$report) = $TF->processOligoTag($tag);
                     $logger->fine($report) if $warning;
                     unless ($tag->getTagSequenceName()) {
 		        $logger->warning("Missing oligo name in read tag for "
@@ -873,14 +858,14 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 	        }
                 elsif ($type eq 'REPT') {
 # repeat read tags
-                    unless ($rtf->processRepeatTag($tag)) {
+                    unless ($TF->processRepeatTag($tag)) {
 	                $logger->info("Missing repeat name in read tag for "
                                   . $read->getReadName()." (line $lineCount)");
                     }
                 }
 	        elsif ($type eq 'ADDI') {
 # chemistry read tag
-                    unless ($rtf->processAdditiveTag($tag)) {
+                    unless ($TF->processAdditiveTag($tag)) {
                         $logger->info("Invalid ADDI tag ignored for "
                                   . $read->getReadName()." (line $lineCount)");
                         next; # don't accept this tag
@@ -1002,7 +987,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                     $type = 'COMM';
 		}
 
-                my $tag = $ctf->makeTag($type,$tcps,$tcpf);
+                my $tag = $TF->makeContigTag($type,$tcps,$tcpf);
 
 #                my $tag = new Tag('contigtag');
 #                $tag->setType($type);
@@ -1319,8 +1304,7 @@ sub parseContig {
     my $contigtaglist = $options{contigtaglist} || '';
     my $ignoretaglist = $options{ignoretaglist} || '';
 
-    $CTF = new ContigTagFactory() unless defined $CTF;
-#    $CTF = new TagHelper() unless defined $CTF;
+    $TF = new TagFactory() unless defined $TF;
 
     my $isUnpadded = 1;
     my $readnamehash = {};
@@ -1409,7 +1393,7 @@ sub parseContig {
                 $type = 'COMM';
 	    }
 
-            my $tag = $CTF->makeTag($type,$tcps,$tcpf);
+            my $tag = $TF->makeContigTag($type,$tcps,$tcpf);
 
             $tag->setTagComment($info);
             if ($info =~ /([ACGT]{5,})/) {
@@ -1498,7 +1482,7 @@ sub parseRead {
     my $readtaglist = $options{readtags} || '';
     my $edittaglist = $options{edittags} || '';
 
-    $RTF = new ReadTagFactory() unless defined $RTF;
+    $TF = new TagFactory() unless defined $TF;
 
     my $isUnpadded = 1;
     while (defined($record = <$CAF>)) {
@@ -1582,7 +1566,7 @@ sub parseRead {
                 }
             }
 # build a new read Tag instance
-	    my $tag = $RTF->makeTag($type,$trps,$trpf,TagComment => $info);
+	    my $tag = $TF->makeTag($type,$trps,$trpf,TagComment => $info);
 
 #                my $tag = new Tag('readtag');
 #                $tag->setType($type);
@@ -1591,13 +1575,13 @@ sub parseRead {
 #                $tag->setTagComment($info);
 
 # the tag now contains the raw data read from the CAF file
-# invoke ReadTagFactory to process, cleanup and test the tag info
-#                $RTF->importTag($tag);
+# invoke TagFactory to process, cleanup and test the tag info
+#                $TF->importTag($tag);
 
-            $RTF->cleanup($tag); # clean-up the tag info
+            $TF->cleanup($tag); # clean-up the tag info
             if ($type eq 'OLIG' || $type eq 'AFOL') {        
 # oligo, staden(AFOL) or gap4 (OLIG)
-                my ($warning,$report) = $RTF->processOligoTag($tag);
+                my ($warning,$report) = $TF->processOligoTag($tag);
                 $logger->fine($report) if $warning;
                 unless ($tag->getTagSequenceName()) {
 		$logger->warning("Missing oligo name in read tag for "
@@ -1607,14 +1591,14 @@ sub parseRead {
 	    }
             elsif ($type eq 'REPT') {
 # repeat read tags
-                unless ($RTF->processRepeatTag($tag)) {
+                unless ($TF->processRepeatTag($tag)) {
 	        $logger->info("Missing repeat name in read tag for "
                              . $read->getReadName()." (l:$line)");
                 }
             }
             elsif ($type eq 'ADDI') {
 # chemistry read tag
-                unless ($RTF->processAdditiveTag($tag)) {
+                unless ($TF->processAdditiveTag($tag)) {
                     $logger->info("Invalid ADDI tag ignored for "
                                  . $read->getReadName()." (l:$line)");
                     next; # don't accept this tag
