@@ -6,21 +6,13 @@ use Contig;
 
 use Mapping;
 
-# use TagFactory::ReadTagFactory;
-
-use TagFactory::ContigTagFactory;
+use TagFactory::TagFactory;
 
 use Alignment;
 
 use Clipping;
 
 use Logging;
-
-#-----------------------------------------------------------------------------
-# class variables
-#-----------------------------------------------------------------------------
-
-my $tagfactory;
 
 #-----------------------------------------------------------------------------
 # methods which take a Contig instance as input and change its content
@@ -34,7 +26,7 @@ sub statistics{
 
     &verifyParameter($contig,'statistics');
 
-    my $logger = &verifyLogger("statistics $contig");
+    my $logger = &verifyLogger("statistics ".$contig->getContigName());
 
 # $options{pass} >= 2 to allow adjustment of zeropoint, else not
 
@@ -126,7 +118,7 @@ $logger->debug("pass $pass");
 # and apply shift to possible tags
                 if ($contig->hasTags()) {
                     $logger->fine("adjusting tag positions (to be tested)");
-                    my %options = (nonew => 1,postwindowfinal => $cfinal); # -$shift
+                    my %options = (nonew => 1,postwindowfinal => $cfinal);
                     my $tags = $contig->getTags();
                     foreach my $tag (@$tags) {
                         $tag->transpose(+1,$shift,%options);
@@ -201,8 +193,10 @@ sub reverseComplement {
 # optional: create copy of the input contig
 
     my %coptions; # copy options
-    $coptions{complete}     = 1 if $options{complete};
-    $coptions{nocomponents} = 1 if $options{nocomponents};
+    foreach my $option ('complete','nocomponents','parent','child') {
+        $coptions{$option} = 1 if $options{$option};
+    }
+
     $contig = $contig->copy(%coptions) unless $options{nonew};
 
     my $length = $contig->getConsensusLength();
@@ -1258,8 +1252,6 @@ sub remapcontigcomponents {
 
     if ($oldcontig->hasTags()) {
 
-        my $tagfactory = new ContigTagFactory();
-
         my $tags = $oldcontig->getTags();
 
         my $breaktags = $options{breaktags} || 'ANNO';
@@ -1271,14 +1263,12 @@ sub remapcontigcomponents {
 # special treatment for ANNO tags?
             my $tagtype = $tag->getType();
             if ($tagtype =~ /$breaktags/) {
-#                my $newtags = ContigTagFactory->remap($tag,$ori2new,break=>1);
-                my $newtags = $tagfactory->remap($tag,$ori2new,break=>1);
+                my $newtags = $tag->remap($ori2new,break=>1);
                 push @newtags, @$newtags if $newtags;
             }
             else {
-#                my $newtags = ContigTagFactory->remap($tag,$ori2new,break=>0);
-                my $newtag  = $tagfactory->remap($tag,$ori2new,break=>0);
-                push @newtags, $newtag if $newtag;
+                my $newtags = $tag->remap($ori2new,break=>0);
+                push @newtags, $newtags if $newtags;
 	    }
 	}
 
@@ -1288,8 +1278,7 @@ sub remapcontigcomponents {
         $mergetags =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
         $mergetags =~ s/\W+/|/g;
 
-#        my @tags = ContigTagFactory->mergeTags([@newtags],$mergetags);        
-        my @tags = $tagfactory->mergeTags([@newtags],$mergetags);        
+        my @tags = TagFactory->mergeTags([@newtags],$mergetags);        
 
 # and add to the new contig
 
@@ -1374,6 +1363,28 @@ sub removereads {
     }
 
     return $splicecount,$parity,$total;
+}
+
+#-----------------------------------------------------------------------------
+# Padding
+#-----------------------------------------------------------------------------
+
+sub pad {
+    my $class = shift;
+    my $contig = shift;
+
+    &verifyParameter($contig,'pad');
+
+    print SDTERR "->pad not yet operational\n";
+}
+
+sub depad {
+    my $class = shift;
+    my $contig = shift;
+
+    &verifyParameter($contig,'pad');
+
+    print SDTERR "->pad not yet operational\n";
 }
 
 #-----------------------------------------------------------------------------
@@ -1508,6 +1519,7 @@ $logger->debug("ENTER");
 
     return &linkToContig($class,$cthis,$cthat,@_);
 $logger->debug("EXIT");
+# if no link yet, try Alignment on consnesus?
 }
 
 
@@ -1673,14 +1685,13 @@ unless ($cpaligned || $cthat->getNumberOfReads() > 1) {
 
 # process the mapping segments and add to the inventory
 
-            my $osegments = $cpmapping->getSegments() || next;
+            my $osegments = $cpmapping->normaliseOnX() || next; # returns array
 
             foreach my $osegment (@$osegments) {
                 my $offset = $osegment->getOffset();
                 $offset = (-$offset+0); # conform to offset convention in this method
                 my $hashkey = sprintf("%08d",$offset);
                 $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
-                $osegment->normaliseOnX();# get in the correct order
                 my @segment = ($osegment->getXstart(),$osegment->getXfinis());
                 push @{$inventory->{$hashkey}},[@segment];
                 $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
@@ -1932,8 +1943,10 @@ $DEBUG->warning("segment after filter @$segment") if $DEBUG;
         next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
         $mapping->putSegment(@$segment);
     }
-# use the analyse method to handle possible single-base segments
-    $mapping->analyseSegments();
+
+# use the normalise method to handle possible single-base segments
+
+    $mapping->normalise();
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
@@ -2149,14 +2162,13 @@ unless ($cpaligned || $compare->getNumberOfReads() > 1) {
 
 # process the mapping segments and add to the inventory
 
-            my $osegments = $cpmapping->getSegments() || next;
+            my $osegments = $cpmapping->normaliseOnX() || next;
 
             foreach my $osegment (@$osegments) {
                 my $offset = $osegment->getOffset();
                 $offset = (-$offset+0); # conform to offset convention in this method
                 my $hashkey = sprintf("%08d",$offset);
                 $inventory->{$hashkey} = [] unless $inventory->{$hashkey};
-                $osegment->normaliseOnX();# get in the correct order
                 my @segment = ($osegment->getXstart(),$osegment->getXfinis());
                 push @{$inventory->{$hashkey}},[@segment];
                 $accumulate->{$hashkey}  = 0 unless $accumulate->{$hashkey};
@@ -2369,8 +2381,9 @@ $DEBUG->fine("segment after filter @$segment") if $DEBUG;
         next if ($segment->[1] < $segment->[0]); # segment pruned out of existence
         $mapping->putSegment(@$segment);
     }
-# use the analyse method to handle possible single-base segments
-    $mapping->analyseSegments();
+# use the normalise method to handle possible single-base segments
+
+    $mapping->normalise();
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
@@ -2596,6 +2609,8 @@ sub propagateTagsToContig {
 # autoload tags unless tags are already defined
 
     $parent->getTags(1) unless $options{notagload};
+#    $parent->getTags(load=>1) unless $options{notagload}; ?
+#    $parent->getTags(sort=>1); ?
 
 $logger->debug("ENTER");
 $logger->debug("parent $parent (".$parent->getContigID()
@@ -2705,21 +2720,16 @@ $logger->debug("Target contig length : $tlength ");
         $excludetag =~ s/\W+/|/g; # put separators in exclude list
     }
 
-# get the tags in the parent (as they are)
+# get the tags in the parent (as they are, but sorted and unique)
 
-    my $ptags = $parent->getTags();
+    my $ptags = $parent->getTags(0,1);
     next unless ($ptags && @$ptags); # just in case, but should not occur
 
 $logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
 
-# get a handle to the tag factory, if not do earlier
-
-    $tagfactory = new ContigTagFactory() unless $tagfactory;
-
 # first attempt for ANNO tags (later to be used for others as well)
 
     my %annotagoptions = (break=>1);
-#    my %annotagoptions = (break=>1, debug=>$logger);
     $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
     $annotagoptions{changestrand} = ($mapping->getAlignment() < 0) ? 1 : 0;
 
@@ -2728,9 +2738,11 @@ $logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
     if ($options{speedmode}) {
 # will keep track of position in the mapping by defining nzt option as HASH
         $annotagoptions{nonzerostart} = {};
-# but requires sorting according to tag position
+# but requires sorting according to tag position (REDUNDENT)
         @$ptags = sort {$a->getPositionLeft() <=> $b->getPositionLeft()} @$ptags;
     }
+
+# apply filter, if any 
 
     my @rtags; # for (remapped) imported tags
     foreach my $ptag (@$ptags) {
@@ -2740,21 +2752,22 @@ $logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
         next unless ($tagtype eq 'ANNO');
 # remapping can be SLOW for large number of tags if not in speedmode
 $logger->debug("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft());
-        my $tptags = $tagfactory->remap($ptag,$mapping,%annotagoptions);
-#        my $tptags = ContigTagFactory->remap($ptag,$mapping,%annotagoptions);
+        my $tptags = $ptag->remap($mapping,%annotagoptions);
 
         push @rtags,@$tptags if $tptags;
     }
+
 $logger->debug("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input");# if annotation tags found, (try to) merge tag fragments
+
     if (@rtags) {
         my %moptions = (overlap => ($options{overlap} || 0));
 $moptions{debug} = $logger;
-#        my $newtags = ContigTagFactory->mergeTags(\@rtags,%moptions);
-        my $newtags = $tagfactory->mergeTags(\@rtags,%moptions);
+        my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
 
 my $oldttags = $contig->getTags() || [];
 $logger->debug(scalar(@$oldttags) . " existing tags on TARGET PT");
 $logger->debug(scalar(@$newtags) . " added (merged) tags PT");
+
         $contig->addTag($newtags) if $newtags;
 
 #        @tags = @$newtags if $newtags;
@@ -2806,8 +2819,9 @@ $logger->debug("offsets: @offset");
 $logger->flush();
 $logger->setPrefix("Tag->transpose");
 # create a new tag by spawning from the tag on the parent contig
-        my $tptag = $ptag->transpose($alignment,\@offset,$tlength); # to be replaced
-#        my $tptag = ContigTagFactory->transpose($ptag,$alignment,\@offset,$tlength);
+        my $tptag = $ptag->transpose($alignment,\@offset,
+                                   postwindowfinal=>$tlength);
+
 $logger->setPrefix("CH->propagateTagsToContig");
         next unless $tptag; # remapped tag out of boundaries
 
@@ -2820,11 +2834,14 @@ $logger->debug("Test presence of transposed Tag against existing tags");
 
 # test if the transposed tag is not already present in the child;
 # if it is, inherit any properties from the transposed parent tag
-# which are not defined in it (e.g. when ctag built from Caf file) 
+# which are not defined in it (e.g. when ctag built from Caf file)
 
+
+# should be done much more efficiently
         my $present = 0;
         my $ctags = $contig->getTags(0);
-$logger->debug("Testing new ($tptag) against existing (@$ctags) tags") if $ctags;
+#$logger->debug("Testing new ($tptag) against existing (@$ctags) tags") if $ctags;
+$logger->debug("Testing new ($tptag) against existing tags") if $ctags;
         foreach my $ctag (@$ctags) {
             my $debug = 0;
 # test the transposed parent tag and port the tag_id / systematic ID
@@ -2841,6 +2858,48 @@ $logger->debug("new tag $tptag added to $contig");
         $contig->addTag($tptag);
 #last;
     }
+}
+
+sub sortTags {
+# sort and remove duplicate contig tags; re: Contig->getTags
+    my $class = shift;
+    my $contig = shift;
+
+    &verifyParameter($contig,'sortTags');
+
+#my $logger = verifyLogger('sortTags');
+#$logger->debug("ENTER");
+
+    my $tags = $contig->getTags(); # tags as is
+
+    return unless ($tags && @$tags);
+
+# sort the tags with increasing tag position
+
+#$logger->debug('sorting');
+
+    @$tags = sort {$a->getPositionLeft() <=> $b->getPositionLeft()} @$tags;
+
+# remove duplicate tags
+
+#$logger->debug('weeding out duplicates');
+#$logger->debug("@$tags");
+
+    my $n = 1;
+    while ($n < scalar(@$tags)) {
+        my $leadtag = $tags->[$n-1];
+        my $nexttag = $tags->[$n];
+# splice the nexttag out of the array if the tags are equal
+        if ($leadtag->isEqual($nexttag)) {
+#$logger->debug("n $n $leadtag equals $nexttag");
+	    splice @$tags, $n, 1;
+	}
+        else {
+	    $n++;
+	}
+    }    
+#$logger->debug("@$tags");
+#$logger->debug("EXIT",skip=>3);
 }
 
 #-----------------------------------------------------------------------------
