@@ -6,6 +6,8 @@ use Tag;
 
 use Mapping;
 
+use Logging;
+
 # ----------------------------------------------------------------------------
 # purpose
 # ----------------------------------------------------------------------------
@@ -105,9 +107,9 @@ sub isEqual {
     my $otag  = shift;
     my %options = @_;
     
-    return undef unless &verifyParameter($atag,'transpose (1-st parameter)');
+    return undef unless &verifyParameter($atag,'isEqual (1-st parameter)');
 
-    return undef unless &verifyParameter($otag,'transpose (2-nd parameter)');
+    return undef unless &verifyParameter($otag,'isEqual (2-nd parameter)');
 
 my $logger = &verifyLogger('isEqual');
 
@@ -130,13 +132,6 @@ $logger->debug($otag->dump());
 # $logger->debug("$amap $omap equality test @equal");
         return 0;
     }
-
-#    my @spos = $atag->getPosition();
-#    my @tpos = $otag->getPosition();
-
-#    return 0 unless (scalar(@spos) && scalar(@spos) == scalar(@tpos));
-#    return 0 if ($spos[0] != $tpos[0]);
-#    return 0 if ($spos[1] != $tpos[1]);
 
 # compare tag comments
 
@@ -735,21 +730,34 @@ sub transpose {
     my $offset = shift;
     my %options = @_;
 
-#print STDERR "ContigTagFactory:: (new) transpose used a:$align  o:$offset  @_\n";
+# TO BE DEPRECATED from here; catch old usage
+    if (ref($offset) eq 'ARRAY') { # use the old form (to be deprecated)
+        unless ($offset->[0] == $offset->[1]) {
+            my $logger = &verifyLogger('transpose');
+            $logger->debug("oldtranspose (offsets @$offset) TO BE DEPRECATED");
+            my $wfinal = $options{postwindowfinal};
+            return &oldtranspose($class,$align,$offset,$wfinal);
+        }
+        $offset = $offset->[0];
+    }
+# TO HERE
+
     
     return undef unless &verifyParameter($tag,'transpose');
 
-    my $oldmapping = $tag->getPositionMapping();
+    my $oldmapping = $tag->getPositionMapping(); # for comparison afterwards
+# NOTE, perhaps truncation test in remapper?
 
     $tag = $tag->copy() unless $options{nonew};
 
-# determine the multiplication mapping
+# determine the multiplication mapping ( y = x * align + offset)
 
     my @csegment = $tag->getPositionRange();
 
     foreach my $i (0,1) {
-        $csegment[2+$i] = $csegment[$i];       # from current contig range (y)
-        $csegment[$i]   = $csegment[$i]*$align + $offset; # to transformed (x)
+        $csegment[2+$i] = $csegment[$i]; 
+        $csegment[2+$i] = $csegment[2+$i] * $align if $align;
+        $csegment[2+$i] = $csegment[2+$i] + $offset; 
     }
 
     my $mapping = new Mapping("linear mapping");
@@ -798,7 +806,7 @@ sub remapper {
 
     return undef unless &verifyPrivate($tag,'remapper');
 
-    my $newmapping = $tag->getPositionMapping();
+    my $tagmapping = $tag->getPositionMapping(); # ; x:tag , y:sequence domain
 
     if ($options{prewindowstart} || $options{prewindowfinal}) {
         my @range = $tag->getPositionRange();
@@ -806,11 +814,16 @@ sub remapper {
         my $pwf = $options{prewindowfinal} || $range[1];
         my $prefilter = new Mapping("prefilter");
         $prefilter->putSegment($pws,$pwf,$pws,$pwf);
-        $newmapping = $prefilter->multiply($newmapping);
-        return undef unless $newmapping; # mapped tag out of range
+        $tagmapping = $tagmapping->multiply($prefilter);
+        return undef unless $tagmapping; # mapped tag out of range
     }
 
-    $newmapping = $mapping->multiply($newmapping);
+    my %moptions; # copy to local hash
+    $moptions{nonzerostart} = $options{nonzerostart} || 0;
+    $moptions{repair}       = $options{repair}       || 0;
+
+    my $newmapping = $tagmapping->multiply($mapping,%moptions); # transform tag
+
     return undef unless $newmapping; # mapped tag out of range
 
     if ($options{postwindowfinal}) {
@@ -818,20 +831,159 @@ sub remapper {
         my $pwf = $options{postwindowfinal};
         my $postfilter = new Mapping("postfilter");
         $postfilter->putSegment($pws,$pwf,$pws,$pwf);
-        $newmapping = $postfilter->multiply($newmapping);
+        $newmapping = $newmapping->multiply($postfilter);
         return undef unless $newmapping; # mapped tag out of range
     }
     
-#print STDOUT $newmapping->toString()."\n" if $options{list};
-
     return undef unless $newmapping->hasSegments(); # mapped tag out of range
 
+# truncation test here? (compare object range on old with new)
+
     $tag->setPositionMapping($newmapping);
+
+# truncation test here? (compare object range on old with new)
+# what about DNA sequence remappping (use oldmapping newmapping)
 
     return 1;
 }
 
-sub oldtranspose { # used in Tag, ContigHelper
+sub testmapper {
+# temporary 
+    my $class = shift;
+    my ($tag,$mapping,%options) = @_;
+    return &remapper(@_);
+}
+
+sub remap {
+# returns an array of (one or more) new tags, or undef
+    my $class = shift;
+    my $tag   = shift;
+    my $mapping = shift;
+    my %options = @_;
+
+    return undef unless &verifyParameter($tag,'remap');
+
+    return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
+
+return $class->oldremap($tag,$mapping,@_) unless $options{usenew}; # test
+
+my $logger = &verifyLogger('newremap');
+$logger->warning("TagFactory->remap o: @_");
+$logger->warning("TagFactory->remap using new version");
+
+# experimental new remapping
+
+    my $oldposition = $tag->getPositionMapping();
+
+    $tag = $tag->copy() unless $options{nonew};
+
+$logger->info($mapping->toString());
+$logger->info($oldposition->toString());
+
+    return undef unless &remapper($tag,$mapping,%options);
+
+# check new position
+     
+    my $newposition = $tag->getPositionMapping();
+
+    return undef unless $newposition->hasSegments(); # just in case
+
+    $newposition->collate($options{repair}); # collate segments ? or better in tag
+
+    my $newsegments = $newposition->getSegments();
+
+# test if there are frame shifts or truncations
+
+    my @isequal = $newposition->isEqual($oldposition); # isequal[0] == 0
+
+    if ($isequal[0] != 1 && $options{nobreak}) { # and nobreak ?
+# the tags are different; to get more info, use the mapping comparison
+        my $mapping = $newposition->compare($oldposition);
+# if 1 segment : truncated, >1 segments : frame shift  
+    }
+
+# case  1 segment   out 1 tag, possibly frameshift/ truncated
+
+    my @tags;
+
+    if (!$tag->isComposite()) {
+        push @tags,$tag;
+    }
+
+# case >1 segments && split/!nosplit out array of tags
+
+    elsif ($options{split} || !$options{nosplit} ) {
+        my $tags = $tag->split();
+        push @tags, @$tags if $tags;
+    }
+
+# case >1 segments && nosplit=composite  out 1 tag with composite position
+
+    elsif ($options{nosplit} && $options{nosplit} eq 'composite') {
+        push @tags,$tag; # as is
+    }
+
+# case >1 segments && nobreak= ??    out 1 tag with overall position & comment
+
+    else { # default
+        push @tags,$tag->collapse();       
+    }
+    
+    return [@tags];
+}
+
+sub split {
+# split a composite tag into 
+    my $class = shift;
+    my $tag   = shift;
+    my %options = @_;
+
+    return undef unless &verifyParameter($tag,'split');
+
+    return $tag unless $tag->isComposite();
+
+    my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
+
+    my $mapping = $tag->getPositionMapping();
+
+    my $segments = $mapping->getSegments();
+
+    my $sequence = $tag->getDNA();
+
+    my $tagsequencespan = $tag->getSpan();
+
+    my @tags;
+
+    my $fragment = 0;
+    my $numberofsegments = scalar(@$segments);
+    foreach my $segment (@$segments) {
+        my $flength = $segment->getSegmentLength();
+        next if ($flength < $minimumsegmentsize);
+        my $newtag = $tag->copy(%options);
+        $newtag->setPosition($segment->getYstart(),$segment->getYfinis());
+# add sequence fragment, if any
+        if ($sequence) {
+            my $fxstart = $segment->getXstart();
+            my $fsequence = substr $sequence, $fxstart-1, $flength;
+            $newtag->setDNA($fsequence);
+        }        
+# add to comments
+        my $tagcomment = $newtag->getTagComment() || '';
+        $tagcomment .= ' ' if $tagcomment;
+        $tagcomment .= "fragment " . (++$fragment) . " of $numberofsegments";
+        $newtag->setTagComment($tagcomment);
+        my $comment = $newtag->getComment();
+        unless ($comment =~ /\bsplit\b/) {
+            $newtag->setComment("split! ($tagsequencespan)",append=>1);
+        }
+        push @tags,$newtag;
+    }
+    return [@tags];
+}
+
+# -------------------
+
+sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
 # transpose a tag by applying a linear transformation
 # (apply only to contig tags)
 # returns new Tag instance (or undef)
@@ -843,7 +995,7 @@ sub oldtranspose { # used in Tag, ContigHelper
 
     return undef unless &verifyParameter($tag,'transpose');
 
- print STDERR "ContigTagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
+print STDERR "TagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
 
 # transpose the position range using the offset info. An undefined offset
 # indicates a boundery outside the range 1 .. length; adjust accordingly
@@ -851,6 +1003,8 @@ sub oldtranspose { # used in Tag, ContigHelper
     return undef unless (defined($offset->[0]) && defined($offset->[1])); 
 
     my @tpos = $tag->getPosition();
+    
+print STDERR "oldtranspose: position @tpos \n";
 
     for my $i (0,1) {
         $tpos[$i] *= $align if ($align eq -1);
@@ -864,6 +1018,7 @@ sub oldtranspose { # used in Tag, ContigHelper
 
 # adjust boundaries to ensure tag position inside allowed window
     
+print STDERR "oldtranspose: new position @tpos \n";
     my $truncated;
     for my $i (0,1) {
         if ($tpos[$i] > $window) {
@@ -875,6 +1030,7 @@ sub oldtranspose { # used in Tag, ContigHelper
             $truncated++;
 	}
     }
+print STDERR "oldtranspose: new position after truncate test  @tpos \n";
 
     @tpos = sort {$a <=> $b} @tpos if @tpos;
 
@@ -896,7 +1052,7 @@ sub oldtranspose { # used in Tag, ContigHelper
 
     my $newcomment = $tag->getComment() || '';
     $newcomment .= ' ' if $newcomment;
-    $newcomment .= "imported ".$tag->getSystematicID(); # ?
+    $newcomment .= "imported ".$tag->getSystematicID(); # if $options{sysID}; # ?
     $newcomment .= " truncated" if $truncated;
     $newcomment .= " frame-shifted" if ($offset->[0] != $offset->[1]);
 
@@ -924,38 +1080,15 @@ sub oldtranspose { # used in Tag, ContigHelper
     return $newtag;
 }
 
-sub newremap {
-# returns an array of (one or more) new tags, or undef
-    my $class = shift;
-    my $tag   = shift;
-    my $mapping = shift;
-    my %options = @_;
-
-    return undef unless &verifyParameter($tag,'remap');
-
-    return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
-
-my $logger = &verifyLogger('newremap');
-
-    my $oldposition = $tag->getPositionMapping();
-
-    $tag = $tag->copy() unless $options{nonew};
-
-$logger->info($mapping->toString());
-$logger->info($oldposition->toString());
-
-    return undef unless &remapper($tag,$mapping,%options);
-
-    return $tag;
-}
-
-sub remap {
+sub oldremap {
 # takes a mapping and transforms the tag positions to the mapped domain
 # returns an array of (one or more) new tags, or undef
     my $class = shift;
     my $tag   = shift;
     my $mapping = shift;
     my %options = @_;
+my $logger = &verifyLogger('oldremap');
+$logger->warning("TagFactory->oldremap 1 $tag $mapping  o: @_");
 
 # options:  break = 1 to allow splitting of a tag straddling mapping segments
 #                     and return a separate tag for each segment
@@ -967,8 +1100,6 @@ sub remap {
     return undef unless &verifyParameter($tag,'remap');
 
     return undef unless &verifyParameter($mapping,'remap', class=>'Mapping');
-
-my $logger = &verifyLogger('remap');
 
 # get current tag position
 
@@ -998,15 +1129,18 @@ $logger->info(" previous positions : $nzs->{tstart}");
 $logger->info(" starting positions : $nzs->{rstart},$nzs->{tstart}");
     }
 
+$logger->info("Mapping: ".$mapping->toString());
+$logger->info("Helper : ".$helpermapping->toString());
+
     my $maskedmapping = $helpermapping->multiply($mapping,%options);
 
 # trap problems with mapping by running again with debug option
 
     unless ($maskedmapping) {
 # something wrong with mapping
-$logger->error("Tag position: @currentposition");
-$logger->error($helpermapping->toString());    
-$logger->error($mapping->toString()); 
+$logger->warning("Tag position: @currentposition");
+$logger->warning($helpermapping->toString());    
+$logger->warning($mapping->toString()); 
         $helpermapping->multiply($mapping,debug=>1);
         return undef; 
     }
