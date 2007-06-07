@@ -299,12 +299,12 @@ sub getRead {
 
 $this->defineReadMetaData(); # unless $this->{read_attributes};
 
-    my $query = "select READINFO.read_id,SEQ2READ.seq_id,
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
                  $this->{read_attributes},$this->{template_addons}
                   from READINFO,SEQ2READ,TEMPLATE 
                  where READINFO.read_id = SEQ2READ.read_id
                    and READINFO.template_id = TEMPLATE.template_id ";
-#$query .= " xxx ";
+
     my $nextword;
     my $readitem;
     undef my $version;
@@ -332,7 +332,7 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
         }
     }
 
-# add version sepecification if it is defined
+# add version specification if it is defined
 
     $query .= " and SEQ2READ.version = $version" if defined ($version);
 
@@ -344,7 +344,7 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
 
     $sth->execute($readitem) || &queryFailed($query,$readitem);
 
-    my ($read_id, $seq_id, @attributes) = $sth->fetchrow_array();
+    my ($read_id, $seq_id, $db_version,@attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
@@ -355,7 +355,7 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
 
         $read->setSequenceID($seq_id);
 
-        $read->setVersion($version);
+        $read->setVersion($db_version);
 
         $this->addMetaDataForRead($read, @attributes);
 
@@ -366,6 +366,7 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
 	return $read;
     } 
     else {
+#	print "no results for query:\n$query\ndata: $readitem\n";
 	return undef;
     }
 }
@@ -1987,12 +1988,12 @@ sub putNewSequenceForRead {
     my $prior = 1;  
     my $version = 0;
     while ($prior) {
-        $prior = $this->getRead(read_id=>$read_id,version=>$version);
+        $prior = $this->getRead(read_id=>$read_id,version=>$version); # a Read
         if ($prior && $read->compareSequence($prior)) {
 	    my $seq_id = $prior->getSequenceID();
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
-            return ("sequence ".$seq_id,"is identical to version $version "
+            return ("sequence ".$seq_id,"is identified as version $version "
                    ."of read $readname");
         }
         elsif ($prior) {
@@ -2572,7 +2573,7 @@ sub getTagsForSequenceIDs {
     my $excludetags = $options{excludetags};
 #    $excludetags =~ s/\W+/,/g if $excludetags; # replace any separator by ',' 
 
-    my $items = "seq_id,tagtype,pstart,pfinal,strand,comment,"
+    my $items = "seq_id,tagtype,pstart,pfinal,strand,comment," # tagcomment
               . "tagseqname,sequence,TAGSEQUENCE.tag_seq_id";
 
     my $query = "select $items from READTAG left join TAGSEQUENCE"
@@ -2596,7 +2597,7 @@ sub getTagsForSequenceIDs {
         $tag->setType            (shift @ary); # tagtype
         $tag->setPosition        (shift @ary, shift @ary); # pstart, pfinal
         $tag->setStrand          (shift @ary); # strand
-        $tag->setTagComment      (shift @ary); # comment
+        $tag->setTagComment      (shift @ary); # tagcomment
         $tag->setTagSequenceName (shift @ary); # tagseqname
         $tag->setDNA             (shift @ary); # sequence
 	$tag->setTagSequenceID   (shift @ary); # tag sequence identifier
@@ -2695,8 +2696,8 @@ $isequaloptions{logger} = $logger; # test purposes
 $logger->debug("processing tag $rtag");
                 next if $ignore->{$rtag};
 $logger->debug("testing tag $rtag");
-# process possible placeholder names (to enable the name comparison)
-                &processTagPlaceHolderName($rtag,$logger);
+# OBSOLETE process possible placeholder names (to enable the name comparison)
+# &processTagPlaceHolderName($rtag,$logger); DEPRECATED
 # and compare the tag with the current existing tag (including host class)
                 $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
 $logger->setPrefix("putTagsForReads");
@@ -2715,7 +2716,7 @@ $logger->setPrefix("putTagsForReads");
         foreach my $rtag (@$rtags) {
             next if $ignore->{$rtag};
 # process possible placeholder names (again! there may be no existing tags)
-            &processTagPlaceHolderName($rtag,$logger);
+# &processTagPlaceHolderName($rtag,$logger); DEPRECATED
             push @tags,$rtag;
 	}
     }
@@ -2735,40 +2736,31 @@ $logger->debug("new tags to be loaded : ".scalar(@tags));
     return &putReadTags($dbh,\@tags);
 }
 
-sub processTagPlaceHolderName { # DEPRECATE ? should go to TagFactory ??
+#sub processTagPlaceHolderName { # DEPRECATED 
 # private method, substitute (possible) placeholder name of the tag sequence
-    my $tag = shift;
-
-my $logger = shift;
-$logger->setPrefix("processTagPlaceHolderName");
-
-    &verifyPrivate($tag,'processTagPlaceHolderName');
-
-    my $name = $tag->getTagSequenceName();
-
-$logger->debug("input '$name'");
-
-    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
-
+#    my $tag = shift;
+#my $logger = shift;
+#$logger->setPrefix("processTagPlaceHolderName");
+#    &verifyPrivate($tag,'processTagPlaceHolderName');
+#    my $name = $tag->getTagSequenceName();
+#$logger->debug("input '$name'");
+#    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
 # generate a generic name from the place holder name and sequence ID
-
-    $name = $1; # the place holder name
-
-    my $seq_id = $tag->getSequenceID();
-    my $randomnumber = int(rand(100)); # from 0 to 99 
-    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
-$logger->debug("new tag name $newname   placeholder '$name'");
+#    $name = $1; # the place holder name
+#    my $seq_id = $tag->getSequenceID();
+#    my $randomnumber = int(rand(100)); # from 0 to 99 
+#    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
+#$logger->debug("new tag name $newname   placeholder '$name'");
 # check/replace if the place holder appears in the comment as well 
-    my $comment = $tag->getTagComment();
-$logger->debug("comment:\n$comment");
-    $comment =~ s/\<$name\>/$newname/ if $comment;
-$logger->debug("new comment:\n$comment");
+#    my $comment = $tag->getTagComment();
+#$logger->debug("comment:\n$comment");
+#    $comment =~ s/\<$name\>/$newname/ if $comment;
+#$logger->debug("new comment:\n$comment");
 
-    $tag->setTagSequenceName($newname);
-    $tag->setTagComment($comment);
-
-    return 1;
-}
+#    $tag->setTagSequenceName($newname);
+#    $tag->setTagComment($comment);
+#    return 1;
+#}
 
 sub getTagSequenceIDsForTags {
 # add tag sequence IDs to input tags
@@ -3061,7 +3053,8 @@ sub verifyParameter {
     my $class  = shift || 'Read';
 
     return if ($object && ref($object) eq $class);
-    print STDOUT "method 'ADBRead->$method' expects a $class instance as parameter\n";
+    print STDOUT "method 'ADBRead->$method' expects a $class instance "
+               . "as parameter (instead of ".($object || 'UNDEF')."\n";
     exit 1;
 }
 
