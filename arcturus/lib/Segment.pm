@@ -4,24 +4,29 @@ use strict;
 
 #----------------------------------------------------------------------
 # Segment: store an individual alignment and the coefficients of the 
-#       corresponding linear transformation in array length 4 on $this
+#          corresponding linear transformation in array length 4 on
+#          $this. The Mapping ID is put as the fifth element; it serves
+#          make some methods only accessible via the parent Mapping
 #----------------------------------------------------------------------
 
 sub new {
 # constructor takes a 4-vector xs,xf ys,yf mapping X domain to Y domain
+# plus a Mapping identifier
     my $class = shift;
-
 
     my $this = [];
 
     bless $this,$class;
 
-# take care all 4 input parameters are defined
+# take care all 4 + 1 input parameters are defined
 
-    my ($xs, $xf, $ys, $yf, $dummy) = @_;
+    my ($xs, $xf, $ys, $yf, $mid, $dummy) = @_;
 
     if (!defined($yf) || !defined($ys) || !defined($xf) || !defined($xs)) {
         die "Segment constructor expects a 4 vector";
+    }
+    unless (defined($mid)) {
+        die "Segment constructor expects a 4 vector + Mapping identifier";
     }
 
 # the interval covered by the x and y domains have to be identical
@@ -41,59 +46,73 @@ sub new {
 
     my $offset = $xs - $direction * $ys;
 
-    @{$this} = ($direction,$offset,$ys,$yf); # copy to local array
+    @{$this} = ($direction,$offset,$ys,$yf,$mid); # copy to local array
 
     return $this;
 }
 
-sub invert {
-# private method: invert by interchanging ystart and yfinis
-    my $this = shift;
-
-    my $dummy = $this->[2];
-    $this->[2] = $this->[3];
-    $this->[3] = $dummy;
-}
+#----------------------------------------------------------------------
+# protected methods can only be invoked by the parent (Mapping) object
+#----------------------------------------------------------------------
 
 sub normaliseOnY {
-# order Y interval, return Y start position
+#  protected method: order Y interval, return Y start position
     my $this = shift;
+    my $mid = shift || ''; # mapping identifier
 
-    my $length = $this->[3] - $this->[2];
+    return &error('normaliseOnY') unless ($mid eq $this->[4]);
 
-#   ($this->[2],$this->[3]) = ($this->[3],$this->[2]) if ($length < 0); 
-    $this->invert() if ($this->[2] > $this->[3]);
+    my $length = $this->getYfinis() - $this->getYstart();
 
-    return $this->getYstart(); # (re: Mapping->analyseSegments)
+   ($this->[2],$this->[3]) = ($this->[3],$this->[2]) if ($length < 0); 
+
+    return $this->getYstart(); # (re: Mapping->normalise)
 }
 
 sub normaliseOnX {
-# order X interval, return length of interval 
+# protected method: order X interval, return length of interval 
     my $this = shift;
+    my $mid = shift || ''; # mapping identifier
+
+    return &error('normaliseOnX') unless ($mid eq $this->[4]); 
 
     my $length = $this->getXfinis() - $this->getXstart();
 
    ($this->[2],$this->[3]) = ($this->[3],$this->[2]) if ($length < 0); 
-#    $this->invert() if ($length < 0);
 
     return abs($length) + 1; # (re: ArcturusDatabase->putMappingsForContig)
 }
 
-sub applyShiftToX {
-# apply a linear shift to X domain (transform X = d * Y + o)
+sub counterAlignUnitLengthInterval {
+# protected method: change the alignment direction for a unit-length interval
     my $this = shift;
-    my $shift = shift || return;
+    my $mid = shift || ''; # mapping identifier
 
-# the shift is done by adjusting the offset (shift X with respect to Y)
+    return &error('counterAlignUnitLengthInterval') unless ($mid eq $this->[4]); 
 
-    $this->[1] += $shift;
+    return 0 if ($this->getAlignment() < 0); # already done, valid but no action
+
+    my $ystart = $this->getYstart();
+
+    return if ($ystart != $this->getYfinis()); # not a unit interval
+
+# calculate new offset from current value and invert direction
+
+    $this->[1] = $ystart + $ystart + $this->getOffset();
+
+    $this->[0] = -1;
+
+    return 1; # correct termination
 }
 
 sub applyLinearTransform {
-# apply a linear transformation to X domain (transform X = d * Y + o)
+# protected method: apply a linear transformation to X domain (transform X = d * Y + o)
     my $this = shift;
     my $alpha = shift; # direction info
     my $shift = shift;
+    my $mid = shift || ''; # mapping identifier
+
+    return &error('applyLinearTransform') unless ($mid eq $this->[4]);
 
 # multiply the local transformation (alpha considered be +1 or -1) 
 # new transform: X = D * Y + O, with  D = alpha*d and O = alpha*o+shift
@@ -104,6 +123,17 @@ sub applyLinearTransform {
     }
 
     $this->[1] += $shift if $shift;
+
+    return 1; # correct termination
+}
+
+sub error {
+# signal error inmethod call and terminate execution
+    my $method = shift;
+    print STDERR "Segment->$method called without correct Mapping "
+               . "identifier\n";
+    exit 1; 
+#    return undef;
 }
 
 #----------------------------------------------------------------------
@@ -192,23 +222,6 @@ sub compare {
     $equalsize = 0 if ($this->getYfinis() != $segment->getYfinis());
 
     return ($equalsize, $alignment, $offset);
-}
-
-sub counterAlignUnitLengthInterval {
-# change the alignment direction for a unit-length interval
-    my $this = shift;
-
-    return if ($this->getAlignment() < 0); # already done
-
-    my $ystart = $this->getYstart();
-
-    return if ($ystart != $this->getYfinis()); # not a unit interval
-
-# calculate new offset from current value and invert direction
-
-    $this->[1] = $ystart + $ystart + $this->getOffset();
-
-    $this->[0] = -1;
 }
 
 #----------------------------------------------------------------------
