@@ -11,7 +11,6 @@ use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 use Contig;
 use Mapping;
-#use MappingFactory;
 
 our @ISA = qw(ArcturusDatabase::ADBRead Exporter);
 
@@ -866,26 +865,29 @@ sub informUsersOfChange {
         next if ($oldproject->getProjectID() == $newpid);
         $log->debug("($newpid, ".$oldproject->getProjectID().", "
                    . $oldproject->getProjectName().")");
-        next if ($oldproject->getProjectName() eq "BIN");
- 
+        my $oldowner = $oldproject->getOwner();
+        next unless $oldowner; # it's a free project
         my $oldprojectname = $oldproject->getProjectName();
-	my $contigids = $oldproject->getContigIDs();
-        my $owner = $oldproject->getOwner();
+	my $contigids = $oldproject->getContigIDs();     
         my $message = "Contig(s) @$contigids from project $oldprojectname"
 	            . " have been merged into contig ".$contig->getContigID();
         if ($newpid) {
             $newprojectname = $newproject->getProjectName();
             $message .= " under project $newprojectname";
+            my $newowner = $newproject->getOwner();
+            if ($newowner && $newowner ne $oldowner) {
+                $message .= " owned by user ".$newowner;
+            }
+            elsif (!$newowner) {
+                $message .= " without owner";
+	    }
             $message .= " (assembly ".$newproject->getAssemblyID().")";
-            if ($newproject->getOwner() ne $oldproject->getOwner()) {
-                $message .= " owned by user ".$newproject->getOwner();
-            } 
         }
         else {
             $message .= "and assigned to the bin";
         }
 # build output messages as array of arrays
-        push @messages,[($owner,$newprojectname,$message)];
+        push @messages,[($oldowner,$newprojectname,$message)];
     }
     return [@messages];
 }
@@ -1118,6 +1120,13 @@ sub deleteContig {
 
     return 0,"Missing contig ID" unless defined($identifier);
 
+# test privilege of user
+  
+    my $user = $this->getArcturusUser();
+    unless ($this->userCanGrantPrivilege($user)) {
+	return 0,"user $user has no privilege for this operation";
+    }
+
 # collect some data for the contig to be deleted
 
     my $query = "select contig_id,gap4name,nreads,ncntgs,created from CONTIG";
@@ -1173,8 +1182,6 @@ sub deleteContig {
 # for some reason I have to call this private function on the fully specified
 # class; importing unlinkContigID using Exporter in ADBProject doesn't work as
 # expected ...
-  
-    my $user = $this->getArcturusUser();
 
     my ($status,$message) = ArcturusDatabase::ADBProject::unlinkContigID($dbh,$cid,$user,$confirm); 
 
@@ -1459,9 +1466,11 @@ sub putMappingsForContig {
 # test existence of mappingID
         my $mappingid = $mapping->getMappingID();
         if ($mappingid) {
-            my $segments = $mapping->getSegments();
+            my $segments = $mapping->normaliseOnX(); # order contig range
+#          my $segments = $mapping->getSegments();
             foreach my $segment (@$segments) {
-                my $length = $segment->normaliseOnX(); # order contig range
+#              my $length = $segment->normaliseOnX(); # order contig range
+                my $length = $segment->getSegmentLength();
                 my $cstart = $segment->getXstart();
                 my $rstart = $segment->getYstart();
                 $accumulatedQuery .= "," if $accumulated++;
@@ -1633,7 +1642,7 @@ sub retireContig {
         return 0,"Contig $c_id is not in the current generation";
     }   
 
-    my $log = $this->verify("retireContig");
+    my $log = $this->verifyLogger("retireContig");
 
 # get the project ID and test if the user has access to the project
 
@@ -2795,9 +2804,10 @@ sub getTagsForContig {
 
     my $dbh = $this->getConnection();
 
-my $log = $this->verifyLogger('getTagsForContig');
+    my $tags = &fetchTagsForContigIDs($dbh,[($cid)],@_); # options ported
 
-    my $tags = &fetchTagsForContigIDs($dbh,[($cid)],$log);
+my $log = $this->verifyLogger('getTagsForContig');
+$log->debug("Tags found: ".scalar(@$tags));
 
     foreach my $tag (@$tags) {
         $contig->addTag($tag);
@@ -2820,14 +2830,14 @@ sub fetchTagsForContigIDs {
 # private method
     my $dbh = shift;
     my $cids = shift; # reference to array of contig IDs
-my $log = shift;
+    my %options = @_;
 
     &verifyPrivate($dbh,"fetchTagsForContigIDs");
 
     &verifyParameter($cids,"fetchTagsForContigIDs","ARRAY");
 
 # compose query (note, this query uses the UNION construct to cater
-# for the case tag_id > 0 tag_seq_id = 0)
+# for the case tag_id > 0 & tag_seq_id = 0)
 
     my $tagitems = "contig_id,TAG2CONTIG.tag_id,cstart,cfinal,strand,comment,"
 	         . "tagtype,systematic_id,tagcomment,CONTIGTAG.tag_seq_id";
@@ -2839,16 +2849,16 @@ my $log = shift;
               . "   and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id"
 	      . "   and contig_id in (".join (',',@$cids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
-              . " union "
+              . " union "       # union weeds out duplicates
               . "select $tagitems,'',''"
               . "  from TAG2CONTIG, CONTIGTAG"
               . " where TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
               . "   and CONTIGTAG.tag_seq_id = 0" # explicitly undefined sequence
 	      . "   and contig_id in (".join (',',@$cids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
-              . " order by contig_id";
+              . " order by contig_id,cstart";
 
-$log->debug("retrieve tags for @$cids") if $log;
+    $query =~ s/union/union all/ if $options{all}; # include duplicates
 
     my @tag;
 
@@ -2874,8 +2884,6 @@ $log->debug("retrieve tags for @$cids") if $log;
 # add to output array
         push @tag, $tag;
     }
-
-$log->debug("Tags found: ".scalar(@tag)) if $log;
 
     return [@tag];
 }
@@ -2919,8 +2927,9 @@ $logger->debug("contig ID = " . ($cid || 'undefined'));
 
 # get the tags and test for valid tag info (at least a tag type defined)
 
-    my $ctags = $contig->getTags();
-
+my $otags = $contig->getTags(); # as is
+$logger->debug("otags $otags ".scalar(@$otags));
+    my $ctags = $contig->getTags(0,1); # as is, sort & remove possible duplicates
 $logger->debug("ctags $ctags ".scalar(@$ctags));
 
 # construct a hash table for tag instance names
@@ -2946,11 +2955,32 @@ $logger->debug("Invalid tag in contig $cid: missing tagtype ($tagcomment)");
 
 $logger->debug("testing for existing Tags");
 
-        my $existingtags = &fetchTagsForContigIDs($dbh,[($cid)]);
+        my $etags = &fetchTagsForContigIDs($dbh,[($cid)]); # existing tags
+    
+# delete the existing tags from the list
+
+my $NEW = 0; if ($NEW) {
+        my ($i,$j) = (0,0);
+        while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
+            if ($ctags->[$i]->getPositionLeft() < $etags->[$j]->getPositionLeft()) {
+                $i++;
+            }
+            elsif ($ctags->[$i]->getPositionLeft() > $etags->[$j]->getPositionLeft()) {
+                $j++;
+            }
+            elsif ($ctags->[$i]->isEqual($etags->[$j])) {
+# remove tag $i from list
+                splice @$ctags,$i,1;
+            }
+            else {
+                $j++; # next existing tag only
+            }
+        }
+} # end NEW
 
 # delete the existing tags from the hash
 
-        foreach my $etag (@$existingtags) {
+        foreach my $etag (@$etags) {
 $logger->debug("Testing existing tag",preskip=>1);
 $logger->debug($etag->dump(0,skip=>1));
             foreach my $key (keys %$tags) {
