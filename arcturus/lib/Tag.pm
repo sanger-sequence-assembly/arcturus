@@ -4,9 +4,7 @@ use strict;
 
 use Mapping;
 
-use TagFactory::ReadTagFactory;   # helper class
-
-use TagFactory::ContigTagFactory; # helper class
+use TagFactory::TagFactory; # helper class
 
 #----------------------------------------------------------------------
 # creating a new tag
@@ -42,7 +40,7 @@ sub copy {
 
     foreach my $item (@items) {
         eval("\$tag->set$item(\$this->get$item())");
-        print STDERR "failed to copy $item ('$@')\n" if $@;
+        print STDERR "failed to copy Tag $item ('$@')\n" if $@;
 #        $LOGGER->error("failed to copy $item ('$@')") if ($LOGGER && $@);
     }
 
@@ -80,7 +78,7 @@ sub setDNA {
 
 sub getDNA {
 # the DNA string is assumed to correspond to the forward strand
-# reverse-complement the dna if strand is reverse AND if so specified
+# optionally, reverse-complement the dna if strand is reverse
     my $this = shift;
     my %options = @_; # transpose
 
@@ -109,7 +107,7 @@ sub getHostClass {
 # return type of host
     my $this = shift;
     my $host = $this->getHost();
-    return ref($host) || $host || '';
+    return ref($host) || ucfirst($host) || '';
 }
 
 # positions are stored as begin-end pairs (array of arrays)
@@ -136,7 +134,7 @@ sub setPosition {
 
     push @$positionpairs,[@position];
 
-    return $this->isJoined(); # sorts intervals, returns number of segments - 1
+    return $this->isComposite(); # sorts intervals, returns number of segments - 1
 }
 
 sub getPosition {
@@ -166,10 +164,7 @@ sub setPositionMapping {
 
     my %options = (keep=>1,join=>0);
     foreach my $segment (@$segments) {
-# test on validity? x domain should be contiguous? or fill in gaps somehow?
-#        $this->setPosition($segment->[2],$segment->[3],%options);
-#print STDOUT "setPositionMapping segment @$segment \n";
-        $this->setPosition($segment->getXstart,$segment->getXfinis,%options);
+        $this->setPosition($segment->getYstart,$segment->getYfinis,%options);
         $options{join} = 1;
     }
 }
@@ -183,11 +178,11 @@ sub getPositionMapping {
         return $mapping unless $options{new};
     }
 
-    my $pairs = $this->isJoined(); # sort and test
+    my $pairs = $this->isComposite(); # sort and test
     return undef unless defined($pairs);
 
 # create a mapping FROM a (ficticious) tag sequence of length equal
-# to the sum total of position intervals TO the tagged sequence
+# to the sum total of position intervals (x) TO the tagged sequence (y)
 
     my $mapping = new Mapping($this->getTagSequenceName() || $this->getTagID());
 
@@ -196,15 +191,14 @@ sub getPositionMapping {
         my @csegment = $this->getPosition($pair); # on contig
         my $segmentlength = $csegment[1] - $csegment[0];
         my $final = $start + $segmentlength; 
-#        $mapping->putSegment($start,$final,@segment);
-        $mapping->putSegment(@csegment,$start,$final); # contig position first
+        $mapping->putSegment($start,$final,@csegment); # sequence position last
         $start = $final + 1;
     }
     
     return $mapping;
 }
 
-sub isJoined {
+sub isComposite {
 # returns number of position pairs
     my $this = shift;
 
@@ -212,7 +206,7 @@ sub isJoined {
     return undef unless defined $positionpairs;
 # numericall sort the positions in the join (ensure ordering)
     @$positionpairs = sort {$a->[0] <=> $b->[0]} @$positionpairs;
-    return scalar(@$positionpairs) - 1;    
+    return scalar(@$positionpairs) - 1;
 }
 
 sub getPositionLeft {
@@ -226,12 +220,20 @@ sub getPositionLeft {
 sub getPositionRange {
     my $this = shift;
 
-    my $part = $this->isJoined();
+    my $part = $this->isComposite();
     return undef unless defined($part);
 
 
     my @pf = $this->getPosition(0);     # first segment;
     my @pl = $this->getPosition($part); # last  segment;
+
+# alternative
+my $test = 0; if ($test) {
+    my $mapping = $this->getPositionMapping(new=>1);
+    my @range = $mapping->getMappedRange();
+    print STDOUT "range: @range  pfs: $pf[0], $pl[1]\n";
+#    return $mapping->getMappedRange();
+}
 
     return $pf[0], $pl[1];
 }
@@ -255,7 +257,7 @@ sub getSize {
 # returns total sequence length occupied by tag 
     my $this = shift;
 
-    my $part = $this->isJoined();
+    my $part = $this->isComposite();
     return undef unless defined($part);
 
     $part++;
@@ -320,7 +322,7 @@ sub setSystematicID {
 
 sub getSystematicID {
     my $this = shift;
-
+#    TagFactory->composeSystematicID($this) unless $this->{systematicid}; # ?
     return $this->{systematicid} || '';
 }
 
@@ -335,7 +337,7 @@ sub getTagComment {
     my %options = @_;
 # before export, process possible place holder (<name>)
     if ($this->{tagcomment} && $this->{tagcomment} =~ /\</) {
-        ReadTagFactory->processTagPlaceHolderName($this) unless $options{pskip};
+        TagFactory->processTagPlaceHolderName($this) unless $options{pskip};
     }
     return $this->{tagcomment} || '';
 }
@@ -375,7 +377,7 @@ sub getTagSequenceName {
     my %options = @_;
 # before export, process possible place holder (<name>)
     if ($this->{tsname} && $this->{tsname} =~ /\</) {
-        ReadTagFactory->processTagPlaceHolderName($this) unless $options{pskip};
+        TagFactory->processTagPlaceHolderName($this) unless $options{pskip};
     }
     return $this->{tsname} || '';
 }
@@ -394,7 +396,7 @@ sub getType {
 }
 
 #----------------------------------------------------------------------
-# methods delegating processing to the ContigTagFactory helper class
+# methods delegating processing to the TagFactory helper class
 #----------------------------------------------------------------------
 
 sub transpose {
@@ -403,18 +405,13 @@ sub transpose {
     my $this =shift;
     my $align = shift;
     my $offset = shift;
-
-if (ref($offset) eq 'ARRAY') { # use the old form (to be deprecated)
-    my $wfinal = shift;
-    return ContigTagFactory->oldtranspose($this,$align,$offset,$wfinal);
-}
-
-    my %options = @_; # prewindowstart/final, postwindowstart/final, nonew
+    my %options = @_;
 
     &verifyKeys(\%options,'transpose','prewindowstart' ,'prewindowfinal',
                                       'postwindowstart','postwindowfinal',
 		                      'nonew');
-    return ContigTagFactory->transpose($this,$align,$offset,%options);
+
+    return TagFactory->transpose($this,$align,$offset,@_);
 }
 
 sub mirror {
@@ -433,7 +430,7 @@ sub mirror {
     $options{postwindowstart} = $mplower unless defined($options{postwindowstart});
     $options{postwindowfinal} = $mpupper unless defined($options{postwindowfinal});
 
-    return ContigTagFactory->transpose($this,-1,$mpupper+$mplower,%options);
+    return TagFactory->transpose($this,-1,$mpupper+$mplower,%options);
 }
 
 sub remap { 
@@ -444,11 +441,31 @@ sub remap {
 
     &verifyKeys(\%options,'remap','prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
-                                  'break',          
-                                  'annooptions','sysIDoptions','usenew','list');
+                                  'break','nobreak','segmentaware',
+ 'usenew','list','useold',         
+                                  'annooptions','sysIDoptions','changestrand');
 
-    return ContigTagFactory->remap($this,$mapping,%options) unless $options{usenew};
-    return ContigTagFactory->newremap($this,$mapping,%options);
+    return TagFactory->remap($this,$mapping,%options);
+}
+
+sub split {
+# split a composite tag into fragments for each position interval
+    my $this = shift;
+    my %options = @_; # which ?
+
+    return $this unless $this->isComposite();
+
+    return TagFactory->split($this,@_); # returns reference to an array of tags 
+}
+
+sub collapse {
+# replace a composite tag position by one position interval
+    my $this = shift;
+    my %options = @_; # which ?
+
+    return $this unless $this->isComposite();
+
+    return TagFactory->collapse($this,@_); # returns a single tag
 }
 
 sub isEqual {
@@ -461,10 +478,9 @@ sub isEqual {
                                     'ignoreblankcomment',
 		                    'includestrand',
                                     'copy','copycom',
-'list','logger', # temporary, to be removed
                                     'inherit');
 
-    return ContigTagFactory->isEqual($this,$tag,%options);
+    return TagFactory->isEqual($this,$tag,%options);
 }
 
 #----------------------------------------------------------------------
@@ -483,7 +499,7 @@ sub writeToCaf {
 
     unless (defined($pair)) {
 # this recursion deals with tags having more than one position segment
-        if (my $pairs = $this->isJoined()) {
+        if (my $pairs = $this->isComposite()) {
             my $string = '';
             for (my $pair = 0 ; $pair <= $pairs ; $pair++) {
                 $string .= $this->writeToCaf($FILE,pair=>$pair,@_);
@@ -588,7 +604,7 @@ sub writeToEMBL {
 # composite tags have more than one position interval specified
 
     my $string  = "FT   ".sprintf("%3s",$key)."             ";
-    if ($this->isJoined()) {
+    if ($this->isComposite()) {
 # generate the join construct for composite tags
         my @joinlist;
         $string .= "complement(" if ($strand eq "reverse");
@@ -668,8 +684,8 @@ sub dump {
     push @line, "sequence ID       ".($tag->getSequenceID() || 0)."\n";
     push @line, "tag ID            ".($tag->getTagID()   || 'undef')."\n";
     my $position;
-    my $pairs = $tag->isJoined();
-    foreach my $p (0 .. $tag->isJoined()) {
+    my $pairs = $tag->isComposite();
+    foreach my $p (0 .. $tag->isComposite()) {
         $position .= " ; " if $position;
         my @position = $tag->getPosition($p);
         $position .= "@position";
@@ -715,7 +731,7 @@ sub verifyKeys {
         next if $keys{$key};
         $value = 'undef' unless defined($value);
         print STDERR "Invalid key $key => '$value' provided "
-                   . "for method Tag->$method\n";
+                   . "for method Tag->$method\n" unless ($key eq 'debug');
     }
 }
 
