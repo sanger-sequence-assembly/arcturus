@@ -149,9 +149,11 @@ public class OligoFinderPanel extends MinervaPanel implements
 					int end = lstProjects.getModel().getSize() - 1;
 					if (end >= 0) {
 						lstProjects.setSelectionInterval(start, end);
+						lstProjects.setEnabled(false);
 					}
 				} else {
 					lstProjects.clearSelection();
+					lstProjects.setEnabled(true);
 				}
 			}
 
@@ -594,6 +596,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				txtMessages.append(message);
+				txtMessages.setCaretPosition(txtMessages.getText().length());
 			}
 		});
 	}
