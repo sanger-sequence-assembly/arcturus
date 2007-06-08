@@ -119,9 +119,13 @@ public class CrossMatchFilter {
 					}
 				}
 			}
-		} catch (IOException e) {
+		}
+		catch (IOException e) {
 			e.printStackTrace();
 			System.exit(1);
+		}
+		catch (NumberFormatException nfe) {
+			nfe.printStackTrace();
 		}
 	}
 
