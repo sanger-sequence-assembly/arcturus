@@ -67,8 +67,8 @@ public class OligoFinder {
 	class Task extends Thread {
 		private Connection conn;
 
-		private final String strFreeReads = "{call procFreeReads}";
-		private CallableStatement pstmtFreeReads;
+		private final String strFreeReads = "select read_id,readname from FREEREADS";
+		private PreparedStatement pstmtFreeReads;
 
 		Read[] reads = null;
 
@@ -78,7 +78,7 @@ public class OligoFinder {
 			try {
 				conn = adb.getPooledConnection(this);
 
-				pstmtFreeReads = conn.prepareCall(strFreeReads);
+				pstmtFreeReads = conn.prepareStatement(strFreeReads);
 
 				if (pstmtFreeReads.execute()) {
 					ResultSet rs = pstmtFreeReads.getResultSet();
