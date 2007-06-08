@@ -195,6 +195,7 @@ sub compare {
 # compare two segments; return offset of segment to this and alignment
     my $this = shift;
     my $segment = shift; # another Segment instance
+    my %options = @_; # domain
 
     if (ref($segment) ne 'Segment') {
         die "Segment->compare expects an instance of the Segment class";
@@ -212,16 +213,23 @@ sub compare {
     $offset = -$offset if ($alignment < 0);
     $offset -= $segment->getOffset();
 
-# 2: test the size and Y position of the segments
+# 2: test the size and X/Y position of the segments
 
-    my $equalsize = 1;
+    my $equilocate = 1;
 
-# both segments should be normalized on Y and have identical Y (read) range
+# both segments should be normalized on X/Y and have identical X/Y range
+# note: either X or Y segments shouild coincide, length test is too weak
 
-    $equalsize = 0 if ($this->getYstart() != $segment->getYstart());
-    $equalsize = 0 if ($this->getYfinis() != $segment->getYfinis());
+    if ($options{domain} && $options{domain} eq 'X') {
+        $equilocate = 0 if ($this->getXstart() != $segment->getXstart());
+        $equilocate = 0 if ($this->getXfinis() != $segment->getXfinis());
+    }
+    else { # default
+        $equilocate = 0 if ($this->getYstart() != $segment->getYstart());
+        $equilocate = 0 if ($this->getYfinis() != $segment->getYfinis());
+    }
 
-    return ($equalsize, $alignment, $offset);
+    return ($equilocate, $alignment, $offset);
 }
 
 #----------------------------------------------------------------------
