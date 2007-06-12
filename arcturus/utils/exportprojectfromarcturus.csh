@@ -39,7 +39,6 @@ limit datasize 16000000
 
 if ( ! -f ${projectname}.0 ) then
   echo \!\! -- Project $projectname version 0 does not exist --
-#  exit 1
 endif
 
 ${basedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
@@ -57,6 +56,13 @@ set depadded=/tmp/${projectname}.$$.depadded.caf
 
 echo Processing $projectname
 
+${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
+
+if ($? != 0) then
+    echo  \!\! -- FAILED to lock project $projectname : export aborted --
+    exit 1
+endif
+
 echo Exporting from Arcturus to caffile $depadded
 
 ${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $depadded  # ? -unlocked
@@ -65,9 +71,19 @@ echo Padding CAF file
 
 caf_pad < $depadded > $padded
 
+if ($? != 0) then
+    echo  \!\! -- Padding caf file FAILED --
+    exit 1
+endif
+
 echo Converting CAF file to Gap4 database
 
 $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
+
+if ($? != 0) then
+    echo  \!\! -- creation of Gap4 database FAILED --
+    exit 1
+endif
 
 echo Changing access privileges on Gap4 database
 
@@ -79,7 +95,11 @@ echo Marking the project as exported
 
 set gap4dirname=`pwd`;
 
-${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -file ${gap4dirname}${projectname}.A 
+${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -file ${gap4dirname}/${projectname}.A 
+
+echo Transfering lock to project owner
+
+${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -transfer owner -confirm
 
 echo Cleaning up
 
@@ -112,3 +132,6 @@ else
 endif
 
 exit 0
+
+
+
