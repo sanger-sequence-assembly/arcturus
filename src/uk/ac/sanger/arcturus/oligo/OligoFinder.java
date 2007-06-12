@@ -121,12 +121,6 @@ public class OligoFinder {
 			task = new Task();
 			task.setName("OligoFinder:FreeReadSearch");
 			task.start();
-
-			if (listener != null) {
-				event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
-						-1, false);
-				listener.oligoFinderUpdate(event);
-			}
 		}
 
 		prepareOligos(oligos);
@@ -155,6 +149,12 @@ public class OligoFinder {
 
 		if (searchFreeReads) {
 			try {
+				if (listener != null) {
+					event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
+							-1, false);
+					listener.oligoFinderUpdate(event);
+				}
+				
 				task.join();
 			} catch (InterruptedException e) {
 				Arcturus
