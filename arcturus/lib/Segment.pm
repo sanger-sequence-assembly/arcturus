@@ -201,6 +201,10 @@ sub compare {
         die "Segment->compare expects an instance of the Segment class";
     }
 
+# default comparison of segments in Y domain; optionally in X domain
+
+    my $useXdomain = ($options{domain} && $options{domain} eq 'X') ? 1 : 0;
+
 # 1: determine the offset and alignment between the X ranges of the segments
 
 # the transformation between X (this) and X (segment) is given by
@@ -210,7 +214,7 @@ sub compare {
     $alignment = -$alignment if ($segment->getAlignment() < 0);
 
     my $offset = $this->getOffset();
-    $offset = -$offset if ($alignment < 0);
+    $offset = -$offset if ($alignment < 0 && !$useXdomain); # y domain only
     $offset -= $segment->getOffset();
 
 # 2: test the size and X/Y position of the segments
@@ -218,13 +222,13 @@ sub compare {
     my $equilocate = 1;
 
 # both segments should be normalized on X/Y and have identical X/Y range
-# note: either X or Y segments shouild coincide, length test is too weak
+# note: either X or Y segments should coincide, length test alone is too weak
 
-    if ($options{domain} && $options{domain} eq 'X') {
+    if ($useXdomain) {
         $equilocate = 0 if ($this->getXstart() != $segment->getXstart());
         $equilocate = 0 if ($this->getXfinis() != $segment->getXfinis());
     }
-    else { # default
+    else { # use Y domain (default)
         $equilocate = 0 if ($this->getYstart() != $segment->getYstart());
         $equilocate = 0 if ($this->getYfinis() != $segment->getYfinis());
     }
