@@ -35,6 +35,7 @@ my $assembly;
 my $pidentifier;           # projectname for which the data are to be loaded
 my $pinherit = 'readcount'; # project inheritance method
 my $isdefault = 0;
+my $nolock = 0;
 
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
@@ -52,7 +53,7 @@ my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
-               . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
+               . "setprojectby|spb|nolock|readtaglist|rtl|noreadtags|nrt|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
                . "frugal|padded|noload|safemode|verbose|batch|info|help|debug";
 
@@ -70,6 +71,8 @@ while (my $nextword = shift @ARGV) {
     $assembly         = shift @ARGV  if ($nextword eq '-assembly');
 
     $pidentifier      = shift @ARGV  if ($nextword eq '-project');
+
+    $nolock           = 1            if ($nextword eq '-nolock');
 
     $pidentifier      = shift @ARGV  if ($nextword eq '-defaultproject');
     $isdefault        = 1            if ($nextword eq '-defaultproject');
@@ -230,6 +233,11 @@ if ($pidentifier) {
     }
 }
 
+unless ($project || $nolock) {
+    $logger->error("Undefined project");
+    exit 1;
+}
+
 # test validity of project inheritance specification
  
 my @projectinheritance = ('project','none',
@@ -239,8 +247,8 @@ foreach my $imode (@projectinheritance) {
     $identified = 1 if ($pinherit eq $imode);
 }
 unless ($identified) {
-    print STDERR "Invalid project inheritance option: $pinherit\n" .
-       "Options available: none, readcount, contiglength, contigcount\n";
+    $logger->error("Invalid project inheritance option: $pinherit");
+    $logger->error("Options available: none, readcount, contiglength, contigcount");
     $adb->disconnect();
     exit 0;
 }
@@ -261,6 +269,28 @@ else {
 }
        
 &showUsage("Invalid caf file name") unless $CAF;
+
+#----------------------------------------------------------------
+# acquire lock on project
+#----------------------------------------------------------------
+
+unless ($nolock) {
+# test if the project is locked
+    if ($project->getLockedStatus()) {
+	$logger->error("Project $pidentifier is locked: import ABORTED");
+# prepare mail message
+        $adb->disconnect();
+        exit 1;
+    }
+     
+    my ($lockstatus,$msg) = $project->acquireLock();
+    unless ($lockstatus) {
+	$logger->error("Project $pidentifier could not be locked: $msg");
+        $logger->error("import ABORTED");
+        $adb->disconnect();
+        exit 1;
+    } 
+}
 
 #----------------------------------------------------------------
 # ignore already loaded contigs? then get them from the database
@@ -944,7 +974,7 @@ $nc = scalar (keys %contigs);
 $logger->info("$nc contigs skipped") if $nc;
 $logger->info("$number contigs loaded");
 
-$adb->putImport($project);
+$project->markImport() if $project; # perhaps after safemode?
 
 # add the Read tags
 
@@ -969,7 +999,10 @@ elsif ($noload) {
         foreach my $tag (@$tags) {
             $logger->info($tag->writeToCaf()) if $list;
         }
-        my $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
+        my $tagstobeloaded;
+        unless ($notest) {
+            $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
+	}
         if (ref($tagstobeloaded) eq 'ARRAY') {
             $logger->warning("Tags to be loaded : ".scalar(@$tagstobeloaded));
             foreach my $tag (@$tagstobeloaded) {
@@ -992,7 +1025,6 @@ elsif ($noload) {
         }
         next unless $read->isEdited();
 #        $read->writeToCaf(*STDOUT);
-#        $adb->?
    }
 
 # read-back lastly inserted contig (meta data) to check on OS cache dump
@@ -1010,12 +1042,16 @@ if ($lastinsertedcontig && $safemode) {
     }
     else {      
         $logger->severe("Safemode test FAILED");
+        $adb->disconnect();
+	exit; # no project unlock
     }
 }
 
 # finally update the meta data for the Assembly and the Organism
 
 # $adb->updateMetaData;
+
+$project->releaseLock() || $logger->severe("could not release lock");
 
 $adb->disconnect();
 
