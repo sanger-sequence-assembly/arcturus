@@ -163,13 +163,16 @@ sub isEqual {
 # return 0 if mappings are in any respect different
     my $mapping = shift;
     my $compare = shift;
+    my %options = @_; # domain=>'Y' (default) , or 'X'
+
+    $options{domain} = uc($options{domain}) if $options{domain};
 
     if (ref($compare) ne 'Mapping') {
-        die "Mapping->compare expects an instance of the Mapping class";
+        die "Mapping->isEqual expects an instance of the Mapping class";
     }
 
-    my $tmaps = $mapping->normalise(@_);    # also sorts segments
-    my $cmaps = $compare->normalise(@_); # also sorts segments
+    my $tmaps = $mapping->normalise(%options); # also sorts segments 
+    my $cmaps = $compare->normalise(%options); # also sorts segments
 
 # test presence of mappings
 
@@ -190,8 +193,7 @@ sub isEqual {
 	my $tsegment = $tmaps->[$i];
 	my $csegment = $cmaps->[$i];
 
-        my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
-
+        my ($identical,$aligned,$offset) = $tsegment->compare($csegment,%options);
 # we require all mapped read segments to be identical
 
         return 0 unless $identical;
@@ -217,8 +219,9 @@ sub compare {
 # compare this Mapping instance with input Mapping at the segment level
     my $mapping = shift;
     my $compare = shift;
+    my %options = @_; # domain=>'Y' (default) or 'X'
 
-my %options = @_;
+    $options{domain} = uc($options{domain}) if $options{domain};
 
     if (ref($compare) ne 'Mapping') {
         die "Mapping->compare expects an instance of the Mapping class";
@@ -228,9 +231,9 @@ my $list = $options{list};
 
 print STDOUT "Enter Mapping compare $mapping  $compare @_\n" if $list;
 
-    my $tmaps = $mapping->normalise(@_); # also sorts segments
+    my $tmaps = $mapping->normalise(%options); # also sorts segments
 
-    my $cmaps = $compare->normalise(@_); # also sorts segments
+    my $cmaps = $compare->normalise(%options); # also sorts segments
 
 #    return $mapping->multiply($compare->inverse()); # to be tested at some point
 #    return $compare->multiply($mapping->inverse()); # to be tested at some point
@@ -255,10 +258,19 @@ print STDOUT "entering segment comparison loop\n" if $list;
         my $tsegment = $tmaps->[$it];
         my $csegment = $cmaps->[$ic];
 # get the interval on both $mapping and the $compare segment 
-        my $ts = $tsegment->getYstart(); # read positions
-        my $tf = $tsegment->getYfinis();
-        my $cs = $csegment->getYstart();
-        my $cf = $csegment->getYfinis();
+        my ($ts,$tf,$cs,$cf);
+        if ($options{domain} && $options{domain} eq 'X') {
+            $ts = $tsegment->getXstart(); # contig positions
+            $tf = $tsegment->getXfinis();
+            $cs = $csegment->getXstart();
+            $cf = $csegment->getXfinis();
+        }
+	else {
+            $ts = $tsegment->getYstart(); # read positions
+            $tf = $tsegment->getYfinis();
+            $cs = $csegment->getYstart();
+            $cf = $csegment->getYfinis();
+	}
 
 print STDOUT "testing it=$it  ic=$ic    $ts,$tf,$cs,$cf \n" if $list;
 
@@ -271,19 +283,28 @@ print STDOUT "of $of  os $os\n" if $list;
 
         if ($of >= $os) {
 # test at the segment level to obtain offset and alignment direction
-            my ($identical,$aligned,$offset) = $tsegment->compare($csegment);
+            my ($identical,$aligned,$offset) = $tsegment->compare($csegment,%options);
 
 # on first interval tested register alignment direction
 
 	    $align = $aligned unless defined($align);
-# break on alignment inconsistency; fatal error, but should never occur
+# break on alignment inconsistency
             return 0,undef unless ($align == $aligned);
 
 # initialise or update the contig alignment segment information on $csegment
 # we have to ensure that the contig range increases in the output segments
 
-            $os = $csegment->getXforY($os); # contig position
-            $of = $csegment->getXforY($of);
+            if ($options{domain} && $options{domain} eq 'X') {
+                $os = $csegment->getYforX($os); # complementary domain (Y) position
+                $of = $csegment->getYforX($of);
+print STDOUT "X  os $os  of $of\n" if $list;
+		$offset = -$offset; # to correct for interchanged domain (TO BE VERIFIED)
+	    }
+	    else {
+                $os = $csegment->getXforY($os); # complementary domain (X) position
+                $of = $csegment->getXforY($of);
+print STDOUT "Y  os $os  of $of\n" if $list;
+	    }
 # ensure that the contig range increases
            ($os, $of) = ($of, $os) if ($csegment->getAlignment < 0);
 
@@ -339,7 +360,7 @@ print STDOUT "after segment test loop\n" if $list;
 
     $newmapping->normalise();
 
-    return $newmapping unless (shift);
+    return $newmapping unless $options{useold};
 
     return $align,[@osegments]; # old system, to be deprecated
 }
@@ -353,7 +374,7 @@ sub normaliseOnX {
 # alias for normalise: order segments in x domain
     my $this = shift;
     my %options = @_; # silent=>
-    $options{normalise} = 'X';
+    $options{domain} = 'X';
     return $this->normalise(%options);
 }
 
@@ -361,7 +382,7 @@ sub normaliseOnY {
 # alias for normalise: order segments in y domain
     my $this = shift;
     my %options = @_; # silent=>
-    $options{normalise} = 'X';
+    $options{domain} = 'Y';
     return $this->normalise(%options);
 }
 
@@ -379,7 +400,7 @@ sub normalise {
 
 # check the current normalization status of the segments against requirement
 
-    my $requirement = $options{normalise} || 'Y'; # default
+    my $requirement = $options{domain} || 'Y'; # default
 
     $requirement = $NORMALISATION{$requirement} || $requirement || 2;
 
@@ -690,13 +711,14 @@ sub multiply {
         $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
         $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
       }
-
+# new construction (TO BE VERIFIED)
     elsif (my $m = $options{nonzerostart}) { # undef,0  or  1,2,3
-        $rs = $thismap->getSegmentCounter(-1) if ($m != 2);
-        $ts = $mapping->getSegmentCounter(-1) if ($m >= 2);
+        $rs = $thismap->getSegmentTracker(-1) if ($m != 2);
+        $ts = $mapping->getSegmentTracker(-1) if ($m >= 2);
         $rs = 0 unless ($rs < scalar(@$rsegments));
         $ts = 0 unless ($ts < scalar(@$tsegments));
     }
+
 
     while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
 
@@ -767,8 +789,8 @@ sub multiply {
 
 # register the current segment counter numbers
 
-    $thismap->setSegmentCounter($rs);
-    $mapping->setSegmentCounter($ts);
+    $thismap->setSegmentTracker($rs);
+    $mapping->setSegmentTracker($ts);
 
 # cleanup and analyse the segments
 
@@ -863,13 +885,13 @@ sub getSegments {
     return $this->{mySegments}; # array reference
 }
 
-sub setSegmentCounter {
-# set counter to keep track of last segment used in multiply operation
+sub setSegmentTracker {
+# set counter to keep track of (last) segment used in multiply operation
     my $this = shift;
     $this->{currentsegment} = shift;
 }
 
-sub getSegmentCounter {
+sub getSegmentTracker {
 # get counter, e.g. of next segment to be used in multiply operation
     my $this = shift;
     my $vary = shift;
