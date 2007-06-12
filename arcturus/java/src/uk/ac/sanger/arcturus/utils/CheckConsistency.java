@@ -21,13 +21,16 @@ public class CheckConsistency {
 			{
 					"Do all contig-to-sequence mappings have valid sequence data?",
 
-					"select CONTIG.contig_id,MAPPING.mapping_id from CONTIG left join (MAPPING,SEQUENCE)"
-							+ " on (CONTIG.contig_id = MAPPING.contig_id and MAPPING.seq_id = SEQUENCE.seq_id)"
+					"select contig_id,mapping_id from MAPPING left join SEQUENCE"
+							+ " using(seq_id)"
 							+ " where sequence is null or quality is null;" },
 			{
-					"Do all mappings have a corresponding read_id?",
+					"Do all mappings have a corresponding read?",
 
-					"select mapping_id from MAPPING left join SEQ2READ using(seq_id) where read_id is null" },
+					"select contig_id,mapping_id,MAPPING.seq_id,SEQ2READ.read_id"
+							+ " from MAPPING left join (SEQ2READ,READINFO)"
+							+ " on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
+							+ " where readname is null" },
 			{
 					"Do all sequences have quality clipping data?",
 
@@ -88,7 +91,8 @@ public class CheckConsistency {
 			}
 		}
 
-		if (instance == null || instance.length() == 0 || organism == null || organism.length() == 0) {
+		if (instance == null || instance.length() == 0 || organism == null
+				|| organism.length() == 0) {
 			printUsage(System.err);
 			System.exit(1);
 		}
