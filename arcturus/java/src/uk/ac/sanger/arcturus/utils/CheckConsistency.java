@@ -12,7 +12,7 @@ import java.text.MessageFormat;
 import javax.swing.JOptionPane;
 
 public class CheckConsistency {
-	protected String[][] queries = {
+	protected String[][] tests = {
 			{
 					"Do all contigs have the correct number of mappings?",
 
@@ -44,51 +44,53 @@ public class CheckConsistency {
 
 					"select SEQUENCE.seq_id from SEQUENCE left join QUALITYCLIP"
 							+ " using(seq_id) where QUALITYCLIP.seq_id is null",
-			
-					"Sequence {0,number,#} has no quality clipping data"
-			},
+
+					"Sequence {0,number,#} has no quality clipping data" },
+			{
+					"Do all sequences have a corresponding sequence-to-read mapping?",
+
+					"select SEQUENCE.seq_id from SEQUENCE left join SEQ2READ"
+							+ " using (seq_id)"
+							+ " where SEQ2READ.seq_id is null",
+
+					"Sequence {0,number,#} has no associated sequence-to-read mapping" },
 			{
 					"Do all sequences have a corresponding read?",
 
-					"select SEQUENCE.seq_id from SEQUENCE left join (SEQ2READ,READINFO)"
+					"select SEQUENCE.seq_id,SEQ2READ.read_id from SEQUENCE left join (SEQ2READ,READINFO)"
 							+ " on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
-							+ " where readname is null",
-			
-					"Sequence {0,number,#} has no associated read"
-			},
+							+ " where readname is null and SEQ2READ.read_id is not null",
+
+					"Sequence {0,number,#} has no associated read (read_id is {1,number,#})" },
 			{
 					"Do all reads have valid sequence data?",
 
 					"select READINFO.read_id,readname from READINFO left join (SEQ2READ,SEQUENCE)"
 							+ " on (READINFO.read_id = SEQ2READ.read_id and SEQ2READ.seq_id = SEQUENCE.seq_id)"
 							+ " where sequence is null or quality is null",
-			
-					"Read {0,number,#} ({1}) has no associated sequence"
-			},
+
+					"Read {0,number,#} ({1}) has no associated sequence" },
 			{
 					"Do all reads have a template?",
 
 					"select read_id,readname from READINFO left join TEMPLATE"
 							+ " using (template_id) where name is null",
-			
-					"Read {0,number,#} ({1}) has no associated template"
-			},
+
+					"Read {0,number,#} ({1}) has no associated template" },
 			{
 					"Do all templates have a ligation?",
 
 					"select template_id,TEMPLATE.name from TEMPLATE left join LIGATION using (ligation_id)"
 							+ " where LIGATION.name is null",
-					
-					"Template {0,number,#} ({1}) has no associated ligation"
-			},
+
+					"Template {0,number,#} ({1}) has no associated ligation" },
 			{
 					"Do all ligations have a clone?",
 
 					"select ligation_id,LIGATION.name from LIGATION left join CLONE using(clone_id)"
 							+ " where CLONE.name is null",
-			
-					"Ligation {0,number,#} ({1}) has no associated clone"
-			}
+
+					"Ligation {0,number,#} ({1}) has no associated clone" }
 
 	};
 
@@ -147,17 +149,34 @@ public class CheckConsistency {
 	protected void checkConsistency(Connection conn) throws SQLException {
 		Statement stmt = conn.createStatement();
 
-		for (int i = 0; i < queries.length; i++) {
-			System.out.println(queries[i][0]);
+		for (int i = 0; i < tests.length; i++) {
+			System.out.println(tests[i][0]);
 			System.out.println();
 
-			MessageFormat format = new MessageFormat(queries[i][2]);
+			MessageFormat format = new MessageFormat(tests[i][2]);
 
-			int rows = doQuery(stmt, queries[i][1], format);
+			int rows = doQuery(stmt, tests[i][1], format);
 			
-			System.out.println(rows == 0 ? "PASSED" : "\n*** FAILED : " + rows + " inconsistencies ***");
+			String message;
+			
+			switch (rows) {
+				case 0:
+					message = "PASSED";
+					break;
+					
+				case 1:
+					message = "\n*** FAILED : 1 inconsistency ***";
+					break;
+					
+				default:
+					message = "\n*** FAILED : " + rows + " inconsistencies ***";
+					break;
+			}
+
+			System.out.println(message);
 			System.out.println();
-			System.out.println("--------------------------------------------------------------------------------");
+			System.out
+					.println("--------------------------------------------------------------------------------");
 		}
 	}
 
@@ -183,7 +202,6 @@ public class CheckConsistency {
 
 		return rows;
 	}
-
 
 	public void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
