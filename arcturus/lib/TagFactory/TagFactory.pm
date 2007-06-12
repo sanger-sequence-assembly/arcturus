@@ -740,15 +740,12 @@ sub transpose {
         }
         $offset = $offset->[0];
     }
-# TO HERE
 
+# TO HERE
     
     return undef unless &verifyParameter($tag,'transpose');
 
-    my $oldmapping = $tag->getPositionMapping(); # for comparison afterwards
-# NOTE, perhaps truncation test in remapper?
-
-    $tag = $tag->copy() unless $options{nonew};
+    $tag = $tag->copy() unless $options{nonew}; # nostatus => 1 ?
 
 # determine the multiplication mapping ( y = x * align + offset)
 
@@ -765,48 +762,18 @@ sub transpose {
 
     return undef unless &remapper($tag,$mapping,%options);
 
-# ok, we have a remapped tag here; now update strand and test for truncation 
-
-    my $newmapping = $tag->getPositionMapping();
-
-# compare the new with the old by testing for equality 
-    
-    my @isequal = $newmapping->isEqual($oldmapping); # if [0] == 0 frameshift
-
-    unless ($isequal[0] == 1) {
-# the tag is truncated 
-        my $newcomment = $tag->getComment() || '';
-        $newcomment .= ' ' if $newcomment;
-        $newcomment .= "(truncated)";
-        $tag->setComment($newcomment);
-    }
-
-# transpose the strand (if needed) (transpose DNA on export only)
-
-    my $strand = $tag->getStrand();
-    my $alignment = $mapping->getAlignment();
-    if ($alignment < 0) {
-        if ($strand eq 'Forward') {
-            $strand = 'Reverse';
-        }
-        elsif ($strand eq 'Reverse') {
-            $strand = 'Forward';
-        }
-        $tag->setStrand($strand);
-    }
-
     return $tag;
 }
 
 sub remapper {
-# private, remap position of tag 
+# private, remap position of tag and corresponding sequence, if any
     my $tag   = shift;
     my $mapping = shift;
     my %options = @_;
 
     return undef unless &verifyPrivate($tag,'remapper');
 
-    my $tagmapping = $tag->getPositionMapping(); # ; x:tag , y:sequence domain
+    my $newmapping = $tag->getPositionMapping(); # ; x:tag , y:sequence domain
 
     if ($options{prewindowstart} || $options{prewindowfinal}) {
         my @range = $tag->getPositionRange();
@@ -814,15 +781,15 @@ sub remapper {
         my $pwf = $options{prewindowfinal} || $range[1];
         my $prefilter = new Mapping("prefilter");
         $prefilter->putSegment($pws,$pwf,$pws,$pwf);
-        $tagmapping = $tagmapping->multiply($prefilter);
-        return undef unless $tagmapping; # mapped tag out of range
+        $newmapping = $newmapping->multiply($prefilter);
+        return undef unless $newmapping; # mapped tag out of range
     }
 
     my %moptions; # copy to local hash
     $moptions{nonzerostart} = $options{nonzerostart} || 0;
     $moptions{repair}       = $options{repair}       || 0;
 
-    my $newmapping = $tagmapping->multiply($mapping,%moptions); # transform tag
+    $newmapping = $newmapping->multiply($mapping,%moptions) if $mapping;
 
     return undef unless $newmapping; # mapped tag out of range
 
@@ -837,12 +804,61 @@ sub remapper {
     
     return undef unless $newmapping->hasSegments(); # mapped tag out of range
 
-# truncation test here? (compare object range on old with new)
+# truncation and frameshift test (compare object range on old with new)
 
-    $tag->setPositionMapping($newmapping);
+    my $oldmapping = $tag->getPositionMapping(); # .. again
 
-# truncation test here? (compare object range on old with new)
-# what about DNA sequence remappping (use oldmapping newmapping)
+    my ($isequal,$align,$shift) = $oldmapping->isEqual($newmapping,domain=>'X');
+
+    $tag->setPositionMapping($newmapping); # replace by new mapping
+
+my $logger = &verifyLogger('remapper');
+$logger->debug("e:$isequal  a:$align  o:$shift");
+$logger->debug($oldmapping->toString()) unless $isequal;
+$logger->debug($newmapping->toString()) unless $isequal;
+$logger->debug($oldmapping->toString()) if $isequal;
+$logger->debug($newmapping->toString()) if $isequal;
+
+    $tag->setStrand('C') if ($isequal && $align == -1); # signal other strand
+
+    return 1 if $isequal; # tagposition identical apart from linear transform
+
+# there are trunctation(s) or frameshift(s)
+
+    my $mapping = $newmapping->compare($oldmapping,domain=>'X');
+
+$logger->debug("mapping $mapping");
+$logger->debug($mapping->toString());
+
+# count number of segments of cross comparison: is one more than frameshift(s)
+
+    my $frameshift = $mapping->hasSegments() - 1;
+    $tag->setFrameShiftStatus($frameshift);
+
+# compare range covered to determine truncation of original tag
+
+    my @orange = $oldmapping->getObjectRange();
+    my @nrange = $newmapping->getObjectRange();
+    my $ltruncate = $nrange[0] - $orange[0];
+    $tag->setTruncationStatus(l => $ltruncate) if $ltruncate;
+    my $rtruncate = $orange[1] - $nrange[1];
+    $tag->setTruncationStatus(r => $rtruncate) if $rtruncate;
+
+# if there are no truncations or frameshifts, the (possible) DNA is unchanged
+
+    return 1 unless ($frameshift || $ltruncate || $rtruncate);
+
+    if (my $olddna = $tag->getDNA()) {
+# DNA sequence remapping (use oldmapping newmapping)
+
+$logger->debug("remapper: there are truncations or frameshifts");
+$logger->debug($oldmapping->toString());
+$logger->debug($newmapping->toString());
+
+        my @range = $newmapping->getObjectRange();
+        my $newdna = substr $olddna,$range[0]-1,$range[1]-$range[0]+1;
+        $tag->setDNA($newdna);
+    }
 
     return 1;
 }
@@ -868,8 +884,8 @@ sub remap {
 return $class->oldremap($tag,$mapping,@_) unless $options{usenew}; # test
 
 my $logger = &verifyLogger('newremap');
-$logger->warning("TagFactory->remap o: @_");
-$logger->warning("TagFactory->remap using new version");
+$logger->debug("TagFactory->remap o: @_");
+$logger->debug("TagFactory->remap using new version");
 
 # experimental new remapping
 
@@ -882,51 +898,36 @@ $logger->info($oldposition->toString());
 
     return undef unless &remapper($tag,$mapping,%options);
 
-# check new position
-     
-    my $newposition = $tag->getPositionMapping();
-
-    return undef unless $newposition->hasSegments(); # just in case
-
-    $newposition->collate($options{repair}); # collate segments ? or better in tag
-
-    my $newsegments = $newposition->getSegments();
-
-# test if there are frame shifts or truncations
-
-    my @isequal = $newposition->isEqual($oldposition); # isequal[0] == 0
-
-    if ($isequal[0] != 1 && $options{nobreak}) { # and nobreak ?
-# the tags are different; to get more info, use the mapping comparison
-        my $mapping = $newposition->compare($oldposition);
-# if 1 segment : truncated, >1 segments : frame shift  
-    }
-
-# case  1 segment   out 1 tag, possibly frameshift/ truncated
+# case 1 segment (regular tag) out 1 tag, possibly frameshift/truncated
 
     my @tags;
 
     if (!$tag->isComposite()) {
-        push @tags,$tag;
+        push @tags,$tag; # as is
     }
 
-# case >1 segments && split/!nosplit out array of tags
+# case > 1 segments (composite tag) to be split into out array of tags
 
     elsif ($options{split} || !$options{nosplit} ) {
         my $tags = $tag->split();
         push @tags, @$tags if $tags;
     }
 
-# case >1 segments && nosplit=composite  out 1 tag with composite position
+# case > 1 segments (composite tag) not to be split
 
-    elsif ($options{nosplit} && $options{nosplit} eq 'composite') {
-        push @tags,$tag; # as is
-    }
-
-# case >1 segments && nobreak= ??    out 1 tag with overall position & comment
-
-    else { # default
-        push @tags,$tag->collapse();       
+    else {
+# either out 1 tag with composite position
+        if ($options{nosplit} eq 'composite') {
+            push @tags,$tag; # as is
+	}
+# or out 1 tag with overall position and new comment
+        elsif ($options{nosplit} eq 'collapse') {
+            push @tags,$tag->collapse();
+	}
+# else, invalid option, fall back on collapse
+        else {
+            push @tags,$tag->collapse();
+	}
     }
     
     return [@tags];
@@ -942,6 +943,8 @@ sub split {
 
     return $tag unless $tag->isComposite();
 
+my $logger = &verifyLogger("split"); $logger->debug("ENTER split");
+
     my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
 
     my $mapping = $tag->getPositionMapping();
@@ -950,7 +953,7 @@ sub split {
 
     my $sequence = $tag->getDNA();
 
-    my $tagsequencespan = $tag->getSpan();
+    my $tagsequencespan = $tag->getSpan(); # size of original tag
 
     my @tags;
 
@@ -981,6 +984,60 @@ sub split {
     return [@tags];
 }
 
+sub collapse {
+# replace a composite tag (position) by a single position range
+    my $class = shift;
+    my $tag   = shift;
+    my %options = @_;
+
+    return undef unless &verifyParameter($tag,'collapse');
+
+    return $tag unless $tag->isComposite();
+
+my $logger = &verifyLogger("collapse"); $logger->debug("ENTER collapse");
+
+    my $mapping = $tag->getPositionMapping();
+
+    my @range = $mapping->getMappedRange();
+
+    my $olddna = $tag->getDNA();
+
+# assemble the new tag
+
+    $tag = $tag->copy() unless $options{nonew};
+
+    $tag->setPosition(@range);
+
+    if ($olddna) {
+# build a new sequence to store with the new single position range
+        my $newdna = '';
+        my ($xs,$xf,$ys,$yf,$yl);
+        my $segments = $mapping->getSegments();
+        foreach my $segment (@$segments) {
+            $xs = $segment->getXstart();
+            $xf = $segment->getXfinis();
+           ($xs,$xf) = ($xf,$xs) if ($xs > $xf);
+            $ys = $segment->getYstart();
+            $yf = $segment->getYfinis();
+           ($ys,$yf) = ($yf,$ys) if ($ys > $yf);
+            if ($yl && $yl > 0) {
+                while ($yl++ < $ys) {
+		    $newdna .= 'X';
+		}
+	    }
+            $newdna .= substr $olddna, $xs-1, $xf-$xs+1;
+            $yl = $yf;
+	}
+
+
+        $tag->setDNA($newdna);
+    }
+
+    return $tag;
+}
+
+# -------------------
+# old stuff, to be replaced
 # -------------------
 
 sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
@@ -1088,7 +1145,7 @@ sub oldremap {
     my $mapping = shift;
     my %options = @_;
 my $logger = &verifyLogger('oldremap');
-$logger->warning("TagFactory->oldremap 1 $tag $mapping  o: @_");
+$logger->debug("TagFactory->oldremap 1 $tag $mapping  o: @_");
 
 # options:  break = 1 to allow splitting of a tag straddling mapping segments
 #                     and return a separate tag for each segment
@@ -1138,9 +1195,9 @@ $logger->info("Helper : ".$helpermapping->toString());
 
     unless ($maskedmapping) {
 # something wrong with mapping
-$logger->warning("Tag position: @currentposition");
-$logger->warning($helpermapping->toString());    
-$logger->warning($mapping->toString()); 
+$logger->debug("Tag position: @currentposition");
+$logger->debug($helpermapping->toString());    
+$logger->debug($mapping->toString()); 
         $helpermapping->multiply($mapping,debug=>1);
         return undef; 
     }
@@ -1427,7 +1484,7 @@ sub mergeTags {
     my $tags = shift; # array reference
     my %options = @_;
 
-my $DEBUG = $options{debug};
+my $logger = &verifyLogger('mergeTags');
 
 # build an inventory of tag types & systematic ID (if defined)
 
@@ -1442,7 +1499,7 @@ my $DEBUG = $options{debug};
         push @{$tagtypehash->{$tagtype}},$tag; # add tag to list
     }
 
-$DEBUG->warning(scalar(keys %$tagtypehash)." tag SIDs") if $DEBUG;
+$logger->debug(scalar(keys %$tagtypehash)." tag SIDs");
 
 # now merge eligible tags from each subset
 
