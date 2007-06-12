@@ -64,9 +64,31 @@ sub setComment {
 }
 
 sub getComment {
+# return comment and truncation / frameshift status
     my $this = shift;
+    my %options = @_;
 
-    return $this->{comment} || '';
+    my $comment = $this->{comment} || '';
+
+    return $comment if $options{nostatus};
+
+# append truncation and frame shift status, if any
+
+    my $status = '';
+    my $truncated = $this->getTruncationStatus('l'); 
+    $status .= "l:$truncated " if $truncated;
+    $truncated = $this->getTruncationStatus('r'); 
+    $status .= "r:$truncated " if $truncated;
+    $status = "truncated $status" if $status;
+    my $shifts = $this->getFrameShiftStatus();
+    $status .= "frameshifts: $shifts" if $shifts;
+
+    return $comment unless $status;
+
+    $status =~ s/^\s+|\s+$//g;
+    $status = " ($status)" if $comment;
+    $comment .= $status;
+    return $comment;
 }
 
 sub setDNA {
@@ -227,11 +249,13 @@ sub getPositionRange {
     my @pf = $this->getPosition(0);     # first segment;
     my @pl = $this->getPosition($part); # last  segment;
 
-# alternative
+# alternative to be VERIFIED
 my $test = 0; if ($test) {
     my $mapping = $this->getPositionMapping(new=>1);
     my @range = $mapping->getMappedRange();
-    print STDOUT "range: @range  pfs: $pf[0], $pl[1]\n";
+    unless ($pf[0] == $range[0] && $pf[1] == $range[1]) {
+        print STDOUT "range: @range  pfs: $pf[0], $pl[1]\n";
+    }
 #    return $mapping->getMappedRange();
 }
 
@@ -253,7 +277,7 @@ sub getSequenceID {
 
 # measures of tag size
 
-sub getSize {
+  sub getSize {
 # returns total sequence length occupied by tag 
     my $this = shift;
 
@@ -283,9 +307,13 @@ sub getSpan {
 
 sub setStrand {
     my $this = shift;
-    my $strand = shift;
- 
-    if ($strand eq 'Forward' || $strand eq 'F') {
+    my $strand = shift || '';
+
+    if ($strand eq 'Complement' || $strand eq 'C') {
+        $this->{strand} = 0  unless   defined $this->{strand};
+        $this->{strand} = -$this->{strand} if $this->{strand};
+    }
+    elsif ($strand eq 'Forward' || $strand eq 'F') {
         $this->{strand} = +1;
     }
     elsif ($strand eq 'Reverse' || $strand eq 'R') {
@@ -395,6 +423,37 @@ sub getType {
     return $this->{type} || '';
 }
 
+#---------------------------------------------------------------------------------
+# tag propagation info; to be included in comment / tagcomment on export
+#---------------------------------------------------------------------------------
+
+sub setFrameShiftStatus {
+    my $this = shift;
+    $this->{frameshift} = shift;
+}
+
+sub getFrameShiftStatus {
+    my $this = shift;
+    return $this->{frameshift} || 0;
+}
+
+sub setTruncationStatus {
+    my $this = shift;
+    my %options = @_; # define as : l => M , r => N
+    foreach my $side ('l','r') {
+        $this->{"${side}truncation"} = $options{$side} if defined $options{$side};
+    }
+}
+
+sub getTruncationStatus {
+    my $this = shift;
+    my $side = shift; # either l or r
+    unless (defined($side) && $side =~ /\bl|r\b/) {
+        return $this->getTruncationStatus('l') + $this->getTruncationStatus('r');
+    }
+    return $this->{"${side}truncation"} || 0;
+}
+
 #----------------------------------------------------------------------
 # methods delegating processing to the TagFactory helper class
 #----------------------------------------------------------------------
@@ -409,7 +468,7 @@ sub transpose {
 
     &verifyKeys(\%options,'transpose','prewindowstart' ,'prewindowfinal',
                                       'postwindowstart','postwindowfinal',
-		                      'nonew');
+		                      'nonew') unless (scalar(@_)%2);
 
     return TagFactory->transpose($this,$align,$offset,@_);
 }
