@@ -21,6 +21,16 @@ public class CheckConsistency {
 							+ " group by contig_id having nreads != mapping_count",
 
 					"Contig {0,number,#} has nreads={1,number,#} but {2,number,#} mappings" },
+
+			{
+					"Do all mappings correspond to contigs?",
+					
+					"select mapping_id,seq_id,MAPPING.contig_id"
+							+ " from MAPPING left join CONTIG using(contig_id)"
+							+ " where CONTIG.contig_id is null",
+							
+					"Mapping {0,number,#} for sequence {1,number,#} refers to non-existent contig {2,number,#}" },
+
 			{
 					"Do all contig-to-sequence mappings have valid sequence data?",
 
@@ -28,17 +38,17 @@ public class CheckConsistency {
 							+ " from MAPPING left join SEQUENCE using(seq_id)"
 							+ " where sequence is null or quality is null",
 
-					"Contig {0,number,#} mapping {1,number,#} has undefined sequence {2,number,#}" },
+					"Mapping {1,number,#} in contig {0,number,#} has undefined sequence {2,number,#}" },
 			{
 					"Do all mappings have a corresponding read?",
 
-					"select contig_id,mapping_id,MAPPING.seq_id,SEQ2READ.read_id"
+					"select contig_id,mapping_id,MAPPING.seq_id"
 							+ " from MAPPING left join (SEQ2READ,READINFO)"
 							+ " on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
 							+ " where readname is null",
 
-					"Contig {0,number,#} mapping {1,number,#} sequence {2,number,#}"
-							+ " has undefined read {3,number,#}" },
+					"Mapping {1,number,#} in contig {0,number,#} has sequence {2,number,#}"
+							+ " with undefined read" },
 			{
 					"Do all sequences have quality clipping data?",
 
@@ -55,7 +65,7 @@ public class CheckConsistency {
 
 					"Sequence {0,number,#} has no associated sequence-to-read mapping" },
 			{
-					"Do all sequences have a corresponding read?",
+					"Do all sequences with a sequence-to-read mapping have a valid read?",
 
 					"select SEQUENCE.seq_id,SEQ2READ.read_id from SEQUENCE left join (SEQ2READ,READINFO)"
 							+ " on (SEQUENCE.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
@@ -144,39 +154,39 @@ public class CheckConsistency {
 	protected void checkConsistency(ArcturusDatabase adb) throws SQLException {
 		Connection conn = adb.getPooledConnection(this);
 		checkConsistency(conn);
+		conn.close();
 	}
 
 	protected void checkConsistency(Connection conn) throws SQLException {
 		Statement stmt = conn.createStatement();
 
 		for (int i = 0; i < tests.length; i++) {
-			System.out.println(tests[i][0]);
-			System.out.println();
+			notifyListener(tests[i][0]);
+			notifyListener("");
 
 			MessageFormat format = new MessageFormat(tests[i][2]);
 
 			int rows = doQuery(stmt, tests[i][1], format);
-			
+
 			String message;
-			
+
 			switch (rows) {
 				case 0:
 					message = "PASSED";
 					break;
-					
+
 				case 1:
 					message = "\n*** FAILED : 1 inconsistency ***";
 					break;
-					
+
 				default:
 					message = "\n*** FAILED : " + rows + " inconsistencies ***";
 					break;
 			}
 
-			System.out.println(message);
-			System.out.println();
-			System.out
-					.println("--------------------------------------------------------------------------------");
+			notifyListener(message);
+			notifyListener("");
+			notifyListener("--------------------------------------------------------------------------------");
 		}
 	}
 
@@ -195,12 +205,16 @@ public class CheckConsistency {
 			for (int col = 1; col <= cols; col++)
 				args[col - 1] = rs.getObject(col);
 
-			System.out.println(format.format(args));
+			notifyListener(format.format(args));
 
 			rows++;
 		}
 
 		return rows;
+	}
+
+	protected void notifyListener(String message) {
+		System.out.println(message);
 	}
 
 	public void printUsage(PrintStream ps) {
