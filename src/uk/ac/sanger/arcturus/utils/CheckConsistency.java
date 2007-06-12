@@ -180,7 +180,7 @@ public class CheckConsistency {
 			c.anchor = GridBagConstraints.EAST;
 			c.fill = GridBagConstraints.NONE;
 			c.weightx = 0.0;
-			add(new JLabel("Username:"), c);
+			add(new JLabel("Instance:"), c);
 
 			c.anchor = GridBagConstraints.EAST;
 			c.fill = GridBagConstraints.HORIZONTAL;
