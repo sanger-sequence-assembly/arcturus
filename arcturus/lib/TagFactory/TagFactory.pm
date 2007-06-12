@@ -825,14 +825,14 @@ $logger->debug($newmapping->toString()) if $isequal;
 
 # there are trunctation(s) or frameshift(s)
 
-    my $mapping = $newmapping->compare($oldmapping,domain=>'X');
+    my $crossmapping = $newmapping->compare($oldmapping,domain=>'X');
 
-$logger->debug("mapping $mapping");
-$logger->debug($mapping->toString());
+$logger->debug("mapping $crossmapping");
+$logger->debug($crossmapping->toString());
 
 # count number of segments of cross comparison: is one more than frameshift(s)
 
-    my $frameshift = $mapping->hasSegments() - 1;
+    my $frameshift = $crossmapping->hasSegments() - 1;
     $tag->setFrameShiftStatus($frameshift);
 
 # compare range covered to determine truncation of original tag
@@ -1331,6 +1331,8 @@ $logger->info("$gapsize : sequence deletion detected");
 
     return [@tags];
 }
+
+#---------------------- TO HERE -------------
 
 sub merge { # used in ContigHelper
 # merge two tags (fragments), if possible
