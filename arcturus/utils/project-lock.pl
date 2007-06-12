@@ -136,6 +136,17 @@ elsif (!$projects || !@$projects) {
 
 else {
 
+# redefine newuser if set to owner
+
+    if ($newuser eq 'owner') {
+	$newuser = $project->getOwner();
+        unless ($newuser) {
+	    $logger->severe("Project $project has no owner");
+	    $adb->disconnect();
+            exit 1;
+	}
+    }
+
 # only one project found, continue
 
     my $project = shift @$projects;
@@ -145,7 +156,7 @@ else {
     $options{confirm} = 1 if $confirm;
 
     if ($forcing) {
-# used in case the project is already locked by someone else
+# used in case the project is already locked by someone else, then first
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
 
        ($success,$message) = $project->transferLock(forcing=>1, %options);
