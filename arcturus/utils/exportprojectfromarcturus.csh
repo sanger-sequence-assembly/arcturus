@@ -62,10 +62,6 @@ ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -pro
 
 set rc=$?
 
-echo -- testing
-echo -- testing status $rc 
-echo -- testing complete
-
 if ( $rc == 0 ) then
     echo  -- project $projectname is now locked --
 else
@@ -84,7 +80,7 @@ echo Padding CAF file
 caf_pad < $depadded > $padded
 
 if ( $rc == 0) then
-    echo -- done
+    echo -- .... done
 else
     echo  \!\! -- Padding caf file FAILED --
     exit 1
@@ -97,7 +93,7 @@ $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
 set rc=$?
 
 if ( $rc == 0) then
-    echo -- done
+    echo -- ..... done
 else
     echo  \!\! -- creation of Gap4 database FAILED --
     exit 1
