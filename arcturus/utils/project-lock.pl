@@ -136,6 +136,11 @@ elsif (!$projects || !@$projects) {
 
 else {
 
+# only one project found, continue
+
+    my $project = shift @$projects;
+    $logger->info($project->toStringLong,skip=>1); # project info if verbose
+
 # redefine newuser if set to owner
 
     if ($newuser && $newuser eq 'owner') {
@@ -146,11 +151,6 @@ else {
             exit 1;
 	}
     }
-
-# only one project found, continue
-
-    my $project = shift @$projects;
-    $logger->info($project->toStringLong,skip=>1); # project info if verbose
 
     my %options = (confirm => 0);
     $options{confirm} = 1 if $confirm;
