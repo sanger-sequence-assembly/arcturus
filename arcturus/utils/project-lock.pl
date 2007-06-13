@@ -210,7 +210,7 @@ else {
 
 $adb->disconnect();
 
-exit 0 unless $success;
+exit 0 if ($success == 2); # done
 
 exit 1; # locking failed
 
