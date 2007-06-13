@@ -104,54 +104,7 @@ public class CheckConsistency {
 
 	};
 
-	public void execute(String[] args) {
-		String instance = null;
-		String organism = null;
-
-		for (int i = 0; i < args.length; i++) {
-			if (args[i].equalsIgnoreCase("-instance"))
-				instance = args[++i];
-
-			if (args[i].equalsIgnoreCase("-organism"))
-				organism = args[++i];
-		}
-
-		if (instance == null || organism == null) {
-			OrganismChooserPanel orgpanel = new OrganismChooserPanel();
-
-			int result = orgpanel.showDialog(null);
-
-			if (result == JOptionPane.OK_OPTION) {
-				instance = orgpanel.getInstance();
-				organism = orgpanel.getOrganism();
-			}
-		}
-
-		if (instance == null || instance.length() == 0 || organism == null
-				|| organism.length() == 0) {
-			printUsage(System.err);
-			System.exit(1);
-		}
-
-		try {
-			System.err.println("Creating an ArcturusInstance for " + instance);
-			System.err.println();
-
-			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
-
-			System.err.println("Creating an ArcturusDatabase for " + organism);
-			System.err.println();
-
-			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
-
-			checkConsistency(adb);
-		} catch (Exception e) {
-			Arcturus.logSevere(e);
-			System.exit(1);
-		}
-	}
-
-	protected void checkConsistency(ArcturusDatabase adb) throws SQLException {
+	public void checkConsistency(ArcturusDatabase adb) throws SQLException {
 		Connection conn = adb.getPooledConnection(this);
 		checkConsistency(conn);
 		conn.close();
@@ -217,15 +170,58 @@ public class CheckConsistency {
 		System.out.println(message);
 	}
 
-	public void printUsage(PrintStream ps) {
+	public static void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
 	}
 
 	public static void main(String args[]) {
-		CheckConsistency cc = new CheckConsistency();
-		cc.execute(args);
-		System.exit(0);
+		String instance = null;
+		String organism = null;
+
+		for (int i = 0; i < args.length; i++) {
+			if (args[i].equalsIgnoreCase("-instance"))
+				instance = args[++i];
+
+			if (args[i].equalsIgnoreCase("-organism"))
+				organism = args[++i];
+		}
+
+		if (instance == null || organism == null) {
+			OrganismChooserPanel orgpanel = new OrganismChooserPanel();
+
+			int result = orgpanel.showDialog(null);
+
+			if (result == JOptionPane.OK_OPTION) {
+				instance = orgpanel.getInstance();
+				organism = orgpanel.getOrganism();
+			}
+		}
+
+		if (instance == null || instance.length() == 0 || organism == null
+				|| organism.length() == 0) {
+			printUsage(System.err);
+			System.exit(1);
+		}
+
+		try {
+			System.err.println("Creating an ArcturusInstance for " + instance);
+			System.err.println();
+
+			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
+
+			System.err.println("Creating an ArcturusDatabase for " + organism);
+			System.err.println();
+
+			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+			CheckConsistency cc = new CheckConsistency();
+
+			cc.checkConsistency(adb);
+		} catch (Exception e) {
+			Arcturus.logSevere(e);
+			System.exit(1);
+		}
 	}
 }
