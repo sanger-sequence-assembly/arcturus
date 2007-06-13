@@ -1,4 +1,4 @@
-#!/bin/csh
+#!/bin/tcsh
 
 # parameters: no 1 = database instance
 #             no 2 = organism name
@@ -60,7 +60,7 @@ echo Processing $projectname
 
 ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
-set rc=$status
+set rc=$?
 
 echo -- testing
 echo -- testing status $rc 
