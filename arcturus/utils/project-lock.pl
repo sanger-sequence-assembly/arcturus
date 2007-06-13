@@ -138,7 +138,7 @@ else {
 
 # redefine newuser if set to owner
 
-    if ($newuser eq 'owner') {
+    if ($newuser && $newuser eq 'owner') {
 	$newuser = $project->getOwner();
         unless ($newuser) {
 	    $logger->severe("Project $project has no owner");
