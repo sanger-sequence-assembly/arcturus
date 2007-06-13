@@ -14,8 +14,8 @@ import java.awt.*;
 import java.awt.event.*;
 
 public class CheckConsistencyPanel extends MinervaPanel {
-	CheckConsistency checker = new CheckConsistency();
-	JTextArea textarea = new JTextArea();
+	protected CheckConsistency checker = new CheckConsistency();
+	protected JTextArea textarea = new JTextArea();
 	protected JButton btnRefresh;
 	protected JButton btnClear;
 
