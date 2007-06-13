@@ -12,6 +12,8 @@ import java.text.MessageFormat;
 import javax.swing.JOptionPane;
 
 public class CheckConsistency {
+	protected CheckConsistencyListener listener = null;
+	
 	protected String[][] tests = {
 			{
 					"Do all contigs have the correct number of mappings?",
@@ -104,10 +106,13 @@ public class CheckConsistency {
 
 	};
 
-	public void checkConsistency(ArcturusDatabase adb) throws SQLException {
+	public void checkConsistency(ArcturusDatabase adb, CheckConsistencyListener listener)
+		throws SQLException {
+		this.listener = listener;
 		Connection conn = adb.getPooledConnection(this);
 		checkConsistency(conn);
 		conn.close();
+		this.listener = null;
 	}
 
 	protected void checkConsistency(Connection conn) throws SQLException {
@@ -167,7 +172,12 @@ public class CheckConsistency {
 	}
 
 	protected void notifyListener(String message) {
-		System.out.println(message);
+		if (listener != null)
+			listener.report(message);
+	}
+	
+	public interface CheckConsistencyListener {
+		public void report(String message);
 	}
 
 	public static void printUsage(PrintStream ps) {
@@ -218,7 +228,14 @@ public class CheckConsistency {
 
 			CheckConsistency cc = new CheckConsistency();
 
-			cc.checkConsistency(adb);
+			CheckConsistencyListener listener = new CheckConsistencyListener() {
+				public void report(String message) {
+					System.out.println(message);
+				}
+				
+			};
+			
+			cc.checkConsistency(adb, listener);
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
 			System.exit(1);
