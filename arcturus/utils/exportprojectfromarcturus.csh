@@ -60,6 +60,10 @@ echo Processing $projectname
 
 ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
+echo -- testing
+echo -- testing status $status 
+echo -- testing complete
+
 if ( $status == 0 ) then
     echo  -- project $projectname is now locked --
 else
