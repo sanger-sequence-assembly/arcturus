@@ -60,7 +60,7 @@ echo Processing $projectname
 
 ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
-set rc = $?
+set rc=$status
 
 echo -- testing
 echo -- testing status $rc 
@@ -77,7 +77,7 @@ echo Exporting from Arcturus to caffile $depadded
 
 ${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $depadded  # ? -unlocked
 
-set rc = $?
+set rc=$?
 
 echo Padding CAF file
 
@@ -94,7 +94,7 @@ echo Converting CAF file to Gap4 database
 
 $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
 
-set rc = $?
+set rc=$?
 
 if ( $rc == 0) then
     echo -- done
