@@ -60,7 +60,13 @@ echo Processing $projectname
 
 ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
-if ($?) then
+echo -- testing
+echo -- testing $? exit value
+echo -- testing ended 
+
+if ( $? == 0 ) then
+    echo  -- project $projectname is now locked --
+else
     echo  \!\! -- FAILED to lock project $projectname : export aborted --
     exit 1
 endif
@@ -73,7 +79,9 @@ echo Padding CAF file
 
 caf_pad < $depadded > $padded
 
-if ($?) then
+if ( $? == 0) then
+    echo -- done
+else
     echo  \!\! -- Padding caf file FAILED --
     exit 1
 endif
@@ -82,7 +90,8 @@ echo Converting CAF file to Gap4 database
 
 $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
 
-if ($?) then
+if ( $? == 0) then
+
     echo  \!\! -- creation of Gap4 database FAILED --
     exit 1
 endif
