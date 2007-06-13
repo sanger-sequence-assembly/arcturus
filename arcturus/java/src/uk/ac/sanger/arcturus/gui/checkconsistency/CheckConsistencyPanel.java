@@ -92,13 +92,14 @@ public class CheckConsistencyPanel extends MinervaPanel {
 		}
 
 		protected void process(List<String> messages) {
-			for (String message : messages)
-				report(message);
+			for (String message : messages) {
+				textarea.append(message);
+				textarea.append("\n");
+			}
 		}
 
 		public void report(String message) {
-			textarea.append(message);
-			textarea.append("\n");
+			publish(message);
 		}
 	}
 }
