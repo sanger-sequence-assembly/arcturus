@@ -10,6 +10,7 @@ import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
 import uk.ac.sanger.arcturus.gui.importreads.ImportReadsPanel;
+import uk.ac.sanger.arcturus.gui.checkconsistency.CheckConsistencyPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
@@ -25,6 +26,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ContigTransferTablePanel cttpAdmin;
 	protected OligoFinderPanel ofp;
 	protected CreateContigTransferPanel cctp;
+	protected CheckConsistencyPanel ccp;
 
 	protected JMenuBar menubar = new JMenuBar();
 
@@ -217,6 +219,18 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		setSelectedComponent(ofp);
 
 		return ofp;
+	}
+
+	public CheckConsistencyPanel showCheckConsistencyPanel() {
+		if (ccp == null)
+			ccp = new CheckConsistencyPanel(adb, this);
+		
+		if (indexOfComponent(ccp) < 0)
+			addTab("Database Check", null, ccp, "Check database consistency");
+		
+		setSelectedComponent(ccp);
+		
+		return ccp;
 	}
 
 	public void addTab(String title, Component component) {

@@ -25,8 +25,10 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowContigTransfers;
 	protected MinervaAbstractAction actionShowAllContigTransfers;
 	protected MinervaAbstractAction actionShowCreateContigTransfer;
+	protected MinervaAbstractAction actionCheckConsistency;
 	protected MinervaAbstractAction actionPrint;
-
+	protected MinervaAbstractAction actionRefresh;
+	
 	protected boolean administrator = false;
 
 	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent,
@@ -220,6 +222,17 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		};
 
 		menu.add(actionShowCreateContigTransfer);
+
+		actionCheckConsistency = new MinervaAbstractAction(
+				"Check database consistency", null, "Check database consistency",
+				new Integer(KeyEvent.VK_D), KeyStroke.getKeyStroke(
+						KeyEvent.VK_D, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				parent.showCheckConsistencyPanel();
+			}
+		};
+
+		menu.add(actionCheckConsistency);
 	}
 
 	protected void createEditMenu() {
@@ -231,7 +244,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		JMenu viewMenu = createMenu("View", KeyEvent.VK_V, "View");
 		menubar.add(viewMenu);
 
-		MinervaAbstractAction actionRefresh = new MinervaAbstractAction(
+		actionRefresh = new MinervaAbstractAction(
 				"Refresh", null, "Refresh the display", new Integer(
 						KeyEvent.VK_R), KeyStroke.getKeyStroke(KeyEvent.VK_F5,
 						0)) {
