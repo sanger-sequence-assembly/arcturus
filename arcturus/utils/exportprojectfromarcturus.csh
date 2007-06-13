@@ -56,9 +56,11 @@ set depadded=/tmp/${projectname}.$$.depadded.caf
 
 echo Processing $projectname
 
+# should the project lock not better be in the export script itself?
+
 ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
-if ($? != 0) then
+if (! ($? == 0)) then
     echo  \!\! -- FAILED to lock project $projectname : export aborted --
     exit 1
 endif
@@ -71,7 +73,7 @@ echo Padding CAF file
 
 caf_pad < $depadded > $padded
 
-if ($? != 0) then
+if (! ($? == 0)) then
     echo  \!\! -- Padding caf file FAILED --
     exit 1
 endif
@@ -80,7 +82,7 @@ echo Converting CAF file to Gap4 database
 
 $caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
 
-if ($? != 0) then
+if (! ($? == 0)) then
     echo  \!\! -- creation of Gap4 database FAILED --
     exit 1
 endif
