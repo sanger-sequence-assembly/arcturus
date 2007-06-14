@@ -7,6 +7,8 @@
 set basedir=`dirname $0`
 set arcturus_home = ${basedir}/..
 
+set badgerbin=${BADGER}/bin
+
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
   echo usage: $0 instance_name organism-name project_name
@@ -31,8 +33,6 @@ endif
 
 set projectname = $3
 
-set caf2gap_dir = /nfs/pathsoft/prod/WGSassembly/bin/64bit
-
 # ok, here we go : request memory for the big action
 
 limit datasize 16000000
@@ -51,8 +51,7 @@ if ( -f $projectname.A ) then
   rmdb $projectname A
 endif
 
-set padded=/tmp/${projectname}.$$.padded.caf
-set depadded=/tmp/${projectname}.$$.depadded.caf
+set caffile=/tmp/${projectname}.$$.caf
 
 echo Processing $projectname
 
@@ -62,40 +61,32 @@ ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -pro
 
 set rc=$?
 
-if ( $rc == 0 ) then
-    echo  -- project $projectname is now locked --
-else
+if ( $rc > 0 ) then
     echo  \!\! -- FAILED to lock project $projectname : export aborted --
     exit 1
+else
+    echo  -- project $projectname is now locked --
 endif
 
-echo Exporting from Arcturus to caffile $depadded
+echo Exporting from Arcturus to caffile $caffile
 
-${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $depadded  # ? -unlocked
+${arcturus_home}/utils/project-export -instance $instance -organism $organism -project $projectname -caf $caffile  # ? -unlocked
 
 set rc=$?
 
-echo Padding CAF file
-
-caf_pad < $depadded > $padded
-
-if ( $rc == 0) then
-    echo -- .... done
-else
-    echo  \!\! -- Padding caf file FAILED --
+if ( $rc >  ) then
+    echo \!\! -- FAILED to export project $projectname to a CAF file : export aborted --
     exit 1
 endif
 
 echo Converting CAF file to Gap4 database
 
-$caf2gap_dir/caf2gap -project $projectname -version A -ace $padded
+${badgerbin}/caf2gap -project $projectname -version A -ace $caffile
 
 set rc=$?
 
-if ( $rc == 0) then
-    echo -- ..... done
-else
-    echo  \!\! -- creation of Gap4 database FAILED --
+if ( $rc > 0 ) then
+    echo  \!\! -- FAILED to create a Gap4 database from $caffile --
     exit 1
 endif
 
@@ -117,7 +108,7 @@ ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -pro
 
 echo Cleaning up
 
-rm -f $padded $depadded
+rm -f $caffile
 
 if ( ! (-e ${projectname}.B) ) then
 

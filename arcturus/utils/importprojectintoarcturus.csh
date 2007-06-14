@@ -1,4 +1,4 @@
-#!/bin/csh
+#!/bin/tcsh
 
 # parameters: no 1 = database instance
 #             no 2 = organism name
@@ -8,6 +8,8 @@
 set basedir=`dirname $0`
 set arcturus_home = ${basedir}/..
 set loader_script = ${arcturus_home}/utils/contig-loader
+
+set badgerbin=${BADGER}/bin
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
@@ -32,8 +34,6 @@ if ( $#argv == 2 ) then
 endif
 
 set projectname = $3
-
-set gap2caf_dir = /nfs/pathsoft/prod/WGSassembly/bin/64bit
 
 # ok, here we go : request memory for the big action
 
@@ -107,11 +107,23 @@ cpdb $projectname 0 $projectname B
 
 echo Converting Gap4 database to CAF format
 
-$gap2caf_dir/gap2caf -project $projectname -version 0 -ace $padded
+${badgerbin}/gap2caf -project $projectname -version 0 -ace $padded
+
+set rc=$?
+
+if ( $rc > 0 ) then
+    echo \!\! -- FAILED to create a CAF file from Gap4 database $projectname :  import aborted --
+    exit 1
+endif
 
 echo Depadding CAF file
 
-caf_depad < $padded > $depadded
+${badgerbin}/caf_depad < $padded > $depadded
+
+if ( $rc > 0 ) then
+    echo \!\! -- FAILED to depad CAF file $padded :  import aborted --
+    exit 1
+endif
 
 echo Importing into Arcturus # ${arcturus_home}/utils
 
