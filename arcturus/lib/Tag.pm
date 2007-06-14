@@ -790,7 +790,7 @@ sub verifyKeys {
         next if $keys{$key};
         $value = 'undef' unless defined($value);
         print STDERR "Invalid key $key => '$value' provided "
-                   . "for method Tag->$method\n" unless ($key eq 'debug');
+                   . "for method Tag->$method\n" unless ($key eq 'debug' || $key eq 'logger');
     }
 }
 
