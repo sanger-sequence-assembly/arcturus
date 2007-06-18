@@ -3,6 +3,7 @@
 # parameters: no 1 = database instance
 #             no 2 = organism name
 #             no 3 = gap4 project (database) name
+#             no 4 = nolock [OPTIONAL]
   
 set basedir=`dirname $0`
 set arcturus_home = ${basedir}/..
@@ -33,6 +34,12 @@ endif
 
 set projectname = $3
 
+set nolock=0
+
+if ( $#argv > 3 && $4 == 'nolock' ) then
+    set nolock=1
+endif
+
 # ok, here we go : request memory for the big action
 
 limit datasize 16000000
@@ -57,15 +64,17 @@ echo Processing $projectname
 
 # should the project lock not better be in the export script itself?
 
-${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
+if ( "$nolock" == "0" ) then
+    ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -confirm
 
-set rc=$?
+    set rc=$?
 
-if ( $rc > 0 ) then
-    echo  \!\! -- FAILED to lock project $projectname : export aborted --
-    exit 1
-else
-    echo  -- project $projectname is now locked --
+    if ( $rc > 0 ) then
+	echo  \!\! -- FAILED to lock project $projectname : export aborted --
+	exit 1
+    else
+	echo  -- project $projectname is now locked --
+    endif
 endif
 
 echo Exporting from Arcturus to caffile $caffile
@@ -102,9 +111,11 @@ set gap4dirname=`pwd`;
 
 ${arcturus_home}/utils/project-export-marker -instance $instance -organism $organism -project $projectname -file ${gap4dirname}/${projectname}.A 
 
-echo Transfering lock to project owner
+if ( "$nolock" == "0" ) then
+    echo Transfering lock to project owner
 
-${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -transfer owner -confirm
+    ${arcturus_home}/utils/project-lock -instance $instance -organism $organism -project $projectname -transfer owner -confirm
+endif
 
 echo Cleaning up
 
