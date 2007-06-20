@@ -183,6 +183,10 @@ public class ContigCAFWriter {
 
 		rs.close();
 
+		if (i != nreads)
+			System.err.println("INCONSISTENT READ COUNT: GOT " + i
+					+ ", EXPECTED " + nreads + " IN CONTIG" + contigid);
+
 		pstmtContigTag.setInt(1, contigid);
 
 		rs = pstmtContigTag.executeQuery();
@@ -531,7 +535,7 @@ public class ContigCAFWriter {
 			}
 
 			pw.close();
-			
+
 			if (pwReads != null)
 				pwReads.close();
 		} catch (Exception e) {
@@ -558,6 +562,7 @@ public class ContigCAFWriter {
 		ps.println("\t-project\tName of project");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS:");
-		ps.println("\t-forassembly\tGenerate a separate file of single-read contigs");
+		ps
+				.println("\t-forassembly\tGenerate a separate file of single-read contigs");
 	}
 }
