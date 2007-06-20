@@ -48,7 +48,7 @@ public class ContigCAFWriter {
 	}
 
 	private void prepareStatements() throws SQLException {
-		String sql = "select gap4name,length,nreads from CONTIG where contig_id = ?";
+		String sql = "select nreads from CONTIG where contig_id = ?";
 
 		pstmtContigData = conn.prepareStatement(sql);
 
@@ -110,26 +110,25 @@ public class ContigCAFWriter {
 
 		sql = "select contig_id from"
 				+ " CURRENTCONTIGS left join PROJECT using(project_id)"
-				+ " where nreads > 1 and name=?";
+				+ " where name=?";
 
 		pstmtContigsForProject = conn.prepareStatement(sql);
 	}
 
-	public int writeContigAsCAF(int contigid, PrintWriter pw)
-			throws SQLException, DataFormatException {
+	public int getContigReadCount(int contigid) throws SQLException {
 		pstmtContigData.setInt(1, contigid);
 
 		ResultSet rs = pstmtContigData.executeQuery();
 
-		if (!rs.next()) {
-			rs.close();
-			return CONTIG_NOT_FOUND;
-		}
+		int nreads = rs.next() ? rs.getInt(1) : -1;
 
-		String gap4name = rs.getString(1);
-		int ctglen = rs.getInt(2);
-		int nreads = rs.getInt(3);
+		rs.close();
 
+		return nreads;
+	}
+
+	public int writeContigAsCAF(int contigid, int nreads, PrintWriter pw)
+			throws SQLException, DataFormatException {
 		String contigname = "Contig" + decimalformat.format(contigid);
 
 		pw.println("Sequence : " + contigname);
@@ -141,7 +140,7 @@ public class ContigCAFWriter {
 
 		pstmtMapping.setInt(1, contigid);
 
-		rs = pstmtMapping.executeQuery();
+		ResultSet rs = pstmtMapping.executeQuery();
 
 		int i = 0;
 
@@ -390,6 +389,22 @@ public class ContigCAFWriter {
 		return OK;
 	}
 
+	private void writeReadsForContig(int contigid, PrintWriter pwReads)
+			throws SQLException, DataFormatException {
+		pstmtMapping.setInt(1, contigid);
+
+		ResultSet rs = pstmtMapping.executeQuery();
+
+		while (rs.next()) {
+			int seqid = rs.getInt(3);
+			int readid = rs.getInt(4);
+
+			writeRead(readid, seqid, pwReads);
+		}
+
+		rs.close();
+	}
+
 	private byte[] decodeCompressedData(byte[] compressed, int length)
 			throws DataFormatException {
 		byte[] buffer = new byte[length];
@@ -465,6 +480,7 @@ public class ContigCAFWriter {
 			String instance = null;
 			String organism = null;
 			String project = null;
+			boolean forAssembly = false;
 
 			for (int i = 0; i < args.length; i++) {
 				if (args[i].equalsIgnoreCase("-instance"))
@@ -475,6 +491,9 @@ public class ContigCAFWriter {
 
 				if (args[i].equalsIgnoreCase("-project"))
 					project = args[++i];
+
+				if (args[i].equalsIgnoreCase("-forassembly"))
+					forAssembly = true;
 			}
 
 			if (instance == null || organism == null || project == null) {
@@ -492,12 +511,29 @@ public class ContigCAFWriter {
 			PrintWriter pw = new PrintWriter(new BufferedWriter(new FileWriter(
 					file)));
 
+			PrintWriter pwReads = null;
+
+			if (forAssembly) {
+				file = new File(project + ".reads.caf");
+				pwReads = new PrintWriter(new BufferedWriter(new FileWriter(
+						file)));
+			}
+
 			List<Integer> ids = ccw.getContigIDsForProject(project);
 
-			for (int contigid : ids)
-				ccw.writeContigAsCAF(contigid, pw);
+			for (int contigid : ids) {
+				int nreads = ccw.getContigReadCount(contigid);
+
+				if (nreads > 1 || pwReads == null)
+					ccw.writeContigAsCAF(contigid, nreads, pw);
+				else
+					ccw.writeReadsForContig(contigid, pwReads);
+			}
 
 			pw.close();
+			
+			if (pwReads != null)
+				pwReads.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
@@ -520,5 +556,8 @@ public class ContigCAFWriter {
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
 		ps.println("\t-project\tName of project");
+		ps.println();
+		ps.println("OPTIONAL PARAMETERS:");
+		ps.println("\t-forassembly\tGenerate a separate file of single-read contigs");
 	}
 }
