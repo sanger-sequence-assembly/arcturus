@@ -61,6 +61,12 @@ public class ContigCAFWriter {
 				+ "  where contig_id = ? and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id"
 				+ "  order by cstart asc";
 
+		sql = "select mapping_id,direction,MAPPING.seq_id,READINFO.read_id,readname"
+				+ "  from MAPPING left join (SEQ2READ,READINFO)"
+				+ "  on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
+				+ "  where contig_id = ?"
+				+ "  order by cstart asc";
+
 		pstmtMapping = conn.prepareStatement(sql);
 
 		sql = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by rstart asc";
