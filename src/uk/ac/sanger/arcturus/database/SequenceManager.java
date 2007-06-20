@@ -132,6 +132,7 @@ public class SequenceManager extends AbstractManager {
 		rs.close();
 
 		setClippings(sequence);
+		loadTagsForSequence(sequence);
 
 		return sequence;
 	}
@@ -182,6 +183,7 @@ public class SequenceManager extends AbstractManager {
 		rs.close();
 
 		setClippings(sequence);
+		loadTagsForSequence(sequence);
 
 		return sequence;
 	}
@@ -240,6 +242,7 @@ public class SequenceManager extends AbstractManager {
 		rs.close();
 
 		setClippings(sequence);
+		loadTagsForSequence(sequence);
 
 		return sequence;
 	}
@@ -284,6 +287,7 @@ public class SequenceManager extends AbstractManager {
 		rs.close();
 
 		setClippings(sequence);
+		loadTagsForSequence(sequence);
 
 		return sequence;
 	}
@@ -338,6 +342,7 @@ public class SequenceManager extends AbstractManager {
 		rs.close();
 
 		setClippings(sequence);
+		loadTagsForSequence(sequence);
 
 		return sequence;
 	}
@@ -508,7 +513,7 @@ public class SequenceManager extends AbstractManager {
 		return sequence;
 	}
 
-	public void loadTagsForSequence(Sequence sequence) throws SQLException {
+	private void loadTagsForSequence(Sequence sequence) throws SQLException {
 		int seq_id = sequence.getID();
 
 		Vector<Tag> tags = sequence.getTags();
