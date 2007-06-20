@@ -1478,31 +1478,30 @@ public class DynamicScaffolding2 {
 				double h = rect.getHeight();
 				double w = rect.getWidth();
 
-				Vector tags = contig.getTags();
+				Vector<Tag> tags = contig.getTags();
 
-				g.setColor(Color.green);
+				if (tags != null) {
+					g.setColor(Color.green);
 
-				for (int j = 0; j < tags.size(); j++) {
-					ContigTag tag = (ContigTag) tags.elementAt(j);
+					for (Tag tag : tags) {
+						if (tag.getType().equalsIgnoreCase("REPT")) {
+							int cstart = tag.getStart();
+							int cfinish = tag.getEnd();
 
-					if (tag.getType().equalsIgnoreCase("REPT")) {
-						int cstart = tag.getContigStart();
-						int cfinish = tag.getContigFinish();
+							int taglen = 1 + cfinish - cstart;
 
-						int taglen = 1 + cfinish - cstart;
+							double dx = (double) cstart / (double) bpPerPixel;
 
-						double dx = (double) cstart / (double) bpPerPixel;
+							double xtag = box.isForward() ? x + dx : x + w - dx;
+							double wtag = (double) taglen / (double) bpPerPixel;
 
-						double xtag = box.isForward() ? x + dx : x + w - dx;
-						double wtag = (double) taglen / (double) bpPerPixel;
+							Rectangle2D.Double rept = new Rectangle2D.Double(
+									xtag, y, wtag, h);
 
-						Rectangle2D.Double rept = new Rectangle2D.Double(xtag,
-								y, wtag, h);
-
-						g.fill(rept);
+							g.fill(rept);
+						}
 					}
 				}
-
 				g.setColor(Color.black);
 
 				if (contig == seedcontig) {
