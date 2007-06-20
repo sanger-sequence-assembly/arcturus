@@ -1,0 +1,23 @@
+DRAFT AGENDA FOR THE ARCTURUS REVIEW MEETING ON 2 JULY 2007
+
+* Status of the core system
+
+  -- What has been done in the past seven months
+
+  -- Priorities for the next few months
+
+* Status of the user interface
+
+  -- Features currently implemented in Minerva
+
+  -- Features under active development
+
+  -- Features that may be needed/useful in future
+
+* Accommodating reads obtained by new technology
+
+* Getting more organisms into Arcturus
+
+* Applications of Arcturus
+
+* AOB
