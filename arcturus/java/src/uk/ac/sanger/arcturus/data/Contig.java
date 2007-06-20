@@ -19,7 +19,7 @@ public class Contig extends Core implements DNASequence {
 	protected byte[] dna = null;
 	protected byte[] quality = null;
 	protected Project project = null;
-	protected Vector tags = new Vector();
+	protected Vector<Tag> tags = null;
 
 	/**
 	 * Constructs a Contig which does not yet have an ID or a name. This
@@ -176,11 +176,14 @@ public class Contig extends Core implements DNASequence {
 		this.quality = quality;
 	}
 
-	public void addTag(ContigTag tag) {
+	public void addTag(Tag tag) {
+		if (tags == null)
+			tags = new Vector<Tag>();
+		
 		tags.add(tag);
 	}
 
-	public Vector getTags() {
+	public Vector<Tag> getTags() {
 		return tags;
 	}
 	

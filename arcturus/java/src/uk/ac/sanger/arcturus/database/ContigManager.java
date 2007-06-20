@@ -147,11 +147,9 @@ public class ContigManager extends AbstractManager {
 
 		pstmtConsensus = conn.prepareStatement(query);
 
-		query = "select tagtype,cstart,cfinal,strand,tagseqname"
-				+ " from TAG2CONTIG,CONTIGTAG,TAGSEQUENCE"
-				+ " where contig_id = ?"
-				+ " and TAG2CONTIG.tag_id = CONTIGTAG.tag_id"
-				+ " and CONTIGTAG.tag_seq_id = TAGSEQUENCE.tag_seq_id";
+		query = "select tagtype,cstart,cfinal,tagcomment"
+				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id)"
+				+ " where contig_id = ?";
 
 		pstmtTags = conn.prepareStatement(query);
 
@@ -896,8 +894,10 @@ public class ContigManager extends AbstractManager {
 	private void loadTagsForContig(Contig contig) throws SQLException {
 		int contig_id = contig.getID();
 
-		Vector tags = contig.getTags();
-		tags.clear();
+		Vector<Tag> tags = contig.getTags();
+		
+		if (tags != null)
+			tags.clear();
 
 		pstmtTags.setInt(1, contig_id);
 		ResultSet rs = pstmtTags.executeQuery();
@@ -906,13 +906,11 @@ public class ContigManager extends AbstractManager {
 			String type = rs.getString(1);
 			int cstart = rs.getInt(2);
 			int cfinal = rs.getInt(3);
-			String strandstring = rs.getString(4);
-			char strand = strandstring == null ? '?' : strandstring.charAt(0);
-			String name = rs.getString(5);
+			String comment = rs.getString(4);
+			
+			Tag tag = new Tag(type, cstart, cfinal, comment);
 
-			ContigTag tag = new ContigTag(type, cstart, cfinal, strand, name);
-
-			tags.add(tag);
+			contig.addTag(tag);
 		}
 
 		rs.close();
