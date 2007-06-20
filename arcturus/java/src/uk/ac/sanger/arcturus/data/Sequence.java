@@ -401,6 +401,11 @@ public class Sequence extends Core {
 			for (int i = 0; i < alignToSCF.length; i++)
 				buffer.append(alignToSCF[i].toCAFString() + "\n");
 		}
+		
+		if (tags != null) {
+			for (Tag tag : tags)
+				buffer.append(tag.toCAFString() + "\n");
+		}
 
 		return buffer.toString();
 	}
