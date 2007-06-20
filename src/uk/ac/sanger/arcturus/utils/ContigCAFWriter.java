@@ -241,7 +241,7 @@ public class ContigCAFWriter {
 
 		pw.println();
 
-		for (i = 0; i < readids.length; i++) {
+		for (i = 0; i < nreads; i++) {
 			int rc = writeRead(readids[i], seqids[i], pw);
 
 			if (rc != OK)
