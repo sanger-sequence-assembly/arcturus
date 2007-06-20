@@ -14,10 +14,20 @@ DRAFT AGENDA FOR THE ARCTURUS REVIEW MEETING ON 2 JULY 2007
 
   -- Features that may be needed/useful in future
 
+* Migration to the 64-bit Linux platform
+
+  -- Core system
+
+  -- Minerva
+
+  -- Supporting software (assembly pipeline, CAF tools, etc.)
+
 * Accommodating reads obtained by new technology
 
 * Getting more organisms into Arcturus
 
 * Applications of Arcturus
+
+* Arcturus paper
 
 * AOB
