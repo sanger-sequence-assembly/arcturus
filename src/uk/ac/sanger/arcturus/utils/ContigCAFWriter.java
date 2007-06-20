@@ -67,9 +67,9 @@ public class ContigCAFWriter {
 
 		pstmtSegment = conn.prepareStatement(sql);
 
-		sql = "select tagtype,cstart,cfinal,tagcomment" 
-			+ " from TAG2CONTIG left join CONTIGTAG using(tag_id) where contig_id = ?"; 
-		
+		sql = "select tagtype,cstart,cfinal,tagcomment"
+				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id) where contig_id = ?";
+
 		pstmtContigTag = conn.prepareStatement(sql);
 
 		sql = "select readname,asped,strand,primer,chemistry,BASECALLER.name,STATUS.name"
@@ -103,15 +103,15 @@ public class ContigCAFWriter {
 
 		pstmtQualityClipping = conn.prepareStatement(sql);
 
-		sql = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and" 
-			+ " (deprecated is null or deprecated = 'N')";
+		sql = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and"
+				+ " (deprecated is null or deprecated = 'N')";
 
 		pstmtReadTag = conn.prepareStatement(sql);
 
 		sql = "select contig_id from"
 				+ " CURRENTCONTIGS left join PROJECT using(project_id)"
 				+ " where nreads > 1 and name=?";
-		
+
 		pstmtContigsForProject = conn.prepareStatement(sql);
 	}
 
@@ -441,21 +441,22 @@ public class ContigCAFWriter {
 		} catch (SQLException sqle) {
 		}
 	}
-	
-	public List<Integer> getContigIDsForProject(String project) throws SQLException {
+
+	public List<Integer> getContigIDsForProject(String project)
+			throws SQLException {
 		pstmtContigsForProject.setString(1, project);
-		
+
 		ResultSet rs = pstmtContigsForProject.executeQuery();
-		
+
 		Vector<Integer> ids = new Vector<Integer>();
-		
+
 		while (rs.next()) {
 			int id = rs.getInt(1);
 			ids.add(id);
 		}
-		
+
 		rs.close();
-		
+
 		return ids;
 	}
 
@@ -464,46 +465,56 @@ public class ContigCAFWriter {
 			String instance = null;
 			String organism = null;
 			String project = null;
-			
+
 			for (int i = 0; i < args.length; i++) {
 				if (args[i].equalsIgnoreCase("-instance"))
 					instance = args[++i];
-				
+
 				if (args[i].equalsIgnoreCase("-organism"))
 					organism = args[++i];
-				
+
 				if (args[i].equalsIgnoreCase("-project"))
 					project = args[++i];
 			}
-			
+
 			if (instance == null || organism == null || project == null) {
 				showUsage(System.err);
 				System.exit(1);
 			}
-			
+
 			ArcturusInstance ai = ArcturusInstance.getInstance(instance);
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
 			ContigCAFWriter ccw = new ContigCAFWriter(adb);
-			
+
 			File file = new File(project + ".caf");
-			
-			PrintWriter pw = new PrintWriter(new BufferedWriter(
-					new FileWriter(file)));
-			
+
+			PrintWriter pw = new PrintWriter(new BufferedWriter(new FileWriter(
+					file)));
+
 			List<Integer> ids = ccw.getContigIDsForProject(project);
 
 			for (int contigid : ids)
 				ccw.writeContigAsCAF(contigid, pw);
-			
+
 			pw.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
 
+		Runtime runtime = Runtime.getRuntime();
+
+		long totalmem = runtime.totalMemory();
+		long freemem = runtime.freeMemory();
+		long usedmem = totalmem - freemem;
+
+		System.err
+				.println("Memory usage: " + (totalmem / 1024) + "kb total, "
+						+ (freemem / 1024) + "kb free, " + (usedmem / 1024)
+						+ "kb used");
 	}
-	
+
 	protected static void showUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
