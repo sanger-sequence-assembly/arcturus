@@ -704,10 +704,6 @@ public class ArcturusDatabase {
 		return sequenceManager.isCacheing();
 	}
 	
-	public void loadTagsForSequence(Sequence sequence) throws SQLException {
-		sequenceManager.loadTagsForSequence(sequence);
-	}
-	
 	/**
 	 * Returns the ContigManager belonging to this ArcturusDatabase.
 	 * 
