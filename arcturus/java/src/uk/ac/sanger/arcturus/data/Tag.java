@@ -31,6 +31,6 @@ public class Tag extends Core {
 
 	public String toCAFString() {
 		return "Tag " + type + " " + start + " " + end
-				+ (comment == null ? "" : "\"" + comment + "\"") + "\n";
+				+ (comment == null ? "" : "\"" + comment + "\"");
 	}
 }
