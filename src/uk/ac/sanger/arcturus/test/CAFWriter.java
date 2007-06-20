@@ -1,9 +1,13 @@
 package uk.ac.sanger.arcturus.test;
 
 import java.io.*;
+import java.sql.SQLException;
 import java.util.*;
+import java.util.zip.DataFormatException;
 
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 public class CAFWriter {
 	protected PrintStream ps = null;
@@ -57,6 +61,19 @@ public class CAFWriter {
 
 		for (int i = 0; i < mappings.length; i++)
 			writeAssembledFrom(mappings[i]);
+		
+		try {
+			contig.getArcturusDatabase().updateContig(contig, ArcturusDatabase.CONTIG_TAGS);
+		} catch (Exception e) {
+			Arcturus.logWarning("Error whilst fetching contig tags", e);
+		}
+		
+		Vector<Tag> tags = contig.getTags();
+		
+		if (tags != null) {
+			for (Tag tag : tags)
+				ps.println(tag.toCAFString());
+		}
 	}
 
 	private void writeAssembledFrom(Mapping mapping) {
@@ -164,11 +181,8 @@ public class CAFWriter {
 		ps.print(buffer.toString());
 	}
 
-	class SegmentComparatorByReadPosition implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Segment segment1 = (Segment) o1;
-			Segment segment2 = (Segment) o2;
-
+	class SegmentComparatorByReadPosition implements Comparator<Segment> {
+		public int compare(Segment segment1, Segment segment2) {
 			int diff = segment1.getReadStart() - segment2.getReadStart();
 
 			return diff;
