@@ -24,6 +24,7 @@ public class ContigCAFWriter {
 	private PreparedStatement pstmtConsensus;
 	private PreparedStatement pstmtMapping;
 	private PreparedStatement pstmtSegment;
+	private PreparedStatement pstmtContigTag;
 	private PreparedStatement pstmtReadBasicData;
 	private PreparedStatement pstmtReadCloneData;
 	private PreparedStatement pstmtSequence;
@@ -66,6 +67,11 @@ public class ContigCAFWriter {
 
 		pstmtSegment = conn.prepareStatement(sql);
 
+		sql = "select tagtype,cstart,cfinal,tagcomment" 
+			+ " from TAG2CONTIG left join CONTIGTAG using(tag_id) where contig_id = ?"; 
+		
+		pstmtContigTag = conn.prepareStatement(sql);
+
 		sql = "select readname,asped,strand,primer,chemistry,BASECALLER.name,STATUS.name"
 				+ " from READINFO,BASECALLER,STATUS where read_id = ?"
 				+ " and READINFO.basecaller = BASECALLER.basecaller_id and READINFO.status = STATUS.status_id";
@@ -97,7 +103,8 @@ public class ContigCAFWriter {
 
 		pstmtQualityClipping = conn.prepareStatement(sql);
 
-		sql = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated is null";
+		sql = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and" 
+			+ " (deprecated is null or deprecated = 'N')";
 
 		pstmtReadTag = conn.prepareStatement(sql);
 
@@ -173,6 +180,24 @@ public class ContigCAFWriter {
 			}
 
 			rs2.close();
+		}
+
+		rs.close();
+
+		pstmtContigTag.setInt(1, contigid);
+
+		rs = pstmtContigTag.executeQuery();
+
+		while (rs.next()) {
+			String tagtype = rs.getString(1);
+			int tagstart = rs.getInt(2);
+			int tagfinish = rs.getInt(3);
+			String tagcomment = rs.getString(4);
+
+			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
+			if (tagcomment != null)
+				pw.print(" \"" + tagcomment + "\"");
+			pw.println();
 		}
 
 		rs.close();
@@ -322,7 +347,7 @@ public class ContigCAFWriter {
 			int tagfinish = rs.getInt(3);
 			String tagcomment = rs.getString(4);
 
-			pw.print("TAG " + tagtype + " " + tagstart + " " + tagfinish);
+			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
 			if (tagcomment != null)
 				pw.print(" \"" + tagcomment + "\"");
 			pw.println();
