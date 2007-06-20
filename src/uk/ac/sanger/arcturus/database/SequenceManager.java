@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.database;
 import uk.ac.sanger.arcturus.data.Read;
 import uk.ac.sanger.arcturus.data.Sequence;
 import uk.ac.sanger.arcturus.data.Clipping;
+import uk.ac.sanger.arcturus.data.Tag;
 
 import java.sql.*;
 import java.util.*;
@@ -35,6 +36,7 @@ public class SequenceManager extends AbstractManager {
 	private PreparedStatement pstmtQualityClipping;
 	private PreparedStatement pstmtSequenceVectorClipping;
 	private PreparedStatement pstmtCloningVectorClipping;
+	private PreparedStatement pstmtTags;
 	private Inflater decompresser = new Inflater();
 
 	/**
@@ -73,6 +75,9 @@ public class SequenceManager extends AbstractManager {
 
 		query = "select cvleft,cvright from CLONEVEC where seq_id = ?";
 		pstmtCloningVectorClipping = conn.prepareStatement(query);
+		
+		query = "select tagtype,pstart,pfinal,comment from READTAG where seq_id = ? and deprecated='N'";
+		pstmtTags = conn.prepareStatement(query);
 
 		hashByReadID = new HashMap();
 		hashBySequenceID = new HashMap();
@@ -501,5 +506,30 @@ public class SequenceManager extends AbstractManager {
 		}
 
 		return sequence;
+	}
+
+	public void loadTagsForSequence(Sequence sequence) throws SQLException {
+		int seq_id = sequence.getID();
+
+		Vector<Tag> tags = sequence.getTags();
+		
+		if (tags != null)
+			tags.clear();
+
+		pstmtTags.setInt(1, seq_id);
+		ResultSet rs = pstmtTags.executeQuery();
+
+		while (rs.next()) {
+			String type = rs.getString(1);
+			int pstart = rs.getInt(2);
+			int pfinal = rs.getInt(3);
+			String comment = rs.getString(4);
+			
+			Tag tag = new Tag(type, pstart, pfinal, comment);
+
+			sequence.addTag(tag);
+		}
+
+		rs.close();
 	}
 }

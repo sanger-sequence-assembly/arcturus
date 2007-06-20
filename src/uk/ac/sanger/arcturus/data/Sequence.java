@@ -1,5 +1,7 @@
 package uk.ac.sanger.arcturus.data;
 
+import java.util.Vector;
+
 /**
  * An object which represents a read sequence, consisting of a DNA sequence
  * string, a base quality array and a version number.
@@ -16,6 +18,7 @@ public class Sequence extends Core {
 	protected Clipping svectorClipLeft = null;
 	protected Clipping svectorClipRight = null;
 	protected AlignToSCF[] alignToSCF = null;
+	protected Vector<Tag> tags = null;
 
 	/**
 	 * Construct a Sequence object for the specified read.
@@ -339,6 +342,31 @@ public class Sequence extends Core {
 
 	public AlignToSCF[] getAlignToSCF() {
 		return alignToSCF;
+	}
+
+	/**
+	 * Adds a tag to this sequence.
+	 * 
+	 * @param tag the tag to be added to the sequence.
+	 */
+	
+	public void addTag(Tag tag) {
+		if (tags == null)
+			tags = new Vector<Tag>();
+		
+		tags.add(tag);
+	}
+
+	/**
+	 * Returns the vector of tags which belong to this sequence, or null
+	 * if there are no tags.
+	 * 
+	 * @returnthe vector of tags which belong to this sequence, or null
+	 * if there are no tags.
+	 */
+	
+	public Vector<Tag> getTags() {
+		return tags;
 	}
 
 	/**
