@@ -160,6 +160,8 @@ public class ContigCAFWriter {
 			readids[i] = readid;
 			seqids[i] = seqid;
 			i++;
+			
+			System.err.println("R2C " + contigid + " " + readid + " " + seqid + " " + readname);
 
 			boolean forward = direction.equalsIgnoreCase("Forward");
 
@@ -244,6 +246,7 @@ public class ContigCAFWriter {
 		for (i = 0; i < nreads; i++) {
 			int rc = writeRead(readids[i], seqids[i], pw);
 
+			System.err.println("WRD " + contigid + " " + readids[i] + " " + seqids[i] + " " + rc);
 			if (rc != OK)
 				return rc;
 		}
