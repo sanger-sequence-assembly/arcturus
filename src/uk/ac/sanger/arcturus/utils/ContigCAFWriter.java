@@ -7,6 +7,8 @@ import java.sql.*;
 import java.util.zip.*;
 import java.util.List;
 import java.util.Vector;
+import java.util.Map;
+import java.util.HashMap;
 import java.io.*;
 import java.text.*;
 
@@ -35,6 +37,42 @@ public class ContigCAFWriter {
 
 	private PreparedStatement pstmtContigsForProject;
 
+	private Map<Integer, String> dictBasecaller = new HashMap<Integer, String>();
+	private Map<Integer, String> dictReadStatus = new HashMap<Integer, String>();
+	private Map<Integer, String> dictClone = new HashMap<Integer, String>();
+
+	class Ligation {
+		private String name;
+		private String cloneName;
+		private int silow;
+		private int sihigh;
+
+		public Ligation(String name, String cloneName, int silow, int sihigh) {
+			this.name = name;
+			this.cloneName = cloneName;
+			this.silow = silow;
+			this.sihigh = sihigh;
+		}
+
+		public String getName() {
+			return name;
+		}
+
+		public String getCloneName() {
+			return cloneName;
+		}
+
+		public int getSilow() {
+			return silow;
+		}
+
+		public int getSihigh() {
+			return sihigh;
+		}
+	}
+
+	private Map<Integer, Ligation> dictLigation = new HashMap<Integer, Ligation>();
+
 	private DateFormat dateformat = new SimpleDateFormat("yyyy-MM-dd");
 
 	private DecimalFormat decimalformat = new DecimalFormat("00000000");
@@ -45,6 +83,7 @@ public class ContigCAFWriter {
 		conn = adb.getPooledConnection(this);
 
 		prepareStatements();
+		createDictionaries();
 	}
 
 	private void prepareStatements() throws SQLException {
@@ -64,8 +103,7 @@ public class ContigCAFWriter {
 		sql = "select mapping_id,direction,MAPPING.seq_id,READINFO.read_id,readname"
 				+ "  from MAPPING left join (SEQ2READ,READINFO)"
 				+ "  on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
-				+ "  where contig_id = ?"
-				+ "  order by cstart asc";
+				+ "  where contig_id = ?" + "  order by cstart asc";
 
 		pstmtMapping = conn.prepareStatement(sql);
 
@@ -78,16 +116,14 @@ public class ContigCAFWriter {
 
 		pstmtContigTag = conn.prepareStatement(sql);
 
-		sql = "select readname,asped,strand,primer,chemistry,BASECALLER.name,STATUS.name"
-				+ " from READINFO,BASECALLER,STATUS where read_id = ?"
-				+ " and READINFO.basecaller = BASECALLER.basecaller_id and READINFO.status = STATUS.status_id";
+		sql = "select readname,asped,strand,primer,basecaller,status"
+				+ " from READINFO where read_id = ?";
 
 		pstmtReadBasicData = conn.prepareStatement(sql);
 
-		sql = "select TEMPLATE.name,LIGATION.name,LIGATION.silow,LIGATION.sihigh,CLONE.name"
-				+ " from READINFO,TEMPLATE,LIGATION,CLONE"
-				+ " where read_id = ? and READINFO.template_id = TEMPLATE.template_id"
-				+ " and TEMPLATE.ligation_id = LIGATION.ligation_id and LIGATION.clone_id = CLONE.clone_id";
+		sql = "select name,ligation_id"
+				+ " from READINFO left join TEMPLATE on(template_id)"
+				+ " where read_id = ?";
 
 		pstmtReadCloneData = conn.prepareStatement(sql);
 
@@ -119,6 +155,69 @@ public class ContigCAFWriter {
 				+ " where name=?";
 
 		pstmtContigsForProject = conn.prepareStatement(sql);
+	}
+
+	private void createDictionaries() throws SQLException {
+		Statement stmt = conn.createStatement();
+
+		String sql = "select basecaller_id,name from BASECALLER";
+
+		ResultSet rs = stmt.executeQuery(sql);
+
+		while (rs.next()) {
+			int basecaller_id = rs.getInt(1);
+			String name = rs.getString(2);
+
+			dictBasecaller.put(basecaller_id, name);
+		}
+
+		rs.close();
+
+		sql = "select status_id,name from STATUS";
+
+		rs = stmt.executeQuery(sql);
+
+		while (rs.next()) {
+			int status_id = rs.getInt(1);
+			String name = rs.getString(2);
+
+			dictReadStatus.put(status_id, name);
+		}
+
+		rs.close();
+
+		sql = "select clone_id,name from CLONE";
+
+		rs = stmt.executeQuery(sql);
+
+		while (rs.next()) {
+			int clone_id = rs.getInt(1);
+			String name = rs.getString(2);
+
+			dictClone.put(clone_id, name);
+		}
+
+		rs.close();
+
+		sql = "select ligation_id,name,clone_id,silow,sihigh from LIGATION";
+
+		rs = stmt.executeQuery(sql);
+
+		while (rs.next()) {
+			int ligation_id = rs.getInt(1);
+			String name = rs.getString(2);
+			int clone_id = rs.getInt(3);
+			int silow = rs.getInt(4);
+			int sihigh = rs.getInt(5);
+
+			String cloneName = dictClone.get(clone_id);
+
+			Ligation ligation = new Ligation(name, cloneName, silow, sihigh);
+
+			dictLigation.put(ligation_id, ligation);
+		}
+
+		stmt.close();
 	}
 
 	public int getContigReadCount(int contigid) throws SQLException {
@@ -160,8 +259,6 @@ public class ContigCAFWriter {
 			readids[i] = readid;
 			seqids[i] = seqid;
 			i++;
-			
-			System.err.println("R2C " + contigid + " " + readid + " " + seqid + " " + readname);
 
 			boolean forward = direction.equalsIgnoreCase("Forward");
 
@@ -246,7 +343,6 @@ public class ContigCAFWriter {
 		for (i = 0; i < nreads; i++) {
 			int rc = writeRead(readids[i], seqids[i], pw);
 
-			System.err.println("WRD " + contigid + " " + readids[i] + " " + seqids[i] + " " + rc);
 			if (rc != OK)
 				return rc;
 		}
@@ -270,8 +366,15 @@ public class ContigCAFWriter {
 		String strand = rs.getString(3);
 		String primer = rs.getString(4);
 		String chemistry = rs.getString(5);
-		String basecaller = rs.getString(6);
-		String status = rs.getString(7);
+
+		int basecaller_id = rs.getInt(6);
+
+		String basecaller = rs.wasNull() ? null : dictBasecaller
+				.get(basecaller_id);
+
+		int status_id = rs.getInt(7);
+
+		String status = rs.wasNull() ? null : dictReadStatus.get(status_id);
 
 		rs.close();
 
@@ -279,16 +382,25 @@ public class ContigCAFWriter {
 
 		rs = pstmtReadCloneData.executeQuery();
 
-		if (!rs.next()) {
-			rs.close();
-			return READ_CLONE_DATA_NOT_FOUND;
-		}
+		String template = null;
+		String ligation = null;
+		int silow = -1;
+		int sihigh = -1;
+		String clone = null;
 
-		String template = rs.getString(1);
-		String ligation = rs.getString(2);
-		int silow = rs.getInt(3);
-		int sihigh = rs.getInt(4);
-		String clone = rs.getString(5);
+		if (rs.next()) {
+			template = rs.getString(1);
+			int ligation_id = rs.getInt(2);
+
+			Ligation l = dictLigation.get(ligation_id);
+
+			if (l != null) {
+				ligation = l.getName();
+				silow = l.getSilow();
+				sihigh = l.getSihigh();
+				clone = l.getCloneName();
+			}
+		}
 
 		rs.close();
 
@@ -299,12 +411,20 @@ public class ContigCAFWriter {
 		pw.println("SCF_File " + readname + "SCF");
 
 		pw.println("Template " + template);
-		pw.println("Insert_size " + silow + " " + sihigh);
-		pw.println("Ligation_no " + ligation);
+		
+		if (silow > 0 && sihigh > 0)
+			pw.println("Insert_size " + silow + " " + sihigh);
+		
+		if (ligation != null)
+			pw.println("Ligation_no " + ligation);
+		
 		pw.println("Primer " + primer);
 		pw.println("Strand " + strand);
 		pw.println("Dye " + chemistry);
-		pw.println("Clone " + clone);
+		
+		if (clone != null)
+			pw.println("Clone " + clone);
+		
 		pw.println("Status " + status);
 		pw.println("Asped " + dateformat.format(asped));
 		pw.println("Base_caller " + basecaller);
