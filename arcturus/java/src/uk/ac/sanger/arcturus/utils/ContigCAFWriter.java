@@ -122,7 +122,7 @@ public class ContigCAFWriter {
 		pstmtReadBasicData = conn.prepareStatement(sql);
 
 		sql = "select name,ligation_id"
-				+ " from READINFO left join TEMPLATE on(template_id)"
+				+ " from READINFO left join TEMPLATE using(template_id)"
 				+ " where read_id = ?";
 
 		pstmtReadCloneData = conn.prepareStatement(sql);
