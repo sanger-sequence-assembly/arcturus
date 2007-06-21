@@ -116,7 +116,7 @@ public class ContigCAFWriter {
 
 		pstmtContigTag = conn.prepareStatement(sql);
 
-		sql = "select readname,asped,strand,primer,basecaller,status"
+		sql = "select readname,asped,strand,primer,chemistry,basecaller,status"
 				+ " from READINFO where read_id = ?";
 
 		pstmtReadBasicData = conn.prepareStatement(sql);
