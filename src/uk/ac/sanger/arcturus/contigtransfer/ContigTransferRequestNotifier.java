@@ -20,10 +20,14 @@ public class ContigTransferRequestNotifier {
 	protected Session session = null;
 	
 	protected Map<Person, List<String>> messageQueues = new HashMap<Person, List<String>>();
+	
+	protected boolean noMail = false;
 
 	private ContigTransferRequestNotifier() {
 		Properties props = Arcturus.getProperties();
 		session = Session.getDefaultInstance(props);
+		
+		noMail = Boolean.getBoolean("contigtransferrequestnotifier.nomail");
 	}
 
 	public static ContigTransferRequestNotifier getInstance() {
@@ -144,7 +148,10 @@ public class ContigTransferRequestNotifier {
 			msg.setHeader("X-Mailer", "Arcturus-Notification");
 			msg.setSentDate(new java.util.Date());
 			
-			Transport.send(msg);
+			if (noMail)
+				msg.writeTo(System.err);
+			else
+				Transport.send(msg);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
