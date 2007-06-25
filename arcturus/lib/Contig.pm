@@ -1383,6 +1383,17 @@ sub undoReadEdits {
     return ContigHelper->undoReadEdits($this,%options);
 }
 
+sub break {
+    my $this = shift;
+    my %options = @_;
+    &verifyKeys(\%options,'break'); # none for the moment
+    return ContigHelper->break($this,%options);
+}
+
+#---------------------------
+# Pad status TO BE DEVELOPED
+#---------------------------
+
 sub toPadded {
     my $this = shift;
     return $this if $this->isPadded();
@@ -1394,10 +1405,6 @@ sub toUnPadded {
     return $this unless $this->isPadded();
     return ContigHelper->depad($this);
 }
-
-#---------------------------
-# Pad status TO BE DEVELOPED
-#---------------------------
 
 sub isPadded {
 # return 0 for unpadded (default) or true for padded
