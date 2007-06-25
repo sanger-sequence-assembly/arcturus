@@ -176,7 +176,7 @@ sub cafFileInventory {
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{Is} = $objecttype;
 	    }
-	    else {
+	    elsif ($identifier) {
 		$logger->error("l:$linecount Unexpected $objecttype specification");
 	    }
         }
@@ -185,7 +185,7 @@ sub cafFileInventory {
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{segments}++;
 	    }
-	    else {
+	    elsif ($identifier) {
 		$logger->error("l:$linecount Unexpected 'Assembled_from' specification");
 	    }
         }        
@@ -226,8 +226,10 @@ sub contigExtractor {
     my @contigitems = ('Sequence');
     push @contigitems,'DNA','BaseQuality' if $options{consensus};
     my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2);
+    my $namefilter = $options{contignamefilter} || 0;
 
     foreach my $contigname (@$contignames) {
+        next if ($namefilter && $contigname !~ /$namefilter/);
         my $cinventory = $inventory->{$contigname};
         unless ($cinventory) {
 	    $logger->error("Missing contig $contigname");
@@ -1681,7 +1683,8 @@ sub verifyPrivate {
     my $caller = shift;
     my $method = shift || 'verifyPrivate';
 
-    return unless ($caller && ref($caller) eq 'ContigFactory');
+    return unless ($caller && ($caller  eq 'ContigFactory' ||
+                           ref($caller) eq 'ContigFactory'));
     print STDERR "Invalid use of private method '$method' in package ContigFactory\n";
     exit 1;
 }
