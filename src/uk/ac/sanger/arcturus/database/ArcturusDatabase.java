@@ -22,6 +22,8 @@ import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequestException;
 
 import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 
+import uk.ac.sanger.arcturus.projectchange.*;
+
 public class ArcturusDatabase {
 	public static final int MYSQL = 1;
 	public static final int ORACLE = 2;
@@ -67,6 +69,8 @@ public class ArcturusDatabase {
 	protected ConnectionPool connectionPool;
 	
 	protected Logger logger = null;
+	
+	protected ProjectChangeEventNotifier projectChangeEventNotifier = new ProjectChangeEventNotifier();
 
 	/**
 	 * Creates a new ArcturusDatabase object from a DataSource, a description
@@ -1153,5 +1157,22 @@ public class ArcturusDatabase {
 		text += "]";
 
 		return text;
+	}
+	
+	/*
+	 *******************************************************************************
+	 */
+	
+	public void addProjectChangeEventListener(Project project,
+			ProjectChangeEventListener listener) {
+		projectChangeEventNotifier.addProjectChangeEventListener(project, listener);
+	}
+	
+	public void addProjectChangeEventListener(ProjectChangeEventListener listener) {
+		projectChangeEventNotifier.addProjectChangeEventListener(listener);
+	}
+	
+	public void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
+		projectChangeEventNotifier.notifyProjectChangeEventListeners(event);
 	}
 }
