@@ -1172,6 +1172,10 @@ public class ArcturusDatabase {
 		projectChangeEventNotifier.addProjectChangeEventListener(listener);
 	}
 	
+	public  void removeProjectChangeEventListener(ProjectChangeEventListener listener) {
+		projectChangeEventNotifier.removeProjectChangeEventListener(listener);
+	}
+	
 	public void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
 		projectChangeEventNotifier.notifyProjectChangeEventListeners(event);
 	}

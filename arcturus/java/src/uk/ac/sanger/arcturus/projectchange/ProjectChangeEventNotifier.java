@@ -28,6 +28,12 @@ public class ProjectChangeEventNotifier {
 		addProjectChangeEventListener(ANY_PROJECT, listener);
 	}
 	
+	public synchronized void removeProjectChangeEventListener(ProjectChangeEventListener listener) {
+		for (Set<ProjectChangeEventListener> listeners : listenerMap.values()) {
+			listeners.remove(listener);
+		}
+	}
+	
 	public synchronized void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
 		Project project = event.getProject();
 		
