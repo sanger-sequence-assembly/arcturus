@@ -14,10 +14,13 @@ import java.util.*;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.gui.scaffold.ScaffoldWorker;
 import uk.ac.sanger.arcturus.people.*;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.Arcturus;
 
-public class ContigTablePanel extends MinervaPanel {
+public class ContigTablePanel extends MinervaPanel implements ProjectChangeEventListener {
 	protected ContigTable table = null;
 	protected ContigTableModel model = null;
 
@@ -38,15 +41,18 @@ public class ContigTablePanel extends MinervaPanel {
 	protected String projectlist;
 
 	protected boolean oneProject;
-
+	
 	public ContigTablePanel(Project[] projects, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, projects[0].getArcturusDatabase());
-
+		
 		projectlist = (projects != null && projects.length > 0) ? projects[0]
 				.getName() : "[null]";
 
 		for (int i = 1; i < projects.length; i++)
 			projectlist += "," + projects[i].getName();
+		
+		for (int i = 0; i < projects.length; i++)
+			adb.addProjectChangeEventListener(projects[i], this);
 
 		oneProject = projects.length == 1;
 
@@ -318,7 +324,7 @@ public class ContigTablePanel extends MinervaPanel {
 	}
 
 	public void closeResources() {
-		// Does nothing
+		adb.removeProjectChangeEventListener(this);
 	}
 
 	public String toString() {
@@ -339,5 +345,10 @@ public class ContigTablePanel extends MinervaPanel {
 
 	protected void doPrint() {
 		// Do nothing.
+	}
+
+	public void projectChanged(ProjectChangeEvent event) {
+		System.err.println("ContigTablePanel received " + event);
+		refresh();
 	}
 }
