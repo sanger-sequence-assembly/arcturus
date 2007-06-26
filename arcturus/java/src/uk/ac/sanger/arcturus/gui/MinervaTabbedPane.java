@@ -4,6 +4,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.sql.*;
+import java.util.HashMap;
+import java.util.Map;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
@@ -19,14 +21,6 @@ import uk.ac.sanger.arcturus.people.Person;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ArcturusDatabase adb;
-	protected ProjectTablePanel ptp;
-	protected ImportReadsPanel irp;
-	protected ReadFinderPanel rfp;
-	protected ContigTransferTablePanel cttp;
-	protected ContigTransferTablePanel cttpAdmin;
-	protected OligoFinderPanel ofp;
-	protected CreateContigTransferPanel cctp;
-	protected CheckConsistencyPanel ccp;
 
 	protected JMenuBar menubar = new JMenuBar();
 
@@ -34,6 +28,17 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected MinervaAbstractAction actionClose;
 
 	protected boolean administrator = false;
+	
+	protected Map<String, MinervaPanel> permanentComponents = new HashMap<String, MinervaPanel>();
+
+	private static final String PROJECT_TABLE = "PROJECT_TABLE";
+	private static final String IMPORT_READS = "IMPORT_READS";
+	private static final String READ_FINDER = "READ_FINDER";
+	private static final String CONTIG_TRANSFER_TABLE = "CONTIG_TRANSFER_TABLE";
+	private static final String ADMIN_CONTIG_TRANSFER_TABLE = "ADMIN_CONTIG_TRANSFER_TABLE";
+	private static final String CREATE_CONTIG_TRANSFER = "CREATE_CONTIG_TRANSFER";
+	private static final String OLIGO_FINDER = "OLIGO_FINDER";
+	private static final String CHECK_CONSISTENCY = "CHECK_CONSISTENCY";
 
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
@@ -132,8 +137,12 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public ProjectTablePanel showProjectTablePanel() {
-		if (ptp == null)
+		ProjectTablePanel ptp = (ProjectTablePanel)permanentComponents.get(PROJECT_TABLE);
+		
+		if (ptp == null) {
 			ptp = new ProjectTablePanel(adb, this);
+			permanentComponents.put(PROJECT_TABLE, ptp);
+		}
 
 		if (indexOfComponent(ptp) < 0)
 			insertTab("Projects", null, ptp, "All projects", 0);
@@ -144,8 +153,12 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public ImportReadsPanel showImportReadsPanel() {
-		if (irp == null)
+		ImportReadsPanel irp = (ImportReadsPanel)permanentComponents.get(IMPORT_READS);
+		
+		if (irp == null) {
 			irp = new ImportReadsPanel(adb, this);
+			permanentComponents.put(IMPORT_READS, irp);
+		}
 
 		if (indexOfComponent(irp) < 0)
 			addTab("Import reads", null, irp, "Import reads");
@@ -156,8 +169,12 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public ReadFinderPanel showReadFinderPanel() {
-		if (rfp == null)
+		ReadFinderPanel rfp = (ReadFinderPanel)permanentComponents.get(READ_FINDER);
+		
+		if (rfp == null) {
 			rfp = new ReadFinderPanel(adb, this);
+			permanentComponents.put(READ_FINDER, rfp);
+		}
 
 		if (indexOfComponent(rfp) < 0)
 			addTab("Find reads", null, rfp, "Find reads");
@@ -168,9 +185,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public ContigTransferTablePanel showContigTransferTablePanel() {
-		if (cttp == null)
+		ContigTransferTablePanel cttp = (ContigTransferTablePanel)permanentComponents.get(CONTIG_TRANSFER_TABLE);
+		
+		if (cttp == null) {
 			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(),
 					this, false);
+			permanentComponents.put(CONTIG_TRANSFER_TABLE, cttp);
+		}
 
 		if (indexOfComponent(cttp) < 0)
 			addTab("Contig transfers", null, cttp, "Contig transfers");
@@ -183,9 +204,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public ContigTransferTablePanel showAdminContigTransferTablePanel() {
-		if (cttpAdmin == null)
+		ContigTransferTablePanel cttpAdmin = (ContigTransferTablePanel)permanentComponents.get(ADMIN_CONTIG_TRANSFER_TABLE);
+	
+		if (cttpAdmin == null) {
 			cttpAdmin = new ContigTransferTablePanel(adb, PeopleManager
 					.findMe(), this, true);
+			permanentComponents.put(ADMIN_CONTIG_TRANSFER_TABLE, cttpAdmin);
+		}
 
 		if (indexOfComponent(cttpAdmin) < 0)
 			addTab("All contig transfers", null, cttpAdmin,
@@ -197,9 +222,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public CreateContigTransferPanel showCreateContigTransferPanel() {
-		if (cctp == null)
+		CreateContigTransferPanel cctp = (CreateContigTransferPanel)permanentComponents.get(CREATE_CONTIG_TRANSFER);
+		
+		if (cctp == null) {
 			cctp = new CreateContigTransferPanel(adb, this);
-
+			permanentComponents.put(CREATE_CONTIG_TRANSFER, cctp);
+		}
+		
 		if (indexOfComponent(cctp) < 0)
 			addTab("Create contig transfers", null, cctp,
 					"Create contig transfers");
@@ -210,9 +239,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public OligoFinderPanel showOligoFinderPanel() {
-		if (ofp == null)
+		OligoFinderPanel ofp = (OligoFinderPanel)permanentComponents.get(OLIGO_FINDER);
+		
+		if (ofp == null) {
 			ofp = new OligoFinderPanel(adb, this);
-
+			permanentComponents.put(OLIGO_FINDER, ofp);
+		}
+		
 		if (indexOfComponent(ofp) < 0)
 			addTab("Oligo finder", null, ofp, "Oligo finder");
 
@@ -222,8 +255,12 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	}
 
 	public CheckConsistencyPanel showCheckConsistencyPanel() {
-		if (ccp == null)
+		CheckConsistencyPanel ccp = (CheckConsistencyPanel)permanentComponents.get(CHECK_CONSISTENCY);
+		
+		if (ccp == null) {
 			ccp = new CheckConsistencyPanel(adb, this);
+			permanentComponents.put(CHECK_CONSISTENCY, ccp);
+		}
 		
 		if (indexOfComponent(ccp) < 0)
 			addTab("Database Check", null, ccp, "Check database consistency");
@@ -269,6 +306,13 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	public void remove(Component c) {
 		super.remove(c);
 		fireStateChanged();
+		
+		if (!isPermanent(c) && c instanceof MinervaPanel)
+			((MinervaPanel)c).closeResources();
+	}
+	
+	protected boolean isPermanent(Component c) {
+		return permanentComponents.containsValue(c);
 	}
 
 	public static MinervaTabbedPane getTabbedPane(Component component) {
