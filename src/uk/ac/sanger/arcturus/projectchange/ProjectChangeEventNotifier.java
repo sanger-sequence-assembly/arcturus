@@ -44,7 +44,7 @@ public class ProjectChangeEventNotifier {
 		
 		if (listeners != null && !listeners.isEmpty()) {
 			for (ProjectChangeEventListener listener : listeners)
-				listener.projectChanged(event);
+				listener.projectChanged(event);			
 		}
 		
 		listeners = listenerMap.get(ANY_PROJECT);
