@@ -20,6 +20,7 @@ use PathogenRepository;
 my $instance;
 my $organism;
 my $cafFileName;
+my $gap4name;
 
 my $lineLimit;             # specifying a line limit implies test mode 
 my $cnFilter = '';         # test contig names for this substring or RE
@@ -53,6 +54,7 @@ my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
+               . "gap4name|g4n|"
                . "setprojectby|spb|nolock|readtaglist|rtl|noreadtags|nrt|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
                . "frugal|padded|noload|safemode|verbose|batch|info|help|debug";
@@ -103,6 +105,8 @@ while (my $nextword = shift @ARGV) {
     $cafFileName      = shift @ARGV  if ($nextword eq '-caf');
 
     $cafFileName      = 'default'    if ($nextword eq '-cafdefault');
+
+    $gap4name         = shift @ARGV  if ($nextword eq '-gap4name');
 
     $cnBlocker        = 1            if ($nextword eq '-ignore');
 
@@ -974,6 +978,7 @@ $nc = scalar (keys %contigs);
 $logger->info("$nc contigs skipped") if $nc;
 $logger->info("$number contigs loaded");
 
+$project->setGap4Name($gap4name) if $gap4name;
 $project->markImport() if $project; # perhaps after safemode?
 
 # add the Read tags
