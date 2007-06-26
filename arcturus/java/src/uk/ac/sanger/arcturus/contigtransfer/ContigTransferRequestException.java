@@ -26,7 +26,7 @@ public class ContigTransferRequestException extends Exception {
 	}
 	
 	public ContigTransferRequestException(int type) {
-		this.type = type;
+		this(type, null);
 	}
 	
 	public int getType() {
