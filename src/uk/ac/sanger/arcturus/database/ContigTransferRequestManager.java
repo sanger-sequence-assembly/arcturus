@@ -4,6 +4,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.people.*;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 
 import java.sql.*;
@@ -765,6 +766,20 @@ public class ContigTransferRequestManager {
 		executeRequest(request);
 
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
+		
+		Project project = request.getOldProject();
+		
+		ProjectChangeEvent event = new ProjectChangeEvent(this,
+				project, ProjectChangeEvent.CONTIGS_CHANGED);
+
+		adb.notifyProjectChangeEventListeners(event);
+		
+		project = request.getNewProject();
+		
+		event = new ProjectChangeEvent(this,
+				project, ProjectChangeEvent.CONTIGS_CHANGED);
+
+		adb.notifyProjectChangeEventListeners(event);
 	}
 
 	protected void executeRequest(ContigTransferRequest request)
