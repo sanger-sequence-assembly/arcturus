@@ -129,7 +129,9 @@ echo Importing into Arcturus # ${arcturus_home}/utils
 
 # added 06/09/2005 default project name
 
-${loader_script} -instance $instance -organism $organism -caf $depadded -defaultproject $projectname
+set gap4dirname=`pwd`;
+
+${loader_script} -instance $instance -organism $organism -caf $depadded -defaultproject $projectname -gap4name ${gap4dirname}/${projectname}.0
 
 # added 06/09/2005 read allocation test with assignment to PROBLEMS project
 
