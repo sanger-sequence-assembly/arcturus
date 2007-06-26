@@ -159,7 +159,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 
 	protected void addSharedFileMenuItems(JMenu menu) {
 		actionShowReadImporter = new MinervaAbstractAction(
-				"Import reads into project", null, "Import reads into project",
+				"Import reads", null, "Import reads into project",
 				new Integer(KeyEvent.VK_I), KeyStroke.getKeyStroke(
 						KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
