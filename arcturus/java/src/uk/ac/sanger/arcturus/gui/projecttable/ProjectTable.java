@@ -6,6 +6,8 @@ import javax.swing.*;
 import javax.swing.table.*;
 import java.util.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
+
 import uk.ac.sanger.arcturus.gui.*;
 
 import uk.ac.sanger.arcturus.gui.contigtable.ContigTablePanel;
@@ -83,6 +85,22 @@ public class ProjectTable extends SortableTable {
 			clist.add(ptm.elementAt(indices[i]));
 
 		return clist;
+	}
+	
+	public ProjectProxy getSelectedProject() {
+		int[] indices = getSelectedRows();
+		
+		switch (indices.length) {
+			case 0:
+				return null;
+				
+			case 1:
+				return (ProjectProxy)((ProjectTableModel) getModel()).elementAt(indices[0]);
+				
+			default:
+				Arcturus.logWarning("Project table has more than one selected project");
+				return null;
+		}
 	}
 
 	public void displaySelectedProjects() {
