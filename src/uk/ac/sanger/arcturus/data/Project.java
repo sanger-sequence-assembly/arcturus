@@ -190,7 +190,7 @@ public class Project extends Core {
 	}
 
 	public boolean isLocked() {
-		return lockdate == null;
+		return lockowner != null;
 	}
 	
 	public Person getLockOwner() {
