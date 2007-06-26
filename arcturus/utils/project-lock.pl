@@ -146,7 +146,8 @@ else {
     if ($newuser && $newuser eq 'owner') {
 	$newuser = $project->getOwner();
         unless ($newuser) {
-	    $logger->severe("Project $project has no owner");
+            my $projectname = $project->getProjectName();
+	    $logger->severe("Project $projectname has no owner");
 	    $adb->disconnect();
             exit 1;
 	}
