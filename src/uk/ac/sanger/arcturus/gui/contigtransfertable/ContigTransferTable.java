@@ -307,10 +307,15 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 	protected void notifyFailure(ContigTransferRequest request, int newStatus,
 			ContigTransferRequestException e) {
+		String reason = e.getMessage();
+		
+		if (reason == null)
+			reason = e.getTypeAsString();
+		
 		String message = "Failed to change status of request "
 				+ request.getRequestID() + " to "
 				+ ContigTransferRequest.convertStatusToString(newStatus) + "\n"
-				+ "The reason was " + e.getTypeAsString();
+				+ "The reason was " + reason;
 
 		JOptionPane.showMessageDialog(this, message,
 				"Failed to update request", JOptionPane.WARNING_MESSAGE, null);

@@ -808,13 +808,16 @@ public class ContigTransferRequestManager {
 				ContigTransferRequestException.SQL_UPDATE_FAILED);
 	}
 
+	protected static final int SOURCE_PROJECT = 1;
+	protected static final int DESTINATION_PROJECT = 2;
+	
 	protected void checkProjectsAreUnlocked(ContigTransferRequest request)
 			throws ContigTransferRequestException, SQLException {
-		checkProjectIsUnlocked(request.getOldProject());
-		checkProjectIsUnlocked(request.getNewProject());
+		checkProjectIsUnlocked(request.getOldProject(), SOURCE_PROJECT);
+		checkProjectIsUnlocked(request.getNewProject(), DESTINATION_PROJECT);
 	}
 
-	protected void checkProjectIsUnlocked(Project project)
+	protected void checkProjectIsUnlocked(Project project, int mode)
 			throws ContigTransferRequestException, SQLException {
 		pstmtCheckProjectLock.setInt(1, project.getID());
 
@@ -834,7 +837,8 @@ public class ContigTransferRequestManager {
 			return;
 		else
 			throw new ContigTransferRequestException(
-					ContigTransferRequestException.PROJECT_IS_LOCKED);
+					ContigTransferRequestException.PROJECT_IS_LOCKED,
+					mode == SOURCE_PROJECT ? "Source project is locked" : "Destination project is locked");
 	}
 
 	public void executeContigTransferRequest(int requestId, Person reviewer)
