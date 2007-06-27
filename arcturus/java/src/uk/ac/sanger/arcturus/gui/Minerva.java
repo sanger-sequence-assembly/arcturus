@@ -16,6 +16,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 
 import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
+import uk.ac.sanger.arcturus.people.PeopleManager;
 
 /**
  * This class is the main class for all GUI applications.
@@ -113,12 +114,13 @@ public class Minerva {
 	}
 
 	private MinervaFrame createMinervaFrame(String name) {
-		String caption = "Minerva - " + name + " [";
+		String caption = "Minerva - " + name;
 
 		if (buildtime != null)
-			caption += buildtime + ", ";
+			caption += " [" + buildtime + "]";
 
-		caption += "Java " + System.getProperty("java.version") + "]";
+		if (PeopleManager.isMasquerading())
+			caption += " [Masquerading as  " + PeopleManager.findMe().getName() + "]";
 
 		MinervaFrame frame = new MinervaFrame(this, caption);
 		
