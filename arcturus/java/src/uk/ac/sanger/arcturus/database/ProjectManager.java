@@ -1,7 +1,10 @@
 package uk.ac.sanger.arcturus.database;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 
 import java.sql.*;
@@ -23,6 +26,9 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtProjectSummary;
 	private PreparedStatement pstmtLastContigTransferOutByID;
 	private PreparedStatement pstmtLastContigTransferOut;
+	private PreparedStatement pstmtUnlockProject;
+	private PreparedStatement pstmtLockProject;
+	private PreparedStatement pstmtLockProjectForOwner;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -61,10 +67,24 @@ public class ProjectManager extends AbstractManager {
 		pstmtLastContigTransferOutByID = conn.prepareStatement(query);
 
 		query = "select old_project_id,max(closed) from CONTIGTRANSFERREQUEST"
-			+ " where status = 'done'"
-			+ " group by old_project_id";
-		
+				+ " where status = 'done'" + " group by old_project_id";
+
 		pstmtLastContigTransferOut = conn.prepareStatement(query);
+
+		query = "update PROJECT set lockowner=null,lockdate=null"
+				+ " where project_id=? and lockowner is not null";
+
+		pstmtUnlockProject = conn.prepareStatement(query);
+
+		query = "update PROJECT set lockowner=?,lockdate=NOW()"
+				+ " where project_id=? and lockowner is null";
+
+		pstmtLockProject = conn.prepareStatement(query);
+
+		query = "update PROJECT set lockowner=owner,lockdate=NOW()"
+				+ " where project_id=? and lockowner is null";
+
+		pstmtLockProjectForOwner = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -145,7 +165,8 @@ public class ProjectManager extends AbstractManager {
 				String creator = rs.getString(7);
 
 				project = createAndRegisterNewProject(project_id, assembly,
-						name, updated, owner, lockdate, lockowner, created, creator);
+						name, updated, owner, lockdate, lockowner, created,
+						creator);
 			}
 		}
 
@@ -156,7 +177,8 @@ public class ProjectManager extends AbstractManager {
 
 	private Project createAndRegisterNewProject(int id, Assembly assembly,
 			String name, java.util.Date updated, String owner,
-			java.util.Date lockdate, String lockowner, java.util.Date created, String creator) {
+			java.util.Date lockdate, String lockowner, java.util.Date created,
+			String creator) {
 		Project project = new Project(id, assembly, name, updated, owner,
 				lockdate, lockowner, created, creator, adb);
 
@@ -215,22 +237,22 @@ public class ProjectManager extends AbstractManager {
 		preloadAllProjects();
 		return new HashSet(hashByID.values());
 	}
-	
+
 	public Set getProjectsForOwner(Person owner) throws SQLException {
 		preloadAllProjects();
-		
+
 		if (owner == null)
 			return null;
-		
+
 		HashSet set = new HashSet();
-		
+
 		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
-			Project project = (Project)iter.next();
-			
+			Project project = (Project) iter.next();
+
 			if (owner.equals(project.getOwner()))
 				set.add(project);
 		}
-		
+
 		return set;
 	}
 
@@ -246,8 +268,9 @@ public class ProjectManager extends AbstractManager {
 			java.util.Date updated = rs.getTimestamp(3);
 			String owner = rs.getString(4);
 			java.util.Date lockdate = rs.getTimestamp(5);
-			java.util.Date created = rs.getTimestamp(6);
-			String creator = rs.getString(7);
+			String lockowner = rs.getString(6);
+			java.util.Date created = rs.getTimestamp(7);
+			String creator = rs.getString(8);
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -256,6 +279,7 @@ public class ProjectManager extends AbstractManager {
 			project.setUpdated(updated);
 			project.setOwner(owner);
 			project.setLockdate(lockdate);
+			project.setLockOwner(lockowner);
 			project.setCreated(created);
 			project.setCreator(creator);
 		}
@@ -303,13 +327,14 @@ public class ProjectManager extends AbstractManager {
 			summary.reset();
 
 		rs.close();
-		
+
 		pstmtLastContigTransferOutByID.setInt(1, project_id);
-		
+
 		rs = pstmtLastContigTransferOutByID.executeQuery();
-		
-		summary.setMostRecentContigTransferOut(rs.next() ? rs.getTimestamp(1) : null);
-		
+
+		summary.setMostRecentContigTransferOut(rs.next() ? rs.getTimestamp(1)
+				: null);
+
 		rs.close();
 	}
 
@@ -332,18 +357,18 @@ public class ProjectManager extends AbstractManager {
 		return summary;
 	}
 
-	public ProjectSummary getProjectSummary(Project project, int minlen, int minreads)
-		throws SQLException {
+	public ProjectSummary getProjectSummary(Project project, int minlen,
+			int minreads) throws SQLException {
 		ProjectSummary summary = new ProjectSummary();
 
 		getProjectSummary(project, minlen, minreads, summary);
 
 		return summary;
 	}
-	
+
 	public Map getProjectSummary(int minlen, int minreads) throws SQLException {
 		HashMap map = new HashMap();
-		
+
 		pstmtProjectSummary.setInt(1, minlen);
 		pstmtProjectSummary.setInt(2, minreads);
 
@@ -351,9 +376,9 @@ public class ProjectManager extends AbstractManager {
 
 		while (rs.next()) {
 			int project_id = rs.getInt(1);
-			
+
 			ProjectSummary summary = new ProjectSummary();
-				
+
 			summary.setNumberOfContigs(rs.getInt(2));
 			summary.setNumberOfReads(rs.getInt(3));
 			summary.setTotalConsensusLength(rs.getInt(4));
@@ -363,33 +388,141 @@ public class ProjectManager extends AbstractManager {
 			summary.setNewestContigCreated(rs.getTimestamp(8));
 			summary.setMostRecentContigUpdated(rs.getTimestamp(9));
 			summary.setMostRecentContigTransferOut(null);
-			
+
 			map.put(new Integer(project_id), summary);
 		}
 
 		rs.close();
-		
+
 		rs = pstmtLastContigTransferOut.executeQuery();
-		
+
 		while (rs.next()) {
 			int project_id = rs.getInt(1);
-			
-			ProjectSummary summary = (ProjectSummary)map.get(new Integer(project_id));
-			
+
+			ProjectSummary summary = (ProjectSummary) map.get(new Integer(
+					project_id));
+
 			if (summary != null)
 				summary.setMostRecentContigTransferOut(rs.getTimestamp(2));
 		}
-		
+
 		rs.close();
 
 		return map;
 	}
-	
+
 	public Map getProjectSummary(int minlen) throws SQLException {
 		return getProjectSummary(minlen, 0);
 	}
-	
+
 	public Map getProjectSummary() throws SQLException {
 		return getProjectSummary(0, 0);
+	}
+
+	/*
+	 * Project locking and unlocking
+	 */
+
+	public boolean canUserUnlockProject(Project project, Person user)
+			throws SQLException {
+		if (!project.isLocked())
+			return false;
+
+		return project.getLockOwner().equals(user)
+				|| adb.hasFullPrivileges(user);
+	}
+
+	public boolean canUserLockProject(Project project, Person user)
+			throws SQLException {
+		if (project.isLocked() || project.isBin())
+			return false;
+
+		return project.isUnowned() || project.getOwner().equals(user)
+				|| adb.hasFullPrivileges(user);
+	}
+
+	public boolean canUserLockProjectForOwner(Project project, Person user)
+			throws SQLException {
+		if (project.isLocked() || project.isBin() || project.isUnowned())
+			return false;
+
+		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
+	}
+
+	public boolean unlockProject(Project project) throws ProjectLockException,
+			SQLException {
+		if (!project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_UNLOCKED);
+
+		if (!canUserUnlockProject(project, PeopleManager.findMe()))
+			throw new ProjectLockException(
+					ProjectLockException.OPERATION_NOT_PERMITTED);
+
+		pstmtUnlockProject.setInt(1, project.getID());
+
+		int rc = pstmtUnlockProject.executeUpdate();
+		
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+
+	public boolean lockProject(Project project) throws ProjectLockException,
+			SQLException {
+		if (project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_LOCKED);
+
+		Person me = PeopleManager.findMe();
+
+		if (!canUserLockProject(project, me))
+			throw new ProjectLockException(
+					ProjectLockException.OPERATION_NOT_PERMITTED);
+
+		pstmtLockProject.setString(1, me.getUID());
+		pstmtLockProject.setInt(2, project.getID());
+
+		int rc = pstmtLockProject.executeUpdate();
+		
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+
+	public boolean lockProjectForOwner(Project project)
+			throws ProjectLockException, SQLException {
+		if (project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_LOCKED);
+
+		if (project.isUnowned())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_HAS_NO_OWNER);
+
+		Person me = PeopleManager.findMe();
+
+		if (!canUserLockProjectForOwner(project, me))
+			throw new ProjectLockException(
+					ProjectLockException.OPERATION_NOT_PERMITTED);
+
+		pstmtLockProjectForOwner.setInt(1, project.getID());
+
+		int rc = pstmtLockProjectForOwner.executeUpdate();
+		
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+	
+	private void lockChanged(Project project) throws SQLException {
+		refreshProject(project);
+		
+		ProjectChangeEvent event = new ProjectChangeEvent(this, project, ProjectChangeEvent.LOCK_CHANGED);
+		
+		adb.notifyProjectChangeEventListeners(event);
 	}
 }
