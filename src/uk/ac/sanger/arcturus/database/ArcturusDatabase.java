@@ -56,7 +56,7 @@ public class ArcturusDatabase {
 			| CONTIG_SEQUENCE_DNA_AND_QUALITY
 			| CONTIG_SEQUENCE_AUXILIARY_DATA
 			| CONTIG_MAPPING_SEGMENTS;
-	
+
 	public static final int USER_IS_REQUESTER = 1;
 	public static final int USER_IS_CONTIG_OWNER = 2;
 	public static final int USER_IS_ADMINISTRATOR = 3;
@@ -67,9 +67,9 @@ public class ArcturusDatabase {
 	protected Connection defaultConnection;
 
 	protected ConnectionPool connectionPool;
-	
+
 	protected Logger logger = null;
-	
+
 	protected ProjectChangeEventNotifier projectChangeEventNotifier = new ProjectChangeEventNotifier();
 
 	/**
@@ -114,16 +114,16 @@ public class ArcturusDatabase {
 
 	private void initialise() throws SQLException {
 		connectionPool = new ConnectionPool(ds);
-		
+
 		defaultConnection = connectionPool.getConnection(this);
 
 		createManagers();
 	}
-	
+
 	/**
 	 * Closes the connection pool belonging to this object.
 	 */
-	
+
 	public synchronized void closeConnectionPool() {
 		if (connectionPool != null) {
 			connectionPool.close();
@@ -186,7 +186,8 @@ public class ArcturusDatabase {
 	 * Establishes a unique (non-cached) JDBC connection to a database, using
 	 * the parameters stored in this object's DataSource.
 	 * 
-	 * @param owner the object which will own the connection.
+	 * @param owner
+	 *            the object which will own the connection.
 	 * 
 	 * @return a java.sql.Connection which can be used to communicate with the
 	 *         database.
@@ -196,7 +197,8 @@ public class ArcturusDatabase {
 	 *             the database.
 	 */
 
-	public synchronized Connection getPooledConnection(Object owner) throws SQLException {
+	public synchronized Connection getPooledConnection(Object owner)
+			throws SQLException {
 		return connectionPool.getConnection(owner);
 	}
 
@@ -227,9 +229,9 @@ public class ArcturusDatabase {
 	 *             in the event of an error.
 	 */
 
-	public synchronized static DataSource createMysqlDataSource(String hostname, int port,
-			String database, String username, String password)
-			throws SQLException {
+	public synchronized static DataSource createMysqlDataSource(
+			String hostname, int port, String database, String username,
+			String password) throws SQLException {
 		MysqlDataSource mysqlds = new MysqlDataSource();
 
 		mysqlds.setServerName(hostname);
@@ -268,9 +270,9 @@ public class ArcturusDatabase {
 	 *             in the event of an error.
 	 */
 
-	public synchronized static DataSource createOracleDataSource(String hostname, int port,
-			String database, String username, String password)
-			throws SQLException {
+	public synchronized static DataSource createOracleDataSource(
+			String hostname, int port, String database, String username,
+			String password) throws SQLException {
 		OracleDataSource oracleds = new OracleDataSource();
 
 		oracleds.setServerName(hostname);
@@ -313,9 +315,9 @@ public class ArcturusDatabase {
 	 *             in the event of an error.
 	 */
 
-	public synchronized static DataSource createDataSource(String hostname, int port,
-			String database, String username, String password, int type)
-			throws SQLException {
+	public synchronized static DataSource createDataSource(String hostname,
+			int port, String database, String username, String password,
+			int type) throws SQLException {
 		switch (type) {
 			case MYSQL:
 				return createMysqlDataSource(hostname, port, database,
@@ -425,7 +427,8 @@ public class ArcturusDatabase {
 		return ligationManager;
 	}
 
-	public synchronized Ligation getLigationByName(String name) throws SQLException {
+	public synchronized Ligation getLigationByName(String name)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getLigationByName(" + name + ")");
 
@@ -460,7 +463,8 @@ public class ArcturusDatabase {
 		return templateManager;
 	}
 
-	public synchronized Template getTemplateByName(String name) throws SQLException {
+	public synchronized Template getTemplateByName(String name)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getTemplateByName(" + name + ")");
 
@@ -501,7 +505,8 @@ public class ArcturusDatabase {
 		templateManager.preloadAllTemplates();
 	}
 
-	public synchronized Template findOrCreateTemplate(int id, String name, Ligation ligation) {
+	public synchronized Template findOrCreateTemplate(int id, String name,
+			Ligation ligation) {
 		return templateManager.findOrCreateTemplate(id, name, ligation);
 	}
 
@@ -541,14 +546,16 @@ public class ArcturusDatabase {
 		return readManager.getReadByID(id);
 	}
 
-	public synchronized Read getReadByID(int id, boolean autoload) throws SQLException {
+	public synchronized Read getReadByID(int id, boolean autoload)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getReadByID(" + id + ", " + autoload + ")");
 
 		return readManager.getReadByID(id, autoload);
 	}
 
-	public synchronized int loadReadsByTemplate(int template_id) throws SQLException {
+	public synchronized int loadReadsByTemplate(int template_id)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("loadReadsByTemplate(" + template_id + ")");
 
@@ -578,8 +585,9 @@ public class ArcturusDatabase {
 		return ReadManager.parseChemistry(text);
 	}
 
-	public synchronized Read findOrCreateRead(int id, String name, Template template,
-			java.util.Date asped, String strand, String primer, String chemistry) {
+	public synchronized Read findOrCreateRead(int id, String name,
+			Template template, java.util.Date asped, String strand,
+			String primer, String chemistry) {
 		return readManager.findOrCreateRead(id, name, template, asped, strand,
 				primer, chemistry);
 	}
@@ -610,15 +618,16 @@ public class ArcturusDatabase {
 		return sequenceManager;
 	}
 
-	public synchronized Sequence getSequenceByReadID(int readid) throws SQLException {
+	public synchronized Sequence getSequenceByReadID(int readid)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getSequenceByReadID(" + readid + ")");
 
 		return sequenceManager.getSequenceByReadID(readid);
 	}
 
-	public synchronized Sequence getSequenceByReadID(int readid, boolean autoload)
-			throws SQLException {
+	public synchronized Sequence getSequenceByReadID(int readid,
+			boolean autoload) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger
 					.info("getSequenceByReadID(" + readid + ", " + autoload
@@ -627,15 +636,16 @@ public class ArcturusDatabase {
 		return sequenceManager.getSequenceByReadID(readid, autoload);
 	}
 
-	public synchronized Sequence getFullSequenceByReadID(int readid) throws SQLException {
+	public synchronized Sequence getFullSequenceByReadID(int readid)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getFullSequenceByReadID(" + readid + ")");
 
 		return sequenceManager.getFullSequenceByReadID(readid);
 	}
 
-	public synchronized Sequence getFullSequenceByReadID(int readid, boolean autoload)
-			throws SQLException {
+	public synchronized Sequence getFullSequenceByReadID(int readid,
+			boolean autoload) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getFullSequenceByReadID(" + readid + ", " + autoload
 					+ ")");
@@ -643,15 +653,16 @@ public class ArcturusDatabase {
 		return sequenceManager.getFullSequenceByReadID(readid, autoload);
 	}
 
-	public synchronized Sequence getSequenceBySequenceID(int seqid) throws SQLException {
+	public synchronized Sequence getSequenceBySequenceID(int seqid)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getSequenceBySequenceID(" + seqid + ")");
 
 		return sequenceManager.getSequenceBySequenceID(seqid);
 	}
 
-	public synchronized Sequence getSequenceBySequenceID(int seqid, boolean autoload)
-			throws SQLException {
+	public synchronized Sequence getSequenceBySequenceID(int seqid,
+			boolean autoload) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getSequenceBySequenceID(" + seqid + ", " + autoload
 					+ ")");
@@ -659,15 +670,16 @@ public class ArcturusDatabase {
 		return sequenceManager.getSequenceBySequenceID(seqid, autoload);
 	}
 
-	public synchronized Sequence getFullSequenceBySequenceID(int seqid) throws SQLException {
+	public synchronized Sequence getFullSequenceBySequenceID(int seqid)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getFullSequenceBySequenceID(" + seqid + ")");
 
 		return sequenceManager.getFullSequenceBySequenceID(seqid);
 	}
 
-	public synchronized Sequence getFullSequenceBySequenceID(int seqid, boolean autoload)
-			throws SQLException {
+	public synchronized Sequence getFullSequenceBySequenceID(int seqid,
+			boolean autoload) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getFullSequenceBySequenceID(" + seqid + ", "
 					+ autoload + ")");
@@ -707,7 +719,7 @@ public class ArcturusDatabase {
 	public synchronized boolean isSequenceCacheing() {
 		return sequenceManager.isCacheing();
 	}
-	
+
 	/**
 	 * Returns the ContigManager belonging to this ArcturusDatabase.
 	 * 
@@ -718,32 +730,33 @@ public class ArcturusDatabase {
 		return contigManager;
 	}
 
-	public synchronized Contig getContigByID(int id, int options) throws SQLException,
-			DataFormatException {
+	public synchronized Contig getContigByID(int id, int options)
+			throws SQLException, DataFormatException {
 		return contigManager.getContigByID(id, options);
 	}
-	
+
 	public synchronized Contig getContigByID(int id) throws SQLException,
-		DataFormatException {
+			DataFormatException {
 		return contigManager.getContigByID(id);
 	}
-	
-	public synchronized Contig getContigByReadName(String readname, int options) throws SQLException,
-		DataFormatException {
+
+	public synchronized Contig getContigByReadName(String readname, int options)
+			throws SQLException, DataFormatException {
 		return contigManager.getContigByReadName(readname, options);
 	}
-	
-	public synchronized Contig getContigByReadName(String readname) throws SQLException,
-		DataFormatException {
+
+	public synchronized Contig getContigByReadName(String readname)
+			throws SQLException, DataFormatException {
 		return contigManager.getContigByReadName(readname);
 	}
 
-	public synchronized void updateContig(Contig contig, int options) throws SQLException,
-		DataFormatException {
+	public synchronized void updateContig(Contig contig, int options)
+			throws SQLException, DataFormatException {
 		contigManager.updateContig(contig, options);
 	}
-	
-	public synchronized boolean isCurrentContig(int contigid) throws SQLException {
+
+	public synchronized boolean isCurrentContig(int contigid)
+			throws SQLException {
 		return contigManager.isCurrentContig(contigid);
 	}
 
@@ -764,13 +777,13 @@ public class ArcturusDatabase {
 		return contigManager.processCurrentContigs(options, minlen, processor);
 	}
 
-	public synchronized int processCurrentContigs(int options, ContigProcessor processor)
-			throws SQLException, DataFormatException {
+	public synchronized int processCurrentContigs(int options,
+			ContigProcessor processor) throws SQLException, DataFormatException {
 		return contigManager.processCurrentContigs(options, 0, processor);
 	}
 
-	public synchronized Set getCurrentContigs(int options, int minlen) throws SQLException,
-			DataFormatException {
+	public synchronized Set getCurrentContigs(int options, int minlen)
+			throws SQLException, DataFormatException {
 		return contigManager.getCurrentContigs(options, minlen);
 	}
 
@@ -788,12 +801,14 @@ public class ArcturusDatabase {
 		return contigManager.countContigsByProject(project_id, minlen);
 	}
 
-	public synchronized int countContigsByProject(int project_id) throws SQLException {
+	public synchronized int countContigsByProject(int project_id)
+			throws SQLException {
 		return countContigsByProject(project_id, 0);
 	}
 
-	public synchronized int processContigsByProject(int project_id, int options, int minlen,
-			ContigProcessor processor) throws SQLException, DataFormatException {
+	public synchronized int processContigsByProject(int project_id,
+			int options, int minlen, ContigProcessor processor)
+			throws SQLException, DataFormatException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("processContigsByProject(" + project_id + ", options="
 					+ options + ", minlen=" + minlen + ")");
@@ -802,13 +817,14 @@ public class ArcturusDatabase {
 				minlen, processor);
 	}
 
-	public synchronized int processContigsByProject(int project_id, int options,
-			ContigProcessor processor) throws SQLException, DataFormatException {
+	public synchronized int processContigsByProject(int project_id,
+			int options, ContigProcessor processor) throws SQLException,
+			DataFormatException {
 		return processContigsByProject(project_id, options, 0, processor);
 	}
 
-	public synchronized Set getContigsByProject(int project_id, int options, int minlen)
-			throws SQLException, DataFormatException {
+	public synchronized Set getContigsByProject(int project_id, int options,
+			int minlen) throws SQLException, DataFormatException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getContigsByProject(" + project_id + ", options="
 					+ options + ", minlen=" + minlen + ")");
@@ -821,11 +837,13 @@ public class ArcturusDatabase {
 		return getContigsByProject(project_id, options, 0);
 	}
 
-	public synchronized void addContigManagerEventListener(ManagerEventListener listener) {
+	public synchronized void addContigManagerEventListener(
+			ManagerEventListener listener) {
 		contigManager.addContigManagerEventListener(listener);
 	}
 
-	public synchronized void removeContigManagerEventListener(ManagerEventListener listener) {
+	public synchronized void removeContigManagerEventListener(
+			ManagerEventListener listener) {
 		contigManager.removeContigManagerEventListener(listener);
 	}
 
@@ -850,7 +868,8 @@ public class ArcturusDatabase {
 		return projectManager.getProjectByID(id);
 	}
 
-	public synchronized Project getProjectByID(int id, boolean autoload) throws SQLException {
+	public synchronized Project getProjectByID(int id, boolean autoload)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger
 					.info("getProjectByID(" + id + ", autoload=" + autoload
@@ -881,12 +900,14 @@ public class ArcturusDatabase {
 
 		return projectManager.getAllProjects();
 	}
-	
-	public synchronized Set getProjectsForOwner(Person owner) throws SQLException {
+
+	public synchronized Set getProjectsForOwner(Person owner)
+			throws SQLException {
 		return projectManager.getProjectsForOwner(owner);
 	}
 
-	public synchronized void refreshProject(Project project) throws SQLException {
+	public synchronized void refreshProject(Project project)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("refreshProject(" + project + ")");
 
@@ -900,8 +921,8 @@ public class ArcturusDatabase {
 		projectManager.refreshAllProjects();
 	}
 
-	public synchronized void setAssemblyForProject(Project project, Assembly assembly)
-			throws SQLException {
+	public synchronized void setAssemblyForProject(Project project,
+			Assembly assembly) throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("setAssemblyForProject(" + project + ", " + assembly
 					+ ")");
@@ -909,13 +930,13 @@ public class ArcturusDatabase {
 		projectManager.setAssemblyForProject(project, assembly);
 	}
 
-	public synchronized void getProjectSummary(Project project, int minlen, int minreads,
-			ProjectSummary summary) throws SQLException {
+	public synchronized void getProjectSummary(Project project, int minlen,
+			int minreads, ProjectSummary summary) throws SQLException {
 		projectManager.getProjectSummary(project, minlen, minreads, summary);
 	}
 
-	public synchronized ProjectSummary getProjectSummary(Project project, int minlen,
-			int minreads) throws SQLException {
+	public synchronized ProjectSummary getProjectSummary(Project project,
+			int minlen, int minreads) throws SQLException {
 		return projectManager.getProjectSummary(project, minlen, minreads);
 	}
 
@@ -924,13 +945,13 @@ public class ArcturusDatabase {
 		projectManager.getProjectSummary(project, minlen, 0, summary);
 	}
 
-	public synchronized void getProjectSummary(Project project, ProjectSummary summary)
-			throws SQLException {
+	public synchronized void getProjectSummary(Project project,
+			ProjectSummary summary) throws SQLException {
 		projectManager.getProjectSummary(project, summary);
 	}
 
-	public synchronized ProjectSummary getProjectSummary(Project project, int minlen)
-			throws SQLException {
+	public synchronized ProjectSummary getProjectSummary(Project project,
+			int minlen) throws SQLException {
 		return projectManager.getProjectSummary(project, minlen);
 	}
 
@@ -938,21 +959,52 @@ public class ArcturusDatabase {
 			throws SQLException {
 		return projectManager.getProjectSummary(project);
 	}
-	
-	public synchronized Map getProjectSummary(int minlen, int minreads) throws SQLException {
+
+	public synchronized Map getProjectSummary(int minlen, int minreads)
+			throws SQLException {
 		return projectManager.getProjectSummary(minlen, minreads);
 	}
-	
+
 	public synchronized Map getProjectSummary(int minlen) throws SQLException {
 		return projectManager.getProjectSummary(minlen);
 	}
-	
+
 	public synchronized Map getProjectSummary() throws SQLException {
 		return projectManager.getProjectSummary();
 	}
 
 	public synchronized void clearProjectCache() {
 		projectManager.clearCache();
+	}
+
+	public synchronized boolean canUserUnlockProject(Project project,
+			Person user) throws SQLException {
+		return projectManager.canUserUnlockProject(project, user);
+	}
+
+	public synchronized boolean canUserLockProject(Project project, Person user)
+			throws SQLException {
+		return projectManager.canUserLockProject(project, user);
+	}
+
+	public synchronized boolean canUserLockProjectForOwner(Project project,
+			Person user) throws SQLException {
+		return projectManager.canUserLockProjectForOwner(project, user);
+	}
+
+	public synchronized boolean unlockProject(Project project)
+			throws SQLException, ProjectLockException {
+		return projectManager.unlockProject(project);
+	}
+
+	public synchronized boolean lockProject(Project project)
+			throws SQLException, ProjectLockException {
+		return projectManager.lockProject(project);
+	}
+
+	public synchronized boolean lockProjectForOwner(Project project)
+			throws SQLException, ProjectLockException {
+		return projectManager.lockProjectForOwner(project);
 	}
 
 	/**
@@ -981,7 +1033,8 @@ public class ArcturusDatabase {
 		return assemblyManager.getAssemblyByID(id, true);
 	}
 
-	public synchronized Assembly getAssemblyByName(String name) throws SQLException {
+	public synchronized Assembly getAssemblyByName(String name)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getAssemblyByName(" + name + ")");
 
@@ -1002,7 +1055,8 @@ public class ArcturusDatabase {
 		return assemblyManager.getAllAssemblies();
 	}
 
-	public synchronized void refreshAssembly(Assembly assembly) throws SQLException {
+	public synchronized void refreshAssembly(Assembly assembly)
+			throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("refreshAssembly(" + assembly + ")");
 
@@ -1019,126 +1073,158 @@ public class ArcturusDatabase {
 	public synchronized void clearAssemblyCache() {
 		assemblyManager.clearCache();
 	}
-	
+
 	/**
 	 * Returns the UserManager belonging to this ArcturusDatabase.
 	 * 
 	 * @return the UserManager belonging to this ArcturusDatabase.
 	 */
-	
+
 	public synchronized UserManager getUserManager() {
 		return userManager;
 	}
-	
-	public synchronized String getRoleForUser(String username) throws SQLException {
+
+	public synchronized String getRoleForUser(String username)
+			throws SQLException {
 		return userManager.getRoleForUser(username);
 	}
-	
-	public synchronized String getRoleForUser(Person person) throws SQLException {
+
+	public synchronized String getRoleForUser(Person person)
+			throws SQLException {
 		return userManager.getRoleForUser(person);
 	}
-	
-	public synchronized String[] getPrivilegesForUser(String username) throws SQLException {
+
+	public synchronized String[] getPrivilegesForUser(String username)
+			throws SQLException {
 		return userManager.getPrivilegesForUser(username);
 	}
-	
-	public synchronized String[] getPrivilegesForUser(Person person) throws SQLException {
+
+	public synchronized String[] getPrivilegesForUser(Person person)
+			throws SQLException {
 		return userManager.getPrivilegesForUser(person);
 	}
-	
-	public synchronized boolean hasPrivilege(String username, String privilege) throws SQLException {
+
+	public synchronized boolean hasPrivilege(String username, String privilege)
+			throws SQLException {
 		return userManager.hasPrivilege(username, privilege);
 	}
-	
-	public synchronized boolean hasPrivilege(Person person, String privilege) throws SQLException {
+
+	public synchronized boolean hasPrivilege(Person person, String privilege)
+			throws SQLException {
 		return userManager.hasPrivilege(person, privilege);
 	}
-	
+
+	public synchronized boolean hasFullPrivileges(Person person)
+			throws SQLException {
+		return userManager.hasFullPrivileges(person);
+	}
+
 	/**
-	 * Returns the ContigTransferRequestManager belonging to this ArcturusDatabase.
+	 * Returns the ContigTransferRequestManager belonging to this
+	 * ArcturusDatabase.
 	 * 
-	 * @return the ContigTransferRequestManager belonging to this ArcturusDatabase.
+	 * @return the ContigTransferRequestManager belonging to this
+	 *         ArcturusDatabase.
 	 */
 
 	public synchronized ContigTransferRequestManager getContigTransferRequestManager() {
 		return contigTransferRequestManager;
 	}
-	
-	public synchronized ContigTransferRequest[] getContigTransferRequestsByUser(Person user, int mode) throws SQLException {
-		return contigTransferRequestManager.getContigTransferRequestsByUser(user, mode);
+
+	public synchronized ContigTransferRequest[] getContigTransferRequestsByUser(
+			Person user, int mode) throws SQLException {
+		return contigTransferRequestManager.getContigTransferRequestsByUser(
+				user, mode);
 	}
-	
-	public synchronized ContigTransferRequest createContigTransferRequest(Person requester,
+
+	public synchronized ContigTransferRequest createContigTransferRequest(
+			Person requester, int contigId, int toProjectId)
+			throws ContigTransferRequestException, SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(
+				requester, contigId, toProjectId);
+	}
+
+	public synchronized ContigTransferRequest createContigTransferRequest(
 			int contigId, int toProjectId)
 			throws ContigTransferRequestException, SQLException {
-		return contigTransferRequestManager.createContigTransferRequest(requester, contigId, toProjectId);
+		return contigTransferRequestManager.createContigTransferRequest(
+				contigId, toProjectId);
 	}
-	
-	public synchronized ContigTransferRequest createContigTransferRequest(int contigId,
-			int toProjectId) throws ContigTransferRequestException,
-			SQLException {
-		return contigTransferRequestManager.createContigTransferRequest(contigId, toProjectId);
+
+	public synchronized ContigTransferRequest createContigTransferRequest(
+			Person requester, Contig contig, Project project)
+			throws ContigTransferRequestException, SQLException {
+		return contigTransferRequestManager.createContigTransferRequest(
+				requester, contig, project);
 	}
-	
-	public synchronized ContigTransferRequest createContigTransferRequest(Person requester,
+
+	public synchronized ContigTransferRequest createContigTransferRequest(
 			Contig contig, Project project)
 			throws ContigTransferRequestException, SQLException {
-		return contigTransferRequestManager.createContigTransferRequest(requester, contig, project);
+		return contigTransferRequestManager.createContigTransferRequest(contig,
+				project);
 	}
-	
-	public synchronized ContigTransferRequest createContigTransferRequest(Contig contig, Project project)
+
+	public synchronized void reviewContigTransferRequest(
+			ContigTransferRequest request, Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
-		return contigTransferRequestManager.createContigTransferRequest(contig, project);
+		contigTransferRequestManager.reviewContigTransferRequest(request,
+				reviewer, newStatus);
 	}
-	
-	public synchronized void reviewContigTransferRequest(ContigTransferRequest request,
+
+	public synchronized void reviewContigTransferRequest(int requestId,
 			Person reviewer, int newStatus)
 			throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.reviewContigTransferRequest(request, reviewer, newStatus);
+		contigTransferRequestManager.reviewContigTransferRequest(requestId,
+				reviewer, newStatus);
 	}
-	
-	public synchronized void reviewContigTransferRequest(int requestId, Person reviewer,
+
+	public synchronized void reviewContigTransferRequest(int requestId,
 			int newStatus) throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.reviewContigTransferRequest(requestId, reviewer, newStatus);
+		contigTransferRequestManager.reviewContigTransferRequest(requestId,
+				newStatus);
 	}
-	
-	public synchronized void reviewContigTransferRequest(int requestId, int newStatus)
-		throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.reviewContigTransferRequest(requestId, newStatus);
-	}
-	
-	public synchronized void executeContigTransferRequest(ContigTransferRequest request,
-			Person reviewer)
+
+	public synchronized void executeContigTransferRequest(
+			ContigTransferRequest request, Person reviewer)
 			throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.executeContigTransferRequest(request, reviewer);
+		contigTransferRequestManager.executeContigTransferRequest(request,
+				reviewer);
 	}
-	
-	public synchronized void executeContigTransferRequest(int requestId, Person reviewer) throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.executeContigTransferRequest(requestId, reviewer);
+
+	public synchronized void executeContigTransferRequest(int requestId,
+			Person reviewer) throws ContigTransferRequestException,
+			SQLException {
+		contigTransferRequestManager.executeContigTransferRequest(requestId,
+				reviewer);
 	}
-	
+
 	public synchronized void executeContigTransferRequest(int requestId)
-		throws ContigTransferRequestException, SQLException {
+			throws ContigTransferRequestException, SQLException {
 		contigTransferRequestManager.executeContigTransferRequest(requestId);
 	}
-	
+
 	public synchronized void setDebugging(boolean debugging) {
 		contigTransferRequestManager.setDebugging(debugging);
 	}
-	
-	public synchronized boolean canCancelRequest(ContigTransferRequest request, Person person) {
+
+	public synchronized boolean canCancelRequest(ContigTransferRequest request,
+			Person person) throws SQLException {
 		return contigTransferRequestManager.canCancelRequest(request, person);
 	}
-	
-	public synchronized boolean canRefuseRequest(ContigTransferRequest request, Person person) {
+
+	public synchronized boolean canRefuseRequest(ContigTransferRequest request,
+			Person person) throws SQLException {
 		return contigTransferRequestManager.canRefuseRequest(request, person);
 	}
-	
-	public synchronized boolean canApproveRequest(ContigTransferRequest request, Person person) {
+
+	public synchronized boolean canApproveRequest(
+			ContigTransferRequest request, Person person) throws SQLException {
 		return contigTransferRequestManager.canApproveRequest(request, person);
 	}
-	
-	public synchronized boolean canExecuteRequest(ContigTransferRequest request, Person person) {
+
+	public synchronized boolean canExecuteRequest(
+			ContigTransferRequest request, Person person) throws SQLException {
 		return contigTransferRequestManager.canExecuteRequest(request, person);
 	}
 
@@ -1158,24 +1244,27 @@ public class ArcturusDatabase {
 
 		return text;
 	}
-	
+
 	/*
-	 *******************************************************************************
+	 * ******************************************************************************
 	 */
-	
+
 	public void addProjectChangeEventListener(Project project,
 			ProjectChangeEventListener listener) {
-		projectChangeEventNotifier.addProjectChangeEventListener(project, listener);
+		projectChangeEventNotifier.addProjectChangeEventListener(project,
+				listener);
 	}
-	
-	public void addProjectChangeEventListener(ProjectChangeEventListener listener) {
+
+	public void addProjectChangeEventListener(
+			ProjectChangeEventListener listener) {
 		projectChangeEventNotifier.addProjectChangeEventListener(listener);
 	}
-	
-	public  void removeProjectChangeEventListener(ProjectChangeEventListener listener) {
+
+	public void removeProjectChangeEventListener(
+			ProjectChangeEventListener listener) {
 		projectChangeEventNotifier.removeProjectChangeEventListener(listener);
 	}
-	
+
 	public void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
 		projectChangeEventNotifier.notifyProjectChangeEventListeners(event);
 	}
