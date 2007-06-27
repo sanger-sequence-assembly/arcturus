@@ -396,33 +396,11 @@ public class ContigTransferRequestManager {
 		 * "superuser" role?
 		 */
 
-		if (hasFullPrivileges(requester))
+		if (adb.hasFullPrivileges(requester))
 			return;
 
 		throw new ContigTransferRequestException(
 				ContigTransferRequestException.USER_NOT_AUTHORISED);
-	}
-
-	protected boolean hasFullPrivileges(Person person) {
-		if (person == null)
-			return false;
-
-		String role = null;
-
-		try {
-			role = adb.getRoleForUser(person);
-		} catch (SQLException e) {
-			Arcturus.logWarning("Failed to get role for user "
-					+ person.getUID(), e);
-			return false;
-		}
-
-		if (role == null)
-			return false;
-
-		return role.equalsIgnoreCase("team leader")
-				|| role.equalsIgnoreCase("administrator")
-				|| role.equalsIgnoreCase("superuser");
 	}
 
 	public ContigTransferRequest createContigTransferRequest(int contigId,
@@ -446,7 +424,7 @@ public class ContigTransferRequestManager {
 				.getID(), project.getID());
 	}
 
-	public boolean canCancelRequest(ContigTransferRequest request, Person person) {
+	public boolean canCancelRequest(ContigTransferRequest request, Person person) throws SQLException {
 		if (request == null || person == null)
 			return false;
 
@@ -458,10 +436,10 @@ public class ContigTransferRequestManager {
 			return false;
 
 		return request.getRequester().equals(person)
-				|| hasFullPrivileges(person);
+				|| adb.hasFullPrivileges(person);
 	}
 
-	public boolean canRefuseRequest(ContigTransferRequest request, Person person) {
+	public boolean canRefuseRequest(ContigTransferRequest request, Person person) throws SQLException {
 		if (request == null || person == null)
 			return false;
 
@@ -479,11 +457,11 @@ public class ContigTransferRequestManager {
 		if (person.equals(dstOwner) && !requester.equals(dstOwner))
 			return true;
 
-		return hasFullPrivileges(person);
+		return adb.hasFullPrivileges(person);
 	}
 
 	public boolean canApproveRequest(ContigTransferRequest request,
-			Person person) {
+			Person person) throws SQLException {
 		if (request == null || person == null)
 			return false;
 
@@ -509,11 +487,11 @@ public class ContigTransferRequestManager {
 				&& (oldProject.isUnowned() || oldProject.isBin()))
 			return true;
 
-		return hasFullPrivileges(person);
+		return adb.hasFullPrivileges(person);
 	}
 
 	public boolean canExecuteRequest(ContigTransferRequest request,
-			Person person) {
+			Person person) throws SQLException {
 		if (request == null || person == null)
 			return false;
 
@@ -526,7 +504,7 @@ public class ContigTransferRequestManager {
 		Person dstOwner = request.getNewProject().getOwner();
 
 		return person.equals(requester) || person.equals(srcOwner)
-				|| person.equals(dstOwner) || hasFullPrivileges(person);
+				|| person.equals(dstOwner) || adb.hasFullPrivileges(person);
 	}
 
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
@@ -664,7 +642,7 @@ public class ContigTransferRequestManager {
 		 * role can make any change at all.
 		 */
 
-		if (hasFullPrivileges(reviewer))
+		if (adb.hasFullPrivileges(reviewer))
 			return;
 
 		throw new ContigTransferRequestException(

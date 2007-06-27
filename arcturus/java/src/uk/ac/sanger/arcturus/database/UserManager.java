@@ -104,4 +104,20 @@ public class UserManager extends AbstractManager {
 		
 		return hasPrivilege(person.getUID(), privilege);
 	}
+	
+	public boolean hasFullPrivileges(Person person) throws SQLException {
+		if (person == null)
+			return false;
+
+		String role = null;
+
+		role = getRoleForUser(person);
+
+		if (role == null)
+			return false;
+
+		return role.equalsIgnoreCase("team leader")
+				|| role.equalsIgnoreCase("administrator")
+				|| role.equalsIgnoreCase("superuser");
+	}
 }
