@@ -308,10 +308,10 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 	protected void notifyFailure(ContigTransferRequest request, int newStatus,
 			ContigTransferRequestException e) {
 		String reason = e.getMessage();
-		
+
 		if (reason == null)
 			reason = e.getTypeAsString();
-		
+
 		String message = "Failed to change status of request "
 				+ request.getRequestID() + " to "
 				+ ContigTransferRequest.convertStatusToString(newStatus) + "\n"
@@ -340,10 +340,16 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequest request = ((ContigTransferTableModel) getModel())
 						.getRequestForRow(rows[i]);
 
-				canCancel &= adb.canCancelRequest(request, me);
-				canRefuse &= adb.canRefuseRequest(request, me);
-				canApprove &= adb.canApproveRequest(request, me);
-				canExecute &= adb.canExecuteRequest(request, me);
+				try {
+					canCancel &= adb.canCancelRequest(request, me);
+					canRefuse &= adb.canRefuseRequest(request, me);
+					canApprove &= adb.canApproveRequest(request, me);
+					canExecute &= adb.canExecuteRequest(request, me);
+				} catch (SQLException sqle) {
+					Arcturus.logWarning(
+									"An error occurred whilst checking user credentals",
+									sqle);
+				}
 			}
 
 			itemCancelMultipleRequests.setEnabled(canCancel);
@@ -358,10 +364,16 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 			singleRequestPopupMenu.setRequest(request);
 
-			itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
-			itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
-			itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
-			itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+			try {
+				itemCancelRequest.setEnabled(adb.canCancelRequest(request, me));
+				itemRefuseRequest.setEnabled(adb.canRefuseRequest(request, me));
+				itemApproveRequest.setEnabled(adb.canApproveRequest(request, me));
+				itemExecuteRequest.setEnabled(adb.canExecuteRequest(request, me));
+			} catch (SQLException sqle) {
+				Arcturus.logWarning(
+								"An error occurred whilst checking user credentals",
+								sqle);
+			}
 
 			singleRequestPopupMenu.show(e.getComponent(), e.getX(), e.getY());
 		}
