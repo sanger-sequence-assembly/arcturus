@@ -270,7 +270,6 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		System.err.println("ProjectTablePanel received " + event);
 		refresh();
 	}
 }
