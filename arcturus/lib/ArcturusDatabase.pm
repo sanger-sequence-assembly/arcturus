@@ -285,7 +285,7 @@ sub userCanMoveAnyContig {
 }
 
 sub getPrivilegesForUser {
-# return the privileges for the specified user or the default user
+# return the privileges hash for the specified user or the default user
     my $this = shift;
     my $user = shift;
     my %options = @_;
@@ -299,7 +299,7 @@ sub getPrivilegesForUser {
         $this->{privilege}->{$user} = $privilege;
     }
 
-    return $privilege;
+    return $privilege; # undef or a hash
 }
 
 sub getUserPrivileges {
@@ -358,7 +358,7 @@ sub fetchUserPrivileges {
 
     return $privilege_hash unless ($option{user}); # hash for all users
 
-    return $privilege_hash->{ $option{user} }; # sub hash for specific user
+    return $privilege_hash->{ $option{user} } || {}; # sub hash for user
 }
 
 sub getRoleForUser {
@@ -371,7 +371,7 @@ sub getRoleForUser {
 
     my ($dummy,$role) = each %$privilege; # the first pair
 
-    return $role;
+    return $role || 'none';
 }
 
 #-----------------------------------------------------------------------------
@@ -448,6 +448,9 @@ print STDERR "updateUser seniority $seniority  role $role ". &verifyUserRole($ro
         my $currentrole = $userprivilege->{$privileges[0]};  
         return 0, "user '$user' does not exist" unless &verifyUserRole($currentrole);   
         return 0, "user '$user' already has role $role" if ($currentrole eq $role);   
+    }
+    else {
+        return 0, "user '$user' does not exist";
     }
 
 # test the seniority of the current arcturus user 
@@ -647,7 +650,6 @@ sub testUserRole {
 
 # (1) if privilege is specified, the current user should have at least that same privilege 
 
-
     if (my $privilege = $options{privilege}) {
 # test the privilege specified against the privilege of the current user
         my $requiredgrade = &verifyPrivilege($privilege) || 0;
@@ -676,7 +678,7 @@ sub testUserRole {
 
     if (my $role = $options{role}) {
 # test the role specified against the role of the current user
-        my $requiredrole = &verifyRole($role) || 0;
+        my $requiredrole = &verifyUserRole($role) || 0;
 
         if ($options{seniority}) {
 # specifies that the role of the current user should supersede the one of testuser
@@ -741,7 +743,7 @@ sub verifyUserRole {
 
     my %userroles = ('annotator'   => 0, 'finisher'      => 1,
                      'team leader' => 3, 'administrator' => 4,
-                     'superuser'   => 5); # space for more
+                     'superuser'   => 5, 'none'          => 0); # space for more
 
     return $userroles{$userrole} if defined($userrole); # return seniority
 
