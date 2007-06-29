@@ -112,7 +112,8 @@ public class ContigCAFWriter {
 		pstmtSegment = conn.prepareStatement(sql);
 
 		sql = "select tagtype,cstart,cfinal,tagcomment"
-				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id) where contig_id = ?";
+				+ " from TAG2CONTIG left join CONTIGTAG using(tag_id)"
+				+ " where contig_id = ? and tagtype is not null order by cstart asc";
 
 		pstmtContigTag = conn.prepareStatement(sql);
 
