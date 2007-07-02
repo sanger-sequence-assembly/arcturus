@@ -18,3 +18,7 @@ mail.smtp.auth=false
 
 mailhandler.to=adh@sanger.ac.uk
 mailhandler.domain=sanger.ac.uk
+
+jmxdb.url=jdbc:mysql://mcs1a:15001/JMXURL
+jmxdb.username=arcturus
+jmxdb.password=***REMOVED***
