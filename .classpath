@@ -7,5 +7,6 @@
 	<classpathentry kind="lib" path="lib/oracle-jdbc.jar"/>
 	<classpathentry kind="lib" path="lib/activation.jar"/>
 	<classpathentry kind="lib" path="lib/javamail.jar"/>
+	<classpathentry kind="lib" path="lib/jmxremote_optional.jar"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
