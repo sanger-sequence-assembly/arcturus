@@ -5,9 +5,15 @@ import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.File;
+import java.lang.management.ManagementFactory;
+import java.net.InetAddress;
+import java.sql.*;
 import java.util.Properties;
 import java.util.logging.*;
 import java.awt.GraphicsEnvironment;
+
+import javax.management.MBeanServer;
+import javax.management.remote.*;
 
 import uk.ac.sanger.arcturus.logging.*;
 
@@ -20,6 +26,7 @@ public class Arcturus {
 	static {
 		loadProperties();
 		initialiseLogging();
+		initialiseJMXRemoteServer();
 	}
 	
 	private static void loadProperties() {
@@ -83,6 +90,58 @@ public class Arcturus {
 			} else
 				dir = dir.getParentFile();
 		}
+	}
+
+	private static void initialiseJMXRemoteServer() {
+		try {
+			String hostname = InetAddress.getLocalHost().getHostName();
+			String url = "service:jmx:jmxmp://" + hostname + "/";
+			
+			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
+			
+			JMXServiceURL jurl = new JMXServiceURL(url);
+			
+			JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(jurl,
+					null, mbs);
+			
+			server.start();
+			
+			jurl = server.getAddress();
+			
+			System.err.println("JMX URL is " + jurl);
+			
+			storeJMXURL(jurl);
+		} catch (Exception e) {
+			logWarning("Error whilst initialising JMX remote server", e);
+		}
+	}
+	
+	private static void storeJMXURL(JMXServiceURL jurl) throws SQLException, ClassNotFoundException {
+		String url = getProperty("jmxdb.url");
+
+		String driver = "com.mysql.jdbc.Driver";
+
+		String username = getProperty("jmxdb.username");
+		String password = getProperty("jmxdb.password");
+
+		Class.forName(driver);
+
+		Connection conn = DriverManager.getConnection(url, username, password);
+
+		String sql = "insert into JMXURL(url,user) values (?,?)";
+
+		PreparedStatement pstmtInsert = conn.prepareStatement(sql);
+		
+		String user = System.getProperty("user.name");
+		
+		pstmtInsert.setString(1, jurl.toString());
+		pstmtInsert.setString(2, user);
+		
+		int rc = pstmtInsert.executeUpdate();
+
+		pstmtInsert.close();
+		
+		conn.close();
 	}
 
 	public static Properties getProperties() {
