@@ -324,7 +324,7 @@ sub fetchUserPrivileges {
 
 # then add user data in USER with user not in PRIVILEGE
 
-    my $union = "select USER.username,'none',role"
+    my $union = "select USER.username,'NONE',role"
               . "  from USER left join PRIVILEGE using (username)"
 	      . " where PRIVILEGE.username is null";
  
@@ -348,7 +348,7 @@ sub fetchUserPrivileges {
 
     my $privilege_hash = {};
     while (my ($username,$privilege,$role) = $sth->fetchrow_array()) {
-        $privilege = 'none' unless $privilege;
+        $privilege = 'none' unless $privilege; # or null?
         $role      = 'none' unless $role; # 
         $privilege_hash->{$username} = {} unless $privilege_hash->{$username};
         $privilege_hash->{$username}->{$privilege} = $role;
@@ -384,7 +384,7 @@ sub addNewUser {
     my $user = shift;
     my $role = shift || 'finisher';
 
-    return 0, "invalid role '$role' specified" unless &verifyUserRole($role);
+    return 0, "invalid role '$role' specified" unless defined &verifyUserRole($role);
 
 # test privilege of the current arcturus user (both grant_privilege and seniority)
 
@@ -426,7 +426,7 @@ sub updateUser {
     my $user = shift;
     my $role = shift || 'finisher';
 
-    return 0, "invalid role '$role' specified" unless &verifyUserRole($role);
+    return 0, "invalid role '$role' specified" unless defined &verifyUserRole($role);
 
 # test privilege of the current arcturus user (both grant_privilege and seniority)
 
@@ -446,7 +446,10 @@ print STDERR "updateUser seniority $seniority  role $role ". &verifyUserRole($ro
     my $userprivilege = &fetchUserPrivileges($dbh,user=>$user);
     if (my @privileges = keys %$userprivilege) {  
         my $currentrole = $userprivilege->{$privileges[0]};  
-        return 0, "user '$user' does not exist" unless &verifyUserRole($currentrole);   
+        unless (defined &verifyUserRole($currentrole)) {
+# occurs when 'user' is absent from both USER and PRIVILEGE tables
+            return 0, "user '$user' does not exist (1)";
+        } 
         return 0, "user '$user' already has role $role" if ($currentrole eq $role);   
     }
     else {
@@ -745,7 +748,7 @@ sub verifyUserRole {
                      'team leader' => 3, 'administrator' => 4,
                      'superuser'   => 5, 'none'          => 0); # space for more
 
-    return $userroles{$userrole} if defined($userrole); # return seniority
+    return $userroles{lc($userrole)} if defined($userrole); # return seniority
 
     return \%userroles; # return hash reference
 }
