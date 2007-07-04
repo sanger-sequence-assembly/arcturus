@@ -262,6 +262,14 @@ my $test = 0; if ($test) {
     return $pf[0], $pl[1];
 }
 
+sub getPositionRight {
+    my $this = shift;
+
+    my @position = $this->getPosition(0); # the first position pair
+
+    return $position[1];
+}
+
 sub setSequenceID {
 # read or contig sequence ID
     my $this = shift;
@@ -466,7 +474,7 @@ sub transpose {
     my $offset = shift;
     my %options = @_;
 
-    &verifyKeys(\%options,'transpose','prewindowstart' ,'prewindowfinal',
+    &verifyKeys('transpose',\%options,'prewindowstart' ,'prewindowfinal',
                                       'postwindowstart','postwindowfinal',
 		                      'nonew') unless (scalar(@_)%2);
 
@@ -480,7 +488,7 @@ sub mirror {
     my $mpupper = shift; # mirror position
     my %options = @_;
 
-    &verifyKeys(\%options,'mirror','mirrorpositionlower', # default 1
+    &verifyKeys('mirror',\%options,'mirrorpositionlower', # default 1
                                    'prewindowstart' ,'prewindowfinal',
                                    'postwindowstart','postwindowfinal',
 		                   'nonew');
@@ -498,7 +506,7 @@ sub remap {
     my $mapping = shift;
     my %options = @_;
 
-    &verifyKeys(\%options,'remap','prewindowstart' ,'prewindowfinal',
+    &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
                                   'break','nobreak','segmentaware',
  'usenew','list','useold',         
@@ -533,10 +541,11 @@ sub isEqual {
     my $tag  = shift;
     my %options = @_; # 'ignorenameofpattern, includestrand, inherit
   
-    &verifyKeys(\%options,'isEqual','ignorenameofpattern',
+    &verifyKeys('isEqual',\%options,'ignorenameofpattern',
                                     'ignoreblankcomment',
 		                    'includestrand',
                                     'copy','copycom',
+                                    'overlaps','contains',
                                     'inherit');
 
     return TagFactory->isEqual($this,$tag,%options);
@@ -552,7 +561,7 @@ sub writeToCaf {
     my $FILE = shift; # optional output file handle
     my %options = @_; # option 'annotag' allows override of default
 
-    &verifyKeys(\%options,'writeToCaf','pair','annotag');
+    &verifyKeys('writeToCaf',\%options,'pair','annotag');
 
     my $pair = $options{pair};
 
@@ -648,7 +657,7 @@ sub writeToEMBL {
     my $FILE = shift; # optional output file handle
     my %options = @_; # tagkey (CDS/TAG)
 
-    &verifyKeys(\%options,'writeToEMBL','tagkey');
+    &verifyKeys('writeToEMBL',\%options,'tagkey');
 
     my $tagtype    = $this->getType();
     my $strand     = lc($this->getStrand());
@@ -733,7 +742,7 @@ sub dump {
     my $FILE = shift; # optional file handle
     my %options = @_;
 
-    &verifyKeys(\%options,'dump','skip','pskip');
+    &verifyKeys('dump',\%options,'skip','pskip');
 
     my $skip = $options{skip}; # true to skip undefined items
 
@@ -778,8 +787,8 @@ sub dump {
 
 sub verifyKeys {
 # test hash keys against a list of input keys
-    my $hash = shift;
     my $method = shift; # method name
+    my $hash = shift; # reference to hash
 
     my %keys;
     foreach my $key (@_) {
@@ -789,8 +798,9 @@ sub verifyKeys {
     while (my($key,$value) = each %$hash) {
         next if $keys{$key};
         $value = 'undef' unless defined($value);
+        next if ($key eq 'debug' || $key eq 'logger');
         print STDERR "Invalid key $key => '$value' provided "
-                   . "for method Tag->$method\n" unless ($key eq 'debug' || $key eq 'logger');
+                   . "for method Tag->$method\n";
     }
 }
 
