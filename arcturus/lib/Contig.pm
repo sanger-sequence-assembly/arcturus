@@ -458,13 +458,19 @@ sub getTags {
 # return a reference to the array of Tag instances (can be empty)
     my $this = shift;
     my $load = shift; # option for loading by delayed instantiation
-    my $sort = shift; # option for sorting tags with position
+    my %options = @_;
+
+    &verifyKeys('getTags',\%options,'sort','merge');
 
     if (!$this->{Tag} && $load && (my $ADB = $this->{ADB})) {
         $ADB->getTagsForContig($this);
     }
 
-    ContigHelper->sortTags($this) if $sort; # and remove duplicates
+# sort tags and remove duplicates / merge coinciding tags
+
+    if ($options{sort} || $options{merge}) {
+        ContigHelper->sortContigTags($this,%options);
+    }
 
     return $this->{Tag};
 }
@@ -614,7 +620,7 @@ sub copy {
 
 # if none of these is specified, copy existing components as they are
 
-    &verifyKeys(\%options,"copy",'nocomponents','complete','parent','child');
+    &verifyKeys('copy',\%options,'nocomponents','complete','parent','child');
 
 # create a new instance
 
@@ -696,7 +702,7 @@ sub getStatistics {
 
     my %options;
     $options{pass} = $pass if $pass;
-#    &verifyKeys(\%options,'getStatistics','pass');
+#    &verifyKeys('getStatistics',\%options,'pass');
     return ContigHelper->statistics($this,%options);
 }
 
@@ -709,7 +715,7 @@ sub isEqual {
     my $compare = shift;
     my %options = @_;
 
-    &verifyKeys(\%options,'isEqual','sequenceonly');
+    &verifyKeys('isEqual',\%options,'sequenceonly');
     return ContigHelper->isEqual($this,$compare,%options);
 
 }
@@ -724,8 +730,9 @@ sub linkToContig {
     my $compare = shift; # Contig instance to be compared to $this
     my %options = @_;
 
-    &verifyKeys(\%options,'linkToContig','sequenceonly',    'new',
-                          'strong','readclipping'); # + others
+    &verifyKeys('linkToContig',\%options,'sequenceonly',    'new',
+                                         'forcelink',
+                                         'strong','readclipping'); # + others
     return ContigHelper->crossmatch($this,$compare,%options);
 }
 
@@ -798,7 +805,7 @@ my $ttags = $target->hasTags();
 #$LOGGER->setBlock('debug',unblock=>1) if $LOGGER;
 $LOGGER->debug("Contig->propagateTagsToContig : parent $parent target contig $target has tags: $ttags") if $LOGGER;
 
-    &verifyKeys(\%options,'propagateTags',@validoptionkeys);
+    &verifyKeys('propagateTags',\%options,@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
 }
 
@@ -812,7 +819,7 @@ sub writeToCaf {
     my $FILE = shift; # obligatory file handle
     my %options = @_;
 
-    &verifyKeys(\%options,'writeToCaf','noreads','readsonly','notags',
+    &verifyKeys('writeToCaf',\%options,'noreads','readsonly','notags',
 		                       'alltags','includetag','excludetag');
 
     return "Missing file handle for Caf output" unless $FILE;
@@ -885,7 +892,7 @@ sub writeToFasta {
     my $QFILE = shift; # optional, ibid for Quality Data
     my %options = @_;
 
-    &verifyKeys(\%options,'writeToFasta','readsonly','gap4name','minNX');
+    &verifyKeys('writeToFasta',\%options,'readsonly','gap4name','minNX');
 
     return "Missing file handle for Fasta output" unless $DFILE;
 
@@ -1009,7 +1016,7 @@ sub writeToMaf {
     my $RFILE = shift; # obligatory file handle for Placed Reads
     my %options = @_;  # minNX=>n , supercontigname=> , contigzeropoint=> 
 
-    &verifyKeys(\%options,'writeToMaf','minNX','supercontigname');
+    &verifyKeys('writeToMaf',\%options,'minNX','supercontigname');
 
     my $report = '';
 
@@ -1091,7 +1098,7 @@ sub writeToEMBL {
     my $QFILE = shift; # optional file handle for quality data
     my %options = @_;
 
-    &verifyKeys(\%options,'writeToEMBL','gap4name','includetag','tagkey');
+    &verifyKeys('writeToEMBL',\%options,'gap4name','includetag','tagkey');
 
 # compose identifier
 
@@ -1311,7 +1318,7 @@ sub reverse {
 # return the reverse complement of this contig (and its components)
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,"reverse",'nonew','complete','nocomponents','child');
+    &verifyKeys('reverse',\%options,'nonew','complete','nocomponents','child');
     return ContigHelper->reverseComplement($this,@_);
 }
 
@@ -1319,7 +1326,7 @@ sub extractEndRegion {
 # return a (new, always) contig object with only the end regions
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'extractEndRegion',
+    &verifyKeys('extractEndRegion',\%options,
                 'endregionsize','sfill','qfill','lfill');
     return ContigHelper->extractEndRegion($this,%options);
 }
@@ -1328,7 +1335,7 @@ sub endRegionTrim {
 # remove low quality data at either end 
     my $this = shift;
     my %options = @_; 
-    &verifyKeys(\%options,'endRegionTrim','new','cliplevel','complete');
+    &verifyKeys('endRegionTrim',\%options,'new','cliplevel','complete');
     return ContigHelper->endRegionTrim($this,%options);
 }
 
@@ -1336,7 +1343,7 @@ sub deleteLowQualityBases {
 # remove low quality dna
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'deleteLowQualityBases', 
+    &verifyKeys('deleteLowQualityBases',\%options, 
                 'threshold','minimum','window','hqpm','symbols',
                 'exportaschild','components');
     return ContigHelper->deleteLowQualityBases($this,%options);
@@ -1346,7 +1353,7 @@ sub replaceLowQualityBases {
 # replace low quality pads by a given symbol
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'replaceLowQualityBases','new','padsymbol',
+    &verifyKeys('replaceLowQualityBases',\%options,'new','padsymbol',
                 'threshold','minimum','window','hqpm','symbols',
                 'exportaschild','components'); # ??
     return ContigHelper->replaceLowQualityBases($this,%options);
@@ -1356,7 +1363,7 @@ sub removeLowQualityReads {
 # remove low quality bases and the low quality reads that cause them
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'removeLowQualityReads','nonew',
+    &verifyKeys('removeLowQualityReads',\%options,'nonew',
                 'threshold','minimum','window','hqpm','symbols');
     return ContigHelper->removeLowQualityReads($this,%options);
 }
@@ -1364,7 +1371,7 @@ sub removeLowQualityReads {
 sub removeShortReads {
     my $this = shift;
     my %options = @_; 
-    &verifyKeys(\%options,'removeShortReads','nonew','threshold');
+    &verifyKeys('removeShortReads',\%options,'nonew','threshold');
     return ContigHelper->removeShortReads($this,%options);
 }
 
@@ -1372,21 +1379,21 @@ sub removeNamedReads {
     my $this = shift;
     my $reads = shift; # array ref
     my %options = @_; 
-    &verifyKeys(\%options,'removeNamedReads','new');
+    &verifyKeys('removeNamedReads',\%options,'new');
     return ContigHelper->removeNamedReads($this,$reads,%options);
 }
 
 sub undoReadEdits {
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'undoReadEdits','nonew','ADB');
+    &verifyKeys('undoReadEdits',\%options,'nonew','ADB');
     return ContigHelper->undoReadEdits($this,%options);
 }
 
 sub break {
     my $this = shift;
     my %options = @_;
-    &verifyKeys(\%options,'break'); # none for the moment
+    &verifyKeys('break',\%options); # none for the moment
     return ContigHelper->break($this,%options);
 }
 
@@ -1417,9 +1424,9 @@ sub isPadded {
 #-------------------------------------------------------------------    
 
 sub verifyKeys {
-# test hash keys against a list of input keys
-    my $hash = shift;
+# private, test hash keys against a list of input keys
     my $method = shift; # method name
+    my $hash = shift; # reference to options hash
 
     my %keys;
     foreach my $key (@_) {
