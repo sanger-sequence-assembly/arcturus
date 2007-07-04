@@ -149,15 +149,19 @@ if (defined($contigids)) {
     $query = "select gap4name,contig_id,length from CONTIG";
     $query .= " where length > $minlen" if defined($minlen);
 } else {
-    $query = "select gap4name,CONTIG.contig_id,length from CONTIG left join C2CMAPPING" .
-	" on CONTIG.contig_id = C2CMAPPING.parent_id" .
-	    " where C2CMAPPING.parent_id is null";
+    $query = "select gap4name,contig_id,length from CURRENTCONTIGS";
 
-    $query .= " and length > $minlen" if defined($minlen);
+    my @conds;
 
-    $query .= " and project_id in ($pinclude)" if defined($pinclude);
+    push @conds, "length > $minlen" if defined($minlen);
 
-    $query .= " and project_id not in ($pexclude)" if defined($pexclude);
+    push @conds, "project_id in ($pinclude)" if defined($pinclude);
+
+    push @conds, "project_id not in ($pexclude)" if defined($pexclude);
+
+    if (@conds) {
+	$query .= " where " . join(" and ",@conds);
+    }
 }
 
 print STDERR $query,"\n";
