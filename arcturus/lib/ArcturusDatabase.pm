@@ -49,8 +49,8 @@ sub open {
 	$this->{DataSource} = $ds;
     }
     else {
-#	$this->{DataSource} = new DataSource(&screen(@_));
-	$this->{DataSource} = new DataSource(@_);
+	$this->{DataSource} = new DataSource(&screen(@_));
+#	$this->{DataSource} = new DataSource(@_);
     }
 
     return undef unless $this->{DataSource};
