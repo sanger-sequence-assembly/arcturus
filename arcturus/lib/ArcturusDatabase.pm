@@ -49,7 +49,7 @@ sub open {
 	$this->{DataSource} = $ds;
     }
     else {
-	$this->{DataSource} = new DataSource(&screen(@_));
+	$this->{DataSource} = new DataSource(&loadPropertiesFile(@_));
 #	$this->{DataSource} = new DataSource(@_);
     }
 
@@ -137,7 +137,7 @@ sub disconnect {
     }
 }
 
-sub screen {
+sub loadPropertiesFile {
 # private
     my %options = @_;
 
