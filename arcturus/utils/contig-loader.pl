@@ -829,12 +829,21 @@ if ($inew && $debug) {
             if ($info =~ /([ACGT]{5,})/) {
                 $tag->setDNA($1);
             }
-# pickup repeat name
+# special for repeats: pickup repeat name
             if ($type eq 'REPT') {
+# remove possible offset info (lost on inheritance)
+                $info =~ s/\,\s*offset\s+\d+//i;
+# try to find the name of the repeat
 		if ($info =~ /^\s*(\S+)\s+from/i) {
 $logger->info("TagSequenceName $1") if $noload;
                     $tag->setTagSequenceName($1);
 		}
+# no name found, try to generate one based on possible read mentioned
+                elsif ($info =~ /\bcontig\s+(\w+\.\w+)/) {
+$logger->info("TagSequenceName read $1");
+                    $tag->setTagSequenceName($1);   
+	        }
+# nothing useful found                
                 else {
 		    $logger->warning("Missing repeat name in contig tag for ".
                             $contig->getContigName().": ($lineCount) $record");
@@ -912,7 +921,12 @@ foreach my $identifier (keys %contigs) {
     if ($contig->getNumberOfReads() < $minOfReads) {
         $logger->warning("$identifier has less than $minOfReads reads");
         next;
-    }         
+    }
+
+# weedout duplicate tags
+
+    $contig->getTags(0,sort=>'full',merge=>1);
+
     $contig->setOrigin($origin);
 
     unless ($isUnpadded) {
@@ -978,8 +992,16 @@ $nc = scalar (keys %contigs);
 $logger->info("$nc contigs skipped") if $nc;
 $logger->info("$number contigs loaded");
 
-$project->setGap4Name($gap4name) if $gap4name;
-$project->markImport() if $project; # perhaps after safemode?
+# add import mark if contigs were loaded ? perhaps after safemode ?
+
+if ($number && $project) {
+    unless ($gap4name) {
+        $gap4name = `pwd`;
+        chomp $gap4name;
+    }
+    $project->setGap4Name($gap4name);
+    $project->markImport(); 
+}
 
 # add the Read tags
 
