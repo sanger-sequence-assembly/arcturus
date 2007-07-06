@@ -115,7 +115,7 @@ if (defined($assembly)) {
     $options{assemblyname} = $assembly if ($assembly =~ /\D/);
 }
 
-my $success;
+my $success = 0;
 
 my ($projects,$message) = $adb->getProject(%options);
 
