@@ -111,10 +111,7 @@ sub isEqual {
 
     return undef unless &verifyParameter($otag,'isEqual (2-nd parameter)');
 
-my $logger = &verifyLogger('isEqual');
-
-$logger->debug($atag->dump());
-$logger->debug($otag->dump());
+#    my $logger = &verifyLogger('isEqual');
 
 # compare tag type and host type
 
@@ -129,8 +126,24 @@ $logger->debug($otag->dump());
     my @equal = $amap->isEqual($omap);
 # insist on equality of position(s) with same alignment and no shift 
     unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
+        return 0 unless ($options{overlaps} || $options{contains});
 # $logger->debug("$amap $omap equality test @equal");
-        return 0;
+# test if otag tags is embedded in atag 
+        my @arange = $amap->getMappedRange();
+        my @orange = $omap->getMappedRange();
+# test if arange contains orange
+        if ($options{contains}) {
+#$logger->debug("arange @arange   orange @orange");
+            return 0 if ($orange[0] < $arange[0]);
+            return 0 if ($orange[1] > $arange[1]);
+#$logger->debug("amap $amap contains omap $omap");
+        }
+        if ($options{overlaps}) {
+#$logger->debug("arange @arange   orange @orange");
+            return 0 if ($orange[1] < $arange[0]);
+            return 0 if ($orange[0] > $arange[1]);
+#$logger->debug("amap $amap overlaps with omap $omap");
+        }
     }
 
 # compare tag comments
@@ -736,8 +749,10 @@ sub transpose {
             my $logger = &verifyLogger('transpose');
             $logger->debug("oldtranspose (offsets @$offset) TO BE DEPRECATED");
             my $wfinal = $options{postwindowfinal};
-            return &oldtranspose($class,$align,$offset,$wfinal);
+            return &oldtranspose($class,$tag,$align,$offset,$wfinal);
         }
+#      my $wfinal = $options{postwindowfinal};
+#      return &oldtranspose($class,$tag,$align,$offset,$wfinal);
         $offset = $offset->[0];
     }
 
@@ -813,11 +828,11 @@ sub remapper {
     $tag->setPositionMapping($newmapping); # replace by new mapping
 
 my $logger = &verifyLogger('remapper');
-$logger->debug("e:$isequal  a:$align  o:$shift");
+$logger->debug("e:$isequal  a:$align  o:$shift") if $isequal;
 $logger->debug($oldmapping->toString()) unless $isequal;
 $logger->debug($newmapping->toString()) unless $isequal;
-$logger->debug($oldmapping->toString()) if $isequal;
-$logger->debug($newmapping->toString()) if $isequal;
+#$logger->debug($oldmapping->toString()) if $isequal;
+#$logger->debug($newmapping->toString()) if $isequal;
 
     $tag->setStrand('C') if ($isequal && $align == -1); # signal other strand
 
@@ -1050,7 +1065,7 @@ sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
     my $offset = shift; # array length 2 with offset at begin and end
     my $window = shift || 1; # new position in range 1 .. window
 
-    return undef unless &verifyParameter($tag,'transpose');
+    return undef unless &verifyParameter($tag,'oldtranspose');
 
 print STDERR "TagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
 
@@ -1724,6 +1739,7 @@ sub verifyParameter {
     unless ($object && ref($object) eq $options{class}) {
         print STDERR "TagFactory->$method expects a $options{class} "
                    . "instance as parameter\n";
+        print STDERR "(instead of $object)\n" if $object;
 	return 0;
     }
 
