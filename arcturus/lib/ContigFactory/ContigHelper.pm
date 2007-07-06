@@ -119,7 +119,7 @@ $logger->debug("pass $pass");
                 if ($contig->hasTags()) {
                     $logger->fine("adjusting tag positions (to be tested)");
                     my %options = (nonew => 1,postwindowfinal => $cfinal);
-                    my $tags = $contig->getTags();
+                    my $tags = $contig->getTags(); # as is
                     foreach my $tag (@$tags) {
                         $tag->transpose(+1,$shift,%options);
                     }
@@ -1363,6 +1363,87 @@ sub removereads {
     }
 
     return $splicecount,$parity,$total;
+}
+
+sub break {
+# split a contig into new contigs on areas of no coverage
+    my $class = shift;
+    my $contig = shift;
+
+    &verifyPrivate($contig,"break");
+
+    my $logger = &verifyLogger("break");
+#    $logger->error("ENTER");
+
+# first determine if there are breaking points
+
+    my $mappings = $contig->getMappings();
+    return undef unless @$mappings;
+
+    @$mappings = sort { $a->getContigStart() <=> $b->getContigStart() } @$mappings;
+
+    my @break = (0);
+    my $nm = scalar(@$mappings);
+    my ($dummy,$farend) = $mappings->[0]->getContigRange();
+    for (my $i = 1 ; $i < $nm ; $i++) {
+        my @current = $mappings->[$i]->getContigRange();
+        unless ($current[0] <= $farend) { # i.e. if there is overlap
+            my $pmap = $mappings->[$i-1]->getMappingName();
+            my $cmap = $mappings->[$i]->getMappingName();
+            my @previous = $mappings->[$i-1]->getContigRange();
+            $logger->info("Discontinuity! $i: consecutive mappings $pmap ".
+                         "(@previous) and $cmap (@current) do not overlap");
+            push @break, $i;
+	}
+        $farend = $current[1] if ($current[1] > $farend);
+    }
+    push @break, $nm;
+
+    $logger->severe("breaking points @break");
+
+    return 0 unless @break > 2;
+
+# a more general approach: get a record of cover by sampling mapping boundaries
+
+    my %boundaries;
+    foreach my $mapping (@$mappings) {
+        my @range =  $mapping->getContigRange();
+        $boundaries{$range[0]}++;
+        $boundaries{$range[1]}++;
+    }
+
+    my @boundaries = sort {$a <=> $b} keys %boundaries; 
+
+# count number of reads straddling each interval
+
+    for (my $i = 1 ; $i < scalar(@boundaries) ; $i++) {
+    }
+
+# collect the new contigs:
+
+    my %readnamehash;
+    my $reads = $contig->getReads();
+    foreach my $read (@$reads) {
+        $readnamehash{$read->getReadName()} = $read;
+    }
+
+    my $contigbasename = $contig->getContigName();
+
+    my @contigs;
+    for (my $i = 1 ; $i < scalar(@break) ; $i++) {
+        my $contig = new Contig($contigbasename."-$i");
+        foreach my $map ( $break[$i-1] .. $break[$i]-1 ) {
+            my $mapping = $mappings->[$map];
+            my $readname = $mapping->getMappingName();
+            $contig->addMapping($mapping);
+            my $read = $readnamehash{$readname};
+            $contig->addRead($read);
+	}
+        $contig->getStatistics();
+        $logger->warning($contig->toString());
+	push @contigs,$contig;
+    }
+    return [@contigs];
 }
 
 #-----------------------------------------------------------------------------
@@ -2609,8 +2690,7 @@ sub propagateTagsToContig {
 # autoload tags unless tags are already defined
 
     $parent->getTags(1) unless $options{notagload};
-#    $parent->getTags(load=>1) unless $options{notagload}; ?
-#    $parent->getTags(sort=>1); ?
+#    $parent->getTags(1,sort=>1) unless $options{notagload};
 
 $logger->debug("ENTER");
 $logger->debug("parent $parent (".$parent->getContigID()
@@ -2722,7 +2802,8 @@ $logger->debug("Target contig length : $tlength ");
 
 # get the tags in the parent (as they are, but sorted and unique)
 
-    my $ptags = $parent->getTags(0,1);
+#    my $ptags = $parent->getTags(0,sort=>'basic'); # or merge?
+    my $ptags = $parent->getTags(0); # 
     next unless ($ptags && @$ptags); # just in case, but should not occur
 
 $logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
@@ -2860,15 +2941,16 @@ $logger->debug("new tag $tptag added to $contig");
     }
 }
 
-sub sortTags {
+sub sortContigTags {
 # sort and remove duplicate contig tags; re: Contig->getTags
     my $class = shift;
     my $contig = shift;
+    my %options = @_; # sort (basic, full), merge
 
-    &verifyParameter($contig,'sortTags');
+    &verifyParameter($contig,'sortContigTags');
 
-#my $logger = verifyLogger('sortTags');
-#$logger->debug("ENTER");
+    my $logger = verifyLogger('sortContigTags');
+$logger->debug("ENTER  o:@_");
 
     my $tags = $contig->getTags(); # tags as is
 
@@ -2876,14 +2958,26 @@ sub sortTags {
 
 # sort the tags with increasing tag position
 
-#$logger->debug('sorting');
-
-    @$tags = sort {$a->getPositionLeft() <=> $b->getPositionLeft()} @$tags;
+    if ($options{sort} && $options{sort} eq 'position') {
+# do a basic sort on start position
+$logger->debug('basic sorting');
+        @$tags = sort positionsort @$tags;
+    }
+    elsif ($options{sort} && $options{sort} eq 'full') {
+# do a sort on position and tag description in tagcomment
+$logger->debug('full sorting');
+        @$tags = sort fullsort @$tags;
+    }
+    elsif ($options{sort}) {
+        $logger->error("invalid sorting option '$options{sort}' ignored");
+    }
 
 # remove duplicate tags
 
-#$logger->debug('weeding out duplicates');
-#$logger->debug("@$tags");
+$logger->debug('weeding out duplicates');
+$logger->debug("tag before duplicate test ".scalar(@$tags));
+
+    my $merge = $options{merge};
 
     my $n = 1;
     while ($n < scalar(@$tags)) {
@@ -2891,15 +2985,50 @@ sub sortTags {
         my $nexttag = $tags->[$n];
 # splice the nexttag out of the array if the tags are equal
         if ($leadtag->isEqual($nexttag)) {
-#$logger->debug("n $n $leadtag equals $nexttag");
+#$logger->debug("n $n lead $leadtag equals next $nexttag");
 	    splice @$tags, $n, 1;
 	}
+        elsif ($merge && $leadtag->isEqual($nexttag,contains=>1)) {
+#$logger->debug("n $n lead $leadtag contains next $nexttag");
+#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
+#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
+	    splice @$tags, $n, 1; # lead tag contains next tag: remove next
+	}
+        elsif ($merge && $nexttag->isEqual($leadtag,contains=>1)) {
+#$logger->debug("n $n next $nexttag contains lead $leadtag");
+#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
+#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
+	    splice @$tags, $n-1, 1; # next tag contains lead tag: remove lead
+	}
+	elsif ($merge && $leadtag->isEqual($nexttag,overlaps=>1)) {
+#$logger->debug("n $n lead $leadtag overlaps with next $nexttag");
+#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
+#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
+	    splice @$tags, $n, 1; # lead tag is extended and contains next tag
+	}
         else {
+#$logger->debug("n $n lead $leadtag  NOT equal  next $nexttag");
 	    $n++;
 	}
     }    
-#$logger->debug("@$tags");
-#$logger->debug("EXIT",skip=>3);
+$logger->debug("tag after sort ".scalar(@$tags));
+$logger->debug("EXIT",skip=>3);
+}
+
+sub fullsort {
+# sort for weedout purposes (getting same comment tags grouped together)
+   $a->getTagComment()    cmp $b->getTagComment()     # sort on the description first
+ or
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # then on start position 
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
+}
+
+sub positionsort {
+# comparison with ordered existing tags
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # then on end position 
 }
 
 #-----------------------------------------------------------------------------
@@ -2921,7 +3050,8 @@ sub verifyPrivate {
     my $caller = shift;
     my $method = shift || 'verifyPrivate';
 
-    return unless ($caller && ref($caller) eq 'ContigHelper');
+    return unless ($caller && ($caller  eq 'ContigHelper' ||
+                           ref($caller) eq 'ContigHelper'));
     print STDERR "Invalid usage of private method '$method' in package ContigHelper\n";
     exit 1;
 }
@@ -2965,7 +3095,7 @@ sub setLogger {
 
     $LOGGER = $logger;
 
-    &verifyLogger(); # creates a default if $LOGGER undefined
+    &verifyLogger(0); # creates a default if $LOGGER undefined
 }
 
 #-----------------------------------------------------------------------------
