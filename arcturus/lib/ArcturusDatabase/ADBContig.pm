@@ -1036,20 +1036,20 @@ sub testContig {
             $ID = $read->getReadName()   if  $level; # import
 	    $ID = $read->getSequenceID() if !$level;
             if (!defined($ID)) {
-                $log->error("Missing identifier in Read ".$read->getReadName);
+                $log->severe("Missing identifier in Read ".$read->getReadName);
                 $success = 0;
             }
             $identifier{$ID} = $read;
 # test presence of sequence and quality data
             if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
-                $log->error("Missing DNA or BaseQuality in Read ".$read->getReadName);
+                $log->severe("Missing DNA or BaseQuality in Read ".$read->getReadName);
                 $success = 0;
             }
         }
         return 0 unless $success;       
     }
     else {
-        $log->error("Contig ".$contig->getContigName." has no Reads");
+        $log->severe("Contig ".$contig->getContigName." has no Reads");
         return 0;
     }
 
@@ -1065,33 +1065,53 @@ sub testContig {
 	        $ID = $mapping->getSequenceID() if !$level;
 # is ID among the identifiers? if so delete the key from the has
                 if (!$identifier{$ID}) {
-                    $log->error("Missing Read for Mapping ".
+                    $log->severe("Missing Read for Mapping ".
                                  $mapping->getMappingName." ($ID)");
                     $success = 0;
                 }
                 delete $identifier{$ID}; # delete the key
             }
 	    else {
-                $log->error("Mapping ".$mapping->getMappingName().
+                $log->severe("Mapping ".$mapping->getMappingName().
                             " for Contig ".$contig->getContigName().
                             " has no Segments");
                 $success = 0;
             }
         }
-        return 0 unless $success;       
+        return 0 unless $success;
     } 
     else {
-        $log->error("Contig ".$contig->getContigName." has no Mappings");
+        $log->severe("Contig ".$contig->getContigName." has no Mappings");
         return 0;
     }
 # now there should be no keys left (when Reads and Mappings correspond 1-1)
     if (scalar(keys %identifier)) {
         foreach my $ID (keys %identifier) {
             my $read = $identifier{$ID};
-           $log->error("Missing Mapping for Read ".$read->getReadName." ($ID)");
+            $log->severe("Missing Mapping for Read ".$read->getReadName." ($ID)");
         }
         return 0;
     }
+
+# test the Mappings for continuous cover
+
+    my $mappings = $contig->getMappings();
+    @$mappings = sort { $a->getContigStart() <=> $b->getContigStart() } @$mappings;
+    my $success = 1;
+    my ($dummy,$farend) = $mappings->[0]->getContigRange();
+    for (my $i = 1 ; $i < scalar(@$mappings) ; $i++) {
+        my @current = $mappings->[$i]->getContigRange();
+        unless ($current[0] <= $farend) { # i.e. if there is overlap
+            my $pmap = $mappings->[$i-1]->getMappingName();
+            my $cmap = $mappings->[$i]->getMappingName();
+            my @previous = $mappings->[$i-1]->getContigRange();
+            $log->severe("Discontinuity! $i: consecutive mappings $pmap ".
+                        "(@previous) and $cmap (@current) do not overlap");
+            $success = 0;
+	}
+        $farend = $current[1] if ($current[1] > $farend);
+    }
+    return 0 unless $success;
 
 # test the number of Reads against the contig meta data (info only; non-fatal)
 
@@ -1099,12 +1119,12 @@ sub testContig {
         my $reads = $contig->getReads();
         my $nreads =  scalar(@$reads);
         if ($nreads != $numberOfReads) {
-	    $log->error("Read count error for contig ".$contig->getContigName.
+	    $log->severe("Read count error for contig ".$contig->getContigName.
                         " (actual $nreads, metadata $numberOfReads)");
         }
     }
     elsif (!$level) {
-        $log->error("Missing metadata for ".contig->getContigName);
+        $log->severe("Missing metadata for ".contig->getContigName);
     }
     return 1;
 }
@@ -1288,7 +1308,7 @@ sub getReadMappingsForContig {
         else {
 # what if not? (should not occur at all)
             my $log = $this->verifyLogger("getReadMappingsForContig");
-            $log->error("Missing Mapping instance for ID $mappingid");
+            $log->severe("Missing Mapping instance for ID $mappingid");
         }
     }
 
@@ -1350,7 +1370,7 @@ sub getContigMappingsForContig {
 # do an age consistence check for this mapping
         $generation = $age unless defined ($generation);
         next if ($generation == $age);
-        $log->error("Inconsistent generation in links for contig $cid");
+        $log->severe("Inconsistent generation in links for contig $cid");
     }
     $sth->finish();
 
@@ -1367,7 +1387,7 @@ sub getContigMappingsForContig {
         }
         else {
 # what if not? (should not occur at all)
-            $log->error("Missing Mapping instance for ID $mappingid");
+            $log->severe("Missing Mapping instance for ID $mappingid");
         }
     }
 
@@ -1421,7 +1441,7 @@ sub putMappingsForContig {
     }
     else {
         $option{type} = 'missing' unless $option{type};
-        $log->error("Missing or invalid 'type' parameter $option{type}");
+        $log->severe("Missing or invalid 'type' parameter $option{type}");
         return 0; # or die ?
     }
 
@@ -1488,7 +1508,7 @@ sub putMappingsForContig {
             }
         }
         else {
-            $log->error("Mapping ".$mapping->getMappingName().
+            $log->severe("Mapping ".$mapping->getMappingName().
 		        " unexpectedly has no mapping_id");
             $success = 0;
         }
@@ -2791,6 +2811,62 @@ sub getRelationsForContigID {
 # methods dealing with contig TAGs
 #------------------------------------------------------------------------------
 
+sub getContigIDsWithTags {
+    my $this = shift;
+    my %options = @_;
+
+# tag_id,comment,tagtype,tagcomment,systematic_id,tag_seq_id
+
+    my $query = "select distinct contig_id from TAG2CONTIG";
+
+    if (($options{current} && !$options{notcurrent}) ||
+        ($options{notcurrent} && !$options{current})) {
+        $query .= " where contig_id";
+        $query .= "   not" if $options{notcurrent}; # overrides
+        $query .= "    in (select contig_id from CURRENTCONTIGS)";
+    }
+    delete $options{notcurrent};
+    delete $options{current};
+
+    my @bindvalue;
+    if ($options{comment}) {
+        $query .= "   and comment like ?"     if ($query =~ /where/);
+        $query .= " where comment like ?" unless ($query =~ /where/);
+        push @bindvalue,$options{comment};
+        delete $options{comment};
+    }
+
+    if (keys %options) {
+        my $subselect = "select tag_id from CONTIGTAG";
+        foreach my $key (keys %options) {
+            $subselect .= "   and"     if ($subselect =~ /where/);
+            $subselect .= " where" unless ($subselect =~ /where/);
+            $subselect .= " $key = ? "        if ($key =~ /\_id/);
+            $subselect .= " $key like ? " unless ($key =~ /\_id/);
+            push @bindvalue, $options{$key};
+	}
+        $query .= "   and tag_id in ($subselect)"     if ($query =~ /where/);
+        $query .= " where tag_id in ($subselect)" unless ($query =~ /where/);
+    }
+
+    $query .= " order by contig_id"; # print STDOUT "q: $query \n";
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($query);
+
+    $sth->execute(@bindvalue) || &queryFailed($query,@bindvalue);
+
+    undef my @contigids;
+    while (my ($contig_id) = $sth->fetchrow_array()) {
+        push @contigids, $contig_id;
+    }
+
+    $sth->finish();
+
+    return [@contigids]; # always return array, may be empty    
+}
+
 sub getTagsForContig {
 # add Tags to Contig instance; returns number of tags added; undef on error
     my $this = shift;
@@ -2856,7 +2932,7 @@ sub fetchTagsForContigIDs {
               . "   and CONTIGTAG.tag_seq_id = 0" # explicitly undefined sequence
 	      . "   and contig_id in (".join (',',@$cids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
-              . " order by contig_id,cstart";
+              . " order by contig_id,cstart,cfinal";
 
     $query =~ s/union/union all/ if $options{all}; # include duplicates
 
@@ -2890,21 +2966,16 @@ sub fetchTagsForContigIDs {
 
 # ---------------
 
-sub enterTagsForContig { # DEPRECTATED
+sub enterTagsForContig { # TEST purposes, to be DEPRECTATED
 # public method for test purposes
     my $this = shift;
     my $contig = shift;
     my %options = @_;
 
-#    die "enterTagsForContigPublic expects a Contig instance"
-#     unless (ref($contig) eq 'Contig');
+    $options{noload}   = 1 unless defined $options{noload};
+    $options{testmode} = 1 unless defined $options{testmode};
 
-#    my $dbh = $this->getConnection();
-
-#    my $log = $this->verifyLogger('enterTagsForContig');
-
-    return &putTagsForContig($this,$contig,@_);
-#    return &putTagsForContig($dbh,$contig,$log,1);
+    return &putTagsForContig($this,$contig,%options);
 }
 
 sub putTagsForContig {
@@ -2917,22 +2988,31 @@ sub putTagsForContig {
 
     return 1 unless $contig->hasTags(); # no tags
 
-    my $logger = $this->verifyLogger("putTagsForContig");
-
     my $cid = $contig->getContigID();
+    
+    my $contigname = $contig->getContigName() || $contig->getGap4Name();
 
-$logger->debug("contig ID = " . ($cid || 'undefined'));
+    unless (defined $cid) {
+        my $logger = $this->verifyLogger("putTagsForContig");
+        $logger->error("undefined contig ID in contig $contigname");
+        return undef;
+    }
 
     return undef unless defined $cid; # missing contig ID
 
 # get the tags and test for valid tag info (at least a tag type defined)
 
-my $otags = $contig->getTags(); # as is
-$logger->debug("otags $otags ".scalar(@$otags));
-    my $ctags = $contig->getTags(0,1); # as is, sort & remove possible duplicates
-$logger->debug("ctags $ctags ".scalar(@$ctags));
+    my $otags = $contig->getTags();
 
-# construct a hash table for tag instance names
+    my $ctags = $contig->getTags(0,sort=>'position'); # as is
+
+    my $logger = $this->verifyLogger("putTagsForContig");
+
+    if (my $removed = scalar(@$otags) - scalar(@$ctags)) {
+        $logger->warning("$removed duplicate tags removed from contig $contigname");
+    }
+
+# construct a hash table for tag instance names ; to be removed, but keep test on tagtype
 
     my $tags = {};
     foreach my $ctag (@$ctags) {
@@ -2951,6 +3031,8 @@ $logger->debug("Invalid tag in contig $cid: missing tagtype ($tagcomment)");
 
     my $testexistence = ($options{noexistencetest} ? 0 : 1);
 
+my $NEW = $options{testmode} || 0;
+
     if ($testexistence && keys %$tags) {
 
 $logger->debug("testing for existing Tags");
@@ -2959,9 +3041,13 @@ $logger->debug("testing for existing Tags");
     
 # delete the existing tags from the list
 
-my $NEW = 0; if ($NEW) {
+if ($NEW) {
+$logger->debug("NEW testing against existing tags",preskip=>1);
         my ($i,$j) = (0,0);
         while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
+$logger->debug("testing contigtag $i ".$ctags->[$i]->getPositionLeft()
+	      ."  against  existingtag $j ".$etags->[$j]->getPositionLeft());
+
             if ($ctags->[$i]->getPositionLeft() < $etags->[$j]->getPositionLeft()) {
                 $i++;
             }
@@ -2970,13 +3056,17 @@ my $NEW = 0; if ($NEW) {
             }
             elsif ($ctags->[$i]->isEqual($etags->[$j])) {
 # remove tag $i from list
+$logger->debug("remove contigtag $i");
                 splice @$ctags,$i,1;
             }
             else {
                 $j++; # next existing tag only
             }
         }
+$logger->debug("new tags ".scalar(@$ctags));
 } # end NEW
+
+else { # OLD
 
 # delete the existing tags from the hash
 
@@ -2992,6 +3082,7 @@ $logger->debug("tags are equal ".$ctag->dump(0,skip=>1));
 		}
             }
         }
+} # end OLD
 
 $logger->debug("end testing for existing Tags");
     }
@@ -3003,146 +3094,181 @@ $logger->debug("end testing for existing Tags");
         my $ctag = $tags->{$key};
         push @tags, $ctag;
     }
-    $ctags = [@tags];
+    $ctags = [@tags] unless $NEW;
 
-$logger->debug("new tags ".scalar(@tags));
+$logger->warning("new tags ".scalar(@$ctags));
+foreach my $tag (@$ctags) {
+    $logger->debug($tag->writeToCaf(0,annotag=>1));
+}
 
-    return 0 unless @tags; # no tags because of tag errors
+$logger->info("Loading? noload = $options{noload}");
+
+    return 0 if $options{noload};
+
+    return 0 unless @$ctags; # no new tags 
     
     $this->getTagSequenceIDsForTags($ctags,autoload => 1); # ->ADBRead
 
-    &getTagIDsForTags($dbh,$ctags,$logger);
+    $this->getTagIDsForContigTags($ctags,insert_enable=>1);
 
     return &putContigTags($dbh,$ctags,$logger);
 }
 
 
-sub getTagIDsForTags {
-# use as private method only: get tag IDs for tags with undefined tag_id
-    my $dbh = shift;
+sub getTagIDsForContigTags {
+# for tags with undefined tag_id: 1) find tag_id from tag comment or systematic ID
+#                                 2) if that fails, create a new tag_id
+# for tags with tag_id defined  : update systematic IDs if that's appropriate
+# 
+    my $this = shift;
     my $tags = shift; # ref to array with Tags
-    my $log = shift;
+    my %options = @_;
 
-    &verifyPrivate($dbh,"getTagIDsForTags");
+    &verifyParameter($tags,"getTagIDsForTags",'ARRAY');
 
-$log->setPrefix('getTagIDsForTags');
-$log->debug("get tag IDs for ".scalar(@$tags)." tags");
+    return 0 unless ($tags && @$tags);
 
-    return undef unless ($tags && @$tags);
+    &verifyParameter($tags->[0],"getTagIDsForTags",'Tag');
+
+
+    my $logger = $this->verifyLogger('getTagIDsForContigTags');
+
+$logger->debug("get IDs for ".scalar(@$tags)." tags");
+
+    my ($dbh, $qsth,$isth,$usth, $query,$insert,$update);
+
+    $dbh = $this->getConnection();
+
+# prepare query to identify the tag_id from either tagcomment or systematic ID
 
 # first we test if the combination tagtype and tagcomment/systematic ID exists
-# we use the UNION construct to test cases where either tagcommenmt or the
+# we use the UNION construct to test cases where either tagcomment or the
 # systematic ID is null; we also cater for undefined data values (-> 'is not null') 
 
-    my $query = "select tag_id,systematic_id,tag_seq_id"
-              . "  from CONTIGTAG"
-              . " where tagtype = ?"
-              . "   and tagcomment is not null" # these three conditions ensure
-              . "   and tagcomment != ''"       # that no line is returned should
-              . "   and tagcomment = ?"         # the bind value be NULL or '' 
-              . " union "
-              . "select tag_id,systematic_id,tag_seq_id"
-              . "  from CONTIGTAG"
-              . " where tagtype = ?"
-              . "   and systematic_id is not null and systematic_id = ?"
-              . "   and (tagcomment is null or tagcomment = '')"
-	      . " limit 1";
+    $query = "select tag_id,systematic_id,tag_seq_id"
+           . "  from CONTIGTAG"
+           . " where tagtype = ?"
+           . "   and tagcomment is not null" # these three conditions ensure
+           . "   and tagcomment != ''"       # that no line is returned should
+           . "   and tagcomment = ?"         # the bind value be NULL or '' 
+           . " union "
+           . "select tag_id,systematic_id,tag_seq_id"
+           . "  from CONTIGTAG"
+           . " where tagtype = ?"
+           . "   and systematic_id is not null and systematic_id = ?"
+           . "   and (tagcomment is null or tagcomment = '')"
+           . " limit 1";
 
-    my $sth = $dbh->prepare($query);
+    $qsth = $dbh->prepare($query);
 
-    my %sIDupdate;
-    foreach my $tag (@$tags) {
+# prepare insert of new contigtag info 
 
-# retrieve contig tag information for combination tagtype & tagcomment/systematic_id
+    if ($options{insert_enable}) {
 
-        my $tagtype = $tag->getType(); # already tested in putTagsForContig
-        my $tagcomment = $tag->getTagComment();
-        my $systematic_id = $tag->getSystematicID();
-        my @data = ($tagtype,$tagcomment,$tagtype,$systematic_id);
+        $insert = "insert into CONTIGTAG "
+                . "(tagtype,systematic_id,tag_seq_id,tagcomment) "
+	        . "values (?,?,?,?)";
 
-# pull out existing data
+        $isth = $dbh->prepare_cached($insert);
 
-        my $rc = $sth->execute(@data) || &queryFailed($query,@data);
+# prepare update of systematic ID
 
-        if ($rc > 0) {
-            my ($tag_id,$systematic_id,$tag_seq_id) = $sth->fetchrow_array();
-$log->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
-# now a) test consistency of tag ID and tag seq ID
-            my $existingtagid = $tag->getTagID();
-            if ($existingtagid && $existingtagid != $tag_id) {
-                $log->error("Inconsistent tag ID ($existingtagid "
-                           ."vs $tag_id for '$tagcomment')");
-            }
-            $tag->setTagID($tag_id);
-            my $existingseqid = $tag->getTagSequenceID();
-            if ($existingseqid && $existingseqid != $tag_seq_id) {
-                $log->error("Inconsistent tag sequence ID ($existingseqid ".
-                             "vs $tag_seq_id for '$tagcomment')");
-            }
-            $tag->setTagSequenceID($tag_seq_id);
-# and flag an update to sys ID
-            $sIDupdate{$tag}++ unless $systematic_id;
-$log->debug($tag->dump(0,skip=>1));
-	}
-        $sth->finish();
+        $update = "update CONTIGTAG set systematic_id = ? where tag_id = ?";
+
+        $usth = $dbh->prepare_cached($update);
     }
 
-    $sth->finish();
-
-# second, for those tags that do not now have an ID, we generate a new entry
-# in the CONTIGTAG table
-
-    my $insert = "insert into CONTIGTAG "
-               . "(tagtype,systematic_id,tag_seq_id,tagcomment) "
-	       . "values (?,?,?,?)";
-
-    $sth = $dbh->prepare_cached($insert);        
+# ok, run through each tag in turn
 
     my $failed = 0;
 
+    my $systematicIDhash = {};
+
     foreach my $tag (@$tags) {
-# skip a tag if the ID is already defined
+
+        my $inconsistent = 0;
+
+# (1) identify the tag_id from either tagcomment or systematic ID
+
+        my $tagtype = $tag->getType();
+        unless ($tagtype) {
+	    next;
+	}
+        my $tagcomment = $tag->getTagComment();
+        my $systematic_id = $tag->getSystematicID();
+        my @binddata = ($tagtype,$tagcomment,$tagtype,$systematic_id);
+
+# pull out existing data
+
+        my $rc = $qsth->execute(@binddata) || &queryFailed($query,@binddata);
+
+        if ($rc > 0) {
+            my ($tag_id,$systematic_id,$tag_seq_id) = $qsth->fetchrow_array();
+$logger->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
+# test consistency of tag ID and tag seq ID
+            my $existingtagid = $tag->getTagID();
+            if ($existingtagid && $existingtagid != $tag_id) {
+                $logger->special("Inconsistent tag ID ($existingtagid "
+                                ."vs $tag_id for '$tagcomment')",ss=>1);
+                $inconsistent++;
+            }
+            $tag->setTagID($tag_id) if $tag_id;
+# test consistency of tag sequence ID and tag seq ID
+            my $existingseqid = $tag->getTagSequenceID();
+            if ($existingseqid && $existingseqid != $tag_seq_id) {
+                $logger->special("Inconsistent tag sequence ID ($existingseqid "
+                                ."vs $tag_seq_id for '$tagcomment')",ss=>1);
+                $inconsistent++;
+            }
+            $tag->setTagSequenceID($tag_seq_id) if $tag_seq_id; # dbase value
+# and flag a possible update to sys ID
+            $systematicIDhash->{$tag}++ unless $systematic_id;
+	}
+# if no match of data found, set tag ID to undefined
+        else {
+            $tag->setTagID(0);
+	}
+        $qsth->finish();
+
+# for those tags that do not have an ID, we generate a new entry in CONTIGTAG
+
         next if $tag->getTagID();
-$log->debug("inserting into CONTIGTAG");
-        my $tagtype        = $tag->getType();
-        next unless $tagtype; # invalid tag
-        my @data = ($tagtype,
-                    $tag->getSystematicID(),
-                    $tag->getTagSequenceID() || 0,
-                    $tag->getTagComment());
-        my $rc =  $sth->execute(@data) || &queryFailed($insert,@data);
+ 
+        @binddata = ($tag->getType(),
+                     $tag->getSystematicID(),
+                     $tag->getTagSequenceID() || 0,
+                     $tag->getTagComment());
+
+$logger->debug("To be inserted into CONTIGTAG : @binddata");
+        next unless $options{insert_enable};
+
+        $rc = $isth->execute(@binddata) || &queryFailed($insert,@binddata);
 
         if ($rc > 0) {
             my $tag_id = $dbh->{'mysql_insertid'};
             $tag->setTagID($tag_id);
-$log->debug("ID $tag_id added");
         }
         else {
             $failed++;
 	}
+        $isth->finish();
     }
-
-    $sth->finish();
 
 # finally update systematic IDs, if any
 
-    if (keys %sIDupdate) {
-
-        my $update = "update CONTIGTAG set systematic_id = ? where tag_id = ?";
-
-        my $sth = $dbh->prepare_cached($update);
+    if ($options{insert_enable} && keys %$systematicIDhash) {
 
         foreach my $tag (@$tags) {
-            next unless $sIDupdate{$tag};
-#            my $tag_id = $tag->getTagID();
-#            my $systematic_id = $tag->getSystematicID();
+            next unless $systematicIDhash->{$tag};
+            next unless $tag->getSystematicID();
             my @binddata = ($tag->getTagID(),$tag->getSystematicID());
-$log->debug("systematic ID added (@binddata)");
-            $sth->execute(@binddata) || &queryFailed($update,@binddata);
+$logger->debug("systematic ID to be added (@binddata)");
+            $usth->execute(@binddata) || &queryFailed($update,@binddata);
+            $usth->finish();
 	}
     }
 
-$log->debug("EXIT, failed = $failed");
+$logger->debug("EXIT, failed = $failed");
     return $failed;
 }
 
@@ -3153,7 +3279,7 @@ sub putContigTags {
     my $tags = shift; # ref to array with Tags
 my $log = shift;
 
-    &verifyPrivate($dbh,"getTagIDsForTags");
+    &verifyPrivate($dbh,"putContigTags");
 
 $log->setPrefix("putContigTags") if $log;
 $log->debug("put Tags for ".scalar(@$tags)." tags") if $log;
