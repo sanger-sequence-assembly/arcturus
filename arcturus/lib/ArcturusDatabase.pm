@@ -22,9 +22,13 @@ sub new {
 
     $this->open(@_); # get the data source
 
+    print STDERR "ArcturusDatabase::open failed to create a DataSource\n" unless $this->{DataSource};
+
     return undef unless $this->{DataSource}; # test it
 
     $this->init(); # get the database connection
+
+    print STDERR "ArcturusDatabase::init failed to obtain a database connection\n" unless $this->{Connection};
 
     return undef unless $this->{Connection}; # test it
 
@@ -45,8 +49,8 @@ sub open {
 	$this->{DataSource} = $ds;
     }
     else {
-	$this->{DataSource} = new DataSource(&screen(@_));
-#	$this->{DataSource} = new DataSource(@_);
+#	$this->{DataSource} = new DataSource(&screen(@_));
+	$this->{DataSource} = new DataSource(@_);
     }
 
     return undef unless $this->{DataSource};
