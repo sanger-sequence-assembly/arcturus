@@ -184,7 +184,7 @@ if ($role) {
 # get the current set of valid privileges
     my $roles = $adb->getValidUserRoles(); # returns a hash
 
-    if ($role && !$roles->{$role}) {
+    if ($role && !defined($roles->{$role})) {
         unless ($role =~ /help|\?/) {
             $logger->severe("Invalid role '$role' specified",preskip=>1);
 	}
@@ -210,7 +210,7 @@ my $success = 0;
 if (!$action) {
 # list current user privilege(s)
     my $list;
-    if ($user =~ /[\%\_]/) {
+    if ($user && $user =~ /[\%\_]/) {
         $list = $adb->getUserPrivileges($user);
         undef $user;
     }
@@ -326,9 +326,14 @@ sub showUsage {
     print STDERR "-list\t\t (no value) show the current user privileges\n";
     print STDERR "\n";
     print STDERR "-user\t\t username to be processed\n";
+    print STDERR "-privilege\t username to be processed\n";
+    print STDERR "\n";
     print STDERR "\t\t adding or removing privilege require user to be defined\n";
     print STDERR "-addprivilege\t (ap)add the specified privilege\n";
     print STDERR "-removeprivilege (rp)remove the specified privilege\n";
+    print STDERR "\n";
+    print STDERR "-newuser\t(nu)\n";
+    print STDERR "-newrole\t(nr) for user\n";
     print STDERR "\n";
     print STDERR "-deleteuser\t (du) delete all privileges of the user specified\n";
     print STDERR "-force\t\t (with 'deleteuser') removes the user from database\n";
