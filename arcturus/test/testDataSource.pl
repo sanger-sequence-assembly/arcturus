@@ -19,6 +19,11 @@ die "You must specify the organism" unless defined($organism);
 $ds = new DataSource(-instance => $instance,
 		     -organism => $organism);
 
+if (!defined($ds)) {
+    print STDERR "Failed to locate a datasource for instance=\"$instance\" and organism=\"$organism\"\n";
+    exit(1);
+}
+
 $url = $ds->getURL();
 print "The URL is $url\n";
 
