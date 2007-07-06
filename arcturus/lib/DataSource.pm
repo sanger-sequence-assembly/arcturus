@@ -54,8 +54,11 @@ sub new {
     # Perform the search
     $mesg = $ldap->search(base   => $base,
 			  scope => 'sub',
+			  deref => 'always',
 			  filter => "($filter)"
 			  );
+
+    die "LDAP search returned a null message" if !defined($mesg);
 
     $mesg->code && die $mesg->error;
 
