@@ -47,7 +47,7 @@ public class Minerva {
 
 				is.close();
 
-				buildtime = myprops.getProperty("BuildTime");
+				//buildtime = myprops.getProperty("BuildTime");
 			}
 		} catch (IOException ioe) {
 			// Do nothing
