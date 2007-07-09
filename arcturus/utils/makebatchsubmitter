@@ -6,11 +6,12 @@ use WrapDBI;
 use DBI;
 
 my $njobs = 8;
-my $instance = 'dev';
+my $instance = 'pathogen';
 my $organism;
 my $schema;
 my $projid = 1;
 my $queue;
+my $arcturus_home;
 
 while (my $nextword = shift @ARGV) {
     $njobs = shift @ARGV if ($nextword eq '-njobs');
@@ -24,12 +25,18 @@ while (my $nextword = shift @ARGV) {
     $projid = shift @ARGV if ($nextword eq '-projid');
 
     $queue = shift @ARGV if ($nextword eq '-q');
+
+    $arcturus_home = shift @ARGV if ($nextword eq '-arcturus_home');
 }
 
-unless (defined($organism) && defined($schema) && defined($queue)) {
+$arcturus_home = $ENV{'ARCTURUS_HOME'} unless defined($arcturus_home);
+
+unless (defined($organism) && defined($schema) && defined($queue) && defined($arcturus_home)) {
     &showUsage();
     exit(1);
 }
+
+$arcturus_home = $ENV{'ARCTURUS_HOME'} unless defined($arcturus_home);
 
 my $dbh = WrapDBI->connect('pathlook');
 
@@ -59,11 +66,11 @@ $dbh->disconnect();
 my @headers =
     ('#!/bin/csh -f',
      '',
-     'set SCRIPT_HOME=`dirname $0`',
-     'set UTILS_DIR=${SCRIPT_HOME}/../utils',
+     'set ARCTURUS_HOME=' . $arcturus_home,
+     'set UTILS_DIR=${ARCTURUS_HOME}/utils',
      '',
      'set bsub="bsub"',
-     'set script=${UTILS_DIR}/readloader',
+     'set script=${UTILS_DIR}/read-loader',
      'set params="-instance ' . $instance . ' -organism ' . $organism . ' -source Oracle -schema ' . $schema . ' -projid ' . $projid . '"',
      'set queue="-q ' . $queue . '"'
      );
@@ -80,7 +87,13 @@ for (my $job = 0; $job < $njobs; $job++) {
     my $nstart = $job * $nblock;
     my $nfinish = ($job + 1) * $nblock - 1;
 
-    print '${bsub} ${queue} ${script} ${params}';
+    my $jobname = $organism . ($job + 1);
+
+    my $outfile = lc($jobname) . ".out";
+
+    my $jobopts = "-J $jobname -N -o $outfile";
+
+    print '${bsub} ${queue} ' . $jobopts . ' ${script} ${params}';
 
     if ($job > 0) {
 	print " -minreadid ",$readids[$nstart];
@@ -103,6 +116,7 @@ sub showUsage {
 
     print STDERR "\nOPTIONAL PARAMETERS:\n";
     print STDERR "\t-njobs\t\t\tNumber of parallel jobs [default: 8]\n";
-    print STDERR "\t-instance\t\tArcturus instance [default: dev]\n";
+    print STDERR "\t-instance\t\tArcturus instance [default: pathogen]\n";
     print STDERR "\t-projid\t\t\tOracle project ID [default: 1]\n";
+    print STDERR "\t-arcturus_home\t\tLocation of Arcturus installation\n";
 }
