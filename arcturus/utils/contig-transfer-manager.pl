@@ -681,11 +681,21 @@ elsif ($action eq 'execute') {
             &sendMessage($requester,"$report by $user") if ($user ne $requester);
             $processed++;
         }
-        elsif ($status) {
-            print STDERR "THIS SHOULD NOT OCCUR\n";
+        elsif ($status && $report =~ /\blocked\b/) { # original project locked
+            $logger->warning("contig $cid could not be moved : "
+                            . "original project inaccessible");
+            $logger->warning($report);
+            $logger->warning("the request will be requeued");
+            $adb->modifyContigTransferRequest($request,2,$force,status=>'approved');
 	}
-        else {
-            $report = "project $pid is locked; request will be requeued";
+        elsif ($status) {
+            print STDERR "THIS SHOULD NOT OCCUR (status $status, $report)\n";
+        }
+        else { # destination project locked
+            $logger->warning("contig $cid could not be moved : "
+                            ."destination project inaccessible");
+            $logger->warning($report);
+            $logger->warning("the request will be requeued");
             $adb->modifyContigTransferRequest($request,2,$force,status=>'approved');
 	}
     }
