@@ -466,7 +466,7 @@ sub linkContigIDsToProjectID {
 
     return (0,"The contig list is empty") unless @$contig_ids;
 
-# check if project specified can be modified by the user
+# check if the destination project can be modified by the current user
 
     my $donotreleaselock;
 
@@ -494,23 +494,24 @@ sub linkContigIDsToProjectID {
 # from their current project to the new one only if their current project
 # is not locked by someone else (this cannot be overridden; you have to
 # have those contigs unlocked first by their owners).
-# However, we are using a join of CONTIG and PROJECT for consistence testing
-# and nothing will happen if the project_id in CONTIG doesn't exist in PROJECT
-# Therefore, we also use a left join 
 
-# THIS QUERY SUCKS! investigate! 1) add extra precaution of 'status' check
+# We are using a join of CONTIG and PROJECT for consistence testing and 
+# nothing will happen if the project_id in CONTIG doesn't exist in PROJECT
+# (inconsistency of CONTIG/PROJECT info) Therefore, we also use a left join 
+
+# investigate! 1) add extra precaution of 'status' check
 #  2) add status check to original project as well!
-# this doesn't address the project status of the contig is in now
+# this doesn't address the project status of the contig is in now ?
 
     my $message = '';
 
     my $query = "update CONTIG,PROJECT"
-              . "   set CONTIG.project_id = $project_id"
-              . " where CONTIG.project_id = PROJECT.project_id"
+              . "   set CONTIG.project_id = $project_id" # the new pid
+              . " where CONTIG.project_id = PROJECT.project_id" # the current pid
               . "   and CONTIG.contig_id in (".join(',',@$contig_ids).")"
               . "   and CONTIG.project_id != $project_id"
 # the fluid lock status is tested earlier, here prevent change to frozen
-#	      . "   and PROJECT.status not in ('finished','quality checked')"
+	      . "   and PROJECT.status not in ('finished','quality checked')"
 	      . "   and (PROJECT.lockdate is null or PROJECT.owner = '$user')";
     $query   .= "   and CONTIG.project_id = 0" if $unassigned; # ? what, when?
 
@@ -569,10 +570,10 @@ sub linkContigIDsToProjectID {
 
     my $na = 0; # not assigned
     while (my ($cid,$pid,$locked,$owner,$lockowner) = $sth->fetchrow_array()) {
-#    while (my ($cid,$pid,$locked,$owner) = $sth->fetchrow_array()) {
-        $message .= "- contig $cid is in project $pid ";
-        $message .= "(owned by user $owner)\n" unless $locked;
-        $message .= "(owned by user $owner; locked by $lockowner)\n" if $locked;
+	my $ownedby = $owner ? "owned by $owner" : "no owner";
+        $message .= "contig $cid is in project $pid ";
+        $message .= "($ownedby)\n" unless $locked;
+        $message .= "($ownedby; locked by $lockowner)\n" if $locked;
         $na++;
     }
 
@@ -582,11 +583,14 @@ sub linkContigIDsToProjectID {
 
     &setLockedStatus($dbh,$project_id,$user,0) unless $donotreleaselock;
 
-    $message .= "$na contigs were NOT assigned to project $project_id\n" if $na;
+    if (scalar(@$contig_ids) > 1) {
+# add more details if more than one cid specified
+        $message .= "$na contigs were NOT assigned to project $project_id\n" if $na;
 
-    $message .= ($na ? (scalar(@$contig_ids)-$na) : "All")
-	      . " contigs specified are assigned to project $project_id\n";
-    
+        $message .= ($na ? (scalar(@$contig_ids)-$na) : "All")
+	         . " contigs specified are assigned to project $project_id\n";
+    }
+     
     return (2,$message);
 }
 
