@@ -79,22 +79,91 @@ public class ContigPadAnalyser {
 				char base = mappings[rdid].getBase(rpos);
 				int qual = mappings[rdid].getQuality(rpos);
 				int seqid = mappings[rdid].getSequence().getID();
-				
+
 				byte[] quality = mappings[rdid].getSequence().getQuality();
-				
+
 				int[] qclip = calculateClipping(quality, thresh);
 
 				int qleft = qclip[0];
 				int qright = qclip[1];
 
+				ps
+						.println("----------------------------------------------------------------------");
+
 				ps.println(cpos + " " + seqid + " " + rpos + " " + base + " "
 						+ qual + " " + qleft + " " + qright
 						+ (rpos <= qleft || rpos >= qright ? " *" : ""));
+
+				reviseMapping(mappings[rdid], qleft, qright, ps);
 			}
 		}
-
 	}
-	
+
+	private void reviseMapping(Mapping mapping, int qleft, int qright,
+			PrintStream ps) {
+		ps.println();
+		ps.println("Revising mapping for sequence "
+				+ mapping.getSequence().getID());
+
+		Segment[] segments = mapping.getSegments();
+		
+		boolean forward = mapping.isForward();
+
+		for (int i = 0; i < segments.length; i++) {
+			Segment segment = segments[i];
+
+			int cs = segment.getContigStart();
+			int cf = segment.getContigFinish();
+
+			int rs = segment.getReadStart();
+			int rf = segment.getReadFinish(forward);
+
+			ps.print(cs + "\t" + cf + "\t-->\t" + rs + "\t" + rf);
+			
+			if (mapping.isForward()) {
+				if (rf <= qleft || rs >= qright)
+					ps.println("\tDELETED");
+				else if (rs > qleft && rf < qright)
+					ps.println();
+				else {
+					if (rs <= qleft) {
+						int dleft = qleft - rs + 1;
+						rs += dleft;
+						cs += dleft;
+						ps.print("\tMODIFIED-LEFT\t");
+					} else {
+						int dright = rf - qright + 1;
+						rf -= dright;
+						cf -= dright;
+						ps.print("\tMODIFIED-RIGHT\t");
+					}
+					
+					ps.println(cs + "\t" + cf + "\t-->\t" + rs + "\t" + rf);
+				}
+			} else {
+				if (rs <= qleft || rf >= qright)
+					ps.println("\tDELETED");
+				else if (rf > qleft && rs < qright)
+					ps.println();
+				else {
+					if (rf <= qleft ) {
+						int dleft = qleft - rf + 1;
+						rf += dleft;
+						cf += dleft;
+						ps.print("\tMODIFIED-LEFT\t");
+					} else {
+						int dright = rs - qright + 1;
+						rs -= dright;
+						cs -= dright;
+						ps.print("\tMODIFIED-RIGHT\t");
+					}
+					
+					ps.println(cs + "\t" + cf + "\t-->\t" + rs + "\t" + rf);
+				}
+			}
+		}
+	}
+
 	private int[] calculateClipping(byte[] quality, int thresh) {
 		int[] q = new int[quality.length];
 
@@ -195,8 +264,14 @@ public class ContigPadAnalyser {
 			PrintStream ps = new PrintStream(new FileOutputStream(
 					"/tmp/cpa.out"));
 
+			long tstart = System.currentTimeMillis();
+			
 			cpa.analyseContig(contig_id, thresh, ps);
 
+			long dt = System.currentTimeMillis()- tstart;
+			
+			System.err.println("Run time = " + dt + " milliseconds");
+			
 			ps.close();
 		} catch (Exception e) {
 			e.printStackTrace();
