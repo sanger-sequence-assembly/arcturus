@@ -284,13 +284,13 @@ public class ArcturusInstance implements Iterator {
 	 * @return a Vector of all of the organisms in this instance.
 	 */
 
-	public Vector getAllOrganisms() throws NamingException {
+	public Vector<Organism> getAllOrganisms() throws NamingException {
 		NamingEnumeration enumeration = context.listBindings("");
 
 		if (enumeration == null)
 			return null;
 
-		Vector zoo = new Vector();
+		Vector<Organism> zoo = new Vector<Organism>();
 
 		while (enumeration.hasMore()) {
 			Binding bd = (Binding) enumeration.next();
@@ -308,8 +308,7 @@ public class ArcturusInstance implements Iterator {
 				String description = getDescription(name);
 
 				if (description != null)
-					zoo
-							.add(new Organism(name, description,
+					zoo.add(new Organism(name, description,
 									(DataSource) object));
 			}
 		}
