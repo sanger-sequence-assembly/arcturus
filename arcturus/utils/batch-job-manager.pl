@@ -204,8 +204,9 @@ foreach my $project (@projects) {
     if ($batch) {
 # export by batch job
         my $command;
-        $command = "bsub -q  babelq1 -N " if $babel;;
-        $command = "bsub -q  pcs3q1 -N " unless $babel;
+        $command = "bsub -q babelq1 -N " if $babel;
+        $command = "bsub -q pcs3q1  -N " unless $babel;
+	$command .= "-R 'select[mem>16000] rusage[mem=16000]' ";
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
         if ($ioport eq 'import') {
