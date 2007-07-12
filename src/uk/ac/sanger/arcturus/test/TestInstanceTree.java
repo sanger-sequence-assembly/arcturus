@@ -151,29 +151,29 @@ public class TestInstanceTree {
 			for (MinervaTreeNode node : children)
 				root.add(node);
 		}
-	}
 
-	private String getDescription(DirContext context, String name)
-			throws NamingException {
-		String cn = name.startsWith("cn=") ? name : "cn=" + name;
+		private String getDescription(DirContext context, String name)
+				throws NamingException {
+			String cn = name;
 
-		String attrnames[] = { "description" };
+			String attrnames[] = { "description" };
 
-		Attributes attrs = context.getAttributes(cn, attrnames);
+			Attributes attrs = context.getAttributes(cn, attrnames);
 
-		Attribute description = attrs.get(attrnames[0]);
+			Attribute description = attrs.get(attrnames[0]);
 
-		if (description == null)
-			return null;
+			if (description == null)
+				return null;
 
-		String desc = null;
+			String desc = null;
 
-		try {
-			desc = (String) description.get();
-		} catch (NoSuchElementException nsee) {
+			try {
+				desc = (String) description.get();
+			} catch (NoSuchElementException nsee) {
+			}
+
+			return desc;
 		}
-
-		return desc;
 	}
 
 	class MinervaTreeNodeComparator implements Comparator<MinervaTreeNode> {
