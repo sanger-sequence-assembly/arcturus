@@ -176,6 +176,18 @@ public class ArcturusInstance implements Iterator {
 
 		return desc;
 	}
+	
+	/**
+	 * Returns the root context of this instance.
+	 * This method allows clients to display the contents of this instance
+	 * in an intelligent fashion by following sub-contexts as necessary. 
+	 * 
+	 * @return the root context of this instance.
+	 */
+	
+	public DirContext getDirContext() {
+		return context;
+	}
 
 	/**
 	 * Returns a NamingEnumeration or the root context of this instance.
