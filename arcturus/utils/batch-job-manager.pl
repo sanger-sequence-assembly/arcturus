@@ -180,7 +180,7 @@ chomp $pwd;
 
 # get the repository position
 
-my $work_dir = `pfind -q $organism`;
+my $work_dir = `pfind -q -u $organism`;
 
 &showUsage("Can't locate project directory for $organism") unless $work_dir;
 
