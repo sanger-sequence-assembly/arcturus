@@ -1183,7 +1183,7 @@ sub mailMessageToOwner {
 # compose and submit a message to the owner of project 
     my ($adb,$request,$contig,$cproject,$tproject,$owner,$requestor,$in) = @_;
 
-    my $arcturusworkdir = `pfind -q $organism`;
+    my $arcturusworkdir = `pfind -q -u $organism`;
     $arcturusworkdir .= "/arcturus";
 
     my $message = "user $requestor requests contig $contig to be moved\n";
