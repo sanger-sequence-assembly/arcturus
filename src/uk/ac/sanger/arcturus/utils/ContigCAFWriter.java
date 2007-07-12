@@ -683,6 +683,8 @@ public class ContigCAFWriter {
 				.println("Memory usage: " + (totalmem / 1024) + "kb total, "
 						+ (freemem / 1024) + "kb free, " + (usedmem / 1024)
 						+ "kb used");
+		
+		System.exit(0);
 	}
 
 	protected static void showUsage(PrintStream ps) {
