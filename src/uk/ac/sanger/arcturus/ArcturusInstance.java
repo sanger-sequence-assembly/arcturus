@@ -177,6 +177,19 @@ public class ArcturusInstance implements Iterator {
 		return desc;
 	}
 
+	/**
+	 * Returns a NamingEnumeration or the root context of this instance.
+	 * This method allows clients to display the contents of this instance
+	 * in an intelligent fashion by following sub-contexts as necessary. 
+	 * 
+	 * @return a NamingEnumeration for the root context of this instance.
+	 * @throws NamingException
+	 */
+	
+	public NamingEnumeration getNamingEnumeration() throws NamingException {
+		return context.listBindings("");
+	}
+	
 	protected NamingEnumeration ne;
 	ArcturusDatabase nextADB;
 
