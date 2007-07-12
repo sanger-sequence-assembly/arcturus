@@ -13,9 +13,11 @@ import java.util.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.Arcturus;
+import uk.ac.sanger.arcturus.data.Organism;
 import uk.ac.sanger.arcturus.database.*;
 
 import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
+import uk.ac.sanger.arcturus.gui.organismtree.OrganismTreePanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 
 /**
@@ -70,27 +72,32 @@ public class Minerva {
 	}
 
 	public void run(final String[] args) {
-		String instance = getStringParameter(args, "-instance");
+		String instances = getStringParameter(args, "-instance");
 
 		String organism = getStringParameter(args, "-organism");
 
-		if (instance == null)
-			instance = Arcturus.getDefaultInstance();
+		if (instances == null)
+			instances = Arcturus.getDefaultInstance();
 
 		if (organism == null)
 			organism = Arcturus.getDefaultOrganism();
 
-		if (instance == null) {
+		if (instances == null) {
 			Arcturus.logWarning("No instance name was specified");
 			System.exit(1);
 		}
 
 		try {
-			ai = ArcturusInstance.getInstance(instance);
+			String[] inames = instances.split(",");
+			
+			ArcturusInstance[] ai = new ArcturusInstance[inames.length];
+			
+			for (int i = 0; i < inames.length; i++)
+				ai[i] = ArcturusInstance.getInstance(inames[i]);
 
 			SplashWindow splash = null;
 
-			String caption = (organism == null) ? ai.getName() : organism;
+			String caption = (organism == null) ? instances : organism;
 
 			MinervaFrame frame = createMinervaFrame(caption);
 
@@ -138,7 +145,12 @@ public class Minerva {
 
 	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
 		MinervaFrame frame = createMinervaFrame(ai.getName());
-		JComponent component = createInstanceDisplay(ai);
+		
+		ArcturusInstance[] aia = new ArcturusInstance[1];
+		
+		aia[0] = ai;
+		
+		JComponent component = createInstanceDisplay(aia);
 
 		frame.setComponent(component);
 
@@ -146,8 +158,8 @@ public class Minerva {
 		frame.setVisible(true);
 	}
 
-	private JComponent createInstanceDisplay(ArcturusInstance ai) {
-		return new OrganismTablePanel(ai);
+	private JComponent createInstanceDisplay(ArcturusInstance[] ai) {
+		return ai.length == 1 ? new OrganismTablePanel(ai[0]) : new OrganismTreePanel(ai);
 	}
 
 	public void createAndShowOrganismDisplay(String organism)
@@ -172,6 +184,39 @@ public class Minerva {
 	public MinervaTabbedPane createOrganismDisplay(String organism)
 			throws SQLException, NamingException {
 		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+
+		adb.setReadCacheing(false);
+		adb.setSequenceCacheing(false);
+
+		MinervaTabbedPane panel = new MinervaTabbedPane(adb);
+
+		panel.showProjectTablePanel();
+
+		return panel;
+	}
+
+	public void createAndShowOrganismDisplay(Organism organism)
+			throws SQLException {
+		MinervaFrame frame = frames.get(organism.getName());
+
+		if (frame == null) {
+			frame = createMinervaFrame(organism.getName());
+			MinervaTabbedPane component = createOrganismDisplay(organism);
+
+			frame.setComponent(component);
+
+			frame.pack();
+			frame.setVisible(true);
+		} else {
+			frame.setVisible(true);
+			frame.setState(JFrame.NORMAL);
+			frame.toFront();
+		}
+	}
+
+	public MinervaTabbedPane createOrganismDisplay(Organism organism)
+			throws SQLException {
+		ArcturusDatabase adb = new ArcturusDatabase(organism);
 
 		adb.setReadCacheing(false);
 		adb.setSequenceCacheing(false);
