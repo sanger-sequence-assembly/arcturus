@@ -2,19 +2,31 @@ package uk.ac.sanger.arcturus.test;
 
 import java.io.PrintStream;
 import java.util.Collections;
+import java.util.NoSuchElementException;
 import java.util.Vector;
+import java.util.Comparator;
 
+import javax.naming.Binding;
+import javax.naming.Context;
+import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
+import javax.naming.directory.Attribute;
+import javax.naming.directory.Attributes;
+import javax.naming.directory.DirContext;
+import javax.sql.DataSource;
 import javax.swing.*;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Organism;
-import uk.ac.sanger.arcturus.gui.organismtable.OrganismComparator;
+
+import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class TestInstanceTree {
-	private OrganismComparator comparator = new OrganismComparator(OrganismComparator.BY_NAME, false);
+	private JTree tree = null;
 
 	public void run(final ArcturusInstance[] instances) {
 		SwingUtilities.invokeLater(new Runnable() {
@@ -28,24 +40,57 @@ public class TestInstanceTree {
 		JFrame frame = new JFrame("Minerva");
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
-		JTree tree = createInstanceTree(instances);
+		try {
+			tree = createInstanceTree(instances);
+		} catch (NamingException e) {
+			e.printStackTrace();
+			System.exit(1);
+		}
+
+		tree.getSelectionModel().setSelectionMode(
+				TreeSelectionModel.SINGLE_TREE_SELECTION);
 
 		JScrollPane scrollpane = new JScrollPane(tree);
 
-		frame.getContentPane().add(scrollpane);
+		final JLabel label = new JLabel();
+
+		tree.addTreeSelectionListener(new TreeSelectionListener() {
+			public void valueChanged(TreeSelectionEvent e) {
+				MinervaTreeNode node = (MinervaTreeNode) tree
+						.getLastSelectedPathComponent();
+
+				if (node == null)
+					return;
+
+				String text = node instanceof OrganismNode ? ((OrganismNode) node)
+						.getURL()
+						: node.toString();
+
+				label.setText(text);
+			}
+		});
+
+		JSplitPane splitpane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,
+				scrollpane, label);
+
+		frame.getContentPane().add(splitpane);
 
 		frame.pack();
 		frame.setVisible(true);
 	}
 
-	private JTree createInstanceTree(ArcturusInstance[] instances) {
+	private JTree createInstanceTree(ArcturusInstance[] instances)
+			throws NamingException {
 		InstanceTreeModel model = new InstanceTreeModel(instances);
 
 		return new JTree(model);
 	}
 
 	class InstanceTreeModel extends DefaultTreeModel {
-		public InstanceTreeModel(ArcturusInstance[] instances) {
+		private MinervaTreeNodeComparator comparator = new MinervaTreeNodeComparator();
+
+		public InstanceTreeModel(ArcturusInstance[] instances)
+				throws NamingException {
 			super(new DefaultMutableTreeNode("Arcturus", true));
 
 			DefaultMutableTreeNode root = (DefaultMutableTreeNode) getRoot();
@@ -55,52 +100,123 @@ public class TestInstanceTree {
 		}
 
 		private void addInstance(ArcturusInstance instance,
-				DefaultMutableTreeNode root) {
-			DefaultMutableTreeNode instanceNode = new DefaultMutableTreeNode(
-					new InstanceProxy(instance), true);
+				DefaultMutableTreeNode root) throws NamingException {
+			DirContext context = instance.getDirContext();
+
+			DefaultMutableTreeNode instanceNode = new InstanceNode(context,
+					instance.getName());
 
 			root.add(instanceNode);
 
-			Vector<Organism> organisms = null;
+			addChildNodes(context, instanceNode);
+		}
 
-			try {
-				organisms = instance.getAllOrganisms();
-			} catch (NamingException e) {
-				Arcturus.logWarning("Error whilst enumerating organisms for "
-						+ instance.getName(), e);
+		private void addChildNodes(DirContext context,
+				DefaultMutableTreeNode root) throws NamingException {
+			Vector<MinervaTreeNode> children = new Vector<MinervaTreeNode>();
+
+			NamingEnumeration ne = context.listBindings("");
+
+			while (ne != null && ne.hasMore()) {
+				Binding bd = (Binding) ne.next();
+
+				String cn = bd.getName();
+
+				String[] cnparts = cn.split("=");
+
+				String name = cnparts[1];
+
+				Object object = bd.getObject();
+
+				if (object instanceof DataSource) {
+					String description = getDescription(context, cn);
+					Organism organism = new Organism(name, description,
+							(DataSource) object);
+					children.add(new OrganismNode(organism));
+				} else if (object instanceof DirContext) {
+					InstanceNode node = new InstanceNode((DirContext) object,
+							name);
+					children.add(node);
+
+					addChildNodes((DirContext) object, node);
+				} else
+					Arcturus.logWarning(
+							"Expecting a DataSource or Context, got a "
+									+ object.getClass().getName(),
+							new Exception("Unexpected LDAP entry"));
 			}
 
-			if (organisms == null)
-				return;
+			Collections.sort(children, comparator);
 
-			Collections.sort(organisms, comparator);
-
-			for (Organism organism : organisms)
-				instanceNode.add(new DefaultMutableTreeNode(new OrganismProxy(
-						organism), false));
+			for (MinervaTreeNode node : children)
+				root.add(node);
 		}
 	}
 
-	class InstanceProxy {
-		private ArcturusInstance instance;
+	private String getDescription(DirContext context, String name)
+			throws NamingException {
+		String cn = name.startsWith("cn=") ? name : "cn=" + name;
 
-		public InstanceProxy(ArcturusInstance instance) {
-			this.instance = instance;
+		String attrnames[] = { "description" };
+
+		Attributes attrs = context.getAttributes(cn, attrnames);
+
+		Attribute description = attrs.get(attrnames[0]);
+
+		if (description == null)
+			return null;
+
+		String desc = null;
+
+		try {
+			desc = (String) description.get();
+		} catch (NoSuchElementException nsee) {
 		}
 
-		public ArcturusInstance getInstance() {
-			return instance;
+		return desc;
+	}
+
+	class MinervaTreeNodeComparator implements Comparator<MinervaTreeNode> {
+		public int compare(MinervaTreeNode node1, MinervaTreeNode node2) {
+			if (node1 instanceof InstanceNode && node2 instanceof OrganismNode)
+				return -1;
+			else if (node1 instanceof OrganismNode
+					&& node2 instanceof InstanceNode)
+				return 1;
+			else
+				return node1.getName().compareTo(node2.getName());
+		}
+	}
+
+	class MinervaTreeNode extends DefaultMutableTreeNode {
+		private String name;
+
+		public MinervaTreeNode(Object userObject, boolean allowsChildren,
+				String name) {
+			super(userObject, allowsChildren);
+			this.name = name;
+		}
+
+		public String getName() {
+			return name;
 		}
 
 		public String toString() {
-			return instance.getName();
+			return name;
 		}
 	}
 
-	class OrganismProxy {
+	class InstanceNode extends MinervaTreeNode {
+		public InstanceNode(DirContext context, String name) {
+			super(context, true, name);
+		}
+	}
+
+	class OrganismNode extends MinervaTreeNode {
 		private Organism organism;
 
-		public OrganismProxy(Organism organism) {
+		public OrganismNode(Organism organism) {
+			super(organism, false, organism.getName());
 			this.organism = organism;
 		}
 
@@ -110,6 +226,15 @@ public class TestInstanceTree {
 
 		public String toString() {
 			return organism.getName() + " (" + organism.getDescription() + ")";
+		}
+
+		public String getURL() {
+			DataSource ds = organism.getDataSource();
+
+			if (ds instanceof MysqlDataSource)
+				return ((MysqlDataSource) ds).getURL();
+			else
+				return ds.toString();
 		}
 	}
 
