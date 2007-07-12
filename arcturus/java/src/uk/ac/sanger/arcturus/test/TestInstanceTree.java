@@ -56,7 +56,7 @@ public class TestInstanceTree {
 
 		tree.addTreeSelectionListener(new TreeSelectionListener() {
 			public void valueChanged(TreeSelectionEvent e) {
-				MinervaTreeNode node = (MinervaTreeNode) tree
+				DefaultMutableTreeNode node = (DefaultMutableTreeNode) tree
 						.getLastSelectedPathComponent();
 
 				if (node == null)
