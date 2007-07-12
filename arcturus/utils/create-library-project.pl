@@ -126,7 +126,7 @@ my $rc = 0;
 
 # find the work directory for the predefined scripts
 
-my $root_dir = `pfind -q $organism`;
+my $root_dir = `pfind -q -u $organism`;
 
 my $utils_dir = "$root_dir/arcturus/utils";
 
