@@ -298,6 +298,14 @@ public class CalculateConsensus {
 
 			if (mappings[i].getContigFinish() > cfinal)
 				cfinal = mappings[i].getContigFinish();
+			
+			Read read = mappings[i].getSequence().getRead();
+
+			if (read == null)
+				Arcturus.logWarning("Read was null for sequence "
+						+ mappings[i].getSequence() + " in database "
+						+ adb.getName(), new Throwable(
+						"Read object was null"));
 		}
 
 		int truecontiglength = 1 + cfinal - cstart;
@@ -335,12 +343,6 @@ public class CalculateConsensus {
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
 				Read read = mappings[rdid].getSequence().getRead();
-
-				if (read == null)
-					Arcturus.logWarning("read was null for sequence "
-							+ mappings[rdid].getSequence() + " in database "
-							+ adb.getName(), new Throwable(
-							"Read object was null"));
 
 				// In the Gap4 consensus algorithm, "strand" refers to the
 				// read-to-contig
