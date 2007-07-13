@@ -9,10 +9,12 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 	protected Minerva minerva = null;
 	protected JToolBar toolbar;
 	protected JComponent component;
+	protected String name;
 
-	public MinervaFrame(Minerva minerva, String title) {
+	public MinervaFrame(Minerva minerva, String title, String name) {
 		super(title);
 		this.minerva = minerva;
+		this.name = name;
 		
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 		
@@ -23,9 +25,13 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 		});
 	}
 	
-	public MinervaFrame(Minerva minerva, String title, JComponent component) {
-		this(minerva, title);
+	public MinervaFrame(Minerva minerva, String title, String name, JComponent component) {
+		this(minerva, title, name);
 		setComponent(component);
+	}
+	
+	public String getName() {
+		return name;
 	}
 	
 	public void setComponent(JComponent component) {
@@ -88,11 +94,7 @@ public class MinervaFrame extends JFrame implements ChangeListener {
 				MinervaClient client = (MinervaClient)component;
 				client.closeResources();
 				
-				if (component instanceof MinervaTabbedPane) {
-					MinervaTabbedPane mtp = (MinervaTabbedPane)component;
-					String name = mtp.getArcturusDatabase().getName();
-					Minerva.getInstance().unregisterFrame(name, this);
-				}
+				Minerva.getInstance().unregisterFrame(this);
 				
 				setVisible(false);
 				dispose();

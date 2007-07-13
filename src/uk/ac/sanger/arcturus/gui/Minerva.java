@@ -129,18 +129,25 @@ public class Minerva {
 		if (PeopleManager.isMasquerading())
 			caption += " [Masquerading as  " + PeopleManager.findMe().getName() + "]";
 
-		MinervaFrame frame = new MinervaFrame(this, caption);
+		MinervaFrame frame = new MinervaFrame(this, caption, name);
 		
-		frames.put(name, frame);
+		registerFrame(frame);
 		
 		return frame;
 	}
 	
-	public void unregisterFrame(String name, MinervaFrame frame) {
-		MinervaFrame frame2 = frames.get(name);
+	public void registerFrame(MinervaFrame frame) {
+		String name = frame.getName();
+		frames.put(name, frame);	
+	}
+	
+	public void unregisterFrame(MinervaFrame frame) {
+		String name = frame.getName();
 		
-		if (frame.equals(frame2))
-			frames.remove(name);
+		frames.remove(name);
+		
+		if (frames.isEmpty())
+			System.exit(0);
 	}
 
 	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
