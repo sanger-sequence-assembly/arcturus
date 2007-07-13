@@ -13,6 +13,8 @@ import java.sql.*;
 public class CalculateConsensus {
 	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
 
+	private final int MAX_ALLOWED_PACKET = 8 * 1024 * 1024;
+
 	private long lasttime;
 	private Runtime runtime = Runtime.getRuntime();
 
@@ -150,6 +152,18 @@ public class CalculateConsensus {
 
 			int nContigs = 0;
 
+			Statement stmt = conn.createStatement();
+
+			String query = "set session max_allowed_packet = "
+					+ MAX_ALLOWED_PACKET;
+
+			try {
+				int rc = stmt.executeUpdate(query);
+			} catch (SQLException sqle) {
+				Arcturus.logWarning("Failed to increase max_allowed_packet to "
+						+ MAX_ALLOWED_PACKET, sqle);
+			}
+			
 			insertStmt = conn.prepareStatement("insert into " + consensustable
 					+ " (contig_id,sequence,length,quality)"
 					+ " VALUES(?,?,?,?)");
@@ -157,7 +171,7 @@ public class CalculateConsensus {
 			updateStmt = conn.prepareStatement("update " + consensustable
 					+ " set sequence=?,length=?,quality=? where contig_id=?");
 
-			String query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
+			query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
 					+ consensustable + " using(contig_id)"
 					: "select CONTIG.contig_id from CONTIG left join "
 							+ consensustable
@@ -166,8 +180,6 @@ public class CalculateConsensus {
 			if (project != null)
 				query += (allcontigs ? " where" : " and") + " project_id = "
 						+ project.getID();
-
-			Statement stmt = conn.createStatement();
 
 			ResultSet rs = stmt.executeQuery(query);
 
@@ -298,14 +310,13 @@ public class CalculateConsensus {
 
 			if (mappings[i].getContigFinish() > cfinal)
 				cfinal = mappings[i].getContigFinish();
-			
+
 			Read read = mappings[i].getSequence().getRead();
 
 			if (read == null)
 				Arcturus.logWarning("Read was null for sequence "
 						+ mappings[i].getSequence() + " in database "
-						+ adb.getName(), new Throwable(
-						"Read object was null"));
+						+ adb.getName(), new Throwable("Read object was null"));
 		}
 
 		int truecontiglength = 1 + cfinal - cstart;
