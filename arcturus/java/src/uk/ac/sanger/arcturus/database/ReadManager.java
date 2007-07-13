@@ -139,6 +139,9 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public static int parseStrand(String text) {
+		if (text == null)
+			return Read.UNKNOWN;
+		
 		if (text.equals("Forward"))
 			return Read.FORWARD;
 
@@ -149,6 +152,9 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public static int parsePrimer(String text) {
+		if (text == null)
+			return Read.UNKNOWN;
+		
 		if (text.equals("Universal_primer"))
 			return Read.UNIVERSAL_PRIMER;
 
@@ -159,6 +165,9 @@ public class ReadManager extends AbstractManager {
 	}
 
 	public static int parseChemistry(String text) {
+		if (text == null)
+			return Read.UNKNOWN;
+		
 		if (text.equals("Dye_terminator"))
 			return Read.DYE_TERMINATOR;
 
