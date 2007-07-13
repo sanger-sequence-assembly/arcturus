@@ -147,7 +147,7 @@ public class Minerva {
 		frames.remove(name);
 		
 		if (frames.isEmpty())
-			System.exit(0);
+			Minerva.exitMinerva();
 	}
 
 	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
