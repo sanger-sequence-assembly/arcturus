@@ -191,7 +191,7 @@ public class CalculateConsensus {
 			System.exit(1);
 		}
 	}
-	
+
 	public void calculateConsensusForContig(int contig_id, boolean doUpdate)
 			throws SQLException, DataFormatException {
 		long clockStart = System.currentTimeMillis();
@@ -335,25 +335,35 @@ public class CalculateConsensus {
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
 				Read read = mappings[rdid].getSequence().getRead();
-				
-				// In the Gap4 consensus algorithm, "strand" refers to the read-to-contig
-				// alignment direction, not the physical strand from which the read has
+
+				if (read == null)
+					Arcturus.logWarning("read was null for sequence "
+							+ mappings[rdid].getSequence() + " in database "
+							+ adb.getName(), new Throwable(
+							"Read object was null"));
+
+				// In the Gap4 consensus algorithm, "strand" refers to the
+				// read-to-contig
+				// alignment direction, not the physical strand from which the
+				// read has
 				// been sequenced.
-				int strand = mappings[rdid].isForward() ? Read.FORWARD : Read.REVERSE;
+				int strand = mappings[rdid].isForward() ? Read.FORWARD
+						: Read.REVERSE;
+
+				int chemistry = read == null ? Read.UNKNOWN : read
+						.getChemistry();
 
 				if (rpos >= 0) {
 					char base = mappings[rdid].getBase(rpos);
 					int qual = mappings[rdid].getQuality(rpos);
 
 					if (qual > 0)
-						algorithm.addBase(base, qual, strand, read
-								.getChemistry());
+						algorithm.addBase(base, qual, strand, chemistry);
 				} else {
 					int qual = mappings[rdid].getPadQuality(cpos);
 
 					if (qual > 0)
-						algorithm.addBase('*', qual, strand, read
-								.getChemistry());
+						algorithm.addBase('*', qual, strand, chemistry);
 				}
 			}
 
