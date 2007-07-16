@@ -556,13 +556,13 @@ public class ContigCAFWriter {
 		dna = decodeCompressedData(dna, seqlen);
 		quality = decodeCompressedData(quality, seqlen);
 
-		buffer.append("DNA : " + readname);
+		pw.println("DNA : " + readname);
 
 		writeDNA(dna, pw);
 
 		pw.println();
 
-		buffer.append("BaseQuality : " + readname);
+		pw.println("BaseQuality : " + readname);
 
 		writeQuality(quality, pw);
 
