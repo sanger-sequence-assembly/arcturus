@@ -442,39 +442,39 @@ public class ContigCAFWriter {
 
 		StringBuffer buffer = new StringBuffer(4096);
 
-		buffer.append("Sequence : " + readname);
-		buffer.append("Is_read");
-		buffer.append("Unpadded");
+		buffer.append("Sequence : " + readname + "\n");
+		buffer.append("Is_read\n");
+		buffer.append("Unpadded\n");
 
-		buffer.append("SCF_File " + readname + "SCF");
+		buffer.append("SCF_File " + readname + "SCF\n");
 
-		buffer.append("Template " + template);
+		buffer.append("Template " + template + "\n");
 
 		if (silow > 0 && sihigh > 0)
-			buffer.append("Insert_size " + silow + " " + sihigh);
+			buffer.append("Insert_size " + silow + " " + sihigh + "\n");
 
 		if (ligation != null)
-			buffer.append("Ligation_no " + ligation);
+			buffer.append("Ligation_no " + ligation + "\n");
 
 		if (primer != null)
-			buffer.append("Primer " + primer);
+			buffer.append("Primer " + primer + "\n");
 
 		if (strand != null)
-			buffer.append("Strand " + strand);
+			buffer.append("Strand " + strand + "\n");
 
 		if (chemistry != null)
-			buffer.append("Dye " + chemistry);
+			buffer.append("Dye " + chemistry + "\n");
 
 		if (clone != null)
-			buffer.append("Clone " + clone);
+			buffer.append("Clone " + clone + "\n");
 
-		buffer.append("Status " + status);
+		buffer.append("Status " + status + "\n");
 
 		if (asped != null)
-			buffer.append("Asped " + dateformat.format(asped));
+			buffer.append("Asped " + dateformat.format(asped) + "\n");
 
 		if (basecaller != null)
-			buffer.append("Base_caller " + basecaller);
+			buffer.append("Base_caller " + basecaller + "\n");
 
 		pstmtQualityClipping.setInt(1, seqid);
 
@@ -483,7 +483,7 @@ public class ContigCAFWriter {
 		while (rs.next()) {
 			int qleft = rs.getInt(1);
 			int qright = rs.getInt(2);
-			buffer.append("Clipping QUAL " + qleft + " " + qright);
+			buffer.append("Clipping QUAL " + qleft + " " + qright + "\n");
 		}
 
 		rs.close();
@@ -497,7 +497,7 @@ public class ContigCAFWriter {
 			int svright = rs.getInt(2);
 			String svname = rs.getString(3);
 			buffer.append("Seq_vec SVEC " + svleft + " " + svright + " \""
-					+ svname + "\"");
+					+ svname + "\"" + "\n");
 		}
 
 		rs.close();
@@ -511,7 +511,7 @@ public class ContigCAFWriter {
 			int cvright = rs.getInt(2);
 			String cvname = rs.getString(3);
 			buffer.append("Clone_vec CVEC " + cvleft + " " + cvright + " \""
-					+ cvname + "\"");
+					+ cvname + "\"" + "\n");
 		}
 
 		rs.close();
@@ -526,9 +526,9 @@ public class ContigCAFWriter {
 			int tagfinish = rs.getInt(3);
 			String tagcomment = rs.getString(4);
 
-			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
+			buffer.append("Tag " + tagtype + " " + tagstart + " " + tagfinish);
 			if (tagcomment != null)
-				pw.print(" \"" + tagcomment + "\"");
+				buffer.append(" \"" + tagcomment + "\"");
 			buffer.append('\n');
 		}
 
@@ -547,7 +547,7 @@ public class ContigCAFWriter {
 		byte[] quality = rs.getBytes(2);
 		int seqlen = rs.getInt(3);
 
-		buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen);
+		buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen+ "\n");
 
 		pw.println(buffer.toString());
 
