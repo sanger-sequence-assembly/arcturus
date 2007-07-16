@@ -116,10 +116,11 @@ public class ContigManager extends AbstractManager {
 		pstmtSequenceData = conn.prepareStatement(query);
 
 		query = "select MAPPING.seq_id,READINFO.read_id,readname,strand,chemistry,primer,asped,"
-				+ " TEMPLATE.template_id,TEMPLATE.name,ligation_id "
-				+ " from MAPPING,SEQ2READ,READINFO,TEMPLATE "
-				+ " where contig_id = ? and MAPPING.seq_id=SEQ2READ.seq_id and "
-				+ " SEQ2READ.read_id=READINFO.read_id and READINFO.template_id=TEMPLATE.template_id";
+				+ " TEMPLATE.template_id,TEMPLATE.name,ligation_id"
+				+ " from MAPPING left join (SEQ2READ,READINFO,TEMPLATE)"
+				+ "  on (MAPPING.seq_id=SEQ2READ.seq_id and"
+				+ " SEQ2READ.read_id=READINFO.read_id and READINFO.template_id=TEMPLATE.template_id)"
+				+ " where contig_id = ?";
 
 		pstmtReadAndTemplateData = conn.prepareStatement(query);
 
