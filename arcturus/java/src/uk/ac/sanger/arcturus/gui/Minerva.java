@@ -26,7 +26,7 @@ import uk.ac.sanger.arcturus.people.PeopleManager;
 
 public class Minerva {
 	private static Minerva instance = null;
-	protected ArcturusInstance ai = null;
+	protected ArcturusInstance[] ai = null;
 	protected String buildtime;
 	protected Map<String, MinervaFrame> frames = new HashMap<String, MinervaFrame>();
 
@@ -90,7 +90,7 @@ public class Minerva {
 		try {
 			String[] inames = instances.split(",");
 			
-			ArcturusInstance[] ai = new ArcturusInstance[inames.length];
+			ai = new ArcturusInstance[inames.length];
 			
 			for (int i = 0; i < inames.length; i++)
 				ai[i] = ArcturusInstance.getInstance(inames[i]);
@@ -190,7 +190,7 @@ public class Minerva {
 
 	public MinervaTabbedPane createOrganismDisplay(String organism)
 			throws SQLException, NamingException {
-		ArcturusDatabase adb = ai.findArcturusDatabase(organism);
+		ArcturusDatabase adb = ai[0].findArcturusDatabase(organism);
 
 		adb.setReadCacheing(false);
 		adb.setSequenceCacheing(false);
