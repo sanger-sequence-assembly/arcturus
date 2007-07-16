@@ -96,18 +96,16 @@ public class ContigCAFWriter {
 		pstmtConsensus = conn.prepareStatement(sql);
 
 		sql = "select mapping_id,direction,MAPPING.seq_id,READINFO.read_id,readname"
-				+ "  from MAPPING,SEQ2READ,READINFO"
-				+ "  where contig_id = ? and MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id"
-				+ "  order by cstart asc";
-
-		sql = "select mapping_id,direction,MAPPING.seq_id,READINFO.read_id,readname"
 				+ "  from MAPPING left join (SEQ2READ,READINFO)"
 				+ "  on (MAPPING.seq_id = SEQ2READ.seq_id and SEQ2READ.read_id = READINFO.read_id)"
 				+ "  where contig_id = ?" + "  order by cstart asc";
 
 		pstmtMapping = conn.prepareStatement(sql);
 
-		sql = "select cstart,rstart,length from SEGMENT where mapping_id = ? order by rstart asc";
+		sql = "select MAPPING.mapping_id,SEGMENT.cstart,rstart,length"
+				+ " from MAPPING left join SEGMENT using (mapping_id)"
+				+ " where  contig_id = ?"
+				+ " order by MAPPING.cstart asc,MAPPING.mapping_id asc,rstart asc";
 
 		pstmtSegment = conn.prepareStatement(sql);
 
@@ -233,6 +231,36 @@ public class ContigCAFWriter {
 		return nreads;
 	}
 
+	class Mapping {
+		private int seqid;
+		private int readid;
+		private boolean forward;
+		private String readname;
+
+		public Mapping(int seqid, int readid, boolean forward, String readname) {
+			this.seqid = seqid;
+			this.readid = readid;
+			this.forward = forward;
+			this.readname = readname;
+		}
+
+		public int getSequenceID() {
+			return seqid;
+		}
+
+		public int getReadID() {
+			return readid;
+		}
+
+		public boolean isForward() {
+			return forward;
+		}
+
+		public String getReadname() {
+			return readname;
+		}
+	}
+
 	public int writeContigAsCAF(int contigid, int nreads, PrintWriter pw)
 			throws SQLException, DataFormatException {
 		String contigname = "Contig" + decimalformat.format(contigid);
@@ -241,14 +269,11 @@ public class ContigCAFWriter {
 		pw.println("Is_contig");
 		pw.println("Unpadded");
 
-		int[] readids = new int[nreads];
-		int[] seqids = new int[nreads];
+		Map<Integer, Mapping> mappings = new HashMap<Integer, Mapping>(nreads);
 
 		pstmtMapping.setInt(1, contigid);
 
 		ResultSet rs = pstmtMapping.executeQuery();
-
-		int i = 0;
 
 		while (rs.next()) {
 			int mappingid = rs.getInt(1);
@@ -257,41 +282,48 @@ public class ContigCAFWriter {
 			int readid = rs.getInt(4);
 			String readname = rs.getString(5);
 
-			readids[i] = readid;
-			seqids[i] = seqid;
-			i++;
-
 			boolean forward = direction.equalsIgnoreCase("Forward");
 
-			pstmtSegment.setInt(1, mappingid);
+			Mapping mapping = new Mapping(seqid, readid, forward, readname);
 
-			ResultSet rs2 = pstmtSegment.executeQuery();
-
-			while (rs2.next()) {
-				int cstart = rs2.getInt(1);
-				int rstart = rs2.getInt(2);
-				int seglen = rs2.getInt(3);
-
-				int rfinish = forward ? rstart + seglen - 1 : rstart - seglen
-						+ 1;
-				int cfinish = cstart + seglen - 1;
-
-				if (forward)
-					pw.println("Assembled_from " + readname + " " + cstart
-							+ " " + cfinish + " " + rstart + " " + rfinish);
-				else
-					pw.println("Assembled_from " + readname + " " + cfinish
-							+ " " + cstart + " " + rfinish + " " + rstart);
-			}
-
-			rs2.close();
+			mappings.put(mappingid, mapping);
 		}
 
 		rs.close();
 
-		if (i != nreads)
-			System.err.println("INCONSISTENT READ COUNT: GOT " + i
-					+ ", EXPECTED " + nreads + " IN CONTIG" + contigid);
+		pstmtSegment.setInt(1, contigid);
+
+		rs = pstmtSegment.executeQuery();
+		
+		int lastmappingid = -1;
+		boolean forward = false;
+		String readname = null;
+
+		while (rs.next()) {
+			int mappingid = rs.getInt(1);
+			int cstart = rs.getInt(2);
+			int rstart = rs.getInt(3);
+			int seglen = rs.getInt(4);
+			
+			if (mappingid != lastmappingid) {
+				Mapping mapping = mappings.get(mappingid);
+				
+				forward = mapping.isForward();
+				readname = mapping.getReadname();
+			}
+
+			int rfinish = forward ? rstart + seglen - 1 : rstart - seglen + 1;
+			int cfinish = cstart + seglen - 1;
+
+			if (forward)
+				pw.println("Assembled_from " + readname + " " + cstart + " "
+						+ cfinish + " " + rstart + " " + rfinish);
+			else
+				pw.println("Assembled_from " + readname + " " + cfinish + " "
+						+ cstart + " " + rfinish + " " + rstart);
+		}
+
+		rs.close();
 
 		pstmtContigTag.setInt(1, contigid);
 
@@ -341,8 +373,11 @@ public class ContigCAFWriter {
 
 		pw.println();
 
-		for (i = 0; i < nreads; i++) {
-			int rc = writeRead(readids[i], seqids[i], pw);
+		for (Mapping mapping : mappings.values()) {
+			int readid = mapping.getReadID();
+			int seqid = mapping.getSequenceID();
+			
+			int rc = writeRead(readid, seqid, pw);
 
 			if (rc != OK)
 				return rc;
@@ -405,30 +440,41 @@ public class ContigCAFWriter {
 
 		rs.close();
 
-		pw.println("Sequence : " + readname);
-		pw.println("Is_read");
-		pw.println("Unpadded");
+		StringBuffer buffer = new StringBuffer(4096);
 
-		pw.println("SCF_File " + readname + "SCF");
+		buffer.append("Sequence : " + readname);
+		buffer.append("Is_read");
+		buffer.append("Unpadded");
 
-		pw.println("Template " + template);
-		
+		buffer.append("SCF_File " + readname + "SCF");
+
+		buffer.append("Template " + template);
+
 		if (silow > 0 && sihigh > 0)
-			pw.println("Insert_size " + silow + " " + sihigh);
-		
+			buffer.append("Insert_size " + silow + " " + sihigh);
+
 		if (ligation != null)
-			pw.println("Ligation_no " + ligation);
-		
-		pw.println("Primer " + primer);
-		pw.println("Strand " + strand);
-		pw.println("Dye " + chemistry);
-		
+			buffer.append("Ligation_no " + ligation);
+
+		if (primer != null)
+			buffer.append("Primer " + primer);
+
+		if (strand != null)
+			buffer.append("Strand " + strand);
+
+		if (chemistry != null)
+			buffer.append("Dye " + chemistry);
+
 		if (clone != null)
-			pw.println("Clone " + clone);
-		
-		pw.println("Status " + status);
-		pw.println("Asped " + dateformat.format(asped));
-		pw.println("Base_caller " + basecaller);
+			buffer.append("Clone " + clone);
+
+		buffer.append("Status " + status);
+
+		if (asped != null)
+			buffer.append("Asped " + dateformat.format(asped));
+
+		if (basecaller != null)
+			buffer.append("Base_caller " + basecaller);
 
 		pstmtQualityClipping.setInt(1, seqid);
 
@@ -437,7 +483,7 @@ public class ContigCAFWriter {
 		while (rs.next()) {
 			int qleft = rs.getInt(1);
 			int qright = rs.getInt(2);
-			pw.println("Clipping QUAL " + qleft + " " + qright);
+			buffer.append("Clipping QUAL " + qleft + " " + qright);
 		}
 
 		rs.close();
@@ -450,7 +496,7 @@ public class ContigCAFWriter {
 			int svleft = rs.getInt(1);
 			int svright = rs.getInt(2);
 			String svname = rs.getString(3);
-			pw.println("Seq_vec SVEC " + svleft + " " + svright + " \""
+			buffer.append("Seq_vec SVEC " + svleft + " " + svright + " \""
 					+ svname + "\"");
 		}
 
@@ -464,7 +510,7 @@ public class ContigCAFWriter {
 			int cvleft = rs.getInt(1);
 			int cvright = rs.getInt(2);
 			String cvname = rs.getString(3);
-			pw.println("Clone_vec CVEC " + cvleft + " " + cvright + " \""
+			buffer.append("Clone_vec CVEC " + cvleft + " " + cvright + " \""
 					+ cvname + "\"");
 		}
 
@@ -483,7 +529,7 @@ public class ContigCAFWriter {
 			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
 			if (tagcomment != null)
 				pw.print(" \"" + tagcomment + "\"");
-			pw.println();
+			buffer.append('\n');
 		}
 
 		rs.close();
@@ -501,20 +547,22 @@ public class ContigCAFWriter {
 		byte[] quality = rs.getBytes(2);
 		int seqlen = rs.getInt(3);
 
-		pw.println("Align_to_SCF 1 " + seqlen + " 1 " + seqlen);
+		buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen);
+
+		pw.println(buffer.toString());
 
 		pw.println();
 
 		dna = decodeCompressedData(dna, seqlen);
 		quality = decodeCompressedData(quality, seqlen);
 
-		pw.println("DNA : " + readname);
+		buffer.append("DNA : " + readname);
 
 		writeDNA(dna, pw);
 
 		pw.println();
 
-		pw.println("BaseQuality : " + readname);
+		buffer.append("BaseQuality : " + readname);
 
 		writeQuality(quality, pw);
 
@@ -683,7 +731,7 @@ public class ContigCAFWriter {
 				.println("Memory usage: " + (totalmem / 1024) + "kb total, "
 						+ (freemem / 1024) + "kb free, " + (usedmem / 1024)
 						+ "kb used");
-		
+
 		System.exit(0);
 	}
 
