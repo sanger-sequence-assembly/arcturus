@@ -508,14 +508,14 @@ sub showUsage {
     print STDERR "-verbose\t(no value)\n";
     print STDERR "\n";
 
-    if (!$source || $source eq 'CAF') {
+    if (!$source || $source eq 'caf') {
 	print STDERR "Parameters for CAF input:\n";
 	print STDERR "\n";
 	print STDERR "-caf\t\tcaf file name OR as alternative\n";
 	print STDERR "-cafdefault\tuse a default caf file name\n";
 	print STDERR "\n";
     }
-    if (!$source || $source eq 'Oracle') {
+    if (!$source || $source eq 'oracle') {
 	print STDERR "Parameters for Oracle input:\n";
 	print STDERR "\n";
 	print STDERR "-schema\t\tMANDATORY: Oracle schema\n";
@@ -527,7 +527,7 @@ sub showUsage {
 	print STDERR "-status\tAsp processing status (default is PASS)\n";
 	print STDERR "\n";
     }
-    if (!$source || $source eq 'Expfiles') {
+    if (!$source || $source eq 'expfiles') {
 	print STDERR "Parameters for Expfiles input:\n";
 	print STDERR "\n";
 	print STDERR "-rootdir\troot directory of data repository\n";
@@ -535,7 +535,7 @@ sub showUsage {
 	print STDERR "-limit\t\tlargest number of reads to be loaded\n";
 	print STDERR "\n";
     }
-    if (!$source || $source eq 'TraceServer') {
+    if (!$source || $source eq 'traceserver') {
 	print STDERR "Parameters for TraceServer input:\n";
 	print STDERR "\n";
 	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
