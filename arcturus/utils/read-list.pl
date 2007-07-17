@@ -29,10 +29,11 @@ my $screen;
 my $fofn;
 my $verbose;
 my $notags;
+my $debug;
 
 my $validKeys  = "organism|o|instance|i|readname|read_id|seq_id|version|".
                  "unassembled|fofn|chemistry|caf|fasta|quality|".
-                 "clip|mask|screen|notags|verbose|help|h";
+                 "clip|mask|screen|notags|verbose|debug|help|h";
 
 while (defined(my $nextword = shift @ARGV)) {
 
@@ -82,6 +83,8 @@ while (defined(my $nextword = shift @ARGV)) {
 
     $verbose     = 1            if ($nextword eq '-verbose');
 
+    $debug       = 1            if ($nextword eq '-debug');
+
     &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
@@ -93,8 +96,10 @@ $SCFchem = 0 if ($fasta || $caf);
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
- 
+$logger->setStandardFilter(0) if $verbose; # set reporting level
+
+$logger->setDebugStream('STDOUT',list=>1) if $debug; 
+
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
@@ -122,6 +127,8 @@ $instance = $adb->getInstance(); # taken from the actual connection
  
 my $URL = $adb->getURL;
 
+$adb->setLogger($logger);
+
 $logger->info("Database $URL opened succesfully");
 
 #----------------------------------------------------------------
@@ -135,32 +142,30 @@ $fofn = &getNamesFromFile($fofn) if $fofn;
 #----------------------------------------------------------------
 
 my $rdir;
-my $read;
 my @reads;
 
-$version = 0 unless defined($version);
+my %options;
+$options{seq_id}   = $seq_id    if defined($seq_id);
+$options{read_id}  = $read_id   if defined($read_id);
+$options{readname} = $readname  if defined($readname);
+$options{version}  = $version   if defined($version);
 
-$read = $adb->getRead(read_id=>$read_id, version=>$version) if $read_id;
-push @reads, $read if $read;
-
-undef $read;
-$read = $adb->getReadByName($readname, $version) if $readname;
-push @reads, $read if $read;
-
-undef $read;
-$read = $adb->getReadBySequenceID($seq_id) if $seq_id;
-push @reads, $read if $read;
+my $read;
+if (defined($seq_id) || defined($read_id) || defined($readname)) {
+    $read = $adb->getRead(%options);
+    push @reads, $read if $read;
+}
 
 if ($fofn) {
-    foreach my $name (@$fofn) {
-        $read = $adb->getReadByName($name,0);
+    $version = 0 unless defined($version);
+    foreach my $rid (@$fofn) {
+        $read = $adb->getReadByName  ($rid,$version) if ($rid =~ /\D/);
+        $read = $adb->getReadByReadID($rid,$version) if ($rid !~ /\D/);
         push @reads, $read if $read;
     }
 }
 
-
 if ($unassembled) {
-
     my $readids = $adb->getIDsForUnassembledReads();
 
     if ($caf || $fasta) {
@@ -174,6 +179,7 @@ if ($unassembled) {
     }
 }
 
+# full listing
 
 my @items = ('read_id','readname','seq_id','version',
              'template','ligation','insertsize','clone',
