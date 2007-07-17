@@ -836,7 +836,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                         $lineCount++;
                     }
                     else {
-                        $info .= '"'; # closing quote
+                        $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
                     }
                 }
 
@@ -979,10 +979,10 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                         $lineCount++;
                     }
                     else {
-                        $info .= '"'; # closing quote
+                        $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
                     }
                 }
-                $logger->warning("CONTIG tag detected: $record\n"     # info ?
+                $logger->info("CONTIG tag detected: $record\n"     # info ?
                                 . "'$type' '$tcps' '$tcpf' '$info'");
                 if ($type eq 'ANNO') {
                     $info =~ s/expresion/expression/;
@@ -991,30 +991,48 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 
                 my $tag = $TF->makeContigTag($type,$tcps,$tcpf);
 
-#                my $tag = new Tag('contigtag');
-#                $tag->setType($type);
-#                $tag->setPosition($tcps,$tcpf);
-#                $tag->setStrand('Unknown');
+# my $tag = new Tag('contigtag');
+# $tag->setType($type);
+# $tag->setPosition($tcps,$tcpf);
+# $tag->setStrand('Unknown');
+
+# preprocess COMM and REPT tags
+
+                if ($type eq 'REPT' || $type eq 'COMM') {
+# remove possible offset info (lost on inheritance)
+                    $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
+	        }
+
                 $tag->setTagComment($info);
                 if ($info =~ /([ACGT]{5,})/) {
                     $tag->setDNA($1);
                 }
-# pickup repeat name
+
+# special for repeats: pickup repeat name
+
                 if ($type eq 'REPT') {
+# try to find the name of the repeat
                     $contig->addTag($tag);
                     $info =~ s/\s*\=\s*/=/g;
 		    if ($info =~ /^\s*(\S+)\s+from/i) {
                         my $tagname = $1;
                         $tagname =~ s/r\=/REPT/i;
                         $tag->setTagSequenceName($tagname);
-	            }
-#		    elsif ($info =~ /^\s*(\S+)\s+from/i) {
-#		    }
-                    else {
-		        $logger->info("Missing repeat name in contig tag for ".
-                             $contig->getContigName().": ($lineCount) $record");
+	   	    }
+# no name found, try alternative
+                    elsif ($info !~ /Repeats\s+with/) {
+# try to generate one based on possible read mentioned
+                        if ($info =~ /\bcontig\s+(\w+\.\w+)/) {
+                            $tag->setTagSequenceName($1);   
+	                }
+# nothing useful found                
+                        else {
+		            $logger->warning("Missing repeat name in contig tag for ".
+                                   $contig->getContigName().": ($lineCount) $record");
+		        }
                     }
                 }
+
                 elsif ($info) {
                     $contig->addTag($tag);
 		    $logger->fine($tag->writeToCaf());
@@ -1384,7 +1402,7 @@ sub parseContig {
                     $line++;
                 }
                 else {
-                    $info .= '"'; # closing quote
+                    $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
                 }
             }
             $logger->info("CONTIG tag detected: $record\n"
@@ -1397,22 +1415,40 @@ sub parseContig {
 
             my $tag = $TF->makeContigTag($type,$tcps,$tcpf);
 
+# preprocess COMM and REPT tags
+
+            if ($type eq 'REPT' || $type eq 'COMM') {
+# remove possible offset info (lost on inheritance)
+                $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
+            }
+
             $tag->setTagComment($info);
             if ($info =~ /([ACGT]{5,})/) {
                 $tag->setDNA($1);
             }
-# pickup repeat name
+
+# special for repeats: pickup repeat name
+
             if ($type eq 'REPT') {
+# try to find the name of the repeat
                 $contig->addTag($tag);
                 $info =~ s/\s*\=\s*/=/g;
-		if ($info =~ /^\s*(\S+)\s+from/i) {
+        	if ($info =~ /^\s*(\S+)\s+from/i) {
                     my $tagname = $1;
                     $tagname =~ s/r\=/REPT/i;
                     $tag->setTagSequenceName($tagname);
-                }
-                else {
-		    $logger->info("l:$line Missing repeat name in contig tag for "
-                                 ."$contigname: $record");
+	        }
+# no name found, try alternative
+                elsif ($info !~ /Repeats\s+with/) {
+# try to generate one based on possible read mentioned
+                    if ($info =~ /\bcontig\s+(\w+\.\w+)/) {
+                        $tag->setTagSequenceName($1);   
+                    }
+# nothing useful found                
+                    else {
+		        $logger->info("l:$line Missing repeat name in contig tag "
+                                 ."for $contigname: $record");
+	            }
                 }
             }
             elsif ($info) {
@@ -1564,7 +1600,7 @@ sub parseRead {
                     $line++;
                 }
                 else {
-                    $info .= '"'; # closing quote
+                    $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
                 }
             }
 # build a new read Tag instance
