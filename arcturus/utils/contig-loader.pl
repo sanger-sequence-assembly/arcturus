@@ -144,10 +144,14 @@ while (my $nextword = shift @ARGV) {
 $outputFile = 'STDOUT' if ($noload && !$outputFile);
 
 my $logger = new Logging($outputFile);
+ 
+$logger->setStandardFilter($logLevel) if $logLevel; # set reporting level
 
-$logger->setFilter($logLevel) if defined $logLevel; # set reporting level
+$logger->setDebugStream('STDOUT',list=>1);
 
-# my $errorlog = $logger->getOutputDevice();
+$logger->setBlock('debug',unblock=>0) unless $debug;
+
+$logger->setBlock('special',unblock=>1) if $debug; # defaults to STDERR
 
 #----------------------------------------------------------------
 # get the database connection
@@ -164,10 +168,6 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
-
-#$adb->setErrorLog($errorlog); # if redirect?
-
-#$adb->setRDEBUG(1) if $debug;
 
 #----------------------------------------------------------------
 # test the CAF file name
@@ -364,6 +364,8 @@ my $lineCount = 0;
 
 my $DNASequence = '';
 my $BaseQuality = '';
+	
+my $accumulatedrecord = '';
 
 while (defined($record = <$CAF>)) {
 
@@ -611,7 +613,9 @@ while (defined($record = <$CAF>)) {
 # elsif ($record =~ /Tag\s+($FTAGS|$STAGS)\s+(\d+)\s+(\d+)(.*)$/i) {
             my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
 # test for a continuation mark (\n\); if so, read until no continuation mark
-            while ($info =~ /\\n\\\s*$/) {
+	    $accumulatedrecord = '';
+            while ($record =~ /\\n\\\s*$/) {
+                $accumulatedrecord .= $record;
                 if (defined($record = <$CAF>)) {
                     chomp $record;
                     $info .= $record;
@@ -636,7 +640,7 @@ while (defined($record = <$CAF>)) {
             $tag->setStrand('Forward');
 
             my $readname = $read->getReadName();
-            if ($type eq 'OLIG' || $type eq 'AFOL') {
+            if (($type eq 'OLIG' || $type eq 'AFOL') && $info && $info =~ /\S/) {
 # test info for sequence specification
                 my ($DNA,$inew) = &get_oligo_DNA($info);
                 if ($DNA) {
@@ -658,7 +662,7 @@ while (defined($record = <$CAF>)) {
 			$logger->info("Multiple DNA info removed from ".
                                       "$type tag for read $readname");
                         $info = $inew;
-$logger->info("new info after DNA removal: $info") if $debug;
+                        $logger->info("new info after DNA removal: $info");
                     }
                 }
 # process oligo names
@@ -672,12 +676,13 @@ $logger->info("new info after DNA removal: $info") if $debug;
                     my ($name,$inew) = &decode_oligo_info($info,$sequence);
                     if ($name) {
                         $tag->setTagSequenceName($name);
-                        $info = $inew if $inew;
-if ($inew && $debug) {
-    print STDOUT "decode new oligio info again\n$info\n";
-   ($name,$inew) = &decode_oligo_info($info,$sequence);
-    print STDOUT "name = $name new : $inew\n\n";
-}
+                        if ($inew) {
+                            $info = $inew;
+                            $logger->info("decode new oligo info again\n$info");
+                           ($name,$inew) = &decode_oligo_info($info,$sequence);
+                            $info = $inew if $inew;
+                            $logger->info("cleaned oligo info:\n$info") if $inew;
+			}
                     }
                     else {
                         $logger->warning("Failed to decode OLIGO info:\n$info");
@@ -757,6 +762,8 @@ if ($inew && $debug) {
 # finally
         elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
             $logger->warning("not recognized ($lineCount): $record") unless $readtagmode;
+            $logger->warning("accumulated record:\n$accumulatedrecord");
+	    $accumulatedrecord = '';
         }
     }
 
@@ -829,24 +836,30 @@ if ($inew && $debug) {
             if ($info =~ /([ACGT]{5,})/) {
                 $tag->setDNA($1);
             }
+# preprocess COMM and REPT tags
+            if ($type eq 'REPT' || $type eq 'COMM') {
+# remove possible offset info (lost on inheritance)
+                $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
+	    }
 # special for repeats: pickup repeat name
             if ($type eq 'REPT') {
-# remove possible offset info (lost on inheritance)
-                $info =~ s/\,\s*offset\s+\d+//i;
 # try to find the name of the repeat
 		if ($info =~ /^\s*(\S+)\s+from/i) {
-$logger->info("TagSequenceName $1") if $noload;
+                    $logger->info("TagSequenceName $1") if $noload;
                     $tag->setTagSequenceName($1);
 		}
-# no name found, try to generate one based on possible read mentioned
-                elsif ($info =~ /\bcontig\s+(\w+\.\w+)/) {
-$logger->info("TagSequenceName read $1");
-                    $tag->setTagSequenceName($1);   
-	        }
+# no name found, try alternative
+                elsif ($info !~ /Repeats\s+with/) {
+# try to generate one based on possible read mentioned
+                    if ($info =~ /\bcontig\s+(\w+\.\w+)/) {
+                        $logger->info("TagSequenceName read $1") if $noload;
+                        $tag->setTagSequenceName($1);   
+	            }
 # nothing useful found                
-                else {
-		    $logger->warning("Missing repeat name in contig tag for ".
-                            $contig->getContigName().": ($lineCount) $record");
+                    else {
+		       $logger->warning("Missing repeat name in contig tag for ".
+                              $contig->getContigName().": ($lineCount) $record");
+		    }
                 }
             }
         }
@@ -970,7 +983,7 @@ foreach my $identifier (keys %contigs) {
     $logger->info("Contig $identifier with ".$contig->getNumberOfReads.
                   " reads : status $added, $msg") if $added;
     $logger->warning("Contig $identifier with ".$contig->getNumberOfReads.
-                     " reads not added, $msg \nContig id =".
+                     " reads not added:\n$msg\nContig id =".
                      ($contig->getContigID || 0)) unless $added;
 
     if ($added) {
@@ -1105,7 +1118,7 @@ sub tagList {
 
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
                  'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
-                 'LOW' ,'MOSC','STOL','TEST','CLIP');
+                 'LOW' ,'MOSC','STOL','TEST','CLIP','IGNS','IGNC');
 
 # edit tags
 
@@ -1115,7 +1128,7 @@ sub tagList {
 }
 
 sub decode_oligo_info {
-    my $info = shift;
+    my $info = shift || '';
     my $sequence = shift;
 
 my $DEBUG = 0;
@@ -1221,12 +1234,12 @@ print STDOUT "name ".($name || '')." (change $change) \n" if $DEBUG;
 
     if ($info[1] =~ /^\w+\.\w{1,2}\b/) {
 # name and sequence possibly interchanged
-print STDOUT "still undecoded info: $info  (@info)\n";
+print STDOUT "still undecoded info: $info  (@info)\n" if $DEBUG;
         $name = $info[1];
         $info[1] = $info[0];
         $info[0] = $name;
         $info = join ('\\n\\',@info);
-print STDOUT "now decoded info: $info ($name)\n";
+print STDOUT "now decoded info: $info ($name)\n" if $DEBUG;
         return $name,$info;
     }
 
