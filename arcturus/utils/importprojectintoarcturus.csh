@@ -4,10 +4,12 @@
 #             no 2 = organism name
 #             no 3 = gap4 project (database) name
 #             no 4 = (optional) name of problems project
+#             no 5 = (optional) loader script to be used
 
 set basedir=`dirname $0`
 set arcturus_home = ${basedir}/..
 set loader_script = ${arcturus_home}/utils/contig-loader
+set javabasedir=/nfs/pathsoft/arcturus/utils
 
 set badgerbin=${BADGER}/bin
 
@@ -151,7 +153,11 @@ ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organ
 
 # calculating consensus sequence (for this project only)
 
-${basedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+if ($instance == 'default') then
+    ${javabasedir}/calculateconsensus -project $projectname -quiet -lowmem
+else
+    ${javabasedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+endif
 
 echo Cleaning up
 
