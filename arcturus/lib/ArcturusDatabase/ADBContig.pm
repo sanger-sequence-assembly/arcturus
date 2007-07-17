@@ -193,7 +193,7 @@ sub getContig {
 
 # for consensus sequence we use lazy instantiation in the Contig class
 
-    return $contig if ($this->testContigForExport($contig));
+    return $contig if $contig->isValid(); # for export
 
     return undef; # invalid Contig instance
 }
@@ -386,8 +386,9 @@ sub putContig {
 
 # test the Contig reads and mappings for completeness (using readname)
 
-    if (!$this->testContigForImport($contig)) {
-        return 0,"Contig $contigname failed completeness test";
+    unless ($contig->isValid(forimport => 1)) {
+	my $diagnosis = $contig->{status} || '';
+        return 0,"Contig $contigname failed completeness test : $diagnosis";
     }
 
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
@@ -470,7 +471,7 @@ sub putContig {
             my $contigid = $previous->getContigID();
             $contig->setContigID($contigid);
             $message = "Contig $contigname is identical to contig "
-                     .  $previous->getContigName() . " (p:"
+                     .  $previous->getContigName() . " (project:"
 		     .  $previous->getProject() . ")";
 # 'prohibitparent' is an option used by assignReadAsContigToProject
             return 0,$message if $options{prohibitparent};
@@ -1000,134 +1001,7 @@ sub getSequenceIDForAssembledReads {
     return $success;
 }
 
-sub testContigForExport {
-    &testContig(shift,shift,0);
-}
-
-sub testContigForImport {
-    &testContig(shift,shift,1);
-}
-
-sub testContig {
-# use via ForExport and ForImport aliases
-    my $this = shift;
-    my $contig = shift || return undef; # Contig instance
-    my $level = shift;
-
-    &verifyParameter($contig,"testContig");
-
-    my $log = $this->verifyLogger('testContig');
-
-# level 0 for export, test number of reads against mappings and metadata    
-# for export: test reads against mappings using the sequence ID
-# for import: test reads against mappings using the readname
-# for both, the reads and mappings must correspond 1 to 1
-
-    my %identifier; # hash for IDs
-
-# test contents of the contig's Read instances
-
-    my $ID;
-    if ($contig->hasReads()) {
-        my $success = 1;
-        my $reads = $contig->getReads();
-        foreach my $read (@$reads) {
-# test identifier: for export sequence ID; for import readname (or both? for both)
-            $ID = $read->getReadName()   if  $level; # import
-	    $ID = $read->getSequenceID() if !$level;
-            if (!defined($ID)) {
-                $log->severe("Missing identifier in Read ".$read->getReadName);
-                $success = 0;
-            }
-            $identifier{$ID} = $read;
-# test presence of sequence and quality data
-            if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
-                $log->severe("Missing DNA or BaseQuality in Read ".$read->getReadName);
-                $success = 0;
-            }
-        }
-        return 0 unless $success;       
-    }
-    else {
-        $log->severe("Contig ".$contig->getContigName." has no Reads");
-        return 0;
-    }
-
-# test contents of the contig's Mapping instances and against the Reads
-
-    if ($contig->hasMappings()) {
-        my $success = 1;
-	my $mappings = $contig->getMappings();
-        foreach my $mapping (@$mappings) {
-# get the identifier: for export sequence ID; for import readname
-            if ($mapping->hasSegments) {
-                $ID = $mapping->getMappingName()    if $level;
-	        $ID = $mapping->getSequenceID() if !$level;
-# is ID among the identifiers? if so delete the key from the has
-                if (!$identifier{$ID}) {
-                    $log->severe("Missing Read for Mapping ".
-                                 $mapping->getMappingName." ($ID)");
-                    $success = 0;
-                }
-                delete $identifier{$ID}; # delete the key
-            }
-	    else {
-                $log->severe("Mapping ".$mapping->getMappingName().
-                            " for Contig ".$contig->getContigName().
-                            " has no Segments");
-                $success = 0;
-            }
-        }
-        return 0 unless $success;
-    } 
-    else {
-        $log->severe("Contig ".$contig->getContigName." has no Mappings");
-        return 0;
-    }
-# now there should be no keys left (when Reads and Mappings correspond 1-1)
-    if (scalar(keys %identifier)) {
-        foreach my $ID (keys %identifier) {
-            my $read = $identifier{$ID};
-            $log->severe("Missing Mapping for Read ".$read->getReadName." ($ID)");
-        }
-        return 0;
-    }
-
-# test the Mappings for continuous cover
-
-    my $mappings = $contig->getMappings();
-    @$mappings = sort { $a->getContigStart() <=> $b->getContigStart() } @$mappings;
-    my $success = 1;
-    my ($dummy,$farend) = $mappings->[0]->getContigRange();
-    for (my $i = 1 ; $i < scalar(@$mappings) ; $i++) {
-        my @current = $mappings->[$i]->getContigRange();
-        unless ($current[0] <= $farend) { # i.e. if there is overlap
-            my $pmap = $mappings->[$i-1]->getMappingName();
-            my $cmap = $mappings->[$i]->getMappingName();
-            my @previous = $mappings->[$i-1]->getContigRange();
-            $log->severe("Discontinuity! $i: consecutive mappings $pmap ".
-                        "(@previous) and $cmap (@current) do not overlap");
-            $success = 0;
-	}
-        $farend = $current[1] if ($current[1] > $farend);
-    }
-    return 0 unless $success;
-
-# test the number of Reads against the contig meta data (info only; non-fatal)
-
-    if (my $numberOfReads = $contig->getNumberOfReads()) {
-        my $reads = $contig->getReads();
-        my $nreads =  scalar(@$reads);
-        if ($nreads != $numberOfReads) {
-	    $log->severe("Read count error for contig ".$contig->getContigName.
-                        " (actual $nreads, metadata $numberOfReads)");
-        }
-    }
-    elsif (!$level) {
-        $log->severe("Missing metadata for ".contig->getContigName);
-    }
-    return 1;
-}
+#----------------------------------------
 
 sub deleteContig {
 # remove data for a given contig_id from all tables
@@ -2932,7 +2806,7 @@ sub fetchTagsForContigIDs {
               . "   and CONTIGTAG.tag_seq_id = 0" # explicitly undefined sequence
 	      . "   and contig_id in (".join (',',@$cids) .")"
 #              . "   and deprecated != 'Y'" # no table column now
-              . " order by contig_id,cstart,cfinal";
+              . " order by contig_id,cstart,tagtype,tagcomment,cfinal";
 
     $query =~ s/union/union all/ if $options{all}; # include duplicates
 
@@ -3004,13 +2878,18 @@ sub putTagsForContig {
 
     my $otags = $contig->getTags();
 
-    my $ctags = $contig->getTags(0,sort=>'position'); # as is
+    my $original = scalar(@$otags);
+
+    my $ctags = $contig->getTags(0,sort=>'full'); # as is
 
     my $logger = $this->verifyLogger("putTagsForContig");
 
-    if (my $removed = scalar(@$otags) - scalar(@$ctags)) {
-        $logger->warning("$removed duplicate tags removed from contig $contigname");
+    if (my $removed = $original - scalar(@$ctags)) {
+        $logger->warning("$removed duplicate tags removed from contig "
+                        . $contigname);
     }
+
+    my @copy = @$ctags;
 
 # construct a hash table for tag instance names ; to be removed, but keep test on tagtype
 
@@ -3042,11 +2921,15 @@ $logger->debug("testing for existing Tags");
 # delete the existing tags from the list
 
 if ($NEW) {
+#return 0 unless ($contigname =~ /g72/);
 $logger->debug("NEW testing against existing tags",preskip=>1);
         my ($i,$j) = (0,0);
         while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
-$logger->debug("testing contigtag $i ".$ctags->[$i]->getPositionLeft()
-	      ."  against  existingtag $j ".$etags->[$j]->getPositionLeft());
+
+$logger->debug("testing contigtag $i ".$ctags->[$i]->getType()." "
+.$ctags->[$i]->getPositionLeft()
+."  against  existingtag $j ".$etags->[$j]->getType()." "
+.$etags->[$j]->getPositionLeft());
 
             if ($ctags->[$i]->getPositionLeft() < $etags->[$j]->getPositionLeft()) {
                 $i++;
@@ -3055,11 +2938,19 @@ $logger->debug("testing contigtag $i ".$ctags->[$i]->getPositionLeft()
                 $j++;
             }
             elsif ($ctags->[$i]->isEqual($etags->[$j])) {
-# remove tag $i from list
-$logger->debug("remove contigtag $i");
+                splice @$ctags,$i,1;
+            }
+            elsif ($etags->[$j]->isEqual($ctags->[$i],contains=>1)) {
                 splice @$ctags,$i,1;
             }
             else {
+$logger->debug("$i & $j are not equal");
+$logger->debug($ctags->[$i]->writeToCaf(0,annotag=>1));
+$logger->debug($etags->[$j]->writeToCaf(0,annotag=>1));
+if ($ctags->[$i]->getType() eq 'WARN' && $etags->[$j]->getType() eq 'WARN') {
+$logger->debug($ctags->[$i]->dump(),ss=>1);
+$logger->debug($etags->[$j]->dump(),ss=>1);
+}
                 $j++; # next existing tag only
             }
         }
@@ -3082,25 +2973,43 @@ $logger->debug("tags are equal ".$ctag->dump(0,skip=>1));
 		}
             }
         }
-} # end OLD
-
-$logger->debug("end testing for existing Tags");
-    }
 
 # collect the tags left
 
-    my @tags;
-    foreach my $key (keys %$tags) {
-        my $ctag = $tags->{$key};
-        push @tags, $ctag;
-    }
-    $ctags = [@tags] unless $NEW;
+        my @tags;
+        foreach my $key (keys %$tags) {
+            my $ctag = $tags->{$key};
+            push @tags, $ctag;
+        }
+        $ctags = [@tags];
+} # end OLD
 
-$logger->warning("new tags ".scalar(@$ctags));
-foreach my $tag (@$ctags) {
-    $logger->debug($tag->writeToCaf(0,annotag=>1));
+    $logger->debug("end testing for existing Tags");
+
+    if (scalar(@$ctags) > 0) {
+        $logger = $this->verifyLogger("putTagsForContig LIST etag");
+# there are new tags, list the old ones
+        $logger->debug("existing tags $contigname",ss=>1);
+        foreach my $tag (@$etags) {
+            $logger->debug($tag->writeToCaf(0,annotag=>1));
+        }
+        $logger = $this->verifyLogger("putTagsForContig LIST ctag");
+        $logger->debug("input tags $contigname",ss=>1);
+        foreach my $tag (@copy) {
+            $logger->debug($tag->writeToCaf(0,annotag=>1));
+        }
+        $logger = $this->verifyLogger("putTagsForContig LIST ntag");
+        $logger->debug("new tags  $contigname ".scalar(@$ctags),ss=>1);
+        foreach my $tag (@$ctags) {
+           $logger->debug($tag->writeToCaf(0,annotag=>1));
+        }
+#	exit 1;
+    }
 }
 
+$logger->warning("new tags $contigname ".scalar(@$ctags),ss=>1);
+
+$logger = $this->verifyLogger("putTagsForContig");
 $logger->info("Loading? noload = $options{noload}");
 
     return 0 if $options{noload};
