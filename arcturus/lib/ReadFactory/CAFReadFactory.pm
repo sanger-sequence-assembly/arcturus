@@ -318,3 +318,45 @@ sub CAFFileParser {
 
     return $count;
 }
+
+# storage and retrieval of reads
+
+sub addReadToList {
+    my $this = shift;
+    my ($name,$read) = @_; 
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    $readhash->{$name} = $read;
+}
+
+sub getReadNamesToLoad {
+# overides superclass method
+    my $this = shift;
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    my @readnames = keys %$readhash;
+
+    return [@readnames];
+}
+
+sub getReadByName {
+# overides superclass method
+    my $this = shift;
+    my $name = shift;
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    return $readhash->{$name};
+}
+
+#------------------------------------------------------------------------
+
+1;
