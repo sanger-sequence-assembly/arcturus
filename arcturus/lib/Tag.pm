@@ -588,7 +588,6 @@ sub writeToCaf {
 # various types of tag, NOTE and ANNO are two special cases
 
     my $host = $this->getHostClass();
-#$host = 0;
 
     my $string = "Tag $type ";
 
@@ -645,6 +644,8 @@ sub writeToCaf {
             $string .= "Tag INFO @pos \"$comment\"\n";
 	}
     }
+
+    $string  =~ s/(\"\s*\")/\"/g; # remove doubly occurring quotes
 
     print $FILE $string if $FILE;
 
