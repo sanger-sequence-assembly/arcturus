@@ -127,22 +127,17 @@ sub isEqual {
 # insist on equality of position(s) with same alignment and no shift 
     unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
         return 0 unless ($options{overlaps} || $options{contains});
-# $logger->debug("$amap $omap equality test @equal");
 # test if otag tags is embedded in atag 
         my @arange = $amap->getMappedRange();
         my @orange = $omap->getMappedRange();
 # test if arange contains orange
         if ($options{contains}) {
-#$logger->debug("arange @arange   orange @orange");
             return 0 if ($orange[0] < $arange[0]);
             return 0 if ($orange[1] > $arange[1]);
-#$logger->debug("amap $amap contains omap $omap");
         }
         if ($options{overlaps}) {
-#$logger->debug("arange @arange   orange @orange");
             return 0 if ($orange[1] < $arange[0]);
             return 0 if ($orange[0] > $arange[1]);
-#$logger->debug("amap $amap overlaps with omap $omap");
         }
     }
 
