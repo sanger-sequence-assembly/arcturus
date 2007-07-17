@@ -15,6 +15,144 @@ use Clipping;
 use Logging;
 
 #-----------------------------------------------------------------------------
+# testing
+#-----------------------------------------------------------------------------
+
+
+
+sub testContig {
+# use via ForExport and ForImport aliases
+    my $this = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    my $level = $options{forimport} || 0;
+
+    &verifyParameter($contig,"testContig");
+
+    my $logger = &verifyLogger('testContig');
+
+$logger->debug("ContigHelper->testContig used"); 
+
+# level 0 for export, test number of reads against mappings and metadata    
+# for export: test reads against mappings using the sequence ID
+# for import: test reads against mappings using the readname
+# in either case, the reads and mappings must correspond 1 to 1
+
+    my $contigstatus = '';
+
+    my %identifier; # hash for IDs
+
+# test contents of the contig's Read instances; we log errors on reads or
+# mappings; we record error status on contig separately
+
+    my $ID;
+    if ($contig->hasReads()) {
+        my $success = 1;
+        my $reads = $contig->getReads();
+        foreach my $read (@$reads) {
+# test identifier: for export sequence ID; for import readname (or both? for both)
+            $ID = $read->getReadName()   if  $level; # import
+	    $ID = $read->getSequenceID() if !$level;
+            if (!defined($ID)) {
+                $logger->severe("Missing identifier in Read ".$read->getReadName);
+                $success = 0;
+            }
+            $identifier{$ID} = $read;
+# test presence of sequence and quality data
+            if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
+                $logger->severe("Missing DNA or BaseQuality in Read ".$read->getReadName);
+                $success = 0;
+            }
+            $contig->{status} = "Invalid or incomplete Read(s)" unless $success;
+        }
+        return 0 unless $success;       
+    }
+    else {
+        $contigstatus .= "Contig ".$contig->getContigName." has no Reads\n";
+    }
+
+# test contents of the contig's Mapping instances and against the Reads
+
+    if ($contig->hasMappings()) {
+        my $success = 1;
+	my $mappings = $contig->getMappings();
+        foreach my $mapping (@$mappings) {
+# get the identifier: for export sequence ID; for import readname
+            if ($mapping->hasSegments) {
+                $ID = $mapping->getMappingName()    if $level;
+	        $ID = $mapping->getSequenceID() if !$level;
+# is ID among the identifiers? if so delete the key from the has
+                if (!$identifier{$ID}) {
+                    $logger->severe("Missing Read for Mapping ".
+                                 $mapping->getMappingName." ($ID)");
+                    $success = 0;
+                }
+                delete $identifier{$ID}; # delete the key
+            }
+	    else {
+                $logger->severe("Mapping ".$mapping->getMappingName().
+                            " for Contig ".$contig->getContigName().
+                            " has no Segments");
+                $success = 0;
+            }
+            $contig->{status} = "Invalid or incomplete Mapping(s)" unless $success;
+        }
+        return 0 unless $success;
+    } 
+    else {
+        $contigstatus .= "Contig ".$contig->getContigName." has no Mappings\n";
+    }
+# now there should be no keys left (when Reads and Mappings correspond 1-1)
+    if (scalar(keys %identifier)) {
+        foreach my $ID (keys %identifier) {
+            my $read = $identifier{$ID};
+            $contigstatus .= "Missing Mapping for Read "
+                          .   $read->getReadName." ($ID)\n";
+        }
+    }
+
+# test the Mappings for continuous cover
+
+    my $mappings = $contig->getMappings();
+    @$mappings = sort { $a->getContigStart() <=> $b->getContigStart() } @$mappings;
+
+    my ($dummy,$farend) = $mappings->[0]->getContigRange();
+    for (my $i = 1 ; $i < scalar(@$mappings) ; $i++) {
+        my @current = $mappings->[$i]->getContigRange();
+        unless ($current[0] <= $farend) { # i.e. if there is overlap
+            my $pmap = $mappings->[$i-1]->getMappingName();
+            my $cmap = $mappings->[$i]->getMappingName();
+            my @previous = $mappings->[$i-1]->getContigRange();
+            $contigstatus .= "Discontinuity at mapping $i: no overlap between "
+                          .  "$pmap (@previous) and $cmap (@current)\n";
+	}
+        $farend = $current[1] if ($current[1] > $farend);
+    }
+
+# test the number of Reads against the contig meta data (info only; non-fatal)
+
+    if (my $numberOfReads = $contig->getNumberOfReads()) {
+        my $reads = $contig->getReads();
+        my $nreads =  scalar(@$reads);
+        if ($nreads != $numberOfReads) {
+            $logger->warning("Read count error for contig ".$contig->getContigName
+                            . " (actual $nreads, metadata $numberOfReads)");
+        }
+    }
+    elsif (!$level) {
+        $logger->warning("Missing metadata for ".contig->getContigName());
+    }
+
+    return 1 unless $contigstatus; # no errors
+
+    $contig->{status} = $contigstatus;
+$logger->warning($contigstatus);
+
+    return 0;
+}
+
+#-----------------------------------------------------------------------------
 # methods which take a Contig instance as input and change its content
 #-----------------------------------------------------------------------------
 
@@ -1456,16 +1594,20 @@ sub pad {
 
     &verifyParameter($contig,'pad');
 
-    print SDTERR "->pad not yet operational\n";
+    my $logger = &verifyLogger('pad');
+
+    $logger->error("not yet operational");
 }
 
 sub depad {
     my $class = shift;
     my $contig = shift;
 
-    &verifyParameter($contig,'pad');
+    &verifyParameter($contig,'depad');
 
-    print SDTERR "->pad not yet operational\n";
+    my $logger = &verifyLogger('depad');
+
+    $logger->error("not yet operational");
 }
 
 #-----------------------------------------------------------------------------
@@ -2950,7 +3092,6 @@ sub sortContigTags {
     &verifyParameter($contig,'sortContigTags');
 
     my $logger = verifyLogger('sortContigTags');
-$logger->debug("ENTER  o:@_");
 
     my $tags = $contig->getTags(); # tags as is
 
@@ -2965,8 +3106,10 @@ $logger->debug('basic sorting');
     }
     elsif ($options{sort} && $options{sort} eq 'full') {
 # do a sort on position and tag description in tagcomment
-$logger->debug('full sorting');
-        @$tags = sort fullsort @$tags;
+$logger->debug('merge sorting') if $options{merge};
+$logger->debug('full sorting') unless $options{merge};
+        @$tags = sort mergesort @$tags     if $options{merge};
+        @$tags = sort fullsort  @$tags unless $options{merge};
     }
     elsif ($options{sort}) {
         $logger->error("invalid sorting option '$options{sort}' ignored");
@@ -2985,29 +3128,18 @@ $logger->debug("tag before duplicate test ".scalar(@$tags));
         my $nexttag = $tags->[$n];
 # splice the nexttag out of the array if the tags are equal
         if ($leadtag->isEqual($nexttag)) {
-#$logger->debug("n $n lead $leadtag equals next $nexttag");
 	    splice @$tags, $n, 1;
 	}
         elsif ($merge && $leadtag->isEqual($nexttag,contains=>1)) {
-#$logger->debug("n $n lead $leadtag contains next $nexttag");
-#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
-#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
 	    splice @$tags, $n, 1; # lead tag contains next tag: remove next
 	}
         elsif ($merge && $nexttag->isEqual($leadtag,contains=>1)) {
-#$logger->debug("n $n next $nexttag contains lead $leadtag");
-#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
-#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
 	    splice @$tags, $n-1, 1; # next tag contains lead tag: remove lead
 	}
 	elsif ($merge && $leadtag->isEqual($nexttag,overlaps=>1)) {
-#$logger->debug("n $n lead $leadtag overlaps with next $nexttag");
-#$logger->debug("lead ".$leadtag->writeToCaf(0,annotag=>1));
-#$logger->debug("next ".$nexttag->writeToCaf(0,annotag=>1));
 	    splice @$tags, $n, 1; # lead tag is extended and contains next tag
 	}
         else {
-#$logger->debug("n $n lead $leadtag  NOT equal  next $nexttag");
 	    $n++;
 	}
     }    
@@ -3015,11 +3147,22 @@ $logger->debug("tag after sort ".scalar(@$tags));
 $logger->debug("EXIT",skip=>3);
 }
 
-sub fullsort {
-# sort for weedout purposes (getting same comment tags grouped together)
+sub mergesort {
+# sort for weedout/merge purposes (getting same tagcomment grouped together)
    $a->getTagComment()    cmp $b->getTagComment()     # sort on the description first
  or
    $a->getPositionLeft()  <=> $b->getPositionLeft()   # then on start position 
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
+}
+
+sub fullsort {
+# sort for comparison purposes 
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position 
+ or
+   $a->getType()          cmp $b->getType()           # then on type
+ or
+   $a->getTagComment()    cmp $b->getTagComment()     # then on the description first
  or
    $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
 }
