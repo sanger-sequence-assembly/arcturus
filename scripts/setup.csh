@@ -28,6 +28,10 @@ if ( `uname -s` == 'OSF1' ) then
 else
     setenv JAVA_HOME /software/jdk1.6.0_01
     set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
+
+    if ( `uname -m` == 'x86_64' ) then
+	setenv JAVA_HEAP_SIZE -Xmx4096M
+    endif
 endif
 
 echo Using Java in $JAVA_HOME 
