@@ -692,8 +692,23 @@ sub copy {
 }
 
 #-------------------------------------------------------------------    
-# calculate consensus length, cover, etc
+# test, calculate consensus length, cover, etc
 #-------------------------------------------------------------------
+
+sub isValid {
+# test if contig has a valid and consistent set of components
+    my $this = shift;
+    my %options = @_;
+
+    &verifyKeys('isValid',\%options,'forimport');
+    return ContigHelper->testContig($this,%options); # returns 1 or 0
+# possible diagnostics stored in $this->{status};
+}
+
+sub getStatus {
+    my $this = shift;
+    return $this->{status} || '';
+}
 
 sub getStatistics {
 # collect a number of contig statistics
