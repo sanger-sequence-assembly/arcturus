@@ -290,14 +290,14 @@ sub countReadDictionaryItem {
 
 #-----------------------------------------------------------------------------
 
-sub getRead {
+sub oldgetRead { # to be DEPRECATED 
 # returns a Read instance with (meta data only) for input read IDs 
 # parameter usage: read_id=>ID or readname=>NAME, version=>VERSION
     my $this = shift;
 
 # compose the query
 
-$this->defineReadMetaData(); # unless $this->{read_attributes};
+    $this->defineReadMetaData(); # unless $this->{read_attributes};
 
     my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
                  $this->{read_attributes},$this->{template_addons}
@@ -342,6 +342,10 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
 
     my $sth = $dbh->prepare_cached($query);
 
+my $logger = $this->verifyLogger('getRead');
+$logger->info("getRead: $query  ($readitem)");
+
+
     $sth->execute($readitem) || &queryFailed($query,$readitem);
 
     my ($read_id, $seq_id, $db_version,@attributes) = $sth->fetchrow_array();
@@ -371,16 +375,111 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
     }
 }
 
+sub getRead {
+# returns a Read instance with (meta data only) for input read IDs 
+# parameter usage: read_id=>ID or readname=>NAME, version=>VERSION
+    my $this = shift;
+    my %options = @_;
+
+# return $this->oldgetRead(@_);
+
+# compose the query; the union construct allows for undefined template 
+
+    $this->defineReadMetaData();
+
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
+                 $this->{read_attributes},$this->{template_addons}
+                  from READINFO,SEQ2READ,TEMPLATE 
+                 where READINFO.read_id = SEQ2READ.read_id
+                   and READINFO.template_id = TEMPLATE.template_id";
+    my $union = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
+                 $this->{read_attributes},'undefined',0
+                  from READINFO,SEQ2READ
+                 where READINFO.read_id = SEQ2READ.read_id";
+
+    my $nextword;
+    my $readitem;
+    my $conditions = '';
+    my @data;
+
+    my $like = 1;
+    undef my $defaultversion;
+    if (defined($options{seq_id})) {
+        $conditions .= "and SEQ2READ.seq_id = ?"; # no default version
+        push @data, $options{seq_id};
+    }
+    if (defined($options{read_id})) {
+        $conditions .= "and READINFO.read_id = ?";
+        push @data, $options{read_id};
+	$defaultversion = 0;
+    }
+    if (defined($options{readname})) {
+        $conditions .= "and READINFO.readname like ?";
+        push @data, $options{readname};
+        $like = 0 unless ($options{readname} =~ /\%/);
+	$defaultversion = 0;
+    }
+
+    return undef unless $conditions; # no valid selection specified
+
+    if (defined($options{version}) || defined($defaultversion)) {
+# version specified explicitly or default to be used (input takes precedence)
+        $options{version} = $defaultversion unless defined $options{version};
+        $conditions .= " and SEQ2READ.version = ?";
+        push @data, $options{version};
+    }
+
+# compose the full query and bindvalues; the limit causes the 'union' part to
+# kick in if the 'query' part gives no result, i.e. the read has no template
+
+    $conditions =~ s/like/=/ unless $like;    
+    my $fullquery = "$query $conditions union $union $conditions limit 1";
+    my @bindvalues  = @data;
+    push @bindvalues, @data; # the union part
+
+    my $dbh = $this->getConnection();
+
+    my $sth = $dbh->prepare_cached($fullquery);
+
+    $sth->execute(@bindvalues) || &queryFailed($fullquery,@bindvalues);
+
+    my ($read_id, $seq_id, $db_version,@attributes) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    if (defined($read_id)) {
+	my $read = new Read();
+
+        $read->setReadID($read_id);
+
+        $read->setSequenceID($seq_id);
+
+        $read->setVersion($db_version);
+
+        $this->addMetaDataForRead($read, @attributes);
+
+        $this->addSequenceMetaDataForRead($read);
+
+	$read->setArcturusDatabase($this);
+
+	return $read;
+    }
+
+# no resdult returned
+
+    return undef;
+}
+
 sub getAllVersionsOfRead {
 # returns a hash of Read instances keyed on sequence ID for a single read
     my $this = shift;
     my %options = @_;
 
-# note: a 'version' option specification is ignored; use getRead or getReads instead
+# note: 'version' option specification is ignored; use getRead or getReads instead
 
     my $reads = {};
     for (my $version = 0 ; ; $version++) {
-        my $read = $this->getRead(version=>$version,%options);
+        my $read = $this->getRead(version=>$version,%options); # options ported
         last unless $read;
         my $seq_id = $read->getSequenceID();
         $reads->{$seq_id} = $read;
@@ -1850,6 +1949,8 @@ sub putSequenceForRead {
 
 	    my ($seqvec, $svleft, $svright) = @{$entry};
 
+            next unless $seqvec;
+
 #	    my $seqvecid = $this->getReadAttributeID('svector',$seqvec) || 0;
 	    my $seqvecid = &getReadAttributeID($seqvec,
 				               $this->{LoadingDictionary}->{'svector'},
@@ -2000,6 +2101,10 @@ sub putNewSequenceForRead {
             $first = $prior unless defined $first;
             $version++;
         }
+        else {
+#read not completed
+            return 0,"read $read_id, version $version could not be retrieved";
+        }
     }
 
 # d) ok, we have a new sequence version for the read which has to be loaded
@@ -2021,7 +2126,9 @@ my $logger = $this->verifyLogger('putNewSequenceForRead');
 $logger->debug("new sequence version detected ($version) for read $readname");
 
     my ($seq_id,$errmsg) = $this->putSequenceForRead($read,$version); 
-    return (0, "failed to load new sequence ($errmsg)") unless $seq_id;
+    unless ($seq_id) {
+        return (0,"failed to load new sequence (version $version: $errmsg)");
+    }
 
     $read->setSequenceID($seq_id);
     $read->setVersion($version);
@@ -2199,8 +2306,6 @@ sub getReadAttributeID {
     my $insert_sth = shift;
     my $extra_data = shift;
 
-    &verifyPrivate($identifier,'getReadAttributeID');
-
 # ALTERNATIVE?
 # sub getReadAttributeID {
 #     my $this = shift;
@@ -2214,6 +2319,7 @@ sub getReadAttributeID {
 
     return undef unless (defined($identifier) && defined($dict));
 
+    &verifyPrivate($identifier,'getReadAttributeID');
 
 # 1 try to find it in the stored dictionary hashes
 
@@ -2432,7 +2538,7 @@ sub getSequenceIDsForReads {
         elsif ($read->isEdited) {
             my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
 	    $log->info("Edited $added $errmsg") if $added;
-	    $log->info("$errmsg") unless $added;
+	    $log->warning("$errmsg") unless $added;
             $success = 0 unless $added;
         }
         else {
