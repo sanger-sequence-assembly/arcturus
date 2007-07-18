@@ -9,7 +9,7 @@
 set basedir=`dirname $0`
 set arcturus_home = ${basedir}/..
 set loader_script = ${arcturus_home}/utils/contig-loader
-set javabasedir=/nfs/pathsoft/arcturus/utils
+set javabasedir=${arcturus_home}/utils
 
 set badgerbin=${BADGER}/bin
 
@@ -153,11 +153,7 @@ ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organ
 
 # calculating consensus sequence (for this project only)
 
-if ($instance == 'default') then
-    ${javabasedir}/calculateconsensus -project $projectname -quiet -lowmem
-else
-    ${javabasedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
-endif
+${javabasedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
 
 echo Cleaning up
 
