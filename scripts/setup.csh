@@ -4,9 +4,6 @@
 set PROGNAME=`basename $0`
 set ARCTURUS_HOME=`dirname $0`
 
-# Specify the location of site-wide preferences and other files
-set ARCTURUS_SITE_HOME=/nfs/pathsoft/arcturus
-
 # This is the Arcturus root package name
 set ARCTURUS_PACKAGE=uk.ac.sanger.arcturus
 
@@ -54,7 +51,7 @@ if (! -d ${HOME}/.arcturus/logging ) then
     mkdir ${HOME}/.arcturus/logging
 endif
 
-set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.home=${ARCTURUS_HOME} -Darcturus.site.home=${ARCTURUS_SITE_HOME}"
+set EXTRA_OPTS="${EXTRA_OPTS} -Darcturus.home=${ARCTURUS_HOME}"
 
 # Add the JDBC and JNDI options to the run-time options
 if ( $?JAVA_OPTS ) then
