@@ -1261,6 +1261,8 @@ sub getProjectIDsForProjectName {
         push @projectids,[@ary];
     }
 
+    $sth->finish();
+
     return [@projectids]; # list of project ID, assembly ID pairs
 }
 
@@ -1321,6 +1323,8 @@ sub getHangingProjectIDs {
     while (my $projectid = $sth->fetchrow_array()) {
         push @projectids,$projectid;
     }
+
+    $sth->finish();
 
     return [@projectids];
 }
@@ -1574,6 +1578,8 @@ sub updateProjectItem {
     my $sth = $dbh->prepare_cached($query);
 
     my $nrw = $sth->execute(@values) || &queryFailed($query,@values);
+
+    $sth->finish();
 
     return ($nrw+0);
 }
@@ -2032,6 +2038,8 @@ sub setLockedStatus {
     my $rc = $sth->execute(@qdata) || &queryFailed($query,@qdata);
 
 # returns 1 for success, 0 for failure
+
+    $sth->finish();
 
     return ($rc + 0);
 }
