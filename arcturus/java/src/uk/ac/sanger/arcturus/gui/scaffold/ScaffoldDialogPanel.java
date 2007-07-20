@@ -33,16 +33,26 @@ public class ScaffoldDialogPanel extends JPanel {
 	public ScaffoldDialogPanel() {
 		super(null);
 		
+		int vfill = 5;
+		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		add(createContigSelectionPanel());
 		
+		add(Box.createVerticalStrut(vfill));
+		
 		add(createIncludeProjectsPanel());
 		
+		add(Box.createVerticalStrut(vfill));
+	
 		add(createLengthCriterionPanel());
 		
+		add(Box.createVerticalStrut(vfill));
+	
 		add(createSubCloneCriterionPanel());
 		
+		add(Box.createVerticalStrut(vfill));
+	
 		add(createBridgeCriterionPanel());
 	}
 	
@@ -196,6 +206,8 @@ public class ScaffoldDialogPanel extends JPanel {
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		
 		frame.pack();
+		
+		frame.setResizable(false);
 		
 		frame.setVisible(true);
 	}
