@@ -16,36 +16,44 @@ public class MessageDialogHandler extends Handler {
 		Level level = record.getLevel();
 
 		int type = JOptionPane.INFORMATION_MESSAGE;
-		
+
 		if (level.equals(Level.WARNING))
 			type = JOptionPane.WARNING_MESSAGE;
 		else if (level.equals(Level.SEVERE))
 			type = JOptionPane.ERROR_MESSAGE;
-		
+
 		String title = level.getLocalizedName() + " : " + record.getMessage();
-		
+
 		String message = title;
-		
+
 		Throwable throwable = record.getThrown();
-		
+
 		if (throwable != null) {
-			StringBuffer sb = new StringBuffer();
-			
-			sb.append("An error has occurred.  Please notify a developer.\n\n");
-			
-			sb.append(throwable.getClass().getName() + ": " + throwable.getMessage() + "\n");
-			
-			StackTraceElement[] ste = throwable.getStackTrace();
-			
-			boolean showAll = ste.length <= 10;
-			
-			for (int i = 0; i < ste.length; i++)
-				if (showAll || ste[i].getClassName().startsWith("uk.ac.sanger.arcturus"))
-					sb.append("  [" + i + "]: " + ste[i] + "\n");
-			
-			message = sb.toString();
+			if (throwable instanceof javax.naming.ServiceUnavailableException) {
+				message = "Minerva cannot connect to the LDAP server.\n" +
+				"Please try again later.";
+			} else {
+				StringBuffer sb = new StringBuffer();
+
+				sb.append("An error has occurred.  Please notify a developer.\n\n");
+
+				sb.append(throwable.getClass().getName() + ": "
+						+ throwable.getMessage() + "\n");
+
+				StackTraceElement[] ste = throwable.getStackTrace();
+
+				boolean showAll = ste.length <= 10;
+
+				for (int i = 0; i < ste.length; i++)
+					if (showAll
+							|| ste[i].getClassName().startsWith(
+									"uk.ac.sanger.arcturus"))
+						sb.append("  [" + i + "]: " + ste[i] + "\n");
+
+				message = sb.toString();
+			}
 		}
-		
+
 		JOptionPane.showMessageDialog(null, message, title, type);
 	}
 }
