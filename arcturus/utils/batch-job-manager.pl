@@ -24,13 +24,14 @@ my $delayed;
 my $batch;
 my $new;
 my $babel;
+my $pcs3;
 
 my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|"
                . "import|export|new|"
-               . "batch|nobatch|delayed|subdir|sd|r|babel|"
+               . "batch|nobatch|delayed|subdir|sd|r|babel|pcs3|"
                . "verbose|debug|confirm|submit|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -80,6 +81,9 @@ while (my $nextword = shift @ARGV) {
     $new          = 1              if ($nextword eq '-new');
 
     $babel        = 1              if ($nextword eq '-babel');
+    $pcs3         = 0              if ($nextword eq '-babel');
+    $pcs3         = 1              if ($nextword eq '-pcs3');
+    $babel        = 0              if ($nextword eq '-pcs3');
 
     $verbose      = 1              if ($nextword eq '-verbose');
 
@@ -205,7 +209,8 @@ foreach my $project (@projects) {
 # export by batch job
         my $command;
         $command = "bsub -q babelq1 -N " if $babel;
-        $command = "bsub -q pcs3q1  -N " unless $babel;
+        $command = "bsub -q pcs3q1  -N " if $pcs3;
+        $command = "bsub -q pfam    -N " unless ($pcs3 || $babel);
 	$command .= "-R 'select[mem>16000] rusage[mem=16000]' ";
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
