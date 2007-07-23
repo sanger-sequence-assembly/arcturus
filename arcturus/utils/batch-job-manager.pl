@@ -206,11 +206,11 @@ foreach my $project (@projects) {
     }
 
     if ($batch) {
-# export by batch job
+# im/export by batch job
         my $command;
         $command = "bsub -q babelq1 -N " if $babel;
         $command = "bsub -q pcs3q1  -N " if $pcs3;
-        $command = "bsub -q pfam    -N " unless ($pcs3 || $babel);
+        $command = "bsub -q phrap   -N " unless ($pcs3 || $babel);
 	$command .= "-R 'select[mem>16000] rusage[mem=16000]' ";
         $command .= "-b 18:00 " if $delayed;
         $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
@@ -235,7 +235,7 @@ foreach my $project (@projects) {
         }
     }
     else {
-# export under user control
+# im/export under user control
         my $command;
         my $message = "Project $project will be ${ioport}ed ";
         my $pwd = `pwd`; chomp $pwd;
