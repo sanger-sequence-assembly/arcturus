@@ -16,22 +16,25 @@ my $instance;
 my $project;
 my $assembly;
 my $fopn;
+my $problem;
 
 my $subdir;
 
 my $ioport;
 my $delayed;
 my $batch;
-my $new;
 my $babel;
 my $pcs3;
+
+my $new;
+my $script;
 
 my $verbose;
 my $confirm;
 
-my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|"
-               . "import|export|new|"
-               . "batch|nobatch|delayed|subdir|sd|r|babel|pcs3|"
+my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|problem|"
+               . "import|export|script|new|"
+               . "batch|nobatch|delayed|subdir|sd|r|babel|pcs3|" # default phrap
                . "verbose|debug|confirm|submit|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -61,6 +64,9 @@ while (my $nextword = shift @ARGV) {
     }
 
     $fopn         = shift @ARGV    if ($nextword eq '-fopn');
+    $fopn         = shift @ARGV    if ($nextword eq '-fofn');
+
+    $problem      = shift @ARGV    if ($nextword eq '-problem');
 
     $delayed      = 1              if ($nextword eq '-delayed');
 
@@ -78,7 +84,9 @@ while (my $nextword = shift @ARGV) {
     $batch        = 1              if ($nextword eq '-delayed');
     $batch        = 1              if ($nextword eq '-batch');
     $batch        = 0              if ($nextword eq '-nobatch');
-    $new          = 1              if ($nextword eq '-new');
+
+    $new          = 1              if ($nextword eq '-new'); # TBD
+    $script       = shift @ARGV    if ($nextword eq '-script');
 
     $babel        = 1              if ($nextword eq '-babel');
     $pcs3         = 0              if ($nextword eq '-babel');
@@ -144,43 +152,69 @@ $adb->setLogger($logger);
 
 my @projects;
 
-if ($project && $project !~ /\W/) {
-# project specificationmay include wildcard
-    my $Projects = &getProjectInstance($project,$assembly,$adb,1);
- 
-    &showUsage("Unknown project(s) $project") unless $Projects;
+my @projectids;
 
-    foreach my $project (@$Projects) {
-        push @projects, $project->getProjectName();
-    }
+# get project IDs specified with '-project' key
+
+if ($project && $project =~ /\,|\;|\s/) {
+    @projectids = split /[\,\;\s]+/,$project;
+}
+elsif ($project) {
+    push @projectids,$project;
 }
 
-elsif ($fopn || $project =~ /\W/) {
-# try file
+# get/add project IDs specified with '-fofn/fopn' key
+
+if ($fopn) {
     $fopn = &getNamesFromFile($fopn);
-# try multiple projects on command line
-    if ($project) {
-	push @$fopn, split /\W/,$project;
-    }
+    push @projectids,@$fopn if $fopn;
+}
 
-    foreach my $project (@$fopn) {
-        my $Projects = &getProjectInstance($project,$assembly,$adb); 
-# allow multiple projects (use wildcards)
-        next unless $Projects;
-        foreach my $project (@$Projects) {
-            push @projects, $project->getProjectName();
-        }
+# get/confirm the project names
+
+my %projects;
+foreach my $projectid (@projectids) {
+# identify each specified project in the database (may contain wildcards)
+    my $Projects = &getProjectInstance($projectid,$assembly,$adb,1);
+# test if any project found
+    unless ($Projects) {
+        $logger->error("Unknown project(s) $projectid");
+        next;
+    }
+# get project names, taking care of duplicates   
+    foreach my $project (@$Projects) {
+        my $name = $project->getProjectName();
+        next if $projects{$name};
+        push @projects, $name;
+        $projects{$name}++;
     }
 }
- 
-&showUsage("Missing project ID or fopn, or unknown project(s)") unless @projects;
+
+&showUsage("No valid projects specified (@projectids)") unless @projects;
 
 #----------------------------------------------------------------
 
+# get the software directory
+
+my $utilsdir;
+
+my $host = $ENV{HOST};
+if ($host =~ /^pcs/) {
+    $utilsdir = "/nfs/pathsoft/arcturus/utils";
+}
+elsif ($host =~ /^seq/) {
+    $utilsdir = "/software/arcturus/utils";
+}
+else {
+    &showUsage("Can't run this script on this host $host");
+}
+
+$logger->warning("host $host  utils $utilsdir");
+$logger->warning("projects: @projects"); # exit 0; # TBD
+
 # get current directory
 
-my $pwd = `pwd`;
-chomp $pwd;
+my $pwd = `pwd`; chomp $pwd;
 
 # get the repository position
 
@@ -194,35 +228,64 @@ my $date = `date +%Y%m%d`; $date =~ s/\s//g;
 
 foreach my $project (@projects) {
 
+# the project must by in the directory the script is run in
+
     if ($subdir) {
+# or in a subdirectory named after the project
         my $subdir = "$pwd/$project";
         chdir ($subdir);
         my $newpwd = `pwd`;
         chomp $newpwd;
         unless ($newpwd eq $subdir) {
             $logger->warning("FAILED to find subdir $project");
+            next;
 	}
         $logger->info("Project directory $newpwd used");
     }
 
+# compose the import/export part of the command (both batch and command line)
+
+    my $command;
+    my $pwd = `pwd`; chomp $pwd;
+    my $message = "Project $project will be ${ioport}ed ";
+    if ($ioport eq 'import') {
+        $command .= "$utilsdir/importprojectintoarcturus.csh ";
+        $command .= "$instance $organism $project ";
+        if ($problem || $script) {
+            $problem = 'PROBLEM' unless $problem; # default
+            $command .= "$problem ";
+            $command .= "$script" if $script;
+	}
+# add in perl script: gap4 name different from project, list of contigs etc
+        $message .= "from gap4 database\n   $pwd/$project.0";
+    }
+    elsif ($ioport eq 'export') {
+        $command .= "$utilsdir/exportprojectfromarcturus.csh ";
+        $command .= "$instance $organism $project ";
+        $command .= "$script" if $script;
+# add in perl script: gap4 name different from project
+        $message .= "to gap4 database\n   $pwd/$project.A";
+    }
+
+# batch or run
+ 
     if ($batch) {
 # im/export by batch job
-        my $command;
-        $command = "bsub -q babelq1 -N " if $babel;
-        $command = "bsub -q pcs3q1  -N " if $pcs3;
-        $command = "bsub -q phrap   -N " unless ($pcs3 || $babel);
-	$command .= "-R 'select[mem>16000] rusage[mem=16000]' ";
-        $command .= "-b 18:00 " if $delayed;
-        $command .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
-        if ($ioport eq 'import') {
-            $command .= "$work_dir/importintoarcturus.csh $project" unless $new;
-            $command .= "$work_dir/newimportintoarcturus.csh $project" if $new;
-        }
-        elsif ($ioport eq 'export') {
-            $command .= "$work_dir/exportfromarcturus.csh $project";
-#        $command .= "$export_script $instance $organism $project 64 0"; # ?
-#        $command .= "$export_script -instance $instance -organism $organism -project $project -consensus "; # ?
-        }
+        my $submit;
+        if ($host =~ /^pcs/) {
+            $submit = "bsub -q babelq1 -N " if $babel;
+            $submit = "bsub -q pcs3q1  -N " if $pcs3;
+            $submit = "bsub -q pcs3q1  -N " unless $submit; # default
+	}
+        else {
+            $submit = "bsub -q phrap   -N "; # on seq
+	}
+
+	$submit .= "-R 'select[mem>16000] rusage[mem=16000]' ";
+        $submit .= "-b 18:00 " if $delayed;
+        $submit .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
+
+        $command = $submit.$command; # the actual import/export command
 
         unless ($confirm) {
             $logger->warning("=> command to be issued:\n$command");
@@ -236,19 +299,8 @@ foreach my $project (@projects) {
     }
     else {
 # im/export under user control
-        my $command;
-        my $message = "Project $project will be ${ioport}ed ";
-        my $pwd = `pwd`; chomp $pwd;
-        if ($ioport eq 'import') {
-            $command = "$work_dir/importintoarcturus.csh $project";
-            $message .= "from gap4 database\n   $pwd/$project.0";
-	}
-        elsif ($ioport eq 'export') {
-            $command = "$work_dir/exportfromarcturus.csh $project";
-            $message .= "to gap4 database\n   $pwd/$project.A";
-        }
-
         unless ($confirm) {
+            $logger->warning("=> command to be issued:\n$command");
             $logger->warning("=> $message");
             $logger->warning("=> repeat using '-confirm'");
             next;
@@ -299,6 +351,9 @@ sub getNamesFromFile {
             print STDERR "Invalid input on file $file: $record\n";
         }
     }
+
+    close $FILE;
+
     return [@list];
 }
 
