@@ -42,7 +42,7 @@ set projectname = $3
 limit datasize 16000000
 
 if ( ! -f ${projectname}.0 ) then
-  set pwd = `pwd`
+  set pwd = `/bin/pwd`
   echo \!\! -- Project $projectname version 0 does not exist in ${pwd} --
   exit 1
 endif
@@ -131,7 +131,7 @@ echo Importing into Arcturus # ${arcturus_home}/utils
 
 # added 06/09/2005 default project name
 
-set gap4dirname=`pwd`;
+set gap4dirname=`/bin/pwd`;
 
 ${loader_script} -instance $instance -organism $organism -caf $depadded -defaultproject $projectname -gap4name ${gap4dirname}/${projectname}.0
 
