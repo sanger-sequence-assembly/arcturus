@@ -6,6 +6,8 @@ use ArcturusDatabase;
 
 use Logging;
 
+use Cwd;
+
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
@@ -31,6 +33,7 @@ my $script;
 
 my $verbose;
 my $confirm;
+my $debug;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|problem|"
                . "import|export|script|new|"
@@ -95,7 +98,7 @@ while (my $nextword = shift @ARGV) {
 
     $verbose      = 1              if ($nextword eq '-verbose');
 
-    $verbose      = 2              if ($nextword eq '-debug');
+    $debug        = 1              if ($nextword eq '-debug');
 
     $confirm      = 1              if ($nextword eq '-confirm');
     $confirm      = 1              if ($nextword eq '-submit');
@@ -110,6 +113,8 @@ while (my $nextword = shift @ARGV) {
 my $logger = new Logging('STDOUT');
  
 $logger->setStandardFilter(0) if $verbose; # set reporting level
+
+$logger->setDebugStream('STDOUT',list=>1) if $debug;
  
 #----------------------------------------------------------------
 # get the database connection
@@ -198,23 +203,28 @@ foreach my $projectid (@projectids) {
 
 my $utilsdir;
 
+my $OS = `uname -s`; chomp $OS;
+
 my $host = $ENV{HOST};
-if ($host =~ /^pcs/) {
+if ($host =~ /^pcs/ && $OS eq "OSF1") {
     $utilsdir = "/nfs/pathsoft/arcturus/utils";
 }
-elsif ($host =~ /^seq/) {
+elsif ($host =~ /^seq/ && $OS eq "Linux") {
+# ? further test on platform with uname -m ?
     $utilsdir = "/software/arcturus/utils";
 }
 else {
-    &showUsage("Can't run this script on this host $host");
+    &showUsage("Can't run this script on this host or OS : $host, $OS");
 }
 
-$logger->warning("host $host  utils $utilsdir");
-$logger->warning("projects: @projects"); # exit 0; # TBD
+$logger->debug("host : $host, OS : $OS, utils : $utilsdir");
+$logger->debug("projects: @projects");
 
 # get current directory
 
-my $pwd = `pwd`; chomp $pwd;
+my $pwd = Cwd::cwd();
+ 
+$logger->debug("This script is run from directory : $pwd",ss=>1);
 
 # get the repository position
 
@@ -233,22 +243,27 @@ foreach my $project (@projects) {
     if ($subdir) {
 # or in a subdirectory named after the project
         my $subdir = "$pwd/$project";
-        chdir ($subdir);
-        my $newpwd = `pwd`;
-        chomp $newpwd;
-        unless ($newpwd eq $subdir) {
-            $logger->warning("FAILED to find subdir $project");
+        chdir ($subdir) if (-d $project);
+        my $subpwd = Cwd::cwd();
+        unless ($subpwd eq $subdir) {
+            $logger->warning("FAILED to locate subdir $project");
             next;
 	}
-        $logger->info("Project directory $newpwd used");
+        $logger->debug("Project directory $subpwd used");
     }
 
 # compose the import/export part of the command (both batch and command line)
 
     my $command;
-    my $pwd = `pwd`; chomp $pwd;
+    my $currentpwd = Cwd::cwd();
     my $message = "Project $project will be ${ioport}ed ";
     if ($ioport eq 'import') {
+# $command .= "$utilsdir/importintoarcturus.pl ";
+# $command .= "-i $instance -o $organism ";
+# $command .= "-p $project " if $project; # split in base project and gap4project
+# $command .= "-s $script "  if $script;
+# $command .= "-pp $problem  if $problem;
+# $command .= "-db $gap4name " or $project? (in wrapper script)
         $command .= "$utilsdir/importprojectintoarcturus.csh ";
         $command .= "$instance $organism $project ";
         if ($problem || $script) {
@@ -257,14 +272,19 @@ foreach my $project (@projects) {
             $command .= "$script" if $script;
 	}
 # add in perl script: gap4 name different from project, list of contigs etc
-        $message .= "from gap4 database\n   $pwd/$project.0";
+        $message .= "from gap4 database\n   $currentpwd/$project.0";
     }
     elsif ($ioport eq 'export') {
+# $command .= "$utilsdir/exportfromarcturus.pl ";
+# $command .= "-i $instance -o $organism ";
+# $command .= "-p $project " if $project; # or scaffold? mutually exclusive + test
+# $command .= "-s $script "  if $script;
+# $command .= "-db $gap4name " or $project? (if scaffold in wrapper script)
         $command .= "$utilsdir/exportprojectfromarcturus.csh ";
         $command .= "$instance $organism $project ";
         $command .= "$script" if $script;
 # add in perl script: gap4 name different from project
-        $message .= "to gap4 database\n   $pwd/$project.A";
+        $message .= "to gap4 database\n   $currentpwd/$project.A";
     }
 
 # batch or run
@@ -286,6 +306,8 @@ foreach my $project (@projects) {
         $submit .= "-o $work_dir/$ioport-$date-".lc($project)." "; # output file
 
         $command = $submit.$command; # the actual import/export command
+
+        $logger->debug("Current directory : ".Cwd::cwd());
 
         unless ($confirm) {
             $logger->warning("=> command to be issued:\n$command");
