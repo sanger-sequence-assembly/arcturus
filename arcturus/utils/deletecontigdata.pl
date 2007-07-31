@@ -10,18 +10,13 @@ use strict;
 my $nextword;
 my $instance;
 my $organism;
-my $dropcontigtable = 0;
-my $username;
-my $password;
+my $confirm;
 
 while ($nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
 
-    $username = shift @ARGV if ($nextword eq '-username');
-    $password = shift @ARGV if ($nextword eq '-password');
-
-    $dropcontigtable = 1 if ($nextword eq '-truncate');
+    $confirm = 1 if ($nextword eq '-confirm');
 }
 
 unless (defined($instance) && defined($organism)) {
@@ -29,17 +24,25 @@ unless (defined($instance) && defined($organism)) {
     exit(0);
 }
 
+unless ($confirm) {
+    print "***********************************************************\n";
+    print "*** YOU ARE ABOUT TO DELETE ALL CONTIGS IN THE DATABASE ***\n";
+    print "***********************************************************\n";
+    print "\n";
+    print "Please confirm that you wish to do this by typing YES: ";
+    my $reply = <STDIN>;
+
+    die "No response!" unless defined($reply);
+
+    chop($reply);
+
+    die "This operation has been abandoned" unless (lc($reply) eq 'yes');
+}
+
 my $adb;
 
-if (defined($username) && defined($password)) {
-    $adb = new ArcturusDatabase(-instance => $instance,
-				-organism => $organism,
-				-username => $username,
-				-password => $password);
-} else {
-    $adb = new ArcturusDatabase(-instance => $instance,
-				-organism => $organism);
-}
+$adb = new ArcturusDatabase(-instance => $instance,
+			    -organism => $organism);
 
 die "Failed to create ArcturusDatabase" unless $adb;
 
@@ -97,23 +100,21 @@ $delete_stmt = $dbh->prepare($query);
 
 my $nrows = $delete_stmt->execute();
 
-print STDERR "$nrows deleted from table SEQ2READ.\n";
+print STDERR "$nrows rows deleted from table SEQ2READ.\n";
 
 $delete_stmt->finish();
 
-if ($dropcontigtable) {
-    print STDERR "Preparing to truncate CONTIG table.\n";
+print STDERR "Preparing to truncate CONTIG table.\n";
 
-    $query = "TRUNCATE TABLE CONTIG";
+$query = "TRUNCATE TABLE CONTIG";
 
-    my $stmt = $dbh->prepare($query);
-    &db_die("Failed to create query \"$query\"");
+my $stmt = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
 
-    $stmt->execute();
-    &db_die("Failed to execute query \"$query\"");
+$stmt->execute();
+&db_die("Failed to execute query \"$query\"");
 
-    print STDERR "Table CONTIG has been truncated\n";
-}
+print STDERR "Table CONTIG has been truncated\n";
 
 $dbh->disconnect();
 
@@ -133,8 +134,5 @@ sub showUsage {
     print STDERR "-organism\tName of organism\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-truncate\tTruncate the CONTIG table (equivalent to DROP followed by CREATE)\n";
-    print STDERR "-username\tMySQL username with DROP TABLE privileges\n";
-    print STDERR "-password\tMySQL password for user with DROP TABLE privileges\n";
+    print STDERR "-confirm\tForce the operation without a prompt\n";
 }
