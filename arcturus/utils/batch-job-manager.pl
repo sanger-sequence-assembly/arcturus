@@ -28,7 +28,7 @@ my $batch;
 my $babel;
 my $pcs3;
 
-my $new;
+my $perl;
 my $script;
 
 my $verbose;
@@ -36,7 +36,7 @@ my $confirm;
 my $debug;
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|problem|"
-               . "import|export|script|new|"
+               . "import|export|script|perl|"
                . "batch|nobatch|delayed|subdir|sd|r|babel|pcs3|" # default phrap
                . "verbose|debug|confirm|submit|help|h";
 
@@ -88,7 +88,7 @@ while (my $nextword = shift @ARGV) {
     $batch        = 1              if ($nextword eq '-batch');
     $batch        = 0              if ($nextword eq '-nobatch');
 
-    $new          = 1              if ($nextword eq '-new'); # TBD
+    $perl         = 1              if ($nextword eq '-perl'); # TBD (later use as default)
     $script       = shift @ARGV    if ($nextword eq '-script');
 
     $babel        = 1              if ($nextword eq '-babel');
@@ -256,35 +256,52 @@ foreach my $project (@projects) {
 
     my $command;
     my $currentpwd = Cwd::cwd();
+    $currentpwd =~ s?.*automount.*/nfs?/nfs?; # chop off possible automount stuff
+
     my $message = "Project $project will be ${ioport}ed ";
     if ($ioport eq 'import') {
-# $command .= "$utilsdir/importintoarcturus.pl ";
-# $command .= "-i $instance -o $organism ";
-# $command .= "-p $project " if $project; # split in base project and gap4project
-# $command .= "-s $script "  if $script;
-# $command .= "-pp $problem  if $problem;
-# $command .= "-db $gap4name " or $project? (in wrapper script)
-        $command .= "$utilsdir/importprojectintoarcturus.csh ";
-        $command .= "$instance $organism $project ";
-        if ($problem || $script) {
-            $problem = 'PROBLEM' unless $problem; # default
-            $command .= "$problem ";
-            $command .= "$script" if $script;
+# perl script
+        if ($perl) {
+            $command .= "$utilsdir/importintoarcturus.pl ";
+            $command .= "-i $instance -o $organism ";
+            $command .= "-p $project ";
+            $command .= "-s $script " if $script;
+            $command .= "-pp $problem "  if $problem;
+            $command .= "-rundir $currentpwd ";
+            $command .= "-debug " if $debug;
+	}
+        else {
+# shell script
+            $command .= "$utilsdir/importprojectintoarcturus.csh ";
+            $command .= "$instance $organism $project ";
+            if ($problem || $script) {
+                $problem = 'PROBLEM' unless $problem; # default
+                $command .= "$problem ";
+                $command .= "$script" if $script;
+	    }
 	}
 # add in perl script: gap4 name different from project, list of contigs etc
         $message .= "from gap4 database\n   $currentpwd/$project.0";
     }
     elsif ($ioport eq 'export') {
-# $command .= "$utilsdir/exportfromarcturus.pl ";
-# $command .= "-i $instance -o $organism ";
-# $command .= "-p $project " if $project; # or scaffold? mutually exclusive + test
-# $command .= "-s $script "  if $script;
-# $command .= "-db $gap4name " or $project? (if scaffold in wrapper script)
-        $command .= "$utilsdir/exportprojectfromarcturus.csh ";
-        $command .= "$instance $organism $project ";
-        $command .= "$script" if $script;
+# perl script
+        if ($perl) {
+            $command .= "$utilsdir/exportfromarcturus.pl ";
+            $command .= "-i $instance -o $organism ";
+            $command .= "-p $project "; # or scaffold? mutually exclusive + test
+            $command .= "-s $script "  if $script;
+#            $command .= "-db $gap4name " or $project? (if scaffold in wrapper script)
+            $command .= "-rundir $currentpwd";
+            $command .= "-debug " if $debug;
+        }
+        else {
+# shell script
+            $command .= "$utilsdir/exportprojectfromarcturus.csh ";
+            $command .= "$instance $organism $project ";
+            $command .= "$script" if $script;
 # add in perl script: gap4 name different from project
-        $message .= "to gap4 database\n   $currentpwd/$project.A";
+            $message .= "to gap4 database\n   $currentpwd/$project.A";
+	}
     }
 
 # batch or run
@@ -307,9 +324,8 @@ foreach my $project (@projects) {
 
         $command = $submit.$command; # the actual import/export command
 
-        $logger->debug("Current directory : ".Cwd::cwd());
-
         unless ($confirm) {
+            $logger->debug("=> $message");
             $logger->warning("=> command to be issued:\n$command");
             $logger->warning("=> use '-confirm' to submit"); 
             next;
@@ -439,6 +455,8 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
+    print STDERR "Batch job manager for import/export of Arcturus projects\n";
+    print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-organism\tArcturus database name\n" unless $organism;
@@ -469,5 +487,3 @@ sub showUsage {
 
     $code ? exit(1) : exit(0);
 }
- 
-
