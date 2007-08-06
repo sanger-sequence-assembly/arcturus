@@ -42,7 +42,7 @@ endif
 
 set project = $4
 
-set arcturus_home = /nfs/pathsoft/arcturus
+set arcturus_home = /software/arcturus
 
 # part I : test which versions exist
 
