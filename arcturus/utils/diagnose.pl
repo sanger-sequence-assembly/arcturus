@@ -4,6 +4,8 @@ use strict;
 
 use ArcturusDatabase;
 
+use Cwd;
+
 # script to be run from the work directory of the project
 
 # verify mode to test the database status against the last import (version B)
@@ -27,7 +29,8 @@ my $info;
 # parse the command line input; options overwrite eachother; order is important
 #------------------------------------------------------------------------------
 
-my $validkeys = "project|p|verify|v|status|s|subdir|sd|filter|f|recursive|r";
+my $validkeys = "organism|o|instance|i|project|p|verify|v|"
+              . "status|s|subdir|sd|filter|f|recursive|r";
 
 while (my $nextword = shift @ARGV) {
 
@@ -120,13 +123,13 @@ $logger->info("invocation:  $invocation"); # experimental
 else {
 # status analysis: get the projects in the current directory
 
-    my $pwd = `pwd`;
-    chomp $pwd;
+    my $pwd = Cwd::cwd();
+
     my $projects = [];
     my $msg;
 
     if ($recursive) {
-         opendir DIR, $pwd || die "serious problems: $!";
+        opendir DIR, $pwd || die "serious problems: $!";
         my @files = readdir DIR;
         closedir DIR;
         foreach my $file (@files) {
@@ -144,14 +147,14 @@ else {
 
     &showUsage($msg) unless (@$projects);
 
-$logger->info("project(s) @$projects");
+# $logger->warning("project(s) @$projects");
 
 # and run each project through the diagnostic shell script
 
     $subdir .= "/" if $subdir;
     $logger->warning("Status of projects in/under $pwd",skip=>1);
     foreach my $project (@$projects) {
-        my $msg = `$root/projectstatus -project $subdir$project` || 'FAILED';
+        my $msg = `$root/projectstatus project $subdir$project` || 'FAILED';
         next if ($filter && $msg !~ /$filter/i);
         chomp $msg;
         $logger->warning($msg,skip=>1);
