@@ -1,4 +1,4 @@
-#!/bin/csh
+#!/bin/tcsh
 
 # run script from your work directory
 
@@ -9,7 +9,7 @@
 
 if ( $#argv == 0 ) then
   echo \!\! -- No database instance specified --
-  echo usage: $0 instance_name organism-name project_name
+  echo usage: $0 instance_name organism-name project project_name
   exit 1
 endif
 
@@ -17,7 +17,7 @@ set instance = $1
 
 if ( $#argv == 1 ) then
   echo \!\! -- No arcturus database specified --
-  echo usage: $0 instance_name organism-name project_name
+  echo usage: $0 instance_name organism-name project project_name
   exit 1
 endif
 
@@ -25,18 +25,18 @@ set organism = $2
 
 if ( $#argv == 2 ) then
   echo \!\! -- No project name specified --
-  echo usage: utils/diagnose -project project_name
+  echo usage: utils/diagnose project project_name
   exit 1
 endif
 
-if ( !($3 == '-project')) then
-  echo \!\! -- '-project' keyword specified --
-  echo usage: utils/diagnose -project project_name
+if ( !($3 == 'project')) then
+  echo \!\! -- no 'project' keyword specified --
+  echo usage: utils/diagnose project project_name
 endif
 
 if ( $#argv == 3 ) then
   echo \!\! -- No project name specified --
-  echo usage: utils/diagnose -project project_name
+  echo usage: utils/diagnose project project_name
   exit 1
 endif
 
