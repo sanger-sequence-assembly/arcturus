@@ -17,13 +17,14 @@ my $instance;
 my $project;
 my $assembly;
 my $verbose;
-my $confirm;
 my $forcing;
 my $newuser;
+my $confirm;
+my $test;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
                . "usurp|force|transfer|"
-               . "confirm|verbose|help";
+               . "confirm|test|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -59,8 +60,13 @@ while (my $nextword = shift @ARGV) {
 
     $confirm      = 1            if ($nextword eq '-confirm');
 
+    $test         = 1  if ($nextword eq '-test');
+
     &showUsage(0) if ($nextword eq '-help');
 }
+
+$forcing = 0 if $test; # overrides
+$confirm = 0 if $test; # overrides
  
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -141,49 +147,62 @@ else {
     my $project = shift @$projects;
     $logger->info($project->toStringLong,skip=>1); # project info if verbose
 
-# redefine newuser if set to owner
+    my $lockstatus = $project->getLockedStatus();
 
-    if ($newuser && $newuser eq 'owner') {
-	$newuser = $project->getOwner();
-        unless ($newuser) {
-            my $projectname = $project->getProjectName();
-	    $logger->severe("Project $projectname has no owner");
-	    $adb->disconnect();
-            exit 1;
-	}
+    if ($test && $lockstatus) {
+        $logger->warning("Project ".$project->getProjectName()." is "
+                        ."curently locked (level $lockstatus)",ss=>1);
+        $success = 2; # project is locked
     }
+    elsif ($test) {
+	$success = 1; # project is unlocked
+    }
+    else {
 
-    my %options = (confirm => 0);
-    $options{confirm} = 1 if $confirm;
+# redefine newuser if set to 'owner'
 
-    if ($forcing) {
+        if ($newuser && $newuser eq 'owner') {
+	    $newuser = $project->getOwner(); # substitute the name
+            unless ($newuser) {
+                my $projectname = $project->getProjectName();
+	        $logger->severe("Project $projectname has no owner");
+	        $adb->disconnect();
+                exit 1;
+	    }
+        }
+
+        my %options = (confirm => 0);
+        $options{confirm} = 1 if $confirm;
+
+        if ($forcing) {
 # used in case the project is already locked by someone else, then first
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
 
-       ($success,$message) = $project->transferLock(forcing=>1, %options);
-        $message =~ s/transfere?/acquire/;
-        $logger->warning($message,skip=>1);
-    }
+           ($success,$message) = $project->transferLock(forcing=>1, %options);
+            $message =~ s/transfere?/acquire/;
+            $logger->warning($message,skip=>1);
+        }
 
-    unless ($success) {
+        unless ($success) {
 # acquire the lock on the project (either by already having it, or when unlocked) 
 
-       ($success,$message) = $project->acquireLock(%options);
+           ($success,$message) = $project->acquireLock(%options);
 
-        if ($success == 2) {
-            $logger->warning($message,ss=>1);
-        }
-        elsif ($success == 1) {
-            $logger->warning($message." (=> use '-confirm')",ss=>1);
-        }
+            if ($success == 2) {
+                $logger->warning($message,ss=>1); # project locked
+            }
+            elsif ($success == 1) {
+                $logger->warning($message." (=> use '-confirm')",ss=>1);
+            }
 # no success
-        elsif ($newuser && $newuser eq $project->getLockOwner()) {
-            $logger->warning($message,ss=>1);
-        }
-        else {
-            $message .= "; you may have no privileges on"
-                     .  " database $organism" if $confirm;
-            $logger->warning($message,ss=>1);
+            elsif ($newuser && $newuser eq $project->getLockOwner()) {
+                $logger->warning($message,ss=>1);
+            }
+            else {
+                $message .= "; you may have no privileges on"
+                         .  " database $organism" if $confirm;
+                $logger->warning($message,ss=>1);
+            }
         }
     }
 
@@ -211,9 +230,9 @@ else {
 
 $adb->disconnect();
 
-exit 0 if ($success == 2); # done
+exit 0 if ($success == 2); # done, project is locked
 
-exit 1; # locking failed
+exit 1; # project not locked
 
 #------------------------------------------------------------------------
 # HELP
@@ -247,6 +266,7 @@ sub showUsage {
     print STDERR "-transfer\tname of new user to transfer lock ownership to\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value)\n";
+    print STDERR "-test\t\t(no value) explicitly no confirm\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for full info\n";
     print STDERR "\n";

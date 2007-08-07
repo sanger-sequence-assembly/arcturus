@@ -18,10 +18,12 @@ my $project;
 my $assembly;
 my $forcing;
 my $verbose;
+
 my $confirm;
+my $test;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
-               . "force|confirm|verbose|help|h";
+               . "force|confirm|test|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -31,31 +33,36 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
-        $instance     = shift @ARGV;
+        $instance = shift @ARGV;
     }
 
     if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
-        $organism     = shift @ARGV;
+        $organism = shift @ARGV;
     }  
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
-        $project      = shift @ARGV;
+        $project  = shift @ARGV;
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
-        $assembly     = shift @ARGV;
+        $assembly = shift @ARGV;
     }
 
-    $forcing      = 1            if ($nextword eq '-force');
+    $forcing      = 1  if ($nextword eq '-force');
 
-    $verbose      = 1            if ($nextword eq '-verbose');
+    $verbose      = 1  if ($nextword eq '-verbose');
 
-    $confirm      = 1            if ($nextword eq '-confirm');
+    $confirm      = 1  if ($nextword eq '-confirm');
+
+    $test         = 1  if ($nextword eq '-test');
 
     &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
+
+$forcing = 0 if $test; # overrides
+$confirm = 0 if $test; # overrides
 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -109,7 +116,7 @@ if (defined($assembly)) {
     $options{assemblyname} = $assembly if ($assembly =~ /\D/);
 }
 
-my $success;
+my $success = 0;
 
 my ($projects,$message) = $adb->getProject(%options);
 
@@ -131,37 +138,48 @@ else {
     my $project = shift @$projects;
     $logger->info($project->toStringLong); # project info if verbose
 
-# unlocking a project with someone else as lockowner requires transfer of the lock
+    my $lockstatus = $project->getLockedStatus();
 
-    my %options = (confirm => 0); # to have it defined
-    $options{confirm} = 1 if $confirm;
-
-    if ($forcing) {
-# acquire the lock ownership yourself (if you don't have it but can acquire it)
-       ($success,$message) = $project->transferLock(forcing=>1,%options);
-        $logger->warning($message,ps=>1);
+    if ($test && $lockstatus) {
+        $logger->warning("Project ".$project->getProjectName()." is "
+                        ."curently locked (level $lockstatus)",ss=>1);
     }
-
-
-   ($success,$message) = $project->releaseLock(%options);
-
-    if ($success == 2) {
-        $logger->warning($message,ss=>1);
-    }
-    elsif ($success == 1) {
-        $logger->warning($message." (=> use '-confirm')",ss=>1);
+    elsif ($test) {
+	$success = 2; # project is found to be unlocked
     }
     else {
-        $message = "FAILED to release lock: ".$message if $confirm;
-        $logger->warning($message,ss=>1);
+
+# unlocking a project with someone else as lockowner requires transfer of the lock
+
+        my %options = (confirm => 0); # to have it defined
+        $options{confirm} = 1 if $confirm;
+
+        if ($forcing) {
+# acquire the lock ownership yourself (if you don't have it but can acquire it)
+           ($success,$message) = $project->transferLock(forcing=>1,%options);
+            $logger->warning($message,ps=>1);
+        }
+
+       ($success,$message) = $project->releaseLock(%options);
+
+        if ($success == 2) {
+            $logger->warning($message,ss=>1);
+        }
+        elsif ($success == 1) {
+            $logger->warning($message." (=> use '-confirm')",ss=>1);
+        }
+        else {
+            $message = "FAILED to release lock: ".$message if $confirm;
+            $logger->warning($message,ss=>1);
+	}
     }
 }
 
 $adb->disconnect();
 
-exit 0 unless $success;
+exit 0 if ($success == 2);
 
-exit 1; # failed
+exit 1; # failed (project not unlocked)
 
 #------------------------------------------------------------------------
 # HELP
@@ -193,6 +211,7 @@ sub showUsage {
     print STDERR "-force\t\tunlock a project locked by another user\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value)\n";
+    print STDERR "-test\t\t(no value) explicitly no confirm\n";
     print STDERR "\n";
     print STDERR "-verbose\t(no value) for full info\n";
     print STDERR "\n";
