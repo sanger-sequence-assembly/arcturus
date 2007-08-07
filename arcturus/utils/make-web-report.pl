@@ -13,6 +13,8 @@ use FileHandle;
 my $instance;
 my $organism;
 
+my $minlen;
+
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
@@ -45,11 +47,17 @@ unless (defined($dbh)) {
 
 print "<H2>Project statistics</H2>\n";
 
-&makeProjectStats($dbh);
+foreach $minlen (0, 2, 5, 10, 100) {
+    &makeProjectStats($dbh, $minlen, 0);
+}
 
-print "<P><HR>\n<H2>Contig statistics</H2>\n";
+&makeProjectStats($dbh, 0, 3);
 
-&makeContigStats($dbh);
+print "<P><HR>\n<H2>Contig statistics at start of month</H2>\n";
+
+foreach $minlen (0, 10, 100) {
+    &makeContigStats($dbh, $minlen);
+}
 
 print "<P><HR>\n<H2>Read statistics</H2>\n";
 
@@ -102,6 +110,8 @@ sub makeFooter {
 
 sub makeProjectStats {
     my $dbh = shift;
+    my $minlen = shift;
+    my $minreads = shift;
 
     my $fields = "PROJECT.name,count(*) as contigs," .
 	"sum(nreads) as `reads`," .
@@ -116,20 +126,6 @@ sub makeProjectStats {
 
     my $sth = $dbh->prepare($query);
     &db_die("prepare($query) failed");
-
-    foreach my $minlen (0, 2, 5, 10, 100) {
-	&makeProjectTable($sth, $minlen, 0);
-    }
-
-    &makeProjectTable($sth, 0, 3);
-
-    $sth->finish();
-}
-
-sub makeProjectTable {
-    my $sth = shift;
-    my $minlen = shift;
-    my $minreads = shift;
 
     my $headers = ['PROJECT','CONTIGS','READS','LENGTH','AVERAGE','STD DEV','MAXIMUM'];
 
@@ -175,40 +171,57 @@ sub makeProjectTable {
     }
 
     print "</TABLE>\n";
+
+    $sth->finish();
 }
 
 sub makeContigStats {
     my $dbh = shift;
-
-    &makeContigTable($dbh, "CURRENTCONTIGS", "CURRENT CONTIGS");
-
-    &makeContigTable($dbh, "CONTIG", "ALL CONTIGS");
-}
-
-sub makeContigTable {
-    my $dbh = shift;
-    my $table = shift;
-    my $caption = shift;
+    my $minlen = shift || 0;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
 		  'July', 'August', 'September', 'October', 'November', 'December');
 
-    print "<H3>$caption CREATED BY MONTH</H3>\n";
+    my $sql = "select year(min(created)),month(min(created)) from CONTIG";
 
-    my $query = "select year(created) as year, month(created) as month, count(*)," .
-	"sum(nreads), sum(length)" .
-	" from $table" .
-	" group by year, month" .
-	" order by year asc, month asc";
-
-    my $sth = $dbh->prepare($query);
-    &db_die("prepare($query) failed");
+    my $sth = $dbh->prepare($sql);
 
     $sth->execute();
 
-    my $headers = ['YEAR', 'MONTH', 'CONTIGS', 'READS', 'LENGTH'];
+    my ($year_start, $month_start) = $sth->fetchrow_array();
 
+    $sth->finish();
+
+    $sql = "select year(NOW()),month(NOW())";
+
+    $sth = $dbh->prepare($sql);
+
+    $sth->execute();
+
+    my ($year_end, $month_end) = $sth->fetchrow_array();
+
+    $sth->finish();
+
+    $sql = "select count(*) as contigs,sum(CA.nreads),sum(CA.length),round(avg(CA.length)),round(std(CA.length)),max(CA.length)" .
+	" from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
+	" on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
+	" where CA.created < ?  and CA.nreads>1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?)";
+
+    $sth = $dbh->prepare($sql);
+
+    my $caption = ($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR MORE";
+
+    print "<H3>$caption</H3>\n";
+   
     print "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
+    print "<TR>\n";
+
+    print "<TH></TH>\n<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"3\">CONTIG LENGTH</TH>\n";
+
+    print "</TR>\n";
+
+    my $headers = ['YEAR', 'MONTH', 'CONTIGS', 'READS', 'LENGTH', 'AVERAGE','STD DEV','MAXIMUM'];
+
     print "<TR>\n";
 
     foreach my $header (@{$headers}) {
@@ -221,25 +234,53 @@ sub makeContigTable {
 
     my $bg;
 
-    while (my ($year, $month, $contigs, $nreads, $ctglen) = $sth->fetchrow_array()) {
-	$bg = "BGCOLOR=\"#" . (($year%2 == 0) ? "FFFFEE" : "EEEEDD") . "\"";
+    my $year = $year_start;
+    my $month = $month_start + 1;
+
+    if ($month > 12) {
+	$year++;
+	$month -= 12;
+    }
+
+    $minlen *= 1000;
+
+    while ($year < $year_end || $month < $month_end) {
+	$bg = "BGCOLOR=\"#" . (($month%2 == 0) ? "FFFFEE" : "EEEEDD") . "\"";
+
+	my $date = sprintf("%04d-%02d-01", $year, $month);
+
+	print STDERR $date,"\n";
+
+	$sth->execute($date, $minlen, $date);
+
+	my ($contigs, $nreads, $totlen, $avglen, $stdlen, $maxlen) = $sth->fetchrow_array();
 	
 	print "<TR $bg>\n";
 
 	print "<TD>$year</TD>\n";
 	print "<TD>$mnames[$month-1]</TD>\n";
+
 	print "<TD $ar>$contigs</TD>\n";
 	print "<TD $ar>$nreads</TD>\n";
-	print "<TD $ar>$ctglen</TD>\n";
+	print "<TD $ar>$totlen</TD>\n";
+	print "<TD $ar>$avglen</TD>\n";
+	print "<TD $ar>$stdlen</TD>\n";
+	print "<TD $ar>$maxlen</TD>\n";
 
 	print "</TR>\n";
+
+	$month++;
+
+	if ($month > 12) {
+	    $year++;
+	    $month -= 12;
+	}
     }
 
     print "</TABLE>\n";
 
     $sth->finish();
 }
-    
 
 sub makeReadStats {
     my $dbh = shift;
