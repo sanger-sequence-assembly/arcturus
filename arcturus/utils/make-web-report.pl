@@ -231,6 +231,7 @@ sub makeContigStats {
     print "</TR>\n";
 
     my $ar = "ALIGN=\"RIGHT\"";
+    my $nbsp = "&nbsp;";
 
     my $bg;
 
@@ -255,6 +256,8 @@ sub makeContigStats {
 
 	my ($contigs, $nreads, $totlen, $avglen, $stdlen, $maxlen) = $sth->fetchrow_array();
 	
+	($nreads,$totlen,$avglen,$stdlen,$maxlen) = ($nbsp,$nbsp,$nbsp,$nbsp,$nbsp) if ($contigs == 0);
+
 	print "<TR $bg>\n";
 
 	print "<TD>$year</TD>\n";
