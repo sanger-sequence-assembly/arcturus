@@ -65,11 +65,10 @@ while (my $nextword = shift @ARGV) {
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') { # optional
-        $assembly     = shift @ARGV;
+        $assembly = shift @ARGV;
     }
 
     if ($nextword eq '-gap4name' || $nextword eq '-g') { # optional, default project
-        $assembly     = shift @ARGV;
         $gap4name = shift @ARGV;
     }
 
@@ -334,7 +333,7 @@ sub showusage {
     my $code = shift || 0;
 
     print STDERR "\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code;
+    print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
     print STDERR "\n";
     print STDERR "Import a Gap4 database into Arcturus for a specified project\n";
     print STDERR "\n";
@@ -363,7 +362,7 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-script\t\t(default contig-loader) name of loader script used\n";
     print STDERR "\n";
-    print STDERR "-unlock\t\t(ul) explicitly unlock the database\n";
+    print STDERR "-unlock\t\t(ul) explicitly (try to) unlock the database\n";
     print STDERR "\n";
     print STDERR "-problem\t(default PROBLEM) project name for unresolved "
                . "parent contigs\n";
@@ -374,7 +373,7 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-debug\n";
     print STDERR "\n";
-    print STDERR "\nParameter input ERROR: $code \n" if $code;
+    print STDERR "\nParameter input ERROR for $0: $code \n" if $code;
     exit 1;
 }
 
