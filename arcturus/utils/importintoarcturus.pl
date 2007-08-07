@@ -140,7 +140,7 @@ unless (defined($projectname)) {
 #------------------------------------------------------------------------------
 
 if ($rundir) {
-    print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
+#   print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
     unless ($pwd =~ /$rundir$/) {
         print STDOUT "Changing work directory from $pwd to $rundir\n";
         chdir ($rundir);
@@ -174,9 +174,9 @@ if ( -f "${gap4name}.A.BUSY") {
 # check age
 
 unless ($version eq "A") {
-    my @vstat = stat "$gap4name.$version";
     my @astat = stat "$gap4name.A";
-    if ($vstat[9] <= $astat[9]) {
+    my @vstat = stat "$gap4name.$version";
+    if (@vstat && @astat && $vstat[9] <= $astat[9]) {
         print STDERR "!! -- Import of project $gap4name WARNING:"
                      ." version $version is older than version A --\n";
         unless ($noagetest) {
