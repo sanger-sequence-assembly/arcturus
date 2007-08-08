@@ -13,6 +13,8 @@ use FileHandle;
 my $instance;
 my $organism;
 
+my $bigbrother = 0;
+
 my $minlen;
 my $filename;
 my $caption;
@@ -20,6 +22,8 @@ my $caption;
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
+
+    $bigbrother = 1 if ($nextword eq '-bigbrother');
 
         if ($nextword eq '-help') {
 	&showUsage();
@@ -101,10 +105,12 @@ print $fhSection "<html><head><title>Contig</title></head><body bgcolor=\"#ffffe
 
 print $fhSection "<h3>CONTIGS</h3>\n";
 
-print $fhSection "Month-by-month historical view.<p>\nStatistics are given for the start of each month,\n";
-print $fhSection "for all projects combined.<p>\n";
+print $fhSection "Month-by-month historical view.\n";
 
-print $fhSection "<h3>Select contigs by length</h3>\n" if ($minlen == 0);
+print $fhSection "<h3>Select contigs by length</h3>\n";
+
+print $fhSection "Statistics are given for the start of each month,\n";
+print $fhSection "for all projects combined.<p>\n";
 
 foreach $minlen (0, 10, 100) {
     $filename = $prefix . "-contig-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
@@ -119,6 +125,37 @@ foreach $minlen (0, 10, 100) {
     &makeContigStats($dbh, $minlen, $fhContig, $dateline);
 
     $fhContig->close();
+}
+
+if ($bigbrother) {
+    print $fhSection "<h3>Select contigs by project</h3>\n";
+
+    print $fhSection "Statistics are given for the start of each month,\n";
+    print $fhSection "for the selected project.<p>\n";
+
+    my $projects = &enumerateProjects($dbh);
+
+    foreach my $projinfo (@{$projects}) {
+	my ($projid, $projname, $projowner) = @{$projinfo};
+
+	if (defined($projowner)) {
+	    my @pwinfo = getpwnam($projowner);
+	    $projowner = $pwinfo[6] if (scalar(@pwinfo));
+	} else {
+	    $projowner = "";
+	}
+	
+	$filename = $prefix . "-contig-${projname}.html";
+	$caption = $projname;
+	
+	print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+	
+	my $fhContig = new FileHandle($filename, "w");
+	
+	&makeContigStats($dbh, 0, $fhContig, $dateline, $projid, $projname, $projowner);
+	
+	$fhContig->close();
+    }
 }
 
 print $fhSection "</body></html>\n";
@@ -301,6 +338,7 @@ sub makeContigStats {
     my $minlen = shift;
     my $fh = shift;
     my $dateline = shift;
+    my $projid = shift;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
 		  'July', 'August', 'September', 'October', 'November', 'December');
@@ -328,11 +366,22 @@ sub makeContigStats {
     $sql = "select count(*) as contigs,sum(CA.nreads),sum(CA.length),round(avg(CA.length)),round(std(CA.length)),max(CA.length)" .
 	" from CONTIG as CA left join (C2CMAPPING,CONTIG as CB)" .
 	" on (CA.contig_id = C2CMAPPING.parent_id and C2CMAPPING.contig_id = CB.contig_id)" .
-	" where CA.created < ?  and CA.nreads>1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?)";
+	" where CA.created < ?  and CA.nreads > 1 and CA.length >= ? and (C2CMAPPING.parent_id is null or CB.created > ?)";
+
+    $sql .= " and CA.project_id = $projid" if defined($projid);
 
     $sth = $dbh->prepare($sql);
 
-    my $caption = ($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR MORE";
+    my $caption;
+    
+    if (defined($projid)) {
+	my $projname = shift;
+	my $projowner = shift;
+
+	$caption = "CONTIGS FOR PROJECT $projname" . (defined($projowner) && length($projowner) > 0 ? " (Owner: $projowner)" : "");
+    } else {
+	$caption = ($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR MORE";
+    }
 
     print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
 
@@ -375,8 +424,6 @@ sub makeContigStats {
 
 	my $date = sprintf("%04d-%02d-01", $year, $month);
 
-	print STDERR $date,"\n";
-
 	$sth->execute($date, $minlen, $date);
 
 	my ($contigs, $nreads, $totlen, $avglen, $stdlen, $maxlen) = $sth->fetchrow_array();
@@ -407,11 +454,33 @@ sub makeContigStats {
 
     print $fh "</TABLE>\n";
 
+    print $fh "<p>This table <strong>excludes</strong> single-read contigs.";
+
     print $fh "<p><em>$dateline</em>\n" if $dateline;
 
     print $fh "</body></html>\n";
 
     $sth->finish();
+}
+
+sub enumerateProjects {
+    my $dbh = shift;
+
+    my $query = "select project_id,name,owner from PROJECT order by name";
+
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute();
+
+    my $projects = [];
+
+    while (my ($projid, $projname, $projowner) = $sth->fetchrow_array()) {
+	push @{$projects}, [$projid, $projname, $projowner];
+    }
+
+    $sth->finish();
+
+    return $projects;
 }
 
 sub makeReadStats {
