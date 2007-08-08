@@ -14,6 +14,8 @@ my $instance;
 my $organism;
 
 my $minlen;
+my $filename;
+my $caption;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -43,25 +45,108 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
+my $prefix = lc($organism);
+
+my $dateline = &makeDateline();
+
 &makeHeader($instance, $organism);
 
-print "<H2>Project statistics</H2>\n";
+&makeIndexPage($prefix);
+
+my $fhSection = new FileHandle("${prefix}-project-index.html", "w");
+
+print $fhSection "<html><head><title>Project</title></head><body bgcolor=\"#ffffee\">\n";
+
+print $fhSection "<h3>PROJECTS</h3>\n";
+
+print $fhSection "Statistics for each project, from the current contig set.\n";
+
+print $fhSection "<h3>Select contigs by length</h3>\n" if ($minlen == 0);
 
 foreach $minlen (0, 2, 5, 10, 100) {
-    &makeProjectStats($dbh, $minlen, 0);
+    $filename = $prefix . "-project-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
+    $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
+
+    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+
+    print $fhSection "<p>\n" if ($minlen == 0);
+
+    my $fhProject = new FileHandle($filename, "w");
+
+    &makeProjectStats($dbh, $minlen, 0, $fhProject, $dateline);
+
+    $fhProject->close();
 }
 
-&makeProjectStats($dbh, 0, 3);
+print $fhSection "<h3>Select contigs by reads</h3>\n";
 
-print "<P><HR>\n<H2>Contig statistics at start of month</H2>\n";
+my $filename = $prefix . "-project-3reads.html";
+my $caption = "Three or more reads";
+
+print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+
+my $fhProject = new FileHandle($filename, "w");
+
+&makeProjectStats($dbh, 0, 3, $fhProject, $dateline);
+
+$fhProject->close();
+
+print $fhSection "</body></html>\n";
+
+$fhSection->close();
+
+$fhSection = new FileHandle("${prefix}-contig-index.html", "w");
+
+print $fhSection "<html><head><title>Contig</title></head><body bgcolor=\"#ffffee\">\n";
+
+print $fhSection "<h3>CONTIGS</h3>\n";
+
+print $fhSection "Month-by-month historical view.<p>\nStatistics are given for the start of each month,\n";
+print $fhSection "for all projects combined.<p>\n";
+
+print $fhSection "<h3>Select contigs by length</h3>\n" if ($minlen == 0);
 
 foreach $minlen (0, 10, 100) {
-    &makeContigStats($dbh, $minlen);
+    $filename = $prefix . "-contig-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
+    $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
+
+    print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+
+    print $fhSection "<p>\n" if ($minlen == 0);
+
+    my $fhContig = new FileHandle($filename, "w");
+
+    &makeContigStats($dbh, $minlen, $fhContig, $dateline);
+
+    $fhContig->close();
 }
 
-print "<P><HR>\n<H2>Read statistics</H2>\n";
+print $fhSection "</body></html>\n";
 
-&makeReadStats($dbh);
+$fhSection->close();
+
+$fhSection = new FileHandle("${prefix}-read-index.html", "w");
+
+print $fhSection "<html><head><title>Read</title></head><body bgcolor=\"#ffffee\">\n";
+
+print $fhSection "<h3>READS</h3>\n";
+
+print $fhSection "Month-by-month historical view.<p>\n";
+
+$filename = $prefix . "-read-asped.html";
+$caption = "All passed reads";
+
+print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n";
+
+my $fhRead = new FileHandle($filename, "w");
+
+&makeReadStats($dbh, $fhRead, $dateline);
+
+$fhRead->close();
+
+print $fhSection "</body></html>\n";
+
+$fhSection->close();
 
 &makeFooter();
 
@@ -73,12 +158,19 @@ sub makeHeader {
     my $instance = shift;
     my $organism = shift;
 
+    my $prefix = lc($organism);
+
     my @lines = ("<HTML>",
 		 "<HEAD>",
 		 "<TITLE>Progress report for $organism</TITLE>",
 		 "</HEAD>",
-		 "<BODY BGCOLOR=\"#FFFFEE\">",
-		 "<H1>Progress report for $organism</H1>"
+		 "<FRAMESET cols=\"20%,80%\" title=\"\">",
+		 "\t<FRAMESET rows=\"30%,70%\" title=\"\">",
+		 "\t\t<FRAME src=\"${prefix}-main-index.html\" name=\"indexFrame\" title=\"Index\">",
+		 "\t\t<FRAME src=\"${prefix}-project-index.html\" name=\"sectionFrame\" title=\"Section\">",
+		 "\t</FRAMESET>",
+		 "\t<FRAME src=\"${prefix}-project-all.html\" name=\"pageFrame\" title=\"Page\">",
+		 "</FRAMESET>"
 		 );
 
     foreach my $line (@lines) {
@@ -86,7 +178,36 @@ sub makeHeader {
     }
 }
 
+sub makeIndexPage {
+    my $prefix = shift;
+
+    my $fhIndex = new FileHandle("${prefix}-main-index.html", "w");
+
+    print $fhIndex "<html><head><title>Index</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fhIndex "<h3>SECTION</h3>\n";
+
+    print $fhIndex "<a href=\"${prefix}-project-index.html\" target=\"sectionFrame\">Project stats</a><br>\n";
+    print $fhIndex "<a href=\"${prefix}-contig-index.html\" target=\"sectionFrame\">Contig stats</a><br>\n";
+    print $fhIndex "<a href=\"${prefix}-read-index.html\" target=\"sectionFrame\">Read stats</a>\n";
+    
+    print $fhIndex "</body></html>\n";
+
+    $fhIndex->close();
+}
+
 sub makeFooter {
+
+    my @lines = ("</BODY>",
+		 "</HTML>"
+		 );
+
+    foreach my $line (@lines) {
+	print $line,"\n";
+    }
+}
+
+sub makeDateline {
     my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = gmtime(time);
 
     $year += 1900;
@@ -97,21 +218,15 @@ sub makeFooter {
     my $mname = ('January','February','March','April','May','June',
 		 'July','August','September','October','November','December')[$mon];
 
-    my @lines = ("<HR>",
-		 "This page was generated dynamically at $timestamp on $dayname, $mday $mname $year",
-		 "</BODY>",
-		 "</HTML>"
-		 );
-
-    foreach my $line (@lines) {
-	print $line,"\n";
-    }
+    return "This page was generated dynamically at $timestamp on $dayname, $mday $mname $year";
 }
 
 sub makeProjectStats {
     my $dbh = shift;
     my $minlen = shift;
     my $minreads = shift;
+    my $fh = shift;
+    my $dateline = shift;
 
     my $fields = "PROJECT.name,count(*) as contigs," .
 	"sum(nreads) as `reads`," .
@@ -129,26 +244,28 @@ sub makeProjectStats {
 
     my $headers = ['PROJECT','CONTIGS','READS','LENGTH','AVERAGE','STD DEV','MAXIMUM'];
 
-    my $caption = ($minreads == 0) ? (($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR MORE")
+    my $caption = ($minreads == 0) ? (($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR LONGER")
 	: "CONTIGS WITH $minreads OR MORE READS";
 
-    print "<H3>$caption</H3>\n";
+    print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
 
-    print "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
+    print $fh "<H3>$caption</H3>\n";
 
-    print "<TR>\n";
+    print $fh "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
 
-    print "<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"3\">CONTIG LENGTH</TH>\n";
+    print $fh "<TR>\n";
 
-    print "</TR>\n";
+    print $fh "<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"3\">CONTIG LENGTH</TH>\n";
 
-    print "<TR>\n";
+    print $fh "</TR>\n";
+
+    print $fh "<TR>\n";
 
     foreach my $header (@{$headers}) {
-	print "<TH>$header</TH>\n";
+	print $fh "<TH>$header</TH>\n";
     }
 
-    print "</TR>\n";
+    print $fh "</TR>\n";
 
     $minlen *= 1000;
 
@@ -157,27 +274,33 @@ sub makeProjectStats {
     my $ar = "ALIGN=\"RIGHT\"";
 
     while (my ($project,$contigs,$nreads,$totlen,$avglen,$stdlen,$maxlen) = $sth->fetchrow_array()) {
-	print "<TR>\n";
+	print $fh "<TR>\n";
 
-	print "<TD>$project</TD>\n";
-	print "<TD $ar>$contigs</TD>\n";
-	print "<TD $ar>$nreads</TD>\n";
-	print "<TD $ar>$totlen</TD>\n";
-	print "<TD $ar>$avglen</TD>\n";
-	print "<TD $ar>$stdlen</TD>\n";
-	print "<TD $ar>$maxlen</TD>\n";
+	print $fh "<TD>$project</TD>\n";
+	print $fh "<TD $ar>$contigs</TD>\n";
+	print $fh "<TD $ar>$nreads</TD>\n";
+	print $fh "<TD $ar>$totlen</TD>\n";
+	print $fh "<TD $ar>$avglen</TD>\n";
+	print $fh "<TD $ar>$stdlen</TD>\n";
+	print $fh "<TD $ar>$maxlen</TD>\n";
 
-	print "</TR>\n";
+	print $fh "</TR>\n";
     }
 
-    print "</TABLE>\n";
+    print $fh "</TABLE>\n";
+
+    print $fh "<p><em>$dateline</em>\n" if $dateline;
+
+    print $fh "</body></html>\n";
 
     $sth->finish();
 }
 
 sub makeContigStats {
     my $dbh = shift;
-    my $minlen = shift || 0;
+    my $minlen = shift;
+    my $fh = shift;
+    my $dateline = shift;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
 		  'July', 'August', 'September', 'October', 'November', 'December');
@@ -211,24 +334,26 @@ sub makeContigStats {
 
     my $caption = ($minlen == 0) ? "ALL CONTIGS" : "CONTIGS $minlen kb OR MORE";
 
-    print "<H3>$caption</H3>\n";
+    print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fh "<H3>$caption</H3>\n";
    
-    print "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
-    print "<TR>\n";
+    print $fh "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
+    print $fh "<TR>\n";
 
-    print "<TH></TH>\n<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"3\">CONTIG LENGTH</TH>\n";
+    print $fh "<TH></TH>\n<TH></TH>\n<TH COLSPAN=\"3\">TOTAL</TH>\n<TH COLSPAN=\"3\">CONTIG LENGTH</TH>\n";
 
-    print "</TR>\n";
+    print $fh "</TR>\n";
 
     my $headers = ['YEAR', 'MONTH', 'CONTIGS', 'READS', 'LENGTH', 'AVERAGE','STD DEV','MAXIMUM'];
 
-    print "<TR>\n";
+    print $fh "<TR>\n";
 
     foreach my $header (@{$headers}) {
-	print "<TH>$header</TH>\n";
+	print $fh "<TH>$header</TH>\n";
     }
 
-    print "</TR>\n";
+    print $fh "</TR>\n";
 
     my $ar = "ALIGN=\"RIGHT\"";
     my $nbsp = "&nbsp;";
@@ -258,19 +383,19 @@ sub makeContigStats {
 	
 	($nreads,$totlen,$avglen,$stdlen,$maxlen) = ($nbsp,$nbsp,$nbsp,$nbsp,$nbsp) if ($contigs == 0);
 
-	print "<TR $bg>\n";
+	print $fh "<TR $bg>\n";
 
-	print "<TD>$year</TD>\n";
-	print "<TD>$mnames[$month-1]</TD>\n";
+	print $fh "<TD>$year</TD>\n";
+	print $fh "<TD>$mnames[$month-1]</TD>\n";
 
-	print "<TD $ar>$contigs</TD>\n";
-	print "<TD $ar>$nreads</TD>\n";
-	print "<TD $ar>$totlen</TD>\n";
-	print "<TD $ar>$avglen</TD>\n";
-	print "<TD $ar>$stdlen</TD>\n";
-	print "<TD $ar>$maxlen</TD>\n";
+	print $fh "<TD $ar>$contigs</TD>\n";
+	print $fh "<TD $ar>$nreads</TD>\n";
+	print $fh "<TD $ar>$totlen</TD>\n";
+	print $fh "<TD $ar>$avglen</TD>\n";
+	print $fh "<TD $ar>$stdlen</TD>\n";
+	print $fh "<TD $ar>$maxlen</TD>\n";
 
-	print "</TR>\n";
+	print $fh "</TR>\n";
 
 	$month++;
 
@@ -280,38 +405,47 @@ sub makeContigStats {
 	}
     }
 
-    print "</TABLE>\n";
+    print $fh "</TABLE>\n";
+
+    print $fh "<p><em>$dateline</em>\n" if $dateline;
+
+    print $fh "</body></html>\n";
 
     $sth->finish();
 }
 
 sub makeReadStats {
     my $dbh = shift;
+    my $fh = shift;
+    my $dateline = shift;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
 		  'July', 'August', 'September', 'October', 'November', 'December');
 
     my $query = "select year(asped) as year,month(asped) as month,count(*) as hits" .
-	" from READINFO where asped is not null" .
+	" from READINFO left join STATUS on (READINFO.status = STATUS.status_id)" .
+	" where asped is not null and STATUS.name='PASS'" .
 	" group by year,month order by year asc,month asc";
 
     my $sth = $dbh->prepare($query);
 
     $sth->execute();
 
-    print "<H3>READS ASPED BY MONTH</H3>\n";
+    print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fh "<H3>READS ASPED BY MONTH</H3>\n";
    
-    print "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
+    print $fh "<TABLE  CELLPADDING=\"3\" BORDER=\"1\">\n";
 
     my $headers = ['YEAR', 'MONTH', 'READS'];
 
-    print "<TR>\n";
+    print $fh "<TR>\n";
 
     foreach my $header (@{$headers}) {
-	print "<TH>$header</TH>\n";
+	print $fh "<TH>$header</TH>\n";
     }
 
-    print "</TR>\n";
+    print $fh "</TR>\n";
 
     my $ar = "ALIGN=\"RIGHT\"";
 
@@ -320,16 +454,20 @@ sub makeReadStats {
     while (my ($year, $month, $nreads) = $sth->fetchrow_array()) {
 	$bg = "BGCOLOR=\"#" . (($year%2 == 0) ? "FFFFEE" : "EEEEDD") . "\"";
 	
-	print "<TR $bg>\n";
+	print $fh "<TR $bg>\n";
 
-	print "<TD>$year</TD>\n";
-	print "<TD>$mnames[$month-1]</TD>\n";
-	print "<TD $ar>$nreads</TD>\n";
+	print $fh "<TD>$year</TD>\n";
+	print $fh "<TD>$mnames[$month-1]</TD>\n";
+	print $fh "<TD $ar>$nreads</TD>\n";
 
-	print "</TR>\n";
+	print $fh "</TR>\n";
     }
 
-    print "</TABLE>\n";
+    print $fh "</TABLE>\n";
+
+    print $fh "<p><em>$dateline</em>\n" if $dateline;
+
+    print $fh "</body></html>\n";
 
     $sth->finish();
 }
