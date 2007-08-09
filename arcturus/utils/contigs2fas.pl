@@ -31,7 +31,7 @@ my $seqfilenum;
 my $totseqlen;
 my $pinclude;
 my $pexclude;
-my $usegapname = 1;
+my $usegapname = 0;
 my $ends = 0;
 my $padmapfile;
 
@@ -66,7 +66,7 @@ while (my $nextword = shift @ARGV) {
 
     $padmapfile = shift @ARGV if ($nextword eq '-padmap');
 
-    $usegapname = 0 if ($nextword eq '-nogap4name');
+    $usegapname = 1 if ($nextword eq '-usegap4name');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -334,7 +334,7 @@ sub showUsage {
     print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
     print STDERR "    -include\t\tInclude contigs in these projects\n";
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
-    print STDERR "    -nogap4name\t\tUse contig ID as name, not Gap4 name\n";
+    print STDERR "    -usegap4name\t\tUse Gap4 name instead of contig ID\n";
     print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
 }
 
