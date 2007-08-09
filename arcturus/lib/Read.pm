@@ -758,7 +758,7 @@ sub writeToCaf {
 sub writeCafSequence {
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
-    my %option = @_;
+    my %options = @_;
 
     my $data = $this->{data};
 
@@ -820,11 +820,13 @@ sub writeCafSequence {
         }
     }
 
-# tags
+# tags; default allow finisher's annotation (on read)
+
+    $options{annotag} = 1 unless defined $options{annotag};
 
     if (my $tags = $this->getTags()) {
         foreach my $tag (@$tags) {
-            $tag->writeToCaf($FILE);
+            $tag->writeToCaf($FILE,%options); # allow finishers annotation
         }
     }
 }
