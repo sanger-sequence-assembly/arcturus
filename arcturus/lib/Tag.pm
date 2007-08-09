@@ -595,30 +595,28 @@ sub writeToCaf {
 # GAP4 NOTE tag, no position info
     }
 
-    elsif ($type eq 'ANNO') {
+    elsif ($type eq 'ANNO' && (!$host || $host eq 'Contig')) {
+# if no host, assume it's a contig; contig annotation tags have special status
 # generate two tags, ANNO contains the systematic ID and comment
-        if (!$host || $host eq 'Contig') {
-# annotation tags have special status
-            $string .= "@pos ";
+        $string .= "@pos ";
 # add the systematic ID
-            my $tagtext = $this->getSystematicID() || 'unspecified'; 
-            $tagtext .= ' ' . $comment if $comment;
-            $string .= "\"$tagtext\"\n" ;
+        my $tagtext = $this->getSystematicID() || 'unspecified'; 
+        $tagtext .= ' ' . $comment if $comment;
+        $string .= "\"$tagtext\"\n" ;
 # if also a comment available add an info tag
-            $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
-#?          $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
-	}
+        $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
+#?       $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
     }
 
     elsif ($host eq 'Read') {
-# standard output of tag with position and tag comment
+# standard output of tag with position and tag comment (including ANNO)
         $string .= "@pos "; 
         $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
         $string .= "\"$tagcomment\"" if $tagcomment;
         $string .= "\n";
     }
     elsif ($host eq 'Contig') {
-# standard output of tag with position and tag comment
+# standard output of tag with position and tag comment (except ANNO)
         $string .= "@pos "; 
         $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
         $string .= "\"$tagcomment\"" if $tagcomment;
