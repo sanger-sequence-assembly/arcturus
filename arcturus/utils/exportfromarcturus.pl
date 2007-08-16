@@ -4,7 +4,7 @@ use strict;
 
 use Cwd;
 
-# export a single project or scaffold from arcturus into a gap4 database
+# export a single project or a scaffold from arcturus into a gap4 database
 
 # script to be run from directory where gap4 database is to be created 
 
@@ -126,7 +126,7 @@ if (!$scaffold && ($version eq '0' || $version eq 'B')) {
 #------------------------------------------------------------------------------
 
 if ($rundir) {
-    print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
+#    print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
     unless ($pwd =~ /$rundir$/) {
         print STDOUT "Changing work directory from $pwd to $rundir\n";
         chdir ($rundir);
@@ -152,6 +152,7 @@ system ("$consensus_script $database -project $projectname -quiet -lowmem");
 #------------------------------------------------------------------------------
 
 my $lock_script = "${arcturus_home}/utils/project-lock";
+$lock_script .= ".pl";
 
 unless ($nolock) { # to completed (always lock? force?, what to do on error?)
                    # or if already locked? leave?, abort ?
@@ -178,10 +179,12 @@ unless ($nolock) { # to completed (always lock? force?, what to do on error?)
 
 my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
+$export_script .= ".pl";
 my $command = "$export_script -instance $instance -organism $organism "
             . "-caf $depadded ";
 
 if ($scaffold) {
+# export using contig-export.pl
     $command .= "-scaffold $scaffold "; # processing of $scaffold in export script
     unless ($gap4name) {
 # if gap4name defined, use that, else generate one project_scaffold_NN
@@ -192,9 +195,9 @@ else { # standard project export
     $command .= "-project $projectname ";
 }
 
-$command .= "-gap4name ${pwd}/$gap4name.$version"; # for export mark
-
 print STDOUT "Exporting from Arcturus to CAF file $depadded\n";
+
+#print STDOUT "$command\n"; exit 0;
 
 system ($command);
 
@@ -214,6 +217,7 @@ print STDOUT "Converting CAF file into Gap4 database\n";
 if ( -f "${gap4name}.$version.BUSY") {
     print STDERR "!! -- Project $gap4name version $version is BUSY --\n";
     print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+# or, change name?
     exit 1;
 }
 
@@ -222,6 +226,7 @@ if ( -f "${gap4name}.$version") {
     unless ($? == 0) {
         print STDERR "!! -- FAILED to remove existing $gap4name.$version ($?) --\n"; 
         print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+# or, change name?
         exit 1;
     }
 }
@@ -253,8 +258,10 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
     print STDOUT "Marking project $projectname as exported\n";
 
     my $marker_script =  "{arcturus_home}/utils/project-export-marker";
+$marker_script .= ".pl";
     system ("$marker_script -i $instance -o $organism -p $projectname "
 	   ."-file $pwd/${gap4name}.$version");
+
     if ($?) {
 	print STDERR "!! -- No export mark written ($?) --\n";
     }
@@ -271,7 +278,18 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
     system ("$lock_script -i $instance -o $organism -p $projectname "
 	   ."-transfer owner -confirm");
 
-    if ($?) {
+    my $status = $?;
+
+    if ($status && $status == 2) {
+# transfer failed because the project has no owner, unlock it
+        my $unlock_script = "${arcturus_home}/utils/project-unlock";
+$unlock_script .= ".pl";
+        system ("$unlock_script -i $instance -o $organism -p $projectname "
+	       ."-force -confirm");
+
+        print STDERR "!! -- Failed to unlock project $projectname --\n" if $?;
+    }
+    elsif ($status) {
         print STDERR "!! -- Failed to transfer lock --\n";
     }
 }
