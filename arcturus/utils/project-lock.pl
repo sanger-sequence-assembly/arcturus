@@ -165,9 +165,10 @@ else {
 	    $newuser = $project->getOwner(); # substitute the name
             unless ($newuser) {
                 my $projectname = $project->getProjectName();
-	        $logger->severe("Project $projectname has no owner");
-	        $adb->disconnect();
-                exit 1;
+                $message = "Failed to transfer lock: project $projectname has no owner";
+	        $logger->severe($message,ps=>1);
+                $adb->disconnect();
+                exit 2;
 	    }
         }
 
