@@ -2101,9 +2101,10 @@ sub putNewSequenceForRead {
             $first = $prior unless defined $first;
             $version++;
         }
-        else {
-#read not completed
-            return 0,"read $read_id, version $version could not be retrieved";
+        elsif ($noload) {
+# read not completed, missing seq_id
+            return 0,"New sequence version $version for read $readname "
+                     ."detected but not loaded";
         }
     }
 
@@ -2112,15 +2113,12 @@ sub putNewSequenceForRead {
 
     if ($read->getSequence() =~ /\-/) {
 # fatal error: sequence contains non-DNA symbols ? /[^ACGTN]/ 
-        return (0,"Invalid new sequence for read $readname: contains non-DNA symbols");
-    }
-    elsif ($noload) {
-        return (0,"New (edited) sequence version for read $readname ignored");
+        return 0,"Invalid new sequence for read $readname: contains non-DNA symbols";
     }
 
-# e) what about test/copying missing data from previous version? method on Read?
+# what about test/copying missing data from previous version? method on Read?
 
-# f) load this new version of the sequence
+# e) load the new version of the sequence
 
 my $logger = $this->verifyLogger('putNewSequenceForRead');
 $logger->debug("new sequence version detected ($version) for read $readname");
@@ -2536,6 +2534,7 @@ sub getSequenceIDsForReads {
             next; # already loaded
 	}
         elsif ($read->isEdited) {
+# assume the edited version is new, hence (try to) load it
             my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
 	    $log->info("Edited $added $errmsg") if $added;
 	    $log->warning("$errmsg") unless $added;
