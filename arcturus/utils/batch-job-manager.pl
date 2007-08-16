@@ -9,36 +9,31 @@ use Logging;
 use Cwd;
 
 #----------------------------------------------------------------
+
+# standard import/export of Arcturus project(s)
+
+#----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
 
-my $organism;
-my $instance;
+my ($organism,$instance);
 
-my $project;
-my $assembly;
-my $fopn;
-my $problem;
+my ($project,$fopn,$assembly,$problem,$gap4name,$version);
 
-my $subdir;
+my ($ioport,$perl,$script);
 
-my $ioport;
-my $delayed;
-my $batch;
-my $babel;
-my $pcs3;
+my ($delayed,$batch,$babel,$pcs3,$subdir);
 
-my $perl;
-my $script;
+my ($verbose,$confirm,$debug);
 
-my $verbose;
-my $confirm;
-my $debug;
-
-my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|problem|"
-               . "import|export|script|perl|"
-               . "batch|nobatch|delayed|subdir|sd|r|babel|pcs3|" # default phrap
+my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|gap4name|"
+               . "import|export|script|perl|problem|"
+               . "batch|nobatch|delayed|subdir|sd|r|"
                . "verbose|debug|confirm|submit|help|h";
+
+my $host = $ENV{HOST};
+
+$validKeys .= "babel|pcs3|" if ($host =~ /pcs/);
 
 while (my $nextword = shift @ARGV) {
 
@@ -68,6 +63,8 @@ while (my $nextword = shift @ARGV) {
 
     $fopn         = shift @ARGV    if ($nextword eq '-fopn');
     $fopn         = shift @ARGV    if ($nextword eq '-fofn');
+
+    $gap4name     = shift @ARGV    if ($nextword eq '-gap4name');
 
     $problem      = shift @ARGV    if ($nextword eq '-problem');
 
@@ -197,6 +194,10 @@ foreach my $projectid (@projectids) {
 
 &showUsage("No valid projects specified (@projectids)") unless @projects;
 
+if ($gap4name && @projects > 1) {
+    &showUsage("Only one project allowed when specifying gap4name");
+}
+
 #----------------------------------------------------------------
 
 # get the software directory
@@ -205,7 +206,6 @@ my $utilsdir;
 
 my $OS = `uname -s`; chomp $OS;
 
-my $host = $ENV{HOST};
 if ($host =~ /^pcs/ && $OS eq "OSF1") {
     $utilsdir = "/nfs/pathsoft/arcturus/utils";
 }
@@ -256,17 +256,22 @@ foreach my $project (@projects) {
 
     my $command;
     my $currentpwd = Cwd::cwd();
-    $currentpwd =~ s?.*automount.*/nfs?/nfs?; # chop off possible automount stuff
+    if ($currentpwd =~ /automount/) {
+        $logger->warning("removing 'automount' prefix from pwd");
+        $currentpwd =~ s?.*automount.*/nfs?/nfs?;
+    }
 
     my $message = "Project $project will be ${ioport}ed ";
     if ($ioport eq 'import') {
 # perl script
         if ($perl) {
-            $command .= "$utilsdir/importintoarcturus.pl ";
+            $command .= "$utilsdir/importintoarcturus ";
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project ";
-            $command .= "-s $script " if $script;
-            $command .= "-pp $problem "  if $problem;
+            $command .= "-g $gap4name "      if $gap4name;
+#           $command .= "-v $version "       if defined $version;
+            $command .= "-script $script "   if $script;
+            $command .= "-problem $problem " if $problem;
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
 	}
@@ -281,16 +286,19 @@ foreach my $project (@projects) {
 	    }
 	}
 # add in perl script: gap4 name different from project, list of contigs etc
-        $message .= "from gap4 database\n   $currentpwd/$project.0";
+        $gap4name = $project unless $gap4name;
+        $version  = 0 unless defined $version;
+        $message .= "from gap4 database\n   $currentpwd/$gap4name.$version";
     }
     elsif ($ioport eq 'export') {
 # perl script
         if ($perl) {
-            $command .= "$utilsdir/exportfromarcturus.pl ";
+            $command .= "$utilsdir/exportfromarcturus ";
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project "; # or scaffold? mutually exclusive + test
-            $command .= "-s $script "  if $script;
-#            $command .= "-db $gap4name " or $project? (if scaffold in wrapper script)
+            $command .= "-s $script "    if $script;
+            $command .= "-db $gap4name " if $gap4name; #(if scaffold in wrapper script)
+# $command .= "-v $version " if $version;
             $command .= "-rundir $currentpwd";
             $command .= "-debug " if $debug;
         }
@@ -326,7 +334,7 @@ foreach my $project (@projects) {
 
         unless ($confirm) {
             $logger->debug("=> $message");
-            $logger->warning("=> command to be issued:\n$command");
+            $logger->warning("=> command to be submitted:\n$command");
             $logger->warning("=> use '-confirm' to submit"); 
             next;
         }
@@ -338,7 +346,7 @@ foreach my $project (@projects) {
     else {
 # im/export under user control
         unless ($confirm) {
-            $logger->warning("=> command to be issued:\n$command");
+            $logger->warning("=> command to be executed:\n$command");
             $logger->warning("=> $message");
             $logger->warning("=> repeat using '-confirm'");
             next;
@@ -457,16 +465,20 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "Batch job manager for import/export of Arcturus projects\n";
     print STDERR "\n";
-    print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n" unless $organism;
-    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
-    print STDERR "\n";
-    print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
-    print STDERR "\n";
-    print STDERR "-import\t\t\n";
-    print STDERR "-export\t\t\n";
-    print STDERR "\n";
+    unless ($organism && $instance) {
+        print STDERR "MANDATORY PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-organism\tArcturus database name\n" unless $organism;
+        print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+        print STDERR "\n";
+    }
+    unless ($ioport) {
+        print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
+        print STDERR "\n";
+        print STDERR "-import\t\t\n";
+        print STDERR "-export\t\t\n";
+        print STDERR "\n";
+    }
     print STDERR "-project\tproject identifier (number or name, including "
                                                . "wildcards)\n";
     print STDERR "-fopn\t\tfile of project identifiers\n";
@@ -479,7 +491,11 @@ sub showUsage {
     print STDERR "-batch\n";
     print STDERR "-nobatch\n";
     print STDERR "\n";
-    print STDERR "-babel\telse execute on pcs3\n";
+    print STDERR "\t\tdefault execution on seq1\n";
+    if ($host =~ /pcs/) {
+        print STDERR "-babel\t\texecute on pcs2 (babel cluster)\n";
+        print STDERR "-pcs3\t\texecute on pcs3\n";
+    }
 
     print STDERR "\n";
     print STDERR "\nParameter input ERROR: $code \n" if $code; 
