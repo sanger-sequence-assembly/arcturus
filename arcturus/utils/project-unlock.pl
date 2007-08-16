@@ -165,11 +165,15 @@ else {
         if ($success == 2) {
             $logger->warning($message,ss=>1);
         }
-        elsif ($success == 1) {
-            $logger->warning($message." (=> use '-confirm')",ss=>1);
+        elsif ($success == 1 || $success == 0 && !$confirm) {
+            my $flag = "-confirm";
+            $flag .= " -force" if ($message =~ /belong/i);
+            $message .= " (=> use '$flag' to unlock)";
+            $logger->warning($message,ss=>1);
         }
         else {
-            $message = "FAILED to release lock: ".$message if $confirm;
+            $message = "FAILED to release lock: ".$message;
+            $message .= " (=> try '-force' to unlock)" if ($message =~ /belong/i);
             $logger->warning($message,ss=>1);
 	}
     }
