@@ -239,8 +239,10 @@ my $date = `date +%Y%m%d`; $date =~ s/\s//g;
 foreach my $project (@projects) {
 
 # the project must by in the directory the script is run in
+        
 
     if ($subdir) {
+        chdir($pwd); # to be sure
 # or in a subdirectory named after the project
         my $subdir = "$pwd/$project";
         chdir ($subdir) if (-d $project);
@@ -249,7 +251,7 @@ foreach my $project (@projects) {
             $logger->warning("FAILED to locate subdir $project");
             next;
 	}
-        $logger->debug("Project directory $subpwd used");
+        $logger->debug("- moved to project directory $subpwd");
     }
 
 # compose the import/export part of the command (both batch and command line)
@@ -298,7 +300,7 @@ foreach my $project (@projects) {
             $command .= "-p $project "; # or scaffold? mutually exclusive + test
             $command .= "-s $script "    if $script;
             $command .= "-db $gap4name " if $gap4name; #(if scaffold in wrapper script)
-# $command .= "-v $version " if $version;
+#           $command .= "-v $version " if $version;
             $command .= "-rundir $currentpwd";
             $command .= "-debug " if $debug;
         }
@@ -335,7 +337,7 @@ foreach my $project (@projects) {
         unless ($confirm) {
             $logger->debug("=> $message");
             $logger->warning("=> command to be submitted:\n$command");
-            $logger->warning("=> use '-confirm' to submit"); 
+            $logger->info("=> use '-confirm' to submit"); 
             next;
         }
 
@@ -361,8 +363,6 @@ foreach my $project (@projects) {
             $logger->severe("failed to ${ioport} project $project");
         }
     }
-
-    chdir ($pwd) if $subdir;
 }
 
 exit 0;
