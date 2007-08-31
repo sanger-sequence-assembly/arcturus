@@ -6,6 +6,8 @@ use ArcturusDatabase;
 
 use Logging;
 
+use Cwd;
+
 use Mail::Send;
 
 #----------------------------------------------------------------
@@ -142,7 +144,6 @@ $logger->info("Database ".$adb->getURL." opened succesfully");
 
 $logger->setSpecialStream($output,append=>1,timestamplabel=>"$instance:$organism") if $output;
 
-
 #----------------------------------------------------------------
 # get the backup project
 #----------------------------------------------------------------
@@ -258,9 +259,12 @@ my $m = scalar(keys %$hashlist);
 $logger->special( ($m || "No")." ".$message,preskip => 1,skip => 1);
 
 if ($m && $address) { # mail message
-    my $pwd = `pwd`; chomp $pwd;
     $message .= "  ($instance:$organism)";
-    $message .= "\n\ndetails in log file $pwd/$output" if $output;
+    if ($output && $output =~ /^\.\//) {
+        my $pwd = Cwd::cwd();
+        $output =~ s/^\./$pwd/; # prepend to get full path name
+        $message .= "\n\ndetails in log file $output";
+    }
     &sendMessage($address,"$m $message");
 }
 
