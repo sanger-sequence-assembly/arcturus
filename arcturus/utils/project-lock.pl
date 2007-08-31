@@ -23,7 +23,7 @@ my $confirm;
 my $test;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
-               . "usurp|force|transfer|"
+               . "useprivilege|up|transfer|"
                . "confirm|test|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -34,27 +34,28 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
-        $instance     = shift @ARGV;
+        $instance = shift @ARGV;
     }
 
     if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
-        $organism     = shift @ARGV;
+        $organism = shift @ARGV;
     }  
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
-        $project      = shift @ARGV;
+        $project  = shift @ARGV;
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
-        $assembly     = shift @ARGV;
+        $assembly = shift @ARGV;
+    }
+
+    if ($nextword eq '-useprivilege' || $nextword eq '-up') {
+        $forcing  = 1;
     }
 
     $newuser      = shift @ARGV  if ($nextword eq '-transfer');
-
-    $forcing      = 1            if ($nextword eq '-usurp');
-    $forcing      = 1            if ($nextword eq '-force');
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
@@ -157,20 +158,25 @@ else {
     elsif ($test) {
 	$success = 1; # project is unlocked
     }
-    else {
 
-# redefine newuser if set to 'owner'
+    else { # not test
 
-        if ($newuser && $newuser eq 'owner') {
-	    $newuser = $project->getOwner(); # substitute the name
-            unless ($newuser) {
+# 1) if project is already locked, test if it is locked by the intended user
+
+        if ($lockstatus && $newuser) {
+# only newuser tested here: current arcturus user is tested in transfer/acquireLock
+            my $lockowner = $project->getLockOwner();
+            my $projectowner = $project->getOwner();
+            $newuser = $projectowner if ($projectowner && $newuser eq 'owner');
+	    if ($newuser eq $lockowner) {
                 my $projectname = $project->getProjectName();
-                $message = "Failed to transfer lock: project $projectname has no owner";
-	        $logger->severe($message,ps=>1);
+                $logger->warning("Project $projectname is locked by $lockowner");
                 $adb->disconnect();
-                exit 2;
+                exit 1; # project is already locked by intended user
 	    }
-        }
+	}
+
+# 2) else, acquire lock by using privilige, if so specified
 
         my %options = (confirm => 0);
         $options{confirm} = 1 if $confirm;
@@ -178,15 +184,15 @@ else {
         if ($forcing) {
 # used in case the project is already locked by someone else, then first
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
-
            ($success,$message) = $project->transferLock(forcing=>1, %options);
             $message =~ s/transfere?/acquire/;
             $logger->warning($message,skip=>1);
         }
 
+# 3) or, acquire the lock in standard mode
+
         unless ($success) {
 # acquire the lock on the project (either by already having it, or when unlocked) 
-
            ($success,$message) = $project->acquireLock(%options);
 
             if ($success == 2) {
@@ -207,9 +213,20 @@ else {
         }
     }
 
-# if the lock was acquired by this user, now change to a new user
+# 4) then, if the lock was acquired by current user, possible transfer to new user
 
-    if ($success == 2 && $newuser) {
+    if ($success == 2 && $newuser && $newuser eq 'owner') {
+	$newuser = $project->getOwner(); # substitute the name
+        unless ($newuser) {
+            my $projectname = $project->getProjectName();
+            $message = "Failed to transfer lock: project $projectname has no owner";
+	    $logger->severe($message,ps=>1);
+            $adb->disconnect();
+            exit 2; # project is locked, but lock could not be transfered
+        }
+    }
+
+    if ($success == 2 && $newuser && $newuser ne $adb->getArcturusUser()) {
 
         $options{newowner} = $newuser;
 
@@ -231,7 +248,7 @@ else {
 
 $adb->disconnect();
 
-exit 0 if ($success == 2); # done, project is locked
+exit 0 if ($success == 2); # done, project is locked, lock possibly transfered
 
 exit 1; # project not locked
 
@@ -263,7 +280,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
-    print STDERR "-usurp\t\t(no value) to acquire existing lock ownership by privilege\n";
+    print STDERR "-up\t\t(use privilege, no value) acquire an existing lock\n";
     print STDERR "-transfer\tname of new user to transfer lock ownership to\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value)\n";
