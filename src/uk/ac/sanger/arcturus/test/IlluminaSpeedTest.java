@@ -14,7 +14,8 @@ public class IlluminaSpeedTest {
 	private static final String USERNAME = "arcturus";
 	private static final String PASSWORD = "***REMOVED***";
 
-	private static final int DEFAULT_HASHSIZE = 10;
+	public static final int DEFAULT_HASHSIZE = 10;
+	public static final int DEFAULT_MAXERROR = 0;
 
 	private static final int BASE_A = 65;
 	private static final int BASE_C = 67;
@@ -33,6 +34,8 @@ public class IlluminaSpeedTest {
 
 	private int hashsize = DEFAULT_HASHSIZE;
 	private int hashmask = 0;
+	
+	private int maxerror = DEFAULT_MAXERROR;
 
 	private HashEntry[] lookup;
 
@@ -42,8 +45,9 @@ public class IlluminaSpeedTest {
 	
 	private JButton btnRunQuery = new JButton("Run");
 
-	public IlluminaSpeedTest(int hashsize) {
+	public IlluminaSpeedTest(int hashsize, int maxerror) {
 		this.hashsize = hashsize;
+		this.maxerror = maxerror;
 	}
 	
 	public void run() {
@@ -330,9 +334,9 @@ public class IlluminaSpeedTest {
 					
 					int j1 = findHits(sequence);
 					
-					reverseComplement(sequence);
+					byte[] rcsequence = reverseComplement(sequence);
 					
-					int j2 = findHits(sequence);
+					int j2 = findHits(rcsequence);
 					
 					if (j1 > 0 || j2 > 0) {
 						hitsf += j1;
@@ -358,17 +362,15 @@ public class IlluminaSpeedTest {
 			return null;
 		}
 		
-		private void reverseComplement(byte[] sequence) {
+		private byte[] reverseComplement(byte[] sequence) {
 			int seqlen = sequence.length;
-			int halflen = seqlen / 2;
+
+			byte[] rcseq = new byte[seqlen];
 			
-			for (int i = 0; i < halflen; i++) {
-				byte a = sequence[i];
-				byte b = sequence[seqlen - 1 - i];
-				
-				sequence[i] = complement(b);
-				sequence[seqlen - 1 - i] = complement(a);
-			}
+			for (int i = 0; i < seqlen; i++)
+				rcseq[i] = complement(sequence[seqlen - 1 - i]);
+
+			return rcseq;
 		}
 		
 		private byte complement(byte c) {
@@ -413,6 +415,7 @@ public class IlluminaSpeedTest {
 		
 		private boolean comparePaddedSequence(byte[] sequence, int offset) {
 			int seqlen = refseq.length;
+			int errors = 0;
 
 			if (offset + sequence.length > seqlen)
 				return false;
@@ -426,8 +429,11 @@ public class IlluminaSpeedTest {
 				if (offset < seqlen) {
 					byte sc = refseq[offset];
 
-					if (oc != sc)
-						return false;
+					if (oc != sc) {
+						errors++;
+						if (errors > maxerror)
+							return false;
+					}
 
 					offset++;
 				} else
@@ -450,10 +456,12 @@ public class IlluminaSpeedTest {
 			btnRunQuery.setEnabled(true);
 		}
 	}
-
+	
 	public static void main(String[] args) {
 		int hashsize = Integer.getInteger("hashsize", DEFAULT_HASHSIZE);
-		IlluminaSpeedTest ist = new IlluminaSpeedTest(hashsize);
+		int maxerror = Integer.getInteger("maxerror", DEFAULT_MAXERROR);
+		
+		IlluminaSpeedTest ist = new IlluminaSpeedTest(hashsize, maxerror);
 		ist.run();
 	}
 }
