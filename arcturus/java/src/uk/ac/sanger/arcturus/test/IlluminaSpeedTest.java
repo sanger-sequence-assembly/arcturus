@@ -14,7 +14,7 @@ public class IlluminaSpeedTest {
 	private static final String USERNAME = "arcturus";
 	private static final String PASSWORD = "***REMOVED***";
 
-	private static final int HASHSIZE = 10;
+	private static final int DEFAULT_HASHSIZE = 10;
 
 	private static final int BASE_A = 65;
 	private static final int BASE_C = 67;
@@ -31,7 +31,7 @@ public class IlluminaSpeedTest {
 
 	private byte[] refseq = null;
 
-	private int hashsize = HASHSIZE;
+	private int hashsize = DEFAULT_HASHSIZE;
 	private int hashmask = 0;
 
 	private HashEntry[] lookup;
@@ -42,6 +42,10 @@ public class IlluminaSpeedTest {
 	
 	private JButton btnRunQuery = new JButton("Run");
 
+	public IlluminaSpeedTest(int hashsize) {
+		this.hashsize = hashsize;
+	}
+	
 	public void run() {
 		makeConnection();
 		makeHashTable();
@@ -298,6 +302,7 @@ public class IlluminaSpeedTest {
 	class SQLWorker extends SwingWorker<Void, Integer> {
 		private int counter;
 		private int hits;
+		private int hitsf, hitsr;
 		private int hitseqs;
 
 		public SQLWorker() {
@@ -307,6 +312,8 @@ public class IlluminaSpeedTest {
 			try {
 				counter = 0;
 				hits = 0;
+				hitsf = 0;
+				hitsr = 0;
 				hitseqs = 0;
 				
 				pbar.setValue(counter);
@@ -328,6 +335,8 @@ public class IlluminaSpeedTest {
 					int j2 = findHits(sequence);
 					
 					if (j1 > 0 || j2 > 0) {
+						hitsf += j1;
+						hitsr += j2;
 						hits += j1 + j2;
 						hitseqs++;
 					}
@@ -353,7 +362,7 @@ public class IlluminaSpeedTest {
 			int seqlen = sequence.length;
 			int halflen = seqlen / 2;
 			
-			for (int i = 0; i <= halflen; i++) {
+			for (int i = 0; i < halflen; i++) {
 				byte a = sequence[i];
 				byte b = sequence[seqlen - 1 - i];
 				
@@ -433,7 +442,7 @@ public class IlluminaSpeedTest {
 			for (int counter : results)
 				pbar.setValue(counter);
 			
-			lblHits.setText("" + hits + " " + hitseqs + "/" + counter);
+			lblHits.setText("" + hits + " (" + hitsf + " F, " + hitsr + " R) "+ hitseqs + "/" + counter);
 		}
 
 		protected void done() {
@@ -443,7 +452,8 @@ public class IlluminaSpeedTest {
 	}
 
 	public static void main(String[] args) {
-		IlluminaSpeedTest ist = new IlluminaSpeedTest();
+		int hashsize = Integer.getInteger("hashsize", DEFAULT_HASHSIZE);
+		IlluminaSpeedTest ist = new IlluminaSpeedTest(hashsize);
 		ist.run();
 	}
 }
