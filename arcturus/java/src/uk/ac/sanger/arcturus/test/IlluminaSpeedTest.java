@@ -34,7 +34,7 @@ public class IlluminaSpeedTest {
 
 	private int hashsize = DEFAULT_HASHSIZE;
 	private int hashmask = 0;
-	
+
 	private int maxerror = DEFAULT_MAXERROR;
 
 	private HashEntry[] lookup;
@@ -42,14 +42,14 @@ public class IlluminaSpeedTest {
 	private JProgressBar pbar = new JProgressBar();
 
 	private JLabel lblHits = new JLabel("-- HITS --");
-	
+
 	private JButton btnRunQuery = new JButton("Run");
 
 	public IlluminaSpeedTest(int hashsize, int maxerror) {
 		this.hashsize = hashsize;
 		this.maxerror = maxerror;
 	}
-	
+
 	public void run() {
 		makeConnection();
 		makeHashTable();
@@ -287,12 +287,12 @@ public class IlluminaSpeedTest {
 		pbar.setPreferredSize(d);
 
 		panel.add(pbar, BorderLayout.NORTH);
-		
+
 		JPanel panel2 = new JPanel(new FlowLayout());
-		
+
 		panel2.add(new JLabel("Hits: "));
 		panel2.add(lblHits);
-		
+
 		panel.add(panel2, BorderLayout.CENTER);
 
 		return panel;
@@ -304,10 +304,15 @@ public class IlluminaSpeedTest {
 	}
 
 	class SQLWorker extends SwingWorker<Void, Integer> {
+		private static final int FORWARD = 1;
+		private static final int REVERSE = 2;
+
 		private int counter;
 		private int hits;
 		private int hitsf, hitsr;
 		private int hitseqs;
+		private int hitseqsf, hitseqsr;
+		private int nohitf, nohitr;
 
 		public SQLWorker() {
 		}
@@ -319,7 +324,11 @@ public class IlluminaSpeedTest {
 				hitsf = 0;
 				hitsr = 0;
 				hitseqs = 0;
-				
+				hitseqsf = 0;
+				hitseqsr = 0;
+				nohitf = 0;
+				nohitr = 0;
+
 				pbar.setValue(counter);
 				lblHits.setText("" + hits);
 
@@ -331,13 +340,19 @@ public class IlluminaSpeedTest {
 					int id = rs.getInt(1);
 					String name = rs.getString(2);
 					byte[] sequence = rs.getBytes(3);
-					
-					int j1 = findHits(sequence);
-					
+
+					int j1 = findHits(sequence, FORWARD);
+
+					if (j1 > 0)
+						hitseqsf++;
+
 					byte[] rcsequence = reverseComplement(sequence);
-					
-					int j2 = findHits(rcsequence);
-					
+
+					int j2 = findHits(rcsequence, REVERSE);
+
+					if (j2 > 0)
+						hitseqsr++;
+
 					if (j1 > 0 || j2 > 0) {
 						hitsf += j1;
 						hitsr += j2;
@@ -346,7 +361,7 @@ public class IlluminaSpeedTest {
 					}
 
 					counter++;
-					
+
 					if ((counter % 1000) == 0)
 						publish(counter);
 				}
@@ -361,18 +376,18 @@ public class IlluminaSpeedTest {
 
 			return null;
 		}
-		
+
 		private byte[] reverseComplement(byte[] sequence) {
 			int seqlen = sequence.length;
 
 			byte[] rcseq = new byte[seqlen];
-			
+
 			for (int i = 0; i < seqlen; i++)
 				rcseq[i] = complement(sequence[seqlen - 1 - i]);
 
 			return rcseq;
 		}
-		
+
 		private byte complement(byte c) {
 			switch (c) {
 				case BASE_A:
@@ -391,28 +406,38 @@ public class IlluminaSpeedTest {
 					return c;
 			}
 		}
-		
-		private int findHits(byte[] sequence) {
+
+		private int findHits(byte[] sequence, int sense) {
 			int k = 0;
-			
+
 			int myhash = 0;
-			
+
 			for (int i = 0; i < hashsize; i++) {
 				myhash <<= 2;
 				myhash |= IlluminaSpeedTest.hashCode(sequence[i]);
 			}
-			
-			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry.getNext())
+
+			if (lookup[myhash] == null) {
+				if (sense == FORWARD)
+					nohitf++;
+				else
+					nohitr++;
+
+				return 0;
+			}
+
+			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry
+					.getNext())
 				if (testSequenceMatch(sequence, entry))
 					k++;
-			
+
 			return k;
 		}
-		
+
 		private boolean testSequenceMatch(byte[] sequence, HashEntry entry) {
 			return comparePaddedSequence(sequence, entry.getOffset());
 		}
-		
+
 		private boolean comparePaddedSequence(byte[] sequence, int offset) {
 			int seqlen = refseq.length;
 			int errors = 0;
@@ -445,22 +470,26 @@ public class IlluminaSpeedTest {
 		}
 
 		protected void process(java.util.List<Integer> results) {
-			for (int counter : results)
-				pbar.setValue(counter);
-			
-			lblHits.setText("" + hits + " (" + hitsf + " F, " + hitsr + " R) "+ hitseqs + "/" + counter);
+			pbar.setValue(counter);
+
+			lblHits.setText("" + hits + " (" + hitsf + " F, " + hitsr + " R) "
+					+ hitseqs + " (" + hitseqsf + " F, " + hitseqsr + " R) of "
+					+ counter);
 		}
 
 		protected void done() {
 			pbar.setValue(pbar.getMaximum());
 			btnRunQuery.setEnabled(true);
+			System.err.println("Out of " + counter + " sequences, " + nohitf
+					+ " had no forward hash match and " + nohitr
+					+ " had no reverse hash match");
 		}
 	}
-	
+
 	public static void main(String[] args) {
 		int hashsize = Integer.getInteger("hashsize", DEFAULT_HASHSIZE);
 		int maxerror = Integer.getInteger("maxerror", DEFAULT_MAXERROR);
-		
+
 		IlluminaSpeedTest ist = new IlluminaSpeedTest(hashsize, maxerror);
 		ist.run();
 	}
