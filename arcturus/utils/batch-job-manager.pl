@@ -259,8 +259,9 @@ foreach my $project (@projects) {
     my $command;
     my $currentpwd = Cwd::cwd();
     if ($currentpwd =~ /automount/) {
-        $logger->warning("removing 'automount' prefix from pwd");
         $currentpwd =~ s?.*automount.*/nfs?/nfs?;
+        $logger->warning("removing 'automount' prefix from pwd : $currentpwd");
+        chdir($currentpwd);
     }
 
     my $message = "Project $project will be ${ioport}ed ";
