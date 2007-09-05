@@ -141,7 +141,7 @@ sub CAFFileParser {
 
 # clip out any object named Contig
 
-            next if ($record =~ /Contig/i);
+            next if ($record =~ /Contig/);
 
 # test against readname exclude and include filters
 
