@@ -272,7 +272,7 @@ foreach my $project (@projects) {
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project ";
             $command .= "-g $gap4name "      if $gap4name;
-#           $command .= "-v $version "       if defined $version;
+            $command .= "-v $version "       if defined $version;
             $command .= "-script $script "   if $script;
             $command .= "-problem $problem " if $problem;
             $command .= "-rundir $currentpwd ";
@@ -283,7 +283,7 @@ foreach my $project (@projects) {
             $command .= "$utilsdir/importprojectintoarcturus.csh ";
             $command .= "$instance $organism $project ";
             if ($problem || $script) {
-                $problem = 'PROBLEM' unless $problem; # default
+                $problem = 'PROBLEMS' unless $problem; # default
                 $command .= "$problem ";
                 $command .= "$script" if $script;
 	    }
@@ -300,8 +300,8 @@ foreach my $project (@projects) {
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project "; # or scaffold? mutually exclusive + test
             $command .= "-s $script "    if $script;
-            $command .= "-db $gap4name " if $gap4name; #(if scaffold in wrapper script)
-#           $command .= "-v $version " if $version;
+            $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
+            $command .= "-v $version " if $version;
             $command .= "-rundir $currentpwd";
             $command .= "-debug " if $debug;
         }
@@ -358,8 +358,6 @@ foreach my $project (@projects) {
         $logger->warning("Project $project is being ${ioport}ed: "
 			."this may take some time .. be patient");
 
-#	$logger->warning("Not yet operational");
-#        next;
         unless ( (0xffff & system($command)) == 0) {
             $logger->severe("failed to ${ioport} project $project");
         }
@@ -469,8 +467,8 @@ sub showUsage {
     unless ($organism && $instance) {
         print STDERR "MANDATORY PARAMETERS:\n";
         print STDERR "\n";
-        print STDERR "-organism\tArcturus database name\n" unless $organism;
-        print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+        print STDERR "-organism\t(o) Arcturus organism database\n" unless $organism;
+        print STDERR "-instance\t(i) Arcturus database instance\n" unless $instance;
         print STDERR "\n";
     }
     unless ($ioport) {
@@ -480,18 +478,24 @@ sub showUsage {
         print STDERR "-export\t\t\n";
         print STDERR "\n";
     }
-    print STDERR "-project\tproject identifier (number or name, including "
+    print STDERR "-project\t(p) project identifier (number or name, may include "
                                                . "wildcards)\n";
-    print STDERR "-fopn\t\tfile of project identifiers\n";
+    print STDERR "-fopn\t\t(fofn) file of project identifiers\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
-    print STDERR "-assembly\n";
-    print STDERR "-gap4name\n";
-    print STDERR "-delayed\n";
     print STDERR "\n";
-    print STDERR "-batch\n";
-    print STDERR "-nobatch\n";
+    print STDERR "-confirm\tstart execution / submit as batch job\n";
+    print STDERR "-perl\t\t(TESTING) use perl script\n";
     print STDERR "\n";
+    print STDERR "-assembly\t(a) required if project is ambiguous\n";
+    print STDERR "-gap4name\tif different from (default) project name; one project only\n";
+    print STDERR "-problem\texplicitly define project for problem parent contigs\n";
+    print STDERR "-subdir\t\t(sd,r) to be used if project is located in subdir of current\n";
+    print STDERR "-script\t\tname of import or export script (other than default) used\n";
+    print STDERR "\n";
+    print STDERR "-nobatch\t(default) run under user control\n" if $batch;
+    print STDERR "-batch\t\tsubmit as batch job\n" unless $batch;
+    print STDERR "-delayed\tfor batch jobs, submit to run after 18:00\n";
     print STDERR "\t\tdefault execution on seq1\n";
     if ($host =~ /pcs/) {
         print STDERR "-babel\t\texecute on pcs2 (babel cluster)\n";
