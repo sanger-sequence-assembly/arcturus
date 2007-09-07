@@ -6,6 +6,8 @@ sub new {
     my $type = shift;
     my $pid = shift || 'self';
 
+    $pid = $$ unless (-d "/proc/$pid"); # for alphas
+
     my $this = {};
     bless $this, $type;
 
@@ -74,6 +76,29 @@ sub makeHash {
     }
 
     return $retval;
+}
+
+sub toString {
+    my $this = shift;
+
+    my $hash = $this->getStat();
+
+    return "not accessible" unless $hash;
+
+    my $string = "pid $hash->{pid}";
+
+    while (my $item = shift) {
+        my $value = $hash->{$item};
+        next unless defined $value;
+        $value *= 4096 if ($item eq 'rss');
+        $string .= ",  $item $value";
+    }
+    return $string;
+}
+
+sub usage {
+    my $this = shift;
+    return "memory usage : ".$this->toString('vsize','rss');
 }
 
 1;
