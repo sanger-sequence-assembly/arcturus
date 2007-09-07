@@ -6,6 +6,9 @@ public class IlluminaAligner {
 	public static final int DEFAULT_HASHSIZE = 10;
 	public static final int DEFAULT_MINLEN = 20;
 	public static final int DEFAULT_DISTINCT_OFFSET = 10;
+	
+	public static final int FORWARD = 1;
+	public static final int REVERSE = 2;
 
 	private int hashsize = DEFAULT_HASHSIZE;
 	private int minlen = DEFAULT_MINLEN;
@@ -66,9 +69,58 @@ public class IlluminaAligner {
 
 			if (nseqs % 100000 == 0)
 				System.err.println(nseqs);
+			
+			String[] words = line.split("\\s");
+			
+			String seqname = words[0];
+			char[] queryseq = words[1].toCharArray();
+			
+			processQuerySequence(seqname, queryseq);
 		}
 
 		queryFileReader.close();
+	}
+	
+	private void processQuerySequence(String name, char[] sequence) {
+		processQuerySequence(name, sequence, FORWARD);
+		
+		char[] revseq = reverseComplement(sequence);
+		
+		processQuerySequence(name, revseq, REVERSE);
+	}
+	
+	private void processQuerySequence(String name, char[] sequence, int direction) {
+		
+	}
+
+	private char[] reverseComplement(char[] sequence) {
+		int seqlen = sequence.length;
+
+		char[] rcseq = new char[seqlen];
+
+		for (int i = 0; i < seqlen; i++)
+			rcseq[i] = complement(sequence[seqlen - 1 - i]);
+
+		return rcseq;
+	}
+
+	private char complement(char c) {
+		switch (c) {
+			case 'A': case 'a':
+				return 'T';
+				
+			case 'C': case 'c':
+				return 'G';
+				
+			case 'G': case 'g':
+				return 'C';
+				
+			case 'T': case 't':
+				return 'A';
+				
+			default:
+				return c;
+		}
 	}
 
 	private void makeHashTable() {
