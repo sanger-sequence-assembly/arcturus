@@ -21,6 +21,9 @@ public class IlluminaAligner {
 	private HashEntry[] lookup;
 
 	private BufferedReader queryFileReader;
+	
+	private int fwdHits = 0;
+	private int revHits = 0;
 
 	public IlluminaAligner(String refseqFilename, String queryFilename,
 			int hashsize, int minlen, int distinctOffset) throws IOException {
@@ -77,6 +80,8 @@ public class IlluminaAligner {
 			
 			processQuerySequence(seqname, queryseq);
 		}
+		
+		System.err.println("hash matches: forward " + fwdHits + ", reverse " + revHits);
 
 		queryFileReader.close();
 	}
@@ -89,8 +94,31 @@ public class IlluminaAligner {
 		processQuerySequence(name, revseq, REVERSE);
 	}
 	
-	private void processQuerySequence(String name, char[] sequence, int direction) {
+	private void processQuerySequence(String name, char[] sequence, int sense) {
+		int hits = findHits(sequence, sense);
 		
+		if (hits > 0) {
+			if (sense == FORWARD)
+				fwdHits++;
+			else
+				revHits++;
+		}
+	}
+	
+	private int findHits(char[] sequence, int sense) {
+		int k = 0;
+
+		int myhash = 0;
+
+		for (int i = 0; i < hashsize; i++) {
+			myhash <<= 2;
+			myhash |= baseToHashCode(sequence[i]);
+		}
+
+		for (HashEntry entry = lookup[myhash]; entry != null; entry = entry.getNext())
+			k++;
+
+		return k;
 	}
 
 	private char[] reverseComplement(char[] sequence) {
