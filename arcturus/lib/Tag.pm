@@ -509,7 +509,8 @@ sub remap {
     &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
                                   'break','nobreak','segmentaware',
- 'usenew','list','useold',         
+ 'usenew','list','useold', 
+                                  'minimumsegmentsize',        
                                   'annooptions','sysIDoptions','changestrand');
 
     return TagFactory->remap($this,$mapping,%options);
@@ -605,7 +606,6 @@ sub writeToCaf {
         $string .= "\"$tagtext\"\n" ;
 # if also a comment available add an info tag
         $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
-#?       $string .= "Tag INFO @pos \"$comment\"\n" if $comment;
     }
 
     elsif ($host eq 'Read') {
