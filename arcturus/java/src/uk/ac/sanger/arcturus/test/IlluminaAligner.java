@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.test;
 
 import java.io.*;
+import java.util.*;
 
 public class IlluminaAligner {
 	public static final int DEFAULT_HASHSIZE = 10;
@@ -98,20 +99,11 @@ public class IlluminaAligner {
 		processQuerySequence(name, revseq, REVERSE);
 	}
 
+	private Vector<Integer> hits = new Vector<Integer>(); 
+
 	private void processQuerySequence(String name, char[] sequence, int sense) {
-		int hits = findHits(sequence, sense);
-
-		if (hits > 0) {
-			if (sense == FORWARD)
-				fwdHits++;
-			else
-				revHits++;
-		}
-	}
-
-	private int findHits(char[] sequence, int sense) {
-		int k = 0;
-
+		hits.clear();
+		
 		for (int offset = 0; offset <= sequence.length - hashsize; offset += hashsize) {
 			int myhash = 0;
 
@@ -120,12 +112,19 @@ public class IlluminaAligner {
 				myhash |= baseToHashCode(sequence[offset + i]);
 			}
 
-			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry
-					.getNext())
-				k++;
+			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry.getNext()) {
+				hits.add(entry.getOffset() - offset);
+			}
 		}
+		
+		//Collections.sort(hits);
 
-		return k;
+		if (hits.size() > 0) {
+			if (sense == FORWARD)
+				fwdHits++;
+			else
+				revHits++;
+		}
 	}
 
 	private char[] reverseComplement(char[] sequence) {
