@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.test;
 import java.io.*;
 import java.util.*;
 
+import uk.ac.sanger.arcturus.smithwaterman.*;
+
 public class IlluminaAligner {
 	public static final int DEFAULT_HASHSIZE = 10;
 	public static final int DEFAULT_MINLEN = 20;
