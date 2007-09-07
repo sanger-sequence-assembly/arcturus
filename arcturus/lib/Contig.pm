@@ -809,13 +809,14 @@ sub propagateTagsToContig {
 
     my @validoptionkeys = ('depth',
                            'notagload',    # take tags as is
-                           'noparentload', # take parent contig as is
-                           'speedmode',
-                           'includetag',
-                           'excludetag',
+                           'noparentload', # take parent contig(s) as is
+                           'speedmode',    # 
+                           'includetag',   # list of tags to be included
+                           'excludetag',   # list of tags to be excluded
                            'minimumsegmentsize', # re : anno tags
                            'change strand',      # re : anno tags
                            'overlap');           # re : anno tags
+
 my $ttags = $target->hasTags();
 #$LOGGER->setBlock('debug',unblock=>1) if $LOGGER;
 $LOGGER->debug("Contig->propagateTagsToContig : parent $parent target contig $target has tags: $ttags") if $LOGGER;
@@ -834,8 +835,14 @@ sub writeToCaf {
     my $FILE = shift; # obligatory file handle
     my %options = @_;
 
-    &verifyKeys('writeToCaf',\%options,'noreads','readsonly','notags',
-		                       'alltags','includetag','excludetag');
+    my @validoptionkeys = ('noreads',   # don't export reads, only contig
+                           'readsonly', # only export reads
+                           'notags',
+		           'alltags',
+                           'includetag',
+                           'excludetag');
+
+    &verifyKeys('writeToCaf',\%options,@validoptionkeys);
 
     return "Missing file handle for Caf output" unless $FILE;
 
