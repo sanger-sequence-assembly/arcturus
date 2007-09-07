@@ -2,9 +2,11 @@ package CAFReadFactory;
 
 use strict;
 
+use Read;
+
 use ReadFactory;
 
-use Read;
+use TagFactory::TagFactory;
 
 our (@ISA);
 
@@ -259,7 +261,29 @@ sub CAFFileParser {
                     }
                 }
             }
-
+            elsif ($items[0] =~ /Tag/i) {
+# parse a read tag
+                my $type = $items[1];
+                my $trps = $items[2];
+                my $trpf = $items[3];
+                my $info = $items[4];
+# test for a continuation mark (\n\); if so, read until no continuation mark
+                while ($info =~ /\\n\\\s*$/) {
+                    if (defined($record = <$CAF>)) {
+                        chomp $record;
+                        $info .= $record;
+                        $line++;
+                    }
+                    else {
+                        $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
+                    }
+		}
+# build a new read Tag instance          
+  	        my $tag = TagFactory->makeReadTag($type,$trps,$trpf,
+                                                  TagComment => $info);
+# print STDERR "Read Tag $type detected : ".$tag->writeToCaf()."\n";
+                $Read->addTag($tag);
+	    }
         }
         elsif ($type == 2) {
 # store the DNA in temporary buffer, add current record to existing contents
