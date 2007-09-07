@@ -6,7 +6,7 @@ public class IlluminaAligner {
 	public static final int DEFAULT_HASHSIZE = 10;
 	public static final int DEFAULT_MINLEN = 20;
 	public static final int DEFAULT_DISTINCT_OFFSET = 10;
-	
+
 	public static final int FORWARD = 1;
 	public static final int REVERSE = 2;
 
@@ -21,7 +21,7 @@ public class IlluminaAligner {
 	private HashEntry[] lookup;
 
 	private BufferedReader queryFileReader;
-	
+
 	private int fwdHits = 0;
 	private int revHits = 0;
 
@@ -60,7 +60,7 @@ public class IlluminaAligner {
 		return seq;
 	}
 
-	public void run() throws IOException {
+	public void run(int stopAfter) throws IOException {
 		makeHashTable();
 
 		String line = null;
@@ -70,33 +70,37 @@ public class IlluminaAligner {
 		while ((line = queryFileReader.readLine()) != null) {
 			nseqs++;
 
+			if (stopAfter > 0 && nseqs > stopAfter)
+				break;
+
 			if (nseqs % 100000 == 0)
 				System.err.println(nseqs);
-			
+
 			String[] words = line.split("\\s");
-			
+
 			String seqname = words[0];
 			char[] queryseq = words[1].toCharArray();
-			
+
 			processQuerySequence(seqname, queryseq);
 		}
-		
-		System.err.println("hash matches: forward " + fwdHits + ", reverse " + revHits);
+
+		System.err.println("hash matches: forward " + fwdHits + ", reverse "
+				+ revHits);
 
 		queryFileReader.close();
 	}
-	
+
 	private void processQuerySequence(String name, char[] sequence) {
 		processQuerySequence(name, sequence, FORWARD);
-		
+
 		char[] revseq = reverseComplement(sequence);
-		
+
 		processQuerySequence(name, revseq, REVERSE);
 	}
-	
+
 	private void processQuerySequence(String name, char[] sequence, int sense) {
 		int hits = findHits(sequence, sense);
-		
+
 		if (hits > 0) {
 			if (sense == FORWARD)
 				fwdHits++;
@@ -104,19 +108,22 @@ public class IlluminaAligner {
 				revHits++;
 		}
 	}
-	
+
 	private int findHits(char[] sequence, int sense) {
 		int k = 0;
 
-		int myhash = 0;
+		for (int offset = 0; offset <= sequence.length - hashsize; offset += hashsize) {
+			int myhash = 0;
 
-		for (int i = 0; i < hashsize; i++) {
-			myhash <<= 2;
-			myhash |= baseToHashCode(sequence[i]);
+			for (int i = 0; i < hashsize; i++) {
+				myhash <<= 2;
+				myhash |= baseToHashCode(sequence[offset + i]);
+			}
+
+			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry
+					.getNext())
+				k++;
 		}
-
-		for (HashEntry entry = lookup[myhash]; entry != null; entry = entry.getNext())
-			k++;
 
 		return k;
 	}
@@ -134,18 +141,22 @@ public class IlluminaAligner {
 
 	private char complement(char c) {
 		switch (c) {
-			case 'A': case 'a':
+			case 'A':
+			case 'a':
 				return 'T';
-				
-			case 'C': case 'c':
+
+			case 'C':
+			case 'c':
 				return 'G';
-				
-			case 'G': case 'g':
+
+			case 'G':
+			case 'g':
 				return 'C';
-				
-			case 'T': case 't':
+
+			case 'T':
+			case 't':
 				return 'A';
-				
+
 			default:
 				return c;
 		}
@@ -253,12 +264,16 @@ public class IlluminaAligner {
 
 	public static boolean isValid(char c) {
 		switch (c) {
-			case 'A': case 'a':
-			case 'C': case 'c':
-			case 'G': case 'g':
-			case 'T': case 't':
+			case 'A':
+			case 'a':
+			case 'C':
+			case 'c':
+			case 'G':
+			case 'g':
+			case 'T':
+			case 't':
 				return true;
-				
+
 			default:
 				return false;
 		}
@@ -286,6 +301,7 @@ public class IlluminaAligner {
 		int hashsize = DEFAULT_HASHSIZE;
 		int minlen = DEFAULT_MINLEN;
 		int distinctOffset = DEFAULT_DISTINCT_OFFSET;
+		int stopAfter = 0;
 
 		String refseqFilename = null;
 		String queryFilename = null;
@@ -301,6 +317,8 @@ public class IlluminaAligner {
 				minlen = Integer.parseInt(args[++i]);
 			else if (args[i].equalsIgnoreCase("-distinct_offset"))
 				distinctOffset = Integer.parseInt(args[++i]);
+			else if (args[i].equalsIgnoreCase("-stopafter"))
+				stopAfter = Integer.parseInt(args[++i]);
 			else {
 				System.err.println("Unknown option: \"" + args[i] + "\"");
 				printUsage(System.err);
@@ -319,7 +337,7 @@ public class IlluminaAligner {
 			IlluminaAligner aligner = new IlluminaAligner(refseqFilename,
 					queryFilename, hashsize, minlen, distinctOffset);
 
-			aligner.run();
+			aligner.run(stopAfter);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
