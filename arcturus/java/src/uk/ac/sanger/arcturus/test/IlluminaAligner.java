@@ -100,6 +100,15 @@ public class IlluminaAligner {
 	}
 
 	private Vector<Integer> hits = new Vector<Integer>(); 
+	
+	private boolean isCloseTo(int a, int b) {
+		int diff = a - b;
+		
+		if (diff < 0)
+			diff = -diff;
+		
+		return diff < distinctOffset;
+	}
 
 	private void processQuerySequence(String name, char[] sequence, int sense) {
 		hits.clear();
@@ -117,7 +126,16 @@ public class IlluminaAligner {
 			}
 		}
 		
-		//Collections.sort(hits);
+		Collections.sort(hits);
+		
+		for (int i = 0; i < hits.size(); i++) {
+			int value = hits.elementAt(i);
+			
+			int j = i + 1;
+			
+			while (j < hits.size() && isCloseTo(hits.elementAt(j), value))
+				hits.remove(j);
+		}
 
 		if (hits.size() > 0) {
 			if (sense == FORWARD)
