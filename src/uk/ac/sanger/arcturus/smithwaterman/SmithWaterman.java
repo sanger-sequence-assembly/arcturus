@@ -241,6 +241,9 @@ public class SmithWaterman {
 		if (sw == null)
 			return null;
 		
+		if (sw.getScore(row, col) == 0)
+			return null;
+		
 		sw.resetOnBestAlignment();
 			
 		Vector<EditEntry> edits = new Vector<EditEntry>();
