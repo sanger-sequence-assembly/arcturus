@@ -153,6 +153,8 @@ public class IlluminaAligner {
 				fwdHits++;
 			else
 				revHits++;
+			
+			int matches = 0;
 
 			for (int i = 0; i < hits.size(); i++) {
 				int subjectOffset = Math.max(0,  hits.elementAt(i) - 5);
@@ -173,14 +175,18 @@ public class IlluminaAligner {
 					int score = calculateScore(edits);
 					
 					if (score >= minlen) {
-						if (sense == FORWARD)
-							fwdMatches++;
-						else
-							revMatches++;
+						matches++;
 					}
 				} catch (SmithWatermanException e) {
 					e.printStackTrace();
 				}
+			}
+
+			if (matches > 0) {
+				if (sense == FORWARD)
+					fwdMatches++;
+				else
+					revMatches++;
 			}
 		}
 	}
@@ -403,8 +409,6 @@ public class IlluminaAligner {
 		}
 
 		if (refseqFilename == null || queryFilename == null) {
-			System.err
-					.println("You must specify file names for the reference sequence and query asequences");
 			printUsage(System.err);
 			System.exit(2);
 		}
@@ -420,5 +424,15 @@ public class IlluminaAligner {
 	}
 
 	private static void printUsage(PrintStream ps) {
+		ps.println("MANDATORY PARAMETERS");
+		ps.println("\t-refseq\t\t\tName of reference sequence FASTA file");
+		ps.println("\t-query\t\t\tName of query sequences file");
+		ps.println();
+		ps.println("OPTIONAL PARAMETERS");
+		ps.println("\t-hashsize\t\tSize of kmer hash [Default:" + DEFAULT_HASHSIZE + "]");
+		ps.println("\t-minlen\t\t\tMinimum match length in query [Default: " + DEFAULT_MINLEN + "]");
+		ps.println("\t-distinct_offset\tMinimum difference in offsets for distinct hash");
+		ps.println("\t\t\t\tmatches [Default: " + DEFAULT_DISTINCT_OFFSET + "]");
+		ps.println("\t-stopafter\t\tStop after this many query sequences");
 	}
 }
