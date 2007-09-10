@@ -18,7 +18,15 @@ public interface SmithWatermanArrayModel {
     public void setScoreAndDirection(int row, int column,
 				     int score, int direction);
 
-    public String getSubjectSequence();
+    public char[] getSubjectSequence();
+    
+    public int getSubjectOffset();
+    
+    public int getSubjectLength();
 
-    public String getQuerySequence();
+    public char[] getQuerySequence();
+    
+    public int getQueryOffset();
+    
+    public int getQueryLength();
 }

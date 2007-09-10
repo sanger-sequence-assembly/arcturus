@@ -1,76 +1,117 @@
 package uk.ac.sanger.arcturus.smithwaterman;
 
 public class BandedSmithWatermanArray implements SmithWatermanArrayModel {
-    private SmithWatermanEntry sw[][] = null;
+	private SmithWatermanEntry sw[][] = null;
 
-    String subjectSequence;
-    String querySequence;
+	private char[] subjectSequence;
+	private int subjectOffset;
+	private int subjectLength;
 
-    private int nrows;
-    private int ncols;
+	private char[] querySequence;
+	private int queryOffset;
+	private int queryLength;
 
-    private int bandwidth;
+	private int bandwidth;
 
-    public BandedSmithWatermanArray(String subjectSequence, String querySequence, int bandwidth) {
-	this.subjectSequence = subjectSequence;
-	this.querySequence = querySequence;
+	public BandedSmithWatermanArray(char[] subjectSequence, int subjectOffset,
+			int subjectLength, char[] querySequence, int queryOffset,
+			int queryLength, int bandwidth) {
+		this.subjectSequence = subjectSequence;
+		this.subjectOffset = subjectOffset;
+		this.subjectLength = subjectLength;
 
-	nrows = subjectSequence.length();
-	ncols = querySequence.length();
+		this.querySequence = querySequence;
+		this.queryOffset = queryOffset;
+		this.queryLength = queryLength;
 
-	this.bandwidth = bandwidth;
+		this.bandwidth = bandwidth;
 
-	createNewArray();
-    }
+		createNewArray();
+	}
 
-    private void createNewArray() {
-	int rowsize = 2 * bandwidth + 1;
+	public BandedSmithWatermanArray(char[] subjectSequence,
+			char[] querySequence, int bandwidth) {
+		this(subjectSequence, 0, subjectSequence.length, querySequence, 0,
+				querySequence.length, bandwidth);
+	}
 
-	sw = new SmithWatermanEntry[nrows][rowsize];
+	private void createNewArray() {
+		int rowsize = 2 * bandwidth + 1;
 
-	for (int row = 0; row < nrows; row++)
-	    for (int col = 0; col < rowsize; col++)
-		sw[row][col] = new SmithWatermanEntry();
-    }
+		sw = new SmithWatermanEntry[subjectLength][rowsize];
 
-    public int getRowCount() { return nrows; }
+		for (int row = 0; row < subjectLength; row++)
+			for (int col = 0; col < rowsize; col++)
+				sw[row][col] = new SmithWatermanEntry();
+	}
 
-    public int getColumnCount() { return ncols; }
+	public int getRowCount() {
+		return subjectLength;
+	}
 
-    public boolean isBanded() { return true; }
+	public int getColumnCount() {
+		return queryLength;
+	}
 
-    public int getBandWidth() { return bandwidth; }
+	public boolean isBanded() {
+		return true;
+	}
 
-    public boolean exists(int row, int column) {
-	int offset = (row < column) ? column - row : row - column;
+	public int getBandWidth() {
+		return bandwidth;
+	}
 
-	return (row >= 0 && row < nrows && column >= 0 && column < ncols && offset <= bandwidth);
-    }
+	public boolean exists(int row, int column) {
+		int offset = (row < column) ? column - row : row - column;
 
-    public int getScore(int row, int column) {
-	SmithWatermanEntry entry = getEntry(row, column);
+		return (row >= 0 && row < subjectLength && column >= 0
+				&& column < queryLength && offset <= bandwidth);
+	}
 
-	return (entry == null) ? 0 : entry.getScore();
-    }
+	public int getScore(int row, int column) {
+		SmithWatermanEntry entry = getEntry(row, column);
 
-    public SmithWatermanEntry getEntry(int row, int column) {
-	if (exists(row, column)) {
-	    int offset = bandwidth + column - row;
+		return (entry == null) ? 0 : entry.getScore();
+	}
 
-	    return sw[row][offset];
-	} else
-	    return null;
-    }
+	public SmithWatermanEntry getEntry(int row, int column) {
+		if (exists(row, column)) {
+			int offset = bandwidth + column - row;
 
-    public void setScoreAndDirection(int row, int column,
-				     int score, int direction) {
-	SmithWatermanEntry entry = getEntry(row, column);
+			return sw[row][offset];
+		} else
+			return null;
+	}
 
-	if (entry != null)
-	    entry.setScoreAndDirection(score, direction);
-    }
+	public void setScoreAndDirection(int row, int column, int score,
+			int direction) {
+		SmithWatermanEntry entry = getEntry(row, column);
 
-    public String getSubjectSequence() { return subjectSequence; }
+		if (entry != null)
+			entry.setScoreAndDirection(score, direction);
+	}
 
-    public String getQuerySequence() { return querySequence; }
+	public char[] getSubjectSequence() {
+		return subjectSequence;
+	}
+
+	public int getSubjectOffset() {
+		return subjectOffset;
+	}
+
+	public int getSubjectLength() {
+		return subjectLength;
+	}
+
+	public char[] getQuerySequence() {
+		return querySequence;
+	}
+
+	public int getQueryOffset() {
+		return queryOffset;
+	}
+
+	public int getQueryLength() {
+		return queryLength;
+	}
 }
