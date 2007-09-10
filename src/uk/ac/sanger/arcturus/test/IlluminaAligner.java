@@ -27,6 +27,11 @@ public class IlluminaAligner {
 
 	private int fwdHits = 0;
 	private int revHits = 0;
+	
+	private int fwdMatches = 0;
+	private int revMatches = 0;
+
+	private ScoringMatrix smat = new ScoringMatrix();
 
 	public IlluminaAligner(String refseqFilename, String queryFilename,
 			int hashsize, int minlen, int distinctOffset) throws IOException {
@@ -90,6 +95,9 @@ public class IlluminaAligner {
 		System.err.println("hash matches: forward " + fwdHits + ", reverse "
 				+ revHits);
 
+		System.err.println("SW matches: forward " + fwdMatches + ", reverse "
+				+ revMatches);
+
 		queryFileReader.close();
 	}
 
@@ -101,20 +109,20 @@ public class IlluminaAligner {
 		processQuerySequence(name, revseq, REVERSE);
 	}
 
-	private Vector<Integer> hits = new Vector<Integer>(); 
-	
+	private Vector<Integer> hits = new Vector<Integer>();
+
 	private boolean isCloseTo(int a, int b) {
 		int diff = a - b;
-		
+
 		if (diff < 0)
 			diff = -diff;
-		
+
 		return diff < distinctOffset;
 	}
 
 	private void processQuerySequence(String name, char[] sequence, int sense) {
 		hits.clear();
-		
+
 		for (int offset = 0; offset <= sequence.length - hashsize; offset += hashsize) {
 			int myhash = 0;
 
@@ -123,18 +131,19 @@ public class IlluminaAligner {
 				myhash |= baseToHashCode(sequence[offset + i]);
 			}
 
-			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry.getNext()) {
+			for (HashEntry entry = lookup[myhash]; entry != null; entry = entry
+					.getNext()) {
 				hits.add(entry.getOffset() - offset);
 			}
 		}
-		
+
 		Collections.sort(hits);
-		
+
 		for (int i = 0; i < hits.size(); i++) {
 			int value = hits.elementAt(i);
-			
+
 			int j = i + 1;
-			
+
 			while (j < hits.size() && isCloseTo(hits.elementAt(j), value))
 				hits.remove(j);
 		}
@@ -144,7 +153,55 @@ public class IlluminaAligner {
 				fwdHits++;
 			else
 				revHits++;
+
+			for (int i = 0; i < hits.size(); i++) {
+				int subjectOffset = Math.max(0,  hits.elementAt(i) - 5);
+				int subjectLength = Math.min(sequence.length + 10, refseq.length - subjectOffset);
+
+				int queryOffset = 0;
+				int queryLength = sequence.length;
+				
+				int bandwidth = 20;
+
+				SmithWatermanArrayModel sw = SmithWaterman.calculateMatrix(
+						refseq, subjectOffset, subjectLength, sequence,
+						queryOffset, queryLength, smat, bandwidth);
+				
+				try {
+					EditEntry[] edits = SmithWaterman.getEditString(sw);
+					
+					int score = calculateScore(edits);
+					
+					if (score >= minlen) {
+						if (sense == FORWARD)
+							fwdMatches++;
+						else
+							revMatches++;
+					}
+				} catch (SmithWatermanException e) {
+					e.printStackTrace();
+				}
+			}
 		}
+	}
+	
+	private int calculateScore(EditEntry[] edits) {
+		if (edits == null || edits.length == 0)
+			return 0;
+		
+		int score = 0;
+		
+		for (int i = 0; i < edits.length; i++) {
+			switch (edits[i].getType()) {
+				case EditEntry.MATCH:
+				case EditEntry.SUBSTITUTION:
+				case EditEntry.INSERTION:
+					score += edits[i].getCount();
+					break;
+			}
+		}
+		
+		return score;
 	}
 
 	private char[] reverseComplement(char[] sequence) {
