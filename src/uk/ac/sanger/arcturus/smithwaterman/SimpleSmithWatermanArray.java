@@ -1,61 +1,101 @@
 package uk.ac.sanger.arcturus.smithwaterman;
 
 public class SimpleSmithWatermanArray implements SmithWatermanArrayModel {
-    SmithWatermanEntry sw[][] = null;
+	private SmithWatermanEntry sw[][] = null;
 
-    String subjectSequence;
-    String querySequence;
+	private char[] subjectSequence;
+	private int subjectOffset;
+	private int subjectLength;
 
-    int nrows;
-    int ncols;
+	private char[] querySequence;
+	private int queryOffset;
+	private int queryLength;
 
-    public SimpleSmithWatermanArray(String subjectSequence, String querySequence) {
-	this.subjectSequence = subjectSequence;
-	this.querySequence = querySequence;
+	public SimpleSmithWatermanArray(char[] subjectSequence, int subjectOffset, int subjectLength,
+			char[] querySequence, int queryOffset, int queryLength) {
+		this.subjectSequence = subjectSequence;
+		this.subjectOffset = subjectOffset;
+		this.subjectLength = subjectLength;
+		
+		this.querySequence = querySequence;
+		this.queryOffset = queryOffset;
+		this.queryLength = queryLength;
 
-	nrows = subjectSequence.length();
-	ncols = querySequence.length();
+		int nrows = subjectLength;
+		int ncols = queryLength;
 
-	sw = new SmithWatermanEntry[nrows][ncols];
+		sw = new SmithWatermanEntry[nrows][ncols];
 
-	for (int row = 0; row < nrows; row++)
-	    for (int col = 0; col < ncols; col++)
-		sw[row][col] = new SmithWatermanEntry();
-    }
+		for (int row = 0; row < nrows; row++)
+			for (int col = 0; col < ncols; col++)
+				sw[row][col] = new SmithWatermanEntry();
+	}
+	
+	public SimpleSmithWatermanArray(char[] subjectSequence, char[] querySequence) {
+		this(subjectSequence, 0, subjectSequence.length, querySequence, 0, querySequence.length);
+	}
 
-    public int getRowCount() { return nrows; }
+	public int getRowCount() {
+		return subjectLength;
+	}
 
-    public int getColumnCount() { return ncols; }
+	public int getColumnCount() {
+		return queryLength;
+	}
 
-    public boolean isBanded() { return false; }
+	public boolean isBanded() {
+		return false;
+	}
 
-    public int getBandWidth() { return -1; }
+	public int getBandWidth() {
+		return -1;
+	}
 
-    public boolean exists(int row, int column) {
-	return (row >= 0 && row < nrows && column >= 0 && column < ncols);
-    }
+	public boolean exists(int row, int column) {
+		return (row >= 0 && row < subjectLength && column >= 0 && column < queryLength);
+	}
 
-    public int getScore(int row, int column) {
-	if (exists(row, column))
-	    return sw[row][column].getScore();
-	else
-	    return 0;
-    }
+	public int getScore(int row, int column) {
+		if (exists(row, column))
+			return sw[row][column].getScore();
+		else
+			return 0;
+	}
 
-    public SmithWatermanEntry getEntry(int row, int column) {
-	if (exists(row, column))
-	    return sw[row][column];
-	else
-	    return null;
-    }
+	public SmithWatermanEntry getEntry(int row, int column) {
+		if (exists(row, column))
+			return sw[row][column];
+		else
+			return null;
+	}
 
-    public void setScoreAndDirection(int row, int column,
-				     int score, int direction) {
-	if (exists(row, column))
-	    sw[row][column].setScoreAndDirection(score, direction);
-    }
+	public void setScoreAndDirection(int row, int column, int score,
+			int direction) {
+		if (exists(row, column))
+			sw[row][column].setScoreAndDirection(score, direction);
+	}
 
-    public String getSubjectSequence() { return subjectSequence; }
+	public char[] getSubjectSequence() {
+		return subjectSequence;
+	}
 
-    public String getQuerySequence() { return querySequence; }
+	public int getSubjectOffset() {
+		return subjectOffset;
+	}
+	
+	public int getSubjectLength() {
+		return subjectLength;
+	}
+
+	public char[] getQuerySequence() {
+		return querySequence;
+	}
+	
+	public int getQueryOffset() {
+		return queryOffset;
+	}
+	
+	public int getQueryLength() {
+		return queryLength;
+	}
 }
