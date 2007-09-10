@@ -114,4 +114,10 @@ public class BandedSmithWatermanArray implements SmithWatermanArrayModel {
 	public int getQueryLength() {
 		return queryLength;
 	}
+	
+	public void resetOnBestAlignment() {
+		for (int row = 0; row < sw.length; row++)
+			for (int col = 0; col < sw[row].length; col++)
+				sw[row][col].setOnBestAlignment(false);
+	}
 }

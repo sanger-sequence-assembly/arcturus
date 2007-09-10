@@ -29,4 +29,6 @@ public interface SmithWatermanArrayModel {
     public int getQueryOffset();
     
     public int getQueryLength();
+    
+    public void resetOnBestAlignment();
 }
