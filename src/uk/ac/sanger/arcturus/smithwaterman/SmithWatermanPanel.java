@@ -81,6 +81,13 @@ public class SmithWatermanPanel extends JPanel {
 
 			setAutoscrolls(true);
 			addMouseMotionListener(this);
+			addMouseListener(new MouseAdapter() {
+				public void mouseClicked(MouseEvent e) {
+					if (e.getButton() == MouseEvent.BUTTON1
+							&& e.getClickCount() == 2)
+						doMouseClicked(e);
+				}
+			});
 		}
 
 		public void setMatrix(SmithWatermanArrayModel sw,
@@ -221,6 +228,33 @@ public class SmithWatermanPanel extends JPanel {
 			} else {
 				return ((currentPosition / cellSize) + 1) * cellSize
 						- currentPosition;
+			}
+		}
+
+		private void doMouseClicked(MouseEvent e) {
+			int x = e.getX();
+			int y = e.getY();
+
+			int row = y / cellSize;
+			int col = x / cellSize;
+
+			System.err.println("Mouse clicked at column " + (col + 1) + ", row"
+					+ (row + 1));
+
+			if (sw.exists(row, col)) {
+				try {
+					EditEntry[] edits = SmithWaterman.getEditString(sw, row,
+							col);
+
+					System.err.println("Edit string:");
+
+					for (int i = 0; i < edits.length; i++)
+						System.err.println(edits[i]);
+				} catch (SmithWatermanException swe) {
+					swe.printStackTrace();
+				}
+
+				repaint();
 			}
 		}
 	}

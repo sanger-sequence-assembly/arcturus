@@ -122,11 +122,10 @@ public class SmithWaterman {
 			}
 		}
 
-		int[] result = new int[3];
+		int[] result = new int[2];
 		
 		result[0] = maxCol;
 		result[1] = maxRow;
-		result[2] = maxScore;
 		
 		return result;
 	}
@@ -134,6 +133,21 @@ public class SmithWaterman {
 	public static Segment[] traceBack(SmithWatermanArrayModel sw) throws SmithWatermanException {
 		if (sw == null)
 			return null;
+		
+		int[] maximal = findMaximalEntry(sw);
+		
+		int col = maximal[0];
+		int row = maximal[1];
+		
+		return traceBack(sw, row, col);
+	}
+	
+	public static Segment[] traceBack(SmithWatermanArrayModel sw, int row, int col)
+	throws SmithWatermanException {
+		if (sw == null)
+			return null;
+		
+		sw.resetOnBestAlignment();
 
 		char[] subjectSequence = sw.getSubjectSequence();
 		int subjectOffset = sw.getSubjectOffset();
@@ -141,11 +155,7 @@ public class SmithWaterman {
 		char[] querySequence = sw.getQuerySequence();
 		int queryOffset = sw.getQueryOffset();
 
-		int[] maximal = findMaximalEntry(sw);
-
-		int col = maximal[0];
-		int row = maximal[1];
-		int score = maximal[2];
+		int score = sw.getScore(row, col);
 
 		Vector<Segment> segments = new Vector<Segment>();
 
@@ -154,6 +164,9 @@ public class SmithWaterman {
 
 		while (score > 0 && col >= 0 && row >= 0) {
 			SmithWatermanEntry entry = sw.getEntry(row, col);
+			
+			if (entry == null)
+				throw new SmithWatermanException("No such entry at (" + row + ", " + col + ")");
 
 			entry.setOnBestAlignment(true);
 			int direction = entry.getDirection();
@@ -220,6 +233,16 @@ public class SmithWaterman {
 		int col = maximal[0];
 		int row = maximal[1];
 		
+		return getEditString(sw, row, col);
+	}
+	
+	public static EditEntry[] getEditString(SmithWatermanArrayModel sw, int row, int col)
+	throws SmithWatermanException {
+		if (sw == null)
+			return null;
+		
+		sw.resetOnBestAlignment();
+			
 		Vector<EditEntry> edits = new Vector<EditEntry>();
 		
 		EditEntry currentEntry = null;
@@ -228,11 +251,15 @@ public class SmithWaterman {
 		
 		do {
 			SmithWatermanEntry entry = sw.getEntry(row, col);
+			
+			if (entry == null)
+				throw new SmithWatermanException("No such entry at (" + row + ", " + col + ")");
+
 			entry.setOnBestAlignment(true);
 			
 			int direction = entry.getDirection();
 	
-			if (direction == lastDirection) {
+			if (direction == lastDirection && currentEntry != null) {
 				currentEntry.setCount(++entryLength);
 			} else {
 				char editType;
