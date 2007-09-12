@@ -27,7 +27,7 @@ public class IlluminaAligner {
 
 	private int fwdHits = 0;
 	private int revHits = 0;
-	
+
 	private int fwdMatches = 0;
 	private int revMatches = 0;
 
@@ -153,28 +153,40 @@ public class IlluminaAligner {
 				fwdHits++;
 			else
 				revHits++;
-			
+
 			int matches = 0;
 
 			for (int i = 0; i < hits.size(); i++) {
-				int subjectOffset = Math.max(0,  hits.elementAt(i) - 5);
-				int subjectLength = Math.min(sequence.length + 10, refseq.length - subjectOffset);
+				int subjectOffset = Math.max(0, hits.elementAt(i) - 5);
+				int subjectLength = Math.min(sequence.length + 10,
+						refseq.length - subjectOffset);
 
 				int queryOffset = 0;
 				int queryLength = sequence.length;
-				
+
 				int bandwidth = 20;
 
 				SmithWatermanArrayModel sw = SmithWaterman.calculateMatrix(
 						refseq, subjectOffset, subjectLength, sequence,
 						queryOffset, queryLength, smat, bandwidth);
-				
+
 				try {
-					EditEntry[] edits = SmithWaterman.getEditString(sw);
-					
+					Alignment alignment = SmithWaterman.getAlignment(sw);
+
+					EditEntry[] edits = alignment.getEdits();
+
 					int score = calculateScore(edits);
-					
+
 					if (score >= minlen) {
+						int row = alignment.getRow();
+						int column = alignment.getColumn();
+
+						System.out.print(name + "\t"
+								+ (sense == FORWARD ? 'F' : 'R') + "\t"
+								+ subjectOffset + "\t" + row + "\t" + column + "\t");
+						for (int j = 0; j < edits.length; j++)
+							System.out.print(((j > 0) ? "," : "") + edits[j]);
+						System.out.println();
 						matches++;
 					}
 				} catch (SmithWatermanException e) {
@@ -190,13 +202,13 @@ public class IlluminaAligner {
 			}
 		}
 	}
-	
+
 	private int calculateScore(EditEntry[] edits) {
 		if (edits == null || edits.length == 0)
 			return 0;
-		
+
 		int score = 0;
-		
+
 		for (int i = 0; i < edits.length; i++) {
 			switch (edits[i].getType()) {
 				case EditEntry.MATCH:
@@ -206,7 +218,7 @@ public class IlluminaAligner {
 					break;
 			}
 		}
-		
+
 		return score;
 	}
 
@@ -429,10 +441,15 @@ public class IlluminaAligner {
 		ps.println("\t-query\t\t\tName of query sequences file");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
-		ps.println("\t-hashsize\t\tSize of kmer hash [Default:" + DEFAULT_HASHSIZE + "]");
-		ps.println("\t-minlen\t\t\tMinimum match length in query [Default: " + DEFAULT_MINLEN + "]");
-		ps.println("\t-distinct_offset\tMinimum difference in offsets for distinct hash");
-		ps.println("\t\t\t\tmatches [Default: " + DEFAULT_DISTINCT_OFFSET + "]");
+		ps.println("\t-hashsize\t\tSize of kmer hash [Default:"
+				+ DEFAULT_HASHSIZE + "]");
+		ps.println("\t-minlen\t\t\tMinimum match length in query [Default: "
+				+ DEFAULT_MINLEN + "]");
+		ps
+				.println("\t-distinct_offset\tMinimum difference in offsets for distinct hash");
+		ps
+				.println("\t\t\t\tmatches [Default: " + DEFAULT_DISTINCT_OFFSET
+						+ "]");
 		ps.println("\t-stopafter\t\tStop after this many query sequences");
 	}
 }
