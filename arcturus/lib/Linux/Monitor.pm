@@ -2,6 +2,8 @@ package Linux::Monitor;
 
 use strict;
 
+my $usage = {}; # class variable
+
 sub new {
     my $type = shift;
     my $pid = shift || 'self';
@@ -41,7 +43,13 @@ sub getStat {
     
     my $values = [ split(/\s+/, $line) ];
     
-    return &makeHash($columns, $values);
+    my $hash = &makeHash($columns, $values);
+
+    if (!$usage->{$hash->{pid}} || $hash->{vsize} > $usage->{$hash->{pid}}) {
+        $usage->{$hash->{pid}} = $hash->{vsize}; # track maximum used
+    }
+
+    return $hash;
 }
 
 sub getStatm {
@@ -99,6 +107,13 @@ sub toString {
 sub usage {
     my $this = shift;
     return "memory usage : ".$this->toString('vsize','rss');
+}
+
+sub DESTROY {
+    print STDOUT "maximum usage\n";
+    foreach my $pid (sort {$a <=> $b} keys %$usage) {
+        print STDOUT "pid = $pid  max memory used $usage->{$pid}\n";
+    }
 }
 
 1;
