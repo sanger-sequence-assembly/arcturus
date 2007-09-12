@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.smithwaterman;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.PrintStream;
 
 public class SmithWatermanPanel extends JPanel {
 	private static final int CELL_SIZE = 40;
@@ -48,12 +49,9 @@ public class SmithWatermanPanel extends JPanel {
 				querySequence.toCharArray(), smat, bandwidth);
 
 		try {
-			EditEntry[] edits = SmithWaterman.getEditString(sw);
-
-			System.err.println("Edit string:");
-
-			for (int i = 0; i < edits.length; i++)
-				System.err.println(edits[i]);
+			Alignment alignment = SmithWaterman.getAlignment(sw);
+			
+			printAlignment(alignment, System.err);
 		} catch (SmithWatermanException e) {
 			e.printStackTrace();
 		}
@@ -63,6 +61,19 @@ public class SmithWatermanPanel extends JPanel {
 		canvas.setMatrix(sw, subjectSequence, querySequence);
 
 		repaint();
+	}
+	
+	private void printAlignment(Alignment alignment, PrintStream ps) {
+		EditEntry[] edits = alignment.getEdits();
+
+		if (edits != null) {
+			ps.println("Edit string starting at row "
+					+ alignment.getRow() + ", column "
+					+ alignment.getColumn() + ":");
+
+			for (int i = 0; i < edits.length; i++)
+				ps.println(edits[i]);
+		}	
 	}
 
 	public class SmithWatermanCanvas extends JPanel implements
@@ -243,13 +254,9 @@ public class SmithWatermanPanel extends JPanel {
 
 			if (sw.exists(row, col)) {
 				try {
-					EditEntry[] edits = SmithWaterman.getEditString(sw, row,
-							col);
+					Alignment alignment = SmithWaterman.getAlignment(sw, row, col);
 
-					System.err.println("Edit string:");
-
-					for (int i = 0; i < edits.length; i++)
-						System.err.println(edits[i]);
+					printAlignment(alignment, System.err);
 				} catch (SmithWatermanException swe) {
 					swe.printStackTrace();
 				}
