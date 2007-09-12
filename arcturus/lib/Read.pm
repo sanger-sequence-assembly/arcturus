@@ -3,6 +3,7 @@ package Read;
 use strict;
 
 use Mapping;
+
 use Clipping;
 
 #-------------------------------------------------------------------
@@ -24,6 +25,18 @@ sub new {
     $this->{padstatus} = 'Unpadded'; # default padstatus
 
     return $this;
+}
+
+#------------------------------------------------------------------- 
+# explicitly erase objects with possible backreferences to this read
+#------------------------------------------------------------------- 
+
+sub erase {
+# erase objects with back references to this read object
+    my $this = shift;
+
+    my $tags = $this->getTags();
+    undef @$tags if $tags;
 }
 
 #-------------------------------------------------------------------
@@ -1031,6 +1044,6 @@ sub dump {
     }
 }
 
-##############################################################
+#------------------------------------------------------------------------------
 
 1;
