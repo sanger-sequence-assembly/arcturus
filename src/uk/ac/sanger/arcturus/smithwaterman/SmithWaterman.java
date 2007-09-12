@@ -224,7 +224,7 @@ public class SmithWaterman {
 		return (Segment[]) segments.toArray(array);
 	}
 	
-	public static EditEntry[] getEditString(SmithWatermanArrayModel sw) throws SmithWatermanException {
+	public static Alignment getAlignment(SmithWatermanArrayModel sw) throws SmithWatermanException {
 		if (sw == null)
 			return null;
 
@@ -233,10 +233,10 @@ public class SmithWaterman {
 		int col = maximal[0];
 		int row = maximal[1];
 		
-		return getEditString(sw, row, col);
+		return getAlignment(sw, row, col);
 	}
-	
-	public static EditEntry[] getEditString(SmithWatermanArrayModel sw, int row, int col)
+
+	public static Alignment getAlignment(SmithWatermanArrayModel sw, int row, int col)
 	throws SmithWatermanException {
 		if (sw == null)
 			return null;
@@ -251,6 +251,9 @@ public class SmithWaterman {
 		EditEntry currentEntry = null;
 		int lastDirection = SmithWatermanEntry.UNDEFINED;
 		int entryLength = 0;
+		
+		int lastRow = row;
+		int lastColumn = col;
 		
 		do {
 			SmithWatermanEntry entry = sw.getEntry(row, col);
@@ -298,6 +301,9 @@ public class SmithWaterman {
 			
 			lastDirection = direction;
 			
+			lastRow = row;
+			lastColumn = col;
+			
 			switch (direction) {
 			case SmithWatermanEntry.MATCH:
 			case SmithWatermanEntry.SUBSTITUTION:
@@ -319,7 +325,7 @@ public class SmithWaterman {
 		} while (sw.getScore(row, col) > 0);
 
 		Collections.reverse(edits);
-		
-		return edits.toArray(new EditEntry[0]);
+
+		return new Alignment(lastRow, lastColumn, edits.toArray(new EditEntry[0]));
 	}
 }
