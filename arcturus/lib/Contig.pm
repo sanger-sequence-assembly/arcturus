@@ -32,6 +32,26 @@ sub new {
 }
 
 #------------------------------------------------------------------- 
+# explicitly erase objects related to this contig (i.p. Tags)
+#------------------------------------------------------------------- 
+
+sub erase {
+# erase objects with possible back references to this contig object
+    my $this = shift;
+
+    my $tags = $this->getTags();
+    undef @$tags if $tags;
+
+# and go through the reads to erase self-references in its tags
+
+    if (my $reads = $this->getReads()) {
+        foreach my $read (@$reads) {
+            $read->erase();
+        }
+    }
+}
+
+#------------------------------------------------------------------- 
 # parent database handle
 #-------------------------------------------------------------------
 
