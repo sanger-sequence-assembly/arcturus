@@ -32,6 +32,6 @@ public class EditEntry {
 	}
 	
 	public String toString() {
-		return "" + type + "." + count;
+		return "" + type + count;
 	}
 }
