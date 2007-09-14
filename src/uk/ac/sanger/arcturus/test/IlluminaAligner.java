@@ -17,6 +17,8 @@ public class IlluminaAligner {
 	private int minlen = DEFAULT_MINLEN;
 	private int distinctOffset = DEFAULT_DISTINCT_OFFSET;
 
+	private boolean bestMatchOnly = false;
+
 	private int hashmask = 0;
 
 	private char[] refseq;
@@ -34,10 +36,12 @@ public class IlluminaAligner {
 	private ScoringMatrix smat = new ScoringMatrix();
 
 	public IlluminaAligner(String refseqFilename, String queryFilename,
-			int hashsize, int minlen, int distinctOffset) throws IOException {
+			int hashsize, int minlen, int distinctOffset, boolean bestMatchOnly)
+			throws IOException {
 		this.hashsize = hashsize;
 		this.minlen = minlen;
 		this.distinctOffset = distinctOffset;
+		this.bestMatchOnly = bestMatchOnly;
 
 		refseq = loadReferenceSequence(refseqFilename);
 
@@ -101,12 +105,43 @@ public class IlluminaAligner {
 		queryFileReader.close();
 	}
 
+	class Match {
+		public int score;
+		public int subjectOffset;
+		public int queryOffset;
+		public int sense;
+		public EditEntry[] edits;
+		
+		public void reset() {
+			score = 0;
+			edits = null;
+		}
+	}
+
+	private Match bestMatch = new Match();
+
 	private void processQuerySequence(String name, char[] sequence) {
+		bestMatch.reset();
+
 		processQuerySequence(name, sequence, FORWARD);
 
 		char[] revseq = reverseComplement(sequence);
 
 		processQuerySequence(name, revseq, REVERSE);
+
+		if (bestMatchOnly && bestMatch.score > 0) {
+			System.out.print(name + "\t"
+					+ (bestMatch.sense == FORWARD ? 'F' : 'R') + "\t"
+					+ bestMatch.subjectOffset + "\t" + bestMatch.queryOffset
+					+ "\t" + bestMatch.score + "\t");
+			
+			EditEntry[] edits = bestMatch.edits;
+			
+			for (int j = 0; j < edits.length; j++)
+				System.out.print(((j > 0) ? "," : "") + edits[j]);
+			
+			System.out.println();
+		}
 	}
 
 	private Vector<Integer> hits = new Vector<Integer>();
@@ -181,12 +216,25 @@ public class IlluminaAligner {
 						int row = alignment.getRow();
 						int column = alignment.getColumn();
 
-						System.out.print(name + "\t"
-								+ (sense == FORWARD ? 'F' : 'R') + "\t"
-								+ (subjectOffset + row) + "\t" + column + "\t" + score + "\t");
-						for (int j = 0; j < edits.length; j++)
-							System.out.print(((j > 0) ? "," : "") + edits[j]);
-						System.out.println();
+						if (score > bestMatch.score) {
+							bestMatch.score = score;
+							bestMatch.subjectOffset = subjectOffset + row;
+							bestMatch.sense = sense;
+							bestMatch.queryOffset = column;
+							bestMatch.edits = edits;
+						}
+
+						if (!bestMatchOnly) {
+							System.out.print(name + "\t"
+									+ (sense == FORWARD ? 'F' : 'R') + "\t"
+									+ (subjectOffset + row) + "\t" + column
+									+ "\t" + score + "\t");
+							for (int j = 0; j < edits.length; j++)
+								System.out.print(((j > 0) ? "," : "")
+										+ edits[j]);
+							System.out.println();
+						}
+
 						matches++;
 					}
 				} catch (SmithWatermanException e) {
@@ -400,6 +448,8 @@ public class IlluminaAligner {
 		String refseqFilename = null;
 		String queryFilename = null;
 
+		boolean bestMatchOnly = false;
+
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-refseq"))
 				refseqFilename = args[++i];
@@ -413,6 +463,8 @@ public class IlluminaAligner {
 				distinctOffset = Integer.parseInt(args[++i]);
 			else if (args[i].equalsIgnoreCase("-stopafter"))
 				stopAfter = Integer.parseInt(args[++i]);
+			else if (args[i].equalsIgnoreCase("-bestmatchonly"))
+				bestMatchOnly = true;
 			else {
 				System.err.println("Unknown option: \"" + args[i] + "\"");
 				printUsage(System.err);
@@ -427,7 +479,8 @@ public class IlluminaAligner {
 
 		try {
 			IlluminaAligner aligner = new IlluminaAligner(refseqFilename,
-					queryFilename, hashsize, minlen, distinctOffset);
+					queryFilename, hashsize, minlen, distinctOffset,
+					bestMatchOnly);
 
 			aligner.run(stopAfter);
 		} catch (Exception e) {
@@ -451,5 +504,7 @@ public class IlluminaAligner {
 				.println("\t\t\t\tmatches [Default: " + DEFAULT_DISTINCT_OFFSET
 						+ "]");
 		ps.println("\t-stopafter\t\tStop after this many query sequences");
+		ps
+				.println("\t-bestmatchonly\t\tOnly display the best match for each query sequence");
 	}
 }
