@@ -183,7 +183,7 @@ public class IlluminaAligner {
 
 						System.out.print(name + "\t"
 								+ (sense == FORWARD ? 'F' : 'R') + "\t"
-								+ subjectOffset + "\t" + row + "\t" + column + "\t");
+								+ (subjectOffset + row) + "\t" + column + "\t" + score + "\t");
 						for (int j = 0; j < edits.length; j++)
 							System.out.print(((j > 0) ? "," : "") + edits[j]);
 						System.out.println();
