@@ -45,10 +45,6 @@ sub getStat {
     
     my $hash = &makeHash($columns, $values);
 
-    if (!$usage->{$hash->{pid}} || $hash->{vsize} > $usage->{$hash->{pid}}) {
-        $usage->{$hash->{pid}} = $hash->{vsize}; # track maximum used
-    }
-
     return $hash;
 }
 
@@ -107,13 +103,6 @@ sub toString {
 sub usage {
     my $this = shift;
     return "memory usage : ".$this->toString('vsize','rss');
-}
-
-sub DESTROY {
-    print STDOUT "maximum usage\n";
-    foreach my $pid (sort {$a <=> $b} keys %$usage) {
-        print STDOUT "pid = $pid  max memory used $usage->{$pid}\n";
-    }
 }
 
 1;
