@@ -1,6 +1,8 @@
 package Project;
- 
+
 use strict;
+
+use Devel::Peek;
  
 #-------------------------------------------------------------------
 # Constructor new
@@ -360,10 +362,16 @@ sub writeContigsToCaf { # TO BE DEPRECATED
     my $report = '';
     my $errors = 0;
 
+    my $frugal = $options{frugal} || 0; 
+
     foreach my $contig_id (@$contigids) {
 
-        my $contig = $ADB->getContig(contig_id=>$contig_id);
+# use frugal mode if number of reads >= $frugal 
 
+#        my $contig = $ADB->getContig(contig_id=>$contig_id,frugal=>$frugal);
+        my $contig = $ADB->getContig(contig_id=>$contig_id,metadataonly=>1,
+                                                           frugal=>$frugal);
+ 
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id\n";
             $errors++;
@@ -386,7 +394,10 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         else {
             $export++;
         }
-    }
+
+#        print STDERR "($export) memory : ".$monitor->usage()."\n" unless ($export%100);
+        $contig->erase();
+   }
 
 # returns number of contigs exported without errors, number of errors and report
 
