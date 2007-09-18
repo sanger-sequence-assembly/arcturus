@@ -906,7 +906,7 @@ sub getReadsForContig {
 # puts an array of (complete, for export) Read instances for the given contig
     my $this = shift;
     my $contig = shift; # Contig instance
-    my %options = @_;
+    my %options = @_; # notags =>  , nosequence => 
 
     &verifyParameter($contig,'getReadsForContig','Contig');
 
@@ -925,7 +925,7 @@ sub getReadsForContig {
                 "  and READINFO.template_id = TEMPLATE.template_id";
 
     my $sth = $dbh->prepare_cached($query);
-
+ 
     my $cid = $contig->getContigID();
 
     my $nr = $sth->execute($cid) || &queryFailed($query,$cid);
@@ -952,9 +952,9 @@ sub getReadsForContig {
 
     $sth->finish();
 
-# add the sequence (in bulk)
+# add the sequence (in bulk) unless delayed loading is used
 
-    $this->getSequenceForReads([@reads]);
+    $this->getSequenceForReads([@reads]) unless $options{nosequence};
 
 # add read tags (in bulk)
 
@@ -1127,6 +1127,9 @@ sub getUnassembledReads {
             while (my ($readitem) = $sth->fetchrow_array()) {
                 push @{$readitems}, $readitem;
             }
+
+            $sth->finish();
+
             return $readitems;
         }
     }
@@ -1168,6 +1171,8 @@ sub getUnassembledReads {
             push @{$readitems}, $readitem;
         }
 
+        $sth->finish();
+
 	return $readitems;
     }
 
@@ -1187,6 +1192,8 @@ sub getUnassembledReads {
         push @tempids, $read_id;
     }
 
+    $sth->finish();
+
 # step 3 : get the read IDs NOT found in the contigs
 
     if (!scalar(@tempids)) {
@@ -1195,13 +1202,15 @@ sub getUnassembledReads {
         $query .= " where ".join(" and ", @constraint) if @constraint;
         $query .= " limit $limit" if $limit;
   
-        $sth = $dbh->prepare_cached($query);
+        $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
 
         while (my ($readitem) = $sth->fetchrow_array()) {
             push @{$readitems}, $readitem;
         }
+
+        $sth->finish();
     }
     else {
         my $ridstart = 0;
@@ -1232,6 +1241,9 @@ sub getUnassembledReads {
             while (my ($readitem) = $sth->fetchrow_array()) {
 	        push @{$readitems}, $readitem;
             }
+
+            $sth->finish();
+
             $ridstart = $ridfinal;
 	}
     }
@@ -1411,18 +1423,18 @@ sub getSequenceForReads {
     }
 
 
-    my @sids = keys(%$sids);
+    my @sids = sort {$a <=> $b} keys(%$sids);
 
     return unless @sids;
 
+    my $added = 0;
     while (my $block = scalar(@sids)) {
 
         $block = $blocksize if ($block > $blocksize);
 
         my @block = splice @sids, 0, $block;
 
-        my $range = join ',',sort {$a <=> $b} @block;
-#        my $range = join ',',sort keys(%$sids);
+        my $range = join ',',@block;
 
         my $query = "select seq_id,sequence,quality from SEQUENCE " .
                     " where seq_id in ($range)";
@@ -1450,6 +1462,7 @@ sub getSequenceForReads {
 #?                $sequence =~ s/\-/N/g unless $read->getVersion();
                 $read->setSequence($sequence);
                 $read->setBaseQuality($quality);
+                $added++ if $read->hasSequence();
             }
         }
 
@@ -1458,45 +1471,55 @@ sub getSequenceForReads {
 
 # NOTE : test outside this method if all Read objects now have a sequence
 
-    return 1;
+    return $added;
 }
 
 #-----------------------------------------------------------------------------
 
 sub getSequenceForRead {
-# returns DNA sequence (string) and quality (array reference) for read_id,
-# readname or seq_id
+# adds DNA sequence (string) and quality (array reference) to read
 # this method is called from the Read class when using delayed data loading
     my $this = shift;
-    my ($key, $value, $version) = @_;
+    my $read = shift;
+
+    &verifyParameter($read,"getSequenceForRead");
+
+# try successively: sequence id, read id and readname, whichever comes first
+
+    my @bindvalue;
 
     my $query = "select sequence,quality from ";
 
-    if ($key eq 'seq_id') {
+    if (my $seq_id = $read->getSequenceID()) {
 	$query .= "SEQUENCE where seq_id=?";
+        push @bindvalue, $seq_id;
     }
-    elsif ($key eq 'id' || $key eq 'read_id') {
-        $version = 0 unless defined($version);
+    elsif (my $read_id = $read->getReadID()) {
+        my $version = $read->getVersion() || 0;
 	$query .= "SEQUENCE,SEQ2READ " . 
                   "where SEQUENCE.seq_id=SEQ2READ.seq_id" .
-                  "  and SEQ2READ.version = $version" .
+                  "  and SEQ2READ.version = ?" .
                   "  and SEQ2READ.read_id = ?";
+        push @bindvalue, $version,$read_id;
     }
-    elsif ($key eq 'name' || $key eq 'readname') {
-        $version = 0 unless defined($version);
+    elsif (my $readname = $read->getReadName()) {
+        my $version = $read->getVersion() || 0;
 	$query .= "SEQUENCE,SEQ2READ,READINFO " .
                   "where SEQUENCE.seq_id=SEQ2READ.seq_id" .
-                  "  and SEQ2READ.version = $version" .
+                  "  and SEQ2READ.version = ?" .
                   "  and READINFO.read_id = SEQ2READ.read_id" .
                   "  and READINFO.readname = ?";
+        push @bindvalue, $version,$readname;
     }
-# print STDERR "getSequenceForRead: $query ($value)\n";
+    else {
+	return 0; # can't do
+    }
 
     my $dbh = $this->getConnection();
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($value) || &queryFailed($query,$value);
+    $sth->execute(@bindvalue) || &queryFailed($query,@bindvalue);
 
     my ($sequence, $quality);
 
@@ -1513,23 +1536,29 @@ sub getSequenceForRead {
 	my @qualarray = unpack("c*", $quality);
 	$quality = [@qualarray];
     }
+  
+    $read->setSequence($sequence);   # a string
+    $read->setBaseQuality($quality); # reference to an array of integers
 
-    return ($sequence, $quality);
+    return 1;
 }
 
 sub getCommentForRead {
 # returns a list of comments, if any, for the specifed read
 # this method is called from Read class when using delayed data loading
     my $this = shift;
-    my ($key,$value,$junk) = @_;
+    my $read = shift;
+
+    &verifyParameter($read,"getCommentForRead");
+
+    my $value;
 
     my $query = "select comment from ";
-
-    if ($key eq 'id' || $key eq 'read_id') {
+    if ($value = $read->getReadID()) {
 	$query .= "READCOMMENT where read_id=?";
     }
-    elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READINFO left join READCOMMENT using(read_id) where readname=?";
+    elsif ($value = $read->getReadName()) {
+	$query .= "READINFO join READCOMMENT using (read_id) where readname=?";
     }
 
     my $dbh = $this->getConnection();
@@ -1538,30 +1567,31 @@ sub getCommentForRead {
 
     $sth->execute($value) || &queryFailed($query,$value);
 
-    my @comment;
-
-    while(my @ary = $sth->fetchrow_array()) {
-	push @comment, @ary;
+    my $added;
+    while(my ($comment) = $sth->fetchrow_array()) {
+        $read->addComment($comment);
+	$added++;
     }
 
     $sth->finish();
 
-    return [@comment];
+    return $added;
 }
 
-sub getTraceArchiveIdentifier {
-# returns the trace archive reference, if any, for the specifed read
-# this method is called from the Read class when using delayed data loading
+sub getTraceArchiveIdentifierForRead {
     my $this = shift;
-    my ($key,$value,$junk) = @_;
+    my $read = shift;
+
+    &verifyParameter($read,"getTraceArchiveIdentifierForRead");
+
+    my $value;
 
     my $query = "select traceref from ";
-
-    if ($key eq 'id' || $key eq 'read_id') {
+    if ($value = $read->getReadID()) {
 	$query .= "TRACEARCHIVE where read_id=?";
     }
-    elsif ($key eq 'name' || $key eq 'readname') {
-	$query .= "READINFO left join TRACEARCHIVE using(read_id) 
+    elsif ($value = $read->getReadName()) {
+	$query .= "READINFO join TRACEARCHIVE using (read_id) 
                    where readname=?";
     }
 
@@ -1579,7 +1609,7 @@ sub getTraceArchiveIdentifier {
 
     $sth->finish();
 
-    return $traceref;
+    $read->setTraceArchiveIdentifier($traceref) if $traceref;
 }
 
 #-----------------------------------------------------------------------------
@@ -1627,7 +1657,7 @@ sub getListOfReadNames {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
 
@@ -2148,7 +2178,11 @@ sub putCommentForReadID {
 
     my $sth = $dbh->prepare_cached($query);
 
-    return $sth->execute($read_id,$comment) ? 1 : 0;
+    my $rc = $sth->execute($read_id,$comment);
+
+    $sth->finish();
+
+    return $rc ? 1 : 0;
 }
 
 sub putCommentForReadName {
@@ -2325,7 +2359,6 @@ sub getReadAttributeID {
 
     return $id if defined($id);
 
-
 # 2 try to read it from the database (if found, the dictionary was not loaded)
    
     return undef unless defined($select_sth);
@@ -2334,10 +2367,9 @@ sub getReadAttributeID {
 
     if (defined($rc)) {
 	($id) = $select_sth->fetchrow_array();
-	$select_sth->finish();
     }
-
-    return $id if defined($id);
+ 
+    return $id if defined($id);  #  $select_sth->finish(); # ?
 
 
 # 3 it's a new dictionary item: add to the database and to the dictionary hash
@@ -2378,7 +2410,7 @@ sub putTraceArchiveIdentifierForRead {
 
     &verifyParameter($read,'putTraceArchiveIdentifierForRead');
 
-    my $TAI = $read->getTraceArchiveIdentifier() || return;
+    my $TAI = $read->getTraceArchiveIdentifier() || return; # item absent
 
     my $readid = $read->getReadID() || return; # must have readid defined
 
@@ -2389,6 +2421,8 @@ sub putTraceArchiveIdentifierForRead {
     my $sth = $dbh->prepare_cached($query);
 
     my $rc = $sth->execute($readid,$TAI);
+
+    $sth->finish();
 
     return (0,"failed to insert trace archive identifier for readID $readid;" .
 	      "DBI::errstr=$DBI::errstr") unless $rc;
@@ -2564,7 +2598,7 @@ sub getSequenceIDsForReads {
                     " where readname in ('".join("','",@names)."')" .
 	            "   and version = 0";
 
-        my $sth = $dbh->prepare_cached($query);
+        my $sth = $dbh->prepare($query);
 
         $sth->execute() || &queryFailed($query);
 
@@ -3032,6 +3066,7 @@ sub putReadTags {
 
             my $sth = $dbh->prepare($accumulatedQuery);        
             my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
+            $sth->finish();
 
             $success = 0 unless $rc;
             $accumulatedQuery = $query;
