@@ -44,17 +44,29 @@ sub erase {
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
-# import the parent Arcturus database handle
+# import the parent Arcturus database handle; alias for setDataSource
     my $this = shift;
-    my $ADB  = shift;
-
-    if (ref($ADB) eq 'ArcturusDatabase') {
-        $this->{ADB} = $ADB;
-    }
-    else {
-        die "Invalid object passed: $ADB";
-    }
+        
+    $this->setDataSource(shift);
 }
+
+sub setDataSource {
+# import the handle to the data source (either database or factory)
+    my $this = shift;
+    my $source = shift || '';
+
+    $this->{SOURCE} = $source if (ref($source) eq 'ArcturusDatabase');
+
+    $this->{SOURCE} = $source if (ref($source) eq 'ContigFactory');
+
+#    $this->{SOURCE} = $source if (ref($source) eq 'ReadFactory'); # possibly
+
+    unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
+        die "Invalid object passed: $source" if $this->{SOURCE};
+    } 
+}
+
+#------------------------------------------------------------------------------
 
 sub addTag {
 # import a Tag instance and add to the Tag list
@@ -94,32 +106,9 @@ sub importSequence {
 # private method
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return; # the parent database
+    my $SOURCE = $this->{SOURCE} || return; # e.g. the parent database
 
-# try successively: sequence id, read id and readname, whichever comes first
-   
-    my ($sequence, $quality);
-
-    if (my $seq_id = $this->getSequenceID()) {
-       ($sequence, $quality) = $ADB->getSequenceForRead(
-                                     seq_id => $seq_id);
-    }
-    elsif (my $read_id =  $this->getReadID()) {
-       ($sequence, $quality) = $ADB->getSequenceForRead(
-                                     read_id => $read_id,
-                                     $this->getVersion());
-    }
-    elsif (my $readname =  $this->getReadName()) {
-# print "using readname $readname\n";
-       ($sequence, $quality) = $ADB->getSequenceForRead(
-                                     readname => $readname,
-                                     $this->getVersion());
-    }
-  
-    $this->setSequence($sequence); # a string
-    $this->setBaseQuality($quality);   # reference to an array of integers
-#    $this->setBaseQuality([@$quality]); # alternative ? copy array, pass ref
-    return 1;
+    return $SOURCE->getSequenceForRead($this);
 }
 
 sub hasSequence {
@@ -135,13 +124,9 @@ sub hasSequence {
 sub importComment {
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return; # the parent database
-
-    my $comments = $ADB->getCommentForRead(id => $this->getReadID);
-
-    foreach my $comment (@$comments) {
-        $this->addComment($comment);
-    }
+    my $ADB = $this->{SOURCE} || return; # the parent database
+    return undef unless (ref($ADB) eq 'ArcturusDatabase');
+    return $ADB->getCommentForRead($this);
 }
 
 #-------------------------------------------------------------------    
@@ -202,7 +187,7 @@ sub newaddAlignToTrace {
     my $this = shift;
     my $value = shift; # array reference
 
-    return unless defined($value);
+    return unless (defined($value) && @$value);
 
     unless (defined($this->{alignToTraceMapping})) {
         $this->{alignToTraceMapping} = new Mapping('align-to-trace');
@@ -312,14 +297,14 @@ sub addComment {
     my $this = shift;
 # add comment as next array element 
     $this->{comment} = [] if !defined($this->{comment});
-    push @{$this->{comment}}, shift; 
+    push @{$this->{comment}}, shift; # store as list of comments
 }
 
 sub getComment {
     my $this = shift;
 # returns an array of comments (or undef)
     $this->importComment unless defined($this->{comment});
-    return $this->{comment}; 
+    return $this->{comment}; # returns array reference
 }
 
 #-----------------
@@ -629,9 +614,10 @@ sub setTraceArchiveIdentifier {
 sub getTraceArchiveIdentifier {
     my $this = shift;
 
-    if (!$this->{TAI}) {
-        my $ADB = $this->{ADB} || return undef;
-        $this->{TAI} = $ADB->getTraceArchiveIdentifier(id=>$this->getReadID);
+    unless ($this->{TAI}) {
+        my $ADB = $this->{SOURCE} || return undef;
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
+        $ADB->getTraceArchiveIdentifierForRead($this);
     }
     return $this->{TAI};
 }
@@ -652,9 +638,9 @@ sub getOriginalVersion {
 # returns the original read, version 0
     my $this = shift;
     return $this unless $this->isEdited();
-    my $ADB = $this->{ADB} || return undef; # cannot acces database
-    my $read_id = $this->getReadID();
-    return $ADB->getRead(read_id=>$read_id);
+    my $ADB = $this->{SOURCE} || return undef; # cannot acces database
+    return undef unless (ref($ADB) eq 'ArcturusDatabase');
+    return $ADB->getRead(read_id=>$this->getReadID());
 }
 
 #----------------------------------------------------------------------
