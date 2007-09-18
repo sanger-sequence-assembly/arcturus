@@ -36,7 +36,7 @@ sub new {
 #------------------------------------------------------------------- 
 
 sub erase {
-# erase objects with possible back references to this contig object
+# erase objects with (possible) back references to this contig object
     my $this = shift;
 
     my $tags = $this->getTags();
@@ -51,29 +51,45 @@ sub erase {
     }
 }
 
+sub setFrugal {
+# in frugal mode, read sequence is fetched in blocks by delayed loading
+# this limits the memory usage i.p. for export of very large contigs
+    my $this = shift;
+    $this->{frugal} = shift || 0;
+}
+
 #------------------------------------------------------------------- 
-# parent database handle
+# parent database handle (or handle to other data source)
 #-------------------------------------------------------------------
 
 sub setArcturusDatabase {
 # import the parent Arcturus database handle
     my $this = shift;
     my $ADB  = shift;
+        
+    $this->setDataSource($ADB);
+}
 
-    if (ref($ADB) eq 'ArcturusDatabase') {
-        $this->{ADB} = $ADB;
-    }
-    else {
-        die "Invalid object passed: $ADB";
-    }
+sub setDataSource {
+# import the handle to the data source (either database or factory)
+    my $this = shift;
+    my $source = shift || '';
+
+    $this->{SOURCE} = $source if (ref($source) eq 'ArcturusDatabase');
+
+    $this->{SOURCE} = $source if (ref($source) eq 'ContigFactory');
+
+    unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
+        die "Invalid object passed: $source" if $this->{SOURCE};
+    } 
 }
 
 sub getOrganism {
 # retrieve the organism 
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return 0; # the parent database
-
+    my $ADB = $this->{SOURCE}; # the source or database
+    return undef unless (ref($ADB) eq 'ArcturusDatabase');
     return $ADB->getOrganism();
 }
 
@@ -81,8 +97,8 @@ sub getInstance {
 # retrieve the instance 
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return 0; # the parent database
-
+    my $ADB = $this->{SOURCE}; # the source or database
+    return undef unless (ref($ADB) eq 'ArcturusDatabase');
     return $ADB->getInstance();
 }
 
@@ -91,19 +107,23 @@ sub getInstance {
 #-------------------------------------------------------------------
 
 sub importSequence {
-# private method for delayed loading
+# private method for delayed loading of contig DNA and BaseQuality
     my $this = shift;
 
-    my $ADB = $this->{ADB} || return 0; # the parent database
+    my $SOURCE = $this->{SOURCE} || return 0; # e.g. the parent database
 
-    my $cid = $this->getContigID() || return 0;
+    return $SOURCE->getSequenceAndBaseQualityForContig($this);
+}
 
-    my ($sequence, $quality) = $ADB->getSequenceAndBaseQualityForContigID($cid);
+sub importReadSequence {
+# private method, delayed loading of DNA and BaseQuality for reads of this contig
+    my $this = shift;
 
-    $this->setSequence($sequence); # a string
-    $this->setBaseQuality($quality);   # reference to an array of integers
+    my $SOURCE = $this->{SOURCE} || return 0; # e.g. the parent database
 
-    return 1;
+    return undef unless (ref($SOURCE) eq 'ArcturusDatabase');
+
+    return $SOURCE->getSequenceForReads(@_); # passes array reference
 }
 
 #-------------------------------------------------------------------    
@@ -426,9 +446,13 @@ sub getReads {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
+ 
+# delayed loading of reads (if required); without frugal flag, the read sequence 
+# itself will be loaded in bulk, with the flag by delayed loading when required 
 
-    if (!$this->{Read} && $load && (my $ADB = $this->{ADB})) {
-        $ADB->getReadsForContig($this);
+    if (!$this->{Read} && $load && (my $SOURCE = $this->{SOURCE})) {
+        my $frugal = $this->{frugal} || 0;
+        $SOURCE->getReadsForContig($this,nosequence=>$frugal);
     }
     return $this->{Read};
 }
@@ -454,7 +478,8 @@ sub getMappings {
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
 
-    if (!$this->{Mapping} && $load && (my $ADB = $this->{ADB})) {
+    if (!$this->{Mapping} && $load && (my $ADB = $this->{SOURCE})) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
         $ADB->getReadMappingsForContig($this);
     }
     return $this->{Mapping};
@@ -482,7 +507,8 @@ sub getTags {
 
     &verifyKeys('getTags',\%options,'sort','merge');
 
-    if (!$this->{Tag} && $load && (my $ADB = $this->{ADB})) {
+    if (!$this->{Tag} && $load && (my $ADB = $this->{SOURCE})) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
         $ADB->getTagsForContig($this);
     }
 
@@ -516,7 +542,8 @@ sub getContigToContigMappings {
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
 
-    if (!$this->{ContigMapping} && $load && (my $ADB = $this->{ADB})) {
+    if (!$this->{ContigMapping} && $load && (my $ADB = $this->{SOURCE})) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
         $ADB->getContigMappingsForContig($this);
     }
     return $this->{ContigMapping};
@@ -539,7 +566,8 @@ sub getParentContigs {
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
 
-    if (!$this->{ParentContig} && $load && (my $ADB = $this->{ADB})) {
+    if (!$this->{ParentContig} && $load && (my $ADB = $this->{SOURCE})) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
         $ADB->getParentContigsForContig($this);
     }
     return $this->{ParentContig};
@@ -565,10 +593,11 @@ sub getChildContigs {
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
 
-    if (!$this->{ChildContig} && $load && (my $ADB = $this->{ADB})) {
+    if (!$this->{ChildContig} && $load && (my $ADB = $this->{SOURCE})) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
         $ADB->getChildContigsForContig($this);
     }
-    return $this->{ChildContig};
+    return $this->{ChildContig}; # array reference
 }
 
 sub addChildContig {
@@ -653,7 +682,7 @@ sub copy {
     $copy->setGap4Name  ($this->getGap4Name());
     $copy->setContigNote($this->getContigNote); # if any
 
-    $copy->setArcturusDatabase($this->{ADB}); # if any
+    $copy->setDataSource($this->{SOURCE}); # if any
 
 # copy the sequence (scalar)
 
@@ -720,7 +749,7 @@ sub isValid {
     my $this = shift;
     my %options = @_;
 
-    &verifyKeys('isValid',\%options,'forimport');
+    &verifyKeys('isValid',\%options,'forimport','noreadsequencetest');
     return ContigHelper->testContig($this,%options); # returns 1 or 0
 # possible diagnostics stored in $this->{status};
 }
@@ -868,26 +897,42 @@ sub writeToCaf {
 
     my $contigname = $this->getContigName();
 
-# dump all reads
+# dump all reads, in frugal mode destroy read after it has been written
 
     unless ($options{noreads}) {
-        my $reads = $this->getReads(1);
-        foreach my $read (@$reads) {
-            $read->writeToCaf($FILE,%options); # transfer options, if any
+# if no reads, use delayed loading
+        my $reads = $this->getReads(1); 
+# in frugal mode we bunch the reads in blocks to improve speed 
+        if ($this->{frugal}) {
+            my $blocksize = 100;
+            while (my @readblock = splice @$reads,0,$blocksize) {
+                $this->importReadSequence(@readblock);
+print STDERR "frugal mode activated (test) , next block ".scalar(@readblock)."\n";
+                foreach my $read (@readblock) {
+                    $read->writeToCaf($FILE,%options); # transfer options, if any
+                    $read->erase(); # prepare to free memory 
+                }
+                undef @readblock;
+	    }
         }
-        return 0 if $options{readsonly};
+        else {  # standard, all read components loaded
+            foreach my $read (@$reads) {
+                $read->writeToCaf($FILE,%options); # transfer options, if any
+            }
+        }
+        return 0 if $options{readsonly}; # export only reads
     }
 
 # write the overall maps for for the contig ("assembled from")
 
     print $FILE "\nSequence : $contigname\nIs_contig\nUnpadded\n";
 
-    my $mappings = $this->getMappings(1);
+    my $mappings = $this->getMappings(1); # if no maps, use delayed loading
     foreach my $mapping (@$mappings) {
         print $FILE $mapping->assembledFromToString();
     }
 
-# write tags, if any are loaded (if no tags, use delayed loading)
+# write contig tags, if any are loaded (if no tags, use delayed loading)
 
     if (!$options{notags} && $this->hasTags(1)) {
         my $tags = $this->getTags();
@@ -938,12 +983,34 @@ sub writeToFasta {
 
     return "Missing file handle for Fasta output" unless $DFILE;
 
+# 'readsonly' switch dumps reads but no contig; its absence dumps contigs 
+
     if ($options{readsonly}) {
-# 'reads' switch dumps reads only; its absence dumps contigs 
-        my $reads = $this->getReads(1);
+        my $reads = $this->getReads(1); # if no reads, use delayed loading
         foreach my $read (@$reads) {
 # options:  qualitymask=>'M'
             $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
+        }
+        return undef;
+
+# in frugal mode we bunch the reads in blocks to improve speed 
+        if ($this->{frugal}) {
+            my $blocksize = 100;
+            while (my @readblock = splice @$reads,0,$blocksize) {
+print STDERR "frugal mode activated (test) , next block ".scalar(@readblock)."\n";
+                $this->importReadSequence(@readblock);
+                foreach my $read (@readblock) {
+                    $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
+                    $read->erase(); # prepare to free memory 
+                }
+                undef @readblock;
+	    }
+        }
+        else {  # standard, all read components loaded
+            foreach my $read (@$reads) {
+# options:  qualitymask=>'M'
+                $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
+            }
         }
         return undef;
     }
@@ -1094,6 +1161,8 @@ sub writeToMaf {
     my $contigzeropoint = $options{contigzeropoint} || 0;
 
 # get the reads and build a hash list for identification
+
+#    $this->setFrugal(1); # if not done before
 
     my %reads;
     my $reads = $this->getReads(1);
@@ -1429,7 +1498,7 @@ sub undoReadEdits {
     my $this = shift;
     my %options = @_;
     &verifyKeys('undoReadEdits',\%options,'nonew','ADB');
-    return ContigHelper->undoReadEdits($this,%options);
+    return ContigHelper->undoReadEdits($this,%options); # ? ADB?
 }
 
 sub break {
