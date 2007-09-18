@@ -18,8 +18,6 @@ use Logging;
 # testing
 #-----------------------------------------------------------------------------
 
-
-
 sub testContig {
 # use via ForExport and ForImport aliases
     my $this = shift;
@@ -27,12 +25,11 @@ sub testContig {
     my %options = @_;
 
     my $level = $options{forimport} || 0;
+    my $noreadsequencetest = $options{noreadsequencetest};
 
     &verifyParameter($contig,"testContig");
 
     my $logger = &verifyLogger('testContig');
-
-$logger->debug("ContigHelper->testContig used"); 
 
 # level 0 for export, test number of reads against mappings and metadata    
 # for export: test reads against mappings using the sequence ID
@@ -60,10 +57,13 @@ $logger->debug("ContigHelper->testContig used");
             }
             $identifier{$ID} = $read;
 # test presence of sequence and quality data
-            if ((!$level || $read->isEdited()) && !$read->hasSequence()) {
-                $logger->severe("Missing DNA or BaseQuality in Read ".$read->getReadName);
-                $success = 0;
-            }
+            if (!$level || $read->isEdited()) { 
+                if (!$noreadsequencetest && !$read->hasSequence()) {
+                    $logger->severe("Missing DNA or BaseQuality in Read "
+                                    .$read->getReadName);
+                    $success = 0;
+                }
+	    }
             $contig->{status} = "Invalid or incomplete Read(s)" unless $success;
         }
         return 0 unless $success;       
@@ -147,7 +147,6 @@ $logger->debug("ContigHelper->testContig used");
     return 1 unless $contigstatus; # no errors
 
     $contig->{status} = $contigstatus;
-$logger->warning($contigstatus);
 
     return 0;
 }
@@ -3101,13 +3100,10 @@ sub sortContigTags {
 
     if ($options{sort} && $options{sort} eq 'position') {
 # do a basic sort on start position
-$logger->debug('basic sorting');
         @$tags = sort positionsort @$tags;
     }
     elsif ($options{sort} && $options{sort} eq 'full') {
 # do a sort on position and tag description in tagcomment
-$logger->debug('merge sorting') if $options{merge};
-$logger->debug('full sorting') unless $options{merge};
         @$tags = sort mergesort @$tags     if $options{merge};
         @$tags = sort fullsort  @$tags unless $options{merge};
     }
@@ -3115,7 +3111,7 @@ $logger->debug('full sorting') unless $options{merge};
         $logger->error("invalid sorting option '$options{sort}' ignored");
     }
 
-# remove duplicate tags
+# remove duplicate tags; in merge mode also consider overlapping tags
 
 $logger->debug('weeding out duplicates');
 $logger->debug("tag before duplicate test ".scalar(@$tags));
