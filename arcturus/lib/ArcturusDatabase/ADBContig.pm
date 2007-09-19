@@ -171,13 +171,24 @@ sub getContig {
 
     return undef unless defined($contig);
 
+# in frugal mode, read sequence will be delayed loaded when required
+# otherwise, read sequence  (base quality) will be loaded here in bulk
+# note: read tags are not delayed-loaded, so if you set the noreadtags
+# flag, you will not get the tags by default but will have to explicitly
+# load read tags afterwards (allows tag selection); conversely, contig 
+# tags are delayed-loaded
+
+    my $frugal = $options{frugal}; # if defined > 0 used as threshold
+
+    $contig->setFrugal(1) if ($frugal && $contig->getNumberOfReads()>=$frugal);
+
     return $contig if ($options{metaDataOnly} || $options{metadataonly});
 
 # get the reads for this contig with their DNA sequences and tags
 
-    my $notags = $options{notags} || 0;
+    my $noreadtags = $options{notags} || $options{noreadtags} || 0;
 
-    $this->getReadsForContig($contig,notags=>$notags);
+    $this->getReadsForContig($contig,notags=>$noreadtags,nosequence=>$frugal);
 
 # get read-to-contig mappings (and implicit segments)
 
@@ -189,28 +200,53 @@ sub getContig {
 
 # get contig tags
 
-    $this->getTagsForContig($contig) unless $notags;
+    my $nocontigtags = $options{notags} || $options{nocontigtags} || 0;
+
+    $this->getTagsForContig($contig) unless $nocontigtags;
 
 # for consensus sequence we use lazy instantiation in the Contig class
 
-    return $contig if $contig->isValid(); # for export
+    return $contig if $contig->isValid(noreadsequencetest=>$frugal); # for export
 
     return undef; # invalid Contig instance
 }
 
-sub getSequenceAndBaseQualityForContigID {
-# returns DNA sequence (string) and quality (array) for the specified contig
+sub getSequenceAndBaseQualityForContig {
+# load DNA data given the contig ID
 # this method is called from the Contig class when using delayed data loading
     my $this = shift;
-    my $contig_id = shift;
+    my $contig = shift;
 
-    my $dbh = $this->getConnection();
+    &verifyParameter($contig,"getSequenceAndBaseQualityForContig");
+
+    my $log = $this->verifyLogger("getSequenceAndBaseQualityForContig (ID)");
+
+    my $cid = $contig->getContigID() || return 0;
+
+    my $dbh = $this->getConnection() || return 0;
+
+    my ($sequence,$quality) = &getSequenceAndBaseQualityForContigID($dbh,$cid,$log);
+
+    $contig->setSequence($sequence);    # a string
+
+    $contig->setBaseQuality($quality);  # reference to an array of integers
+
+    return 1;
+}
+
+sub getSequenceAndBaseQualityForContigID {
+# returns DNA sequence (string) and quality (array) for the specified contig
+    my $dbh = shift;
+    my $cid = shift;
+    my $log = shift;
+
+    &verifyPrivate($dbh,"getSequenceAndBaseQualityForContigID");
 
     my $query = "select sequence,quality from CONSENSUS where contig_id = ?";
 
     my $sth = $dbh->prepare_cached($query);
 
-    $sth->execute($contig_id) || &queryFailed($query,$contig_id);
+    $sth->execute($cid) || &queryFailed($query,$cid);
 
     my ($sequence, $quality);
 
@@ -223,8 +259,7 @@ sub getSequenceAndBaseQualityForContigID {
     if (defined($sequence)) {
         $sequence = uncompress($sequence);
         unless ($sequence) {
-            my $log = $this->verifyLogger("getSequenceAndBaseQualityForContigID");
-            $log->error("uncompress FAILED in contig_id=$contig_id : "
+            $log->error("uncompress FAILED for contig ID = $cid : "
                        ."undefined sequence");
         }
     }
@@ -239,8 +274,7 @@ sub getSequenceAndBaseQualityForContigID {
 # the decompression failed, probably due to a bug in the Perl Z-lib module
             my $length = 0;
             $length = length($sequence) if $sequence;
-            my $log = $this->verifyLogger("getSequenceAndBaseQualityForContigID");
-            $log->error("uncompress FAILED in contig_id=$contig_id : "
+            $log->error("uncompress FAILED for contig ID = $cid : "
                        ."undefined quality (sequence length $length)");
 # try to recover by faking an array of low quality data
             my @qualarray;
@@ -480,7 +514,7 @@ sub putContig {
 
             unless ($noload) {
  
-# (re-)assign project, if a project is explicitly defined
+# (re-)assign project, if a project is explicitly defined TO BE IMPROVED
 
                 if ($project && $setprojectby eq 'project') {
 # shouldn't this have an extra switch?
@@ -499,9 +533,9 @@ sub putContig {
                 if ($contig->hasTags()) {
 # test existing tags
                     if ($inheritTags) {
-# TODO any selection of tags ?
+# TODO any selection of tags ? e.g. No repeat tags
                         $message .= "\n!!!: no tags inserted for $contigname"
-                        unless $this->putTagsForContig($contig);
+                                     unless $this->putTagsForContig($contig);
 		    }
 		    else {
                         $message .= "\npossible tags ignored for $contigname"
@@ -540,18 +574,17 @@ sub putContig {
 		            "(possibly corrupted MAPPING table?)");
                 next;
             }
-            $this->getReadMappingsForContig($parent);
+            $this->getReadMappingsForContig($parent); # ? $parent->getMappings(1)
 
             $contig->setArcturusDatabase($this); # re: enables link recovery
-#            my ($mapping,$linked,$deallocated) = MappingFactory->crossmatch($contig,$parent);
             my ($linked,$deallocated) = $contig->linkToContig($parent);
 # add parent to contig, later import tags from parent(s)
-            my $previous = $parent->getContigName();
+            my $parentname = $parent->getContigName();
             if ($linked) {
                 $contig->addParentContig($parent); # re: Tag transport
 	    }
             else {
-                $message .= "; empty link detected to $previous";
+                $message .= "; empty link detected to $parentname";
 # TO BE TESTED: what if the link is spurious? Go back to 
 # getParentIDsForContig and find new parents by masking with this parent
 # then add new parents at the end of the current list
@@ -571,13 +604,13 @@ sub putContig {
                 }
 
 	    }
-            $message .= "; $deallocated reads deallocated from $previous".
+            $message .= "; $deallocated reads deallocated from $parentname".
   		        "  (possibly split contig?)\n" if $deallocated;
         }
 
 # inherit the tags
 
-#TODO        $contig->inheritTags(excludetag=>'REPT|ANNO') if $inheritTags;
+#TODO        $contig->inheritTags(excludetag=>'REPT') if $inheritTags;
         $contig->inheritTags() if $inheritTags;
 
 # determine the project_id unless it's already specified (with options)
@@ -663,7 +696,7 @@ sub putContig {
 
     $this->buildHistoryTreeForContig($contigid);
 
-# and assign the contig to the specified project
+# and assign the contig to the specified project (POSSIBLY TO BE UPDATED)
 
     if ($project) {
         $message .= "; assigned to project ";
@@ -921,12 +954,14 @@ sub putMetaDataForContig {
 
     my $rc = $sth->execute(@data) || &queryFailed($query,@data); 
 
+    $sth->finish();
+
     return 0 unless ($rc == 1);
     
     return $dbh->{'mysql_insertid'}; # the contig_id
 }
 
-sub getSequenceIDForAssembledReads {
+sub getSequenceIDForAssembledReadsTBD { # TO BE DEPRECATED
 # put sequenceID, version and read_id into Read instances given their 
 # readname (for unedited reads) or their sequence (edited reads)
 # NOTE: this method may insert new read sequence
@@ -938,6 +973,7 @@ sub getSequenceIDForAssembledReads {
     &verifyParameter($reads->[0],"getSequenceIDForAssembledReads",'Read');
 	
     my $log = $this->verifyLogger('getSequenceIDForAssembledReads');
+    $log->error("Using deprecated method getSequenceIDForAssembledReads");
 
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
@@ -973,7 +1009,7 @@ sub getSequenceIDForAssembledReads {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
 
@@ -1166,6 +1202,7 @@ sub getReadMappingsForContig {
         $mappings->{$mid} = $mapping;
 # ? add remainder of data (cstart, cfinish) ?
     }
+
     $sth->finish();
 
 # second, pull out the segments
@@ -1344,9 +1381,9 @@ sub putMappingsForContig {
 
         my $rc = $sth->execute(@data) || &queryFailed($mquery,@data);
 
-
         $mapping->setMappingID($dbh->{'mysql_insertid'}) if ($rc == 1);
     }
+    $sth->finish();
 
 # 2) the individual segments (in block mode)
 
@@ -1650,6 +1687,7 @@ sub cleanupMappingTables {
 	       .  "   and CONTIG.contig_id IS NULL";
         my $sth = $dbh->prepare_cached($query);
         my $rc = $sth->execute() || &queryFailed($query) && next;
+        $sth->finish();
         $report .= sprintf ("%6d",($rc+0)) . " contig IDs ";
         $report .= "to be " if $preview;
         $report .= "have been " unless $preview;
@@ -1667,6 +1705,7 @@ sub cleanupMappingTables {
 	   .  " where CONTIG.contig_id IS NULL";
     my $sth = $dbh->prepare_cached($query);
     my $rc = $sth->execute() || &queryFailed($query);
+    $sth->finish();
     $report .= sprintf ("%6d",($rc+0)) . " parent IDs ";
     $report .= "to be " if $preview;
     $report .= "have been " unless $preview;
@@ -1694,14 +1733,12 @@ sub cleanupSegmentTables {
 	       .  " where ${table}MAPPING.mapping_id IS NULL";
         my $sth = $dbh->prepare_cached($query);
         my $rc = $sth->execute() || &queryFailed($query) && next;
+        $sth->finish();
         $report .= sprintf ("%6d",($rc+0)) . " mapping IDs ";
         $report .= "to be " if $preview;
         $report .= "have been " unless $preview;
         $report .= "removed from ${table}SEGMENT\n";
-# long list option? preview = 2
-        if ($preview > 1) {
-# long list option: return a list of all mapping IDs affected (TO BE DONE)
-        }
+# long list option
     }
 
     return $report;
@@ -1722,6 +1759,8 @@ sub deleteContigToContigMapping {
     my $sth = $dbh->prepare_cached($delete);
 
     my $row = $sth->execute(@_) || &queryFailed($delete,@_);
+
+    $sth->finish();
 
     return ($row+0);
 }
@@ -2277,6 +2316,8 @@ sub buildHistoryTreeForContig {
 	}
 # add the contigs of the current generation to the update list
         push @updateids,@contigids;
+
+        $sth->finish();
     }
 
     return 0 unless @updateids;
@@ -2290,6 +2331,8 @@ sub buildHistoryTreeForContig {
     my $sth = $dbh->prepare($query);
 
     my $update = $sth->execute() || &queryFailed($query);
+    
+    $sth->finish();
 
     return $update + 0;
 }
@@ -2430,7 +2473,7 @@ sub getCurrentParentIDs {
 	        " where contig_id in (".join(",",@$current).")" .
 		" order by parent_id";
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
 
@@ -2727,7 +2770,7 @@ sub getContigIDsWithTags {
 
     my $dbh = $this->getConnection();
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute(@bindvalue) || &queryFailed($query,@bindvalue);
 
@@ -2756,8 +2799,8 @@ sub getTagsForContig {
 
     my $tags = &fetchTagsForContigIDs($dbh,[($cid)],@_); # options ported
 
-my $log = $this->verifyLogger('getTagsForContig');
-$log->debug("Tags found: ".scalar(@$tags));
+#my $log = $this->verifyLogger('getTagsForContig');
+#$log->debug("Tags found: ".scalar(@$tags));
 
     foreach my $tag (@$tags) {
         $contig->addTag($tag);
@@ -2812,7 +2855,7 @@ sub fetchTagsForContigIDs {
 
     my @tag;
 
-    my $sth = $dbh->prepare_cached($query);
+    my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query) && exit;
 
@@ -2834,6 +2877,8 @@ sub fetchTagsForContigIDs {
 # add to output array
         push @tag, $tag;
     }
+
+    $sth->finish();
 
     return [@tag];
 }
@@ -2878,31 +2923,42 @@ sub putTagsForContig {
 
     my $otags = $contig->getTags();
 
-    my $original = scalar(@$otags);
+    my $original = scalar(@$otags); # the number of input tags
 
-    my $ctags = $contig->getTags(0,sort=>'full'); # as is
+    my $ctags = $contig->getTags(0,sort=>'full'); # as is; removed duplicates
 
     my $logger = $this->verifyLogger("putTagsForContig");
 
     if (my $removed = $original - scalar(@$ctags)) {
+# warning to output device
         $logger->warning("$removed duplicate tags removed from contig "
                         . $contigname);
     }
 
-    my @copy = @$ctags;
+# test tag type and remove any tag without
 
-# construct a hash table for tag instance names ; to be removed, but keep test on tagtype
+$logger->debug("test tag type");
+    my $i = 0;
+    while ($i < scalar(@$ctags)) {
+ # each tag must have a tag type
+        if ($ctags->[$i]->getType()) { 
+	    $i++;
+        }
+        else {
+            my $tagcomment = $ctags->[$i]->getTagComment() || "no description";
+            $logger->debug("Invalid tag removed from contig $cid: "
+                          ."missing tagtype for ($tagcomment)");
+            splice @$ctags,$i,1; # remove from list
+        }
+    }
+$logger->debug("test tag type end");
+
+# prepare a hash table for alternative method TO BE REMOVED
 
     my $tags = {};
     foreach my $ctag (@$ctags) {
-        my $tagtype = $ctag->getType(); # must have a tag type
-        unless ($tagtype) {
-            my $tagcomment = $ctag->getTagComment() || "no description";
-$logger->debug("Invalid tag in contig $cid: missing tagtype ($tagcomment)");
-            next;
-        }
         $tags->{$ctag} = $ctag;
-    }
+    } # until HERE
 
 # test contig instance tags against possible tags (already) in database
 
@@ -2910,26 +2966,16 @@ $logger->debug("Invalid tag in contig $cid: missing tagtype ($tagcomment)");
 
     my $testexistence = ($options{noexistencetest} ? 0 : 1);
 
-my $NEW = $options{testmode} || 0;
+    if ($testexistence && @$ctags) {
 
-    if ($testexistence && keys %$tags) {
-
-$logger->debug("testing for existing Tags");
+        $logger->debug("testing against existing Tags");
 
         my $etags = &fetchTagsForContigIDs($dbh,[($cid)]); # existing tags
     
 # delete the existing tags from the list
 
-if ($NEW) {
-#return 0 unless ($contigname =~ /g72/);
-$logger->debug("NEW testing against existing tags",preskip=>1);
         my ($i,$j) = (0,0);
         while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
-
-$logger->debug("testing contigtag $i ".$ctags->[$i]->getType()." "
-.$ctags->[$i]->getPositionLeft()
-."  against  existingtag $j ".$etags->[$j]->getType()." "
-.$etags->[$j]->getPositionLeft());
 
             if ($ctags->[$i]->getPositionLeft() < $etags->[$j]->getPositionLeft()) {
                 $i++;
@@ -2944,73 +2990,67 @@ $logger->debug("testing contigtag $i ".$ctags->[$i]->getType()." "
                 splice @$ctags,$i,1;
             }
             else {
-$logger->debug("$i & $j are not equal");
-$logger->debug($ctags->[$i]->writeToCaf(0,annotag=>1));
-$logger->debug($etags->[$j]->writeToCaf(0,annotag=>1));
-if ($ctags->[$i]->getType() eq 'WARN' && $etags->[$j]->getType() eq 'WARN') {
-$logger->debug($ctags->[$i]->dump(),ss=>1);
-$logger->debug($etags->[$j]->dump(),ss=>1);
-}
+#$logger->debug("$i & $j are not equal");
+#$logger->debug($ctags->[$i]->writeToCaf(0,annotag=>1));
+#$logger->debug($etags->[$j]->writeToCaf(0,annotag=>1));
                 $j++; # next existing tag only
             }
         }
 $logger->debug("new tags ".scalar(@$ctags));
-} # end NEW
 
-else { # OLD
-
+        if ($options{useoldhashmethod}) { # TO BE REMOVED
 # delete the existing tags from the hash
-
-        foreach my $etag (@$etags) {
+            foreach my $etag (@$etags) {
 $logger->debug("Testing existing tag",preskip=>1);
 $logger->debug($etag->dump(0,skip=>1));
-            foreach my $key (keys %$tags) {
-                my $ctag = $tags->{$key};
-                if ($ctag->isEqual($etag)) {
+                foreach my $key (keys %$tags) {
+                    my $ctag = $tags->{$key};
+                    if ($ctag->isEqual($etag)) {
 $logger->debug("tags are equal ".$ctag->dump(0,skip=>1));
-                    delete $tags->{$ctag};
-                    last;
+                        delete $tags->{$ctag};
+                        last;
+                    }
 		}
             }
-        }
 
 # collect the tags left
 
-        my @tags;
-        foreach my $key (keys %$tags) {
-            my $ctag = $tags->{$key};
-            push @tags, $ctag;
-        }
-        $ctags = [@tags];
-} # end OLD
+            my @tags;
+            foreach my $key (keys %$tags) {
+               my $ctag = $tags->{$key};
+               push @tags, $ctag;
+            }
+            $ctags = [@tags];
+        } # until HERE
+$logger->debug("end testing for existing Tags");
 
-    $logger->debug("end testing for existing Tags");
-
-    if (scalar(@$ctags) > 0) {
-        $logger = $this->verifyLogger("putTagsForContig LIST etag");
+#    if (scalar(@$ctags) > 0) {
+#        $logger = $this->verifyLogger("putTagsForContig LIST etag");
 # there are new tags, list the old ones
-        $logger->debug("existing tags $contigname",ss=>1);
-        foreach my $tag (@$etags) {
-            $logger->debug($tag->writeToCaf(0,annotag=>1));
-        }
-        $logger = $this->verifyLogger("putTagsForContig LIST ctag");
-        $logger->debug("input tags $contigname",ss=>1);
-        foreach my $tag (@copy) {
-            $logger->debug($tag->writeToCaf(0,annotag=>1));
-        }
-        $logger = $this->verifyLogger("putTagsForContig LIST ntag");
-        $logger->debug("new tags  $contigname ".scalar(@$ctags),ss=>1);
-        foreach my $tag (@$ctags) {
-           $logger->debug($tag->writeToCaf(0,annotag=>1));
-        }
+#        $logger->debug("existing tags $contigname",ss=>1);
+#        foreach my $tag (@$etags) {
+#            $logger->debug($tag->writeToCaf(0,annotag=>1));
+#        }
+#        $logger = $this->verifyLogger("putTagsForContig LIST ctag");
+#        $logger->debug("input tags $contigname",ss=>1);
+#        foreach my $tag (@copy) {
+#            $logger->debug($tag->writeToCaf(0,annotag=>1));
+#        }
+#        $logger = $this->verifyLogger("putTagsForContig LIST ntag");
+#        $logger->debug("new tags  $contigname ".scalar(@$ctags),ss=>1);
+#        foreach my $tag (@$ctags) {
+#           $logger->debug($tag->writeToCaf(0,annotag=>1));
+#        }
 #	exit 1;
+#    }
     }
-}
 
-$logger->warning("new tags $contigname ".scalar(@$ctags),ss=>1);
+$logger->info("new tags $contigname ".scalar(@$ctags),ss=>1);
+foreach my $tag (@$ctags) { # TO BE REMOVED
+    $logger->debug($tag->writeToCaf(0,annotag=>1));
+} # until HERE
 
 $logger = $this->verifyLogger("putTagsForContig");
-$logger->info("Loading? noload = $options{noload}");
 
     return 0 if $options{noload};
 
@@ -3020,7 +3060,8 @@ $logger->info("Loading? noload = $options{noload}");
 
     $this->getTagIDsForContigTags($ctags,insert_enable=>1);
 
-    return &putContigTags($dbh,$ctags,$logger);
+$logger->debug("put Tags for ".scalar(@$ctags)." tags");
+    return &putContigTags($dbh,$ctags);
 }
 
 
@@ -3028,7 +3069,7 @@ sub getTagIDsForContigTags {
 # for tags with undefined tag_id: 1) find tag_id from tag comment or systematic ID
 #                                 2) if that fails, create a new tag_id
 # for tags with tag_id defined  : update systematic IDs if that's appropriate
-# 
+# inconsistencies are 
     my $this = shift;
     my $tags = shift; # ref to array with Tags
     my %options = @_;
@@ -3041,8 +3082,6 @@ sub getTagIDsForContigTags {
 
 
     my $logger = $this->verifyLogger('getTagIDsForContigTags');
-
-$logger->debug("get IDs for ".scalar(@$tags)." tags");
 
     my ($dbh, $qsth,$isth,$usth, $query,$insert,$update);
 
@@ -3113,7 +3152,6 @@ $logger->debug("get IDs for ".scalar(@$tags)." tags");
 
         if ($rc > 0) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $qsth->fetchrow_array();
-$logger->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
 # test consistency of tag ID and tag seq ID
             my $existingtagid = $tag->getTagID();
             if ($existingtagid && $existingtagid != $tag_id) {
@@ -3137,6 +3175,7 @@ $logger->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
         else {
             $tag->setTagID(0);
 	}
+
         $qsth->finish();
 
 # for those tags that do not have an ID, we generate a new entry in CONTIGTAG
@@ -3148,7 +3187,6 @@ $logger->debug("tag ID $tag_id  tag_seq ID $tag_seq_id ($systematic_id)");
                      $tag->getTagSequenceID() || 0,
                      $tag->getTagComment());
 
-$logger->debug("To be inserted into CONTIGTAG : @binddata");
         next unless $options{insert_enable};
 
         $rc = $isth->execute(@binddata) || &queryFailed($insert,@binddata);
@@ -3171,13 +3209,11 @@ $logger->debug("To be inserted into CONTIGTAG : @binddata");
             next unless $systematicIDhash->{$tag};
             next unless $tag->getSystematicID();
             my @binddata = ($tag->getTagID(),$tag->getSystematicID());
-$logger->debug("systematic ID to be added (@binddata)");
             $usth->execute(@binddata) || &queryFailed($update,@binddata);
             $usth->finish();
 	}
     }
 
-$logger->debug("EXIT, failed = $failed");
     return $failed;
 }
 
@@ -3186,12 +3222,8 @@ sub putContigTags {
 # use as private method only
     my $dbh = shift;
     my $tags = shift; # ref to array with Tags
-my $log = shift;
 
     &verifyPrivate($dbh,"putContigTags");
-
-$log->setPrefix("putContigTags") if $log;
-$log->debug("put Tags for ".scalar(@$tags)." tags") if $log;
 
     return undef unless ($tags && @$tags);
 
@@ -3225,7 +3257,7 @@ $log->debug("put Tags for ".scalar(@$tags)." tags") if $log;
         $success++ if $rc;
     }
 
-$log->debug("EXIT putContigTags success $success missed $missed") if $log;
+    $sth->finish();
 
     return $success; 
 }
@@ -3248,7 +3280,7 @@ sub verifyPrivate {
     my $caller = shift;
     my $method = shift;
 
-    if (ref($caller) eq 'Arcturusdatabase' || $caller =~ /^ADB\w+/) {
+    if (ref($caller) eq 'ArcturusDatabase' || $caller =~ /^ADB\w+/) {
         print STDERR "Invalid use of private method ADBContig->$method\n";
 	exit 1;
     }
