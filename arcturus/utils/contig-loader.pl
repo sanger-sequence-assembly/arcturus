@@ -280,12 +280,12 @@ else {
 
 unless ($nolock) {
 # test if the project is locked
-    if ($project->getLockedStatus()) {
-	$logger->error("Project $pidentifier is locked: import ABORTED");
+#    if ($project->getLockedStatus()) {
+#	$logger->error("Project $pidentifier is locked: import ABORTED");
 # prepare mail message
-        $adb->disconnect();
-        exit 1;
-    }
+#        $adb->disconnect();
+#        exit 1;
+#    }
      
     my ($lockstatus,$msg) = $project->acquireLock();
     unless ($lockstatus) {
@@ -293,7 +293,8 @@ unless ($nolock) {
         $logger->error("import ABORTED");
         $adb->disconnect();
         exit 1;
-    } 
+    }
+    $logger->warning($msg);
 }
 
 #----------------------------------------------------------------
