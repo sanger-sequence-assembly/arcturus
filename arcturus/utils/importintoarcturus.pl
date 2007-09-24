@@ -198,7 +198,7 @@ $lock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
 my $command = "$lock_script -i $instance -o $organism -p $projectname -confirm";
 
-$command .= "-up" if $forcegetlock; # (try to) invoke privilege (if user has it)
+$command .= " -su" if $forcegetlock; # (try to) invoke privilege (if user has it)
 
 system ($command);
 
