@@ -185,7 +185,7 @@ my @items = ('read_id','readname','seq_id','version',
              'template','ligation','insertsize','clone',
              'chemistry','SCFchemistry','strand','primer','aspeddate',
              'basecaller','lqleft','lqright','slength','sequence',
-             'quality','align-to-SCF','pstatus');
+             'quality','align-to-SCF','pstatus','traceserver');
 
 if (@reads) {
     $adb->getTagsForReads([@reads]) unless $notags;
@@ -247,9 +247,11 @@ sub list {
     $L{clone}      = $read->getClone || '';
    
     $L{chemistry}  = $read->getChemistry;
-    if ($rdir && (my $ta = $read->getTraceArchiveIdentifier)) {
+    my $ta = $read->getTraceArchiveIdentifier();
+    $ta =~ s/\~\w+\///; # remove possibly added ~name
+    $L{traceserver} = $ta;
+    if ($rdir && $ta) {
 # get full chemistry from SCF file, if present
-        $ta =~ s/\~\w+\///; # remove possibly added ~name
         $L{SCFchemistry} = &SCFchemistry($rdir,$ta);
     }
     $L{strand}     = $read->getStrand;
