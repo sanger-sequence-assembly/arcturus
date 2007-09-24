@@ -23,14 +23,14 @@ my $projectowner;
 my $projectstatus;
 my $projectcomment;
 
-my $useprivilege;
+my $superuser;
 
 my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
                . "comment|pc|extend|"
-               . "owner|po|name|pn|status|ps|privilege|"
+               . "owner|po|name|pn|status|ps|superuser|su|"
                . "confirm|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -75,7 +75,9 @@ while (my $nextword = shift @ARGV) {
     $projectstatus    = shift @ARGV  if ($nextword eq '-status');
     $projectstatus    = shift @ARGV  if ($nextword eq '-ps');
 
-    $useprivilege     = 1            if ($nextword eq '-privilege');
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $superuser    = 1;
+    }
 
     $verbose          = 1            if ($nextword eq '-verbose');
 
@@ -177,7 +179,7 @@ else {
     $confirm = 0 unless $confirm;
 
     my %uoptions = (confirm => $confirm);
-    $uoptions{useprivilege} = 1 if $useprivilege;
+    $uoptions{useprivilege} = 1 if $superuser;
     my ($success,$message) = $adb->updateProjectAttribute($project,%uoptions);
     $message =~ s/null//ig if $message;
 
@@ -236,7 +238,7 @@ sub showUsage {
     print STDERR "-status\t\tchange project status (may result in locking)\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value) \n";
-    print STDERR "-privilege\tuse privilege if project owned by someone else\n" if $user;
+    print STDERR "-supersuser\t(su) use privilege if project owned by someone else\n" if $user;
     print STDERR "\n";
 
     $code ? exit(1) : exit(0);
