@@ -28,13 +28,14 @@ my ($instance,$organism,$projectname,$assembly,$gap4name,$version);
 my $problemproject = 'PROBLEMS'; # default
 
 my $import_script = "${arcturus_home}/utils/contig-loader";
+$import_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
 my $repair = "-movetoproblems";
 
-my ($unlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
+my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
 
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap4name|g|"
-              . "version|v|unlock|problem|script|abortonwarning|aow|"
+              . "version|v|superuser|su|problem|script|abortonwarning|aow|"
               . "noagetest|nat|keep|rundir|rd|debug|help|h";
 
 #------------------------------------------------------------------------------
@@ -76,7 +77,7 @@ while (my $nextword = shift @ARGV) {
         $version = shift @ARGV;
     }
 
-    if ($nextword eq '-problem') { # optional, default PROBLEM
+    if ($nextword eq '-problem') { # optional, default PROBLEMS
         $problemproject = shift @ARGV;
     }
 
@@ -101,8 +102,8 @@ while (my $nextword = shift @ARGV) {
         $keep = 1;
     }
 
-    if ($nextword eq '-unlock') {
-        $unlock = 1;
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $forcegetlock = 1;
     }
 
     if ($nextword eq '-rundir' || $nextword eq '-rd') {
@@ -136,17 +137,13 @@ unless (defined($projectname)) {
 }
 
 #------------------------------------------------------------------------------
-# check if in the right directory
+# change to the right directory
 #------------------------------------------------------------------------------
 
 if ($rundir) {
-#   print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
-    unless ($pwd =~ /$rundir$/) {
-        print STDOUT "Changing work directory from $pwd to $rundir\n";
-        chdir ($rundir);
-        $pwd = Cwd::cwd();
-    }
-#    $rundir = "-rundir $pwd";
+    print STDOUT "Changing work directory from $pwd to $rundir\n";
+    chdir ($rundir);
+    $pwd = Cwd::cwd();
 }
 
 #------------------------------------------------------------------------------
@@ -171,9 +168,15 @@ if ( -f "${gap4name}.A.BUSY") {
     exit 1 if $abortonwarning;
 }
 
+# detrmine if script run in standard mode
+
+my $nonstandard = ($gap4name ne $projectname || $version ne '0') ? 1 : 0;
+print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
+#nonstandard = 0 if ?
+
 # check age
 
-unless ($version eq "A") {
+unless ($version eq "A" || $nonstandard) {
     my @astat = stat "$gap4name.A";
     my @vstat = stat "$gap4name.$version";
     if (@vstat && @astat && $vstat[9] <= $astat[9]) {
@@ -190,22 +193,22 @@ unless ($version eq "A") {
 # check existence and accessibility of arcturus database to be modified 
 #------------------------------------------------------------------------------
 
-# default test lock status; if locked, abort
-# or force unlocking; if still locked, abort
+my $lock_script = "${arcturus_home}/utils/project-lock";
+$lock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
-my $unlock_script = "${arcturus_home}/utils/project-unlock";
+my $command = "$lock_script -i $instance -o $organism -p $projectname -confirm";
 
-my $command = "$unlock_script -i $instance -o $organism -p $projectname ";
-
-$command .= $unlock ? "-force -confirm" : "-test"; # if '-unlock', (try to) unlock
+$command .= "-up" if $forcegetlock; # (try to) invoke privilege (if user has it)
 
 system ($command);
 
 if ($?) {
+# project lock cannot be acquired by the current user 
     print STDOUT "!! -- Arcturus project $projectname is not accessible --\n";
     exit 1;
 }
 
+#print STDOUT "can proceed but test abort\n"; exit 1; # busy test
 #------------------------------------------------------------------------------
 # export the database as a depadded CAF file
 #------------------------------------------------------------------------------
@@ -234,11 +237,12 @@ unless ($? == 0) {
     exit 1;
 }
 
+#print STDOUT "can proceed but test abort\n"; exit 1; # busy test
 #------------------------------------------------------------------------------
 # change data in the repository: create backup version B  
 #------------------------------------------------------------------------------
 
-unless ($version eq "B") {
+unless ($version eq "B" || $nonstandard) {
     print STDOUT "Backing up version $version to B\n";
     if (-f "$gap4name.B") {
         system ("rmdb $gap4name B");
@@ -266,7 +270,7 @@ print STDOUT "Importing into Arcturus\n";
 
 system ("$import_script -instance $instance -organism $organism -caf $depadded "
        ."-defaultproject $projectname -gap4name ${pwd}/$gap4name.$version");
- # locking? default project setting for inheritance?
+
 unless ($? == 0) {
     print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
     exit 1;
@@ -288,33 +292,27 @@ system ("$consensus_script $database -project $projectname -quiet -lowmem");
 #------------------------------------------------------------------------------
 
 my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
-
-my $allocation_i_log = "/tmp/${gap4name}.$$.allocation-i.log";
-my $allocation_b_log = "/tmp/${gap4name}.$$.allocation-b.log";
+$allocation_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
 print STDOUT "Testing read allocation for possible duplicates inside projects\n";
 
 # use repair mode for inconsistencies inside the project
 
+my $allocation_i_log = "readallocation-i-.$$.${gap4name}.log"; # inside project
+
 system ("$allocation_script -instance $instance -organism $organism "
        ."$repair -problemproject $problemproject -workproject $projectname -inside "
        ."-log $allocation_i_log -mail ejz");
 
+# no repair mode for inconsistencies between projects
 
 print STDOUT "Testing read allocation for possible duplicates between projects\n";
 
-# no repair mode for inconsistencies between projects
+my $allocation_b_log = "readallocation-b-.$$.${gap4name}.log"; # between projects
 
 system ("$allocation_script -instance $instance -organism $organism "
        ."-nr -problemproject $problemproject -workproject $projectname -between "
        ."-log $allocation_b_log -mail ejz");
-
-unless ( -f "readallocation.log") {
-    system ("touch readallocation.log");
-}
-
-system ("cat $allocation_i_log >> readallocation.log");
-system ("cat $allocation_b_log >> readallocation.log");
 
 #-------------------------------------------------------------------------------
 
@@ -322,7 +320,11 @@ exit 0 if $keep;
 
 print STDOUT "Cleaning up\n";
 
-system ("rm -f $padded $depadded $allocation_i_log $allocation_b_log");
+system ("rm -f $padded $depadded");
+
+# purge readallocation logs older than a given date  TO BE COMPLETED
+# "find . -mtime +30 -type f -exec rm -f {} \;"
+# cleanup files of name "readallocation*log"
 
 exit 0;
 
@@ -362,7 +364,7 @@ sub showusage {
     print STDERR "\n";
     print STDERR "-script\t\t(default contig-loader) name of loader script used\n";
     print STDERR "\n";
-    print STDERR "-unlock\t\t(ul) explicitly (try to) unlock the database\n";
+    print STDERR "-superuser\t(su) (try to) lock the database using su privilege\n";
     print STDERR "\n";
     print STDERR "-problem\t(default PROBLEM) project name for unresolved "
                . "parent contigs\n";
@@ -378,7 +380,4 @@ sub showusage {
 }
 
 #------------------------------------------------------------------------------
-
-sub ssystem {my $command = shift; print STDOUT "\nTBE:'$command'\n\n";}
-
 
