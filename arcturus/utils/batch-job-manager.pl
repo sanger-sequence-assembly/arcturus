@@ -283,6 +283,7 @@ foreach my $project (@projects) {
             $command .= "-v $version "       if defined $version;
             $command .= "-script $script "   if $script;
             $command .= "-problem $problem " if $problem;
+            $command .= "-su" if $superuser;
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
 	}
@@ -312,8 +313,7 @@ foreach my $project (@projects) {
             $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
             $command .= "-v $version " if $version;
             $command .= "-rundir $currentpwd";
-            $command .= "-su" if $superuser;
-            $command .= "-debug " if $debug;
+             $command .= "-debug " if $debug;
         }
         else {
 # shell script
