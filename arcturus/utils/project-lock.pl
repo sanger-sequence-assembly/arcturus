@@ -17,13 +17,13 @@ my $instance;
 my $project;
 my $assembly;
 my $verbose;
-my $forcing;
+my $superuser;
 my $newuser;
 my $confirm;
 my $test;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
-               . "useprivilege|up|transfer|"
+               . "superuser|su|transfer|"
                . "confirm|test|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -51,8 +51,8 @@ while (my $nextword = shift @ARGV) {
         $assembly = shift @ARGV;
     }
 
-    if ($nextword eq '-useprivilege' || $nextword eq '-up') {
-        $forcing  = 1;
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $superuser = 1;
     }
 
     $newuser      = shift @ARGV  if ($nextword eq '-transfer');
@@ -66,7 +66,7 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help');
 }
 
-$forcing = 0 if $test; # overrides
+$superuser = 0 if $test; # overrides
 $confirm = 0 if $test; # overrides
  
 #----------------------------------------------------------------
@@ -181,7 +181,7 @@ else {
         my %options = (confirm => 0);
         $options{confirm} = 1 if $confirm;
 
-        if ($forcing) {
+        if ($superuser) {
 # used in case the project is already locked by someone else, then first
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
            ($success,$message) = $project->transferLock(forcing=>1, %options);
@@ -280,7 +280,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
-    print STDERR "-up\t\t(use privilege, no value) acquire an existing lock\n";
+    print STDERR "-su\t\t(use privilege, no value) acquire an existing lock\n";
     print STDERR "-transfer\tname of new user to transfer lock ownership to\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value)\n";
