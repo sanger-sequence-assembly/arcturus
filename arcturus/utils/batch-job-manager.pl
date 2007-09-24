@@ -20,15 +20,15 @@ my ($organism,$instance);
 
 my ($project,$fopn,$assembly,$problem,$gap4name,$version);
 
-my ($ioport,$perl,$script);
+my ($ioport,$perl,$script); $perl = 1; # default
 
-my ($delayed,$batch,$babel,$pcs3,$subdir);
+my ($delayed,$batch,$babel,$pcs3,$subdir,$superuser);
 
 my ($verbose,$confirm,$debug);
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|gap4name|"
                . "import|export|script|perl|problem|"
-               . "batch|nobatch|delayed|subdir|sd|r|"
+               . "batch|nobatch|delayed|subdir|sd|r|superuser|su|"
                . "verbose|debug|confirm|submit|help|h";
 
 my $host = $ENV{HOST};
@@ -85,8 +85,11 @@ while (my $nextword = shift @ARGV) {
     $batch        = 1              if ($nextword eq '-batch');
     $batch        = 0              if ($nextword eq '-nobatch');
 
-    $perl         = 1              if ($nextword eq '-perl'); # TBD (later use as default)
+    $perl         = 0              if ($nextword eq '-noperl'); # TBD (later use as default)
     $script       = shift @ARGV    if ($nextword eq '-script');
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $superuser = 1;
+    }              
 
     $babel        = 1              if ($nextword eq '-babel');
     $pcs3         = 0              if ($nextword eq '-babel');
@@ -94,7 +97,6 @@ while (my $nextword = shift @ARGV) {
     $babel        = 0              if ($nextword eq '-pcs3');
 
     $verbose      = 1              if ($nextword eq '-verbose');
-
     $debug        = 1              if ($nextword eq '-debug');
 
     $confirm      = 1              if ($nextword eq '-confirm');
@@ -217,6 +219,12 @@ else {
     &showUsage("Can't run this script on this host or OS : $host, $OS");
 }
 
+# override default directory if script run in a test mode
+
+my $scriptdir = $0;
+$scriptdir =~ s/\/[^\/]+$//; # remove script name
+$utilsdir = $scriptdir if ($scriptdir =~ /ejz/);
+
 $logger->debug("host : $host, OS : $OS, utils : $utilsdir");
 $logger->debug("projects: @projects");
 
@@ -238,8 +246,7 @@ my $date = `date +%Y%m%d`; $date =~ s/\s//g;
 
 foreach my $project (@projects) {
 
-# the project must by in the directory the script is run in
-        
+# the project must be in the directory the script is run in
 
     if ($subdir) {
         chdir($pwd); # to be sure
@@ -268,7 +275,8 @@ foreach my $project (@projects) {
     if ($ioport eq 'import') {
 # perl script
         if ($perl) {
-            $command .= "$utilsdir/importintoarcturus ";
+            $command .= "$utilsdir/importintoarcturus " unless ($utilsdir =~ /ejz/);
+            $command .= "$utilsdir/importintoarcturus.pl "  if ($utilsdir =~ /ejz/); # test
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project ";
             $command .= "-g $gap4name "      if $gap4name;
@@ -296,13 +304,15 @@ foreach my $project (@projects) {
     elsif ($ioport eq 'export') {
 # perl script
         if ($perl) {
-            $command .= "$utilsdir/exportfromarcturus ";
+            $command .= "$utilsdir/exportfromarcturus " unless ($utilsdir =~ /ejz/);
+            $command .= "$utilsdir/exportfromarcturus.pl "  if ($utilsdir =~ /ejz/); # test
             $command .= "-i $instance -o $organism ";
             $command .= "-p $project "; # or scaffold? mutually exclusive + test
             $command .= "-s $script "    if $script;
             $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
             $command .= "-v $version " if $version;
             $command .= "-rundir $currentpwd";
+            $command .= "-su" if $superuser;
             $command .= "-debug " if $debug;
         }
         else {
