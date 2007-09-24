@@ -283,7 +283,7 @@ foreach my $project (@projects) {
             $command .= "-v $version "       if defined $version;
             $command .= "-script $script "   if $script;
             $command .= "-problem $problem " if $problem;
-            $command .= "-su" if $superuser;
+            $command .= "-su " if $superuser;
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
 	}
