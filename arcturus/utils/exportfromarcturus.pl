@@ -25,11 +25,13 @@ my $badgerbin     = "$ENV{BADGER}/bin";
 my ($instance,$organism,$projectname,$assembly,$gap4name,$version,$scaffold);
 
 my $export_script = "${arcturus_home}/utils/contig-export";
+$export_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
-my ($nolock,$rundir,$keep,$debug);
+my ($nolock,$rundir,$superuser,$keep,$debug);
 
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap4name|g|"
-              . "scaffold|c|script|nolock|rundir|rd|keep|help|h";
+              . "scaffold|c|script|nolock|rundir|rd|superuser|su|"
+              . "keep|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -80,6 +82,10 @@ while (my $nextword = shift @ARGV) {
         $rundir = shift @ARGV;
     }
 
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $superuser = 1;
+    }
+
     if ($nextword eq '-keep') {
         $keep = 1;
     }
@@ -121,17 +127,16 @@ if (!$scaffold && ($version eq '0' || $version eq 'B')) {
     exit 1;
 }
 
+# ? IF NOLOCK test that you are not exporting to the standard version A ?
+
 #------------------------------------------------------------------------------
-# check if in the right directory
+# change to the right directory
 #------------------------------------------------------------------------------
 
 if ($rundir) {
-#    print STDOUT "pwd    : $pwd\nrundir : $rundir\n";
-    unless ($pwd =~ /$rundir$/) {
-        print STDOUT "Changing work directory from $pwd to $rundir\n";
-        chdir ($rundir);
-        $pwd = Cwd::cwd();
-    }
+    print STDOUT "Changing work directory from $pwd to $rundir\n";
+    chdir ($rundir);
+    $pwd = Cwd::cwd();
 }
 
 #------------------------------------------------------------------------------
@@ -152,24 +157,19 @@ system ("$consensus_script $database -project $projectname -quiet -lowmem");
 #------------------------------------------------------------------------------
 
 my $lock_script = "${arcturus_home}/utils/project-lock";
-$lock_script .= ".pl";
+$lock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
-unless ($nolock) { # to completed (always lock? force?, what to do on error?)
-                   # or if already locked? leave?, abort ?
-
+unless ($nolock) {
+# try to acquire the lock, but do not use privilege ??
     my $command = "$lock_script -i $instance -o $organism -p $projectname ";
 
-    system ("$command -test");
-
+    system ("$command -confirm") unless $superuser;
+    system ("$command -su -confirm") if $superuser; # ??
+       
     if ($?) {
-# project not locked, try to lock it yourself
-        system ("$command -force -confirm");
-
-        if ($?) {
-            print STDOUT "!! -- Arcturus project $projectname is not"
-                       . " accessible --\n"; # you cannot acquire a lock
-            exit 1;
-	}
+        print STDOUT "!! -- Arcturus project $projectname is not"
+                   . " accessible --\n"; # you cannot acquire a lock
+        exit 1;
     }
 }
 
@@ -179,12 +179,11 @@ unless ($nolock) { # to completed (always lock? force?, what to do on error?)
 
 my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
-$export_script .= ".pl";
 my $command = "$export_script -instance $instance -organism $organism "
             . "-caf $depadded ";
 
 if ($scaffold) {
-# export using contig-export.pl
+# export using contig-export.pl TO BE DEVELOPED
     $command .= "-scaffold $scaffold "; # processing of $scaffold in export script
     unless ($gap4name) {
 # if gap4name defined, use that, else generate one project_scaffold_NN
@@ -196,8 +195,6 @@ else { # standard project export
 }
 
 print STDOUT "Exporting from Arcturus to CAF file $depadded\n";
-
-#print STDOUT "$command\n"; exit 0;
 
 system ($command);
 
@@ -258,7 +255,8 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
     print STDOUT "Marking project $projectname as exported\n";
 
     my $marker_script =  "{arcturus_home}/utils/project-export-marker";
-$marker_script .= ".pl";
+    $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+
     system ("$marker_script -i $instance -o $organism -p $projectname "
 	   ."-file $pwd/${gap4name}.$version");
 
@@ -283,9 +281,10 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
     if ($status && $status == 2) {
 # transfer failed because the project has no owner, unlock it
         my $unlock_script = "${arcturus_home}/utils/project-unlock";
-$unlock_script .= ".pl";
+        $unlock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+
         system ("$unlock_script -i $instance -o $organism -p $projectname "
-	       ."-force -confirm");
+	       ."-up -confirm");
 
         print STDERR "!! -- Failed to unlock project $projectname --\n" if $?;
     }
