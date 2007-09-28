@@ -27,6 +27,8 @@ Arcturus currently requires the following external JAR files:
   * The JavaMail library.
   
   * The Java Activation Framework library (used by JavaMail).
+  
+  * The JMX-RMP library.
 
 They are kept in the "lib" sub-directory.  The manifest file for
 the Arcturus JAR file expects them to be in this location.
