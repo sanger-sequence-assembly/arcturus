@@ -15,20 +15,15 @@ if ( ! $?JAVA_HEAP_SIZE) then
     setenv JAVA_HEAP_SIZE -Xmx512M
 endif
 
-# Determine our operating system, and set JAVA_HOME accordingly.
+# Set JAVA_HOME and location of Arcturus JAR file
 
-if ( `uname -s` == 'OSF1' ) then
-    setenv JAVA_HOME /nfs/pathsoft/external/bio-soft/java/usr/opt/java142
-    setenv JAVA_HEAP_SIZE "-fast64 -Xmx4096M"
-    set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus-for-java1.4.jar
-    echo Using the legacy \(Java 1.4\) version of arcturus.jar
-else
-    setenv JAVA_HOME /software/jdk1.6.0_01
-    set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
+setenv JAVA_HOME /software/jdk1.6.0_01
+set ARCTURUS_JAR=${ARCTURUS_HOME}/../arcturus.jar
 
-    if ( `uname -m` == 'x86_64' ) then
-	setenv JAVA_HEAP_SIZE -Xmx4096M
-    endif
+# Augment heap size if running on a 64-bit cluster machine
+
+if ( `uname -m` == 'x86_64' ) then
+    setenv JAVA_HEAP_SIZE -Xmx4096M
 endif
 
 echo Using Java in $JAVA_HOME 
