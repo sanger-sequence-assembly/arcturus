@@ -8,12 +8,15 @@ import javax.swing.ListSelectionModel;
 
 import java.sql.SQLException;
 import java.text.*;
+import java.util.HashSet;
+import java.util.Iterator;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.*;
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.SortableTable;
+import uk.ac.sanger.arcturus.gui.WarningFrame;
 
 import uk.ac.sanger.arcturus.gui.genericdisplay.InfoPanel;
 import uk.ac.sanger.arcturus.gui.genericdisplay.InvalidClientObjectException;
@@ -50,6 +53,8 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 	protected JMenuItem itemExecuteMultipleRequests = new JMenuItem(
 			"Execute selected requests...");
 
+	protected WarningFrame warningFrame;
+	
 	protected ArcturusDatabase adb;
 
 	protected Person me = PeopleManager.findMe();
@@ -167,7 +172,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
-				notifyFailure(request, ContigTransferRequest.CANCELLED, e);
+				notifyFailure(e, ContigTransferRequest.CANCELLED);
 			} catch (SQLException e) {
 				Arcturus
 						.logWarning(
@@ -192,7 +197,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
-				notifyFailure(request, ContigTransferRequest.REFUSED, e);
+				notifyFailure(e, ContigTransferRequest.REFUSED);
 			} catch (SQLException e) {
 				Arcturus
 						.logWarning(
@@ -217,7 +222,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
-				notifyFailure(request, ContigTransferRequest.APPROVED, e);
+				notifyFailure(e, ContigTransferRequest.APPROVED);
 			} catch (SQLException e) {
 				Arcturus
 						.logWarning(
@@ -241,7 +246,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
-				notifyFailure(request, ContigTransferRequest.DONE, e);
+				notifyFailure(e, ContigTransferRequest.DONE);
 			} catch (SQLException e) {
 				Arcturus
 						.logWarning(
@@ -278,6 +283,8 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				options, options[1]);
 
 		if (rc == JOptionPane.YES_OPTION) {
+			HashSet<ContigTransferRequestException> failures = new HashSet<ContigTransferRequestException>();
+			
 			int[] rows = getSelectedRows();
 
 			for (int i = 0; i < rows.length; i++) {
@@ -290,7 +297,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 					else
 						adb.reviewContigTransferRequest(request, me, newStatus);
 				} catch (ContigTransferRequestException e) {
-					notifyFailure(request, newStatus, e);
+					failures.add(e);
 				} catch (SQLException e) {
 					Arcturus
 							.logWarning(
@@ -298,6 +305,9 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 									e);
 				}
 			}
+			
+			if (! failures.isEmpty())
+				notifyMultipleFailures(failures, newStatus);
 
 			ContigTransferRequestNotifier.getInstance().processAllQueues();
 
@@ -305,15 +315,51 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		}
 	}
 
-	protected void notifyFailure(ContigTransferRequest request, int newStatus,
-			ContigTransferRequestException e) {
+	private void notifyMultipleFailures(HashSet<ContigTransferRequestException> failures, int newStatus) {
+		Iterator<ContigTransferRequestException> iterator = failures.iterator();
+		
+		if (failures.size() == 1) {
+			notifyFailure(iterator.next(), newStatus);
+			return;
+		}
+		
+		if (warningFrame == null)
+			warningFrame = new WarningFrame("Contig Transfer Errors");
+		
+		warningFrame.clearText();
+		
+		while (iterator.hasNext()) {
+			ContigTransferRequestException ctre = iterator.next();
+			
+			ContigTransferRequest request = ctre.getRequest();
+			
+			String reason = ctre.getMessage();
+			
+			if (reason == null)
+				reason = ctre.getTypeAsString();
+			
+			String message = "Failed to change status of request "
+				+ (request == null ? "[UNKNOWN ID]" : request.getRequestID()) + " to "
+				+ ContigTransferRequest.convertStatusToString(newStatus) + "\n"
+				+ "The reason was " + reason;
+
+			warningFrame.appendText(message);
+			warningFrame.appendText("\n\n");
+		}
+		
+		warningFrame.setVisible(true);
+	}
+
+	protected void notifyFailure(ContigTransferRequestException e, int newStatus) {
 		String reason = e.getMessage();
+		ContigTransferRequest request = e.getRequest();
+		int requestID = (request == null) ? -1 : request.getRequestID();
 
 		if (reason == null)
 			reason = e.getTypeAsString();
 
 		String message = "Failed to change status of request "
-				+ request.getRequestID() + " to "
+				+ requestID + " to "
 				+ ContigTransferRequest.convertStatusToString(newStatus) + "\n"
 				+ "The reason was " + reason;
 
