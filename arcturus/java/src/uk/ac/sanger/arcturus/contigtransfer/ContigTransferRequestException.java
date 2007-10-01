@@ -19,6 +19,7 @@ public class ContigTransferRequestException extends Exception {
 	public static final int CONTIG_ALREADY_IN_DESTINATION_PROJECT = 14;
 	
 	protected int type = UNKNOWN;
+	protected ContigTransferRequest request;
 	
 	public ContigTransferRequestException(int type, String message) {
 		super(message);
@@ -29,6 +30,16 @@ public class ContigTransferRequestException extends Exception {
 		this(type, null);
 	}
 	
+	public ContigTransferRequestException(ContigTransferRequest request, int type, String message) {
+		super(message);
+		this.type = type;
+		this.request = request;
+	}
+	
+	public ContigTransferRequestException(ContigTransferRequest request, int type) {
+		this(request, type, null);
+	}
+
 	public int getType() {
 		return type;
 	}
@@ -77,5 +88,14 @@ public class ContigTransferRequestException extends Exception {
 			default:
 				return "Unknown (code=" + type + ")";
 		}
+	}
+	
+	public ContigTransferRequest getRequest() {
+		return request;
+	}
+	
+	public void setRequest(ContigTransferRequest request) {
+		if (this.request == null)
+			this.request = request;
 	}
 }
