@@ -525,7 +525,7 @@ public class ContigTransferRequestManager {
 		 */
 
 		if (reviewer == null)
-			throw new ContigTransferRequestException(
+			throw new ContigTransferRequestException(request,
 					ContigTransferRequestException.USER_IS_NULL);
 
 		/*
@@ -540,6 +540,7 @@ public class ContigTransferRequestManager {
 			checkContigProjectStillValid(request);
 		} catch (ContigTransferRequestException ctre) {
 			markRequestAsFailed(request);
+			ctre.setRequest(request);
 			throw ctre;
 		}
 
@@ -580,7 +581,7 @@ public class ContigTransferRequestManager {
 				&& fromProject.getID() == currentProjectID)
 			return;
 
-		throw new ContigTransferRequestException(
+		throw new ContigTransferRequestException(request,
 				ContigTransferRequestException.CONTIG_HAS_MOVED);
 	}
 
@@ -645,7 +646,7 @@ public class ContigTransferRequestManager {
 		if (adb.hasFullPrivileges(reviewer))
 			return;
 
-		throw new ContigTransferRequestException(
+		throw new ContigTransferRequestException(request,
 				ContigTransferRequestException.USER_NOT_AUTHORISED);
 	}
 
@@ -670,7 +671,7 @@ public class ContigTransferRequestManager {
 				&& (newStatus == ContigTransferRequest.DONE || newStatus == ContigTransferRequest.CANCELLED))
 			return;
 
-		throw new ContigTransferRequestException(
+		throw new ContigTransferRequestException(request,
 				ContigTransferRequestException.INVALID_STATUS_CHANGE);
 	}
 
@@ -688,7 +689,7 @@ public class ContigTransferRequestManager {
 		int rc = pstmtUpdateRequestStatus.executeUpdate();
 
 		if (rc != 1)
-			throw new ContigTransferRequestException(
+			throw new ContigTransferRequestException(request,
 					ContigTransferRequestException.SQL_UPDATE_FAILED);
 
 		request.setStatus(newStatus);
@@ -721,7 +722,7 @@ public class ContigTransferRequestManager {
 		int oldStatus = request.getStatus();
 
 		if (reviewer == null)
-			throw new ContigTransferRequestException(
+			throw new ContigTransferRequestException(request,
 					ContigTransferRequestException.USER_IS_NULL);
 
 		checkStatusChangeIsAllowed(request, ContigTransferRequest.DONE);
@@ -733,6 +734,7 @@ public class ContigTransferRequestManager {
 			checkContigProjectStillValid(request);
 		} catch (ContigTransferRequestException ctre) {
 			markRequestAsFailed(request);
+			ctre.setRequest(request);
 			throw ctre;
 		}
 
@@ -782,7 +784,7 @@ public class ContigTransferRequestManager {
 			}
 		}
 
-		throw new ContigTransferRequestException(
+		throw new ContigTransferRequestException(request,
 				ContigTransferRequestException.SQL_UPDATE_FAILED);
 	}
 
@@ -791,12 +793,14 @@ public class ContigTransferRequestManager {
 	
 	protected void checkProjectsAreUnlocked(ContigTransferRequest request)
 			throws ContigTransferRequestException, SQLException {
-		checkProjectIsUnlocked(request.getOldProject(), SOURCE_PROJECT);
-		checkProjectIsUnlocked(request.getNewProject(), DESTINATION_PROJECT);
+		checkProjectIsUnlocked(request, SOURCE_PROJECT);
+		checkProjectIsUnlocked(request, DESTINATION_PROJECT);
 	}
 
-	protected void checkProjectIsUnlocked(Project project, int mode)
+	protected void checkProjectIsUnlocked(ContigTransferRequest request, int mode)
 			throws ContigTransferRequestException, SQLException {
+		Project project = (mode == SOURCE_PROJECT) ? request.getOldProject() : request.getNewProject();
+		
 		pstmtCheckProjectLock.setInt(1, project.getID());
 
 		ResultSet rs = pstmtCheckProjectLock.executeQuery();
@@ -814,7 +818,7 @@ public class ContigTransferRequestManager {
 		if (lockdateNull && lockownerNull)
 			return;
 		else
-			throw new ContigTransferRequestException(
+			throw new ContigTransferRequestException(request,
 					ContigTransferRequestException.PROJECT_IS_LOCKED,
 					mode == SOURCE_PROJECT ? "Source project is locked" : "Destination project is locked");
 	}
