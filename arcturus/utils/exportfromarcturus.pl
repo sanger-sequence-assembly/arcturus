@@ -27,10 +27,11 @@ my ($instance,$organism,$projectname,$assembly,$gap4name,$version,$scaffold);
 my $export_script = "${arcturus_home}/utils/contig-export";
 $export_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
-my ($nolock,$rundir,$superuser,$keep,$debug);
+my ($nolock,$rundir,$create,$superuser,$keep,$debug);
 
-my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap4name|g|"
-              . "scaffold|c|script|nolock|rundir|rd|superuser|su|"
+my $validkeys = "instance|i|organism|o|project|p|assembly|a|scaffold|c|"
+              . "gap4name|g|version|v|"
+              . "script|nolock|rundir|rd|create|superuser|su|"
               . "keep|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -42,36 +43,36 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
-        $instance     = shift @ARGV;
+        $instance      = shift @ARGV;
     }
 
     if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
-        $organism     = shift @ARGV;
+        $organism      = shift @ARGV;
     }  
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
         die "You can't re-define project" if $projectname;
-        $projectname  = shift @ARGV;
+        $projectname   = shift @ARGV;
         $version = "A" unless defined($version);   #? somewhere else
         $gap4name = $projectname unless $gap4name; #? somewhere else
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
-        $assembly     = shift @ARGV;
+        $assembly      = shift @ARGV;
     }
 
     if ($nextword eq '-scaffold' || $nextword eq '-s') {
-        $scaffold     = shift @ARGV; # agp file or ' separated list
+        $scaffold      = shift @ARGV; # agp file or ' separated list
     }
 
     if ($nextword eq '-gap4name' || $nextword eq '-g') {
-        $gap4name = shift @ARGV;
+        $gap4name      = shift @ARGV;
     }
 
     if ($nextword eq '-version'  || $nextword eq '-v') {
-        $version = shift @ARGV;
+        $version       = shift @ARGV;
     }
 
     if ($nextword eq '-script') {  # optional, default contig-export
@@ -79,15 +80,19 @@ while (my $nextword = shift @ARGV) {
     }
 
     if ($nextword eq '-rundir' || $nextword eq '-rd') {
-        $rundir = shift @ARGV;
+        $rundir        = shift @ARGV;
+    }
+
+    if ($nextword eq '-create') {
+        $create        = 1;
     }
 
     if ($nextword eq '-superuser' || $nextword eq '-su') {
-        $superuser = 1;
+        $superuser     = 1;
     }
 
     if ($nextword eq '-keep') {
-        $keep = 1;
+        $keep          = 1;
     }
 
     if ($nextword eq '-help'     || $nextword eq '-h') {
@@ -134,9 +139,32 @@ if (!$scaffold && ($version eq '0' || $version eq 'B')) {
 #------------------------------------------------------------------------------
 
 if ($rundir) {
+# test if directory exists; if not (try to) create it
+    unless (-d $rundir) {
+        print STDOUT "Directory $rundir does not exist\n";
+	exit 1 unless $create;
+        print STDOUT "Creating directory $rundir\n";
+        system("mkdir $rundir");
+        if ($?) {
+            print STDERR "Failed to create $rundir\n";
+            exit 1;
+	}
+        system("chmod g+w $rundir");
+    }         
     print STDOUT "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
     $pwd = Cwd::cwd();
+}
+
+#------------------------------------------------------------------------------
+# check if target gap4 database is accessible
+#------------------------------------------------------------------------------
+
+if ( -f "${gap4name}.$version.BUSY") {
+    print STDERR "!! -- Project $gap4name version $version is BUSY --\n";
+    print STDERR "!! -- Export of $gap4name.$version aborted --\n";
+# or, change name?
+    exit 1;
 }
 
 #------------------------------------------------------------------------------
@@ -254,7 +282,7 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
     print STDOUT "Marking project $projectname as exported\n";
 
-    my $marker_script =  "{arcturus_home}/utils/project-export-marker";
+    my $marker_script =  "${arcturus_home}/utils/project-export-marker";
     $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
     system ("$marker_script -i $instance -o $organism -p $projectname "
@@ -374,6 +402,7 @@ sub showusage {
     print STDERR "-version\t(v) Gap4 database version if different from 0\n";
     print STDERR "\n";
     print STDERR "-rundir\t\t(rd) explicitly set directory where script will run\n";
+    print STDERR "-create\t\t(try to) create the directory if it does not exist\n";
     print STDERR "\n";
     print STDERR "-script\t\t(default project-export) name of loader script used\n";
     print STDERR "\n";
