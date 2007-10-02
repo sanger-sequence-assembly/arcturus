@@ -405,7 +405,8 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         }
         else {
             my $nrofreads = $contig->getNumberOfReads();
-            $logger->error("contig $contig_id ($nrofreads)") if $logger;
+            $logger->error("contig $contig_id $nrofreads") if $logger;
+            $logger->flush();
             $export++;
         }
 
