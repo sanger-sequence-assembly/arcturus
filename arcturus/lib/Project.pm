@@ -1,8 +1,6 @@
 package Project;
 
 use strict;
-
-use Devel::Peek;
  
 #-------------------------------------------------------------------
 # Constructor new
@@ -350,7 +348,7 @@ sub writeContigsToCaf { # TO BE DEPRECATED
 # write contigs to CAF
     my $this = shift;
     my $FILE = shift; # obligatory file handle
-    my %options = @_;
+    my %options = @_; # frugal=> , logger=>
 
     my ($contigids,$status) = $this->fetchContigIDs($options{notacquirelock});
 
@@ -362,7 +360,15 @@ sub writeContigsToCaf { # TO BE DEPRECATED
     my $report = '';
     my $errors = 0;
 
-    my $frugal = $options{frugal} || 0; 
+    my $frugal = $options{frugal} || 0;
+    my $logger = $options{logger};
+
+    if ($logger) {
+        my $pd = $this->getProjectData();
+        my $nc = $pd->{contigs};
+        my $nr = $pd->{reads}; 
+        $logger->error("Project $pd->{name} $nc contigs $nr reads");
+    }
 
     foreach my $contig_id (@$contigids) {
 
@@ -373,11 +379,14 @@ sub writeContigsToCaf { # TO BE DEPRECATED
                                                            frugal=>$frugal);
  
         unless ($contig) {
-            $report .= "FAILED to retrieve contig $contig_id\n";
+            my $message = "FAILED to retrieve contig $contig_id";
+            $logger->error($message) if $logger;
+            $report .= $message."\n";
             $errors++;
             next;
         }
 
+# to removed 
         if ($options{endregiontrim}) {
             my %eoption = (cliplevel=>$options{endregiontrim});
             $contig->endRegionTrim($contig,%eoption);
@@ -386,16 +395,20 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         if ($options{padded}) {
             $contig = $contig->toPadded();
 	}
+# to here
 
         if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
-            $report .= "FAILED to export contig $contig_id\n";
+            my $message= "FAILED to export contig $contig_id";
+            $logger->error($message) if $logger;
+            $report .= $message."\n";
             $errors++;
         }
         else {
+            my $nrofreads = $contig->getNumberOfReads();
+            $logger->error("contig $contig_id ($nrofreads)") if $logger;
             $export++;
         }
 
-#        print STDERR "($export) memory : ".$monitor->usage()."\n" unless ($export%100);
         $contig->erase();
    }
 
