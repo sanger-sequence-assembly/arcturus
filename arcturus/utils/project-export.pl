@@ -23,6 +23,7 @@ my $lock = 0;
 my $padded;
 my $readsonly = 0;
 my $output;
+my $minerva;
 my $fopn;
 my $caffile; # for standard CAF format
 my $maffile; # for Millikan format
@@ -42,7 +43,7 @@ my $preview;
 my $METHOD = 1; # test construction
 
 my $validKeys  = "organism|instance|project|assembly|fopn|ignore|caf|maf|"
-               . "readsonly|fasta|quality|lock|minNX|"
+               . "readsonly|fasta|quality|lock|minNX|minerva|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
                . "preview|confirm|batch|verbose|debug|help|test";
@@ -72,6 +73,8 @@ while (my $nextword = shift @ARGV) {
     $fopn        = shift @ARGV  if ($nextword eq '-fopn');
 
     $ignorename  = shift @ARGV  if ($nextword eq '-ignore');
+
+    $minerva     = 1            if ($nextword eq '-minerva');
 
     $verbose     = 1            if ($nextword eq '-verbose');
 
@@ -144,6 +147,8 @@ my $logger = new Logging();
  
 $logger->setStandardFilter(0) if $verbose; # set reporting level
  
+$logger->setPrefix("#MINERVA ") if $minerva;
+
 #----------------------------------------------------------------
 # get the database connection
 #----------------------------------------------------------------
@@ -183,7 +188,7 @@ $fopn = &getNamesFromFile($fopn) if $fopn;
 #----------------------------------------------------------------
 
 if ($padded && (defined($fastafile) || defined($maffile))) {
-    $logger->warning("Redundant '-padded' key ignored");
+    $logger->info("Redundant '-padded' key ignored");
     undef $padded;
 }
 
@@ -285,6 +290,9 @@ foreach my $identifier (@identifiers) {
 # okay, here we have collected all projects to be exported
 
 my %exportoptions;
+
+$exportoptions{logger} = $logger if $minerva;
+
 $exportoptions{endregiontrim} = $endregiontrim if $endregiontrim;
 
 if (defined($caffile)) {
@@ -402,7 +410,7 @@ if ($preview) {
     $logger->warning("To export these projects, use '-confirm'");
 }
 else {
-    $logger->warning("There were no errors") unless $errorcount;
+#    $logger->warning("There were no errors") unless $errorcount;
     $logger->warning("$errorcount Errors found") if $errorcount;
 }
 
