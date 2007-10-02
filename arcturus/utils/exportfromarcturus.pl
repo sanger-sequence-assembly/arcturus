@@ -229,7 +229,7 @@ my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
 my $command = "$export_script -instance $instance -organism $organism "
             . "-caf $depadded ";
-#$command   .= "-minerva " if $minerva;
+#$command   .= "-minerva " if $minerva; # later here
 
 if ($scaffold) {
 # export using contig-export.pl TO BE DEVELOPED project must be mentioned
@@ -245,7 +245,7 @@ if ($scaffold) {
 else { # standard project export
     $command =~ s/contig/project/; # (temporary) change to (old) project-export script
     $command .= "-project $projectname ";
-#    $command .= "-minerva " if $minerva;
+    $command .= "-minerva " if $minerva;
 }
 
 print STDERR "Exporting to CAF file $depadded\n";
@@ -330,10 +330,9 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
 
     system ("$lock_script -i $instance -o $organism -p $projectname "
 	   ."-transfer owner -confirm"); # minerva ?
-
     my $status = $?;
 
-    if ($status && $status == 2) {
+    if ($status && ($status == 2 || $status == 512)) {
 # transfer failed because the project has no owner, unlock it
         my $unlock_script = "${arcturus_home}/utils/project-unlock";
         $unlock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
@@ -359,12 +358,14 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
     system ("rm -f $depadded");
 
     unless (-e "${gap4name}.B") {
+        exit 0 unless (-f "${gap4name}.0");
         print STDERR "!! -- version ${gap4name}.0 kept because "
                    . "no back-up B version found --\n";
         exit 0;
     }
 
     if ( -z "{gap4name}.B") {
+        exit 0 unless (-f "${gap4name}.0");
         print STDERR "!! -- version ${gap4name}.0 kept because "
 	           . "corrupted B version found --\n";
         exit 0;
@@ -388,15 +389,15 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
 #-------------------------------------------------------------------------------
 
-exit 0 if $keep;
-
-print STDERR "Cleaning up temporary files\n";
-
-system ("rm -f $depadded");
+unless ($keep) {
+    print STDERR "Cleaning up temporary files\n";
+    system ("rm -f $depadded");
+}
 
 exit 0;
 
 #-------------------------------------------------------------------------------
+# info
 #-------------------------------------------------------------------------------
 
 sub showusage {
