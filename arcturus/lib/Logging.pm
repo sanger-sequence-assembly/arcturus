@@ -91,13 +91,15 @@ sub finest {
 }
 
 sub error {
-# write message to the error log
+# write message to the error log; default flush stream handle
     my $this = shift;
     my $text = shift;
     my %options = @_;
 
-    $options{prefix} = $this->getPrefix() unless defined($options{prefix});
+    $options{flush} = 1 unless defined $options{flush};
 
+    $options{prefix} = $this->getPrefix() unless defined($options{prefix});
+ 
     &write(&getOutputStream($this->{STREAMS},1),$text,%options);
 }
 
@@ -129,7 +131,7 @@ sub debug {
 
 sub setFilter {
 print STDERR "Logging->setFilter TO BE DEPRECATED\n"; 
-&setStandardFilter(@_); # alias TO BE DEPRECATED
+&setStandardFilter(@_);
 }
 
 sub setStandardFilter {
@@ -439,7 +441,11 @@ sub write {
 # private, write text to the handle (file or otherwise) of the given stream
     my $stream = shift; # stream hash
     my $text = shift;
-    my %options = @_;
+    my %options = @_; 
+
+# formatting options: preskip,ps,ss,skip,prespace,space,postspace,emphasis,
+#                     space,prefix,nobreak,nb,bs
+# other options     : flush,   (xml)
 
     return unless $stream;
 
@@ -492,14 +498,14 @@ sub write {
 	return;
     }    
 
-# print STDERR "handle: $handle  method: $method  msg:'$text'\n";
-
-#    eval("\$handle->$method(\$message)") if $method; # will do nicely
-
     if ($method eq 'print') {
 # to a file handle
         $handle->print($message);
+        $handle->flush() if $options{flush};
     }
+#    elsif ($method) {
+#        eval("\$handle->$method(\$message)"); # will do nicely
+#    }
     elsif ($method eq 'write') {
 # to a default write method of e.g. a database handle
 print STDERR "handle: $handle  method: $method  msg:'$text'\n";
@@ -507,6 +513,7 @@ print STDERR "handle: $handle  method: $method  msg:'$text'\n";
     }
     elsif ($method) {
 # use the specified method on the stream handle
+print STDERR "handle: $handle  method: $method  msg:'$text'\n";
         eval("\$handle->$method(\$message)");
     }
     else {
