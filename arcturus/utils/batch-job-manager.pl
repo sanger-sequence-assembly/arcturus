@@ -24,12 +24,12 @@ my ($ioport,$perl,$script); $perl = 1; # default
 
 my ($delayed,$batch,$babel,$pcs3,$subdir,$superuser);
 
-my ($verbose,$confirm,$debug);
+my ($verbose,$confirm,$debug,$minerva);
 
 my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|gap4name|"
-               . "import|export|script|perl|problem|"
+               . "import|export|script|noperl|problem|"
                . "batch|nobatch|delayed|subdir|sd|r|superuser|su|"
-               . "verbose|debug|confirm|submit|help|h";
+               . "verbose|debug|minerva|confirm|submit|help|h";
 
 my $host = $ENV{HOST};
 
@@ -97,6 +97,7 @@ while (my $nextword = shift @ARGV) {
     $babel        = 0              if ($nextword eq '-pcs3');
 
     $verbose      = 1              if ($nextword eq '-verbose');
+    $minerva      = 1              if ($nextword eq '-minerva');
     $debug        = 1              if ($nextword eq '-debug');
 
     $confirm      = 1              if ($nextword eq '-confirm');
@@ -234,14 +235,6 @@ my $pwd = Cwd::cwd();
  
 $logger->debug("This script is run from directory : $pwd",ss=>1);
 
-# get the repository position
-
-my $work_dir = `pfind -q -u $organism`;
-
-&showUsage("Can't locate project directory for $organism") unless $work_dir;
-
-$work_dir .= "/arcturus/import-export"; # full work directory
-
 my $date = `date +%Y%m%d`; $date =~ s/\s//g;
 
 foreach my $project (@projects) {
@@ -312,8 +305,10 @@ foreach my $project (@projects) {
             $command .= "-s $script "    if $script;
             $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
             $command .= "-v $version " if $version;
-            $command .= "-rundir $currentpwd";
-             $command .= "-debug " if $debug;
+#            $command .= "-su " if $superuser;
+            $command .= "-rundir $currentpwd ";
+            $command .= "-debug " if $debug;
+            $command .= "-minerva " if $minerva;
         }
         else {
 # shell script
@@ -328,6 +323,18 @@ foreach my $project (@projects) {
 # batch or run
  
     if ($batch) {
+# get the repository position
+        my $work_dir = `pfind -q -u $organism`;
+        if ($work_dir) {
+            $work_dir .= "/arcturus/import-export"; # full work directory
+	}
+	elsif ($subdir) {
+            $work_dir = Cwd::pwd();
+            $work_dir =~ s?.*automount.*/nfs?/nfs?;
+	}
+	else {
+            &showUsage("Can't locate project directory for $organism (use -r)");
+	}
 # im/export by batch job
         my $submit;
         if ($host =~ /^pcs/) {
