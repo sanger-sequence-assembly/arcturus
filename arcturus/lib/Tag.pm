@@ -745,7 +745,7 @@ sub dump {
 
     my $skip = $options{skip}; # true to skip undefined items
 
-    my $report = $tag->getHost() . "Tag instance $tag\n";
+    my $report = $tag->getHostClass() . "Tag instance $tag\n";
 
     my @line;
     push @line, "sequence ID       ".($tag->getSequenceID() || 0)."\n";
