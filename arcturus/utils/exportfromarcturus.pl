@@ -337,8 +337,7 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
         my $unlock_script = "${arcturus_home}/utils/project-unlock";
         $unlock_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
 
-        system ("$unlock_script -i $instance -o $organism -p $projectname "
-	       ."-up -confirm"); # minerva ?
+        system ("$unlock_script -i $instance -o $organism -p $projectname -confirm");
 
         print STDERR "!! -- Failed to unlock project $projectname --\n" if $?;
     }
