@@ -463,7 +463,7 @@ sub write {
 	    }
         }
         $message .= "!! " if $options{emphasis};
-        $message .= "$options{prefix} : " if $options{prefix};
+        $message .= "$options{prefix} " if $options{prefix};
 # the text, if any
         $message .= $text if ($text && length($text) > 0);
 # formatting after
