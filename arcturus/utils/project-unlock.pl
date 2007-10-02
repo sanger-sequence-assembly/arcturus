@@ -16,14 +16,14 @@ my $organism;
 my $instance;
 my $project;
 my $assembly;
-my $forcing;
+my $superuser;
 my $verbose;
 
 my $confirm;
 my $test;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
-               . "force|confirm|test|verbose|help|h";
+               . "superuser|su|confirm|test|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -50,7 +50,9 @@ while (my $nextword = shift @ARGV) {
         $assembly = shift @ARGV;
     }
 
-    $forcing      = 1  if ($nextword eq '-force');
+    if ($nextword eq '-superuser' || $nextword eq '-su') {
+        $superuser = 1;
+    }
 
     $verbose      = 1  if ($nextword eq '-verbose');
 
@@ -61,8 +63,8 @@ while (my $nextword = shift @ARGV) {
     &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
-$forcing = 0 if $test; # overrides
-$confirm = 0 if $test; # overrides
+$superuser = 0 if $test; # overrides
+$confirm   = 0 if $test; # overrides
 
 #----------------------------------------------------------------
 # open file handle for output via a Reporter module
@@ -154,7 +156,7 @@ else {
         my %options = (confirm => 0); # to have it defined
         $options{confirm} = 1 if $confirm;
 
-        if ($forcing) {
+        if ($superuser) {
 # acquire the lock ownership yourself (if you don't have it but can acquire it)
            ($success,$message) = $project->transferLock(forcing=>1,%options);
             $logger->warning($message,ps=>1);
@@ -212,7 +214,7 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
-    print STDERR "-force\t\tunlock a project locked by another user\n";
+    print STDERR "-superuser\t(su) run this script as superuser\n";
     print STDERR "\n";
     print STDERR "-confirm\t(no value)\n";
     print STDERR "-test\t\t(no value) explicitly no confirm\n";
