@@ -987,7 +987,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                     my ($warning,$report) = $TF->processOligoTag($tag);
                     $logger->fine($report) if $warning;
                     unless ($tag->getTagSequenceName()) {
-		        $logger->warning("Missing oligo name in read tag for "
+		        $logger->info("Missing oligo name in read tag for "
                                . $read->getReadName()." (line $lineCount)");
                         next; # don't load this tag
 	            }
@@ -1009,9 +1009,9 @@ $logger->fine("DONE $newObjectType for $newObjectName");
  	        }
 # test the comment; ignore tags with empty comment
                 unless ($tag->getTagComment() =~ /\S/) {
-		    $logger->severe("Empty $type read tag ignored for "
+		    $logger->info("Empty $type read tag ignored for "
                                 . $read->getReadName()." (line $lineCount)");
-                    $logger->warning($tag->writeToCaf(0));
+                    $logger->info($tag->writeToCaf(0));
 		    next; # don't accept this tag
 		}
 
@@ -1055,7 +1055,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
             }
 # finally
             elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
-                $logger->warning("not recognized ($lineCount): $record");
+                $logger->info("not recognized ($lineCount): $record");
             }
         }
 
@@ -1161,7 +1161,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 	                }
 # nothing useful found                
                         else {
-		            $logger->warning("Missing repeat name in contig tag for ".
+		            $logger->info("Missing repeat name in contig tag for ".
                                    $contig->getContigName().": ($lineCount) $record");
 		        }
                     }
@@ -1172,7 +1172,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 		    $logger->fine($tag->writeToCaf());
                 }
                 else {
-		    $logger->warning("Empty $type contig tag ignored ($lineCount)");
+		    $logger->info("Empty $type contig tag ignored ($lineCount)");
 		}
 
 	    }
@@ -1181,11 +1181,11 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                 $logger->info("CONTIG tag ignored: ($lineCount) $record");
 	    }
             elsif ($record =~ /Tag/) {
-$logger->warning("CONTIG tag not recognized: ($lineCount) $record");
+#$logger->warning("CONTIG tag not recognized: ($lineCount) $record");
                 $logger->info("CONTIG tag not recognized: ($lineCount) $record");
             }
             else {
-$logger->warning("ignored: ($lineCount) $record");
+#$logger->warning("ignored: ($lineCount) $record");
                 $logger->info("ignored: ($lineCount) $record");
             }
         }
@@ -1547,7 +1547,7 @@ sub parseContig {
                          . "'$type' '$tcps' '$tcpf' '$info'");
 
             if ($type eq 'ANNO') {
-                $logger->warning("Contig annotation tag changed to COMM");
+                $logger->warning("Contig annotation ANNO tag changed to COMM");
                 $type = 'COMM';
 	    }
 
@@ -1595,15 +1595,14 @@ sub parseContig {
          	$logger->fine($tag->writeToCaf());
             }
             else {
-	        $logger->warning("l:$line Empty $type contig tag ignored");
+	        $logger->info("l:$line Empty $type contig tag ignored");
 	    }
         }
         elsif ($ignoretags && $record =~ /Tag\s+($ignoretags)\s+(\d+)\s+(\d+)(.*)$/i) {
             $logger->info("l:$line CONTIG tag ignored: $record");
         }
         elsif ($record =~ /Tag/) {
-            $logger->warning("l:$line CONTIG tag not recognized: $record");
-#            $logger->info("l:$line CONTIG tag not recognized: $record");
+            $logger->info("l:$line CONTIG tag not recognized: $record");
         }
         else {
             $logger->info("l:$line Ignored: $record");
@@ -1761,7 +1760,7 @@ $logger->fine("Read Tag $type detected");
 #                my ($warning,$report) = $TF->processOligoTag($tag);
                 $logger->fine($report) if $warning;
                 unless ($tag->getTagSequenceName()) {
-		$logger->warning("Missing oligo name in read tag for "
+		$logger->info("Missing oligo name in read tag for "
                                 . $read->getReadName()." (l:$line)");
                         next; # don't load this tag
 	        }
@@ -1785,9 +1784,9 @@ $logger->fine("Read Tag $type detected");
  	    }
 # test the comment; ignore tags with empty comment
             unless ($tag->getTagComment() =~ /\S/) {
-	        $logger->severe("Empty $type read tag ignored for "
+	        $logger->info("Empty $type read tag ignored for "
                                . $read->getReadName()." (l:$line)");
-                $logger->warning($tag->writeToCaf(0));
+                $logger->info($tag->writeToCaf(0));
 	        next; # don't accept this tag
 	    }
 # tag processing finished
@@ -1801,7 +1800,7 @@ $logger->fine("Read Tag $type detected");
         }
 
         elsif ($record =~ /Tag/) {
-            $logger->warning("READ tag not recognized: $record");
+            $logger->info("READ tag not recognized: $record");
         }
      
         elsif ($record =~ /Note\sINFO\s(.*)$/) {
@@ -1829,6 +1828,7 @@ $logger->fine("Read Tag $type detected");
 sub parseScaffold {
     my $this = shift;
     my $file = shift;
+    my %options = @_; # full =>
 
     my $logger = &verifyLogger('parseScaffold');
 
@@ -1860,7 +1860,26 @@ sub parseScaffold {
 
     close $APG;
 
-    return $apg;
+    return &scaffoldList($apg) unless $options{full}; # return list of contigs
+
+    return $apg; # returns an array of arrays with scaffold member data
+}
+
+sub scaffoldList {
+# convert array of arrays into list of signed contig IDs
+    my $apg = shift; # array of arrays
+
+    return undef unless ($apg && @$apg);
+
+    my @scaffold;
+    foreach my $component (@$apg) {
+        my $type = shift @$component;
+        next unless ($type eq 'c'); # ignore gaps
+        my $sign = pop @$component;
+        my $identifier = shift @$component;
+        push @scaffold,"$sign$identifier";
+    }
+    return \@scaffold;
 }
 
 #-----------------------------------------------------------------------------
