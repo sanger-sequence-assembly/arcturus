@@ -43,7 +43,7 @@ my $PROJECTINSTANCECACHE = {};
 #----------------------------------------------------------------
 
 my $actions = "transfer|grant|wait|defer|cancel|reject|execute|"
-            . "reschedule|probe";
+            . "reschedule|propagate|probe";
 
 my $validKeys = "organism|o|instance|i|$actions|"
               . "contig|c|focn|fofn|project|p|focpn|foccn|assembly|a|"
@@ -86,8 +86,9 @@ while (my $nextword = shift @ARGV) {
 
     $action      = 'reject'     if ($nextword eq '-reject');
 
-$action      = 'reenter'    if ($nextword eq '-reschedule'); # test phase
-$action      = 'probe'      if ($nextword eq '-probe');      # separate script?
+    $action      = 'reenter'    if ($nextword eq '-reschedule'); # test phase
+
+    $action      = 'propagate'  if ($nextword eq '-propagate');  # test phase
 
     $action      = 'list'       if ($nextword eq '-list');     # pending requests only
 
@@ -101,6 +102,7 @@ $action      = 'probe'      if ($nextword eq '-probe');      # separate script?
     $assembly    = shift @ARGV  if ($nextword eq '-a');
 
     $contig      = shift @ARGV  if ($nextword eq '-contig');
+    $contig      = shift @ARGV  if ($nextword eq '-c');
 
     $focn        = shift @ARGV  if ($nextword eq '-focn');
     $focn        = shift @ARGV  if ($nextword eq '-fofn');
@@ -247,13 +249,13 @@ $logger->info("Database $URL opened succesfully",skip=>1);
 # preliminaries: get (possible) contig and/or project info
 #----------------------------------------------------------------
 
-my ($cids,$ctophash,$pid);
+my ($cids,$ctophash,$pid,$namehash);
 
 if (defined($focpn)) {
 
     $logger->info("Reading from file $focpn");
 
-   ($cids,$ctophash) = &getContigProjectIdentifiers($focpn,$adb);
+   ($cids,$ctophash,$namehash) = &getContigProjectIdentifiers($focpn,$adb);
 
 # run through all contigs and collect the projects
 
@@ -272,7 +274,7 @@ elsif (defined($foccn)) {
 
     $logger->info("Reading from file $foccn");
 
-   ($cids,$ctophash) = &getProjectIdentifiersForContigs($foccn,$adb);
+   ($cids,$ctophash,$namehash) = &getProjectIdentifiersForContigs($foccn,$adb);
 # run through all contigs and collect the projects
 
     foreach my $cid (@$cids) {
@@ -288,7 +290,7 @@ elsif (defined($foccn)) {
 
 elsif ($contig || defined($focn)) {
 
-    $cids = &getContigIdentifiers($contig,$focn,$adb);
+   ($cids,$namehash) = &getContigIdentifiers($contig,$focn,$adb);
 
 }
 
@@ -340,11 +342,18 @@ if ($action eq 'transfer') {
     }
 
     $options{open} = $openproject;
-#$options{user} = $user if $user; # what does this, check
-    $options{requester_comment} = $comment if $comment;
+#$options{user} = $user if $user; # what does this, check ?
     $options{ignore_project} = 1 if $force;
 
     foreach my $contig (@$cids) {
+# assemble the requester comment
+        undef $options{requester_comment};
+        $options{requester_comment} = $comment if $comment;
+# add the original gap4name used to identify the contig, if any
+	if ($namehash && (my $name = $namehash->{$contig})) {
+            $options{requester_comment} .= "; " if $options{requester_comment};
+            $options{requester_comment} .= $name;
+	}
 
         if ($ctophash) {
 	    my $Project = &getCachedProject($adb,$ctophash->{$contig},$assembly);
@@ -488,7 +497,7 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
     $options{status} = 'pending' unless ($action eq 'reenter');
     $options{status} .= ',approved'  if ($action eq 'cancel');
 
-    my $datamode = ($action eq 'reenter' ? 2 : 1);
+    my $datamode = ($action eq 'reenter' || $action eq 'propagate') ? 2 : 1;
     my $requestsfound = $adb->getContigTransferRequestIDs($datamode,%options);
 
     if ($requestsfound && @$requestsfound && $requestsfound->[0] == $request) {
@@ -526,7 +535,7 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
         }
 
         elsif ($action eq 'reenter') {
-# only for dba
+# only for dba: reactivate a previously rejected request
    	    my %options = (status => 'pending');
             $options{requester_comment} = "previously $rd->{status} request was re-entered"
                                        . ($comment ? ": $comment" : "");
@@ -559,7 +568,7 @@ if ($action =~ /\b(grant|defer|cancel|reject|reenter)\b/) {
                 my $projectname = $project->getProjectName();
                 $report =~ s/ID\s(\d+)\b/$projectname/i;
             }
-            $logger->warning("operation refused : $report");
+            $logger->warning("operation failed or refused : $report");
         }
     }
     elsif ($request) {
@@ -645,7 +654,7 @@ elsif ($action eq 'execute') {
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
             	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
 	               $rd->{reviewer},$rd->{status},
-                       $rd->{reviewer_comment});
+                       $rd->{reviewer_comment} || '');
             $logger->warning("contig transfer request to be executed "
                            . "(=> use '-confirm') :\n\n".$line);
             next;
@@ -703,10 +712,51 @@ elsif ($action eq 'execute') {
     $logger->warning("no transfer requests processed",preskip=>1) unless $processed;            
 }
 
+elsif ($action eq 'propagate') {
+# only for dba: re-enter a request that has gone out of scope
+    my $rd = $adb->getContigTransferRequestData($request);
+    my $original_contig = $rd->{contig_id};
+    my $original_comment = $rd->{requester_comment};
+    my $project = $rd->{new_project_id};
+    my $comment = "previously $rd->{status} request was propagated "
+                .  ($comment ? ": $original_comment" : "");
+    my $contig;
+# first try to find the new contig using the parent_id
+    my $pairs = $adb->getCurrentContigIDsForAncestorIDs([($original_contig)]);
+    if ($pairs && scalar(@$pairs) == 1) {
+        $contig = $pairs->[0]->[0]; # the descendant of original contig
+    }
+# if none found or more than 1, (possibly) try the gap4name
+    elsif ($original_comment) { # try original gap4name?
+        my $cids = $adb->getContigIDsForContigProperty(gap4name => $original_comment);
+	$contig = $cids->[0] if ($cids && scalar(@$cids) == 1);     
+    }
 
+    if (!$contig && $pairs && scalar(@$pairs) > 1) {
+	$logger->warning("Ambiguous contig propagation result");
+        foreach my $pair (@$pairs) {
+            $logger->warning("@$pair");
+	}
+    }
 
-elsif ($action eq 'probe') {
-# ? separate script?
+    if ($contig) {
+        my $command = "$0 -i $instance -o $organism -transfer "
+                    . "-c $contig -p $project -confirm ";
+        $command   .= "-comment '$original_comment' " if $original_comment;
+        $command   .= "-a $assembly " if $assembly;
+        if ($confirm) {
+            system($command);
+            my $status = ($? ? 0 : 1);
+            $logger->error("Failed to submit a transfer new request $?") if $status;
+	}
+	else {
+            $logger->warning("To submit transfer request for contig $contig: ".
+                             "repeat with \"-confirm\""); 
+	}
+    }
+    else {
+        $logger->error("No (unique) descendants found");
+    }
 }
   
 $adb->disconnect();
@@ -768,6 +818,8 @@ $options{project} = 173;
 
     my @cids;
 
+    my $namehash = {}; # contig ID to gap4name
+
     foreach my $contig (@contigs) {
 
         next unless $contig;
@@ -782,11 +834,12 @@ $options{project} = 173;
                 $logger->warning("contig with read $contig not found");
                 next;
             }
+            $namehash->{$contig_id} = $contig;
             $contig = $contig_id;
         }
         push @cids,$contig;
     }
-    return [@cids];
+    return [@cids],$namehash;
 }
 
 sub getContigProjectIdentifiers {
@@ -801,6 +854,7 @@ sub getContigProjectIdentifiers {
 
     my $cids = [];
     my $itophash = {}; # contig ID to project
+    my $namehash = {}; # contig ID to gap4name
 
     foreach my $contig (@$contigs) {
 
@@ -820,6 +874,7 @@ sub getContigProjectIdentifiers {
                 $logger->warning("contig with read $contig not found");
                 next;
             }
+            $namehash->{$contig_id} = $contig;
             $contig = $contig_id;
         }
 
@@ -827,7 +882,7 @@ sub getContigProjectIdentifiers {
         $itophash->{$contig} = $project;
     }
 
-    return $cids,$itophash;
+    return $cids,$itophash,$namehash;
 }
 
 #------------------------------------------------------------------------
@@ -845,6 +900,7 @@ sub getProjectIdentifiersForContigs {
 
     my $cids = [];
     my $itophash = {}; # contig ID to project
+    my $namehash = {}; # contig ID to gap4name
 
     foreach my $contig (@$contigs) {
 
@@ -864,6 +920,7 @@ sub getProjectIdentifiersForContigs {
                 $logger->warning("contig with read $contig not found");
                 next;
             }
+            $namehash->{$contig_id} = $contig;
             $contig = $contig_id;
         }
 # add to output list
@@ -888,7 +945,7 @@ sub getProjectIdentifiersForContigs {
         $itophash->{$contig} = $project;
     }
 
-    return $cids,$itophash;
+    return $cids,$itophash,$namehash;
 }
 
 #------------------------------------------------------------------------
@@ -1145,14 +1202,15 @@ sub createContigTransferRequest {
 
 # the request has been added with status 'pending', now update comment and reviewer
 
-    my $comment = $options{comment};
+    my $comment = $options{requester_comment};
 
     my $status; # for output message
 
     if ($cpp && $tpp) {
 # user has privilege on both (current & destination) projects; add comment if not project owner
-        unless ($comment || $user eq $cnames[2]) {
-     	    $comment = "original contig owner $cnames[2]";
+        unless ($user eq $cnames[2]) {
+            $comment .= " " if $comment;
+     	    $comment .= "original contig owner $cnames[2]";
 	}
         $adb->modifyContigTransferRequest($rqid,0,0,requester_comment => $comment,
                                                     status =>'approved');
