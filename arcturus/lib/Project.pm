@@ -367,7 +367,7 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         my $pd = $this->getProjectData();
         my $nc = $pd->{contigs};
         my $nr = $pd->{reads}; 
-        $logger->error("Project $pd->{name} $nc contigs $nr reads");
+        $logger->error("$nc CONTIGS $nr READS");
     }
 
     foreach my $contig_id (@$contigids) {
@@ -405,7 +405,7 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         }
         else {
             my $nrofreads = $contig->getNumberOfReads();
-            $logger->error("contig $contig_id $nrofreads") if $logger;
+            $logger->error("CONTIG $contig_id $nrofreads") if $logger;
             $logger->flush();
             $export++;
         }
