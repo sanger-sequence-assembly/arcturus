@@ -49,13 +49,16 @@ sub open {
 	$this->{DataSource} = $ds;
     }
     else {
-	$this->{DataSource} = new DataSource(&loadPropertiesFile(@_));
-#	$this->{DataSource} = new DataSource(@_);
+        my @properties = &loadProperties(@_); # pick up info if not already defined
+	$this->{DataSource} = new DataSource(@properties);
+# pick up specific info
+        my %properties = @properties;
+#        $this->setAdministrator($properties{administrator});
     }
 
     return undef unless $this->{DataSource};
 
-    $this->init(); 
+    $this->init();
 
     return $this;
 }
@@ -137,14 +140,11 @@ sub disconnect {
     }
 }
 
-sub loadPropertiesFile {
+sub loadProperties {
 # private
-    my %options = @_;
+    my %properties = @_; # input properties already defined
 
-    return @_ if ($options{instance} || $options{organism});
-
-# no organism or instance specified
-# try to retrieve data from .arcturus.props
+# (try to) retrieve data from .arcturus.props in this directory branch
 
     my $file = ".arcturus.props";
     for my $i (0,1,2) {
@@ -161,9 +161,13 @@ sub loadPropertiesFile {
         next unless ($record =~ s/^arcturus\.//);
         my @info = split /\W+/,$record;
         next unless (scalar(@info) == 2); # invalid info
+# add the new value to info, unless the property is already defined
+        next if defined($properties{ "$info[0]"});
+        next if defined($properties{"-$info[0]"});
         push @_,@info;
     }
-    return @_;
+
+    return @_; # return input properties and any added from props file 
 }
 
 #-----------------------------------------------------------------------------
@@ -198,9 +202,6 @@ sub putArcturusUser {
 
     my $user = getpwuid($<);
 
-$this->{ArcturusUser} = $user; # temp
-    $ARCTURUSUSER = $user;
-
 # test against prohibited names (force login with own unix username)
 
     my %forbidden = (pathdb => 1, pathsoft => 1, yeasties => 1,
@@ -212,6 +213,11 @@ $this->{ArcturusUser} = $user; # temp
 
 	die "You cannot access Arcturus under username $user";
     }
+
+# valid user
+
+$this->{ArcturusUser} = $user; # temp
+    $ARCTURUSUSER = $user;
 
 # initialise the privileges hash
 
@@ -229,19 +235,38 @@ return $this->{ArcturusUser} || ''; # temp
 sub verifyArcturusUser {
 # test if the user exists in the USER table; print a warning if not
     my $this = shift;
+    my %options = @_; # user=>, list=>
 
-    my $user = $this->getArcturusUser() || return undef;
+    my $user = $options{user} || $this->getArcturusUser() || return undef;
 
     my $userdatahash = &fetchUserPrivileges($this->getConnection(),user=>$user);
 
     unless ($userdatahash && keys %$userdatahash) {
+        return 0 unless $options{list}; # no error message
         my $logger = &verifyLogger('verifyArcturusUser');
         $logger->error("user $user is unknown to Arcturus database " 
-	              . ($this->getURL() || "VOID")) if shift;
+	              . ($this->getURL() || "VOID"));
         return 0;
     }
 
     return $user;
+}
+
+sub setAdminstrator {
+    my $this = shift;
+    my $user = shift || 'ejz';
+
+    return 0 unless $this->verifyArcturusUser(user=>$user,list=>1); # failed
+
+    $this->{DBA} = $user;
+
+    return 1;
+}
+
+sub getAdministrator {
+    my $this = shift;
+ 
+   return $this->{DBA};
 }
 
 #-------------------------------------------------------------------------
