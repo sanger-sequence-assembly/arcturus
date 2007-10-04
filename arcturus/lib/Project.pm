@@ -362,12 +362,11 @@ sub writeContigsToCaf { # TO BE DEPRECATED
 
     my $frugal = $options{frugal} || 0;
     my $logger = $options{logger};
+    $logger = 0 unless ($logger && ref($logger) eq 'Logging'); # protect
 
     if ($logger) {
         my $pd = $this->getProjectData();
-        my $nc = $pd->{contigs};
-        my $nr = $pd->{reads}; 
-        $logger->error("$nc CONTIGS $nr READS");
+        $logger->error("$pd->{contigs} CONTIGS $pd->{reads} READS");
     }
 
     foreach my $contig_id (@$contigids) {
@@ -405,10 +404,7 @@ sub writeContigsToCaf { # TO BE DEPRECATED
         }
         else {
             my $nrofreads = $contig->getNumberOfReads();
-	    if (defined($logger)) {
-		$logger->error("CONTIG $contig_id $nrofreads");
-		$logger->flush();
-	    }
+	    $logger->error("CONTIG $contig_id $nrofreads") if $logger;
             $export++;
         }
 
