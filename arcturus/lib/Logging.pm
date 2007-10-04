@@ -53,17 +53,25 @@ sub new {
 sub severe {
 # write message to the standard log
     my $this = shift;
+    my $text = shift;
+    my %options = @_;
+
+    $options{flush} = 1 unless defined $options{flush}; # default not buffered
  
     return unless $this->testStandardFilter(4);
-    &write(&getOutputStream($this->{STREAMS},0),@_);
+    &write(&getOutputStream($this->{STREAMS},0),$text,%options);
 }
 
 sub warning {
 # write message to the standard log
     my $this = shift;
+    my $text = shift;
+    my %options = @_;
+
+    $options{flush} = 1 unless defined $options{flush}; # default not buffered
 
     return unless $this->testStandardFilter(3);
-    &write(&getOutputStream($this->{STREAMS},0),@_);
+    &write(&getOutputStream($this->{STREAMS},0),$text,%options);
 }
 
 sub info {
@@ -96,7 +104,7 @@ sub error {
     my $text = shift;
     my %options = @_;
 
-    $options{flush} = 1 unless defined $options{flush};
+    $options{flush} = 1 unless defined $options{flush}; # default not buffered
 
     $options{prefix} = $this->getPrefix() unless defined($options{prefix});
  
@@ -116,6 +124,8 @@ sub debug {
     my $this = shift;
     my $text = shift;
     my %options = @_;
+
+    $options{flush} = 1 unless defined $options{flush}; # default not buffered
 
     $options{prefix} = $this->getPrefix() unless defined($options{prefix});
 
