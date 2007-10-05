@@ -1696,18 +1696,30 @@ sub getListOfEditedSequences {
 
 sub hasRead {
 # test presence of read with specified readname; return (first) read_id
-    my $this      = shift;
-    my $readname  = shift || return; # readname to be tested
+    my $this = shift;
+    my %options = @_; # read_id=> or readname=> 
 
     my $dbh = $this->getConnection();
    
-    my $query = "select read_id from READINFO where readname=?";
+    my $query = "select read_id from READINFO ";
+
+    my $bindvalue;
+    if ($bindvalue = $options{readname}) {
+        $query .= "where readname = ?";
+    }
+    elsif ($bindvalue = $options{read_id}) {
+        $query .= "where read_id = ?";
+    }
+    else {
+print STDERR "INVALID call hasRead : @_\n"; # to be removed
+        return undef;
+    }
 
     my $sth = $dbh->prepare_cached($query);
 
     my $read_id;
 
-    $sth->execute($readname) || &queryFailed($query,$readname);
+    $sth->execute($bindvalue) || &queryFailed($query,$bindvalue);
 
     while (my @ary = $sth->fetchrow_array()) {
         $read_id = $ary[0];
@@ -2088,7 +2100,7 @@ sub putNewSequenceForRead {
 
     my $readname = $read->getReadName();
     return (0,"incomplete Read instance: missing readname") unless $readname; 
-    my $read_id = $this->hasRead($readname);
+    my $read_id = $this->hasRead(readname=>$readname);
 
 # test db read_id against (possible) Read read_id (we don't know how $read was made)
 
@@ -2188,8 +2200,10 @@ sub putCommentForReadID {
 sub putCommentForReadName {
 # add a comment for a given readname (finishers entry of comment?)
     my $this = shift;
+    my $name = shift;
 
-    my $readid = $this->hasRead(shift);
+    my $readid = $this->hasRead(readname=>$name);
+    return 0 unless $readid;
     return $this->putCommentForReadID($readid,shift);
 }
 
@@ -2368,9 +2382,13 @@ sub getReadAttributeID {
     if (defined($rc)) {
 	($id) = $select_sth->fetchrow_array();
     }
- 
-    return $id if defined($id);  #  $select_sth->finish(); # ?
 
+# return the identification found
+
+    if (defined($id)) {
+        $select_sth->finish();
+        return $id;
+    }
 
 # 3 it's a new dictionary item: add to the database and to the dictionary hash
 
@@ -2390,13 +2408,16 @@ sub getReadAttributeID {
 
 	    if (defined($rc)) {
 		($id) = $select_sth->fetchrow_array();
-		$select_sth->finish();
+ 		$select_sth->finish();
 	    }
 	} elsif ($rows == 1) {
 	    my $dbh = $insert_sth->{'Database'};
 	    $id = $dbh->{'mysql_insertid'};
 	}
     }
+
+    $select_sth->finish();
+    $insert_sth->finish();
 
     &dictionaryInsert($dict, $identifier, $id) if defined($id);
 
@@ -2445,12 +2466,13 @@ sub deleteRead { # TO BE TESTED
 
     my $readid;
     if ($key eq 'id' || $key eq 'read_id') {
-	$readid = $value;
+	$readid = $this->hasRead(read_id=>$value); # test existence
+        return (0,"Read $value does not exist") unless $readid;
     }
     elsif ($key eq 'name' || $key eq 'readname') {
-        return $this->deleteReadsLike($value,@_) if ($value =~ /[\%\-]/);
-	$readid = $this->hasRead($value); # get read_id for readname
-        return (0,"Read does not exist") unless $readid;
+        return $this->deleteReadsLike($value,@_) if ($value =~ /[\%\_]/);
+	$readid = $this->hasRead(readname=>$value); # get read_id for readname
+        return (0,"Read $value does not exist") unless $readid;
     }
     else {
         return (0,"invalid input");
@@ -2477,30 +2499,30 @@ sub deleteRead { # TO BE TESTED
 
 # remove for readid from all tables it could be in (should be separate cleanup?)
 
-my $logger = $this->verifyLogger("deleteRead");
-
-    my @stables = ('SEQVEC','CLONEVEC','SEQUENCE','QUALITYCLIP','READTAG');
+    my $logger = $this->verifyLogger("deleteRead");
 
     my $delete = 0;
 # delete seq_id items
+    my @stables = ('SEQVEC','CLONEVEC','SEQUENCE','QUALITYCLIP','READTAG');
     foreach my $table (@stables) {
-        $query = "delete $table from $table left join SEQ2READ using (seq_id) where read_id=?";
-$logger->debug("$query"); next; # test this query!
-
+        $query = "delete $table from $table left join SEQ2READ using (seq_id)"
+               . " where read_id=?";
+        $logger->info($query);
         $sth = $dbh->prepare_cached($query);
-#        $row = $sth->execute($readid) || &queryFailed($query,$readid);
+        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
         $sth->finish();
     }
 
-    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','READINFO');
 # delete read_id items
-    foreach my $table (@stables) {
-        $query = "delete from $table where read_id=?";
-$logger->debug("$query"); next; # test this query!
 
+    my @rtables = ('READCOMMENT','TRACEARCHIVE','SEQ2READ','READINFO');
+    foreach my $table (@rtables) {
+
+        $query = "delete from $table where read_id=?";
+        $logger->info($query);
         $sth = $dbh->prepare_cached($query);
-#        $row = $sth->execute($readid) || &queryFailed($query,$readid);
+        $row = $sth->execute($readid) || &queryFailed($query,$readid);
         $delete++ if ($row > 0);
         $sth->finish();
     }
@@ -2526,8 +2548,9 @@ sub deleteReadsLike { # TO BE TESTED
     while (my ($read_id) = $sth->fetchrow_array()) {
         push @readids,$read_id;
     }
-
     $sth->finish();
+
+    return 0,"no reads found with readname like '$name'" unless @readids;
 
     my $result = 0;
     my $report = '';
@@ -2875,32 +2898,6 @@ $logger->debug("new tags to be loaded : ".scalar(@tags));
     return &putReadTags($dbh,\@tags);
 }
 
-#sub processTagPlaceHolderName { # DEPRECATED 
-# private method, substitute (possible) placeholder name of the tag sequence
-#    my $tag = shift;
-#my $logger = shift;
-#$logger->setPrefix("processTagPlaceHolderName");
-#    &verifyPrivate($tag,'processTagPlaceHolderName');
-#    my $name = $tag->getTagSequenceName();
-#$logger->debug("input '$name'");
-#    return 0 unless ($name && $name =~ /^\<(\w+)\>$/); # of form "<name>"
-# generate a generic name from the place holder name and sequence ID
-#    $name = $1; # the place holder name
-#    my $seq_id = $tag->getSequenceID();
-#    my $randomnumber = int(rand(100)); # from 0 to 99 
-#    my $newname = $name.sprintf("%lx%02d",$seq_id,$randomnumber);
-#$logger->debug("new tag name $newname   placeholder '$name'");
-# check/replace if the place holder appears in the comment as well 
-#    my $comment = $tag->getTagComment();
-#$logger->debug("comment:\n$comment");
-#    $comment =~ s/\<$name\>/$newname/ if $comment;
-#$logger->debug("new comment:\n$comment");
-
-#    $tag->setTagSequenceName($newname);
-#    $tag->setTagComment($comment);
-#    return 1;
-#}
-
 sub getTagSequenceIDsForTags {
 # add tag sequence IDs to input tags
     my $this = shift;
@@ -2954,9 +2951,9 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
                 $tagIDhash->{$tagseqname} = $tag_seq_id;
                 $tagSQhash->{$tagseqname} = $sequence;
             }
-
-            $sth->finish();
-	}
+ 	}
+        
+        $sth->finish();
 
 # test the sequence against the one specified in the tags
 
@@ -2998,7 +2995,7 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
                     last;
 		}
 # if the sequence was not found, then generate a new entry with a related name
-                unless ($sequence eq $tagSQhash->{$tagseqname}) {
+                unless ($sequence && $sequence eq $tagSQhash->{$tagseqname}) {
                     $logger->error("Tag sequence mismatch for tag $tagseqname : (tag) ".
                                    "$sequence  (taglist) $tagSQhash->{$tagseqname}");
 # generate a new tag sequence name by appending a random string
