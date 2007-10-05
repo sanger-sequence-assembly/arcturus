@@ -360,7 +360,7 @@ $readstoload = $factory->getReadNamesToLoad() unless defined($readstoload);
 
 foreach my $readname (@{$readstoload}) {
 
-    next if (!$noloading && !$onlyloadtags && $adb->hasRead($readname)); # already stored
+    next if (!$noloading && !$onlyloadtags && $adb->hasRead(readname=>$readname)); # already stored
 
     my $read = $factory->getReadByName($readname);
 
