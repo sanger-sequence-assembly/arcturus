@@ -34,7 +34,7 @@ my $minerva = '';
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|scaffold|c|"
               . "gap4name|g|version|v|nolock|nl|"
               . "script|rundir|rd|create|superuser|su|"
-              . "keep|minerva|m|help|h";
+              . "keep|minerva|m|passon|po|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -106,6 +106,10 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-minerva' || $nextword eq '-m') {
         $minerva       = "#MINERVA "; # minerva prefix
+    }
+
+    if ($nextword eq '-passon' || $nextword eq '-po') {
+        last; # abort parsing here and pass remainder of ARGV on to export script
     }
 
     if ($nextword eq '-help'     || $nextword eq '-h') {
@@ -241,11 +245,13 @@ if ($scaffold) {
 # if gap4name defined, use that, else generate one project_scaffold_NN
 # to be developed (or function in export script?)
     }
+    $command .= " @ARGV" if @ARGV;
 }
 else { # standard project export
     $command =~ s/contig/project/; # (temporary) change to (old) project-export script
     $command .= "-project $projectname ";
     $command .= "-minerva " if $minerva;
+    $command .= " @ARGV" if @ARGV;
 }
 
 print STDERR "Exporting to CAF file $depadded\n";
@@ -387,7 +393,6 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 }
 
 #-------------------------------------------------------------------------------
-
 unless ($keep) {
     print STDERR "Cleaning up temporary files\n";
     system ("rm -f $depadded");
