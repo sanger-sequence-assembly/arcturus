@@ -326,6 +326,8 @@ sub CAFFileParser {
             $readhash->{AV} =~ s/^\s+|\s+$//; # remove leading/trailing blanks
             my @quality = split /\s+/, $readhash->{AV};
             $Read->setBaseQuality([@quality]);
+# special : check that primer is defined
+            $Read->setPrimer("Unknown_primer") unless $Read->getPrimer();
 # add the readname and Read object to the buffer of the super class
             if ($this->addReadToList($object,$Read)) {
                 $count++;
