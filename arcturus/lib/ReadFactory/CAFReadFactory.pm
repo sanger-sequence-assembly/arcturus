@@ -120,9 +120,7 @@ sub CAFFileParser {
     my $type = 0;
     undef my $pdate;
 
-
-    my $count = 0;
-    my $missed = 0;
+    my $problems = 0;
 
     $this->loginfo("Begin reading caf file");
 
@@ -181,6 +179,10 @@ sub CAFFileParser {
             delete $reads{$object};
             exit 0;
         }
+
+        elsif ($record =~ /\bunpadded|align_to_scf/i) {
+            next;
+	}
 
         elsif ($record =~ /Is_read/) {
             next;
@@ -261,14 +263,29 @@ sub CAFFileParser {
                     }
                 }
             }
-            elsif ($items[0] =~ /Tag/i) {
+            elsif ($items[0] =~ /^Tag/i) {
 # parse a read tag
                 my $type = $items[1];
                 my $trps = $items[2];
                 my $trpf = $items[3];
-                my $info = $items[4];
+                my $info = $items[4] || '';
+                while (scalar(@items) > 5) {
+                    $info .= " ".$items[5];
+                    shift @items;
+                }
+# test numericity of position data (perhaps to TagFactory)
+                if (!$trps || !$trpf || $trps =~ /\D/ || $trpf =~ /\D/) {
+                     $this->logwarning("$record\n$line  @items");
+                     $problems++;
+                     next;
+                }
+# check contents of oligo tags (perhaps to TagFactory)
+                if ($type eq 'OLIG' && !$info) {
+#                     print STDERR "$line $record   (missing info)\n";
+                     $problems++; # missing info
+                }
 # test for a continuation mark (\n\); if so, read until no continuation mark
-                while ($info =~ /\\n\\\s*$/) {
+                while ($info && $info =~ /\\n\\\s*$/) {
                     if (defined($record = <$CAF>)) {
                         chomp $record;
                         $info .= $record;
@@ -281,8 +298,16 @@ sub CAFFileParser {
 # build a new read Tag instance          
   	        my $tag = TagFactory->makeReadTag($type,$trps,$trpf,
                                                   TagComment => $info);
-# print STDERR "Read Tag $type detected : ".$tag->writeToCaf()."\n";
-                $Read->addTag($tag);
+                $Read->addTag($tag) if $tag;
+                $problems++ unless $tag;
+	    }
+            elsif ($items[0] =~ /^Sequencing_vector/) {
+# $items[2] is vector name? check?
+                next;
+            }
+
+            else {
+		$this->logwarning("not recognized: $line  $record");
 	    }
         }
         elsif ($type == 2) {
@@ -304,11 +329,12 @@ sub CAFFileParser {
 # okay, here we have a hash of read hashes
 
     $this->loginfo("CAF file parser finished ($line)");
-    my $nr = scalar(keys %reads) + $count + $missed;
+    my $nr = scalar(keys %reads);
  
-    $this->loginfo("$nr reads processes ($count, $missed)"); 
+    $this->loginfo("$nr reads processed (tag problems $problems)"); 
 
-
+    my $count = 0;
+    my $missed = 0;
     foreach my $object (keys %reads) {
 
         my $readhash = $reads{$object};
@@ -340,7 +366,7 @@ sub CAFFileParser {
 
     undef %reads; # release memory
 
-    $this->loginfo("$count reads loaded, $missed reads skipped");
+    $this->loginfo("$count reads parsed, $missed reads skipped");
 
     return $count;
 }
