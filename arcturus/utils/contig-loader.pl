@@ -1193,7 +1193,7 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
 # the info string starts with a name like axx..
         $name = $1;
     }
-    elsif ($info[1] eq $sequence) {
+    elsif (defined($info[1]) && $info[1] eq $sequence) {
         $name = $info[0];
         $name = "o$name" unless ($name =~ /\D/);
     }
