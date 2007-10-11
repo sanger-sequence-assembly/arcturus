@@ -12,6 +12,9 @@ public class BandedSmithWatermanArray implements SmithWatermanArrayModel {
 	private int queryLength;
 
 	private int bandwidth;
+	
+	private int bestRow = -1;
+	private int bestColumn = -1;
 
 	public BandedSmithWatermanArray(char[] subjectSequence, int subjectOffset,
 			int subjectLength, char[] querySequence, int queryOffset,
@@ -119,5 +122,19 @@ public class BandedSmithWatermanArray implements SmithWatermanArrayModel {
 		for (int row = 0; row < sw.length; row++)
 			for (int col = 0; col < sw[row].length; col++)
 				sw[row][col].setOnBestAlignment(false);
+	}
+	
+	public void setMaximalEntry(int row, int column) {
+		bestRow = row;
+		bestColumn = column;
+	}
+	
+	public int[] getMaximalEntry() {
+		int[] pos = new int[2];
+		
+		pos[0] = bestRow;
+		pos[1] = bestColumn;
+		
+		return pos;
 	}
 }

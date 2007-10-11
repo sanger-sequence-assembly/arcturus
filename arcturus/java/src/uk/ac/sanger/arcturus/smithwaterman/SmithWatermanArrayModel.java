@@ -30,5 +30,9 @@ public interface SmithWatermanArrayModel {
     
     public int getQueryLength();
     
+    public int[] getMaximalEntry();
+    
+    public void setMaximalEntry(int row, int column);
+    
     public void resetOnBestAlignment();
 }
