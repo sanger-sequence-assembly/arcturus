@@ -44,8 +44,15 @@ public class RunSmithWaterman {
 		
 		ScoringMatrix smat = new ScoringMatrix();
 		
+		if (subjectLength == 0)
+			subjectLength = subjectSequence.length - subjectOffset;
+		
+		if (queryLength == 0)
+			queryLength = querySequence.length - queryOffset;
+		
 		SmithWatermanArrayModel sw = SmithWaterman.calculateMatrix(subjectSequence,
-				querySequence, smat, bandwidth);
+				subjectOffset, subjectLength,
+				querySequence, queryOffset, queryLength, smat, bandwidth);
 		
 		int[] best = SmithWaterman.findMaximalEntry(sw);
 		
@@ -102,7 +109,7 @@ public class RunSmithWaterman {
 
 	private static void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS");
-		ps.println("\t-subject\t\tName of subject FASTA file");
+		ps.println("\t-subject\tName of subject FASTA file");
 		ps.println("\t-query\t\tName of query FASTA file");
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
