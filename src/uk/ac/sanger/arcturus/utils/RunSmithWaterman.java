@@ -59,7 +59,7 @@ public class RunSmithWaterman {
 		Alignment al = null;
 		
 		try {
-			al = SmithWaterman.getAlignment(sw, best[0], best[1]);
+			al = SmithWaterman.getAlignment(sw, best[1], best[0]);
 		} catch (SmithWatermanException e) {
 			e.printStackTrace();
 		}
