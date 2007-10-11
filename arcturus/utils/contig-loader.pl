@@ -1233,7 +1233,7 @@ print STDOUT "name ".($name || '')." (change $change) \n" if $DEBUG;
 
 # or see if possibly the name and sequence fields have been interchanged
 
-    if ($info[1] =~ /^\w+\.\w{1,2}\b/) {
+    if (defined($info[1]) && $info[1] =~ /^\w+\.\w{1,2}\b/) {
 # name and sequence possibly interchanged
 print STDOUT "still undecoded info: $info  (@info)\n" if $DEBUG;
         $name = $info[1];
