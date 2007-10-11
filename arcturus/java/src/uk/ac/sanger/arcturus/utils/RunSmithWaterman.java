@@ -70,7 +70,9 @@ public class RunSmithWaterman {
 		EditEntry[] edits = al.getEdits();
 		
 		for (int i = 0; i < edits.length; i++)
-			System.out.println((i > 0 ? "," :"") + edits[i]);
+			System.out.print((i > 0 ? "," :"") + edits[i]);
+		
+		System.out.println();
 	}
 	
 	private static char[] loadFromFile(String filename) {
