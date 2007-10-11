@@ -97,7 +97,6 @@ public class RunSmithWaterman {
 					headerseen = true;
 				} else {
 					sb.append(line);
-					sb.append('\n');
 				}
 			}
 
