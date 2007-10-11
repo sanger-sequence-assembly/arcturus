@@ -54,7 +54,7 @@ public class RunSmithWaterman {
 				subjectOffset, subjectLength,
 				querySequence, queryOffset, queryLength, smat, bandwidth);
 		
-		int[] best = SmithWaterman.findMaximalEntry(sw);
+		int[] best = sw.getMaximalEntry();
 		
 		Alignment al = null;
 		
