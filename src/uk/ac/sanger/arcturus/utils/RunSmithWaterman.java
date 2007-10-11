@@ -42,7 +42,7 @@ public class RunSmithWaterman {
 		char[] subjectSequence = loadFromFile(subjectFilename);
 		char[] querySequence = loadFromFile(queryFilename);
 		
-		ScoringMatrix smat = new ScoringMatrix();
+		ScoringMatrix smat = new ScoringMatrix(1, -2, -2, -3);
 		
 		if (subjectLength == 0)
 			subjectLength = subjectSequence.length - subjectOffset;
@@ -67,12 +67,12 @@ public class RunSmithWaterman {
 		System.out.println("Row: " + (subjectOffset + al.getRow()));
 		System.out.println("Col: " + (queryOffset + al.getColumn()));
 		
+		System.out.println();
+	
 		EditEntry[] edits = al.getEdits();
 		
 		for (int i = 0; i < edits.length; i++)
-			System.out.print((i > 0 ? "," :"") + edits[i]);
-		
-		System.out.println();
+			System.out.println(edits[i]);
 	}
 	
 	private static char[] loadFromFile(String filename) {
