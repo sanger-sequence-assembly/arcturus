@@ -99,7 +99,7 @@ public class SmithWaterman {
 		return (i > j) ? i : j;
 	}
 
-	private static int[] findMaximalEntry(SmithWatermanArrayModel sw) {
+	public static int[] findMaximalEntry(SmithWatermanArrayModel sw) {
 		if (sw == null)
 			return null;
 
