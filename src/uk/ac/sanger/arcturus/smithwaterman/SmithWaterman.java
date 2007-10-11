@@ -14,6 +14,8 @@ public class SmithWaterman {
 		int sMismatch = smat.getMismatchScore();
 		int sGapInit = smat.getGapInitScore();
 		//int sGapExtend = smat.getGapExtendScore();
+		
+		int bestScore = -1;
 
 		SmithWatermanArrayModel sw;
 
@@ -74,6 +76,13 @@ public class SmithWaterman {
 							sw.setScoreAndDirection(row, col, left,
 									SmithWatermanEntry.LEFT);
 					}
+					
+					score = (diagonal >= maxGapScore) ? diagonal : maxGapScore;
+					
+					if (score > bestScore) {
+						bestScore = score;
+						sw.setMaximalEntry(row, col);
+					}
 				} else {
 					sw.setScoreAndDirection(row, col, 0,
 							SmithWatermanEntry.UNDEFINED);
@@ -98,43 +107,12 @@ public class SmithWaterman {
 	private static int max(int i, int j) {
 		return (i > j) ? i : j;
 	}
-
-	public static int[] findMaximalEntry(SmithWatermanArrayModel sw) {
-		if (sw == null)
-			return null;
-
-		int nrows = sw.getRowCount();
-		int ncols = sw.getColumnCount();
-
-		int maxScore = 0;
-		int maxRow = 0;
-		int maxCol = 0;
-
-		for (int row = 0; row < nrows; row++) {
-			for (int col = 0; col < ncols; col++) {
-				int score = sw.getScore(row, col);
-
-				if (score >= maxScore) {
-					maxRow = row;
-					maxCol = col;
-					maxScore = score;
-				}
-			}
-		}
-
-		int[] result = new int[2];
-		
-		result[0] = maxCol;
-		result[1] = maxRow;
-		
-		return result;
-	}
 	
 	public static Segment[] traceBack(SmithWatermanArrayModel sw) throws SmithWatermanException {
 		if (sw == null)
 			return null;
 		
-		int[] maximal = findMaximalEntry(sw);
+		int[] maximal = sw.getMaximalEntry();
 		
 		int col = maximal[0];
 		int row = maximal[1];
@@ -228,7 +206,7 @@ public class SmithWaterman {
 		if (sw == null)
 			return null;
 
-		int[] maximal = findMaximalEntry(sw);
+		int[] maximal = sw.getMaximalEntry();
 
 		int col = maximal[0];
 		int row = maximal[1];

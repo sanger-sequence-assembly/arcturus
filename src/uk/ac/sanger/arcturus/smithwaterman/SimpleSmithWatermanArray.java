@@ -10,6 +10,9 @@ public class SimpleSmithWatermanArray implements SmithWatermanArrayModel {
 	private char[] querySequence;
 	private int queryOffset;
 	private int queryLength;
+	
+	private int bestRow = -1;
+	private int bestColumn = -1;
 
 	public SimpleSmithWatermanArray(char[] subjectSequence, int subjectOffset, int subjectLength,
 			char[] querySequence, int queryOffset, int queryLength) {
@@ -103,5 +106,19 @@ public class SimpleSmithWatermanArray implements SmithWatermanArrayModel {
 		for (int row = 0; row < sw.length; row++)
 			for (int col = 0; col < sw[row].length; col++)
 				sw[row][col].setOnBestAlignment(false);
+	}
+	
+	public void setMaximalEntry(int row, int column) {
+		bestRow = row;
+		bestColumn = column;
+	}
+	
+	public int[] getMaximalEntry() {
+		int[] pos = new int[2];
+		
+		pos[0] = bestRow;
+		pos[1] = bestColumn;
+		
+		return pos;
 	}
 }
