@@ -173,6 +173,8 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage("Invalid organism '$organism' on server '$instance'");
 }
+
+$adb->setLogger($logger);
  
 my $URL = $adb->getURL;
 
