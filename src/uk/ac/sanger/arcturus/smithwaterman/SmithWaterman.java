@@ -198,6 +198,8 @@ public class SmithWaterman {
 			segments.add(new Segment(startA, endA, startB, endB));
 
 		Segment[] array = new Segment[segments.size()];
+		
+		Collections.reverse(segments);
 
 		return (Segment[]) segments.toArray(array);
 	}
