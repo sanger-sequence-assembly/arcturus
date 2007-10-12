@@ -116,7 +116,7 @@ sub getContig {
 
     $query .= "order by contig_id desc limit 1";
 
-    $this->logQuery('getContig',$query,@values) if $options{debug};
+    $this->logQuery('getContig',$query,@values) if $options{report};
 
 # ok, execute
 
@@ -208,7 +208,15 @@ sub getContig {
 
     return $contig if $contig->isValid(noreadsequencetest=>$frugal); # for export
 
-    return undef; # invalid Contig instance
+# store the query and the contig status
+
+    $this->logQuery('getContig',$query,@values) unless $options{report};
+
+    my $logger = $this->verifyLogger("getContig :");
+    $logger->debug("invalid contig returned",emphasis=>1);
+    $logger->debug($contig->{status});
+
+    return undef;
 }
 
 sub getSequenceAndBaseQualityForContig {
@@ -428,6 +436,7 @@ sub putContig {
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
  
     my $reads = $contig->getReads();
+#$log->debug("calling getSequenceIDsForRead from $this");
     return 0, "Missing sequence IDs for contig $contigname" 
         unless $this->getSequenceIDsForReads($reads); # to be tested
 # unless $this->getSequenceIDForAssembledReads($reads);
@@ -2537,7 +2546,7 @@ sub getCurrentContigIDsForAncestorIDs {
               . "   and M1.contig_id in (" . join(',',@$ccid) . ")"
               . "   and M2.contig_id in (" . join(',',@$acid) . ")"
 	      . "   order by cc,ac";
-
+ 
     my $sth = $dbh->prepare($query);
 
     $sth->execute() || &queryFailed($query);
