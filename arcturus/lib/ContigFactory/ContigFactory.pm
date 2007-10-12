@@ -625,6 +625,20 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
         chomp $record;
         next if ($record !~ /\S/);
 
+# extend the record if it ends in a continuation mark
+
+        my $extend;
+        while ($record =~ /\\n\\\s*$/) {
+            if (defined($extend = <$CAF>)) {
+                chomp $extend;
+                $record .= $extend;
+                $lineCount++;
+            }
+            else {
+                $record .= '"' if ($record =~ /\"/); # closing quote
+            }
+        }
+
 #--------------------------------------------------------------------------
 # checking padded/unpadded status and its consistence
 #--------------------------------------------------------------------------
@@ -668,6 +682,7 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
             }
             $objectType = 0; # preset
             my $objectInstance;
+#??            if ($newObjectName =~ /(\s|^)Contig/) {
             if ($newObjectName =~ /contig/i) {
 # it's a contig; decide if the new object has to be built
                 next unless $consensus;
@@ -692,7 +707,7 @@ $logger->fine("Building $newObjectType for $newObjectName");
                 $lineCount++;
                 chomp $nextrecord;
                 last unless ($nextrecord =~ /\S/); # blank line
-                if ($nextrecord =~ /Sequence|DNA|BaseQuality/) {
+                if ($nextrecord =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
                     $logger->error("Missing blank after DNA or Quality block ($lineCount)");
 		    last;
 		}
@@ -1317,7 +1332,7 @@ sub parseDNA {
         $line++;
         chomp $record;
         last unless ($record =~ /\S/); # blank line
-        if ($record =~ /Sequence|DNA|BaseQuality/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("Missing blank after DNA block ($line)");
 	    last;
 	}
@@ -1388,7 +1403,7 @@ sub parseBaseQuality {
         $line++;
         chomp $record;
         last unless ($record =~ /\S/); # blank line
-        if ($record =~ /Sequence|DNA|BaseQuality/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("Missing blank after DNA block ($line)");
 	    last;
 	}
@@ -1462,16 +1477,28 @@ sub parseContig {
 
 # parse the file until the next blank record
 
-#    $TF = new TagFactory() unless defined $TF;
-
     my $isUnpadded = 1;
     my $readnamehash = {};
     while (defined($record = <$CAF>)) {
         $line++;
         chomp $record;
+# add subsequent lines if continuation mark '\n\' present
+        while ($record =~ /\\n\\\s*$/) {
+            my $extension;
+            if (defined($extension = <$CAF>)) {
+                chomp $extension;
+                $record .= $extension;
+                $record =~ s/\\n\\\s*\"/\"/; # replace continuation & closing quote
+                $line++;
+            }
+            elsif ($record !~ /\"\s*$/) {
+# end of file encountered: complete continued record
+                $record .= '"' if ($record =~ /\"/); # closing quote
+            }
+        }
 # check presence and compatibility of keywords
         last unless ($record =~ /\S/); # blank line
-        if ($record =~ /Sequence|DNA|BaseQuality/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("l:$line Missing blank line after Contig block");
 	    last;
 	}
@@ -1534,6 +1561,7 @@ sub parseContig {
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
+print STDERR "Extending Tag record ($line)  .. SHOULD NOT OCCUR!!\n";
                 if (defined($record = <$CAF>)) {
                     chomp $record;
                     $info .= $record;
@@ -1668,9 +1696,23 @@ sub parseRead {
     while (defined($record = <$CAF>)) {
         $line++;
         chomp $record;
+# add subsequent lines if continuation mark '\n\' present
+        while ($record =~ /\\n\\\s*$/) {
+            my $extension;
+            if (defined($extension = <$CAF>)) {
+                chomp $extension;
+                $record .= $extension;
+                $record =~ s/\\n\\\s*\"/\"/; # replace redundant continuation
+                $line++;
+            }
+            elsif ($record !~ /\"\s*$/) {
+# end of file encountered: complete continued record
+                $record .= '"' if ($record =~ /\"/); # closing quote
+            }
+        }
 # check presence and compatibility of keywords
         last unless ($record =~ /\S/); # blank line
-        if ($record =~ /Sequence|DNA|BaseQuality/) {
+        if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("Missing blank line after Read block ($line)");
             $logger->error("$record");
 	    last;
