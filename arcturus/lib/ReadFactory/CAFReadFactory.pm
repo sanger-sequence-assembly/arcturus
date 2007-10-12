@@ -34,7 +34,7 @@ sub new {
 
         $log = shift if ($nextword eq 'log');
 
-        $includes = shift if ($nextword eq 'include');
+        $includes = shift if ($nextword eq 'readnamelike');
 
         $excludes = shift if ($nextword eq 'exclude');
     }
@@ -49,32 +49,33 @@ sub new {
 
 # set up buffer for possibly included files
 
-    my $includeset;
+    my $includelist;
     if (ref($includes) eq 'ARRAY') {
-        $includeset = {};
-        while (my $readname = shift @$includes) {
-            $includeset->{$readname} = 1;
-        }
+        $includelist = join '|',@$includes;
     }
     elsif ($includes) {
-        die "CAFReadFactory constructor expects an 'include' array";
+        $includelist = $includes;
+print STDERR "includelist:$includelist\n";
     }     
 
 # set up buffer for possibly excluded or included files
 
-    my $excludeset = {};
-    if (ref($excludes) eq 'ARRAY') {
+    my $excludehash = {};
+    if (ref($excludes) eq 'HASH') {
+        $excludehash = $excludes;
+    }
+    elsif (ref($excludes) eq 'ARRAY') {
         while (my $readname = shift @$excludes) {
-            $excludeset->{$readname} = 1;
+            $excludehash->{$readname} = 1;
         }
     }
     elsif ($excludes) {
-        die "CAFReadFactory constructor expects an 'exclude' array";
+        $excludehash->{$excludes} = 1;
     }     
 
 # parse the caf file and populate the buffers of the super class
 
-    $this->CAFFileParser($CAF,$excludeset,$includeset);    
+    $this->CAFFileParser($CAF,$excludehash,$includelist);    
 
     return $this;
 }
@@ -110,9 +111,10 @@ sub CAFFileParser {
 # build an array of Read instances for the reads on this CAF file
     my $this    = shift;
     my $CAF     = shift;
-    my $exclude = shift;
-    my $include = shift;
+    my $excludehash = shift;
+    my $includelist = shift;
 
+    print STDERR "Include $includelist \n" if $includelist;
 
     undef my %reads; # hash for temporary DNA and Quality data storage
 
@@ -139,17 +141,20 @@ sub CAFFileParser {
             my $item = $1;
             $object = $2;
 
-# clip out any object named Contig
+# clip out any object named Contig (? redundant because of Is_contig test ?)
 
-            next if ($record =~ /Contig/);
+            next if ($record =~ /(\s|^)Contig/);
 
 # test against readname exclude and include filters
 
-            if (defined($exclude->{$object}) ||
-		defined($include) && !defined($include->{$object})) {
+            if (defined($excludehash) && defined($excludehash->{$object}) ||
+		defined($includelist) && $object !~ /$includelist/ ) {
                 $this->loginfo("read $object ignored");
                 next;
             }
+            elsif (defined($excludehash) || defined($includelist)) {
+                $this->logwarning("read $object accepted");
+	    }
 # assign the new input type
             $type = 1 if ($item eq 'Sequence');
             $type = 2 if ($item eq 'DNA');
@@ -180,7 +185,30 @@ sub CAFFileParser {
             exit 0;
         }
 
-        elsif ($record =~ /\bunpadded|align_to_scf/i) {
+        elsif ($record =~ /\bunpadded/i) {
+            next;
+	}
+
+        elsif ($record =~ /align_to_scf\s+(.*)\s*$/i) {
+# count align to SCF records: edited reads cannot be loaded from CAF
+            next unless ($type == 1); # scanning a read
+            my @positions = split /\s+/,$1;
+# get the current Read
+            my $Read = $reads{$object}->{Read};
+            if (scalar @positions == 4) {
+                my $entry = $Read->addAlignToTrace([@positions]);
+                if ($entry == 2) {
+                    $this->logwarning("Edited read $object detected");
+                    $this->logwarning("Edited read $object cannot be loaded");
+                    delete $reads{$object};
+                    $type = 0; # ignore edited data
+                }
+            }
+	    else {
+                $this->logwarning("Invalid Align_to_SCF record in read $object");
+                delete $reads{$object};
+                $type = 0;
+	    }
             next;
 	}
 
