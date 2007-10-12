@@ -294,6 +294,7 @@ foreach my $project (@projects) {
         $gap4name = $project unless $gap4name;
         $version  = 0 unless defined $version;
         $message .= "from gap4 database\n   $currentpwd/$gap4name.$version";
+        undef $gap4name; # for possible next project
     }
     elsif ($ioport eq 'export') {
 # perl script
