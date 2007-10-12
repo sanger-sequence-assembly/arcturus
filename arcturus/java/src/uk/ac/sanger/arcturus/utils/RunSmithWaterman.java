@@ -56,27 +56,36 @@ public class RunSmithWaterman {
 		
 		int[] best = sw.getMaximalEntry();
 		
-		Alignment al = null;
-		
 		try {
-			al = SmithWaterman.getAlignment(sw);
+			Alignment al = SmithWaterman.getAlignment(sw);
+		
+			System.out.println("Row: " + (subjectOffset + al.getRow()));
+			System.out.println("Col: " + (queryOffset + al.getColumn()));
+		
+			int score = sw.getScore(best[0], best[1]);
+		
+			System.out.println("Score: " + score);
+		
+			System.out.println();
+	
+			EditEntry[] edits = al.getEdits();
+		
+			for (int i = 0; i < edits.length; i++)
+				System.out.println(edits[i]);
 		} catch (SmithWatermanException e) {
 			e.printStackTrace();
 		}
-		
-		System.out.println("Row: " + (subjectOffset + al.getRow()));
-		System.out.println("Col: " + (queryOffset + al.getColumn()));
-		
-		int score = sw.getScore(best[0], best[1]);
-		
-		System.out.println("Score: " + score);
-		
-		System.out.println();
-	
-		EditEntry[] edits = al.getEdits();
-		
-		for (int i = 0; i < edits.length; i++)
-			System.out.println(edits[i]);
+
+		try {
+			Segment[] segments = SmithWaterman.traceBack(sw);
+
+			System.out.println();
+			
+			for (int i = 0; i < segments.length; i++)
+				System.out.println(segments[i]);
+		} catch (SmithWatermanException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	private static char[] loadFromFile(String filename) {
