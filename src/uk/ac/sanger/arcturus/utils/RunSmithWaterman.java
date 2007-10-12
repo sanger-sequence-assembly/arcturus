@@ -81,8 +81,13 @@ public class RunSmithWaterman {
 
 			System.out.println();
 			
-			for (int i = 0; i < segments.length; i++)
-				System.out.println(segments[i]);
+			for (int i = 0; i < segments.length; i++) {
+				Segment seg = segments[i];
+				int starta = seg.getStartA();
+				int startb = seg.getStartB();
+				int len = seg.getLength();
+				System.out.println(starta + "\t" + startb + "\t" + len);
+			}
 		} catch (SmithWatermanException e) {
 			e.printStackTrace();
 		}
