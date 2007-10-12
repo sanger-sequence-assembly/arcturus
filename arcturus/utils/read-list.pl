@@ -248,7 +248,7 @@ sub list {
    
     $L{chemistry}  = $read->getChemistry;
     my $ta = $read->getTraceArchiveIdentifier();
-    $ta =~ s/\~\w+\///; # remove possibly added ~name
+    $ta =~ s/\~\w+\/// if $ta; # remove possibly added ~name
     $L{traceserver} = $ta;
     if ($rdir && $ta) {
 # get full chemistry from SCF file, if present
