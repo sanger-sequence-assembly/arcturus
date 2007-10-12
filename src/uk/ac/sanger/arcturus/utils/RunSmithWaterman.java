@@ -83,8 +83,8 @@ public class RunSmithWaterman {
 			
 			for (int i = 0; i < segments.length; i++) {
 				Segment seg = segments[i];
-				int starta = seg.getStartA();
-				int startb = seg.getStartB();
+				int starta = subjectOffset + seg.getStartA();
+				int startb = queryOffset + seg.getStartB();
 				int len = seg.getLength();
 				System.out.println(starta + "\t" + startb + "\t" + len);
 			}
