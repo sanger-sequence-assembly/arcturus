@@ -857,7 +857,7 @@ sub logQuery {
     my $log = $this->{querylog};
 
     unless (@entry >= 2) { # retrieval mode
-        my $logentry = $entry[0] || 1;
+        my $logentry = $entry[0] || scalar(@$log) || 1; # default most recent
         $logentry = $log->[$logentry-1]; # the query data
         return undef unless $logentry;
         @entry = @$logentry;
