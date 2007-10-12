@@ -13,6 +13,8 @@ use Cwd;
 #------------------------------------------------------------------------------
 
 my $pwd = Cwd::cwd(); # the current directory
+   $pwd =~ s?.*automount.*/nfs?/nfs?;
+   $pwd =~ s?.*automount.*/root?/nfs?;
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 $arcturus_home =~ s?/utils/\.\.??;
@@ -36,7 +38,7 @@ my ($forcegetlock,$keep,$abortonwarning,$noagetest,$rundir,$debug);
 
 my $validkeys = "instance|i|organism|o|project|p|assembly|a|gap4name|g|"
               . "version|v|superuser|su|problem|script|abortonwarning|aow|"
-              . "noagetest|nat|keep|rundir|rd|debug|help|h";
+              . "noagetest|nat|keep|rundir|rd|debug|help|h|passon|po";
 
 #------------------------------------------------------------------------------
 
@@ -117,6 +119,10 @@ while (my $nextword = shift @ARGV) {
     if ($nextword eq '-help' || $nextword eq '-h') {
         &showusage(); # and exit
     }
+
+    if ($nextword eq '-passon' || $nextword eq '-po') {
+	last; # abort input parsing here
+    }
 }
 
 #------------------------------------------------------------------------------
@@ -144,6 +150,8 @@ if ($rundir) {
     print STDOUT "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
     $pwd = Cwd::cwd();
+    $pwd =~ s?.*automount.*/nfs?/nfs?;
+    $pwd =~ s?.*automount.*/root?/nfs?;
 }
 
 #------------------------------------------------------------------------------
@@ -172,7 +180,6 @@ if ( -f "${gap4name}.A.BUSY") {
 
 my $nonstandard = ($gap4name ne $projectname || $version ne '0') ? 1 : 0;
 print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
-#nonstandard = 0 if ?
 
 # check age
 
@@ -237,7 +244,6 @@ unless ($? == 0) {
     exit 1;
 }
 
-#print STDOUT "can proceed but test abort\n"; exit 1; # busy test
 #------------------------------------------------------------------------------
 # change data in the repository: create backup version B  
 #------------------------------------------------------------------------------
@@ -268,8 +274,15 @@ unless ($version eq "B" || $nonstandard) {
 
 print STDOUT "Importing into Arcturus\n";
 
-system ("$import_script -instance $instance -organism $organism -caf $depadded "
-       ."-defaultproject $projectname -gap4name ${pwd}/$gap4name.$version");
+$command  = "$import_script -instance $instance -organism $organism "
+          . "-caf $depadded -defaultproject $projectname "
+          . "-gap4name ${pwd}/$gap4name.$version";
+$command .= " @ARGV" if @ARGV; # pass on any remaining input
+
+print STDERR "$command\n" if @ARGV;
+# exit 0 if @ARGV;
+
+system ($command);
 
 unless ($? == 0) {
     print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
