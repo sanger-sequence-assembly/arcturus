@@ -320,6 +320,11 @@ foreach my $contig_id (sort {$a <=> $b} keys %$link) {
 	$logger->special("Testing contig $contig_id against parent $parent_id");
 	$logger->info("Loading parent $parent_id");
         my $parent = $adb->getContig(contig_id=>$parent_id, notags => 1);
+        unless ($parent) {
+            $logger->special("Failed to retrieve parent contig $parent_id",emphasis=>1);
+	    $logger->debug($adb->logQuery());
+            next;
+        }
 # analyse the link
         my ($segments,$dealloc) = $contig->linkToContig($parent,forcelink=>$force);
         unless (defined($segments)) {
