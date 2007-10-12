@@ -151,7 +151,7 @@ $logger->setDebugStream('STDOUT',list=>1);
 
 $logger->setBlock('debug',unblock=>0) unless $debug;
 
-$logger->setBlock('special',unblock=>1) if $debug; # defaults to STDERR
+$logger->setBlock('special',unblock=>1) if $debug; # defaults to STDOUT
 
 #----------------------------------------------------------------
 # get the database connection
@@ -168,6 +168,8 @@ if (!$adb || $adb->errorStatus()) {
 # abort with error message
     &showUsage(0,"Invalid organism '$organism' on server '$instance'");
 }
+
+$adb->setLogger($logger);
 
 #----------------------------------------------------------------
 # test the CAF file name
@@ -323,7 +325,7 @@ my $ETAGS = &tagList('ETAGS');
 my $readtagmode = 0;
 
 if (!$readtaglist) {
-    $readtaglist = "$FTAGS|$STAGS";
+    $readtaglist = "$FTAGS|$STAGS|$ETAGS";
 }
 elsif ($readtaglist eq 'default') {
     $readtaglist = '\w{3,4}';
@@ -390,6 +392,21 @@ while (defined($record = <$CAF>)) {
     next if ($record !~ /\S/);
 #print "$lineCount $record \n";
 
+# extend the record if it ends in a continuation mark
+
+    my $extend;
+    while ($record =~ /\\n\\\s*$/) {
+        if (defined($extend = <$CAF>)) {
+            chomp $extend;
+            $record .= $extend;
+            $record =~ s/\\n\\\s*\"/\"/; # remove redundent continuation mark
+            $lineCount++;
+        }
+        else {
+            $record .= '"' if ($record =~ /\"/); # closing quote
+        }
+    }
+
 # test for padded/unpadded keyword and its consistence
 
     if ($record =~ /([un]?)padded/i) {
@@ -433,8 +450,8 @@ while (defined($record = <$CAF>)) {
             }
             elsif ($objectName =~ /contig/i) {
                 $contig = new Contig($objectName);
-                 $contigs{$objectName} = $contig;
-               $contig->setSequence($DNASequence);
+                $contigs{$objectName} = $contig;
+                $contig->setSequence($DNASequence);
             }
             else {
                 $read = new Read($objectName);
@@ -605,6 +622,12 @@ while (defined($record = <$CAF>)) {
         }
         elsif ($record =~ /Seq_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
             $read->addSequencingVector([$4, $2, $3]);
+# skip if continuation marks appear
+            while ($record =~ /\\n\\\s*$/) {
+                if (defined($record = <$CAF>)) {
+                    $lineCount++;
+                }
+            }
         }   
         elsif ($record =~ /Clone_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
             $read->addCloningVector([$4, $2, $3]);
@@ -617,6 +640,7 @@ while (defined($record = <$CAF>)) {
 	    $accumulatedrecord = '';
             while ($record =~ /\\n\\\s*$/) {
                 $accumulatedrecord .= $record;
+print STDERR "Extending Tag record ($lineCount)  .. SHOULD NOT OCCUR!!\n";
                 if (defined($record = <$CAF>)) {
                     chomp $record;
                     $info .= $record;
@@ -824,9 +848,8 @@ while (defined($record = <$CAF>)) {
                         $info .= '"'; # closing quote
                     }
                 }
-                $logger->warning("CONTIG tag detected: $record\n"
-#                $logger->info("CONTIG tag detected: $record\n"
-                        . "'$type' '$tcps' '$tcpf' '$info'");
+                $logger->info("CONTIG tag detected: $record\n"
+                            . "'$type' '$tcps' '$tcpf' '$info'");
 #$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
             my $tag = new Tag('contig');
             $contig->addTag($tag);
@@ -1130,7 +1153,7 @@ sub tagList {
 
 sub decode_oligo_info {
     my $info = shift || '';
-    my $sequence = shift;
+    my $sequence = shift || '';
 
 my $DEBUG = 0;
 print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
@@ -1147,8 +1170,11 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
         my $clutter = $1;
         my $cleanup = $clutter;
         $cleanup =~ s/\\n\\/-/g;
-        $clutter =~ s/\\/\\\\/g; # quote backslash symbol
+#        $clutter =~ s/\\/\\\\/g; # quote backslash symbol
+	$cleanup = qw($cleanup);
+	$clutter = qw($cleanup);
         $change = 1 if ($info =~ s/$clutter/$cleanup/);
+
     }
 
 # split $info on blanks and \n\ separation symbols
@@ -1168,7 +1194,8 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
     }
 
     my $name;
-    if ($info =~ /^\s*(\d+)\b(.*?)$sequence/) {
+    my $qwsequence = qw($sequence);
+    if (defined($sequence) && $info =~ /^\s*(\d+)\b(.*?)$qwsequence/) {
 # the info string starts with a number followed by the sequence
         $name = "o$1";
         $change++ if ($info =~ s/^\s*(\d+)\b/$name/);
@@ -1185,15 +1212,15 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
         $name = $1;
     }
 # try its a name like 17H10.1
-    elsif ($info =~ /^(\w+\.\w{1,2})\b/) {
+    elsif ($info && $info =~ /^(\w+\.\w{1,2})\b/) {
         $name = $1;
     }
 # try with the results of the split
-    elsif ($info[0] !~ /\=/ && $info =~ /^([a-zA-Z]\w+)\b/i) {
+    elsif ($info[0] && $info[0] !~ /\=/ && $info =~ /^([a-zA-Z]\w+)\b/i) {
 # the info string starts with a name like axx..
         $name = $1;
     }
-    elsif (defined($info[1]) && $info[1] eq $sequence) {
+    elsif (defined($sequence) && defined($info[1]) && $info[1] eq $sequence) {
         $name = $info[0];
         $name = "o$name" unless ($name =~ /\D/);
     }
@@ -1276,10 +1303,11 @@ sub get_oligo_DNA {
 
     if ($info =~ /([ACGT\*]{5,})/i) {
         my $DNA = $1;
+        my $dna = qw($DNA);
 # test if the DNA occurs twice in the data
-        if ($info =~ /$DNA[^ACGT].*(sequence\=)?$DNA/i) {
+        if ($info =~ /$dna[^ACGT].*(sequence\=)?$dna/i) {
 # multiple occurrences of DNA to be removed ...
-            $info =~ s/($DNA[^ACGT].*?)(sequence\=)?$DNA/$1/i;
+            $info =~ s/($dna[^ACGT].*?)(sequence\=)?$dna/$1/i;
             return $DNA,$info;
         }
 	return $DNA,0; # no change
