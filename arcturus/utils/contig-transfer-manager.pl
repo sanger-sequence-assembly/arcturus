@@ -650,7 +650,7 @@ elsif ($action eq 'execute') {
 # translate project_ID's into project names
             $rd->{old_project_id} = $old_project->getProjectName() if $old_project;
             $rd->{new_project_id} = $new_project->getProjectName() if $new_project;
-            my $line = sprintf("%3d %7d %10s > %-10s %6s  %9s  %19s %6s %10s  %-40s",
+            my $line = sprintf("%5d %7d %10s > %-10s %8s %19s %6s %10s  %-40s",
                        $rd->{request_id},$rd->{contig_id},$rd->{old_project_id},
             	       $rd->{new_project_id},$rd->{requester},$rd->{opened},
 	               $rd->{reviewer},$rd->{status},
