@@ -56,6 +56,8 @@ public class RunSmithWaterman {
 		
 		int[] best = sw.getMaximalEntry();
 		
+		System.out.println("Maximal entry is at " + best[0] + ", " + best[1]);
+		
 		try {
 			Alignment al = SmithWaterman.getAlignment(sw);
 		
