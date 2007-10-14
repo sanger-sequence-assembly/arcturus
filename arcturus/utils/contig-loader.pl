@@ -46,6 +46,7 @@ my $notest = 0;
 my $list = 0;
 my $batch = 0;
 my $debug = 0;
+my $contigtagdebug = 0;
 
 my $safemode = 0;
 
@@ -57,7 +58,7 @@ my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "gap4name|g4n|"
                . "setprojectby|spb|nolock|readtaglist|rtl|noreadtags|nrt|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
-               . "frugal|padded|noload|safemode|verbose|batch|info|help|debug";
+               . "frugal|padded|noload|safemode|verbose|batch|info|help|debug|contigtagdebug";
 
 
 while (my $nextword = shift @ARGV) {
@@ -88,6 +89,8 @@ while (my $nextword = shift @ARGV) {
     $logLevel         = 2            if ($nextword eq '-info'); 
 
     $debug            = 1            if ($nextword eq '-debug'); 
+
+    $contigtagdebug   = 1            if ($nextword eq '-contigtagdebug');
 
     $minOfReads       = shift @ARGV  if ($nextword eq '-minimum');
 
@@ -849,7 +852,7 @@ print STDERR "Extending Tag record ($lineCount)  .. SHOULD NOT OCCUR!!\n";
                     }
                 }
                 $logger->info("CONTIG tag detected: $record\n"
-                            . "'$type' '$tcps' '$tcpf' '$info'");
+                            . "'$type' '$tcps' '$tcpf' '$info'") if $contigtagdebug;
 #$logger->info("CONTIG tag: $record\n'$type' '$tcps' '$tcpf' '$info'") if $noload;
             my $tag = new Tag('contig');
             $contig->addTag($tag);
@@ -882,13 +885,13 @@ print STDERR "Extending Tag record ($lineCount)  .. SHOULD NOT OCCUR!!\n";
 # nothing useful found                
                     else {
 		       $logger->warning("Missing repeat name in contig tag for ".
-                              $contig->getContigName().": ($lineCount) $record");
+                              $contig->getContigName().": ($lineCount) $record") if $contigtagdebug;
 		    }
                 }
             }
         }
         elsif ($record =~ /Tag/) {
-            $logger->warning("CONTIG tag not recognized: ($lineCount) $record") unless $readtagmode;
+            $logger->warning("CONTIG tag not recognized: ($lineCount) $record") unless ($readtagmode && $contigtagdebug);
         }
         else {
             $logger->warning("ignored: ($lineCount) $record");
@@ -1381,6 +1384,7 @@ sub showUsage {
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
 #    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
     print STDERR "-verbose\t(no value) for some progress info\n";
+    print STDERR "-contigtagdebug\tShow debugging info for contig tags\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
