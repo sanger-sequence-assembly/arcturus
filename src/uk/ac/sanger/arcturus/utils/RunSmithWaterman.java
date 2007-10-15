@@ -71,9 +71,7 @@ public class RunSmithWaterman {
 				querySequence, queryOffset, queryLength, smat, bandwidth);
 		
 		int[] best = sw.getMaximalEntry();
-		
-		System.out.println("Maximal entry is at " + best[0] + ", " + best[1]);
-		
+				
 		try {
 			Alignment al = SmithWaterman.getAlignment(sw);
 			
@@ -104,8 +102,8 @@ public class RunSmithWaterman {
 			
 				for (int i = 0; i < segments.length; i++) {
 					Segment seg = segments[i];
-					int starta = subjectOffset + seg.getStartA();
-					int startb = queryOffset + seg.getStartB();
+					int starta = subjectOffset + seg.getStartA() + 1;
+					int startb = queryOffset + seg.getStartB() + 1;
 					int len = seg.getLength();
 					System.out.println(starta + "\t" + startb + "\t" + len);
 				}
