@@ -16,6 +16,10 @@ public class RunSmithWaterman {
 		int queryOffset = DEFAULT_QUERY_OFFSET;
 		int queryLength = 0;
 		int bandwidth = DEFAULT_BANDWIDTH;
+		
+		boolean writeEdits = false;
+		boolean writeSegments = true;
+		boolean writeSummary = true;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-subject"))
@@ -32,6 +36,18 @@ public class RunSmithWaterman {
 				queryLength = Integer.parseInt(args[++i]);
 			else if (args[i].equalsIgnoreCase("-bandwidth"))
 				bandwidth = Integer.parseInt(args[++i]);
+			else if (args[i].equalsIgnoreCase("-edits"))
+				writeEdits = true;
+			else if (args[i].equalsIgnoreCase("-noedits"))
+				writeEdits = false;
+			else if (args[i].equalsIgnoreCase("-segments"))
+				writeSegments = true;
+			else if (args[i].equalsIgnoreCase("-nosegments"))
+				writeSegments = false;
+			else if (args[i].equalsIgnoreCase("-summary"))
+				writeSummary = true;
+			else if (args[i].equalsIgnoreCase("-nosummary"))
+				writeSummary = false;
 		}
 
 		if (subjectFilename == null || queryFilename == null) {
@@ -60,35 +76,39 @@ public class RunSmithWaterman {
 		
 		try {
 			Alignment al = SmithWaterman.getAlignment(sw);
-		
-			System.out.println("Row: " + (subjectOffset + al.getRow()));
-			System.out.println("Col: " + (queryOffset + al.getColumn()));
-		
-			int score = sw.getScore(best[0], best[1]);
-		
-			System.out.println("Score: " + score);
-		
-			System.out.println();
-	
-			EditEntry[] edits = al.getEdits();
-		
-			for (int i = 0; i < edits.length; i++)
-				System.out.println(edits[i]);
-		} catch (SmithWatermanException e) {
-			e.printStackTrace();
-		}
-
-		try {
-			Segment[] segments = SmithWaterman.traceBack(sw);
-
-			System.out.println();
 			
-			for (int i = 0; i < segments.length; i++) {
-				Segment seg = segments[i];
-				int starta = subjectOffset + seg.getStartA();
-				int startb = queryOffset + seg.getStartB();
-				int len = seg.getLength();
-				System.out.println(starta + "\t" + startb + "\t" + len);
+			int score = sw.getScore(best[0], best[1]);
+
+			if (writeSummary) {
+				System.out.println("Row: " + (subjectOffset + al.getRow()));
+				System.out.println("Col: " + (queryOffset + al.getColumn()));
+		
+				System.out.println("Score: " + score);
+			}
+			
+			if (writeEdits) {
+				if (writeSummary)
+					System.out.println();
+
+				EditEntry[] edits = al.getEdits();
+		
+				for (int i = 0; i < edits.length; i++)
+					System.out.println(edits[i]);
+			}
+
+			if (writeSegments) {
+				Segment[] segments = SmithWaterman.traceBack(sw);
+
+				if (writeSummary || writeEdits)
+					System.out.println();
+			
+				for (int i = 0; i < segments.length; i++) {
+					Segment seg = segments[i];
+					int starta = subjectOffset + seg.getStartA();
+					int startb = queryOffset + seg.getStartB();
+					int len = seg.getLength();
+					System.out.println(starta + "\t" + startb + "\t" + len);
+				}
 			}
 		} catch (SmithWatermanException e) {
 			e.printStackTrace();
@@ -133,7 +153,7 @@ public class RunSmithWaterman {
 		ps.println("\t-subject\tName of subject FASTA file");
 		ps.println("\t-query\t\tName of query FASTA file");
 		ps.println();
-		ps.println("OPTIONAL PARAMETERS");
+		ps.println("OPTIONAL PARAMETERS WHICH CONTROL PROCESSING");
 		ps.println("\t-subjectoffset\tOffset into subject [default: "
 				+ DEFAULT_SUBJECT_OFFSET + "]");
 		ps.println("\t-queryoffset\tOffset into query [default: "
@@ -142,5 +162,10 @@ public class RunSmithWaterman {
 		ps.println("\t-querylength\tLength in query [default: entire sequence]");
 		ps.println("\t-bandwidth\tSemi-bandwidth for banded Smith-Waterman [default:"
 						+ DEFAULT_BANDWIDTH + "]");
+		ps.println();
+		ps.println("OPTIONAL PARAMETERS WHICH CONTROL OUTPUT");
+		ps.println("\t-[no]summary\tDo [not] write summary");
+		ps.println("\t-[no]edits\tDo [not] write edit strings");
+		ps.println("\t-[no]segments\tDo [not] write exact matching segments");
 	}
 }
