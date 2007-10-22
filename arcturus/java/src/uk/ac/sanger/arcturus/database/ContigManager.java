@@ -14,7 +14,7 @@ import java.util.zip.DataFormatException;
 public class ContigManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private Connection conn;
-	private HashMap hashByID;
+	private HashMap<Integer, Contig> hashByID;
 
 	private Inflater decompresser = new Inflater();
 
@@ -43,14 +43,14 @@ public class ContigManager extends AbstractManager {
 
 	protected ManagerEvent event = null;
 
-	private transient Vector eventListeners = new Vector();
+	private transient Vector<ManagerEventListener> eventListeners = new Vector<ManagerEventListener>();
 
 	protected MappingComparator mappingComparator = new MappingComparator();
 
 	protected SegmentComparatorByContigPosition segmentComparator = new SegmentComparatorByContigPosition();
 
-	protected Map svectorByID = new HashMap();
-	protected Map cvectorByID = new HashMap();
+	protected Map<Integer, String> svectorByID = new HashMap<Integer, String>();
+	protected Map<Integer, String> cvectorByID = new HashMap<Integer, String>();
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -66,7 +66,7 @@ public class ContigManager extends AbstractManager {
 
 		prepareStatements();
 
-		hashByID = new HashMap();
+		hashByID = new HashMap<Integer, Contig>();
 
 		preloadSequencingVectors();
 		preloadCloningVectors();
@@ -499,7 +499,7 @@ public class ContigManager extends AbstractManager {
 
 		int nMappings = mapmap.size();
 
-		Vector segv = new Vector(1000, 1000);
+		Vector<Segment> segv = new Vector<Segment>(1000, 1000);
 
 		pstmtSegmentData.setInt(1, contig_id);
 
@@ -656,7 +656,7 @@ public class ContigManager extends AbstractManager {
 	}
 
 	private Map createMappingsMap(Mapping[] mappings) {
-		Map hash = new HashMap(mappings.length);
+		Map<Integer, Mapping> hash = new HashMap<Integer, Mapping>(mappings.length);
 
 		for (int i = 0; i < mappings.length; i++) {
 			Mapping value = mappings[i];
@@ -934,7 +934,7 @@ public class ContigManager extends AbstractManager {
 		return count;
 	}
 
-	public Set getContigsByProject(int project_id, int options, int minlen)
+	public Set<Contig> getContigsByProject(int project_id, int options, int minlen)
 			throws SQLException, DataFormatException {
 		ContigSetBuilder csb = new ContigSetBuilder();
 
@@ -1153,14 +1153,14 @@ public class ContigManager extends AbstractManager {
 	}
 
 	class ContigSetBuilder implements ContigProcessor {
-		private Set contigs = new HashSet();
+		private Set<Contig> contigs = new HashSet<Contig>();
 
 		public boolean processContig(Contig contig) {
 			contigs.add(contig);
 			return true;
 		}
 
-		public Set getContigSet() {
+		public Set<Contig> getContigSet() {
 			return contigs;
 		}
 	}
@@ -1213,10 +1213,8 @@ public class ContigManager extends AbstractManager {
 		}
 	}
 
-	class MappingComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			Mapping mapping1 = (Mapping) o1;
-			Mapping mapping2 = (Mapping) o2;
+	class MappingComparator implements Comparator<Mapping> {
+		public int compare(Mapping mapping1, Mapping mapping2) {
 
 			int diff = mapping1.getContigStart() - mapping2.getContigStart();
 

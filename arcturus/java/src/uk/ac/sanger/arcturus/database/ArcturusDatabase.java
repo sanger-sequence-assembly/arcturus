@@ -823,7 +823,7 @@ public class ArcturusDatabase {
 		return processContigsByProject(project_id, options, 0, processor);
 	}
 
-	public synchronized Set getContigsByProject(int project_id, int options,
+	public synchronized Set<Contig> getContigsByProject(int project_id, int options,
 			int minlen) throws SQLException, DataFormatException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getContigsByProject(" + project_id + ", options="
