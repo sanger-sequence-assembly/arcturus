@@ -234,6 +234,16 @@ sub getCreator {
     return $this->{data}->{creator};
 }
   
+sub setDirectory {
+    my $this = shift;
+    $this->{data}->{directory} = shift;
+}
+  
+sub getDirectory {
+    my $this = shift;
+    return $this->{data}->{directory};
+}
+  
 sub setLockDate {
     my $this = shift;
     $this->{data}->{lockdate} = shift;
@@ -560,6 +570,8 @@ sub getProjectData {
 
     $pd->{'comment'} = $this->getComment();
 
+    $pd->{'directory'} = $this->getDirectory();
+
     return $pd;
 }
 #-------------------------------------------------------------------    
@@ -608,6 +620,7 @@ sub toStringLong {
     $string .= "Project owner      ".($this->getOwner() || 'no owner')."\n";
 
     $string .= "Project status     ". $this->getProjectStatus()."\n";
+    $string .= "Project directory  ".($this->getDirectory() || 'unknown')."\n";
 
     $string .= "Lock status        ";
     if (my $lock = $this->getLockedStatus()) {
