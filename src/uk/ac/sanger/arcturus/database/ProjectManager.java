@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.database;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
@@ -17,7 +16,7 @@ import java.util.*;
 public class ProjectManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private Connection conn;
-	private HashMap hashByID = new HashMap();
+	private HashMap<Integer, Project> hashByID = new HashMap<Integer, Project>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
 	private PreparedStatement pstmtByNameAndAssembly;
@@ -40,13 +39,16 @@ public class ProjectManager extends AbstractManager {
 
 		conn = adb.getConnection();
 
-		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator from PROJECT where project_id = ?";
+		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory" +
+			" from PROJECT where project_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator from PROJECT where assembly_id = ? and name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory" +
+			" from PROJECT where assembly_id = ? and name = ?";
 		pstmtByNameAndAssembly = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator from PROJECT where name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory" +
+			" from PROJECT where name = ?";
 		pstmtByName = conn.prepareStatement(query);
 
 		query = "update PROJECT set assembly_id = ? where project_id = ?";
@@ -126,6 +128,9 @@ public class ProjectManager extends AbstractManager {
 
 			project = createAndRegisterNewProject(id, assembly, name, updated,
 					owner, lockdate, lockowner, created, creator);
+			
+			String directory = rs.getString(9);
+			project.setDirectory(directory);
 		}
 
 		rs.close();
@@ -167,6 +172,9 @@ public class ProjectManager extends AbstractManager {
 				project = createAndRegisterNewProject(project_id, assembly,
 						name, updated, owner, lockdate, lockowner, created,
 						creator);
+				
+				String directory = rs.getString(8);
+				project.setDirectory(directory);
 			}
 		}
 
@@ -233,18 +241,18 @@ public class ProjectManager extends AbstractManager {
 		stmt.close();
 	}
 
-	public Set getAllProjects() throws SQLException {
+	public Set<Project> getAllProjects() throws SQLException {
 		preloadAllProjects();
-		return new HashSet(hashByID.values());
+		return new HashSet<Project>(hashByID.values());
 	}
 
-	public Set getProjectsForOwner(Person owner) throws SQLException {
+	public Set<Project> getProjectsForOwner(Person owner) throws SQLException {
 		preloadAllProjects();
 
 		if (owner == null)
 			return null;
 
-		HashSet set = new HashSet();
+		HashSet<Project> set = new HashSet<Project>();
 
 		for (Iterator iter = hashByID.values().iterator(); iter.hasNext();) {
 			Project project = (Project) iter.next();
@@ -366,8 +374,8 @@ public class ProjectManager extends AbstractManager {
 		return summary;
 	}
 
-	public Map getProjectSummary(int minlen, int minreads) throws SQLException {
-		HashMap map = new HashMap();
+	public Map<Integer, ProjectSummary> getProjectSummary(int minlen, int minreads) throws SQLException {
+		HashMap<Integer, ProjectSummary> map = new HashMap<Integer, ProjectSummary>();
 
 		pstmtProjectSummary.setInt(1, minlen);
 		pstmtProjectSummary.setInt(2, minreads);
