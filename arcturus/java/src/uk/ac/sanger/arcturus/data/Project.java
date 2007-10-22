@@ -20,8 +20,9 @@ public class Project extends Core {
 	protected Person lockowner = null;
 	protected Date created = null;
 	protected Person creator = null;
+	protected String directory = null;
 
-	protected Set contigs = null;
+	protected Set<Contig> contigs = null;
 
 	/**
 	 * Constructs a Project which does not yet have an ID. This constructor will
@@ -74,6 +75,7 @@ public class Project extends Core {
 		this.lockowner = lockowner;
 		this.created = created;
 		this.creator = creator;
+		this.directory = null;
 	}
 
 	/**
@@ -228,6 +230,14 @@ public class Project extends Core {
 	public void setCreator(Person creator) {
 		this.creator = creator;
 	}
+	
+	public void setDirectory(String directory) {
+		this.directory = directory;
+	}
+	
+	public String getDirectory() {
+		return directory;
+	}
 
 	/**
 	 * Returns the number of contigs currently contained in this Project object.
@@ -262,13 +272,13 @@ public class Project extends Core {
 		return contigs;
 	}
 
-	public void setContigs(Set contigs) {
+	public void setContigs(Set<Contig> contigs) {
 		this.contigs = contigs;
 	}
 
 	public void addContig(Contig contig) {
 		if (contigs == null)
-			contigs = new HashSet();
+			contigs = new HashSet<Contig>();
 
 		contigs.add(contig);
 	}
