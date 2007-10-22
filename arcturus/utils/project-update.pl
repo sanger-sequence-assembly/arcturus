@@ -19,6 +19,7 @@ my $assembly;
 
 my $extend;
 my $projectname;
+my $projectdir;
 my $projectowner;
 my $projectstatus;
 my $projectcomment;
@@ -29,7 +30,7 @@ my $verbose;
 my $confirm;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
-               . "comment|pc|extend|"
+               . "comment|pc|extend|directory|dir|"
                . "owner|po|name|pn|status|ps|superuser|su|"
                . "confirm|verbose|help|h";
 
@@ -53,6 +54,10 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
         $project      = shift @ARGV;
+    }
+
+    if ($nextword eq '-directory'  || $nextword eq '-dir') {
+        $projectdir   = shift @ARGV;
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
@@ -175,6 +180,7 @@ else {
         $projectcomment = $currentcomment." / ".$projectcomment;
     }
     $project->setComment($projectcomment)      if $projectcomment;
+    $project->setDirectory($projectdir)        if $projectdir;
     
     $confirm = 0 unless $confirm;
 
@@ -230,6 +236,8 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
     print STDERR "-assembly\tassembly ID or name\n";
+    print STDERR "\n";
+    print STDERR "-directory\t(dir) the gap4 database's directory\n";
     print STDERR "\n";
     print STDERR "-comment\tthe comment to be entered or added (between '')\n";
     print STDERR "-append\t\t(with comment) extend existing comment (else replace)\n";

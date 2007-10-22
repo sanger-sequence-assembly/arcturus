@@ -15,12 +15,13 @@ my $instance;
 my $project_id;
 my $projectname;
 my $assembly = 1; # default assembly ID
+my $projectdir;
 my $owner;
 my $comment;
 my $verbose;
 
 my $validKeys  = "organism|o|instance|i|project|p|pn|projectname|"
-               . "assembly|a|project_id|pid|"
+               . "assembly|a|project_id|pid|directory|dir|"
                . "owner|comment|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
@@ -53,6 +54,10 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-project_id' || $nextword eq '-pid') {
         $project_id   = shift @ARGV;
+    }
+
+    if ($nextword eq '-directory' || $nextword eq '-dir') {
+        $projectdir   = shift @ARGV;
     }
 
     $owner        = shift @ARGV  if ($nextword eq '-owner');
@@ -154,6 +159,8 @@ $project->setOwner($owner) if defined($owner);
 
 $project->setComment($comment) if $comment;
 
+$project->setDirectory($projectdir) if $projectdir;
+
 my $pid = $adb->putProject($project);
 
 if ($pid) {
@@ -190,6 +197,9 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-project_id\tproject ID to be allocated (overrides autoincrement)\n";
     print STDERR "-assembly\tassembly name or ID to be used (default 1)\n";
+    print STDERR "\n";
+    print STDERR "-directory\t(dir) the gap4 database's directory\n";
+    print STDERR "\n";
     print STDERR "-owner\t\tAssign the new project to this user\n";
     print STDERR "-comment\tA comment in quotation marks\n";
     print STDERR "-verbose\t(no value) \n";
