@@ -104,19 +104,32 @@ sub getDNA {
     my $this = shift;
     my %options = @_; # transpose
 
+    my $sequence = $this->{DNA};
+
+    return '' unless $sequence;
+
     unless ($options{transpose} && $this->getStrand() eq 'Reverse') {
-        return $this->{DNA} || '';
+        return $sequence;
     }
 
-    my $dna = inverse($this->{DNA} || '');
-    $dna =~ tr/ACGTacgt/TGCAtgca/ if $dna;
-    return $dna;
+# return the reverse complement of the sequence
+
+    my $reverse;
+    my $length = length($sequence);
+    for my $i (1 .. $length) {
+        my $j = $length - $i;
+        my $base = substr $sequence, $j, 1;
+        $reverse .= $base;
+    }
+    $reverse =~ tr/ACGTacgt/TGCAtgca/ if $reverse;
+
+    return $reverse;
 }
 
 sub setHost {
 # instance of host object
     my $this = shift;
-    $this->{host} = shift;
+    $this->{host} = shift; 
 }
 
 sub getHost {
@@ -741,7 +754,7 @@ sub dump {
     my $FILE = shift; # optional file handle
     my %options = @_;
 
-    &verifyKeys('dump',\%options,'skip','pskip');
+    &verifyKeys('dump',\%options,'skip','pskip','transpose');
 
     my $skip = $options{skip}; # true to skip undefined items
 
@@ -767,7 +780,7 @@ sub dump {
     push @line, "tag comment       ".($tag->getTagComment(@_)  || 'undef')."\n\n";
     push @line, "tag sequence ID   ".($tag->getTagSequenceID() || 'undef')."\n";
     push @line, "tag sequence name ".($tag->getTagSequenceName(@_) || 'undef')."\n";
-    push @line, "sequence          ".($tag->getDNA() || 'undef')."\n";
+    push @line, "sequence          ".($tag->getDNA(%options) || 'undef')."\n";
     push @line, "tag host class    ".($tag->getHostClass() || 'undef')."\n";
 
     foreach my $line (@line) {
