@@ -135,7 +135,7 @@ public class ArcturusInstance implements Iterator {
 
 		String description = getDescription(name);
 
-		return new ArcturusDatabase(ds, description, name);
+		return new ArcturusDatabase(ds, description, name, this);
 	}
 	
 	/**
@@ -296,7 +296,7 @@ public class ArcturusInstance implements Iterator {
 				String description = getDescription(name);
 
 				return new ArcturusDatabase((DataSource) object, description,
-						name);
+						name, this);
 			}
 		}
 

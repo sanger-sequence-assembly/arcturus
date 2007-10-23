@@ -223,7 +223,7 @@ public class Minerva {
 
 	public MinervaTabbedPane createOrganismDisplay(Organism organism)
 			throws SQLException {
-		ArcturusDatabase adb = new ArcturusDatabase(organism);
+		ArcturusDatabase adb = new ArcturusDatabase(organism, null);
 
 		adb.setReadCacheing(false);
 		adb.setSequenceCacheing(false);

@@ -80,7 +80,7 @@ public class TestArcturusDatabase {
 			DataSource ds = ArcturusDatabase.createMysqlDataSource("pcs3",
 					14642, "SCAB", "arcturus", "***REMOVED***");
 
-			adb = new ArcturusDatabase(ds, description, name);
+			adb = new ArcturusDatabase(ds, description, name, ai);
 
 			System.out.println("Testing new ArcturusDatabase object");
 

@@ -24,6 +24,8 @@ import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 
 import uk.ac.sanger.arcturus.projectchange.*;
 
+import uk.ac.sanger.arcturus.ArcturusInstance;
+
 public class ArcturusDatabase {
 	public static final int MYSQL = 1;
 	public static final int ORACLE = 2;
@@ -65,6 +67,8 @@ public class ArcturusDatabase {
 	protected String description;
 	protected String name;
 	protected Connection defaultConnection;
+	
+	protected ArcturusInstance instance;
 
 	protected ConnectionPool connectionPool;
 
@@ -88,11 +92,12 @@ public class ArcturusDatabase {
 	 *            the short name for this database.
 	 */
 
-	public ArcturusDatabase(DataSource ds, String description, String name)
+	public ArcturusDatabase(DataSource ds, String description, String name, ArcturusInstance instance)
 			throws SQLException {
 		this.ds = ds;
 		this.description = description;
 		this.name = name;
+		this.instance = instance;
 
 		initialise();
 	}
@@ -104,10 +109,11 @@ public class ArcturusDatabase {
 	 *            the Organism from which to create the ArcturusDatabase.
 	 */
 
-	public ArcturusDatabase(Organism organism) throws SQLException {
+	public ArcturusDatabase(Organism organism, ArcturusInstance instance) throws SQLException {
 		this.name = organism.getName();
 		this.description = organism.getDescription();
 		this.ds = organism.getDataSource();
+		this.instance = instance;
 
 		initialise();
 	}
@@ -159,6 +165,16 @@ public class ArcturusDatabase {
 
 	public synchronized String getName() {
 		return name;
+	}
+	
+	/**
+	 * Returns the instance which created this object.
+	 * 
+	 * @return the instance which created this object.
+	 */
+	
+	public ArcturusInstance getInstance() {
+		return instance;
 	}
 
 	/**
