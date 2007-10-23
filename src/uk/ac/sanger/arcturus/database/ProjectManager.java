@@ -123,14 +123,12 @@ public class ProjectManager extends AbstractManager {
 			String lockowner = rs.getString(6);
 			java.util.Date created = rs.getTimestamp(7);
 			String creator = rs.getString(8);
+			String directory = rs.getString(9);
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
 			project = createAndRegisterNewProject(id, assembly, name, updated,
-					owner, lockdate, lockowner, created, creator);
-			
-			String directory = rs.getString(9);
-			project.setDirectory(directory);
+					owner, lockdate, lockowner, created, creator, directory);
 		}
 
 		rs.close();
@@ -168,13 +166,11 @@ public class ProjectManager extends AbstractManager {
 				String lockowner = rs.getString(5);
 				java.util.Date created = rs.getTimestamp(6);
 				String creator = rs.getString(7);
+				String directory = rs.getString(8);
 
 				project = createAndRegisterNewProject(project_id, assembly,
 						name, updated, owner, lockdate, lockowner, created,
-						creator);
-				
-				String directory = rs.getString(8);
-				project.setDirectory(directory);
+						creator, directory);
 			}
 		}
 
@@ -186,9 +182,11 @@ public class ProjectManager extends AbstractManager {
 	private Project createAndRegisterNewProject(int id, Assembly assembly,
 			String name, java.util.Date updated, String owner,
 			java.util.Date lockdate, String lockowner, java.util.Date created,
-			String creator) {
+			String creator, String directory) {
 		Project project = new Project(id, assembly, name, updated, owner,
 				lockdate, lockowner, created, creator, adb);
+		
+		project.setDirectory(directory);
 
 		registerNewProject(project);
 
@@ -200,7 +198,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void preloadAllProjects() throws SQLException {
-		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator from PROJECT";
+		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory from PROJECT";
 
 		Statement stmt = conn.createStatement();
 
@@ -217,6 +215,7 @@ public class ProjectManager extends AbstractManager {
 			String lockowner = rs.getString(7);
 			java.util.Date created = rs.getTimestamp(8);
 			String creator = rs.getString(9);
+			String directory = rs.getString(10);
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -224,7 +223,7 @@ public class ProjectManager extends AbstractManager {
 
 			if (project == null)
 				createAndRegisterNewProject(id, assembly, name, updated, owner,
-						lockdate, lockowner, created, creator);
+						lockdate, lockowner, created, creator, directory);
 			else {
 				project.setAssembly(assembly);
 				project.setName(name);
