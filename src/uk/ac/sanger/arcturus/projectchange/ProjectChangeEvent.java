@@ -8,6 +8,7 @@ public class ProjectChangeEvent extends EventObject {
 	public static final int CONTIGS_CHANGED = 1;
 	public static final int LOCK_CHANGED = 2;
 	public static final int OWNER_CHANGED = 3;
+	public static final int IMPORTED = 4;
 
 	protected Project project;
 	protected int type;
@@ -37,6 +38,9 @@ public class ProjectChangeEvent extends EventObject {
 				
 			case OWNER_CHANGED:
 				return "OWNER_CHANGED";
+				
+			case IMPORTED:
+				return "IMPORTED";
 				
 			default:
 				return "UNKNOWN(" + type + ")";
