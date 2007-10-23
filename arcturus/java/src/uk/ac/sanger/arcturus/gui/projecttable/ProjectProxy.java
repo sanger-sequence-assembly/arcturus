@@ -12,6 +12,8 @@ import java.util.Date;
 public class ProjectProxy {
 	protected Project project = null;
 	protected ProjectSummary summary = null;
+	protected boolean importing = false;
+	protected boolean exporting = false;
 	
 	public ProjectProxy(Project project, ProjectSummary summary) {
 		this.project = project;
@@ -124,5 +126,27 @@ public class ProjectProxy {
 	
 	public boolean isMine() {
 		return (project == null) ? false : project.isMine();
+	}
+	
+	public void setImporting(boolean importing) throws IllegalStateException {
+		if (exporting)
+			throw new IllegalStateException("Attempted to change import state whilst exporting");
+		
+		this.importing = importing;
+	}
+	
+	public boolean isImporting() {
+		return importing;
+	}
+	
+	public void setExporting(boolean exporting) throws IllegalStateException {
+		if (importing)
+			throw new IllegalStateException("Attempted to change export state whilst importing");
+		
+		this.exporting = exporting;
+	}
+	
+	public boolean isExporting() {
+		return exporting;
 	}
 }
