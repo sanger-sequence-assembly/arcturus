@@ -223,6 +223,9 @@ public class ProjectTable extends SortableTable {
 			Font font = c.getFont().deriveFont(Font.BOLD);
 			c.setFont(font);
 		}
+		
+		if (proxy.isImporting() || proxy.isExporting())
+			c.setForeground(Color.lightGray);
 
 		return c;
 	}
