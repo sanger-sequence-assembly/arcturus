@@ -52,7 +52,7 @@ public class JobPlacer {
 
 		while ((line = br.readLine()) != null) {
 			if (host == null)
-				host = line;
+				host = line.trim();
 		}
 
 		try {
