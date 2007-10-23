@@ -29,6 +29,8 @@ Arcturus currently requires the following external JAR files:
   * The Java Activation Framework library (used by JavaMail).
   
   * The JMX-RMP library.
+  
+  * The Ganymed SSH library,
 
 They are kept in the "lib" sub-directory.  The manifest file for
 the Arcturus JAR file expects them to be in this location.
@@ -93,6 +95,15 @@ identity of people involved in assembly projects.
 
 uk.ac.sanger.arcturus.oligo contains a package which can be used to
 search reads and contigs for oligo sequences.
+
+uk.ac.sanger.arcturus.smithwaterman is a set of classes for performing
+Smith-Waterman alignments.
+
+uk.ac.sanger.arcturus.crossmatch contains classes which can parse the
+output of Phil Green's cross_match alignment software.
+
+uk.ac.sanger.arcturus.jobrunner is a set of classes for running external
+processes via SSH.
 
 uk.ac.sanger.arcturus.utils contains utility classes which do not neatly
 fit anywhere else in the framework.
