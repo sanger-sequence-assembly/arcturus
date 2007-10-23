@@ -22,3 +22,7 @@ mailhandler.domain=sanger.ac.uk
 jmxdb.url=jdbc:mysql://mcs1a:15001/arcturus
 jmxdb.username=arcturus
 jmxdb.password=***REMOVED***
+
+jobplacer.prefix=ssh
+jobplacer.host=seq1
+jobplacer.command=lsplace -R "mem>8000"
