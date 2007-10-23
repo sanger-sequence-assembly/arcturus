@@ -8,7 +8,6 @@
 	<classpathentry kind="lib" path="lib/activation.jar"/>
 	<classpathentry kind="lib" path="lib/javamail.jar"/>
 	<classpathentry kind="lib" path="lib/jmxremote_optional.jar"/>
-	<classpathentry kind="lib" path="ganymed-ssh2-build210.jar"/>
 	<classpathentry kind="lib" path="lib/ganymed-ssh2-build210.jar"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
