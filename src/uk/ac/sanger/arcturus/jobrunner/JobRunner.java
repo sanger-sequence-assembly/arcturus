@@ -204,6 +204,9 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 				+ " seconds";
 		
 		client.setStatus(message);
-		client.done(rc);
+		
+		int irc = rc != null ? rc.intValue() : 9999;
+		
+		client.done(irc);
 	}
 }
