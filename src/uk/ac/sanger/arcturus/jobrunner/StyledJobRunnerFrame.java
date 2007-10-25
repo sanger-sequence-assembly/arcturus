@@ -23,8 +23,8 @@ public class StyledJobRunnerFrame extends JFrame implements JobRunnerClient {
 	protected JButton btnClose = new JButton("Close");
 	
 	public StyledJobRunnerFrame(String hostname, String workingDirectory,
-			String command) {
-		super(command);
+			String command, String caption) {
+		super(caption);
 		
 		JPanel mainpanel = new JPanel(new BorderLayout());
 
