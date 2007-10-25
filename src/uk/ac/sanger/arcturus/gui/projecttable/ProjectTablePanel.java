@@ -10,9 +10,12 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.print.PrinterException;
 
+import java.io.File;
+
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 
@@ -216,15 +219,113 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected void exportToGap4() {
 		ProjectProxy proxy = table.getSelectedProject();
 		
-		if (proxy != null)
-			notYetImplemented("Exporting " + proxy.getName() + " to a Gap4 database");
+		String projectName = proxy.getName();
+		
+		Person owner = proxy.getOwner();
+		
+		if (!proxy.isMine() && (owner != null)) {
+			JOptionPane.showMessageDialog(this,
+					"Project " + projectName +
+						" belongs to " + owner.getName() +
+						".\nYou don't have permission to export it.\nPlease seek assistance.",
+					"Cannot export project " + projectName,
+					JOptionPane.ERROR_MESSAGE);
+
+			return;
+		
+		}
+		
+		String directory = proxy.getProject().getDirectory();
+		
+		if (directory == null) {
+			JOptionPane.showMessageDialog(this,
+					"Could not find the home directory for " + projectName +
+						".\nPlease seek assistance.",
+					"Cannot export project " + projectName,
+					JOptionPane.ERROR_MESSAGE);
+
+			return;
+		}
+		
+		File dir = new File(directory);
+		
+		if (!dir.exists() || !dir.isDirectory()) {
+			JOptionPane.showMessageDialog(this,
+					"The home directory for " + projectName + " is listed as\n" + directory +
+						"\nbut this directory does not exist.\nPlease seek assistance.",
+					"Cannot export project " + projectName,
+					JOptionPane.ERROR_MESSAGE);			
+
+			return;
+		}
+			
+		int rc = JOptionPane.showConfirmDialog(this,
+				"Do you wish to export " + projectName + "?",
+				"Export project?",
+				JOptionPane.OK_CANCEL_OPTION);
+		
+		if (rc != JOptionPane.OK_OPTION)
+			return;
+		
+		ProjectExporter exporter = new ProjectExporter(proxy, directory, this);
+		
+		exporter.start();
 	}
 
 	protected void importFromGap4() {
 		ProjectProxy proxy = table.getSelectedProject();
 		
-		if (proxy != null)
-			notYetImplemented("Importing " + proxy.getName() + " from a Gap4 database");
+		String projectName = proxy.getName();
+		
+		Person owner = proxy.getOwner();
+		
+		if (!proxy.isMine() && (owner != null)) {
+			JOptionPane.showMessageDialog(this,
+					"Project " + projectName +
+						" belongs to " + owner.getName() +
+						".\nYou don't have permission to import it.\nPlease seek assistance.",
+					"Cannot import project " + projectName,
+					JOptionPane.ERROR_MESSAGE);
+
+			return;
+		
+		}
+		
+		String directory = proxy.getProject().getDirectory();
+		
+		if (directory == null) {
+			JOptionPane.showMessageDialog(this,
+					"Could not find the home directory for " + projectName +
+						".\nPlease seek assistance.",
+					"Cannot import project " + projectName,
+					JOptionPane.ERROR_MESSAGE);
+
+			return;
+		}
+		
+		File dir = new File(directory);
+		
+		if (!dir.exists() || !dir.isDirectory()) {
+			JOptionPane.showMessageDialog(this,
+					"The home directory for " + projectName + " is listed as\n" + directory +
+						"\nbut this directory does not exist.\nPlease seek assistance.",
+					"Cannot import project " + projectName,
+					JOptionPane.ERROR_MESSAGE);			
+
+			return;
+		}
+			
+		int rc = JOptionPane.showConfirmDialog(this,
+				"Do you wish to import " + projectName + "?",
+				"Import project?",
+				JOptionPane.OK_CANCEL_OPTION);
+		
+		if (rc != JOptionPane.OK_OPTION)
+			return;
+		
+		ProjectImporter importer = new ProjectImporter(proxy, directory, this);
+		
+		importer.start();
 	}
 
 	protected void exportForAssembly() {
