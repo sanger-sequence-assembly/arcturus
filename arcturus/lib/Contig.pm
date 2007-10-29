@@ -245,8 +245,9 @@ sub addContigNote {
     my $this = shift;
     my $note = shift || return;
     my $newnote = $this->getContigNote();
-    $newnote .= "," if $newnote; # comma separated list
-    $this->setContigNote($newnote.$note);
+#    $newnote .= "," if $newnote; # comma separated list
+    $note = "$newnote,$note" if $newnote;
+    $this->setContigNote($note);
 }
   
 sub setContigNote {
@@ -622,7 +623,7 @@ sub importer {
     my $class = shift; # (obligatory) class name of object to be stored
     my $buffername = shift; # (optional) internal name of buffer
 
-    return if ($this eq $Component); # protection, you can't import yourself
+    return if ($Component && $this eq $Component); # you can't import yourself
 
     $buffername = $class unless defined($buffername);
 
@@ -642,7 +643,7 @@ sub importer {
         }
         $this->{$buffername} = [] if !defined($this->{$buffername});
         push @{$this->{$buffername}}, $Component;
-        return unless (my $sequence_id = shift);
+        return unless (defined(my $sequence_id = shift));
         $Component->setSequenceID($sequence_id);
 # shouldn't this be done for ChildContigs and Mappings and Reads as well?
         $Component->setHost($this) if ($class eq 'Tag');
@@ -863,7 +864,7 @@ sub propagateTagsToContig {
                            'includetag',   # list of tags to be included
                            'excludetag',   # list of tags to be excluded
                            'minimumsegmentsize', # re : anno tags
-                           'change strand',      # re : anno tags
+#                           'change strand',      # re : anno tags
                            'overlap');           # re : anno tags
 
 my $ttags = $target->hasTags();
@@ -1255,7 +1256,7 @@ sub writeToEMBL {
             $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
             $includetag =~ s/\W+/|/g; # put separators in include list
 
-            my $tags = $this->getTags();
+            my $tags = $this->getTags(0,sort=>'position');
 # test if there are tags with identical systematic ID; collect groups, if any
             my @newtags;
             my $joinhash = {};
@@ -1289,7 +1290,11 @@ sub writeToEMBL {
 	        }
 	    }
 
-# export the tags
+# export the tags; sort on start position, then on end position
+
+            @newtags = sort {$a->getPositionLeft()  <=> $b->getPositionLeft() 
+			or   $a->getPositionRight() <=> $b->getPositionRight()}
+	               @newtags;
 
             my $tagkey = $options{tagkey}; # default CDS set in Tag class
             foreach my $tag (@newtags) {
