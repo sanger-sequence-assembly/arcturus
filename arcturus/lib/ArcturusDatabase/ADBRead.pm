@@ -906,7 +906,7 @@ sub getReadsForContig {
 # puts an array of (complete, for export) Read instances for the given contig
     my $this = shift;
     my $contig = shift; # Contig instance
-    my %options = @_; # notags =>  , nosequence => 
+    my %options = @_; # notags =>  , nosequence => , caller (diagnostic)
 
     &verifyParameter($contig,'getReadsForContig','Contig');
 
@@ -951,6 +951,16 @@ sub getReadsForContig {
     }
 
     $sth->finish();
+
+# test reads found against meta data
+
+    unless (@reads) {
+        my $logger = $this->verifyLogger('getReadsForContig');
+        $logger->error("No reads for contig $cid, called from " .
+                       ($options{caller} || "undefined"));
+        $logger->error("options: @_");
+        $logger->error($query);
+    }
 
 # add the sequence (in bulk) unless delayed loading is used
 
@@ -1398,12 +1408,12 @@ sub getReadNamesLike {
 sub getSequenceForReads {
 # takes an array of Read instances and adds the DNA and BaseQuality (in bulk)
     my $this  = shift;
-    my $reads = shift; # array of Reads objects
-    my $blocksize = shift || 10000;
+    my $reads = shift; # array of Read objects
+    my %options = @_;  # blocksize=> , caller=>
 
-    &verifyParameter($reads,"getSequenceForReads",'ARRAY');
+    &verifyParameter($reads,"getSequenceForReads",'ARRAY',@_);
 
-    &verifyParameter($reads->[0],"getSequenceForReads");
+    &verifyParameter($reads->[0],"getSequenceForReads",undef,@_);
 
     my $dbh = $this->getConnection();
 
@@ -1426,6 +1436,8 @@ sub getSequenceForReads {
     my @sids = sort {$a <=> $b} keys(%$sids);
 
     return unless @sids;
+ 
+    my $blocksize = $options{blocksize} || 10000;
 
     my $added = 0;
     while (my $block = scalar(@sids)) {
@@ -2143,6 +2155,11 @@ sub putNewSequenceForRead {
             $first = $prior unless defined $first;
             $version++;
         }
+# no prior, hence exit loop and load new sequence
+        elsif (!$read->getSequence()) {
+# read not completed, missing seq_id
+            return 0,"Missing DNA sequence for new version ($version) of read $readname";
+        }
         elsif ($noload) {
 # read not completed, missing seq_id
             return 0,"New sequence version $version for read $readname "
@@ -2570,13 +2587,13 @@ sub getSequenceIDsForReads {
 # (see also getSequenceIDForAssembledReads in ADBContig)
     my $this = shift;
     my $reads = shift; # array ref
-    my $noload = shift; # flag inhibiting insertion of new read sequence
+    my %options = @_;
 
     &verifyParameter($reads,"getSequenceIDForReads",'ARRAY');
 
     &verifyParameter($reads->[0],"getSequenceIDForReads");
 	
-    my $log = $this->verifyLogger('getSequenceIDForReads');
+    my $log = $this->verifyLogger('getSequenceIDForReads'); 
 
 # collect the readnames of unedited and of edited reads
 # for edited reads, get sequenceID by testing the sequence against
@@ -2592,7 +2609,7 @@ sub getSequenceIDsForReads {
 	}
         elsif ($read->isEdited) {
 # assume the edited version is new, hence (try to) load it
-            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$noload);
+            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$options{noload});
 	    $log->info("Edited $added $errmsg") if $added;
 	    $log->warning("$errmsg") unless $added;
             $success = 0 unless $added;
@@ -2639,7 +2656,7 @@ sub getSequenceIDsForReads {
 # have we collected all of them? then %unedited should be empty
 
     if (keys %$unedited) {
-        my $log = $this->verifyLogger('getSequenceIDsForReads');
+        $log = $this->verifyLogger('getSequenceIDsForReads');
         $log->error("Sequence ID not found for reads: "
 	            . join(',',sort keys %$unedited));
         foreach my $key (keys %$unedited) {
@@ -2785,12 +2802,7 @@ sub putTagsForReads {
 
     my $logger = $this->verifyLogger("putTagsForReads");
 
-$logger->debug("ENTER getSequenceIDsForRead");
-
-    my $success = $this->getSequenceIDsForReads($reads,1); # noload flag set
-
-$logger->setPrefix("putTagsForReads");
-$logger->debug("AFTER getSequenceIDsForRead");
+    my $success = $this->getSequenceIDsForReads($reads,noload=>1); # noload flag set
 
 # build a list of sequence IDs in tags (all sequence IDs must be defined)
 
@@ -2902,7 +2914,7 @@ sub getTagSequenceIDsForTags {
 # add tag sequence IDs to input tags
     my $this = shift;
     my $tags = shift;
-    my %options = @_; # print STDERR "getTagSequenceIDsForTags: @_\n";
+    my %options = @_;
 
 # check input
 
@@ -2932,12 +2944,10 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
 
         my $tagSQhash = {};
 
-# get tag_seq_id, tagsequence for tagseqnames
+# get tag_seq_id, tagsequence for tagseqnames as currently in the database
 
         my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
 	          . " where tagseqname = ?";
-# my $query = "select tag_seq_id,tagseqname,sequence from TAGSEQUENCE"
-#           . " where tagseqname in ('".join("','",@tagseqnames)."')";
 
         my $dbh = $this->getConnection();
 
@@ -2959,12 +2969,13 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
 
         foreach my $tag (@$tags) {
             my $tagseqname = $tag->getTagSequenceName();
-            next unless $tagseqname;
+            next unless ($tagseqname && $tagseqname =~ /\S/); # defined and not blank
 	    my $sequence = $tag->getDNA();
+# if tag ID is missing, and if autoload, add to the database for this name
             if (!$tagIDhash->{$tagseqname}) {
                 $logger->error("Missing tag name $tagseqname ("
                               . ($sequence || 'no sequence available')
-                              . ") in TAGSEQUENCE list");
+                              . ") in TAGSEQUENCE database");
                 next unless $options{autoload}; # allow sequence to be null
 # add tag name and sequence, if any, to TAGSEQUENCE list
 	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
@@ -2973,7 +2984,14 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
                     $tagSQhash->{$tagseqname} = $sequence if $sequence;
                 }
             }
-# test for a possible mismatch of sequence with the one in the database
+            elsif (!$tagSQhash->{$tagseqname}) {
+# no sequence available for this tag ID in database, but present in tag
+		if ($sequence && $options{autoload}) {
+		    $logger->warning("Tag $tagseqname might be updated with sequence '$sequence'");
+#?   	            my $update = &updateTagSequence($dbh,$tagseqname,$sequence);
+                }
+	    }
+# both ID and sequence are in the database test for a possible mismatch
             elsif ($sequence && $sequence ne $tagSQhash->{$tagseqname}) {
 # test if the sequence is already in the database for another name (with a query)
                 my $query = "select tag_seq_id,tagseqname,sequence"
@@ -3014,6 +3032,7 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
             $tag->setTagSequenceID($tagIDhash->{$tagseqname});
         }
     }
+    return $tagIDhash;
 }
    
 sub putReadTags {
@@ -3188,10 +3207,16 @@ sub verifyParameter {
     my $object = shift;
     my $method = shift || 'UNDEFINED';
     my $class  = shift || 'Read';
+    my %options = @_;
 
     return if ($object && ref($object) eq $class);
+
     print STDOUT "method 'ADBRead->$method' expects a $class instance "
-               . "as parameter (instead of ".($object || 'UNDEF')."\n";
+               . "as parameter (instead of ".($object || 'UNDEF').")\n";
+
+    my $caller = $options{caller};
+    print STDOUT "method 'ADBRead->$method' was called from $caller\n" if $caller; 
+
     exit 1;
 }
 
