@@ -123,7 +123,7 @@ sub importReadSequence {
 
     return undef unless (ref($SOURCE) eq 'ArcturusDatabase');
 
-    return $SOURCE->getSequenceForReads(@_); # passes array reference
+    return $SOURCE->getSequenceForReads(@_,caller=>'Contig'); # passes array ref
 }
 
 #-------------------------------------------------------------------    
@@ -453,7 +453,7 @@ sub getReads {
 
     if (!$this->{Read} && $load && (my $SOURCE = $this->{SOURCE})) {
         my $frugal = $this->{frugal} || 0;
-        $SOURCE->getReadsForContig($this,nosequence=>$frugal);
+        $SOURCE->getReadsForContig($this,nosequence=>$frugal,caller=>'Contig');
     }
     return $this->{Read};
 }
@@ -903,12 +903,14 @@ sub writeToCaf {
     unless ($options{noreads}) {
 # if no reads, use delayed loading
         my $reads = $this->getReads(1); 
-# in frugal mode we bunch the reads in blocks to improve speed 
+# in frugal mode we bunch the reads in blocks to improve speed (and reduce memory) 
         if ($this->{frugal}) {
-            my $blocksize = 100;
+            my $blocksize = 1000;
+            my $logger = &verifyLogger('writeToCaf');
+            $logger->debug("blocked export of ".scalar(@$reads)." reads");
             while (my @readblock = splice @$reads,0,$blocksize) {
-                $this->importReadSequence(@readblock);
-print STDERR "frugal mode activated (test) , next block ".scalar(@readblock)."\n";
+                $logger->debug("writing block of ".scalar(@readblock)," reads");
+                $this->importReadSequence(\@readblock);
                 foreach my $read (@readblock) {
                     $read->writeToCaf($FILE,%options); # transfer options, if any
                     $read->erase(); # prepare to free memory 
@@ -996,10 +998,12 @@ sub writeToFasta {
 
 # in frugal mode we bunch the reads in blocks to improve speed 
         if ($this->{frugal}) {
+            my $logger = &verifyLogger('writeToFasta');
+            $logger->debug("blocked export of ".scalar(@$reads)." reads");
             my $blocksize = 100;
             while (my @readblock = splice @$reads,0,$blocksize) {
-print STDERR "frugal mode activated (test) , next block ".scalar(@readblock)."\n";
-                $this->importReadSequence(@readblock);
+                $logger->debug("writing block of ".scalar(@readblock)," reads");
+                $this->importReadSequence(\@readblock);
                 foreach my $read (@readblock) {
                     $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
                     $read->erase(); # prepare to free memory 
