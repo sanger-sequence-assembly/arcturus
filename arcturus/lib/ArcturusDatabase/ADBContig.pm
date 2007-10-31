@@ -173,12 +173,14 @@ sub getContig {
 
 # in frugal mode, read sequence will be delayed loaded when required
 # otherwise, read sequence  (base quality) will be loaded here in bulk
-# note: read tags are not delayed-loaded, so if you set the noreadtags
+# NOTE: read tags are not delayed-loaded, so if you set the noreadtags
 # flag, you will not get the tags by default but will have to explicitly
 # load read tags afterwards (allows tag selection); conversely, contig 
 # tags are delayed-loaded
 
     my $frugal = $options{frugal}; # if defined > 0 used as threshold
+
+    $frugal = 1000 unless defined($frugal); 
 
     $contig->setFrugal(1) if ($frugal && $contig->getNumberOfReads()>=$frugal);
 
@@ -188,7 +190,9 @@ sub getContig {
 
     my $noreadtags = $options{notags} || $options{noreadtags} || 0;
 
-    $this->getReadsForContig($contig,notags=>$noreadtags,nosequence=>$frugal);
+    $this->getReadsForContig($contig,notags=>$noreadtags,
+                                     nosequence=>$frugal,
+                                     caller=>'ADBContig->getContig');
 
 # get read-to-contig mappings (and implicit segments)
 
@@ -661,6 +665,12 @@ sub putContig {
 	        $message .= ($mapping->assembledFromToString || "empty link\n");
 	    }
 	}
+# remove the parent contigs to enable garbage collection
+        my $parents = $contig->getParentContigs();
+        foreach my $parent (@$parents) {
+            $parent->erase();
+        } 
+        undef @$parents;
     }
     else {
 # the contig has no precursor, is completely new
@@ -1778,7 +1788,7 @@ sub repairContigToContigMappings {
 # replace contig to contig mappings which are different from those in database
     my $this = shift;
     my $contig = shift;
-    my %options = @_;
+    my %options = @_; # nokeep update confirm
 
     &verifyParameter($contig,"repairContigToContigMappings");
 
@@ -1877,7 +1887,13 @@ sub repairContigToContigMappings {
         next if $options{nodelete};
         my $parent_id = $existingmapping->getSequenceID();
         my $mapping_id = $existingmapping->getMappingID();
-        $message .= "To be deleted: $contig_id - $parent_id ($mapping_id) ..";
+        $message .= "Existing mapping ";
+        $message .= "to be deleted" if $options{nokeep};
+        $message .= ": $contig_id - $parent_id ($mapping_id) ..";
+        unless ($options{nokeep}) {
+            $message .= ".. \n";
+            next;
+	}
         if (!$options{confirm}) {
             $message .= ".. (to be confirmed)\n";
         }
@@ -2775,7 +2791,9 @@ sub getContigIDsWithTags {
         $query .= " where tag_id in ($subselect)" unless ($query =~ /where/);
     }
 
-    $query .= " order by contig_id"; # print STDOUT "q: $query \n";
+    $query .= " order by contig_id";  
+
+    $this->logQuery('getContigIDsWithTags',$query,@bindvalue);
 
     my $dbh = $this->getConnection();
 
