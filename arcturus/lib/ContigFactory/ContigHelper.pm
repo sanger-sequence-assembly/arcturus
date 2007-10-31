@@ -61,7 +61,9 @@ sub testContig {
                 if (!$noreadsequencetest && !$read->hasSequence()) {
                     $logger->severe("Missing DNA or BaseQuality in Read "
                                     .$read->getReadName);
-                    $success = 0;
+$logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
+$logger->severe($read->writeToCaf(*STDOUT));
+                    $success = 0 unless ($read->getReadName() =~ /con/);
                 }
 	    }
             $contig->{status} = "Invalid or incomplete Read(s)" unless $success;
@@ -1226,7 +1228,7 @@ $logger->debug("ENTER slidingmeanfilter $window");
 
     my @filter;
     for (my $i = 0 ; $i < $window ; $i++) {
-        $filter[$i] = $1.0;
+        $filter[$i] = 1.0;
     }
 
 # step 2: apply log transform
@@ -1730,18 +1732,36 @@ sub crossmatch {
     &verifyParameter($cthis,'crossmatch 1-st parameter');
 
     &verifyParameter($cthat,'crossmatch 2-nd parameter');
+
+    my $logger = &verifyLogger('crossmatch');
+
 # option strong       : set True for comparison at read mapping level
 # option readclipping : if set, require a minumum number of reads in C2C segment
 
-    my $logger = &verifyLogger('crossmatch');
+    unless ((my $cthism = $cthis->hasMappings()) && (my $cthatm = $cthat->hasMappings())) {
+# if either of the two contigs does not have mappings, no comparison can be made
+        unless ($options{sequenceonly}) {
+            $logger->debug("Contig ".$cthis->getContigName()." has no mappings") unless $cthism;
+            $logger->debug("Contig ".$cthat->getContigName()." has no mappings") unless $cthatm;
+            return undef,0;
+        }
+# try the alignment of the consensus sequence
+$logger->debug("Trying sequence comparison TO BE DEVELOPED");
+# options: banded window? see correlate module
+        my $mapping = Alignment->correlate(uc($cthis->getSequence()),undef,
+                                           uc($cthat->getSequence()),undef,
+                                           %options);
+$logger->debug($mapping->toString()) if $mapping;
+# test mapping for length and orientation
+        return undef,0  unless $mapping;
+        return $mapping->hasSegments(),0;
+    }
 $logger->debug("ENTER");
 
 # remove later from HERE
     return &newLinkToContig($class,$cthis,$cthat,@_) if $options{new};
 
     return &linkToContig($class,$cthis,$cthat,@_);
-$logger->debug("EXIT");
-# if no link yet, try Alignment on consnesus?
 }
 
 
@@ -2800,11 +2820,10 @@ sub cleanupsegmentlist {
         } 
         my $threshold = $options{threshold} || 5;
         $threshold = $length/2 if ($threshold >= $length);
-#$DEBUG->info("CM length $length  threshold $threshold\n";
+
         my $segmentlist = [];
         foreach my $segment (@$newsegmentlist) {
             my $size = $segment->[1] - $segment->[0] + 1;
-#$DEBUG->info("CM size $size  threshold $threshold\n";
             push @$segmentlist,$segment if ($size > $threshold);
         }
         $newsegmentlist = $segmentlist;
@@ -2817,7 +2836,7 @@ sub cleanupsegmentlist {
 
 sub propagateTagsToContig {
     my $class = shift;
-# propagate tags FROM this (parent) TO the specified target contig
+# propagate tags FROM parent TO the specified target contig
     my $parent = shift;
     my $contig = shift;
     my %options = @_;
@@ -2835,10 +2854,11 @@ sub propagateTagsToContig {
 
 $logger->debug("ENTER");
 $logger->debug("parent $parent (".$parent->getContigID()
-        .")  target $contig (".$contig->getContigID().")");
+           .")  target $contig (".$contig->getContigID().")");
 my $tags = $parent->getTags() || []; 
 $logger->debug("tags: ".scalar(@$tags));
 
+    return 0 unless $parent->hasTags();
     return 0 unless $parent->hasTags();
 
 $logger->debug("parent $parent has tags ".scalar(@{$parent->getTags()}));
@@ -2874,7 +2894,12 @@ $logger->debug("Testing C2C mapping to find parent ".$parent->getSequenceID());
                 foreach my $c2cmapping (@$c2cmappings) {
 $logger->debug("Testing mapping $c2cmapping ".$c2cmapping->getSequenceID());
 # we use the sequence IDs here, assuming the mappings come from the database
+# NOTE this identification should be more consistent using host_sequence_ID in Mapping class ?
 		    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
+                        $mapping = $c2cmapping;
+                        last;
+                    }
+		    if ($c2cmapping->getMappingName eq $parent->getContigName) {
                         $mapping = $c2cmapping;
                         last;
                     }
@@ -3086,7 +3111,7 @@ sub sortContigTags {
 # sort and remove duplicate contig tags; re: Contig->getTags
     my $class = shift;
     my $contig = shift;
-    my %options = @_; # sort (basic, full), merge
+    my %options = @_; # sort=> (position, full), merge=>
 
     &verifyParameter($contig,'sortContigTags');
 
@@ -3113,8 +3138,8 @@ sub sortContigTags {
 
 # remove duplicate tags; in merge mode also consider overlapping tags
 
-$logger->debug('weeding out duplicates');
-$logger->debug("tag before duplicate test ".scalar(@$tags));
+#$logger->debug('weeding out duplicates');
+#$logger->debug("tag before duplicate test ".scalar(@$tags));
 
     my $merge = $options{merge};
 
@@ -3139,8 +3164,8 @@ $logger->debug("tag before duplicate test ".scalar(@$tags));
 	    $n++;
 	}
     }    
-$logger->debug("tag after sort ".scalar(@$tags));
-$logger->debug("EXIT",skip=>3);
+#$logger->debug("tag after sort ".scalar(@$tags));
+#$logger->debug("EXIT",skip=>3);
 }
 
 sub mergesort {
@@ -3153,7 +3178,7 @@ sub mergesort {
 }
 
 sub fullsort {
-# sort for comparison purposes 
+# sort for comparison purposes (inside the same tag set)
    $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position 
  or
    $a->getType()          cmp $b->getType()           # then on type
@@ -3181,6 +3206,7 @@ sub verifyParameter {
 
     return if ($object && ref($object) eq $class);
     print STDOUT "ContigHelper->$method expects a $class instance as parameter\n";
+    print STDOUT "instead of $object\n" if $object;
     exit 1;
 }
 
@@ -3230,11 +3256,11 @@ sub setLogger {
     my $this = shift;
     my $logger = shift;
 
-    return if ($logger && ref($logger) ne 'Logging'); # protection
+    return if (!$logger || ref($logger) ne 'Logging'); # protection
 
     $LOGGER = $logger;
 
-    &verifyLogger(0); # creates a default if $LOGGER undefined
+    &verifyLogger(); # creates a default if $LOGGER undefined
 }
 
 #-----------------------------------------------------------------------------
