@@ -46,7 +46,7 @@ sub getContigStart {
     return $range[0];
 }
 
-sub getObjectRange {
+sub getObjectRange { # range on the host object, i.p. Contig
     my $this = shift;
     my $test = shift; # force testing the current range
 
@@ -71,10 +71,10 @@ sub getMappedRange {
 }
 
 #-------------------------------------------------------------------
-# mapping metadata (mappingname, sequence ID, mapping ID and alignment)
+# mapping metadata (mappingname, sequence ID, mapping ID)
 #-------------------------------------------------------------------
 
-sub getMappingID {
+sub getMappingID {   # Arcturus mapping_id
     my $this = shift;
     return $this->{mapping_id};
 }
@@ -84,7 +84,7 @@ sub setMappingID {
     $this->{mapping_id} = shift;
 }
 
-sub getMappingName {
+sub getMappingName { # e.g. for read-to-contig mappings : readname
     my $this = shift;
     return $this->{mappingname};
 }
@@ -94,7 +94,7 @@ sub setMappingName {
     $this->{mappingname} = shift;
 }
 
-sub getSequenceID {
+sub getSequenceID {  # r-to-c mapping: read seq_id; p-to-c mapping : parent_id
     my $this = shift;
     return $this->{seq_id};
 }
@@ -103,6 +103,20 @@ sub setSequenceID {
     my $this = shift;
     $this->{seq_id} = shift;
 }
+
+sub getHostSequenceID { # both  r-to-c &  p-to-c : host contig_id
+    my $this = shift;
+    return $this->{hostseqid};
+}
+
+sub setHostSequenceID {
+    my $this = shift;
+    $this->{hostseqid} = shift;
+}
+
+#-------------------------------------------------------------------
+# alignment 
+#-------------------------------------------------------------------
 
 sub setAlignmentDirection {
 # must be defined when creating Mapping instance from database
@@ -662,6 +676,7 @@ sub copy {
 sub inverse {
 # return inverse mapping as new mapping
     my $this = shift;
+    my %options = @_;
 
     my $segments = $this->getSegments();
 
@@ -677,7 +692,10 @@ sub inverse {
                              $segment[0],$segment[1]);
     }
 
-    $inverse->normalise(); # on y
+    $inverse->normalise(@_); # port options
+
+    $inverse->setSequenceID($this->getHostSequenceID());
+    $inverse->setHostSequenceID($this->getSequenceID());
 
     return $inverse;   
 }
@@ -705,18 +723,21 @@ sub multiply {
 # find the starting point in segment arrays if activated
 
     my ($rs,$ts) = (0,0);
-# option to start the search at a different position
-    my $nzs = $options{nonzerostart};
-      if ($nzs && ref($nzs) eq 'HASH') {
-        $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
-        $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
-      }
+# tracking of segments option to start the search at a different position
+# (use this method repeatedly for a list of mappings sorted on mapped? position) 
+my $nzs = $options{nonzerostart};
+if ($nzs && ref($nzs) eq 'HASH') {
+ $rs = $nzs->{rstart} if ($nzs->{rstart} && $nzs->{rstart} > 0);
+ $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
+print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
+}
 # new construction (TO BE VERIFIED)
-    elsif (my $m = $options{nonzerostart}) { # undef,0  or  1,2,3
-        $rs = $thismap->getSegmentTracker(-1) if ($m != 2);
-        $ts = $mapping->getSegmentTracker(-1) if ($m >= 2);
-        $rs = 0 unless ($rs < scalar(@$rsegments));
-        $ts = 0 unless ($ts < scalar(@$tsegments));
+    if (my $track = $options{tracksegments}) { # undef,0  or  1,2,3
+        my $backskip = $options{'ts-backskip'}; 
+        $backskip = 1 unless defined($backskip); # default backskip one
+        $rs = $thismap->getSegmentTracker(-$backskip) if ($track != 2);
+        $ts = $mapping->getSegmentTracker(-$backskip) if ($track >= 2);
+print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
     }
 
 
@@ -782,10 +803,11 @@ sub multiply {
     }
 
 # adjust the non-zero start parameters TO BE DEPRECATED
-      if ($nzs && ref($nzs) eq 'HASH') {
-        $nzs->{rstart} = $rs;
-        $nzs->{tstart} = $ts;
-      }
+if ($nzs && ref($nzs) eq 'HASH') {
+ $nzs->{rstart} = $rs;
+ $nzs->{tstart} = $ts;
+print STDERR "segment tracking:  end  rs=$rs  ts=$ts\n";
+}
 
 # register the current segment counter numbers
 
@@ -896,10 +918,13 @@ sub getSegmentTracker {
     my $this = shift;
     my $vary = shift;
 
+    $this->{currentsegment} = 0 unless defined $this->{currentsegment};
+
     my $rank = $this->{currentsegment};
-    $rank = 0 unless defined $rank;
-    $rank += $vary if $vary;
-    $rank = 0 if ($rank < 0);
+
+    $rank += $vary if $vary; # optional offset
+
+    $rank = 0 if ($rank < 0 || $rank >= $this->hasSegments());
 
     return $rank;
 }
@@ -1012,63 +1037,12 @@ sub toString {
 }
 
 #-------------------------------------------------------------------
-# private functions
-#-------------------------------------------------------------------
-
-my $OLD = 0;
-sub findContigRange { # TO BE DEPRECATED
-# private find X (contig) begin and end positions from input mapping segments
-    my $segments = shift; # arrayref for Segments
-
-# if no segments specified default to all
-
-    return undef unless (ref($segments) eq 'ARRAY');
-
-    my ($cstart,$cfinal);
-
-    foreach my $segment (@$segments) {
-# ensure the correct alignment cstart <= cfinish
-#  interferes with normalization status ??
-        $segment->normaliseOnX();
-        my $cs = $segment->getXstart();
-        $cstart = $cs if (!defined($cstart) || $cs < $cstart);
-        my $cf = $segment->getXfinis();
-        $cfinal = $cf if (!defined($cfinal) || $cf > $cfinal);
-    }
-
-    return defined($cstart) ? [($cstart, $cfinal)] : undef;
-}
-
-
-sub findMappedRange { # TO BE DEPRECATED
-# private find Y (read) begin and end positions from input mapping segments
-    my $segments = shift; # arrayref for Segments
-
-# if no segments specified default to all
-
-    return undef unless (ref($segments) eq 'ARRAY');
-
-    my ($mstart,$mfinal);
-
-    foreach my $segment (@$segments) {
-# ensure the correct alignment start <= finish
-        $segment->normaliseOnY();
-#  interferes with normalization status ??
-        my $ms = $segment->getYstart();
-        $mstart = $ms if (!defined($mstart) || $ms < $mstart);
-        my $mf = $segment->getYfinis();
-        $mfinal = $mf if (!defined($mfinal) || $mf > $mfinal);
-    }
-
-    return defined($mstart) ? [($mstart, $mfinal)] : undef;
-}
-
+# private
 #-------------------------------------------------------------------
 
 sub findXrange {
 # private find X (contig) begin and end positions from input mapping segments
     my $segments = shift; # array-ref
-#return &findContigRange($segments) if $OLD;
 
     return undef unless (ref($segments) eq 'ARRAY');
 
@@ -1077,7 +1051,7 @@ sub findXrange {
     foreach my $segment (@$segments) {
 # ensure the correct alignment xstart <= xfinish
         my ($xs,$xf) = ($segment->getXstart(),$segment->getXfinis());
-        ($xs,$xf) = ($xf,$xs) if ($xf < $xs);
+       ($xs,$xf) = ($xf,$xs) if ($xf < $xs);
         $xstart = $xs if (!defined($xstart) || $xs < $xstart);
         $xfinal = $xf if (!defined($xfinal) || $xf > $xfinal);
     }
@@ -1088,7 +1062,6 @@ sub findXrange {
 sub findYrange {
 # private find Y (read) begin and end positions from input mapping segments
     my $segments = shift; # array-ref
-#return &findMappedRange( $segments) if $OLD;
 
 # if no segments specified default to all
 
@@ -1099,7 +1072,7 @@ sub findYrange {
     foreach my $segment (@$segments) {
 # ensure the correct alignment ystart <= yfinish
         my ($ys,$yf) = ($segment->getYstart(),$segment->getYfinis());
-	($ys,$yf) = ($yf,$ys) if ($yf < $ys);
+       ($ys,$yf) = ($yf,$ys) if ($yf < $ys);
         $ystart = $ys if (!defined($ystart) || $ys < $ystart);
         $yfinal = $yf if (!defined($yfinal) || $yf > $yfinal);
     }
