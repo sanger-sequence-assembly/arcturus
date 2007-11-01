@@ -220,14 +220,14 @@ if ($pidentifier) {
     unless ($projects && @$projects) {
         $logger->warning("Unknown project $pidentifier ($m)");
         $adb->disconnect();
-        exit 0 unless $override;
+        exit 2 unless $override; # exit with error status
         $logger->warning("No default project available");
     }
 
     if ($projects && @$projects > 1) {
         $logger->warning("ambiguous project identifier $pidentifier ($m)");
         $adb->disconnect();
-        exit 0 unless $override;
+        exit 2 unless $override; # exit with error status
     }
 
     $project = $projects->[0] if ($projects && @$projects >= 1);
@@ -244,7 +244,7 @@ if ($pidentifier) {
 
 unless ($project || $nolock) {
     $logger->error("Undefined project");
-    exit 1;
+    exit 2; # exit with error status
 }
 
 # test validity of project inheritance specification
@@ -259,7 +259,7 @@ unless ($identified) {
     $logger->error("Invalid project inheritance option: $pinherit");
     $logger->error("Options available: none, readcount, contiglength, contigcount");
     $adb->disconnect();
-    exit 0;
+    exit 2; # exit with error status
 }
 
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
@@ -289,7 +289,7 @@ unless ($nolock) {
 #	$logger->error("Project $pidentifier is locked: import ABORTED");
 # prepare mail message
 #        $adb->disconnect();
-#        exit 1;
+#        exit 2;
 #    }
      
     my ($lockstatus,$msg) = $project->acquireLock();
@@ -297,7 +297,7 @@ unless ($nolock) {
 	$logger->error("Project $pidentifier could not be locked: $msg");
         $logger->error("import ABORTED");
         $adb->disconnect();
-        exit 1;
+        exit 2; # exit with error status
     }
     $logger->warning($msg);
 }
@@ -949,7 +949,7 @@ $origin = 'Arcturus CAF parser' unless $origin;
 $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
                           $origin eq 'Finishing Software');
  
-my $number = 0;
+my $loaded = 0;
 my $lastinsertedcontig = 0;
 foreach my $identifier (keys %contigs) {
 
@@ -1018,7 +1018,7 @@ foreach my $identifier (keys %contigs) {
         delete $contigs{$identifier};
         $lastinsertedcontig = $added;
         undef $contig;
-        $number++;
+        $loaded++;
     }
     else {
 #        $adb->clearLastContig();
@@ -1030,11 +1030,11 @@ foreach my $identifier (keys %contigs) {
 
 $nc = scalar (keys %contigs);
 $logger->info("$nc contigs skipped") if $nc;
-$logger->info("$number contigs loaded");
+$logger->info("$loaded contigs loaded");
 
 # add import mark if contigs were loaded ? perhaps after safemode ?
 
-if ($number && $project) {
+if ($loaded && $project) {
     unless ($gap4name) {
         $gap4name = `pwd`;
         chomp $gap4name;
@@ -1110,7 +1110,7 @@ if ($lastinsertedcontig && $safemode) {
     else {      
         $logger->severe("Safemode test FAILED");
         $adb->disconnect();
-	exit; # no project unlock
+	exit 2; # exit with error status and leave project locked
     }
 }
 
@@ -1122,7 +1122,9 @@ $project->releaseLock() || $logger->severe("could not release lock");
 
 $adb->disconnect();
 
-exit(0);
+exit 0 if $loaded;  # no errors and contigs loaded
+
+exit 1; # no errors but no contigs loaded
 
 #------------------------------------------------------------------------
 # subroutines
