@@ -2,6 +2,8 @@
 
 use strict;
 
+use ArcturusDatabase;
+
 use Cwd;
 
 # export a single project or a scaffold from arcturus into a gap4 database
@@ -156,8 +158,32 @@ if ($nolock && $version eq 'A') {
 }
 
 #------------------------------------------------------------------------------
-# change to the right directory
+# change to the right directory; use current if rundir is defined but 0
 #------------------------------------------------------------------------------
+
+unless (defined($rundir)) {
+# pick up the directory from the database
+     my $adb = new ArcturusDatabase (-instance => $instance,
+			             -organism => $organism);
+     if (!$adb || $adb->errorStatus()) {
+# abort with error message
+         &showUsage("Invalid organism '$organism' on server '$instance'");
+     }
+     my ($project,$msg);
+     if ($projectname =~ /\D/) {
+        ($project,$msg) = $adb->getProject(projectname=>$projectname);
+     }
+     else {
+        ($project,$msg) = $adb->getProject(project_id=>$projectname);
+     } 
+     $adb->disconnect();
+# get the directory     
+     unless ($project && @$project == 1) {
+         &showusage("Invalid or ambiguous project specification");
+     }
+     $rundir = $project->[0]->getDirectory();
+     print STDERR "Undefined directory for project $projectname\n" unless $rundir;
+}
 
 if ($rundir) {
 # test if directory exists; if not (try to) create it
