@@ -1,0 +1,159 @@
+<html>
+<head>
+<title>Contig Transfers</title>
+</head>
+<body bgcolor="#ffffee">
+<h1>Contig Transfers</h1>
+<p>
+Minerva allows you to request the transfer of contigs from one
+project to another.  Each request is placed in a queue for processing.
+If you have requested a contig which is in a project belonging to
+someone else, then they must give their permission before the contig
+can actually be transferred.
+</p>
+<h2>The lifecycle of a normal request</h2>
+<p>
+A normal contig transfer request passes through several stages.  A new
+request is labelled as <strong>pending</strong>.  If the owner of the
+contig gives permission for the transfer, the request's status changes to
+<strong>approved</strong>.  At this point, the contig has not actually
+been transferred.  It is still in its original project, but the contig's owner
+or the person who made the request can now execute the request.  Executing
+an approved request moves the contig into its new project.  The request's
+status changes to <strong>done</strong>, and the request is closed.
+</p>
+<h2>Refusing a request</h2>
+<p>
+The owner of the contig can refuse the request if s/he needs the contig
+to remain in its original project.  The status of the request changes
+to <strong>refused</strong>, and the request is closed.
+No further action can be taken on a closed request.
+</p>
+<h2>Cancelling a request</h2>
+<p>
+The person who made the request can cancel it at any time whilst it is
+<strong>pending</strong> or <strong>approved</strong>.  The request is
+removed from the queue, its status is changed to <strong>cancelled</strong>,
+and it is closed, so no further action can be taken on it.
+</p>
+<h2>How requests can fail</h2>
+<p>
+It is possible for a contig transfer request to fail.  The most common
+reason is that the requested contig is no longer current, and this
+usually happens because the contig's original project has been imported
+into Arcturus after the contig was joined or split in Gap4.  The
+request's status changes to <strong>failed</strong> and the request is
+closed.
+</p>
+<p>
+A contig transfer request can sometimes be refused automatically by
+Arcturus.  This may happen if two people try to request the same
+contig.  The first request will be accepted, but the second request
+will be refused if the first request is still active (<strong>pending</strong>
+or <strong>approved</strong>).  Arcturus allows each contig to
+be the subject of no more than one active request.
+</p>
+<h2>Contig transfers and locked projects</h2>
+<p>
+Arcturus will not allow a contig to be transferred into or out of a
+locked project.  If you try to execute an <strong>approved</strong> request 
+to or from a locked project, the transfer will not take place.  The request
+remains in the <strong>approved</strong> state.  It can be executed only
+when both projects have been unlocked.
+</p>
+<h1>Using Minerva to manage contig transfer requests</h1>
+<h2>Submitting a contig transfer request</h2>
+<p>
+Select one or more contigs from the contig list of your chosen project,
+then select <strong>Transfer selected contigs to</strong> from the
+<strong>Contig</strong> menu.
+</p>
+<center>
+<img src="screenshots/contigtransfer1.png" width="744" height="448">
+</center>
+<p>
+The drop-down menu shows the projects into which you could transfer
+the selected contigs.  In this example, you could transfer contigs
+to PKN6, PKNFOS17K6 or the BIN.
+</p>
+<h2>Viewing your contig transfer requests</h2>
+<p>
+Select <strong>Show all contig transfer requests</strong> from the
+<strong>File</strong> menu.  A new display opens up:
+</p>
+<center>
+<img src="screenshots/contigtransfer2.png" width="746" height="489">
+</center>
+<p>
+This display lists all of your active contig transfer requests.  The
+table in the upper panel shows the requests that you have made, plus
+any requests which other people have made to transfer contigs into
+your projects.
+</p>
+<p>
+The table in the lower panel shows requests that other people have
+made for contigs in your projects.
+</p>
+<h2>Approving a contig transfer request</h2>
+<p>
+You can approve one or more pending requests by selecting the corresponding
+rows in the table and clicking the right mouse button over the table.
+A popup menu appears:
+</p>
+<center>
+<img src="screenshots/contigtransfer3.png" width="744" height="487">
+</center>
+<p>
+In this example, the selected requests can be cancelled or approved
+by selecting the appropriate menu item.  If the user chooses to
+approve the requests, the display changes to show the new status:
+</p>
+<center>
+<img src="screenshots/contigtransfer4.png" width="915" height="489">
+</center>
+<p>
+Notice that the date and time has been recorded, along with the name of
+the person who approved the requests.
+</p>
+<h2>Executing a contig transfer request</h2>
+<p>
+You can execute one or more approved requests by selecting the corresponding
+rows in the table and clicking the right mouse button over the table.
+A popup menu appears:
+</p>
+<center>
+<img src="screenshots/contigtransfer5.png" width="914" height="487">
+</center>
+<p>
+Notice that it is still possible to cancel the requests at this stage.
+If the user chooses to execute the requests, a confirmation dialog box
+appears, giving the user one last chance to change his/her mind:
+</p>
+<center>
+<img src="screenshots/contigtransfer6.png" width="915" height="485">
+</center>
+<p>
+There is a short pause whilst the contigs are transferred to their
+new projects.  Then the project list is updated automatically to show
+the revised summary information for the projects which have been
+affected by the transfers: 
+</p>
+<center>
+<img src="screenshots/contigtransfer7.png" width="831" height="394">
+</center>
+<h2>When a transfer fails</h2>
+<p>
+If any of the requests cannot be successfully executed, a new window
+appears, containing details of the problem which prevented the transfer
+from taking place:
+</p>
+<center>
+<img src="screenshots/contigtransfer8.png" width="530" height="407">
+</center>
+<hr />
+[<a href="importreads.html">PREV: The Read Importer</a>]
+<!-- [<a href="importreads.html">NEXT: The Read Importer</a>] -->
+[<a href="index.html">HOME: Back to the first page</a>]
+<hr />
+</body>
+</html>
