@@ -108,11 +108,11 @@ public class TestInstanceTree {
 
 			root.add(instanceNode);
 
-			addChildNodes(context, instanceNode);
+			addChildNodes(context, instanceNode, instance);
 		}
 
 		private void addChildNodes(DirContext context,
-				DefaultMutableTreeNode root) throws NamingException {
+				DefaultMutableTreeNode root, ArcturusInstance instance) throws NamingException {
 			Vector<MinervaTreeNode> children = new Vector<MinervaTreeNode>();
 
 			NamingEnumeration ne = context.listBindings("");
@@ -131,14 +131,14 @@ public class TestInstanceTree {
 				if (object instanceof DataSource) {
 					String description = getDescription(context, cn);
 					Organism organism = new Organism(name, description,
-							(DataSource) object);
+							(DataSource) object, instance);
 					children.add(new OrganismNode(organism));
 				} else if (object instanceof DirContext) {
 					InstanceNode node = new InstanceNode((DirContext) object,
 							name);
 					children.add(node);
 
-					addChildNodes((DirContext) object, node);
+					addChildNodes((DirContext) object, node, instance);
 				} else
 					Arcturus.logWarning(
 							"Expecting a DataSource or Context, got a "

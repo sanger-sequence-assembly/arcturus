@@ -334,7 +334,7 @@ public class ArcturusInstance implements Iterator {
 
 				if (description != null)
 					zoo.add(new Organism(name, description,
-									(DataSource) object));
+									(DataSource) object, this));
 			}
 		}
 

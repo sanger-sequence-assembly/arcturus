@@ -109,11 +109,11 @@ public class ArcturusDatabase {
 	 *            the Organism from which to create the ArcturusDatabase.
 	 */
 
-	public ArcturusDatabase(Organism organism, ArcturusInstance instance) throws SQLException {
+	public ArcturusDatabase(Organism organism) throws SQLException {
 		this.name = organism.getName();
 		this.description = organism.getDescription();
 		this.ds = organism.getDataSource();
-		this.instance = instance;
+		this.instance = organism.getInstance();
 
 		initialise();
 	}
