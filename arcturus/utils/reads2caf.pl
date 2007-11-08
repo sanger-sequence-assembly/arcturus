@@ -19,6 +19,7 @@ my $readids;
 my $outfile;
 my $verbose;
 my $aspedafter;
+my $fofn;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -29,6 +30,8 @@ while (my $nextword = shift @ARGV) {
     $aspedafter = shift @ARGV if ($nextword eq '-aspedafter');
 
     $outfile = shift @ARGV if ($nextword eq '-caf');
+
+    $fofn = shift @ARGV if ($nextword eq '-fofn');
 
     $verbose = 1 if ($nextword eq '-verbose');
 
@@ -41,14 +44,20 @@ while (my $nextword = shift @ARGV) {
 unless (defined($organism) &&
 	defined($instance) &&
 	defined($outfile) &&
-	(defined($readids) || defined($aspedafter))) {
+	(defined($readids) || defined($aspedafter) || defined($fofn))) {
     print STDERR "One or more mandatory parameters are missing.\n\n";
     &showUsage();
     exit(1);
 }
 
-if (defined($readids) && defined($aspedafter)) {
-    print STDERR "You can only specify ONE of -readids and -aspedafter";
+my $eocount = 0;
+
+$eocount++ if defined($readids);
+$eocount++ if defined($aspedafter);
+$eocount++ if defined($fofn);
+
+if ($eocount > 1) {
+    print STDERR "You can only specify ONE of -readids, -aspedafter and -fofn";
     exit(1);
 }
 
@@ -67,6 +76,37 @@ if (defined($dbh)) {
     print STDERR "DataSource URL is $dsn\n";
     print STDERR "DBI error is $DBI::errstr\n";
     die "getConnection failed";
+}
+
+if (defined($fofn)) {
+    my @readlist;
+
+    my $query = "select read_id from READINFO where readname = ?";
+
+    my $sth = $dbh->prepare($query);
+    &db_die("prepare($query) failed");
+
+    my $fofnfh = new FileHandle($fofn, "r");
+
+    while (my $line = <$fofnfh>) {
+	chop($line);
+
+	my ($readname) = $line =~ /^\s*(\S+)\s*/;
+
+	$sth->execute($readname);
+
+	my ($readid) = $sth->fetchrow_array();
+
+	printf STDERR "$readname $readid\n";
+
+	push @readlist, $readid if defined($readid);
+    }
+
+    $fofnfh->close();
+
+    $sth->finish();
+
+    $readids = join(",", @readlist);
 }
 
 my $outfh = new FileHandle($outfile, "w");
@@ -151,6 +191,12 @@ $tmplsth->finish();
 $dbh->disconnect();
 
 exit(0);
+
+sub reportProgress {
+    my $format = shift;
+
+    printf STDERR $format, @_;
+}
 
 sub processOneRead {
     my ($sth, $tmplsth, $outfh, $dict_ligation, $dict_clone,
@@ -325,6 +371,7 @@ sub showUsage {
     print STDERR "EXCLUSIVE MANDATORY PARAMETERS:\n";
     print STDERR "    -readids\t\tRange of read IDs to process\n";
     print STDERR "    -aspedafter\t\tOutput all reads asped after this date\n";
+    print STDERR "    -fofn\t\tList of read names to process\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -verbose\t\tVerbose output\n";

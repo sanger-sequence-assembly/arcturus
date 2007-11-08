@@ -348,7 +348,9 @@ else {
 #------------------------------------------------------------------------------
 
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
-    $allocation_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+
+    my $username = $ENV{'USER'};
+    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/); # script is run in test mode
 
     print STDOUT "Testing read allocation for possible duplicates inside projects\n";
 
@@ -375,15 +377,17 @@ else {
 
 #-------------------------------------------------------------------------------
 
-exit 0 if $keep;
+unless ($keep) {
+    print STDOUT "Cleaning up\n";
 
-print STDOUT "Cleaning up\n";
-
-system ("rm -f $padded $depadded");
+    system ("rm -f $padded $depadded");
 
 # purge readallocation logs older than a given date  TO BE COMPLETED
 # "find . -mtime +30 -type f -exec rm -f {} \;"
 # cleanup files of name "readallocation*log"
+}
+
+print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
 
 exit 0;
 

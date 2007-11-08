@@ -424,6 +424,8 @@ unless ($keep) {
     system ("rm -f $depadded");
 }
 
+print STDOUT "\n\nEXPORT OF $projectname HAS FINISHED.\n";
+
 exit 0;
 
 #-------------------------------------------------------------------------------
