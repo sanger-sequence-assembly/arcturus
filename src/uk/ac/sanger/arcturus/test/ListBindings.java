@@ -4,6 +4,8 @@ import java.util.*;
 import javax.naming.*;
 import javax.naming.directory.*;
 
+import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+
 public class ListBindings {
 	public void run() throws NamingException {
 		Properties props = new Properties();
@@ -13,10 +15,17 @@ public class ListBindings {
 
 		DirContext rootctx = new InitialDirContext(props);
 		
-		enumerate("", rootctx);
+		boolean useListBindings = Boolean.getBoolean("useListBindings");
+		
+		if (useListBindings)
+			enumerate("", rootctx);
+		else {
+			System.out.println("Enumerating root context");
+			enumerate2("", rootctx);
+		}
 	}
 	
-	private void enumerate(String prefix, Context context) throws NamingException {
+	private void enumerate(String prefix, DirContext context) throws NamingException {
 		System.out.println(prefix + "Enumerating " + context);
 		
 		prefix += "\t";
@@ -32,9 +41,65 @@ public class ListBindings {
 			
 			System.out.println(prefix + name + " --> " + object);
 			
-			if (object instanceof Context)
-				enumerate(prefix, (Context)object);
+			if (object instanceof DirContext)
+				enumerate(prefix, (DirContext)object);
 		}
+	}
+	
+	private void enumerate2(String prefix, DirContext context) throws NamingException {
+		prefix += "\t";
+		
+		String filter = "(cn=*)";
+		
+		SearchControls cons = new SearchControls();
+		
+		cons.setReturningObjFlag(true);
+		cons.setSearchScope(SearchControls.ONELEVEL_SCOPE);
+		cons.setDerefLinkFlag(true);
+		
+		NamingEnumeration<SearchResult> ne = context.search("", filter, cons);
+		
+		while (ne != null && ne.hasMore()) {
+			SearchResult res = ne.next();
+			
+			Object object = res.getObject();
+			
+			Attributes attrs = res.getAttributes();
+			
+			String cn = getStringAttribute(attrs, "cn");
+			
+			String description = getStringAttribute(attrs, "description");
+
+			String objstr;
+			
+			if (object instanceof DirContext)
+				objstr = "DirContext";
+			else if (object instanceof MysqlDataSource) {
+				MysqlDataSource ds = (MysqlDataSource)object;
+				
+				objstr = "DataSource[host=" + ds.getServerName() + ", port=" + ds.getPortNumber() +
+					", database=" + ds.getDatabaseName() + "]";
+			} else
+				objstr = object.toString();
+
+			System.out.println(prefix + cn +
+					(description == null ? "" : " \"" + description + "\"") +
+					" --> " + objstr);
+			
+			if (object instanceof DirContext)
+				enumerate2(prefix, (DirContext)object);
+		}
+	}
+	
+	private String getStringAttribute(Attributes attrs, String key) throws NamingException {
+		Attribute attr = attrs.get(key);
+		
+		if (attr == null)
+			return null;
+		
+		Object value = attr.get();
+		
+		return (value instanceof String) ? (String)value : value.toString();
 	}
 	
 	public static void main(String[] args) {
