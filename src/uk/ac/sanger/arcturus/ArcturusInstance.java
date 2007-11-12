@@ -130,12 +130,47 @@ public class ArcturusInstance implements Iterator {
 			return null;
 		
 		String cn = "cn=" + name;
+		
+		SearchResult res = lookup(cn);
 
-		DataSource ds = (DataSource) context.lookup(cn);
-
-		String description = getDescription(name);
+		DataSource ds = (DataSource) res.getObject();
+		
+		String description = null;
+		
+		Attributes attrs = res.getAttributes();
+				
+		Attribute attr = attrs.get("description");
+		
+		if (attr != null) {
+			Object value = attr.get();
+			if (value instanceof String)
+				description = (String)value;
+		}
 
 		return new ArcturusDatabase(ds, description, name, this);
+	}
+	
+	private SearchResult lookup(String cn) throws NamingException {
+		SearchControls controls = new SearchControls();
+		
+		controls.setReturningObjFlag(true);
+		controls.setSearchScope(SearchControls.SUBTREE_SCOPE);
+		controls.setDerefLinkFlag(true);
+		
+		String filter = "(&(objectClass=javaNamingReference)(" + cn + "))";
+		
+		NamingEnumeration<SearchResult> ne = context.search("", filter, controls);
+
+		while (ne.hasMore()) {
+			SearchResult res = ne.next();
+			
+			Object obj = res.getObject();
+			
+			if (obj instanceof DataSource)
+				return res;
+		}
+		
+		return null;
 	}
 	
 	/**
