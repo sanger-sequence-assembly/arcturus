@@ -36,6 +36,22 @@ public class LDAPSearch {
 			System.out.println("Name:\t\t" + name);
 			System.out.println("Classname:\t" + classname);
 			System.out.println("isRelative:\t" + (res.isRelative() ? "yes" : "no"));
+			
+			Attributes attrs = res.getAttributes();
+			
+			Attribute attr = attrs.get("cn");
+			
+			if (attr != null) {
+				Object value = attr.get();
+				System.out.println("cn:\t\t" + value);
+			}
+			
+			attr = attrs.get("description");
+			
+			if (attr != null) {
+				Object value = attr.get();
+				System.out.println("Description:\t" + value);
+			}
 			 
 			if (obj != null && obj instanceof MysqlDataSource) {
 				MysqlDataSource ds = (MysqlDataSource)obj;
