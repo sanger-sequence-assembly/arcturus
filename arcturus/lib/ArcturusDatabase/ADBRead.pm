@@ -1046,10 +1046,10 @@ sub getUnassembledReads {
         push @constraint, "readname not regexp '$options{namenotregexp}'";
     }
 
-# add status selection (default PASS only); specify name or id
+# add status selection, specify name or id
 
-    my $status = "PASS"; # default
-    $status = $options{status} if defined($options{status}); # could equal 0
+    my $status = 'PASS'; # default setting
+    $status = $options{status} if defined($options{status}); # status by name
     my $status_id = $options{status_id}; # if defined, takes precedence
     if ($status || $status_id) {
 # identify the status in the dictionary; if not, assign 0 to status_id
@@ -1064,7 +1064,7 @@ sub getUnassembledReads {
 
     my $limit = $options{limit};
 
-# choose your method and go
+# choose your (default) method and go
 
     my $method = $options{method};
     unless (defined($method)) {
@@ -1084,7 +1084,7 @@ sub getUnassembledReads {
                    . "  from CONTIG left join C2CMAPPING "
                    . "    on CONTIG.contig_id = C2CMAPPING.parent_id "
                    . " where C2CMAPPING.parent_id is null";
-        $query    .= "  and nreads > 1" unless $options{nosingleton};
+        $query    .= "   and nreads > 1" unless $options{nosingleton};
 
         $dbh->do($query) || &queryFailed($query) && return undef;
 
@@ -1155,8 +1155,6 @@ sub getUnassembledReads {
     $withsingletoncontigs = 1 if $options{nosingleton}; # EXCLUDE those reads
 
     $contigids = $this->getCurrentContigIDs(singleton=>$withsingletoncontigs);
-# somehow the next query does not work because the method is not known
-#    $contigids = &getCurrentContigs($dbh,singleton=>$withsingletoncontigs);
 
 # find the read IDs which do not occur in these contigs
 
@@ -1261,6 +1259,30 @@ sub getUnassembledReads {
     return $readitems; # array of readnames
 }
 
+sub getFreeReads {
+    my $this = shift;
+    my $item = shift || 'read_id';
+
+    return undef unless ($item eq 'read_id' || $item eq 'readname');
+
+    my $query = "select $item from FREEREADS";
+
+    my $dbh = $this->getConnection();
+ 
+    my $sth = $dbh->prepare($query);
+
+    $sth->execute() || &queryFailed($query);
+
+    my $readitems = [];
+    while (my ($readitem) = $sth->fetchrow_array()) {
+	push @{$readitems}, $readitem;
+    }
+
+    $sth->finish();
+
+    return $readitems;
+}
+
 sub isUnassembledRead {
 # check if a read_id or readname is of an unassembled read
     my $this = shift;
@@ -1300,7 +1322,7 @@ sub isUnassembledRead {
 
     $query .= " and MAPPING.contig_id in ($subquery) limit 1";
 
-    $this->logQuery('isUnassembledRead',$query,$value);
+#    $this->logQuery('isUnassembledRead',$query,$value);
 
     my $dbh = $this->getConnection();
     my $sth = $dbh->prepare_cached($query);
