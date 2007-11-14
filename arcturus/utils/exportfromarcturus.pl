@@ -343,6 +343,9 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
     my $marker_script =  "${arcturus_home}/utils/project-export-marker";
     $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
+# cleanup pwd
+    $pwd =~ s?.*automount.*/nfs?/nfs?;
+    $pwd =~ s?.*automount.*/root?/nfs?;
 
     system ("$marker_script -i $instance -o $organism -p $projectname "
 	   ."-file $pwd/${gap4name}.$version");
