@@ -179,6 +179,7 @@ if ($fopn) {
 
 my %projects;
 foreach my $projectid (@projectids) {
+    $projectid =~ s/\*/%/g; # replace possible linux wildcard by MySQL equi
 # identify each specified project in the database (may contain wildcards)
     my $Projects = &getProjectInstance($projectid,$assembly,$adb,1);
 # test if any project found
@@ -244,10 +245,25 @@ foreach my $project (@projects) {
     if ($subdir) {
         chdir($pwd); # to be sure
 # or in a subdirectory named after the project
+        my $lcdirname = lc($project); # 1-st alias
+        my $ucdirname = uc($project); # 2-nd alias
         my $subdir = "$pwd/$project";
-        chdir ($subdir) if (-d $project);
+        if (-d $project) {
+            chdir ($subdir);
+        }
+        elsif ($lcdirname ne $project && (-d $lcdirname)) {
+           $subdir = "$pwd/$lcdirname";
+           chdir ($subdir);
+        }
+        elsif ($ucdirname ne $project && (-d $ucdirname)) {
+           $subdir = "$pwd/$ucdirname";
+           chdir ($subdir);
+        }
+        else {
+	    undef $subdir; # forces exit with error message
+	}
         my $subpwd = Cwd::cwd();
-        unless ($subpwd eq $subdir) {
+        unless ($subpwd eq $subdir) { # to be sure            
             $logger->warning("FAILED to locate subdir $project");
             next;
 	}
