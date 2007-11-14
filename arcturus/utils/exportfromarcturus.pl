@@ -329,9 +329,9 @@ unless ($? == 0) {
 
 print STDERR "Changing access provileges on Gap4 database\n";
 
-system ("chmod g-w ${gap4name}.$version");
+system ("chmod ug-w ${gap4name}.$version");
 
-system ("chmod g-w ${gap4name}.$version.aux");
+system ("chmod ug-w ${gap4name}.$version.aux");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode)
