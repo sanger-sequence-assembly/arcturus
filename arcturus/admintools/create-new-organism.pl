@@ -272,7 +272,7 @@ $sth->finish();
 if (defined($directory)) {
     print STDERR "### Setting the directory for the projects ... ";
 
-    $query = "update PROJECT set directory = concat('" . $directory . "', name) where name != 'PROBLEMS'";
+    $query = "update PROJECT set directory = concat('" . $directory . "/', name) where name != 'PROBLEMS'";
 
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
