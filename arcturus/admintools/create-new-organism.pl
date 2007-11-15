@@ -18,6 +18,7 @@ my $dbname;
 
 my $ldapurl;
 my $ldapuser;
+my $rootdn;
 
 my $template;
 
@@ -31,6 +32,7 @@ while (my $nextword = shift @ARGV) {
 
     $ldapurl = shift @ARGV if ($nextword eq '-ldapurl');
     $ldapuser = shift @ARGV if ($nextword eq '-ldapuser');
+    $rootdn = shift @ARGV if ($nextword eq '-rootdn');
 
     $template = shift @ARGV if ($nextword eq '-template');
 
@@ -42,14 +44,14 @@ while (my $nextword = shift @ARGV) {
 
 unless (defined($instance) && defined($organism) && defined($dbhost)
 	&& defined($dbport) && defined($dbname) && defined($ldapurl)
-	&& defined($ldapuser) && defined($template)) {
+	&& defined($ldapuser) && defined($rootdn) && defined($template)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
 }
 
 my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
 
-my $dbpw = &getPassword("Enter password for root MySQL user");
+my $dbpw = &getPassword("Enter password for root MySQL user", "MYSQL_ROOT_PW");
 
 if (!defined($dbpw) || length($dbpw) == 0) {
     print STDERR "No password was entered\n";
@@ -150,7 +152,7 @@ print STDERR "OK\n\n";
 
 $dbh->disconnect();
 
-$dbpw = &getPassword("Enter password for MySQL user arcturus_dba");
+$dbpw = &getPassword("Enter password for MySQL user arcturus_dba", "ARCTURUS_DBA_PW");
 
 if (!defined($dbpw) || length($dbpw) == 0) {
     print STDERR "No password was entered\n";
@@ -159,7 +161,8 @@ if (!defined($dbpw) || length($dbpw) == 0) {
 
 print STDERR "### Creating views ... ";
 
-my $command = "cat /software/arcturus/sql/views/*.sql | mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+my $command = "cat /software/arcturus/sql/views/*.sql | " .
+    " mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
 
 my $rc = system($command);
 
@@ -172,7 +175,8 @@ print STDERR "OK\n\n";
 
 print STDERR "### Creating stored procedures ... ";
 
-$command = "cat /software/arcturus/sql/procedures/*.sql | mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+$command = "cat /software/arcturus/sql/procedures/*.sql | " .
+    " mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
 
 $rc = system($command);
 
@@ -183,16 +187,138 @@ unless ($rc == 0) {
 
 print STDERR "OK\n\n";
 
+print STDERR "### Creating an LDAP entry ... ";
+
+my $ldappw = &getPassword("Enter password for LDAP user", "LDAP_ADMIN_PW");
+
+if (!defined($dbpw) || length($dbpw) == 0) {
+    print STDERR "No password was entered\n";
+    exit(2);
+}
+
+my $ldap = Net::LDAP->new($ldapurl) or die "$@";
+ 
+my $mesg = $ldap->bind($ldapuser, password => $ldappw);
+$mesg->code && die $mesg->error;
+
+my $result = $ldap->add("cn=$organism,cn=$instance,$rootdn",
+		     attr => ['cn' => $organism,
+			      'javaClassName' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSource',
+			      'javaFactory' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSourceFactory',
+			      'javaReferenceAddress' => ["#0#user#arcturus",
+							 "#1#password#***REMOVED***",
+							 "#2#serverName#$dbhost",
+							 "#3#port#$dbport",
+							 "#4#databaseName#$dbname",
+							 "#5#profileSql#false",
+							 "#6#explicitUrl#false"],
+			      'objectClass' => ['top',
+						'javaContainer',
+						'javaNamingReference']
+			      ]
+		     );
+
+$result->code && warn "failed to add entry: ", $result->error;  
+
+$mesg = $ldap->unbind;
+
+print STDERR "OK\n\n";
+
+print STDERR "### Preparing to populate tables for $dbname ...";
+
+$dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
+
+my $dbh = DBI->connect($dsn, "arcturus", "***REMOVED***");
+
+unless (defined($dbh)) {
+    print STDERR "Failed to connect to $dsn as arcturus\n";
+    print STDERR "DBI error is $DBI::errstr\n";
+    exit(3);
+}
+
+print STDERR "OK\n\n";
+
+my @pwinfo = getpwuid($<);
+my $me = $pwinfo[0];
+
+print STDERR "### Creating the default assembly ...";
+
+$query = "insert into ASSEMBLY(name,creator,created) values(?,?,now())";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+$sth->execute($organism, $me);
+&db_die("Failed to execute query \"$query\"");
+
+my $assembly_id = $dbh->{'mysql_insertid'};
+
+$sth->finish();
+
+print STDERR "OK\n\n";
+
+print STDERR "### Creating BIN and PROBLEMS projects ...";
+
+$query = "insert into PROJECT(assembly_id,name,creator,created) values(?,?,?,NOW())";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+$sth->execute($assembly_id, 'BIN', $me);
+&db_die("Failed to execute query \"$query\" for BIN");
+
+$sth->execute($assembly_id, 'PROBLEMS', $me);
+&db_die("Failed to execute query \"$query\" for PROBLEMS");
+
+$sth->finish();
+
+print STDERR "OK\n\n";
+
+print STDERR "### Populating the USER table ...";
+
+$query = "insert into USER(username,role) select username,role from $template.USER";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+$sth->execute();
+&db_die("Failed to execute query \"$query\"");
+
+$sth->finish();
+
+print STDERR "OK\n\n";
+
+print STDERR "### Populating the PRIVILEGE table ...";
+
+$query = "insert into PRIVILEGE(username,privilege) select username,privilege from $template.PRIVILEGE";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+$sth->execute();
+&db_die("Failed to execute query \"$query\"");
+
+$sth->finish();
+
+print STDERR "OK\n\n";
+
+$dbh->disconnect();
+
 exit(0);
 
 sub getPassword {
     my $prompt = shift || "Enter password:";
+    my $alias = shift;
+
+    my $password = defined($alias) ? $ENV{$alias} : undef;
+
+    return $password if defined($password);
 
     print "$prompt ";
 
     ReadMode 'noecho';
 
-    my $password = ReadLine 0;
+    $password = ReadLine 0;
 
     ReadMode 'normal';
 
@@ -225,6 +351,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "    -ldapurl\t\tLDAP URL\n";
     print STDERR "    -ldapuser\t\tLDAP username\n";
+    print STDERR "    -rootdn\t\tLDAP root DN\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
 }
