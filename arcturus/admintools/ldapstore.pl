@@ -49,7 +49,6 @@ $result = $ldap->add("cn=$organism,cn=$instance,$rootdn",
 							 "#6#explicitUrl#false"],
 			      'objectClass' => ['top',
 						'javaContainer',
-						'javaObject',
 						'javaNamingReference']
 			      ]
 		     );
