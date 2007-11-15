@@ -248,7 +248,7 @@ print STDERR "OK\n\n";
 
 print STDERR "### Populating the USER table ... ";
 
-$query = "insert into USER(username,role) select username,role from $template.USER";
+$query = "insert into USER(username,role) select username,role from arcturus.USER";
 
 $sth = $dbh->prepare($query);
 &db_die("Failed to prepare query \"$query\"");
@@ -260,9 +260,14 @@ $sth->finish();
 
 print STDERR "OK\n\n";
 
-print STDERR "### Populating the PRIVILEGE table ... ";
+print STDERR "### Populating the PRIVILEGE table ...\n";
 
-$query = "insert into PRIVILEGE(username,privilege) select username,privilege from $template.PRIVILEGE";
+my %privileges = ('finisher' => ['create_project', 'lock_project', 'move_any_contig'],
+		  'team leader' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig'],
+		  'administrator' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig']
+		  );
+
+$query = "select username,role from USER";
 
 $sth = $dbh->prepare($query);
 &db_die("Failed to prepare query \"$query\"");
@@ -270,9 +275,42 @@ $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("Failed to execute query \"$query\"");
 
+my %roles;
+
+while (my ($user,$role) = $sth->fetchrow_array()) {
+    $roles{$user} = $role;
+}
+
 $sth->finish();
 
-print STDERR "OK\n\n";
+$query = "insert into PRIVILEGE(username,privilege) values (?,?)";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+foreach my $user (sort keys %roles) {
+    my $role = $roles{$user};
+
+    printf STDERR "\t%-8s %-20s\t", $user, $role;
+
+    my $privs = $privileges{$role};
+
+    if (defined($privs)) {
+	foreach my $priv (@{$privs}) {
+	    $sth->execute($user, $priv);
+	    &db_die("Failed to execute query \"$query\" with user=$user, privilege=$priv");
+	    print STDERR " $priv";
+	}
+    } else {
+	print STDERR "\nWARNING: No privileges defined for user $user, role $role\n";
+    }
+
+    print STDERR "\n";
+}
+
+$sth->finish();
+
+print STDERR "\nOK\n\n";
 
 $dbh->disconnect();
 
