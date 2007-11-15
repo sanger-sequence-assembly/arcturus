@@ -20,6 +20,8 @@ my $ldapurl;
 my $ldapuser;
 my $rootdn;
 
+my $aliasdn;
+
 my $template;
 
 while (my $nextword = shift @ARGV) {
@@ -34,6 +36,8 @@ while (my $nextword = shift @ARGV) {
     $ldapuser = shift @ARGV if ($nextword eq '-ldapuser');
     $rootdn = shift @ARGV if ($nextword eq '-rootdn');
 
+    $aliasdn = shift @ARGV if ($nextword eq '-aliasdn');
+
     $template = shift @ARGV if ($nextword eq '-template');
 
     if ($nextword eq '-help') {
@@ -43,10 +47,15 @@ while (my $nextword = shift @ARGV) {
 }
 
 unless (defined($instance) && defined($organism) && defined($dbhost)
-	&& defined($dbport) && defined($dbname) && defined($ldapurl)
+	&& defined($dbport) && defined($ldapurl)
 	&& defined($ldapuser) && defined($rootdn) && defined($template)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
+}
+
+unless (defined($dbname)) {
+    $dbname = $organism;
+    print STDERR "WARNING: No database name specified, using $organism as the default.\n\n";
 }
 
 my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
@@ -121,7 +130,7 @@ foreach my $tablename (@tables) {
     print STDERR "\t$tablename\n";
 }
 
-print STDERR "\n";
+print STDERR "\nOK\n\n";
 
 print STDERR "### Granting privileges to user arcturus ... ";
 
@@ -187,44 +196,7 @@ unless ($rc == 0) {
 
 print STDERR "OK\n\n";
 
-print STDERR "### Creating an LDAP entry ... ";
-
-my $ldappw = &getPassword("Enter password for LDAP user", "LDAP_ADMIN_PW");
-
-if (!defined($dbpw) || length($dbpw) == 0) {
-    print STDERR "No password was entered\n";
-    exit(2);
-}
-
-my $ldap = Net::LDAP->new($ldapurl) or die "$@";
- 
-my $mesg = $ldap->bind($ldapuser, password => $ldappw);
-$mesg->code && die $mesg->error;
-
-my $result = $ldap->add("cn=$organism,cn=$instance,$rootdn",
-		     attr => ['cn' => $organism,
-			      'javaClassName' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSource',
-			      'javaFactory' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSourceFactory',
-			      'javaReferenceAddress' => ["#0#user#arcturus",
-							 "#1#password#***REMOVED***",
-							 "#2#serverName#$dbhost",
-							 "#3#port#$dbport",
-							 "#4#databaseName#$dbname",
-							 "#5#profileSql#false",
-							 "#6#explicitUrl#false"],
-			      'objectClass' => ['top',
-						'javaContainer',
-						'javaNamingReference']
-			      ]
-		     );
-
-$result->code && warn "failed to add entry: ", $result->error;  
-
-$mesg = $ldap->unbind;
-
-print STDERR "OK\n\n";
-
-print STDERR "### Preparing to populate tables for $dbname ...";
+print STDERR "### Preparing to populate tables for $dbname ... ";
 
 $dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
 
@@ -241,7 +213,7 @@ print STDERR "OK\n\n";
 my @pwinfo = getpwuid($<);
 my $me = $pwinfo[0];
 
-print STDERR "### Creating the default assembly ...";
+print STDERR "### Creating the default assembly ... ";
 
 $query = "insert into ASSEMBLY(name,creator,created) values(?,?,now())";
 
@@ -257,7 +229,7 @@ $sth->finish();
 
 print STDERR "OK\n\n";
 
-print STDERR "### Creating BIN and PROBLEMS projects ...";
+print STDERR "### Creating BIN and PROBLEMS projects ... ";
 
 $query = "insert into PROJECT(assembly_id,name,creator,created) values(?,?,?,NOW())";
 
@@ -274,7 +246,7 @@ $sth->finish();
 
 print STDERR "OK\n\n";
 
-print STDERR "### Populating the USER table ...";
+print STDERR "### Populating the USER table ... ";
 
 $query = "insert into USER(username,role) select username,role from $template.USER";
 
@@ -288,7 +260,7 @@ $sth->finish();
 
 print STDERR "OK\n\n";
 
-print STDERR "### Populating the PRIVILEGE table ...";
+print STDERR "### Populating the PRIVILEGE table ... ";
 
 $query = "insert into PRIVILEGE(username,privilege) select username,privilege from $template.PRIVILEGE";
 
@@ -303,6 +275,65 @@ $sth->finish();
 print STDERR "OK\n\n";
 
 $dbh->disconnect();
+
+my $dn = "cn=$organism,cn=$instance,$rootdn";
+
+print STDERR "### Creating an LDAP entry\n$dn ... ";
+
+my $ldappw = &getPassword("Enter password for LDAP user", "LDAP_ADMIN_PW");
+
+if (!defined($dbpw) || length($dbpw) == 0) {
+    print STDERR "No password was entered\n";
+    exit(2);
+}
+
+my $ldap = Net::LDAP->new($ldapurl) or die "$@";
+ 
+my $mesg = $ldap->bind($ldapuser, password => $ldappw);
+$mesg->code && die $mesg->error;
+
+my $result = $ldap->add($dn,
+		     attr => ['cn' => $organism,
+			      'javaClassName' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSource',
+			      'javaFactory' => 'com.mysql.jdbc.jdbc2.optional.MysqlDataSourceFactory',
+			      'javaReferenceAddress' => ["#0#user#arcturus",
+							 "#1#password#***REMOVED***",
+							 "#2#serverName#$dbhost",
+							 "#3#port#$dbport",
+							 "#4#databaseName#$dbname",
+							 "#5#profileSql#false",
+							 "#6#explicitUrl#false"],
+			      'objectClass' => ['top',
+						'javaContainer',
+						'javaNamingReference']
+			      ]
+		     );
+
+$result->code && warn "failed to add entry: ", $result->error;
+
+print STDERR "OK\n\n";
+
+if (defined($aliasdn)) {
+    my $aliasdn = "cn=$organism," . $aliasdn . ",$rootdn";
+    
+    print STDERR "### Creating an LDAP alias\n$aliasdn ... ";
+
+    my $result = $ldap->add($aliasdn,
+		     attr => ['cn' => $organism,
+			      'aliasedObjectName' => $dn,
+			      'objectClass' => ['top',
+						'alias',
+						'extensibleObject'
+						]
+			      ]
+		     );
+
+    $result->code && warn "failed to add entry: ", $result->error;
+}
+
+$mesg = $ldap->unbind;
+
+print STDERR "OK\n\n";
 
 exit(0);
 
@@ -347,11 +378,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "    -host\t\tMySQL host\n";
     print STDERR "    -port\t\tMySQL port\n";
-    print STDERR "    -db\t\t\tMySQL database to create\n";
     print STDERR "\n";
     print STDERR "    -ldapurl\t\tLDAP URL\n";
     print STDERR "    -ldapuser\t\tLDAP username\n";
     print STDERR "    -rootdn\t\tLDAP root DN\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
+    print STDERR "\n\n";
+    print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
+    print STDERR "    -aliasdn\t\tLDAP DN (relative to root DN) for alias\n";
 }
