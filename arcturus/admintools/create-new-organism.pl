@@ -26,6 +26,9 @@ my $aliasdn;
 
 my $template;
 
+my $projects;
+my $directory;
+
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
@@ -43,6 +46,10 @@ while (my $nextword = shift @ARGV) {
     $template = shift @ARGV if ($nextword eq '-template');
 
     $description = shift @ARGV if ($nextword eq '-description');
+
+    $projects = shift @ARGV if ($nextword eq '-projects');
+
+    $directory = shift @ARGV if ($nextword eq '-directory');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -246,9 +253,35 @@ $sth->execute($assembly_id, 'BIN', $me);
 $sth->execute($assembly_id, 'PROBLEMS', $me);
 &db_die("Failed to execute query \"$query\" for PROBLEMS");
 
+print STDERR "OK\n\n";
+
+if (defined($projects)) {
+    print STDERR "### Creating user-specified projects ...\n";
+
+    foreach my $project (split(/,/, $projects)) {
+	$sth->execute($assembly_id, $project, $me);
+	&db_die("Failed to execute query \"$query\" for $project");
+	print STDERR "\t$project\n";
+    }
+
+    print STDERR "\nOK\n\n";
+}
+
 $sth->finish();
 
-print STDERR "OK\n\n";
+if (defined($directory)) {
+    print STDERR "### Setting the directory for the projects ... ";
+
+    $query = "update PROJECT set directory = concat('" . $directory . "', name) where name != 'PROBLEMS'";
+
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+
+    print STDERR "OK\n\n";
+}
 
 print STDERR "### Populating the USER table ... ";
 
@@ -435,4 +468,6 @@ sub showUsage {
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
     print STDERR "    -aliasdn\t\tLDAP DN (relative to root DN) for alias\n";
+    print STDERR "    -projects\t\tProjects to add to the database\n";
+    print STDERR "    -directory\tBase directory for projects\n";
 }
