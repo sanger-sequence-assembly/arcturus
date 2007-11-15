@@ -20,6 +20,8 @@ my $ldapurl;
 my $ldapuser;
 my $rootdn;
 
+my $description;
+
 my $aliasdn;
 
 my $template;
@@ -40,6 +42,8 @@ while (my $nextword = shift @ARGV) {
 
     $template = shift @ARGV if ($nextword eq '-template');
 
+    $description = shift @ARGV if ($nextword eq '-description');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -47,7 +51,7 @@ while (my $nextword = shift @ARGV) {
 }
 
 unless (defined($instance) && defined($organism) && defined($dbhost)
-	&& defined($dbport) && defined($ldapurl)
+	&& defined($dbport) && defined($description) && defined($ldapurl)
 	&& defined($ldapuser) && defined($rootdn) && defined($template)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
@@ -341,6 +345,9 @@ my $result = $ldap->add($dn,
 							 "#4#databaseName#$dbname",
 							 "#5#profileSql#false",
 							 "#6#explicitUrl#false"],
+
+			      'description' => $description,
+
 			      'objectClass' => ['top',
 						'javaContainer',
 						'javaNamingReference']
@@ -420,6 +427,8 @@ sub showUsage {
     print STDERR "    -ldapurl\t\tLDAP URL\n";
     print STDERR "    -ldapuser\t\tLDAP username\n";
     print STDERR "    -rootdn\t\tLDAP root DN\n";
+    print STDERR "\n";
+    print STDERR "    -description\tDescription for LDAP entry\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
     print STDERR "\n\n";
