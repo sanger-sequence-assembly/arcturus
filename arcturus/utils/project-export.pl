@@ -147,7 +147,7 @@ my $logger = new Logging();
  
 $logger->setStandardFilter(0) if $verbose; # set reporting level
  
-$logger->setPrefix("#MINERVA ") if $minerva;
+$logger->setPrefix("#MINERVA") if $minerva;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -285,6 +285,23 @@ foreach my $identifier (@identifiers) {
     elsif (!$batch) {
         $logger->warning("Unknown project $identifier");
     }
+}
+
+# if the projects should be locked: acquire the lock here
+
+my $i = 0;
+# acquire the lock on the projects
+while ($lock && $i < scalar(@projects)) {
+    my $project = $projects[$i];
+    my ($status,$msg) = $project->acquireLock();
+    if ($status && $status == 2) { # success
+        $i++;
+        next;
+    }
+ # failed to acquirelock on project
+    $logger->severe("Failed to acquire lock on project "
+		   .$project->getProjectName()." : $msg");
+    splice @projects,$i,1; # remove project from list
 }
 
 # okay, here we have collected all projects to be exported
