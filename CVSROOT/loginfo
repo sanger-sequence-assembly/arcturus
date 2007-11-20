@@ -20,7 +20,7 @@
 DEFAULT		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog
 ^zoo		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
 ^snp_analysis	(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog_snp_analysis 2>&1
-^snp_analysis	/usr/bin/Mail -s "%{} update now available" jm15@sanger.ac.uk
+^snp_analysis	(echo "user: $USER"; echo %s;) | mail jm15@sanger.ac.uk -s "%{} update now available"
 
 # ^zoo		(echo "user: $USER"; echo %s; date; cat; echo;  (sleep 10; cd /nfs/disk222/yeastpub/zoo/; if [ $USER != kdj ]; then cvs -q update -d; fi ; echo) &) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
 
