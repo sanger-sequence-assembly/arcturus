@@ -19,7 +19,7 @@
 
 DEFAULT		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog
 ^zoo		(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog_zoo 2>&1
-^snp_analysis	(echo "user: $USER"; echo %s ) | /usr/bin/Mail jm15@sanger.ac.uk -s "%{} update now available"
+^snp_analysis	(echo "user: $USER"; echo %s ) | /usr/bin/Mail jm15@sanger.ac.uk, tk2@sanger.ac.uk -s "%{} update now available"
 ^snp_analysis	(echo "user: $USER"; echo %s; date; cat; echo) >> $CVSROOT/CVSROOT/commitlog_snp_analysis 2>&1
 
 
