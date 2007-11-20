@@ -136,7 +136,7 @@ sub addProjectID {
 }
 
 sub getProjectIDs {
-# export reference to the contig IDs array as is
+# export reference to the project IDs array as is
     my $this = shift;
 
     $this->{projectIDs} = [] unless defined $this->{projectIDs};
@@ -153,7 +153,7 @@ sub getNumberOfProjects {
 }
 
 sub fetchProjectIDs {
-# get IDs from database, export reference to the contig IDs array
+# get IDs from database, export reference to the project IDs array
     my $this = shift;
     my $nolockcheck = shift || 0; # set true to return only unlocked data
 
@@ -172,6 +172,25 @@ sub fetchProjectIDs {
     }
 
     return $pids;
+}
+ 
+#-------------------------------------------------------------------
+
+sub getProjects {
+# returns a list of Project instances for this assembly
+    my $this = shift;
+
+    my $projectids = $this->fetchProjectIDs();
+
+    my @projects;
+    foreach my $projectid (@$projectids) {
+
+        my ($project,$message) = $this->getProject(project_id => $projectid); 
+ 
+        push @projects,@$project if ($project && @$project);
+    }
+
+    return [@projects];
 }
  
 #-------------------------------------------------------------------
