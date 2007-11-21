@@ -84,12 +84,12 @@ public class ProjectExporter {
 	}
 
 	class Processor extends ContigCAFWriter implements ContigProcessor {
-		private PrintWriter pw;
+		private PrintWriter mypw;
 
 		public Processor(ArcturusDatabase adb, PrintWriter pw)
 				throws SQLException {
 			super(adb);
-			this.pw = pw;
+			this.mypw = pw;
 		}
 
 		public boolean processContig(Contig contig) {
@@ -100,7 +100,7 @@ public class ProjectExporter {
 			int rc;
 
 			try {
-				rc = writeContigAsCAF(contig, pw);
+				rc = writeContigAsCAF(contig, mypw);
 			} catch (Exception e) {
 				Arcturus.logSevere(e);
 				return false;
