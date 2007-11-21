@@ -482,7 +482,7 @@ public class ContigCAFWriter {
 		if (clone != null)
 			buffer.append("Clone " + clone + "\n");
 
-		buffer.append("Status " + status + "\n");
+		buffer.append("ProcessStatus " + status + "\n");
 
 		if (asped != null)
 			buffer.append("Asped " + dateformat.format(asped) + "\n");
