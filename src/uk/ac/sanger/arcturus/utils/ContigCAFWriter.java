@@ -566,7 +566,7 @@ public class ContigCAFWriter {
 			int endInSCF = startInSCF + length - 1;
 			
 			buffer.append("Align_to_SCF " + startInSequence + " " + endInSequence +
-					" " + startInSCF + " " + endInSCF);
+					" " + startInSCF + " " + endInSCF + "\n");
 		}
 		
 		rs.close();
@@ -585,7 +585,7 @@ public class ContigCAFWriter {
 		int seqlen = rs.getInt(3);
 		
 		if (!hasAlignToSCF)
-			buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen+ "\n");
+			buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen + "\n");
 
 		pw.println(buffer.toString());
 
