@@ -81,6 +81,8 @@ public class ProjectExporter {
 				exportProject(project, processor);
 			}
 		}
+		
+		pw.close();
 	}
 
 	class Processor extends ContigCAFWriter implements ContigProcessor {
