@@ -524,7 +524,42 @@ public class ProjectManager extends AbstractManager {
 
 		return rc == 1;
 	}
-	
+
+	public boolean unlockProjectForExport(Project project) throws ProjectLockException,
+			SQLException {
+		if (!project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_UNLOCKED);
+
+		pstmtUnlockProject.setInt(1, project.getID());
+
+		int rc = pstmtUnlockProject.executeUpdate();
+		
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+
+	public boolean lockProjectForExport(Project project) throws ProjectLockException,
+			SQLException {
+		if (project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_LOCKED);
+
+		Person me = PeopleManager.findMe();
+
+		pstmtLockProject.setString(1, me.getUID());
+		pstmtLockProject.setInt(2, project.getID());
+
+		int rc = pstmtLockProject.executeUpdate();
+		
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+
 	private void lockChanged(Project project) throws SQLException {
 		refreshProject(project);
 		
