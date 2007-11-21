@@ -1018,6 +1018,16 @@ public class ArcturusDatabase {
 		return projectManager.lockProject(project);
 	}
 
+	public synchronized boolean unlockProjectForExport(Project project)
+			throws SQLException, ProjectLockException {
+		return projectManager.unlockProjectForExport(project);
+	}
+
+	public synchronized boolean lockProjectForExport(Project project)
+			throws SQLException, ProjectLockException {
+		return projectManager.lockProjectForExport(project);
+	}
+	
 	public synchronized boolean lockProjectForOwner(Project project)
 			throws SQLException, ProjectLockException {
 		return projectManager.lockProjectForOwner(project);
