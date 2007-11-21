@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
+import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import java.sql.*;
@@ -34,6 +35,7 @@ public class ContigCAFWriter {
 	private PreparedStatement pstmtCloningVector;
 	private PreparedStatement pstmtQualityClipping;
 	private PreparedStatement pstmtReadTag;
+	private PreparedStatement pstmtAlignToSCF;
 
 	private PreparedStatement pstmtContigsForProject;
 
@@ -148,7 +150,11 @@ public class ContigCAFWriter {
 				+ " (deprecated is null or deprecated = 'N')";
 
 		pstmtReadTag = conn.prepareStatement(sql);
-
+		
+		sql = "select startinseq,startinscf,length from ALIGN2SCF where seq_id = ?";
+		
+		pstmtAlignToSCF = conn.prepareStatement(sql);
+		
 		sql = "select contig_id from"
 				+ " CURRENTCONTIGS left join PROJECT using(project_id)"
 				+ " where name=?";
@@ -259,6 +265,14 @@ public class ContigCAFWriter {
 		public String getReadname() {
 			return readname;
 		}
+	}
+	
+	public int writeContigAsCAF(Contig contig, PrintWriter pw) 
+		throws SQLException, DataFormatException {
+		int contigid = contig.getID();
+		int nreads = contig.getReadCount();
+		
+		return writeContigAsCAF(contigid, nreads, pw);
 	}
 
 	public int writeContigAsCAF(int contigid, int nreads, PrintWriter pw)
@@ -534,6 +548,29 @@ public class ContigCAFWriter {
 
 		rs.close();
 
+		pstmtAlignToSCF.setInt(1, seqid);
+		
+		rs = pstmtAlignToSCF.executeQuery();
+
+		boolean hasAlignToSCF = false;
+
+		while (rs.next()) {
+			hasAlignToSCF = true;
+			
+			int startInSequence = rs.getInt(1);
+			int startInSCF = rs.getInt(2);
+			
+			int length = rs.getInt(3);
+			
+			int endInSequence = startInSequence + length - 1;
+			int endInSCF = startInSCF + length - 1;
+			
+			buffer.append("Align_to_SCF " + startInSequence + " " + endInSequence +
+					" " + startInSCF + " " + endInSCF);
+		}
+		
+		rs.close();
+		
 		pstmtSequence.setInt(1, seqid);
 
 		rs = pstmtSequence.executeQuery();
@@ -546,8 +583,9 @@ public class ContigCAFWriter {
 		byte[] dna = rs.getBytes(1);
 		byte[] quality = rs.getBytes(2);
 		int seqlen = rs.getInt(3);
-
-		buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen+ "\n");
+		
+		if (!hasAlignToSCF)
+			buffer.append("Align_to_SCF 1 " + seqlen + " 1 " + seqlen+ "\n");
 
 		pw.println(buffer.toString());
 
