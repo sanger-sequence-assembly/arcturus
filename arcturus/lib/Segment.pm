@@ -23,16 +23,17 @@ sub new {
     my ($xs, $xf, $ys, $yf, $mid, $dummy) = @_;
 
     if (!defined($yf) || !defined($ys) || !defined($xf) || !defined($xs)) {
-        die "Segment constructor expects a 4 vector";
-    }
-    unless (defined($mid)) {
         die "Segment constructor expects a 4 vector + Mapping identifier";
+    }
+    unless (defined($mid)) { # not fatal
+        print STDERR "Segment constructor expects a 4 vector + Mapping identifier";
+        $mid = '';
     }
 
 # the interval covered by the x and y domains have to be identical
 
     if (abs($xf-$xs) != abs($yf-$ys)) {
-        print STDOUT "Invalid segment sizes in Segment constructor: @_\n";
+        print STDERR "Invalid segment sizes in Segment constructor: @_\n";
 	return undef;
     }
 
