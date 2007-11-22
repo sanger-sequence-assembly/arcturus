@@ -194,32 +194,15 @@ sub dbVersion {
 # arcturus user information
 #-----------------------------------------------------------------------------
 
-my $ARCTURUSUSER;
-
 sub putArcturusUser {
 # determine the username from the system data
     my $this = shift;
 
     my $user = getpwuid($<);
 
-# test against prohibited names (force login with own unix username)
+    $this->{ArcturusUser} = $user; # temp
 
-    my %forbidden = (pathdb => 1, pathsoft => 1, yeasties => 1,
-                     othernames => 1);
-
-    if ($forbidden{$user}) {
-
-        $this->disconnect();
-
-	die "You cannot access Arcturus under username $user";
-    }
-
-# valid user
-
-$this->{ArcturusUser} = $user; # temp
-    $ARCTURUSUSER = $user;
-
-# initialise the privileges hash
+# initialise the privileges hash (to be populated when needed)
 
     $this->{privilege} = {} unless $this->{privilege};
 }
@@ -228,8 +211,7 @@ sub getArcturusUser {
 # return the username (as is)
     my $this = shift;
 
-return $this->{ArcturusUser} || ''; # temp
-    return $ARCTURUSUSER || '';
+    return $this->{ArcturusUser} || '';
 }
 
 sub verifyArcturusUser {
@@ -422,7 +404,8 @@ sub addNewUser {
     my $seniority = &verifyUserRole($userrole);
 # the current user can only allocate a role lower than or equal its own seniority 
     unless ($seniority && $seniority >= &verifyUserRole($role)) {
-print STDERR "addNewUser seniority $seniority  role $role ". &verifyUserRole($role)."\n";
+        my $logger = &verifyLogger('addNewUser');
+        $logger->error("seniority $seniority  role $role ". &verifyUserRole($role));
         return 0, "you do not have privilege for this operation";
     }
 
@@ -464,7 +447,8 @@ sub updateUser {
     my $seniority = &verifyUserRole($userrole);
 # the current user can only change a role lower than or equal its own seniority 
     unless ($seniority && $seniority >= &verifyUserRole($role)) {
-print STDERR "updateUser seniority $seniority  role $role ". &verifyUserRole($role)."\n";
+        my $logger = &verifyLogger('updateUser');
+        $logger->error("seniority $seniority : role $role ". &verifyUserRole($role));
         return 0, "you do not have privilege for this operation";
     }
 
@@ -775,7 +759,8 @@ sub verifyUserRole {
 
     my %userroles = ('annotator'   => 0, 'finisher'      => 1,
                      'team leader' => 3, 'administrator' => 4,
-                     'superuser'   => 5, 'none'          => 0); # space for more
+                     'superuser'   => 5, 'assembler'     => 0,
+                     'none'        => 0); # space for more
 
     return $userroles{lc($userrole)} if defined($userrole); # return seniority
 
