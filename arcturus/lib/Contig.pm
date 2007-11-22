@@ -70,6 +70,15 @@ sub setArcturusDatabase {
     $this->setDataSource($ADB);
 }
 
+sub getArcturusDatabase {
+# return the database handle, if any
+    my $this = shift;
+
+    my $source = $this->{SOURCE};
+
+    return (ref($source) eq 'ArcturusDatabase') ? $source : undef;
+}
+
 sub setDataSource {
 # import the handle to the data source (either database or factory)
     my $this = shift;
@@ -795,7 +804,8 @@ sub linkToContig {
     my $compare = shift; # Contig instance to be compared to $this
     my %options = @_;
 
-    &verifyKeys('linkToContig',\%options,'sequenceonly',    'new',
+    &verifyKeys('linkToContig',\%options,'sequenceonly',
+                                           'new',
                                          'forcelink',
                                          'strong','readclipping'); # + others
     return ContigHelper->crossmatch($this,$compare,%options);
@@ -865,11 +875,10 @@ sub propagateTagsToContig {
                            'excludetag',   # list of tags to be excluded
                            'minimumsegmentsize', # re : anno tags
 #                           'change strand',      # re : anno tags
-                           'overlap');           # re : anno tags
-
-my $ttags = $target->hasTags();
-#$LOGGER->setBlock('debug',unblock=>1) if $LOGGER;
-$LOGGER->debug("Contig->propagateTagsToContig : parent $parent target contig $target has tags: $ttags") if $LOGGER;
+                           'overlap',            # re : anno tags
+                           'sequenceonly',       # re : anno tags
+                           'banded',             # re : anno tags 
+                           'debug');             # re : anno tags
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
