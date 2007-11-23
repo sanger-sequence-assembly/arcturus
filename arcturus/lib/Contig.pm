@@ -8,12 +8,10 @@ use ContigFactory::ContigHelper;
 
 use TagFactory::TagFactory;
 
+use Logging;
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
-#-----------------------------------------------------------------------------
-
-my $LOGGER;
-
 #-----------------------------------------------------------------------------
 
 sub new {
@@ -722,9 +720,11 @@ sub copy {
         }
 # add the copied array
         $component =~ s/s$//;
-        eval "\$copy->add$component(\$arraycopy)"; 
-        $LOGGER->error("failed to copy $component ('$@')") if ($LOGGER && $@); 
-        print STDERR "failed to copy $component ('$@')\n" if (!$LOGGER && $@); 
+        eval "\$copy->add$component(\$arraycopy)";
+        next unless $@;
+
+	my $logger = &verifyLogger('copy');
+        $logger->error("failed to copy $component ('$@')"); 
     }
 
 # load components if they are not already present
@@ -804,7 +804,9 @@ sub linkToContig {
     my $compare = shift; # Contig instance to be compared to $this
     my %options = @_;
 
-    &verifyKeys('linkToContig',\%options,'sequenceonly',
+    &verifyKeys('linkToContig',\%options,'sequenceonly','banded',
+                                         'bandedoffset','bandedlinear',
+                                         'bandedwindow',
                                            'new',
                                          'forcelink',
                                          'strong','readclipping'); # + others
@@ -820,7 +822,9 @@ sub inheritTags {
     my $this = shift;
     my %options = @_;
 # what about selected tags only?
-$LOGGER->debug("Contig->inheritTags: this $this ; opts: @_") if $LOGGER;
+
+    my $logger = &verifyLogger('inheritTag');
+    $logger->debug("Contig->inheritTags: this $this ; opts: @_");
 #my $depth = shift;
 
     $options{depth} = 1 unless defined($options{depth});
@@ -873,12 +877,14 @@ sub propagateTagsToContig {
                            'speedmode',    # 
                            'includetag',   # list of tags to be included
                            'excludetag',   # list of tags to be excluded
-                           'minimumsegmentsize', # re : anno tags
+                           'minimumsegmentsize',  # re : anno tags
 #                           'change strand',      # re : anno tags
-                           'overlap',            # re : anno tags
-                           'sequenceonly',       # re : anno tags
-                           'banded',             # re : anno tags 
-                           'debug');             # re : anno tags
+                           'overlap',             # re : anno tags
+                           'sequenceonly','banded',    # re : anno tags
+                           'bandedlinear',             # re : anno tags 
+                           'bandedoffset',             # re : anno tags 
+                           'bandedwindow',             # re : anno tags 
+                           'debug');
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
@@ -1568,6 +1574,36 @@ sub verifyKeys {
         print STDERR "Invalid key $key ($value) provided "
                    . "for method Contig->$method\n";
     }
+}
+
+#-----------------------------------------------------------------------------
+
+my $LOGGER; # class variable
+
+#-----------------------------------------------------------------------------
+
+sub verifyLogger {
+# private, test the logging unit; if not found, build a default logging module
+    my $prefix = shift;
+
+    &verifyPrivate($prefix,'verifyLogger');
+
+    if ($LOGGER && ref($LOGGER) eq 'Logging') {
+
+        if (defined($prefix)) {
+
+            $prefix = "Contig->".$prefix unless ($prefix =~ /\-\>/); 
+
+            $LOGGER->setPrefix($prefix);
+        }
+        return $LOGGER;
+    }
+
+# no (valid) logging unit is defined, create a default unit
+
+    $LOGGER = new Logging();
+
+    return &verifyLogger($prefix);
 }
 
 sub setLogger {
