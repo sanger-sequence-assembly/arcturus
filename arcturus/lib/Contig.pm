@@ -919,8 +919,8 @@ sub writeToCaf {
 # if no reads, use delayed loading
         my $reads = $this->getReads(1); 
 # in frugal mode we bunch the reads in blocks to improve speed (and reduce memory) 
-        if ($this->{frugal}) {
-            my $blocksize = 1000;
+	if (my $blocksize = $this->{frugal}) {
+            $blocksize = 100 if ($blocksize < 100); # minimum
             my $logger = &verifyLogger('writeToCaf');
             $logger->debug("blocked export of ".scalar(@$reads)." reads");
             while (my @readblock = splice @$reads,0,$blocksize) {
@@ -1012,10 +1012,10 @@ sub writeToFasta {
         return undef;
 
 # in frugal mode we bunch the reads in blocks to improve speed 
-        if ($this->{frugal}) {
+	if (my $blocksize = $this->{frugal}) {
+            $blocksize = 100 if ($blocksize < 100);
             my $logger = &verifyLogger('writeToFasta');
             $logger->debug("blocked export of ".scalar(@$reads)." reads");
-            my $blocksize = 100;
             while (my @readblock = splice @$reads,0,$blocksize) {
                 $logger->debug("writing block of ".scalar(@readblock)," reads");
                 $this->importReadSequence(\@readblock);
@@ -1181,8 +1181,6 @@ sub writeToMaf {
     my $contigzeropoint = $options{contigzeropoint} || 0;
 
 # get the reads and build a hash list for identification
-
-#    $this->setFrugal(1); # if not done before
 
     my %reads;
     my $reads = $this->getReads(1);
@@ -1586,7 +1584,7 @@ sub verifyLogger {
 # private, test the logging unit; if not found, build a default logging module
     my $prefix = shift;
 
-    &verifyPrivate($prefix,'verifyLogger');
+#    &verifyPrivate($prefix,'verifyLogger');
 
     if ($LOGGER && ref($LOGGER) eq 'Logging') {
 
