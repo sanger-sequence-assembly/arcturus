@@ -370,7 +370,9 @@ sub writeContigsToCaf { # TO BE DEPRECATED
     my $report = '';
     my $errors = 0;
 
-    my $frugal = $options{frugal} || 0;
+    $options{frugal} = 100 unless defined $options{frugal};
+
+    my $frugal = $options{frugal};
     my $logger = $options{logger};
     $logger = 0 unless ($logger && ref($logger) eq 'Logging'); # protect
 
@@ -422,7 +424,6 @@ sub writeContigsToCaf { # TO BE DEPRECATED
    }
 
 # returns number of contigs exported without errors, number of errors and report
-
     return $export,$errors,$report;
 }
 
