@@ -924,7 +924,7 @@ sub writeToCaf {
             my $logger = &verifyLogger('writeToCaf');
             $logger->debug("blocked export of ".scalar(@$reads)." reads");
             while (my @readblock = splice @$reads,0,$blocksize) {
-                $logger->debug("writing block of ".scalar(@readblock)," reads");
+                $logger->debug("writing block of ".scalar(@readblock)." reads");
                 $this->importReadSequence(\@readblock);
                 foreach my $read (@readblock) {
                     $read->writeToCaf($FILE,%options); # transfer options, if any
@@ -1017,7 +1017,7 @@ sub writeToFasta {
             my $logger = &verifyLogger('writeToFasta');
             $logger->debug("blocked export of ".scalar(@$reads)." reads");
             while (my @readblock = splice @$reads,0,$blocksize) {
-                $logger->debug("writing block of ".scalar(@readblock)," reads");
+                $logger->debug("writing block of ".scalar(@readblock)." reads");
                 $this->importReadSequence(\@readblock);
                 foreach my $read (@readblock) {
                     $read->writeToFasta($DFILE,$QFILE,%options); # transfer options
