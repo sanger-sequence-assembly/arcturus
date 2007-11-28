@@ -5,7 +5,7 @@ if ( $#argv < 2 ) then
   exit 1
 endif
 
-set mysql_home=/nfs/pathsoft/external/linux/mysql5.0/bin/mysql
+set mysql_home=/nfs/pathsoft/external/linux/mysql5.0/bin
 
 set db=$1
 set proj=$2
