@@ -25,6 +25,8 @@ my $percontig = 0;
 my $usegap4name = 0;
 my $rawfilename;
 my $showpadrate = 0;
+my $depad = 0;
+my $projects;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -49,6 +51,10 @@ while (my $nextword = shift @ARGV) {
     $rawfilename = shift @ARGV if ($nextword eq '-raw');
 
     $showpadrate = 1 if ($nextword eq '-showpadrate');
+
+    $depad = 1 if ($nextword eq '-depad');
+
+    $projects = shift @ARGV if ($nextword eq '-projects');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -101,15 +107,29 @@ if (defined($contigids)) {
     $query = "select gap4name,contig_id,length from CONTIG";
     $query .= " where length > $minlen" if defined($minlen);
 } else {
-    $query = "select gap4name,CONTIG.contig_id,length from CONTIG left join C2CMAPPING" .
-	" on CONTIG.contig_id = C2CMAPPING.parent_id" .
-	    " where C2CMAPPING.parent_id is null";
+    $query = "select gap4name,contig_id,length from CURRENTCONTIGS";
 
-    $query .= " and length > $minlen" if defined($minlen);
+    my @conditions = ();
 
-    $query .= " and project_id in ($pinclude)" if defined($pinclude);
+    if (defined($projects)) {
+	$query .= " left join PROJECT using(project_id)";
 
-    $query .= " and project_id not in ($pexclude)" if defined($pexclude);
+	my @plist;
+
+	foreach my $pname (split(/,/, $projects)) {
+	    push @plist, "'" . $pname . "'";
+	}
+
+	push @conditions, "name in (" . join(",", @plist) . ")";
+    }
+
+    push @conditions, "length > $minlen" if defined($minlen);
+
+    push @conditions, "project_id in ($pinclude)" if defined($pinclude);
+
+    push @conditions, "project_id not in ($pexclude)" if defined($pexclude);
+
+    $query .= " where " . join(" and ", @conditions) if (@conditions);
 }
 
 print STDERR $query,"\n" if $verbose;
@@ -170,11 +190,13 @@ while(my @ary = $sth->fetchrow_array()) {
     while (my $base = shift(@cdata)) {
 	my $qual = shift(@qdata);
 
-	&registerBaseAndQuality($base, $qual, $qstats);
+	unless ($depad && uc($base) eq 'N') {
+	    &registerBaseAndQuality($base, $qual, $qstats);
 
-	&registerBaseAndQuality($base, $qual, $cqstats) if $percontig;
+	    &registerBaseAndQuality($base, $qual, $cqstats) if $percontig;
 
-	print $rawfh chr($base)," ",$qual,"\n" if defined($rawfh);
+	    print $rawfh chr($base)," ",$qual,"\n" if defined($rawfh);
+	}
     }
 
     &reportStats($contigname, $cqstats, $showpadrate) if $percontig;
@@ -211,6 +233,7 @@ sub reportStats {
     my ($name, $hash, $showpadrate, $junk) = @_;
     my $padcount = 0;
     my $nonpadcount = 0;
+    my $allbases = {};
 
     foreach my $basecode (sort numeric keys(%{$hash})) {
 	my $base = chr($basecode);
@@ -221,6 +244,10 @@ sub reportStats {
 
 	foreach my $qual (sort numeric keys(%{$hash->{$basecode}})) {
 	    my $qualcount = $hash->{$basecode}->{$qual};
+
+	    $allbases->{$qual} = 0 unless defined($allbases->{$qual});
+
+	    $allbases->{$qual} += $qualcount;
 
 	    printf "#%-20s %s %3d %8d\n", $name, $base, $qual, $qualcount;
 
@@ -239,6 +266,13 @@ sub reportStats {
 	} else {
 	    $nonpadcount += $n;
 	}
+    }
+
+    my $base = '*';
+
+    foreach my $qual (sort numeric keys(%{$allbases})) {
+	my $qualcount = $allbases->{$qual};
+	printf "#%-20s %s %3d %8d\n", $name, $base, $qual, $qualcount;
     }
 
     if ($showpadrate) {
