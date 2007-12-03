@@ -48,9 +48,7 @@ my @contigs;
 if (defined($contigid)) {
     push @contigs, $contigid;
 } else {
-    $query =  "select CONTIG.contig_id from CONTIG left join C2CMAPPING" .
-	" on CONTIG.contig_id = C2CMAPPING.parent_id" .
-	" where C2CMAPPING.parent_id is null";
+    $query =  "select contig_id from CURRENTCONTIGS";
 
     $query .= " and length > $minlen" if defined($minlen);
 
@@ -82,23 +80,32 @@ $query = "select TEMPLATE.template_id,READINFO.read_id,readname,cstart,cfinish,d
     " where contig_id = ?" .
     " and $conditions and CLONE.name=? order by template_id asc,cstart asc";
 
-$stmt = $dbh->prepare($query);
+my $stmt_readinfo = $dbh->prepare($query);
+&db_die("Failed to create query \"$query\"");
+
+$query = "select name from CONTIG left join PROJECT using(project_id) where contig_id = ?";
+
+my $stmt_projectname = $dbh->prepare($query);
 &db_die("Failed to create query \"$query\"");
 
 foreach $contigid (@contigs) {
-    $stmt->execute($contigid, $clonename);
+    $stmt_projectname->execute($contigid);
+
+    my ($project) = $stmt_projectname->fetchrow_array() || "UNKNOWN";
+
+    $stmt_readinfo->execute($contigid, $clonename);
     &db_die("Failed to execute query \"$query\" for contig $contigid");
     
     my $last_templateid = -1;
     my ($last_readname, $last_cstart, $last_cfinish, $last_direction);
 
     while (my ($templateid, $readid, $readname, $cstart, $cfinish, $direction, $sihigh) =
-	   $stmt->fetchrow_array()) {
+	   $stmt_readinfo->fetchrow_array()) {
 	if ($templateid == $last_templateid) {
 	    if ($last_direction eq 'Forward' && $direction eq 'Reverse') {
-		printf "%8d %8d  %8d  %8d  %-30s  %-30s\n",$contigid,
+		printf "%8d %8d  %8d  %8d  %-30s  %-30s  %-20s\n",$contigid,
 		$last_cstart, $cfinish, ($cfinish-$last_cstart-$sihigh),
-		$last_readname, $readname;
+		$last_readname, $readname, $project;
 	    } else {
 		print STDERR "Inconsistent: $contigid $last_readname $last_direction $last_cstart to $last_cfinish <-->" .
 		    " $readname $direction $cstart $cfinish\n";
@@ -110,7 +117,8 @@ foreach $contigid (@contigs) {
     }
 }
 
-$stmt->finish();
+$stmt_readinfo->finish();
+$stmt_projectname->finish();
 
 $dbh->disconnect();
 
