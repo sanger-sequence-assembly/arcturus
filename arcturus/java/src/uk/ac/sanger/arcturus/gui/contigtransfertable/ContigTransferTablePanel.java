@@ -113,8 +113,8 @@ public class ContigTransferTablePanel extends MinervaPanel {
 	}
 
 	protected void addClassSpecificViewMenuItems(JMenu menu) {
-		if (tableAdmin != null)
-			return;
+		//if (tableAdmin != null)
+		//	return;
 		
 		menu.addSeparator();
 
