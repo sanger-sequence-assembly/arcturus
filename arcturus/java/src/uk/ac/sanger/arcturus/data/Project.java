@@ -257,11 +257,11 @@ public class Project extends Core {
 	 *         object.
 	 */
 
-	public Set getContigs() {
+	public Set<Contig> getContigs() {
 		return contigs;
 	}
 
-	public Set getContigs(boolean refresh) throws SQLException {
+	public Set<Contig> getContigs(boolean refresh) throws SQLException {
 		try {
 			if (refresh && adb != null)
 				contigs = adb.getContigsByProject(ID,
