@@ -30,6 +30,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 	protected JProgressBar pbarReadProgress = new JProgressBar();
 	protected JCheckBox cbSelectAll = new JCheckBox("All projects");
 	protected JCheckBox cbFreeReads = new JCheckBox("Scan free reads");
+	protected JCheckBox cbUseCachedFreeReads = new JCheckBox("Use cached free reads");
 
 	protected ProjectListModel plm;
 
@@ -167,6 +168,10 @@ public class OligoFinderPanel extends MinervaPanel implements
 				updateFindOligosButton();
 			}
 		});
+		
+		panel.add(cbUseCachedFreeReads);
+		cbUseCachedFreeReads.setSelected(false);
+		cbUseCachedFreeReads.setEnabled(false);
 
 		add(panel);
 
@@ -361,8 +366,9 @@ public class OligoFinderPanel extends MinervaPanel implements
 		txtMessages.append("\n\n");
 
 		boolean freereads = cbFreeReads.isSelected();
+		boolean useCachedFreeReads = cbUseCachedFreeReads.isSelected();
 
-		Task task = new Task(finder, oligos, projects, freereads);
+		Task task = new Task(finder, oligos, projects, freereads, useCachedFreeReads);
 
 		task.setName("OligoSearch");
 		task.start();
@@ -373,18 +379,20 @@ public class OligoFinderPanel extends MinervaPanel implements
 		protected final Oligo[] oligos;
 		protected final Project[] projects;
 		protected boolean freereads;
-
+		protected boolean useCachedFreeReads;
+		
 		public Task(OligoFinder finder, Oligo[] oligos, Project[] projects,
-				boolean freereads) {
+				boolean freereads, boolean useCachedFreeReads) {
 			this.finder = finder;
 			this.oligos = oligos;
 			this.projects = projects;
 			this.freereads = freereads;
+			this.useCachedFreeReads = useCachedFreeReads;
 		}
 
 		public void run() {
 			try {
-				finder.findMatches(oligos, projects, freereads);
+				finder.findMatches(oligos, projects, freereads, useCachedFreeReads);
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("An error occurred whilst finding matches",
 						sqle);
@@ -493,6 +501,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 						searchInProgress = false;
 						updateFindOligosButton();
 						txtOligoList.setEditable(true);
+						cbUseCachedFreeReads.setEnabled(finder.hasCachedFreeReads());
 					}
 				});
 				break;
