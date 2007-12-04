@@ -166,6 +166,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 		cbFreeReads.addItemListener(new ItemListener() {
 			public void itemStateChanged(ItemEvent e) {
 				updateFindOligosButton();
+				updateUseCachedFreeReadsCheckbox();
 			}
 		});
 		
@@ -501,7 +502,7 @@ public class OligoFinderPanel extends MinervaPanel implements
 						searchInProgress = false;
 						updateFindOligosButton();
 						txtOligoList.setEditable(true);
-						cbUseCachedFreeReads.setEnabled(finder.hasCachedFreeReads());
+						updateUseCachedFreeReadsCheckbox();
 					}
 				});
 				break;
@@ -637,7 +638,14 @@ public class OligoFinderPanel extends MinervaPanel implements
 		});
 
 	}
-
+	
+	protected void updateUseCachedFreeReadsCheckbox() {
+		boolean finderHasCachedReads = finder.hasCachedFreeReads();
+		boolean scanFreeReads = cbFreeReads.isSelected();
+		
+		cbUseCachedFreeReads.setEnabled(finderHasCachedReads && scanFreeReads);
+	}
+	
 	protected void updateFindOligosButton() {
 		boolean isProjectSelected = !lstProjects.isSelectionEmpty();
 		boolean haveOligosInList = txtOligoList.getDocument().getLength() > 0;
