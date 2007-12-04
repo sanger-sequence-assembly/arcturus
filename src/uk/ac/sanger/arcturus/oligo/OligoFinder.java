@@ -30,6 +30,8 @@ public class OligoFinder {
 			+ " SEQ2READ left join SEQUENCE using(seq_id) where read_id = ? order by seq_id limit 1";
 	private PreparedStatement pstmtSequence;
 
+	private Read[] cachedFreeReads = null;
+
 	public OligoFinder(ArcturusDatabase adb, OligoFinderEventListener listener) {
 		this.adb = adb;
 
@@ -73,7 +75,7 @@ public class OligoFinder {
 		Read[] reads = null;
 
 		public void run() {
-			Vector v = new Vector();
+			Vector<Read> v = new Vector<Read>();
 
 			try {
 				conn = adb.getPooledConnection(this);
@@ -85,20 +87,23 @@ public class OligoFinder {
 
 					if (rs != null) {
 						while (rs.next())
-							v.add(new Read(rs.getString(2),
-								  rs.getInt(1), null));
+							v
+									.add(new Read(rs.getString(2),
+											rs.getInt(1), null));
 					}
 
 					reads = (Read[]) v.toArray(new Read[0]);
 
 				}
 			} catch (SQLException sqle) {
-				Arcturus.logWarning("Error whilst enumerating free reads", sqle);
+				Arcturus
+						.logWarning("Error whilst enumerating free reads", sqle);
 			} finally {
 				try {
 					conn.close();
 				} catch (SQLException sqle) {
-					Arcturus.logWarning("Error whilst closing connection", sqle);
+					Arcturus
+							.logWarning("Error whilst closing connection", sqle);
 				}
 			}
 		}
@@ -106,18 +111,23 @@ public class OligoFinder {
 		public Read[] getReads() {
 			return reads;
 		}
-		
+
 		public int getReadCount() {
 			return (reads == null) ? 0 : reads.length;
 		}
 	}
 
+	public boolean hasCachedFreeReads() {
+		return cachedFreeReads != null;
+	}
+
 	public synchronized int findMatches(Oligo[] oligos, Contig[] contigs,
-			boolean searchFreeReads) throws SQLException {
+			boolean searchFreeReads, boolean useCachedFreeReads)
+			throws SQLException {
 		int found = 0;
 		Task task = null;
 
-		if (searchFreeReads) {
+		if (searchFreeReads && (cachedFreeReads == null || !useCachedFreeReads)) {
 			task = new Task();
 			task.setName("OligoFinder:FreeReadSearch");
 			task.start();
@@ -148,44 +158,46 @@ public class OligoFinder {
 		}
 
 		if (searchFreeReads) {
-			try {
+			if (task != null) {
+				try {
+					if (listener != null) {
+						event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS,
+								null, null, -1, false);
+						listener.oligoFinderUpdate(event);
+					}
+
+					task.join();
+				} catch (InterruptedException e) {
+					Arcturus.logWarning(
+									"Interrupted whilst waiting for free-read eumerator to complete",
+									e);
+				}
+
+				cachedFreeReads = task.getReads();
+			}
+
+			int nreads = cachedFreeReads == null ? 0 : cachedFreeReads.length;
+
+			if (nreads > 0) {
 				if (listener != null) {
-					event.setEvent(OligoFinderEvent.ENUMERATING_FREE_READS, null, null,
+					event.setEvent(OligoFinderEvent.START_READS, null, null,
+							nreads, false);
+					listener.oligoFinderUpdate(event);
+				}
+
+				for (int i = 0; i < cachedFreeReads.length; i++)
+					found += findMatches(oligos, cachedFreeReads[i]);
+
+				if (listener != null) {
+					event.setEvent(OligoFinderEvent.FINISH_READS, null, null,
 							-1, false);
 					listener.oligoFinderUpdate(event);
 				}
-				
-				task.join();
-			} catch (InterruptedException e) {
-				Arcturus
-						.logWarning(
-								"Interrupted whilst waiting for free-read eumerator to complete",
-								e);
-			}
-
-			int nreads = task.getReadCount();
-
-			if (listener != null) {
-				event.setEvent(OligoFinderEvent.START_READS, null, null,
-						nreads, false);
-				listener.oligoFinderUpdate(event);
-			}
-
-			Read[] reads = task.getReads();
-
-			for (int i = 0; i < reads.length; i++)
-				found += findMatches(oligos, reads[i]);
-
-			if (listener != null) {
-				event.setEvent(OligoFinderEvent.FINISH_READS, null, null, -1,
-						false);
-				listener.oligoFinderUpdate(event);
 			}
 		}
-		
+
 		if (listener != null) {
-			event.setEvent(OligoFinderEvent.FINISH, null, null, -1,
-					false);
+			event.setEvent(OligoFinderEvent.FINISH, null, null, -1, false);
 			listener.oligoFinderUpdate(event);
 		}
 
@@ -333,15 +345,15 @@ public class OligoFinder {
 	}
 
 	public int findMatches(Oligo[] oligos, Project[] projects,
-			boolean searchFreeReads) throws SQLException {
+			boolean searchFreeReads, boolean useCachedFreeReads) throws SQLException {
 		Contig[] contigs = getContigsForProjects(projects);
 
-		return findMatches(oligos, contigs, searchFreeReads);
+		return findMatches(oligos, contigs, searchFreeReads, useCachedFreeReads);
 	}
 
 	private Contig[] getContigsForProjects(Project[] projects)
 			throws SQLException {
-		Set contigs = new HashSet();
+		Set<Contig> contigs = new HashSet<Contig>();
 
 		for (int i = 0; i < projects.length; i++)
 			contigs.addAll(projects[i].getContigs(true));
