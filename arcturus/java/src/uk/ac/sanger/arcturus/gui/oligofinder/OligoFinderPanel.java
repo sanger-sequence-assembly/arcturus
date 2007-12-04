@@ -46,7 +46,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 
 	protected boolean showHashMatch = false;
 
-	protected HashMap oligomatches = new HashMap();
+	protected HashMap<Oligo, HashSet<OligoMatch>> oligomatches = 
+		new HashMap<Oligo, HashSet<OligoMatch>>();
 
 	protected DecimalFormat df = new DecimalFormat();
 
@@ -519,15 +520,15 @@ public class OligoFinderPanel extends MinervaPanel implements
 				.getValue(), event.isForward());
 
 		if (!oligomatches.containsKey(oligo))
-			oligomatches.put(oligo, new HashSet());
+			oligomatches.put(oligo, new HashSet<OligoMatch>());
 
-		HashSet matchset = (HashSet) oligomatches.get(oligo);
+		HashSet<OligoMatch> matchset = (HashSet<OligoMatch>) oligomatches.get(oligo);
 
 		matchset.add(match);
 	}
 
 	protected void reportMatches() {
-		Set oligoset = oligomatches.keySet();
+		Set<Oligo> oligoset = oligomatches.keySet();
 
 		if (oligoset.isEmpty()) {
 			postMessage("\nNo oligo matches were found.\n");
@@ -537,12 +538,12 @@ public class OligoFinderPanel extends MinervaPanel implements
 			Arrays.sort(oligos);
 
 			for (int i = 0; i < oligos.length; i++)
-				reportMatchesForOligo(oligos[i], (Set) oligomatches
+				reportMatchesForOligo(oligos[i], (Set<OligoMatch>) oligomatches
 						.get(oligos[i]));
 		}
 	}
 
-	protected void reportMatchesForOligo(Oligo oligo, Set matchset) {
+	protected void reportMatchesForOligo(Oligo oligo, Set<OligoMatch> matchset) {
 		OligoMatch[] matches = (OligoMatch[]) matchset
 				.toArray(new OligoMatch[0]);
 
@@ -588,11 +589,8 @@ public class OligoFinderPanel extends MinervaPanel implements
 		}
 	}
 
-	class OligoMatchComparator implements Comparator {
-		public int compare(Object o1, Object o2) {
-			OligoMatch m1 = (OligoMatch) o1;
-			OligoMatch m2 = (OligoMatch) o2;
-
+	class OligoMatchComparator implements Comparator<OligoMatch> {
+		public int compare(OligoMatch m1, OligoMatch m2) {
 			int rc = m1.getID() - m2.getID();
 
 			if (rc != 0)
