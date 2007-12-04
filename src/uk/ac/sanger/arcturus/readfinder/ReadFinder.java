@@ -57,7 +57,8 @@ public class ReadFinder {
 		return str.indexOf("%") >= 0 || str.indexOf("_") >= 0;
 	}
 	
-	public void findRead(String readname, ReadFinderEventListener listener) throws SQLException {
+	public void findRead(String readname, boolean onlyFreeReads, ReadFinderEventListener listener)
+		throws SQLException {
 		if (conn == null) {
 			conn = adb.getPooledConnection(this);
 			prepareStatements();
@@ -94,6 +95,9 @@ public class ReadFinder {
 			ResultSet rs2 = pstmtReadToContig.executeQuery();
 			
 			if (rs2.next()) {
+				if (onlyFreeReads)
+					continue;
+				
 				int contigid = rs2.getInt(1);
 				int cstart = rs2.getInt(2);
 				int cfinish = rs2.getInt(3);

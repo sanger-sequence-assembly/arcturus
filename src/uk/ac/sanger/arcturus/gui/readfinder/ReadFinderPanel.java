@@ -21,6 +21,8 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 	protected JTextArea txtMessages = new JTextArea(20, 100);
 	protected JButton btnFindReads;
 	protected JButton btnClearMessages = new JButton("Clear messages");
+	protected JCheckBox cbxOnlyFreeReads = new JCheckBox("Only list free reads");
+	protected boolean onlyFreeReads;
 	
 	protected MinervaAbstractAction actionFindReads;
 	protected MinervaAbstractAction actionGetReadsFromFile;
@@ -95,6 +97,10 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		panel.add(btnFindReads);
 		
+		panel.add(cbxOnlyFreeReads);
+		
+		cbxOnlyFreeReads.setSelected(false);
+		
 		add(panel);
 
 		scrollpane = new JScrollPane(txtMessages);
@@ -129,6 +135,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				null, "Find reads", new Integer(KeyEvent.VK_I),
 				KeyStroke.getKeyStroke(KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
+				setEnabled(false);
 				findReads();
 			}
 		};
@@ -201,7 +208,9 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		for (int i = 0; i < wordcount; i++)
 			readnames[i] = st.nextToken();
 		
-		Task task = new Task(readFinder, readnames, this);
+		onlyFreeReads = cbxOnlyFreeReads.isSelected();
+		
+		Task task = new Task(readFinder, readnames, onlyFreeReads, this);
 		
 		task.start();
 	}
@@ -209,23 +218,31 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 	class Task extends Thread {
 		protected final String[] readnames;
 		protected final ReadFinder readFinder;
+		protected final boolean onlyFreeReads;
 		protected final ReadFinderEventListener listener;
 		
-		public Task(ReadFinder readFinder, String[] readnames, ReadFinderEventListener listener) {
+		public Task(ReadFinder readFinder, String[] readnames, boolean onlyFreeReads, 
+				ReadFinderEventListener listener) {
 			this.readFinder = readFinder;
 			this.readnames = readnames;
+			this.onlyFreeReads = onlyFreeReads;
 			this.listener = listener;
 		}
 		
 		public void run() {
 			for (int i = 0; i < readnames.length; i++) {
 				try {
-					readFinder.findRead(readnames[i], listener);
+					readFinder.findRead(readnames[i], onlyFreeReads, listener);
 				}
 				catch (SQLException sqle) {
 					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
 				}
-			}			
+			}
+			
+			SwingUtilities.invokeLater(new Runnable() {
+				public void run() {
+					actionFindReads.setEnabled(true);
+				}});
 		}	
 	}
 
@@ -241,11 +258,11 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				break;
 				
 			case ReadFinderEvent.READ_DOES_NOT_EXIST:
-				message = readname + " does not exist";
+				message = readname + " does not exist\n";
 				break;
 				
 			case ReadFinderEvent.READ_IS_FREE:
-				message = readname + " is free";
+				message = onlyFreeReads? readname : readname + " is free\n";
 				break;
 				
 			case ReadFinderEvent.READ_IS_IN_CONTIG:
@@ -257,7 +274,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				") in project " +
 				contig.getProject().getName() + " at " + event.getContigStart() +
 				" to " + event.getContigFinish() + " in " +
-				(event.isForward() ? "forward" : "reverse") + " sense";
+				(event.isForward() ? "forward" : "reverse") + " sense\n";
 				break;
 				
 			case ReadFinderEvent.FINISH:
@@ -271,7 +288,7 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
-				txtMessages.append(message + "\n\n");
+				txtMessages.append(message + "\n");
 			}
 		});
 	}
