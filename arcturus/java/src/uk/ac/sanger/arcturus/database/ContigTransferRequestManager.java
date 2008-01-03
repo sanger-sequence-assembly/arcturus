@@ -80,9 +80,7 @@ public class ContigTransferRequestManager {
 
 		pstmtByContigOwner = conn.prepareStatement(query);
 
-		query = "select " + columns + " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id"
-				+ " where name is not null"
-				+ " and (CONTIGTRANSFERREQUEST.status = 'pending' or CONTIGTRANSFERREQUEST.status = 'approved')";
+		query = "select " + columns + " from CONTIGTRANSFERREQUEST left join PROJECT on old_project_id=project_id";
 
 		pstmtAllRequests = conn.prepareStatement(query);
 
