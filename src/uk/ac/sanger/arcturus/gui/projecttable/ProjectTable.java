@@ -132,38 +132,26 @@ public class ProjectTable extends SortableTable {
 	}
 
 	private void handleCellMouseClick(MouseEvent event) {
-		if (event.isPopupTrigger()) {
-			Point point = event.getPoint();
+		Point point = event.getPoint();
 
+		int column = columnAtPoint(point);
+		int modelColumn = convertColumnIndexToModel(column);
+	
+		if (event.isPopupTrigger()) {
 			int row = rowAtPoint(point);
 			ProjectProxy proxy = ((ProjectTableModel) getModel())
 					.getProjectAtRow(row);
 			projectForPopup = proxy.getProject();
 
-			int column = columnAtPoint(point);
-			int modelColumn = convertColumnIndexToModel(column);
-
-			switch (modelColumn) {
-				case ProjectTableModel.LOCKED_COLUMN:
+			if (modelColumn == ProjectTableModel.LOCKED_COLUMN) {
 					showProjectLockPopup(event);
-					break;
-
-				case ProjectTableModel.OWNER_COLUMN:
-					showProjectOwnerPopup(event);
-					break;
 			}
 		} else if (event.getID() == MouseEvent.MOUSE_CLICKED
 				&& event.getButton() == MouseEvent.BUTTON1
+				&& modelColumn != ProjectTableModel.OWNER_COLUMN
 				&& event.getClickCount() == 2) {
 			displaySelectedProjects();
 		}
-	}
-
-	private void showProjectOwnerPopup(MouseEvent event) {
-		JOptionPane.showMessageDialog(getParent(),
-				"At this point, you would see the project owner popup menu",
-				"Project Owner Popup", JOptionPane.INFORMATION_MESSAGE, null);
-
 	}
 
 	private void showProjectLockPopup(MouseEvent event) {

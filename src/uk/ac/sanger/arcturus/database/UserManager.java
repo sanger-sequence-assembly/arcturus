@@ -36,6 +36,37 @@ public class UserManager extends AbstractManager {
 	public void clearCache() {
 		roleCache.clear();
 	}
+	
+	public Person[] getAllUsers() throws SQLException {
+		String query = "select username,role from USER";
+		
+		Statement stmt = conn.createStatement();
+		ResultSet rs = stmt.executeQuery(query);
+		
+		Vector<Person> people = new Vector<Person>();
+		
+		while (rs.next()) {
+			String username = rs.getString(1);
+			String role = rs.getString(2);
+			
+			Person person = PeopleManager.findPerson(username);
+			
+			if (person != null && role != null && !role.equalsIgnoreCase("assembler") &&
+					!role.equalsIgnoreCase("annotator")) {
+				people.add(person);
+				roleCache.put(username, role);
+			}
+		}
+		
+		rs.close();
+		stmt.close();
+		
+		Person[] allusers = (Person[])people.toArray(new Person[0]);
+		
+		Arrays.sort(allusers);
+		
+		return allusers;
+	}
 
 	public String getRoleForUser(String username) {
 		if (username == null)
