@@ -117,7 +117,7 @@ public class Person implements Comparable {
 	}
 	
 	public boolean equals(Object that) {
-		if (that instanceof Person && that != null)
+		if (that instanceof Person && that != null  && ((Person)that).uid != null)
 			return ((Person)that).uid.equalsIgnoreCase(uid);
 		else
 			return false;
