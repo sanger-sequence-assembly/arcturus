@@ -151,6 +151,17 @@ $logger->info("Database $URL opened succesfully");
 
 $adb->setLogger($logger);
 
+# test user against prohibited names (force login with own unix username)
+
+my $user = $adb->getArcturusUser();
+
+my %forbidden = (pathdb => 1, pathsoft => 1, yeastpub => 1,othernames => 1);
+
+if ($forbidden{$user}) {
+    $adb->disconnect();
+    die "You cannot access Arcturus under username $user";
+}
+
 #----------------------------------------------------------------
 # identify the project
 #----------------------------------------------------------------
@@ -322,7 +333,7 @@ foreach my $project (@projects) {
             $command .= "-s $script "    if $script;
             $command .= "-db $gap4name " if $gap4name; # (if scaffold in wrapper script)
             $command .= "-v $version " if $version;
-#            $command .= "-su " if $superuser;
+            $command .= "-su " if $superuser;
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
             $command .= "-minerva " if $minerva;
