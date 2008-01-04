@@ -1033,6 +1033,10 @@ public class ArcturusDatabase {
 		return projectManager.lockProjectForOwner(project);
 	}
 
+	public void setProjectOwner(Project project, Person person) throws SQLException {
+		projectManager.setProjectOwner(project, person);
+	}
+
 	/**
 	 * Returns the AssemblyManager belonging to this ArcturusDatabase.
 	 * 
@@ -1152,6 +1156,10 @@ public class ArcturusDatabase {
 	
 	public synchronized boolean isCoordinator() {
 		return userManager.isCoordinator();
+	}
+	
+	public Person[] getAllUsers() throws SQLException {
+		return userManager.getAllUsers();
 	}
 
 	/**

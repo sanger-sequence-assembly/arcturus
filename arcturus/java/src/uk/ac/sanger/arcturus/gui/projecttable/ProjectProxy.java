@@ -2,8 +2,9 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Assembly;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
-
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.Person;
 
 import java.sql.SQLException;
@@ -148,5 +149,18 @@ public class ProjectProxy {
 	
 	public boolean isExporting() {
 		return exporting;
+	}
+
+	public void setOwner(Person person) {
+		if (project == null || project.getArcturusDatabase() == null)
+			return;
+		
+		ArcturusDatabase adb = project.getArcturusDatabase();
+		
+		try {
+			adb.setProjectOwner(project, person);
+		} catch (SQLException e) {
+			Arcturus.logSevere("Unable to set owner for " + project.getName() + " to " + person, e);
+		}
 	}
 }

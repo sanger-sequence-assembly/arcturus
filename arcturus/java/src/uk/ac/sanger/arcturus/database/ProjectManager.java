@@ -28,6 +28,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtUnlockProject;
 	private PreparedStatement pstmtLockProject;
 	private PreparedStatement pstmtLockProjectForOwner;
+	private PreparedStatement pstmtSetProjectOwner;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -87,6 +88,10 @@ public class ProjectManager extends AbstractManager {
 				+ " where project_id=? and lockowner is null";
 
 		pstmtLockProjectForOwner = conn.prepareStatement(query);
+		
+		query = "update PROJECT set owner = ? where project_id = ?";
+		
+		pstmtSetProjectOwner = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -566,5 +571,15 @@ public class ProjectManager extends AbstractManager {
 		ProjectChangeEvent event = new ProjectChangeEvent(this, project, ProjectChangeEvent.LOCK_CHANGED);
 		
 		adb.notifyProjectChangeEventListeners(event);
+	}
+
+	public void setProjectOwner(Project project, Person person) throws SQLException {
+		pstmtSetProjectOwner.setString(1, person.getUID());
+		pstmtSetProjectOwner.setInt(2, project.getID());
+		
+		int rc = pstmtSetProjectOwner.executeUpdate();
+		
+		if (rc == 1)
+			project.setOwner(person);
 	}
 }

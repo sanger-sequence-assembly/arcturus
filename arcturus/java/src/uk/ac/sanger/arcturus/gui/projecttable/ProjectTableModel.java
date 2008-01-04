@@ -24,6 +24,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected int dateColumnType = CONTIG_UPDATED_DATE;
 	protected int minreads = 0;
 	protected int minlen = 0;
+	protected boolean canEditUser = false;
 
 	protected static final int ASSEMBLY_COLUMN = 0;
 	protected static final int PROJECT_COLUMN = 1;
@@ -37,6 +38,7 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
+		canEditUser = adb.isCoordinator();
 		comparator = new ProjectComparator();
 		comparator.setAscending(false);
 		populateProjectsArray();
@@ -124,10 +126,12 @@ class ProjectTableModel extends AbstractTableModel implements
 		switch (col) {
 			case ASSEMBLY_COLUMN:
 			case PROJECT_COLUMN:
-			case OWNER_COLUMN:
 			case LOCKED_COLUMN:
 				return String.class;
-
+				
+			case OWNER_COLUMN:
+				return Person.class;
+				
 			case TOTAL_LENGTH_COLUMN:
 			case CONTIG_COUNT_COLUMN:
 			case MAXIMUM_LENGTH_COLUMN:
@@ -192,8 +196,8 @@ class ProjectTableModel extends AbstractTableModel implements
 				}
 
 			case OWNER_COLUMN:
-				Person owner = project.getOwner();
-				return owner == null ? null : owner.getName();
+				return project.getOwner();
+				//return owner == null ? null : owner.getName();
 				
 			case LOCKED_COLUMN:
 				Person lockowner = project.getLockOwner();
@@ -206,9 +210,21 @@ class ProjectTableModel extends AbstractTableModel implements
 	}
 
 	public boolean isCellEditable(int row, int col) {
-		return false;
+		return canEditUser && col == OWNER_COLUMN;
 	}
 
+    public void setValueAt(Object value, int row, int col) {
+    	if (col == OWNER_COLUMN && value instanceof Person) {
+    		Person person = (Person)value;
+    		
+    		ProjectProxy project = getProjectAtRow(row);
+    		
+    		project.setOwner(person);
+
+            fireTableCellUpdated(row, col);  		
+    	}
+    }
+    
 	public boolean isColumnSortable(int col) {
 		return (col > 0);
 	}

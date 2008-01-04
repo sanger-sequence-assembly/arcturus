@@ -5,6 +5,8 @@ import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableColumn;
 
 import java.awt.*;
 import java.awt.event.*;
@@ -46,7 +48,14 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 						updateActions();
 					}
 				});
-
+		
+		if (adb.isCoordinator()) {
+			JComboBox comboBox = createUserComboBox(); 
+	        DefaultCellEditor editor = new DefaultCellEditor(comboBox);
+	        editor.setClickCountToStart(2);
+	        table.setDefaultEditor(Person.class, editor);
+		}
+		
 		JScrollPane scrollpane = new JScrollPane(table);
 
 		add(scrollpane, BorderLayout.CENTER);
@@ -57,6 +66,26 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		actionCloseView.setEnabled(false);
 
 		updateActions();
+	}
+
+	private JComboBox createUserComboBox() {
+		Person[] people = null;
+		
+		try {
+			people = adb.getAllUsers();
+		} catch (SQLException e) {
+			Arcturus.logSevere("Failed to get list of users", e);
+			return null;
+		}
+		
+        JComboBox comboBox = new JComboBox();
+		
+		for (int i = 0; i < people.length; i++)
+			comboBox.addItem(people[i]);
+		
+		comboBox.setMaximumRowCount(people.length);
+
+		return comboBox;
 	}
 
 	protected void createActions() {
