@@ -180,9 +180,9 @@ sub getContig {
 
     my $frugal = $options{frugal}; # if defined > 0 used as threshold
 
-    $frugal = 1000 unless defined($frugal); 
+    $frugal = 500 unless defined($frugal); # default
 
-    $contig->setFrugal(1) if ($frugal && $contig->getNumberOfReads()>=$frugal);
+    $contig->setFrugal($frugal) if ($frugal && $contig->getNumberOfReads()>=$frugal);
 
     return $contig if ($options{metaDataOnly} || $options{metadataonly});
 
