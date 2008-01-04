@@ -4,7 +4,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.regex.*;
 
-public class ProjectComparator implements Comparator {
+public class ProjectComparator implements Comparator<ProjectProxy> {
 	public static final int BY_TOTAL_LENGTH = 1;
 	public static final int BY_CONTIGS = 2;
 	public static final int BY_MAXIMUM_LENGTH = 3;
@@ -52,10 +52,7 @@ public class ProjectComparator implements Comparator {
 		return (that instanceof ProjectComparator && (ProjectComparator) that == this);
 	}
 
-	public int compare(Object o1, Object o2) {
-		ProjectProxy p1 = (ProjectProxy) o1;
-		ProjectProxy p2 = (ProjectProxy) o2;
-
+	public int compare(ProjectProxy p1, ProjectProxy p2) {
 		switch (type) {
 			case BY_TOTAL_LENGTH:
 				return compareByTotalLength(p1, p2);
