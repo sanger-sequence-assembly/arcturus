@@ -83,7 +83,11 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		for (int i = 0; i < people.length; i++)
 			comboBox.addItem(people[i]);
 		
-		comboBox.setMaximumRowCount(people.length);
+		Person nobody = PeopleManager.findPerson("nobody");
+		
+		comboBox.addItem(nobody);
+		
+		comboBox.setMaximumRowCount(comboBox.getItemCount());
 
 		return comboBox;
 	}

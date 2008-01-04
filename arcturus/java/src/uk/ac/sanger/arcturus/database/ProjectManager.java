@@ -574,12 +574,18 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void setProjectOwner(Project project, Person person) throws SQLException {
-		pstmtSetProjectOwner.setString(1, person.getUID());
+		boolean nobody = person.getUID().equalsIgnoreCase("nobody");
+		
+		if (nobody)
+			pstmtSetProjectOwner.setNull(1, Types.CHAR);
+		else
+			pstmtSetProjectOwner.setString(1, person.getUID());
+		
 		pstmtSetProjectOwner.setInt(2, project.getID());
 		
 		int rc = pstmtSetProjectOwner.executeUpdate();
 		
 		if (rc == 1)
-			project.setOwner(person);
+			project.setOwner(nobody ? null : person);
 	}
 }
