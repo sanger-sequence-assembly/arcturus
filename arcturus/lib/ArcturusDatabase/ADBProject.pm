@@ -298,7 +298,7 @@ sub putProject {
                   $project->getOwner() || $this->getArcturusUser() || 'arcturus',
                   $this->getArcturusUser() || 'arcturus',
                   $project->getComment()   || undef,
-                  $project->getDirectory() || 'unknown',
+                  $project->getDirectory() || undef,
                   $project->getProjectID() || undef);
 
 # perhaps an override on method 
