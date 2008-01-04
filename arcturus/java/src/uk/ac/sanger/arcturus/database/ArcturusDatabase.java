@@ -1110,13 +1110,11 @@ public class ArcturusDatabase {
 		return userManager;
 	}
 
-	public synchronized String getRoleForUser(String username)
-			throws SQLException {
+	public synchronized String getRoleForUser(String username) {
 		return userManager.getRoleForUser(username);
 	}
 
-	public synchronized String getRoleForUser(Person person)
-			throws SQLException {
+	public synchronized String getRoleForUser(Person person) {
 		return userManager.getRoleForUser(person);
 	}
 
