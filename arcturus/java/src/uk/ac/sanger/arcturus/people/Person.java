@@ -95,33 +95,7 @@ public class Person implements Comparable {
 	}
 
 	public String toString() {
-		String string = "Person[uid=" + uid;
-
-		if (name != null)
-			string += ", name=" + name;
-
-		if (mail != null)
-			string += ", mail=" + mail;
-
-		if (phone != null)
-			string += ", telephone=" + phone;
-
-		if (homedir != null)
-			string += ", homedirectory=" + homedir;
-
-		if (room != null)
-			string += ", room=" + room;
-
-		if (dept != null)
-			string += ", department=" + dept;
-
-		if (photo != null)
-			string += ", photo=ImageIcon[" + photo.getIconWidth() + "x"
-					+ photo.getIconHeight() + "]";
-
-		string += "]";
-
-		return string;
+		return name == null ? uid : name;
 	}
 
 	public int compareTo(Object o) {
