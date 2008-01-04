@@ -760,7 +760,7 @@ sub verifyUserRole {
     my %userroles = ('annotator'   => 0, 'finisher'      => 1,
                      'team leader' => 3, 'administrator' => 4,
                      'superuser'   => 5, 'assembler'     => 0,
-                     'none'        => 0); # space for more
+                     'coordinator' => 2, 'none'          => 0); # space for more
 
     return $userroles{lc($userrole)} if defined($userrole); # return seniority
 
