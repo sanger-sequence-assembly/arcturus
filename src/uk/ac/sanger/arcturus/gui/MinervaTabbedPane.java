@@ -26,8 +26,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	protected MinervaAbstractAction actionShowProjectList;
 	protected MinervaAbstractAction actionClose;
-
-	protected boolean administrator = false;
 	
 	protected Map<String, MinervaPanel> permanentComponents = new HashMap<String, MinervaPanel>();
 
@@ -43,16 +41,6 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	public MinervaTabbedPane(ArcturusDatabase adb) {
 		super();
 		this.adb = adb;
-
-		Person me = PeopleManager.findMe();
-
-		String role = adb.getRoleForUser(me);
-		administrator = (role != null
-				&& (role.equalsIgnoreCase("administrator") || 
-					role.equalsIgnoreCase("team leader") ||
-					role.equalsIgnoreCase("coordinator")) && 
-					!Boolean.getBoolean("minerva.noadmin"));
-
 
 		createActions();
 

@@ -221,7 +221,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected boolean canExport(ProjectProxy proxy) {		
 		Person owner = proxy.getOwner();
 		
-		return administrator || proxy.isMine() || owner == null;
+		return adb.isCoordinator() || proxy.isMine() || owner == null;
 	}
 
 	protected void exportToGap4() {
@@ -283,7 +283,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected boolean canImport(ProjectProxy proxy) {		
 		Person owner = proxy.getOwner();
 		
-		return administrator || proxy.isMine() || owner == null;
+		return adb.isCoordinator() || proxy.isMine() || owner == null;
 	}
 
 	protected void importFromGap4() {
