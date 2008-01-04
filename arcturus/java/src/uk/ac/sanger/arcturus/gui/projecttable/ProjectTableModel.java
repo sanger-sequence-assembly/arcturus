@@ -17,7 +17,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	public static final int CONTIG_CREATED_DATE = 2;
 	public static final int CONTIG_UPDATED_DATE = 3;
 
-	protected Vector projects = new Vector();
+	protected Vector<ProjectProxy> projects = new Vector<ProjectProxy>();
 	protected ProjectComparator comparator;
 	protected int lastSortColumn = 3;
 	protected ArcturusDatabase adb = null;
@@ -193,17 +193,8 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case OWNER_COLUMN:
 				Person owner = project.getOwner();
-
-				if (owner == null)
-					return null;
-				else {
-					String name = owner.getName();
-					if (name == null)
-						name = owner.getUID();
-
-					return name;
-				}
-
+				return owner == null ? null : owner.getName();
+				
 			case LOCKED_COLUMN:
 				Person lockowner = project.getLockOwner();
 				return (lockowner == null || lockowner.getName() == null ? null

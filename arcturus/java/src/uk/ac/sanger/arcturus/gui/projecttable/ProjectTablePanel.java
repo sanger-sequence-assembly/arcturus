@@ -29,8 +29,6 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected MinervaAbstractAction actionExportToGap4;
 	protected MinervaAbstractAction actionImportFromGap4;
 	protected MinervaAbstractAction actionExportForAssembly;
-	
-	protected boolean hasFullPrivileges = false;
 
 	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, adb);
@@ -59,14 +57,6 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		actionCloseView.setEnabled(false);
 
 		updateActions();
-		
-		Person me = PeopleManager.findMe();
-		
-		try {
-			hasFullPrivileges = adb.hasFullPrivileges(me);
-		} catch (SQLException e1) {
-			Arcturus.logSevere("Failed to check privileges for " + me, e1);
-		}
 	}
 
 	protected void createActions() {
@@ -231,7 +221,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected boolean canExport(ProjectProxy proxy) {		
 		Person owner = proxy.getOwner();
 		
-		return hasFullPrivileges || proxy.isMine() || owner == null;
+		return administrator || proxy.isMine() || owner == null;
 	}
 
 	protected void exportToGap4() {
@@ -293,7 +283,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected boolean canImport(ProjectProxy proxy) {		
 		Person owner = proxy.getOwner();
 		
-		return hasFullPrivileges || proxy.isMine() || owner == null;
+		return administrator || proxy.isMine() || owner == null;
 	}
 
 	protected void importFromGap4() {
