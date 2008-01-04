@@ -26,8 +26,9 @@ my $instance;
 my $project;
 my $assembly;
 
-my $datafile;  # for list of tag ids and positions
-my $fastafile; # for the fasta fuile on which the annotation has been made 
+my $datafile;    # for list of tag ids and positions
+my $fastafile;   # for the fasta fuile on which the annotation has been made 
+my $segmentfile; # for externally provided mappings
 
 my $propagate;
 my $reanalyze;
@@ -56,7 +57,7 @@ my $minimumnrofreads = 2;
 
 my $validKeys  = "organism|instance|project|assembly|tagfile|tf|fasta|ff|"
                . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|swprog|"
-               . "currentcontig|cc|propagate|reanalyze|"
+               . "segmentfile|sf|currentcontig|cc|propagate|reanalyze|"
                . "clipoption|co|simplequalityclip|sqc|baseclip|bqc|qualityclip|qc|"
                . "qcminimimum|qcm|qcthreshold|qct|qchqpm|"
                . "override|minimumnrofreads|mnor|verbose|debug|nodebug|help";
@@ -148,6 +149,10 @@ while (my $nextword = shift @ARGV) {
             &showUsage("Option '$nextword' has been disabled");
         }
         $swprog  = shift @ARGV;
+    }
+
+    if ($nextword eq "segmentfile" || $nextword eq "sf") {
+        $segmentfile = shift @ARGV;
     }
 
     if ($nextword eq 'minimumnrofreads' || $nextword eq 'mnor') {
@@ -335,6 +340,9 @@ if ($fastafile) {
     $logger->warning("$processed annotation contigs tested");
 }
 
+if ($segmentfile) {
+}
+
 #-----------------------------------------------------------------------
 # parse the file with annotation data and build tag data hash
 #-----------------------------------------------------------------------
@@ -425,7 +433,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
         $tag->setSystematicID($contigtag->[0]);
         push @tags,$tag;
 
-        $logger->fine($tag->dump(0,1)."\n");
+        $logger->fine($tag->dump(0,skip=>1)."\n");
     }
 
     $logger->info(scalar(@tags)." contig tags assembled for $contigname\n");
@@ -521,9 +529,15 @@ foreach my $contigname (sort keys %$contigtaghash) {
 
         my $mapping;
 
-# METHOD 1 : Smith-Waterman alignment
+# METHOD 0 : mapping provided outside
 
-        if ($swprog && length($asequence) < 30000) {
+        if ($segmentfile) {
+            $mapping = &segmentfile($segmentfile); # original contig, new contig
+	}
+
+# METHOD 1 : Smith-Waterman alignment fro small contiglength
+
+        if (!$mapping && $swprog && length($asequence) < 30000) {
 	    $logger->fine("Smith Waterman Alignment selected");
            ($mapping,my $s) = &SmithWatermanAlignment($asequence,$fsequence);
             unless ($mapping) {
