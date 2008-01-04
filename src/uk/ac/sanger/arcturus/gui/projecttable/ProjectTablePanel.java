@@ -11,10 +11,12 @@ import java.awt.event.*;
 import java.awt.print.PrinterException;
 
 import java.io.File;
+import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
+import uk.ac.sanger.arcturus.people.PeopleManager;
 import uk.ac.sanger.arcturus.people.Person;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
@@ -27,6 +29,8 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected MinervaAbstractAction actionExportToGap4;
 	protected MinervaAbstractAction actionImportFromGap4;
 	protected MinervaAbstractAction actionExportForAssembly;
+	
+	protected boolean hasFullPrivileges = false;
 
 	public ProjectTablePanel(ArcturusDatabase adb, MinervaTabbedPane parent) {
 		super(new BorderLayout(), parent, adb);
@@ -55,6 +59,14 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		actionCloseView.setEnabled(false);
 
 		updateActions();
+		
+		Person me = PeopleManager.findMe();
+		
+		try {
+			hasFullPrivileges = adb.hasFullPrivileges(me);
+		} catch (SQLException e1) {
+			Arcturus.logSevere("Failed to check privileges for " + me, e1);
+		}
 	}
 
 	protected void createActions() {
@@ -215,6 +227,12 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 	protected void viewSelectedProjects() {
 		table.displaySelectedProjects();
 	}
+	
+	protected boolean canExport(ProjectProxy proxy) {		
+		Person owner = proxy.getOwner();
+		
+		return hasFullPrivileges || proxy.isMine() || owner == null;
+	}
 
 	protected void exportToGap4() {
 		ProjectProxy proxy = table.getSelectedProject();
@@ -223,7 +241,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		
 		Person owner = proxy.getOwner();
 		
-		if (!proxy.isMine() && (owner != null)) {
+		if (!canExport(proxy)) {
 			JOptionPane.showMessageDialog(this,
 					"Project " + projectName +
 						" belongs to " + owner.getName() +
@@ -271,6 +289,12 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		
 		exporter.start();
 	}
+	
+	protected boolean canImport(ProjectProxy proxy) {		
+		Person owner = proxy.getOwner();
+		
+		return hasFullPrivileges || proxy.isMine() || owner == null;
+	}
 
 	protected void importFromGap4() {
 		ProjectProxy proxy = table.getSelectedProject();
@@ -279,7 +303,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 		
 		Person owner = proxy.getOwner();
 		
-		if (!proxy.isMine() && (owner != null)) {
+		if (!canImport(proxy)) {
 			JOptionPane.showMessageDialog(this,
 					"Project " + projectName +
 						" belongs to " + owner.getName() +
@@ -287,8 +311,7 @@ public class ProjectTablePanel extends MinervaPanel implements ProjectChangeEven
 					"Cannot import project " + projectName,
 					JOptionPane.ERROR_MESSAGE);
 
-			return;
-		
+			return;		
 		}
 		
 		String directory = proxy.getProject().getDirectory();
