@@ -228,7 +228,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		Set mypset = null;
 
 		try {
-			if (administrator)
+			if (adb.isCoordinator())
 				mypset = adb.getAllProjects();
 			else
 				mypset = adb.getProjectsForOwner(me);

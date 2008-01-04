@@ -28,23 +28,12 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionCheckConsistency;
 	protected MinervaAbstractAction actionPrint;
 	protected MinervaAbstractAction actionRefresh;
-	
-	protected boolean administrator = false;
 
 	public MinervaPanel(LayoutManager layoutManager, MinervaTabbedPane parent,
 			ArcturusDatabase adb) {
 		super(layoutManager);
 		this.parent = parent;
 		this.adb = adb;
-
-		Person me = PeopleManager.findMe();
-		String role = adb.getRoleForUser(me);
-		
-		administrator = role != null
-				&& (role.equalsIgnoreCase("administrator") || 
-					role.equalsIgnoreCase("team leader") ||
-					role.equalsIgnoreCase("coordinator")) && 
-					!Boolean.getBoolean("minerva.noadmin");
 	}
 
 	public MinervaPanel(MinervaTabbedPane parent, ArcturusDatabase adb) {
@@ -204,7 +193,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 			}
 		};
 
-		if (administrator)
+		if (adb.isCoordinator())
 			menu.add(actionShowAllContigTransfers);
 		else
 			menu.add(actionShowContigTransfers);
