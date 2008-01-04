@@ -2,12 +2,15 @@ package uk.ac.sanger.arcturus.database;
 
 import java.sql.*;
 import java.util.*;
+
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.Person;
 
 public class UserManager extends AbstractManager {
 	private Connection conn;
 	private PreparedStatement pstmtRoleByName, pstmtPrivilegesByName;
 	private PreparedStatement pstmtHasPrivilege;
+	private Map<String, String> roleCache = new HashMap<String, String>();
 
 	/**
 	 * Creates a new UserManager to provide user management services to
@@ -31,24 +34,38 @@ public class UserManager extends AbstractManager {
 	}
 
 	public void clearCache() {
+		roleCache.clear();
 	}
 
-	public String getRoleForUser(String username) throws SQLException {
+	public String getRoleForUser(String username) {
 		if (username == null)
 			return null;
 		
-		pstmtRoleByName.setString(1, username);
+		String role = roleCache.get(username);
 		
-		ResultSet rs = pstmtRoleByName.executeQuery();
+		if (role != null)
+			return role;
 		
-		String role = rs.next() ? rs.getString(1): null;
+		try {
+			pstmtRoleByName.setString(1, username);
 		
-		rs.close();
+			ResultSet rs = pstmtRoleByName.executeQuery();
+		
+			role = rs.next() ? rs.getString(1): null;
+		
+			rs.close();
+		}
+		catch (SQLException e) {
+			role = "unknown";
+			Arcturus.logSevere("Failed to get role for " + username, e);
+		}
+		
+		roleCache.put(username, role);
 		
 		return role;
 	}
 	
-	public String getRoleForUser(Person person) throws SQLException {
+	public String getRoleForUser(Person person) {
 		if (person == null)
 			return null;
 		
@@ -63,7 +80,7 @@ public class UserManager extends AbstractManager {
 		
 		ResultSet rs = pstmtPrivilegesByName.executeQuery();
 		
-		Vector rolesv = new Vector();
+		Vector<String> rolesv = new Vector<String>();
 		
 		while (rs.next())
 			rolesv.add(rs.getString(1));
