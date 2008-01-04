@@ -4,7 +4,7 @@ import java.sql.*;
 import java.util.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
-import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.people.*;
 
 public class UserManager extends AbstractManager {
 	private Connection conn;
@@ -122,7 +122,7 @@ public class UserManager extends AbstractManager {
 		return hasPrivilege(person.getUID(), privilege);
 	}
 	
-	public boolean hasFullPrivileges(Person person) throws SQLException {
+	public boolean hasFullPrivileges(Person person) {
 		if (person == null)
 			return false;
 
@@ -136,5 +136,32 @@ public class UserManager extends AbstractManager {
 		return role.equalsIgnoreCase("team leader")
 				|| role.equalsIgnoreCase("administrator")
 				|| role.equalsIgnoreCase("superuser");
+	}
+	
+	public boolean hasFullPrivileges() {
+		return hasFullPrivileges(PeopleManager.findMe()) && 
+				!Boolean.getBoolean("minerva.noadmin");
+	}
+	
+	public boolean isCoordinator(Person person) {
+		if (person == null)
+			return false;
+
+		String role = null;
+
+		role = getRoleForUser(person);
+
+		if (role == null)
+			return false;
+
+		return role.equalsIgnoreCase("team leader")
+				|| role.equalsIgnoreCase("coordinator")
+				|| role.equalsIgnoreCase("administrator")
+				|| role.equalsIgnoreCase("superuser");
+	}
+	
+	public boolean isCoordinator() {
+		return isCoordinator(PeopleManager.findMe()) && 
+			!Boolean.getBoolean("minerva.noadmin");
 	}
 }

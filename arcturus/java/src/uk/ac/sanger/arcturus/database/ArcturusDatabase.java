@@ -1138,9 +1138,20 @@ public class ArcturusDatabase {
 		return userManager.hasPrivilege(person, privilege);
 	}
 
-	public synchronized boolean hasFullPrivileges(Person person)
-			throws SQLException {
+	public synchronized boolean hasFullPrivileges(Person person) {
 		return userManager.hasFullPrivileges(person);
+	}
+
+	public synchronized boolean hasFullPrivileges() {
+		return userManager.hasFullPrivileges();
+	}
+	
+	public synchronized boolean isCoordinator(Person person) {
+		return userManager.isCoordinator(person);
+	}
+	
+	public synchronized boolean isCoordinator() {
+		return userManager.isCoordinator();
 	}
 
 	/**
