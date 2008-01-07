@@ -81,12 +81,9 @@ public class TestProjectManager {
 			displayAssemblies(adb, enumeratecontigs);
 
 			if (testmove) {
-				Set assemblies = adb.getAllAssemblies();
+				Assembly[] assemblyArray = adb.getAllAssemblies();
 
-				Assembly[] assemblyArray = (Assembly[]) assemblies
-						.toArray(new Assembly[0]);
-
-				Arrays.sort(assemblyArray, byname);
+				Arrays.sort(assemblyArray);
 
 				Set projects1 = assemblyArray[0].getProjects();
 
@@ -155,19 +152,15 @@ public class TestProjectManager {
 	}
 
 	public void displayAssemblies(ArcturusDatabase adb, boolean enumeratecontigs) {
-		Set<Assembly> assemblies = null;
+		Assembly[] assemblyArray = null;
 		
 		try {
-			assemblies = adb.getAllAssemblies();
+			assemblyArray = adb.getAllAssemblies();
 		} catch (SQLException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
 
-		Assembly[] assemblyArray = (Assembly[]) assemblies
-				.toArray(new Assembly[0]);
-
-		Arrays.sort(assemblyArray, byname);
+		Arrays.sort(assemblyArray);
 
 		for (int i = 0; i < assemblyArray.length; i++) {
 			Assembly assembly = assemblyArray[i];
