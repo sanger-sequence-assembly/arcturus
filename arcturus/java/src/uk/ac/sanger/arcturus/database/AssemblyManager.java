@@ -12,7 +12,7 @@ import java.util.*;
 public class AssemblyManager extends AbstractManager {
 	private ArcturusDatabase adb;
 	private Connection conn;
-	private HashMap hashByID = new HashMap();
+	private HashMap<Integer, Assembly> hashByID = new HashMap<Integer, Assembly>();
 	private PreparedStatement pstmtByID;
 	private PreparedStatement pstmtByName;
 
@@ -146,8 +146,9 @@ public class AssemblyManager extends AbstractManager {
 		stmt.close();
 	}
 
-	public Set getAllAssemblies() {
-		return new HashSet(hashByID.values());
+	public Set<Assembly> getAllAssemblies() throws SQLException {
+		preloadAllAssemblies();
+		return new HashSet<Assembly>(hashByID.values());
 	}
 
 	public void refreshAssembly(Assembly assembly) throws SQLException {
