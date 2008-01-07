@@ -486,8 +486,14 @@ public class ProjectTablePanel extends MinervaPanel implements
 			}
 
 			try {
-				if (adb.createNewProject(assembly, name.trim(), owner, directory.trim()))
+				if (adb.createNewProject(assembly, name.trim(), owner, directory.trim())) {
 					refresh();
+					
+					JOptionPane.showMessageDialog(this,
+							"Successfully created project " + name,
+							"The project was created",
+							JOptionPane.INFORMATION_MESSAGE);
+				}
 			} catch (SQLException e) {
 				if (e.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
 					JOptionPane.showMessageDialog(this, "Project " + name
