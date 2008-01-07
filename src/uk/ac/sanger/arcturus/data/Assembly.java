@@ -14,7 +14,7 @@ public class Assembly extends Core {
 	protected Date created = null;
 	protected String creator = null;
 
-	protected Set projects = null;
+	protected Set<Project> projects = null;
 
 	/**
 	 * Constructs a Assembly which does not yet have an ID. This constructor
@@ -119,17 +119,17 @@ public class Assembly extends Core {
 	 *         object.
 	 */
 
-	public Set getProjects() {
+	public Set<Project> getProjects() {
 		return projects;
 	}
 
-	public void setProjects(Set projects) {
+	public void setProjects(Set<Project> projects) {
 		this.projects = projects;
 	}
 
 	public void addProject(Project project) {
 		if (projects == null)
-			projects = new HashSet();
+			projects = new HashSet<Project>();
 
 		projects.add(project);
 	}
@@ -144,5 +144,9 @@ public class Assembly extends Core {
 	public void refresh() throws SQLException {
 		if (adb != null)
 			adb.refreshAssembly(this);
+	}
+	
+	public String toString() {
+		return name;
 	}
 }
