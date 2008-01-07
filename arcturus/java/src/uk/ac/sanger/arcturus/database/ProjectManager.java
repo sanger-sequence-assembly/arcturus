@@ -29,6 +29,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtLockProject;
 	private PreparedStatement pstmtLockProjectForOwner;
 	private PreparedStatement pstmtSetProjectOwner;
+	private PreparedStatement pstmtCreateNewProject;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -40,16 +41,16 @@ public class ProjectManager extends AbstractManager {
 
 		conn = adb.getConnection();
 
-		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory" +
-			" from PROJECT where project_id = ?";
+		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory"
+				+ " from PROJECT where project_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory" +
-			" from PROJECT where assembly_id = ? and name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory"
+				+ " from PROJECT where assembly_id = ? and name = ?";
 		pstmtByNameAndAssembly = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory" +
-			" from PROJECT where name = ?";
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory"
+				+ " from PROJECT where name = ?";
 		pstmtByName = conn.prepareStatement(query);
 
 		query = "update PROJECT set assembly_id = ? where project_id = ?";
@@ -88,10 +89,15 @@ public class ProjectManager extends AbstractManager {
 				+ " where project_id=? and lockowner is null";
 
 		pstmtLockProjectForOwner = conn.prepareStatement(query);
-		
+
 		query = "update PROJECT set owner = ? where project_id = ?";
-		
+
 		pstmtSetProjectOwner = conn.prepareStatement(query);
+
+		query = "insert into PROJECT(assembly_id,name,creator,created,owner,directory)"
+				+ "values (?,?,?,NOW(),?,?)";
+
+		pstmtCreateNewProject = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -190,7 +196,7 @@ public class ProjectManager extends AbstractManager {
 			String creator, String directory) {
 		Project project = new Project(id, assembly, name, updated, owner,
 				lockdate, lockowner, created, creator, adb);
-		
+
 		project.setDirectory(directory);
 
 		registerNewProject(project);
@@ -378,7 +384,8 @@ public class ProjectManager extends AbstractManager {
 		return summary;
 	}
 
-	public Map<Integer, ProjectSummary> getProjectSummary(int minlen, int minreads) throws SQLException {
+	public Map<Integer, ProjectSummary> getProjectSummary(int minlen,
+			int minreads) throws SQLException {
 		HashMap<Integer, ProjectSummary> map = new HashMap<Integer, ProjectSummary>();
 
 		pstmtProjectSummary.setInt(1, minlen);
@@ -474,7 +481,7 @@ public class ProjectManager extends AbstractManager {
 		pstmtUnlockProject.setInt(1, project.getID());
 
 		int rc = pstmtUnlockProject.executeUpdate();
-		
+
 		if (rc == 1)
 			lockChanged(project);
 
@@ -497,7 +504,7 @@ public class ProjectManager extends AbstractManager {
 		pstmtLockProject.setInt(2, project.getID());
 
 		int rc = pstmtLockProject.executeUpdate();
-		
+
 		if (rc == 1)
 			lockChanged(project);
 
@@ -523,15 +530,15 @@ public class ProjectManager extends AbstractManager {
 		pstmtLockProjectForOwner.setInt(1, project.getID());
 
 		int rc = pstmtLockProjectForOwner.executeUpdate();
-		
+
 		if (rc == 1)
 			lockChanged(project);
 
 		return rc == 1;
 	}
 
-	public boolean unlockProjectForExport(Project project) throws ProjectLockException,
-			SQLException {
+	public boolean unlockProjectForExport(Project project)
+			throws ProjectLockException, SQLException {
 		if (!project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_UNLOCKED);
@@ -539,15 +546,15 @@ public class ProjectManager extends AbstractManager {
 		pstmtUnlockProject.setInt(1, project.getID());
 
 		int rc = pstmtUnlockProject.executeUpdate();
-		
+
 		if (rc == 1)
 			lockChanged(project);
 
 		return rc == 1;
 	}
 
-	public boolean lockProjectForExport(Project project) throws ProjectLockException,
-			SQLException {
+	public boolean lockProjectForExport(Project project)
+			throws ProjectLockException, SQLException {
 		if (project.isLocked())
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
@@ -558,7 +565,7 @@ public class ProjectManager extends AbstractManager {
 		pstmtLockProject.setInt(2, project.getID());
 
 		int rc = pstmtLockProject.executeUpdate();
-		
+
 		if (rc == 1)
 			lockChanged(project);
 
@@ -567,25 +574,40 @@ public class ProjectManager extends AbstractManager {
 
 	private void lockChanged(Project project) throws SQLException {
 		refreshProject(project);
-		
-		ProjectChangeEvent event = new ProjectChangeEvent(this, project, ProjectChangeEvent.LOCK_CHANGED);
-		
+
+		ProjectChangeEvent event = new ProjectChangeEvent(this, project,
+				ProjectChangeEvent.LOCK_CHANGED);
+
 		adb.notifyProjectChangeEventListeners(event);
 	}
 
-	public void setProjectOwner(Project project, Person person) throws SQLException {
+	public void setProjectOwner(Project project, Person person)
+			throws SQLException {
 		boolean nobody = person.getUID().equalsIgnoreCase("nobody");
-		
+
 		if (nobody)
 			pstmtSetProjectOwner.setNull(1, Types.CHAR);
 		else
 			pstmtSetProjectOwner.setString(1, person.getUID());
-		
+
 		pstmtSetProjectOwner.setInt(2, project.getID());
-		
+
 		int rc = pstmtSetProjectOwner.executeUpdate();
-		
+
 		if (rc == 1)
 			project.setOwner(nobody ? null : person);
+	}
+
+	public boolean createNewProject(Assembly assembly, String name, Person owner,
+			String directory) throws SQLException {
+		pstmtCreateNewProject.setInt(1, assembly.getID());
+		pstmtCreateNewProject.setString(2, name);
+		pstmtCreateNewProject.setString(3, System.getProperty("user.name"));
+		pstmtCreateNewProject.setString(4, owner.getUID());
+		pstmtCreateNewProject.setString(5, directory);
+		
+		int rc = pstmtCreateNewProject.executeUpdate();
+		
+		return rc == 1;
 	}
 }

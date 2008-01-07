@@ -1,6 +1,8 @@
 package uk.ac.sanger.arcturus.database;
 
+import java.io.File;
 import java.sql.*;
+
 import javax.sql.*;
 
 import java.util.Map;
@@ -25,6 +27,7 @@ import uk.ac.sanger.arcturus.pooledconnection.ConnectionPool;
 import uk.ac.sanger.arcturus.projectchange.*;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
+import uk.ac.sanger.arcturus.Arcturus;
 
 public class ArcturusDatabase {
 	public static final int MYSQL = 1;
@@ -75,6 +78,8 @@ public class ArcturusDatabase {
 	protected Logger logger = null;
 
 	protected ProjectChangeEventNotifier projectChangeEventNotifier = new ProjectChangeEventNotifier();
+	
+	protected String defaultDirectory = null;
 
 	/**
 	 * Creates a new ArcturusDatabase object from a DataSource, a description
@@ -124,6 +129,8 @@ public class ArcturusDatabase {
 		defaultConnection = connectionPool.getConnection(this);
 
 		createManagers();
+		
+		inferDefaultDirectory();
 	}
 
 	/**
@@ -1036,7 +1043,12 @@ public class ArcturusDatabase {
 	public void setProjectOwner(Project project, Person person) throws SQLException {
 		projectManager.setProjectOwner(project, person);
 	}
-
+	
+	public boolean createNewProject(Assembly assembly, String name, Person owner,
+			String directory) throws SQLException {
+		return projectManager.createNewProject(assembly, name, owner, directory);
+	}
+	
 	/**
 	 * Returns the AssemblyManager belonging to this ArcturusDatabase.
 	 * 
@@ -1310,5 +1322,51 @@ public class ArcturusDatabase {
 
 	public void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
 		projectChangeEventNotifier.notifyProjectChangeEventListeners(event);
+	}
+
+	/*
+	 * ******************************************************************************
+	 */
+	
+	private void inferDefaultDirectory() {
+		String query = "select directory from PROJECT where directory is not null" + 
+			" order by project_id asc limit 1";
+		
+		try {
+			Statement stmt = defaultConnection.createStatement();
+			
+			ResultSet rs = stmt.executeQuery(query);
+			
+			String dirname = rs.next() ? rs.getString(1) : null;
+			
+			rs.close();
+			stmt.close();
+			
+			String separator = System.getProperty("file.separator");
+			
+			if (dirname != null) {
+				String[] parts = dirname.split(separator);
+				
+				for (int i = parts.length - 1; i >= 0; i--) {
+					if (parts[i].equalsIgnoreCase(name)) {
+						dirname = "";
+						
+						for (int j = 0; j <= i; j++)
+							if (parts[j].length() > 0)
+								dirname += separator + parts[j];
+						
+						defaultDirectory = dirname;
+						
+						return;
+					}
+				}
+			}
+		} catch (SQLException e) {
+			Arcturus.logSevere("An error occurred whilst trying to infer the default directory", e);
+		}	
+	}
+	
+	public String getDefaultDirectory() {
+		return defaultDirectory;
 	}
 }
