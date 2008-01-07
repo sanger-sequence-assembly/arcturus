@@ -1040,11 +1040,11 @@ public class ArcturusDatabase {
 		return projectManager.lockProjectForOwner(project);
 	}
 
-	public void setProjectOwner(Project project, Person person) throws SQLException {
+	public synchronized void setProjectOwner(Project project, Person person) throws SQLException {
 		projectManager.setProjectOwner(project, person);
 	}
 	
-	public boolean createNewProject(Assembly assembly, String name, Person owner,
+	public synchronized boolean createNewProject(Assembly assembly, String name, Person owner,
 			String directory) throws SQLException {
 		return projectManager.createNewProject(assembly, name, owner, directory);
 	}
@@ -1170,7 +1170,7 @@ public class ArcturusDatabase {
 		return userManager.isCoordinator();
 	}
 	
-	public Person[] getAllUsers() throws SQLException {
+	public synchronized Person[] getAllUsers() throws SQLException {
 		return userManager.getAllUsers();
 	}
 
