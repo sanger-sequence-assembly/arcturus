@@ -9,7 +9,7 @@ import java.sql.SQLException;
  * This class represents a assembly, which is a set of projects.
  */
 
-public class Assembly extends Core {
+public class Assembly extends Core implements Comparable {
 	protected Date updated = null;
 	protected Date created = null;
 	protected String creator = null;
@@ -148,5 +148,14 @@ public class Assembly extends Core {
 	
 	public String toString() {
 		return name;
+	}
+
+	public int compareTo(Object o) {
+		if (o instanceof Assembly) {
+			Assembly that = (Assembly)o;
+			
+			return name.compareTo(that.name);
+		} else 
+			return 0;
 	}
 }
