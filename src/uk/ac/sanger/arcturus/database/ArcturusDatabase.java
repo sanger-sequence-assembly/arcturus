@@ -1078,7 +1078,7 @@ public class ArcturusDatabase {
 		assemblyManager.preloadAllAssemblies();
 	}
 
-	public synchronized Set<Assembly> getAllAssemblies() throws SQLException {
+	public synchronized Assembly[] getAllAssemblies() throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getAllAssemblies");
 

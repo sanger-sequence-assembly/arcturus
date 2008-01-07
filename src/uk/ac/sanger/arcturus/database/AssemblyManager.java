@@ -146,9 +146,12 @@ public class AssemblyManager extends AbstractManager {
 		stmt.close();
 	}
 
-	public Set<Assembly> getAllAssemblies() throws SQLException {
+	public Assembly[] getAllAssemblies() throws SQLException {
 		preloadAllAssemblies();
-		return new HashSet<Assembly>(hashByID.values());
+		Collection asms = hashByID.values();
+		Assembly[] assemblies = (Assembly[]) asms.toArray(new Assembly[0]);
+		Arrays.sort(assemblies);
+		return assemblies;
 	}
 
 	public void refreshAssembly(Assembly assembly) throws SQLException {
