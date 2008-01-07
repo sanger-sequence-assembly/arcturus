@@ -165,6 +165,7 @@ public class UserManager extends AbstractManager {
 			return false;
 
 		return role.equalsIgnoreCase("team leader")
+				|| role.equalsIgnoreCase("coordinator")
 				|| role.equalsIgnoreCase("administrator")
 				|| role.equalsIgnoreCase("superuser");
 	}
