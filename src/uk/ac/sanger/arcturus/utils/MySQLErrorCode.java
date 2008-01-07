@@ -1,4 +1,4 @@
-package uk.ac.sanger.arcturus.test;
+package uk.ac.sanger.arcturus.utils;
 
 public class MySQLErrorCode {
 	public final static int ER_ERROR_MESSAGES = 303;
