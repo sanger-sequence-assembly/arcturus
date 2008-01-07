@@ -155,7 +155,14 @@ public class TestProjectManager {
 	}
 
 	public void displayAssemblies(ArcturusDatabase adb, boolean enumeratecontigs) {
-		Set assemblies = adb.getAllAssemblies();
+		Set<Assembly> assemblies = null;
+		
+		try {
+			assemblies = adb.getAllAssemblies();
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 		Assembly[] assemblyArray = (Assembly[]) assemblies
 				.toArray(new Assembly[0]);
