@@ -466,9 +466,27 @@ public class ProjectTablePanel extends MinervaPanel implements
 			String directory = panelNewProject.getDirectory();
 			Person owner = panelNewProject.getOwner();
 			Assembly assembly = panelNewProject.getAssembly();
+			
+			if (name == null || name.trim().length() == 0) {
+				JOptionPane.showMessageDialog(this,
+						"You did not specify the name of the project",
+						"Failed to create the project",
+						JOptionPane.WARNING_MESSAGE);
+				
+				return;
+			}
+			
+			if (directory == null || directory.trim().length() == 0) {
+				JOptionPane.showMessageDialog(this,
+						"You did not specify a directory for the project",
+						"Failed to create the project",
+						JOptionPane.WARNING_MESSAGE);
+				
+				return;
+			}
 
 			try {
-				if (adb.createNewProject(assembly, name, owner, directory))
+				if (adb.createNewProject(assembly, name.trim(), owner, directory.trim()))
 					refresh();
 			} catch (SQLException e) {
 				if (e.getErrorCode() == MySQLErrorCode.ER_DUP_ENTRY)
