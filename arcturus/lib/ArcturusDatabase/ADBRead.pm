@@ -2992,18 +2992,21 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
         foreach my $tag (@$tags) {
             my $tagseqname = $tag->getTagSequenceName();
             next unless ($tagseqname && $tagseqname =~ /\S/); # defined and not blank
-	    my $sequence = $tag->getDNA();
+	    my $sequence = $tag->getDNA() || '';
 # if tag ID is missing, and if autoload, add to the database for this name
             if (!$tagIDhash->{$tagseqname}) {
-                $logger->error("Missing tag name $tagseqname ("
-                              . ($sequence || 'no sequence available')
-                              . ") in TAGSEQUENCE database");
+                $logger->debug("Missing tag name $tagseqname "
+                              ."in TAGSEQUENCE database");
                 next unless $options{autoload}; # allow sequence to be null
 # add tag name and sequence, if any, to TAGSEQUENCE list
 	        my $tag_seq_id = &insertTagSequence($dbh,$tagseqname,$sequence);
          	if ($tag_seq_id) {
                     $tagIDhash->{$tagseqname} = $tag_seq_id;                
                     $tagSQhash->{$tagseqname} = $sequence if $sequence;
+                    $logger->info("Tag name $tagseqname ("
+                                 .($sequence||'no sequence available')
+                                 ." entered in TAGSEQUENCE database"
+                                 ." as $tag_seq_id"); 
                 }
             }
             elsif (!$tagSQhash->{$tagseqname}) {
