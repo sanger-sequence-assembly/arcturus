@@ -250,7 +250,7 @@ public class TestContigTransferRequestManager {
 				return;
 			}
 			
-			ctrm.executeContigTransferRequest(request, reviewer);
+			ctrm.executeContigTransferRequest(request, reviewer, true);
 			
 			request = ctrm.findContigTransferRequest(request_id);
 			

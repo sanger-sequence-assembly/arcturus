@@ -112,7 +112,7 @@ public class ProjectImporter extends Thread {
 			ProjectChangeEvent event = new ProjectChangeEvent(this, proxy
 					.getProject(), ProjectChangeEvent.IMPORTED);
 			
-			proxy.getProject().getArcturusDatabase().notifyProjectChangeEventListeners(event);
+			proxy.getProject().getArcturusDatabase().notifyProjectChangeEventListeners(event, null);
 		}
 	}
 }

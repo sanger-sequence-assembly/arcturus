@@ -1241,22 +1241,22 @@ public class ArcturusDatabase {
 	}
 
 	public synchronized void executeContigTransferRequest(
-			ContigTransferRequest request, Person reviewer)
+			ContigTransferRequest request, Person reviewer, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException {
 		contigTransferRequestManager.executeContigTransferRequest(request,
-				reviewer);
+				reviewer, notifyListeners);
 	}
 
 	public synchronized void executeContigTransferRequest(int requestId,
-			Person reviewer) throws ContigTransferRequestException,
+			Person reviewer, boolean notifyListeners) throws ContigTransferRequestException,
 			SQLException {
 		contigTransferRequestManager.executeContigTransferRequest(requestId,
-				reviewer);
+				reviewer, notifyListeners);
 	}
 
-	public synchronized void executeContigTransferRequest(int requestId)
+	public synchronized void executeContigTransferRequest(int requestId, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.executeContigTransferRequest(requestId);
+		contigTransferRequestManager.executeContigTransferRequest(requestId, notifyListeners);
 	}
 
 	public synchronized void setDebugging(boolean debugging) {
@@ -1320,8 +1320,8 @@ public class ArcturusDatabase {
 		projectChangeEventNotifier.removeProjectChangeEventListener(listener);
 	}
 
-	public void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
-		projectChangeEventNotifier.notifyProjectChangeEventListeners(event);
+	public void notifyProjectChangeEventListeners(ProjectChangeEvent event, Class listenerClass) {
+		projectChangeEventNotifier.notifyProjectChangeEventListeners(event, listenerClass);
 	}
 
 	/*

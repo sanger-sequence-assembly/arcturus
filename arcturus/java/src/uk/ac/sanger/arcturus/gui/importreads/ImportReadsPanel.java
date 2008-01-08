@@ -263,7 +263,7 @@ public class ImportReadsPanel extends MinervaPanel {
 				ProjectChangeEvent event = new ProjectChangeEvent(this,
 						project, ProjectChangeEvent.CONTIGS_CHANGED);
 
-				adb.notifyProjectChangeEventListeners(event);
+				adb.notifyProjectChangeEventListeners(event, null);
 			}
 		} catch (SQLException sqle) {
 			Arcturus

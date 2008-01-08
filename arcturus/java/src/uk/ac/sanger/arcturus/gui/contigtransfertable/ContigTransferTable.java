@@ -8,8 +8,8 @@ import javax.swing.ListSelectionModel;
 
 import java.sql.SQLException;
 import java.text.*;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.*;
@@ -242,7 +242,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 
 		if (rc == JOptionPane.YES_OPTION) {
 			try {
-				adb.executeContigTransferRequest(request, me);
+				adb.executeContigTransferRequest(request, me, true);
 				ContigTransferRequestNotifier.getInstance().processAllQueues();
 				refresh();
 			} catch (ContigTransferRequestException e) {
@@ -283,54 +283,35 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 				options, options[1]);
 
 		if (rc == JOptionPane.YES_OPTION) {
-			HashSet<ContigTransferRequestException> failures = new HashSet<ContigTransferRequestException>();
-			
 			int[] rows = getSelectedRows();
-
-			for (int i = 0; i < rows.length; i++) {
-				ContigTransferRequest request = ((ContigTransferTableModel) getModel())
-						.getRequestForRow(rows[i]);
-
-				try {
-					if (newStatus == ContigTransferRequest.DONE)
-						adb.executeContigTransferRequest(request, me);
-					else
-						adb.reviewContigTransferRequest(request, me, newStatus);
-				} catch (ContigTransferRequestException e) {
-					failures.add(e);
-				} catch (SQLException e) {
-					Arcturus
-							.logWarning(
-									"SQL exception whilst updating a contig transfer request",
-									e);
-				}
-			}
 			
-			if (! failures.isEmpty())
-				notifyMultipleFailures(failures, newStatus);
-
-			ContigTransferRequestNotifier.getInstance().processAllQueues();
-
-			refresh();
+			ContigTransferRequest[] requests = new ContigTransferRequest[rows.length];
+			
+			ContigTransferTableModel model = (ContigTransferTableModel) getModel();
+			
+			for (int i = 0; i < rows.length; i++)
+				requests[i] = model.getRequestForRow(i);
+			
+			ProgressMonitor monitor = new ProgressMonitor(this,
+					"Processing contig transfer requests",
+					"Processing " + requests.length + " requests", 0, requests.length);
+			
+			monitor.setMillisToDecideToPopup(50);
+			monitor.setMillisToPopup(100);
+			
+			ContigTransferWorker worker = new ContigTransferWorker(this, adb, requests, newStatus, monitor);
+			
+			worker.execute();
 		}
 	}
 
-	private void notifyMultipleFailures(HashSet<ContigTransferRequestException> failures, int newStatus) {
-		Iterator<ContigTransferRequestException> iterator = failures.iterator();
-		
-		if (failures.size() == 1) {
-			notifyFailure(iterator.next(), newStatus);
-			return;
-		}
-		
+	protected void notifyMultipleFailures(Set<ContigTransferRequestException> failures, int newStatus) {
 		if (warningFrame == null)
 			warningFrame = new WarningFrame("Contig Transfer Errors");
 		
 		warningFrame.clearText();
 		
-		while (iterator.hasNext()) {
-			ContigTransferRequestException ctre = iterator.next();
-			
+		for (ContigTransferRequestException ctre : failures) {
 			ContigTransferRequest request = ctre.getRequest();
 			
 			String reason = ctre.getMessage();
