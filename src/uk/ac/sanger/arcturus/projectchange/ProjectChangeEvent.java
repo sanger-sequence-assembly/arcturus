@@ -20,10 +20,18 @@ public class ProjectChangeEvent extends EventObject {
 		this.type = type;
 	}
 
+	public void setProject(Project project) {
+		this.project = project;
+	}
+	
 	public Project getProject() {
 		return project;
 	}
 
+	public void setType(int type) {
+		this.type = type;
+	}
+	
 	public int getType() {
 		return type;
 	}

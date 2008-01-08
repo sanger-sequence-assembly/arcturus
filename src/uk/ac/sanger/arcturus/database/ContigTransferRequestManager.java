@@ -715,7 +715,7 @@ public class ContigTransferRequestManager {
 	}
 
 	public void executeContigTransferRequest(ContigTransferRequest request,
-			Person reviewer) throws ContigTransferRequestException,
+			Person reviewer, boolean notifyListeners) throws ContigTransferRequestException,
 			SQLException {
 		int oldStatus = request.getStatus();
 
@@ -745,19 +745,21 @@ public class ContigTransferRequestManager {
 
 		notifier.notifyRequestStatusChange(reviewer, request, oldStatus);
 		
-		Project project = request.getOldProject();
+		if (notifyListeners) {
+			Project project = request.getOldProject();
 		
-		ProjectChangeEvent event = new ProjectChangeEvent(this,
-				project, ProjectChangeEvent.CONTIGS_CHANGED);
+			ProjectChangeEvent event = new ProjectChangeEvent(this,
+					project, ProjectChangeEvent.CONTIGS_CHANGED);
 
-		adb.notifyProjectChangeEventListeners(event);
+			adb.notifyProjectChangeEventListeners(event, null);
 		
-		project = request.getNewProject();
+			project = request.getNewProject();
 		
-		event = new ProjectChangeEvent(this,
-				project, ProjectChangeEvent.CONTIGS_CHANGED);
+			event = new ProjectChangeEvent(this,
+					project, ProjectChangeEvent.CONTIGS_CHANGED);
 
-		adb.notifyProjectChangeEventListeners(event);
+			adb.notifyProjectChangeEventListeners(event, null);
+		}
 	}
 
 	protected void executeRequest(ContigTransferRequest request)
@@ -821,15 +823,15 @@ public class ContigTransferRequestManager {
 					mode == SOURCE_PROJECT ? "Source project is locked" : "Destination project is locked");
 	}
 
-	public void executeContigTransferRequest(int requestId, Person reviewer)
+	public void executeContigTransferRequest(int requestId, Person reviewer, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException {
 		ContigTransferRequest request = findContigTransferRequest(requestId);
-		executeContigTransferRequest(request, reviewer);
+		executeContigTransferRequest(request, reviewer, notifyListeners);
 	}
 
-	public void executeContigTransferRequest(int requestId)
+	public void executeContigTransferRequest(int requestId, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException {
-		executeContigTransferRequest(requestId, PeopleManager.findMe());
+		executeContigTransferRequest(requestId, PeopleManager.findMe(), notifyListeners);
 	}
 
 	public static String prettyPrint(ContigTransferRequest request) {

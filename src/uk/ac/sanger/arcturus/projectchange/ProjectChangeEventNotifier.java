@@ -34,7 +34,8 @@ public class ProjectChangeEventNotifier {
 		}
 	}
 	
-	public synchronized void notifyProjectChangeEventListeners(ProjectChangeEvent event) {
+	public synchronized void notifyProjectChangeEventListeners(ProjectChangeEvent event,
+			Class listenerClass) {
 		Project project = event.getProject();
 		
 		if (project == null)
@@ -43,15 +44,18 @@ public class ProjectChangeEventNotifier {
 		Set<ProjectChangeEventListener> listeners = listenerMap.get(project);
 		
 		if (listeners != null && !listeners.isEmpty()) {
-			for (ProjectChangeEventListener listener : listeners)
-				listener.projectChanged(event);			
+			for (ProjectChangeEventListener listener : listeners) {
+				if (listenerClass == null || listenerClass.isInstance(listener))
+					listener.projectChanged(event);			
+			}
 		}
 		
 		listeners = listenerMap.get(ANY_PROJECT);
 		
 		if (listeners != null && !listeners.isEmpty()) {
 			for (ProjectChangeEventListener listener : listeners)
-				listener.projectChanged(event);
+				if (listenerClass == null || listenerClass.isInstance(listener))
+					listener.projectChanged(event);
 		}		
 	}
 }

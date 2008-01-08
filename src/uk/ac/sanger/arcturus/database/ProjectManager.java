@@ -578,7 +578,7 @@ public class ProjectManager extends AbstractManager {
 		ProjectChangeEvent event = new ProjectChangeEvent(this, project,
 				ProjectChangeEvent.LOCK_CHANGED);
 
-		adb.notifyProjectChangeEventListeners(event);
+		adb.notifyProjectChangeEventListeners(event, null);
 	}
 
 	public void setProjectOwner(Project project, Person person)

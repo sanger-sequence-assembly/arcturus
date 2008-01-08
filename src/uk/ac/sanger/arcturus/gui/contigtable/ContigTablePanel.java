@@ -348,7 +348,6 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		System.err.println("ContigTablePanel received " + event);
 		refresh();
 	}
 }
