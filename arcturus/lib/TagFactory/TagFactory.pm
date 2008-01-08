@@ -1062,7 +1062,8 @@ sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
 
     return undef unless &verifyParameter($tag,'oldtranspose');
 
-print STDERR "TagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
+    my $logger = &verifyLogger('oldtranspose');
+$logger->debug("used a:$align o:@$offset w:$window");
 
 # transpose the position range using the offset info. An undefined offset
 # indicates a boundery outside the range 1 .. length; adjust accordingly
@@ -1071,7 +1072,7 @@ print STDERR "TagFactory::oldtranspose used a:$align o:@$offset w:$window\n";
 
     my @tpos = $tag->getPosition();
     
-print STDERR "oldtranspose: position @tpos \n";
+$logger->debug("position @tpos");
 
     for my $i (0,1) {
         $tpos[$i] *= $align if ($align eq -1);
@@ -1085,8 +1086,9 @@ print STDERR "oldtranspose: position @tpos \n";
 
 # adjust boundaries to ensure tag position inside allowed window
     
-print STDERR "oldtranspose: new position @tpos \n";
-    my $truncated;
+$logger->debug("new position @tpos");
+ 
+   my $truncated;
     for my $i (0,1) {
         if ($tpos[$i] > $window) {
             $tpos[$i] = $window;
@@ -1097,7 +1099,8 @@ print STDERR "oldtranspose: new position @tpos \n";
             $truncated++;
 	}
     }
-print STDERR "oldtranspose: new position after truncate test  @tpos \n";
+
+$logger->debug("new position after truncate test");
 
     @tpos = sort {$a <=> $b} @tpos if @tpos;
 
@@ -1140,9 +1143,6 @@ print STDERR "oldtranspose: new position after truncate test  @tpos \n";
 # TAGSEQUENCE table items
     $newtag->setTagSequenceName($tag->getTagSequenceName()); 
     $newtag->setDNA($tag->getDNA());
-
-#print STDOUT "transpose in  : ".$tag->writeToCaf();  
-#print STDOUT "transpose out : ".$newtag->writeToCaf();  
 
     return $newtag;
 }
@@ -1485,7 +1485,7 @@ if ($options{debug} && $options{debug}>1) {
     $newtag->setComment($comment) if $comment;
     $newtag->setTagComment($newcomment) if $newcomment;
 
-$newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
+#$newtag->writeToCaf(*STDOUT,annotag=>1) if $options{debug};
 
     return $newtag;
 }
@@ -1793,6 +1793,9 @@ sub verifyLogger {
 
             $LOGGER->setPrefix($prefix);
         }
+
+        $LOGGER->debug('ENTER') if shift;
+
         return $LOGGER;
     }
 
