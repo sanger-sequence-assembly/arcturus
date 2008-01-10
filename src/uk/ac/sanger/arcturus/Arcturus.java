@@ -22,11 +22,34 @@ public class Arcturus {
 
 	protected static Properties arcturusProps = new Properties(System.getProperties());
 	protected static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
+	
+	protected static long jarFileTimestamp = 0L;
 
 	static {
+		setJarFileTimestamp();
 		loadProperties();
 		initialiseLogging();
 		initialiseJMXRemoteServer();
+	}
+	
+	private static void setJarFileTimestamp() {
+		String jarfilename = System.getProperty("arcturus.jar");
+		
+		if (jarfilename != null) {
+			File jarfile = new File(jarfilename);
+			
+			if (jarfile.exists())
+				jarFileTimestamp = jarfile.lastModified();
+		}
+		
+		if (jarFileTimestamp > 0) {
+			java.util.Date date = new java.util.Date(jarFileTimestamp); 		
+			System.err.println("JAR file was last modified at " + date);
+		}
+	}
+	
+	public static long getJarFileTimestamp() {
+		return jarFileTimestamp;
 	}
 	
 	private static void loadProperties() {
