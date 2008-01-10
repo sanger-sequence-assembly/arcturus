@@ -8,7 +8,6 @@ import javax.swing.ListSelectionModel;
 
 import java.sql.SQLException;
 import java.text.*;
-import java.util.Iterator;
 import java.util.Set;
 
 import uk.ac.sanger.arcturus.Arcturus;
@@ -276,8 +275,10 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 		Object[] options = { "Yes", "No" };
 
 		String verb = ContigTransferRequest.getStatusVerb(newStatus);
+		
+		Component window = SwingUtilities.getRoot(this);
 
-		int rc = JOptionPane.showOptionDialog(this, "Do you really want to "
+		int rc = JOptionPane.showOptionDialog(window, "Do you really want to "
 				+ verb + " these requests?", "Please confirm the command",
 				JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE, null,
 				options, options[1]);
@@ -292,7 +293,7 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 			for (int i = 0; i < rows.length; i++)
 				requests[i] = model.getRequestForRow(i);
 			
-			ProgressMonitor monitor = new ProgressMonitor(this,
+			ProgressMonitor monitor = new ProgressMonitor(window,
 					"Processing contig transfer requests",
 					"Processing " + requests.length + " requests", 0, requests.length);
 			
