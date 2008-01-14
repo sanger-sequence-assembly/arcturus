@@ -143,6 +143,8 @@ sub addAlignToTrace {
 
     my @array = @$value; # be sure it's an array ref 
 
+    return 0 if ($value->[2] == 0 && $value->[3] == 0); # invalid alignment
+
     push @{$this->{alignToTrace}}, [@array];
 }
 
