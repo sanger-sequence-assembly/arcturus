@@ -149,6 +149,13 @@ sub getAverageCover {
 
 #-------------------------------------------------------------------   
 
+sub setCheckSum {
+    my $this = shift;
+    $this->{data}->{checksum} = shift;
+}
+
+#-------------------------------------------------------------------   
+
 sub getConsensusLength {
     my $this = shift;
     $this->importSequence() unless defined($this->{data}->{clength});
@@ -523,6 +530,7 @@ sub getTags {
 # sort tags and remove duplicates / merge coinciding tags
 
     if ($options{sort} || $options{merge}) {
+#        TagFactory->sortContigTags($this,%options); # ??
         ContigHelper->sortContigTags($this,%options);
     }
 
