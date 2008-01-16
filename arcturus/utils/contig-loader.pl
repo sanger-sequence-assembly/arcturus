@@ -165,7 +165,7 @@ $logger->setBlock('special',unblock=>1) if $debug; # defaults to STDOUT
 &showUsage(0,"Missing database instance") unless $instance;
 
 my $adb = new ArcturusDatabase (-instance => $instance,
-		                -organism => $organism);
+	   	                -organism => $organism);
 
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
@@ -258,7 +258,7 @@ foreach my $imode (@projectinheritance) {
 unless ($identified) {
     $logger->error("Invalid project inheritance option: $pinherit");
     $logger->error("Options available: none, readcount, contiglength, contigcount");
-    $adb->disconnect();
+    $adb->disconnect() if $adb;
     exit 2; # exit with error status
 }
 
@@ -296,7 +296,7 @@ unless ($nolock) {
     unless ($lockstatus) {
 	$logger->error("Project $pidentifier could not be locked: $msg");
         $logger->error("import ABORTED");
-        $adb->disconnect();
+        $adb->disconnect() if $adb;
         exit 2; # exit with error status
     }
     $logger->warning($msg);
@@ -420,6 +420,7 @@ while (defined($record = <$CAF>)) {
 #            $logger->info("is not Padded set to $isUnpadded ");
             if (!$isUnpadded && !$usePadded) {
                 $logger->severe("Padded assembly not accepted");
+                $isTruncated = 1;
                 last;
             }
         }
@@ -953,11 +954,16 @@ my $loaded = 0;
 my $lastinsertedcontig = 0;
 foreach my $identifier (keys %contigs) {
 
-    last if ($noload && $notest);
+    my $contig = $contigs{$identifier};
+
+    if ($noload && $notest) {
+	last unless $list;
+        $contig->writeToCaf(*STDOUT);
+        next;
+    }
 
 # minimum number of reads test
 
-    my $contig = $contigs{$identifier};
     if ($contig->getNumberOfReads() < $minOfReads) {
         $logger->warning("$identifier has less than $minOfReads reads");
         next;
@@ -1141,7 +1147,7 @@ sub tagList {
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SIL' ,'IRPT','LINE','REPA','REPY',
                  'REPZ','FICM','VARD','VARS','CSED','CONS','EXON',
-                 'SILR','DIFF');
+                 'SILR','DIFF','FWGS');
 
 # software TAGS
 
