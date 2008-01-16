@@ -26,7 +26,7 @@ my $lineLimit;             # specifying a line limit implies test mode
 my $cnFilter = '';         # test contig names for this substring or RE
 my $cnBlocker;             # contig name blocker, ignore contig names of age 0
 my $rnBlocker;             # ignore reads like pattern
-my $minOfReads = 2;        # default require at least 2 reads per contig
+my $minOfReads = 1;        # default load all contigs, including single-read
 my $loadreadtags = 1;      # default load read tags
 my $readtaglist;           # allows specification of individual tags
 my $contigtag = 2;         # contig tag processing
@@ -1375,7 +1375,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-minimum\tnumber of reads per contig (default 2)\n";
+    print STDERR "-minimum\tnumber of reads per contig (default 1 i.e. all contigs)\n";
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
