@@ -164,6 +164,9 @@ sub getContig {
         my $project = shift @attributes;
         $contig->setProject($project);
 
+        my $checksum = shift @attributes;
+        $contig->setCheckSum($checksum);
+
 	$contig->setArcturusDatabase($this);
     }
 
@@ -490,7 +493,7 @@ sub putContig {
     my $message;
     if ($previous) {
         $message = "Contig $contigname matches contig "
-                 .  $previous->getContigName();
+                 .  $previous->getContigName()  . " ($readhash) ";
 # the read name hash or the sequence IDs hash does match: test generation
         unless ($this->isCurrentContigID($previous->getContigID())) {
             $message .= " in an older generation; ";
@@ -511,7 +514,7 @@ sub putContig {
 
     if ($previous) {
 # pull out previous contig mappings and compare them one by one with contig's
-        $this->getReadMappingsForContig($previous);
+        $previous->getMappings(1); # delayed loading
 
         if ($contig->isEqual($previous)) {
 # add the contig ID to the contig
@@ -666,11 +669,12 @@ sub putContig {
 	    }
 	}
 # remove the parent contigs to enable garbage collection
-        my $parents = $contig->getParentContigs();
-        foreach my $parent (@$parents) {
-            $parent->erase();
-        } 
-        undef @$parents;
+        if ($noload && (my $parents = $contig->getParentContigs())) {
+            foreach my $parent (@$parents) {
+                $parent->erase();
+            } 
+            undef @$parents;
+	}
     }
     else {
 # the contig has no precursor, is completely new
@@ -740,6 +744,15 @@ sub putContig {
             $this->logMessage(@$message); # owner, projects, text
         }
 
+    }
+
+# remove the parent contigs to enable garbage collection, if any
+
+    if (my $parents = $contig->getParentContigs()) {
+        foreach my $parent (@$parents) {
+            $parent->erase();
+        } 
+        undef @$parents;
     }
 
     return $contigid, $message;
@@ -963,7 +976,8 @@ sub putMetaDataForContig {
 
     my @data = ($contig->getGap4Name(),
                 $contig->getConsensusLength() || 0,
-                $contig->hasParentContigs(),
+                $contig->getNumberOfParentContigs(),
+#                $contig->hasParentContigs(),
                 $contig->getNumberOfReads(),
                 $contig->getNumberOfNewReads(),
                 $contig->getAverageCover(),
