@@ -302,11 +302,11 @@ print STDOUT "Importing into Arcturus\n";
 
 $command  = "$import_script -instance $instance -organism $organism "
           . "-caf $depadded -defaultproject $projectname "
-          . "-gap4name ${pwd}/$gap4name.$version";
+          . "-gap4name ${pwd}/$gap4name.$version "
+          . "-minimum 1";
 $command .= " @ARGV" if @ARGV; # pass on any remaining input
 
-print STDERR "$command\n" if @ARGV;
-# exit 0 if @ARGV;
+print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
 
 system ($command);
 
@@ -314,7 +314,9 @@ system ($command);
 #             1 (or 256) for no contigs imported, but no errors
 #             2 (or 512) for an error status 
 
-my $status = $?; 
+my $status = $?;
+
+#$status = int($status/256) if ($status > 128);
 
 if ($status && ($status == 2 || $status == 512)) {
     print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
@@ -378,6 +380,7 @@ else {
 #-------------------------------------------------------------------------------
 
 unless ($keep) {
+
     print STDOUT "Cleaning up\n";
 
     system ("rm -f $padded $depadded");
