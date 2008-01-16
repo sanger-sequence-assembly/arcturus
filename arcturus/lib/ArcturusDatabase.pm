@@ -743,7 +743,7 @@ sub verifyPrivilege {
 
     my %privileges = ('create_project'   => 2,'assign_project'  => 3,
                       'grant_privileges' => 4,'move_any_contig' => 1,
-                      'lock_project'     => 1);
+                      'lock_project'     => 4);
 
     return $privileges{$privilege} if defined($privilege); # return true or false
 
