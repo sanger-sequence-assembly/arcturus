@@ -283,14 +283,16 @@ else {
 # acquire lock on project
 #----------------------------------------------------------------
 
+my $lockstatusfound;
+
 unless ($nolock) {
-# test if the project is locked
-#    if ($project->getLockedStatus()) {
-#	$logger->error("Project $pidentifier is locked: import ABORTED");
-# prepare mail message
-#        $adb->disconnect();
-#        exit 2;
-#    }
+
+# Here only probe the current lock status; if locked do not unlock afterwards
+
+    $lockstatusfound = $project->getLockedStatus();
+
+# now try to acquire the lock; if already locked this will only succeed if
+# this user already owns the lock
      
     my ($lockstatus,$msg) = $project->acquireLock();
     unless ($lockstatus) {
@@ -1124,7 +1126,10 @@ if ($lastinsertedcontig && $safemode) {
 
 # $adb->updateMetaData;
 
-$project->releaseLock() || $logger->severe("could not release lock");
+unless ($lockstatusfound) {
+# the project was not locked before; return project to this state
+    $project->releaseLock() || $logger->severe("could not release lock");
+}
 
 $adb->disconnect();
 
