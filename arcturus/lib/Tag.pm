@@ -49,6 +49,17 @@ sub copy {
 
 #----------------------------------------------------------------------
 
+#use TagFactory::TagFactory_new; # helper class
+
+sub verify {
+# process tag comment(s) and test tag for completeness & content validity
+    my $this = shift;
+
+    return TagFactory_new->verifyTagContent($this);
+}
+
+#----------------------------------------------------------------------
+
 sub setComment {
     my $this = shift;
     my $text = shift;
@@ -298,7 +309,7 @@ sub getSequenceID {
 
 # measures of tag size
 
-  sub getSize {
+sub getSize {
 # returns total sequence length occupied by tag 
     my $this = shift;
 
@@ -384,6 +395,9 @@ sub setTagComment {
 sub getTagComment {
     my $this = shift;
     my %options = @_;
+
+print STDERR "getTagComment: options : '@_'\n" if (scalar(@_)%2);
+exit 1 if (scalar(@_)%2);
 # before export, process possible place holder (<name>)
     if ($this->{tagcomment} && $this->{tagcomment} =~ /\</) {
         TagFactory->processTagPlaceHolderName($this) unless $options{pskip};
@@ -522,7 +536,7 @@ sub remap {
     &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
                                   'break','nobreak','segmentaware',
- 'usenew','list','useold', 
+'usenew','list','useold', # to be removed later
                                   'minimumsegmentsize',        
                                   'annooptions','sysIDoptions','changestrand');
 
@@ -623,16 +637,22 @@ sub writeToCaf {
 
     elsif ($host eq 'Read') {
 # standard output of tag with position and tag comment (including ANNO)
-        $string .= "@pos "; 
-        $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
-        $string .= "\"$tagcomment\"" if $tagcomment;
+        $string .= "@pos ";
+        if ($tagcomment) {
+            $tagcomment =~ s/\n/\\n\\/g; # new-line to caf format
+            $tagcomment =~ s/\\n\\/\\n\\\n/g; # if there are others
+            $string .= "\"$tagcomment\"";
+	}
         $string .= "\n";
     }
     elsif ($host eq 'Contig') {
 # standard output of tag with position and tag comment (except ANNO)
         $string .= "@pos "; 
-        $tagcomment =~ s/\\n\\/\\n\\\n/g if $tagcomment;
-        $string .= "\"$tagcomment\"" if $tagcomment;
+        if ($tagcomment) {
+            $tagcomment =~ s/\n/\\n\\/g; # new-line to caf format
+            $tagcomment =~ s/\\n\\/\\n\\\n/g; # if there are others
+            $string .= "\"$tagcomment\"";
+	}
         $string .= "\n";
 # if comment available add an INFO tag
         if ($comment && $options{infotag}) {
