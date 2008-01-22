@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.database;
 
 import java.io.File;
+import java.io.IOException;
 import java.sql.*;
 
 import javax.sql.*;
@@ -1045,7 +1046,7 @@ public class ArcturusDatabase {
 	}
 	
 	public synchronized boolean createNewProject(Assembly assembly, String name, Person owner,
-			String directory) throws SQLException {
+			String directory) throws SQLException, IOException {
 		return projectManager.createNewProject(assembly, name, owner, directory);
 	}
 	

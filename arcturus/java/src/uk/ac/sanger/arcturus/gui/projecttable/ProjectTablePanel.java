@@ -11,6 +11,7 @@ import java.awt.event.*;
 import java.awt.print.PrinterException;
 
 import java.io.File;
+import java.io.IOException;
 import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.Arcturus;
@@ -502,8 +503,14 @@ public class ProjectTablePanel extends MinervaPanel implements
 							JOptionPane.WARNING_MESSAGE);
 				else
 					Arcturus.logSevere(
-									"An error occurred when trying to create a new project",
-									e);
+							"An error occurred when trying to create a new project",
+							e);
+			}
+			catch (IOException ioe) {
+				Arcturus.logSevere(
+							"An error occurred when trying to create a new project",
+							ioe);
+				
 			}
 		}
 
