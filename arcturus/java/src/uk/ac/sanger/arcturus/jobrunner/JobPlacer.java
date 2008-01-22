@@ -67,4 +67,18 @@ public class JobPlacer {
 	public int getExitValue() {
 		return rc;
 	}
+
+    public static final void main(String[] args) {
+	try {
+	    JobPlacer placer = new JobPlacer();
+	    String host = placer.findHost();
+	    System.out.println("findHost returned " + host);
+	}
+	catch (Exception e) {
+	    e.printStackTrace();
+	}
+	finally {
+	    System.exit(0);
+	}
+    }
 }
