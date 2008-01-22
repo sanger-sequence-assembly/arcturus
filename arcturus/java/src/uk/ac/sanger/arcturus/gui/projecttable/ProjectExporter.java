@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
-import java.io.IOException;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 
@@ -35,7 +34,7 @@ public class ProjectExporter extends Thread {
 
 		try {
 			host = placer.findHost();
-		} catch (IOException e) {
+		} catch (Exception e) {
 			Arcturus.logWarning("Unable to find a host for the job", e);
 			return;
 		}
