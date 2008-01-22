@@ -39,7 +39,7 @@ public class JobPlacer {
 	private int rc = INVALID;
 	private Runtime runtime = Runtime.getRuntime();
 
-	public String findHost() throws IOException {
+	public String findHost() throws Exception {
 		rc = INVALID;
 
 		Process process = runtime.exec(command);
@@ -61,7 +61,10 @@ public class JobPlacer {
 			e.printStackTrace();
 		}
 
-		return rc == 0 ? host : null;
+		if (rc == 0 && host != null)
+			return host;
+		else
+			throw new Exception("Failed to find a host using \"" + command + "\"");
 	}
 
 	public int getExitValue() {
