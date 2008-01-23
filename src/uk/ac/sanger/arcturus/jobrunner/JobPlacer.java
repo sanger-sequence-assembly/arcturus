@@ -64,7 +64,7 @@ public class JobPlacer {
 		if (rc == 0 && host != null)
 			return host;
 		else
-			throw new Exception("Failed to find a host using \"" + command + "\"");
+			throw new Exception("Failed to find a host using \"" + command[2] + "\"");
 	}
 
 	public int getExitValue() {
