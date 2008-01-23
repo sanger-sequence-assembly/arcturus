@@ -39,6 +39,7 @@ my $endregiontrim;
 my $clipsymbol;
 my $gap4name;
 my $preview;
+my $append = 0;
 
 my $METHOD = 1; # test construction
 
@@ -46,7 +47,7 @@ my $validKeys  = "organism|instance|project|assembly|fopn|ignore|caf|maf|"
                . "readsonly|fasta|quality|lock|minNX|minerva|"
                . "mask|symbol|shrink|qualityclip|qc|qclipthreshold|qct|"
                . "qclipsymbol|qcs|endregiontrim|ert|gap4name|g4n|padded|"
-               . "preview|confirm|batch|verbose|debug|help|test";
+               . "preview|confirm|batch|verbose|debug|help|test|append";
 
 while (my $nextword = shift @ARGV) {
 
@@ -100,6 +101,8 @@ while (my $nextword = shift @ARGV) {
         $caffile     = shift @ARGV  if ($nextword eq '-caf');   # '0' for STDOUT
         $maffile     = shift @ARGV  if ($nextword eq '-maf');   # cannot be '0'
     }
+
+    $append      = 1            if ($nextword eq '-append');
 
     $minNX       = shift @ARGV  if ($nextword eq '-minNX');
 
@@ -197,10 +200,9 @@ if ($padded && (defined($fastafile) || defined($maffile))) {
 my ($fhDNA, $fhQTY, $fhRDS);
 
 unless ($preview) {
-
     if (defined($caffile) && $caffile) {
         $caffile .= '.caf' unless ($caffile =~ /\.caf$|null/);
-        $fhDNA = new FileHandle($caffile, "w");
+        $fhDNA = new FileHandle($caffile, $append ? "a" : "w");
         &showUsage("Failed to create CAF output file \"$caffile\"") unless $fhDNA;
     }
     elsif (defined($caffile)) {
@@ -209,10 +211,10 @@ unless ($preview) {
 
     if (defined($fastafile) && $fastafile) {
         $fastafile .= '.fas' unless ($fastafile =~ /\.fas$|null/);
-        $fhDNA = new FileHandle($fastafile, "w");
+        $fhDNA = new FileHandle($fastafile, $append ? "a" : "w");
         &showUsage("Failed to create FASTA sequence output file \"$fastafile\"") unless $fhDNA;
         if (defined($qualityfile)) {
-            $fhQTY = new FileHandle($qualityfile, "w"); 
+            $fhQTY = new FileHandle($qualityfile, $append ? "a" : "w"); 
   	    &showUsage("Failed to create FASTA quality output file \"$qualityfile\"") unless $fhQTY;
         }
         elsif ($fastafile eq '/dev/null') {
@@ -513,6 +515,8 @@ sub showUsage {
     print STDERR "-qualityclip\tRemove low quality pads (default '*')\n";
     print STDERR "-qclipsymbol\t(qcs) use specified symbol as low quality pad\n";
     print STDERR "-qclipthreshold\t(qct) clip quality values below threshold\n";
+    print STDERR "\n";
+    print STDERR "-append\t\tappend output to named file\n";
     print STDERR "\n";
     print STDERR "-minNX\t\treplace runs of at least minNX 'N's by 'X'-es\n";
     print STDERR "\n";
