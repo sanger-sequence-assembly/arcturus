@@ -25,4 +25,4 @@ jmxdb.password=***REMOVED***
 
 jobplacer.prefix=ssh
 jobplacer.host=seq1
-jobplacer.command=lsplace -R "mem>8000"
+jobplacer.command=/software/arcturus/utils/find_a_host.csh
