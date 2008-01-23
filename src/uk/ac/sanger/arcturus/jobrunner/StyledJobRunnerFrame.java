@@ -5,6 +5,8 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.io.PrintWriter;
+
 import javax.swing.*;
 import javax.swing.text.*;
 import javax.swing.border.Border;
@@ -22,9 +24,13 @@ public class StyledJobRunnerFrame extends JFrame implements JobRunnerClient {
 	
 	protected JButton btnClose = new JButton("Close");
 	
+	protected PrintWriter log = null;
+	
 	public StyledJobRunnerFrame(String hostname, String workingDirectory,
-			String command, String caption) {
+			String command, String caption, PrintWriter log) {
 		super(caption);
+		
+		this.log = log;
 		
 		JPanel mainpanel = new JPanel(new BorderLayout());
 
@@ -79,10 +85,20 @@ public class StyledJobRunnerFrame extends JFrame implements JobRunnerClient {
 
 	public void appendToStdout(String text) {
 		document.appendToStdout(text);
+		
+		if (log != null) {
+			log.print(text);
+			log.flush();
+		}
 	}
 
 	public void appendToStderr(String text) {
 		document.appendToStderr(text);
+		
+		if (log != null) {
+			log.print(text);
+			log.flush();
+		}
 	}
 
 	public void setStatus(String text) {
@@ -90,6 +106,7 @@ public class StyledJobRunnerFrame extends JFrame implements JobRunnerClient {
 	}
 	
 	public void done(int rc) {
+		log.close();
 		pbar.setIndeterminate(false);
 		pbar.setValue(pbar.getMaximum());
 		btnClose.setEnabled(true);
