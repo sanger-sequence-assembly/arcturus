@@ -1,4 +1,4 @@
-#!/bin/csh -f
+#!/bin/csh
 
 if ( ! $?LSF_ENVDIR ) then
   if ( -e /etc/lsf.conf ) then
