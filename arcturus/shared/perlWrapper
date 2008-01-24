@@ -7,7 +7,11 @@ set PERL_SCRIPT_NAME=${SCRIPT_HOME}/${SCRIPT_NAME}.pl
 
 set PERL_LIB_DIR=${SCRIPT_HOME}/../lib
 
-setenv PERL5LIB ${PERL_LIB_DIR}:${PERL5LIB}
+if ( $?PERL5LIB ) then
+  setenv PERL5LIB ${PERL_LIB_DIR}:${PERL5LIB}
+else
+  setenv PERL5LIB ${PERL_LIB_DIR}
+endif
 
 if ( -x ${PERL_SCRIPT_NAME} ) then
     exec ${PERL_SCRIPT_NAME} $*
