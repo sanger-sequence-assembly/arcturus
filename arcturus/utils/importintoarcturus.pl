@@ -21,7 +21,7 @@ my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 $arcturus_home =~ s?/utils/\.\.??;
 my $javabasedir   = "${arcturus_home}/utils";
-my $badgerbin     = "$ENV{BADGER}/bin";
+#my $badgerbin     = "$ENV{BADGER}/bin";
 
 #------------------------------------------------------------------------------
 # command line input parser
@@ -252,7 +252,8 @@ my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
 print STDOUT "Converting Gap4 database $gap4name.$version to CAF\n";
 
-system ("${badgerbin}/gap2caf -project $gap4name -version $version -ace $padded");
+#system ("${badgerbin}/gap2caf -project $gap4name -version $version -ace $padded");
+system ("gap2caf -project $gap4name -version $version -ace $padded");
 
 unless ($? == 0) {
     print STDERR "!! -- FAILED to create a CAF file from $gap4name.$version ($?) --\n";
@@ -262,7 +263,8 @@ unless ($? == 0) {
    
 print STDOUT "Depadding CAF file\n";
 
-system ("${badgerbin}/caf_depad < $padded > $depadded");
+#system ("/${badgerbin}/caf_depad < $padded > $depadded");
+system ("caf_depad < $padded > $depadded");
 
 unless ($? == 0) {
     print STDERR "!! -- FAILED to depad CAF file $padded ($?) --\n";
@@ -303,7 +305,7 @@ print STDOUT "Importing into Arcturus\n";
 $command  = "$import_script -instance $instance -organism $organism "
           . "-caf $depadded -defaultproject $projectname "
           . "-gap4name ${pwd}/$gap4name.$version "
-          . "-minimum 1";
+          . "-minimum 1 -dounlock";
 $command .= " @ARGV" if @ARGV; # pass on any remaining input
 
 print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
