@@ -36,7 +36,9 @@ my $assembly;
 my $pidentifier;           # projectname for which the data are to be loaded
 my $pinherit = 'readcount'; # project inheritance method
 my $isdefault = 0;
-my $nolock = 0;
+
+my $noacquirelock = 0;
+my $autolockmode = 1;
 
 my $lowMemory;             # specify to minimise memory usage
 my $usePadded = 0;         # 1 to allow a padded assembly
@@ -56,7 +58,8 @@ my $logLevel;              # default log warnings and errors only
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
                . "gap4name|g4n|"
-               . "setprojectby|spb|nolock|readtaglist|rtl|noreadtags|nrt|"
+               . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
+               . "noacquirelock|nal|dounlock|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
                . "frugal|padded|noload|safemode|verbose|batch|info|help|debug|contigtagdebug";
 
@@ -75,7 +78,10 @@ while (my $nextword = shift @ARGV) {
 
     $pidentifier      = shift @ARGV  if ($nextword eq '-project');
 
-    $nolock           = 1            if ($nextword eq '-nolock');
+    $noacquirelock    = 1            if ($nextword eq '-noacquirelock');
+    $noacquirelock    = 1            if ($nextword eq '-nal');
+
+    $autolockmode     = 0            if ($nextword eq '-dounlock');
 
     $pidentifier      = shift @ARGV  if ($nextword eq '-defaultproject');
     $isdefault        = 1            if ($nextword eq '-defaultproject');
@@ -242,7 +248,7 @@ if ($pidentifier) {
     }
 }
 
-unless ($project || $nolock) {
+unless ($project || $noacquirelock) {
     $logger->error("Undefined project");
     exit 2; # exit with error status
 }
@@ -283,13 +289,13 @@ else {
 # acquire lock on project
 #----------------------------------------------------------------
 
-my $lockstatusfound;
+my $lockedonentry;
 
-unless ($nolock) {
+unless ($noacquirelock) {
 
 # Here only probe the current lock status; if locked do not unlock afterwards
 
-    $lockstatusfound = $project->getLockedStatus();
+    $lockedonentry = $project->getLockedStatus();
 
 # now try to acquire the lock; if already locked this will only succeed if
 # this user already owns the lock
@@ -400,7 +406,7 @@ while (defined($record = <$CAF>)) {
 # extend the record if it ends in a continuation mark
 
     my $extend;
-    while ($record =~ /\\n\\\s*$/) {
+    while ($record =~ /\\n[\\]?\s*$/) {
         if (defined($extend = <$CAF>)) {
             chomp $extend;
             $record .= $extend;
@@ -411,6 +417,7 @@ while (defined($record = <$CAF>)) {
             $record .= '"' if ($record =~ /\"/); # closing quote
         }
     }
+    $record =~ s/\\n[\\]?\s*\"\s*$/\"/; # remove redundent continuation mark
 
 # test for padded/unpadded keyword and its consistence
 
@@ -629,7 +636,7 @@ while (defined($record = <$CAF>)) {
         elsif ($record =~ /Seq_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
             $read->addSequencingVector([$4, $2, $3]);
 # skip if continuation marks appear
-            while ($record =~ /\\n\\\s*$/) {
+            while ($record =~ /\\n\\\s*$/ || $record =~ /\\n\s*$/) {
                 if (defined($record = <$CAF>)) {
                     $lineCount++;
                 }
@@ -644,7 +651,7 @@ while (defined($record = <$CAF>)) {
             my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
 # test for a continuation mark (\n\); if so, read until no continuation mark
 	    $accumulatedrecord = '';
-            while ($record =~ /\\n\\\s*$/) {
+            while ($record =~ /\\n\\\s*$/ || $record =~ /\\n\s*$/) {
                 $accumulatedrecord .= $record;
 print STDERR "Extending Tag record ($lineCount)  .. SHOULD NOT OCCUR!!\n";
                 if (defined($record = <$CAF>)) {
@@ -844,7 +851,7 @@ print STDERR "Extending Tag record ($lineCount)  .. SHOULD NOT OCCUR!!\n";
             my $type = $1; my $tcps = $2; my $tcpf = $3; 
             my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
 # test for a continuation mark (\n\); if so, read until no continuation mark
-                while ($info =~ /\\n\\\s*$/) {
+                while ($info =~ /\\n\\\s*$/ || $info =~ /\\n\s*$/) {
                     if (defined($record = <$CAF>)) {
                         chomp $record;
                         $info .= $record;
@@ -1061,6 +1068,7 @@ if ($loadreadtags) {
         next unless $read->hasTags();
         push @reads, $read;
     }
+
     my $success = $adb->putTagsForReads(\@reads,autoload=>1);
     $logger->info("putTagsForReads success = $success");
 }
@@ -1126,7 +1134,7 @@ if ($lastinsertedcontig && $safemode) {
 
 # $adb->updateMetaData;
 
-unless ($lockstatusfound) {
+unless ($lockedonentry && $autolockmode) {
 # the project was not locked before; return project to this state
     $project->releaseLock() || $logger->severe("could not release lock");
 }
@@ -1186,7 +1194,6 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
         my $clutter = $1;
         my $cleanup = $clutter;
         $cleanup =~ s/\\n\\/-/g;
-#        $clutter =~ s/\\/\\\\/g; # quote backslash symbol
 	$cleanup = qw($cleanup);
 	$clutter = qw($cleanup);
         $change = 1 if ($info =~ s/$clutter/$cleanup/);
@@ -1195,6 +1202,7 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
 
 # split $info on blanks and \n\ separation symbols
 
+#    my @info = split /\s+|\\n[\\]?/,$info;
     my @info = split /\s+|\\n\\/,$info;
 
 # cleanup empty flags= specifications
@@ -1203,6 +1211,7 @@ print STDOUT "\ndecode_oligo_info  $info ($sequence) \n" if $DEBUG;
         if ($part =~ /flags\=(.*)/) {
             my $flag = $1;
             unless ($flag =~ /\S/) {
+ #               $info =~ s/\\n[\\]?flags\=\s*//;
                 $info =~ s/\\n\\flags\=\s*//;
                 $change = 1;
             }
@@ -1282,6 +1291,7 @@ print STDOUT "still undecoded info: $info  (@info)\n" if $DEBUG;
         $name = $info[1];
         $info[1] = $info[0];
         $info[0] = $name;
+#        $info = join ('\\n',@info);
         $info = join ('\\n\\',@info);
 print STDOUT "now decoded info: $info ($name)\n" if $DEBUG;
         return $name,$info;
@@ -1300,6 +1310,7 @@ print STDOUT "now decoded info: $info ($name)\n" if $DEBUG;
         }
     }
 
+#    $info =~ s/\\n[\\]+\s*$name\s*$// if $name; # chop off name at end, if any
     $info =~ s/\\n\\\s*$name\s*$// if $name; # chop off name at end, if any
 
 # if the name is still blank substitute a placeholder
