@@ -170,6 +170,18 @@ $sth->execute();
 
 print STDERR "OK\n\n";
 
+print STDERR "### Granting privileges to user readonly ... ";
+
+$query = "GRANT SELECT, EXECUTE ON \`$dbname\`.* TO 'readonly'\@'\%'";
+
+$sth = $dbh->prepare($query);
+&db_die("Failed to prepare query \"$query\"");
+
+$sth->execute();
+&db_die("Failed to execute query \"$query\"");
+
+print STDERR "OK\n\n";
+
 $dbh->disconnect();
 
 $dbpw = &getPassword("Enter password for MySQL user arcturus_dba", "ARCTURUS_DBA_PW");
