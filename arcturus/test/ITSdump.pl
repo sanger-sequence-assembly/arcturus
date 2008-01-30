@@ -188,6 +188,13 @@ foreach (@ARGV) {
     seq_dump($ts, $_);
 }
 
+# Iterate over names read from stdin
+while (my $line = <STDIN>) {
+    my ($readname) = $line =~ /\s*(\S+)\s*/;
+    next unless defined($readname);
+    seq_dump($ts, $readname);
+}
+
 # Disconnect
 undef $ts;
 

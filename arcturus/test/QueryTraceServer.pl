@@ -6,11 +6,12 @@ use TraceServer;
 
 my $proj = shift || die "No project name specified";
 my $last_seqid = shift || die "No min trace id specified";
+my $status = shift || 'PASS';
 
 my $ts = TraceServer->new(TS_DIRECT, TS_READ_ONLY, "");
 
-my $group = $ts->get_group($proj, 'PASS')
-    || die "Group '$proj / PASS' not found";
+my $group = $ts->get_group($proj, $status)
+    || die "Group '$proj / $status' not found";
 
 my $grit = $group->get_iterator(1);
 $grit->set($last_seqid);
