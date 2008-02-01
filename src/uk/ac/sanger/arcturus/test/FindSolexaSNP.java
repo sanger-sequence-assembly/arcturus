@@ -232,13 +232,18 @@ public class FindSolexaSNP {
 						.getLigation();
 				int ligation_id = ligation == null ? 0 : ligation.getID();
 
+				char strand = mappings[rdid].isForward() ? 'F' : 'R';
+
+				int chemistry = read == null ? Read.UNKNOWN : read
+						.getChemistry();
+
 				if (rpos >= 0) {
 					char base = mappings[rdid].getBase(rpos);
 					int qual = mappings[rdid].getQuality(rpos);
 
 					if (qual > 0)
 						reportBase(contig_id, cpos, sequence.getID(), read
-								.getID(), rpos, ligation_id, base, qual);
+								.getID(), rpos, ligation_id, strand, chemistry, base, qual);
 				}
 			}
 		}
@@ -249,7 +254,7 @@ public class FindSolexaSNP {
 	private final String TAB = "\t";
 	
 	private void reportBase(int contig_id, int cpos, int seqid, int readid,
-			int rpos, int ligid, char base, int qual) {
+			int rpos, int ligid, char strand, int chemistry, char base, int qual) {
 		System.out.print(contig_id);
 		System.out.print(TAB);
 		
@@ -268,6 +273,12 @@ public class FindSolexaSNP {
 		System.out.print(ligid);
 		System.out.print(TAB);
 		
+		System.out.print(strand);
+		System.out.print(TAB);
+		
+		System.out.print(chemistry);
+		System.out.print(TAB);
+	
 		System.out.print(base);
 		System.out.print(TAB);
 		
