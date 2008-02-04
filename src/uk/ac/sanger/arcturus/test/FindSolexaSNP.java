@@ -225,25 +225,30 @@ public class FindSolexaSNP {
 
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
-				Sequence sequence = mappings[rdid].getSequence();
-				Read read = mappings[rdid].getSequence().getRead();
-				Template template = read.getTemplate();
-				Ligation ligation = template == null ? null : template
-						.getLigation();
-				int ligation_id = ligation == null ? 0 : ligation.getID();
-
-				char strand = mappings[rdid].isForward() ? 'F' : 'R';
-
-				int chemistry = read == null ? Read.UNKNOWN : read
-						.getChemistry();
 
 				if (rpos >= 0) {
-					char base = mappings[rdid].getBase(rpos);
 					int qual = mappings[rdid].getQuality(rpos);
+					
+					if (qual > 0) {
+						Sequence sequence = mappings[rdid].getSequence();
+						Read read = mappings[rdid].getSequence().getRead();
+						Template template = read.getTemplate();
+						Ligation ligation = template == null ? null : template
+								.getLigation();
+						int ligation_id = ligation == null ? 0 : ligation
+								.getID();
 
-					if (qual > 0)
+						char strand = mappings[rdid].isForward() ? 'F' : 'R';
+
+						int chemistry = read == null ? Read.UNKNOWN : read
+								.getChemistry();
+
+						char base = mappings[rdid].getBase(rpos);
+
 						reportBase(contig_id, cpos, sequence.getID(), read
-								.getID(), rpos, ligation_id, strand, chemistry, base, qual);
+								.getID(), rpos, ligation_id, strand, chemistry,
+								base, qual);
+					}
 				}
 			}
 		}
@@ -252,37 +257,37 @@ public class FindSolexaSNP {
 	}
 
 	private final String TAB = "\t";
-	
+
 	private void reportBase(int contig_id, int cpos, int seqid, int readid,
 			int rpos, int ligid, char strand, int chemistry, char base, int qual) {
 		System.out.print(contig_id);
 		System.out.print(TAB);
-		
+
 		System.out.print(cpos);
 		System.out.print(TAB);
-		
+
 		System.out.print(seqid);
 		System.out.print(TAB);
-		
+
 		System.out.print(readid);
 		System.out.print(TAB);
-		
+
 		System.out.print(rpos);
 		System.out.print(TAB);
-		
+
 		System.out.print(ligid);
 		System.out.print(TAB);
-		
+
 		System.out.print(strand);
 		System.out.print(TAB);
-		
+
 		System.out.print(chemistry);
 		System.out.print(TAB);
-	
+
 		System.out.print(base);
 		System.out.print(TAB);
-		
+
 		System.out.print(qual);
-		System.out.println();	
+		System.out.println();
 	}
 }
