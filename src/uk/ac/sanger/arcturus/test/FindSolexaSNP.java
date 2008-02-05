@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus;
 import uk.ac.sanger.arcturus.Arcturus;
 
 import java.util.zip.*;
@@ -29,6 +30,9 @@ public class FindSolexaSNP {
 	private PrintStream debugps = null;
 
 	private String projectname = null;
+
+	private Gap4BayesianConsensus alg1 = new Gap4BayesianConsensus();
+	private Gap4BayesianConsensus alg2 = new Gap4BayesianConsensus();
 
 	public static void main(String args[]) {
 		FindSolexaSNP finder = new FindSolexaSNP();
@@ -223,34 +227,48 @@ public class FindSolexaSNP {
 				debugps.println("CONSENSUS POSITION: " + (1 + cpos - cstart));
 			}
 
+			alg1.reset();
+			alg2.reset();
+
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
+				int qual = mappings[rdid].getQuality(rpos);
 
-				if (rpos >= 0) {
-					int qual = mappings[rdid].getQuality(rpos);
-					
-					if (qual > 0) {
-						Sequence sequence = mappings[rdid].getSequence();
-						Read read = mappings[rdid].getSequence().getRead();
-						Template template = read.getTemplate();
-						Ligation ligation = template == null ? null : template
-								.getLigation();
-						int ligation_id = ligation == null ? 0 : ligation
-								.getID();
+				if (qual > 0) {
+					Sequence sequence = mappings[rdid].getSequence();
+					Read read = mappings[rdid].getSequence().getRead();
+					Template template = read.getTemplate();
+					Ligation ligation = template == null ? null : template
+							.getLigation();
+					int ligation_id = ligation == null ? 0 : ligation.getID();
 
-						char strand = mappings[rdid].isForward() ? 'F' : 'R';
+					char strand = mappings[rdid].isForward() ? 'F' : 'R';
 
-						int chemistry = read == null ? Read.UNKNOWN : read
-								.getChemistry();
+					int chemistry = read == null ? Read.UNKNOWN : read
+							.getChemistry();
 
-						char base = mappings[rdid].getBase(rpos);
+					char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
 
-						reportBase(contig_id, cpos, sequence.getID(), read
-								.getID(), rpos, ligation_id, strand, chemistry,
-								base, qual);
-					}
+					if (ligation_id == 0)
+						alg2.addBase(base, qual, strand, chemistry);
+					else
+						alg1.addBase(base, qual, strand, chemistry);
+
+					// reportBase(contig_id, cpos, sequence.getID(), read
+					// .getID(), rpos, ligation_id, strand, chemistry,
+					// base, qual);
 				}
 			}
+
+			int score1 = alg1.getBestScore();
+			char best1 = alg1.getBestBase();
+
+			int score2 = alg2.getBestScore();
+			char best2 = alg2.getBestBase();
+
+			//if (score1 > 0 && score2 > 0 && best1 != best2)
+				System.out.println("" + contig_id + TAB + cpos + TAB + best1
+						+ TAB + score1 + TAB + best2 + TAB + score2);
 		}
 
 		return true;
