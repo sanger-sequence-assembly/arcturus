@@ -148,7 +148,7 @@ sub CAFFileParser {
 # test against readname exclude and include filters
 
             if (defined($excludehash) && defined($excludehash->{$object}) ||
-		defined($includelist) && $object !~ /$includelist/ ) {
+		defined($includelist) && $includelist !~ /\b$object\b/ ) {
                 $this->loginfo("read $object ignored");
                 next;
             }
@@ -199,9 +199,15 @@ sub CAFFileParser {
                 my $entry = $Read->addAlignToTrace([@positions]);
                 if ($entry == 2) {
                     $this->logwarning("Edited read $object detected");
-                    $this->logwarning("Edited read $object cannot be loaded");
-                    delete $reads{$object};
-                    $type = 0; # ignore edited data
+# allow acceptance only if objectname explicitly specified
+                    unless ($object && $includelist =~ /\b$object\b/) {
+                        $this->logwarning("Edited read $object cannot be loaded");
+                        delete $reads{$object};
+                        $type = 0; # ignore edited data
+                    }
+                }
+                elsif (!$entry) {
+                    $this->logwarning("Invalid Align_to_SCF record in read $object");
                 }
             }
 	    else {
@@ -359,16 +365,27 @@ sub CAFFileParser {
     $this->loginfo("CAF file parser finished ($line)");
     my $nr = scalar(keys %reads);
  
-    $this->loginfo("$nr reads processed (tag problems $problems)"); 
+    $this->loginfo("$nr reads found (tag problems $problems)"); 
 
     my $count = 0;
     my $missed = 0;
     foreach my $object (keys %reads) {
 
+        my $progress = $count + $missed + 1;
+        $this->logwarning("processing read $progress") unless ($progress%1000);
+
         my $readhash = $reads{$object};
 
         if (!$readhash->{f1} || !$readhash->{f2} || !$readhash->{f3}) {
-            $this->logwarning("read $object is not complete");
+            unless ($readhash->{f1}) {
+                $this->logwarning("read $object is not complete : missing meta data");
+	    }
+            unless ($readhash->{f1}) {
+                $this->logwarning("read $object is not complete : missing DNA");
+	    }
+            unless ($readhash->{f1}) {
+                $this->logwarning("read $object is not complete : missing Base Quality");
+   	    }
             $missed++;
         }        
         else {
