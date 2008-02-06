@@ -4,11 +4,15 @@ use strict;
 
 use FileHandle;
 
+use Linux::Monitor;
+
 #-------------------------------------------------------
 # Class variable
 #-------------------------------------------------------
 
 my $linebreak;
+
+my $monitor;
 
 #-------------------------------------------------------
 # Constructor always sets to 'info' filter level
@@ -139,7 +143,7 @@ sub debug {
 # e.g. level 'severe' will only print that level
 #--------------------------------------------------------------
 
-sub setFilter {
+sub setFilter { # to be deprecated
 print STDERR "Logging->setFilter TO BE DEPRECATED\n"; 
 &setStandardFilter(@_);
 }
@@ -241,6 +245,14 @@ sub flush {
         &timestamp($stream,'flush') if $stream->{stamp};
         $handle->flush();
     }
+}
+
+sub stderr2stdout {
+# redirect STDERR to STDOUT
+
+    open(STDERR,">&STDOUT") || return 0; # exit 0 for failure
+
+    return 1; # success
 }
 
 #-----------------------------------------------------------------------
@@ -545,6 +557,37 @@ sub timestamp {
 }
 
 #---------------------------------------------------------------------------
+# special
+#---------------------------------------------------------------------------
+
+sub listStreams {
+    my $this = shift;
+
+    my @devices;
+    foreach my $stream (0,1,2,3) {
+        push @devices, $this->{STREAMS}->[$stream]->{device};
+    }
+
+    $this->warning("Standard Stream active on device $devices[0]");
+    $this->info("Standard Stream active (level: info)");
+    $this->fine("Standard Stream active (level: fine)");
+    $this->finest("Standard Stream active (level: finest)");
+    $this->error("Error Stream active on device $devices[1]");
+    $this->debug("Debug Stream active on device $devices[4]");
+    $this->special("Special Stream active on device $devices[2]");
+}
+
+sub memoryUsage {
+# report current memory usage on standard stream
+    my $this = shift;
+    my $text = shift;
+
+    $monitor = new Linux::Monitor() unless $monitor;
+
+    $this->warning($text." ".$monitor->usage());
+}
+
+#---------------------------------------------------------------------------
 
 sub verifyPrivate {
     my $caller = shift;
@@ -554,7 +597,7 @@ sub verifyPrivate {
         die "Invalid use of private Logging->$method";
     }
 }
- 
+
 #-----------------------------------------------------------------------
 # close streams on destruction  
 #-----------------------------------------------------------------------
