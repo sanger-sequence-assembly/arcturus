@@ -4,11 +4,13 @@ public class WeightedMajorityVote implements ConsensusAlgorithm {
 	private int totalA, totalC, totalG, totalT, totalX;
 	private char bestbase;
 	private int bestscore;
+	private int readCount;
 
 	public boolean reset() {
 		totalA = totalC = totalG = totalT = totalX = 0;
 		bestbase = '?';
 		bestscore = -1;
+		readCount = 0;
 
 		return true;
 	}
@@ -35,6 +37,8 @@ public class WeightedMajorityVote implements ConsensusAlgorithm {
 				totalX += quality;
 				break;
 		}
+		
+		readCount++;
 
 		return true;
 	}
@@ -102,5 +106,9 @@ public class WeightedMajorityVote implements ConsensusAlgorithm {
 			return 99;
 		else
 			return value;
+	}
+	
+	public int getReadCount() {
+		return readCount;
 	}
 }
