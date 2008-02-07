@@ -612,20 +612,18 @@ while (defined($record = <$CAF>)) {
             if (scalar @positions == 4) {
                 my $entry = $read->addAlignToTrace([@positions]);
 # temporary fix for consensus read with bad align to trace info 
-                if ($entry && $objectName =~ /^contig/) {
+                if ($entry == 2 && $objectName =~ /^contig/) {
                     $logger->warning("align-to-scf specification for "
                                     ."consensus read corrected");
                     undef $read->{alignToTrace};
 		}
-                if ($isUnpadded && $entry == 2) {
+                if ($entry == 2 && $isUnpadded) {
                     $logger->info("Edited read $objectName detected ($lineCount)");
 # on first encounter load the read item dictionaries
                     $adb->populateLoadingDictionaries() unless $dictionaries;
                     $dictionaries = 1;
                 }
             }
-#            elsif ($objectName =~ /^contig/) {
-#	    }
             else {
                 $logger->severe("Invalid alignment: ($lineCount) $record",2);
                 $logger->severe("positions: @positions",2);
