@@ -70,6 +70,10 @@ public class FindSolexaSNP {
 		}
 
 		try {
+			report();
+			
+			consensus.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
+			
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
@@ -125,6 +129,8 @@ public class FindSolexaSNP {
 			}
 
 			System.err.println(nContigs + " contigs were processed");
+			
+			report();
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
 			System.exit(1);
@@ -145,7 +151,7 @@ public class FindSolexaSNP {
 		long timenow = System.currentTimeMillis();
 
 		System.out.println("******************** REPORT ********************");
-		System.out.println("Time: " + (timenow - lasttime));
+		System.out.println("Time: " + (timenow - lasttime) + " ms");
 
 		System.out.println("Memory (kb): (free/total) " + runtime.freeMemory()
 				/ 1024 + "/" + runtime.totalMemory() / 1024);
