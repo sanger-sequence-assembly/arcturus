@@ -264,7 +264,7 @@ public class FindSolexaSNP {
 			int score2 = alg2.getBestScore();
 			char best2 = alg2.getBestBase();
 
-			//if (score1 > 0 && score2 > 0 && best1 != best2)
+			if (score1 > 0 && score2 > 0 && best1 != best2)
 				System.out.println("" + contig_id + TAB + cpos + TAB + best1
 						+ TAB + score1 + TAB + best2 + TAB + score2);
 		}
