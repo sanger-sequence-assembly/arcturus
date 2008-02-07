@@ -20,7 +20,8 @@ public class FindSolexaSNP {
 	private String instance = null;
 	private String organism = null;
 
-	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS;
+	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS | 
+		ArcturusDatabase.CONTIG_SEQUENCE_AUXILIARY_DATA;
 
 	private ArcturusDatabase adb = null;
 	private Connection conn = null;
