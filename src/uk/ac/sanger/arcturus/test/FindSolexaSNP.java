@@ -291,6 +291,11 @@ public class FindSolexaSNP {
 	}
 	
 	private void findConsensusReadMismatch(int contig_id, int cpos, Vector<Base> bases) {
+		if (bases == null || bases.isEmpty())
+			return;
+		
+		int depth = bases.size();
+		
 		consensus.reset();
 		
 		for (Base base : bases) {
@@ -306,7 +311,7 @@ public class FindSolexaSNP {
 
 		for (Base base : bases) {
 			if (base.ligation_id == 0 && base.base != bestbase)
-				System.out.println("" + contig_id + TAB + cpos 
+				System.out.println("" + contig_id + TAB + cpos + TAB + depth
 						+ TAB + bestbase + TAB + score 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
 						+ TAB + base.base + TAB + base.quality);
@@ -314,6 +319,11 @@ public class FindSolexaSNP {
 	}
 	
 	private void findLowQualityPadding(int contig_id, int cpos, Vector<Base> bases) {
+		if (bases == null || bases.isEmpty())
+			return;
+		
+		int depth = bases.size();
+	
 		consensus.reset();
 		
 		for (Base base : bases) {
@@ -329,7 +339,7 @@ public class FindSolexaSNP {
 
 		for (Base base : bases) {
 			if (base.base != bestbase)
-				System.out.println("" + contig_id + TAB + cpos 
+				System.out.println("" + contig_id + TAB + cpos + TAB + depth
 						+ TAB + bestbase + TAB + score 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
 						+ TAB + base.base + TAB + base.quality);
