@@ -31,6 +31,11 @@ public class FindSolexaSNP {
 	private PrintStream debugps = null;
 
 	private String projectname = null;
+	
+	private final static int CONSENSUS_READ_MISMATCH = 1;
+	private final static int LOW_QUALITY_PADDING = 2;
+	
+	private int mode = CONSENSUS_READ_MISMATCH;
 
 	private Gap4BayesianConsensus consensus = new Gap4BayesianConsensus();
 
@@ -62,6 +67,12 @@ public class FindSolexaSNP {
 
 			if (args[i].equalsIgnoreCase("-project"))
 				projectname = args[++i];
+			
+			if (args[i].equalsIgnoreCase("-crm"))
+				mode = CONSENSUS_READ_MISMATCH;
+			
+			if (args[i].equalsIgnoreCase("-lqp"))
+				mode = LOW_QUALITY_PADDING;
 		}
 
 		if (instance == null || organism == null) {
@@ -168,7 +179,7 @@ public class FindSolexaSNP {
 		ps.println("\t-project\tName of project for contigs");
 		ps.println();
 		ps.println("OPTIONS");
-		String[] options = { "-debug", "-lowmem" };
+		String[] options = { "-debug", "-lowmem" , "-crm", "-lqp"};
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);
@@ -261,14 +272,25 @@ public class FindSolexaSNP {
 				}
 			}
 			
-			processBases(contig_id, cpos, bases);
-
+			switch (mode) {
+				case CONSENSUS_READ_MISMATCH:
+					findConsensusReadMismatch(contig_id, cpos, bases);
+					break;
+					
+				case LOW_QUALITY_PADDING:
+					findLowQualityPadding(contig_id, cpos, bases);
+					break;
+					
+				default:
+					System.err.println("Unknown mode!");
+					System.exit(1);
+			}
 		}
 
 		return true;
 	}
 	
-	private void processBases(int contig_id, int cpos, Vector<Base> bases) {
+	private void findConsensusReadMismatch(int contig_id, int cpos, Vector<Base> bases) {
 		consensus.reset();
 		
 		for (Base base : bases) {
@@ -284,6 +306,29 @@ public class FindSolexaSNP {
 
 		for (Base base : bases) {
 			if (base.ligation_id == 0 && base.base != bestbase)
+				System.out.println("" + contig_id + TAB + cpos 
+						+ TAB + bestbase + TAB + score 
+						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
+						+ TAB + base.base + TAB + base.quality);
+		}
+	}
+	
+	private void findLowQualityPadding(int contig_id, int cpos, Vector<Base> bases) {
+		consensus.reset();
+		
+		for (Base base : bases) {
+			if (base.quality > 0)
+				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
+		}
+		
+		int score = consensus.getBestScore();
+		char bestbase = consensus.getBestBase();
+		
+		if (bestbase != '*')
+			return;
+
+		for (Base base : bases) {
+			if (base.base != bestbase)
 				System.out.println("" + contig_id + TAB + cpos 
 						+ TAB + bestbase + TAB + score 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
