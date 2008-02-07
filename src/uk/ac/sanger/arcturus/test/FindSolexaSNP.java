@@ -32,8 +32,7 @@ public class FindSolexaSNP {
 
 	private String projectname = null;
 
-	private Gap4BayesianConsensus alg1 = new Gap4BayesianConsensus();
-	private Gap4BayesianConsensus alg2 = new Gap4BayesianConsensus();
+	private Gap4BayesianConsensus consensus = new Gap4BayesianConsensus();
 
 	public static void main(String args[]) {
 		FindSolexaSNP finder = new FindSolexaSNP();
@@ -265,25 +264,26 @@ public class FindSolexaSNP {
 	}
 	
 	private void processBases(int contig_id, int cpos, Vector<Base> bases) {
-		alg1.reset();
-		alg2.reset();
+		consensus.reset();
 		
 		for (Base base : bases) {
 			if (base.ligation_id != 0)
-				alg1.addBase(base.base, base.quality, base.strand, base.chemistry);
-			else
-				alg2.addBase(base.base, base.quality, base.strand, base.chemistry);
+				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
 		}
 		
-		int score1 = alg1.getBestScore();
-		char best1 = alg1.getBestBase();
+		int score = consensus.getBestScore();
+		char bestbase = consensus.getBestBase();
+		
+		if (consensus.getReadCount() == 0)
+			return;
 
-		int score2 = alg2.getBestScore();
-		char best2 = alg2.getBestBase();
-
-		if (score1 > 0 && alg2.getReadCount() > 0 && best1 != best2)
-			System.out.println("" + contig_id + TAB + cpos + TAB + best1
-					+ TAB + score1 + TAB + best2 + TAB + score2);	
+		for (Base base : bases) {
+			if (base.ligation_id == 0 && base.base != bestbase)
+				System.out.println("" + contig_id + TAB + cpos 
+						+ TAB + bestbase + TAB + score 
+						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
+						+ TAB + base.base + TAB + base.quality);
+		}
 	}
 
 	private final String TAB = "\t";
