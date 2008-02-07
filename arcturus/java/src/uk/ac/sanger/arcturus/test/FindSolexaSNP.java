@@ -241,23 +241,24 @@ public class FindSolexaSNP {
 				int qual = rpos >= 0 ? mappings[rdid].getQuality(rpos) : mappings[rdid].getPadQuality(cpos);
 				char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
 
-				Sequence sequence = mappings[rdid].getSequence();
-				int seq_id = sequence.getID();
-				Read read = mappings[rdid].getSequence().getRead();
-				int read_id = read.getID();
-				Template template = read.getTemplate();
-				Ligation ligation = template == null ? null : template
-						.getLigation();
-				int ligation_id = ligation == null ? 0 : ligation.getID();
+				if (qual > 0) {
+					Sequence sequence = mappings[rdid].getSequence();
+					int seq_id = sequence.getID();
+					Read read = mappings[rdid].getSequence().getRead();
+					int read_id = read.getID();
+					Template template = read.getTemplate();
+					Ligation ligation = template == null ? null : template
+							.getLigation();
+					int ligation_id = ligation == null ? 0 : ligation.getID();
 
-				char strand = mappings[rdid].isForward() ? 'F' : 'R';
+					char strand = mappings[rdid].isForward() ? 'F' : 'R';
 
-				int chemistry = read == null ? Read.UNKNOWN : read
-						.getChemistry();
+					int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
 
-				Base b = new Base(read_id, seq_id, rpos, ligation_id, strand, chemistry, base, qual);
+					Base b = new Base(read_id, seq_id, rpos, ligation_id, strand, chemistry, base, qual);
 					
-				bases.add(b);
+					bases.add(b);
+				}
 			}
 			
 			processBases(contig_id, cpos, bases);
