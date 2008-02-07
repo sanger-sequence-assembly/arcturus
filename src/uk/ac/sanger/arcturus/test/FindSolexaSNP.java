@@ -237,29 +237,27 @@ public class FindSolexaSNP {
 
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
-				int qual = mappings[rdid].getQuality(rpos);
+				
+				int qual = rpos >= 0 ? mappings[rdid].getQuality(rpos) : mappings[rdid].getPadQuality(cpos);
+				char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
 
-				if (qual > 0) {
-					Sequence sequence = mappings[rdid].getSequence();
-					int seq_id = sequence.getID();
-					Read read = mappings[rdid].getSequence().getRead();
-					int read_id = read.getID();
-					Template template = read.getTemplate();
-					Ligation ligation = template == null ? null : template
-							.getLigation();
-					int ligation_id = ligation == null ? 0 : ligation.getID();
+				Sequence sequence = mappings[rdid].getSequence();
+				int seq_id = sequence.getID();
+				Read read = mappings[rdid].getSequence().getRead();
+				int read_id = read.getID();
+				Template template = read.getTemplate();
+				Ligation ligation = template == null ? null : template
+						.getLigation();
+				int ligation_id = ligation == null ? 0 : ligation.getID();
 
-					char strand = mappings[rdid].isForward() ? 'F' : 'R';
+				char strand = mappings[rdid].isForward() ? 'F' : 'R';
 
-					int chemistry = read == null ? Read.UNKNOWN : read
-							.getChemistry();
+				int chemistry = read == null ? Read.UNKNOWN : read
+						.getChemistry();
 
-					char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
-
-					Base b = new Base(read_id, seq_id, rpos, ligation_id, strand, chemistry, base, qual);
+				Base b = new Base(read_id, seq_id, rpos, ligation_id, strand, chemistry, base, qual);
 					
-					bases.add(b);
-				}
+				bases.add(b);
 			}
 			
 			processBases(contig_id, cpos, bases);
@@ -273,7 +271,7 @@ public class FindSolexaSNP {
 		consensus.reset();
 		
 		for (Base base : bases) {
-			if (base.ligation_id != 0)
+			if (base.ligation_id != 0 && base.quality > 0)
 				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
 		}
 		
