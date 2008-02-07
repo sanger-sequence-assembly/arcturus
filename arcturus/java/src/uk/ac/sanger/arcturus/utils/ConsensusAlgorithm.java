@@ -17,4 +17,6 @@ public interface ConsensusAlgorithm {
 	public int getBestScore();
 
 	public int getScoreForBase(char base);
+	
+	public int getReadCount();
 }

@@ -387,4 +387,8 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 				return -1;
 		}
 	}
+	
+	public int getReadCount() {
+		return depth;
+	}
 }
