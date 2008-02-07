@@ -6,6 +6,7 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus;
 import uk.ac.sanger.arcturus.Arcturus;
 
+import java.util.Vector;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
@@ -226,9 +227,8 @@ public class FindSolexaSNP {
 			if (debugps != null) {
 				debugps.println("CONSENSUS POSITION: " + (1 + cpos - cstart));
 			}
-
-			alg1.reset();
-			alg2.reset();
+			
+			Vector<Base> bases = new Vector<Base>();
 
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
@@ -251,27 +251,62 @@ public class FindSolexaSNP {
 
 					char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
 
-					if (ligation_id == 0)
-						alg2.addBase(base, qual, strand, chemistry);
-					else
-						alg1.addBase(base, qual, strand, chemistry);
+					Base b = new Base(read_id, seq_id, rpos, ligation_id, strand, chemistry, base, qual);
+					
+					bases.add(b);
 				}
 			}
+			
+			processBases(contig_id, cpos, bases);
 
-			int score1 = alg1.getBestScore();
-			char best1 = alg1.getBestBase();
-
-			int score2 = alg2.getBestScore();
-			char best2 = alg2.getBestBase();
-
-			if (score1 > 0 && alg2.getReadCount() > 0 && best1 != best2)
-				System.out.println("" + contig_id + TAB + cpos + TAB + best1
-						+ TAB + score1 + TAB + best2 + TAB + score2);
 		}
 
 		return true;
 	}
+	
+	private void processBases(int contig_id, int cpos, Vector<Base> bases) {
+		alg1.reset();
+		alg2.reset();
+		
+		for (Base base : bases) {
+			if (base.ligation_id != 0)
+				alg1.addBase(base.base, base.quality, base.strand, base.chemistry);
+			else
+				alg2.addBase(base.base, base.quality, base.strand, base.chemistry);
+		}
+		
+		int score1 = alg1.getBestScore();
+		char best1 = alg1.getBestBase();
+
+		int score2 = alg2.getBestScore();
+		char best2 = alg2.getBestBase();
+
+		if (score1 > 0 && alg2.getReadCount() > 0 && best1 != best2)
+			System.out.println("" + contig_id + TAB + cpos + TAB + best1
+					+ TAB + score1 + TAB + best2 + TAB + score2);	
+	}
 
 	private final String TAB = "\t";
 
+	class Base {
+		protected int read_id;
+		protected int sequence_id;
+		protected int read_position;
+		protected int ligation_id;
+		protected char strand;
+		protected int chemistry;
+		protected char base;
+		protected int quality;
+		
+		public Base(int read_id, int sequence_id, int read_position, int ligation_id, char strand, int chemistry, char base, int quality) {
+			this.read_id = read_id;
+			this.sequence_id = sequence_id;
+			this.read_position = read_position;
+			this.ligation_id = ligation_id;
+			this.strand = strand;
+			this.chemistry = chemistry;
+			this.base = base;
+			this.quality = quality;
+		}
+	}
 }
