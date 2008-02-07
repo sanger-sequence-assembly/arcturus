@@ -236,7 +236,9 @@ public class FindSolexaSNP {
 
 				if (qual > 0) {
 					Sequence sequence = mappings[rdid].getSequence();
+					int seq_id = sequence.getID();
 					Read read = mappings[rdid].getSequence().getRead();
+					int read_id = read.getID();
 					Template template = read.getTemplate();
 					Ligation ligation = template == null ? null : template
 							.getLigation();
@@ -253,10 +255,6 @@ public class FindSolexaSNP {
 						alg2.addBase(base, qual, strand, chemistry);
 					else
 						alg1.addBase(base, qual, strand, chemistry);
-
-					// reportBase(contig_id, cpos, sequence.getID(), read
-					// .getID(), rpos, ligation_id, strand, chemistry,
-					// base, qual);
 				}
 			}
 
@@ -276,36 +274,4 @@ public class FindSolexaSNP {
 
 	private final String TAB = "\t";
 
-	private void reportBase(int contig_id, int cpos, int seqid, int readid,
-			int rpos, int ligid, char strand, int chemistry, char base, int qual) {
-		System.out.print(contig_id);
-		System.out.print(TAB);
-
-		System.out.print(cpos);
-		System.out.print(TAB);
-
-		System.out.print(seqid);
-		System.out.print(TAB);
-
-		System.out.print(readid);
-		System.out.print(TAB);
-
-		System.out.print(rpos);
-		System.out.print(TAB);
-
-		System.out.print(ligid);
-		System.out.print(TAB);
-
-		System.out.print(strand);
-		System.out.print(TAB);
-
-		System.out.print(chemistry);
-		System.out.print(TAB);
-
-		System.out.print(base);
-		System.out.print(TAB);
-
-		System.out.print(qual);
-		System.out.println();
-	}
 }
