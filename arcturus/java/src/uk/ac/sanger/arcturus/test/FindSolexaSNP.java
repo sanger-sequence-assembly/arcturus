@@ -305,7 +305,7 @@ public class FindSolexaSNP {
 			this.ligation_id = ligation_id;
 			this.strand = strand;
 			this.chemistry = chemistry;
-			this.base = base;
+			this.base = Character.toUpperCase(base);
 			this.quality = quality;
 		}
 	}
