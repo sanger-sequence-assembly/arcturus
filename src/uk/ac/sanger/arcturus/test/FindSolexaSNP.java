@@ -272,7 +272,7 @@ public class FindSolexaSNP {
 		consensus.reset();
 		
 		for (Base base : bases) {
-			if (base.ligation_id != 0 && base.quality > 0)
+			if (base.quality > 0)
 				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
 		}
 		
