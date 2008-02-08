@@ -39,6 +39,7 @@ public class FindSolexaSNP {
 	private int mode = CONSENSUS_READ_MISMATCH;
 
 	private Gap4BayesianConsensus consensus = new Gap4BayesianConsensus();
+	private Gap4BayesianConsensus consensus2 = new Gap4BayesianConsensus();
 
 	public static void main(String args[]) {
 		FindSolexaSNP finder = new FindSolexaSNP();
@@ -85,6 +86,7 @@ public class FindSolexaSNP {
 			report(System.err);
 			
 			consensus.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
+			consensus2.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
 			
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
@@ -295,7 +297,12 @@ public class FindSolexaSNP {
 
 		return true;
 	}
-	
+
+	private final String TAB = "\t";
+	private final String PREFIX_A = "A ";
+	private final String PREFIX_B = "B ";
+	private final String EMPTY_STRING = "";
+
 	private void findConsensusReadMismatch(int contig_id, int cpos, Vector<Base> bases) {
 		if (bases == null || bases.isEmpty())
 			return;
@@ -303,22 +310,37 @@ public class FindSolexaSNP {
 		int depth = bases.size();
 		
 		consensus.reset();
+		consensus2.reset();
 		
 		for (Base base : bases) {
-			if (base.quality > 0)
+			if (base.quality > 0) {
 				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
+				
+				if (base.ligation_id != 0)
+					consensus2.addBase(base.base, base.quality, base.strand, base.chemistry);
+			}
 		}
 		
 		int score = consensus.getBestScore();
 		char bestbase = consensus.getBestBase();
+		
+		int score2 = consensus2.getBestScore();
+		char bestbase2 = consensus2.getBestBase();
+		int count2 = consensus2.getReadCount();
 		
 		if (consensus.getReadCount() == 0)
 			return;
 
 		for (Base base : bases) {
 			if (base.ligation_id == 0 && base.base != bestbase)
-				System.out.println("" + contig_id + TAB + cpos + TAB + depth
+				System.out.println(PREFIX_A + contig_id + TAB + cpos + TAB + depth
 						+ TAB + bestbase + TAB + score 
+						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
+						+ TAB + base.clipOK
+						+ TAB + base.base + TAB + base.quality);			
+			else if (count2 > 0 && base.ligation_id == 0 && base.base != bestbase2)
+				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB + depth
+						+ TAB + bestbase2 + TAB + score2 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
 						+ TAB + base.clipOK
 						+ TAB + base.base + TAB + base.quality);
@@ -346,15 +368,13 @@ public class FindSolexaSNP {
 
 		for (Base base : bases) {
 			if (base.base != bestbase)
-				System.out.println("" + contig_id + TAB + cpos + TAB + depth
+				System.out.println(EMPTY_STRING + contig_id + TAB + cpos + TAB + depth
 						+ TAB + bestbase + TAB + score 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
 						+ TAB + base.clipOK
 						+ TAB + base.base + TAB + base.quality);
 		}
 	}
-
-	private final String TAB = "\t";
 
 	class Base {
 		protected int read_id;
