@@ -339,7 +339,7 @@ public class FindSolexaSNP {
 						+ TAB + base.clipOK
 						+ TAB + base.base + TAB + base.quality);			
 			else if (count2 > 0 && base.ligation_id == 0 && base.base != bestbase2)
-				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB + depth
+				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB + count2
 						+ TAB + bestbase2 + TAB + score2 
 						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
 						+ TAB + base.clipOK
