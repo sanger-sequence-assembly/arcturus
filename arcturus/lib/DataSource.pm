@@ -66,10 +66,15 @@ sub new {
  
     foreach my $entry ($mesg->all_entries) {
 	my $dn = $entry->dn;
+
+	$this->{'description'} = $entry->get_value('description');
+
 	my @items = $entry->get_value('javaClassName');
 	my $classname = shift @items;
+
 	@items = $entry->get_value('javaFactory');
 	my $factory = shift @items;
+
 	@items = $entry->get_value('javaReferenceAddress');
 
 	my @datasourcelist = split(/\./, $classname);
@@ -201,5 +206,11 @@ sub getOrganism {
 
      return $this->{'organism'};
  }
+
+sub getDescription {
+    my $this = shift;
+
+    return $this->{'description'};
+}
 
 1;
