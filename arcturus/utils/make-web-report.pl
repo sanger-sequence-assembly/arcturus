@@ -40,6 +40,8 @@ unless (defined($organism) &&
 
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
+my $description = $ds->getDescription() || "$instance:$organism";
+
 my $dbh = $ds->getConnection();
 
 unless (defined($dbh)) {
@@ -53,9 +55,9 @@ my $prefix = lc($organism);
 
 my $dateline = &makeDateline();
 
-&makeHeader($instance, $organism);
+&makeHeader($instance, $organism, $description);
 
-&makeIndexPage($prefix);
+&makeIndexPage($prefix, $description);
 
 my $fhSection = new FileHandle("${prefix}-project-index.html", "w");
 
@@ -77,7 +79,7 @@ foreach $minlen (0, 2, 5, 10, 100) {
 
     my $fhProject = new FileHandle($filename, "w");
 
-    &makeProjectStats($dbh, $minlen, 0, $fhProject, $dateline);
+    &makeProjectStats($dbh, $minlen, 0, $fhProject, $dateline, $description);
 
     $fhProject->close();
 }
@@ -91,7 +93,7 @@ print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n"
 
 my $fhProject = new FileHandle($filename, "w");
 
-&makeProjectStats($dbh, 0, 3, $fhProject, $dateline);
+&makeProjectStats($dbh, 0, 3, $fhProject, $dateline, $description);
 
 $fhProject->close();
 
@@ -122,7 +124,7 @@ foreach $minlen (0, 10, 100) {
 
     my $fhContig = new FileHandle($filename, "w");
 
-    &makeContigStats($dbh, $minlen, $fhContig, $dateline);
+    &makeContigStats($dbh, $minlen, $fhContig, $dateline, $description);
 
     $fhContig->close();
 }
@@ -152,7 +154,7 @@ if ($bigbrother) {
 	
 	my $fhContig = new FileHandle($filename, "w");
 	
-	&makeContigStats($dbh, 0, $fhContig, $dateline, $projid, $projname, $projowner);
+	&makeContigStats($dbh, 0, $fhContig, $dateline, $description, $projid, $projname, $projowner);
 	
 	$fhContig->close();
     }
@@ -177,7 +179,7 @@ print $fhSection "<a href=\"$filename\" target=\"pageFrame\">$caption</a><br>\n"
 
 my $fhRead = new FileHandle($filename, "w");
 
-&makeReadStats($dbh, $fhRead, $dateline);
+&makeReadStats($dbh, $fhRead, $dateline, $description);
 
 $fhRead->close();
 
@@ -194,12 +196,13 @@ exit(0);
 sub makeHeader {
     my $instance = shift;
     my $organism = shift;
+    my $description = shift;
 
     my $prefix = lc($organism);
 
     my @lines = ("<HTML>",
 		 "<HEAD>",
-		 "<TITLE>Progress report for $organism</TITLE>",
+		 "<TITLE>Progress report for $description</TITLE>",
 		 "</HEAD>",
 		 "<FRAMESET cols=\"20%,80%\" title=\"\">",
 		 "\t<FRAMESET rows=\"30%,70%\" title=\"\">",
@@ -217,6 +220,7 @@ sub makeHeader {
 
 sub makeIndexPage {
     my $prefix = shift;
+    my $description = shift;
 
     my $fhIndex = new FileHandle("${prefix}-main-index.html", "w");
 
@@ -264,6 +268,7 @@ sub makeProjectStats {
     my $minreads = shift;
     my $fh = shift;
     my $dateline = shift;
+    my $description = shift;
 
     my $fields = "PROJECT.name,count(*) as contigs," .
 	"sum(nreads) as `reads`," .
@@ -285,6 +290,8 @@ sub makeProjectStats {
 	: "CONTIGS WITH $minreads OR MORE READS";
 
     print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fh "<H2>$description</H2>\n";
 
     print $fh "<H3>$caption</H3>\n";
 
@@ -338,6 +345,7 @@ sub makeContigStats {
     my $minlen = shift;
     my $fh = shift;
     my $dateline = shift;
+    my $description = shift;
     my $projid = shift;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
@@ -384,6 +392,8 @@ sub makeContigStats {
     }
 
     print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fh "<H2>$description</H2>\n";
 
     print $fh "<H3>$caption</H3>\n";
    
@@ -487,6 +497,7 @@ sub makeReadStats {
     my $dbh = shift;
     my $fh = shift;
     my $dateline = shift;
+    my $description = shift;
 
     my @mnames = ('January', 'February', 'March', 'April', 'May', 'June',
 		  'July', 'August', 'September', 'October', 'November', 'December');
@@ -501,6 +512,8 @@ sub makeReadStats {
     $sth->execute();
 
     print $fh "<html><head><title>$caption</title></head><body bgcolor=\"#ffffee\">\n";
+
+    print $fh "<H2>$description</H2>\n";
 
     print $fh "<H3>READS ASPED BY MONTH</H3>\n";
    
