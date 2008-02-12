@@ -550,6 +550,6 @@ sub db_die {
 
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
-    print STDERR "    -instance\t\tName of instance [default: prod]\n";
+    print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
 }
