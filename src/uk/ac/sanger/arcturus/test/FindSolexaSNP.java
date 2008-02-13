@@ -6,6 +6,8 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus;
 import uk.ac.sanger.arcturus.Arcturus;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.Vector;
 import java.util.zip.*;
 import java.io.*;
@@ -20,8 +22,8 @@ public class FindSolexaSNP {
 	private String instance = null;
 	private String organism = null;
 
-	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS | 
-		ArcturusDatabase.CONTIG_SEQUENCE_AUXILIARY_DATA;
+	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS
+			| ArcturusDatabase.CONTIG_SEQUENCE_AUXILIARY_DATA;
 
 	private ArcturusDatabase adb = null;
 	private Connection conn = null;
@@ -32,11 +34,17 @@ public class FindSolexaSNP {
 	private PrintStream debugps = null;
 
 	private String projectname = null;
-	
+
 	private final static int CONSENSUS_READ_MISMATCH = 1;
 	private final static int LOW_QUALITY_PADDING = 2;
-	
+
 	private int mode = CONSENSUS_READ_MISMATCH;
+
+	private String tagType;
+	private String tagComment;
+
+	private int tag_id = -1;
+	private PreparedStatement pstmtCreateTag2Contig;
 
 	private Gap4BayesianConsensus consensus = new Gap4BayesianConsensus();
 	private Gap4BayesianConsensus consensus2 = new Gap4BayesianConsensus();
@@ -69,12 +77,18 @@ public class FindSolexaSNP {
 
 			if (args[i].equalsIgnoreCase("-project"))
 				projectname = args[++i];
-			
+
 			if (args[i].equalsIgnoreCase("-crm"))
 				mode = CONSENSUS_READ_MISMATCH;
-			
+
 			if (args[i].equalsIgnoreCase("-lqp"))
 				mode = LOW_QUALITY_PADDING;
+
+			if (args[i].equalsIgnoreCase("-tagtype"))
+				tagType = args[++i];
+
+			if (args[i].equalsIgnoreCase("-tagcomment"))
+				tagComment = args[++i];
 		}
 
 		if (instance == null || organism == null) {
@@ -84,10 +98,16 @@ public class FindSolexaSNP {
 
 		try {
 			report(System.err);
-			
+
+			if (tagType != null && tagComment == null) {
+				DateFormat formatter = new SimpleDateFormat("yyyy MMM dd HH:mm");
+				java.util.Date now = new java.util.Date();
+				tagComment = "Discrepancy tagged at " + formatter.format(now);
+			}
+
 			consensus.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
 			consensus2.setMode(Gap4BayesianConsensus.MODE_PAD_IS_STAR);
-			
+
 			System.err.println("Creating an ArcturusInstance for " + instance);
 			System.err.println();
 
@@ -125,6 +145,11 @@ public class FindSolexaSNP {
 				Arcturus.logWarning("Failed to increase max_allowed_packet to "
 						+ MAX_ALLOWED_PACKET, sqle);
 			}
+			
+			if (tagType != null) {
+				query = "insert into TAG2CONTIG(contig_id, tag_id, cstart, cfinal) values(?,?,?,?)";
+				pstmtCreateTag2Contig = conn.prepareStatement(query);
+			}
 
 			debugps = debug ? System.out : null;
 
@@ -143,7 +168,7 @@ public class FindSolexaSNP {
 			}
 
 			System.err.println(nContigs + " contigs were processed");
-			
+
 			report(System.err);
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
@@ -167,8 +192,8 @@ public class FindSolexaSNP {
 		ps.println("******************** REPORT ********************");
 		ps.println("Time: " + (timenow - lasttime) + " ms");
 
-		ps.println("Memory (kb): (free/total) " + runtime.freeMemory()
-				/ 1024 + "/" + runtime.totalMemory() / 1024);
+		ps.println("Memory (kb): (free/total) " + runtime.freeMemory() / 1024
+				+ "/" + runtime.totalMemory() / 1024);
 		ps.println("************************************************");
 		ps.println();
 	}
@@ -180,9 +205,11 @@ public class FindSolexaSNP {
 		ps.println();
 		ps.println("OPTIONAL PARAMETERS");
 		ps.println("\t-project\tName of project for contigs");
+		ps.println("\t-tagtype\tGap4 tag type for discrepancies");
+		ps.println("\t-tagcomment\tGap4 tag comment for discrepancies");
 		ps.println();
 		ps.println("OPTIONS");
-		String[] options = { "-debug", "-lowmem" , "-crm", "-lqp"};
+		String[] options = { "-debug", "-lowmem", "-crm", "-lqp" };
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);
@@ -246,13 +273,14 @@ public class FindSolexaSNP {
 			if (debugps != null) {
 				debugps.println("CONSENSUS POSITION: " + (1 + cpos - cstart));
 			}
-			
+
 			Vector<Base> bases = new Vector<Base>();
 
 			for (int rdid = rdleft; rdid <= rdright; rdid++) {
 				int rpos = mappings[rdid].getReadOffset(cpos);
-				
-				int qual = rpos >= 0 ? mappings[rdid].getQuality(rpos) : mappings[rdid].getPadQuality(cpos);
+
+				int qual = rpos >= 0 ? mappings[rdid].getQuality(rpos)
+						: mappings[rdid].getPadQuality(cpos);
 				char base = rpos >= 0 ? mappings[rdid].getBase(rpos) : '*';
 
 				if (qual > 0) {
@@ -267,28 +295,33 @@ public class FindSolexaSNP {
 
 					char strand = mappings[rdid].isForward() ? 'F' : 'R';
 
-					int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
-					
-					Clipping qclip = sequence.getQualityClipping();
-					
-					boolean clipOK = qclip != null && rpos >= 0 &&
-						rpos > qclip.getLeft() && rpos < qclip.getRight();
+					int chemistry = read == null ? Read.UNKNOWN : read
+							.getChemistry();
 
-					Base b = new Base(read_id, seq_id, rpos, clipOK, ligation_id, strand, chemistry, base, qual);
-					
+					Clipping qclip = sequence.getQualityClipping();
+
+					boolean clipOK = qclip != null && rpos >= 0
+							&& rpos > qclip.getLeft()
+							&& rpos < qclip.getRight();
+
+					Base b = new Base(read_id, seq_id, rpos, clipOK,
+							ligation_id, strand, chemistry, base, qual);
+
 					bases.add(b);
 				}
 			}
-			
+
 			switch (mode) {
 				case CONSENSUS_READ_MISMATCH:
-					findConsensusReadMismatch(contig_id, cpos, bases);
+					if (findConsensusReadMismatch(contig_id, cpos, bases)
+							&& tagType != null)
+						addContigTag(contig_id, cpos);
 					break;
-					
+
 				case LOW_QUALITY_PADDING:
 					findLowQualityPadding(contig_id, cpos, bases);
 					break;
-					
+
 				default:
 					System.err.println("Unknown mode!");
 					System.exit(1);
@@ -298,81 +331,139 @@ public class FindSolexaSNP {
 		return true;
 	}
 
+	private void addContigTag(int contig_id, int cpos) {
+		try {
+			if (tag_id < 0)
+				createContigTag();
+			
+			pstmtCreateTag2Contig.setInt(1, contig_id);
+			pstmtCreateTag2Contig.setInt(2, tag_id);
+			pstmtCreateTag2Contig.setInt(3, cpos);
+			pstmtCreateTag2Contig.setInt(4, cpos);
+			
+			pstmtCreateTag2Contig.executeUpdate();
+		} catch (SQLException e) {
+			Arcturus.logSevere("An error occurred when adding a contig tag", e);
+		}
+	}
+
+	private void createContigTag() throws SQLException {
+		if (tagType == null)
+			return;
+
+		String query = "insert into CONTIGTAG(tagtype, tagcomment) values (?,?)";
+		
+		PreparedStatement pstmtCreateContigTag = conn.prepareStatement(query,
+				Statement.RETURN_GENERATED_KEYS);
+		
+		pstmtCreateContigTag.setString(1, tagType);
+		pstmtCreateContigTag.setString(2, tagComment);
+		
+		int rc = pstmtCreateContigTag.executeUpdate();
+
+		if (rc == 1) {
+			ResultSet rs = pstmtCreateContigTag.getGeneratedKeys();
+			tag_id = rs.next() ? rs.getInt(1) : -1;
+			rs.close();
+		} else {
+			Arcturus
+					.logSevere("Failed to create a CONTIGTAG entry.  Cannot create contig tags.");
+			tagType = null;
+		}
+
+		pstmtCreateContigTag.close();
+	}
+
 	private final String TAB = "\t";
 	private final String PREFIX_A = "A ";
 	private final String PREFIX_B = "B ";
 	private final String EMPTY_STRING = "";
 
-	private void findConsensusReadMismatch(int contig_id, int cpos, Vector<Base> bases) {
+	private boolean findConsensusReadMismatch(int contig_id, int cpos,
+			Vector<Base> bases) {
 		if (bases == null || bases.isEmpty())
-			return;
-		
+			return false;
+
 		int depth = bases.size();
-		
+
 		consensus.reset();
 		consensus2.reset();
-		
+
 		for (Base base : bases) {
 			if (base.quality > 0) {
-				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
-				
+				consensus.addBase(base.base, base.quality, base.strand,
+						base.chemistry);
+
 				if (base.ligation_id != 0)
-					consensus2.addBase(base.base, base.quality, base.strand, base.chemistry);
+					consensus2.addBase(base.base, base.quality, base.strand,
+							base.chemistry);
 			}
 		}
-		
+
 		int score = consensus.getBestScore();
 		char bestbase = consensus.getBestBase();
-		
+
 		int score2 = consensus2.getBestScore();
 		char bestbase2 = consensus2.getBestBase();
 		int count2 = consensus2.getReadCount();
-		
+
 		if (consensus.getReadCount() == 0)
-			return;
+			return false;
+
+		boolean result = false;
 
 		for (Base base : bases) {
-			if (base.ligation_id == 0 && base.base != bestbase)
-				System.out.println(PREFIX_A + contig_id + TAB + cpos + TAB + depth
-						+ TAB + bestbase + TAB + score 
-						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
-						+ TAB + base.clipOK
-						+ TAB + base.base + TAB + base.quality);			
-			else if (count2 > 0 && base.ligation_id == 0 && base.base != bestbase2)
-				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB + count2
-						+ TAB + bestbase2 + TAB + score2 
-						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
-						+ TAB + base.clipOK
-						+ TAB + base.base + TAB + base.quality);
+			if (base.ligation_id == 0 && base.base != bestbase) {
+				System.out.println(PREFIX_A + contig_id + TAB + cpos + TAB
+						+ depth + TAB + bestbase + TAB + score + TAB
+						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read_position + TAB + base.clipOK + TAB
+						+ base.base + TAB + base.quality);
+
+				result = true;
+			} else if (count2 > 0 && base.ligation_id == 0
+					&& base.base != bestbase2) {
+				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB
+						+ count2 + TAB + bestbase2 + TAB + score2 + TAB
+						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read_position + TAB + base.clipOK + TAB
+						+ base.base + TAB + base.quality);
+
+				result = true;
+			}
 		}
+
+		return result;
 	}
-	
-	private void findLowQualityPadding(int contig_id, int cpos, Vector<Base> bases) {
+
+	private void findLowQualityPadding(int contig_id, int cpos,
+			Vector<Base> bases) {
 		if (bases == null || bases.isEmpty())
 			return;
-		
+
 		int depth = bases.size();
-	
+
 		consensus.reset();
-		
+
 		for (Base base : bases) {
 			if (base.quality > 0)
-				consensus.addBase(base.base, base.quality, base.strand, base.chemistry);
+				consensus.addBase(base.base, base.quality, base.strand,
+						base.chemistry);
 		}
-		
+
 		int score = consensus.getBestScore();
 		char bestbase = consensus.getBestBase();
-		
+
 		if (bestbase != '*')
 			return;
 
 		for (Base base : bases) {
 			if (base.base != bestbase)
-				System.out.println(EMPTY_STRING + contig_id + TAB + cpos + TAB + depth
-						+ TAB + bestbase + TAB + score 
-						+ TAB + base.read_id + TAB + base.sequence_id + TAB + base.read_position
-						+ TAB + base.clipOK
-						+ TAB + base.base + TAB + base.quality);
+				System.out.println(EMPTY_STRING + contig_id + TAB + cpos + TAB
+						+ depth + TAB + bestbase + TAB + score + TAB
+						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read_position + TAB + base.clipOK + TAB
+						+ base.base + TAB + base.quality);
 		}
 	}
 
@@ -386,8 +477,10 @@ public class FindSolexaSNP {
 		protected int chemistry;
 		protected char base;
 		protected int quality;
-		
-		public Base(int read_id, int sequence_id, int read_position,boolean clipOK, int ligation_id, char strand, int chemistry, char base, int quality) {
+
+		public Base(int read_id, int sequence_id, int read_position,
+				boolean clipOK, int ligation_id, char strand, int chemistry,
+				char base, int quality) {
 			this.read_id = read_id;
 			this.sequence_id = sequence_id;
 			this.read_position = read_position;
