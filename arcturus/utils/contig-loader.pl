@@ -1166,7 +1166,7 @@ sub tagList {
                  'WARN','DRPT','LEFT','RGHT','TLCM','ALUS','VARI',
                  'CpGI','NNNN','SIL' ,'IRPT','LINE','REPA','REPY',
                  'REPZ','FICM','VARD','VARS','CSED','CONS','EXON',
-                 'SILR','DIFF','FWGS');
+                 'SILR','DIFF','FWGS','FCDS');
 
 # software TAGS
 
