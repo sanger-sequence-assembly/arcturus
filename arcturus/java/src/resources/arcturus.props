@@ -7,7 +7,7 @@ arcturus.default.instance=bacteria,fungi,helminths,protozoa
 
 arcturus.update.url=http://intweb.sanger.ac.uk/Software/Arcturus/arcturus.zip
 
-jdbcloghandler.host=mcs1a
+jdbcloghandler.host=mcs2a
 jdbcloghandler.port=15001
 jdbcloghandler.database=arcturus
 jdbcloghandler.username=arcturus
@@ -19,7 +19,7 @@ mail.smtp.auth=false
 mailhandler.to=arcturus@sanger.ac.uk
 mailhandler.domain=sanger.ac.uk
 
-jmxdb.url=jdbc:mysql://mcs1a:15001/arcturus
+jmxdb.url=jdbc:mysql://mcs2a:15001/arcturus
 jmxdb.username=arcturus
 jmxdb.password=***REMOVED***
 
