@@ -236,6 +236,8 @@ public class CheckConsistency {
 			};
 			
 			cc.checkConsistency(adb, listener);
+
+			System.exit(0);
 		} catch (Exception e) {
 			Arcturus.logSevere(e);
 			System.exit(1);
