@@ -565,7 +565,9 @@ sub listStreams {
 
     my @devices;
     foreach my $stream (0,1,2,3) {
-        push @devices, $this->{STREAMS}->[$stream]->{device};
+        my $device = $this->{STREAMS}->[$stream]->{device};
+        $device = '' unless defined($device);
+        push @devices, $device;
     }
 
     $this->warning("Standard Stream active on device $devices[0]");
@@ -573,7 +575,7 @@ sub listStreams {
     $this->fine("Standard Stream active (level: fine)");
     $this->finest("Standard Stream active (level: finest)");
     $this->error("Error Stream active on device $devices[1]");
-    $this->debug("Debug Stream active on device $devices[4]");
+    $this->debug("Debug Stream active on device $devices[3]");
     $this->special("Special Stream active on device $devices[2]");
 }
 
