@@ -2,7 +2,7 @@
 
 set ALL = $#argv
 
-set MYSQL="mysql -h mcs2a -P 15001 -u arcturus --password=***REMOVED*** --batch --skip-column-names"
+set MYSQL="mysql -h mcs3a -P 15001 -u arcturus --password=***REMOVED*** --batch --skip-column-names"
 set LISTDBS="select table_schema from information_schema.tables where table_name = 'PROJECT'"
 set LISTDIRS="select distinct(substring_index(directory,'/',5)) from PROJECT where directory like '/nfs/repository/%'"
 
