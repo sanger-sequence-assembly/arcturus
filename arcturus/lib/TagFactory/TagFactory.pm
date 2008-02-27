@@ -67,26 +67,34 @@ sub new {
 
 sub makeReadTag {
     my $newtag = &makeTag(@_);
+#    my $newtag = &makeTag(@_,Host=>'Read');
     $newtag->setHost('Read');   # define kind
     return $newtag;
 }
 
 sub makeContigTag {
     my $newtag = &makeTag(@_);
+#    my $newtag = &makeTag(@_,Host=>'Contig');
     $newtag->setHost('Contig');
     return $newtag;
 }
 
 sub makeTag {
 # make a new tag
-    my $this = shift;
+    my $class = shift;
     my ($tagtype,$start,$final,%options) = @_;
+#    my $start = shift;
+#    my $final = shift;
+#    my %options = @_;
 
-    my $newtag = new Tag(); # no type
+    my $newtag = new Tag();
 
-    $newtag->setType($tagtype); # gap4 tag type
     $newtag->setPosition($start,$final);
-    $newtag->setStrand('Forward'); # default
+
+    $newtag->setType($tagtype) if $tagtype;
+#    $options{Type}   = 'UNDF'    unless defined($options{Type});
+
+    $options{Strand} = 'Forward' unless defined($options{Strand});
 
     foreach my $item (keys %options) {
         my $value = $options{$item};
@@ -97,142 +105,73 @@ sub makeTag {
 }
 
 #----------------------------------------------------------------------
-# compare two tags
+# processing various tags to regularise internal presentation
 #----------------------------------------------------------------------
 
-sub isEqual {
-# compare two tags
+sub verifyTagContent {
+# process / cleanup tagcomment / complete tag using comment 
     my $class = shift;
-    my $atag = shift;
-    my $otag  = shift;
+    my $tag   = shift;
     my %options = @_;
-    
-    return undef unless &verifyParameter($atag,'isEqual (1-st parameter)');
 
-    return undef unless &verifyParameter($otag,'isEqual (2-nd parameter)');
+    return undef unless &verifyParameter($tag,'verifyTagContent');
 
-#    my $logger = &verifyLogger('isEqual');
+    my $logger = &verifyLogger('verifyTagContent',1);
 
-# compare tag type and host type
+    my $tagtype = $tag->getType();
 
-    return 0 unless ($atag->getType() eq $otag->getType());
+    my $tagcomment = $tag->getTagComment();
 
-    return 0 unless ($atag->getHostClass() eq $otag->getHostClass());
+    my $hostclass = $tag->getHostClass() || ''; # if any
 
-# compare tag position(s) by looking at the mapping representation
+# collect diagnostic messages in a report
 
-    my $amap = $atag->getPositionMapping();
-    my $omap = $otag->getPositionMapping();
-    my @equal = $amap->isEqual($omap);
-# insist on equality of position(s) with same alignment and no shift 
-    unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
-        return 0 unless ($options{overlaps} || $options{contains});
-# test if otag tags is embedded in atag 
-        my @arange = $amap->getMappedRange();
-        my @orange = $omap->getMappedRange();
-# test if arange contains orange
-        if ($options{contains}) {
-            return 0 if ($orange[0] < $arange[0]);
-            return 0 if ($orange[1] > $arange[1]);
-        }
-        if ($options{overlaps}) {
-            return 0 if ($orange[1] < $arange[0]);
-            return 0 if ($orange[0] > $arange[1]);
-        }
+    my $report = '';
+    my $returnstatus = 1; # exit > 0 for valid tag, else 0
+
+# cleanup the comments
+
+    &cleanuptagcomment($tag);
+
+    &cleanupcontigtagcomment($tag) if ($hostclass ne 'Read');
+
+# test for DNA info embedded in the comment
+
+    my $msg = &get_tag_DNA($tag);
+
+    $report .= $msg if $msg;
+
+# ok, now analyse specific tag info
+
+    if ($tagtype eq 'OLIG' || $tagtype eq 'AFOL') {
+	my ($status,$msg) = &processOligoTag($class,$tag);
+#  $returnstatus = 0 unless $status:
+        $report .= $msg if $msg;       
+    } 
+    elsif ($tagtype eq 'REPT') {
+$logger->warning("verifyTagContent:REPT");
+        my $status = &processRepeatTag  ($class,$tag);
+        $report .= "No repeat sequence name detected" unless $status;
+$logger->warning("verifyTagContent:REPT (status $status)");
+        $returnstatus = 0 unless $status;
+    }
+    elsif ($tagtype eq 'ADDI') {
+        my ($status,$msg) = &processAdditiveTag($class,$tag); 
+        $report .= $msg if (defined($status) && $status != 1);
+	$returnstatus = 0 unless $status;
     }
 
-# compare tag comments
+# amend ANNO tag
 
-    if ($atag->getTagComment() =~ /\S/ && $otag->getTagComment() =~ /\S/) {
-# both comments defined
-        unless ($atag->getTagComment() eq $otag->getTagComment()) {
-# tags may be different, do a more detailed comparison using a cleaned version
-            my $inop = $options{ignorenameofpattern}; # e.g.: oligo names
-            unless (&cleanuptagcomment($atag->getTagComment(),$inop) eq
-                    &cleanuptagcomment($otag->getTagComment(),$inop)) {
-   	        return 0;
-            }
-	}
-    }
-    elsif ($atag->getTagComment() =~ /\S/) {
-# one of the comments is blank and the other is not
-        return 0 unless $options{ignoreblankcomment};
-# fill in the blank comment where it is missing
-        $otag->setTagComment($atag->getTagComment()) if $options{copycom};
-    }
-    elsif  ($otag->getTagComment() =~ /\S/) {
-# one of the comments is blank and the other is not
-        return 0 unless $options{ignoreblankcomment};
-# fill in the blank comment where it is missing
-        $atag->setTagComment($otag->getTagComment()) if $options{copycom};
+    elsif ($tagtype eq 'ANNO' && $options{annotag} && ($options{annotag} ne 'ANNO')) {
+        $tag->setType($options{annotag});
+        $report .= "Annotation ANNO tag type changed to $options{annotag}\n";
     }
 
-# compare the tag sequence & name or (if no tag sequence name) systematic ID.
-# the tag sequence or name takes precedence over the systematic ID because 
-# in e.g. the case of repeat tags, a systematic ID could have been generated 
-# by the tag loading software
+# return status to signal a valid tag or not
 
-    if ($atag->getDNA() || $otag->getDNA()) {
-# at least one of the tag DNA sequences is defined; then they must be equal 
-        return 0 unless ($atag->getDNA() eq $otag->getDNA());
-    }
-    elsif ($atag->getTagSequenceName() =~ /\S/ || 
-           $otag->getTagSequenceName() =~ /\S/) {
-# at least one of the tag sequence names is defined; then they must be equal
-	return 0 unless ($atag->getTagSequenceName() eq 
-                         $otag->getTagSequenceName());
-    }
-# neither tag has a tag sequence name defined, then consider the systematic ID
-    elsif ($atag->getSystematicID() =~ /\S/ || 
-           $otag->getSystematicID() =~ /\S/) {
-# at least one of the systematic IDs is defined; then they must be equal
-	return 0 unless ($atag->getSystematicID() eq $otag->getSystematicID());
-    }
-
-# compare strands (optional)
-
-    if ($options{includestrand}) {
-
-        return 0 unless ($otag->getStrand() eq 'Unknown' ||
-                         $atag->getStrand() eq 'Unknown' ||
-                         $atag->getStrand() eq $otag->getStrand());
-    }
-
-# the tags are identical; inherit possible undefined data
-
-    if ($options{copy} || $options{inherit}) {
-# copy tag ID, tag sequence ID and systematic ID, if not already defined
-        unless ($otag->getTagID()) {
-            $otag->setTagID($atag->getTagID());
-        }
-        unless ($otag->getTagSequenceID()) {
-            $otag->setTagSequenceID($atag->getTagSequenceID());
-        }
-        unless ($otag->getSystematicID()) {
-           $otag->setSystematicID($atag->getSystematicID());
-        }
-    }
-
-    return 1
-}
-
-sub cleanuptagcomment {
-# private method cleanup for purpose of comparison of comments
-    my $comment = shift;
-    my $inop = shift; # special treatment for e.g. auto-generated oligo names
-
-    &verifyPrivate($comment,'cleanuptagcomment');
-
-# remove quotes, '\n\' and shrink blankspace into a single blank
-
-    $comment =~ s/^\s*([\"\'])\s*(.*)\1\s*$/$2/; # remove quotes
-    $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
-    $comment =~ s/\\n\\/ /g; # replace by blank space
-    $comment =~ s/\s+/ /g; # shrink blank space
-
-    $comment =~ s/^$inop// if $inop; # remove if present at begin
-   
-    return $comment;
+$logger->error("output status $returnstatus, report: $report");
+    return $returnstatus,$report;
 }
 
 
@@ -240,7 +179,7 @@ sub cleanuptagcomment {
 # Read tags : cleanup/reformat/analyse tag info and if needed standardise
 #-----------------------------------------------------------------------------
 
-sub cleanup {
+sub cleanup { # TO BE DEPRECATED
 # clean the tag info by removing clutter, double info and redundent new line
     my $this = shift;
     my $tag  = shift;
@@ -249,7 +188,7 @@ sub cleanup {
 
     my $info = $tag->getTagComment();
 
-    my ($change,$inew) = &cleanupreadtaginfo($info);
+    my ($change,$inew) = &cleanupreadtaginfo($info,$tag);
 
     return 0 unless $change; # no change
 
@@ -258,9 +197,214 @@ sub cleanup {
     return $change; # the number of changes
 }
 
+sub cleanupreadtaginfo {
+    my ($info,$tag) = @_;
+    return &oldcleanupreadtaginfo($info);
+#    return &cleanuptagcomment($tag);
+}
+
+#-----------------------------------------------------------------------------
 #-----------------------------------------------------------------------------
 
-sub processOligoTag {
+sub cleanuptagcomment {
+# private, remove quotes, redundant spaces or \n\ from the tag description
+    my $tag = shift;
+
+    &verifyPrivate($tag,'cleanuptagcomment');
+
+    foreach my $handle ('TagComment','Comment') { 
+
+        my ($comment,$changes);
+
+        eval ("\$comment = \$tag->get$handle()");
+
+        next unless ($comment =~ /\S/);
+
+        $changes++ if ($comment =~ s/\s+\"([^\"]+)\".*$/$1/); # remove quotes 
+
+        $changes++ if ($comment =~ s/^\s+|\s+$//); # remove leading/trailing blanks
+
+        $changes++ if ($comment =~ s/\n+/\\n\\/g); # replace new line by \n\
+
+        $changes++ if ($comment =~ s/\\n\\\s*$//); # delete trailing newline
+
+        $changes++ if ($comment =~ s/\s+(\\n\\)/$1/g); # delete blanks before \n\
+
+        $changes++ if ($comment =~ s/(\\n\\)\-(\\n\\)/-/g); # - between \n\
+
+        $changes++ if ($comment =~ s/(\\n\\)o(\\n\\)/\\n\\/g); # o between \n\
+
+        $changes++ if ($comment =~ s/(\\n\\){2,}/\\n\\/g); # remove repeats of \n\
+
+        $changes++ if ($comment =~ s?\\/?/?g); # replace back-slashed slashes
+
+        $changes++ if ($comment =~ /^\s*\\\s*/); # remove a single backslash
+
+        next unless $changes;
+
+        eval ("\$tag->set$handle(\$comment)");
+    }
+}
+
+sub cleanupcontigtagcomment {
+# private, ad hoc cleanup of autogenerated contig tags
+    my $tag = shift;
+
+    &verifyPrivate($tag,'cleanupcontigtagcomment');
+
+    my $tagcomment = $tag->getTagComment();
+
+    my $changes = 0;
+
+    if ($tagcomment =~ /Repeats\s+with/) {
+        $changes++ if ($tagcomment =~ s/\,\s*offset\s+\d+//i);
+    }
+
+    $changes++ if ($tagcomment =~ s/expresion/expression/);
+
+    $tag->setTagComment($tagcomment) if $changes;
+
+# print STDERR "cleanupcontigtagcomment changes=$changes\n";
+    return $changes;   
+}
+
+sub get_tag_DNA {
+# get DNA sequence from comment and remove possible multiple occurrences
+    my $tag = shift;
+
+    &verifyPrivate($tag,'get_tag_DNA');
+
+    my $tagcomment = $tag->getTagComment();
+
+    my $report = '';
+    if ($tagcomment =~ /([ACGT\*]{5,})/i) {
+        my $DNA = $1; my $dna = qw($DNA); # can contain "*"
+# test if the DNA occurs twice in the data; remove multiple occurrences
+        if ($tagcomment =~ s/($dna[^ACGT].*?)(sequence\=)?$dna/$1/i) {
+            my $tagtype = $tag->getType() || "undefined type";
+            $report = "Multiple DNA info removed from \'$tagtype\' tag";
+            $tag->setTagComment($tagcomment);
+        }
+        $tag->setDNA($DNA);
+    }
+
+#print STDERR "get_tag_DNA report:'$report'\n";
+    return $report;
+}
+
+#-----------------------------------------------------------------------------
+# Read tags : cleanup/reformat/analyse tag info and if needed standardise
+#-----------------------------------------------------------------------------
+
+sub oldprocessRepeatTag {
+# check repeat tags for presence of tag sequence name
+    my $this = shift;
+    my $tag  = shift;
+
+    return undef unless &verifyParameter($tag,'processRepeatTag');
+
+    my $tagtype = $tag->getType();
+
+    return undef unless ($tagtype eq 'REPT');
+
+    my $tagcomment = $tag->getTagComment();
+# test presence of a (repeat) tag sequence name upfront
+    if ($tagcomment =~ /^\s*(\S+)\s/i) {
+        $tag->setTagSequenceName($1);
+        return 1;
+    }
+    return 0; # no name found
+}
+
+sub processRepeatTag {
+# check repeat tags for presence of tag sequence name
+    my $this = shift;
+    my $tag  = shift;
+return &oldprocessRepeatTag($this,$tag) unless @_; # add parameter to invoke
+
+    return undef unless &verifyParameter($tag,'processRepeatTag');
+
+    my $tagtype = $tag->getType();
+
+    return undef unless ($tagtype eq 'REPT');
+
+    my $tagcomment = $tag->getTagComment();
+
+    my $status = 0;
+
+# test presence of a (repeat) tag sequence name upfront
+               
+    $tagcomment =~ s/\s*\=\s*/=/g;
+    if ($tagcomment =~ /^\s*(\S+)\s+from/i) {
+        my $tagseqname = $1;
+        $tagseqname =~ s/r\=/REPT/i;
+        $tag->setTagSequenceName($tagseqname);
+        $status = 1;
+    }
+    elsif ($tagcomment =~ /^\s*(\S+)\s/i) {
+        $tag->setTagSequenceName($1);
+        $status = 1;
+    }
+# no name found, try alternative
+    elsif ($tagcomment !~ /Repeats\s+with/) {
+# try to generate one based on possible read mentioned
+        if ($tagcomment =~ /\bcontig\s+(\w+\.\w+)/) {
+            $tag->setTagSequenceName($1);   
+            $status = 2;
+        }
+    }
+
+    return $status;
+}
+
+sub oldprocessAdditiveTag {
+# check position range
+    my $this = shift;
+    my $tag  = shift;
+
+    return undef unless &verifyParameter($tag,'processAdditiveTag');
+
+    my $tagtype = $tag->getType();
+
+    return undef unless ($tagtype eq 'ADDI');
+
+    my ($tposs,$tposf) = $tag->getPosition();
+
+    return 0 if ($tposs != 1); # invalid position
+
+    return 1;
+}
+
+sub processAdditiveTag {
+# check position range
+    my $this = shift;
+    my $tag  = shift;
+return &oldprocessAdditiveTag($this,$tag) unless @_; # add parameter to invoke
+
+    return undef unless &verifyParameter($tag,'processAdditiveTag');
+
+    my $tagtype = $tag->getType();
+
+    return undef unless ($tagtype eq 'ADDI');
+
+# test presence of a descriptor
+
+    return 0,"Missing tag description" unless $tag->getTagComment();
+
+# test position
+
+    my ($tposs,$tposf) = $tag->getPosition();
+
+    $tag->setPosition(1,$tposf) unless ($tposs == 1); # correction
+
+    return 1,'OK' if ($tposs == 1); 
+
+# invalid position, additag must start at 1
+
+    return 2,"Invalid ADDI tag start position $tposs corrected";
+}
+
+sub oldprocessOligoTag {
 # test/complete oligo information
     my $this = shift;
     my $tag  = shift;
@@ -434,49 +578,182 @@ sub processOligoTag {
     return $warning,$report;
 }
 
-sub processRepeatTag {
-# check repeat tags for presence of tag sequence name
+sub processOligoTag {
+# test/complete oligo information
     my $this = shift;
     my $tag  = shift;
-
-    return undef unless &verifyParameter($tag,'processRepeatTag');
+ my %options = @_; # used in repair mode
+  return &oldprocessOligoTag($this,$tag,@_) unless $options{usenew};
+ 
+    return undef unless &verifyParameter($tag,'processOligoTag');
+print STDOUT "processOligoTag ..\n";
 
     my $tagtype = $tag->getType();
 
-    return undef unless ($tagtype eq 'REPT');
+    return undef unless ($tagtype eq 'OLIG' || $tagtype eq 'AFOL');
 
-    my $tagcomment = $tag->getTagComment();
-# test presence of a (repeat) tag sequence name upfront
-    if ($tagcomment =~ /^\s*(\S+)\s/i) {
-        $tag->setTagSequenceName($1);
-        return 1;
+    my $warning = 0;
+    my $report = '';
+
+    if (my $dna = $tag->getDNA()) {
+# test existing dna atribute against possible description in info
+        my $copytag = $tag->copy();
+        my $change = &get_tag_DNA($copytag); # overrides existing DNA attribute
+        $tag->setTagComment($copytag->getTagComment()) if $change;
+        my $copydna = $copytag->getDNA();
+# the dna and tagcomment attributes are inconsistent if copydna  differs from  dna 
+        if ($copydna ne $dna) {
+            my $tagcomment = $copytag->getTagComment();
+            $report .= "Oligo tag DNA sequence ($dna) conflicts with tag\n"
+	            .  "comment $tagcomment\nDNA sequence replaced\n";
+            $tag->setDNA($copydna); # always repair
+            $warning++;
+	}
     }
-    return 0; # no name found
-}
+    else {
+# no DNA defined yet, extract from info, if any
+        $report = &get_tag_DNA($tag); # 
+        $dna = $tag->getDNA();
+        $report .= "Missing DNA sequence in oligo tag info\n" unless $dna;
+        $report .= "Oligo tag DNA sequence $dna added\n" if $dna;
+        $warning++ if $report;
+    }
 
-sub processAdditiveTag {
-# check position range
-    my $this = shift;
-    my $tag  = shift;
 
-    return undef unless &verifyParameter($tag,'processAdditiveTag');
+# test DNA length against position specification
 
-    my $tagtype = $tag->getType();
+    my $DNA = $tag->getDNA(); # may have changed
+    my $tagcomment = $tag->getTagComment();
 
-    return undef unless ($tagtype eq 'ADDI');
+    if ($DNA && (my $length = length($DNA))) {
 
-    my ($tposs,$tposf) = $tag->getPosition();
+	my ($tposs,$tposf) = $tag->getPosition();
+        
+        unless ($tposf > $tposs) {
+            $report .= "position error ($tposs $tposf) in oligo tag\n"
+	            .  "$tagcomment\n";
+	    $warning++;
+# abort: invalid position information
+            return $warning, $report;
+        }
 
-    return 0 if ($tposs != 1); # invalid position
+        if ($tposf-$tposs+1 != $length) {
+            $report .= "oligo length mismatch ($tposs $tposf $length) "
+                    .  "in tag comment\n$tagcomment\n";
+# you might want to correct the positions by matching against read?
+	    $warning++;
+        }
+    }
 
-    return 1;
+# get the tag sequence name from the oligo information ($tagcomment)
+
+    if ($tagtype eq 'AFOL') {
+# these tags are supposed to have a standard (Staden) format with the
+# tag sequence name specified; test/assign to the $tag instance 
+        if ($tagcomment =~ /oligoname\s*(\w+)/i) {
+            my $newtagseqname = $1;
+# check the name against the one of this $tag, if it is defined
+            if (my $oldtagseqname = $tag->getTagSequenceName()) {
+                if ($oldtagseqname ne $newtagseqname) {
+                    $report .= "oligo tag sequence name mismatch "
+                            .  "($oldtagseqname <> $newtagseqname) "
+                            .  "in tag comment\n$tagcomment\n";
+	            $warning++;
+		}
+                $tag->setTagSequenceName($newtagseqname); # if $options{forcen}
+	    }
+	    else {
+# assign/replace name derived from tag comment
+                $tag->setTagSequenceName($newtagseqname);
+	    }
+        }
+	else {
+            $report .= "Unrecognized tag information\n$tagcomment\n";
+	    $warning++;
+	}
+    }
+
+    elsif ($tagtype eq 'OLIG') {
+# these tags have a loosly defined structure which has to be "decoded"
+# we try to extract a tagsequence name from the tag information 
+        my ($newname,$newcomment) = &decode_oligo_info($tagcomment,$DNA);
+
+# test if the comment contains a place holder
+
+        if ($newcomment && $newcomment =~ /\<\w+\>/) {
+# if the tag sequence name is defined, and matches the generic place
+# holder name, then substitute the place holder in the tag comment
+            my $placeholder = $1;
+            my $tagseqname = $tag->getTagSequenceName(); # existing name,if any
+            if ($tagseqname && $tagseqname =~ /^$placeholder\w+/) {
+                $newcomment =~ s/\<$placeholder\>/$tagseqname/;
+                $report .= "place holder <$placeholder> replaced by "
+		        .  "existing tag sequence name $tagseqname\n";
+                $warning++;
+            }
+            elsif ($tagseqname) {
+# the tag sequence name is defined, but differs from the placeholder name
+# two options: replace the place holder by the tag sequence name, or
+# overwrite the currrent sequence name and substitute by the place holder
+                $report .= "Conflicting tag sequence name and place holder: "
+		        .  "($tagseqname, <$placeholder>)\n";
+                $warning++;
+# choose which one by specifying the name with the force option (repair mode)
+                if (my $force = $options{nameforcing}) {
+                    if ($tagseqname =~ /$force/ && $placeholder =~ /$force/) {
+                        $report .= "'force' option not discriminating\n";
+                    }
+		    elsif ($tagseqname =~ /$force/) {
+                        $newcomment =~ s/\<$placeholder\>/$tagseqname/;
+                    }
+                    else {
+                        $tag->setTagSequenceName($placeholder);
+		    }
+		}
+            }
+	    else {
+# the tag name is not defined, enter the placeholder
+                $tag->setTagSequenceName($newname);
+	    }
+            $tag->setTagComment($newcomment);
+	}
+
+        elsif ($newname && $tag->getTagSequenceName()) {
+# test the name (from comment) against existing name
+            my $tagseqname = $tag->getTagSequenceName();
+            unless ($newname eq $tagseqname) {
+                $report .= "tag sequence name change indicated: "
+		        .  "($tagseqname --> $newname)\n";
+# specify with the force option if the new name is selected
+                my $force = $options{nameforcing};
+                if ($force && ($newname =~ /$force/ || $tagseqname =~ /$force/)) {
+                    $tag->setTagSequenceName($newname);
+                }
+	    }
+            $tag->setTagComment($newcomment) if $newcomment;
+	}
+
+        elsif ($newname) {
+# there is no existing name; assign the tag sequence name
+            $tag->setTagSequenceName($newname);
+            $tag->setTagComment($newcomment) if $newcomment;
+	}
+
+        else {
+	    $report .= "Failed to decode OLIGO description:\n$tagcomment\n";
+            $warning++;
+	}
+    }
+
+print STDOUT "oligotag : w:$warning r:$report\n\n";
+    return $warning,$report;
 }
 
 #-----------------------------------------------------------------------------
 # private methods doing the dirty work
 #-----------------------------------------------------------------------------
 
-sub get_oligo_DNA {
+sub get_oligo_DNA { # TO BE DEPRECATED
 # get DNA sequence from tag comment and remove possible multiple occurrences
     my $info = shift;
 
@@ -494,7 +771,7 @@ sub get_oligo_DNA {
     return 0,0; # no DNA
 }
 
-sub decode_oligo_info {
+sub olddecode_oligo_info {
 # ad-hoc oligo info decoder
     my $info = shift;
     my $sequence = shift;
@@ -660,7 +937,321 @@ $logger->debug("now decoded info: $info ($name)");
     return ($name,$info);
 }
 
-sub cleanupreadtaginfo {
+sub decode_oligo_info {
+# ad-hoc oligo info decoder
+    my $info = shift || return 0,0;
+    my $sequence = shift;
+return &olddecode_oligo_info($info,$sequence);
+
+# this is a more or less ad-hoc parser for oligo info produced in gap4
+
+my $logger = &verifyLogger('decode_oligo_info');
+
+$logger->debug("decode_oligo_info  $info ($sequence)");
+
+    my $change = 0;
+# clean up name (replace possible ' oligo ' string by 'o')
+    $change++ if ($info =~ s/\boligo[\b\s*]/o/i);
+# remove names of form oligo_m....
+    $change++ if ($info =~ s/oligo\_m\w*//);
+
+# replace blank space by \n\ if at least one \n\ already occurs
+    if ($info =~ /\\n\\/) {
+        $change++ if($info =~ s/\s+/\\n\\/g);
+    }
+# replace multiple occurring \n\ by one
+    $change++ if ($info =~ s/(\\n\\){2,}/\\n\\/g); 
+# remove possible place holder name
+    $change++ if ($info =~ s/^\<\w+\>//i);
+
+# clean up stretches of text between \n\
+
+    $change++ if ($info =~ s/1300(\d)/130$1/g); # ad hoc
+    $change++ if ($info =~ s/ig\\n\\pk/ig-pk/);
+    $change++ if ($info =~ s/ig\spk/ig-pk/);
+
+    if ($info =~ /(pcr.+)\\n\\seq/) {
+$logger->debug("Ia change $change");
+        my $clutter = $1;
+        my $cleanup = $clutter;
+        $cleanup =~ s/\\n\\/-/g;
+#        $clutter =~ s/\\/\\\\/g;
+        $cleanup = qw($cleanup);
+        $clutter = qw($clutter);
+$logger->debug("Ia clutter '$clutter'\nIa cleanup '$cleanup'");
+        unless ($clutter eq $cleanup) {
+            $change++ if ($info =~ s/$clutter/$cleanup/);
+        }
+    }
+
+$logger->debug("I change $change $info");
+
+# split $info on blanks and \n\ separation symbols
+
+    my @info = split /\s+|\\n\\/,$info;
+
+# cleanup empty flags= specifications
+
+    foreach my $part (@info) {
+        if ($part =~ /flags\=(.*)/) {
+            my $flag = $1;
+            unless ($flag =~ /\S/) {
+                $info =~ s/\\n\\flags\=\s*//;
+                $change = 1;
+            }
+        }
+    }
+
+    my $name;
+    my $qwsequence = qw($sequence);
+    if (defined($sequence) && $info =~ /^\s*(\d+)\b(.*?)$qwsequence/) {
+# the info string starts with a number followed by the sequence
+        $name = "o$1";
+        $change++ if ($info =~ s/^\s*(\d+)\b/$name/);
+    }
+    elsif ($info !~ /serial/ && $info =~ /\b([dopt]\d+)\b/) {
+# the info contains a name like o1234 or t1234
+        $name = $1;
+    }
+    elsif ($info !~ /serial/ && $info =~ /\bo([a-z]\d+)\b/) {
+        $name = $1;
+    }
+    elsif ($info !~ /serial/ && $info =~ /[^\w\.]0(\d+)\b/) {
+        $name = "o$1"; # correct typo 0 for o
+    }
+    elsif ($info =~ /\b(o\w+)\b/ && $info !~ /\bover\b/i && $info !~ /\bof\b/i) {
+# the info contains a name like oxxxxx (check for names like of1234 -> f1234)
+        $name = $1;
+    }
+# try its a name like 17H10.1
+    elsif ($info =~ /^(\w+\.\w{1,2})\b/) {
+        $name = $1;
+    }
+# try with the results of the split
+    elsif ($info[0] && $info[0] !~ /\=/ && $info =~ /^([a-zA-Z]\w+)\b/i) {
+# the info string starts with a name like axx..
+        $name = $1;
+    }
+    elsif (defined($sequence) && defined($info[1]) && $info[1] eq $sequence) {
+        $name = $info[0];
+        $name = "o$name" unless ($name =~ /\D/);
+    }
+
+$logger->debug("II name ".($name || '')." (change $change)");
+ 
+    return ($name,0) if ($name && !$change); # no new info
+    return ($name,$info) if $name; # info modified
+
+
+# name could not easily be decoded: try one or two special possibilities
+
+
+    foreach my $part (@info) {
+        if ($part =~ /serial\#?\=?(.*)/) {
+            $part = qw($part);
+            my $number = $1;
+            if (defined($number) && $number =~ /\w/) {
+# generate a name based on the information following '=' (mostly a number)
+                $name = "o$number"; 
+# replace the serial field by the name
+                $info =~ s/$part/$name/;
+            }
+            else {
+# remove the part from the info (it contains no information)
+                $info =~ s/$part//;
+	    }
+	    $change++;
+	}
+    }
+
+$logger->debug("name ".($name || '')." (change $change)");
+
+    return ($name,$info) if $name;
+
+# or see if possibly the name and sequence fields have been interchanged
+
+    if (defined($info[1]) && $info[1] =~ /^\w+\.\w{1,2}\b/) {
+# name and sequence possibly interchanged
+$logger->debug("still undecoded info: $info  (@info)");
+        $name = $info[1];
+        $info[1] = $info[0];
+        $info[0] = $name;
+        $info = join ('\\n\\',@info);
+$logger->debug("now decoded info: $info ($name)");
+        return $name,$info;
+    }
+
+# still no joy, try info field that looks like a name (without = sign etc.)
+
+    foreach my $part (@info) {
+        next if ($part =~ /\=/);
+# consider it a name if the field starts with a character
+        if ($part =~ /\b([a-zA-Z]\w+)\b/) {
+            my $save = $1;
+# avoid repeating information
+            $name  = $save if ($name && $save =~ /$name/);
+            $name .= $save unless ($name && $name =~ /$save/);
+        }
+    }
+
+    $info =~ s/\\n\\\s*$name\s*$// if $name; # chop off name at end, if any
+
+# if the name is still blank substitute a placeholder
+            
+    $name = '<oligo>' unless $name; # place holder name
+
+# put the name upfront in the info string
+
+    $info = "$name\\n\\".$info;
+    $info =~ s/\\n\\[\s*|o]\\n\\/\\n\\/g; # cleanup
+
+    return ($name,$info);
+}
+
+#----------------------------------------------------------------------
+# compare two tags
+#----------------------------------------------------------------------
+
+sub isEqual {
+# compare two tags
+    my $class = shift;
+    my $atag = shift;
+    my $otag  = shift;
+    my %options = @_;
+    
+    return undef unless &verifyParameter($atag,'isEqual (1-st parameter)');
+
+    return undef unless &verifyParameter($otag,'isEqual (2-nd parameter)');
+
+#    my $logger = &verifyLogger('isEqual');
+
+# compare tag type and host type
+
+    return 0 unless ($atag->getType() eq $otag->getType());
+
+    return 0 unless ($atag->getHostClass() eq $otag->getHostClass());
+
+# compare tag position(s) by looking at the mapping representation
+
+    my $amap = $atag->getPositionMapping();
+    my $omap = $otag->getPositionMapping();
+    my @equal = $amap->isEqual($omap);
+# insist on equality of position(s) with same alignment and no shift 
+    unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
+        return 0 unless ($options{overlaps} || $options{contains});
+# test if otag tags is embedded in atag 
+        my @arange = $amap->getMappedRange();
+        my @orange = $omap->getMappedRange();
+# test if arange contains orange
+        if ($options{contains}) {
+            return 0 if ($orange[0] < $arange[0]);
+            return 0 if ($orange[1] > $arange[1]);
+        }
+        if ($options{overlaps}) {
+            return 0 if ($orange[1] < $arange[0]);
+            return 0 if ($orange[0] > $arange[1]);
+        }
+    }
+
+# compare tag comments
+
+    if ($atag->getTagComment() =~ /\S/ && $otag->getTagComment() =~ /\S/) {
+# both comments defined
+        unless ($atag->getTagComment() eq $otag->getTagComment()) {
+# tags may be different, do a more detailed comparison using a cleaned version
+            my $inop = $options{ignorenameofpattern}; # e.g.: oligo names
+            unless (&cleancompare($atag->getTagComment(),$inop) eq
+                    &cleancompare($otag->getTagComment(),$inop)) {
+   	        return 0;
+            }
+	}
+    }
+    elsif ($atag->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment where it is missing
+        $otag->setTagComment($atag->getTagComment()) if $options{copycom};
+    }
+    elsif  ($otag->getTagComment() =~ /\S/) {
+# one of the comments is blank and the other is not
+        return 0 unless $options{ignoreblankcomment};
+# fill in the blank comment where it is missing
+        $atag->setTagComment($otag->getTagComment()) if $options{copycom};
+    }
+
+# compare the tag sequence & name or (if no tag sequence name) systematic ID.
+# the tag sequence or name takes precedence over the systematic ID because 
+# in e.g. the case of repeat tags, a systematic ID could have been generated 
+# by the tag loading software
+
+    if ($atag->getDNA() || $otag->getDNA()) {
+# at least one of the tag DNA sequences is defined; then they must be equal 
+        return 0 unless ($atag->getDNA() eq $otag->getDNA());
+    }
+    elsif ($atag->getTagSequenceName() =~ /\S/ || 
+           $otag->getTagSequenceName() =~ /\S/) {
+# at least one of the tag sequence names is defined; then they must be equal
+	return 0 unless ($atag->getTagSequenceName() eq 
+                         $otag->getTagSequenceName());
+    }
+# neither tag has a tag sequence name defined, then consider the systematic ID
+    elsif ($atag->getSystematicID() =~ /\S/ || 
+           $otag->getSystematicID() =~ /\S/) {
+# at least one of the systematic IDs is defined; then they must be equal
+	return 0 unless ($atag->getSystematicID() eq $otag->getSystematicID());
+    }
+
+# compare strands (optional)
+
+    if ($options{includestrand}) {
+
+        return 0 unless ($otag->getStrand() eq 'Unknown' ||
+                         $atag->getStrand() eq 'Unknown' ||
+                         $atag->getStrand() eq $otag->getStrand());
+    }
+
+# the tags are identical; inherit possible undefined data
+
+    if ($options{copy} || $options{inherit}) {
+# copy tag ID, tag sequence ID and systematic ID, if not already defined
+        unless ($otag->getTagID()) {
+            $otag->setTagID($atag->getTagID());
+        }
+        unless ($otag->getTagSequenceID()) {
+            $otag->setTagSequenceID($atag->getTagSequenceID());
+        }
+        unless ($otag->getSystematicID()) {
+           $otag->setSystematicID($atag->getSystematicID());
+        }
+    }
+
+    return 1
+}
+
+sub cleancompare {
+# private method cleanup for purpose of comparison of comments
+    my $comment = shift;
+    my $inop = shift; # special treatment for e.g. auto-generated oligo names
+
+    &verifyPrivate($comment,'cleancompare');
+
+# remove quotes, '\n\' and shrink blankspace into a single blank
+
+    $comment =~ s/^\s*([\"\'])\s*(.*)\1\s*$/$2/; # remove quotes
+    $comment =~ s/^\s+|\s+$//g; # remove leading & trailing blank
+    $comment =~ s/\\n\\/ /g; # replace by blank space
+    $comment =~ s/\s+/ /g; # shrink blank space
+
+    $comment =~ s/^$inop// if $inop; # remove if present at begin
+   
+    return $comment;
+}
+
+#----------------------------------------------------------------------
+# place holder name
+#----------------------------------------------------------------------
+
+sub cleanupreadtaginfoold { # TO BE DEPRECATED
 # remove quotes, redundant spaces and \n\ from the tag description
     my $comment = shift;
 
@@ -717,7 +1308,7 @@ sub processTagPlaceHolderName {
 
 # and similarly, if the place holder appears in the comment, substitute
 
-    if (my $comment = $tag->getTagComment()) {
+    if (my $comment = $tag->getTagComment(pskip=>1)) {
         if ($comment =~ s/\<$name\>/$newname/) {
             $tag->setTagComment($comment);
 	}
@@ -873,7 +1464,7 @@ $logger->debug($newmapping->toString());
     return 1;
 }
 
-sub testmapper {
+sub testmapper { # TO BE DEPRECATED
 # temporary 
     my $class = shift;
     my ($tag,$mapping,%options) = @_;
@@ -1047,7 +1638,7 @@ my $logger = &verifyLogger("collapse"); $logger->debug("ENTER collapse");
 }
 
 # -------------------
-# old stuff, to be replaced
+# old stuff, to be DEPRECATED
 # -------------------
 
 sub oldtranspose { # used in Tag, ContigHelper TO BE DEPRECATED
@@ -1343,8 +1934,15 @@ $logger->info("$gapsize : sequence deletion detected");
 }
 
 #---------------------- TO HERE -------------
+#------------------------------------------------------------------------------
+# sorting tags
+#------------------------------------------------------------------------------
 
-sub merge { # used in ContigHelper
+#------------------------------------------------------------------------------
+# merging
+#------------------------------------------------------------------------------
+
+sub merge { #
 # merge two tags (fragments), if possible
     my $class = shift;
     my $atag = shift;
@@ -1551,7 +2149,7 @@ $logger->debug(scalar(keys %$tagtypehash)." tag SIDs");
 }
 
 sub makeCompositeTag {
-# join tags in the input list to make a composite tag
+# join tags in the input list to make a tag with a composite position range
     my $class = shift;
     my $tags = shift;
 
@@ -1559,7 +2157,7 @@ sub makeCompositeTag {
 
     return $newtag unless @$tags; # there is only one tag
 
-# for the remaining tags add the positions to the new tag and concatenate
+# for the remaining tags add the positions to the new tag & concatenate
 # the tag comments if they conform to comment for fragmented annotation tags
 
     my $tagcommentformat = 'fragment\\s+([\\d\\,]+)\\s+of\\s+(\\d+)';
