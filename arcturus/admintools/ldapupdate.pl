@@ -5,7 +5,7 @@ use Term::ReadKey;
 use DBI;
 
 while ($nextword = shift @ARGV) {
-    $url = shift @ARGV if ($nextword eq '-url');
+    $server = shift @ARGV if ($nextword eq '-server');
 
     $base = shift @ARGV if ($nextword eq '-base');
 
@@ -29,10 +29,13 @@ while ($nextword = shift @ARGV) {
 
     $principal = shift @ARGV if ($nextword eq '-principal');
 
-    $password = shift @ARGV if ($nextword eq '-password');
+    if ($nextword eq '-help') {
+	showUsage();
+	exit(0);
+    }
 }
 
-$url = 'ldap.internal.sanger.ac.uk' unless defined($url);
+$server = 'ldap.internal.sanger.ac.uk' unless defined($server);
 
 $base = "cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk" unless defined($base);
 
@@ -46,9 +49,9 @@ if ($listall) {
     $filter = "&(objectClass=javaNamingReference)(cn=$organism)";
 }
 
-$ldap = Net::LDAP->new($url) or die "$@";
+$ldap = Net::LDAP->new($server) or die "$@";
 
-if (defined($principal) && !defined($password)) {
+if (defined($principal)) {
     print "Password: ";
     ReadMode 'noecho';
     $password = ReadLine 0;
@@ -208,4 +211,40 @@ sub createReferenceAddress {
     }
 
     return $strings;
+}
+
+sub showUsage {
+    my @text = ("Usage",
+		"-----",
+		"",
+		"MANDATORY PARAMETERS",
+		"(none)",
+		"",
+		"OPTIONAL PARAMETERS",
+		"-server\t\tName of LDAP server",
+		"\t\t[default: ldap.internal.sanger.ac.uk]",
+		"",
+		"-base\t\tRoot of LDAP tree to modify",
+		"\t\t[default: cn=jdbc,ou=arcturus,ou=projects,dc=sanger,dc=ac,dc=uk]",
+		"",
+		"-instance\tArcturus instance name",
+		"",
+		"-organism\tArcturus organism name (to list/modify a specific organism)",
+		"-listall\tList/modify all entries (this is the default option)",
+		"",
+		"-verbose\tProduce verbose output",
+		"",
+		"-newhost\tName of new MySQL host",
+		"-newport\tPort number of new MySQL host",
+		"-update\t\tUpdate the tree with the new host and/or port",
+		"",
+		"-showurl\tDisplay the DBI URL for each entry",
+		"-testurl\tTest the DBI URL for each entry",
+		"",
+		"-principal\tName of the LDAP manager (if -update is specified)",
+		);
+
+    foreach my $line (@text) {
+	print STDERR $line,"\n";
+    }
 }
