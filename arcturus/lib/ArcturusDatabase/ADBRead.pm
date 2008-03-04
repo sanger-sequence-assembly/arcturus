@@ -1765,6 +1765,48 @@ print STDERR "INVALID call hasRead : @_\n"; # to be removed
     return $read_id;
 }
 
+sub getReadsNotInDatabase {
+# returns those readnames from input list which are not found in database
+    my $this = shift;
+    my $readnames = shift; # reference to array with readnames to be tested
+
+    &verifyParameter($readnames,"getReadsNotInDatabase",'ARRAY');
+
+    my $dbh = $this->getConnection();
+
+# build a hash list keyed on readnames
+
+    my $namehash = {};
+    foreach my $name (@$readnames) {
+        $namehash->{$name}++;
+    }
+
+# do the search in blocks of 1000; remove readnames found from hash keys
+
+    my $nr = scalar(@$readnames);
+    for (my $i = 0; $i < $nr ; $i += 1000) {
+        my $j = $i + 1000 - 1;
+        $j = $nr - 1 if ($j >= $nr);
+        my $joinstring = join "','",@$readnames[$i .. $j];
+        my $query = "select readname from READINFO"
+                  . " where  readname in ('$joinstring')";
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        my $results = $sth->fetchall_arrayref();
+        foreach my $result (@$results) {
+            delete $namehash->{$result->[0]};
+        }
+    }
+
+# the remaining keys are readnames not present in the database
+
+    my @missingreads = keys %$namehash;
+
+    return [@missingreads];    
+}
+
 sub areReadsNotInDatabase {
 # return a list of those readnames from an input list which are NOT present
     my $this      = shift;
@@ -2892,8 +2934,6 @@ $isequaloptions{logger} = $logger; # test purposes
 $logger->debug("processing tag $rtag");
                 next if $ignore->{$rtag};
 $logger->debug("testing tag $rtag");
-# OBSOLETE process possible placeholder names (to enable the name comparison)
-# &processTagPlaceHolderName($rtag,$logger); DEPRECATED
 # and compare the tag with the current existing tag (including host class)
                 $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
 $logger->setPrefix("putTagsForReads");
@@ -3075,13 +3115,15 @@ sub putReadTags {
               . "(seq_id,tagtype,tag_seq_id,pstart,pfinal,strand,comment) "
               . "values ";
 
-    my $success = 1;
+#    my $success = 1;
     my $block = 100; # insert block size
 
     my $accumulated = 0;
     my $accumulatedQuery = $query;
     my $lastTag = $tags->[@$tags-1];
 
+    my $tagsloaded = 0;
+    my $tagsmissed = 0;
     foreach my $tag (@$tags) {
 
         my $seq_id           = $tag->getSequenceID();
@@ -3109,13 +3151,17 @@ sub putReadTags {
             my $rc = $sth->execute() || &queryFailed($accumulatedQuery);
             $sth->finish();
 
-            $success = 0 unless $rc;
+            $tagsloaded += $accumulated if $rc;
+            $tagsmissed += $accumulated unless $rc;
+
+#            $success = 0 unless $rc;
             $accumulatedQuery = $query;
             $accumulated = 0;
         }
     }
 
-    return $success; 
+    return $tagsloaded; 
+#    return $tagsloaded,$tagsmissed; # contig-loader.pl read-loader.pl oligo-tag-loader (read-tag-tester readtag-cleanup)
 }
 
 
