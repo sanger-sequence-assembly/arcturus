@@ -401,9 +401,9 @@ sub putContig {
     my $project = shift; # Project instance or '0' or undef
     my %options = @_;
 
-    &verifyParameter($contig,"getParentContigsForContig");
+    &verifyParameter($contig,"putContig");
 
-    &verifyParameter($project,"getParentContigsForContig",'Project');
+    &verifyParameter($project,"putContig",'Project');
 
     my $log = $this->verifyLogger('putContig');
 
@@ -493,7 +493,7 @@ sub putContig {
     my $message;
     if ($previous) {
         $message = "Contig $contigname matches contig "
-                 .  $previous->getContigName()  . " ($readhash) ";
+                 .  $previous->getContigName();
 # the read name hash or the sequence IDs hash does match: test generation
         unless ($this->isCurrentContigID($previous->getContigID())) {
             $message .= " in an older generation; ";
@@ -877,6 +877,10 @@ $log->debug($testproject->getProjectID()." ".$testproject->getProjectName().
             my $score = 0;
             foreach my $contigid (@$contigids) {
                 if ($inheritmodel == 1) {
+		    unless (defined($readsinparent{$contigid})) {
+$log->warning("inheritProject: undefined number of reads in hash for contig $contigid");
+			next;
+		    }
                     $score += $readsinparent{$contigid};
                 }
 		elsif ($inheritmodel == 2) {
@@ -1230,6 +1234,7 @@ sub getReadMappingsForContig {
         my $mapping = new Mapping($nm);
         $mapping->setSequenceID($sid);
         $mapping->setAlignmentDirection($dir);
+        $mapping->setHostSequenceID($cid);
 # add Mapping instance to output list and hash list keyed on mapping ID
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;
@@ -1307,6 +1312,7 @@ sub getContigMappingsForContig {
         $mapping->setSequenceID($pid);
         $mapping->setAlignmentDirection($dir);
         $mapping->setMappingID($mid);
+        $mapping->setHostSequenceID($cid);
 # add Mapping instance to output list and hash list keyed on mapping ID
         push @mappings, $mapping;
         $mappings->{$mid} = $mapping;
