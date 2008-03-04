@@ -49,13 +49,11 @@ sub copy {
 
 #----------------------------------------------------------------------
 
-#use TagFactory::TagFactory_new; # helper class
-
 sub verify {
 # process tag comment(s) and test tag for completeness & content validity
     my $this = shift;
 
-    return TagFactory_new->verifyTagContent($this);
+    return TagFactory->verifyTagContent($this);
 }
 
 #----------------------------------------------------------------------
@@ -274,14 +272,14 @@ sub getPositionRange {
     my @pl = $this->getPosition($part); # last  segment;
 
 # alternative to be VERIFIED
-my $test = 0; if ($test) {
+ my $test = 0; if ($test) {
     my $mapping = $this->getPositionMapping(new=>1);
     my @range = $mapping->getMappedRange();
     unless ($pf[0] == $range[0] && $pf[1] == $range[1]) {
         print STDOUT "range: @range  pfs: $pf[0], $pl[1]\n";
     }
-#    return $mapping->getMappedRange();
-}
+    return $mapping->getMappedRange();
+ }
 
     return $pf[0], $pl[1];
 }
@@ -395,9 +393,6 @@ sub setTagComment {
 sub getTagComment {
     my $this = shift;
     my %options = @_;
-
-print STDERR "getTagComment: options : '@_'\n" if (scalar(@_)%2);
-exit 1 if (scalar(@_)%2);
 # before export, process possible place holder (<name>)
     if ($this->{tagcomment} && $this->{tagcomment} =~ /\</) {
         TagFactory->processTagPlaceHolderName($this) unless $options{pskip};
@@ -535,7 +530,7 @@ sub remap {
 
     &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
-                                  'break','nobreak','segmentaware',
+                                  'split','nosplit','segmentaware',
 'usenew','list','useold', # to be removed later
                                   'minimumsegmentsize',        
                                   'annooptions','sysIDoptions','changestrand');
@@ -573,7 +568,7 @@ sub isEqual {
                                     'ignoreblankcomment',
 		                    'includestrand',
                                     'copy','copycom',
-                                    'overlaps','contains',
+                                    'overlaps','contains','adjoins',
                                     'inherit');
 
     return TagFactory->isEqual($this,$tag,%options);
