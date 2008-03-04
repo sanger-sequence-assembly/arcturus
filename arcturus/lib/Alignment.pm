@@ -86,6 +86,14 @@ sub correlate {
 # get (& process/copy) control parameters or their defaults
 #------------------------------------------------------------------------------
 
+    if ($options{banded}) {
+# to be developed and tested
+        my $defaults = &getDefaults($templatelength,$sequencelength);
+        foreach my $key (%$defaults) {
+            $options{$key} = $defaults->{$key} unless defined $options{$key};
+        }
+    }
+
     my $coaligned  = $options{coaligned} || 0; # ensure definition
     my $ofilter    = $options{filteroffsets}; 
     my $searchmode = $options{searchmode};
@@ -101,7 +109,8 @@ sub correlate {
     my $owindow = 0;
 
     my %coptions; # correlation options
-    if ($options{bandedwindow} || $options{bandedlinear} || $options{bandedoffset}) {
+    if ($options{banded}) {
+#    if ($options{bandedwindow} || $options{bandedlinear} || $options{bandedoffset}) {
 # the approximate linear relation is known and used to limit search domain
         $coptions{linear} = $options{bandedlinear} || 1.0;
         $coptions{offset} = $options{bandedoffset} || 0.0;
@@ -121,6 +130,7 @@ sub correlate {
         $banding = 1;
     }
     else {
+# not banded search requires ..
         $reverse = 1 if ($options{coaligned} && $options{coaligned} < 0);
 
         $peakdrift = 5 unless defined $peakdrift; # ???
@@ -219,7 +229,7 @@ $logger->debug("Analysing distribution");
 $logger->debug("offset $roffsets count $rcount"); 
             foreach my $offset (@$roffsets) {
                 $offset->[3] = 1; # reverse
-$logger->info("roffset: @$offset");
+$logger->fine("roffset: @$offset");
             } 
         }
 
@@ -268,7 +278,7 @@ $logger->info("roffset: @$offset");
     $options{minimumsegmentsize} = $mrss unless defined $options{minimumsegmentsize};
     my $mss = $options{minimumsegmentsize} - ($kmersize-1); # adjust for endregion extension 
 
-    $logger->info("Getting initial set of alignment segments (mss = $mss)");
+    $logger->fine("Getting initial set of alignment segments (mss = $mss)");
 
 delete $options{threshold};
     my $segments = &getAlignmentSegments($correlationhash,minimumsegmentsize=>$mss,
@@ -280,7 +290,7 @@ delete $options{threshold};
 #  extend the segments to full size by adding half kmersize at the end 
 #-----------------------------------------------------------------------------------------
 
-$logger->info("Extend alignment segments");
+$logger->fine("Extend alignment segments");
     &extendSegments($segments,$kmersize,$reverse);
 
 #-----------------------------------------------------------------------------------------
@@ -298,19 +308,19 @@ $logger->info("Extend alignment segments");
         my $minimumsegmentsize = $options{autoclip} * $mrss; # starting value
 
         while ($minimumsegmentsize) {
-$logger->info("number of segments ".scalar(@$segments),skip=>1);
-$logger->info("minimum segment-length required: $minimumsegmentsize");
+$logger->fine("number of segments ".scalar(@$segments),skip=>1);
+$logger->fine("minimum segment-length required: $minimumsegmentsize");
 
             $mss = int($minimumsegmentsize+0.5);
             my $removed = &cleanupEmbeddedAndShortSegments($segments,reverse=>$reverse,
                                                             minimumsegmentsize=>$mss);
 
 $logger = &verifyLogger('after cleanupEmbeddedAndShortSegments');  
-$logger->info("$removed segments removed with cleanup");
-$logger->info(&listSegments($segments,"minimized selection"));
+$logger->fine("$removed segments removed with cleanup");
+$logger->fine(&listSegments($segments,"minimized selection"));
 
             $overlap = &cleanupOverlappingSegments($segments,reverse=>$reverse);
-$logger->info("$overlap overlapping segments"); 
+$logger->fine("$overlap overlapping segments"); 
             unless ($overlap && @$segments > 2 && $minimumsegmentsize < $templatelength/3) {
                 $minimumsegmentsize /= 2;
                 last;
@@ -327,7 +337,7 @@ $logger->fine("$removed segments removed on initial cleanup");
 $logger->fine("$overlap overlapping segments"); 
     }
 
-    $logger->info(&listSegments($segments,"segment minimized selection")) if $options{diagnose};
+    $logger->fine(&listSegments($segments,"segment minimized selection")) if $options{diagnose};
 
 #-----------------------------------------------------------------------------------------
 # filter segments to remove discordant ones and add half a kmer size at either end
@@ -364,7 +374,7 @@ $options{iterate}  = 9;
     $options{iterate}  = 1 unless defined($options{iterate}); # default
     my $iterate = $options{iterate};
 
-$logger->info("iterate = $iterate  olb:$offsetlowerbound  oub:$offsetupperbound");
+$logger->fine("iterate = $iterate  olb:$offsetlowerbound  oub:$offsetupperbound");
 
     $options{minimumsegmentsize} = 1 unless defined $options{minimumsegmentsize}; # ?
 
@@ -382,10 +392,10 @@ $logger->info("iterate = $iterate  olb:$offsetlowerbound  oub:$offsetupperbound"
 
         $peakdrift = $kmersize - 1 if ($kmersize <= $peakdrift);
 
-$logger->info("Doing kmersize $kmersize on ".scalar(@$gaps)." gaps; drift $peakdrift",ss=>1);
+$logger->fine("Doing kmersize $kmersize on ".scalar(@$gaps)." gaps; drift $peakdrift",ss=>1);
 
         foreach my $gap (@$gaps) {
-            $logger->info("t-gap : $gap->[0] - $gap->[1] , s-gap : $gap->[2] - $gap->[3]");
+            $logger->fine("t-gap : $gap->[0] - $gap->[1] , s-gap : $gap->[2] - $gap->[3]");
 # build the hashes, using only the data in the interval
             $tkmerhash = &buildKmerHash($template,$kmersize,$gap->[0],$gap->[1]);
 # NOTE: inverted case requires [3],[2] TO BE TESTED
@@ -411,7 +421,7 @@ $logger->info("Doing kmersize $kmersize on ".scalar(@$gaps)." gaps; drift $peakd
                 $offsets[0]--;
                 $offsets[1]++;
 	    }
-$logger->info("kmer $kmersize;  gap @$gap;   offsets @offsets");
+$logger->fine("kmer $kmersize;  gap @$gap;   offsets @offsets");
 
 # we do an un-banded search because it's a very limited search domain
 
@@ -419,24 +429,24 @@ $logger->info("kmer $kmersize;  gap @$gap;   offsets @offsets");
                             offsetlowerbound=>$offsets[0], 
                             offsetupperbound=>$offsets[1]); 
             my $shash = &sampleCorrelationHash($tkmerhash,$skmerhash,undef,%roptions);
-$logger->info("No segments found") unless $shash;
+$logger->fine("No segments found") unless $shash;
             next unless $shash;
 # NOTE : here add a search using the reverse complement
 
 # add new segments to the existing segments
 
             my $newsegments = &getAlignmentSegments($shash,minimumlength=>$minimum);
-$logger->info(scalar(@$newsegments)." segments found for minimumlength $minimum");
+$logger->fine(scalar(@$newsegments)." segments found for minimumlength $minimum");
 
 
             if (@$newsegments) {
-#$logger->info(&listSegments($newsegments,"before extend"));
+#$logger->fine(&listSegments($newsegments,"before extend"));
                 &extendSegments($newsegments,$kmersize,$reverse);
-#$logger->info(&listSegments($newsegments,"before cleanup"));
+#$logger->fine(&listSegments($newsegments,"before cleanup"));
                 my %ceasoptions = (reverse => $reverse, targetoffset => $toffset);
                 my $removed = &cleanupEmbeddedAndShortSegments($newsegments,%ceasoptions);
-$logger->info("$removed segments removed with gap cleanup",skip=>1);
-$logger->info(&listSegments($newsegments,"after cleanup"));
+$logger->fine("$removed segments removed with gap cleanup",skip=>1);
+$logger->fine(&listSegments($newsegments,"after cleanup"));
 
                 my $overlap = &cleanupOverlappingSegments($newsegments,%cuosoptions);
                 push @$segments,@$newsegments;
@@ -449,23 +459,23 @@ $logger->info(&listSegments($newsegments,"after cleanup"));
 
 # do a final cleanup, just in case (no gap determination)
 
-#$logger->info(&listSegments($segments,"final raw segment ")) if $options{diagnose};
+#$logger->fine(&listSegments($segments,"final raw segment ")) if $options{diagnose};
 
 #    &cleanupEmbeddedAndShortSegments($segments,%soptions);
 
-#$logger->info(&listSegments($segments,"final cleaned segment ")) if $options{diagnose};
+#$logger->fine(&listSegments($segments,"final cleaned segment ")) if $options{diagnose};
 
     my %moptions = (lowqsymbol => 'NX\*\-', window => 1);
     $moptions{lqextend} = $options{lqextend} if defined $options{lqextend}; # default 'NX\*\-'
     $moptions{lqsymbol} = $options{lqsymbol} if defined $options{lqsymbol}; # default 1   
     &mergeSegments($segments,$reverse,$template,$sequence,%moptions);
     
-$logger->info(&listSegments($segments,"final merged segment ")) if $options{diagnose};
+$logger->fine(&listSegments($segments,"final merged segment ")) if $options{diagnose};
 
 # and analyze remaining gaps
         
     my $gaps = &gapSegments($segments,$reverse,[@borders]);
-$logger->info(scalar(@$gaps)." gaps found"); 
+$logger->fine(scalar(@$gaps)." gaps found"); 
 
 # export the segments as a Mapping
 
@@ -482,6 +492,37 @@ $logger->info(scalar(@$gaps)." gaps found");
     $mapping->normalise();
 
     return $mapping;
+}
+
+sub getDefaults {
+# determine a set of defaults from sequence lengths
+    my $thislength = shift;
+    my $thatlength = shift;
+
+    my %options;
+
+# default values for banded search
+
+    $options{bandedlinear} = $thatlength / $thislength;
+    $options{bandedoffset} = 0.5*($thislength - $thatlength);
+    $options{bandedwindow} =  abs($thislength - $thatlength) + 3;
+
+# default values for windows
+
+    my $offsetwindow = abs($thislength - $thatlength) + 10;
+    $options{offsetlowerbound} = -$offsetwindow;
+    $options{offsetupperbound} = +$offsetwindow;
+
+# default value for kmer size
+
+    $options{kmersize} = int(log($thislength+$thatlength)/2.3+7); 
+
+    my $logger = &verifyLogger();
+    foreach my $key (keys %options) {
+        $logger->fine("Default $key\t: $options{$key}");
+    }
+
+    return \%options;
 }
     
 #--------------------------------------------------------------------------
@@ -694,11 +735,11 @@ $logger->debug("ENTER opts: @_");
 # test number of trials; test if very large numbers
             my $trials = scalar(@$match) * scalar(@$local);
             if ($trials > 1000000 && $options{guillotine}) {
-                $logger->info("$trials trials for kmers $kmer (".scalar(@$match)
+                $logger->fine("$trials trials for kmers $kmer (".scalar(@$match)
                                                  .") and $key (".scalar(@$local).")");
                 my $remk = &reverse($kmer);
 		next if ($kmer eq $remk); # palidromic kmer
-		$logger->info("accepted: '$kmer'  vs '$remk'");
+		$logger->fine("accepted: '$kmer'  vs '$remk'");
             }  
             foreach my $thisposition (@$local) {
 # for banded search, define upper and lower bounds
@@ -828,7 +869,7 @@ $logger->fine("correlate kmer hashes ($list) ") if $list;
 # ? $positionlowerbound = ($thisposition + $boffset) * $blinear; # ??
                     $positionupperbound = $positionlowerbound + $bwindow;
                     $positionlowerbound -= $bwindow;
-$logger->info("local boundaries: $positionlowerbound $positionupperbound ($thisposition)") if $list;
+$logger->fine("local boundaries: $positionlowerbound $positionupperbound ($thisposition)") if $list;
                 }
 
                 undef my $jfirst;
@@ -926,14 +967,14 @@ sub getAlignmentSegments {
     my $segments = [];
 
     unless (defined($maxoffset)) {
-        $logger->info("getAlignmentSegments: empty correlation hash");
+        $logger->fine("getAlignmentSegments: empty correlation hash");
 	return $segments;
     }
 
     my $threshold = $offsetcount->{$maxoffset}/20;  
     $threshold = $options{threshold} if defined $options{threshold};
-    $logger->info("largest count $offsetcount->{$maxoffset} for offset $maxoffset"); 
-    $logger->info("offset range sampled : $offsets[0] - $offsets[$lio];  threshold $threshold");
+    $logger->fine("largest count $offsetcount->{$maxoffset} for offset $maxoffset"); 
+    $logger->fine("offset range sampled : $offsets[0] - $offsets[$lio];  threshold $threshold");
 
 # collect all peaks in offset distribution above threshold
     
@@ -1136,9 +1177,9 @@ sub filterOffsets {
 	}
 
         if ($options{list}) {
-            $logger->info("DH deviation hash");
+            $logger->fine("DH deviation hash");
             foreach my $deviation (sort {$a <=> $b} keys %$deviationhash) {
-                $logger->info("DH $deviation $deviationhash->{$deviation}");
+                $logger->fine("DH $deviation $deviationhash->{$deviation}");
 	    }
 	}
 
@@ -1198,8 +1239,8 @@ $logger->debug("SS looking for overlapping segments");
         $soverlap = $segments->[$i]->[3] - $segments->[$i+1]->[2] + 1 unless $reverse;
         $soverlap = $segments->[$i+1]->[2] - $segments->[$i]->[3] + 1 if $reverse;
         next unless ($toverlap > 0 || $soverlap > 0);
-$logger->info("SS regular overlap $toverlap $soverlap");
-$logger->info("SS regular overlap @{$segments->[$i]} : @{$segments->[$i+1]}");
+$logger->fine("SS regular overlap $toverlap $soverlap");
+$logger->fine("SS regular overlap @{$segments->[$i]} : @{$segments->[$i+1]}");
         $overlapcount++;
 # find the domain with the largest overlap
         my $overlap = ($toverlap >= $soverlap) ? $toverlap : $soverlap;
@@ -1207,14 +1248,14 @@ $logger->info("SS regular overlap @{$segments->[$i]} : @{$segments->[$i+1]}");
         my $shrink = int(($overlap+1)/2);
         my $rhshrink = $shrink; # right hand 
         my $lhshrink = $shrink; # left hand
-$logger->info("SS shrinking segments by $shrink");
+$logger->fine("SS shrinking segments by $shrink");
 
 # do a quality scan if overlap > 1 and at least on quality data set is available
 
         if ($overlap > 1 && ($tq || $sq)) {
 # at least one set of quality data is specified: use lowest quality as breaking point
 # TO BE TESTED
-#$logger->info("quality to be taken into account; overlap $overlap");
+#$logger->fine("quality to be taken into account; overlap $overlap");
 	    my $lsegment = new Segment(@{$segments->[$i]}); # segment on left
 	    my $rsegment = new Segment(@{$segments->[$i+1]}); # segment on right
 
@@ -1276,7 +1317,7 @@ $logger->info("SS shrinking segments by $shrink");
         $segments->[$i+1]->[0] += $lhshrink;
         $segments->[$i+1]->[2] += $lhshrink   unless $reverse;
         $segments->[$i]->[3]   += $lhshrink       if $reverse;
-$logger->info("SS new segments @{$segments->[$i]} : @{$segments->[$i+1]}");
+$logger->fine("SS new segments @{$segments->[$i]} : @{$segments->[$i+1]}");
     }
     return $overlapcount;
 }
@@ -1351,7 +1392,7 @@ sub mergeSegments {
 # if no symbol is specified, compare case only; if (low quality) pad symbols are
 # provided (e.g. N, X, *, -), generate a regular expression from the template sequence 
 
-        if (defined($symbol) || $symbol =~ /\S/) {
+        if (defined($symbol) || ($symbol && $symbol =~ /\S/)) {
             $tstring =~ s/(\w)/[$1$symbol]/g; # generate a regexp 
         }
             
@@ -1645,7 +1686,7 @@ sub diagnose {
     my @offsets = sort {$a <=> $b} keys %$correlationhash;
     $logger->fine(scalar(@offsets)." offsets detected: \n@offsets");
 # block to list initial search results
-    $logger->info("diagnose: ".scalar(@$segments)." segments found");
+    $logger->fine("diagnose: ".scalar(@$segments)." segments found");
 # create list of Segment objects 
     my @segments;
     foreach my $segment (@$segments) {
@@ -1660,7 +1701,7 @@ sub diagnose {
         my @segmentdata = $segments[$i]->getSegment();
         push @segmentdata,$segments[$i]->getSegmentLength();
         push @segmentdata,$segments[$i]->getOffset();
-        $logger->info("segment : @segmentdata");
+        $logger->fine("segment : @segmentdata");
     }
 }
 
