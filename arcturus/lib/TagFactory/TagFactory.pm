@@ -181,7 +181,7 @@ $logger->error("output status $returnstatus, report: $report");
 
 sub cleanup { # TO BE DEPRECATED
 # clean the tag info by removing clutter, double info and redundent new line
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
 
     return undef unless &verifyParameter($tag,'cleanup',kind=>'Read');
@@ -298,7 +298,7 @@ sub get_tag_DNA {
 
 sub oldprocessRepeatTag {
 # check repeat tags for presence of tag sequence name
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
 
     return undef unless &verifyParameter($tag,'processRepeatTag');
@@ -318,9 +318,9 @@ sub oldprocessRepeatTag {
 
 sub processRepeatTag {
 # check repeat tags for presence of tag sequence name
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
-return &oldprocessRepeatTag($this,$tag) unless @_; # add parameter to invoke
+return &oldprocessRepeatTag($class,$tag) unless @_; # add parameter to invoke
 
     return undef unless &verifyParameter($tag,'processRepeatTag');
 
@@ -359,7 +359,7 @@ return &oldprocessRepeatTag($this,$tag) unless @_; # add parameter to invoke
 
 sub oldprocessAdditiveTag {
 # check position range
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
 
     return undef unless &verifyParameter($tag,'processAdditiveTag');
@@ -377,9 +377,9 @@ sub oldprocessAdditiveTag {
 
 sub processAdditiveTag {
 # check position range
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
-return &oldprocessAdditiveTag($this,$tag) unless @_; # add parameter to invoke
+return &oldprocessAdditiveTag($class,$tag) unless @_; # add parameter to invoke
 
     return undef unless &verifyParameter($tag,'processAdditiveTag');
 
@@ -406,7 +406,7 @@ return &oldprocessAdditiveTag($this,$tag) unless @_; # add parameter to invoke
 
 sub oldprocessOligoTag {
 # test/complete oligo information
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
     my %options = @_; # used in repair mode
  
@@ -580,10 +580,10 @@ sub oldprocessOligoTag {
 
 sub processOligoTag {
 # test/complete oligo information
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
  my %options = @_; # used in repair mode
-  return &oldprocessOligoTag($this,$tag,@_) unless $options{usenew};
+  return &oldprocessOligoTag($class,$tag,@_) unless $options{usenew};
  
     return undef unless &verifyParameter($tag,'processOligoTag');
 print STDOUT "processOligoTag ..\n";
@@ -1131,14 +1131,15 @@ sub isEqual {
 
     return 0 unless ($atag->getHostClass() eq $otag->getHostClass());
 
-# compare tag position(s) by looking at the mapping representation
+# compare tag position(s) by using the mapping representation
 
     my $amap = $atag->getPositionMapping();
     my $omap = $otag->getPositionMapping();
     my @equal = $amap->isEqual($omap);
 # insist on equality of position(s) with same alignment and no shift 
     unless ($equal[0] == 1 && $equal[1] == 1 && $equal[2] == 0) {
-        return 0 unless ($options{overlaps} || $options{contains});
+# the position ranges are not equal; test if they do overlap
+        return 0 unless ($options{overlaps} || $options{contains} || $options{adjoins});
 # test if otag tags is embedded in atag 
         my @arange = $amap->getMappedRange();
         my @orange = $omap->getMappedRange();
@@ -1147,9 +1148,15 @@ sub isEqual {
             return 0 if ($orange[0] < $arange[0]);
             return 0 if ($orange[1] > $arange[1]);
         }
+# test if orange is to the left or to the right of arange
         if ($options{overlaps}) {
             return 0 if ($orange[1] < $arange[0]);
             return 0 if ($orange[0] > $arange[1]);
+        }
+# test if orange buds on the left or on the right to arange
+        if (my $flush = $options{adjoins}) { #  usually 1
+            return 0 unless (($orange[1] + $flush == $arange[0])   # left  join
+                         ||  ($orange[0] - $flush == $arange[1])); # right join
         }
     }
 
@@ -1284,7 +1291,7 @@ sub cleanupreadtaginfoold { # TO BE DEPRECATED
 
 sub processTagPlaceHolderName {
 # substitute (possible) placeholder name of the tag sequence & comment
-    my $this = shift;
+    my $class = shift;
     my $tag  = shift;
 
     return undef unless &verifyParameter($tag,'processTagPlaceHolderName');
@@ -1509,7 +1516,8 @@ $logger->info($oldposition->toString());
 
 # case > 1 segments (composite tag) to be split into out array of tags
 
-    elsif ($options{split} || !$options{nosplit} ) {
+    elsif ($options{split} || (!defined($options{split}) && !$options{nosplit}) ) {
+#    elsif ($options{split} && !$options{nosplit}) {
         my $tags = $tag->split();
         push @tags, @$tags if $tags;
     }
@@ -1518,11 +1526,11 @@ $logger->info($oldposition->toString());
 
     else {
 # either out 1 tag with composite position
-        if ($options{nosplit} eq 'composite') {
+        if ($options{nosplit} && $options{nosplit} eq 'composite') {
             push @tags,$tag; # as is
 	}
 # or out 1 tag with overall position and new comment
-        elsif ($options{nosplit} eq 'collapse') {
+        elsif ($options{nosplit} && $options{nosplit} eq 'collapse') {
             push @tags,$tag->collapse();
 	}
 # else, invalid option, fall back on collapse
@@ -1846,7 +1854,7 @@ $logger->info("Masked Mapping: ".$maskedmapping->toString());
         push @tags,$newtag;
     }
 
-    elsif ($options{break}) {
+    elsif ($options{break} || $options{split}) {
 # CASE 2 : more than one segment, generate multiple tags
         my $number = 0;
         my $minimumsegmentsize = $options{minimumsegmentsize} || 1;
@@ -1938,8 +1946,95 @@ $logger->info("$gapsize : sequence deletion detected");
 # sorting tags
 #------------------------------------------------------------------------------
 
+sub sortTags {
+# sort an array of Tag instances in situ on position and/or comment; weedout duplicates
+    my $class = shift;
+    my $tags = shift; # array reference
+    my %options = @_; # sort=>['position', 'full'), merge=>[0,1]
+
+    &verifyParameter($tags,'sortTags',class=>'ARRAY');
+
+    my $logger = &verifyLogger('sortTags');
+
+# sort the tags with increasing tag position
+
+    if ($options{sort} && $options{sort} eq 'position') {
+# do a basic sort on start position
+        @$tags = sort positionsort @$tags;
+    }
+    elsif ($options{sort} && $options{sort} eq 'full') {
+# do a sort on position and tag description in tagcomment
+        @$tags = sort mergesort @$tags     if $options{merge};
+        @$tags = sort fullsort  @$tags unless $options{merge};
+    }
+    elsif ($options{sort}) {
+        $logger->error("invalid sorting option '$options{sort}' ignored");
+    }
+
+# remove duplicate tags; in merge mode also consider overlapping tags
+
+    my $merge = $options{merge};
+
+    my $n = 1;
+    while ($n < scalar(@$tags)) {
+        my $leadtag = $tags->[$n-1];
+        my $nexttag = $tags->[$n];
+# splice the nexttag out of the array if the tags are equal
+        if ($leadtag->isEqual($nexttag)) {
+	    splice @$tags, $n, 1;
+	}
+        elsif ($merge && $leadtag->isEqual($nexttag,contains=>1)) {
+	    splice @$tags, $n, 1; # lead tag contains next tag: remove next
+	}
+        elsif ($merge && $nexttag->isEqual($leadtag,contains=>1)) {
+	    splice @$tags, $n-1, 1; # next tag contains lead tag: remove lead
+	}
+	elsif ($merge && $leadtag->isEqual($nexttag,overlaps=>1)) {
+#?            $leadtag->setPosition($nexttag->getPositionRange(),join=>1);
+#?            $leadtag->collapse(nonew=>1);
+	    splice @$tags, $n, 1; # lead tag is extended and contains next tag
+	}
+	elsif ($merge && $leadtag->isEqual($nexttag,adjoins=>1)) {
+# budding tags found; add next tag range to leadtag and collapse; then remove next
+            $leadtag->setPosition($nexttag->getPositionRange(),join=>1);
+            $leadtag->collapse(nonew=>1);
+	    splice @$tags, $n, 1;
+	}
+        else {
+	    $n++;
+	}
+    }    
+}
+
+sub mergesort {
+# sort for weedout/merge purposes (getting same tagcomment grouped together)
+   $a->getTagComment()    cmp $b->getTagComment()     # sort on the description first
+ or
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # then on start position 
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
+}
+
+sub fullsort {
+# sort for comparison purposes (inside the same tag set)
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position 
+ or
+   $a->getType()          cmp $b->getType()           # then on type
+ or
+   $a->getTagComment()    cmp $b->getTagComment()     # then on the description first
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
+}
+
+sub positionsort {
+# comparison with ordered existing tags
+   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position
+ or
+   $a->getPositionRight() <=> $b->getPositionRight(); # then on end position 
+}
+
 #------------------------------------------------------------------------------
-# merging
+# merging/combining tags of same type
 #------------------------------------------------------------------------------
 
 sub merge { #
@@ -2336,6 +2431,13 @@ sub verifyParameter {
 	return 0;
     }
 
+    if (ref($object) eq 'ARRAY') {
+# test the first element (assuming all other are same ref type)
+        delete $options{class};
+        return &verifyParameter($object->[0],$method,%options);
+    }
+
+
     return 1 unless (ref($object) eq 'Tag'); # for objects different from Tag
 
 # test the tag type by interogating its host class, if any
@@ -2350,8 +2452,7 @@ sub verifyParameter {
         my $logger = &verifyLogger();
         $logger->error("TagFactory->$method expects a tag of type "
 	             . "$options{type} (instead of '$hostclass')");
-#        return 0; # diagnostic message
-        $logger->debug($object->dump());
+    $logger->debug($object->dump());
         $hostclass =~ s/(contig|read).*/ucfirst($1)/;
         $object->setHost($hostclass); 
     }
@@ -2406,7 +2507,7 @@ sub verifyLogger {
 
 sub setLogger {
 # assign a Logging object
-    my $this = shift;
+    my $class = shift;
     my $logger = shift;
 
     return if ($logger && ref($logger) ne 'Logging'); # protection
