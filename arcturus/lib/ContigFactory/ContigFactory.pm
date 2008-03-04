@@ -21,10 +21,59 @@ use Logging;
 # ----------------------------------------------------------------------------
 
 my $TF; # tag factory
+my $TAGTEST = 0;
+my $TESTMODE = 1;
+
+# ----------------------------------------------------------------------------
+# constructor (if you need an object; all methods can be called on the class)
+# ----------------------------------------------------------------------------
+
+sub new {
+# create a ContigFactory object
+    my $class = shift;
+
+    my $this = {};
+
+    bless $this,$class;
+
+    return $this;
+}
 
 # ----------------------------------------------------------------------------
 # building Contig instances from a Fasta file
 # ----------------------------------------------------------------------------
+
+sub getContigs {
+# returns array of Contig instances found on input file
+    my $class = shift;
+    my $filename = shift;
+    my %options = @_;
+
+    my $format = $options{format};
+
+    unless ($format) {
+        if ($filename =~ /\.(\w+)\s*$/) {
+            $format = $1; # take file extension as type indicator
+	}
+    }
+
+    
+    if ($format eq 'fasta' || $format eq 'fas') {
+        return &fastaFileParser($class,$filename,@_);
+    }
+    elsif ($format eq 'embl') {
+        return &emblFileParser($class,$filename,@_);
+    }
+    elsif ($format eq 'caf') {
+        return &cafFileParser($class,$filename,@_);
+    }
+
+    my $logger = &verifyLogger('getContigs');
+
+    $logger->error("unknown format for file $filename");
+
+    return undef;
+}
 
 sub fastaFileParser {
 # build contig objects from a Fasta file 
@@ -106,6 +155,9 @@ sub emblFileParser {
     my $emblcontigs = [];
 
     undef my $contig;
+    undef my @contigtag;
+    my $parsetag = 0;
+
     my $sequence = '';
     my $length = 0;
     my $checksum = 0;
@@ -132,6 +184,10 @@ sub emblFileParser {
                                   .$contig->getContigName());
 		}
                 $contig->setSequence($sequence);
+                if (@contigtag) {
+                    $contig->addTag(@contigtag);
+                    undef @contigtag;
+		}
                 push @$emblcontigs, $contig;
 	    }
 # and open a new one
@@ -145,7 +201,78 @@ sub emblFileParser {
             $sequence = '';
             $length = 0;
 	}
-            
+
+# parse a feature, e.g. tag
+
+        elsif ($record =~ /^FT\s+(.*)$/) {
+            my $info = $1;
+            if ($info =~ /(CDS|Tag)\s+(\d+)[\.\>\<]+(\d+)/) {
+# new tag with one position started
+                my ($type,$ts,$tf) = ($1,$2,$3);
+                $type = 'FCDS' if ($type eq 'CDS'); # FCDS recognised by Gap4
+                my $contigtag = TagFactory->makeContigTag($type,$ts,$tf);
+                push @contigtag,$contigtag;
+                $parsetag = 1;
+            }
+            elsif ($info =~ /(CDS|Tag)\s+join\(([^\)]+)\)/) {
+                my ($type,$joinstring) = ($1,$2);
+                my $contigtag = TagFactory->makeContigTag($type);
+                $contigtag->setStrand('Forward');
+                my @positions = split ',',$joinstring;
+                foreach my $position (@positions) {
+                    my ($ts,$tf) = split /\.+/,$position;
+                    $contigtag->setPosition($ts,$tf,join=>1);
+		}
+                push @contigtag,$contigtag;
+                $parsetag = 1;
+ 	    }
+            elsif ($info =~ /(CDS|Tag)\s+complement\(join\(([^\)]+)\)/) {
+                my ($type,$joinstring) = ($1,$2);
+                my $contigtag = TagFactory->makeContigTag($type);
+                $contigtag->setStrand('Reverse');
+                my @positions = split ',',$joinstring;
+                foreach my $position (@positions) {
+                    my ($ts,$tf) = split /\.+/,$position;
+                    $contigtag->setPosition($ts,$tf,join=>1);
+		}
+                push @contigtag,$contigtag;
+                $parsetag = 1;
+ 	    }
+            elsif ($info =~ /(CDS|Tag)\s+complement\(([^\)]+)\)/) {
+                my ($type,$joinstring) = ($1,$2);
+                my $contigtag = TagFactory->makeContigTag($type);
+                $contigtag->setStrand('Reverse');
+                my @positions = split ',',$joinstring;
+                foreach my $position (@positions) {
+                    my ($ts,$tf) = split /\.+/,$position;
+                    $contigtag->setPosition($ts,$tf,join=>1);
+		}
+                push @contigtag,$contigtag;
+                $parsetag = 1;
+ 	    }
+# if parsetag flag not on, we are outside a tag
+            if ($parsetag && @contigtag) {
+                my $contigtag = $contigtag[$#contigtag]; # most recent addition
+                my $tagcomment = $contigtag->getTagComment() || '';
+                if ($info =~ /note|ortholog|systematic/) {
+#  cleanup the current info line
+                    $info =~ s/(^\s*|\s*$|\/)//g;
+                    $tagcomment .= '\\n\\' if $tagcomment;
+	   	    $tagcomment .= $info;
+		    $contigtag->setTagComment($tagcomment);
+                    if ($info =~ /\bsystematic_id\b\=\"(.+)\"/) {
+                        $contigtag->setSystematicID($1);
+		    }
+                }  
+            }
+# else other info is to be parsed
+            else {
+# to be developed                
+	    }
+        }
+
+# parse the sequence  data
+
         elsif ($record =~ /^SQ\s*(.*)$/) {
             my $sequencedata = $1;
             my @sequencedata = split ';',$sequencedata;
@@ -179,6 +306,11 @@ sub emblFileParser {
                            .$contig->getContigName());
      	}
         $contig->setSequence($sequence);
+
+        if (@contigtag) {
+            $contig->addTag(@contigtag);
+            undef @contigtag;
+     	}
         push @$emblcontigs, $contig;
     }
 
@@ -188,8 +320,12 @@ sub emblFileParser {
 }
 
 #-----------------------------------------------------------------------------
-# building Contigs from CAF file 
+# building Contigs from CAF file using an inventory
 #-----------------------------------------------------------------------------
+
+my $INVENTORY; # class variable
+
+#------------- building an inventory of contigs and reads --------------------
 
 sub cafFileInventory {
 # build an inventory of objects in the CAF file
@@ -267,11 +403,12 @@ sub cafFileInventory {
             my @filelocation = ($location,$linecount);
             $inventory->{$identifier}->{$datatype} = \@filelocation;
         }
-        elsif ($record =~ /(Is_[read|contig])/) {
+        elsif ($record =~ /(Is_[read|contig]+)/) {
             my $objecttype = $1;
 # check if this is inside a valid block on the file
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{Is} = $objecttype;
+
 	    }
 	    elsif ($identifier) {
 		$logger->error("l:$linecount Unexpected $objecttype specification");
@@ -291,18 +428,74 @@ sub cafFileInventory {
 
     $CAF->close() if $CAF;
 
-    $class->{inventory} = $inventory if (ref($class) eq 'HASH');
+    $class->{inventory} = $inventory if ref($class); # store on instance hash
+
+    $INVENTORY = $inventory unless ref($class);      # store on class variable
 
     return $inventory;
 }
 
+sub getInventory {
+    my $class = shift;
+
+    return $class->{inventory} if ref($class); # called on an instance
+
+    return $INVENTORY if (ref($INVENTORY) eq 'HASH');
+
+# there is no valid inventory
+
+    my $logger = verifyLogger('getInventory');
+    $logger->error("*** missing inventory ***");
+    return undef;
+}
+    
+my %headers = (Sequence=>'SQ',DNA=>'DNA',BaseQuality=>'BQ',segments=>'Segs');
+
+sub listInventoryForObject {
+# returns a list of inventory items for the give object name
+    my $class = shift;
+    my $objectname = shift;
+
+    my $inventory = &getInventory($class);
+
+    my $report = sprintf ("%24s",$objectname);
+    my $objectdata = $inventory->{$objectname} || return $report." no data";
+    foreach my $type ('Sequence', 'DNA', 'BaseQuality','segments') {
+        next unless defined $objectdata->{$type};
+        my $data = $objectdata->{$type};
+        $data = $data->[0] if (ref($data) eq 'ARRAY');
+        $report .= " ".sprintf("%5s",$headers{$type})." ".sprintf("%12d",$data);
+    }
+    return $report;
+}
+
+sub removeObjectFromInventory {
+# remove a list of objects from the inventory
+    my $class = shift;
+    my $objectnames = shift; # array reference
+print STDERR "removeObjectFromInventory ENTER\n";
+
+    &verifyParameter($objectnames,'removeObjectFromInventory','ARRAY');
+
+    my $inventory = &getInventory($class) || return;
+
+    foreach my $objectname (@$objectnames) {
+        delete $inventory->{$objectname};
+    }
+}
+
+#------------- building Contig and Read instances from the caf file --------------------
+    
+my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2); # class constants
+
 sub contigExtractor {
     my $class = shift;
     my $contignames = shift; # array with contigs to be extracted
-    my $inventory = shift; # inventory HASH made with cafFileInventory method
     my %options = @_; # print STDOUT "contigextractor options @_\n";
 
     my $logger = &verifyLogger('contigExtractor');
+
+    my $inventory = &getInventory($class);
 
 # -------------- options processing
 
@@ -334,20 +527,8 @@ sub contigExtractor {
 
 # --------------- get caf file from inventory hash
 
-    unless ($inventory) {
-# pick up the cached hash, if this method not called on the class itself 
-        $inventory = $class->{inventory} if (ref($class) eq 'HASH');
-# and check
-        unless ($inventory) {
-            $logger->error("Missing CAF file inventory");
-            return undef;
-	}
-    }   
-
 #    my $CAF = &getFileHandle($inventory);
-
     my $caffile = $inventory->{caffilename};
-
     my $CAF = new FileHandle($caffile,"r");
 
     unless ($CAF) {
@@ -366,7 +547,6 @@ sub contigExtractor {
     my @contigstack;
     my @contigitems = ('Sequence');
     push @contigitems,'DNA','BaseQuality' if $consensus;
-    my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2);
 
     foreach my $contigname (@$contignames) {
         next if ($namefilter && $contigname !~ /$namefilter/);
@@ -377,6 +557,7 @@ sub contigExtractor {
 	}
         next if $contigs{$contigname}; # duplicate entry
         my $contig = new Contig($contigname);
+        $contig->setDataSource($class);
         $contigs{$contigname} = $contig; # add to output stack
         foreach my $item (@contigitems) {
             my $itemlocation = $cinventory->{$item};
@@ -385,12 +566,9 @@ sub contigExtractor {
 	}
     }
 
-# run through each contig in turn and collect the required data and read names
+# run through each contig in turn and collect dna & quality data and read names
 
-    my @readstack;
-# default reads have sequence only and DNA if edited
-    my @readitems = ('Sequence');
-    push @readitems,'DNA','BaseQuality' if ($readselect && $readselect eq 'full');
+    my @reads;
 
     my ($status,$line);
     foreach my $stack (sort {$a->[2] <=> $b->[2]} @contigstack) {
@@ -409,26 +587,53 @@ sub contigExtractor {
 # and collect the readnames in this contig
         my $reads = $contig->getReads();
         unless ($reads && @$reads) {
-	    $logger->error("contig ". $contig->getContigName()." has no reads specified");
+	    $logger->error("contig ". $contig->getContigName()
+                          ." has no reads specified");
             next;
 	}
 
         next if ($readselect && $readselect eq 'none');
 
-        foreach my $read (@$reads) {
-            my $readname = $read->getReadName();
-            my $rinventory = $inventory->{$readname};
-            unless ($rinventory) {
-	        $logger->error("Missing read $readname in inventory");
-	        next;
-   	    }
-            foreach my $item (@readitems) {
-                my $itemlocation = $rinventory->{$item};
-                next unless $itemlocation;
-                push @readstack,[($read,$components{$item},@$itemlocation)];
-	    }
-	}        
+        push @reads,@$reads;
+
+#        foreach my $read (@$reads) {
+#            my $readname = $read->getReadName();
+#            my $rinventory = $inventory->{$readname};
+#            unless ($rinventory) {
+#	        $logger->error("Missing read $readname in inventory");
+#	        next;
+#   	    }
+#            foreach my $item (@readitems) {
+#                my $itemlocation = $rinventory->{$item};
+#                next unless $itemlocation;
+#                push @readstack,[($read,$components{$item},@$itemlocation)];
+#	    }
+#	}        
     }
+
+    my @readstack;
+# default reads have sequence only and DNA if edited
+    my @readitems = ('Sequence');
+    if ($readselect && $readselect eq 'full') {
+        push @readitems,'DNA','BaseQuality';
+    } 
+
+    foreach my $read (@reads) {
+        my $readname = $read->getReadName();
+        my $rinventory = $inventory->{$readname};
+        $read->setDataSource($class);
+        unless ($rinventory) {
+            $logger->error("Missing read $readname in inventory");
+            next;
+        }
+        foreach my $item (@readitems) {
+            my $itemlocation = $rinventory->{$item};
+            next unless $itemlocation;
+            push @readstack,[($read,$components{$item},@$itemlocation)];
+	}
+    }        
+
+# use readExtractor here; to be tested
 
 # and collect all the required read items
 
@@ -488,7 +693,97 @@ sub contigExtractor {
     return \@contigs;
 }
 
+sub readExtractor {
+    my $class = shift;
+    my $reads = shift; # array with reads to be extracted
+    my %options = @_; 
+# print STDOUT "readextractor options @_\n";
+
+    my $logger = &verifyLogger('readExtractor');
+
+    my $inventory = &getInventory($class);
+
+# if input is a list of names, replace by list of Read objects
+
+    my @reads;
+    foreach my $read (@$reads) {
+        next if (ref($read) eq 'Read');
+        push @reads,new Read($read); # read contains readname
+    }
+# if readnames replaced by read objects: assign new output array
+    $reads = \@reads if @reads;
+
+# get caf file from inventory hash
+
+    unless ($inventory) {
+# pick up the cached hash, if this method not called on the class itself 
+        $inventory = $class->{inventory} if (ref($class) eq 'HASH');
+# and check
+        unless ($inventory) {
+            $logger->error("Missing CAF file inventory");
+            return undef;
+	}
+    }   
+
+    my $CAF = &getFileHandle($inventory);
+
+    unless ($CAF) {
+	$logger->error("Invalid CAF file specification $inventory->{caffile}");
+        return undef;
+    }
+
+# --------------- main
+
+$logger->error("getting reads");
+
+    my @readstack;
+# default reads have sequence only and DNA if edited
+    my @readitems;
+    push @readitems,'Sequence'    unless $options{nosequence};
+    push @readitems,'DNA'         unless $options{nodna};
+    push @readitems,'BaseQuality' unless $options{noquality};
+
+    foreach my $read (@reads) {
+        my $readname = $read->getReadName();
+        my $rinventory = $inventory->{$readname};
+        unless ($rinventory) {
+            $logger->error("Missing read $readname in inventory");
+            next;
+        }
+        foreach my $item (@readitems) {
+            my $itemlocation = $rinventory->{$item};
+            next unless $itemlocation;
+            push @readstack,[($read,$components{$item},@$itemlocation)];
+	}
+    }        
+
+# and collect all the required read items
+
+    foreach my $stack (sort {$a->[2] <=> $b->[2]} @readstack) {
+        my $status = 0;
+        my ($read,$type,$fileposition,$line) = @$stack;
+        seek $CAF, $fileposition, 00; # position the file 
+        if ($type == 0) {
+           ($status,$line) = &parseRead        ($CAF,$read,$line,%options);
+        }
+	elsif ($type == 1) {
+           ($status,$line) = &parseDNA         ($CAF,$read,$line);
+        }
+        elsif ($type == 2) {
+	   ($status,$line) = &parseBaseQuality ($CAF,$read,$line);
+        }
+        unless ($status) {
+            my $readname = $read->getReadName();
+	    $logger->error("Failed to extract data for read $readname");
+	}
+    }
+
+    return $reads;
+}
+
+
 sub extractContig {
+# public, extract a named contig 
     my $class = shift;
     my $contigname = shift;
 
@@ -499,16 +794,28 @@ sub extractContig {
     return undef;
 }
 
+sub extractRead {
+# public, extract a named read
+    my $class = shift;
+    my $readname = shift;
+
+    my $reads = $class->readExtractor([($readname)],@_); # port options
+
+    return $reads->[0] if $reads->[0];
+
+    return undef;
+}
+
 # several methods to be developed using delayed loading techniques TO BE TESTED
 
-sub getSequenceForContig {
-# to be developed: delayed loading of read sequence
+sub getSequenceAndBaseQualityForContig {
+# delayed loading of seuence data for contig
     my $class = shift;
     my $contig = shift;
-    my $inventory = shift; # optional
 
-    $inventory = $class->{inventory} if (!$inventory && ref($class));
-    return undef unless $inventory; # no inventory available
+    &verifyParameter($contig,'getSequenceAndBaseQualityForContig');
+
+    my $inventory = &getInventory($class) || return undef;
 
     return &getSequenceForObject($contig,$inventory);
 }
@@ -517,10 +824,11 @@ sub getSequenceForRead {
 # to be developed: delayed loading of read sequence
     my $class = shift;
     my $read  = shift;
-    my $inventory = shift; # optional
+print STDOUT "getSequenceForReadn";
 
-    $inventory = $class->{inventory} if (!$inventory && ref($class));
-    return undef unless $inventory; # no inventory available
+    &verifyParameter($read,'getSequenceForRead','Read');
+
+    my $inventory = &getInventory($class) || return undef;
 
     return &getSequenceForObject($read,$inventory);
 }
@@ -545,7 +853,7 @@ sub getSequenceForObject {
         my $positions = $objectinventory->{$item};
         unless ($positions) {
             my $logger = &verifyLogger("getSequenceForObject");
-	    $logger->error("No $item available for object $objectname");
+	    $logger->debug("No $item available for object $objectname");
 	    next;
 	}
         my ($fileposition,$line) = @$positions;
@@ -564,8 +872,10 @@ sub getSequenceForObject {
 }
 
 sub getFileHandle {
-# auto generate file handle
+# private : auto generate file handle
     my $inventory = shift;
+
+    &verifyPrivate($inventory,"getFileHandle");
    
     my $filehandle = $inventory->{filehandle};
 
@@ -583,9 +893,20 @@ sub getFileHandle {
     return $filehandle;
 }
 
-#-------------------------------------------------------------------------------------
+sub closeFileHandle {
+# auto generate file handle
+    my $inventory = shift;
+   
+    my $filehandle = $inventory->{filehandle} || return undef;
+
+    delete $inventory->{filehandle};
+
+    $filehandle->close();
+}
+
+#------------------------------------------------------------------------------
 # sequencial caf file parser (small files)
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 sub cafFileParser {
 # build contig objects from a Fasta file 
@@ -778,8 +1099,7 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
             }
             $objectType = 0; # preset
             my $objectInstance;
-#??            if ($newObjectName =~ /(\s|^)Contig/) {
-            if ($newObjectName =~ /contig/i) {
+            if ($newObjectName =~ /(\s|^)Contig/) {
 # it's a contig; decide if the new object has to be built
                 next unless $consensus;
                 next if $blockobject->{$newObjectName};
@@ -797,6 +1117,20 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
 		}
 	    }
 # now read the file to the next blank line and accumulate the sequence or quality 
+
+	    if ($TESTMODE) {
+                my ($status,$line);
+                if ($newObjectType eq 'DNA') {
+  		   ($status,$line) = &parseDNA($CAF,$objectInstance,$lineCount,noverify=>1);
+	        }
+                elsif ($newObjectType eq 'BaseQuality') {
+  		   ($status,$line) = &parseBaseQuality($CAF,$objectInstance,$lineCount,noverify=>1);
+	        }
+                $lineCount = $line if $status;
+                $objectType = 0;
+                next;
+	    }
+
             my $sequencedata = '';
 $logger->fine("Building $newObjectType for $newObjectName");
             while (defined(my $nextrecord = <$CAF>)) {
@@ -1038,6 +1372,14 @@ $logger->fine("DONE $newObjectType for $newObjectName");
         elsif ($objectType == 1) {
 # parsing a read, the Mapping object is defined here; Read may be defined
             $read = $reads{$objectName};
+
+            if ($TESTMODE) {
+                my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
+                $lineCount = $line if $status;
+		$objectType = 0;
+                next;
+	    }
+
 # processing a read, test for Alignments and Quality specification
             if ($record =~ /Align\w+\s+((\d+)\s+(\d+)\s+(\d+)\s+(\d+))\s*$/) {
 # AlignToSCF for both padded and unpadded files
@@ -1172,6 +1514,15 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 
         elsif ($objectType == 2) {
 # parsing a contig, get constituent reads and mapping
+
+            if ($TESTMODE) {
+                my $contig = $contigs{$objectName};
+                my ($status,$line) = &parseContig($CAF,$contig,$lineCount,noverify=>1);
+                $lineCount = $line if $status;
+		$objectType = 0;
+                next;
+	    }
+
             if ($record =~ /Ass\w+from\s+(\S+)\s+(.*)$/) {
 # an Assembled from alignment, identify the Mapping for this readname ($1)
                 $mapping = $mappings{$1};
@@ -1348,6 +1699,10 @@ $logger->fine("DONE $newObjectType for $newObjectName");
 
 # return array references for contigs and reads 
 
+    return \%contigs,\%reads,$truncated if $options{oldcontigloader};
+
+# bundle all objects in one array
+
     my $er = 0;
     my $objects = [];
     foreach my $key (keys %contigs) {
@@ -1446,7 +1801,7 @@ sub parseDNA {
         $logger->warning("$line: empty DNA block detected for ".$object->getName());
     }
 
-    return $line;
+    return 1,$line;
 }
 
 sub parseBaseQuality {
@@ -1574,6 +1929,8 @@ sub parseContig {
         }
     }
 
+    $contigname = $contig->getContigName() unless $contigname;
+
 # parse the file until the next blank record
 
     my $isUnpadded = 1;
@@ -1673,16 +2030,29 @@ $logger->error("Extending Tag record ($line)  .. SHOULD NOT OCCUR!!");
                 }
             }
 
+# ignore autogenerated tags
 
-#           my $tag = TagFactory->makeContigTag($type,$tcps,$tcpf,TagComment=>$info);
-#           my ($status,$msg) = TagFactory->process($tag); # complete the tag using info
-#           $logger->info("($line) invalid or empty tag: ".$msg) if $status;
-#           $contig->addTag($tag) unless $status;
+            next if ($info =~ /imported|split|shift|truncated/);
 
+
+if ($TAGTEST) {
+            my $tag = TagFactory->makeContigTag($type,$tcps,$tcpf,TagComment=>$info);
+$logger->warning("CT verify CONTIG tag");
+            my ($status,$msg) = $tag->verify(); # complete the tag using info
+            $logger->warning("($line) invalid or empty tag: ".($msg || '')) unless $status;
+            $contig->addTag($tag) if $status;
+$logger->warning("CT DONE (status $status)");
+
+} else {
+# remove 'offset' information (lost on inheritance)
+
+            $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
 
 # TO TAGFACTORY from  here
             $logger->info("CONTIG tag detected: $record\n"
                          . "'$type' '$tcps' '$tcpf' '$info'");
+
+# investigate annotation again ....
 
             if ($type eq 'ANNO') {
                 $logger->warning("Contig annotation ANNO tag changed to COMM");
@@ -1734,6 +2104,7 @@ $logger->error("Extending Tag record ($line)  .. SHOULD NOT OCCUR!!");
             else {
 	        $logger->info("l:$line Empty $type contig tag ignored");
 	    }
+} # end TEST
 # TO TAGFACTORY until here
 
         }
@@ -1747,6 +2118,8 @@ $logger->error("Extending Tag record ($line)  .. SHOULD NOT OCCUR!!");
             $logger->info("($line) Ignored: $record");
         }
     }
+
+    return 1,$line;
 }
 
 sub parseRead {
@@ -1760,7 +2133,7 @@ sub parseRead {
 
     &verifyPrivate($CAF,'parseRead');
 
-    my $logger = &verifyLogger('parseRead :');
+    my $logger = &verifyLogger('parseRead');
 
 # options: if taglist specified only those tags will be picked up, with info on other
 #          tags skipped; if no readtaglist specified all tags will be processed
@@ -1799,6 +2172,8 @@ sub parseRead {
             return 0,$line;
         }
     }
+
+    $readname = $read->getReadName() unless $readname;
 
 # parse the file until the next blank record
 
@@ -1860,6 +2235,7 @@ sub parseRead {
                 my $entry = $read->addAlignToTrace([@positions]);
                 if ($isUnpadded && $entry == 2) {
                     $logger->info("Edited read $readname detected ($line)");
+                   print STDERR "Edited read $readname detected ($line)\n";
                 }
             }
             else {
@@ -1889,7 +2265,8 @@ sub parseRead {
 
         elsif ($readtaglist && $record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
 # elsif ($readtaglist && $record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
-            my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
+            my $type = $1; my $trps = $2; my $trpf = $3;
+            my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
 $logger->fine("Read Tag $type detected");
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
@@ -1903,12 +2280,20 @@ $logger->error("This block should not be activated");
                     $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
                 }
             }
-# build a new read Tag instance
-	    my $tag = TagFactory->makeReadTag($type,$trps,$trpf,TagComment => $info);
-#           my ($status,$msg) = TagFactory->process($tag); # complete the tag using info
-#           $logger->info("($line) ignored invalid or empty tag: ".$msg) if $status;
-#           $read->addTag($tag) unless ($status);
 
+# build a new read Tag instance
+
+	    my $tag = TagFactory->makeReadTag($type,$trps,$trpf,TagComment => $info);
+if ($TAGTEST) {
+print STDERR "verify READ tag\n";
+            my ($status,$msg) = $tag->verify(); # complete the tag using info
+$logger->error("output status $status, report: $msg for readtag : ".$tag->getType());
+            $logger->info("($line) ignored invalid or empty tag: ".($msg || '')) if $status;
+            $read->addTag($tag) if $status;
+print STDERR "DONE but not added\n" unless ($status);
+print STDERR "DONE\n" if ($status);
+
+} else {
 # TO TAGFACTORY from  here
 # the tag now contains the raw data read from the CAF file
 # invoke TagFactory to process, cleanup and test the tag info
@@ -1950,8 +2335,8 @@ $logger->error("This block should not be activated");
 	    }
 # tag processing finished
             $read->addTag($tag);
+} # end TEST
 # TO TAGFACTORY until here
-
 
         }
 
