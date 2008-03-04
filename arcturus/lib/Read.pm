@@ -59,6 +59,8 @@ sub setDataSource {
 
     $this->{SOURCE} = $source if (ref($source) eq 'ContigFactory');
 
+    $this->{SOURCE} = $source if ($source eq 'ContigFactory');
+
 #    $this->{SOURCE} = $source if (ref($source) eq 'ReadFactory'); # possibly
 
     unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
@@ -823,9 +825,12 @@ sub writeCafSequence {
 
 # tags; default allow finisher's annotation (on read)
 
+    return if $options{notags};
+
     $options{annotag} = 1 unless defined $options{annotag};
 
     if (my $tags = $this->getTags()) {
+# tag selection?        
         foreach my $tag (@$tags) {
             $tag->writeToCaf($FILE,%options); # allow finishers annotation
         }
