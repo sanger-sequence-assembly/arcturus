@@ -71,7 +71,7 @@ sub getMappedRange {
 }
 
 #-------------------------------------------------------------------
-# mapping metadata (mappingname, sequence ID, mapping ID)
+# mapping metadata (mappingname, mapping ID)
 #-------------------------------------------------------------------
 
 sub getMappingID {   # Arcturus mapping_id
@@ -94,24 +94,30 @@ sub setMappingName {
     $this->{mappingname} = shift;
 }
 
-sub getSequenceID {  # r-to-c mapping: read seq_id; p-to-c mapping : parent_id
+#------------------------------------------------------------------------------
+# the sequence IDs to which the mapping relates in the x and y domains
+# e.g. for r-to-c mapping the y-domain has read seq_id, y-domain contig seq_id
+# e.g. for p-to-c mapping the y-domain has parent seq_id, y-domain contig s_id
+#------------------------------------------------------------------------------
+
+sub getSequenceID {
     my $this = shift;
-    return $this->{seq_id};
+    my $domain = shift || 'y'; # default y-domain
+    $domain = 'x' unless ($domain eq 'y'); # allow only 'x' or 'y'
+    return $this->{$domain."seq_id"};
 }
 
 sub setSequenceID {
     my $this = shift;
-    $this->{seq_id} = shift;
+    my $seq_id = shift;
+    my $domain = shift || 'y'; # default y-domain
+    $domain = 'x' unless ($domain eq 'y'); # allow only 'x' or 'y'
+    $this->{$domain."seq_id"} = $seq_id;
 }
 
-sub getHostSequenceID { # both  r-to-c &  p-to-c : host contig_id
+sub setHostSequenceID { # alias
     my $this = shift;
-    return $this->{hostseqid};
-}
-
-sub setHostSequenceID {
-    my $this = shift;
-    $this->{hostseqid} = shift;
+    $this->setSequenceID(shift,'x');
 }
 
 #-------------------------------------------------------------------
@@ -422,7 +428,8 @@ sub normalise {
 # return if the normalization already matches the required one
         return $segments if ($normalisation == $requirement);
 # if the current normalisation is on x, invert array to speed up sorting
-        &invertArray($segments) if ($normalisation == 1);
+# &invertArray($segments) if ($normalisation == 1);
+        @$segments = reverse(@$segments) if ($normalisation == 1);
     }
 
     $this->{normalisation} = 0; # as it is going to be determined
@@ -506,7 +513,8 @@ sub normalise {
 # sorting may be very slow for a large number of segments, because
 # we had earlier sorted according to Y, we better reverse the array order
 
-        &invertArray($segments) unless ($globalalignment >= 0);
+# &invertArray($segments) unless ($globalalignment >= 0);
+        @$segments = reverse(@$segments) unless ($globalalignment >= 0);
 
 # just to be sure, we now sort again
         @$segments = sort { $a->getXstart() <=> $b->getXstart() } @$segments;
@@ -524,6 +532,8 @@ sub normalise {
 sub invertArray {
 # private; helper method for normalise, normaliseOnX, normaliseOnY
     my $segments = shift;
+
+#    @$segments = reverse(@$segments); return;
            
     my $length = scalar(@$segments);
     for (my $i = 0 ; $i < $length ; $i++) {
@@ -682,9 +692,13 @@ sub inverse {
 
     return undef unless ($segments && @$segments);
 
-    my $name = $this->getMappingName() || $this; # 
+    my $name = $this->getMappingName() || $this;
+    $name = "inverse of $name";
+    $name =~ s/inverse of inverse of //; # two consecutive inversions
+# perhaps this should be replaced by Sequence_ysequence domain ??
+#   $name = sprintf("sequence_%08d",($this->getSequenceID('y')); # if defined
 
-    my $inverse = new Mapping("inverse of $name");
+    my $inverse = new Mapping($name);
 
     foreach my $segment (@$segments) {
         my @segment = $segment->getSegment();
@@ -694,8 +708,10 @@ sub inverse {
 
     $inverse->normalise(@_); # port options
 
-    $inverse->setSequenceID($this->getHostSequenceID());
-    $inverse->setHostSequenceID($this->getSequenceID());
+    $inverse->setSequenceID($this->getSequenceID('x'),'y');
+    $inverse->setSequenceID($this->getSequenceID('y'),'x');
+
+#$inverse->setSequenceID($this->getSequenceID()); # temporary
 
     return $inverse;   
 }
@@ -732,6 +748,7 @@ if ($nzs && ref($nzs) eq 'HASH') {
 print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
 }
 # new construction (TO BE VERIFIED)
+
     if (my $track = $options{tracksegments}) { # undef,0  or  1,2,3
         my $backskip = $options{'ts-backskip'}; 
         $backskip = 1 unless defined($backskip); # default backskip one
@@ -739,7 +756,6 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
         $ts = $mapping->getSegmentTracker(-$backskip) if ($track >= 2);
 print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
     }
-
 
     while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
 
@@ -885,6 +901,132 @@ sub dump {
     print STDOUT "txf $txf  reverse maps to  bxf $tempbxf\n";
 
     exit; #?
+}
+
+#-------------------------------------------------------------------
+# transformation of objects in x-domain to y-domain
+#-------------------------------------------------------------------
+
+sub transform {
+# transform an input x-range to an (array of) y-position intervals
+    my $this = shift;
+    my @position = sort {$a <=> $b} (shift,shift);
+
+# represent the position range as a 1-1 mapping
+
+    my $helper = new Mapping("scratch");
+    $helper->putSegment(@position,@position);
+
+# the segments of 'transform' represent the parts of the input range
+# which map to the output range
+
+    my $transform = $helper->multiply($this);
+    my $segments = $transform->normaliseOnY();
+
+# extract the actual mapped part as a list of arrays of length 2
+
+    my @output;
+    foreach my $segment (@$segments) {
+        my @section = $segment->getYstart(),$segment->getYfinis();
+        push @output,[@section];
+    }
+
+# return the mapped interval(s) and the transform (which has alignment info)
+
+    return [@output],$transform;
+}
+
+sub transformString {
+# map an input string to an output string, replacing gaps by gapsymbol
+    my $this = shift;
+    my $string = shift || return undef;
+    my %options = @_; # gapsymbol=>
+
+# get the part(s) in the mapped domain (starts at position 1)
+
+    my ($list,$transform) = $this->transform(1,length($string));
+    my $alignment = $transform->getAlignment() || return undef;
+#print STDOUT $transform->toString();
+
+    $options{gapsymbol} = 'n' unless defined $options{gapsymbol};
+    my $gapsymbol = $options{gapsymbol};
+
+    my $output;
+    my ($sstart,$pfinal);
+    my $segments = $transform->getSegments();
+
+    foreach my $segment (@$segments) {
+
+        my $slength = $segment->getSegmentLength();
+
+        $sstart = $segment->getXstart()-1 if ($alignment > 0);
+        $sstart = $segment->getXfinis()-1 if ($alignment < 0);
+
+        my $substring = substr $string,$sstart,$slength;
+        $substring = reverse($substring)    if ($alignment < 0);
+        $substring =~ tr/acgtACGT/tgcaTGCA/ if ($alignment < 0);    
+
+        if ($output) {
+            my $gapsize = $segment->getYstart() -  $pfinal - 1;
+            while ($gapsize-- > 0) {
+                $output .= $gapsymbol;
+	    }
+	    $output .= $substring;
+	}
+	else {
+	    $output = $substring;
+            $pfinal = $segment->getYfinis();
+	}
+    }
+    
+    return $output;
+}
+
+sub transformArray {
+# map an input array to an output array, replacing gaps by gap values
+    my $this = shift;
+    my $array = shift || return undef; # array reference
+    my %options = @_; # gapvalue=>
+
+# get the part(s) in the mapped domain (starts at position 1)
+
+    my ($output,$transform) = $this->transform(1,scalar(@$array));
+    my $alignment = $transform->getAlignment() || return undef;
+
+    $options{gapvalue} = 1 unless defined $options{gapsymbol};
+    my $gapvalue = $options{gapvalue};
+
+    my @output;
+    my ($sstart,$pfinal);
+    my $segments = $transform->getSegments();
+
+    foreach my $segment (@$segments) {
+
+        my $slength = $segment->getSegmentLength();
+
+        $sstart = $segment->getXstart()-1 if ($alignment > 0);
+        $sstart = $segment->getXfinis()-1 if ($alignment < 0);
+
+        my @subarray;
+        foreach (my $i = $sstart ; $i < $sstart + $slength ; $i++) {
+            push @subarray,$array->[$i];
+        }       
+
+        @subarray = reverse(@subarray) if ($alignment < 0);
+
+        if (@output) {
+            my $gapsize = $segment->getYstart() -  $pfinal - 1;
+            while ($gapsize-- > 0) {
+                push @output, $gapvalue;
+	    }
+	}
+	else {
+            $pfinal = $segment->getYfinis();
+	}
+        push @output,@subarray;
+    }
+    
+    return [@output];
 }
 
 #-------------------------------------------------------------------
