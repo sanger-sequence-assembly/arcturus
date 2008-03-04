@@ -1509,10 +1509,9 @@ sub break {
     my $class = shift;
     my $contig = shift;
 
-    &verifyPrivate($contig,"break");
+    &verifyParameter($contig,"break");
 
-    my $logger = &verifyLogger("break");
-#    $logger->error("ENTER");
+    my $logger = &verifyLogger("break",1);
 
 # first determine if there are breaking points
 
@@ -1626,7 +1625,7 @@ sub isEqual {
     &verifyParameter($master,'isEqual');
     &verifyParameter($contig,'isEqual');
 
-    my $logger = &verifyLogger('isEqual');
+    my $logger = &verifyLogger('isEqual',1);
 
 # ensure that the metadata are defined; do not allow zeropoint adjustments here
 
@@ -1651,7 +1650,10 @@ $logger->debug("Trying sequence comparison TO BE DEVELOPED");
 
 # test the length
 
-    return 0 unless ($master->getConsensusLength() == $contig->getConsensusLength());
+    unless ($master->getConsensusLength() == $contig->getConsensusLength()) {
+	$logger->debug("consensus length mismatch");
+	return 0;
+    }
 
 # test the end reads (allow for inversion)
 
@@ -1668,6 +1670,7 @@ $logger->debug("Trying sequence comparison TO BE DEVELOPED");
     }
     else {
 # the contigs are different
+	$logger->debug("end reads mismatch exit 1");
         return 0;
     }
 
@@ -1690,6 +1693,7 @@ $logger->debug("Trying sequence comparison TO BE DEVELOPED");
     undef my $shift;
     if (my $mappings = $contig->getMappings()) {
 # check number of mappings
+;
         return 0 if ($numberofmappings != scalar(@$mappings));
 
         foreach my $mapping (@$mappings) {
@@ -1697,6 +1701,7 @@ $logger->debug("Trying sequence comparison TO BE DEVELOPED");
             my $key = $mapping->getSequenceID() || $mapping->getMappingName();
             return undef unless defined($key); # incomplete Mapping
             my $match = $sequence->{$key};
+
             return 0 unless defined($match); # there is no counterpart in $master
 # compare the two maps
             my ($identical,$aligned,$offset) = $match->isEqual($mapping);
@@ -1735,61 +1740,37 @@ sub crossmatch {
 
     my $logger = &verifyLogger('crossmatch');
 
+    if ((my $cthism = $cthis->hasMappings()) && (my $cthatm = $cthat->hasMappings())) {
+# find the alignment from the read-to-contig mappings
+
 # option strong       : set True for comparison at read mapping level
 # option readclipping : if set, require a minumum number of reads in C2C segment
 
-    unless ((my $cthism = $cthis->hasMappings()) && (my $cthatm = $cthat->hasMappings())) {
-# if either of the two contigs does not have mappings, no comparison can be made
-        unless ($options{sequenceonly}) {
-            $logger->debug("Contig ".$cthis->getContigName()." has no mappings") unless $cthism;
-            $logger->debug("Contig ".$cthat->getContigName()." has no mappings") unless $cthatm;
-            return undef,0;
-        }
+#       return &linkcontigs($cthis,$cthat,@_) unless $options{old};
+
+        return &linkToContig($class,$cthis,$cthat,@_);
+    }
+
+    elsif ($options{sequenceonly}) {
 # try the alignment of the consensus sequence
-$logger->info("using sequences\noptions: @_");
 
-        my $thislength = $cthis->getConsensusLength();
-        my $thatlength = $cthat->getConsensusLength();
+# default banded search; if set to 0 search is between offset windows
+ 
+        $options{banded} = 1 unless defined $options{banded}; 
 
-# default is search between offset boundaries
-
-        $options{banded} = 1 unless defined $options{banded}; # default banded
-# set up for a banded search; use defaults if no parameters specified 
-        if ($options{banded}) {
-            my $dl = $thatlength / $thislength;
-            my $do = 0.5*($thislength - $thatlength); # default offset
-            my $dw =  abs($thislength - $thatlength); # default window
-            $dw += 3; # guarantee a minimum window
-$logger->fine("Defaults for banded search: l:$dl  o:$do w:$dw",ss=>1);
-            $options{bandedlinear} = $dl unless defined $options{bandedlinear};
-            $options{bandedoffset} = $do unless defined $options{bandedoffset};
-            $options{bandedwindow} = $dw unless defined $options{bandedwindow};
-	}
-        else {
-            my $offsetwindow = abs($thislength - $thatlength) + 10; # default window
-            $options{offsetlowerbound} = -$offsetwindow unless defined $options{offsetlowerbound};
-            $options{offsetupperbound} = +$offsetwindow unless defined $options{offsetupperbound};
-$logger->info("Defaults for offset boundaries: $options{offsetlowerbound} to $options{offsetupperbound}",ss=>1);
-	}
-
-        my $kms = int(log($thislength+$thatlength)/2.3+7); 
-$logger->info("default kmersize $kms");
-        $options{kmersize} = $kms unless defined $options{kmersize};
-        $options{lqsymbol} = 0    unless defined $options{lqsymbol};
-        $options{minimumsegmentsize} = 50 unless defined $options{minimumsegmentsize}; # raw filter
+$options{lqsymbol} = 0    unless defined $options{lqsymbol};
+$options{minimumsegmentsize} = 50 unless defined $options{minimumsegmentsize}; # raw filter
 
 $options{diagnose} = 1;
 $options{iterate}  = 1;
 $options{iterate}  = 0;
 $options{minimum}  = 3;
 
-        my $thishash = {}; my $thathash = {};
-        my $mapping = Alignment->correlate(uc($cthis->getSequence()),$thishash,
-                                           uc($cthat->getSequence()),$thathash,
+        my $mapping = Alignment->correlate(uc($cthis->getSequence()),undef,
+                                           uc($cthat->getSequence()),undef,
                                            %options);
 # test mapping for length and orientation
         return undef,0  unless $mapping;
-$logger->info($mapping->toString());
 
 # here completion of mapping ; see line 2191 
 
@@ -1797,14 +1778,18 @@ $logger->info($mapping->toString());
         $mapping->setSequenceID($cthat->getContigName());
         $mapping->setHostSequenceID($cthis->getContigName());
 
+$logger->info($mapping->toString());
+
         $cthis->addContigToContigMapping($mapping);        
 
         return $mapping->hasSegments(),0;
     }
-
-    return &linkcontigs($cthis,$cthat,@_) unless $options{old};
-
-    return &linkToContig($class,$cthis,$cthat,@_);
+    else {
+# if any of the two contigs does not have mappings, no comparison can be made
+        $logger->debug("Contig ".$cthis->getContigName()." has no mappings") unless $cthism;
+        $logger->debug("Contig ".$cthat->getContigName()." has no mappings") unless $cthatm;
+        return undef,0;
+    }
 }
 
 
@@ -1924,6 +1909,8 @@ $logger->debug("sequences equated to one another (temporary fix)");
         if ($options{strong}) {
 # strong comparison: test for identical mappings (apart from shift)
             my ($identical,$aligned,$offset) = $complement->isEqual($mapping);
+            $logger->info("not identical ".$mapping->getMappingName()
+                   ." $identical,$aligned,$offset") unless $identical;
 
 # keep the first encountered (contig-to-contig) alignment value != 0 
 
@@ -2299,8 +2286,7 @@ sub linkToContig { # will be REDUNDENT
 
     die "$this takes a Contig instance" unless (ref($compare) eq 'Contig');
 
-my $DEBUG = &verifyLogger('linkToContig');
-$DEBUG->debug("ENTER");
+my $DEBUG = &verifyLogger('linkToContig',1);
 
 # test completeness
 
@@ -2331,7 +2317,7 @@ $DEBUG->debug("ENTER");
     foreach my $mapping (@$cmappings) {
         my $oseq_id = $mapping->getSequenceID();
         unless (defined($oseq_id)) {
-            print STDOUT "Incomplete Mapping ".$mapping->getMappingName."\n";
+#            $logger->severe("Incomplete Mapping ".$mapping->getMappingName());
             return undef; # abort: incomplete Mapping; should never occur!
         }
         my $complement = $sequencehash->{$oseq_id};
@@ -2877,227 +2863,295 @@ sub propagateTagsToContig {
     my $class = shift;
 # propagate tags FROM parent TO the specified target contig
     my $parent = shift;
-    my $contig = shift;
+    my $target = shift;
     my %options = @_;
 
     &verifyParameter($parent,'propagateTagsToContig 1-st parameter');
 
-    &verifyParameter($contig,'propagateTagsToContig 2-nd parameter');
+    &verifyParameter($target,'propagateTagsToContig 2-nd parameter');
 
-    my $logger = &verifyLogger('propagateTagsToContig PT');
+# autoload tags unless tags are already defined or notagload specified
 
-# autoload tags unless tags are already defined
-
-    $parent->getTags(1) unless $options{notagload};
-#    $parent->getTags(1,sort=>1) unless $options{notagload};
-
-$logger->debug("ENTER @_");
-$logger->debug("parent $parent (".$parent->getContigID()
-           .")  target $contig (".$contig->getContigID().")");
-$logger->debug("tags on parent: ".scalar(@{$parent->getTags() || []}));
+    $parent->getTags(($options{notagload} ? 0 : 1),sort=>'full',merge=>1);
 
     return 0 unless $parent->hasTags();
-    return 0 unless $parent->hasTags();
 
-$logger->debug("parent $parent has tags ".scalar(@{$parent->getTags()}));
+    my $logger = &verifyLogger('propagateTagsToContig',1);
 
-# check the parent-child relation: is there a mapping between them and
+#----------------------------------------------------------------------------
+# check/get the parent-child mapping: is there a mapping between them and
 # is the ID of the one of the parents identical to to the input $parent?
-# we do this by getting the parents on the $contig and compare with $parent
+# we do this by getting the parents on the $target and compare with $parent
+#----------------------------------------------------------------------------
 
-    my $mapping;
+    my $parent_id = $parent->getContigID() || 0;
 
-    my $parent_id = $parent->getContigID();
+    my $target_id = $target->getContigID() || 0;
 
-# define (delayed) autoload status: explicitly specify if not to be used 
+# use (delayed) autoloading to ensure mappings on target; explicitly specify if not to be used 
 
-    my $dl = $options{noparentload} ? 0 : 1; # default 1
+    $target->hasContigToContigMappings(1) unless $options{noparentload};
 
-    if ($contig->hasContigToContigMappings($dl)) {
+# if parents are specified on the $target then determine if $parent is among them
 
-# if parents are provided, then screen this ($parent) against them
-# if this parent is not among the ones listed, ignore
-# if no parents are provided, adopt this one $parent
-
-$logger->debug("Testing C2C mapping to find parent ".$parent->getSequenceID());
- 
-        my $cparents = $contig->getParentContigs($dl) || [];
-# if no parents defined, just take only input $parent (add to list)
-        push @$cparents,$parent unless ($cparents && @$cparents);
-
-# ensure that $parent is among  the parent(s) provided and identify the mapping 
-
-        foreach my $cparent (@$cparents) {
-	    next unless ($cparent->getContigID() == $parent_id);
-# yes, there is a parent child relation between the input Contigs
-# find the corresponding mapping using contig and mapping names
-            my $c2cmappings = $contig->getContigToContigMappings();
-# test hostContigID == $contig->getSequenceID ?
-            foreach my $c2cmapping (@$c2cmappings) {
-$logger->info("Testing mapping $c2cmapping ".$c2cmapping->getSequenceID());
-$logger->info("agains parent $parent ".$parent->getSequenceID());
-# we use the sequence IDs here, assuming the mappings come from the database
-	        if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
-                    $mapping = $c2cmapping;
-                    last;
-                }
-$logger->info("Testing mapping $c2cmapping ".$c2cmapping->getMappingName());
-$logger->info("agains parent $parent ".$parent->getContigName());
-# this should be redundent ..
-       	        if ($c2cmapping->getMappingName eq $parent->getContigName) {
-                    $mapping = $c2cmapping;
-                    last;
-                }
-            }
+    if ($target->hasParentContigs()) {
+        my $verifyparent = 0;
+        my $tparents = $target->getParentContigs();
+        foreach my $tparent (@$tparents) {
+            my $tparent_id = $tparent->getContigID();
+	    next unless ($tparent_id && $tparent_id == $parent_id);
+            $verifyparent = 1;
+            last;
 	}
-    }
-
-$logger->debug("mapping selected: ".($mapping || 'not found'));
-
-# if mapping is not defined here, we have to find it from scratch
-
-    unless ($mapping) {
-$logger->debug("Finding mappings from scratch");
-        my ($nrofsegments,$deallocated) = $contig->linkToContig($parent,%options);
-$logger->debug("number of mapping segments : ".($nrofsegments || 0));
-        return 0 unless $nrofsegments;
-# identify the mapping using parent contig and mapping name
-        my $c2cmappings = $contig->getContigToContigMappings();
-        foreach my $c2cmapping (@$c2cmappings) {
-#	    if ($c2cmapping->getSequenceID eq $parent->getSequenceID) {
-	    if ($c2cmapping->getMappingName eq $parent->getContigName) {
-                $mapping = $c2cmapping;
-                last;
-            }
-        }
-# protect against the mapping still not found, but this should not occur
-$logger->debug("mapping identified: ".($mapping || 'not found'));
-        return 0 unless $mapping;
-    }
-$logger->debug("\n".$mapping->assembledFromToString());
-
-# check if the length of the target contig is defined
-
-    my $tlength = $contig->getConsensusLength();
-    unless ($tlength) {
-        $contig->getStatistics(1); # no zeropoint shift; use contig as is
-        $tlength = $contig->getConsensusLength();
-        unless ($tlength) {
-            $logger->warning("Undefined length in (child) contig");
+        unless ($verifyparent) {
+            $logger->fine("no valid parent ($parent_id) provided for contig ($target_id)");
             return 0;
         }
     }
 
-$logger->debug("Target contig length : $tlength ");
+# ok, $parent is accepted as a parent of $target; now find the mapping to be used
 
-# if the mapping comes from Arcturus we have to use its inverse
-
-#    $mapping = $mapping->inverse() unless $options{noinverse};
-    $mapping = $mapping->inverse();
-
-# ok, propagate the tags from parent to target
-
-    my $includetag = $options{includetag};
-    my $excludetag = $options{excludetag};
-    if ($options{includetag}) { # specified takes precedence
-        $includetag = $options{includetag};
-        $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $includetag =~ s/\W+/|/g; # put separators in include list
+    my @c2cmappings;
+    foreach my $contig ($target,$parent) { # look in both contigs
+        my $cmappings = $contig->getContigToContigMappings();
+        next unless ($cmappings && @$cmappings);
+        push @c2cmappings, @$cmappings;
     }
-    elsif ($options{excludetag}) {
-        $excludetag = $options{excludetag};
-        $excludetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
-        $excludetag =~ s/\W+/|/g; # put separators in exclude list
+
+# the tags are on the parent, therefore we look for a mapping with the parent as
+# xdomainsequence (see Mapping) (and the target as ydomainsequence, if defined) 
+
+    my @mapping;
+    my @reserve;
+# collect the possible matching mapping(s) or inverse by matching the parent_id then target_id 
+    foreach my $mapping (@c2cmappings) {
+        my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
+        my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
+$logger->fine("mapping $mapping xsid $xdomainseq_id  ysid $ydomainseq_id");
+# collect mapping(s), or their inverse(s), which match the parent in the x-domain
+        if ($xdomainseq_id && $xdomainseq_id == $parent_id) {
+            next if ($target_id && $ydomainseq_id && $target_id != $ydomainseq_id);
+$logger->info("mapping $mapping accepted as is");
+            push @mapping,$mapping;
+        }
+        elsif ($ydomainseq_id && $ydomainseq_id == $parent_id) {
+# the inverse mapping matches the parent domain
+            next if ($target_id && $xdomainseq_id && $target_id != $xdomainseq_id);
+$logger->info("inverse of mapping $mapping accepted");
+            push @mapping,$mapping->inverse();
+        }
+    }
+# if no mapping was found (e.g. parent id is undefined (taken to be 0), use target_id on its own
+    if (!@mapping && $target_id) {
+        foreach my $mapping (@c2cmappings) {
+            my $xdomainseq_id = $mapping->getSequenceID('x') || 0;
+            my $ydomainseq_id = $mapping->getSequenceID('y') || 0;
+            push @reserve,$mapping            if ($target_id == $ydomainseq_id);
+            push @reserve,$mapping->inverse() if ($target_id == $xdomainseq_id);
+$logger->warning("mapping @reserve accepted as backup (experimental on target_id)") if @reserve;
+        }
+    }
+# if still no mapping identified, then no sequence id info is available to identify a mapping
+# in this case we assume that any (single) mapping on the parent or on the target is the one to use
+    unless (@mapping || @reserve) {
+        foreach my $contig ($target,$parent) { # look in both contigs
+            my $cmappings = $contig->getContigToContigMappings();
+            next unless ($cmappings && @$cmappings == 1);
+            push @reserve,$cmappings->[0]->inverse() if ($contig eq $target);
+            push @mapping,$cmappings->[0] if ($contig eq $parent);
+$logger->warning("mapping @reserve accepted as backup (experimental no sequence id)") if @reserve;
+        }
+    }
+
+# ok, decide on which mapping to use
+
+    my $p2tmapping;
+    if (scalar(@mapping) == 1) {
+        $p2tmapping = $mapping[0];
+	$logger->fine("only 1 mapping matches");
+    }
+    elsif (@mapping) {
+# test for duplicate mappings, exit loop on first mismatch (implies at least 2 different ones)
+        while (@mapping > 1) {
+            last unless ($mapping[0]->isEqual($mapping[1]));
+            shift @mapping;
+        }
+        unless (@mapping == 1) {
+  	    $logger->warning("ambiguous parent-to-contig mapping: more than 1 mapping matches");
+            return 0; # this case is unrecoverable
+	}
+        $p2tmapping = $mapping[0];
+    }
+    elsif (scalar(@reserve) == 1) {
+	$logger->warning("using backup mapping option");
+        $p2tmapping = $reserve[0]; # fall back position: use the only mapping provided
+    }
+# the next branches do not return but proceed with an attempt to determine mapping from scratch
+    elsif (@reserve) {
+	$logger->warning("ambiguous contig-to-parent mapping: more than 1 mapping matches");
+    }
+    else {
+	$logger->warning("no (valid) parent-to-contig mapping provided");
+    }
+
+# if mapping is not defined here, we try to find it from scratch (unless option norerun is set)
+
+    unless ($p2tmapping) {
+# prevent endless loop
+        $logger->info("Finding mappings from scratch: @_");
+        return 0 if $options{norerun};
+        my ($nrofsegments,$deallocated) = $target->linkToContig($parent,%options);
+        return 0 unless $nrofsegments;
+# now that we have a mapping use recursion
+        return $class->propagateTagsToContig($parent,$target,%options,norerun=>1);
+    }
+
+$logger->debug($p2tmapping->assembledFromToString(),ss=>1);
+
+#-------------------------------------------------------------------------
+# propagate the tags from parent to target; define tag selection
+#-------------------------------------------------------------------------
+
+    my $includetag; # default include all
+    my $excludetag; # default exclude none
+    if (my $tagfilter = $options{tagfilter}) {
+        $tagfilter =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagfilter =~ s/\W+/|/g; # put separators in include list
+        my $screen = $options{tagscreen}; # 1 include; 0 exclude
+        $screen = 1 unless defined $screen; # default include
+        $excludetag = $tagfilter unless $screen;
+        $includetag = $tagfilter if $screen;
+    }
+# tags which may be split 
+    my $tagtosplit = $options{tagtosplit}; # default split none
+    if ($tagtosplit) { # specified takes precedence
+        $tagtosplit =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        $tagtosplit =~ s/\W+/|/g; # put separators in include list
+    }
+# specific tags can have their type changed on output to become "Arcturus Special Info Tags"
+    my $changetypehash = {};
+    my $changetype = $options{changetype};
+    $changetype = "ANNO|REPT" unless defined $changetype;
+    my $newtypetag = $options{newtypetag} || 'ASIT';
+    if ($changetype) { # build a hash list keyed on tagtype
+        $changetype =~ s/^\s+|\s+$//g; # leading/trailing blanks
+        foreach my $tag (split /\W/,$changetype) {
+            $changetypehash->{$tag} = $newtypetag;
+        }
     }
 
 # get the tags in the parent (as they are, but sorted and unique)
 
-#    my $ptags = $parent->getTags(0,sort=>'basic'); # or merge?
-    my $ptags = $parent->getTags(0); # 
-    next unless ($ptags && @$ptags); # just in case, but should not occur
+    my $ptags = $parent->getTags(0,sort=>'full',merge=>1);
 
-$logger->debug("parent contig $parent has tags: ".scalar(@$ptags));
-
-# first attempt for ANNO tags (later to be used for others as well)
-
-    my %annotagoptions = (break=>1);
-    $annotagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
-    $annotagoptions{changestrand} = ($mapping->getAlignment() < 0) ? 1 : 0;
-
-# activate speedup for mapping multiplication 
-
-    if ($options{speedmode}) {
-# will keep track of position in the mapping by defining nzt option as HASH
-        $annotagoptions{nonzerostart} = {};
-# but requires sorting according to tag position (REDUNDENT)
-        @$ptags = sort {$a->getPositionLeft() <=> $b->getPositionLeft()} @$ptags;
+    foreach my $tag (@$ptags) {
+        $logger->debug($tag->writeToCaf());
     }
+    $logger->debug("parent contig $parent has tags: ".scalar(@$ptags),skip=>1);
 
-# apply filter, if any 
+#-----------------------------------------------------------------------------------
+# deal with the tags that may be split when remapped
+#-----------------------------------------------------------------------------------
+
+    my %splittagoptions = (split=>1);
+# activate speedup for mapping multiplication 
+    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
+# $splittagoptions{tracksegments} = 3 if $options{speedmode};
+    $splittagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
+    $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
+
+$logger->info("Doing the remapping with split allowed",skip=>2);
 
     my @rtags; # for (remapped) imported tags
     foreach my $ptag (@$ptags) {
+        last unless $tagtosplit; # default do not split any tag; exit loop
         my $tagtype = $ptag->getType();
+        next if ($tagtype =~ /\b$newtypetag\b/);
+        next if ($tagtype !~ /\b$tagtosplit\b/i);
         next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next unless ($tagtype eq 'ANNO');
 # remapping can be SLOW for large number of tags if not in speedmode
-$logger->debug("CC Collecting ANNO tag for remapping ".$ptag->getPositionLeft());
-        my $tptags = $ptag->remap($mapping,%annotagoptions);
-
+$logger->debug("CC Collecting tags for remapping with split ".$ptag->getPositionLeft());
+        my $tptags = $ptag->remap($p2tmapping,%splittagoptions);
         push @rtags,@$tptags if $tptags;
     }
+$logger->debug("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input",skip=>1);
 
-$logger->debug("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input");# if annotation tags found, (try to) merge tag fragments
+# if annotation tags found, (try to) merge tag fragments
 
     if (@rtags) {
         my %moptions = (overlap => ($options{overlap} || 0));
-$moptions{debug} = $logger;
         my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
 
-my $oldttags = $contig->getTags() || [];
+my $oldttags = $target->getTags() || [];
 $logger->debug(scalar(@$oldttags) . " existing tags on TARGET PT");
 $logger->debug(scalar(@$newtags) . " added (merged) tags PT");
 
-        $contig->addTag($newtags) if $newtags;
+        $target->addTag($newtags) if $newtags;
 
-#        @tags = @$newtags if $newtags;
-my $newttags = $contig->getTags() || [];
+my $newttags = $target->getTags() || [];
 $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
+
     }
-else {
-$logger->debug("NO REMAPPED ANNO TAGS FROM PARENT $parent_id");
-}
-#return 0;
+    else {
+        $logger->info("No tags were remapped (with split allowed) from parent contig $parent_id",skip=>1);
+    }
 
-# the remainder is for other tags using the old algorithm
+    $logger->info("Doing the remapping without split allowed",skip=>2);
 
-    my $c2csegments = $mapping->getSegments();
-    my $alignment = $mapping->getAlignment();
+#---------------------------------------------------------------------------------------
+# remap the tags which may not be split and can have frameshifts after remapping
+#---------------------------------------------------------------------------------------
 
-$logger->flush();
     foreach my $ptag (@$ptags) {
 # apply include or exclude filter
         my $tagtype = $ptag->getType();
+        next if ($tagtype =~ /\b$newtypetag\b/); # always ignore special tag
         next if ($excludetag && $tagtype =~ /\b$excludetag\b/i);
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
-        next if ($tagtype eq 'ANNO');
+        next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
 
-#        my $tptags = $ptag->remap($mapping,break=>0); 
-#        $contig->addTag($tptags) if $tptags;
+        my $tptag;
+my $NEW = 1;
+if ($NEW) {
+#        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',usenew=>1);
+        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',usenew=>0);
+	$logger->warning("tag $ptag could not be re-mapped (1)") unless $tptags;
+        next unless $tptags;
+        $tptag = $tptags->[0] if $tptags; 
+}
+
+unless ($NEW) {
+# OBSOLETE to be DELETED from here
+# check if the length of the target contig is defined
+
+        my $tlength = $target->getConsensusLength();
+        unless ($tlength) {
+            $target->getStatistics(1); # no zeropoint shift; use contig as is
+            $tlength = $target->getConsensusLength();
+            unless ($tlength) {
+                $logger->warning("Undefined length in (child) contig");
+               return 0;
+            }
+        }
+        $logger->debug("Target contig length : $tlength ");
+        my $c2csegments = $p2tmapping->getSegments();
+        my $alignment = $p2tmapping->getAlignment();
 $logger->debug("CC Collecting $tagtype tag for remapping ".$ptag->getPositionLeft());
 # determine the segment(s) of the mapping with the tag's position
 $logger->debug("processing tag $ptag (align $alignment)");
 
+# the remainder uses the old algorithm which has to be replaced by the ->remap method
         undef my @offset;
         my @position = $ptag->getPosition();
+
 $logger->debug("tag position (on parent) @position");
-#$logger->flush();
+
         foreach my $segment (@$c2csegments) {
 # for the correct segment, getXforY returns true
             for my $i (0,1) {
-                if ($segment->getXforY($position[$i])) {
-                    $offset[$i] = $segment->getOffset();
+                if ($segment->getYforX($position[$i])) {
+                    $offset[$i] = -$segment->getOffset();
 # ensure that both offsets are defined; this line ensures definition in
 # case the counterpart falls outside any segment (i.e. outside the contig)
                     $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
@@ -3106,21 +3160,26 @@ $logger->debug("tag position (on parent) @position");
         }
 # accept the new tag only if the position offsets are defined
 $logger->debug("offsets: @offset");
+$logger->error("tag $ptag could not be remapped") unless @offset;
         next unless @offset;
 $logger->flush();
 $logger->setPrefix("Tag->transpose");
 # create a new tag by spawning from the tag on the parent contig
-        my $tptag = $ptag->transpose($alignment,\@offset,
-                                   postwindowfinal=>$tlength);
+        $tptag = $ptag->transpose($alignment,\@offset,
+                                  postwindowfinal=>$tlength);
 
 $logger->setPrefix("CH->propagateTagsToContig");
+$logger->error("tag $ptag could not be remapped") unless $tptag;
         next unless $tptag; # remapped tag out of boundaries
-
-if ($ptag eq $ptags->[0]) {
-$logger->debug("tag on parent :". $ptag->dump);
-$logger->debug("tag on child :". $tptag->dump);
+# TO BE DELETED TO HERE
 }
-$logger->flush();
+
+
+#if ($ptag eq $ptags->[0]) {
+ $logger->info("tag on parent :". $ptag->writeToCaf(),pskip=>1);
+ $logger->info("tag on child :". $tptag->writeToCaf(),skip=>1);
+#}
+
 $logger->debug("Test presence of transposed Tag against existing tags");
 
 # test if the transposed tag is not already present in the child;
@@ -3128,9 +3187,9 @@ $logger->debug("Test presence of transposed Tag against existing tags");
 # which are not defined in it (e.g. when ctag built from Caf file)
 
 
-# should be done much more efficiently
+# should be done much more efficiently afterwards by using the full sort 
         my $present = 0;
-        my $ctags = $contig->getTags(0);
+        my $ctags = $target->getTags(0);
 #$logger->debug("Testing new ($tptag) against existing (@$ctags) tags") if $ctags;
 $logger->debug("Testing new ($tptag) against existing tags") if $ctags;
         foreach my $ctag (@$ctags) {
@@ -3145,9 +3204,21 @@ $logger->debug("Testing new ($tptag) against existing tags") if $ctags;
 
 # the (transposed) tag from parent is not in the current contig: add it
 
-$logger->debug("new tag $tptag added to $contig");
-        $contig->addTag($tptag);
-#last;
+# if the remapped tag has frameshifts or is truncated & the tagtype is among
+# the keys of the hash list $newtypetag the tagtype is renamed  
+
+        if (my $newtagtype = $changetypehash->{$tagtype}) {
+            my $comment = $tptag->getComment();
+            next unless ($comment =~ /split|truncated|frame|shift/);
+            my $tagcomment = $tptag->getTagComment();
+            my $newcomment = "Alteration detected for previous version of tag at this position\\n\\"
+	  	           . "$tagcomment \\n\\$comment";
+# rename the tag type and amend the comment
+            $tptag->setType($newtagtype);
+            $tptag->setTagComment($newcomment);
+        }
+# and add the tag to the contig
+        $target->addTag($tptag);
     }
 }
 
@@ -3167,76 +3238,7 @@ sub sortContigTags {
 
 # sort the tags with increasing tag position
 
-    if ($options{sort} && $options{sort} eq 'position') {
-# do a basic sort on start position
-        @$tags = sort positionsort @$tags;
-    }
-    elsif ($options{sort} && $options{sort} eq 'full') {
-# do a sort on position and tag description in tagcomment
-        @$tags = sort mergesort @$tags     if $options{merge};
-        @$tags = sort fullsort  @$tags unless $options{merge};
-    }
-    elsif ($options{sort}) {
-        $logger->error("invalid sorting option '$options{sort}' ignored");
-    }
-
-# remove duplicate tags; in merge mode also consider overlapping tags
-
-#$logger->debug('weeding out duplicates');
-#$logger->debug("tag before duplicate test ".scalar(@$tags));
-
-    my $merge = $options{merge};
-
-    my $n = 1;
-    while ($n < scalar(@$tags)) {
-        my $leadtag = $tags->[$n-1];
-        my $nexttag = $tags->[$n];
-# splice the nexttag out of the array if the tags are equal
-        if ($leadtag->isEqual($nexttag)) {
-	    splice @$tags, $n, 1;
-	}
-        elsif ($merge && $leadtag->isEqual($nexttag,contains=>1)) {
-	    splice @$tags, $n, 1; # lead tag contains next tag: remove next
-	}
-        elsif ($merge && $nexttag->isEqual($leadtag,contains=>1)) {
-	    splice @$tags, $n-1, 1; # next tag contains lead tag: remove lead
-	}
-	elsif ($merge && $leadtag->isEqual($nexttag,overlaps=>1)) {
-	    splice @$tags, $n, 1; # lead tag is extended and contains next tag
-	}
-        else {
-	    $n++;
-	}
-    }    
-#$logger->debug("tag after sort ".scalar(@$tags));
-#$logger->debug("EXIT",skip=>3);
-}
-
-sub mergesort {
-# sort for weedout/merge purposes (getting same tagcomment grouped together)
-   $a->getTagComment()    cmp $b->getTagComment()     # sort on the description first
- or
-   $a->getPositionLeft()  <=> $b->getPositionLeft()   # then on start position 
- or
-   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
-}
-
-sub fullsort {
-# sort for comparison purposes (inside the same tag set)
-   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position 
- or
-   $a->getType()          cmp $b->getType()           # then on type
- or
-   $a->getTagComment()    cmp $b->getTagComment()     # then on the description first
- or
-   $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
-}
-
-sub positionsort {
-# comparison with ordered existing tags
-   $a->getPositionLeft()  <=> $b->getPositionLeft()   # sort on start position
- or
-   $a->getPositionRight() <=> $b->getPositionRight(); # then on end position 
+    return TagFactory->sortTags($tags,@_) unless $options{useold};
 }
 
 #-----------------------------------------------------------------------------
@@ -3285,6 +3287,9 @@ sub verifyLogger {
 
             $LOGGER->setPrefix($prefix);
         }
+
+        $LOGGER->debug('ENTER') if shift;
+
         return $LOGGER;
     }
 
