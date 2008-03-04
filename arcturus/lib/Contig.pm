@@ -86,6 +86,8 @@ sub setDataSource {
 
     $this->{SOURCE} = $source if (ref($source) eq 'ContigFactory');
 
+    $this->{SOURCE} = $source if ($source eq 'ContigFactory');
+
     unless ($this->{SOURCE} && $this->{SOURCE} eq $source) {
         die "Invalid object passed: $source" if $this->{SOURCE};
     } 
@@ -97,6 +99,7 @@ sub getOrganism {
 
     my $ADB = $this->{SOURCE}; # the source or database
     return undef unless (ref($ADB) eq 'ArcturusDatabase');
+
     return $ADB->getOrganism();
 }
 
@@ -106,6 +109,7 @@ sub getInstance {
 
     my $ADB = $this->{SOURCE}; # the source or database
     return undef unless (ref($ADB) eq 'ArcturusDatabase');
+
     return $ADB->getInstance();
 }
 
@@ -664,7 +668,7 @@ sub importer {
         $Component->setHost($this) if ($class eq 'Tag');
     }
     else {
-# reset option
+# reset option: call method with Component undefined (or 0)
         undef $this->{$buffername};
     }
 }
@@ -829,15 +833,13 @@ sub inheritTags {
 # inherit tags FROM this contig's parents
     my $this = shift;
     my %options = @_;
-# what about selected tags only?
 
     my $logger = &verifyLogger('inheritTag');
     $logger->debug("Contig->inheritTags: this $this ; opts: @_");
-#my $depth = shift;
 
-    $options{depth} = 1 unless defined($options{depth});
+# depth 1 or less: parents; depths 2 for grandparents (if no tags on parents)
 
-#$depth = 1 unless defined($depth);
+    $options{depth} = 1 unless defined($options{depth}); # 
 
 # get the parents; if none present, (try to) get them from the database
 
@@ -848,14 +850,17 @@ sub inheritTags {
     $options{depth} -= 1; # here, because it applies to all parents
 
     foreach my $parent (@$parents) {
-# if this parent does not have tags, test its parent(s)
-# $parent->inheritTags($depth-1) if ($depth > 0 && !$parent->hasTags(1));
-        if ($options{depth} >= 0 && !$parent->hasTags(1)) {
+# check if this parent does have tags using delayed loading; if not
+# inherit from its parent(s) until the depth specification runs out
+        if (!$parent->hasTags(1) && $options{depth} > 0) {
+	    $logger->info("inherit tags at level $options{depth}");
             $parent->inheritTags(%options);
         }
-# get the tags from the parent into this contig
-#        next unless $parent->hasTags();
-        $parent->propagateTagsToContig($this,%options);
+    }
+# get the tags from the parents into this contig (as they now are)
+    delete $options{depth};
+    foreach my $parent (@$parents) {
+        &propagateTagsToContig($parent,$this,%options);
     }
 }
 
@@ -869,7 +874,7 @@ sub propagateTags {
     my $children = $this->getChildContigs(1);
 
     foreach my $child (@$children) {
-        $this->propagateTagsToContig($child,%options);
+        &propagateTagsToContig($this,$child,%options);
     }
 }
 
@@ -883,15 +888,16 @@ sub propagateTagsToContig {
                            'notagload',    # take tags as is
                            'noparentload', # take parent contig(s) as is
                            'speedmode',    # 
-                           'includetag',   # list of tags to be included
-                           'excludetag',   # list of tags to be excluded
+                           'tagfilter',    # list of tags to be screened
+                           'tagscreen',    # 1 to include, 0 to exclude 
+                           'split','nosplit',
                            'minimumsegmentsize',  # re : anno tags
 #                           'change strand',      # re : anno tags
                            'overlap',             # re : anno tags
-                           'sequenceonly','banded',    # re : anno tags
-                           'bandedlinear',             # re : anno tags 
-                           'bandedoffset',             # re : anno tags 
-                           'bandedwindow',             # re : anno tags 
+                           'sequenceonly','banded',    # re : anno tags ?
+                           'bandedlinear',             # re : anno tags ?
+                           'bandedoffset',             # re : anno tags ?
+                           'bandedwindow',             # re : anno tags ?
                            'debug');
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
@@ -910,7 +916,8 @@ sub writeToCaf {
 
     my @validoptionkeys = ('noreads',   # don't export reads, only contig
                            'readsonly', # only export reads
-                           'notags',
+ #                          'gap4name',  # 
+                           'notags',    # don't export tags
 		           'alltags',
                            'includetag',
                            'excludetag');
