@@ -1106,7 +1106,8 @@ sub getContigIDsForProjectID {
               . "  from CONTIG left join C2CMAPPING"
               . "    on CONTIG.contig_id = C2CMAPPING.parent_id"
 	      . " where CONTIG.project_id = ?"
-              .	"   and C2CMAPPING.parent_id is null";
+              . "   and C2CMAPPING.parent_id is null"
+              . " order by contig_id";
 
     my $sth = $dbh->prepare_cached($query);
 
