@@ -911,24 +911,50 @@ sub getReadsForContig {
     &verifyParameter($contig,'getReadsForContig','Contig');
 
     return if $contig->hasReads(); # only 'empty' instance allowed
-
-    my $dbh = $this->getConnection();
-
-# NOTE: this query is to be TESTED may have to be optimized
-
-    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version," .
-                "$this->{read_attributes},$this->{template_addons}" .
-                " from MAPPING,SEQ2READ,READINFO,TEMPLATE " .
-                "where MAPPING.contig_id = ?" .
-                "  and MAPPING.seq_id = SEQ2READ.seq_id" .
-                "  and SEQ2READ.read_id = READINFO.read_id" .
-                "  and READINFO.template_id = TEMPLATE.template_id";
-
-    my $sth = $dbh->prepare_cached($query);
  
     my $cid = $contig->getContigID();
 
-    my $nr = $sth->execute($cid) || &queryFailed($query,$cid);
+    my $dbh = $this->getConnection();
+
+# the query may need a union construct depending on the (possible) presence
+# of template_id=0 in any of the reads and, if so, whether or not a record 
+# exists in the TEMPLATE table with template_id=0; if not, the union is
+# mandatory to recall reads without template info. The union, however is a
+# slower query because of overheads, so adding a template_id=0 record to
+# TEMPLATE is to be prefered; the default setting is not to use the union.  
+
+    my @bindvalues;
+
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+              . "$this->{read_attributes},$this->{template_addons}"
+              . "  from MAPPING,SEQ2READ,READINFO,TEMPLATE"
+              . " where MAPPING.seq_id = SEQ2READ.seq_id"
+              . "   and SEQ2READ.read_id = READINFO.read_id"
+              . "   and READINFO.template_id = TEMPLATE.template_id"
+	      . "   and MAPPING.contig_id = ?";
+        push @bindvalues,$cid;
+
+# the union construct is needed if there are reads without template info
+# and the TEMPLATE does not contain a template_id=0 entry; 
+
+    $options{nounion} = 1 unless defined $options{nounion};
+
+    unless ($options{nounion}) { # 
+        $query .= " and READINFO.template_id > 0"
+              . " union "
+              . "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+              . "$this->{read_attributes},$this->{template_addons}"
+              . "  from MAPPING,SEQ2READ,READINFO,TEMPLATE "
+              . " where MAPPING.seq_id = SEQ2READ.seq_id"
+              . "   and SEQ2READ.read_id = READINFO.read_id"
+              . "   and READINFO.template_id = 0"
+              . "   and MAPPING.contig_id = ?";
+        push @bindvalues,$cid;
+    }
+    
+    my $sth = $dbh->prepare_cached($query);
+
+    my $nr = $sth->execute(@bindvalues) || &queryFailed($query,@bindvalues);
 
     my @reads;
 
@@ -1805,38 +1831,6 @@ sub getReadsNotInDatabase {
     my @missingreads = keys %$namehash;
 
     return [@missingreads];    
-}
-
-sub areReadsNotInDatabase {
-# return a list of those readnames from an input list which are NOT present
-    my $this      = shift;
-    my $readnames = shift; # array reference with readnames to be tested
-
-    &verifyParameter($readnames,"areReadsNotInDatabase",'ARRAY');
-
-    my %namehash;
-    foreach my $name (@$readnames) {
-        $namehash{$name}++;
-    }
-
-    my $dbh = $this->getConnection();
-   
-    my $query = "select readname from READINFO 
-                 where  readname in ('".join ("','",@$readnames)."')";
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    while (my @ary = $sth->fetchrow_array()) {
-        delete $namehash{$ary[0]};
-    }
-
-    $sth->finish();
-
-    my @notPresent = keys %namehash; # the left over
-
-    return \@notPresent;
 }
 
 #------------------------------------------------------------------------------
