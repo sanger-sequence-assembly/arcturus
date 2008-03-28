@@ -12,7 +12,6 @@ use Logging;
 
 my $organism;
 my $instance;
-my $verbose;
 my $contig;
 my $strong = 0;
 my $fofn;
@@ -20,9 +19,11 @@ my $next = 1;
 my $confirm = 0;
 my $cleanup = 0;
 my $force = 0;
+my $verbose;
+my $debug;
 
 my $validKeys  = "organism|instance|contig|fofn|next|strong|force|"
-               . "cleanup|preview|confirm|verbose|debug|help";
+               . "cleanup|preview|confirm|verbose|info|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -47,7 +48,9 @@ while (my $nextword = shift @ARGV) {
 
     $verbose   = 1            if ($nextword eq '-verbose');
 
-    $verbose   = 2            if ($nextword eq '-debug');
+    $verbose   = 2            if ($nextword eq '-info');
+
+    $debug     = 1            if ($nextword eq '-debug');
 
     $confirm   = 0            if ($nextword eq '-preview');
 
@@ -62,7 +65,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging('STDOUT');
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter($verbose) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -127,7 +130,7 @@ foreach my $contig_id (@contigs) {
 
     $contig->addContigToContigMapping(0); # erase any existing C2CMappings
 
-    $contig->setDEBUG() if ($verbose && $verbose > 1); 
+$contig->setLogger() if ($verbose && $verbose > 1); 
 
 # get the parents from a database search
 
@@ -137,7 +140,9 @@ foreach my $contig_id (@contigs) {
 
     foreach my $parent (@$linked) {
 	$logger->info("Loading parent $parent");
-        $parent = $adb->getContig(contig_id=>$parent);
+        my $contig = $adb->getContig(contig_id=>$parent);
+        print STDERR "Contig $parent not retrieved\n" unless $contig;
+        $parent = $contig;
     }
 
     $logger->info("No parents found on detailed search") unless @$linked;
@@ -148,6 +153,11 @@ foreach my $contig_id (@contigs) {
 
     my @rejectids; # for spurious links
     foreach my $parent (@$linked) {
+
+        unless (ref($parent) eq 'Contig') {
+            $logger->error("undefined parent 1 ".($parent||'undef'));
+	    next;
+        }
 
         $logger->warning("\nTesting against parent ".$parent->getContigName);
 
@@ -165,16 +175,23 @@ foreach my $contig_id (@contigs) {
 # determine if any new contig ids are added to the list
 #	    $logger->warning("new IDs: @$newids");
             my $parentidhash = {};
-            foreach my $parent (@$linked) {
-                my $pid = $parent->getContigID();
+            foreach my $contig (@$linked) {
+                unless (ref($contig) eq 'Contig') {
+                    $logger->error("undefined parent 2 ".($contig||'undef'));
+	            next;
+                }
+
+                next unless (ref($contig) eq 'Contig');
+                my $pid = $contig->getContigID();
                 $parentidhash->{$pid}++;
 	    }
 # find the newly added parent IDs, if any, which do not occur in the parent ID hash
             foreach my $pid (@$newids) {
                 next if $parentidhash->{$pid}; # already in list
 	        $logger->warning("Loading new parent $pid");
-                $parent = $adb->getContig(contig_id=>$pid);
-                push @$linked,$parent if $parent;
+                my $contig = $adb->getContig(contig_id=>$pid);
+                print STDERR "Contig $pid not retrieved\n" unless $contig;
+                push @$linked,$contig if $contig;
             }
         }
  
