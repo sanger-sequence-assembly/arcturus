@@ -6,6 +6,7 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
+import java.util.Vector;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
@@ -14,6 +15,8 @@ public class CalculateConsensus {
 	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
 
 	private final int MAX_ALLOWED_PACKET = 8 * 1024 * 1024;
+
+	private final int MAX_NORMAL_READ_LENGTH = 8000;
 
 	private long lasttime;
 	private Runtime runtime = Runtime.getRuntime();
@@ -47,6 +50,8 @@ public class CalculateConsensus {
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
 	private String consensustable = null;
+
+	private int maxNormalReadLength = MAX_NORMAL_READ_LENGTH;
 
 	public static void main(String args[]) {
 		CalculateConsensus cc = new CalculateConsensus();
@@ -97,6 +102,9 @@ public class CalculateConsensus {
 
 			if (args[i].equalsIgnoreCase("-no_pad"))
 				mode = Gap4BayesianConsensus.MODE_NO_PAD;
+
+			if (args[i].equalsIgnoreCase("-maxnormalreadlength"))
+				maxNormalReadLength = Integer.parseInt(args[++i]);
 		}
 
 		if (instance == null || organism == null) {
@@ -163,7 +171,7 @@ public class CalculateConsensus {
 				Arcturus.logWarning("Failed to increase max_allowed_packet to "
 						+ MAX_ALLOWED_PACKET, sqle);
 			}
-			
+
 			insertStmt = conn.prepareStatement("insert into " + consensustable
 					+ " (contig_id,sequence,length,quality)"
 					+ " VALUES(?,?,?,?)");
@@ -292,11 +300,13 @@ public class CalculateConsensus {
 			return false;
 
 		Mapping[] mappings = contig.getMappings();
-		int nreads = mappings.length;
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
 
 		int cstart = mappings[0].getContigStart();
 		int cfinal = mappings[0].getContigFinish();
+
+		Vector<Mapping> normalReads = new Vector<Mapping>();
+		Vector<Mapping> longReads = new Vector<Mapping>();
 
 		for (int i = 0; i < mappings.length; i++) {
 			if (mappings[i].getSequence() == null
@@ -317,7 +327,18 @@ public class CalculateConsensus {
 				Arcturus.logWarning("Read was null for sequence "
 						+ mappings[i].getSequence() + " in database "
 						+ adb.getName(), new Throwable("Read object was null"));
+
+			if (mappings[i].getSequence().getLength() > maxNormalReadLength)
+				longReads.add(mappings[i]);
+			else
+				normalReads.add(mappings[i]);
 		}
+
+		System.err.println("Of " + mappings.length + " mappings, "
+				+ normalReads.size() + " are of normal  length and "
+				+ longReads.size() + " are oversize");
+
+		mappings = normalReads.toArray(new Mapping[0]);
 
 		int truecontiglength = 1 + cfinal - cstart;
 
@@ -325,6 +346,8 @@ public class CalculateConsensus {
 		byte[] quality = new byte[truecontiglength];
 
 		int maxdepth = -1;
+
+		int nreads = mappings.length;
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
@@ -351,34 +374,16 @@ public class CalculateConsensus {
 
 			algorithm.reset();
 
-			for (int rdid = rdleft; rdid <= rdright; rdid++) {
-				int rpos = mappings[rdid].getReadOffset(cpos);
-				Read read = mappings[rdid].getSequence().getRead();
+			// Process the normal reads
+			for (int rdid = rdleft; rdid <= rdright; rdid++)
+				processMapping(mappings[rdid], cpos);
 
-				// In the Gap4 consensus algorithm, "strand" refers to the
-				// read-to-contig
-				// alignment direction, not the physical strand from which the
-				// read has
-				// been sequenced.
-				int strand = mappings[rdid].isForward() ? Read.FORWARD
-						: Read.REVERSE;
+			// Process the oversize (consensus) reads
+			for (Mapping mapping : longReads)
+				processMapping(mapping, cpos);
 
-				int chemistry = read == null ? Read.UNKNOWN : read
-						.getChemistry();
-
-				if (rpos >= 0) {
-					char base = mappings[rdid].getBase(rpos);
-					int qual = mappings[rdid].getQuality(rpos);
-
-					if (qual > 0)
-						algorithm.addBase(base, qual, strand, chemistry);
-				} else {
-					int qual = mappings[rdid].getPadQuality(cpos);
-
-					if (qual > 0)
-						algorithm.addBase('*', qual, strand, chemistry);
-				}
-			}
+			if (cpos % 1000 == 0)
+				System.err.println("Base " + cpos + " done");
 
 			try {
 				sequence[cpos - cstart] = (byte) algorithm.getBestBase();
@@ -403,6 +408,31 @@ public class CalculateConsensus {
 		consensus.setQuality(quality);
 
 		return true;
+	}
+
+	private void processMapping(Mapping mapping, int cpos) {
+		int rpos = mapping.getReadOffset(cpos);
+
+		int qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
+				.getPadQuality(cpos);
+
+		if (qual <= 0)
+			return;
+
+		Read read = mapping.getSequence().getRead();
+
+		// In the Gap4 consensus algorithm, "strand" refers to the
+		// read-to-contig
+		// alignment direction, not the physical strand from which the
+		// read has
+		// been sequenced.
+		int strand = mapping.isForward() ? Read.FORWARD : Read.REVERSE;
+
+		int chemistry = read == null ? Read.UNKNOWN : read.getChemistry();
+
+		char base = (rpos >= 0) ? mapping.getBase(rpos) : '*';
+
+		algorithm.addBase(base, qual, strand, chemistry);
 	}
 
 	public void storeConsensus(int contig_id, Consensus consensus,
