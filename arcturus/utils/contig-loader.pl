@@ -50,6 +50,8 @@ my $batch = 0;
 my $debug = 0;
 my $contigtagdebug = 0;
 
+my $readrepair;
+
 my $safemode = 0;
 
 my $outputFile;            # default STDOUT
@@ -57,7 +59,7 @@ my $logLevel;              # default log warnings and errors only
 
 my $validKeys  = "organism|instance|assembly|caf|cafdefault|out|consensus|"
                . "project|defaultproject|test|minimum|filter|ignore|list|"
-               . "gap4name|g4n|"
+               . "gap4name|g4n|repair|"
                . "setprojectby|spb|readtaglist|rtl|noreadtags|nrt|"
                . "noacquirelock|nal|dounlock|"
                . "ignorereadnamelike|irnl|contigtagprocessing|ctp|notest|"
@@ -87,6 +89,8 @@ while (my $nextword = shift @ARGV) {
     $isdefault        = 1            if ($nextword eq '-defaultproject');
 
     $lineLimit        = shift @ARGV  if ($nextword eq '-test');
+
+    $readrepair       = 1            if ($nextword eq '-repair');
 
     $consensus        = 1            if ($nextword eq '-consensus');
 
@@ -226,14 +230,14 @@ if ($pidentifier) {
     unless ($projects && @$projects) {
         $logger->warning("Unknown project $pidentifier ($m)");
         $adb->disconnect();
-        exit 2 unless $override; # exit with error status
+        exit 1 unless $override; # exit with error status
         $logger->warning("No default project available");
     }
 
     if ($projects && @$projects > 1) {
         $logger->warning("ambiguous project identifier $pidentifier ($m)");
         $adb->disconnect();
-        exit 2 unless $override; # exit with error status
+        exit 1 unless $override; # exit with error status
     }
 
     $project = $projects->[0] if ($projects && @$projects >= 1);
@@ -250,7 +254,7 @@ if ($pidentifier) {
 
 unless ($project || $noacquirelock) {
     $logger->error("Undefined project");
-    exit 2; # exit with error status
+    exit 1; # exit with error status
 }
 
 # test validity of project inheritance specification
@@ -265,7 +269,7 @@ unless ($identified) {
     $logger->error("Invalid project inheritance option: $pinherit");
     $logger->error("Options available: none, readcount, contiglength, contigcount");
     $adb->disconnect() if $adb;
-    exit 2; # exit with error status
+    exit 1; # exit with error status
 }
 
 print "readnameblocker $rnBlocker\n" if $rnBlocker;
@@ -305,7 +309,7 @@ unless ($noacquirelock) {
 	$logger->error("Project $pidentifier could not be locked: $msg");
         $logger->error("import ABORTED");
         $adb->disconnect() if $adb;
-        exit 2; # exit with error status
+        exit 1; # exit with error status
     }
     $logger->warning($msg);
 }
@@ -461,7 +465,7 @@ while (defined($record = <$CAF>)) {
             elsif ($contig = $contigs{$objectName}) {
                 $contig->setSequence($DNASequence);
             }
-            elsif ($objectName =~ /contig/i) {
+            elsif ($objectName =~ /Contig/) {
                 $contig = new Contig($objectName);
                 $contigs{$objectName} = $contig;
                 $contig->setSequence($DNASequence);
@@ -483,7 +487,7 @@ while (defined($record = <$CAF>)) {
             elsif ($contig = $contigs{$objectName}) {
                 $contig->setBaseQuality ([@BaseQuality]);
             }
-            elsif ($objectName =~ /contig/i) {
+            elsif ($objectName =~ /Contig/) {
                 $contig = new Contig($objectName);
                 $contigs{$objectName} = $contig;
                 $contig->setBaseQuality ([@BaseQuality]);
@@ -506,7 +510,7 @@ while (defined($record = <$CAF>)) {
 # now test if we really want the sequence data
         if ($objectType) {
 # for contig, we need consensus option on
-            if ($contigs{$objectName} || $objectName =~ /contig/i) {
+            if ($contigs{$objectName} || $objectName =~ /Contig/) {
                 $objectType = 0 if !$consensus;
                 $objectType = 0 if $cnBlocker->{$objectName};
             }
@@ -529,7 +533,7 @@ while (defined($record = <$CAF>)) {
        
 # the next block handles a special case where 'Is_contig' is defined after 'assembled'
 
-    if ($objectName =~ /contig/i && $record =~ /assemble/i && abs($objectType) != 2) {
+    if ($objectName =~ /Contig/ && $record =~ /assemble/i && abs($objectType) != 2) {
 # decide if this contig is to be included
         if (!$cnBlocker->{$objectName} && 
            ($cnFilter !~ /\S/ || $objectName =~ /$cnFilter/)) {
@@ -612,11 +616,11 @@ while (defined($record = <$CAF>)) {
             if (scalar @positions == 4) {
                 my $entry = $read->addAlignToTrace([@positions]);
 # temporary fix for consensus read with bad align to trace info 
-                if ($entry == 2 && $objectName =~ /^contig/) {
-                    $logger->warning("align-to-scf specification for "
-                                    ."consensus read corrected");
-                    undef $read->{alignToTrace};
-		}
+#                if ($entry == 2 && $objectName =~ /^contig/) {
+#                    $logger->warning("align-to-scf specification for "
+#                                    ."consensus read $objectName corrected");
+#                    undef $read->{alignToTrace};
+#		}
                 if ($entry == 2 && $isUnpadded) {
                     $logger->info("Edited read $objectName detected ($lineCount)");
 # on first encounter load the read item dictionaries
@@ -990,38 +994,52 @@ foreach my $identifier (keys %contigs) {
 
     $contig->setOrigin($origin);
 
-    unless ($isUnpadded) {
-# convert padded reads and mappings into unpadded representation
-        my $reads = $contig->getReads();
-        my $mappings = $contig->getMappings();
-        if ($reads && @$reads && $mappings && @$mappings) {
-            my $namelookup = {};
-            for (my $i = 0 ; $i < scalar(@$mappings) ; $i++) {
-                $namelookup->{$mappings->[$i]->getMappingName()} = $i;
-	    }
+    $contig->toUnPadded(nonew=>1) unless $isUnpadded;
+#   $contig->writeToCaf(*STDOUT) if $list;
 
-            foreach my $paddedread (@$reads) {
-                my $mappingnumber = $namelookup->{$paddedread->getReadName};
-		my $paddedmapping = $mappings->[$mappingnumber];
-                unless ($paddedmapping) {
-                    print STDERR "missing mapping for read ".
-                        $paddedread->getReadName."\n";
-                    next;
-                }
-# convert the padded read / mapping to unpadded representations
-                my $intermediate = new PaddedRead($paddedread);
-                $intermediate->setPadded();
-                $mappings->[$mappingnumber] = $intermediate->dePad($paddedmapping);
-                $paddedread = $intermediate->exportAsRead();
-	    }
-	}
-	else {
-            print STDERR "Cannot convert to unpadded contig ".
-		$contig->getContigName()."\n";
+# test consensus reads (to be separate subroutine)
+
+    my $reads = $contig->getReads();
+    foreach my $read (@$reads) {
+	next unless $read->isEdited();
+# first test if the read is already present and if so its length
+        my $readname = $read->getReadName();
+	next unless ($readname =~ /^contig/); # consider only consensus reads
+        my $readlgth = $read->getSequenceLength();
+# if a version 0 already exists, compare
+        if (my $dbread = $adb->getRead(readname=>$readname)) {
+# if the lengths are equal, remove the align to trace data 
+$logger->warning("version 0 already exists");
+            if ($dbread->getSequenceLength == $readlgth) {
+                undef $read->{alignToTrace};
+            }
+# otherwise the new read is treated as an edited read
             next;
-	}
-	$contig->writeToCaf(*STDOUT) if $list;
+        }
+# there is no version 0: either approximately restore the original version
+# or remove the alignment record to treat this read as version 0
+        next unless ($readrepair);
+$logger->warning("edited read $readname");
+        my $mapping = $read->getAlignToTraceMapping();
+$logger->warning($mapping->toString());
+        my $original = $mapping->transformString($read->getSequence());
+        my $oquality = $mapping->transformArray($read->getBaseQuality());
+
+$logger->warning("read sequence:\n".$read->getSequence());
+$logger->warning("restored original:\n$original");
+
+#        exit unless ($readname eq 'contig00143_0105');
+# restore original read and put in database       
+        my $originalread = new Read($readname);
+        $originalread->setSequence($original);
+        $originalread->setBaseQuality($oquality);
+my %loadoptions;        
+        my ($success,$errmsg) = $adb->putRead($read, %loadoptions);
+	next if $success;
+        $logger->severe("Unable to put read $readname: $errmsg");
     }
+
+# load
 
     my ($added,$msg) = $adb->putContig($contig, $project,
                                        noload  => $noload,
@@ -1132,7 +1150,7 @@ if ($lastinsertedcontig && $safemode) {
     else {      
         $logger->severe("Safemode test FAILED");
         $adb->disconnect();
-	exit 2; # exit with error status and leave project locked
+	exit 1; # exit with error status and leave project locked
     }
 }
 
@@ -1147,9 +1165,7 @@ unless ($lockedonentry && $autolockmode) {
 
 $adb->disconnect();
 
-exit 0 if $loaded;  # no errors and contigs loaded
-
-exit 1; # no errors but no contigs loaded
+exit 0;  # no errors
 
 #------------------------------------------------------------------------
 # subroutines
