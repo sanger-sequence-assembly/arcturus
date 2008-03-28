@@ -2214,7 +2214,7 @@ $logger->debug("segment after filter @$segment");
 
 # use the normalise method to handle possible single-base segments
 
-    $mapping->normalise();
+    $mapping->normalise(mute=>1); # short messsage for alignment problem
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
@@ -2270,7 +2270,7 @@ $logger->debug("EXIT");
 }
 
 
-sub linkToContig { # will be REDUNDENT
+sub linkToContig { # will be REDUNDENT to be DEPRECATED
 # compare two contigs using sequence IDs in their read-to-contig mappings
 # adds a contig-to-contig Mapping instance with a list of mapping segments,
 # if any, mapping from $compare to $this contig
@@ -2650,7 +2650,7 @@ $DEBUG->fine("segment after filter @$segment") if $DEBUG;
     }
 # use the normalise method to handle possible single-base segments
 
-    $mapping->normalise();
+    $mapping->normalise(mute=>1);
 
     if ($mapping->hasSegments()) {
 # here, test if the mapping is valid, using the overall maping range
@@ -2931,8 +2931,8 @@ $logger->fine("mapping $mapping xsid $xdomainseq_id  ysid $ydomainseq_id");
 # collect mapping(s), or their inverse(s), which match the parent in the x-domain
         if ($xdomainseq_id && $xdomainseq_id == $parent_id) {
             next if ($target_id && $ydomainseq_id && $target_id != $ydomainseq_id);
-$logger->info("mapping $mapping accepted as is");
-            push @mapping,$mapping;
+$logger->info("mapping $mapping accepted");
+           push @mapping,$mapping;
         }
         elsif ($ydomainseq_id && $ydomainseq_id == $parent_id) {
 # the inverse mapping matches the parent domain
@@ -3031,7 +3031,7 @@ $logger->debug($p2tmapping->assembledFromToString(),ss=>1);
 # specific tags can have their type changed on output to become "Arcturus Special Info Tags"
     my $changetypehash = {};
     my $changetype = $options{changetype};
-    $changetype = "ANNO|REPT" unless defined $changetype;
+    $changetype = "ANNO|REPT|RP20" unless defined $changetype;
     my $newtypetag = $options{newtypetag} || 'ASIT';
     if ($changetype) { # build a hash list keyed on tagtype
         $changetype =~ s/^\s+|\s+$//g; # leading/trailing blanks
@@ -3082,16 +3082,12 @@ $logger->debug("remapped ".scalar(@rtags)." from ".scalar(@$ptags)." input",skip
     if (@rtags) {
         my %moptions = (overlap => ($options{overlap} || 0));
         my $newtags = TagFactory->mergeTags(\@rtags,%moptions);
-
 my $oldttags = $target->getTags() || [];
 $logger->debug(scalar(@$oldttags) . " existing tags on TARGET PT");
 $logger->debug(scalar(@$newtags) . " added (merged) tags PT");
-
         $target->addTag($newtags) if $newtags;
-
 my $newttags = $target->getTags() || [];
 $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
-
     }
     else {
         $logger->info("No tags were remapped (with split allowed) from parent contig $parent_id",skip=>1);
@@ -3111,107 +3107,23 @@ $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
         next if ($includetag && $tagtype !~ /\b$includetag\b/i);
         next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
 
-        my $tptag;
-my $NEW = 1;
-if ($NEW) {
-#        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',usenew=>1);
-        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',usenew=>0);
+        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse');
+#        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
 	$logger->warning("tag $ptag could not be re-mapped (1)") unless $tptags;
-        next unless $tptags;
-        $tptag = $tptags->[0] if $tptags; 
-}
+        next unless ($tptags && @$tptags);
+        my $tptag = $tptags->[0]; 
 
-unless ($NEW) {
-# OBSOLETE to be DELETED from here
-# check if the length of the target contig is defined
-
-        my $tlength = $target->getConsensusLength();
-        unless ($tlength) {
-            $target->getStatistics(1); # no zeropoint shift; use contig as is
-            $tlength = $target->getConsensusLength();
-            unless ($tlength) {
-                $logger->warning("Undefined length in (child) contig");
-               return 0;
-            }
-        }
-        $logger->debug("Target contig length : $tlength ");
-        my $c2csegments = $p2tmapping->getSegments();
-        my $alignment = $p2tmapping->getAlignment();
-$logger->debug("CC Collecting $tagtype tag for remapping ".$ptag->getPositionLeft());
-# determine the segment(s) of the mapping with the tag's position
-$logger->debug("processing tag $ptag (align $alignment)");
-
-# the remainder uses the old algorithm which has to be replaced by the ->remap method
-        undef my @offset;
-        my @position = $ptag->getPosition();
-
-$logger->debug("tag position (on parent) @position");
-
-        foreach my $segment (@$c2csegments) {
-# for the correct segment, getXforY returns true
-            for my $i (0,1) {
-                if ($segment->getYforX($position[$i])) {
-                    $offset[$i] = -$segment->getOffset();
-# ensure that both offsets are defined; this line ensures definition in
-# case the counterpart falls outside any segment (i.e. outside the contig)
-                    $offset[1-$i] = $offset[$i] unless defined $offset[1-$i];
-                }
-            }
-        }
-# accept the new tag only if the position offsets are defined
-$logger->debug("offsets: @offset");
-$logger->error("tag $ptag could not be remapped") unless @offset;
-        next unless @offset;
-$logger->flush();
-$logger->setPrefix("Tag->transpose");
-# create a new tag by spawning from the tag on the parent contig
-        $tptag = $ptag->transpose($alignment,\@offset,
-                                  postwindowfinal=>$tlength);
-
-$logger->setPrefix("CH->propagateTagsToContig");
-$logger->error("tag $ptag could not be remapped") unless $tptag;
-        next unless $tptag; # remapped tag out of boundaries
-# TO BE DELETED TO HERE
-}
-
-
-#if ($ptag eq $ptags->[0]) {
- $logger->info("tag on parent :". $ptag->writeToCaf(),pskip=>1);
- $logger->info("tag on child :". $tptag->writeToCaf(),skip=>1);
-#}
-
-$logger->debug("Test presence of transposed Tag against existing tags");
-
-# test if the transposed tag is not already present in the child;
-# if it is, inherit any properties from the transposed parent tag
-# which are not defined in it (e.g. when ctag built from Caf file)
-
-
-# should be done much more efficiently afterwards by using the full sort 
-        my $present = 0;
-        my $ctags = $target->getTags(0);
-#$logger->debug("Testing new ($tptag) against existing (@$ctags) tags") if $ctags;
-$logger->debug("Testing new ($tptag) against existing tags") if $ctags;
-        foreach my $ctag (@$ctags) {
-            my $debug = 0;
-# test the transposed parent tag and port the tag_id / systematic ID
-            if ($tptag->isEqual($ctag,inherit=>1,debug=>$debug)) {
-                $present = 1;
-                last;
-	    }
-        }
-        next if $present;
-
-# the (transposed) tag from parent is not in the current contig: add it
+ $logger->fine("tag on parent :". $ptag->writeToCaf(),pskip=>1);
+ $logger->fine("tag on child :". $tptag->writeToCaf(),skip=>1);
 
 # if the remapped tag has frameshifts or is truncated & the tagtype is among
-# the keys of the hash list $newtypetag the tagtype is renamed  
+# the keys of the hash list $newtypetag the tagtype is to be renamed  
 
         if (my $newtagtype = $changetypehash->{$tagtype}) {
             my $comment = $tptag->getComment();
             next unless ($comment =~ /split|truncated|frame|shift/);
             my $tagcomment = $tptag->getTagComment();
-            my $newcomment = "Alteration detected for previous version of tag at this position\\n\\"
+            my $newcomment = "Alteration detected of previous version of tag at this position\\n\\"
 	  	           . "$tagcomment \\n\\$comment";
 # rename the tag type and amend the comment
             $tptag->setType($newtagtype);
@@ -3220,6 +3132,8 @@ $logger->debug("Testing new ($tptag) against existing tags") if $ctags;
 # and add the tag to the contig
         $target->addTag($tptag);
     }
+# finally, remove duplicates on the target
+    $target->getTags(0,sort=>'full',merge=>1);
 }
 
 sub sortContigTags {
