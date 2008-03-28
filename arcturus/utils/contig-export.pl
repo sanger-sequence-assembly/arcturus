@@ -4,8 +4,6 @@ use strict;
 
 use ArcturusDatabase;
 
-use ContigFactory::ContigFactory;
-
 use Logging;
 
 #----------------------------------------------------------------
@@ -39,7 +37,7 @@ my $gap4name;
 my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
                . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
                . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
-               . "endregiontrim|ert|endegiononly|ero|erbose|help";
+               . "endregiontrim|ert|endegiononly|ero|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -303,37 +301,44 @@ foreach my $identifier (@contigs) {
     if ($endregiononly) {
 # replace contig by an endregion masked 
 	$woptions{qfill} = 50 if $endregiontrim; # test
-        $contig = ContigFactory->endRegionOnly($contig,%woptions);
+        $contig = $contig->extractEndRegion(%woptions);
         next unless $contig;
     }
-#    elsif ($endregiontrim) {
+
     if ($endregiontrim) {
-print STDOUT "endregiontrim=$endregiontrim\n";
         my %toptions = (cliplevel=>$endregiontrim);
-        my ($clipped,$cstatus) = ContigFactory->endRegionTrim($contig,%toptions);
-        $logger->warning($cstatus);
+        my ($clipped,$cstatus) = $contig->endRegionTrim(%toptions);
+        $logger->warning($cstatus,skip=>1);
         next unless $clipped;
         $contig = $clipped;
-$logger->skip();
-#        my ($ql,$qr) = $contig->endregiontrim(cliplevel=>$endregiontrim);
-#        $logger->warning("end region clipping $endregiontrim clipped range $ql, $qr");
-#        next unless $contig;
+    }
+
+    if ($qualityclip) {
+        $logger->warning("quality clipping");
+	my %qcoptions = (hqpm => 0, minimum=>0);
+        my ($newcontig,$status) = $contig->deleteLowQualityBases(%qcoptions);
+        $contig = $newcontig;
+	$woptions{qualityclip} = 0;
     }
 
     if ($padded) {
-#       $contig = ContigFactory->toPadded($contig);
-       next unless $contig;
+        $contig = $contig->toPadded();
+        next unless $contig;
     }
 
     my $err;
 
     $contig->setContigName($identifier) if ($identifier =~ /\D/);
 
-    $err = $contig->writeToCaf($fhDNA,%woptions)          if defined($caffile);
-
-    $err = $contig->writeToFasta($fhDNA,$fhQTY,%woptions) if defined($fastafile);
-
-    $err = $contig->writeToEMBL($fhDNA)                   if defined($emblfile);
+    if (defined($caffile)) {
+        $err = $contig->writeToCaf($fhDNA,%woptions);
+    }
+    elsif (defined($fastafile)) {
+        $err = $contig->writeToFasta($fhDNA,$fhQTY,%woptions);
+    }
+    elsif (defined($emblfile)) {
+        $err = $contig->writeToEMBL($fhDNA);
+    }
 
     $errorcount++ if $err;
 }
