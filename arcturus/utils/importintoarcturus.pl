@@ -21,7 +21,6 @@ my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 $arcturus_home =~ s?/utils/\.\.??;
 my $javabasedir   = "${arcturus_home}/utils";
-#my $badgerbin     = "$ENV{BADGER}/bin";
 
 #------------------------------------------------------------------------------
 # command line input parser
@@ -145,30 +144,39 @@ unless (defined($projectname)) {
 }
 
 #------------------------------------------------------------------------------
+# get a Project instance
+#------------------------------------------------------------------------------
+
+my $adb = new ArcturusDatabase (-instance => $instance,
+		                -organism => $organism);
+if (!$adb || $adb->errorStatus()) {
+# abort with error message
+     &showUsage("Invalid organism '$organism' on server '$instance'");
+}
+
+my ($projects,$msg);
+if ($projectname =~ /\D/) {
+   ($projects,$msg) = $adb->getProject(projectname=>$projectname);
+}
+else {
+   ($projects,$msg) = $adb->getProject(project_id=>$projectname);
+} 
+
+# test uniqueness    
+     
+unless ($projects && @$projects == 1) {
+    &showusage("Invalid or ambiguous project specification: $msg");
+}
+
+my $project = $projects->[0];
+
+#------------------------------------------------------------------------------
 # change to the right directory; use current if rundir is defined but 0
 #------------------------------------------------------------------------------
 
 unless (defined($rundir)) {
-# pick up the directory from the database
-     my $adb = new ArcturusDatabase (-instance => $instance,
-			             -organism => $organism);
-     if (!$adb || $adb->errorStatus()) {
-# abort with error message
-         &showUsage("Invalid organism '$organism' on server '$instance'");
-     }
-     my ($project,$msg);
-     if ($projectname =~ /\D/) {
-        ($project,$msg) = $adb->getProject(projectname=>$projectname);
-     }
-     else {
-        ($project,$msg) = $adb->getProject(project_id=>$projectname);
-     } 
-     $adb->disconnect();
-# get the directory     
-     unless ($project && @$project == 1) {
-         &showusage("Invalid or ambiguous project specification");
-     }
-     $rundir = $project->[0]->getDirectory();
+# try to pick up the directory from the database
+     $rundir = $project->getDirectory();
      print STDERR "Undefined directory for project $projectname\n" unless $rundir;
 }
 
@@ -202,7 +210,7 @@ if ( -f "${gap4name}.A.BUSY") {
     exit 1 if $abortonwarning;
 }
 
-# detrmine if script run in standard mode
+# determine if script run in standard mode
 
 my $nonstandard = ($gap4name ne $projectname || $version ne '0') ? 1 : 0;
 print STDOUT "$0 running in non-standard mode\n" if $nonstandard;
@@ -252,7 +260,6 @@ my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
 print STDOUT "Converting Gap4 database $gap4name.$version to CAF\n";
 
-#system ("${badgerbin}/gap2caf -project $gap4name -version $version -ace $padded");
 system ("gap2caf -project $gap4name -version $version -ace $padded");
 
 unless ($? == 0) {
@@ -263,7 +270,6 @@ unless ($? == 0) {
    
 print STDOUT "Depadding CAF file\n";
 
-#system ("/${badgerbin}/caf_depad < $padded > $depadded");
 system ("caf_depad < $padded > $depadded");
 
 unless ($? == 0) {
@@ -300,6 +306,8 @@ unless ($version eq "B" || $nonstandard) {
 # change the data in Arcturus
 #------------------------------------------------------------------------------
 
+$project->fetchContigIDs(); # load the current contig IDs before import
+
 print STDOUT "Importing into Arcturus\n";
 
 $command  = "$import_script -instance $instance -organism $organism "
@@ -312,27 +320,19 @@ print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
 
 system ($command);
 
-# exit status 0 for import of contigs
-#             1 (or 256) for no contigs imported, but no errors
-#             2 (or 512) for an error status 
+# exit status 0 for no errors with or without new contigs imported
+#             1 (or 256) for an error status 
 
 my $status = $?;
 
-#$status = int($status/256) if ($status > 128);
-
-if ($status && ($status == 2 || $status == 512)) {
+if ($status) {
     print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
     exit 1;
 }
 
-# if contigs were imported (status == 0) do post-processing
+# decide if new contigs were imported by probing the project again
 
-if ($status) {
-    print STDOUT "Database $gap4name.$version successfully processed, "
-               . "but does not contain new data\n";
-}
-
-else {
+elsif ($project->hasNewContigs()) {
 
 #------------------------------------------------------------------------------
 # consensus calculation
@@ -354,21 +354,14 @@ else {
     my $allocation_script = "${arcturus_home}/utils/read-allocation-test";
 
     my $username = $ENV{'USER'};
-    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/); # script is run in test mode
+# if script is run in test mode add .pl to bypass the wrapper
+    $allocation_script .= ".pl" if (defined($username) && $basedir =~ /$username/);
 
-    print STDOUT "Testing read allocation for possible duplicates inside projects\n";
-
-    # use repair mode for inconsistencies inside the project
-
-    my $allocation_i_log = "readallocation-i-.$$.${gap4name}.log"; # inside project
-
-    system ("$allocation_script -instance $instance -organism $organism "
-           ."$repair -problemproject $problemproject -workproject $projectname "
-           ."-inside -log $allocation_i_log -mail ejz");
-
-# no repair mode for inconsistencies between projects
+# first we test between projects, then inside, because inside test may reallocate
 
     print STDOUT "Testing read allocation for possible duplicates between projects\n";
+
+# do not use repair mode for inconsistencies between projects, just record them
 
     my $allocation_b_log = "readallocation-b-.$$.${gap4name}.log"; # between projects
 
@@ -376,8 +369,26 @@ else {
            ."-nr -problemproject $problemproject -workproject $projectname "
            ."-between -log $allocation_b_log -mail ejz");
 
+
+    print STDOUT "Testing read allocation for possible duplicates inside projects\n";
+
+# use repair mode for inconsistencies inside the project
+
+    my $allocation_i_log = "readallocation-i-.$$.${gap4name}.log"; # inside project
+
+    system ("$allocation_script -instance $instance -organism $organism "
+           ."$repair -problemproject $problemproject -workproject $projectname "
+           ."-inside -log $allocation_i_log -mail ejz");
+
     print STDOUT "New data from database $gap4name.$version successfully processed\n";
 }
+
+else {
+    print STDOUT "Database $gap4name.$version successfully processed, "
+               . "but does not contain new contigs\n";
+}
+     
+$adb->disconnect();
 
 #-------------------------------------------------------------------------------
 
