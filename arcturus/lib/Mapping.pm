@@ -470,12 +470,13 @@ sub normalise {
         $localalignment = $segment->getAlignment() unless $localalignment;
 # test the alignment of each subsequent segment; exit on inconsistency
 	if ($segment->getAlignment() != $localalignment) {
-# if this error occurs it is an indication for an erroneous alignment
-# direction in the MAPPING table; on first encounter, printer error message
+# this inconsistency is an indication of e.g. an alignment reversal
+# in the segment list; on first encounter, printer error message
             unless ($options{silent}) {
                 print STDERR "Inconsistent alignment(s) in mapping "
                            . ($this->getMappingName || $this->getSequenceID)
-			   . " :\n".$this->assembledFromToString();
+			   . " :\n";
+                print STDERR $this->assembledFromToString() unless $options{mute};
 	    }
             $globalalignment = 0;
             last;
@@ -747,7 +748,7 @@ if ($nzs && ref($nzs) eq 'HASH') {
  $ts = $nzs->{tstart} if ($nzs->{tstart} && $nzs->{tstart} > 0);
 print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
 }
-# new construction (TO BE VERIFIED)
+# new construction (TO BE VERIFIED and TESTED)
 
     if (my $track = $options{tracksegments}) { # undef,0  or  1,2,3
         my $backskip = $options{'ts-backskip'}; 
@@ -779,8 +780,7 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
                 $ts++;
 	    }
 	    else {
-		print STDOUT "Mapping->multiply: should not occur (1) !!\n";
-                &dump($thismap,$mapping,$rs,$ts);
+                &dump($thismap,$mapping,$rs,$ts,1);
                 return undef;
 	    }
 	}
@@ -793,8 +793,7 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
                 $rs++;
             }
             else {
-	        print STDOUT "Mapping->multiply: should not occur (2) !!\n";
-                &dump($thismap,$mapping,$rs,$ts);
+                &dump($thismap,$mapping,$rs,$ts,2);
                 return undef;
 	    }
 	}
@@ -806,8 +805,7 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
                 $ts++;
             }
             else {
-	        print STDOUT "Mapping->multiply: should not occur (3) !!\n";
-                &dump($thismap,$mapping,$rs,$ts);
+                &dump($thismap,$mapping,$rs,$ts,3);
                 return undef;
             }
         }
@@ -819,6 +817,7 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
     }
 
 # adjust the non-zero start parameters TO BE DEPRECATED
+
 if ($nzs && ref($nzs) eq 'HASH') {
  $nzs->{rstart} = $rs;
  $nzs->{tstart} = $ts;
@@ -874,7 +873,9 @@ sub collate {
 
 sub dump {
 # private helper method for diagnostic purpose
-    my ($thismap,$mapping,$rs,$ts) = @_;
+    my ($thismap,$mapping,$rs,$ts,$m) = @_;
+
+    print STDOUT "Mapping->multiply: should not occur ($m) !!\n" if $m;
 	
     my $rsegments = $thismap->getSegments();
     my $tsegments = $mapping->getSegments();
