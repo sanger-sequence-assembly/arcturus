@@ -29,6 +29,7 @@ my $assembly;
 my $datafile;    # for list of tag ids and positions
 my $fastafile;   # for the fasta fuile on which the annotation has been made 
 my $segmentfile; # for externally provided mappings
+my $inemblfile;
 
 my $propagate;
 my $reanalyze;
@@ -55,12 +56,12 @@ my $cliphqpm;
 
 my $minimumnrofreads = 2;
 
-my $validKeys  = "organism|instance|project|assembly|tagfile|tf|fasta|ff|"
+my $validKeys  = "organism|instance|project|assembly|tagfile|tf|fasta|ff|ief|inputemblfile|"
                . "embl|emblfile|ef|contig|tag|confirm|dbload|noload|swprog|"
                . "segmentfile|sf|currentcontig|cc|propagate|reanalyze|"
                . "clipoption|co|simplequalityclip|sqc|baseclip|bqc|qualityclip|qc|"
                . "qcminimimum|qcm|qcthreshold|qct|qchqpm|"
-               . "override|minimumnrofreads|mnor|verbose|debug|nodebug|help";
+               . "override|minimumnrofreads|mnor|verbose|info|debug|nodebug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -86,6 +87,9 @@ while (my $nextword = shift @ARGV) {
     $fastafile  = shift @ARGV  if ($nextword eq '-fasta');
     $fastafile  = shift @ARGV  if ($nextword eq '-ff');
 
+    $inemblfile = shift @ARGV  if ($nextword eq '-inputemblfile');
+    $inemblfile = shift @ARGV  if ($nextword eq '-ief');
+
     if ($nextword eq '-contig' || $nextword eq '-currentcontig' 
                                || $nextword eq '-cc') {
         $contig    = shift @ARGV;
@@ -99,6 +103,7 @@ while (my $nextword = shift @ARGV) {
     $reanalyze  = 1            if ($nextword eq '-reanalyze');
 
     $verbose    = 1            if ($nextword eq '-verbose');
+    $verbose    = 2            if ($nextword eq '-info');
 
     if ($nextword eq '-debug') {
         if (defined($debug) && !$debug) {
@@ -210,9 +215,9 @@ if ($swprog) {
                                                                                
 my $logger = new Logging('STDOUT');
  
-$logger->setFilter(2) if $verbose; # set reporting level
+$logger->setStandardFilter($verbose) if $verbose; # set reporting level
 
-$logger->setFilter(0) if $debug;   # set reporting level
+$logger->setBlock('debug',unblock=>1) if $debug;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -222,7 +227,7 @@ $logger->setFilter(0) if $debug;   # set reporting level
 
 &showUsage("Missing database instance") unless $instance;
 
-&showUsage("Missing data file with annotation tag info") unless $datafile;
+&showUsage("Missing data file with annotation tag info") unless ($datafile || $inemblfile);
 
 my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
@@ -299,12 +304,27 @@ if (defined($project)) {
 
 my $fastacontighash = {};
 
-if ($fastafile) {
+if ($fastafile || $inemblfile) {
 
 # parse the file to load the sequence into Contig instances
 
-    my $fastacontigs = ContigFactory->fastaFileParser($fastafile,report=>1000000);
-#    my $fastacontigs = ContigFactory->getContig(fasta=>$fastafile,report=>1000000);
+    my $fastacontigs;
+
+    if ($fastafile) {
+        $fastacontigs = ContigFactory->fastaFileParser($fastafile,report=>1000000);
+    }
+    else {
+        $fastacontigs = ContigFactory->emblFileParser($inemblfile,report=>1000000);
+        foreach my $contig (@$fastacontigs) {
+            $logger->info($contig->getContigName());
+            my $tags = $contig->getTags();
+            foreach my $tag (@$tags) {
+                $logger->info($tag->writeToCaf());
+	    }
+        }
+        $fastafile = $inemblfile;
+    }
+
     unless (defined $fastacontigs) {
 # file not found
         $logger->severe("FAILED to open file $fastafile");
@@ -327,7 +347,7 @@ if ($fastafile) {
         }
 # extract the contig ID, if any
         my $contigid = $contig->getContigID();
-#	print STDOUT "cn: $contigname  $contigid\n";
+	print STDOUT "cn: $contigname  $contigid\n";
         if ($contigid > 0) { 
       	    $fastacontighash->{$contigid} = $contig;
 	    $processed++;
@@ -352,7 +372,7 @@ my $contigtaghash = {};
 my $annotatedlength = {};
 
 my $lines = 0;
-if ($datafile =~ /\*|\?/) {
+if ($datafile && $datafile =~ /\*|\?/) {
 # wild card provided in filename; get all files of that description
     my @datafiles = `ls $datafile`;
     foreach my $datafile (@datafiles) {
@@ -360,15 +380,38 @@ if ($datafile =~ /\*|\?/) {
         $lines += &readtags($datafile,$contigtaghash,$annotatedlength);
     }
 }
-else {
-# a single file is specifified
+elsif ($datafile) {
+# a single file is specified
     $lines = &readtags($datafile,$contigtaghash,$annotatedlength);
 }
 
-my $nc = scalar(keys %$contigtaghash);
+my $nc;
+if ($datafile) {
+    $nc = scalar(keys %$contigtaghash);
+    $logger->warning("data read for $nc contigs from file(s) $datafile "
+                    ."($lines lines)");
+}
+else {
+    my @fastacontigs = keys %$fastacontighash;
+    foreach my $contig_id (@fastacontigs) {
+        my $contig = $fastacontighash->{$contig_id};
+        my $tags = $contig->getTags();
+        next unless ($tags && @$tags);
 
-$logger->warning("data read for $nc contigs from file(s) $datafile "
-                ."($lines lines)");
+# XXX
+        $contigtaghash->{$contig_id} = [] unless $contigtaghash->{$contig_id};
+        my $contigtaglist = $contigtaghash->{$contig_id}; # an array ref      
+
+        foreach my $tag (@$tags) { 
+            my ($ps,$pf) = $tag->getPositionRange();
+            my $sysid = $tag->getSystematicID();
+            my @tagdata = ($sysid,$ps,$pf);
+            push @$contigtaglist, \@tagdata;
+	}
+
+        $annotatedlength->{$contig_id} = $contig->getConsensusLength();
+    }
+}
 
 #-----------------------------------------------------------------------
 # if the emblfile is defined, open it for writing
@@ -447,7 +490,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 # print STDOUT "1 cn: $contigname  $contig_id\n";
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
     }
-    elsif ($contigname =~ /(\d+)/) {
+    elsif ($contigname =~ /\D(\d+)\D/) {
         my $contig_id = $1 + 0;
 # print STDOUT "2 cn: $contigname  $contig_id\n";
         $arcturuscontig = $adb->getContig(contig_id=>$contig_id,metaDataOnly=>1);
@@ -506,7 +549,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
 
         my $csequence = $arcturuscontig->getSequence();
 
-        $arcturuscontig->replaceLowQualityBases(nonew=>1);
+        $arcturuscontig->replaceLowQualityBases();
 
 # determine the transformation from annotation contig to arcturus contig
 
@@ -553,7 +596,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
             my $linear = 1.0 + 2.0 * $peakdrift/($alength + $flength);
             my $bandedwindow = 4.0 * sqrt($peakdrift); # generous minimum of 
             $bandedwindow = $peakdrift/2 if ($peakdrift/2 < $bandedwindow);
-	    $logger->fine("peak drift: $peakdrift, window: $bandedwindow");
+	    $logger->info("peak drift: $peakdrift, window: $bandedwindow");
             my %options = (kmersize=>9,
                            coaligned=>1,
                            peakdrift=>$peakdrift,
@@ -563,17 +606,15 @@ foreach my $contigname (sort keys %$contigtaghash) {
                            list=>1);
 # experimental options
             $options{autoclip} = 1;
-	    $options{goldenpath} = 1; # not operational yet
+#	    $options{goldenpath} = 1; # not operational yet
             my $kmersize = int((log($alength)/log(10))*4 + 0.5) - 7;
             $kmersize++ unless ($kmersize%2);
 	    $kmersize = 7 if ($kmersize < 7);
             $options{kmersize} = $kmersize;
 # $options{squality} = $arcturuscontig->getBaseQuality();
  
-            my $output = $logger->getOutputDevice() || *STDOUT;
-            $options{debug} = $output if $debug;
-
-            $mapping = Alignment->correlate($fsequence,0,$asequence,0,%options);
+            Alignment->setLogger($logger);
+            $mapping = Alignment->correlate(uc($fsequence),0,uc($asequence),0,%options);
 	}
 
 # here we must have a mapping between the (original) arcturus contig and
@@ -589,7 +630,6 @@ foreach my $contigname (sort keys %$contigtaghash) {
 	$mapping = $mapping->inverse();
         $mapping->setMappingName($contigname);
         $logger->fine("Mapping : ".$mapping->toString(extended=>1,text=>'Seg'));
-#next if $debug;
 
 # ok, here we have a mapping; put the tags on the fastacontig
 
@@ -608,6 +648,7 @@ foreach my $contigname (sort keys %$contigtaghash) {
             $inputtagids{$sysid}++;
         }
         $logger->warning("$tagcount tags found for contig $contigname");
+
 #        &listtags($fastacontig,'fastacontig $tagcount tags added');
 
 # make the arcturus contig its child
@@ -635,7 +676,8 @@ $arcturuscontig->setLogger($logger) if $verbose;
 #$fastacontig->setLogger($logger);
         $fastacontig->addChildContig($arcturuscontig);
         $arcturuscontig->addContigToContigMapping($mapping);
-        $fastacontig->propagateTags(break=>1);
+        $fastacontig->propagateTags(split=>1) unless $inemblfile;
+        $fastacontig->propagateTags(nosplit=>1)   if $inemblfile;
 $fastacontig->setLogger();
       }
     }
@@ -757,8 +799,7 @@ if ($reanalyze) {
 
 # if not propagated: get ancestor - current contig relation from database
 
-    $logger->skip();
-    $logger->warning("Re-analyzing direct contig links to ancestors");
+    $logger->warning("Re-analyzing direct contig links to ancestors",ps=>1);
     unless (@ancestorcontigs) {
         $logger->warning("There are NO ancestral contigs with tags");
     }
@@ -809,8 +850,8 @@ if ($reanalyze) {
         my $contig = $currentcontigs->{$ccnm};
         my $ccid = $contig->getContigID();
         next if ($cc && $ccid != $cc);
-        $logger->skip();
-        $logger->warning("Processing current contig $ccid ($contig)");
+
+        $logger->warning("Processing current contig $ccid ($contig)",ps=>1);
 # skip if the current contig is the originally annotated one
         if ($acdestinations->{$ccid}) {
             $logger->warning("Contig $ccid is the original annotated contig");
@@ -893,13 +934,11 @@ $contig->setLogger($logger) if $verbose;
 	}
     }
 
-    $logger->skip();
-    $logger->warning(scalar(keys %remappedtags)." remapped tags after reanalyze");
+    $logger->warning(scalar(keys %remappedtags)." remapped tags after reanalyze",ps=>1);
     foreach my $sysid (sort keys %inputtagids) {
         next if $remappedtags{$sysid};
-        $logger->info("Missing from output tags: $sysid");
+        $logger->info("Missing from output tags: $sysid",skip=>1);
     }
-    $logger->skip();
 } # end reanalyze
 
 # list summary of result if not loading tags or other export 
@@ -977,8 +1016,7 @@ $ptoptions{debug} = $logger;
     undef %remappedtags;
     foreach my $ccnm (sort keys %$currentcontigs) {
         my $contig = $currentcontigs->{$ccnm};
-        $logger->skip();
-	$logger->warning("Processing current contig $ccnm");
+	$logger->warning("Processing current contig $ccnm",ps=>1);
         unless ($contig->hasTags()) {
 	    $logger->warning("contig $ccnm has no annotation");
 	    next unless $project;
@@ -1021,9 +1059,8 @@ $ptoptions{debug} = $logger;
     $logger->warning(scalar(keys %remappedtags)." remapped tags after quality clipping");
     foreach my $sysid (sort keys %inputtagids) {
         next if $remappedtags{$sysid};
-        $logger->warning("Missing from output tags: $sysid");
+        $logger->warning("Missing from output tags: $sysid",skip=>1);
     }
-    $logger->skip();
 }
 
 $EMBL->close() if $EMBL;
@@ -1047,9 +1084,7 @@ if ($confirm) { # AND not in reanalyze mode!
 
 
 if ($lengthmismatch && !$fastafile) {
-    $logger->skip();
-    $logger->severe("!! You need to provide the fasta file used for annotation");
-    $logger->skip();
+    $logger->severe("!! You need to provide the fasta file used for annotation",ss=>1);
 }
 elsif (!$numberprocessed) {
     $logger->warning("NO contigs processed");
@@ -1064,10 +1099,8 @@ $adb->disconnect();
 
 my @currentcontigs = sort (keys %$currentcontigs);
 
-$logger->skip();
-$logger->warning("NO current contigs found") unless @currentcontigs;
-$logger->warning("current contigs affected:")  if @currentcontigs;
-$logger->skip();
+$logger->warning("NO current contigs found",ss=>1) unless @currentcontigs;
+$logger->warning("current contigs affected:",ss=>1)  if @currentcontigs;
 
 # list the origins and destinations of the mapped contigs
 
@@ -1077,25 +1110,20 @@ if (@currentcontigs) {
         $logger->warning("$contig");
     }
 
-    $logger->skip();
-    $logger->warning("mappings from original contigs to current contigs");
-    $logger->skip();
+    $logger->warning("mappings from original contigs to current contigs",ss=>1);
 
     foreach my $acid (sort {$a <=> $b} keys %$acdestinations) {
         my $destinations = $acdestinations->{$acid}; # itself a hash
         my @destinations = sort {$a <=> $b} keys(%$destinations);
         $logger->warning("contig $acid  => @destinations");
     }
-    $logger->skip();
-    $logger->warning("mappings from current contigs to original contigs");
-    $logger->skip();
+    $logger->warning("mappings from current contigs to original contigs",ss=>1);
 
     foreach my $acid (sort {$a <=> $b} keys %$ccontigorigins) {
         my $origins = $ccontigorigins->{$acid}; # itself a hash
         my @origins = sort {$a <=> $b} keys(%$origins);
-        $logger->warning("contig $acid  <= @origins") if (@origins > 1);
+        $logger->warning("contig $acid  <= @origins",skip=>1) if (@origins > 1);
     }
-    $logger->skip();
 }
 
 # check the inventory of tags
@@ -1109,12 +1137,11 @@ if (my $in=scalar(keys(%inputtagids))) {
     }
     foreach my $sysid (sort keys %remappedtags) {
         next if $inputtagids{$sysid};
-        $logger->warning("Missing from  input tags: $sysid");
+        $logger->warning("Missing from  input tags: $sysid",skip=>1);
     }
-    $logger->skip();
 }
 else {
-    $logger->warning("There are no input tags");
+    $logger->warning("There are no input tags",skip=>1);
 }
 
 exit;
