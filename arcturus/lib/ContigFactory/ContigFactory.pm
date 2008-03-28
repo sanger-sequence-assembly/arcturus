@@ -17,14 +17,6 @@ use Clipping;
 use Logging;
 
 # ----------------------------------------------------------------------------
-# class variable
-# ----------------------------------------------------------------------------
-
-my $TF; # tag factory
-my $TAGTEST = 0;
-my $TESTMODE = 1;
-
-# ----------------------------------------------------------------------------
 # constructor (if you need an object; all methods can be called on the class)
 # ----------------------------------------------------------------------------
 
@@ -473,7 +465,6 @@ sub removeObjectFromInventory {
 # remove a list of objects from the inventory
     my $class = shift;
     my $objectnames = shift; # array reference
-print STDERR "removeObjectFromInventory ENTER\n";
 
     &verifyParameter($objectnames,'removeObjectFromInventory','ARRAY');
 
@@ -697,7 +688,6 @@ sub readExtractor {
     my $class = shift;
     my $reads = shift; # array with reads to be extracted
     my %options = @_; 
-# print STDOUT "readextractor options @_\n";
 
     my $logger = &verifyLogger('readExtractor');
 
@@ -734,8 +724,6 @@ sub readExtractor {
 
 # --------------- main
 
-$logger->error("getting reads");
-
     my @readstack;
 # default reads have sequence only and DNA if edited
     my @readitems;
@@ -743,13 +731,15 @@ $logger->error("getting reads");
     push @readitems,'DNA'         unless $options{nodna};
     push @readitems,'BaseQuality' unless $options{noquality};
 
+    my $extractedreads = []; # actually extracted 
     foreach my $read (@reads) {
         my $readname = $read->getReadName();
         my $rinventory = $inventory->{$readname};
         unless ($rinventory) {
-            $logger->error("Missing read $readname in inventory");
+            $logger->error("Missing read $readname NOT found in inventory");
             next;
         }
+        push @$extractedreads,$read;
         foreach my $item (@readitems) {
             my $itemlocation = $rinventory->{$item};
             next unless $itemlocation;
@@ -778,7 +768,7 @@ $logger->error("getting reads");
 	}
     }
 
-    return $reads;
+    return $extractedreads;
 }
 
 
@@ -824,7 +814,6 @@ sub getSequenceForRead {
 # to be developed: delayed loading of read sequence
     my $class = shift;
     my $read  = shift;
-print STDOUT "getSequenceForReadn";
 
     &verifyParameter($read,'getSequenceForRead','Read');
 
@@ -961,11 +950,13 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
     $readtaglist =~ s/\W/|/g if ($readtaglist && $readtaglist !~ /\\/);
     $readtaglist = '\w{3,4}' unless $readtaglist; # default
     $logger->fine("Read tags to be processed: $readtaglist");
+$logger->warning("Read tags to be processed: $readtaglist");
 
     my $contigtaglist = $options{contigtaglist};
     $contigtaglist =~ s/\W/|/g if ($contigtaglist && $contigtaglist !~ /\\/);
     $contigtaglist = '\w{3,4}' unless $contigtaglist; # default
     $logger->info("Contig tags to be processed: $contigtaglist");
+$logger->warning("Contig tags to be processed: $contigtaglist");
 
     my $ignoretaglist = $options{ingoretaglist};
 
@@ -1004,10 +995,6 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
     my $DNASequence = '';
     my $BaseQuality = '';
 
-# set up the read tag factory and contig tag factory
-
-    $TF = new TagFactory() unless $TF;
-
     $logger->info("Parsing CAF file $caffile");
 
     $logger->info("Read a maximum of $lineLimit lines") if $lineLimit;
@@ -1023,7 +1010,7 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
         $lineCount++;
 #        if ($progress && !($lineCount%$progress)) {
         if ($progress && ($lineCount >= $listCount)) {
-            my $fraction = sprintf ("%5.2f", $lineCount/$fileSize);           
+            my $fraction = sprintf ("%5.2f", $lineCount/$fileSize);         
             $logger->error("$fraction completed .....",bs=>1);
             $listCount += $progress;
 	}
@@ -1118,46 +1105,15 @@ my $readnamefilter   = $options{readnamefilter}  || ''; # test purposes
 	    }
 # now read the file to the next blank line and accumulate the sequence or quality 
 
-	    if ($TESTMODE) {
-                my ($status,$line);
-                if ($newObjectType eq 'DNA') {
-  		   ($status,$line) = &parseDNA($CAF,$objectInstance,$lineCount,noverify=>1);
-	        }
-                elsif ($newObjectType eq 'BaseQuality') {
-  		   ($status,$line) = &parseBaseQuality($CAF,$objectInstance,$lineCount,noverify=>1);
-	        }
-                $lineCount = $line if $status;
-                $objectType = 0;
-                next;
-	    }
-
-            my $sequencedata = '';
-$logger->fine("Building $newObjectType for $newObjectName");
-            while (defined(my $nextrecord = <$CAF>)) {
-                $lineCount++;
-                chomp $nextrecord;
-                last unless ($nextrecord =~ /\S/); # blank line
-                if ($nextrecord =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
-                    $logger->error("Missing blank after DNA or Quality block ($lineCount)");
-		    last;
-		}
-                $sequencedata .= $nextrecord;
-            }
-$logger->fine("DONE $newObjectType for $newObjectName");
-# store the sequence data in the 
+            my ($status,$line);
             if ($newObjectType eq 'DNA') {
-                $sequencedata =~ s/\s+//g; # remove all blank space
-                $objectInstance->setSequence($sequencedata);
+  	       ($status,$line) = &parseDNA($CAF,$objectInstance,$lineCount,noverify=>1);
 	    }
-	    elsif ($newObjectType eq 'BaseQuality') {
-                $sequencedata =~ s/\s+/ /g; # clear redundent blank space
-                $sequencedata =~ s/^\s|\s$//g; # remove leading/trailing
-                my @BaseQuality = split /\s/,$sequencedata;
-                $objectInstance->setBaseQuality (\@BaseQuality);
+            elsif ($newObjectType eq 'BaseQuality') {
+  	       ($status,$line) = &parseBaseQuality($CAF,$objectInstance,$lineCount,noverify=>1);
 	    }
-	    else {
-		$logger->error("This should not occur ($lineCount)");
-	    }
+            $lineCount = $line if $status;
+            $objectType = 0;
             next;
 	}
 
@@ -1171,8 +1127,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
             }
             $objectType = 0; # preset
 
-# THIS SHOULD GO BELOW
-            if ($objectName =~ /contig/i) {
+            if ($objectName =~ /Contig/) {
 # it's a contig; decide if the new object has to be built
                 if ($blockobject->{$objectName}) {
                     $objectType = -2; # forced discarding read objects
@@ -1187,6 +1142,15 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                     $contigs{$objectName} = $contig;
 		}
                 $objectType = 2; # activate processing contig data 
+
+		my $readhashref = \%reads;
+                my $contig = $contigs{$objectName};
+                my ($status,$line) = &parseContig($CAF,$contig,$lineCount,
+                                                  readhashref=>$readhashref,
+                                                  noverify=>1);
+                $lineCount = $line if $status;
+		$objectType = 0;
+                next;
             }
 	    else {
 # the new data relate to a read
@@ -1196,14 +1160,18 @@ $logger->fine("DONE $newObjectType for $newObjectName");
                     $reads{$objectName} = $read;
 		}
                 $objectType = 1; # activate processing read data
+
+                my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
+                $lineCount = $line if $status;
+		$objectType = 0;
+                next;
 	    }
-# TO HERE
 	}
 
 # REMOVE from HERE ?
-#$logger->warning("TAG detected ($lineCount): $record") if ($record =~ /\bTag/);
     my $IGNORETHIS = 0; unless ($IGNORETHIS) {
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:?\s*(\S+)/) {
+#print STDERR "IGNORETHIS block used  ... \n";
 # a new object is detected
             my $newObjectType = $1;
             my $newObjectName = $2;
@@ -1372,285 +1340,26 @@ $logger->fine("DONE $newObjectType for $newObjectName");
         elsif ($objectType == 1) {
 # parsing a read, the Mapping object is defined here; Read may be defined
             $read = $reads{$objectName};
-
-            if ($TESTMODE) {
-                my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
-                $lineCount = $line if $status;
-		$objectType = 0;
-                next;
-	    }
-
-# processing a read, test for Alignments and Quality specification
-            if ($record =~ /Align\w+\s+((\d+)\s+(\d+)\s+(\d+)\s+(\d+))\s*$/) {
-# AlignToSCF for both padded and unpadded files
-                my @positions = split /\s+/,$1;
-                if (scalar @positions == 4) {
-                    my $entry = $read->addAlignToTrace([@positions]);
-                    if ($isUnpadded && $entry == 2) {
-                        $logger->info("Edited read $objectName detected ($lineCount)");
-                    }
-                }
-                else {
-                    $logger->severe("Invalid alignment: ($lineCount) $record",2);
-                    $logger->severe("positions: @positions",2);
-                }
-            }
-            elsif ($record =~ /Clipping\sQUAL\s+(\d+)\s+(\d+)/i) {
-# low quality boundaries $1 $2
-                $read->setLowQualityLeft($1);
-                $read->setLowQualityRight($2);
-            }
-            elsif ($record =~ /Clipping\sphrap\s+(\d+)\s+(\d+)/i) {
-# should be a special testing method on Reads?, or maybe here
-#            $read->setLowQualityLeft($1); # was level 1 is not low quality!
-#            $read->setLowQualityRight($2);
-            }
-            elsif ($record =~ /Seq_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
-                $read->addSequencingVector([$4, $2, $3]);
-            }
-            elsif ($record =~ /Clone_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
-                $read->addCloningVector([$4, $2, $3]);
-            }
-# further processing a read Read TAGS and EDITs
-            elsif ($record =~ /Tag\s+($readtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
-
-                my $type = $1; my $trps = $2; my $trpf = $3; my $info = $4;
-# test for a continuation mark (\n\); if so, read until no continuation mark
-                while ($info =~ /\\n\\\s*$/) {
-                    if (defined($record = <$CAF>)) {
-                        chomp $record;
-                        $info .= $record;
-                        $lineCount++;
-                    }
-                    else {
-                        $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
-                    }
-                }
-
-# build a new read Tag instance
-
-		my $tag = $TF->makeReadTag($type,$trps,$trpf,TagComment => $info);
-
-# the tag now contains the raw data read from the CAF file
-# invoke TagFactory to process, cleanup and test the tag info
-
-                $TF->cleanup($tag); # clean-up the tag info
-                if ($type eq 'OLIG' || $type eq 'AFOL') {        
-# oligo, staden(AFOL) or gap4 (OLIG)
-                    my ($warning,$report) = $TF->processOligoTag($tag);
-                    $logger->fine($report) if $warning;
-                    unless ($tag->getTagSequenceName()) {
-		        $logger->info("Missing oligo name in read tag for "
-                               . $read->getReadName()." (line $lineCount)");
-                        next; # don't load this tag
-	            }
-	        }
-                elsif ($type eq 'REPT') {
-# repeat read tags
-                    unless ($TF->processRepeatTag($tag)) {
-	                $logger->info("Missing repeat name in read tag for "
-                                  . $read->getReadName()." (line $lineCount)");
-                    }
-                }
-	        elsif ($type eq 'ADDI') {
-# chemistry read tag
-                    unless ($TF->processAdditiveTag($tag)) {
-                        $logger->info("Invalid ADDI tag ignored for "
-                                  . $read->getReadName()." (line $lineCount)");
-                        next; # don't accept this tag
-                    }
- 	        }
-# test the comment; ignore tags with empty comment
-                unless ($tag->getTagComment() =~ /\S/) {
-		    $logger->info("Empty $type read tag ignored for "
-                                . $read->getReadName()." (line $lineCount)");
-                    $logger->info($tag->writeToCaf(0));
-		    next; # don't accept this tag
-		}
-
-                $read->addTag($tag);
-            }
-
-            elsif ($record =~ /Tag/ && $record =~ /$edittags/) {
-                $logger->fine("READ EDIT tag detected but not processed: $record");
-            }
-            elsif ($record =~ /Tag/) {
-                $logger->info("READ tag not recognized: $record");
-            }
-# EDIT tags TO BE TESTED (NOT OPERATIONAL AT THE MOMENT)
-       	    elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*replaced\s+(\w+)\s+by\s+(\w+)\s+at\s+(\d+)/) {
-                $logger->warning("readtag error in: $record |$1|$2|$3|$4|$5|") if ($1 != $2);
-                my $tag = new Tag('read');
-	        $tag->editReplace($5,$3.$4);
-                $read->addTag($tag);
-            }
-            elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*deleted\s+(\w+)\s+at\s+(\d+)/) {
-                $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-                my $tag = new Tag('read');
-	        $tag->editDelete($4,$3); # delete signalled by uc ATCG
-                $read->addTag($tag);
-            }
-            elsif ($record =~ /Tag\s+DONE\s+(\d+)\s+(\d+).*inserted\s+(\w+)\s+at\s+(\d+)/) {
-                $logger->warning("readtag error in: $record (|$1|$2|$3|$4|)") if ($1 != $2); 
-                my $tag = new Tag('read');
-	        $tag->editDelete($4,$3); # insert signalled by lc atcg
-                $read->addTag($tag);
-            }
-            elsif ($record =~ /Note\sINFO\s(.*)$/) {
-
-	        my $trpf = $read->getSequenceLength();
-#            my $tag = new Tag('readtag');
-#            $tag->setType($type);
-#            $tag->setPosition($trps,$trpf);
-#            $tag->setStrand('Forward');
-#            $tag->setTagComment($info);
-  	        $logger->info("NOTE detected but not processed ($lineCount): $record");
-            }
-# finally
-            elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
-                $logger->info("not recognized ($lineCount): $record");
-            }
+            $logger->error("scan $objectName ($objectType) SHOULD NOT occur $lineCount");
+# TO BE DEPRECATED
+            my ($status,$line) = &parseRead($CAF,$read,$lineCount,noverify=>1);
+            $lineCount = $line if $status;
+            $objectType = 0;
+            next;
+	 
+# UNTIL HERE
         }
 
         elsif ($objectType == 2) {
 # parsing a contig, get constituent reads and mapping
-
-            if ($TESTMODE) {
-                my $contig = $contigs{$objectName};
-                my ($status,$line) = &parseContig($CAF,$contig,$lineCount,noverify=>1);
-                $lineCount = $line if $status;
-		$objectType = 0;
-                next;
-	    }
-
-            if ($record =~ /Ass\w+from\s+(\S+)\s+(.*)$/) {
-# an Assembled from alignment, identify the Mapping for this readname ($1)
-                $mapping = $mappings{$1};
-                if (!defined($mapping)) {
-                    $mapping = new Mapping($1);
-                    $mappings{$1} = $mapping;
-                }
-# identify the Read for this readname ($1), else create
-                $read = $reads{$1};
-                if (!defined($read)) {
-                    $read = new Read($1);
-                    $reads{$1} = $read;
-                }
-# add the alignment to the Mapping 
-                my @positions = split /\s+/,$2;
-                if (scalar @positions == 4) {
-# an asssembled from record
-                    my $entry = $mapping->addAssembledFrom(@positions); 
-# $entry returns number of alignments: add Mapping and Read for first
-                    if ($entry == 1) {
-                        unless ($readnamefilter && 
-                                $read->getReadName =~ /$readnamefilter/) {
-                            $contig->addMapping($mapping);
-                            $contig->addRead($read);
-                        }
-                    }
-# test number of alignments: padded allows only one record per read,
-#                            unpadded may have multiple records per read
-                    if (!$isUnpadded && $entry > 1) {
-                        $logger->severe("Multiple assembled_from in padded "
-                                       ."assembly ($lineCount) $record");
-                        undef $contigs{$objectName};
-                        next;
-                    }
-                }
-                else {
-                    $logger->severe("Invalid alignment: ($lineCount) $record");
-                    $logger->severe("positions: @positions",2);
-                }
-            }
-            elsif ($record =~ /Tag\s+($contigtaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
-# detected a contig TAG
-                my $type = $1; my $tcps = $2; my $tcpf = $3; 
-                my $info = $4; $info =~ s/\s+\"([^\"]+)\".*$/$1/ if $info;
-# test for a continuation mark (\n\); if so, read until no continuation mark
-                while ($info =~ /\\n\\\s*$/) {
-                    if (defined($record = <$CAF>)) {
-                        chomp $record;
-                        $info .= $record;
-                        $lineCount++;
-                    }
-                    else {
-                        $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
-                    }
-                }
-                $logger->info("CONTIG tag detected: $record\n"     # info ?
-                                . "'$type' '$tcps' '$tcpf' '$info'");
-                if ($type eq 'ANNO') {
-                    $info =~ s/expresion/expression/;
-                    $type = 'COMM';
-		}
-
-                my $tag = $TF->makeContigTag($type,$tcps,$tcpf);
-#                $TF->cleanup($tag); # 
-
-# my $tag = new Tag('contigtag');
-# $tag->setType($type);
-# $tag->setPosition($tcps,$tcpf);
-# $tag->setStrand('Unknown');
-
-# preprocess COMM and REPT tags
-
-                if ($type eq 'REPT' || $type eq 'COMM') { # TO TAGFACTORY
-# remove possible offset info (lost on inheritance)
-                    $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
-	        }
-
-                $tag->setTagComment($info);   # TO TAGFACTORY
-                if ($info =~ /([ACGT]{5,})/) {
-                    $tag->setDNA($1);
-                }
-
-# special for repeats: pickup repeat name
-
-                if ($type eq 'REPT') {  # TO TAGFACTORY
-# try to find the name of the repeat
-                    $contig->addTag($tag);
-                    $info =~ s/\s*\=\s*/=/g;
-		    if ($info =~ /^\s*(\S+)\s+from/i) {
-                        my $tagname = $1;
-                        $tagname =~ s/r\=/REPT/i;
-                        $tag->setTagSequenceName($tagname);
-	   	    }
-# no name found, try alternative
-                    elsif ($info !~ /Repeats\s+with/) {
-# try to generate one based on possible read mentioned
-                        if ($info =~ /\bcontig\s+(\w+\.\w+)/) {
-                            $tag->setTagSequenceName($1);   
-	                }
-# nothing useful found                
-                        else {
-		            $logger->info("Missing repeat name in contig tag for ".
-                                   $contig->getContigName().": ($lineCount) $record");
-		        }
-                    }
-                }
-
-                elsif ($info) {
-                    $contig->addTag($tag);
-		    $logger->fine($tag->writeToCaf());
-                }
-                else {
-		    $logger->info("Empty $type contig tag ignored ($lineCount)");
-		}
-
-	    }
-            elsif ($ignoretaglist 
-                && $record =~ /Tag\s+($ignoretaglist)\s+(\d+)\s+(\d+)(.*)$/i) {
-                $logger->info("CONTIG tag ignored: ($lineCount) $record");
-	    }
-            elsif ($record =~ /Tag/) {
-#$logger->warning("CONTIG tag not recognized: ($lineCount) $record");
-                $logger->info("CONTIG tag not recognized: ($lineCount) $record");
-            }
-            else {
-#$logger->warning("ignored: ($lineCount) $record");
-                $logger->info("ignored: ($lineCount) $record");
-            }
+            $logger->error("scan $objectName ($objectType) SHOULD NOT occur $lineCount");
+# TO BE DEPRECATED
+            my $contig = $contigs{$objectName};
+            my ($status,$line) = &parseContig($CAF,$contig,$lineCount,noverify=>1);
+            $lineCount = $line if $status;
+	    $objectType = 0;
+            next;
+# UNTIL HERE
         }
 
         elsif ($objectType == -2) {
@@ -1690,6 +1399,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
     
     $logger->warning("Scanning of CAF file $caffile was truncated") if $truncated;
     $logger->info("$lineCount lines processed of CAF file $caffile");
+$logger->warning("$lineCount lines processed of CAF file $caffile");
 
     my $nc = scalar (keys %contigs);
     my $nm = scalar (keys %mappings);
@@ -1702,6 +1412,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
     return \%contigs,\%reads,$truncated if $options{oldcontigloader};
 
 # bundle all objects in one array
+$logger->warning("bundling ....");
 
     my $er = 0;
     my $objects = [];
@@ -1730,6 +1441,7 @@ $logger->fine("DONE $newObjectType for $newObjectName");
     my $no = scalar @$objects;
 
     $logger->info("$no Objects; $nr Reads (unassembled)");
+$logger->warning("$no Objects; $nr Reads (unassembled)");
 
     return $objects,$truncated;
 }
@@ -1882,7 +1594,7 @@ sub parseContig {
 # keyword or at the start of the actual data block
     my $CAF  = shift;
     my $contig = shift; # Contig instance with contigname defined
-    my $line = shift; # starting line in the file (re: error reporting)
+    my $fline = shift; # starting line in the file (re: error reporting)
     my %options = @_;
 
     &verifyPrivate($CAF,'parseContig');
@@ -1909,7 +1621,8 @@ sub parseContig {
 
         $record = <$CAF>;
         chomp $record;
-        $line++;
+	my $line = $fline;
+        $fline++;
 
         if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
             $contigname = $1;
@@ -1933,10 +1646,12 @@ sub parseContig {
 
 # parse the file until the next blank record
 
+    my $readobjecthash = $options{readhashref};
+
     my $isUnpadded = 1;
     my $readnamehash = {};
     while (defined($record = <$CAF>)) {
-        $line++;
+        $fline++;
         chomp $record;
 # add subsequent lines if continuation mark '\n\' present
         while ($record =~ /\\n\\\s*$/) {
@@ -1945,7 +1660,7 @@ sub parseContig {
                 chomp $extension;
                 $record .= $extension;
 #                $record =~ s/\\n\\\s*\"/\"/; # replace continuation & closing quote
-                $line++;
+                $fline++;
             }
             elsif ($record !~ /\"\s*$/) {
 # end of file encountered: complete continued record
@@ -1955,6 +1670,8 @@ sub parseContig {
         $record =~ s/\\n\\\s*\"/\"/; # replace continuation & closing quote
 # check presence and compatibility of keywords
         last unless ($record =~ /\S/); # blank line
+
+        my $line = $fline - 1; # for messages
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("l:$line Missing blank line after Contig block");
 	    last;
@@ -1989,7 +1706,12 @@ sub parseContig {
             unless (defined($readdata)) {
 # on first encounter create the Mapping and Read for this readname
                 $readdata = []; # array (length 2)
-                $readdata->[0] = new Read($readname);
+# if an external Read object list is provided, look there first
+                $readdata->[0] = $readobjecthash->{$readname} if $readobjecthash;
+                unless ($readdata->[0]) {
+                    $readdata->[0] = new Read($readname);
+                    $readobjecthash->{$readname} = $readdata->[0] if $readobjecthash;
+		}
                 $readdata->[1] = new Mapping($readname);
                 $readnamehash->{$readname} = $readdata;
                 $contig->addMapping($readdata->[1]);
@@ -2034,79 +1756,14 @@ $logger->error("Extending Tag record ($line)  .. SHOULD NOT OCCUR!!");
 
             next if ($info =~ /imported|split|shift|truncated/);
 
-
-if ($TAGTEST) {
             my $tag = TagFactory->makeContigTag($type,$tcps,$tcpf,TagComment=>$info);
-$logger->warning("CT verify CONTIG tag");
             my ($status,$msg) = $tag->verify(); # complete the tag using info
-            $logger->warning("($line) invalid or empty tag: ".($msg || '')) unless $status;
-            $contig->addTag($tag) if $status;
-$logger->warning("CT DONE (status $status)");
-
-} else {
-# remove 'offset' information (lost on inheritance)
-
-            $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
-
-# TO TAGFACTORY from  here
-            $logger->info("CONTIG tag detected: $record\n"
-                         . "'$type' '$tcps' '$tcpf' '$info'");
-
-# investigate annotation again ....
-
-            if ($type eq 'ANNO') {
-                $logger->warning("Contig annotation ANNO tag changed to COMM");
-                $type = 'COMM';
-	    }
-
-            my $tag = TagFactory->makeContigTag($type,$tcps,$tcpf);
-
-# TO TAGFACTORY preprocess COMM and REPT tags 
-
-            if ($type eq 'REPT' || $type eq 'COMM') {
-# remove possible offset info (lost on inheritance)
-                $info =~ s/\,\s*offset\s+\d+//i if ($info =~ /Repeats\s+with/);
-            }
-
-            $tag->setTagComment($info);
-            if ($info =~ /([ACGT]{5,})/) {
-                $tag->setDNA($1);
-            }
-
-# special for repeats: pickup repeat name
-
-            if ($type eq 'REPT') {
-# try to find the name of the repeat
+            if ($status) {
                 $contig->addTag($tag);
-                $info =~ s/\s*\=\s*/=/g;
-        	if ($info =~ /^\s*(\S+)\s+from/i) {
-                    my $tagname = $1;
-                    $tagname =~ s/r\=/REPT/i;
-                    $tag->setTagSequenceName($tagname);
-	        }
-# no name found, try alternative
-                elsif ($info !~ /Repeats\s+with/) {
-# try to generate one based on possible read mentioned
-                    if ($info =~ /\bcontig\s+(\w+\.\w+)/) {
-                        $tag->setTagSequenceName($1);   
-                    }
-# nothing useful found                
-                    else {
-		        $logger->info("l:$line Missing repeat name in contig tag "
-                                 ."for $contigname: $record");
-	            }
-                }
-            }
-            elsif ($info) {
-                $contig->addTag($tag);
-         	$logger->fine($tag->writeToCaf());
-            }
-            else {
-	        $logger->info("l:$line Empty $type contig tag ignored");
 	    }
-} # end TEST
-# TO TAGFACTORY until here
-
+	    else {
+                $logger->warning("($line) invalid or empty tag: ".($msg || ''));
+	    }
         }
         elsif ($ignoretags && $record =~ /Tag\s+($ignoretags)\s+(\d+)\s+(\d+)(.*)$/i) {
             $logger->info("($line) CONTIG tag ignored: $record");
@@ -2119,7 +1776,7 @@ $logger->warning("CT DONE (status $status)");
         }
     }
 
-    return 1,$line;
+    return 1,$fline;
 }
 
 sub parseRead {
@@ -2128,7 +1785,7 @@ sub parseRead {
 # keyword or at the start of the actual data block
     my $CAF  = shift;
     my $read = shift; # Read instance with readname defined
-    my $line = shift; # starting line in the file (re: error reporting)
+    my $fline = shift; # starting line in the file (re: error reporting)
     my %options = @_;
 
     &verifyPrivate($CAF,'parseRead');
@@ -2154,7 +1811,8 @@ sub parseRead {
 
         $record = <$CAF>;
         chomp $record;
-        $line++;
+        my $line = $fline;
+        $fline++;
 
         if ($record =~ /^\s*Sequence\s*\:?\s*(\S+)/) {
             $readname = $1;
@@ -2179,7 +1837,7 @@ sub parseRead {
 
     my $isUnpadded = 1;
     while (defined($record = <$CAF>)) {
-        $line++;
+        $fline++;
         chomp $record;
         last unless ($record =~ /\S/); # end of this block
 # add subsequent lines if continuation mark '\n\' present
@@ -2189,17 +1847,18 @@ sub parseRead {
                 chomp $extension;
                 $record .= $extension;
 # $record =~ s/\\n\\\s*\"/\"/; # replace redundant continuation
-                $line++;
+                $fline++;
             }
             elsif ($record !~ /\"\s*$/) {
 # end of file encountered: complete continued record
                 $record .= '"' if ($record =~ /\"/); # closing quote
             }
         }
-        $record =~ s/\\n\\\s*\"/\"/; # remove redundant continuation
+        $record =~ s/[\\n\\]+\s*\"/\"/; # remove redundant continuation
 
 # check presence and compatibility of keywords
 
+        my $line = $fline - 1;
         if ($record =~ /^\s*(Sequence|DNA|BaseQuality)\s*\:/) {
             $logger->error("Missing blank line after Read block ($line)");
             $logger->error("$record");
@@ -2235,7 +1894,6 @@ sub parseRead {
                 my $entry = $read->addAlignToTrace([@positions]);
                 if ($isUnpadded && $entry == 2) {
                     $logger->info("Edited read $readname detected ($line)");
-                   print STDERR "Edited read $readname detected ($line)\n";
                 }
             }
             else {
@@ -2270,11 +1928,11 @@ sub parseRead {
 $logger->fine("Read Tag $type detected");
 # test for a continuation mark (\n\); if so, read until no continuation mark
             while ($info =~ /\\n\\\s*$/) {
-$logger->error("This block should not be activated");
+$logger->error("This line extention block should NOT be activated : $fline $record");
                 if (defined($record = <$CAF>)) {
                     chomp $record;
                     $info .= $record;
-                    $line++;
+                    $fline++;
                 }
                 else {
                     $info .= '"' unless ($info =~ /\"\s*$/); # closing quote
@@ -2284,60 +1942,18 @@ $logger->error("This block should not be activated");
 # build a new read Tag instance
 
 	    my $tag = TagFactory->makeReadTag($type,$trps,$trpf,TagComment => $info);
-if ($TAGTEST) {
-print STDERR "verify READ tag\n";
+
             my ($status,$msg) = $tag->verify(); # complete the tag using info
-$logger->error("output status $status, report: $msg for readtag : ".$tag->getType());
-            $logger->info("($line) ignored invalid or empty tag: ".($msg || '')) if $status;
-            $read->addTag($tag) if $status;
-print STDERR "DONE but not added\n" unless ($status);
-print STDERR "DONE\n" if ($status);
 
-} else {
-# TO TAGFACTORY from  here
-# the tag now contains the raw data read from the CAF file
-# invoke TagFactory to process, cleanup and test the tag info
-            TagFactory->cleanup($tag); # clean-up the tag info
-            if ($type eq 'OLIG' || $type eq 'AFOL') {        
-# oligo, staden(AFOL) or gap4 (OLIG)
-                my ($warning,$report) = TagFactory->processOligoTag($tag);
-#                my ($warning,$report) = $TF->processOligoTag($tag);
-                $logger->fine($report) if $warning;
-                unless ($tag->getTagSequenceName()) {
-		$logger->info("Missing oligo name in read tag for "
-                                . $read->getReadName()." (l:$line)");
-                        next; # don't load this tag
-	        }
+            if ($status) {
+                $read->addTag($tag);
 	    }
-            elsif ($type eq 'REPT') {
-# repeat read tags
-                unless (TagFactory->processRepeatTag($tag)) {
-#                unless ($TF->processRepeatTag($tag)) {
-	        $logger->info("Missing repeat name in read tag for "
-                             . $read->getReadName()." (l:$line)");
-                }
-            }
-            elsif ($type eq 'ADDI') {
-# chemistry read tag
-                unless (TagFactory->processAdditiveTag($tag)) {
-#                unless ($TF->processAdditiveTag($tag)) {
-                    $logger->info("Invalid ADDI tag ignored for "
-                                 . $read->getReadName()." (l:$line)");
-                    next; # don't accept this tag
-                }
- 	    }
-# test the comment; ignore tags with empty comment
-            unless ($tag->getTagComment() =~ /\S/) {
-	        $logger->info("Empty $type read tag ignored for "
-                               . $read->getReadName()." (l:$line)");
+            else {
+                $logger->info("($line) ignored invalid or empty "
+                              . $tag->getType() . " tag for read "
+                              . $read->getReadName() . " : ".($msg || ''));
                 $logger->info($tag->writeToCaf(0));
-	        next; # don't accept this tag
-	    }
-# tag processing finished
-            $read->addTag($tag);
-} # end TEST
-# TO TAGFACTORY until here
-
+            }
         }
 
 # most of the following is not operational
@@ -2366,7 +1982,7 @@ print STDERR "DONE\n" if ($status);
         }
     }
 
-    return 1,$line;
+    return 1,$fline;
 }
 
 #-----------------------------------------------------------------------------
