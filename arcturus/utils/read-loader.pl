@@ -24,6 +24,7 @@ my $source; # name of factory type
 
 my $noexclude = 0;         # re: suppresses check against already loaded reads
 my $noloading = 0;         # re: test mode without read loading
+my $update;
 
 my $skipaspedcheck = 0;
 my $skipqualityclipcheck = 0;
@@ -37,14 +38,16 @@ my $logLevel;              # default log warnings and errors only
 
 my $readstoload;
 my $readstoskip;
+my $listofreads;
 
-my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|out|"
+my $validKeys = "organism|instance|caf|cafdefault|fofn|forn|read|out|"
               . "limit|filter|source|exclude|info|help|asped|"
               . "filter|readnamelike|rootdir|status|"
               . "subdir|verbose|schema|projid|aspedafter|aspedbefore|"
               . "minreadid|maxreadid|skipaspedcheck|isconsensusread|icr|"
               . "noload|noexclude|acceptlikeyeast|aly|onlyloadtags|olt|test|"
-              . "group|skipqualityclipcheck";
+              . "group|skipqualityclipcheck|"
+              . "repair|update";
 
 my %PARS;
 
@@ -79,6 +82,9 @@ while (my $nextword = shift @ARGV) {
     $noloading        = 1            if ($nextword eq '-noload');
     $noloading        = 2            if ($nextword eq '-test');
 
+    $update           = 1            if ($nextword eq '-repair');
+    $update           = 1            if ($nextword eq '-update');
+
 # Do not check Read objects for the presence of an Asped date. This allows
 # us to load external reads, which lack this information.
 
@@ -104,10 +110,10 @@ while (my $nextword = shift @ARGV) {
 
 # logging
 
-    $outputFile       = shift @ARGV  if ($nextword eq '-out');
+    $outputFile         = shift @ARGV  if ($nextword eq '-out');
 
-    $logLevel         = 0            if ($nextword eq '-verbose');
-    $logLevel         = 2            if ($nextword eq '-info'); 
+    $logLevel           = 0            if ($nextword eq '-verbose');
+    $logLevel           = 2            if ($nextword eq '-info'); 
 
 # source specific entries are imported in a hash
 
@@ -118,6 +124,8 @@ while (my $nextword = shift @ARGV) {
 
     $readstoload        = shift @ARGV  if ($nextword eq '-fofn');
     $readstoload        = shift @ARGV  if ($nextword eq '-forn');
+
+    $listofreads        = shift @ARGV  if ($nextword eq '-read');
 
     $PARS{aspedafter}   = shift @ARGV  if ($nextword eq '-aspedafter');
     $PARS{aspedbefore}  = shift @ARGV  if ($nextword eq '-aspedbefore');
@@ -192,13 +200,25 @@ $adb->populateLoadingDictionaries();
 # get an include list from a FOFN (replace name by array reference)
 #----------------------------------------------------------------
 
-$readstoload = &readNamesFromFile($readstoload) if $readstoload;
+my $readloadlist = [];
+
+if ($listofreads && $listofreads =~ /,|;/) { # comma-separated list
+# possible leading/trailing blanks
+    $listofreads =~ s/^\s+|\s+$//; 
+    push @$readloadlist, split /,|;/,$listofreads;
+}
+elsif ($listofreads) { # single read specified
+    push @$readloadlist,$listofreads;
+}
+elsif ($readstoload) {
+    $readloadlist = &readNamesFromFile($readstoload);
+}
 
 #----------------------------------------------------------------
 # ignore already loaded reads? then get them from the database
 #----------------------------------------------------------------
 
-if (!$noexclude) {
+if (!$noexclude && !$update) {
 
     $logger->info("Collecting existing readnames");
 
@@ -358,15 +378,35 @@ $loadoptions{skipchemistrycheck} = 1 if $consensus_read;
 $loadoptions{acceptlikeyeast}    = 1 if $acceptlikeyeast;
 $loadoptions{skipqualityclipcheck} = 1 if $skipqualityclipcheck;
 
-$readstoload = $factory->getReadNamesToLoad() unless defined($readstoload);
+$readloadlist = $factory->getReadNamesToLoad() unless @$readloadlist;
 
-foreach my $readname (@{$readstoload}) {
+$logger->warning(scalar(@$readloadlist)." to be processed");
 
-    next if (!$noloading && !$onlyloadtags && $adb->hasRead(readname=>$readname)); # already stored
+foreach my $readname (@{$readloadlist}) {
+print STDOUT "readname $readname\n"; next;
+    if ($adb->hasRead(readname=>$readname)) {
+ 	$logger->info("read $readname is already loaded");
+      $logger->warning("read $readname is already loaded");
+        next if (!$noloading && !$onlyloadtags && !$update); # noloading implies test
+    }
+
+#    if (!$noloading && !$onlyloadtags && $adb->hasRead(readname=>$readname)) {
+# already stored
+#	$logger->info("read $readname skipped");
+#	next;
+#    }
 
     my $read = $factory->getReadByName($readname);
 
     next if !defined($read); # do error listing inside factory
+
+# if the read is a consensus read, do not accept more than one alignment
+
+    if ($read->isEdited() && $consensus_read) {
+        undef $read->{alignToTrace};
+#	print STDERR "is still edited \n" if $read->isEdited();
+        next if $read->isEdited();
+    }
 
     if ($onlyloadtags) {
 # check if the read exists in the database
@@ -388,13 +428,26 @@ foreach my $readname (@{$readstoload}) {
         next;
     }
 
+    elsif ($update) {
+
+        $loadoptions{execute} = 1;
+$loadoptions{execute} = 0; # temp
+        $loadoptions{execute} = 0 if $noloading; # test option 
+
+        my ($success,$errmsg) = $adb->updateRead($read, %loadoptions);
+
+        $logger->severe("Unable to update read $readname: $errmsg") unless $success;
+
+#        $adb->putTagsForReads([($read)]) if $read->hasTags();
+    }
+
     elsif ($noloading) {
 
         my $report = $adb->testRead($read,%loadoptions);
 
-        print STDOUT "\n$readname: $report\n";
+        $logger->warning("$readname: $report",ss=>1);
 
-	$read->writeCafSequence(*STDOUT) if ($noloading > 1);
+	$read->writeToCaf(*STDOUT) if ($noloading > 1);
 
         next;
     }
@@ -411,6 +464,8 @@ foreach my $readname (@{$readstoload}) {
 }
 
 $adb->disconnect();
+
+$logger->warning("END OF LOADING");
 
 $logger->close();
 
@@ -497,6 +552,7 @@ sub showUsage {
     print STDERR "-readnamelike\tprocess only those readnames matching pattern or substring\n";
     print STDERR "-noexclude\t(no value) override default exclusion of reads already loaded\n";
     print STDERR "-noload\t\t(no value) do not load the read(s) found (test mode)\n";
+    print STDERR "-update\t\t(-repair; no value) update metadata for existing reads\n";
     print STDERR "-onlyloadtags\t(-olt, no value) load tags for already loaded read(s)\n";
     print STDERR "\t\t e.g. to load tags from experiment files use:\n";
     print STDERR "\t\t.. -source Expfiles -onlyloadtags -subdir ETC [-verbose -noload]\n";
