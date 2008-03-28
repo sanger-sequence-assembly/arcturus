@@ -547,10 +547,13 @@ sub putContig {
 # check / import tags for this contig
 
                 if ($contig->hasTags()) {
-# test existing tags
+# NEEDS REWRITE: default load tags and register newly loaded tags in Project
+# what about noload option, test tags ?
+                    my $tags = $contig->getTags();
+ # test existing tags                     
                     if ($inheritTags) {
-# TODO any selection of tags ? e.g. No repeat tags
-                        $message .= "\n!!!: no tags inserted for $contigname"
+# TODO any selection of tags ? e.g. No repeat tags; option nokeep? noload?
+                        $message .= "\nno (new) tags inserted for $contigname"
                                      unless $this->putTagsForContig($contig);
 		    }
 		    else {
@@ -626,7 +629,7 @@ sub putContig {
 
 # inherit the tags
 
-#TODO        $contig->inheritTags(excludetag=>'REPT') if $inheritTags;
+#TODO        $contig->inheritTags(excludetag=>'REPT') if $inheritTags; # defualt override?
         $contig->inheritTags() if $inheritTags;
 
 # determine the project_id unless it's already specified (with options)
@@ -711,7 +714,7 @@ sub putContig {
 # and contig tags?
 
     my %ctoptions = (notestexisting => 1); # it's a new contig
-# TODO ? add tagtype selection ?
+# TODO ? add tagtype selection ? register number opf tags added in Project object
     return 0, "Failed to insert tags for $contigname"
         unless $this->putTagsForContig($contig,%ctoptions);
 
@@ -2939,7 +2942,7 @@ sub enterTagsForContig { # TEST purposes, to be DEPRECTATED
     my %options = @_;
 
     $options{noload}   = 1 unless defined $options{noload};
-    $options{testmode} = 1 unless defined $options{testmode};
+    $options{testmode} = 1 unless defined $options{testmode}; # not used anymore
 
     return &putTagsForContig($this,$contig,%options);
 }
@@ -2948,7 +2951,7 @@ sub putTagsForContig {
 # public method
     my $this = shift;
     my $contig = shift;
-    my %options = @_;
+    my %options = @_; # noload; noexistencetest; nokeep
 
     &verifyParameter($contig,"putTagsForContig");
 
@@ -2982,9 +2985,15 @@ sub putTagsForContig {
                         . $contigname);
     }
 
+# copy the ordered $ctag array to keep all tags in $contig; nokeep option erases existing tags
+
+    unless ($options{nokeep}) {
+        @$otags = @$ctags; # copy
+        $ctags  =  $otags; # point to copy array
+    }
+
 # test tag type and remove any tag without
 
-$logger->debug("test tag type");
     my $i = 0;
     while ($i < scalar(@$ctags)) {
  # each tag must have a tag type
@@ -2998,14 +3007,6 @@ $logger->debug("test tag type");
             splice @$ctags,$i,1; # remove from list
         }
     }
-$logger->debug("test tag type end");
-
-# prepare a hash table for alternative method TO BE REMOVED
-
-    my $tags = {};
-    foreach my $ctag (@$ctags) {
-        $tags->{$ctag} = $ctag;
-    } # until HERE
 
 # test contig instance tags against possible tags (already) in database
 
@@ -3019,95 +3020,44 @@ $logger->debug("test tag type end");
 
         my $etags = &fetchTagsForContigIDs($dbh,[($cid)]); # existing tags
     
-# delete the existing tags from the list
+# delete the (possibly) existing tags from the ctags list 
 
         my ($i,$j) = (0,0);
         while ($i < scalar(@$ctags) && $j < scalar(@$etags)) {
-
+# test positions, which must coincide
             if ($ctags->[$i]->getPositionLeft() < $etags->[$j]->getPositionLeft()) {
                 $i++;
             }
             elsif ($ctags->[$i]->getPositionLeft() > $etags->[$j]->getPositionLeft()) {
                 $j++;
             }
+# test for equality or overlap 
             elsif ($ctags->[$i]->isEqual($etags->[$j])) {
                 splice @$ctags,$i,1;
             }
             elsif ($etags->[$j]->isEqual($ctags->[$i],contains=>1)) {
                 splice @$ctags,$i,1;
             }
+# tags are not equal
             else {
-#$logger->debug("$i & $j are not equal");
-#$logger->debug($ctags->[$i]->writeToCaf(0,annotag=>1));
-#$logger->debug($etags->[$j]->writeToCaf(0,annotag=>1));
                 $j++; # next existing tag only
             }
         }
-$logger->debug("new tags ".scalar(@$ctags));
-
-        if ($options{useoldhashmethod}) { # TO BE REMOVED
-# delete the existing tags from the hash
-            foreach my $etag (@$etags) {
-$logger->debug("Testing existing tag",preskip=>1);
-$logger->debug($etag->dump(0,skip=>1));
-                foreach my $key (keys %$tags) {
-                    my $ctag = $tags->{$key};
-                    if ($ctag->isEqual($etag)) {
-$logger->debug("tags are equal ".$ctag->dump(0,skip=>1));
-                        delete $tags->{$ctag};
-                        last;
-                    }
-		}
-            }
-
-# collect the tags left
-
-            my @tags;
-            foreach my $key (keys %$tags) {
-               my $ctag = $tags->{$key};
-               push @tags, $ctag;
-            }
-            $ctags = [@tags];
-        } # until HERE
-$logger->debug("end testing for existing Tags");
-
-#    if (scalar(@$ctags) > 0) {
-#        $logger = $this->verifyLogger("putTagsForContig LIST etag");
-# there are new tags, list the old ones
-#        $logger->debug("existing tags $contigname",ss=>1);
-#        foreach my $tag (@$etags) {
-#            $logger->debug($tag->writeToCaf(0,annotag=>1));
-#        }
-#        $logger = $this->verifyLogger("putTagsForContig LIST ctag");
-#        $logger->debug("input tags $contigname",ss=>1);
-#        foreach my $tag (@copy) {
-#            $logger->debug($tag->writeToCaf(0,annotag=>1));
-#        }
-#        $logger = $this->verifyLogger("putTagsForContig LIST ntag");
-#        $logger->debug("new tags  $contigname ".scalar(@$ctags),ss=>1);
-#        foreach my $tag (@$ctags) {
-#           $logger->debug($tag->writeToCaf(0,annotag=>1));
-#        }
-#	exit 1;
-#    }
     }
 
-$logger->info("new tags $contigname ".scalar(@$ctags),ss=>1);
-foreach my $tag (@$ctags) { # TO BE REMOVED
-    $logger->debug($tag->writeToCaf(0,annotag=>1));
-} # until HERE
+#    $logger = $this->verifyLogger("putTagsForContig");
 
-$logger = $this->verifyLogger("putTagsForContig");
-
-    return 0 if $options{noload};
+    $logger->info("new tags $contigname ".scalar(@$ctags),ss=>1);
 
     return 0 unless @$ctags; # no new tags 
+
+    return 0 if $options{noload};
+#    return scalar(@$ctags) if $options{noload}; # ??
     
     $this->getTagSequenceIDsForTags($ctags,autoload => 1); # ->ADBRead
 
     $this->getTagIDsForContigTags($ctags,insert_enable=>1);
 
-$logger->debug("put Tags for ".scalar(@$ctags)." tags");
     return &putContigTags($dbh,$ctags);
 }
 
@@ -3129,6 +3079,8 @@ sub getTagIDsForContigTags {
 
 
     my $logger = $this->verifyLogger('getTagIDsForContigTags');
+
+#$logger->debug("put Tags for ".scalar(@$tags)." tags");
 
     my ($dbh, $qsth,$isth,$usth, $query,$insert,$update);
 
