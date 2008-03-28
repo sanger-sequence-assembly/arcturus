@@ -140,6 +140,11 @@ sub disconnect {
     }
 }
 
+sub DESTROY {
+    my $this = shift;
+    $this->disconnect();
+}
+
 sub loadProperties {
 # private
     my %properties = @_; # input properties already defined
