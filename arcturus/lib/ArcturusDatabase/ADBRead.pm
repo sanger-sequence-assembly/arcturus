@@ -1935,11 +1935,40 @@ sub putRead {
 
     my $readname = $read->getReadName();
 
-    my $query = "insert into" .
+# either update (meta) data for an existing read
+
+    my ($query,$sth);
+
+    if (my $updatehash = $options{metadata}) {
+
+        return 0,"no changes specified for read $readname" unless keys %$updatehash;
+
+        $query  = "update READINFO set ";
+        $query .= " asped = ".    $read->getAspedData()."," if $updatehash->{date};
+        $query .= " template_id = $template_id,"            if $updatehash->{template};
+        $query .= " strand = ".   $read->getStrand()   ."," if $updatehash->{strand};
+        $query .= " chemistry = ".$read->getChemistry()."," if $updatehash->{chemistry};
+        $query .= " primer = ".   $read->getPrimer()   ."," if $updatehash->{primer};
+        $query .= " basecaller = $basecaller,"              if $updatehash->{basecaller};
+        $query .= " status = $status,"                      if $updatehash->{status};
+        chop $query; # remove trailing comma
+        $query .= " where readname = $readname limit 1";
+
+        $sth = $dbh->prepare($query);
+print STDOUT "updateRead: $query\n";
+#        $rc = $sth->execute();
+
+        return (0, "failed to update core data in READINFO table; DBI::errstr=$DBI::errstr")
+  	    unless (defined($rc) && $rc == 1);
+   }
+
+# or insert a new read 
+
+    $query = "insert into" .
 	" READINFO(readname,asped,template_id,strand,chemistry,primer,basecaller,status)" .
 	    " VALUES(?,?,?,?,?,?,?,?)";
 
-    my $sth = $dbh->prepare_cached($query);
+    $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($readname,
 			$read->getAspedDate(),
@@ -1976,6 +2005,49 @@ sub putRead {
     $read->setVersion(0);
 
     return (1, "OK"); # or $readid?
+}
+
+sub updateRead {
+# change attributes of a read already in the database
+    my $this = shift;
+    my $read = shift;
+    my %options = @_;
+
+    &verifyParameter($read,'updateRead');
+print STDOUT "updateRead ENTERED\n";
+
+# get the read as currently in the database
+
+    my $readname = $read->getReadName(); # mandatory item
+    return 0,"invalid Read instance : missing readname" unless $readname;
+    my $adbread = $this->getRead(readname=>$readname);
+    return 0,"read $readname is a new read"; # use putRead instead
+
+# compare the read items 
+
+    my @attributes = ('AspedDate','Template','Strand','Chemistry',
+                      'Primer','BaseCaller','ProcessStatus'); # Comment ?
+
+    my $updatehash;
+    my $report = '';
+    for (my $i = 0 ; $i < scalar(@attributes) ; $i++) {
+        my $attribute = $attributes[$i];
+        my ($current,$replace);
+        eval "\$current = \$adbread->get$attribute()";
+        eval "\$replace = \$read->get$attribute()";
+        next if (!$replace && !$options{override}); # no reset to undef or 0
+        $current = 'undef' unless defined($current);
+        $replace = 'undef' unless defined($replace);
+        next if ($current eq $replace);
+        $updatehash = {} unless $updatehash; # define on first reference
+        $attribute =~ tr/[A-Z]/[a-z]/;        
+        $attribute =~ s/date|process//;
+        $updatehash->{$attribute}++;
+        $report .= "attribute $attribute $current to be replaced by $replace\n";
+    }
+    return 1,"no changes indicated for read $readname" unless $updatehash;
+#    return $this->putRead($read,metadata=>$updatehash) if $options{execute};
+    return 1,$report;
 }
 
 sub putSequenceForRead {
