@@ -188,6 +188,36 @@ sub fetchContigIDs {
     return ($cids,$status);
 }
 
+sub hasNewContigs {
+# compares the set of contig IDs stored after an earlier fetch with the
+# current state of the database; return undef if it can't be decided 
+    my $this = shift;
+    my %options = @_;
+
+    my $previouscontigids = $this->getContigIDs(); # as is
+
+    my ($currentcontigids,$status) = $this->fetchContigIDs(); # refresh
+
+    unless ($currentcontigids) {
+# fetch failed; default return 1, optionally return undef
+	$options{undef_on_undecided} ? return undef : return 1;
+    }
+
+# return true if the number of contigs or the last elements are different  
+
+print STDERR "Project->hasNewContigs p:".scalar(@$previouscontigids)
+            ." c:".scalar(@$currentcontigids)."\n";
+    return 1 if (@$previouscontigids != @$currentcontigids);
+
+    my $l = scalar(@$previouscontigids) - 1; # last element
+
+    return 1 if ($previouscontigids->[$l] != $currentcontigids->[$l]);
+
+print STDERR "No new contigs loaded\n";
+return 1; # until introduction
+    return 0; # there are no new contigs
+}
+
 #-------------------------------------------------------------------    
 # importing & exporting meta data
 #-------------------------------------------------------------------    
@@ -385,7 +415,6 @@ sub writeContigsToCaf { # TO BE DEPRECATED
 
 # use frugal mode if number of reads >= $frugal 
 
-#        my $contig = $ADB->getContig(contig_id=>$contig_id,frugal=>$frugal);
         my $contig = $ADB->getContig(contig_id=>$contig_id,metadataonly=>1,
                                                            frugal=>$frugal);
  
