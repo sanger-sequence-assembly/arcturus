@@ -334,10 +334,6 @@ public class CalculateConsensus {
 				normalReads.add(mappings[i]);
 		}
 
-		System.err.println("Of " + mappings.length + " mappings, "
-				+ normalReads.size() + " are of normal  length and "
-				+ longReads.size() + " are oversize");
-
 		mappings = normalReads.toArray(new Mapping[0]);
 
 		int truecontiglength = 1 + cfinal - cstart;
@@ -381,9 +377,6 @@ public class CalculateConsensus {
 			// Process the oversize (consensus) reads
 			for (Mapping mapping : longReads)
 				processMapping(mapping, cpos);
-
-			if (cpos % 1000 == 0)
-				System.err.println("Base " + cpos + " done");
 
 			try {
 				sequence[cpos - cstart] = (byte) algorithm.getBestBase();
