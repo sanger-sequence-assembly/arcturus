@@ -53,6 +53,15 @@ public class ReadFinder {
 		catch (SQLException sqle) {}
 	}
 	
+	public boolean isValid(int timeout) {
+		try {
+			return conn.isValid(timeout);
+		}
+		catch (SQLException e) {
+			return false;
+		}
+	}
+	
 	protected boolean containsWildcards(String str) {
 		return str.indexOf("%") >= 0 || str.indexOf("_") >= 0;
 	}
