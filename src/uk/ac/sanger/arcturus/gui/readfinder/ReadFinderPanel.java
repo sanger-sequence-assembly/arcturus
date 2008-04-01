@@ -230,12 +230,15 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 		}
 		
 		public void run() {
-			for (int i = 0; i < readnames.length; i++) {
+			boolean ok = true;
+			
+			for (int i = 0; i < readnames.length && ok; i++) {
 				try {
 					readFinder.findRead(readnames[i], onlyFreeReads, listener);
 				}
 				catch (SQLException sqle) {
 					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
+					ok = readFinder.isValid(5);
 				}
 			}
 			
