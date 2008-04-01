@@ -383,7 +383,6 @@ $readloadlist = $factory->getReadNamesToLoad() unless @$readloadlist;
 $logger->warning(scalar(@$readloadlist)." to be processed");
 
 foreach my $readname (@{$readloadlist}) {
-print STDOUT "readname $readname\n"; next;
     if ($adb->hasRead(readname=>$readname)) {
  	$logger->info("read $readname is already loaded");
       $logger->warning("read $readname is already loaded");
