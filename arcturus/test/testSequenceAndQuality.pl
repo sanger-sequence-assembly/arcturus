@@ -43,7 +43,12 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select seq_id,seqlen,sequence,quality from SEQUENCE";
+my $query = "select readname from SEQ2READ left join READINFO using (read_id) where seq_id = ?";
+
+my $sth_seq2read = $dbh->prepare($query);
+&db_die("prepare($query) failed");
+
+$query = "select seq_id,seqlen,sequence,quality from SEQUENCE";
 
 $query .= " where seq_id >= $min_seq_id" if defined($min_seq_id);
 
@@ -61,7 +66,12 @@ while (my ($seq_id, $seqlen, $sequence, $quality) = $sth->fetchrow_array()) {
     my $badqual = $seqlen != length($quality);
 
     if ($badseq || $badqual) {
-	print $seq_id;
+	$sth_seq2read->execute($seq_id);
+	my ($readname) = $sth_seq2read->fetchrow_array();
+	$sth_seq2read->finish();
+
+	print "$seq_id ($readname)";
+
 	print " SEQUENCE LENGTH MISMATCH: $seqlen vs ",length($sequence) if $badseq;
 	print " QUALITY LENGTH MISMATCH: $seqlen vs ",length($quality) if $badqual;
 	print "\n";
