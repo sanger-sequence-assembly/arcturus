@@ -351,7 +351,7 @@ sub CAFFileParser {
         elsif ($type == 3) {
 # store the Quality Data
             $record =~ s/\b0(\d)\b/$1/g; # remove '0' from values such as '01' .. 
-	    $reads{$object}->{AV} .= $record; 
+	    $reads{$object}->{AV} .= $record.' ';
         }
 # register for this object which section has been completed (on key f1, f2, f3)
 	if ($type > 0) {
