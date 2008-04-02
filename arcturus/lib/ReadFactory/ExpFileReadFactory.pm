@@ -169,28 +169,48 @@ sub getRejectedFiles {
 #------------------------------------------------------------
 # build Read from Exp file stored in the superclass list
 #------------------------------------------------------------
- 
-sub getNextRead {
-# pick up the Read reference from the auxiliary data
-    my $this = shift;
- 
-    my $readname = $this->getCurrentReadName(); 
 
-    my $filename = $this->getNextReadAuxiliaryData(); # returns full file name
- 
-# parse the file and build Read instance
- 
-    my $read = $this->expFileParser($readname, $filename); # returns Read object
- 
-    if (!defined($read) or ref($read) ne 'Read') {
-                                                                               
-        $this->logerror("Cannot build read $readname from $filename");
-                                                                               
-        return undef;
+sub addReadToList {
+    my $this = shift;
+    my ($name,$file) = @_;
+
+    my $read = $this->expFileParser($name,$file);
+
+    unless (ref($read) eq 'Read') {
+        $this->logwarning("Can't parse experiment file $file");
+        return; 
     }
-    else {
-        return $read;
-    }
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    $readhash->{$name} = $read;
+}
+
+sub getReadNamesToLoad {
+# overides superclass method
+    my $this = shift;
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    my @readnames = keys %$readhash;
+
+    return [@readnames];
+}
+
+sub getReadByName {
+# overides superclass method
+    my $this = shift;
+    my $name = shift;
+
+    $this->{readlist} = {} unless defined $this->{readlist};
+
+    my $readhash = $this->{readlist};
+
+    return $readhash->{$name};
 }
 
 sub expFileParser {
