@@ -1849,12 +1849,10 @@ sub putRead {
 
     my ($rc, $errmsg);
 
-   ($rc, $errmsg) = &checkReadForCompleteness($read, @_);
+   ($rc, $errmsg) = &checkReadForCompleteness($read,@_);
     return (0, "failed completeness check ($errmsg)") unless $rc;
 
-#return 0,"TEST ABORT checkReadForCompletenes: $errmsg";
-
-   ($rc, $errmsg) = &checkReadForConsistency($read, @_);
+   ($rc, $errmsg) = &checkReadForConsistency($read,@_);
     return (0, "failed consistency check ($errmsg)") unless $rc;
 
 # b) encode dictionary items; special case: template & ligation
@@ -1944,22 +1942,23 @@ sub putRead {
         return 0,"no changes specified for read $readname" unless keys %$updatehash;
 
         $query  = "update READINFO set ";
-        $query .= " asped = ".    $read->getAspedData()."," if $updatehash->{date};
-        $query .= " template_id = $template_id,"            if $updatehash->{template};
-        $query .= " strand = ".   $read->getStrand()   ."," if $updatehash->{strand};
-        $query .= " chemistry = ".$read->getChemistry()."," if $updatehash->{chemistry};
-        $query .= " primer = ".   $read->getPrimer()   ."," if $updatehash->{primer};
-        $query .= " basecaller = $basecaller,"              if $updatehash->{basecaller};
-        $query .= " status = $status,"                      if $updatehash->{status};
+        $query .= " asped='".    $read->getAspedData()."'," if $updatehash->{date};
+        $query .= " template_id=$template_id,"              if $updatehash->{template};
+        $query .= " strand='".   $read->getStrand()   ."'," if $updatehash->{strand};
+        $query .= " chemistry='".$read->getChemistry()."'," if $updatehash->{chemistry};
+        $query .= " primer='".   $read->getPrimer()   ."'," if $updatehash->{primer};
+        $query .= " basecaller=$basecaller,"                if $updatehash->{basecaller};
+        $query .= " status=$status,"                        if $updatehash->{status};
         chop $query; # remove trailing comma
-        $query .= " where readname = $readname limit 1";
+        $query .= " where readname = '$readname' limit 1";
 
         $sth = $dbh->prepare($query);
-print STDOUT "updateRead: $query\n";
-#        $rc = $sth->execute();
+#print STDOUT "updateRead: $query\n";
+        $rc = $sth->execute();
 
-        return (0, "failed to update core data in READINFO table; DBI::errstr=$DBI::errstr")
-  	    unless (defined($rc) && $rc == 1);
+        return 1,"done $readname" if (defined($rc) && $rc == 1);
+
+        return 0,"failed to update core data in READINFO table; DBI::errstr=$DBI::errstr";
    }
 
 # or insert a new read 
@@ -2014,14 +2013,13 @@ sub updateRead {
     my %options = @_;
 
     &verifyParameter($read,'updateRead');
-print STDOUT "updateRead ENTERED\n";
 
 # get the read as currently in the database
 
     my $readname = $read->getReadName(); # mandatory item
     return 0,"invalid Read instance : missing readname" unless $readname;
     my $adbread = $this->getRead(readname=>$readname);
-    return 0,"read $readname is a new read"; # use putRead instead
+    return 0,"read $readname is a new read" unless $adbread; # use putRead instead
 
 # compare the read items 
 
@@ -2045,8 +2043,8 @@ print STDOUT "updateRead ENTERED\n";
         $updatehash->{$attribute}++;
         $report .= "attribute $attribute $current to be replaced by $replace\n";
     }
-    return 1,"no changes indicated for read $readname" unless $updatehash;
-#    return $this->putRead($read,metadata=>$updatehash) if $options{execute};
+    return 2,"no changes indicated for read $readname" unless $updatehash;
+    return $this->putRead($read,metadata=>$updatehash,@_) if $options{execute};
     return 1,$report;
 }
 
@@ -2063,6 +2061,15 @@ sub putSequenceForRead {
     my $readname = $read->getReadName();
 
     return (0,"Failed to add sequence for $readname: missing read_id") unless $readid;
+
+    my $readsequence = $read->getSequence();
+
+    my $readbquality = $read->getBaseQuality();
+
+    unless ($readsequence && length($readsequence) == scalar(@$readbquality)) {
+        return (0,"Failed to add sequence for $readname: inconsistent "
+                 ."sequence lengths");
+    }
 
     my $dbh = $this->getConnection();
 
@@ -2083,9 +2090,11 @@ sub putSequenceForRead {
 
 # insert sequence and base quality
 
-    my $sequence = compress($read->getSequence());
+# my $sequence = compress($read->getSequence());
+    my $sequence = compress($readsequence);
 
-    my $basequality = compress(pack("c*", @{$read->getBaseQuality()}));
+# my $basequality = compress(pack("c*", @{$read->getBaseQuality()}));
+    my $basequality = compress(pack("c*", @$readbquality));
 
     $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
 
@@ -2368,7 +2377,7 @@ sub testRead {
     $report .= 'completeness : '.($status ? 'passed' : 'FAILED');
     $report .= " ($msg)" unless $status;
 
-    return $report;
+    $report .= ' ';
 
    ($status,$msg) = &checkReadForConsistency($read,@_);
     $report .= 'consistency  : '.($status ? 'passed' : 'FAILED');
@@ -2443,6 +2452,16 @@ sub checkReadForConsistency {
     my %options = @_;
 
     &verifyPrivate($read,'checkReadForConsistency');
+
+# check sequence data
+
+    my $readsequence = $read->getSequence();
+
+    my $readbquality = $read->getBaseQuality();
+
+    unless ($readsequence && (length($readsequence) == scalar(@$readbquality))) {
+        return (0,"Inconsistent sequence lengths for ".$read->getReadName());
+    }
 
 # check process status 
 
@@ -2927,6 +2946,8 @@ sub putTagsForReads {
     my %options = @_; # autoload=> 
 
     &verifyParameter($reads,'putTagsForReads','ARRAY');
+
+    return '0.0' unless @$reads; # empty array
 
     &verifyParameter($reads->[0],'putTagsForReads');
 
