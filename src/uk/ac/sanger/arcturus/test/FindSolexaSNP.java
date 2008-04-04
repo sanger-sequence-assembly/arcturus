@@ -287,7 +287,6 @@ public class FindSolexaSNP {
 					Sequence sequence = mappings[rdid].getSequence();
 					int seq_id = sequence.getID();
 					Read read = mappings[rdid].getSequence().getRead();
-					int read_id = read.getID();
 					Template template = read.getTemplate();
 					Ligation ligation = template == null ? null : template
 							.getLigation();
@@ -304,7 +303,7 @@ public class FindSolexaSNP {
 							&& rpos > qclip.getLeft()
 							&& rpos < qclip.getRight();
 
-					Base b = new Base(read_id, seq_id, rpos, clipOK,
+					Base b = new Base(read, seq_id, rpos, clipOK,
 							ligation_id, strand, chemistry, base, qual);
 
 					bases.add(b);
@@ -416,7 +415,8 @@ public class FindSolexaSNP {
 			if (base.ligation_id == 0 && base.base != bestbase) {
 				System.out.println(PREFIX_A + contig_id + TAB + cpos + TAB
 						+ depth + TAB + bestbase + TAB + score + TAB
-						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read.getID() + TAB + base.read.getName() + TAB
+						+ base.sequence_id + TAB
 						+ base.read_position + TAB + base.clipOK + TAB
 						+ base.base + TAB + base.quality);
 
@@ -425,7 +425,8 @@ public class FindSolexaSNP {
 					&& base.base != bestbase2) {
 				System.out.println(PREFIX_B + contig_id + TAB + cpos + TAB
 						+ count2 + TAB + bestbase2 + TAB + score2 + TAB
-						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read.getID() + TAB + base.read.getName() + TAB
+						+ base.sequence_id + TAB
 						+ base.read_position + TAB + base.clipOK + TAB
 						+ base.base + TAB + base.quality);
 
@@ -461,14 +462,15 @@ public class FindSolexaSNP {
 			if (base.base != bestbase)
 				System.out.println(EMPTY_STRING + contig_id + TAB + cpos + TAB
 						+ depth + TAB + bestbase + TAB + score + TAB
-						+ base.read_id + TAB + base.sequence_id + TAB
+						+ base.read.getID() + TAB + base.read.getName() + TAB
+						+ base.sequence_id + TAB
 						+ base.read_position + TAB + base.clipOK + TAB
 						+ base.base + TAB + base.quality);
 		}
 	}
 
 	class Base {
-		protected int read_id;
+		protected Read read;
 		protected int sequence_id;
 		protected int read_position;
 		protected boolean clipOK;
@@ -478,10 +480,10 @@ public class FindSolexaSNP {
 		protected char base;
 		protected int quality;
 
-		public Base(int read_id, int sequence_id, int read_position,
+		public Base(Read read, int sequence_id, int read_position,
 				boolean clipOK, int ligation_id, char strand, int chemistry,
 				char base, int quality) {
-			this.read_id = read_id;
+			this.read = read;
 			this.sequence_id = sequence_id;
 			this.read_position = read_position;
 			this.clipOK = clipOK;
