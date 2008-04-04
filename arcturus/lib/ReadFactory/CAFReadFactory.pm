@@ -200,7 +200,7 @@ sub CAFFileParser {
                 if ($entry == 2) {
                     $this->logwarning("Edited read $object detected");
 # allow acceptance only if objectname explicitly specified
-                    unless ($object && $includelist =~ /\b$object\b/) {
+                    unless (defined($object) && defined($includelist) && $includelist =~ /\b$object\b/) {
                         $this->logwarning("Edited read $object cannot be loaded");
                         delete $reads{$object};
                         $type = 0; # ignore edited data
