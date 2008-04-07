@@ -30,9 +30,10 @@ my $fofn;
 my $verbose;
 my $notags;
 my $debug;
+my $full;
 
 my $validKeys  = "organism|o|instance|i|readname|read_id|seq_id|version|".
-                 "unassembled|fofn|chemistry|caf|fasta|quality|".
+                 "unassembled|fofn|chemistry|caf|fasta|quality|full|".
                  "clip|mask|screen|notags|verbose|debug|help|h";
 
 while (defined(my $nextword = shift @ARGV)) {
@@ -76,6 +77,8 @@ while (defined(my $nextword = shift @ARGV)) {
     $fasta       = 1            if ($nextword eq '-fasta');
 
     $caf         = 1            if ($nextword eq '-caf');
+
+    $full        = 1            if ($nextword eq '-full');
 
     $quality     = 1            if ($nextword eq '-quality');
 
@@ -211,7 +214,7 @@ foreach my $read (@reads) {
 
     next if ($caf || $fasta);
 
-    if ($SCFchem && !defined($rdir)) {
+    if ($full || $SCFchem && !defined($rdir)) {
         my $PR = new PathogenRepository();
         $rdir = $PR->getAssemblyDirectory($organism);
         $rdir =~ s?/assembly??;
@@ -247,7 +250,7 @@ sub list {
     $L{clone}      = $read->getClone || '';
    
     $L{chemistry}  = $read->getChemistry;
-    my $ta = $read->getTraceArchiveIdentifier();
+    my $ta = $read->getTraceArchiveIdentifier(1); # list full info in db
     $ta =~ s/\~\w+\/// if $ta; # remove possibly added ~name
     $L{traceserver} = $ta;
     if ($rdir && $ta) {
