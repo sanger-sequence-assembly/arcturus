@@ -411,7 +411,12 @@ sub setBaseQuality {
 sub getBaseQuality {
 # return the quality data (possibly) using lazy instatiation
     my $this = shift;
+    my %options = @_;
+
     $this->importSequence() unless defined($this->{BaseQuality});
+
+    return join ' ',@{$this->{BaseQuality}} if $options{asString};
+
     return $this->{BaseQuality}; # returns an array reference
 }
 
@@ -618,10 +623,20 @@ sub setTraceArchiveIdentifier {
 sub getTraceArchiveIdentifier {
     my $this = shift;
 
-    unless ($this->{TAI}) {
+    unless (defined($this->{TAI})) {
         my $ADB = $this->{SOURCE} || return undef;
-        return undef unless (ref($ADB) eq 'ArcturusDatabase');
-        $ADB->getTraceArchiveIdentifierForRead($this);
+        if (ref($ADB) eq 'ArcturusDatabase') {
+            $ADB->getTraceArchiveIdentifierForRead($this);
+            if ($this->{TAI} && !shift) { # default test & cleanup
+                $this->{TAI} =~ s/.*\///; # remove possible subdir prefix
+                $this->{TAI} = 0 unless ($this->{TAI} =~ /$this->{readname}/);
+	    }
+	}
+    }
+# if no trace archive reference found (i.e. null or 0), generate a default
+    unless ($this->{TAI}) {
+        $this->{TAI} = $this->{readname};
+        $this->{TAI} .= "SCF" unless ($this->{readname} =~ /gz$/);
     }
     return $this->{TAI};
 }
@@ -771,7 +786,10 @@ sub writeCafSequence {
     print $FILE "Sequence : $this->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "$this->{padstatus}\n"; # Unpadded or Padded
-    print $FILE "SCF_File $this->{readname}SCF\n";
+# alternative for trace reference
+    my $traceserver = $this->getTraceArchiveIdentifier();
+    print $FILE "SCF_File $traceserver\n";
+
     print $FILE "Template $data->{template}\n"          if defined $data->{template};
     print $FILE "Insert_size @{$data->{insertsize}}\n"  if defined $data->{insertsize};
     print $FILE "Ligation_no $data->{ligation}\n"       if defined $data->{ligation};
@@ -808,8 +826,13 @@ sub writeCafSequence {
 # sequencing vector
 
     if (my $seqvec = $this->getSequencingVector()) {
+        my $svector;
         foreach my $vector (@$seqvec) {
-            my $name = $vector->[0] || "unknown";
+            $svector = $vector->[0] unless $svector;
+	}
+        print $FILE "Sequencing_vector \"$svector\"\n" if $svector;
+        foreach my $vector (@$seqvec) {
+            my $name = $vector->[0] || $svector || "unknown";
             print $FILE "Seq_vec SVEC $vector->[1] $vector->[2] \"$name\"\n";
         }
     }
