@@ -622,20 +622,20 @@ sub setTraceArchiveIdentifier {
 
 sub getTraceArchiveIdentifier {
     my $this = shift;
+    my %options = @_; # asis => 1 for raw data in db
 
     unless (defined($this->{TAI})) {
         my $ADB = $this->{SOURCE} || return undef;
         if (ref($ADB) eq 'ArcturusDatabase') {
             $ADB->getTraceArchiveIdentifierForRead($this);
-            if ($this->{TAI} && !shift) { # default test & cleanup
-                $this->{TAI} =~ s/.*\///; # remove possible subdir prefix
-                $this->{TAI} = 0 unless ($this->{TAI} =~ /$this->{readname}/);
+            unless ($this->{TAI} && $this->{TAI} =~ /$this->{readname}/) {
+                $this->{TAI} = 0 unless $options{asis}; # defined but not in db
 	    }
 	}
     }
 # if no trace archive reference found (i.e. null or 0), generate a default
-    unless ($this->{TAI}) {
-        $this->{TAI} = $this->{readname};
+    unless ($options{asis} || $this->{TAI}) {
+        $this->{TAI}  = $this->{readname};
         $this->{TAI} .= "SCF" unless ($this->{readname} =~ /gz$/);
     }
     return $this->{TAI};
@@ -786,8 +786,9 @@ sub writeCafSequence {
     print $FILE "Sequence : $this->{readname}\n";
     print $FILE "Is_read\n";
     print $FILE "$this->{padstatus}\n"; # Unpadded or Padded
-# alternative for trace reference
+# get trace reference
     my $traceserver = $this->getTraceArchiveIdentifier();
+    $traceserver =~ s/.*\/// unless $options{fulltrace}; # remove subdir prefix
     print $FILE "SCF_File $traceserver\n";
 
     print $FILE "Template $data->{template}\n"          if defined $data->{template};
