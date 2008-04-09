@@ -348,7 +348,7 @@ $logger->info("getRead: $query  ($readitem)");
 
     $sth->execute($readitem) || &queryFailed($query,$readitem);
 
-    my ($read_id, $seq_id, $db_version,@attributes) = $sth->fetchrow_array();
+    my ($read_id, $seq_id, $db_version, @attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
@@ -392,6 +392,7 @@ sub getRead {
                   from READINFO,SEQ2READ,TEMPLATE 
                  where READINFO.read_id = SEQ2READ.read_id
                    and READINFO.template_id = TEMPLATE.template_id";
+
     my $union = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
                  $this->{read_attributes},'undefined',0
                   from READINFO,SEQ2READ
@@ -443,7 +444,7 @@ sub getRead {
 
     $sth->execute(@bindvalues) || &queryFailed($fullquery,@bindvalues);
 
-    my ($read_id, $seq_id, $db_version,@attributes) = $sth->fetchrow_array();
+    my ($read_id, $seq_id, $db_version, @attributes) = $sth->fetchrow_array();
 
     $sth->finish();
 
@@ -465,7 +466,7 @@ sub getRead {
 	return $read;
     }
 
-# no resdult returned
+# no result returned
 
     return undef;
 }
@@ -762,7 +763,7 @@ sub getReadsByReadID {
 }
 
 sub getReadsForCondition {
-# private method
+# private method; returns an array of version 0 Read instances
     my $this = shift;
     my $condition = shift;
     my $tables = shift || ''; # optional extra tables
@@ -943,8 +944,8 @@ sub getReadsForContig {
         $query .= " and READINFO.template_id > 0"
               . " union "
               . "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
-              . "$this->{read_attributes},$this->{template_addons}"
-              . "  from MAPPING,SEQ2READ,READINFO,TEMPLATE "
+              . "$this->{read_attributes},'undefined',0"
+              . "  from MAPPING,SEQ2READ,READINFO"
               . " where MAPPING.seq_id = SEQ2READ.seq_id"
               . "   and SEQ2READ.read_id = READINFO.read_id"
               . "   and READINFO.template_id = 0"
@@ -985,12 +986,18 @@ sub getReadsForContig {
         $logger->error("No reads for contig $cid, called from " .
                        ($options{caller} || "undefined"));
         $logger->error("options: @_");
-        $logger->error($query);
+        $logger->error("$query\n@bindvalues");
+        return;
     }
+
+# add the trace archive reference
+
+#    $options{notrace} = 1;
+    $this->getTraceArchiveIdentifierForReads(\@reads) unless $options{notrace};
 
 # add the sequence (in bulk) unless delayed loading is used
 
-    $this->getSequenceForReads([@reads]) unless $options{nosequence};
+    $this->getSequenceForReads(\@reads) unless $options{nosequence};
 
 # add read tags (in bulk)
 
@@ -1672,6 +1679,88 @@ sub getTraceArchiveIdentifierForRead {
     $read->setTraceArchiveIdentifier($traceref) if $traceref;
 }
 
+sub getTraceArchiveIdentifierForReads {
+# takes an array of Read instances and adds the DNA and BaseQuality (in bulk)
+    my $this  = shift;
+    my $reads = shift; # array of Read objects
+    my %options = @_;  # blocksize=> , caller=>
+
+    &verifyParameter($reads,"getTraceArchiveIdentifierForReads",'ARRAY',@_);
+
+    return undef unless @$reads;
+
+    &verifyParameter($reads->[0],"getTraceArchiveIdentifierForReads",undef,@_);
+
+    my $dbh = $this->getConnection();
+
+# build a list of read IDs (all read IDs must be defined)
+
+    my $rids = {};
+    foreach my $read (@$reads) {
+# test if sequence ID is defined
+        if (my $read_id = $read->getReadID()) {
+            $rids->{$read_id} = $read;
+        }
+        else {
+# warning message
+            print STDERR "Missing read ID in read ".$read->getReadName."\n";
+        }
+    }
+
+
+    my @rids = sort {$a <=> $b} keys(%$rids);
+
+    return unless @rids;
+ 
+    my $blocksize = $options{blocksize} || 10000;
+
+    my $added = 0;
+    while (my $block = scalar(@rids)) {
+
+        $block = $blocksize if ($block > $blocksize);
+
+        my @block = splice @rids, 0, $block;
+
+        my $range = join ',',@block;
+
+        my $query = "select read_id,traceref from TRACEARCHIVE " .
+                    " where read_id in ($range)";
+
+        my $sth = $dbh->prepare($query);
+
+# pull the data from the SEQUENCE table in bulk
+
+        $sth->execute() || &queryFailed($query);
+
+        while(my @ary = $sth->fetchrow_array()) {
+
+	    my ($read_id, $traceref) = @ary;
+
+            if (my $read = $rids->{$read_id}) {
+
+                $read->setTraceArchiveIdentifier($traceref);
+
+                delete $rids->{$read_id};
+
+                $added++;
+            }
+        }
+
+        $sth->finish();
+    }
+
+# the remaining Read objects have no trace ref; reset to defined but 0
+
+    foreach my $read_id (keys %$rids) {
+print STDOUT "trace reference set to 0 for read $read_id\n";
+        my $read = $rids->{$read_id};
+
+        $read->setTraceArchiveIdentifier(0);    
+    }
+
+    return $added;
+}
+
 #-----------------------------------------------------------------------------
 
 sub getListOfReadNames {
@@ -2025,17 +2114,20 @@ sub updateRead {
 
     my @attributes = ('AspedDate','Template','Strand','Chemistry',
                       'Primer','BaseCaller','ProcessStatus'); # Comment ?
+    push @attributes , ('BaseQuality','Sequence');
 
     my $updatehash;
     my $report = '';
     for (my $i = 0 ; $i < scalar(@attributes) ; $i++) {
         my $attribute = $attributes[$i];
-        my ($current,$replace);
-        eval "\$current = \$adbread->get$attribute()";
-        eval "\$replace = \$read->get$attribute()";
+        my ($current,$replace,%options);
+        %options = (asString=>1) if ($attribute eq 'BaseQuality');
+        eval "\$current = \$adbread->get$attribute(\%options)";
+        eval "\$replace = \$read->get$attribute(\%options)";
         next if (!$replace && !$options{override}); # no reset to undef or 0
         $current = 'undef' unless defined($current);
         $replace = 'undef' unless defined($replace);
+#print STDOUT "cur: $current\nrep: $replace\n";
         next if ($current eq $replace);
         $updatehash = {} unless $updatehash; # define on first reference
         $attribute =~ tr/[A-Z]/[a-z]/;        
@@ -2828,6 +2920,8 @@ sub getTagsForReads {
 
     &verifyParameter($reads,"getTagsForReads",'ARRAY');
 
+    return undef unless @$reads;
+
     &verifyParameter($reads->[0],"getTagsForReads");
 
 # build a list of sequence IDs (all sequence IDs must be defined)
@@ -2848,7 +2942,7 @@ sub getTagsForReads {
 
     my @sids = sort {$a <=> $b} keys(%$readlist);
 
-    return unless @sids;
+    return undef unless @sids;
 
     my $dbh = $this->getConnection();
 
