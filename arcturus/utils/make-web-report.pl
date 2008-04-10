@@ -69,7 +69,7 @@ print $fhSection "Statistics for each project, from the current contig set.\n";
 
 print $fhSection "<h3>Select contigs by length</h3>\n" if ($minlen == 0);
 
-foreach $minlen (0, 2, 5, 10, 100) {
+foreach $minlen (0, 1, 2, 5, 10, 100) {
     $filename = $prefix . "-project-" . ($minlen == 0 ? "all" : "${minlen}kb") . ".html";
     $caption = ($minlen == 0) ? "All contigs" : "$minlen kb or longer";
 
