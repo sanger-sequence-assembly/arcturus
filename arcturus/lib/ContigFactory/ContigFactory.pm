@@ -754,6 +754,7 @@ sub readExtractor {
         my ($read,$type,$fileposition,$line) = @$stack;
         seek $CAF, $fileposition, 00; # position the file 
         if ($type == 0) {
+            $options{fullscan} = 1 unless defined $options{fullscan};
            ($status,$line) = &parseRead        ($CAF,$read,$line,%options);
         }
 	elsif ($type == 1) {
@@ -1571,7 +1572,7 @@ sub parseBaseQuality {
             $logger->error("Missing blank after DNA block ($line)");
 	    last;
 	}
-        $qualitydata .= $record;
+        $qualitydata .= $record.' '; # just in case
     }
 
 # add the BaseQuality to the object provided
@@ -1836,6 +1837,7 @@ sub parseRead {
 # parse the file until the next blank record
 
     my $isUnpadded = 1;
+    my $sequencingvector;
     while (defined($record = <$CAF>)) {
         $fline++;
         chomp $record;
@@ -1913,6 +1915,11 @@ sub parseRead {
 #            $read->setLowQualityRight($2);
         }
         elsif ($record =~ /Seq_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
+            my $sv = $4; # test against sequencing vector if defined before
+            if ($sequencingvector && $sequencingvector ne $sv) {
+		$logger->warning("sequencing vector inconsistency corrected ($sv,$sequencingvector)");
+                $sv = $sequencingvector;
+	    }
             $read->addSequencingVector([$4, $2, $3]);
         }
         elsif ($record =~ /Clone_vec\s+(\w+)\s(\d+)\s+(\d+)\s+\"([\w\.]+)\"/i) {
@@ -1976,8 +1983,72 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
 #            $tag->setTagComment($info);
   	    $logger->info("NOTE detected but not processed ($line): $record");
         }
-# finally
-        elsif ($record !~ /SCF|Sta|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
+
+        elsif ($record =~ /SCF|Pro|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
+# this block is taken from CAFfileloader
+            next unless $options{fullscan};
+# decode the read meta data
+            $record =~ s/^\s+|\s+$//g;
+            my @items = split /\s+/,$record; 
+#print "rec:'$record' '@items' \n" if !$items[0];
+            if ($items[0] =~ /Temp/i) {
+                $read->setTemplate($items[1]);
+            }
+            elsif ($items[0] =~ /^Ins/i) {
+                $read->setInsertSize([$items[1],$items[2]]);
+            }
+            elsif ($items[0] =~ /^Liga/i) {
+                $read->setLigation($items[1]);
+            }
+#            elsif ($items[0] =~ /^Seq_vec/i) {
+#		my ($svleft, $svright, $svname) = @items[2,3,4];
+#		$svname =~ s/\"//g if defined($svname);
+#		$read->addSequencingVector([$svname, $svleft, $svright]);
+#            }
+#            elsif ($items[0] =~ /^Sequencing_vector/i) {
+#		my $svname = $items[1];
+#		$svname =~ s/\"//g if defined($svname);
+#            }
+            elsif ($items[0] =~ /^Pri/i) {
+                $read->setPrimer($items[1]);
+            }
+            elsif ($items[0] =~ /^Str/i) {
+                $read->setStrand($items[1]);
+            }
+            elsif ($items[0] =~ /^Dye/i) {
+                $read->setChemistry($items[1]);
+            }
+#            elsif ($items[0] =~ /^Clone_vec/i) {
+#		my ($cvleft, $cvright, $cvname) = $record =~ /^Clone_vec\s+\S+\s+(\d+)\s+(\d+)\s+(\"\S+\")?/;
+#		$cvname =~ s/\"//g if defined($cvname);
+#		$read->addCloningVector([$cvname, $cvleft, $cvright]);
+#            }
+            elsif ($items[0] =~ /^Clo/i) {
+                $read->setClone($items[1]);
+            }
+            elsif ($items[0] =~ /^Pro/i) {
+                $read->setProcessStatus($items[1]) if ($record !~ /PASS/);
+            }
+            elsif ($items[0] =~ /^Asp/i) {
+                $read->setAspedDate($items[1]);
+            }
+            elsif ($items[0] =~ /^Bas/i) {
+                $read->setBaseCaller($items[1]);
+            }
+#            elsif ($items[0] =~ /^Cli/i) {
+#                $read->setLowQualityLeft($items[2]);
+#                $read->setLowQualityRight($items[3]);
+#            }
+            elsif ($items[0] =~ /SCF_File/i) {
+# add if other than default and not zip files
+                if ($items[1] !~ /\.gz|zip|tar/) {
+                    $read->setTraceArchiveIdentifier($items[1]);
+                } 
+            }
+
+	}
+
+	else {
             $logger->warning("($line) not recognized : $record");
         }
     }
