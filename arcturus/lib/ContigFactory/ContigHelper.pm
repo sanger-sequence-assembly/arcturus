@@ -104,6 +104,8 @@ $logger->severe($read->writeToCaf(*STDOUT));
     } 
     else {
         $contigstatus .= "Contig ".$contig->getContigName." has no Mappings\n";
+        $contig->{status} = $contigstatus;
+        return 0;
     }
 # now there should be no keys left (when Reads and Mappings correspond 1-1)
     if (scalar(keys %identifier)) {
