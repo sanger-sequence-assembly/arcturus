@@ -624,20 +624,22 @@ sub getTraceArchiveIdentifier {
     my $this = shift;
     my %options = @_; # asis => 1 for raw data in db
 
+    my $readname = $this->{readname};
+
     unless (defined($this->{TAI})) {
         my $ADB = $this->{SOURCE} || return undef;
         if (ref($ADB) eq 'ArcturusDatabase') {
             $ADB->getTraceArchiveIdentifierForRead($this);
-            unless ($this->{TAI} && $this->{TAI} =~ /$this->{readname}/) {
+            unless ($this->{TAI} && $this->{TAI} =~ /$readname/) {
                 $this->{TAI} = 0 unless $options{asis}; # defined but not in db
 	    }
 	}
     }
 # if no trace archive reference found (i.e. null or 0), generate a default
-    unless ($options{asis} || $this->{TAI}) {
+    unless ($options{asis} || ($this->{TAI} && $this->{TAI} =~ /$readname/)) {
         $this->{TAI}  = $this->{readname};
-        if ($this->{readname} =~ /^[^\s\.]+\.[\w]+$/) { # sanger format
-            $this->{TAI} .= "SCF" unless ($this->{readname} =~ /gz$/);
+        if ($readname =~ /^[^\s\.]+\.[\w]+$/) { # sanger format
+            $this->{TAI} .= "SCF" unless ($readname =~ /gz$/);
         } 
     }
     return $this->{TAI};
