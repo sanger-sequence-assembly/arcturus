@@ -43,7 +43,7 @@ unless (defined($dbh)) {
     die "getConnection failed";
 }
 
-my $query = "select readname from SEQ2READ left join READINFO using (read_id) where seq_id = ?";
+my $query = "select readname,version from SEQ2READ left join READINFO using (read_id) where seq_id = ?";
 
 my $sth_seq2read = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -59,6 +59,9 @@ $sth->execute();
 &db_die("execute($query) failed");
 
 while (my ($seq_id, $seqlen, $sequence, $quality) = $sth->fetchrow_array()) {
+    my $zseqlen = length($sequence);
+    my $zqlen = length($quality);
+
     $sequence = uncompress($sequence);
     $quality = uncompress($quality);
 
@@ -67,13 +70,13 @@ while (my ($seq_id, $seqlen, $sequence, $quality) = $sth->fetchrow_array()) {
 
     if ($badseq || $badqual) {
 	$sth_seq2read->execute($seq_id);
-	my ($readname) = $sth_seq2read->fetchrow_array();
+	my ($readname, $version) = $sth_seq2read->fetchrow_array();
 	$sth_seq2read->finish();
 
-	print "$seq_id ($readname)";
+	print "$seq_id ($readname version $version)";
 
-	print " SEQUENCE LENGTH MISMATCH: $seqlen vs ",length($sequence) if $badseq;
-	print " QUALITY LENGTH MISMATCH: $seqlen vs ",length($quality) if $badqual;
+	print " SEQUENCE LENGTH MISMATCH: $seqlen vs ",length($sequence), " ($zseqlen compressed)" if $badseq;
+	print " QUALITY LENGTH MISMATCH: $seqlen vs ",length($quality), " ($zqlen compressed)" if $badqual;
 	print "\n";
     }
 }
