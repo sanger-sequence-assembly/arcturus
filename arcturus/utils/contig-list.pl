@@ -21,11 +21,13 @@ my $fasta;
 my $fofn;
 my $verbose;
 my $metadataonly = 0;
+my $parents;
 my $loadcmaps;
 my $project;
+my $union;
 
 my $validKeys  = "organism|instance|contig|fofn|read|tag|short|cmaps|".
-                 "project|fasta|verbose|help";
+                 "project|fasta|delayed|extended|verbose|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -50,7 +52,12 @@ while (my $nextword = shift @ARGV) {
 
     $verbose      = 1            if ($nextword eq '-verbose');
 
+    $parents      = 1            if ($nextword eq '-short');
     $metadataonly = 1            if ($nextword eq '-short');
+
+    $metadataonly = 1            if ($nextword eq '-delayed');
+
+    $union        = 1            if ($nextword eq '-extended');
 
     $loadcmaps    = 1            if ($nextword eq '-cmaps');
 
@@ -63,7 +70,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging();
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -146,7 +153,7 @@ foreach my $contig (@contigs) {
 #    print "Adding contig-to-contig mappings\n";
 #    $contig->getContigToContigMapping(1) if $loadcmaps;
 #    $contig->getParentContigs(1) if $loadcmaps;
-    if ($metadataonly) {
+    if ($parents) {
         my $full = 1;
         print STDOUT "\n\n";
         print STDOUT $contig->metaDataToString($full);
@@ -165,6 +172,7 @@ foreach my $contig (@contigs) {
         $contig->writeToFasta(*STDOUT,*STDOUT);
     } 
     else {
+        $contig->getReads(1,nounion=>0) if $union;
         $contig->writeToCaf(*STDOUT); 
     }
 }
@@ -212,6 +220,8 @@ sub showUsage {
     print STDERR "-contig\t\tContig ID\n";
     print STDERR "-fofn\t\tfilename with list of contig IDs to be included\n";
     print STDERR "-fasta\t\tOutput in fasta format\n";
+    print STDERR "-short\t\t(no value) only metadata & parents\n";
+    print STDERR "-delayed\t(no value) using delayed loading\n";
     print STDERR "-verbose\t(no value) \n";
     print STDERR "\n";
 
