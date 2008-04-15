@@ -31,9 +31,10 @@ my $verbose;
 my $notags;
 my $debug;
 my $full;
+my $all;
 
 my $validKeys  = "organism|o|instance|i|readname|read_id|seq_id|version|".
-                 "unassembled|fofn|chemistry|caf|fasta|quality|full|".
+                 "unassembled|fofn|chemistry|caf|fasta|quality|full|all|".
                  "clip|mask|screen|notags|verbose|debug|help|h";
 
 while (defined(my $nextword = shift @ARGV)) {
@@ -79,6 +80,8 @@ while (defined(my $nextword = shift @ARGV)) {
     $caf         = 1            if ($nextword eq '-caf');
 
     $full        = 1            if ($nextword eq '-full');
+
+    $all         = 1            if ($nextword eq '-all');
 
     $quality     = 1            if ($nextword eq '-quality');
 
@@ -199,6 +202,7 @@ else {
 
 my %option;
 $option{qualitymask} = $mask if $mask;
+$option{all} = 1 if $all;
 
 foreach my $read (@reads) {
 
@@ -234,6 +238,7 @@ exit;
 sub list {
     my $read = shift;
     my $rdir = shift; # if rdir defined, do full chemistry
+    my %options = @_;
 
     my $break = "\n";
 
@@ -250,7 +255,7 @@ sub list {
     $L{clone}      = $read->getClone || '';
    
     $L{chemistry}  = $read->getChemistry;
-    my $ta = $read->getTraceArchiveIdentifier(1); # list full info in db
+    my $ta = $read->getTraceArchiveIdentifier(asis=>1); # list info as in db
     $ta =~ s/\~\w+\/// if $ta; # remove possibly added ~name
     $L{traceserver} = $ta;
     if ($rdir && $ta) {
@@ -269,13 +274,16 @@ sub list {
 
     foreach my $item (@items) {
         my $value = $L{$item};
-        next unless defined $value;
+        next unless (defined ($value) || $options{all});
         printf ("%12s  ",$item);
         if (ref($value) eq 'ARRAY') {
             print "@$value".$break;
         }
-        else {
+        elsif (defined($value)) {
             print $value.$break;
+	}
+        else {
+            print $break;
         }
     }     
 
