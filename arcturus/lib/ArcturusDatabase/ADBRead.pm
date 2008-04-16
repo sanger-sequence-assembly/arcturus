@@ -925,7 +925,7 @@ sub getReadsForContig {
 # TEMPLATE is to be prefered; the default setting is not to use the union.  
 
     my @bindvalues;
-
+ 
     my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
               . "$this->{read_attributes},$this->{template_addons}"
               . "  from MAPPING,SEQ2READ,READINFO,TEMPLATE"
@@ -952,7 +952,7 @@ sub getReadsForContig {
               . "   and MAPPING.contig_id = ?";
         push @bindvalues,$cid;
     }
-    
+
     my $sth = $dbh->prepare_cached($query);
 
     my $nr = $sth->execute(@bindvalues) || &queryFailed($query,@bindvalues);
@@ -992,7 +992,6 @@ sub getReadsForContig {
 
 # add the trace archive reference
 
-#    $options{notrace} = 1;
     $this->getTraceArchiveIdentifierForReads(\@reads) unless $options{notrace};
 
 # add the sequence (in bulk) unless delayed loading is used
@@ -1752,7 +1751,7 @@ sub getTraceArchiveIdentifierForReads {
 # the remaining Read objects have no trace ref; reset to defined but 0
 
     foreach my $read_id (keys %$rids) {
-print STDOUT "trace reference set to 0 for read $read_id\n";
+
         my $read = $rids->{$read_id};
 
         $read->setTraceArchiveIdentifier(0);    
