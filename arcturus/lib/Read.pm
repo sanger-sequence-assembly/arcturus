@@ -638,8 +638,9 @@ sub getTraceArchiveIdentifier {
 # if no trace archive reference found (i.e. null or 0), generate a default
     unless ($options{asis} || ($this->{TAI} && $this->{TAI} =~ /$readname/)) {
         $this->{TAI}  = $this->{readname};
-        if ($readname =~ /^[^\s\.]+\.[\w]+$/) { # sanger format
-            $this->{TAI} .= "SCF" unless ($readname =~ /gz$/);
+        if ($readname =~ /^[^\s\.]+\.[\w]+$/) { # sanger like format
+            $this->{TAI} .= "SCF" unless ($readname =~ /\.\w\w$/);
+#            $this->{TAI} .= "SCF" unless ($readname =~ /gz$/);
         } 
     }
     return $this->{TAI};
