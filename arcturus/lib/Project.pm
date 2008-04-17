@@ -140,12 +140,15 @@ sub addContigID {
 # import a contig ID
     my $this = shift;
     my $contigid = shift;
+#    my %options = @_;
 
     undef $this->{contigIDs} unless $contigid; # reset option
 
     $this->{contigIDs} = [] unless defined $this->{contigIDs};
 
     push @{$this->{contigIDs}}, $contigid if $contigid;
+
+print STDOUT "added contigID $contigid to project : o  @_\n" if @_;
 }
 
 sub getContigIDs {
@@ -498,7 +501,7 @@ sub writeContigsToFasta {
             print STDERR "quality clipping ".$this->getContigName()."\n";
             my $status = $contig->deleteLowQualityBases(nonew=>1,%options);
             unless ($status) {
- 	        print STDERR "No quality clipped for ".$this->getContigName()."\n";
+ 	        print STDERR "No quality clipped for ".$contig->getContigName()."\n";
 	    }
         }
 
