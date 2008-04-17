@@ -205,16 +205,17 @@ sub hasNewContigs {
 
 # return true if the number of contigs or the last elements are different  
 
-print STDERR "Project->hasNewContigs p:".scalar(@$previouscontigids)
-            ." c:".scalar(@$currentcontigids)."\n";
+#print STDERR "Project->hasNewContigs p:".scalar(@$previouscontigids)
+#            ." c:".scalar(@$currentcontigids)."\n";
+ 
     return 1 if (@$previouscontigids != @$currentcontigids);
 
     my $l = scalar(@$previouscontigids) - 1; # last element
 
     return 1 if ($previouscontigids->[$l] != $currentcontigids->[$l]);
 
-print STDERR "No new contigs loaded\n";
-return 1; # until introduction
+#print STDERR "No new contigs loaded\n";
+
     return 0; # there are no new contigs
 }
 
@@ -456,7 +457,7 @@ sub writeContigsToCaf { # TO BE DEPRECATED
     return $export,$errors,$report;
 }
 
-sub writeContigsToFasta { # TO BE DEPRECATED
+sub writeContigsToFasta {
 # write DNA of this read in FASTA format to FILE handle
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
@@ -487,8 +488,27 @@ sub writeContigsToFasta { # TO BE DEPRECATED
             my %eoption = (cliplevel=>$options{endregiontrim});
             $contig->endRegionTrim(%eoption);
 	}
+# get a masked version of the current consensus
+        if ($options{endregiononly}) {
+            $contig->extractEndRegion(nonew=>1,%options);
+        }
+# apply quality clipping
+        if ($options{qualityclip}) {
+# get a clipped version of the current consensus
+            print STDERR "quality clipping ".$this->getContigName()."\n";
+            my $status = $contig->deleteLowQualityBases(nonew=>1,%options);
+            unless ($status) {
+ 	        print STDERR "No quality clipped for ".$this->getContigName()."\n";
+	    }
+        }
 
-        if ($contig->writeToFasta($DFILE,$QFILE,%options)) {
+        my %woptions;
+        foreach my $option ('readsonly','gap4name','minNX') {
+	    next unless defined $options{$option};
+            $woptions{$option} = $options{$option};
+	}
+
+        if ($contig->writeToFasta($DFILE,$QFILE,%woptions)) {
 # writeToFasta returns 0 for no errors
             $report .= "FAILED to export contig $contig_id\n";
             $errors++;
