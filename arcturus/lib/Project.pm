@@ -498,7 +498,7 @@ sub writeContigsToFasta {
 # apply quality clipping
         if ($options{qualityclip}) {
 # get a clipped version of the current consensus
-            print STDERR "quality clipping ".$this->getContigName()."\n";
+            print STDERR "quality clipping ".$contig->getContigName()."\n";
             my $status = $contig->deleteLowQualityBases(nonew=>1,%options);
             unless ($status) {
  	        print STDERR "No quality clipped for ".$contig->getContigName()."\n";
