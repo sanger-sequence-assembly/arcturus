@@ -22,18 +22,19 @@ my ($project,$fopn,$assembly,$problem,$gap4name,$version);
 
 my ($ioport,$perl,$script); $perl = 1; # default
 
-my ($delayed,$batch,$babel,$pcs3,$subdir,$superuser);
+my ($delayed,$batch,$subdir,$superuser); my ($babel,$pcs3);
 
 my ($verbose,$confirm,$debug,$minerva);
 
-my $validKeys  = "organism|o|instance|i|project|p|assembly|a|fopn|fofn|gap4name|"
-               . "import|export|script|noperl|problem|"
+my $validKeys  = "organism|o|instance|i|"
+               . "project|p|assembly|a|fopn|fofn|gap4name|"
+               . "import|export|script|noperl|problem|passon|po|"
                . "batch|nobatch|delayed|subdir|sd|r|superuser|su|"
                . "verbose|debug|minerva|confirm|submit|help|h";
 
 my $host = $ENV{HOST};
 
-$validKeys .= "babel|pcs3|" if ($host =~ /pcs/);
+# $validKeys .= "babel|pcs3|" if ($host =~ /pcs/); obsolete
 
 while (my $nextword = shift @ARGV) {
 
@@ -91,13 +92,17 @@ while (my $nextword = shift @ARGV) {
         $superuser = 1;
     }              
 
-    $babel        = 1              if ($nextword eq '-babel');
-    $pcs3         = 0              if ($nextword eq '-babel');
-    $pcs3         = 1              if ($nextword eq '-pcs3');
-    $babel        = 0              if ($nextword eq '-pcs3');
+#    $babel        = 1              if ($nextword eq '-babel');
+#    $pcs3         = 0              if ($nextword eq '-babel');
+#    $pcs3         = 1              if ($nextword eq '-pcs3');
+#    $babel        = 0              if ($nextword eq '-pcs3');
+
+    $minerva      = 1              if ($nextword eq '-minerva');
+    if ($nextword eq '-passon' || $nextword eq '-po') {
+        last;                        
+    }
 
     $verbose      = 1              if ($nextword eq '-verbose');
-    $minerva      = 1              if ($nextword eq '-minerva');
     $debug        = 1              if ($nextword eq '-debug');
 
     $confirm      = 1              if ($nextword eq '-confirm');
@@ -306,6 +311,7 @@ foreach my $project (@projects) {
             $command .= "-su " if $superuser;
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
+	    $command .= " @ARGV" if @ARGV; # passed on to import script
 	}
         else {
 # shell script
@@ -316,6 +322,7 @@ foreach my $project (@projects) {
                 $command .= "$problem ";
                 $command .= "$script" if $script;
 	    }
+	    $command .= " @ARGV" if @ARGV; # passed on to import script
 	}
 # add in perl script: gap4 name different from project, list of contigs etc
         $gap4name = $project unless $gap4name;
@@ -337,12 +344,14 @@ foreach my $project (@projects) {
             $command .= "-rundir $currentpwd ";
             $command .= "-debug " if $debug;
             $command .= "-minerva " if $minerva;
+	    $command .= " @ARGV" if @ARGV; # passed on to export script
         }
         else {
 # shell script
             $command .= "$utilsdir/exportprojectfromarcturus.csh ";
             $command .= "$instance $organism $project ";
             $command .= "$script" if $script;
+	    $command .= " @ARGV" if @ARGV; # passed on to export script
 # add in perl script: gap4 name different from project
             $message .= "to gap4 database\n   $currentpwd/$project.A";
 	}
