@@ -163,6 +163,11 @@ sub getReadNamesToLoad {
 
     my $sth = $dbh->prepare($query);
 
+    unless ($sth) {
+        print STDERR "FAILED $query:\nDBI::errstr=$DBI::errstr";
+        return [];
+    }
+
     $sth->execute();
 
     my $readlist = [];
