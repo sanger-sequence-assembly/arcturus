@@ -198,7 +198,7 @@ if ($rundir) {
 	}
         system("chmod g+w $rundir");
     }         
-    print STDERR "Changing work directory from $pwd to $rundir\n";
+#    print STDERR "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
     $pwd = Cwd::cwd();
 }
