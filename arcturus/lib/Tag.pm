@@ -610,7 +610,7 @@ sub writeToCaf {
 
 # various types of tag, NOTE and ANNO are two special cases
 
-    my $host = $this->getHostClass();
+    my $host = $this->getHostClass() || 'Contig'; # if no host, assume contig
 
     my $string = "Tag $type ";
 
@@ -618,8 +618,8 @@ sub writeToCaf {
 # GAP4 NOTE tag, no position info
     }
 
-    elsif ($type eq 'ANNO' && (!$host || $host eq 'Contig')) {
-# if no host, assume it's a contig; contig annotation tags have special status
+    elsif ($options{anno2info} && ($type eq 'ANNO') && ($host eq 'Contig')) {
+# contig annotation tags may have special status
 # generate two tags, ANNO contains the systematic ID and comment
         $string .= "@pos ";
 # add the systematic ID
