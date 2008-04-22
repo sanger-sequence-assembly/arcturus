@@ -958,13 +958,17 @@ sub isEqual {
 # one of the comments is blank and the other is not
         return 0 unless $options{ignoreblankcomment};
 # fill in the blank comment where it is missing
-        $otag->setTagComment($atag->getTagComment()) if $options{copycom};
+        if ($options{copycom}) {
+            $otag->setTagComment($atag->getTagComment());
+	}
     }
     elsif  ($otag->getTagComment() =~ /\S/) {
 # one of the comments is blank and the other is not
         return 0 unless $options{ignoreblankcomment};
 # fill in the blank comment where it is missing
-        $atag->setTagComment($otag->getTagComment()) if $options{copycom};
+        if ($options{copycom}) {
+            $atag->setTagComment($otag->getTagComment());
+	}
     }
 
 # compare the tag sequence & name or (if no tag sequence name) systematic ID.
@@ -978,9 +982,9 @@ sub isEqual {
     }
     elsif ($atag->getTagSequenceName() =~ /\S/ || 
            $otag->getTagSequenceName() =~ /\S/) {
-# at least one of the tag sequence names is defined; then they must be equal
-	return 0 unless ($atag->getTagSequenceName() eq 
-                         $otag->getTagSequenceName());
+# at least one of the tag sequence names is defined; they must be equal unless '0'
+	return 0 if ($atag->getTagSequenceName() && $otag->getTagSequenceName()
+	          && $atag->getTagSequenceName() ne $otag->getTagSequenceName());
     }
 # neither tag has a tag sequence name defined, then consider the systematic ID
     elsif ($atag->getSystematicID() =~ /\S/ || 
@@ -1711,22 +1715,23 @@ sub sortTags {
 
 # sort the tags with increasing tag position
 
+    my $merge;
+
     if ($options{sort} && $options{sort} eq 'position') {
 # do a basic sort on start position
         @$tags = sort positionsort @$tags;
     }
     elsif ($options{sort} && $options{sort} eq 'full') {
 # do a sort on position and tag description in tagcomment
-        @$tags = sort mergesort @$tags     if $options{merge};
-        @$tags = sort fullsort  @$tags unless $options{merge};
+        $merge = $options{merge};
+        @$tags = sort mergesort @$tags     if $merge;
+        @$tags = sort fullsort  @$tags unless $merge;
     }
     elsif ($options{sort}) {
         $logger->error("invalid sorting option '$options{sort}' ignored");
     }
 
 # remove duplicate tags; in merge mode also consider overlapping tags
-
-    my $merge = $options{merge};
 
     my $n = 1;
     while ($n < scalar(@$tags)) {
@@ -1757,7 +1762,9 @@ sub sortTags {
         else {
 	    $n++;
 	}
-    }    
+    }
+# if tags (could) have been merged, now do a full sort
+    &sortTags($class,$tags,sort=>'full') if $merge;    
 }
 
 sub mergesort {
@@ -1775,7 +1782,7 @@ sub fullsort {
  or
    $a->getType()          cmp $b->getType()           # then on type
  or
-   $a->getTagComment()    cmp $b->getTagComment()     # then on the description first
+   $a->getTagComment()    cmp $b->getTagComment()     # then on the description
  or
    $a->getPositionRight() <=> $b->getPositionRight(); # finally on end position 
 }
@@ -2187,6 +2194,7 @@ sub verifyParameter {
 
     if (ref($object) eq 'ARRAY') {
 # test the first element (assuming all other are same ref type)
+        return 1 unless @$object;
         delete $options{class};
         return &verifyParameter($object->[0],$method,%options);
     }
