@@ -185,6 +185,7 @@ sub fetchContigIDs {
         $this->{contigIDs} = undef;
         foreach my $contigid (@$cids) {
             $this->addContigID($contigid);
+#            $this->addContigID($contigid,"Project->fetchContigIDs");
         }
     }
 
@@ -388,8 +389,8 @@ sub getGap4Name {
 # exporting of this project's contig as CAF or fasta file
 #-------------------------------------------------------------------    
   
-sub writeContigsToCaf { # TO BE DEPRECATED
-# write contigs to CAF
+sub writeContigsToCaf {
+# write all contigs in this project to CAF; standard project export
     my $this = shift;
     my $FILE = shift; # obligatory file handle
     my %options = @_; # frugal=> , logger=>
@@ -429,17 +430,6 @@ sub writeContigsToCaf { # TO BE DEPRECATED
             $errors++;
             next;
         }
-
-# to removed 
-        if ($options{endregiontrim}) {
-            my %eoption = (cliplevel=>$options{endregiontrim});
-            $contig->endRegionTrim($contig,%eoption);
-	}
-
-        if ($options{padded}) {
-            $contig = $contig->toPadded();
-	}
-# to here
 
         if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
             my $message= "FAILED to export contig $contig_id";
@@ -486,20 +476,22 @@ sub writeContigsToFasta {
             $errors++;
             next;
         }
-
-        if ($options{endregiontrim}) {
-            my %eoption = (cliplevel=>$options{endregiontrim});
-            $contig->endRegionTrim(%eoption);
-	}
-# get a masked version of the current consensus
-        if ($options{endregiononly}) {
-            $contig->extractEndRegion(nonew=>1,%options);
+# end region trimming
+        if (my $cliplevel = $options{endregiontrim}) {
+             $contig->endRegionTrim(cliplevel=>$cliplevel);
         }
 # apply quality clipping
         if ($options{qualityclip}) {
+            my %qoptions; # only quality clipping options
+            foreach my $option ('threshold','minimum','window','hqpm','symbols') {
+	        next unless defined $options{$option};
+                $qoptions{$option} = $options{$option};
+	    }
 # get a clipped version of the current consensus
-            print STDERR "quality clipping ".$contig->getContigName()."\n";
-            my $status = $contig->deleteLowQualityBases(nonew=>1,%options);
+#print STDERR "quality clipping ".$contig->getContigName()."\n";
+            my ($new,$status) = $contig->deleteLowQualityBases(nonew=>1,%qoptions);
+
+            $contig = $new if ($status);
             unless ($status) {
  	        print STDERR "No quality clipped for ".$contig->getContigName()."\n";
 	    }
