@@ -6,6 +6,8 @@ use Exporter;
 
 use ArcturusDatabase::ADBRead;
 
+use TagFactory::TagFactory;
+
 use Compress::Zlib;
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
@@ -542,6 +544,8 @@ sub putContig {
 # TODO BETTER: add entry to the contigtransfer table
                     $this->assignContigToProject($previous,$project);
                     $project->addContigID($contigid);
+#                    $project->addContigID($contigid,"ADBContig->putContig");
+#$log->warning("contig $contigid added (Project->addContigID)");
                 }
 
 # check / import tags for this contig
@@ -817,6 +821,7 @@ sub inheritProject {
             foreach my $project (@$projects) {
                 my $nolockcheck = ($lockcheck ? 0 : 1);
                 my ($cids,$msg) = $project->fetchContigIDs($nolockcheck);
+#???                $project->addContigID(0); # reset contig ID list
                 $project->addContig(0); # reset contig ID list
                 next unless ($cids);
                 foreach my $contigid (@$cids) {
@@ -2951,7 +2956,7 @@ sub putTagsForContig {
 # public method
     my $this = shift;
     my $contig = shift;
-    my %options = @_; # noload; noexistencetest; nokeep
+    my %options = @_; # noload; noexistencetest; nokeep; nomerge
 
     &verifyParameter($contig,"putTagsForContig");
 
@@ -2975,14 +2980,15 @@ sub putTagsForContig {
 
     my $original = scalar(@$otags); # the number of input tags
 
-    my $ctags = $contig->getTags(0,sort=>'full'); # as is; removed duplicates
+    my $merge = $options{nomerge} ? 0 : 1;
+
+    my $ctags = $contig->getTags(0,sort=>'full',merge=>$merge); # as is
 
     my $logger = $this->verifyLogger("putTagsForContig");
 
     if (my $removed = $original - scalar(@$ctags)) {
 # warning to output device
-        $logger->warning("$removed duplicate tags removed from contig "
-                        . $contigname);
+        $logger->warning("$removed duplicate tags removed from contig $contigname");
     }
 
 # copy the ordered $ctag array to keep all tags in $contig; nokeep option erases existing tags
@@ -3012,13 +3018,15 @@ sub putTagsForContig {
 
     my $dbh = $this->getConnection();
 
-    my $testexistence = ($options{noexistencetest} ? 0 : 1);
+    my $testexistence = $options{noexistencetest} ? 0 : 1;
 
     if ($testexistence && @$ctags) {
 
         $logger->debug("testing against existing Tags");
 
         my $etags = &fetchTagsForContigIDs($dbh,[($cid)]); # existing tags
+
+        TagFactory->sortTags($etags,sort=>'full'); # MySQL sort is case insensitive
     
 # delete the (possibly) existing tags from the ctags list 
 
@@ -3045,14 +3053,11 @@ sub putTagsForContig {
         }
     }
 
-#    $logger = $this->verifyLogger("putTagsForContig");
-
     $logger->info("new tags $contigname ".scalar(@$ctags),ss=>1);
 
     return 0 unless @$ctags; # no new tags 
 
-    return 0 if $options{noload};
-#    return scalar(@$ctags) if $options{noload}; # ??
+    return scalar(@$ctags) if $options{noload}; # number of new tags
     
     $this->getTagSequenceIDsForTags($ctags,autoload => 1); # ->ADBRead
 
@@ -3080,8 +3085,6 @@ sub getTagIDsForContigTags {
 
     my $logger = $this->verifyLogger('getTagIDsForContigTags');
 
-#$logger->debug("put Tags for ".scalar(@$tags)." tags");
-
     my ($dbh, $qsth,$isth,$usth, $query,$insert,$update);
 
     $dbh = $this->getConnection();
@@ -3102,8 +3105,10 @@ sub getTagIDsForContigTags {
            . "select tag_id,systematic_id,tag_seq_id"
            . "  from CONTIGTAG"
            . " where tagtype = ?"
-           . "   and systematic_id is not null and systematic_id = ?"
-           . "   and (tagcomment is null or tagcomment = '')"
+           . "   and systematic_id is not null"
+           . "   and systematic_id != ''" 
+           . "   and systematic_id = ?"
+#           . "   and (tagcomment is null or tagcomment = '')"
            . " limit 1";
 
     $qsth = $dbh->prepare($query);
@@ -3149,12 +3154,14 @@ sub getTagIDsForContigTags {
 
         my $rc = $qsth->execute(@binddata) || &queryFailed($query,@binddata);
 
+#$logger->warning("rc=$rc"); next;
+
         if ($rc > 0) {
             my ($tag_id,$systematic_id,$tag_seq_id) = $qsth->fetchrow_array();
 # test consistency of tag ID and tag seq ID
             my $existingtagid = $tag->getTagID();
             if ($existingtagid && $existingtagid != $tag_id) {
-                $logger->special("Inconsistent tag ID ($existingtagid "
+                $logger->special("Inconsistent contig tag ID ($existingtagid "
                                 ."vs $tag_id for '$tagcomment')",ss=>1);
                 $inconsistent++;
             }
@@ -3162,8 +3169,17 @@ sub getTagIDsForContigTags {
 # test consistency of tag sequence ID and tag seq ID
             my $existingseqid = $tag->getTagSequenceID();
             if ($existingseqid && $existingseqid != $tag_seq_id) {
-                $logger->special("Inconsistent tag sequence ID ($existingseqid "
-                                ."vs $tag_seq_id for '$tagcomment')",ss=>1);
+                if ($tag_seq_id) { # always flag this inconsistence
+                    $logger->special("Inconsistent tag sequence ID "
+                                    ."($existingseqid vs $tag_seq_id for "
+                                    ."'$tagcomment')",ss=>1);
+                }
+                else { # tag_seq_id in the database is 0
+                    $logger->info("Inconsistent tag sequence ID "
+                                  ."($existingseqid vs $tag_seq_id for "
+                                  ."'$tagcomment')",ss=>1);
+# update database value ??
+		}
                 $inconsistent++;
             }
             $tag->setTagSequenceID($tag_seq_id) if $tag_seq_id; # dbase value
