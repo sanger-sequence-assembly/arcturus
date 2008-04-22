@@ -465,14 +465,18 @@ sub getReads {
 # return a reference to the array of Read instances (can be empty)
     my $this = shift;
     my $load = shift; # set 1 for loading by delayed instantiation
+    my %options = @_;
  
 # delayed loading of reads (if required); without frugal flag, the read sequence 
 # itself will be loaded in bulk, with the flag by delayed loading when required 
 
     if (!$this->{Read} && $load && (my $SOURCE = $this->{SOURCE})) {
-        my $frugal = $this->{frugal} || 0;
-        $SOURCE->getReadsForContig($this,nosequence=>$frugal,caller=>'Contig');
-    }
+#        my $frugal = $this->{frugal} || 0;
+#        $SOURCE->getReadsForContig($this,nosequence=>$frugal,caller=>'Contig');
+        $options{nosequence} = $this->{frugal} || 0;
+        $options{caller} = 'Contig'; # for diagnostics
+        $SOURCE->getReadsForContig($this,%options);
+   }
     return $this->{Read};
 }
 
@@ -534,7 +538,6 @@ sub getTags {
 # sort tags and remove duplicates / merge coinciding tags
 
     if ($options{sort} || $options{merge}) {
-#        TagFactory->sortContigTags($this,%options); # ??
         ContigHelper->sortContigTags($this,%options);
     }
 
@@ -971,7 +974,8 @@ sub writeToCaf {
         my $tags = $this->getTags();
 # decide on which tags to export; default no annotation (assembly export)
         my $includetag;
-        my $excludetag = 'ANNO';
+#        my $excludetag = 'ANNO'; # default ?
+        my $excludetag;
         if ($options{alltags}) {
             undef $excludetag;
         }
@@ -1493,7 +1497,7 @@ sub deleteLowQualityBases {
     my %options = @_;
     &verifyKeys('deleteLowQualityBases',\%options, 
                 'threshold','minimum','window','hqpm','symbols',
-                'exportaschild','components');
+                'exportaschild','components','nonew');
     return ContigHelper->deleteLowQualityBases($this,%options);
 }
 
