@@ -2688,7 +2688,7 @@ sub putTraceArchiveIdentifierForRead {
 
     &verifyParameter($read,'putTraceArchiveIdentifierForRead');
 
-    my $TAI = $read->getTraceArchiveIdentifier() || return; # item absent
+    my $TAI = $read->getTraceArchiveIdentifier(asis=>1) || return; # if absent
 
     my $readid = $read->getReadID() || return; # must have readid defined
 
