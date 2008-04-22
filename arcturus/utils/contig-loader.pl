@@ -1188,7 +1188,8 @@ sub tagList {
 
     my @STAGS = ('ADDI','AFOL','AMBG','CVEC','SVEC','FEAT','REPT',
                  'MALX','MALI','XMAT','OLIG','COMP','STOP','PCOP',
-                 'LOW' ,'MOSC','STOL','TEST','CLIP','IGNS','IGNC');
+                 'LOW' ,'MOSC','STOL','TEST','CLIP','IGNS','IGNC',
+                 'ASIT');
 
 # edit tags
 
