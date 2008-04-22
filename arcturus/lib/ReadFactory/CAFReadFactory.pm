@@ -84,7 +84,7 @@ print STDERR "includelist:$includelist\n";
 # getNextRead returns the Read instance stored in the superclass
 #------------------------------------------------------------
 
-sub getNextRead {
+sub getNextRead { # OBSOLETE,  to be deprecated
 # pick up the Read reference from the auxiliary data
     my $this = shift;
 
@@ -114,7 +114,7 @@ sub CAFFileParser {
     my $excludehash = shift;
     my $includelist = shift;
 
-    print STDERR "Include $includelist \n" if $includelist;
+#    print STDERR "Include $includelist \n" if $includelist;
 
     undef my %reads; # hash for temporary DNA and Quality data storage
 
@@ -200,7 +200,7 @@ sub CAFFileParser {
                 if ($entry == 2) {
                     $this->logwarning("Edited read $object detected");
 # allow acceptance only if objectname explicitly specified
-                    unless (defined($object) && defined($includelist) && $includelist =~ /\b$object\b/) {
+                    unless (defined($includelist) && $includelist =~ /\b$object\b/) {
                         $this->logwarning("Edited read $object cannot be loaded");
                         delete $reads{$object};
                         $type = 0; # ignore edited data
