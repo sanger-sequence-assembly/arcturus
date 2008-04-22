@@ -380,20 +380,13 @@ $loadoptions{skipqualityclipcheck} = 1 if $skipqualityclipcheck;
 
 $readloadlist = $factory->getReadNamesToLoad() unless @$readloadlist;
 
-$logger->warning(scalar(@$readloadlist)." to be processed");
+$logger->warning(scalar(@$readloadlist)." reads to be processed");
 
 foreach my $readname (@{$readloadlist}) {
     if ($adb->hasRead(readname=>$readname)) {
  	$logger->info("read $readname is already loaded");
-      $logger->warning("read $readname is already loaded");
         next if (!$noloading && !$onlyloadtags && !$update); # noloading implies test
     }
-
-#    if (!$noloading && !$onlyloadtags && $adb->hasRead(readname=>$readname)) {
-# already stored
-#	$logger->info("read $readname skipped");
-#	next;
-#    }
 
     my $read = $factory->getReadByName($readname);
 
@@ -424,20 +417,54 @@ foreach my $readname (@{$readloadlist}) {
 #	 }
         next if $noloading; # test mode
         $adb->putTagsForReads([($read)]);
+	$processed++;
         next;
     }
 
     elsif ($update) {
 
         $loadoptions{execute} = 1;
-$loadoptions{execute} = 0; # temp
+
         $loadoptions{execute} = 0 if $noloading; # test option 
+
+# "repair" missing process status data (is implied by presence in database)
+
+        $read->setProcessStatus('PASS') unless $read->getProcessStatus();
+
+# "repair" missing ligation data if an insert size is available
+
+#        unless ($read->getLigation() || $read->isEdited()) {
+        unless ($read->getLigation()) {
+            my $ligation = $read->getClone();
+            $ligation = "foreign" unless $ligation;
+            if (my $insertsize = $read->getInsertSize()) {
+                my ($sil,$sih) = @$insertsize;
+	        $ligation .= "-$sil-$sih";
+	        $read->setLigation($ligation);
+            }
+	}
+
+        my $report = $adb->testRead($read);
+        $logger->warning("$readname $report") if ($report =~ /fail/i);
+        $logger->warning("$readname $report");
 
         my ($success,$errmsg) = $adb->updateRead($read, %loadoptions);
 
-        $logger->severe("Unable to update read $readname: $errmsg") unless $success;
+        if (!$success) {
+            $logger->severe("Unable to update read $readname : $errmsg");
+            next;
+	}
+        elsif ($success == 1) {
+            $logger->warning("read $readname: $errmsg");
+            $processed++;
+	}
+        else {
+            $logger->info("read $readname: $errmsg");
+        }
 
-#        $adb->putTagsForReads([($read)]) if $read->hasTags();
+        $adb->putTagsForReads([($read)]) if $read->hasTags();
+
+        next;
     }
 
     elsif ($noloading) {
@@ -456,6 +483,8 @@ $loadoptions{execute} = 0; # temp
     my ($success,$errmsg) = $adb->putRead($read, %loadoptions);
 
     $logger->severe("Unable to put read $readname: $errmsg") unless $success;
+    
+    $processed++ if $success;
 
     $adb->putTraceArchiveIdentifierForRead($read) if $success;
 
@@ -559,6 +588,8 @@ sub showUsage {
     print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
     print STDERR "-skipqualityclipcheck\t (for reads without quality clipping)\n";
     print STDERR "-isconcensusread (-icr; for artificial reads) \n";
+    print STDERR "\n";
+    print STDERR "-repair\t\n";
     print STDERR "\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
     print STDERR "-info\t\t(no value) for some progress info\n";
