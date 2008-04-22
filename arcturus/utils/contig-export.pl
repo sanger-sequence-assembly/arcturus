@@ -271,6 +271,7 @@ elsif (defined($caffile)) {
     $woptions{noreads} = 1 if $noreads;
     $woptions{qualitymask} = $masking if $masking;
     $woptions{qualitymask} = $msymbol if $msymbol; # overrides
+    $woptions{alltags} = 1;
 }
 
 my $errorcount = 0;
