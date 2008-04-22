@@ -460,6 +460,7 @@ $logger->debug("map $ori2new\n".$ori2new->toString(text=>'ASSEMBLED'));
 
 # build the new contig
 
+#    $contig = $contig->copy(%coptions) unless $options{nonew}; # ??
     my $clippedcontig = new Contig();
 
 # add descriptors and sequence
@@ -3097,9 +3098,9 @@ $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
 
     $logger->info("Doing the remapping without split allowed",skip=>2);
 
-#---------------------------------------------------------------------------------------
-# remap the tags which may not be split and can have frameshifts after remapping
-#---------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+# remap tags which may not be split and can have frameshifts after remapping
+#------------------------------------------------------------------------------
 
     foreach my $ptag (@$ptags) {
 # apply include or exclude filter
@@ -3110,9 +3111,21 @@ $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
         next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
 
         my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse');
-#        my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
-	$logger->warning("tag $ptag could not be re-mapped (1)") unless $tptags;
-        next unless ($tptags && @$tptags);
+# my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
+        unless ($tptags && @$tptags) {
+    	    $logger->info("tag $tagtype could not be re-mapped (1)");
+# test
+if ($options{testremap}) {
+    $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
+    unless ($tptags && @$tptags) {
+        $logger->info("tag $tagtype could not be re-mapped (2)");
+        next;
+    }
+}
+next unless $options{testremap};
+#	    next;
+	}
+
         my $tptag = $tptags->[0]; 
 
  $logger->fine("tag on parent :". $ptag->writeToCaf(),pskip=>1);
@@ -3125,8 +3138,8 @@ $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
             my $comment = $tptag->getComment();
             next unless ($comment =~ /split|truncated|frame|shift/);
             my $tagcomment = $tptag->getTagComment();
-            my $newcomment = "Alteration detected of previous version of tag at this position\\n\\"
-	  	           . "$tagcomment \\n\\$comment";
+            my $newcomment = "Alteration detected of previous version of tag "
+                           . "at this position\\n\\$tagcomment \\n\\$comment";
 # rename the tag type and amend the comment
             $tptag->setType($newtagtype);
             $tptag->setTagComment($newcomment);
