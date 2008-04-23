@@ -351,7 +351,7 @@ foreach my $user (sort keys %roles) {
 	    print STDERR " $priv";
 	}
     } else {
-	print STDERR "\nWARNING: No privileges defined for user $user, role $role\n";
+	print STDERR " *** NO PRIVILEGES DEFINED ***";
     }
 
     print STDERR "\n";
@@ -365,11 +365,11 @@ $dbh->disconnect();
 
 my $dn = "cn=$organism,cn=$instance,$rootdn";
 
-print STDERR "### Creating an LDAP entry\n$dn ... ";
+print STDERR "### Creating an LDAP entry $dn ... ";
 
 my $ldappw = &getPassword("Enter password for LDAP user", "LDAP_ADMIN_PW");
 
-if (!defined($dbpw) || length($dbpw) == 0) {
+if (!defined($ldappw) || length($ldappw) == 0) {
     print STDERR "No password was entered\n";
     exit(2);
 }
@@ -399,15 +399,21 @@ my $result = $ldap->add($dn,
 			      ]
 		     );
 
-$result->code && warn "failed to add entry: ", $result->error;
-
-print STDERR "OK\n\n";
+if ($result->code) {
+    print STDERR " FAILED: ", $result->error, "\n";
+    exit(1);
+} else {
+    print STDERR " OK\n";
+}
 
 if (defined($aliasdn)) {
+    &checkOrCreateLDAPNode($aliasdn, $rootdn, $ldap);
+
+    print STDERR "### Creating an LDAP alias $aliasdn ...";
+
+
     my $aliasdn = "cn=$organism," . $aliasdn . ",$rootdn";
     
-    print STDERR "### Creating an LDAP alias\n$aliasdn ... ";
-
     my $result = $ldap->add($aliasdn,
 		     attr => ['cn' => $organism,
 			      'aliasedObjectName' => $dn,
@@ -418,14 +424,70 @@ if (defined($aliasdn)) {
 			      ]
 		     );
 
-    $result->code && warn "failed to add entry: ", $result->error;
+    if ($result->code) {
+	print STDERR " FAILED: ", $result->error, "\n";
+    } else {
+	print STDERR " OK\n";
+    }
 }
 
 $mesg = $ldap->unbind;
 
-print STDERR "OK\n\n";
+print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
 
 exit(0);
+
+sub checkOrCreateLDAPNode {
+    my ($aliasdn, $rootdn, $ldap, $junk) = @_;
+
+    my @dnparts = split(/,/, $aliasdn);
+
+    my $base = $rootdn;
+
+    while (my $part = pop @dnparts) {
+	print STDERR "\nSearching $base for $part ... ";
+
+	$mesg = $ldap->search(base   => $base,
+			      scope => 'one',
+			      deref => 'never',
+			      filter => "($part)"
+			      );
+
+	die "LDAP search returned a null message" if !defined($mesg);
+
+	$mesg->code && die $mesg->error;
+
+	my @entries = $mesg->all_entries;
+
+	if (scalar(@entries) > 0) {
+	    print STDERR "OK\n";
+	} else {
+	    print STDERR "NOT FOUND\n";
+	    
+	    my $dn = $part . "," . $base;
+	    print STDERR "Attempting to create $dn ... ";
+	    
+	    my ($lhs,$rhs) = split(/=/, $part);
+	    
+	    my $result = $ldap->add($dn,
+				    attr => [ $lhs => $rhs,
+					      'objectClass' => [ 'top', 'javaContainer' ]
+					      ]
+				    );
+	    
+	    if ($result->code) {
+		print STDERR "FAILED: ", $result->error, "\n";
+		exit(1);
+	    } else {
+		print STDERR "OK\n";
+	    }
+	}
+	
+	$base = $part . "," . $base;
+    }
+
+    print STDERR "\n";
+}
 
 sub getPassword {
     my $prompt = shift || "Enter password:";
@@ -481,5 +543,5 @@ sub showUsage {
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
     print STDERR "    -aliasdn\t\tLDAP DN (relative to root DN) for alias\n";
     print STDERR "    -projects\t\tProjects to add to the database\n";
-    print STDERR "    -directory\tBase directory for projects\n";
+    print STDERR "    -directory\t\tBase directory for projects\n";
 }
