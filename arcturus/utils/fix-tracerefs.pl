@@ -61,7 +61,7 @@ my $condition;
 if ($fixwhat eq 'missing') {
     $condition = "traceref is null";
 } elsif ($fixwhat eq 'filerefs') {
-    $condition = "traceref not regexp '^[[:digit:]]\$'";
+    $condition = "traceref not regexp '^[[:digit:]]+\$'";
 } else {
     $condition = "0==1";
 }
