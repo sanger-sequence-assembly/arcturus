@@ -320,7 +320,7 @@ elsif ($source eq 'traceserver') {
 	print STDERR "Automatic minreadid invoked\n";
 	my $dbh = $adb->getConnection();
 
-	my $query = "select max(read_id) from TRACEARCHIVE";
+	my $query = "select max(traceref) from TRACEARCHIVE";
 
 	my $sth = $dbh->prepare($query);
 	&db_die("prepare($query) failed");
@@ -328,32 +328,16 @@ elsif ($source eq 'traceserver') {
 	$sth->execute();
 	&db_die("prepare($query) failed");
 
-	my ($maxreadid) =  $sth->fetchrow_array();
+	my ($traceref) =  $sth->fetchrow_array();
 
 	$sth->finish();
 
-	if (defined($maxreadid)) {
-	    print STDERR "\tMax read_id id $maxreadid\n";
-
-	    $query = "select traceref from TRACEARCHIVE where read_id = $maxreadid";
-
-	    $sth = $dbh->prepare($query);
-	    &db_die("prepare($query) failed");
-
-	    $sth->execute();
-	    &db_die("prepare($query) failed");
-
-	    my ($traceref) =  $sth->fetchrow_array();
-
-	    $sth->finish();
-
-	    if ($traceref =~ /^\d+$/) {
-		print STDERR "\tSetting minreadid to $traceref\n";
-		$PARS{'minreadid'} = $traceref;
-	    } else {
-		print STDERR "\tUndefining minreadid\n";
-		undef $PARS{'minreadid'};
-	    }
+	if (defined($traceref)) {
+	    print STDERR "\tSetting minreadid to $traceref\n";
+	    $PARS{'minreadid'} = $traceref;
+	} else {
+	    print STDERR "\tCould not determine minreadid automatically\n";
+	    undef $PARS{'minreadid'};
 	}
     }
 
@@ -587,7 +571,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-skipaspedcheck\t (for reads without asped date)\n";
     print STDERR "-skipqualityclipcheck\t (for reads without quality clipping)\n";
-    print STDERR "-isconcensusread (-icr; for artificial reads) \n";
+    print STDERR "-isconsensusread (-icr; for artificial reads) \n";
     print STDERR "\n";
     print STDERR "-repair\t\n";
     print STDERR "\n";
@@ -612,7 +596,7 @@ sub showUsage {
 	print STDERR "-aspedafter\tasped date guillotine\n";
 	print STDERR "-minreadid\tminimum Oracle read ID\n";
 	print STDERR "-maxreadid\tmaximum Oracle read ID\n";
-	print STDERR "-status\tAsp processing status (default is PASS)\n";
+	print STDERR "-status\t\tAsp processing status (default is PASS)\n";
 	print STDERR "\n";
     }
     if (!$source || $source eq 'expfiles') {
@@ -627,7 +611,7 @@ sub showUsage {
 	print STDERR "Parameters for TraceServer input:\n";
 	print STDERR "\n";
 	print STDERR "-group\t\tMANDATORY: name of trace server group to load\n";
-	print STDERR "-minreadid\tminimum trace server read ID\n";
+	print STDERR "-minreadid\tminimum trace server read ID (use 'auto' to auto-detect)\n";
 	print STDERR "\n";
     }
 
