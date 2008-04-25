@@ -289,7 +289,8 @@ public class CalculateConsensus {
 		}
 		ps.println(")");
 
-		String[] padmodes = { "-pad_is_n", "-pad_is_star", "-pad_is_dash", "-no_pad" };
+		String[] padmodes = { "-pad_is_n", "-pad_is_star", "-pad_is_dash",
+				"-no_pad" };
 
 		for (int i = 0; i < padmodes.length; i++)
 			ps.println("\t" + padmodes[i]);
@@ -407,10 +408,19 @@ public class CalculateConsensus {
 	}
 
 	private void processMapping(Mapping mapping, int cpos) {
-		int rpos = mapping.getReadOffset(cpos);
+		int rpos = -1;
+		int qual = -1;
+		
+		try {
+			rpos = mapping.getReadOffset(cpos);
 
-		int qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
-				.getPadQuality(cpos);
+			qual = (rpos >= 0) ? mapping.getQuality(rpos) : mapping
+					.getPadQuality(cpos);
+		} catch (ArrayIndexOutOfBoundsException e) {
+			e.printStackTrace();
+			System.err.println("Mapping " + mapping);
+			System.exit(1);
+		}
 
 		if (qual <= 0)
 			return;
