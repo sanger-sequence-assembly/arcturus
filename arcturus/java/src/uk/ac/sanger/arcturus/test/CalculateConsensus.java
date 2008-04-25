@@ -12,7 +12,7 @@ import java.io.*;
 import java.sql.*;
 
 public class CalculateConsensus {
-	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_N;
+	private final int defaultPaddingMode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
 
 	private final int MAX_ALLOWED_PACKET = 8 * 1024 * 1024;
 
@@ -99,6 +99,9 @@ public class CalculateConsensus {
 
 			if (args[i].equalsIgnoreCase("-pad_is_star"))
 				mode = Gap4BayesianConsensus.MODE_PAD_IS_STAR;
+
+			if (args[i].equalsIgnoreCase("-pad_is_dash"))
+				mode = Gap4BayesianConsensus.MODE_PAD_IS_DASH;
 
 			if (args[i].equalsIgnoreCase("-no_pad"))
 				mode = Gap4BayesianConsensus.MODE_NO_PAD;
@@ -286,7 +289,7 @@ public class CalculateConsensus {
 		}
 		ps.println(")");
 
-		String[] padmodes = { "-pad_is_n", "-pad_is_star", "-no_pad" };
+		String[] padmodes = { "-pad_is_n", "-pad_is_star", "-pad_is_dash", "-no_pad" };
 
 		for (int i = 0; i < padmodes.length; i++)
 			ps.println("\t" + padmodes[i]);
