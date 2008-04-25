@@ -23,8 +23,9 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	public static final int MODE_PAD_IS_N = 0;
 	public static final int MODE_PAD_IS_STAR = 1;
 	public static final int MODE_NO_PAD = 2;
+	public static final int MODE_PAD_IS_DASH = 3;
 
-	private int mode = MODE_PAD_IS_N;
+	private int mode = MODE_PAD_IS_STAR;
 
 	private boolean pad_present = false;
 	private boolean best_is_current = true;
