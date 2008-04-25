@@ -22,6 +22,7 @@ my $fastafile;
 my $destdir;
 my $padton;
 my $padtox;
+my $padtodash;
 my $depad;
 my $fastafh;
 my $contigids;
@@ -61,6 +62,7 @@ while (my $nextword = shift @ARGV) {
 
     $padton = 1 if ($nextword eq '-padton');
     $padtox = 1 if ($nextword eq '-padtox');
+    $padtodash = 1 if ($nextword eq '-padtodash');
 
     $depad = 1 if ($nextword eq '-depad');
 
@@ -89,6 +91,9 @@ $padton = 0 if $depad;
 
 $padtox = 0 unless defined($padtox);
 $padtox = 0 if $depad;
+
+$padtodash = 0 unless defined($padtodash);
+$padtodash = 0 if $depad;
 
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
@@ -221,6 +226,9 @@ while(my @ary = $sth->fetchrow_array()) {
     } elsif ($padtox) {
 	# Convert pads to X ...
 	$sequence =~ s/[\*\-]/X/g;
+    } elsif ($padtodash) {
+	# Convert pads to dash
+	$sequence =~ s/\*/\-/g;
     }
 
     if ($ends && length($sequence) > 2 * $ends) {
@@ -327,15 +335,18 @@ sub showUsage {
     print STDERR "    -minlen\t\tMinimum length for contigs [default: 1000]\n";
     print STDERR "    -contigs\t\tComma-separated list of contig IDs [implies -minlen 0]\n";
     print STDERR "    -allcontigs\t\tSelect all contigs, not just from current set\n";
+    print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
+    print STDERR "    -include\t\tInclude contigs in these projects\n";
+    print STDERR "    -exclude\t\tExclude contigs in these projects\n";
+    print STDERR "    -usegap4name\tUse Gap4 name instead of contig ID\n";
+    print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
+    print STDERR "\n";
+    print STDERR "PADDING OPTIONS:\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
     print STDERR "    -padmap\t\tName of file for depadded-to-padded coordinate mapping\n";
     print STDERR "    -padton\t\tConvert pads to N\n";
     print STDERR "    -padtox\t\tConvert pads to X\n";
-    print STDERR "    -maxseqperfile\tMaximum sequence length per file\n";
-    print STDERR "    -include\t\tInclude contigs in these projects\n";
-    print STDERR "    -exclude\t\tExclude contigs in these projects\n";
-    print STDERR "    -usegap4name\t\tUse Gap4 name instead of contig ID\n";
-    print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
+    print STDERR "    -padtodash\t\tConvert pads to dashes\n";
 }
 
 sub getProjectIDs {
