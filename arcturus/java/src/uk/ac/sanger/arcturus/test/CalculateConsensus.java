@@ -222,17 +222,18 @@ public class CalculateConsensus {
 		Contig contig = adb.getContigByID(contig_id, flags);
 
 		PrintStream debugps = debug ? System.out : null;
+		
+		System.err.print("CONTIG " + contig_id + ": " + contig.getLength()
+				+ " bp, " + contig.getReadCount() + " reads ");
 
 		if (calculateConsensus(contig, algorithm, consensus, debugps)) {
 			long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024;
 			long clockStop = System.currentTimeMillis() - clockStart;
-			System.err.print("CONTIG " + contig_id + ": " + contig.getLength()
-					+ " bp, " + contig.getReadCount() + " reads, " + clockStop
-					+ " ms, " + usedMemory + " kb");
+			System.err.print(clockStop + " ms, " + usedMemory + " kb");
 			storeConsensus(contig_id, consensus, doUpdate);
 			System.err.println(doUpdate ? "    UPDATED" : "    STORED");
 		} else
-			System.err.println("Data missing, operation abandoned");
+			System.err.println("data missing, operation abandoned");
 
 		if (lowmem)
 			contig.setMappings(null);
@@ -418,7 +419,7 @@ public class CalculateConsensus {
 					.getPadQuality(cpos);
 		} catch (ArrayIndexOutOfBoundsException e) {
 			e.printStackTrace();
-			System.err.println("Mapping " + mapping);
+			System.err.println("Mapping " + mapping +", cpos " + cpos);
 			System.exit(1);
 		}
 
