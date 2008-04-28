@@ -29,6 +29,8 @@ my $template;
 my $projects;
 my $directory;
 
+my $nocreatedatabase = 0;
+
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
@@ -51,6 +53,8 @@ while (my $nextword = shift @ARGV) {
 
     $directory = shift @ARGV if ($nextword eq '-directory');
 
+    $nocreatedatabase = 1 if ($nextword eq '-nocreatedatabase');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -59,8 +63,13 @@ while (my $nextword = shift @ARGV) {
 
 unless (defined($instance) && defined($organism) && defined($dbhost)
 	&& defined($dbport) && defined($description) && defined($ldapurl)
-	&& defined($ldapuser) && defined($rootdn) && defined($template)) {
+	&& defined($ldapuser) && defined($rootdn)) {
     &showUsage("One or more mandatory parameters are missing");
+    exit(1);
+}
+
+unless (defined($template) || $nocreatedatabase) {
+    &showUsage("You must specify either -template DBNAME or -nocreatedatabase");
     exit(1);
 }
 
@@ -86,51 +95,27 @@ unless (defined($dbh)) {
     exit(3);
 }
 
-my $query = "select table_name from information_schema.tables where table_schema = '" . $template .
-    "' and table_type = 'BASE TABLE'";
+unless ($nocreatedatabase) { 
+    my $query = "select table_name from information_schema.tables where table_schema = '" . $template .
+	"' and table_type = 'BASE TABLE'";
 
-my $sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
+    my $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
 
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
 
-my @tables;
+    my @tables;
 
-while (my ($tablename) = $sth->fetchrow_array()) {
-    push @tables, $tablename;
-}
+    while (my ($tablename) = $sth->fetchrow_array()) {
+	push @tables, $tablename;
+    }
 
-$sth->finish();
+    $sth->finish();
 
-print STDERR "### Creating a new database $dbname ... ";
+    print STDERR "### Creating a new database $dbname ... ";
 
-$query = "create database $dbname";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-print STDERR "OK\n\n";
-
-print STDERR "### Switching to database $dbname ... ";
-
-$query = "use $dbname";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-print STDERR "OK\n\n";
-
-print STDERR "### Creating tables ...\n";
-
-foreach my $tablename (@tables) {
-    $query = "create table $tablename like $template.$tablename";
+    $query = "create database $dbname";
 
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
@@ -138,17 +123,43 @@ foreach my $tablename (@tables) {
     $sth->execute();
     &db_die("Failed to execute query \"$query\"");
 
-    print STDERR "\t$tablename\n";
-}
+    print STDERR "OK\n\n";
 
-print STDERR "\nOK\n\n";
+    print STDERR "### Switching to database $dbname ... ";
+
+    $query = "use $dbname";
+
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+
+    print STDERR "OK\n\n";
+
+    print STDERR "### Creating tables ...\n";
+
+    foreach my $tablename (@tables) {
+	$query = "create table $tablename like $template.$tablename";
+
+	$sth = $dbh->prepare($query);
+	&db_die("Failed to prepare query \"$query\"");
+
+	$sth->execute();
+	&db_die("Failed to execute query \"$query\"");
+
+	print STDERR "\t$tablename\n";
+    }
+
+    print STDERR "\nOK\n\n";
+}
 
 print STDERR "### Granting privileges to user arcturus ... ";
 
-$query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES," .
+my $query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES," .
     " LOCK TABLES, EXECUTE ON \`$dbname\`.* TO 'arcturus'\@'\%'";
 
-$sth = $dbh->prepare($query);
+my $sth = $dbh->prepare($query);
 &db_die("Failed to prepare query \"$query\"");
 
 $sth->execute();
@@ -538,10 +549,12 @@ sub showUsage {
     print STDERR "    -description\tDescription for LDAP entry\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
+    print STDERR "\t\t\t[Unless -nocreatedatabase has been specified]";
     print STDERR "\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
     print STDERR "    -aliasdn\t\tLDAP DN (relative to root DN) for alias\n";
     print STDERR "    -projects\t\tProjects to add to the database\n";
     print STDERR "    -directory\t\tBase directory for projects\n";
+    print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
 }
