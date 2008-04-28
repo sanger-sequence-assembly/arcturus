@@ -640,7 +640,6 @@ sub getTraceArchiveIdentifier {
         $this->{TAI}  = $this->{readname};
         if ($readname =~ /^[^\s\.]+\.[\w]+$/) { # sanger like format
             $this->{TAI} .= "SCF" unless ($readname =~ /\.\w\w$/);
-#            $this->{TAI} .= "SCF" unless ($readname =~ /gz$/);
         } 
     }
     return $this->{TAI};
@@ -856,12 +855,15 @@ sub writeCafSequence {
 
     return if $options{notags};
 
-    $options{annotag} = 1 unless defined $options{annotag};
-
     if (my $tags = $this->getTags()) {
-# tag selection?        
+# tag selection        
+        my %toptions = (annotag => 1); # default allow finishers annotation
+        foreach my $key ("annotag","infotag","anno2info") { # investigate other
+            $toptions{$key} = $options{$key} if defined $options{$key};
+        }
+
         foreach my $tag (@$tags) {
-            $tag->writeToCaf($FILE,%options); # allow finishers annotation
+            $tag->writeToCaf($FILE,%toptions);
         }
     }
 }
