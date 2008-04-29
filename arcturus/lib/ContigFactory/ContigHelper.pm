@@ -418,7 +418,7 @@ $logger->debug("ENTER @_");
 
     my $pads = &findlowquality($contig->getSequence(),
                                $contig->getBaseQuality(),
-                               $options{symbols},   # default 'ACGT'
+                               $options{symbols},   # default 'ACGTN-'
                                $options{threshold}, # default 20
                                $options{minimum},   # default 15
                                $options{hqpm},      # default 30
@@ -545,7 +545,7 @@ $log->debug("options  @_");
 
     my $pads = &findlowquality($sequence,           # ? no test DNA
                                $quality,
-                               $options{symbols},   # default 'ACGT'
+                               $options{symbols},   # default 'ACGTN-'
                                $options{threshold}, # default 20
                                $options{minimum},   # default 15
                                $options{hqpm},      # default 30
@@ -640,7 +640,7 @@ $logger->debug("ENTER @_");
 
     my $pads = &findlowquality($contig->getSequence(),
                                $contig->getBaseQuality(),
-                               $options{symbols},   # default 'ACGT'
+                               $options{symbols},   # default 'ACGTN-'
                                $options{threshold}, # default 20
                                $options{minimum},   # default 15
                                $options{hqpm},      # default 30
@@ -1142,14 +1142,20 @@ sub findlowquality {
 
 # options (and defaults if 0 or undef)
  
-    my $symbols               = shift || 'ACGT';
+    my $symbols               = shift || 'ACGTN-';
     my $threshold             = shift;
     my $minimum               = shift;
     my $highqualitypadminimum = shift;
     my $fwindow               = shift || 9;
-# check defaults if undef
-    $threshold = 20 unless defined($threshold);
-    $minimum = 15   unless defined($minimum);
+
+# put defaults if undef
+
+    $threshold             = 20 unless defined($threshold);
+    unless (defined($minimum) && defined($highqualitypadminimum)) {
+# default to Gap4 clipping
+        $minimum = 0; $highqualitypadminimum = 0;
+    }
+    $minimum               = 15 unless defined($minimum);
     $highqualitypadminimum = 30 unless defined($highqualitypadminimum);
 
     my $logger = &verifyLogger('findlowquality');
@@ -3111,7 +3117,7 @@ $logger->debug(scalar(@$newttags) . " updated tags on TARGET PT");
         next if ($tagtosplit && $tagtype =~ /\b$tagtosplit\b/i);
 
         my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse');
-# my $tptags = $ptag->remap($p2tmapping,nosplit=>'collapse',useold=>1);
+
         unless ($tptags && @$tptags) {
     	    $logger->info("tag $tagtype could not be re-mapped (1)");
 # test
