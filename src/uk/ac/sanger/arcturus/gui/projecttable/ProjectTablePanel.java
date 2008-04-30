@@ -16,6 +16,7 @@ import java.sql.SQLException;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Assembly;
+import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
 import uk.ac.sanger.arcturus.people.PeopleManager;
@@ -33,6 +34,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 	protected MinervaAbstractAction actionExportToGap4;
 	protected MinervaAbstractAction actionImportFromGap4;
 	protected MinervaAbstractAction actionExportForAssembly;
+	protected MinervaAbstractAction actionRetireProject;
 	protected MinervaAbstractAction actionCreateNewProject;
 
 	protected final NewProjectPanel panelNewProject;
@@ -147,6 +149,15 @@ public class ProjectTablePanel extends MinervaPanel implements
 		};
 
 		actionCreateNewProject.setEnabled(adb.isCoordinator());
+
+		actionRetireProject = new MinervaAbstractAction(
+				"Retire project", null, "Retire project",
+				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
+						KeyEvent.VK_R, ActionEvent.ALT_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				retireProject();
+			}
+		};
 	}
 
 	protected void updateActions() {
@@ -157,6 +168,13 @@ public class ProjectTablePanel extends MinervaPanel implements
 		actionExportForAssembly.setEnabled(rowcount == 1);
 
 		actionViewProject.setEnabled(rowcount > 0);
+		
+		if (rowcount == 1) {
+			ProjectProxy proxy = table.getSelectedProject();
+			Project project = proxy.getProject();
+			actionRetireProject.setEnabled(proxy.isMine() && ! project.isRetired());
+		}
+
 	}
 
 	protected boolean addClassSpecificFileMenuItems(JMenu menu) {
@@ -233,6 +251,18 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 		model.showAllContigs();
 		rbShowAllContigs.setSelected(true);
+
+		menu.addSeparator();
+		
+		final JCheckBoxMenuItem cbShowRetiredProjects = new JCheckBoxMenuItem("Show retired projects");
+		cbShowRetiredProjects.setState(false);
+		menu.add(cbShowRetiredProjects);
+		
+		cbShowRetiredProjects.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				model.showRetiredProjects(cbShowRetiredProjects.getState());
+			}		
+		});
 	}
 
 	protected void createClassSpecificMenus() {
@@ -249,6 +279,10 @@ public class ProjectTablePanel extends MinervaPanel implements
 		projectMenu.addSeparator();
 
 		projectMenu.add(actionExportForAssembly);
+
+		projectMenu.addSeparator();
+
+		projectMenu.add(actionRetireProject);
 
 		projectMenu.getPopupMenu().addPopupMenuListener(
 				new PopupMenuListener() {
@@ -418,6 +452,33 @@ public class ProjectTablePanel extends MinervaPanel implements
 		if (proxy != null)
 			notYetImplemented("Exporting " + proxy.getName()
 					+ " for incremental assembly");
+	}
+	
+	protected void retireProject() {
+		ProjectProxy proxy = table.getSelectedProject();
+		Project project = proxy.getProject();
+		String projectName = project.getName();
+		
+		if (! proxy.isMine()) {
+			JOptionPane.showMessageDialog(
+					this,
+					"Project "
+							+ projectName
+							+ " does not belong to you",
+					"Cannot retire project " + projectName,
+					JOptionPane.ERROR_MESSAGE);
+
+			return;
+		}
+		
+		
+		try {
+			if (adb.retireProject(project))
+				model.refresh();
+		}
+		catch (SQLException e) {
+			Arcturus.logWarning("An error occurred when retiring project " + projectName, e);
+		}
 	}
 
 	protected void notYetImplemented(String message) {
