@@ -13,6 +13,15 @@ import java.util.zip.DataFormatException;
  */
 
 public class Project extends Core {
+	// Constants which represent the status values
+	public static final int UNKNOWN = -1;
+	public static final int IN_SHOTGUN = 0;
+	public static final int PREFINISHING = 1;
+	public static final int IN_FINISHING = 2;
+	public static final int FINISHED = 3;
+	public static final int QUALITY_CHECKED = 4;
+	public static final int RETIRED = 5;
+
 	protected Assembly assembly = null;
 	protected Date updated = null;
 	protected Person owner = null;
@@ -21,6 +30,7 @@ public class Project extends Core {
 	protected Date created = null;
 	protected Person creator = null;
 	protected String directory = null;
+	protected int status = UNKNOWN;
 
 	protected Set<Contig> contigs = null;
 
@@ -60,7 +70,7 @@ public class Project extends Core {
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
 			Person owner, Date lockdate, Person lockowner, Date created, Person creator,
-			ArcturusDatabase adb) {
+			int status, ArcturusDatabase adb) {
 		super(ID, adb);
 
 		try {
@@ -76,6 +86,7 @@ public class Project extends Core {
 		this.created = created;
 		this.creator = creator;
 		this.directory = null;
+		this.status = status;
 	}
 
 	/**
@@ -90,7 +101,7 @@ public class Project extends Core {
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
 			String owner, Date lockdate, String lockowner, Date created, String creator,
-			ArcturusDatabase adb) {
+			int status, ArcturusDatabase adb) {
 		super(ID, adb);
 
 		try {
@@ -105,6 +116,8 @@ public class Project extends Core {
 		this.lockowner = findPerson(lockowner);
 		this.created = created;
 		this.creator = findPerson(creator);
+		this.directory = null;
+		this.status = status;
 	}
 
 	private Person findPerson(String uid) {
@@ -237,6 +250,43 @@ public class Project extends Core {
 	
 	public String getDirectory() {
 		return directory;
+	}
+	
+	public void setStatus(int status) {
+		this.status = status;
+	}
+	
+	public int getStatus() {
+		return status;
+	}
+	
+	public String getStatusAsString() {
+		switch (status) {
+			case IN_SHOTGUN:
+				return "In shotgun";
+				
+			case PREFINISHING:
+				return "Prefinishing";
+				
+			case IN_FINISHING:
+				return "In finishing";
+				
+			case FINISHED:
+				return "Finished";
+				
+			case QUALITY_CHECKED:
+				return "Quality checked";
+				
+			case RETIRED:
+				return "Retired";
+				
+			default:
+				return "Unknown";
+		}
+	}
+	
+	public boolean isRetired() {
+		return status == RETIRED;
 	}
 
 	/**

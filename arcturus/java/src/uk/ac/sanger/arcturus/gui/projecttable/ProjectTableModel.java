@@ -25,6 +25,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected int minreads = 0;
 	protected int minlen = 0;
 	protected boolean canEditUser = false;
+	protected boolean displayRetiredProjects = false;
 
 	protected static final int ASSEMBLY_COLUMN = 0;
 	protected static final int PROJECT_COLUMN = 1;
@@ -55,15 +56,15 @@ class ProjectTableModel extends AbstractTableModel implements
 		try {
 			Map map = adb.getProjectSummary(minlen, minreads);
 
-			Set projectset = adb.getAllProjects();
+			Set<Project> projectset = adb.getAllProjects();
 
-			for (Iterator iter = projectset.iterator(); iter.hasNext();) {
-				Project project = (Project) iter.next();
+			for (Project project : projectset) {
+				if (displayRetiredProjects || !project.isRetired()) {
+					ProjectSummary summary = (ProjectSummary) map
+							.get(new Integer(project.getID()));
 
-				ProjectSummary summary = (ProjectSummary) map.get(new Integer(
-						project.getID()));
-
-				projects.add(new ProjectProxy(project, summary));
+					projects.add(new ProjectProxy(project, summary));
+				}
 			}
 
 			resort();
@@ -122,16 +123,16 @@ class ProjectTableModel extends AbstractTableModel implements
 		}
 	}
 
-	public Class getColumnClass(int col) {
+	public Class<?> getColumnClass(int col) {
 		switch (col) {
 			case ASSEMBLY_COLUMN:
 			case PROJECT_COLUMN:
 			case LOCKED_COLUMN:
 				return String.class;
-				
+
 			case OWNER_COLUMN:
 				return Person.class;
-				
+
 			case TOTAL_LENGTH_COLUMN:
 			case CONTIG_COUNT_COLUMN:
 			case MAXIMUM_LENGTH_COLUMN:
@@ -197,8 +198,8 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case OWNER_COLUMN:
 				return project.getOwner();
-				//return owner == null ? null : owner.getName();
-				
+				// return owner == null ? null : owner.getName();
+
 			case LOCKED_COLUMN:
 				Person lockowner = project.getLockOwner();
 				return (lockowner == null || lockowner.getName() == null ? null
@@ -213,18 +214,18 @@ class ProjectTableModel extends AbstractTableModel implements
 		return canEditUser && col == OWNER_COLUMN;
 	}
 
-    public void setValueAt(Object value, int row, int col) {
-    	if (col == OWNER_COLUMN && value instanceof Person) {
-    		Person person = (Person)value;
-    		
-    		ProjectProxy project = getProjectAtRow(row);
-    		
-    		project.setOwner(person);
+	public void setValueAt(Object value, int row, int col) {
+		if (col == OWNER_COLUMN && value instanceof Person) {
+			Person person = (Person) value;
 
-            fireTableCellUpdated(row, col);  		
-    	}
-    }
-    
+			ProjectProxy project = getProjectAtRow(row);
+
+			project.setOwner(person);
+
+			fireTableCellUpdated(row, col);
+		}
+	}
+
 	public boolean isColumnSortable(int col) {
 		return (col > 0);
 	}
@@ -328,6 +329,11 @@ class ProjectTableModel extends AbstractTableModel implements
 
 	protected void setMinimumReads(int minreads) {
 		this.minreads = minreads;
+		refresh();
+	}
+
+	public void showRetiredProjects(boolean show) {
+		this.displayRetiredProjects = show;
 		refresh();
 	}
 }

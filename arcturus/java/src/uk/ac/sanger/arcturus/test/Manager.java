@@ -260,7 +260,7 @@ public class Manager {
 				Assembly assembly = getAssemblyByID(assembly_id);
 
 				Project project = new Project(project_id, assembly, name,
-						updated, owner, locked, lockowner, created, creator, null);
+						updated, owner, locked, lockowner, created, creator, Project.UNKNOWN, null);
 
 				projectByID.put(id, project);
 			}

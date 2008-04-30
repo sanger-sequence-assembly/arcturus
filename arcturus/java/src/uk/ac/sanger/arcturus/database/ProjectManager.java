@@ -32,6 +32,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtLockProjectForOwner;
 	private PreparedStatement pstmtSetProjectOwner;
 	private PreparedStatement pstmtCreateNewProject;
+	private PreparedStatement pstmtRetireProject;
 
 	/**
 	 * Creates a new ContigManager to provide contig management services to an
@@ -43,15 +44,15 @@ public class ProjectManager extends AbstractManager {
 
 		conn = adb.getConnection();
 
-		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory"
+		String query = "select assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory,status"
 				+ " from PROJECT where project_id = ?";
 		pstmtByID = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory"
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory,status"
 				+ " from PROJECT where assembly_id = ? and name = ?";
 		pstmtByNameAndAssembly = conn.prepareStatement(query);
 
-		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory"
+		query = "select project_id,updated,owner,lockdate,lockowner,created,creator,directory,status"
 				+ " from PROJECT where name = ?";
 		pstmtByName = conn.prepareStatement(query);
 
@@ -100,6 +101,10 @@ public class ProjectManager extends AbstractManager {
 				+ "values (?,?,?,NOW(),?,?)";
 
 		pstmtCreateNewProject = conn.prepareStatement(query);
+		
+		query = "update PROJECT set status = 'retired' where project_id = ?";
+		
+		pstmtRetireProject = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -137,11 +142,12 @@ public class ProjectManager extends AbstractManager {
 			java.util.Date created = rs.getTimestamp(7);
 			String creator = rs.getString(8);
 			String directory = rs.getString(9);
+			int status = statusStringToCode(rs.getString(10));
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
 			project = createAndRegisterNewProject(id, assembly, name, updated,
-					owner, lockdate, lockowner, created, creator, directory);
+					owner, lockdate, lockowner, created, creator, directory, status);
 		}
 
 		rs.close();
@@ -180,10 +186,11 @@ public class ProjectManager extends AbstractManager {
 				java.util.Date created = rs.getTimestamp(6);
 				String creator = rs.getString(7);
 				String directory = rs.getString(8);
+				int status = statusStringToCode(rs.getString(9));
 
 				project = createAndRegisterNewProject(project_id, assembly,
 						name, updated, owner, lockdate, lockowner, created,
-						creator, directory);
+						creator, directory, status);
 			}
 		}
 
@@ -195,9 +202,9 @@ public class ProjectManager extends AbstractManager {
 	private Project createAndRegisterNewProject(int id, Assembly assembly,
 			String name, java.util.Date updated, String owner,
 			java.util.Date lockdate, String lockowner, java.util.Date created,
-			String creator, String directory) {
+			String creator, String directory, int status) {
 		Project project = new Project(id, assembly, name, updated, owner,
-				lockdate, lockowner, created, creator, adb);
+				lockdate, lockowner, created, creator, status, adb);
 
 		project.setDirectory(directory);
 
@@ -211,7 +218,7 @@ public class ProjectManager extends AbstractManager {
 	}
 
 	public void preloadAllProjects() throws SQLException {
-		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory from PROJECT";
+		String query = "select project_id,assembly_id,name,updated,owner,lockdate,lockowner,created,creator,directory,status from PROJECT";
 
 		Statement stmt = conn.createStatement();
 
@@ -229,6 +236,7 @@ public class ProjectManager extends AbstractManager {
 			java.util.Date created = rs.getTimestamp(8);
 			String creator = rs.getString(9);
 			String directory = rs.getString(10);
+			int status = statusStringToCode(rs.getString(11));
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -236,7 +244,7 @@ public class ProjectManager extends AbstractManager {
 
 			if (project == null)
 				createAndRegisterNewProject(id, assembly, name, updated, owner,
-						lockdate, lockowner, created, creator, directory);
+						lockdate, lockowner, created, creator, directory, status);
 			else {
 				project.setAssembly(assembly);
 				project.setName(name);
@@ -291,6 +299,8 @@ public class ProjectManager extends AbstractManager {
 			String lockowner = rs.getString(6);
 			java.util.Date created = rs.getTimestamp(7);
 			String creator = rs.getString(8);
+			String directory = rs.getString(9);
+			int status = statusStringToCode(rs.getString(10));
 
 			Assembly assembly = adb.getAssemblyByID(assembly_id);
 
@@ -302,6 +312,8 @@ public class ProjectManager extends AbstractManager {
 			project.setLockOwner(lockowner);
 			project.setCreated(created);
 			project.setCreator(creator);
+			project.setDirectory(directory);
+			project.setStatus(status);
 		}
 
 		rs.close();
@@ -310,7 +322,23 @@ public class ProjectManager extends AbstractManager {
 	public void refreshAllProjects() throws SQLException {
 		preloadAllProjects();
 	}
+	
+	private int statusStringToCode(String status) {
+		if (status.equalsIgnoreCase("in shotgun"))
+			return Project.IN_SHOTGUN;
+		else if (status.equalsIgnoreCase("prefinishing"))
+			return Project.PREFINISHING;
+		else if (status.equalsIgnoreCase("in finishing"))
+			return Project.IN_FINISHING;
+		else if (status.equalsIgnoreCase("quality checked"))
+			return Project.QUALITY_CHECKED;
+		else if (status.equalsIgnoreCase("retired"))
+			return Project.RETIRED;
+		else
+			return Project.UNKNOWN;
+	}
 
+	
 	public void setAssemblyForProject(Project project, Assembly assembly)
 			throws SQLException {
 		if (project != null && assembly != null) {
@@ -620,6 +648,20 @@ public class ProjectManager extends AbstractManager {
 		pstmtCreateNewProject.setString(5, directory);
 		
 		int rc = pstmtCreateNewProject.executeUpdate();
+		
+		return rc == 1;
+	}
+
+	public boolean retireProject(Project project)  throws SQLException {
+		if (project.isRetired())
+			return true;
+		
+		pstmtRetireProject.setInt(1, project.getID());
+		
+		int rc = pstmtRetireProject.executeUpdate();
+		
+		if (rc == 1)
+			project.setStatus(Project.RETIRED);
 		
 		return rc == 1;
 	}

@@ -1,6 +1,5 @@
 package uk.ac.sanger.arcturus.database;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.*;
 
@@ -918,14 +917,14 @@ public class ArcturusDatabase {
 		projectManager.preloadAllProjects();
 	}
 
-	public synchronized Set getAllProjects() throws SQLException {
+	public synchronized Set<Project> getAllProjects() throws SQLException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getAllProjects");
 
 		return projectManager.getAllProjects();
 	}
 
-	public synchronized Set getProjectsForOwner(Person owner)
+	public synchronized Set<Project> getProjectsForOwner(Person owner)
 			throws SQLException {
 		return projectManager.getProjectsForOwner(owner);
 	}
@@ -1048,8 +1047,12 @@ public class ArcturusDatabase {
 	public synchronized boolean createNewProject(Assembly assembly, String name, Person owner,
 			String directory) throws SQLException, IOException {
 		return projectManager.createNewProject(assembly, name, owner, directory);
-	}
-	
+	}	
+
+	public boolean retireProject(Project project) throws SQLException {
+		return projectManager.retireProject(project);
+	}		
+
 	/**
 	 * Returns the AssemblyManager belonging to this ArcturusDatabase.
 	 * 

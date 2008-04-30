@@ -206,11 +206,17 @@ public class ProjectTable extends SortableTable {
 
 		ProjectTableModel ptm = (ProjectTableModel) getModel();
 		ProjectProxy proxy = ptm.getProjectAtRow(rowIndex);
+		
+		int fontStyle = Font.PLAIN;
 
-		if (proxy.isMine()) {
-			Font font = c.getFont().deriveFont(Font.BOLD);
-			c.setFont(font);
-		}
+		if (proxy.isMine())
+			fontStyle |= Font.BOLD;
+		
+		if (proxy.getProject().isRetired())
+			fontStyle |= Font.ITALIC;
+		
+		if (fontStyle != Font.PLAIN)
+			c.setFont(c.getFont().deriveFont(fontStyle));
 		
 		if (proxy.isImporting() || proxy.isExporting())
 			c.setForeground(Color.lightGray);
@@ -297,7 +303,7 @@ public class ProjectTable extends SortableTable {
 
 		ProjectTableModel ptm = (ProjectTableModel) getModel();
 
-		Set projects = new HashSet();
+		Set<Project> projects = new HashSet<Project>();
 
 		for (int i = 0; i < indices.length; i++) {
 			ProjectProxy proxy = (ProjectProxy) ptm.elementAt(indices[i]);
