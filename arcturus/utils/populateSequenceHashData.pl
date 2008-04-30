@@ -48,8 +48,9 @@ $sth->execute();
 my ($count) = $sth->fetchrow_array();
 
 if ($count == 0) {
-    $dbh->disconnect();
     print STDERR "Nothing to update for $organism\n";
+    $sth->finish();
+    $dbh->disconnect();
     exit(0);
 }
 
