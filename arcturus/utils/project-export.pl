@@ -330,10 +330,10 @@ elsif (defined($fastafile)) {
     $exportoptions{qcthreshold} = $clipthreshold if defined($clipthreshold);
     $exportoptions{qcsymbol} = $clipsymbol if defined($clipsymbol);
     $exportoptions{gap4name} = 1 if $gap4name;
-    if ($qualityclip) {
-        $exportoptions{lqpm} = 30;
-        $exportoptions{lqpm} = $clipthreshold if defined($clipthreshold);
-    }
+#    if ($qualityclip) {
+#        $exportoptions{lqpm} = 30;
+#        $exportoptions{lqpm} = $clipthreshold if defined($clipthreshold);
+#    }
 }
 elsif (defined($maffile)) {
     $exportoptions{'minNX'} = $minNX;
