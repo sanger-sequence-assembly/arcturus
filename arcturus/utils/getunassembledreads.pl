@@ -367,6 +367,16 @@ while (my $remainder = scalar(@$readids)) {
                 next;
 	    }
         }
+        my $s = $read->getSequence();
+        my $q = $read->getBaseQuality();
+        unless ($s && $q && length($s) == scalar(@$q)) {
+            print STDERR "read $readname discarded because of conflicting "
+                       . "sequence lengths : DNA ".length($s)
+                       . "  q: ".scalar(@$q)."\n";
+            $discarded++;
+            next;
+	}
+
         $read->writeToCaf($CAF,qualitymask=>$mask)        if $CAF;
         $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $FAS;
     }
