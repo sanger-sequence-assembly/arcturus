@@ -18,6 +18,7 @@ my $verbose = 0;
 my $instance;
 my $organism;
 my $fixwhat;
+my $silent;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -25,6 +26,7 @@ while (my $nextword = shift @ARGV) {
     $fixwhat  = shift @ARGV if ($nextword eq '-fix');
 
     $verbose = 1 if ($nextword eq '-verbose');
+    $silent  = 1 if ($nextword eq '-silent');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -55,6 +57,10 @@ die if ($@);
 my $ds = new DataSource(-instance => $instance, -organism => $organism);
 
 my $dbh = $ds->getConnection();
+
+unless ($dbh) {
+    print STDERR "Failed to open data source : $DBI::err ($DBI::errstr)\n\n";
+}
 
 my $condition;
 
@@ -114,6 +120,7 @@ while (my ($readid,$readname) = $sth->fetchrow_array()) {
 	    print STDERR "*** No sequence for $readname ***\n";
 	}
     } else {
+        next if $silent;
 	print STDERR "\t" if $verbose;
 	print STDERR "*** $readname is not in the Internal Trace Server ***\n";
     }
