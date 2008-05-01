@@ -184,7 +184,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 			}
 
 			actionRetireProject.setEnabled(canRetire);
-		}
+		} else
+			actionRetireProject.setEnabled(false);
 
 	}
 
