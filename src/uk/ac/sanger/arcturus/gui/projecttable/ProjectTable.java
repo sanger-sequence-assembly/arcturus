@@ -238,16 +238,11 @@ public class ProjectTable extends SortableTable {
 		int[] indices = getSelectedRows();
 
 		switch (indices.length) {
-			case 0:
-				return null;
-
 			case 1:
 				return (ProjectProxy) ((ProjectTableModel) getModel())
 						.elementAt(indices[0]);
 
 			default:
-				Arcturus
-						.logWarning("Project table has more than one selected project");
 				return null;
 		}
 	}
