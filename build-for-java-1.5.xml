@@ -4,8 +4,8 @@
 <project name="Simple Buildfile" default="jar" basedir=".">
   <property name="project.name" value="arcturus"/>
   <property name="package.prefix" value="uk.ac.sanger"/>
-  <property name="jar.file" value="${project.name}.jar" />
-  <property name="zip.file" value="${project.name}.zip" />
+  <property name="jar.file" value="${project.name}-for-java-1.5.jar" />
+  <property name="zip.file" value="${project.name}-for-java-1.5.zip" />
 
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
@@ -28,7 +28,7 @@
   <property name="resources.dir" value="${src.dir}/resources" />
 
   <!-- Target version of Java -->
-  <property name="build.target" value="1.6" />
+  <property name="build.target" value="1.5" />
 
   <!-- Target to create the build directories prior to the -->
   <!-- compile target. -->
