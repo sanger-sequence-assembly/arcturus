@@ -150,10 +150,9 @@ public class ProjectTablePanel extends MinervaPanel implements
 
 		actionCreateNewProject.setEnabled(adb.isCoordinator());
 
-		actionRetireProject = new MinervaAbstractAction(
-				"Retire project", null, "Retire project",
-				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
-						KeyEvent.VK_R, ActionEvent.ALT_MASK)) {
+		actionRetireProject = new MinervaAbstractAction("Retire project", null,
+				"Retire project", new Integer(KeyEvent.VK_R), KeyStroke
+						.getKeyStroke(KeyEvent.VK_R, ActionEvent.ALT_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				retireProject();
 			}
@@ -168,11 +167,23 @@ public class ProjectTablePanel extends MinervaPanel implements
 		actionExportForAssembly.setEnabled(rowcount == 1);
 
 		actionViewProject.setEnabled(rowcount > 0);
-		
+
 		if (rowcount == 1) {
 			ProjectProxy proxy = table.getSelectedProject();
 			Project project = proxy.getProject();
-			actionRetireProject.setEnabled(proxy.isMine() && ! project.isRetired());
+
+			boolean canRetire = false;
+
+			try {
+				canRetire = adb.canUserRetireProject(project)
+						&& !project.isRetired();
+			} catch (SQLException e) {
+				Arcturus.logWarning(
+						"A problem occurred when checking whether the user can retire project "
+								+ project.getName(), e);
+			}
+
+			actionRetireProject.setEnabled(canRetire);
 		}
 
 	}
@@ -253,15 +264,16 @@ public class ProjectTablePanel extends MinervaPanel implements
 		rbShowAllContigs.setSelected(true);
 
 		menu.addSeparator();
-		
-		final JCheckBoxMenuItem cbShowRetiredProjects = new JCheckBoxMenuItem("Show retired projects");
+
+		final JCheckBoxMenuItem cbShowRetiredProjects = new JCheckBoxMenuItem(
+				"Show retired projects");
 		cbShowRetiredProjects.setState(false);
 		menu.add(cbShowRetiredProjects);
-		
+
 		cbShowRetiredProjects.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				model.showRetiredProjects(cbShowRetiredProjects.getState());
-			}		
+			}
 		});
 	}
 
@@ -453,31 +465,36 @@ public class ProjectTablePanel extends MinervaPanel implements
 			notYetImplemented("Exporting " + proxy.getName()
 					+ " for incremental assembly");
 	}
-	
+
 	protected void retireProject() {
 		ProjectProxy proxy = table.getSelectedProject();
 		Project project = proxy.getProject();
 		String projectName = project.getName();
-		
-		if (! proxy.isMine()) {
-			JOptionPane.showMessageDialog(
-					this,
-					"Project "
-							+ projectName
-							+ " does not belong to you",
-					"Cannot retire project " + projectName,
-					JOptionPane.ERROR_MESSAGE);
 
-			return;
-		}
-		
-		
 		try {
+			if (!adb.canUserRetireProject(project)) {
+				JOptionPane.showMessageDialog(this,
+						"You do not have the authority to retire Project "
+								+ projectName, "Cannot retire project "
+								+ projectName, JOptionPane.ERROR_MESSAGE);
+
+				return;
+			}
+
+			int rc = JOptionPane.showConfirmDialog(this,
+					"Are you sure you want to retire project " + projectName
+							+ "?", "Retire project?",
+					JOptionPane.OK_CANCEL_OPTION);
+
+			if (rc != JOptionPane.OK_OPTION)
+				return;
+
 			if (adb.retireProject(project))
 				model.refresh();
-		}
-		catch (SQLException e) {
-			Arcturus.logWarning("An error occurred when retiring project " + projectName, e);
+		} catch (SQLException e) {
+			Arcturus.logWarning(
+					"An error occurred when trying to retire project "
+							+ projectName, e);
 		}
 	}
 
@@ -528,29 +545,30 @@ public class ProjectTablePanel extends MinervaPanel implements
 			String directory = panelNewProject.getDirectory();
 			Person owner = panelNewProject.getOwner();
 			Assembly assembly = panelNewProject.getAssembly();
-			
+
 			if (name == null || name.trim().length() == 0) {
 				JOptionPane.showMessageDialog(this,
 						"You did not specify the name of the project",
 						"Failed to create the project",
 						JOptionPane.WARNING_MESSAGE);
-				
+
 				return;
 			}
-			
+
 			if (directory == null || directory.trim().length() == 0) {
 				JOptionPane.showMessageDialog(this,
 						"You did not specify a directory for the project",
 						"Failed to create the project",
 						JOptionPane.WARNING_MESSAGE);
-				
+
 				return;
 			}
 
 			try {
-				if (adb.createNewProject(assembly, name.trim(), owner, directory.trim())) {
+				if (adb.createNewProject(assembly, name.trim(), owner,
+						directory.trim())) {
 					refresh();
-					
+
 					JOptionPane.showMessageDialog(this,
 							"Successfully created project " + name,
 							"The project was created",
@@ -563,15 +581,16 @@ public class ProjectTablePanel extends MinervaPanel implements
 							"Failed to create the project",
 							JOptionPane.WARNING_MESSAGE);
 				else
-					Arcturus.logSevere(
-							"An error occurred when trying to create a new project",
-							e);
-			}
-			catch (IOException ioe) {
-				Arcturus.logSevere(
-							"An error occurred when trying to create a new project",
-							ioe);
-				
+					Arcturus
+							.logSevere(
+									"An error occurred when trying to create a new project",
+									e);
+			} catch (IOException ioe) {
+				Arcturus
+						.logSevere(
+								"An error occurred when trying to create a new project",
+								ioe);
+
 			}
 		}
 
