@@ -652,9 +652,30 @@ public class ProjectManager extends AbstractManager {
 		return rc == 1;
 	}
 
-	public boolean retireProject(Project project)  throws SQLException {
+	public boolean canUserRetireProject(Project project, Person user)
+			throws SQLException {
+		if (project.isLocked() || project.isBin() || project.isUnowned())
+			return false;
+
+		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
+	}
+
+	public boolean canUserRetireProject(Project project)
+			throws SQLException {
+		if (project.isLocked() || project.isBin() || project.isUnowned())
+			return false;
+		
+		Person user = PeopleManager.findMe();
+
+		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
+	}
+
+	public boolean retireProject(Project project) throws SQLException {
 		if (project.isRetired())
 			return true;
+		
+		if (!canUserRetireProject(project))
+			return false;
 		
 		pstmtRetireProject.setInt(1, project.getID());
 		

@@ -1049,6 +1049,16 @@ public class ArcturusDatabase {
 		return projectManager.createNewProject(assembly, name, owner, directory);
 	}	
 
+	public boolean canUserRetireProject(Project project, Person user)
+			throws SQLException {
+		return projectManager.canUserRetireProject(project, user);
+	}
+
+	public boolean canUserRetireProject(Project project)
+			throws SQLException {
+		return projectManager.canUserRetireProject(project);
+	}
+
 	public boolean retireProject(Project project) throws SQLException {
 		return projectManager.retireProject(project);
 	}		
