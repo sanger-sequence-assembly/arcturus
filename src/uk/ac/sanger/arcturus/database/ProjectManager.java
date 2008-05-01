@@ -35,7 +35,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtRetireProject;
 
 	/**
-	 * Creates a new ContigManager to provide contig management services to an
+	 * Creates a new ProjectManager to provide project management services to an
 	 * ArcturusDatabase object.
 	 */
 
@@ -681,9 +681,28 @@ public class ProjectManager extends AbstractManager {
 		
 		int rc = pstmtRetireProject.executeUpdate();
 		
-		if (rc == 1)
+		if (rc == 1) {
 			project.setStatus(Project.RETIRED);
+			
+			retireContigs(project);
+		}
 		
 		return rc == 1;
+	}
+	
+	private void retireContigs(Project project) throws SQLException {
+		Project bin = getBinForProject(project);
+		adb.moveContigs(project, bin);
+	}
+	
+	public Project getBinForProject(Project project) throws SQLException {
+		if (project == null)
+			return null;
+		
+		Assembly assembly = project.getAssembly();
+		
+		Project bin = getProjectByName(assembly, "BIN");
+		
+		return (bin != null) ? bin : getProjectByName(null, "BIN");
 	}
 }

@@ -1063,6 +1063,10 @@ public class ArcturusDatabase {
 		return projectManager.retireProject(project);
 	}		
 
+	public Project getBinForProject(Project project) throws SQLException {
+		return projectManager.getBinForProject(project);
+	}
+	
 	/**
 	 * Returns the AssemblyManager belonging to this ArcturusDatabase.
 	 * 
@@ -1295,6 +1299,10 @@ public class ArcturusDatabase {
 	public synchronized boolean canExecuteRequest(
 			ContigTransferRequest request, Person person) throws SQLException {
 		return contigTransferRequestManager.canExecuteRequest(request, person);
+	}
+	
+	public synchronized void moveContigs(Project fromProject, Project toProject) throws SQLException {
+		contigTransferRequestManager.moveContigs(fromProject, toProject);
 	}
 
 	/**

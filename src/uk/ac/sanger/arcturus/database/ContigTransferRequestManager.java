@@ -40,6 +40,8 @@ public class ContigTransferRequestManager {
 	protected PreparedStatement pstmtMarkRequestAsDone = null;
 
 	protected PreparedStatement pstmtSetClosedDate = null;
+	
+	protected PreparedStatement pstmtContigsByProjectID = null;
 
 	protected boolean debugging = false;
 
@@ -129,6 +131,10 @@ public class ContigTransferRequestManager {
 		query = "update CONTIGTRANSFERREQUEST set closed=NOW() where request_id = ?";
 
 		pstmtSetClosedDate = conn.prepareStatement(query);
+		
+		query = "select contig_id from CURRENTCONTIGS where project_id = ?";
+		
+		pstmtContigsByProjectID = conn.prepareStatement(query);
 	}
 
 	public ContigTransferRequest[] getContigTransferRequestsByUser(Person user,
@@ -889,5 +895,34 @@ public class ContigTransferRequestManager {
 
 	public void setDebugging(boolean debugging) {
 		this.debugging = debugging;
+	}
+
+	public void moveContigs(Project fromProject, Project toProject) throws SQLException {
+		if (fromProject == null || toProject == null) {
+			Arcturus.logWarning("Attempted to move contigs from " + 
+					(fromProject == null ? "NULL project" : fromProject.getName()) +
+					" to " +
+					(toProject == null ? "NULL project " : toProject.getName()));
+			return;	
+		}
+			
+		int fromID = fromProject.getID();
+		int toID = toProject.getID();
+		
+		pstmtContigsByProjectID.setInt(1, fromID);
+		
+		ResultSet rs = pstmtContigsByProjectID.executeQuery();
+		
+		while (rs.next()) {
+			int contig_id = rs.getInt(1);
+			
+			pstmtMoveContig.setInt(1, toID);
+			pstmtMoveContig.setInt(2, contig_id);
+			pstmtMoveContig.setInt(3, fromID);
+			
+			pstmtMoveContig.executeUpdate();
+		}
+		
+		rs.close();
 	}
 }
