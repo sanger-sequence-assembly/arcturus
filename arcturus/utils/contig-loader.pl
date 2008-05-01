@@ -1075,8 +1075,8 @@ $logger->info("$loaded contigs loaded");
 
 if ($loaded && $project) {
     unless ($gap4name) {
-        $gap4name = `pwd`;
-        chomp $gap4name;
+        $gap4name = `pawd`;
+        chomp $gap4name if $gap4name;
     }
     $project->setGap4Name($gap4name);
     $project->markImport(); 
