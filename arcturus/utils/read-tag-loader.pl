@@ -74,7 +74,7 @@ while (my $nextword = shift @ARGV) {
                                                                                
 my $logger = new Logging('STDOUT');
  
-$logger->setFilter(0) if $verbose; # set reporting level
+$logger->setStandardFilter(0) if $verbose; # set reporting level
  
 #----------------------------------------------------------------
 # get the database connection
@@ -253,6 +253,8 @@ sub showUsage {
 
     print STDERR "\n";
     print STDERR "Define and load tags for selected reads\n";
+    print STDERR "\n";
+    print STDERR "e.g. .. -read 'xxxy%' -tagtype SILR -tagtext all -limit 0\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
     print STDERR "\n";
