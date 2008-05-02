@@ -254,7 +254,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return conn.getHoldability();
 	}
 
-	public Map getTypeMap() throws SQLException {
+	public Map<String,Class<?>> getTypeMap() throws SQLException {
 		return conn.getTypeMap();
 	}
 
@@ -318,7 +318,7 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		return conn.setSavepoint(name);
 	}
 
-	public void setTypeMap(Map map) throws SQLException {
+	public void setTypeMap(Map <String,Class<?>> map) throws SQLException {
 		conn.setTypeMap(map);
 	}
 
@@ -377,11 +377,11 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		conn.setClientInfo(name, value);
 	}
 
-	public boolean isWrapperFor(Class arg0) throws SQLException {
-		return conn.isWrapperFor(arg0);
+	public boolean isWrapperFor(Class<?> iface) throws SQLException {
+		return conn.isWrapperFor(iface);
 	}
 
-	public Object unwrap(Class arg0) throws SQLException {
-		return conn.unwrap(arg0);
+	public <T> T unwrap(Class<T> iface) throws SQLException {
+		return conn.unwrap(iface);
 	}
 }

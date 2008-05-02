@@ -14,7 +14,7 @@ import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class ConnectionPool implements ConnectionPoolMBean {
 	public final static long DEFAULT_TIMEOUT = 60000;
-	private HashSet connections;
+	private HashSet<PooledConnection> connections;
 	private DataSource dataSource;
 	final private long timeout;
 	private ConnectionReaper reaper;
@@ -35,7 +35,7 @@ public class ConnectionPool implements ConnectionPoolMBean {
 		
 		initDataSource();
 		
-		connections = new HashSet(poolsize);
+		connections = new HashSet<PooledConnection>(poolsize);
 		reaper = new ConnectionReaper(this, timeout);
 		reaper.start();
 		
