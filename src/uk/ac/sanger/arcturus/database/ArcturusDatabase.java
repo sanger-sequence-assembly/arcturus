@@ -70,7 +70,7 @@ public class ArcturusDatabase {
 	protected String description;
 	protected String name;
 	protected Connection defaultConnection;
-	
+
 	protected ArcturusInstance instance;
 
 	protected ConnectionPool connectionPool;
@@ -78,7 +78,7 @@ public class ArcturusDatabase {
 	protected Logger logger = null;
 
 	protected ProjectChangeEventNotifier projectChangeEventNotifier = new ProjectChangeEventNotifier();
-	
+
 	protected String defaultDirectory = null;
 
 	/**
@@ -97,8 +97,8 @@ public class ArcturusDatabase {
 	 *            the short name for this database.
 	 */
 
-	public ArcturusDatabase(DataSource ds, String description, String name, ArcturusInstance instance)
-			throws SQLException {
+	public ArcturusDatabase(DataSource ds, String description, String name,
+			ArcturusInstance instance) throws SQLException {
 		this.ds = ds;
 		this.description = description;
 		this.name = name;
@@ -129,7 +129,7 @@ public class ArcturusDatabase {
 		defaultConnection = connectionPool.getConnection(this);
 
 		createManagers();
-		
+
 		inferDefaultDirectory();
 	}
 
@@ -173,13 +173,13 @@ public class ArcturusDatabase {
 	public synchronized String getName() {
 		return name;
 	}
-	
+
 	/**
 	 * Returns the instance which created this object.
 	 * 
 	 * @return the instance which created this object.
 	 */
-	
+
 	public ArcturusInstance getInstance() {
 		return instance;
 	}
@@ -846,8 +846,8 @@ public class ArcturusDatabase {
 		return processContigsByProject(project_id, options, 0, processor);
 	}
 
-	public synchronized Set<Contig> getContigsByProject(int project_id, int options,
-			int minlen) throws SQLException, DataFormatException {
+	public synchronized Set<Contig> getContigsByProject(int project_id,
+			int options, int minlen) throws SQLException, DataFormatException {
 		if (logger != null && logger.isLoggable(Level.INFO))
 			logger.info("getContigsByProject(" + project_id + ", options="
 					+ options + ", minlen=" + minlen + ")");
@@ -1034,39 +1034,47 @@ public class ArcturusDatabase {
 			throws SQLException, ProjectLockException {
 		return projectManager.lockProjectForExport(project);
 	}
-	
+
 	public synchronized boolean lockProjectForOwner(Project project)
 			throws SQLException, ProjectLockException {
 		return projectManager.lockProjectForOwner(project);
 	}
 
-	public synchronized void setProjectOwner(Project project, Person person) throws SQLException {
+	public synchronized void setProjectOwner(Project project, Person person)
+			throws SQLException {
 		projectManager.setProjectOwner(project, person);
 	}
-	
-	public synchronized boolean createNewProject(Assembly assembly, String name, Person owner,
-			String directory) throws SQLException, IOException {
-		return projectManager.createNewProject(assembly, name, owner, directory);
-	}	
 
-	public boolean canUserRetireProject(Project project, Person user)
-			throws SQLException {
-		return projectManager.canUserRetireProject(project, user);
+	public synchronized boolean createNewProject(Assembly assembly,
+			String name, Person owner, String directory) throws SQLException,
+			IOException {
+		return projectManager
+				.createNewProject(assembly, name, owner, directory);
 	}
 
-	public boolean canUserRetireProject(Project project)
+	public boolean canUserChangeProjectStatus(Project project, Person user)
 			throws SQLException {
-		return projectManager.canUserRetireProject(project);
+		return projectManager.canUserChangeProjectStatus(project, user);
+	}
+
+	public boolean canUserChangeProjectStatus(Project project)
+			throws SQLException {
+		return projectManager.canUserChangeProjectStatus(project);
+	}
+
+	public boolean changeProjectStatus(Project project, int status)
+			throws SQLException {
+		return projectManager.changeProjectStatus(project, status);
 	}
 
 	public boolean retireProject(Project project) throws SQLException {
 		return projectManager.retireProject(project);
-	}		
+	}
 
 	public Project getBinForProject(Project project) throws SQLException {
 		return projectManager.getBinForProject(project);
 	}
-	
+
 	/**
 	 * Returns the AssemblyManager belonging to this ArcturusDatabase.
 	 * 
@@ -1179,15 +1187,15 @@ public class ArcturusDatabase {
 	public synchronized boolean hasFullPrivileges() {
 		return userManager.hasFullPrivileges();
 	}
-	
+
 	public synchronized boolean isCoordinator(Person person) {
 		return userManager.isCoordinator(person);
 	}
-	
+
 	public synchronized boolean isCoordinator() {
 		return userManager.isCoordinator();
 	}
-	
+
 	public synchronized Person[] getAllUsers() throws SQLException {
 		return userManager.getAllUsers();
 	}
@@ -1259,22 +1267,25 @@ public class ArcturusDatabase {
 	}
 
 	public synchronized void executeContigTransferRequest(
-			ContigTransferRequest request, Person reviewer, boolean notifyListeners)
-			throws ContigTransferRequestException, SQLException {
+			ContigTransferRequest request, Person reviewer,
+			boolean notifyListeners) throws ContigTransferRequestException,
+			SQLException {
 		contigTransferRequestManager.executeContigTransferRequest(request,
 				reviewer, notifyListeners);
 	}
 
 	public synchronized void executeContigTransferRequest(int requestId,
-			Person reviewer, boolean notifyListeners) throws ContigTransferRequestException,
-			SQLException {
+			Person reviewer, boolean notifyListeners)
+			throws ContigTransferRequestException, SQLException {
 		contigTransferRequestManager.executeContigTransferRequest(requestId,
 				reviewer, notifyListeners);
 	}
 
-	public synchronized void executeContigTransferRequest(int requestId, boolean notifyListeners)
-			throws ContigTransferRequestException, SQLException {
-		contigTransferRequestManager.executeContigTransferRequest(requestId, notifyListeners);
+	public synchronized void executeContigTransferRequest(int requestId,
+			boolean notifyListeners) throws ContigTransferRequestException,
+			SQLException {
+		contigTransferRequestManager.executeContigTransferRequest(requestId,
+				notifyListeners);
 	}
 
 	public synchronized void setDebugging(boolean debugging) {
@@ -1300,8 +1311,9 @@ public class ArcturusDatabase {
 			ContigTransferRequest request, Person person) throws SQLException {
 		return contigTransferRequestManager.canExecuteRequest(request, person);
 	}
-	
-	public synchronized void moveContigs(Project fromProject, Project toProject) throws SQLException {
+
+	public synchronized void moveContigs(Project fromProject, Project toProject)
+			throws SQLException {
 		contigTransferRequestManager.moveContigs(fromProject, toProject);
 	}
 
@@ -1342,52 +1354,57 @@ public class ArcturusDatabase {
 		projectChangeEventNotifier.removeProjectChangeEventListener(listener);
 	}
 
-	public void notifyProjectChangeEventListeners(ProjectChangeEvent event, Class listenerClass) {
-		projectChangeEventNotifier.notifyProjectChangeEventListeners(event, listenerClass);
+	public void notifyProjectChangeEventListeners(ProjectChangeEvent event,
+			Class listenerClass) {
+		projectChangeEventNotifier.notifyProjectChangeEventListeners(event,
+				listenerClass);
 	}
 
 	/*
 	 * ******************************************************************************
 	 */
-	
+
 	private void inferDefaultDirectory() {
-		String query = "select directory from PROJECT where directory is not null" + 
-			" order by project_id asc limit 1";
-		
+		String query = "select directory from PROJECT where directory is not null"
+				+ " order by project_id asc limit 1";
+
 		try {
 			Statement stmt = defaultConnection.createStatement();
-			
+
 			ResultSet rs = stmt.executeQuery(query);
-			
+
 			String dirname = rs.next() ? rs.getString(1) : null;
-			
+
 			rs.close();
 			stmt.close();
-			
+
 			String separator = System.getProperty("file.separator");
-			
+
 			if (dirname != null) {
 				String[] parts = dirname.split(separator);
-				
+
 				for (int i = parts.length - 1; i >= 0; i--) {
 					if (parts[i].equalsIgnoreCase(name)) {
 						dirname = "";
-						
+
 						for (int j = 0; j <= i; j++)
 							if (parts[j].length() > 0)
 								dirname += separator + parts[j];
-						
+
 						defaultDirectory = dirname;
-						
+
 						return;
 					}
 				}
 			}
 		} catch (SQLException e) {
-			Arcturus.logSevere("An error occurred whilst trying to infer the default directory", e);
-		}	
+			Arcturus
+					.logSevere(
+							"An error occurred whilst trying to infer the default directory",
+							e);
+		}
 	}
-	
+
 	public String getDefaultDirectory() {
 		return defaultDirectory;
 	}

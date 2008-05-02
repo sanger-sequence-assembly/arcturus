@@ -32,7 +32,7 @@ public class ProjectManager extends AbstractManager {
 	private PreparedStatement pstmtLockProjectForOwner;
 	private PreparedStatement pstmtSetProjectOwner;
 	private PreparedStatement pstmtCreateNewProject;
-	private PreparedStatement pstmtRetireProject;
+	private PreparedStatement pstmtChangeProjectStatus;
 
 	/**
 	 * Creates a new ProjectManager to provide project management services to an
@@ -102,9 +102,9 @@ public class ProjectManager extends AbstractManager {
 
 		pstmtCreateNewProject = conn.prepareStatement(query);
 		
-		query = "update PROJECT set status = 'retired' where project_id = ?";
+		query = "update PROJECT set status = ? where project_id = ?";
 		
-		pstmtRetireProject = conn.prepareStatement(query);
+		pstmtChangeProjectStatus = conn.prepareStatement(query);
 	}
 
 	public void clearCache() {
@@ -332,12 +332,38 @@ public class ProjectManager extends AbstractManager {
 			return Project.IN_FINISHING;
 		else if (status.equalsIgnoreCase("quality checked"))
 			return Project.QUALITY_CHECKED;
+		else if (status.equalsIgnoreCase("finished"))
+			return Project.FINISHED;
 		else if (status.equalsIgnoreCase("retired"))
 			return Project.RETIRED;
 		else
 			return Project.UNKNOWN;
 	}
 
+	private String statusCodeToString(int status) {
+		switch (status) {
+			case Project.IN_SHOTGUN:
+				return "in shotgun";
+				
+			case Project.PREFINISHING:
+				return "prefinishing";
+				
+			case Project.IN_FINISHING:
+				return "in finishing";
+				
+			case Project.QUALITY_CHECKED:
+				return "quality checked";
+				
+			case Project.FINISHED:
+				return "finished";
+				
+			case Project.RETIRED:
+				return "retired";
+				
+			default:
+				return null;
+		}
+	}
 	
 	public void setAssemblyForProject(Project project, Assembly assembly)
 			throws SQLException {
@@ -652,7 +678,7 @@ public class ProjectManager extends AbstractManager {
 		return rc == 1;
 	}
 
-	public boolean canUserRetireProject(Project project, Person user)
+	public boolean canUserChangeProjectStatus(Project project, Person user)
 			throws SQLException {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
@@ -660,7 +686,7 @@ public class ProjectManager extends AbstractManager {
 		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
 	}
 
-	public boolean canUserRetireProject(Project project)
+	public boolean canUserChangeProjectStatus(Project project)
 			throws SQLException {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
@@ -669,25 +695,42 @@ public class ProjectManager extends AbstractManager {
 
 		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
 	}
+	
+	public boolean changeProjectStatus(Project project, int status) throws SQLException {
+		if (project == null)
+			return false;
+		
+		if (project.getStatus() == status)
+			return true;
+		
+		if (!canUserChangeProjectStatus(project))
+			return false;
+		
+		String statusString = statusCodeToString(status);
+		
+		if (statusString == null)
+			return false;
+		
+		pstmtChangeProjectStatus.setString(1, statusString);
+		pstmtChangeProjectStatus.setInt(2, project.getID());
+		
+		int rc = pstmtChangeProjectStatus.executeUpdate();
+		
+		if (rc == 1) {
+			project.setStatus(status);
+			
+			if (status == Project.RETIRED)
+				retireContigs(project);
+			
+			return true;
+		} else
+			return false;
+	}
 
 	public boolean retireProject(Project project) throws SQLException {
 		if (project.isRetired())
 			return true;
-		
-		if (!canUserRetireProject(project))
-			return false;
-		
-		pstmtRetireProject.setInt(1, project.getID());
-		
-		int rc = pstmtRetireProject.executeUpdate();
-		
-		if (rc == 1) {
-			project.setStatus(Project.RETIRED);
-			
-			retireContigs(project);
-		}
-		
-		return rc == 1;
+		return changeProjectStatus(project, Project.RETIRED);
 	}
 	
 	private void retireContigs(Project project) throws SQLException {
