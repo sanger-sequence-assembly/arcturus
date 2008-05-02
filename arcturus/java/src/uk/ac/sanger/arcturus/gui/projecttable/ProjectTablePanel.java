@@ -175,7 +175,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 			boolean canRetire = false;
 
 			try {
-				canRetire = adb.canUserRetireProject(project)
+				canRetire = adb.canUserChangeProjectStatus(project)
 						&& !project.isRetired();
 			} catch (SQLException e) {
 				Arcturus.logWarning(
@@ -473,7 +473,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 		String projectName = project.getName();
 
 		try {
-			if (!adb.canUserRetireProject(project)) {
+			if (!adb.canUserChangeProjectStatus(project)) {
 				JOptionPane.showMessageDialog(this,
 						"You do not have the authority to retire Project "
 								+ projectName, "Cannot retire project "

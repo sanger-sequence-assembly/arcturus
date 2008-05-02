@@ -26,6 +26,8 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected int minlen = 0;
 	protected boolean canEditUser = false;
 	protected boolean displayRetiredProjects = false;
+	
+	protected boolean displayProjectStatus = false;
 
 	protected static final int ASSEMBLY_COLUMN = 0;
 	protected static final int PROJECT_COLUMN = 1;
@@ -36,6 +38,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	protected static final int DATE_COLUMN = 6;
 	protected static final int OWNER_COLUMN = 7;
 	protected static final int LOCKED_COLUMN = 8;
+	protected static final int STATUS_COLUMN = 9;
 
 	public ProjectTableModel(ArcturusDatabase adb) {
 		this.adb = adb;
@@ -117,6 +120,9 @@ class ProjectTableModel extends AbstractTableModel implements
 
 			case LOCKED_COLUMN:
 				return "Lock status";
+				
+			case STATUS_COLUMN:
+				return "Status";
 
 			default:
 				return "UNKNOWN";
@@ -128,6 +134,7 @@ class ProjectTableModel extends AbstractTableModel implements
 			case ASSEMBLY_COLUMN:
 			case PROJECT_COLUMN:
 			case LOCKED_COLUMN:
+			case STATUS_COLUMN:
 				return String.class;
 
 			case OWNER_COLUMN:
@@ -152,7 +159,7 @@ class ProjectTableModel extends AbstractTableModel implements
 	}
 
 	public int getColumnCount() {
-		return 9;
+		return displayProjectStatus ? 10 : 9;
 	}
 
 	public ProjectProxy getProjectAtRow(int row) {
@@ -204,6 +211,9 @@ class ProjectTableModel extends AbstractTableModel implements
 				Person lockowner = project.getLockOwner();
 				return (lockowner == null || lockowner.getName() == null ? null
 						: "Locked by " + lockowner.getName());
+				
+			case STATUS_COLUMN:
+				return project.getProject().getStatusAsString();
 
 			default:
 				return null;
