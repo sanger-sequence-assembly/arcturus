@@ -8,8 +8,6 @@ use FileHandle;
 
 use strict;
 
-print STDERR '$0 is ',$0,"\n";
-
 my $minscore = 70;
 my $minmatch = 30;
 
@@ -20,6 +18,11 @@ my $assemblyname;
 my $fosends;
 my $root;
 my $dlimit = 4 * 1024 * 1024;
+
+my $home_dir = `dirname $0`;
+chop($home_dir);
+my $arcturus_utils_dir = $home_dir . '/../utils';
+die "Could not find Arcturus utils dir (should be $arcturus_utils_dir)" unless -d $arcturus_utils_dir;
 
 #####################################################################
 # Parse command-line arguments
@@ -45,6 +48,11 @@ unless (defined($organism) && defined($instance) && defined($assemblyname) && de
     exit(1);
 }
 
+unless (-d $root) {
+    print STDERR "-root parameter $root is not a directory.\n";
+    exit(1);
+}
+
 #####################################################################
 # Project specific variables:
 
@@ -57,8 +65,6 @@ my $trash = 'BIN';
 my @fos_ends = defined($fosends) ? split(/,/, $fosends) : undef;
 
 my $repeats = 'repeats.dbs';
-
-my $webDir = "/nfs/WWWdev/INTWEB_docs/htdocs/Projects/B_pertussis/bpst24";
 
 #####################################################################
 # These should not need to be edited:
@@ -132,11 +138,11 @@ $dbh->disconnect();
 chdir($assembly) || die "Couldn't cd to $assembly\n";
 #system("usageMonitor $$ > $memUsage &");
 
-my $cmd = $ENV{'ARCTURUS_UTILS_DIR'} . "/calculateconsensus";
+my $cmd = $arcturus_utils_dir . "/calculateconsensus";
 
 my $rc = system("$cmd -instance $instance -organism $organism -quiet -lowmem");
 
-$cmd = $ENV{'ARCTURUS_UTILS_DIR'} . "/project-export";
+$cmd = $arcturus_utils_dir . "/project-export";
 
 unlink($previous) if -f $previous;
 
@@ -146,7 +152,7 @@ foreach my $project (@projects) {
     print STDERR "Export of $project ",($rc == 0 ? " succeeded" : " failed with error code $rc"),"\n";
 }
 
-$cmd = $ENV{'ARCTURUS_UTILS_DIR'} . "/getunassembledreads";
+$cmd = $arcturus_utils_dir . "/getunassembledreads";
 
 print STDERR "Getting unassembled reads\n";
 $rc = system("$cmd -instance $instance -organism $organism -caf $newReads");
@@ -174,9 +180,9 @@ $rc = system("contig-loader -instance $instance -organism $organism" .
 	     " -caf $depadcaf -setprojectby readcount");
 print STDERR ($rc == 0) ? "OK\n" : "Failed with error code $rc\n";
 
-$cmd = $ENV{'ARCTURUS_UTILS_DIR'} . "/exportfromarcturus";
+$cmd = $arcturus_utils_dir . "/exportfromarcturus";
 
-my $unlock = $ENV{'ARCTURUS_UTILS_DIR'} . "/project-unlock";
+my $unlock = $arcturus_utils_dir . "/project-unlock";
 
 foreach my $project (@projects) {
     print STDERR "Exporting $project as Gap4 database.\n";
