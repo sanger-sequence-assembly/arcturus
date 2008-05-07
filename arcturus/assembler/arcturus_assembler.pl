@@ -8,6 +8,8 @@ use FileHandle;
 
 use strict;
 
+print STDERR '$0 is ',$0,"\n";
+
 my $minscore = 70;
 my $minmatch = 30;
 
