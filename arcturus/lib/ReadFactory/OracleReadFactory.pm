@@ -76,7 +76,7 @@ sub setupPreparedStatements {
 						 basecaller,
 						 processstatus, scfdir, scffile
 						 from $schema.extended_read
-						 where readname = ?]);
+						 where readname = ?]) || &quip();
 
     $this->{sth}->{lig_info} = $dbh->prepare(qq[select insertsizemin, insertsizemax
 						from $schema.ligation where ligid = ?]);
@@ -114,6 +114,12 @@ sub setupPreparedStatements {
     $this->{sth}->{scfdir} = $dbh->prepare(qq[select scfdir
 					      from $schema.scfdirs
 					      where scfdirid = ?]);
+}
+
+sub quip {
+    print STDERR "failed to setup (Oracle) prepared statement : "
+               . "$DBI::err ($DBI::errstr)\n\n" if ($DBI::err);
+    exit ;
 }
 
 sub getReadNamesToLoad {
