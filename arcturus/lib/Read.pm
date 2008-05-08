@@ -6,6 +6,8 @@ use Mapping;
 
 use Clipping;
 
+use Digest::MD5 qw(md5 md5_hex md5_base64);
+
 #-------------------------------------------------------------------
 # Constructor (optional instantiation with readname as identifier)
 #-------------------------------------------------------------------
@@ -177,10 +179,12 @@ sub getAlignToTraceMapping {
 }
 
 sub isEdited {
+# test if the read is edited based on the aling-to-trace record(s)
     my $this = shift;
 # return true if the number of alignments > 1, else false
     my $align = $this->getAlignToTrace();
     return ($align && scalar(@$align) > 1) ? 1 : 0;
+# warning: possible edits to quality data are not captured here
 }
 
 #--------------------------------------------------
@@ -403,8 +407,10 @@ sub setBaseQuality {
 
     my $quality = shift;
 
-    if (defined($quality) and ref($quality) eq 'ARRAY') {
+    if (!defined($quality) || ref($quality) eq 'ARRAY') {
+#    if (defined($quality) and ref($quality) eq 'ARRAY') {
 	$this->{BaseQuality} = $quality;
+        $this->getBaseQualityHash();
     }
 }
 
@@ -418,6 +424,21 @@ sub getBaseQuality {
     return join ' ',@{$this->{BaseQuality}} if $options{asString};
 
     return $this->{BaseQuality}; # returns an array reference
+}
+
+sub setBaseQualityHash {
+    my $this = shift;
+    $this->{basequalityhash} = shift;
+}
+
+sub getBaseQualityHash {
+    my $this = shift;
+# if undefined, derive from current quality data
+    unless (defined($this->{basequalityhash})) {
+        my $quality = $this->getBaseQuality(); # triggers delayed loading
+        $this->setBaseQualityHash(md5(pack("c*",@$quality))) if $quality;
+    }
+    return $this->{basequalityhash};
 }
 
 #-----------------
@@ -461,14 +482,15 @@ sub setSequence {
 
     my $sequence = shift;
 
+    $this->{Sequence} = $sequence;
     if (defined($sequence)) {
-	$this->{Sequence} = $sequence;
 	$this->{data}->{slength} = length($sequence);
+	$this->getSequenceHash();
     }
 }
 
 sub getSequence {
-# return the DNA (possibly) using lazy instatiation
+# return the DNA (possibly) using lazy instantiation
     my $this = shift;
     my %options = @_;
 
@@ -507,6 +529,21 @@ sub maskDNA {
     $part3 =~ s/./$sym/g;
 
     return $part1.$part2.$part3;
+}
+
+sub setSequenceHash {
+    my $this = shift;
+    $this->{sequencehash} = shift;
+}
+
+sub getSequenceHash {
+    my $this = shift;
+# if undefined, derive from current dna data
+    unless (defined($this->{sequencehash})) {
+        my $sequence = $this->getSequence(); # triggers delayed loading
+        $this->setSequenceHash(md5($sequence)) if $sequence;
+    }
+    return $this->{sequencehash};
 }
 
 #-----------------
@@ -660,8 +697,8 @@ sub getVersion {
 sub getOriginalVersion {
 # returns the original read, version 0
     my $this = shift;
-    return $this unless $this->isEdited();
-    my $ADB = $this->{SOURCE} || return undef; # cannot acces database
+    return $this unless ($this->getVersion() || $this->isEdited());
+    my $ADB = $this->{SOURCE} || return undef;
     return undef unless (ref($ADB) eq 'ArcturusDatabase');
     return $ADB->getRead(read_id=>$this->getReadID());
 }
@@ -684,10 +721,18 @@ sub compareSequence {
 # compare sequence in input read against this
     my $this = shift;
     my $read = shift || return undef;
+    my %options = @_;
+
+# in standard comparison use the hashes
+
+    unless ($options{full}) {
+        return 0 if ($this->getBaseQualityHash() ne $read->getBaseQualityHash());
+        return 0 if ($this->getSequenceHash()    ne $read->getSequenceHash());
+        return 1;
+    }
 
 # test respectively, sequence length, DNA and quality; exit on first mismatch
 
-my $DEBUG = 0;
     if (!defined($this->getSequenceLength())) {
 # this Read instance has no sequence information
         return undef;
@@ -699,6 +744,15 @@ my $DEBUG = 0;
     elsif ($this->getSequenceLength() != $read->getSequenceLength()) {
 # different lengths
         return 0;
+    }
+
+# long test the base quality data first
+
+    my $thisBQD = $this->getBaseQuality();
+    my $readBQD = $read->getBaseQuality();
+
+    for (my $i=0 ; $i<@$thisBQD ; $i++) {
+        return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
 
 # test the DNA sequences; special provision for sequence with pads 
@@ -713,14 +767,14 @@ my $DEBUG = 0;
 	}
 # different DNA strings; we do extra test for sequences with pads
         return 0 unless ($thisDNA =~ /-/);
+#        return 0 unless ($options{acceptpads} && $thisDNA =~ /-/);
 # compare individual alignment segments (separated by '-')
-$DEBUG = 0;
-print "testing ".$read->getReadName." version ".$read->getVersion.
-" against ".$this->getReadName."\n" if $DEBUG;
+#my $DEBUG = 0;
+#print "testing ".$read->getReadName." version ".$read->getVersion." against ".$this->getReadName."\n" if $DEBUG;
         my @pad;
         my $pos = -1;
-        my $thisBQD = $this->getBaseQuality();
-        my $readBQD = $read->getBaseQuality();
+#        my $thisBQD = $this->getBaseQuality();
+#        my $readBQD = $read->getBaseQuality();
         while (($pos = index($thisDNA,'-',$pos)) > -1) {
 # alter 'this' quality data at the pad position to match the 'read' data
             $thisBQD->[$pos] = $readBQD->[$pos];
@@ -731,7 +785,7 @@ print "testing ".$read->getReadName." version ".$read->getVersion.
         my $start = 1;
         for (my $i = 0; $i < scalar(@pad); $i++) {
             my $length = $pad[$i] - $start;
-print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
+#print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
             if ($length > 0) {
                 my $subthis = substr $thisDNA,$start,$length;
                 my $subread = substr $readDNA,$start,$length;
@@ -740,13 +794,6 @@ print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
             }
             $start = $pad[$i] + 1;
 	}
-    }
-
-    my $thisBQD = $this->getBaseQuality();
-    my $readBQD = $read->getBaseQuality();
-
-    for (my $i=0 ; $i<@$thisBQD ; $i++) {
-        return 0 if ($thisBQD->[$i] != $readBQD->[$i]);
     }
 
     return 1; # identical sequences 
