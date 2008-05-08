@@ -387,16 +387,20 @@ sub getRead {
 
     $this->defineReadMetaData();
 
-    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
-                 $this->{read_attributes},$this->{template_addons}
-                  from READINFO,SEQ2READ,TEMPLATE 
-                 where READINFO.read_id = SEQ2READ.read_id
-                   and READINFO.template_id = TEMPLATE.template_id";
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+              . "       SEQUENCE.seq_hash,SEQUENCE.qual_hash,"
+              . "       $this->{read_attributes},$this->{template_addons}"
+              . "  from READINFO,SEQ2READ,TEMPLATE,SEQUENCE"
+              . " where READINFO.read_id = SEQ2READ.read_id"
+              . "   and SEQ2READ.seq_id = SEQUENCE.seq_id"
+              . "   and READINFO.template_id = TEMPLATE.template_id";
 
-    my $union = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
-                 $this->{read_attributes},'undefined',0
-                  from READINFO,SEQ2READ
-                 where READINFO.read_id = SEQ2READ.read_id";
+    my $union = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+              . "       SEQUENCE.seq_hash,SEQUENCE.qual_hash,"
+              . "       $this->{read_attributes},'undefined',0"
+              . "  from READINFO,SEQ2READ,SEQUENCE"
+              . " where READINFO.read_id = SEQ2READ.read_id"
+              . "   and SEQ2READ.seq_id = SEQUENCE.seq_id";
 
     my $nextword;
     my $readitem;
@@ -456,6 +460,10 @@ sub getRead {
         $read->setSequenceID($seq_id);
 
         $read->setVersion($db_version);
+
+        $read->setSequenceHash(shift @attributes);
+
+        $read->setBaseQualityHash(shift @attributes);
 
         $this->addMetaDataForRead($read, @attributes);
 
@@ -727,6 +735,7 @@ sub getReads{
     $constraints .= " limit $options{limit}" if $options{limit};
 
     return &getReadsForCondition($this,$constraints,$additionaltable);
+#    return &getReadsForCondition($this->getConnection,$constraints,$additionaltable);
 }
 
 sub getReadsByReadID {
@@ -754,6 +763,7 @@ sub getReadsByReadID {
         my $constraints = "READINFO.read_id in ($range) and version = 0";
 
         my $reads = $this->getReadsForCondition($constraints);
+#  my $reads = &getReadsForCondition($this->getConnection,$constraints);
 
         push @reads, @$reads if ($reads && @$reads);
 
@@ -780,7 +790,7 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
 # add the other conditions
     $query   .= "    and $condition" if $condition;
 
-    $this->logQuery('getReadsForCondition',$query);
+$this->logQuery('getReadsForCondition',$query);
 
 # execute
 
@@ -862,7 +872,7 @@ sub getReadsBySequenceID {
 
     my $dbh = $this->getConnection();
 
-# retrieve version 0 (un-edited reads only, the raw data)
+# retrieve version 0 (un-edited reads only, raw data, but no sequence data)
 
 $this->defineReadMetaData(); # unless $this->{read_attributes};
 
@@ -1946,6 +1956,7 @@ sub putRead {
 # b) encode dictionary items; special case: template & ligation
 
 #    $this->populateLoadingDictionaries(); # autoload (ignored if already done)
+
     my $dbh = $this->getConnection();
 
 # CLONE
@@ -2164,6 +2175,8 @@ sub putSequenceForRead {
 
     my $dbh = $this->getConnection();
 
+    $this->populateLoadingDictionaries(); # autoload (ignored if already done)
+
 # Get a seq_id for this read
 
     my $query = "insert into SEQ2READ(read_id,version) VALUES(?,?)";
@@ -2181,17 +2194,21 @@ sub putSequenceForRead {
 
 # insert sequence and base quality
 
-# my $sequence = compress($read->getSequence());
     my $sequence = compress($readsequence);
 
-# my $basequality = compress(pack("c*", @{$read->getBaseQuality()}));
     my $basequality = compress(pack("c*", @$readbquality));
 
-    $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
+#    $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
+    $query = "insert into SEQUENCE"
+           . "(seq_id,seqlen,seq_hash,qual_hash,sequence,quality) "
+           . "VALUES(?,?,?,?,?,?)";
 
     $sth = $dbh->prepare_cached($query);
 
-    $rc = $sth->execute($seqid, $read->getSequenceLength(), $sequence, $basequality);
+    $rc = $sth->execute($seqid, $read->getSequenceLength(),
+                                $read->getSequenceHash(),
+                                $read->getBaseQualityHash(),
+                                $sequence, $basequality);
 
 # shouldn't we undo the insert in READINFO? if it fails
 
@@ -2239,7 +2256,9 @@ sub putSequenceForRead {
 	    my $seqvecid = &getReadAttributeID($seqvec,
 				               $this->{LoadingDictionary}->{'svector'},
 				               $this->{SelectStatement}->{'svector'},
-				               $this->{InsertStatement}->{'svector'}) || 0;
+				               $this->{InsertStatement}->{'svector'});
+
+            $seqvecid = 0 unless defined ($seqvecid);
 
 unless ($seqvecid) {
 print STDOUT "unidentified sequencing vector '$seqvec, $svleft, $svright' \n"; 
@@ -2329,7 +2348,7 @@ print STDOUT "unidentified sequencing vector '$seqvec, $svleft, $svright' \n";
     return ($seqid, "OK");
 }
 
-sub putNewSequenceForRead {
+sub oldputNewSequenceForRead { # TBD
 # add the sequence of this read as a new (edited) sequence for existing read
 # on success put the new sequence ID and version number into the input Read
     my $this = shift;
@@ -2820,7 +2839,7 @@ sub deleteReadsLike { # TO BE TESTED
     return $result,$report;
 }
 
-sub getSequenceIDsForReads {
+sub oldgetSequenceIDsForReads { # TBD
 # put sequenceID, version and read_id into Read instances given their 
 # readname (for unedited reads) or their sequence (edited reads)
 # NOTE: this method may insert new read sequence
@@ -2849,7 +2868,7 @@ sub getSequenceIDsForReads {
 	}
         elsif ($read->isEdited) {
 # assume the edited version is new, hence (try to) load it
-            my ($added,$errmsg) = $this->putNewSequenceForRead($read,$options{noload});
+            my ($added,$errmsg) = $this->oldputNewSequenceForRead($read,$options{noload});
 	    $log->info("Edited $added $errmsg") if $added;
 	    $log->warning("$errmsg") unless $added;
             $success = 0 unless $added;
@@ -2906,6 +2925,173 @@ sub getSequenceIDsForReads {
     }
 
     return $success;
+}
+
+sub getSequenceIDsForReads {
+# put sequenceID, version and read_id into Read instances given their 
+# readname (for un-edited reads) or their sequence (edited reads)
+# NOTE: this method may insert new read sequence
+    my $this = shift;
+    my $reads = shift; # array ref
+    my %options = @_;
+
+    &verifyParameter($reads,"getSequenceIDForReads",'ARRAY');
+
+    &verifyParameter($reads->[0],"getSequenceIDForReads");
+	
+    my $logger = $this->verifyLogger('getSequenceIDForReads'); 
+
+# collect data of all reads and pull out the data for version 0
+# test for each read the sequence and quality hashes; if they do not
+# match the read is edited. Collect edited reads for subsequent processing 
+
+    my $success = 1;
+
+    my $readhash = {};
+    foreach my $read (@$reads) {
+        next if $read->getSequenceID(); # already assigned
+        my $readname = $read->getReadName();
+        $readhash->{$readname} = $read;
+    }
+
+# get the sequence IDs for the collected reads (for sequence version = 0)
+
+    my @readnames = sort keys(%$readhash);
+
+    my $dbh = $this->getConnection();
+
+    my $blocksize = 10000;
+    while (my $block = scalar(@readnames)) {
+
+        $block = $blocksize if ($block > $blocksize);
+
+        my @names = splice @readnames, 0, $block;
+
+        my $query = "select READINFO.read_id,readname,SEQ2READ.seq_id,"
+                  . "       SEQUENCE.seq_hash,SEQUENCE.qual_hash"
+                  . "  from READINFO,SEQ2READ,SEQUENCE"
+                  . " where READINFO.read_id = SEQ2READ.read_id"
+                  . "   and SEQ2READ.seq_id = SEQUENCE.seq_id"
+                  . "   and readname in ('".join("','",@names)."')"
+	          . "   and version = 0";
+
+        my $sth = $dbh->prepare($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        while (my @ary = $sth->fetchrow_array()) {
+            my ($read_id,$readname,$seq_id,$seq_hash,$bql_hash) = @ary;
+            my $read = $readhash->{$readname}; # the read concerned
+# test db read_id against (possible) exiting read_id (we don't know origin of read)
+            if ($read->getReadID() && $read->getReadID() != $read_id) {
+                $logger->warning("incompatible read IDs ("
+                                .$read->getReadID." vs. $read_id)");
+	        next;
+            }
+            $read->setReadID($read_id); # mark readname in database
+# test if the sequence and quality hashes match; if not, the read is edited
+# next if  $read->isEdited(); # no further check needed
+            next if ($read->getSequenceHash()    ne $seq_hash);
+            next if ($read->getBaseQualityHash() ne $bql_hash);
+# ok, the read is the unedited version: remove from hash table
+            delete $readhash->{$readname};
+            $read->setSequenceID($seq_id);
+            $read->setVersion(0);
+        }
+        $sth->finish();
+    }
+
+# the reads remaining in the readhash are not version 0 reads
+
+    @readnames = sort keys %$readhash;
+    my $load = ($options{noload} ? 0 : 1);
+    foreach my $readname (sort keys %$readhash) {
+# identify which version of the read it is; if new try to load it
+        my $read = $readhash->{$readname};
+        my ($added,$errmsg) = $this->putNewSequenceForRead($read,load=>$load);
+        unless ($added) {
+	    $logger->warning("$errmsg");
+	    next;
+        }
+	$logger->info("Edited $added $errmsg");
+        delete $readhash->{$readname};
+    }
+
+# if there are still reads left, their sequence ID could not be found 
+
+    @readnames = sort keys %$readhash;
+    if (@readnames) {
+        $logger->error("Sequence IDs not found for reads: ".scalar(@readnames));
+        foreach my $readname (@readnames) {
+            $logger->special("Missing sequence ID for read : $readname");
+	}
+        $success = 0;
+    }
+
+    return $success;
+}
+
+sub putNewSequenceForRead {
+    my $this = shift;
+    my $read = shift;
+    my %options = @_; # load =>   has to be explicitly defined 
+
+    &verifyParameter($read,"putNewSequenceForRead");
+
+# test if the readname already occurs in the database by testing its read ID
+
+    my $readname = $read->getReadName();
+
+    my $read_id = $read->getReadID() || return (0,"unknown read $readname");
+
+#  now we test the previous versions of the read and compare
+
+    my $first;
+    my $prior = 1;  
+    my $version = 0;
+    while ($prior) {
+        $prior = $this->getRead(read_id=>$read_id,version=>$version); # a Read
+        if ($prior && $read->compareSequence($prior)) {
+	    my $seq_id = $prior->getSequenceID();
+            $read->setSequenceID($seq_id);
+            $read->setVersion($version);
+            return (1,"sequence ".$seq_id." is identified as version $version "
+                   ."of read $readname");
+        }
+        elsif ($prior) {
+            $first = $prior unless defined $first;
+            $version++;
+        }
+# no prior, hence exit loop and load new sequence
+        elsif (!$read->getSequence()) {
+# read not completed, missing seq_id
+            return (0,"Missing DNA sequence for version $version of read $readname");
+        }
+        elsif (!$options{load}) {
+# read not completed, missing seq_id
+            return (0,"New sequence version $version for read $readname "
+                     ."detected but not loaded");
+        }
+    }
+
+#  ok, we have a new sequence version for the read which has to be loaded
+
+    my $symbols = $options{symbols} || 'ACGTN-';
+    if ($read->getSequence() =~ /[^$symbols]/i) {
+# fatal error: sequence contains invalid symbols
+        return (0,"new sequence for read $readname: contains invalid symbols");
+    }
+
+# load the new version of the sequence
+
+    my ($seq_id,$errmsg) = $this->putSequenceForRead($read,$version); 
+
+    return 0,"failed to load new sequence (version $version: $errmsg)" unless $seq_id;
+
+    $read->setSequenceID($seq_id);
+    $read->setVersion($version);
+
+    return $seq_id,"new sequence version loaded ($version) for read $readname";
 }
 
 #----------------------------------------------------------------------------- 
