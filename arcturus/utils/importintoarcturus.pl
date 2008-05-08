@@ -260,7 +260,7 @@ my $depadded = "/tmp/${gap4name}.$$.depadded.caf";
 
 print STDOUT "Converting Gap4 database $gap4name.$version to CAF\n";
 
-system ("gap2caf -project $gap4name -version $version -ace $padded");
+system ("gap2caf -project $gap4name -version $version -maxqual 100 -ace $padded");
 
 unless ($? == 0) {
     print STDERR "!! -- FAILED to create a CAF file from $gap4name.$version ($?) --\n";
