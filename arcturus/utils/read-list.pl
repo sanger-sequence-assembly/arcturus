@@ -8,6 +8,8 @@ use FileHandle;
 use Logging;
 use PathogenRepository;
 
+#use Hexify qw(Hexify);
+
 #----------------------------------------------------------------
 # ingest command line parameters
 #----------------------------------------------------------------
@@ -190,8 +192,8 @@ if ($unassembled) {
 my @items = ('read_id','readname','seq_id','version',
              'template','ligation','insertsize','clone',
              'chemistry','SCFchemistry','strand','primer','aspeddate',
-             'basecaller','lqleft','lqright','slength','sequence',
-             'quality','align-to-SCF','pstatus','traceserver');
+             'basecaller','lqleft','lqright','slength','sequence','shash',
+             'quality','qhash','align-to-SCF','traceserver','pstatus');
 
 if (@reads) {
     $adb->getTagsForReads([@reads]) unless $notags;
@@ -269,6 +271,11 @@ sub list {
     $L{basecaller} = $read->getBaseCaller;
     $L{lqleft}     = $read->getLowQualityLeft;
     $L{lqright}    = $read->getLowQualityRight;
+
+# sequence hashes
+
+    $L{shash}      = &Hexify($read->getSequenceHash());
+    $L{qhash}      = &Hexify($read->getBaseQualityHash());
 
 # list section until now
 
@@ -348,11 +355,14 @@ sub list {
 # align to scf records
 
     my $aligns = $read->getAlignToTrace();
-    if ($aligns && scalar(@$aligns) > 1) {
+    if ($aligns && scalar(@$aligns) > 0) {
         print "\nAlign_to_SCF records:\n";
         foreach my $align (@$aligns) {
             printf (" %4d - %4d     %4d - %4d $break",@$align);
         }
+    }
+    elsif (my $a2tmap = $read->getAlignToTraceMapping()) {
+        print " ".$a2tmap->writeToString('Align_to_SCF');
     }
 
 # finally, comments, if any
@@ -419,6 +429,141 @@ sub getNamesFromFile {
     }
 
     return [@list];
+}
+
+#------------------------------------------------------------------------
+
+sub Hexify {
+
+    use bytes;
+    # First argument: data or reference to the data.
+    my $data = shift;
+
+    return '' unless defined $data;
+
+    my $dr = ref($data) ? $data : \$data;
+
+    my $start  = 0;             # first byte to dump
+    my $lastplusone = length($$dr); # first byte not to dump
+    my $align  = 1;             # align
+    my $chunk  = 16;            # bytes per line
+    my $first  = $start;        # number of 1st byte
+    my $dups   = 0;             # output identical lines
+    my $group  = 1;             # group per # bytes
+
+    my $show   = sub { my $t = shift;
+                       $t =~ tr /\000-\037\177-\377/./;
+                       $t;
+                 };
+
+    # Check for second argument.
+    if ( @_ ) {
+
+        # Second argument: options hash or hashref.
+        my %atts = ( align      => $align,
+                     chunk      => $chunk,
+                     showdata   => $show,
+                     start      => $start,
+                     length     => $lastplusone - $start,
+                     duplicates => $dups,
+                     first      => undef,
+                     group      => 1,
+                   );
+
+        if ( @_ == 1 ) {        # hash ref
+            my $a = shift;
+#            croak($usage) unless ref($a) eq 'HASH';
+            %atts = ( %atts, %$a );
+        }
+        elsif ( @_ % 2 ) {      # odd
+#            croak($usage);
+        }
+        else {                  # assume hash
+            %atts = ( %atts, @_ );
+        }
+
+        my $length;
+        $start  = delete($atts{start});
+        $length = delete($atts{length});
+        $align  = delete($atts{align});
+        $chunk  = delete($atts{chunk});
+        $show   = delete($atts{showdata});
+        $dups   = delete($atts{duplicates});
+        $group  = delete($atts{group});
+        $first  = defined($atts{first}) ? $atts{first}  : $start;
+        delete($atts{first});
+
+        if ( %atts ) {
+            croak("Hexify: unrecognized options: ".
+                  join(" ", sort(keys(%atts))));
+        }
+
+        # Sanity
+        $start = 0 if $start < 0;
+        $lastplusone = $start + $length;
+        $lastplusone = length($$dr)
+          if $lastplusone > length($$dr);
+        $chunk = 16 if $chunk <= 0;
+        if ( $chunk % $group ) {
+            croak("Hexify: chunk ($chunk) must be a multiple of group ($group)");
+        }
+    }
+    $group *= 2;
+
+    #my $fmt = "  %04x: %-" . (3 * $chunk - 1) . "s  %-" . $chunk . "s\n";
+    my $fmt = "  %04x: %-" . (2*$chunk + $chunk/($group/2) - 1) . "s  %-" . $chunk . "s\n";
+    my $ret = "";
+
+    if ( $align && (my $r = $first % $chunk) ) {
+        # This piece of code can be merged into the main loop.
+        # However, this piece is only executed infrequently.
+        my $lead = " " x $r;
+        my $firstn = $chunk - $r;
+        $first -= $r;
+        my $n = $lastplusone - $start;
+        $n = $firstn if $n > $firstn;
+        my $ss = substr($$dr, $start, $n);
+        (my $hex = $lead . $lead . unpack("H*",$ss)) =~ s/(.{$group})(?!$)/$1 /g;
+        $ret .= sprintf($fmt, $first, $hex,
+                        $lead . $show->($ss));
+        $start += $n;
+        $first += $chunk;
+    }
+
+    my $same = "";
+    my $didsame = 0;
+    my $dupline = "          |\n";
+
+    while ( $start < $lastplusone ) {
+        my $n = $lastplusone - $start;
+        $n = $chunk if $n > $chunk;
+        my $ss = substr($$dr, $start, $n);
+
+        if ( !$dups ) {
+            if ( $ss eq $same && ($start + $n) < $lastplusone ) {
+                if ( !$didsame ) {
+                    $ret .= $dupline;
+                    $same = $ss;
+                    $didsame = 1;
+                }
+                next;
+            }
+            else {
+                $same = "";
+                $didsame = 0;
+            }
+        }
+        $same = $ss;
+
+        (my $hex = unpack("H*", $ss)) =~ s/(.{$group})(?!$)/$1 /g;
+        $ret .= sprintf($fmt, $first, $hex, $show->($ss));
+    }
+    continue {
+        $start += $chunk;
+        $first += $chunk;
+    }
+
+    $ret;
 }
 
 #------------------------------------------------------------------------
