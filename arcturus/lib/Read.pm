@@ -116,7 +116,7 @@ sub importSequence {
 }
 
 sub hasSequence {
-# return true if both DNA and BaseQuality are defined
+# return true if both DNA and BaseQuality are defined 
     my $this = shift;
     return ($this->{Sequence} && $this->{BaseQuality});
 }
@@ -403,13 +403,13 @@ sub getProcessStatus {
 
 sub setBaseQuality {
 # import the reference to an array with base qualities
+# setting quality parameter to 'undef' removes the data, but not the hash value
     my $this = shift;
-
-    my $quality = shift;
+    my $quality = shift; # array ref or undef; other data types ignored
 
     if (!defined($quality) || ref($quality) eq 'ARRAY') {
-#    if (defined($quality) and ref($quality) eq 'ARRAY') {
 	$this->{BaseQuality} = $quality;
+        return unless $quality; # re: get..Hash could trigger delayed loading
         $this->getBaseQualityHash();
     }
 }
@@ -433,7 +433,7 @@ sub setBaseQualityHash {
 
 sub getBaseQualityHash {
     my $this = shift;
-# if undefined, derive from current quality data
+# if undefined, derive from current quality data, if any
     unless (defined($this->{basequalityhash})) {
         my $quality = $this->getBaseQuality(); # triggers delayed loading
         $this->setBaseQualityHash(md5(pack("c*",@$quality))) if $quality;
@@ -478,11 +478,13 @@ sub getName() {
 #-----------------
 
 sub setSequence {
+# setting sequence parameter to 'undef' removes the sequence, but not the hash value
     my $this = shift;
-
     my $sequence = shift;
 
     $this->{Sequence} = $sequence;
+    $this->{data}->{slength} = 0;
+
     if (defined($sequence)) {
 	$this->{data}->{slength} = length($sequence);
 	$this->getSequenceHash();
@@ -538,7 +540,7 @@ sub setSequenceHash {
 
 sub getSequenceHash {
     my $this = shift;
-# if undefined, derive from current dna data
+# if undefined, derive from current dna data, if any
     unless (defined($this->{sequencehash})) {
         my $sequence = $this->getSequence(); # triggers delayed loading
         $this->setSequenceHash(md5($sequence)) if $sequence;
@@ -723,11 +725,18 @@ sub compareSequence {
     my $read = shift || return undef;
     my %options = @_;
 
-# in standard comparison use the hashes
+# in standard comparison use the hashes 
 
     unless ($options{full}) {
+# if sequence data not defined always return 0 for not equal
+        return 0 unless $this->getSequenceHash();
+        return 0 unless $read->getSequenceHash();
+        return 0 if ($this->getSequenceHash() ne $read->getSequenceHash());
+
+        return 0 unless $this->getBaseQualityHash();
+        return 0 unless $read->getBaseQualityHash();
         return 0 if ($this->getBaseQualityHash() ne $read->getBaseQualityHash());
-        return 0 if ($this->getSequenceHash()    ne $read->getSequenceHash());
+
         return 1;
     }
 
@@ -769,12 +778,8 @@ sub compareSequence {
         return 0 unless ($thisDNA =~ /-/);
 #        return 0 unless ($options{acceptpads} && $thisDNA =~ /-/);
 # compare individual alignment segments (separated by '-')
-#my $DEBUG = 0;
-#print "testing ".$read->getReadName." version ".$read->getVersion." against ".$this->getReadName."\n" if $DEBUG;
         my @pad;
         my $pos = -1;
-#        my $thisBQD = $this->getBaseQuality();
-#        my $readBQD = $read->getBaseQuality();
         while (($pos = index($thisDNA,'-',$pos)) > -1) {
 # alter 'this' quality data at the pad position to match the 'read' data
             $thisBQD->[$pos] = $readBQD->[$pos];
@@ -785,7 +790,6 @@ sub compareSequence {
         my $start = 1;
         for (my $i = 0; $i < scalar(@pad); $i++) {
             my $length = $pad[$i] - $start;
-#print "i=$i  pad[i] $pad[$i]  start $start  length $length\n" if $DEBUG;
             if ($length > 0) {
                 my $subthis = substr $thisDNA,$start,$length;
                 my $subread = substr $readDNA,$start,$length;
