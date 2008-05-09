@@ -2988,8 +2988,12 @@ sub getSequenceIDsForReads {
                                 .$read->getReadID." vs. $read_id)");
 	        next;
             }
-            $read->setReadID($read_id); # mark readname in database
-# test if the sequence and quality hashes match; if not, the read is edited
+            $read->setReadID($read_id); # marks the readname in the database
+
+            unless ($read->hasSequence()) {
+                $logger->severe("read $readname has NO sequence data");
+                next;
+	    }
 # next if  $read->isEdited(); # no further check needed
             next if ($read->getSequenceHash()    ne $seq_hash);
             next if ($read->getBaseQualityHash() ne $bql_hash);
@@ -3004,10 +3008,12 @@ sub getSequenceIDsForReads {
 # the reads remaining in the readhash are not version 0 reads
 
     @readnames = sort keys %$readhash;
+
     my $load = ($options{noload} ? 0 : 1);
     foreach my $readname (sort keys %$readhash) {
 # identify which version of the read it is; if new try to load it
         my $read = $readhash->{$readname};
+        next unless $read->hasSequence(); # error message done earlier
         my ($added,$errmsg) = $this->putNewSequenceForRead($read,load=>$load);
         unless ($added) {
 	    $logger->warning("$errmsg");
@@ -3063,9 +3069,9 @@ sub putNewSequenceForRead {
             $version++;
         }
 # no prior, hence exit loop and load new sequence
-        elsif (!$read->getSequence()) {
+        elsif (!$read->hasSequence()) {
 # read not completed, missing seq_id
-            return (0,"Missing DNA sequence for version $version of read $readname");
+            return (0,"Missing sequence data for version $version of read $readname");
         }
         elsif (!$options{load}) {
 # read not completed, missing seq_id
