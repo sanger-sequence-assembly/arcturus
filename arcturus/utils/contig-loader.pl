@@ -518,7 +518,7 @@ while (defined($record = <$CAF>)) {
             elsif ($read = $reads{$objectName}) {
 # we consider an existing read only if the number of SCF-alignments is NOT 1
 	        my $align = $read->getAlignToTrace();
-                $objectType = 0 if ($isUnpadded && $align && scalar(@$align) == 1);
+#                $objectType = 0 if ($isUnpadded && $align && scalar(@$align) == 1);
 #	         my $aligntotracemapping = $read->getAlignToTraceMapping();
 #                $objectType = 0 if ($isUnpadded && $aligntotracemapping
 #                                && ($aligntotracemapping->hasSegments() == 1));
