@@ -24,6 +24,10 @@ public class JMXServerTest {
 		
 		System.err.println("InetAddress.getLocalHost().getHostName() returned " + hostname);
 		
+		InetAddress addr = InetAddress.getByName(hostname);
+		
+		System.err.println("InetAddress.getByName(" + hostname + ") returned " + addr);
+		
 		String url = "service:jmx:jmxmp://" + hostname + "/";
 		
 		System.err.println("URL is " + url);
