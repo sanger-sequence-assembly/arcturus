@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.io.FileInputStream;
 import java.io.File;
 import java.lang.management.ManagementFactory;
+import java.net.BindException;
 import java.net.InetAddress;
 import java.sql.*;
 import java.util.Properties;
@@ -134,7 +135,10 @@ public class Arcturus {
 			System.err.println("JMX URL is " + jurl);
 			
 			storeJMXURL(jurl);
-		} catch (Exception e) {
+		} catch (BindException be) {
+			logInfo("Bind exception whilst initialising JMX remote server", be);
+		}
+		catch (Exception e) {
 			logWarning("Error whilst initialising JMX remote server", e);
 		}
 	}
@@ -252,6 +256,10 @@ public class Arcturus {
 
 	public static void logInfo(String message) {
 		logger.log(Level.INFO, message);
+	}
+
+	public static void logInfo(String message, Throwable throwable) {
+		logger.log(Level.INFO, message, throwable);
 	}
 
 	public static void logWarning(String message) {
