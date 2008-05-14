@@ -584,7 +584,7 @@ sub writeToCaf {
     my $FILE = shift; # optional output file handle
     my %options = @_; # option 'annotag' allows override of default
 
-    &verifyKeys('writeToCaf',\%options,'pair','annotag');
+    &verifyKeys('writeToCaf',\%options,'pair','annotag','infotag','anno2info');
 
     my $pair = $options{pair};
 
@@ -627,7 +627,7 @@ sub writeToCaf {
         $tagtext .= ' ' . $comment if $comment;
         $string .= "\"$tagtext\"\n" ;
 # if also a comment available add an info tag
-        $string .= "Tag INFO @pos \"$tagcomment\"\n" if $tagcomment;
+        $string .= "Tag ASIT @pos \"$tagcomment\"\n" if $tagcomment;
     }
 
     elsif ($host eq 'Read') {
