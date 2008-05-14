@@ -331,7 +331,11 @@ sub getDirection {
 
 sub setInsertSize {
     my $this = shift;
-    $this->{data}->{insertsize} = shift;
+    my $insertsize = shift;
+    return unless (ref($insertsize) eq 'ARRAY');
+    return unless defined($insertsize->[0]);
+    return unless defined($insertsize->[1]);
+    $this->{data}->{insertsize} = $insertsize;
 }
 
 sub getInsertSize {
