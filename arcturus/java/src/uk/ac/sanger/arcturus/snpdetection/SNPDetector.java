@@ -165,7 +165,7 @@ public class SNPDetector {
 						int score = groupConsensus[i].getBestScore();
 
 						if (base != defaultBase) {
-							System.err.println(cpos + "\t" + defaultBase
+							System.out.println(cpos + "\t" + defaultBase
 									+ " (Q=" + defaultScore + ", N="
 									+ defaultReads + ")\t" + i + "\t" + base
 									+ " (Q=" + score + ", N=" + nReads + ")");
