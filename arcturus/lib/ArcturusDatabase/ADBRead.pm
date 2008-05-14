@@ -1931,6 +1931,64 @@ sub getReadsNotInDatabase {
     return [@missingreads];    
 }
 
+sub getReadVersionHash {
+    my $this = shift;
+    my $readnames = shift; # reference to array with readnames to be tested
+
+    &verifyParameter($readnames,"getReadVersionHash",'ARRAY');
+
+    my $dbh = $this->getConnection();
+
+# build a hash list keyed on readnames
+
+    my $namehash = {};
+    foreach my $name (@$readnames) {
+        $namehash->{$name}++;
+    }
+
+    my $readversionhash = {};
+
+# do the search in blocks; remove readnames found from hash keys
+
+    my $blocksize = 10000;
+
+    my $nr = scalar(@$readnames);
+    for (my $i = 0; $i < $nr ; $i += $blocksize) {
+        my $j = $i + $blocksize - 1;
+        $j = $nr - 1 if ($j >= $nr);
+        my $joinstring = join "','",@$readnames[$i .. $j];
+
+        my $query = "select readname,READINFO.read_id,version,"
+                  . "       SEQUENCE.seq_id,seq_hash,qual_hash"
+                  . "  from READINFO,SEQ2READ,SEQUENCE"
+                  . " where READINFO.read_id = SEQ2READ.read_id"
+                  . "   and SEQ2READ.seq_id = SEQUENCE.seq_id"
+                  . "   and readname in ('$joinstring')";
+
+        my $sth = $dbh->prepare($query);
+
+        my $rw =  $sth->execute() || &queryFailed($query);
+
+        while (my ($rnm,$id,$version,$sid,$sh,$qh) = $sth->fetchrow_array()) {
+
+            $readversionhash->{$rnm} = [] unless $readversionhash->{$rnm};
+            my $versionnode =  $readversionhash->{$rnm};
+            $versionnode->[$version] = {} unless $versionnode->[$version];
+            my $versionhash = $versionnode->[$version];
+            $versionhash->{seq_id} = $sid;
+            $versionhash->{seq_hash} = $sh;
+            $versionhash->{qual_hash} = $qh;
+            delete $namehash->{$rnm};
+        }
+    }
+
+# the remaining keys are readnames not present in the database
+
+    my @missingreads = keys %$namehash;
+
+    return $readversionhash,[@missingreads];
+}
+
 #------------------------------------------------------------------------------
 # importing reads as Read objects
 #------------------------------------------------------------------------------
@@ -2930,10 +2988,10 @@ sub oldgetSequenceIDsForReads { # TBD
 sub getSequenceIDsForReads {
 # put sequenceID, version and read_id into Read instances given their 
 # readname (for un-edited reads) or their sequence (edited reads)
-# NOTE: this method may insert new read sequence
+# NOTE: this method may insert new read sequence into SEQUENCE table
     my $this = shift;
     my $reads = shift; # array ref
-    my %options = @_;
+    my %options = @_; # noload , blocksize , acceptversionzero
 
     &verifyParameter($reads,"getSequenceIDForReads",'ARRAY');
 
@@ -2955,12 +3013,15 @@ sub getSequenceIDsForReads {
     }
 
 # get the sequence IDs for the collected reads (for sequence version = 0)
+# first process all unedited reads (version 0) and remove them from the list
+# we use and insist on read hash info, unless the 'acceptversionzero' is set
 
     my @readnames = sort keys(%$readhash);
 
     my $dbh = $this->getConnection();
 
-    my $blocksize = 10000;
+    my $blocksize = $options{blocksize} || 10000;
+
     while (my $block = scalar(@readnames)) {
 
         $block = $blocksize if ($block > $blocksize);
@@ -2988,32 +3049,54 @@ sub getSequenceIDsForReads {
                                 .$read->getReadID." vs. $read_id)");
 	        next;
             }
-            $read->setReadID($read_id); # marks the readname in the database
+            $read->setReadID($read_id); # marks that readname is in database
 
-            unless ($read->hasSequence()) {
-                $logger->severe("read $readname has NO sequence data");
-                next;
+# test if the align-to-trace state indicates an edited read 
+
+            next if $read->isEdited();
+
+# get the sequence hashes in the input read
+
+            my $read_seq_hash = $read->getSequenceHash()    || '';
+            my $read_bql_hash = $read->getBaseQualityHash() || '';
+
+# if the hashes are defined, compare to the ones from the query
+
+            if ($read_seq_hash && $read_bql_hash) {
+# any difference of hash values means an edited read
+                next if ($read_seq_hash ne $seq_hash);
+                next if ($read_bql_hash ne $bql_hash);
 	    }
-# next if  $read->isEdited(); # no further check needed
-            next if ($read->getSequenceHash()    ne $seq_hash);
-            next if ($read->getBaseQualityHash() ne $bql_hash);
-# ok, the read is the unedited version: remove from hash table
-            delete $readhash->{$readname};
-            $read->setSequenceID($seq_id);
+            else {           
+# the hashes are not defined,and no sequence is available: 
+# optionally accept the read explicitly as version 0; use this
+# flag if no edited reads are expected (re: phusion assembly)
+                next unless $options{acceptversionzero};
+	    }
+
+# ok, the read is (accepted as) the unedited version: remove from hash table
+
             $read->setVersion(0);
+            $read->setSequenceID($seq_id);
+            delete $readhash->{$readname};
         }
         $sth->finish();
     }
 
-# the reads remaining in the readhash are not version 0 reads
+# the reads remaining in the readhash are not version 0 reads; to find the 
+# version if it is already in the database requeires only the hashes to be
+# defined; to add a new version to the database, reads must have sequence
 
     @readnames = sort keys %$readhash;
 
-    my $load = ($options{noload} ? 0 : 1);
+    my $load = ($options{noload} ? 0 : 1); # default 1
     foreach my $readname (sort keys %$readhash) {
 # identify which version of the read it is; if new try to load it
         my $read = $readhash->{$readname};
-        next unless $read->hasSequence(); # error message done earlier
+        unless ($read->getSequenceHash() && $read->getBaseQualityHash()) { 
+            $logger->severe("read $readname has NO sequence data");
+	    next; # must have sequence to identify its version
+	}
         my ($added,$errmsg) = $this->putNewSequenceForRead($read,load=>$load);
         unless ($added) {
 	    $logger->warning("$errmsg");
@@ -3062,22 +3145,28 @@ sub putNewSequenceForRead {
             $read->setSequenceID($seq_id);
             $read->setVersion($version);
             return (1,"sequence ".$seq_id." is identified as version $version "
-                   ."of read $readname");
+                     ."of read $readname");
         }
         elsif ($prior) {
             $first = $prior unless defined $first;
             $version++;
         }
 # no prior, hence exit loop and load new sequence
-        elsif (!$read->hasSequence()) {
-# read not completed, missing seq_id
-            return (0,"Missing sequence data for version $version of read $readname");
-        }
-        elsif (!$options{load}) {
-# read not completed, missing seq_id
-            return (0,"New sequence version $version for read $readname "
-                     ."detected but not loaded");
-        }
+
+#        elsif (!$read->hasSequence()) {
+# read not complete, missing sequence; no seq_id can be added
+#            return (0,"missing sequence data for version $version of read $readname");
+#        }
+#        elsif (!$options{load}) {
+# return read not completed, missing seq_id
+#            return (0,"new sequence version $version for read $readname "
+#                     ."detected but not loaded");
+#        }
+    }
+
+    unless( $read->hasSequence()) {
+# read not complete, missing sequence; no seq_id can be added
+        return (0,"missing sequence data for version $version of read $readname");
     }
 
 #  ok, we have a new sequence version for the read which has to be loaded
@@ -3085,14 +3174,22 @@ sub putNewSequenceForRead {
     my $symbols = $options{symbols} || 'ACGTN-';
     if ($read->getSequence() =~ /[^$symbols]/i) {
 # fatal error: sequence contains invalid symbols
-        return (0,"new sequence for read $readname: contains invalid symbols");
+        return (0,"new sequence for read $readname contains invalid symbols");
+    }
+
+# add new sequence if load option active; else return read without seq_id
+
+    unless ($options{load}) {
+# return read not completed, missing seq_id
+        return (0,"new sequence version $version for read $readname "
+                 ."detected but not loaded");
     }
 
 # load the new version of the sequence
 
     my ($seq_id,$errmsg) = $this->putSequenceForRead($read,$version); 
 
-    return 0,"failed to load new sequence (version $version: $errmsg)" unless $seq_id;
+    return 0,"failed to load new sequence (v $version: $errmsg)" unless $seq_id;
 
     $read->setSequenceID($seq_id);
     $read->setVersion($version);
