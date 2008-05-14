@@ -414,6 +414,7 @@ sub putContig {
 # lockcheck 0/1       for choice of project used for project inheritance
 # inheritTags=>0/1/2  for generation depth of tag inheritance from parents
 # noload=>0/1         for testmode (everything except write to database)
+# acceptversionzero   when identifying read sequence id without sequence dat
 
     my $setprojectby = $options{setprojectby} || 'contiglength'; # 'none'
     if ($setprojectby eq 'project' && !$project) {
@@ -445,10 +446,10 @@ sub putContig {
 # get readIDs/seqIDs for its reads, load new sequence for edited reads
  
     my $reads = $contig->getReads();
-#$log->debug("calling getSequenceIDsForRead from $this");
-    return 0, "Missing sequence IDs for contig $contigname" 
-        unless $this->getSequenceIDsForReads($reads); # to be tested
-# unless $this->getSequenceIDForAssembledReads($reads);
+    my $avz = $options{acceptversionzero};
+    unless ($this->getSequenceIDsForReads($reads,acceptversionzero=>$avz)) {
+        return 0, "Missing sequence IDs for contig $contigname";
+    }
 
 # get the sequenceIDs (from Read); also build the readnames array 
 
@@ -1004,82 +1005,6 @@ sub putMetaDataForContig {
     return 0 unless ($rc == 1);
     
     return $dbh->{'mysql_insertid'}; # the contig_id
-}
-
-sub getSequenceIDForAssembledReadsTBD { # TO BE DEPRECATED
-# put sequenceID, version and read_id into Read instances given their 
-# readname (for unedited reads) or their sequence (edited reads)
-# NOTE: this method may insert new read sequence
-    my $this = shift;
-    my $reads = shift;
-
-    &verifyParameter($reads,"getSequenceIDForAssembledReads",'ARRAY');
-
-    &verifyParameter($reads->[0],"getSequenceIDForAssembledReads",'Read');
-	
-    my $log = $this->verifyLogger('getSequenceIDForAssembledReads');
-    $log->error("Using deprecated method getSequenceIDForAssembledReads");
-
-# collect the readnames of unedited and of edited reads
-# for edited reads, get sequenceID by testing the sequence against
-# version(s) already in the database with method addNewSequenceForRead
-# for unedited reads pull the data out in bulk with a left join
-
-    my $success = 1;
-
-    my $unedited = {};
-    foreach my $read (@$reads) {
-        if ($read->isEdited) {
-            my ($added,$errmsg) = $this->putNewSequenceForRead($read);
-	    $log->info("Edited $added $errmsg") if $added;
-	    $log->info("$errmsg") unless $added;
-            $success = 0 unless $added;
-        }
-        else {
-            my $readname = $read->getReadName();
-            $unedited->{$readname} = $read;
-        }
-    }
-
-# get the sequence IDs for the unedited reads (version = 0)
-
-    my $range = join "','",sort keys(%$unedited);
-
-    return unless $range;
-
-    my $query = "select READINFO.read_id,readname,seq_id" .
-                "  from READINFO left join SEQ2READ using(read_id) " .
-                " where readname in ('$range')" .
-	        "   and version = 0";
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare($query);
-
-    $sth->execute() || &queryFailed($query);
-
-    while (my @ary = $sth->fetchrow_array()) {
-        my ($read_id,$readname,$seq_id) = @ary;
-        my $read = $unedited->{$readname};
-        delete $unedited->{$readname};
-        $read->setReadID($read_id);
-        $read->setSequenceID($seq_id);
-        $read->setVersion(0);
-    }
-
-    $sth->finish();
-
-# have we collected all of them? then %unedited should be empty
-
-    if (keys %$unedited) {
-        $log->error("Sequence ID not found for reads: "
-	            . join(',',sort keys %$unedited));
-        foreach my $key (keys %$unedited) {
-            $log->special("Missing sequence ID for read : $key");
-	}
-        $success = 0;
-    }
-    return $success;
 }
 
 #----------------------------------------
