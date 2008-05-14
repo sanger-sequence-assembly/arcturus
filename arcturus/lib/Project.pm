@@ -393,7 +393,7 @@ sub writeContigsToCaf {
 # write all contigs in this project to CAF; standard project export
     my $this = shift;
     my $FILE = shift; # obligatory file handle
-    my %options = @_; # frugal=> , logger=>
+    my %options = @_; # frugal=> , logger=>, endregiontrim=>
 
     my ($contigids,$status) = $this->fetchContigIDs($options{notacquirelock});
 
@@ -429,6 +429,10 @@ sub writeContigsToCaf {
             $report .= $message."\n";
             $errors++;
             next;
+        }
+# end region trimming (for export to gap4 database, re: prefinishing)
+        if (my $cliplevel = $options{endregiontrim}) {
+             $contig->endRegionTrim(cliplevel=>$cliplevel);
         }
 
         if ($contig->writeToCaf($FILE)) { # returns 0 if no errors
@@ -469,7 +473,7 @@ sub writeContigsToFasta {
 
     foreach my $contig_id (@$contigids) {
 
-        my $contig = $ADB->getContig(contig_id=>$contig_id);
+        my $contig = $ADB->getContig(contig_id=>$contig_id,metadataonly=>1);
 
         unless ($contig) {
             $report .= "FAILED to retrieve contig $contig_id\n";
@@ -488,7 +492,6 @@ sub writeContigsToFasta {
                 $qoptions{$option} = $options{$option};
 	    }
 # get a clipped version of the current consensus
-#print STDERR "quality clipping ".$contig->getContigName()."\n";
             my ($new,$status) = $contig->deleteLowQualityBases(nonew=>1,%qoptions);
 
             $contig = $new if ($status);
