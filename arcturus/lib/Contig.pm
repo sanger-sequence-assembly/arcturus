@@ -1549,6 +1549,13 @@ sub break {
     return ContigHelper->break($this,%options);
 }
 
+sub disassemble {
+    my $this = shift;
+    my %options = @_;
+    &verifyKeys('disassemble',\%options,'tagstart','tagfinal');
+    return ContigHelper->disassemble($this,%options);
+}
+
 #---------------------------
 # Pad status TO BE DEVELOPED
 #---------------------------
