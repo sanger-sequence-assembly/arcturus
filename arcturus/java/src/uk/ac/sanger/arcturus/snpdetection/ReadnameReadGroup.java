@@ -5,7 +5,6 @@ import java.util.regex.*;
 import uk.ac.sanger.arcturus.data.Read;
 
 public class ReadnameReadGroup extends ReadGroup {
-	private String name;
 	private Pattern pattern;
 	
 	public ReadnameReadGroup(String name) {

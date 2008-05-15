@@ -10,9 +10,10 @@ public class Base {
 	protected int chemistry;
 	protected char base;
 	protected int quality;
+	protected ReadGroup readGroup;
 
 	public Base(Read read, int sequence_id, int read_position, char strand,
-			int chemistry, char base, int quality) {
+			int chemistry, char base, int quality, ReadGroup readGroup) {
 		this.read = read;
 		this.sequence_id = sequence_id;
 		this.read_position = read_position;
@@ -20,5 +21,6 @@ public class Base {
 		this.chemistry = chemistry;
 		this.base = Character.toUpperCase(base);
 		this.quality = quality;
+		this.readGroup = readGroup;
 	}
 }
