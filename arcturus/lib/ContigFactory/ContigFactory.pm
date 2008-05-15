@@ -475,27 +475,33 @@ sub removeObjectFromInventory {
     }
 }
 
-#------------- building Contig and Read instances from the caf file --------------------
+#------------- building Contig and Read instances from the caf file --------------
     
 my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2); # class constants
 
 sub contigExtractor {
     my $class = shift;
     my $contignames = shift; # array with contigs to be extracted
-    my %options = @_; # print STDOUT "contigextractor options @_\n";
+    my $readversionhash = shift;
+    my %options = @_; 
+
+# options : contignamefilter, usepadded, consensus, contigtaglist, ignoretaglist
+#           readtaglist, noreadsequence, noreads
 
     my $logger = &verifyLogger('contigExtractor');
 
     my $inventory = &getInventory($class);
 
-# -------------- options processing
+# -------------- options processing (used in this module)
 
     my $consensus  = $options{consensus};        # include consensus, default not
     my $namefilter = $options{contignamefilter}; # select specific contigs
 
 # default DNA and BaseQuality only added for edited reads
 
-    my $readselect = $options{readselect}; # 'none', 'full', else default
+    my $noreads    = $options{noreads} || 0;
+
+# -------------- options processing (passed on to sub-modules)
 
 # tag-related: test options, replace if processed or put default values 
 
@@ -504,28 +510,23 @@ sub contigExtractor {
     $contigtaglist = '\w{3,4}' unless $contigtaglist; # default
     $options{contigtaglist} = $contigtaglist;
 
-    my $readtaglist = $options{readtaglist};
-    $readtaglist =~ s/\W/|/g if ($readtaglist && $readtaglist !~ /\\/);
-    $readtaglist = '\w{3,4}' unless $readtaglist; # default
-    $options{readtaglist} = $readtaglist;
-
     my $ignoretaglist = $options{ignoretaglist};
     $ignoretaglist =~ s/\W/|/g if ($ignoretaglist && $ignoretaglist !~ /\\/);
-    $options{ignoretaglist} = $ignoretaglist;
+    $options{ignoretaglist} = $ignoretaglist if $ignoretaglist;
 
     $options{usepadded} = 0 unless defined $options{usepadded};
-    $options{noverify}  = 0 unless defined $options{noverify};
 
 # --------------- get caf file from inventory hash
 
-#    my $CAF = &getFileHandle($inventory);
-    my $caffile = $inventory->{caffilename};
-    my $CAF = new FileHandle($caffile,"r");
+    my $CAF = &getFileHandle($inventory);
 
-    unless ($CAF) {
-	$logger->error("Invalid CAF file specification $caffile");
-        return undef;
-    }
+#    my $caffile = $inventory->{caffilename};
+#    my $CAF = new FileHandle($caffile,"r");
+
+#    unless ($CAF) {
+#	$logger->error("Invalid CAF file specification $caffile");
+#        return undef;
+#    }
 
 # --------------- main
 
@@ -574,6 +575,7 @@ sub contigExtractor {
         elsif ($type == 2) {
            ($status,$line) = &parseBaseQuality ($CAF,$contig,$line);
         }
+
         next if $type;
 # and collect the readnames in this contig
         my $reads = $contig->getReads();
@@ -583,95 +585,9 @@ sub contigExtractor {
             next;
 	}
 
-        next if ($readselect && $readselect eq 'none');
+        next if $noreads;
 
         push @reads,@$reads;
-
-#        foreach my $read (@$reads) {
-#            my $readname = $read->getReadName();
-#            my $rinventory = $inventory->{$readname};
-#            unless ($rinventory) {
-#	        $logger->error("Missing read $readname in inventory");
-#	        next;
-#   	    }
-#            foreach my $item (@readitems) {
-#                my $itemlocation = $rinventory->{$item};
-#                next unless $itemlocation;
-#                push @readstack,[($read,$components{$item},@$itemlocation)];
-#	    }
-#	}        
-    }
-
-    my @readstack;
-# default reads have sequence only and DNA if edited
-    my @readitems = ('Sequence');
-    if ($readselect && $readselect eq 'full') {
-        push @readitems,'DNA','BaseQuality';
-    } 
-
-    foreach my $read (@reads) {
-        my $readname = $read->getReadName();
-        my $rinventory = $inventory->{$readname};
-        $read->setDataSource($class);
-        unless ($rinventory) {
-            $logger->error("Missing read $readname in inventory");
-            next;
-        }
-        foreach my $item (@readitems) {
-            my $itemlocation = $rinventory->{$item};
-            next unless $itemlocation;
-            push @readstack,[($read,$components{$item},@$itemlocation)];
-	}
-    }        
-
-# use readExtractor here; to be tested
-
-# and collect all the required read items
-
-    foreach my $stack (sort {$a->[2] <=> $b->[2]} @readstack) {
-        my ($read,$type,$fileposition,$line) = @$stack;
-        seek $CAF, $fileposition, 00; # position the file 
-        if ($type == 0) {
-           ($status,$line) = &parseRead        ($CAF,$read,$line,%options);
-        }
-	elsif ($type == 1) {
-           ($status,$line) = &parseDNA         ($CAF,$read,$line);
-        }
-        elsif ($type == 2) {
-	   ($status,$line) = &parseBaseQuality ($CAF,$read,$line);
-        }
-        unless ($status) {
-            my $readname = $read->getReadName();
-	    $logger->error("Failed to extract data for read $readname");
-	    next;
-	}
-# type > 0 implies readoption 'full' with all read data now loaded
-        next if ($type || $readselect && $readselect eq 'full');
-# default read option
-        next unless $read->isEdited();
-# add here the DNA and Quality data for this read
-#	&getSequenceForObject($read,$inventory); next # alternative (conjunct getFileHandle)
-
-        my $readname = $read->getReadName();
-        my $rinventory = $inventory->{$readname};
-        foreach my $item ('DNA','BaseQuality') {
-            my $positions = $rinventory->{$item};
-            unless ($positions) {
-		$logger->error("No $item available for edited read $readname");
-		next;
-	    }
-           ($fileposition,$line) = @$positions;
-            seek $CAF, $fileposition, 00; # position the file 
-            $type = $components{$item};
-            if ($type == 1) {
-               ($status,$line) = &parseDNA         ($CAF,$read,$line);
-	    }
-	    elsif ($type == 2) {
-               ($status,$line) = &parseBaseQuality ($CAF,$read,$line);
-	    }
-            next if $status;
-	    $logger->error("Failed to extract $item data for read $readname");
-        }     
     }
 
     my @contigs;
@@ -679,31 +595,47 @@ sub contigExtractor {
         push @contigs, $contigs{$contigname};
     }
 
-    $CAF->close() if $CAF;
+    return \@contigs unless @reads;
+
+# extract the reads
+
+    my %roptions;
+    foreach my $key ('readtaglist','ignoretaglist','nosequence') {
+        $roptions{$key} = $options{$key} if $options{$key};
+    }
+    my $result = $class->readExtractor(\@reads,$readversionhash,%roptions);
 
     return \@contigs;
 }
 
 sub readExtractor {
+# return a list of Read instances 
     my $class = shift;
-    my $reads = shift; # array with reads to be extracted
-    my %options = @_; 
+    my $reads = shift;  # array with Reads or readnames to be extracted
+    my $readversionhash = shift; # may be 0 or undefined
+    my %options = @_; # readtaglist, edittaglist, fullreadscan, noreadsequence
+
+# if no readversion hash is provided, the Reads have DNA and BQ data
+# if  a readversion hash is specified, those reads that match have DNA and BQ
+# removed and have the sequence ID set (unless the nosequence option is used)
 
     my $logger = &verifyLogger('readExtractor');
 
+    my $readtaglist = $options{readtaglist};
+    $readtaglist =~ s/\W/|/g if ($readtaglist && $readtaglist !~ /\\/);
+    $readtaglist = '\w{3,4}' unless $readtaglist; # default
+    $options{readtaglist} = $readtaglist;
+ 
+    my $edittaglist = $options{edittaglist};
+    $edittaglist =~ s/\W/|/g if ($edittaglist && $edittaglist !~ /\\/);
+    $options{edittaglist} = $edittaglist if $edittaglist;
+
+    $options{fullreadscan}   = 0 unless defined $options{fullreadscan};
+    $options{noreadsequence} = 0 unless defined $options{noreadsequence};
+
+# --------------------- get caf file from inventory hash --------------------
+
     my $inventory = &getInventory($class);
-
-# if input is a list of names, replace by list of Read objects
-
-    my @reads;
-    foreach my $read (@$reads) {
-        next if (ref($read) eq 'Read');
-        push @reads,new Read($read); # read contains readname
-    }
-# if readnames replaced by read objects: assign new output array
-    $reads = \@reads if @reads;
-
-# get caf file from inventory hash
 
     unless ($inventory) {
 # pick up the cached hash, if this method not called on the class itself 
@@ -715,21 +647,23 @@ sub readExtractor {
 	}
     }   
 
-    my $CAF = &getFileHandle($inventory);
+    my $CAF = &getFileHandle($inventory) || return undef;
 
-    unless ($CAF) {
-	$logger->error("Invalid CAF file specification $inventory->{caffile}");
-        return undef;
+#------- if input is a list of names, replace by list of Read objects -------
+
+    my @reads;
+    foreach my $read (@$reads) {
+        push @reads, $read           if (ref($read) eq 'Read');
+        push @reads, new Read($read) if (ref($read) ne 'Read'); # readname
     }
+# if readnames replaced by read objects: assign new output array
+    $reads = \@reads if @reads;
 
-# --------------- main
+#--------------------------------- main -------------------------------------
 
     my @readstack;
-# default reads have sequence only and DNA if edited
-    my @readitems;
-    push @readitems,'Sequence'    unless $options{nosequence};
-    push @readitems,'DNA'         unless $options{nodna};
-    push @readitems,'BaseQuality' unless $options{noquality};
+    my @readitems =('Sequence');
+    push @readitems,'DNA','BaseQuality' unless $options{noreadsequence};
 
     my $extractedreads = []; # actually extracted 
     foreach my $read (@reads) {
@@ -754,7 +688,6 @@ sub readExtractor {
         my ($read,$type,$fileposition,$line) = @$stack;
         seek $CAF, $fileposition, 00; # position the file 
         if ($type == 0) {
-            $options{fullscan} = 1 unless defined $options{fullscan};
            ($status,$line) = &parseRead        ($CAF,$read,$line,%options);
         }
 	elsif ($type == 1) {
@@ -766,7 +699,29 @@ sub readExtractor {
         unless ($status) {
             my $readname = $read->getReadName();
 	    $logger->error("Failed to extract data for read $readname");
+	    next;
 	}
+# test if sequence data have to be removed
+        next unless $readversionhash;
+        next unless $read->hasSequence();
+# get the data from the hash for this read
+        my $readname = $read->getReadName();
+        if (my $versionhashlist = $readversionhash->{$readname}) {
+            my $seq_hash = $read->getSequenceHash();
+            my $bql_hash = $read->getBaseQualityHash();
+	    my $version = 0;
+	    for (my $version=0 ; $version < @$versionhashlist ; $version++) {
+                my $versionhash = $versionhashlist->[$version];
+                next unless ($seq_hash eq $versionhash->{seq_hash});
+                next unless ($bql_hash eq $versionhash->{qual_hash});
+# both hashes match: this read version is in the database
+                $read->setSequenceID($versionhash->{seq_id});
+                $read->setVersion($version);
+# remove sequence data
+                $read->setSequence(undef);    
+                $read->setBaseQuality(undef);
+	    }
+	}       
     }
 
     return $extractedreads;
@@ -789,8 +744,11 @@ sub extractRead {
 # public, extract a named read
     my $class = shift;
     my $readname = shift;
+    my %options = @_;
 
-    my $reads = $class->readExtractor([($readname)],@_); # port options
+    $options{fullreadscan} = 1 unless defined $options{fullreadscan};
+
+    my $reads = $class->readExtractor([($readname)],%options);
 
     return $reads->[0] if $reads->[0];
 
@@ -1244,7 +1202,7 @@ $logger->warning("Contig tags to be processed: $contigtaglist");
 # we consider an existing read only if the number of SCF-alignments is NOT 1
 	            my $align = $read->getAlignToTrace();
                     if ($isUnpadded && $align && scalar(@$align) == 1) {
-                        $objectType = 0;
+#                        $objectType = 0;
 		    }
 #	         my $aligntotracemapping = $read->getAlignToTraceMapping();
 #                $objectType = 0 if ($isUnpadded && $aligntotracemapping
@@ -1787,7 +1745,7 @@ sub parseRead {
     my $CAF  = shift;
     my $read = shift; # Read instance with readname defined
     my $fline = shift; # starting line in the file (re: error reporting)
-    my %options = @_;
+    my %options = @_; # readtaglist, edittaglist, fullreadscan, noverify
 
     &verifyPrivate($CAF,'parseRead');
 
@@ -1986,7 +1944,7 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
 
         elsif ($record =~ /SCF|Pro|Temp|Ins|Dye|Pri|Str|Clo|Seq|Lig|Pro|Asp|Bas/) {
 # this block is taken from CAFfileloader
-            next unless $options{fullscan};
+            next unless $options{fullreadscan};
 # decode the read meta data
             $record =~ s/^\s+|\s+$//g;
             my @items = split /\s+/,$record; 
