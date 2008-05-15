@@ -15,11 +15,6 @@ public class SNPDetector {
 
 	private static final String TAB = "\t";
 
-	private boolean showConsensusDiscrepancies = Boolean
-			.getBoolean("showConsensusDiscrepancies");
-	private boolean showReadDiscrepancies = Boolean
-			.getBoolean("showReadDiscrepancies");
-
 	@SuppressWarnings("unchecked")
 	public SNPDetector(ReadGroup[] readGroups) {
 		this.readGroups = readGroups;
@@ -35,26 +30,16 @@ public class SNPDetector {
 
 		for (int i = 0; i < numGroups; i++)
 			readSets[i] = new HashSet<Read>();
-
-		if (!showConsensusDiscrepancies && !showReadDiscrepancies)
-			showReadDiscrepancies = true;
 	}
 
-	public boolean processContig(Contig contig) throws Exception {
-		if (contig == null || contig.getMappings() == null)
+	public boolean processContig(Contig contig, SNPProcessor processor)
+			throws Exception {
+		if (processor == null || contig == null || contig.getMappings() == null)
 			return false;
-
-		System.err.println("Processing contig " + contig.getID() + " ("
-				+ contig.getLength() + " bp, " + contig.getReadCount()
-				+ " reads)");
 
 		classifyReadsInContig(contig);
 
-		for (int j = 0; j < numGroups; j++)
-			System.err.println("There are " + readSets[j].size()
-					+ " reads in group " + readGroups[j]);
-
-		processReadsInContig(contig);
+		processReadsInContig(contig, processor);
 
 		return true;
 	}
@@ -77,7 +62,8 @@ public class SNPDetector {
 		}
 	}
 
-	private void processReadsInContig(Contig contig) throws Exception {
+	private void processReadsInContig(Contig contig, SNPProcessor processor)
+			throws Exception {
 		Mapping[] mappings = contig.getMappings();
 		int nreads = mappings.length;
 		int cpos, rdleft, rdright, oldrdleft, oldrdright;
@@ -172,49 +158,13 @@ public class SNPDetector {
 			if (defaultReads > 0) {
 				char defaultBase = defaultConsensus.getBestBase();
 				int defaultScore = defaultConsensus.getBestScore();
-				
-				boolean foundMismatch = false;
 
-				if (showConsensusDiscrepancies) {
-					for (int i = 0; i < groupConsensus.length; i++) {
-						int nReads = groupConsensus[i].getReadCount();
-
-						if (nReads > 0) {
-							char base = groupConsensus[i].getBestBase();
-							int score = groupConsensus[i].getBestScore();
-
-							if (base != defaultBase) {
-								foundMismatch = true;
-								
-								System.out.println(cpos + TAB + defaultBase
-										+ " (Q=" + defaultScore + ", N="
-										+ defaultReads + ")" + TAB + i + TAB
-										+ base + " (Q=" + score + ", N="
-										+ nReads + ")");
-							}
-						}
-					}
+				for (Base base : bases) {
+					if (base.base != defaultBase && base.base != 'N')
+						processor.processSNP(contig, cpos, defaultBase,
+								defaultScore, defaultReads, base);
 				}
-
-				if (showReadDiscrepancies) {
-					for (Base base : bases) {
-						if (base.base != defaultBase && base.base != 'N') {
-							foundMismatch = true;
-
-							System.out.println(cpos + TAB + defaultBase
-									+ " (Q=" + defaultScore + ", N="
-									+ defaultReads + ")" + TAB
-									+ base.read.getName() + TAB
-									+ base.read_position + TAB + base.base
-									+ TAB + base.quality);
-						}
-					}
-				}
-				
-				if (foundMismatch)
-					System.out.println();
 			}
 		}
-
 	}
 }
