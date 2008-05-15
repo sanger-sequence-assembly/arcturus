@@ -59,11 +59,13 @@ sub testContig {
 # test presence of sequence and quality data
             if (!$level || $read->isEdited()) { 
                 if (!$noreadsequencetest && !$read->hasSequence()) {
-                    $logger->severe("Missing DNA or BaseQuality in Read "
-                                    .$read->getReadName);
+                    unless ($read->getSequenceID()) {
+                        $logger->severe("Missing DNA or BaseQuality in Read "
+                                        .$read->getReadName);
 $logger->severe("ex/import-level=$level  isEdited=".$read->isEdited());
 $logger->severe($read->writeToCaf(*STDOUT));
-                    $success = 0 unless ($read->getReadName() =~ /con/);
+                        $success = 0 unless ($read->getReadName() =~ /con/);
+		    }
                 }
 	    }
             $contig->{status} = "Invalid or incomplete Read(s)" unless $success;
@@ -252,7 +254,7 @@ $logger->debug("pass $pass");
 # cstart != 1: this is an unusual lower boundary, apply shift to the 
 # Mappings (and Segments) to get the contig starting at position 1
                 my $shift = 1 - $cstart;
-                $logger->warning("zero point shift by $shift applied to contig $name");
+                $logger->info("zero point shift by $shift applied to contig $name");
                 foreach my $mapping (@$mappings) {
                     $mapping->applyShiftToContigPosition($shift);
                 }
@@ -1564,6 +1566,7 @@ sub break {
 # count number of reads straddling each interval
 
     for (my $i = 1 ; $i < scalar(@boundaries) ; $i++) {
+# to be completed
     }
 
 # collect the new contigs:
@@ -1591,6 +1594,51 @@ sub break {
 	push @contigs,$contig;
     }
     return [@contigs];
+}
+
+sub disassemble {
+# public, partly dis-assemble contig by removing reads in selected intervals
+    my $class = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,"disAssembleContig");
+
+# read intervals are marked by special tags on reads
+
+    my $reads = $contig->getReads(1);
+    my $mapps = $contig->getMappings(1);
+
+# build cross reference hash
+
+    my $mappingnames = {};
+    foreach my $mapping (@$mapps) {
+	$mappingnames->{$mapping->getMappingName} = $mapping;
+    }
+
+# intervals are marked by reads with tags
+
+    my %readtagstart;
+    my %readtagfinal;
+    $options{tagstart} = 'BRKS' unless defined $options{tagstart};
+    $options{tagfinal} = 'BRKF' unless defined $options{tagfinal};
+
+# TO BE DEVELOPED
+
+    foreach my $read (@$reads) {
+        my $tags = $read->getTags();
+        foreach my $tag (@$tags) {
+            my $tagtype = $tag->getType();
+#           $readtagstart->{$read} = $read if ($tagtype eq $options{tagstart});
+	}
+    }
+
+# identify reads to be removed
+# remove using removereads method above
+
+# run contig through break method; return resulting array of smaller contigs
+
+#    return $class->break($contig); # ? or list of contig, list of reads?
 }
 
 #-----------------------------------------------------------------------------
