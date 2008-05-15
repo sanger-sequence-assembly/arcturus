@@ -133,7 +133,7 @@ public class SNPTagger implements SNPProcessor {
 
 			String comment = "SNP: " + base.base + "(Q=" + base.quality
 					+ ") vs consensus " + defaultBase + " (Q=" + defaultScore
-					+ " from " + defaultReads + " reads; strain="
+					+ " from " + defaultReads + " reads); strain="
 					+ base.readGroup.getName();
 
 			pstmtInsertTag.setString(5, comment);
