@@ -490,8 +490,9 @@ sub setSequence {
     $this->{data}->{slength} = 0;
 
     if (defined($sequence)) {
+	$this->{Sequence} =~ s/n/N/g; # hack to undo gap2caf conversion 
 	$this->{data}->{slength} = length($sequence);
-	$this->getSequenceHash();
+	$this->getSequenceHash(); # put sequence hash if undefined
     }
 }
 
@@ -544,7 +545,7 @@ sub setSequenceHash {
 
 sub getSequenceHash {
     my $this = shift;
-# if undefined, derive from current dna data, if any
+# if undefined, derive from current dna data; else leave as is
     unless (defined($this->{sequencehash})) {
         my $sequence = $this->getSequence(); # triggers delayed loading
         $this->setSequenceHash(md5($sequence)) if $sequence;
