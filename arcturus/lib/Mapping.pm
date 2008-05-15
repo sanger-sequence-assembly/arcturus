@@ -494,8 +494,8 @@ sub normalise {
         unless ($options{silent}) {
             print STDERR "Anomalous alignment in mapping "
                        . ($this->getMappingName || $this->getSequenceID)
-	               . " ($localalignment $globalalignment) :\n"
-                       .  $this->writeToString('segment',extended=>1);
+	               . " (l:$localalignment g:$globalalignment) :\n";
+            print STDERR $this->writeToString('segment',extended=>1) unless $options{mute};
         }
         $globalalignment = $localalignment;
     }
