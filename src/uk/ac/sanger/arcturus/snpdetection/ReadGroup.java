@@ -9,7 +9,8 @@ public abstract class ReadGroup {
 	public static final int BY_LIGATION = 1;
 	public static final int BY_CLONE = 2;
 	public static final int BY_READNAME = 3;
-	
+	protected String name;
+
 	public abstract boolean belongsTo(Read read);
 	
 	public static ReadGroup createReadGroup(ArcturusDatabase adb, String keyValue) {
@@ -58,5 +59,9 @@ public abstract class ReadGroup {
 			default:
 				throw new IllegalArgumentException("Invalid type");
 		}
+	}
+	
+	public String getName() {
+		return name;
 	}
 }

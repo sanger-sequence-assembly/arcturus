@@ -4,7 +4,6 @@ import uk.ac.sanger.arcturus.data.*;
 
 public class LigationReadGroup extends ReadGroup {
 	private int ligation_id = -1;
-	private String name;
 	
 	public LigationReadGroup(Ligation ligation) {
 		if (ligation != null) {

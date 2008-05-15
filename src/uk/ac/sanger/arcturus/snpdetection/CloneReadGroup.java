@@ -4,7 +4,6 @@ import uk.ac.sanger.arcturus.data.*;
 
 public class CloneReadGroup extends ReadGroup {
 	private int clone_id = -1;
-	private String name;
 	
 	public CloneReadGroup(Clone clone) {
 		if (clone != null) {
