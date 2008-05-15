@@ -12,7 +12,7 @@ import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Contig;
 
-public class SNPDetectorDemo {
+public class SNPDetectorDemo implements SNPProcessor {
 	private ArcturusDatabase adb;
 	private ReadGroup[] readGroups;
 	private SNPDetector detector;
@@ -25,9 +25,9 @@ public class SNPDetectorDemo {
 	public SNPDetectorDemo(String[] args) throws NamingException, SQLException {
 		String instance = null;
 		String organism = null;
-		
+
 		List<String> groupNames = new Vector<String>();
-		
+
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
 				instance = args[++i];
@@ -48,7 +48,7 @@ public class SNPDetectorDemo {
 		System.err.println();
 
 		ArcturusInstance ai = null;
-		
+
 		ai = ArcturusInstance.getInstance(instance);
 
 		System.err.println("Creating an ArcturusDatabase for " + organism);
@@ -67,10 +67,10 @@ public class SNPDetectorDemo {
 		}
 
 		readGroups = new ReadGroup[groupNames.size()];
-		
+
 		for (int i = 0; i < groupNames.size(); i++)
 			readGroups[i] = ReadGroup.createReadGroup(adb, groupNames.get(i));
-		
+
 		detector = new SNPDetector(readGroups);
 	}
 
@@ -87,30 +87,40 @@ public class SNPDetectorDemo {
 		Statement stmt = conn.createStatement();
 
 		String query = "select contig_id from CURRENTCONTIGS";
-		
+
 		ResultSet rs = stmt.executeQuery(query);
 
 		while (rs.next()) {
 			int contig_id = rs.getInt(1);
-			
+
 			System.err.print("Fetching contig " + contig_id + " ...");
-			
+
 			Contig contig = adb.getContigByID(contig_id, flags);
-			
+
 			System.err.println(" DONE");
 
 			try {
-				detector.processContig(contig);
+				detector.processContig(contig, this);
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 
 		rs.close();
-		
+
 		stmt.close();
 	}
-	
+
+	private static final String TAB = "\t";
+
+	public void processSNP(Contig contig, int contig_position,
+			char defaultBase, int defaultScore, int defaultReads, Base base) {
+		System.out.println(contig_position + TAB + defaultBase + " (Q="
+				+ defaultScore + ", N=" + defaultReads + ")" + TAB
+				+ base.read.getName() + TAB + base.read_position + TAB
+				+ base.base + TAB + base.quality + TAB + base.readGroup.getName());
+	}
+
 	public static void main(String[] args) {
 		try {
 			SNPDetectorDemo demo = new SNPDetectorDemo(args);
