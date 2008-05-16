@@ -1153,7 +1153,7 @@ my $TEST = 0;
     while (@$stillmissing) {
         my @nameblock = splice @$stillmissing,0,1000;
 	$logger->info("extracting next ".scalar(@nameblock)." reads");
-        my $reads = ContigFactory->readExtractor(\@nameblock,fullreadscan=>1);
+        my $reads = ContigFactory->readExtractor(\@nameblock,0,fullreadscan=>1);
         unless ($reads && @$reads) {
     	    $logger->warning("FAILED to fetch any reads");
 	    next;
@@ -1329,6 +1329,7 @@ sub showUsage {
     print STDERR "-defaultproject\t(dp) project  ID or name of project to be used\n";
     print STDERR "\t\t when the inheritance mechanism does not find a project\n";
     print STDERR "-assignproject\t(ap) project ID or name (overrides setprojectby)\n";
+    print STDERR "-project\talias of assignproject\n";
     print STDERR "-assembly\tassembly ID or name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for tag processing:\n";
