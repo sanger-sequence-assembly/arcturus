@@ -1970,7 +1970,7 @@ sub getReadVersionHash {
         my $rw =  $sth->execute() || &queryFailed($query);
 
         while (my ($rnm,$id,$version,$sid,$sh,$qh) = $sth->fetchrow_array()) {
-
+            next unless ($sh && $qh); # must be defined in database
             $readversionhash->{$rnm} = [] unless $readversionhash->{$rnm};
             my $versionnode =  $readversionhash->{$rnm};
             $versionnode->[$version] = {} unless $versionnode->[$version];
