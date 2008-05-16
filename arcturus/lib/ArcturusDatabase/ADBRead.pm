@@ -2231,6 +2231,14 @@ sub putSequenceForRead {
                  ."sequence lengths");
     }
 
+    my $readseqhash = $read->getSequenceHash();
+
+    my $readbqlhash = $read->getBaseQualityHash();
+
+    unless ($readseqhash && $readbqlhash) {
+        print STDERR "BAD THINGS HAPPEN: undefined hashes for $readname\n";
+    }
+
     my $dbh = $this->getConnection();
 
     $this->populateLoadingDictionaries(); # autoload (ignored if already done)
@@ -2256,7 +2264,6 @@ sub putSequenceForRead {
 
     my $basequality = compress(pack("c*", @$readbquality));
 
-#    $query = "insert into SEQUENCE(seq_id,seqlen,sequence,quality) VALUES(?,?,?,?)";
     $query = "insert into SEQUENCE"
            . "(seq_id,seqlen,seq_hash,qual_hash,sequence,quality) "
            . "VALUES(?,?,?,?,?,?)";
@@ -2264,8 +2271,7 @@ sub putSequenceForRead {
     $sth = $dbh->prepare_cached($query);
 
     $rc = $sth->execute($seqid, $read->getSequenceLength(),
-                                $read->getSequenceHash(),
-                                $read->getBaseQualityHash(),
+                                $readseqhash, $readbqlhash,
                                 $sequence, $basequality);
 
 # shouldn't we undo the insert in READINFO? if it fails
@@ -3062,13 +3068,17 @@ sub getSequenceIDsForReads {
 
 # if the hashes are defined, compare to the ones from the query
 
-            if ($read_seq_hash && $read_bql_hash) {
+            if ($read_seq_hash && $read_bql_hash && $seq_hash && $bql_hash ) {
 # any difference of hash values means an edited read
                 next if ($read_seq_hash ne $seq_hash);
                 next if ($read_bql_hash ne $bql_hash);
 	    }
             else {           
-# the hashes are not defined,and no sequence is available: 
+# the hashes are not defined, and no sequence is available: 
+                unless ($seq_hash && $bql_hash) {
+		    $logger->warning("sequence hashes for read $read_id: "
+                                    ."$readname missing in database");
+	        }
 # optionally accept the read explicitly as version 0; use this
 # flag if no edited reads are expected (re: phusion assembly)
                 next unless $options{acceptversionzero};
