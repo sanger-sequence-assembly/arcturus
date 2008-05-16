@@ -17,7 +17,7 @@ public class SNPTagger implements SNPProcessor {
 	private ReadGroup[] readGroups;
 	private SNPDetector detector;
 	private String tagtype;
-	private PreparedStatement pstmtInsertTag;
+	private PreparedStatement pstmtInsertTag = null;
 
 	private int flags = ArcturusDatabase.CONTIG_TO_CALCULATE_CONSENSUS
 			| ArcturusDatabase.CONTIG_SEQUENCE_AUXILIARY_DATA;
@@ -44,8 +44,7 @@ public class SNPTagger implements SNPProcessor {
 				tagtype = args[++i];
 		}
 
-		if (instance == null || organism == null || groupNames.isEmpty()
-				|| tagtype == null) {
+		if (instance == null || organism == null || groupNames.isEmpty()) {
 			printUsage(System.err);
 			System.exit(1);
 		}
@@ -79,20 +78,22 @@ public class SNPTagger implements SNPProcessor {
 
 		detector = new SNPDetector(readGroups);
 
-		String query = "insert into READTAG(seq_id,tagtype,pstart,pfinal,comment) VALUES(?,?,?,?,?)";
-
-		pstmtInsertTag = conn.prepareStatement(query);
+		if (tagtype != null) {
+			String query = "insert into READTAG(seq_id,tagtype,pstart,pfinal,comment) VALUES(?,?,?,?,?)";
+			pstmtInsertTag = conn.prepareStatement(query);
+		}
 	}
 
 	private void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");
 		ps.println("\t-organism\tName of organism");
-		ps.println("\t-tag\tThe Gap4 tag to apply to the sequences");
 		ps.println();
 		ps.println("REPEATED PARAMETERS");
-		ps
-				.println("\t-group\t\t{readname|ligation|clone}=name read grouping specification");
+		ps.println("\t-group\t\t{readname|ligation|clone}=name read grouping specification");
+		ps.println();
+		ps.println("OPTIONAL PARAMETERS");
+		ps.println("\t-tag\tThe Gap4 tag to apply to the sequences");
 	}
 
 	public void run() throws SQLException, DataFormatException {
@@ -123,32 +124,37 @@ public class SNPTagger implements SNPProcessor {
 		stmt.close();
 	}
 
+	private static final String TAB = "\t";
+	
 	public void processSNP(Contig contig, int contig_position,
 			char defaultBase, int defaultScore, int defaultReads, Base base) {
-		try {
-			pstmtInsertTag.setInt(1, base.sequence_id);
-			pstmtInsertTag.setString(2, tagtype);
-			pstmtInsertTag.setInt(3, base.read_position);
-			pstmtInsertTag.setInt(4, base.read_position);
+		if (pstmtInsertTag != null) {
+			try {
+				pstmtInsertTag.setInt(1, base.sequence_id);
+				pstmtInsertTag.setString(2, tagtype);
+				pstmtInsertTag.setInt(3, base.read_position);
+				pstmtInsertTag.setInt(4, base.read_position);
 
-			String comment = "SNP: " + base.base + " (Q=" + base.quality
-					+ ") vs consensus " + defaultBase + " (Q=" + defaultScore
-					+ " from " + defaultReads + " reads); strain="
-					+ base.readGroup.getName();
+				String comment = "SNP: " + base.base + " (Q=" + base.quality
+						+ ") vs consensus " + defaultBase + " (Q="
+						+ defaultScore + " from " + defaultReads
+						+ " reads); strain=" + base.readGroup.getName();
 
-			pstmtInsertTag.setString(5, comment);
+				pstmtInsertTag.setString(5, comment);
 
-			int rc = pstmtInsertTag.executeUpdate();
-
-			if (rc == 1) {
-				System.out.println("TAG: " + tagtype + " on " + base.read.getName()
-						+ ", sequence " + base.sequence_id + ", position "
-						+ base.read_position + ", comment \"" + comment + "\"");
+				pstmtInsertTag.executeUpdate();
+			} catch (SQLException e) {
+				e.printStackTrace();
+				System.exit(2);
 			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-			System.exit(2);
 		}
+		
+		System.out.println(contig.getID() + TAB + contig_position + TAB +
+				defaultBase + " (Q="
+				+ defaultScore + ", N=" + defaultReads + ")" + TAB
+				+ base.read.getName() + TAB + base.read_position + TAB
+				+ base.base + TAB + base.quality + TAB + base.readGroup.getName());
+
 	}
 
 	public static void main(String[] args) {
