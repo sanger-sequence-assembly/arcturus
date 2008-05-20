@@ -72,6 +72,8 @@ public class DataSourceDemo {
 			pgds.setUser("arcturus");
 			pgds.setPassword("***REMOVED***");
 			
+			pgds.setPrepareThreshold(1);
+			
 			alias = "cn=pgtest";
 			ds1 = pgds;
 		} else
