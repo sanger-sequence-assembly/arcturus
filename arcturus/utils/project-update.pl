@@ -28,11 +28,12 @@ my $superuser;
 
 my $verbose;
 my $confirm;
+my $list;
 
 my $validKeys  = "organism|o|instance|i|assembly|a|project|p|"
                . "comment|pc|extend|directory|dir|"
                . "owner|po|name|pn|status|ps|superuser|su|"
-               . "confirm|verbose|help|h";
+               . "list|confirm|verbose|help|h";
 
 while (my $nextword = shift @ARGV) {
 
@@ -87,6 +88,8 @@ while (my $nextword = shift @ARGV) {
     $verbose          = 1            if ($nextword eq '-verbose');
 
     $confirm          = 1            if ($nextword eq '-confirm');
+
+    $list             = 1            if ($nextword eq '-list');
 
     &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
@@ -161,6 +164,10 @@ if ($projects && @$projects > 1) {
 elsif (!$projects || !@$projects) {
     $logger->warning("Project $project not available : $message");
 }
+elsif ($list) {
+    my $project = shift @$projects;
+    $logger->warning($project->toStringLong);
+}
 
 # assemble the new data in the project instance
 
@@ -180,7 +187,21 @@ else {
         $projectcomment = $currentcomment." / ".$projectcomment;
     }
     $project->setComment($projectcomment)      if $projectcomment;
-    $project->setDirectory($projectdir)        if $projectdir;
+    if ($projectdir && $projectdir =~ /s([\/\?])([\w\/]+)\1(\w*)\1$/) {
+        my ($oldstring,$newstring) = ($2,$3);
+        my $newprojectdir = $project->getDirectory();
+        if ($newprojectdir) {
+            $newprojectdir =~ s/$oldstring/$newstring/;
+            $project->setDirectory($newprojectdir);
+	}
+	else {
+	    $logger->warning("No project directory defined for "
+                            . $project->getProjectName());
+	}
+    }
+    elsif ($projectdir) {
+        $project->setDirectory($projectdir);
+    }
     
     $confirm = 0 unless $confirm;
 
