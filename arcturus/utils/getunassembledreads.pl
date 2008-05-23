@@ -44,11 +44,13 @@ my $loglevel;           # default log warnings and errors only
 my $debug;
 my $test;
 
-my $validKeys  = "organism|instance|assembly|caf|aspedbefore|ab|aspedafter|aa|"
+my $validKeys  = "organism|o|instance|i|assembly|a|"
+               . "caf|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
                . "namenotlike|nnl|excludelist|el|mask|tags|all|fasta|nofile|"
-               . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|status|nostatus|"
-               . "test|info|verbose|debug|log|help";
+               . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
+               . "status|nostatus|"
+               . "test|info|verbose|debug|log|help|h";
 
 
 while (my $nextword = shift @ARGV) {
@@ -57,9 +59,17 @@ while (my $nextword = shift @ARGV) {
         &showUsage("Invalid keyword '$nextword'");
     }
 
-    $instance         = shift @ARGV  if ($nextword eq '-instance');
+    if ($nextword eq '-instance' || $nextword eq '-i') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define instance" if $instance;
+        $instance     = shift @ARGV;
+    }
 
-    $organism         = shift @ARGV  if ($nextword eq '-organism');
+    if ($nextword eq '-organism' || $nextword eq '-o') {
+# the next statement prevents redefinition when used with e.g. a wrapper script
+        die "You can't re-define organism" if $organism;
+        $organism     = shift @ARGV;
+    }
 
     $aspedbefore      = shift @ARGV  if ($nextword eq '-aspedbefore');
     $aspedbefore      = shift @ARGV  if ($nextword eq '-ab');
@@ -79,7 +89,9 @@ while (my $nextword = shift @ARGV) {
     $selectmethod     = shift @ARGV  if ($nextword eq '-selectmethod');
     $selectmethod     = shift @ARGV  if ($nextword eq '-sm');
 
-    $assembly         = shift @ARGV  if ($nextword eq '-assembly');
+    if ($nextword eq '-assembly' || $nextword eq '-a') {
+        $assembly     = shift @ARGV;
+    }
 
     if (defined($fasta) && ($nextword eq '-caf' || $nextword eq '-fasta')) {
         die "-caf and -fasta specification are mutually exclusive";
@@ -125,7 +137,8 @@ while (my $nextword = shift @ARGV) {
 
     $logfile          = shift @ARGV  if ($nextword eq '-log');
 
-    &showUsage(0) if ($nextword eq '-help');
+
+    &showUsage(0) if ($nextword eq '-help' || $nextword eq '-h');
 }
 
 #----------------------------------------------------------------
@@ -142,16 +155,30 @@ $logger->setBlock('debug',unblock=>1) if $debug;
 # get the database connection
 #----------------------------------------------------------------
 
-&showUsage("Missing organism database") unless $organism;
-
-&showUsage("Missing database instance") unless $instance;
-
-&showUsage("Missing caf or fasta filename") unless ($test || defined($outputFileName));
+if ($organism eq 'default' || $instance eq 'default') {
+    undef $organism;
+    undef $instance;
+}
 
 my $adb = new ArcturusDatabase (-instance => $instance,
-			        -organism => $organism);
+                                -organism => $organism);
 
-&showUsage("Unknown organism '$organism'") unless $adb;
+if (!$adb || $adb->errorStatus()) {
+# abort with error message
+
+    &showUsage("Missing organism database") unless $organism;
+
+    &showUsage("Missing database instance") unless $instance;
+
+    &showUsage("Organism '$organism' not found on server '$instance'");
+}
+
+$organism = $adb->getOrganism(); # taken from the actual connection
+$instance = $adb->getInstance(); # taken from the actual connection
+
+my $URL = $adb->getURL;
+
+$logger->info("Database $URL opened succesfully");
 
 $adb->setLogger($logger);
 
@@ -159,7 +186,7 @@ $adb->setLogger($logger);
 # MAIN
 #----------------------------------------------------------------
 
-my ($CAF,$FAS,$QLT);
+my ($CAF,$FAS,$QLT,$QMASK);
 
 if ($fasta) {
 # fasta output
@@ -185,6 +212,10 @@ elsif (defined($outputFileName)) {
         $CAF = new FileHandle($outputFileName,"w");
     }
     $CAF = *STDOUT unless $CAF;
+}
+if ($mask && $outputFileName) {
+    $outputFileName =~ s/\.(fas|qlt|caf)//;
+    $QMASK = new FileHandle($outputFileName.'.mask.lis',"w");
 }
 
 my %options;
@@ -379,6 +410,13 @@ while (my $remainder = scalar(@$readids)) {
 
         $read->writeToCaf($CAF,qualitymask=>$mask)        if $CAF;
         $read->writeToFasta($FAS,$QLT,qualitymask=>$mask) if $FAS;
+
+        next unless ($mask && $QMASK);
+# export the quality range for the read if masking is used
+        my $lql = $read->getLowQualityLeft();
+        my $lqr = $read->getLowQualityRight();
+#print STDERR "writing to mask list $readname,$lql,$lqr \n";
+        print $QMASK "$readname $lql $lqr\n";
     }
     undef @$reads;
 }
@@ -387,6 +425,10 @@ print STDERR "$discarded reads ignored\n" if $discarded;
 print STDERR "$excluded reads excluded\n" if $excluded;
 
 $adb->disconnect();
+
+foreach my $FILE ($CAF,$FAS,$QLT,$QMASK) {
+    close ($FILE) if $FILE;
+}
 
 exit 0;
 
