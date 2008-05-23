@@ -137,10 +137,19 @@ public class Arcturus {
 			storeJMXURL(jurl);
 		} catch (BindException be) {
 			logInfo("Bind exception whilst initialising JMX remote server", be);
+			reportBindException("adh@sanger.ac.uk", be);
 		}
 		catch (Exception e) {
 			logWarning("Error whilst initialising JMX remote server", e);
 		}
+	}
+	
+	private static void reportBindException(String recipient, BindException be) {
+		MailHandler handler = new MailHandler(recipient);
+		LogRecord record = new LogRecord(Level.INFO, "Bind exception whilst initialising JMX remote server");
+		record.setThrown(be);
+		handler.publish(record);
+		handler.close();
 	}
 	
 	private static void storeJMXURL(JMXServiceURL jurl) throws SQLException, ClassNotFoundException {
@@ -164,7 +173,7 @@ public class Arcturus {
 		pstmtInsert.setString(1, jurl.toString());
 		pstmtInsert.setString(2, user);
 		
-		int rc = pstmtInsert.executeUpdate();
+		pstmtInsert.executeUpdate();
 
 		pstmtInsert.close();
 		
