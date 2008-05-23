@@ -488,6 +488,8 @@ sub contigExtractor {
 # options : contignamefilter, usepadded, consensus, contigtaglist, ignoretaglist
 #           readtaglist, noreadsequence, noreads
 
+    &verifyParameter($contignames,'contigExtractor','ARRAY');
+
     my $logger = &verifyLogger('contigExtractor');
 
     my $inventory = &getInventory($class);
@@ -619,6 +621,8 @@ sub readExtractor {
 # if  a readversion hash is specified, those reads that match have DNA and BQ
 # removed and have the sequence ID set (unless the nosequence option is used)
 
+    &verifyParameter($reads,'readExtractor','ARRAY');
+ 
     my $logger = &verifyLogger('readExtractor');
 
     my $readtaglist = $options{readtaglist};
