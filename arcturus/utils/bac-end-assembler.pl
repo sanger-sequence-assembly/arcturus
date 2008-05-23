@@ -24,6 +24,7 @@ my $breakmode;
 my $contig;
 my $filter;
 my $cleanup;
+my $clipcontig; # remove low quality data
 
 my $verbose;
 my $confirm;
@@ -33,7 +34,7 @@ my $swprog;
 my $caffile;
 
 my $validKeys  = "organism|instance|filename|fn|swprog|caf|breakmode|bm|"
-               . "cleanup|contig|read|confirm|verbose|debug|help";
+               . "clip|cleanup|contig|read|confirm|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
@@ -56,9 +57,11 @@ while (my $nextword = shift @ARGV) {
     $datafile   = shift @ARGV  if ($nextword eq '-filename');
     $datafile   = shift @ARGV  if ($nextword eq '-fn');
 
-    $verbose    = 1            if ($nextword eq '-verbose');
+    $verbose    = 2            if ($nextword eq '-verbose');
 
     $cleanup    = 1            if ($nextword eq '-cleanup');
+
+    $clipcontig = 1            if ($nextword eq '-clip');
 
     $verbose    = 2            if ($nextword eq '-debug');
     $debug      = 1            if ($nextword eq '-debug');
@@ -119,9 +122,8 @@ if ($swprog) {
                                                                                
 my $logger = new Logging('STDOUT');
  
-$logger->setFilter(2) if $verbose; # set reporting level
-$logger->setFilter(1) if $debug;  # fine reporting level
-$DEBUG = $debug if $debug;
+$logger->setStandardFilter($verbose) if $verbose; # set fine reporting level
+$logger->setBlock('debug',unblock=>1) if $debug;
 
 #----------------------------------------------------------------
 # get the database connection
@@ -147,6 +149,10 @@ my $URL = $adb->getURL;
 
 $logger->info("Database $URL opened succesfully");
 
+$adb->setLogger($logger);
+
+Contig->setLogger($logger);
+
 #-----------------------------------------------------------------------
 # parse the file with annotation data and build tag data in a hash
 #-----------------------------------------------------------------------
@@ -162,6 +168,7 @@ my $contigreadhash = {};
 my $line = 0;
 
 my $readnamehash = {};
+my $tobediscarded = {};
 
 my $duplicates = 0;
 while ($FILE && defined(my $record = <$FILE>)) {
@@ -171,13 +178,21 @@ while ($FILE && defined(my $record = <$FILE>)) {
     next unless ($record =~ /\S/);
 
     if ($record =~ /(\S+)\s+([FR])\s+(\S+)\s+(\d+)\s+(\d+)\s*$/) {
-        my $contig = $3; # Arcturus contig number 
+        my $contig = $3; # Arcturus contig number
+        my $length = $5 - $4 + 1;
         if ($readnamehash->{$1}) {
-            $logger->fine("Duplicate readname $1 ignored on file $datafile");
+            my $oldlength = $readnamehash->{$1};
+            $logger->fine("Duplicate readname $1 ignored on file $datafile "
+                         ."(contig $contig)");
             $duplicates++;
+            next unless ($length >= $oldlength);
+# the new match is at least as good as the previous: discard
+            $logger->warning("Better match for readname $1 on contig $contig "
+                            ."discarded ($length $oldlength)");
+            $tobediscarded->{$1}++;
             next;
         }
-        $readnamehash->{$1}++;
+        $readnamehash->{$1} = $length;
         $contigreadhash->{$contig} = [] unless $contigreadhash->{$contig};
         my $contigreadlist = $contigreadhash->{$contig}; # an array ref      
         my @readdata = ($1,$2,$4,$5); # read, alignment, begin, end
@@ -190,7 +205,9 @@ while ($FILE && defined(my $record = <$FILE>)) {
 
 $FILE->close() if $FILE;
 
+my $discarded = scalar(keys %$tobediscarded);
 $logger->warning("$duplicates duplicates ignored") if $duplicates;
+$logger->warning("$discarded reads to be discarded") if $discarded;
 $logger->warning("$line records read from file $datafile");
 $logger->warning(scalar(keys %$contigreadhash)." contigs to be processed");
 
@@ -212,8 +229,8 @@ elsif (defined($caffile)) {
 # run through all the contigs
 
 foreach my $contigname (sort keys %$contigreadhash) {
-
     next if ($contig && $contigname !~ /$contig/);
+    $logger->info("contig $contigname  ($contig)");
 
     $logger->warning("Processing contig $contigname");
 
@@ -234,6 +251,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
         my ($name,$strand,$cstart,$cfinal) = @$bacreadinfo;
         $logger->info("bacreadinfo $name,$strand,$cstart,$cfinal");
+        next if $tobediscarded->{$name};
 
         if ($adb->isUnassembledRead(readname=>$name)) {
             $newread++;
@@ -306,6 +324,24 @@ foreach my $contigname (sort keys %$contigreadhash) {
         $logger->warning("Project $projectname found for ID $project_id");
     }
 
+# ------------- process sequence data, if specified
+
+    $logger->info("Getting consensus");
+
+    my $consensus = $arcturuscontig->getSequence();
+
+    my $padmapping;
+    if ($clipcontig) {
+	$logger->info("Removing low quality from consensus");
+        my ($clncontig,$sts) = $arcturuscontig->deleteLowQualityBases(exportaschild=>1);
+        my $mappings = $clncontig->getContigToContigMappings();
+
+        $padmapping = $mappings->[0];
+	$logger->fine($padmapping->toString());
+    }
+
+# ------------- check reads and mappings
+
 # remove one-base mappings, if any
 
     if ($cleanup) {
@@ -325,10 +361,6 @@ foreach my $contigname (sort keys %$contigreadhash) {
         $arcturuscontig->getReads(1);
     }
 
-    $logger->info("Getting consensus");
-
-    my $consensus = $arcturuscontig->getSequence();
-
 # run through the reads and create a Tag object for each
 
     $logger->warning(scalar(@$bacendreads)." new reads specified for $contigname\n");
@@ -341,11 +373,20 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
         my ($name,$strand,$cstart,$cfinal) = @$bacreadinfo;
         $logger->info("bacreadinfo $name,$strand,$cstart,$cfinal");
+
+        if ($padmapping) {
+            my ($intervals,$transform) = $padmapping->transform($cstart,$cfinal);
+             $logger->fine("cstart cfinal   $cstart  $cfinal"); 
+            ($cstart,$cfinal) = $transform->getMappedRange();
+#            ($cstart,$cfinal) = $transform->getContigRange();
+             $logger->info("cstart cfinal   $cstart  $cfinal"); 
+#            ($cstart,$cfinal) = $transform->getContigRange();
+	}
         
 # get the read from the database
 
         unless ($adb->isUnassembledRead(readname=>$name)) {
-	    print STDERR "Read $name is an assembled read\n";
+	    $logger->error("Read $name is an assembled read");
             next if $breakmode;
 	}
 
@@ -353,7 +394,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
         unless ($read) {
             $read = $adb->getRead(readname=>$name);
 	    unless ($read) {
-		$logger->warning("Read $name not found") if ($confirm || $CAF);
+		$logger->error("Read $name not found") if ($confirm || $CAF);
                 next;
 	    }
             $readhash->{$name} = $read;
@@ -409,10 +450,10 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
            ($mapping,$score) = &SmithWatermanAlignment($csubstring,$rsubstring);
 
 	    if ($mapping) {
-$logger->warning( "mapping $mapping, score $score ")       if $DEBUG;
+                $logger->debug(" mapping $mapping, score $score ");
                 $mapping->setMappingName("SW");
-$logger->warning($mapping->toString(Xdomain=>$csubstring,
-                                    Ydomain=>$rsubstring)) if $DEBUG;
+                $logger->debug($mapping->toString(Xdomain=>$csubstring,
+                                                  Ydomain=>$rsubstring));
             }
             else {
 	        $logger->severe("Failed read placement : "
@@ -428,7 +469,7 @@ $logger->warning($mapping->toString(Xdomain=>$csubstring,
  	    $placedreads++;
         }
 	else {
-            print STDERR "No alignment method specified\n";
+            $logger->error("No alignment method specified");
             last;
         }
 
@@ -446,8 +487,8 @@ $logger->warning($mapping->toString(Xdomain=>$csubstring,
         $r2cmapping = $r2cmapping->inverse();
         $r2cmapping->setMappingName($name);
 
-        $logger->warning($r2cmapping->toString(Xdomain=>$sequence,
-                                               Ydomain=>$consensus)) if $DEBUG;
+        $logger->debug($r2cmapping->toString(Xdomain=>$sequence,
+                                             Ydomain=>$consensus));
 
         $readmapping->{$name} = $r2cmapping; 
 
