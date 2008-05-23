@@ -671,8 +671,8 @@ sub getTraceArchiveIdentifier {
     my $readname = $this->{readname};
 
     unless (defined($this->{TAI})) {
-        my $ADB = $this->{SOURCE} || return undef;
-        if (ref($ADB) eq 'ArcturusDatabase') {
+        my $ADB = $this->{SOURCE};
+        if ($ADB && ref($ADB) eq 'ArcturusDatabase') {
             $ADB->getTraceArchiveIdentifierForRead($this);
             unless ($this->{TAI} && $this->{TAI} =~ /$readname/) {
                 $this->{TAI} = 0 unless $options{asis}; # defined but not in db
@@ -847,7 +847,7 @@ sub writeCafSequence {
     print $FILE "Is_read\n";
     print $FILE "$this->{padstatus}\n"; # Unpadded or Padded
 # get trace reference
-    my $traceserver = $this->getTraceArchiveIdentifier();
+    my $traceserver = $this->getTraceArchiveIdentifier() || '';
     $traceserver =~ s/.*\/// unless $options{fulltrace}; # remove subdir prefix
     print $FILE "SCF_File $traceserver\n";
 
