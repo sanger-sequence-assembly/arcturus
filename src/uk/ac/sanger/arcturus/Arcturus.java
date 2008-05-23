@@ -148,11 +148,11 @@ public class Arcturus {
 
 			storeJMXURL(jurl);
 		} catch (BindException be) {
+			//logInfo("Bind exception whilst initialising JMX remote server on "
+			//		+ hostname, be);
 			System.err
 					.println("Bind exception whilst initialising JMX remote server on "
 							+ hostname);
-			logInfo("Bind exception whilst initialising JMX remote server on "
-					+ hostname, be);
 			reportBindException("adh@sanger.ac.uk", be);
 		} catch (Exception e) {
 			logWarning("Error whilst initialising JMX remote server", e);
