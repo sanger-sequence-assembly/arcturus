@@ -3531,8 +3531,9 @@ $logger->debug("tagseqnames: @tagseqnames to be identified");
             elsif (!$tagSQhash->{$tagseqname}) {
 # no sequence available for this tag ID in database, but present in tag
 		if ($sequence && $options{autoload}) {
-		    $logger->warning("Tag $tagseqname might be updated with sequence '$sequence'");
-#?   	            my $update = &updateTagSequence($dbh,$tagseqname,$sequence);
+		    $logger->warning("Tag $tagseqname might be updated "
+                                    ."with sequence '$sequence'");
+   	            my $update = &updateTagSequence($dbh,$tagseqname,$sequence);
                 }
 	    }
 # both ID and sequence are in the database test for a possible mismatch
@@ -3707,6 +3708,9 @@ sub insertTagSequence {
             return $tag_seq_id;
         }
     }
+    elsif ($update) {
+	return undef; # no sequence defined
+    }
 
 # insert a new tagseqname, sequence combination into TAGSEQUENCE
 
@@ -3747,6 +3751,15 @@ sub insertTagSequence {
     $sth->finish();
 
     return $tag_seq_id;
+}
+
+sub updateTagSequence {
+# private method; update the TAGSEQUENCE table
+    my $dbh = shift;
+    my $tagseqname = shift || return undef;
+    my $sequence   = shift || return undef;
+
+    &insertTagSequence($dbh,$tagseqname,$sequence,1);
 }
 
 #------------------------------------------------------------------------------
