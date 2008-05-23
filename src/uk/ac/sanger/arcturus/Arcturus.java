@@ -8,6 +8,7 @@ import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.net.BindException;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.sql.*;
 import java.util.Properties;
 import java.util.logging.*;
@@ -21,9 +22,10 @@ import uk.ac.sanger.arcturus.logging.*;
 public class Arcturus {
 	protected static final String PROJECT_PROPERTIES_FILE = ".arcturus.props";
 
-	protected static Properties arcturusProps = new Properties(System.getProperties());
+	protected static Properties arcturusProps = new Properties(System
+			.getProperties());
 	protected static Logger logger = Logger.getLogger("uk.ac.sanger.arcturus");
-	
+
 	protected static long jarFileTimestamp = 0L;
 
 	static {
@@ -32,48 +34,52 @@ public class Arcturus {
 		initialiseLogging();
 		initialiseJMXRemoteServer();
 	}
-	
+
 	private static void setJarFileTimestamp() {
 		String jarfilename = System.getProperty("arcturus.jar");
-		
+
 		if (jarfilename != null) {
 			File jarfile = new File(jarfilename);
-			
+
 			if (jarfile.exists())
 				jarFileTimestamp = jarfile.lastModified();
 		}
-		
+
 		if (jarFileTimestamp > 0) {
-			java.util.Date date = new java.util.Date(jarFileTimestamp); 		
+			java.util.Date date = new java.util.Date(jarFileTimestamp);
 			System.err.println("JAR file was last modified at " + date);
 		}
 	}
-	
+
 	public static long getJarFileTimestamp() {
 		return jarFileTimestamp;
 	}
-	
+
 	private static void loadProperties() {
-		// Load the properties in the user's private version of the properties file,
-		// if it exists.  If not, use the properties file in the JAR file.
-		
+		// Load the properties in the user's private version of the properties
+		// file,
+		// if it exists. If not, use the properties file in the JAR file.
+
 		File userhome = new File(System.getProperty("user.home"));
 		File dotarcturus = new File(userhome, ".arcturus");
-		File privateprops = (dotarcturus != null && dotarcturus.isDirectory()) ?
-				new File(dotarcturus, "arcturus.props") : null;
-		
+		File privateprops = (dotarcturus != null && dotarcturus.isDirectory()) ? new File(
+				dotarcturus, "arcturus.props")
+				: null;
+
 		InputStream is = null;
-		
-		if (privateprops != null && privateprops.isFile() && privateprops.canRead()) {
+
+		if (privateprops != null && privateprops.isFile()
+				&& privateprops.canRead()) {
 			try {
 				is = new FileInputStream(privateprops);
-			}
-			catch (FileNotFoundException fnfe) {
-				System.err.println("Failed to open properties file " + privateprops.getPath());
+			} catch (FileNotFoundException fnfe) {
+				System.err.println("Failed to open properties file "
+						+ privateprops.getPath());
 				System.exit(1);
 			}
 		} else
-			is = Arcturus.class.getResourceAsStream("/resources/arcturus.props");
+			is = Arcturus.class
+					.getResourceAsStream("/resources/arcturus.props");
 
 		if (is != null) {
 			try {
@@ -86,7 +92,7 @@ public class Arcturus {
 			System.err.println("Unable to find a resource file");
 			System.exit(2);
 		}
-		
+
 		// Find the project-specific properties, if they exist, by walking up
 		// the
 		// directory tree from the application's current working directory,
@@ -117,42 +123,53 @@ public class Arcturus {
 	}
 
 	private static void initialiseJMXRemoteServer() {
+		String hostname = "UNKNOWN";
+		
 		try {
-			String hostname = InetAddress.getLocalHost().getHostName();
+			hostname = InetAddress.getLocalHost().getHostName();
+		} catch (UnknownHostException e1) {
+		}
+
+		try {
 			String url = "service:jmx:jmxmp://" + hostname + "/";
-			
+
 			MBeanServer mbs = ManagementFactory.getPlatformMBeanServer();
-			
+
 			JMXServiceURL jurl = new JMXServiceURL(url);
-			
-			JMXConnectorServer server = JMXConnectorServerFactory.newJMXConnectorServer(jurl,
-					null, mbs);
-			
+
+			JMXConnectorServer server = JMXConnectorServerFactory
+					.newJMXConnectorServer(jurl, null, mbs);
+
 			server.start();
-			
+
 			jurl = server.getAddress();
-			
+
 			System.err.println("JMX URL is " + jurl);
-			
+
 			storeJMXURL(jurl);
 		} catch (BindException be) {
-			logInfo("Bind exception whilst initialising JMX remote server", be);
+			System.err
+					.println("Bind exception whilst initialising JMX remote server on "
+							+ hostname);
+			logInfo("Bind exception whilst initialising JMX remote server on "
+					+ hostname, be);
 			reportBindException("adh@sanger.ac.uk", be);
-		}
-		catch (Exception e) {
+		} catch (Exception e) {
 			logWarning("Error whilst initialising JMX remote server", e);
 		}
 	}
-	
+
 	private static void reportBindException(String recipient, BindException be) {
 		MailHandler handler = new MailHandler(recipient);
-		LogRecord record = new LogRecord(Level.INFO, "Bind exception whilst initialising JMX remote server");
+		LogRecord record = new LogRecord(Level.INFO,
+				"Bind exception whilst initialising JMX remote server");
 		record.setThrown(be);
 		handler.publish(record);
 		handler.close();
 	}
-	
-	private static void storeJMXURL(JMXServiceURL jurl) throws SQLException, ClassNotFoundException {
+
+	private static void storeJMXURL(JMXServiceURL jurl) throws SQLException,
+			ClassNotFoundException {
 		String url = getProperty("jmxdb.url");
 
 		String driver = "com.mysql.jdbc.Driver";
@@ -167,16 +184,16 @@ public class Arcturus {
 		String sql = "insert into JMXURL(url,user) values (?,?)";
 
 		PreparedStatement pstmtInsert = conn.prepareStatement(sql);
-		
+
 		String user = System.getProperty("user.name");
-		
+
 		pstmtInsert.setString(1, jurl.toString());
 		pstmtInsert.setString(2, user);
-		
+
 		pstmtInsert.executeUpdate();
 
 		pstmtInsert.close();
-		
+
 		conn.close();
 	}
 
@@ -207,8 +224,9 @@ public class Arcturus {
 		logger.setUseParentHandlers(false);
 
 		Handler warner = null;
-		
-		if (GraphicsEnvironment.isHeadless() || Boolean.getBoolean("useConsoleLogHandler"))
+
+		if (GraphicsEnvironment.isHeadless()
+				|| Boolean.getBoolean("useConsoleLogHandler"))
 			warner = new ConsoleHandler();
 		else
 			warner = new MessageDialogHandler();
@@ -219,16 +237,18 @@ public class Arcturus {
 
 		try {
 			File homedir = new File(System.getProperty("user.home"));
-			
+
 			File dotarcturus = new File(homedir, ".arcturus");
-			
+
 			if (dotarcturus.exists() || dotarcturus.mkdir()) {
-				FileHandler filehandler = new FileHandler("%h/.arcturus/arcturus%u.%g.log");
+				FileHandler filehandler = new FileHandler(
+						"%h/.arcturus/arcturus%u.%g.log");
 				filehandler.setLevel(Level.INFO);
 				filehandler.setFormatter(new SimpleFormatter());
 				logger.addHandler(filehandler);
 			} else
-				throw new IOException(".arcturus directory could not be created");
+				throw new IOException(
+						".arcturus directory could not be created");
 		} catch (IOException ioe) {
 			logger.log(Level.WARNING,
 					"Unable to create a FileHandler for logging", ioe);
@@ -243,15 +263,15 @@ public class Arcturus {
 			logger.log(Level.WARNING,
 					"Unable to create a JDBCLogHandler for logging", e);
 		}
-		
+
 		try {
 			MailHandler mailhandler = new MailHandler(null);
 			mailhandler.setLevel(Level.WARNING);
 			logger.addHandler(mailhandler);
 		} catch (Exception e) {
-				logger.log(Level.WARNING,
-						"Unable to create a MailHandler for logging", e);
-			}
+			logger.log(Level.WARNING,
+					"Unable to create a MailHandler for logging", e);
+		}
 		System.err.println("Using logger " + logger.getName());
 	}
 
