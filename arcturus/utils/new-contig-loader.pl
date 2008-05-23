@@ -74,6 +74,7 @@ my $noaspedcheck;           # (re: read load mode)
 my $rtagtypeaccept = 'default'; 
 my $loadreadtags = 1;       # (default) load new read tags found on caf file
 my $echoreadtags;           # list the read tags found; implies no loading
+my $screenreadtags;         # retired readtags which are NOT in the current lis
 
 # project
 
@@ -81,6 +82,7 @@ my $pidentifier = 'BIN';    # projectname for which the data are to be loaded
 my $assembly;               # may be required in case of ambiguity
 my $pinherit = 'readcount'; # project inheritance method, default on number of reads
 my $projectlock;            # if set acquire lock on project first ? shoulb always
+my $autolockmode = 1;
 
 # output
 
@@ -120,14 +122,12 @@ my $validkeys  = "organism|o|instance|i|"
                . "loadcontigtags|lct|testcontigtags|tct|listcontig|list|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
-               . "loadreadtags|lrt|"
+               . "loadreadtags|lrt|screenreadtags|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
-               . "assembly|a|lock|pl|dounlock|project|"
+               . "assembly|a|projectlock|pl|dounlock|project|"
 
                . "outputfile|out|log|verbose|info|debug|memory|help";
-
-# dounlock to be implemented !!
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -186,6 +186,7 @@ while (my $nextword = shift @ARGV) {
     $minnrofreads     = shift @ARGV  if ($nextword eq '-minimum');
     $maxnrofreads     = shift @ARGV  if ($nextword eq '-maximum');
     $contignamefilter = shift @ARGV  if ($nextword eq '-filter'); 
+
     if ($nextword eq '-withoutparents' || $nextword eq '-wp') {
         $withoutparents = 1;
     } 
@@ -216,7 +217,7 @@ while (my $nextword = shift @ARGV) {
     $breakcontig        = 0            if ($nextword eq '-nobreak');
 
     if ($nextword eq '-acceptversionzero' || $nextword eq '-avz') {
-	$acceptversionzero = 1;
+	$acceptversionzero = 1; # use with Phusion assembly
     }
 
     if ($nextword eq '-noloadreads' || $nextword eq '-nlr') {
@@ -266,12 +267,13 @@ while (my $nextword = shift @ARGV) {
         $loadreadtags = 0;            
     }
     elsif ($nextword eq '-loadreadtags'   || $nextword eq '-lrt') {
-        $loadreadtags = 1;            
+        $loadreadtags = 1 unless defined $loadreadtags;            
     }
     elsif ($nextword eq '-showreadtags'   || $nextword eq '-srt') {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
+    $screenreadtags   = 1 if ($nextword eq 'screenreadtags'); 
 
 # project ('assignproject' forces its use, by-passing inheritance)
 
@@ -292,6 +294,7 @@ while (my $nextword = shift @ARGV) {
         $projectlock  = 1;
     }
 
+    $autolockmode     = 0            if ($nextword eq '-dounlock');
 # reporting
 
     $loglevel         = 0            if ($nextword eq '-verbose'); # info, fine, finest
@@ -613,7 +616,8 @@ next unless ($objectname =~ /Contig/);
 #$logger->warning("building read version hash 1");
            ($readversionhash,$missing) = $adb->getReadVersionHash(\@readnames);
             if ($missing && @$missing) {
-        	$logger->warning(scalar(@$missing)." reads still missing");
+        	$logger->warning(scalar(@$missing)." reads still missing "
+                                 ."or with undefined hashes in database");
             }
             $logger->warning("keys ".scalar(keys %$readversionhash));
 #$logger->memoryUsage("after test reads in database");
@@ -660,7 +664,7 @@ while (!$fullscan) {
         if (@contignames) {
 # extract a list of minimal Contig with corresponding Read instances
             my $nctbe = scalar(@contignames);
-            $logger->info("block of $nctbe contigs to be extracted");
+            $logger->warning("block of $nctbe contigs to be extracted");
             $poptions{noreads} = 1 if $uservhashlocal;
             $objects = ContigFactory->contigExtractor(\@contignames,$readversionhash,
                                                                     %poptions);
@@ -690,6 +694,8 @@ while (!$fullscan) {
                 }
 # get the readversion hash and extract the reads
                ($readversionhash, my $missing) = $adb->getReadVersionHash(\@names);
+#        	$logger->warning(scalar(@$missing)." reads still missing "
+#                                 ."or with undefined hashes in database");
                 my $ereads = ContigFactory->readExtractor(\@reads,$readversionhash,
                                                                   %poptions);
 #$logger->memoryUsage("after extracting local reads in database");
@@ -958,16 +964,17 @@ $logger->fine("getting tags done");
 
 # dump/echo the readtag
 
-        if (@$reads && ($loadreadtags || $echoreadtags)) {
+        if (@$reads && ($loadreadtags || $screenreadtags || $echoreadtags)) {
 
             $logger->warning("Processing readtags for ".scalar(@$reads)." reads");
-
-#            $logger->warning("Getting tags for ".scalar(@$reads)." reads");
 
             if ($loadreadtags) {
                 my $success = $adb->putTagsForReads($reads,autoload=>1);
                 $logger->warning("putTagsForReads success = $success");
             }
+	    elsif ($screenreadtags) {
+#                my $success = $adb->putTagsForReads($reads,autoload=>1,retire=>0);
+	    }
             else {
 # echoreadtags
                 $logger->warning("Read Tags Listing\n");
@@ -1047,7 +1054,7 @@ if ($lastinsertedcontig && $safemode) {
 
 # $adb->updateMetaData;
 
-unless ($lockstatusfound) {
+unless ($lockstatusfound && $autolockmode) {
 # the project was not locked before; return project to this state
     $project->releaseLock() || $logger->severe("could not release lock");
 }
@@ -1080,12 +1087,6 @@ sub testreadsindatabase {
     return undef unless (ref($readnames) eq 'ARRAY' && @$readnames);
 
 # test if the reads are present in the arcturus database
-
-my $TEST = 0;
-#if ($TEST) {
-#push @$readnames,'ejztestreadname1';
-#  push @$readnames,'ejztestreadname2'; $options{readload} = 1;
-#}
 
     my $missingreads = $adb->getReadsNotInDatabase($readnames);
 
@@ -1134,12 +1135,6 @@ my $TEST = 0;
 
     my $stillmissing = $adb->getReadsNotInDatabase($missingreads);
     
-#if ($TEST) {
-#  $missingreads = $readnames; # test
-#  $stillmissing = $missingreads; # test
-#  $readload = 0;
-#}
-
     return 0 unless ($stillmissing && @$stillmissing);
 
     my $stillmissingreads = scalar(@$stillmissing);
@@ -1183,14 +1178,6 @@ my $TEST = 0;
             if ($nac && ($nac eq 'all' || $readname =~ /$nac/)) {
                 $loadoptions{skipaspedcheck} = 1;
             }
-
-#if ($TEST) {
-# should be my ($status,$report) = $read->isValid(%loadoptions); # ?
-#            my $report = $adb->testRead($read,%loadoptions);
-#$read->writeToCaf(*STDOUT) unless $readload; 
-#  $logger->warning("$readname : $report") if ($report =~ /failed/i);
-#$logger->warning("TEST ABORT");exit;
-#}
 
             next unless $readload;
             my ($status,$msg) = $adb->putRead($read,%loadoptions);
