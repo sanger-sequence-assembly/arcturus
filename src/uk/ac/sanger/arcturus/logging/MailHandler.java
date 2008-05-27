@@ -55,14 +55,16 @@ public class MailHandler extends Handler {
 			msg.setFrom(addrFrom);
 
 			msg.addRecipient(Message.RecipientType.TO, addrTo);
+			
+			String subject = record.getMessage();
 
-			msg.setSubject("An Arcturus Java exception occurred");
+			msg.setSubject(subject);
 			
 			StringBuffer sb = new StringBuffer(16384);
 			
 			sb.append("An Arcturus Java exception has occurred\n\n");
 			
-			sb.append(record.getMessage() + "\n\n");
+			sb.append(subject + "\n\n");
 			
 			sb.append("The logger is " + record.getLoggerName() + "\n");
 			sb.append("The sequence number is " + record.getSequenceNumber() + "\n");
