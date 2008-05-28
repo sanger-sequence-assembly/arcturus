@@ -1,13 +1,10 @@
 package uk.ac.sanger.arcturus.utils;
 
 import uk.ac.sanger.arcturus.ArcturusInstance;
-import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 
 import java.sql.*;
 import java.util.zip.*;
-import java.util.List;
-import java.util.Vector;
 import java.util.Map;
 import java.util.HashMap;
 import java.io.*;
@@ -73,8 +70,8 @@ public class ReadCAFWriter {
 	}
 
 	private void prepareStatements() throws SQLException {
-		String sql = "select READINFO.read_id,seq_id,asped,strand,primer,chemistry,basecaller,status"
-				+ " from READINFO left join SEQ2READ using(read_id) where readname = ? and version = ?";
+		String sql = "select READINFO.read_id,seq_id,asped,strand,primer,chemistry,basecaller,status,version"
+				+ " from READINFO left join SEQ2READ using(read_id) where readname = ? order by version asc";
 
 		pstmtReadBasicData = conn.prepareStatement(sql);
 
@@ -106,9 +103,9 @@ public class ReadCAFWriter {
 				+ " (deprecated is null or deprecated = 'N')";
 
 		pstmtReadTag = conn.prepareStatement(sql);
-		
+
 		sql = "select startinseq,startinscf,length from ALIGN2SCF where seq_id = ?";
-		
+
 		pstmtAlignToSCF = conn.prepareStatement(sql);
 	}
 
@@ -175,212 +172,210 @@ public class ReadCAFWriter {
 		stmt.close();
 	}
 
-	public void writeRead(String readname, int version, PrintWriter pw)
-			throws SQLException, DataFormatException {
+	public void writeRead(String readname, PrintWriter pw) throws SQLException,
+			DataFormatException {
 		pstmtReadBasicData.setString(1, readname);
-		pstmtReadBasicData.setInt(2, version);
 
-		ResultSet rs = pstmtReadBasicData.executeQuery();
+		ResultSet rsRead = pstmtReadBasicData.executeQuery();
 
-		if (!rs.next()) {
-			rs.close();
-			System.err.println("### Read \"" + readname + "\" version " + version + " was not found ###");
-			return;
-		}
+		while (rsRead.next()) {
+			int readid = rsRead.getInt(1);
+			int seqid = rsRead.getInt(2);
+			java.util.Date asped = rsRead.getDate(3);
+			String strand = rsRead.getString(4);
+			String primer = rsRead.getString(5);
+			String chemistry = rsRead.getString(6);
 
-		int readid = rs.getInt(1);
-		int seqid = rs.getInt(2);
-		java.util.Date asped = rs.getDate(3);
-		String strand = rs.getString(4);
-		String primer = rs.getString(5);
-		String chemistry = rs.getString(6);
+			int basecaller_id = rsRead.getInt(7);
 
-		int basecaller_id = rs.getInt(7);
+			String basecaller = rsRead.wasNull() ? null : dictBasecaller
+					.get(basecaller_id);
 
-		String basecaller = rs.wasNull() ? null : dictBasecaller
-				.get(basecaller_id);
+			int status_id = rsRead.getInt(8);
 
-		int status_id = rs.getInt(8);
+			String status = rsRead.wasNull() ? null : dictReadStatus
+					.get(status_id);
 
-		String status = rs.wasNull() ? null : dictReadStatus.get(status_id);
+			int version = rsRead.getInt(9);
 
-		rs.close();
+			pstmtReadCloneData.setInt(1, readid);
 
-		pstmtReadCloneData.setInt(1, readid);
+			ResultSet rs = pstmtReadCloneData.executeQuery();
 
-		rs = pstmtReadCloneData.executeQuery();
+			String template = null;
+			String ligation = null;
+			int silow = -1;
+			int sihigh = -1;
+			String clone = null;
 
-		String template = null;
-		String ligation = null;
-		int silow = -1;
-		int sihigh = -1;
-		String clone = null;
+			if (rs.next()) {
+				template = rs.getString(1);
+				int ligation_id = rs.getInt(2);
 
-		if (rs.next()) {
-			template = rs.getString(1);
-			int ligation_id = rs.getInt(2);
+				Ligation l = dictLigation.get(ligation_id);
 
-			Ligation l = dictLigation.get(ligation_id);
-
-			if (l != null) {
-				ligation = l.getName();
-				silow = l.getSilow();
-				sihigh = l.getSihigh();
-				clone = l.getCloneName();
+				if (l != null) {
+					ligation = l.getName();
+					silow = l.getSilow();
+					sihigh = l.getSihigh();
+					clone = l.getCloneName();
+				}
 			}
-		}
 
-		rs.close();
+			rs.close();
 
-		pw.println("Sequence : " + readname);
-		pw.println("Is_read");
-		pw.println("Unpadded");
+			pw.println("Sequence : " + readname);
+			pw.println("Version " + version);
+			pw.println("Is_read");
+			pw.println("Unpadded");
 
-		pw.println("SCF_File " + readname + "SCF");
+			pw.println("SCF_File " + readname + "SCF");
 
-		pw.println("Template " + template);
+			pw.println("Template " + template);
 
-		if (silow > 0 && sihigh > 0)
-			pw.println("Insert_size " + silow + " " + sihigh);
+			if (silow > 0 && sihigh > 0)
+				pw.println("Insert_size " + silow + " " + sihigh);
 
-		if (ligation != null)
-			pw.println("Ligation_no " + ligation);
+			if (ligation != null)
+				pw.println("Ligation_no " + ligation);
 
-		if (primer != null)
-			pw.println("Primer " + primer);
+			if (primer != null)
+				pw.println("Primer " + primer);
 
-		if (strand != null)
-			pw.println("Strand " + strand);
+			if (strand != null)
+				pw.println("Strand " + strand);
 
-		if (chemistry != null)
-			pw.println("Dye " + chemistry);
+			if (chemistry != null)
+				pw.println("Dye " + chemistry);
 
-		if (clone != null)
-			pw.println("Clone " + clone);
+			if (clone != null)
+				pw.println("Clone " + clone);
 
-		if (status != null)
-			pw.println("ProcessStatus " + status);
+			if (status != null)
+				pw.println("ProcessStatus " + status);
 
-		if (asped != null)
-			pw.println("Asped " + dateformat.format(asped));
+			if (asped != null)
+				pw.println("Asped " + dateformat.format(asped));
 
-		if (basecaller != null)
-			pw.println("Base_caller " + basecaller);
+			if (basecaller != null)
+				pw.println("Base_caller " + basecaller);
 
-		pstmtQualityClipping.setInt(1, seqid);
+			pstmtQualityClipping.setInt(1, seqid);
 
-		rs = pstmtQualityClipping.executeQuery();
+			rs = pstmtQualityClipping.executeQuery();
 
-		while (rs.next()) {
-			int qleft = rs.getInt(1);
-			int qright = rs.getInt(2);
-			pw.println("Clipping QUAL " + qleft + " " + qright);
-		}
+			while (rs.next()) {
+				int qleft = rs.getInt(1);
+				int qright = rs.getInt(2);
+				pw.println("Clipping QUAL " + qleft + " " + qright);
+			}
 
-		rs.close();
+			rs.close();
 
-		pstmtSequenceVector.setInt(1, seqid);
+			pstmtSequenceVector.setInt(1, seqid);
 
-		rs = pstmtSequenceVector.executeQuery();
+			rs = pstmtSequenceVector.executeQuery();
 
-		while (rs.next()) {
-			int svleft = rs.getInt(1);
-			int svright = rs.getInt(2);
-			String svname = rs.getString(3);
-			pw.println("Seq_vec SVEC " + svleft + " " + svright + " \""
-					+ svname + "\"");
-		}
+			while (rs.next()) {
+				int svleft = rs.getInt(1);
+				int svright = rs.getInt(2);
+				String svname = rs.getString(3);
+				pw.println("Seq_vec SVEC " + svleft + " " + svright + " \""
+						+ svname + "\"");
+			}
 
-		rs.close();
+			rs.close();
 
-		pstmtCloningVector.setInt(1, seqid);
+			pstmtCloningVector.setInt(1, seqid);
 
-		rs = pstmtCloningVector.executeQuery();
+			rs = pstmtCloningVector.executeQuery();
 
-		while (rs.next()) {
-			int cvleft = rs.getInt(1);
-			int cvright = rs.getInt(2);
-			String cvname = rs.getString(3);
-			pw.println("Clone_vec CVEC " + cvleft + " " + cvright + " \""
-					+ cvname + "\"");
-		}
+			while (rs.next()) {
+				int cvleft = rs.getInt(1);
+				int cvright = rs.getInt(2);
+				String cvname = rs.getString(3);
+				pw.println("Clone_vec CVEC " + cvleft + " " + cvright + " \""
+						+ cvname + "\"");
+			}
 
-		rs.close();
+			rs.close();
 
-		pstmtReadTag.setInt(1, seqid);
+			pstmtReadTag.setInt(1, seqid);
 
-		rs = pstmtReadTag.executeQuery();
+			rs = pstmtReadTag.executeQuery();
 
-		while (rs.next()) {
-			String tagtype = rs.getString(1);
-			int tagstart = rs.getInt(2);
-			int tagfinish = rs.getInt(3);
-			String tagcomment = rs.getString(4);
+			while (rs.next()) {
+				String tagtype = rs.getString(1);
+				int tagstart = rs.getInt(2);
+				int tagfinish = rs.getInt(3);
+				String tagcomment = rs.getString(4);
 
-			pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
-			if (tagcomment != null)
-				pw.print(" \"" + tagcomment + "\"");
+				pw.print("Tag " + tagtype + " " + tagstart + " " + tagfinish);
+				if (tagcomment != null)
+					pw.print(" \"" + tagcomment + "\"");
+				pw.println();
+			}
+
+			rs.close();
+
+			pstmtAlignToSCF.setInt(1, seqid);
+
+			rs = pstmtAlignToSCF.executeQuery();
+
+			boolean hasAlignToSCF = false;
+
+			while (rs.next()) {
+				hasAlignToSCF = true;
+
+				int startInSequence = rs.getInt(1);
+				int startInSCF = rs.getInt(2);
+
+				int length = rs.getInt(3);
+
+				int endInSequence = startInSequence + length - 1;
+				int endInSCF = startInSCF + length - 1;
+
+				pw.println("Align_to_SCF " + startInSequence + " "
+						+ endInSequence + " " + startInSCF + " " + endInSCF);
+			}
+
+			rs.close();
+
+			pstmtSequence.setInt(1, seqid);
+
+			rs = pstmtSequence.executeQuery();
+
+			if (!rs.next()) {
+				rs.close();
+				pw.println("### Could not find sequence data for version " + version + " ###");
+			}
+
+			byte[] dna = rs.getBytes(1);
+			byte[] quality = rs.getBytes(2);
+			int seqlen = rs.getInt(3);
+
+			if (!hasAlignToSCF)
+				pw.println("Align_to_SCF 1 " + seqlen + " 1 " + seqlen);
+
+			pw.println();
+
+			dna = decodeCompressedData(dna, seqlen);
+			quality = decodeCompressedData(quality, seqlen);
+
+			pw.println("DNA : " + readname);
+
+			writeDNA(dna, pw);
+
+			pw.println();
+
+			pw.println("BaseQuality : " + readname);
+
+			writeQuality(quality, pw);
+
 			pw.println();
 		}
-
-		rs.close();
-
-		pstmtAlignToSCF.setInt(1, seqid);
 		
-		rs = pstmtAlignToSCF.executeQuery();
-
-		boolean hasAlignToSCF = false;
-
-		while (rs.next()) {
-			hasAlignToSCF = true;
-			
-			int startInSequence = rs.getInt(1);
-			int startInSCF = rs.getInt(2);
-			
-			int length = rs.getInt(3);
-			
-			int endInSequence = startInSequence + length - 1;
-			int endInSCF = startInSCF + length - 1;
-			
-			pw.println("Align_to_SCF " + startInSequence + " " + endInSequence +
-					" " + startInSCF + " " + endInSCF);
-		}
-		
-		rs.close();
-		
-		pstmtSequence.setInt(1, seqid);
-
-		rs = pstmtSequence.executeQuery();
-
-		if (!rs.next()) {
-			rs.close();
-			pw.println("### Could not find sequence data for read ###");
-			return;
-		}
-
-		byte[] dna = rs.getBytes(1);
-		byte[] quality = rs.getBytes(2);
-		int seqlen = rs.getInt(3);
-		
-		if (!hasAlignToSCF)
-			pw.println("Align_to_SCF 1 " + seqlen + " 1 " + seqlen);
-
-		pw.println();
-
-		dna = decodeCompressedData(dna, seqlen);
-		quality = decodeCompressedData(quality, seqlen);
-
-		pw.println("DNA : " + readname);
-
-		writeDNA(dna, pw);
-
-		pw.println();
-
-		pw.println("BaseQuality : " + readname);
-
-		writeQuality(quality, pw);
-
-		pw.println();
+		rsRead.close();
 	}
 
 	private byte[] decodeCompressedData(byte[] compressed, int length)
@@ -439,35 +434,33 @@ public class ReadCAFWriter {
 			ArcturusDatabase adb = ai.findArcturusDatabase(organism);
 
 			PrintWriter pw = new PrintWriter(System.out, true);
-			
+
 			ReadCAFWriter writer = new ReadCAFWriter(adb);
 
-			BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-			
+			BufferedReader reader = new BufferedReader(new InputStreamReader(
+					System.in));
+
 			while (true) {
 				System.out.print(">");
-				
+
 				String line = reader.readLine();
-				
+
 				if (line == null)
 					break;
-				
+
 				String[] words = line.split("\\s+");
-				
+
 				if (words.length == 0)
 					continue;
-				
+
 				String readname = words[0];
-				
-				int version = words.length > 1 ? Integer.parseInt(words[1]) : 0;
-				
-				writer.writeRead(readname, version, pw);
+
+				writer.writeRead(readname, pw);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 			System.exit(1);
 		}
-
 
 		System.exit(0);
 	}
