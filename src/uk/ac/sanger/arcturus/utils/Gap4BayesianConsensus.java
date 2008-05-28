@@ -39,6 +39,9 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 	private int nEvents = 0;
 	private PrintStream debugps = null;
 	private DecimalFormat decimal = null;
+	
+	private int forcedBestBase;
+	private boolean useForcedBestBase;
 
 	private final static double log10 = Math.log(10.0);
 
@@ -69,6 +72,8 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 		bestbase = -1;
 		depth = 0;
+		
+		useForcedBestBase = false;
 
 		pad_present = false;
 		best_is_current = true;
@@ -171,6 +176,11 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 		if (quality == 0)
 			iBase = BASE_DASH;
+		
+		if (quality >= 100) {
+			forcedBestBase = iBase;
+			useForcedBestBase = true;
+		}
 
 		// Check the quality against the current maximum value for this base and
 		// strand/chemistry
@@ -204,6 +214,11 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		if (debugps != null) {
 			debugps.println();
 			debugps.println("Gap4BayesianConsensus::findBestBase()");
+		}
+		
+		if (useForcedBestBase) {
+			bestbase = forcedBestBase;
+			best_is_current = true;
 		}
 
 		int nbase_types = pad_present ? 5 : 4;
@@ -360,12 +375,19 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 
 		if (bestbase < 0)
 			return 0;
-		else
-			return scores[bestbase];
+		else {
+			if (useForcedBestBase)
+				return forcedBestBase == BASE_DASH ? 0 : 100;
+			else
+				return scores[bestbase];
+		}
 	}
 
 	public int getScoreForBase(char base) {
 		findBestBase();
+		
+		if (useForcedBestBase)
+			return forcedBestBase == BASE_DASH ? 0 : 100;
 
 		switch (base) {
 			case 'a':
