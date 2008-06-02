@@ -9,6 +9,6 @@
 	<classpathentry kind="lib" path="lib/jmxremote_optional.jar"/>
 	<classpathentry kind="lib" path="lib/mysql-connector-java-5.1.6-bin.jar"/>
 	<classpathentry kind="lib" path="lib/postgresql-8.3-603.jdbc3.jar"/>
-	<classpathentry kind="lib" path="trilead-ssh2-build213.jar"/>
+	<classpathentry kind="lib" path="lib/trilead-ssh2-build213.jar"/>
 	<classpathentry kind="output" path="classes"/>
 </classpath>
