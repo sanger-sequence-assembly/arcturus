@@ -7,10 +7,7 @@ import java.util.List;
 
 import javax.swing.SwingWorker;
 
-
-import ch.ethz.ssh2.ChannelCondition;
-import ch.ethz.ssh2.Connection;
-import ch.ethz.ssh2.Session;
+import com.trilead.ssh2.*;
 
 public class JobRunner extends SwingWorker<Void, JobOutput> {
 	protected String hostname;
