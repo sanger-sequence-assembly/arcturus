@@ -966,11 +966,11 @@ $logger->fine("getting tags done");
 
         if (@$reads && ($loadreadtags || $screenreadtags || $echoreadtags)) {
 
-            $logger->warning("Processing readtags for ".scalar(@$reads)." reads");
+            $logger->warning("Processing readtags for ".scalar(@$reads)." reads") if $debug;
 
             if ($loadreadtags) {
                 my $success = $adb->putTagsForReads($reads,autoload=>1);
-                $logger->warning("putTagsForReads success = $success");
+                $logger->warning("putTagsForReads success = $success") if $debug;
             }
 	    elsif ($screenreadtags) {
 #                my $success = $adb->putTagsForReads($reads,autoload=>1,retire=>0);
