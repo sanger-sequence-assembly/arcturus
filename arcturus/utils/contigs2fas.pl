@@ -182,7 +182,7 @@ $sth = $dbh->prepare($query);
 $sth->execute();
 &db_die("execute($query) failed");
 
-$query = "select sequence from CONSENSUS where contig_id = ?";
+$query = "select sequence,quality from CONSENSUS where contig_id = ?";
 
 my $sth_sequence = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -194,13 +194,15 @@ while(my @ary = $sth->fetchrow_array()) {
 
     $sth_sequence->execute($contigid);
 
-    my ($compressedsequence) = $sth_sequence->fetchrow_array();
+    my ($compressedsequence, $compressedquality) = $sth_sequence->fetchrow_array();
 
     $sth_sequence->finish();
 
     next unless defined($compressedsequence);
 
     my $sequence = uncompress($compressedsequence);
+
+    my $quality = $ascaf ? uncompress($compressedquality) : undef;
 
     if ($contiglength != length($sequence)) {
 	print STDERR "Sequence length mismatch for contig $contigid: $contiglength vs ",
@@ -272,7 +274,7 @@ while(my @ary = $sth->fetchrow_array()) {
 
     if ($ascaf) {
 	$contigname = $organism . "_" . $contigname;
-	&writeAsCAF($fastafh, $contigname, $sequence);
+	&writeAsCAF($fastafh, $contigname, $sequence, $quality);
     } else {
 	printf $fastafh ">$contigname\n";
 	&writeSequence($fastafh, $sequence);
@@ -356,6 +358,7 @@ sub writeAsCAF {
     my $fh = shift;
     my $seqname = shift;
     my $sequence = shift;
+    my $quality = shift;
 
     my $seqlen = length($sequence);
 
@@ -369,13 +372,10 @@ sub writeAsCAF {
     &writeSequence($fh, $sequence);
     print $fh "\n";
 
-    my $qual = [];
-    for (my $i = 0; $i < $seqlen; $i++) {
-	push @{$qual}, 2;
-    }
+    my @bq = unpack("c*", $quality);
 
     print $fh "BaseQuality : $seqname\n";
-    &writeQuality($fh, $qual);
+    &writeQuality($fh, \@bq);
     print $fh "\n";
 
     my $contigname = "Contig_" . $seqname;
