@@ -35,6 +35,7 @@ my $pexclude;
 my $usegapname = 0;
 my $ends = 0;
 my $padmapfile;
+my $ascaf = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -70,6 +71,8 @@ while (my $nextword = shift @ARGV) {
 
     $usegapname = 1 if ($nextword eq '-usegap4name');
 
+    $ascaf = 1 if ($nextword eq '-ascaf');
+
     if ($nextword eq '-help') {
 	&showUsage();
 	exit(0);
@@ -91,6 +94,8 @@ $padton = 0 if $depad;
 
 $padtox = 0 unless defined($padtox);
 $padtox = 0 if $depad;
+
+$padtodash = 1 if defined($ascaf);
 
 $padtodash = 0 unless defined($padtodash);
 $padtodash = 0 if $depad;
@@ -205,7 +210,7 @@ while(my @ary = $sth->fetchrow_array()) {
     my $contigname = $usegapname && defined($gap4name) ? $gap4name : sprintf("contig%06d", $contigid);
 
     if (defined($padfh)) {
-	my $mappings = &padMap($sequence, 'N');
+	my $mappings = &padMap($sequence, '*');
 
 	print $padfh $contigname;
 
@@ -265,11 +270,12 @@ while(my @ary = $sth->fetchrow_array()) {
 	}
     }
 
-    printf $fastafh ">$contigname\n";
-
-    while (length($sequence) > 0) {
-	print $fastafh substr($sequence, 0, 50), "\n";
-	$sequence = substr($sequence, 50);
+    if ($ascaf) {
+	$contigname = $organism . "_" . $contigname;
+	&writeAsCAF($fastafh, $contigname, $sequence);
+    } else {
+	printf $fastafh ">$contigname\n";
+	&writeSequence($fastafh, $sequence);
     }
 
     if ($destdir) {
@@ -322,6 +328,69 @@ sub padMap {
     die "We should never get to this point";
 }
 
+sub writeSequence {
+    my $fh = shift;
+    my $sequence = shift;
+
+    while (length($sequence) > 0) {
+	print $fh substr($sequence, 0, 50), "\n";
+	$sequence = substr($sequence, 50);
+    }
+}
+
+sub writeQuality {
+    my $fh = shift;
+    my $quality = shift;
+
+    my $qlen = scalar(@{$quality});
+
+    for (my $i = 0; $i < $qlen; $i++) {
+	print $fh (($i % 50) > 0) ? " " : "", $quality->[$i];
+	print $fh "\n" if (($i % 50)  == 49);
+    }
+
+    print $fh "\n" if (($qlen % 50) > 0);
+}
+
+sub writeAsCAF {
+    my $fh = shift;
+    my $seqname = shift;
+    my $sequence = shift;
+
+    my $seqlen = length($sequence);
+
+    print $fh "Sequence : $seqname\n";
+    print $fh "Is_read\nPadded\nPrimer unknown\nStrand unknown\nDye unknown\n";
+    print $fh "Clipping QUAL 1 $seqlen\n";
+    print $fh "Tag ARCT 1 $seqlen \"Consensus read\"\n";
+    print $fh "\n";
+
+    print $fh "DNA : $seqname\n";
+    &writeSequence($fh, $sequence);
+    print $fh "\n";
+
+    my $qual = [];
+    for (my $i = 0; $i < $seqlen; $i++) {
+	push @{$qual}, 2;
+    }
+
+    print $fh "BaseQuality : $seqname\n";
+    &writeQuality($fh, $qual);
+    print $fh "\n";
+
+    my $contigname = "Contig_" . $seqname;
+
+    print $fh "Sequence : $contigname\n";
+
+    print $fh "Is_contig\nPadded\n";
+    print $fh "Assembled_from $seqname 1 $seqlen 1 $seqlen\n";
+    print $fh "\n";
+
+    print $fh "DNA : $contigname\n";
+    &writeSequence($fh, $sequence);
+    print $fh "\n";
+}
+
 sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance [default: prod]\n";
@@ -340,6 +409,7 @@ sub showUsage {
     print STDERR "    -exclude\t\tExclude contigs in these projects\n";
     print STDERR "    -usegap4name\tUse Gap4 name instead of contig ID\n";
     print STDERR "    -ends\t\tMask out the middle of the contig except for this many bp at either end\n";
+    print STDERR "    -ascaf\t\tGenerate a CAF file containing each contig as a consensus read\n";
     print STDERR "\n";
     print STDERR "PADDING OPTIONS:\n";
     print STDERR "    -depad\t\tRemove pad characters from sequence\n";
