@@ -219,6 +219,7 @@ public class Gap4BayesianConsensus implements ConsensusAlgorithm {
 		if (useForcedBestBase) {
 			bestbase = forcedBestBase;
 			best_is_current = true;
+			return;
 		}
 
 		int nbase_types = pad_present ? 5 : 4;
