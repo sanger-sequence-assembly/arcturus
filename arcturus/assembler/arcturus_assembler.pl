@@ -152,11 +152,15 @@ foreach my $project (@projects) {
     print STDERR "Export of $project ",($rc == 0 ? " succeeded" : " failed with error code $rc"),"\n";
 }
 
+system("touch $previous") unless -e $previous;
+
 $cmd = $arcturus_utils_dir . "/getunassembledreads";
 
 print STDERR "Getting unassembled reads\n";
 $rc = system("$cmd -instance $instance -organism $organism -caf $newReads");
 print STDERR ($rc == 0) ? "OK\n" : "Failed with error code $rc\n";
+
+system("touch $newReads") unless -e $newReads;
 
 &my_reassemble_bayesian($previous, $newReads, $project,
 			$minmatch, $minscore, $newAssembly, 2);
