@@ -136,11 +136,11 @@ $dbh->disconnect();
 #my $saveSTDERR = &redirectSTDERR($log);
 
 chdir($assembly) || die "Couldn't cd to $assembly\n";
-#system("usageMonitor $$ > $memUsage &");
+#mySys("usageMonitor $$ > $memUsage &");
 
 my $cmd = $arcturus_utils_dir . "/calculateconsensus";
 
-my $rc = system("$cmd -instance $instance -organism $organism -quiet -lowmem");
+my $rc = mySys("$cmd -instance $instance -organism $organism -quiet -lowmem");
 
 $cmd = $arcturus_utils_dir . "/project-export";
 
@@ -148,19 +148,19 @@ unlink($previous) if -f $previous;
 
 foreach my $project (@projects) {
     print STDERR "Exporting $project.\n";
-    $rc = system("$cmd -instance $instance -organism $organism -project $project -caf $previous -append -lock");
+    $rc = mySys("$cmd -instance $instance -organism $organism -project $project -caf $previous -append -lock");
     print STDERR "Export of $project ",($rc == 0 ? " succeeded" : " failed with error code $rc"),"\n";
 }
 
-system("touch $previous") unless -e $previous;
+mySys("touch $previous") unless -e $previous;
 
 $cmd = $arcturus_utils_dir . "/getunassembledreads";
 
 print STDERR "Getting unassembled reads\n";
-$rc = system("$cmd -instance $instance -organism $organism -caf $newReads");
+$rc = mySys("$cmd -instance $instance -organism $organism -caf $newReads");
 print STDERR ($rc == 0) ? "OK\n" : "Failed with error code $rc\n";
 
-system("touch $newReads") unless -e $newReads;
+mySys("touch $newReads") unless -e $newReads;
 
 &my_reassemble_bayesian($previous, $newReads, $project,
 			$minmatch, $minscore, $newAssembly, 2);
@@ -176,11 +176,11 @@ if (@fos_ends) {
 my $depadcaf = "$tmpdir/depadded.caf";
 
 print STDERR "Depadding assembly CAF file\n";
-$rc = system("caf_depad < $newAssembly > $depadcaf");
+$rc = mySys("caf_depad < $newAssembly > $depadcaf");
 print STDERR ($rc == 0) ? "OK\n" : "Failed with error code $rc\n";
 
 print STDERR "Importing assembly into Arcturus\n";
-$rc = system("contig-loader -instance $instance -organism $organism" .
+$rc = mySys("new-contig-loader -instance $instance -organism $organism" .
 	     " -caf $depadcaf -setprojectby readcount");
 print STDERR ($rc == 0) ? "OK\n" : "Failed with error code $rc\n";
 
@@ -190,7 +190,7 @@ my $unlock = $arcturus_utils_dir . "/project-unlock";
 
 foreach my $project (@projects) {
     print STDERR "Exporting $project as Gap4 database.\n";
-    $rc = system("$cmd -instance $instance -organism $organism -project $project");
+    $rc = mySys("$cmd -instance $instance -organism $organism -project $project");
     print STDERR "Export of $project ",($rc == 0 ? " succeeded" : " failed with error code $rc"),"\n";
 }
 
@@ -214,7 +214,7 @@ sub my_reassemble_bayesian {
 
     print STDERR "$cmd\n";
 
-    system($cmd) && die "Error running reassembler $!\n";
+    mySys($cmd) && die "Error running reassembler $!\n";
 }
 
 sub db_die {
@@ -235,4 +235,26 @@ sub showUsage {
     print STDERR "    -minmatch\t\tParameter for phrap\n";
     print STDERR "    -minscore\t\tParameter for phrap\n";
     print STDERR "    -dlimit\t\tData size limit\n";
+}
+
+# The next subroutine was shamelessly stolen from WGSassembly.pm
+
+sub mySys {
+    my ($cmd) = @_;
+    print STDERR "$cmd\n";
+    my $res = 0xffff & system($cmd);
+    return if ($res == 0);
+    printf STDERR "system(%s) returned %#04x: ", $cmd, $res;
+    if ($res == 0xff00) {
+	print STDERR "command failed: $!\n";
+    } elsif ($res > 0x80) {
+	$res >>= 8;
+	print STDERR "exited with non-zero status $res\n";
+    } else {
+	my $sig = $res & 0x7f;
+	print STDERR "exited through signal $sig";
+	if ($res & 0x80) {print STDERR " (core dumped)"; }
+	print STDERR "\n";
+    }
+    exit 1;
 }
