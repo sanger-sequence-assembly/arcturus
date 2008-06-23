@@ -140,7 +140,7 @@ chdir($assembly) || die "Couldn't cd to $assembly\n";
 
 my $cmd = $arcturus_utils_dir . "/calculateconsensus";
 
-my $rc = mySys("$cmd -instance $instance -organism $organism -quiet -lowmem");
+my $rc = mySys("$cmd -instance $instance -organism $organism");
 
 $cmd = $arcturus_utils_dir . "/project-export";
 

@@ -78,8 +78,7 @@ ${arcturusbin}/contig-loader -instance ${instance} \
                              -caf newassembly.depad.caf
 
 ${arcturusjava}/calculateconsensus -instance ${instance} \
-                                   -organism ${organism} \
-                                   -quiet -lowmem
+                                   -organism ${organism}
 
 #rm -f oldcontigs.caf newreads.caf newassembly.caf assembly
 #gzip newassembly.depad.caf
