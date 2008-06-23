@@ -153,7 +153,7 @@ ${arcturus_home}/utils/read-allocation-test -instance $instance -organism $organ
 
 # calculating consensus sequence (for this project only)
 
-${javabasedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+${javabasedir}/calculateconsensus -instance $instance -organism $organism -project $projectname
 
 echo Cleaning up
 

@@ -345,7 +345,7 @@ elsif ($project->hasNewContigs()) {
         $database = "-instance $instance -organism $organism";
     }
  
-    system ("$consensus_script $database -project $projectname -quiet -lowmem");
+    system ("$consensus_script $database -project $projectname");
 
 #------------------------------------------------------------------------------
 # consistence tests after import

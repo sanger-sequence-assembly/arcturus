@@ -48,7 +48,7 @@ if ( ! -f ${projectname}.0 ) then
   echo \!\! -- Project $projectname version 0 does not exist --
 endif
 
-${basedir}/calculateconsensus -instance $instance -organism $organism -project $projectname -quiet -lowmem
+${basedir}/calculateconsensus -instance $instance -organism $organism -project $projectname
 
 endif
 

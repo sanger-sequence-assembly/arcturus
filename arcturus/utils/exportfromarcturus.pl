@@ -227,7 +227,7 @@ unless ($instance eq 'default' || $organism eq 'default') {
 
 print STDERR "${minerva}Calculating consensus\n";
 
-system ("$consensus_script $database -project $projectname -quiet -lowmem"); # -$minerva?
+system ("$consensus_script $database -project $projectname"); # -$minerva?
 
 #------------------------------------------------------------------------------
 # lock the project (before export, to prevent any changes while exporting)
