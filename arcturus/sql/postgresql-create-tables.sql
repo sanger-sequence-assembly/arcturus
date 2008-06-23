@@ -578,8 +578,14 @@ where (C2CMAPPING.parent_id is not null and CONTIG.nreads > 0);
 CREATE VIEW FREEREADS AS
 select	READINFO.read_id AS read_id,
 	READINFO.readname AS readname
-from READINFO left join (SEQ2READ join MAPPING join CURRENTCONTIGS)
-on (READINFO.read_id = SEQ2READ.read_id
-and SEQ2READ.seq_id = MAPPING.seq_id
-and MAPPING.contig_id = CURRENTCONTIGS.contig_id)
+from 
+(
+  (
+    (
+      READINFO left join SEQ2READ on (READINFO.read_id = SEQ2READ.read_id)
+    )
+    left join MAPPING on (READINFO.read_id = SEQ2READ.read_id)
+  )
+  left join CURRENTCONTIGS on (MAPPING.contig_id = CURRENTCONTIGS.contig_id)
+)
 where CURRENTCONTIGS.contig_id is null;
