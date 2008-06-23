@@ -34,8 +34,7 @@ public class CalculateConsensus {
 	private Connection conn = null;
 
 	private boolean debug = false;
-	private boolean lowmem = false;
-	private boolean quiet = false;
+	private boolean verbose = false;
 	private boolean allcontigs = false;
 
 	private int mode = defaultPaddingMode;
@@ -82,11 +81,8 @@ public class CalculateConsensus {
 			if (args[i].equalsIgnoreCase("-debug"))
 				debug = true;
 
-			if (args[i].equalsIgnoreCase("-lowmem"))
-				lowmem = true;
-
-			if (args[i].equalsIgnoreCase("-quiet"))
-				quiet = true;
+			if (args[i].equalsIgnoreCase("-verbose"))
+				verbose = true;
 
 			if (args[i].equalsIgnoreCase("-allcontigs"))
 				allcontigs = true;
@@ -135,8 +131,7 @@ public class CalculateConsensus {
 			Project project = (projectname == null) ? null : adb
 					.getProjectByName(null, projectname);
 
-			if (lowmem)
-				adb.getSequenceManager().setCacheing(false);
+			adb.getSequenceManager().setCacheing(false);
 
 			conn = adb.getConnection();
 
@@ -146,7 +141,7 @@ public class CalculateConsensus {
 				System.exit(1);
 			}
 
-			if (!quiet)
+			if (verbose)
 				adb.addContigManagerEventListener(new MyListener());
 
 			Class algclass = Class.forName(algname);
@@ -169,7 +164,7 @@ public class CalculateConsensus {
 					+ MAX_ALLOWED_PACKET;
 
 			try {
-				int rc = stmt.executeUpdate(query);
+				stmt.executeUpdate(query);
 			} catch (SQLException sqle) {
 				Arcturus.logWarning("Failed to increase max_allowed_packet to "
 						+ MAX_ALLOWED_PACKET, sqle);
@@ -235,8 +230,7 @@ public class CalculateConsensus {
 		} else
 			System.err.println("data missing, operation abandoned");
 
-		if (lowmem)
-			contig.setMappings(null);
+		contig.setMappings(null);
 	}
 
 	public void report() {
@@ -262,7 +256,7 @@ public class CalculateConsensus {
 		ps.println("\t-project\tName of project for contigs");
 		ps.println();
 		ps.println("OPTIONS");
-		String[] options = { "-debug", "-lowmem", "-quiet", "-allcontigs" };
+		String[] options = { "-debug", "-verbose", "-allcontigs" };
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);
