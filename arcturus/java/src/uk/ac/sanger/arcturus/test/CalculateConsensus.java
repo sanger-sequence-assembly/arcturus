@@ -7,8 +7,7 @@ import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
 import java.util.Vector;
-import java.util.Set;
-import java.util.HashSet;
+import java.util.List;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
@@ -68,7 +67,7 @@ public class CalculateConsensus {
 		System.err.println("==================");
 		System.err.println();
 		
-		Set<Integer> contigSet = null;
+		List<Integer> contigList = null;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -99,7 +98,7 @@ public class CalculateConsensus {
 				nostore = true;
 			
 			if (args[i].equalsIgnoreCase("-contigs"))
-				contigSet = parseContigIDs(args[++i]);
+				contigList = parseContigIDs(args[++i]);
 
 			if (args[i].equalsIgnoreCase("-project"))
 				projectname = args[++i];
@@ -190,7 +189,7 @@ public class CalculateConsensus {
 					+ " ON DUPLICATE KEY UPDATE" 
 					+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)");
 
-			if (contigSet == null) {
+			if (contigList == null) {
 				query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
 						+ consensustable + " using(contig_id)"
 						: "select CONTIG.contig_id from CONTIG left join "
@@ -203,18 +202,18 @@ public class CalculateConsensus {
 
 				ResultSet rs = stmt.executeQuery(query);
 				
-				contigSet = new HashSet<Integer>();
+				contigList = new Vector<Integer>();
 				
 				while (rs.next()) {
 					int contig_id = rs.getInt(1);
 					
-					contigSet.add(contig_id);
+					contigList.add(contig_id);
 				}
 				
 				rs.close();
 			}
 
-			for (int contig_id : contigSet) {
+			for (int contig_id : contigList) {
 				calculateConsensusForContig(contig_id);
 				nContigs++;
 			}
@@ -226,8 +225,8 @@ public class CalculateConsensus {
 		}
 	}
 
-	private Set<Integer> parseContigIDs(String string) {
-		Set<Integer> contigs = new HashSet<Integer>();
+	private List<Integer> parseContigIDs(String string) {
+		List<Integer> contigs = new Vector<Integer>();
 		
 		String[] words = string.split(",");
 		
