@@ -7,6 +7,8 @@ import uk.ac.sanger.arcturus.utils.*;
 import uk.ac.sanger.arcturus.Arcturus;
 
 import java.util.Vector;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.zip.*;
 import java.io.*;
 import java.sql.*;
@@ -35,7 +37,9 @@ public class CalculateConsensus {
 
 	private boolean debug = false;
 	private boolean verbose = false;
+	private boolean progress = false;
 	private boolean allcontigs = false;
+	private boolean nostore = false;
 
 	private int mode = defaultPaddingMode;
 
@@ -43,8 +47,7 @@ public class CalculateConsensus {
 
 	private ConsensusAlgorithm algorithm = null;
 
-	private PreparedStatement insertStmt = null;
-	private PreparedStatement updateStmt = null;
+	private PreparedStatement stmtStoreConsensus = null;
 
 	private Deflater compresser = new Deflater(Deflater.BEST_COMPRESSION);
 
@@ -64,6 +67,8 @@ public class CalculateConsensus {
 		System.err.println("CalculateConsensus");
 		System.err.println("==================");
 		System.err.println();
+		
+		Set<Integer> contigSet = null;
 
 		for (int i = 0; i < args.length; i++) {
 			if (args[i].equalsIgnoreCase("-instance"))
@@ -84,8 +89,17 @@ public class CalculateConsensus {
 			if (args[i].equalsIgnoreCase("-verbose"))
 				verbose = true;
 
+			if (args[i].equalsIgnoreCase("-progress"))
+				progress = true;
+
 			if (args[i].equalsIgnoreCase("-allcontigs"))
 				allcontigs = true;
+			
+			if (args[i].equalsIgnoreCase("-nostore"))
+				nostore = true;
+			
+			if (args[i].equalsIgnoreCase("-contigs"))
+				contigSet = parseContigIDs(args[++i]);
 
 			if (args[i].equalsIgnoreCase("-project"))
 				projectname = args[++i];
@@ -170,36 +184,38 @@ public class CalculateConsensus {
 						+ MAX_ALLOWED_PACKET, sqle);
 			}
 
-			insertStmt = conn.prepareStatement("insert into " + consensustable
-					+ " (contig_id,sequence,length,quality)"
-					+ " VALUES(?,?,?,?)");
+			stmtStoreConsensus = conn.prepareStatement("insert into " + consensustable
+					+ " (contig_id,length,sequence,quality)"
+					+ " VALUES(?,?,?,?)"
+					+ " ON DUPLICATE KEY UPDATE" 
+					+ " sequence=VALUES(sequence), quality=VALUES(quality), length=VALUES(length)");
 
-			updateStmt = conn.prepareStatement("update " + consensustable
-					+ " set sequence=?,length=?,quality=? where contig_id=?");
-
-			query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
-					+ consensustable + " using(contig_id)"
-					: "select CONTIG.contig_id from CONTIG left join "
+			if (contigSet == null) {
+				query = allcontigs ? "select CONTIG.contig_id,length(sequence) from CONTIG left join "
+						+ consensustable + " using(contig_id)"
+						: "select CONTIG.contig_id from CONTIG left join "
 							+ consensustable
 							+ " using(contig_id) where sequence is null";
 
-			if (project != null)
-				query += (allcontigs ? " where" : " and") + " project_id = "
-						+ project.getID();
+				if (project != null)
+					query += (allcontigs ? " where" : " and") + " project_id = "
+					+ project.getID();
 
-			ResultSet rs = stmt.executeQuery(query);
-
-			while (rs.next()) {
-				int contig_id = rs.getInt(1);
-
-				boolean doUpdate = false;
-
-				if (allcontigs) {
-					rs.getInt(2);
-					doUpdate = !rs.wasNull();
+				ResultSet rs = stmt.executeQuery(query);
+				
+				contigSet = new HashSet<Integer>();
+				
+				while (rs.next()) {
+					int contig_id = rs.getInt(1);
+					
+					contigSet.add(contig_id);
 				}
+				
+				rs.close();
+			}
 
-				calculateConsensusForContig(contig_id, doUpdate);
+			for (int contig_id : contigSet) {
+				calculateConsensusForContig(contig_id);
 				nContigs++;
 			}
 
@@ -210,7 +226,24 @@ public class CalculateConsensus {
 		}
 	}
 
-	public void calculateConsensusForContig(int contig_id, boolean doUpdate)
+	private Set<Integer> parseContigIDs(String string) {
+		Set<Integer> contigs = new HashSet<Integer>();
+		
+		String[] words = string.split(",");
+		
+		for (String word: words) {
+			try {
+				contigs.add(new Integer(word));
+			}
+			catch (NumberFormatException nfe) {
+				System.err.println("Not parsable as an integer: \"" + word + "\"");
+			}
+		}
+		
+		return contigs;
+	}
+
+	public void calculateConsensusForContig(int contig_id)
 			throws SQLException, DataFormatException {
 		long clockStart = System.currentTimeMillis();
 
@@ -225,8 +258,12 @@ public class CalculateConsensus {
 			long usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1024;
 			long clockStop = System.currentTimeMillis() - clockStart;
 			System.err.print(clockStop + " ms, " + usedMemory + " kb");
-			storeConsensus(contig_id, consensus, doUpdate);
-			System.err.println(doUpdate ? "    UPDATED" : "    STORED");
+			if (nostore) {
+				System.err.println("    CALCULATED");
+			} else {
+				storeConsensus(contig_id, consensus);
+				System.err.println("    STORED");
+			}
 		} else
 			System.err.println("data missing, operation abandoned");
 
@@ -254,9 +291,10 @@ public class CalculateConsensus {
 		ps.println("\t-algorithm\tName of class for consensus algorithm");
 		ps.println("\t-consensustable\tName of consensus table");
 		ps.println("\t-project\tName of project for contigs");
+		ps.println("\t-contigs\tComma-separated list of contigs");
 		ps.println();
 		ps.println("OPTIONS");
-		String[] options = { "-debug", "-verbose", "-allcontigs" };
+		String[] options = { "-debug", "-verbose", "-allcontigs", "-nostore" };
 
 		for (int i = 0; i < options.length; i++)
 			ps.println("\t" + options[i]);
@@ -332,6 +370,10 @@ public class CalculateConsensus {
 			else
 				normalReads.add(mappings[i]);
 		}
+		
+		if (progress)
+			System.err.println("\nNormal reads: " + normalReads.size() + ", long read: "
+					+ longReads.size());
 
 		mappings = normalReads.toArray(new Mapping[0]);
 
@@ -343,6 +385,13 @@ public class CalculateConsensus {
 		int maxdepth = -1;
 
 		int nreads = mappings.length;
+		
+		long lasttime = 0L;
+		
+		if (progress) {
+			lasttime = System.currentTimeMillis();
+			System.err.println();
+		}
 
 		for (cpos = cstart, rdleft = 0, oldrdleft = 0, rdright = -1, oldrdright = -1; cpos <= cfinal; cpos++) {
 			while ((rdleft < nreads)
@@ -394,8 +443,14 @@ public class CalculateConsensus {
 				System.err.println("Quality array overflow: " + cpos
 						+ " (base=" + cstart + ")");
 			}
+			
+			if (progress && (cpos % 10000 == 0)) {
+				long timenow = System.currentTimeMillis();
+				System.err.println("" + cpos + "\t" + (timenow - lasttime));
+				lasttime = timenow;
+			}
 		}
-
+		
 		consensus.setDNA(sequence);
 		consensus.setQuality(quality);
 
@@ -436,8 +491,7 @@ public class CalculateConsensus {
 		algorithm.addBase(base, qual, strand, chemistry);
 	}
 
-	public void storeConsensus(int contig_id, Consensus consensus,
-			boolean doUpdate) throws SQLException {
+	public void storeConsensus(int contig_id, Consensus consensus) throws SQLException {
 		byte[] sequence = consensus.getDNA();
 		byte[] quality = consensus.getQuality();
 
@@ -461,19 +515,11 @@ public class CalculateConsensus {
 		for (int i = 0; i < compressedQualityLength; i++)
 			compressedQuality[i] = buffer[i];
 
-		if (doUpdate) {
-			updateStmt.setInt(4, contig_id);
-			updateStmt.setBytes(1, compressedSequence);
-			updateStmt.setInt(2, seqlen);
-			updateStmt.setBytes(3, compressedQuality);
-			updateStmt.executeUpdate();
-		} else {
-			insertStmt.setInt(1, contig_id);
-			insertStmt.setBytes(2, compressedSequence);
-			insertStmt.setInt(3, seqlen);
-			insertStmt.setBytes(4, compressedQuality);
-			insertStmt.executeUpdate();
-		}
+		stmtStoreConsensus.setInt(1, contig_id);
+		stmtStoreConsensus.setInt(2, seqlen);
+		stmtStoreConsensus.setBytes(3, compressedSequence);
+		stmtStoreConsensus.setBytes(4, compressedQuality);
+		stmtStoreConsensus.executeUpdate();
 	}
 
 	private class Consensus {
