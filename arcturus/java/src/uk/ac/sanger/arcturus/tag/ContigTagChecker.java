@@ -114,6 +114,7 @@ public class ContigTagChecker {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	private void analyseContig(int contig_id) throws SQLException {
 		List<Mapping> mappings = getParentMappings(contig_id);
 
@@ -122,23 +123,44 @@ public class ContigTagChecker {
 			return;
 		}
 
-		Tag[] tags = getContigTags(contig_id);
-		
-		System.out.println("Tags in child contig:");
-		
-		for (Tag tag : tags)
-			System.out.println(tag);
+		List<Tag> tags = getContigTags(contig_id);
 
-		for (Mapping mapping : mappings)
-			analyseParentToChildMapping(mapping, contig_id, tags);
+		Collections.sort(tags);
+
+		List<Tag> remappedTags = new Vector<Tag>();
+
+		for (Mapping mapping : mappings) {
+			List<Tag> newtags = analyseParentToChildMapping(mapping, contig_id,
+					tags);
+
+			if (newtags != null)
+				remappedTags.addAll(newtags);
+		}
+
+		Collections.sort(remappedTags);
+
+		System.out
+				.println("----------------------------------------------------------------------");
+
+		System.out.println("\nTags in child contig:");
+
+		for (Tag tag : tags)
+			System.out.println("\n" + tag);
+
+		System.out.println("\nRemapped tags in parent contigs:");
+
+		for (Tag tag : remappedTags)
+			System.out.println("\n" + tag + "\n// From " + tag.parent.contig_id
+					+ "\t" + tag.parent.cstart + "\t" + tag.parent.cfinal);
 	}
 
-	private void analyseParentToChildMapping(Mapping mapping, int child_id,
-			Tag[] childTags) throws SQLException {
-		Tag[] parentTags = getContigTags(mapping.parent_id);
+	@SuppressWarnings("unchecked")
+	private List<Tag> analyseParentToChildMapping(Mapping mapping,
+			int child_id, List<Tag> childTags) throws SQLException {
+		List<Tag> parentTags = getContigTags(mapping.parent_id);
 
-		if (parentTags == null || parentTags.length == 0)
-			return;
+		if (parentTags == null || parentTags.size() == 0)
+			return null;
 
 		System.out.println("\nTesting mapping from contig " + mapping.parent_id
 				+ " to contig " + child_id);
@@ -154,15 +176,24 @@ public class ContigTagChecker {
 		for (Segment segment : mapping.segments)
 			System.out.println(segment.toString(forward));
 
-		Tag[] remappedTags = new Tag[parentTags.length];
+		List<Tag> remappedTags = remapParentTags(parentTags, mapping);
 
-		for (int i = 0; i < parentTags.length; i++)
-			remappedTags[i] = remapParentTag(parentTags[i], mapping);
-		
-		System.out.println();
-		
-		for (int i = 0; i < parentTags.length; i++)
-			System.out.println("Parent tag " + parentTags[i] + "\nRemapped " + remappedTags[i] + "\n");
+		Collections.sort(remappedTags);
+
+		for (Tag remappedTag : remappedTags) {
+			System.out.println("\n" + remappedTag.parent + "\n" + remappedTag);
+		}
+
+		return remappedTags;
+	}
+
+	private List<Tag> remapParentTags(List<Tag> parentTags, Mapping mapping) {
+		List<Tag> remappedTags = new Vector<Tag>(parentTags.size());
+
+		for (Tag parentTag : parentTags)
+			remappedTags.add(remapParentTag(parentTag, mapping));
+
+		return remappedTags;
 	}
 
 	private Tag remapParentTag(Tag parentTag, Mapping mapping) {
@@ -172,10 +203,15 @@ public class ContigTagChecker {
 		int cstart = getChildPosition(pstart, mapping);
 		int cfinal = getChildPosition(pfinal, mapping);
 
+		boolean forward = mapping.direction == Mapping.FORWARD;
+
 		Tag remappedTag = new Tag();
 
-		remappedTag.cstart = cstart;
-		remappedTag.cfinal = cfinal;
+		remappedTag.contig_id = mapping.contig_id;
+		remappedTag.parent = parentTag;
+
+		remappedTag.cstart = forward ? cstart : cfinal;
+		remappedTag.cfinal = forward ? cfinal : cstart;
 		remappedTag.strand = parentTag.strand;
 		remappedTag.tag_id = parentTag.tag_id;
 		remappedTag.tagtype = parentTag.tagtype;
@@ -222,6 +258,7 @@ public class ContigTagChecker {
 		while (rs.next()) {
 			Mapping mapping = new Mapping();
 
+			mapping.contig_id = contig_id;
 			mapping.parent_id = rs.getInt(1);
 			int mapping_id = rs.getInt(2);
 			mapping.cstart = rs.getInt(3);
@@ -264,7 +301,7 @@ public class ContigTagChecker {
 		return segments;
 	}
 
-	private Tag[] getContigTags(int contig_id) throws SQLException {
+	private List<Tag> getContigTags(int contig_id) throws SQLException {
 		pstmtTag.setInt(1, contig_id);
 
 		Vector<Tag> tagv = new Vector<Tag>();
@@ -273,6 +310,8 @@ public class ContigTagChecker {
 
 		while (rs.next()) {
 			Tag tag = new Tag();
+
+			tag.contig_id = contig_id;
 
 			tag.tag_id = rs.getInt(1);
 			tag.cstart = rs.getInt(2);
@@ -295,9 +334,7 @@ public class ContigTagChecker {
 
 		rs.close();
 
-		Tag[] tags = tagv.toArray(new Tag[0]);
-
-		return tags;
+		return tagv;
 	}
 
 	public static void main(String[] args) {
@@ -315,6 +352,7 @@ public class ContigTagChecker {
 		public static final int REVERSE = 2;
 
 		protected int parent_id;
+		protected int contig_id;
 		protected int cstart;
 		protected int cfinish;
 		protected int pstart;
@@ -337,11 +375,12 @@ public class ContigTagChecker {
 		}
 	}
 
-	class Tag {
+	class Tag implements Comparable {
 		public static final int FORWARD = 1;
 		public static final int REVERSE = 2;
 		public static final int UNKNOWN = 3;
 
+		protected int contig_id;
 		protected int tag_id;
 		protected int cstart;
 		protected int cfinal;
@@ -349,9 +388,33 @@ public class ContigTagChecker {
 		protected String tagtype;
 		protected String tagcomment;
 
+		protected Tag parent = null;
+
 		public String toString() {
-			return "" + tag_id + "\t" + cstart + "\t" + cfinal + "\t" + strand
-					+ "\t" + tagtype + "\t\"" + tagcomment + "\"";
+			return "" + contig_id + "\t" + cstart + "\t" + cfinal + "\t"
+					+ tag_id + "\t" + strand + "\t" + tagtype + "\t\""
+					+ tagcomment + "\"";
+		}
+
+		public int compareTo(Object o) {
+			Tag that = (Tag) o;
+
+			int d = this.cstart - that.cstart;
+
+			if (d != 0)
+				return d;
+			else
+				return this.cfinal - that.cfinal;
+		}
+
+		public boolean rangeMatches(Tag that) {
+			return that != null && this.cstart == that.cstart
+					&& this.cfinal == that.cfinal;
+		}
+
+		public boolean rangeAndTypeMatches(Tag that) {
+			return rangeMatches(that)
+					&& this.tagtype.equalsIgnoreCase(that.tagtype);
 		}
 	}
 }
