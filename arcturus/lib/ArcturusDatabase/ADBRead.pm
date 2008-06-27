@@ -3335,7 +3335,7 @@ sub putTagsForReads {
 # bulk insertion of tag data
     my $this = shift;
     my $reads = shift; # array of Read instances
-    my %options = @_; # autoload=> 
+    my %options = @_; # autoload=> , synchronise=>
 
     &verifyParameter($reads,'putTagsForReads','ARRAY');
 
@@ -3414,14 +3414,28 @@ $logger->debug("processing tag $rtag");
                 next if $ignore->{$rtag};
 $logger->debug("testing tag $rtag");
 # and compare the tag with the current existing tag (including host class)
-                $ignore->{$rtag}++ if $rtag->isEqual($etag,%isequaloptions);
+                if ($rtag->isEqual($etag,%isequaloptions)) {
+                    $ignore->{$rtag}++; # skip this input tag afterwards
+                    $ignore->{$etag}++; # this existing tags is in input list
+		}
 $logger->setPrefix("putTagsForReads");
             }
             $tcounter++;
         }
     }
 
-# finally collect all tags in the reads not marked to be ignored
+# if tags have to be retired, run through the existing tags
+
+    if ($options{synchronise}) {
+# existing tags also in the input list are marked as to be ignored
+        foreach my $etag (@$existingtags) {
+            next if $ignore->{$etag};
+# this existing tags was not found amongst the input tags: retire it
+            &retireReadTag($dbh,$etag);
+	}
+    }
+
+# finally collect all tags in the reads not marked as to be ignored, load them
 
     my @tags;
     foreach my $read (@$reads) {
@@ -3430,8 +3444,6 @@ $logger->setPrefix("putTagsForReads");
         my $rtags = $read->getTags();
         foreach my $rtag (@$rtags) {
             next if $ignore->{$rtag};
-# process possible placeholder names (again! there may be no existing tags)
-# &processTagPlaceHolderName($rtag,$logger); DEPRECATED
             push @tags,$rtag;
 	}
     }
@@ -3644,6 +3656,34 @@ sub putReadTags {
 #    return $tagsloaded,$tagsmissed; # contig-loader.pl read-loader.pl oligo-tag-loader (read-tag-tester readtag-cleanup)
 }
 
+sub retireReadTag {
+# use as private method only
+    my $dbh = shift;
+    my $tag = shift;
+
+    &verifyPrivate($dbh,"putReadTags");
+
+    &verifyParameter($tag,"putReadTags",'Tag');
+
+    my ($pstart,$pfinal) = $tag->getPosition();
+    my $strand           = $tag->getStrand();
+    $strand =~ s/(\w)\w*/$1/;
+    my $comment          = $tag->getTagComment();
+# we quote the comment string because it may contain odd characters
+    $comment = $dbh->quote($comment);
+
+    my $query = "update READTAG set deprecated = 'Y'"
+   	      . " where seq_id  = "    .  $tag->getSequenceID()  
+              . "   and tagtype = '"   .  $tag->getType() . "'"
+              . "   and tag_seq_id = " . ($tag->getTagSequenceID() || 0)
+              . "   and pstart = "     .  $pstart
+              . "   and pfinal = "     .  $pfinal
+              . "   and strand = '"    .  $strand . "'";
+    $query   .= "   and comment like $comment" if $comment;
+#    print STDOUT "deprecate: $query\n\n"; # TO BE TESTED
+
+    return $dbh->do($query); # true for success
+}
 
 sub putTagSequence {
 # public method add tagseqname and sequence to TAGSEQUENCE table
