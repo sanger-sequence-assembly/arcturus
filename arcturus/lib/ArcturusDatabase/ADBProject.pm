@@ -389,6 +389,29 @@ sub deleteProject {
     return 2, "$report was deleted";
 }
 
+# a special method used when the same project is retrieved repeatedly
+
+my $CACHEDPROJECTS;
+
+sub getCachedProject {
+    my $this = shift;
+    my $pid  = shift; # we cache on project_id because it is unique
+
+    return undef unless (defined $pid && $pid !~ /\D/);
+
+    $CACHEDPROJECTS = {} unless defined $CACHEDPROJECTS;
+
+    unless ($CACHEDPROJECTS->{$pid}) {
+        my ($projects,$msg) = $this->getProject(project_id=>$pid);
+#print STDERR "new project cached: $pid $projects\n";
+        return undef unless ($projects && @$projects);
+#print STDERR "new project cached: $pid $projects  @$projects\n";
+        $CACHEDPROJECTS->{$pid} = $projects->[0];
+    }
+
+    return $CACHEDPROJECTS->{$pid};  
+}
+
 #------------------------------------------------------------------------------
 # assigning contigs to a project and reads (as singleton contig) to a project
 #------------------------------------------------------------------------------
