@@ -22,24 +22,41 @@ public class OrganismTreeModel extends DefaultTreeModel {
 
 	public OrganismTreeModel(ArcturusInstance[] instances)
 			throws NamingException {
-		super(new DefaultMutableTreeNode("Arcturus", true));
+		super(null);
+		
+		if (instances == null)
+			return;
 
-		DefaultMutableTreeNode root = (DefaultMutableTreeNode) getRoot();
+		DefaultMutableTreeNode root = null;
+		
+		if (instances.length == 1) {
+			root = createInstanceNode(instances[0]);
+		} else {
+			root = new DefaultMutableTreeNode("Arcturus", true);
 
-		for (int i = 0; i < instances.length; i++)
-			addInstance(instances[i], root);
+			for (int i = 0; i < instances.length; i++)
+				addInstance(instances[i], root);
+		}
+		
+		setRoot(root);
 	}
-
-	private void addInstance(ArcturusInstance instance,
-			DefaultMutableTreeNode root) throws NamingException {
+	
+	private DefaultMutableTreeNode createInstanceNode(ArcturusInstance instance) throws NamingException {
 		DirContext context = instance.getDirContext();
 
 		DefaultMutableTreeNode instanceNode = new InstanceNode(context,
 				instance.getName());
 
-		root.add(instanceNode);
+		addChildNodes(context, instanceNode, instance);	
+		
+		return instanceNode;
+	}
 
-		addChildNodes(context, instanceNode, instance);
+	private void addInstance(ArcturusInstance instance,
+			DefaultMutableTreeNode root) throws NamingException {
+		DefaultMutableTreeNode instanceNode = createInstanceNode(instance);
+
+		root.add(instanceNode);
 	}
 
 	private void addChildNodes(DirContext context,
