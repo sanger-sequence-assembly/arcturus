@@ -85,7 +85,7 @@ public class ProjectImporterExporter extends Thread {
 		final String command = shellcommand + " -instance " +
 				instance + " -organism " + organism + " -project " + project;
 		
-		final String caption = (importing ? "Importing " : "Exporting") + 
+		final String caption = (importing ? "Importing " : "Exporting ") + 
 				instance + ":" + organism + ":" + project + " on " + host;
 		
 		PrintWriter logtmp = null;
