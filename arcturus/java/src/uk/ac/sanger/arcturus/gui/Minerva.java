@@ -166,7 +166,7 @@ public class Minerva {
 	}
 
 	private JComponent createInstanceDisplay(ArcturusInstance[] ai) {
-		return ai.length == 1 ? new OrganismTablePanel(ai[0]) : new OrganismTreePanel(ai);
+		return new OrganismTreePanel(ai);
 	}
 
 	public void createAndShowOrganismDisplay(String organism)
