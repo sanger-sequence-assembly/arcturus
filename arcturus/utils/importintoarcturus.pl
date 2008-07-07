@@ -149,7 +149,7 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-     &showusage("Invalid organism '$organism' on server '$instance'");
+     &showusage("Invalid organism '$organism' on instance '$instance'");
 }
 
 my ($projects,$msg);
