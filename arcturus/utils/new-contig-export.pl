@@ -16,7 +16,7 @@ my $DEBUG = 1;
 
 my ($organism,$instance);
 
-my ($project,$fopn, $contig,$focn, $fofn,$assembly);
+my ($project,$fopn, $contig,$focn,$fofn,$assembly);
 
 my ($minsize,$minread,$maxread);
 #my $ignoreblocked = 0;
@@ -79,7 +79,8 @@ my $screenkeys  = "undoedit|ue|removebadreads|rbr";
 
 my $validkeys  = "organism|o|instance|i|"                               # dbase
                . "contig|c|focn|fofn|project|p|fopn|assembly|a|accept|" # dataset
-               . "minsize|ms|minreads|min|maxreads|max|ignoreblocked|"  # constraints
+               . "ignoreblocked|" # project status (of contigs)
+               . "minlen|minsize|ms|minreads|min|maxreads|max|"  # constraints
                . "format|caf|maf|fasta|embl|reverse|"                   # output format
 #   .|mask|symbol|shrink|"
                . "confirm|info|verbose|debug|help";                     # reporting
@@ -168,7 +169,7 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 
 # constraints
 
-    if ($nextword eq '-minsize'  || $nextword eq '-ms') {
+    if ($nextword eq '-minlen' ||$nextword eq '-minsize' || $nextword eq '-ms') {
         $minsize   = shift @ARGV;
     }
 
