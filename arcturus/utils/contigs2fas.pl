@@ -238,6 +238,8 @@ while(my @ary = $sth->fetchrow_array()) {
 	$sequence =~ s/\*/\-/g;
     }
 
+    next if ($depad && defined($minlen) && length($sequence) < $minlen);
+
     if ($ends && length($sequence) > 2 * $ends) {
 	my $leftend = substr($sequence, 0, $ends);
 	my $midlen = length($sequence) - 2 * $ends;
