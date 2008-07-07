@@ -11,6 +11,7 @@ use Term::ReadKey;
 
 my $instance;
 my $organism;
+my $subdir;
 
 my $dbhost;
 my $dbport;
@@ -22,14 +23,13 @@ my $rootdn;
 
 my $description;
 
-my $aliasdn;
-
 my $template;
 
 my $projects;
 my $directory;
 
 my $nocreatedatabase = 0;
+my $skipdbsteps = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
@@ -43,7 +43,7 @@ while (my $nextword = shift @ARGV) {
     $ldapuser = shift @ARGV if ($nextword eq '-ldapuser');
     $rootdn = shift @ARGV if ($nextword eq '-rootdn');
 
-    $aliasdn = shift @ARGV if ($nextword eq '-aliasdn');
+    $subdir = shift @ARGV if ($nextword eq '-subdir');
 
     $template = shift @ARGV if ($nextword eq '-template');
 
@@ -54,6 +54,7 @@ while (my $nextword = shift @ARGV) {
     $directory = shift @ARGV if ($nextword eq '-directory');
 
     $nocreatedatabase = 1 if ($nextword eq '-nocreatedatabase');
+    $skipdbsteps = 1 if ($nextword eq '-skipdbsteps');
 
     if ($nextword eq '-help') {
 	&showUsage();
@@ -63,13 +64,13 @@ while (my $nextword = shift @ARGV) {
 
 unless (defined($instance) && defined($organism) && defined($dbhost)
 	&& defined($dbport) && defined($description) && defined($ldapurl)
-	&& defined($ldapuser) && defined($rootdn)) {
+	&& defined($ldapuser) && defined($rootdn) && defined($subdir)) {
     &showUsage("One or more mandatory parameters are missing");
     exit(1);
 }
 
-unless (defined($template) || $nocreatedatabase) {
-    &showUsage("You must specify either -template DBNAME or -nocreatedatabase");
+unless (defined($template) || $nocreatedatabase  || $skipdbsteps) {
+    &showUsage("You must specify either -template DBNAME or -nocreatedatabase or -skipdbsteps");
     exit(1);
 }
 
@@ -78,303 +79,315 @@ unless (defined($dbname)) {
     print STDERR "WARNING: No database name specified, using $organism as the default.\n\n";
 }
 
-my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
+unless ($skipdbsteps) {
+    my $dsn = "DBI:mysql:database=arcturus;host=$dbhost;port=$dbport";
 
-my $dbpw = &getPassword("Enter password for root MySQL user", "MYSQL_ROOT_PW");
-
-if (!defined($dbpw) || length($dbpw) == 0) {
-    print STDERR "No password was entered\n";
-    exit(2);
-}
-
-my $dbh = DBI->connect($dsn, "root", $dbpw);
-
-unless (defined($dbh)) {
-    print STDERR "Failed to connect to $dsn as root\n";
-    print STDERR "DBI error is $DBI::errstr\n";
-    exit(3);
-}
-
-unless ($nocreatedatabase) { 
-    my $query = "select table_name from information_schema.tables where table_schema = '" . $template .
-	"' and table_type = 'BASE TABLE'";
-
-    my $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-
-    my @tables;
-
-    while (my ($tablename) = $sth->fetchrow_array()) {
-	push @tables, $tablename;
+    my $dbpw = &getPassword("Enter password for root MySQL user", "MYSQL_ROOT_PW");
+    
+    if (!defined($dbpw) || length($dbpw) == 0) {
+	print STDERR "No password was entered\n";
+	exit(2);
     }
-
-    $sth->finish();
-
-    print STDERR "### Creating a new database $dbname ... ";
-
-    $query = "create database $dbname";
-
-    $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-
-    print STDERR "OK\n\n";
-
-    print STDERR "### Switching to database $dbname ... ";
-
-    $query = "use $dbname";
-
-    $sth = $dbh->prepare($query);
-    &db_die("Failed to prepare query \"$query\"");
-
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-
-    print STDERR "OK\n\n";
-
-    print STDERR "### Creating tables ...\n";
-
-    foreach my $tablename (@tables) {
-	$query = "create table $tablename like $template.$tablename";
-
-	$sth = $dbh->prepare($query);
+    
+    my $dbh = DBI->connect($dsn, "root", $dbpw);
+    
+    unless (defined($dbh)) {
+	print STDERR "Failed to connect to $dsn as root\n";
+	print STDERR "DBI error is $DBI::errstr\n";
+	exit(3);
+    }
+    
+    unless ($nocreatedatabase) { 
+	my $query = "select table_name from information_schema.tables where table_schema = '" . $template .
+	    "' and table_type = 'BASE TABLE'";
+	
+	my $sth = $dbh->prepare($query);
 	&db_die("Failed to prepare query \"$query\"");
-
+	
 	$sth->execute();
 	&db_die("Failed to execute query \"$query\"");
+	
+	my @tables;
+	
+	while (my ($tablename) = $sth->fetchrow_array()) {
+	    push @tables, $tablename;
+	}
+	
+	$sth->finish();
+	
+	print STDERR "### Creating a new database $dbname ... ";
+	
+	$query = "create database $dbname";
+	
+	$sth = $dbh->prepare($query);
+	&db_die("Failed to prepare query \"$query\"");
+	
+	$sth->execute();
+	&db_die("Failed to execute query \"$query\"");
+	
+	print STDERR "OK\n\n";
+	
+	print STDERR "### Switching to database $dbname ... ";
+	
+	$query = "use $dbname";
+	
+	$sth = $dbh->prepare($query);
+	&db_die("Failed to prepare query \"$query\"");
+	
+	$sth->execute();
+	&db_die("Failed to execute query \"$query\"");
+	
+	print STDERR "OK\n\n";
+	
+	print STDERR "### Creating tables ...\n";
+	
+	foreach my $tablename (@tables) {
+	    $query = "create table $tablename like $template.$tablename";
+	    
+	    $sth = $dbh->prepare($query);
+	    &db_die("Failed to prepare query \"$query\"");
+	    
+	    $sth->execute();
+	    &db_die("Failed to execute query \"$query\"");
+	    
+	    print STDERR "\t$tablename\n";
+	}
 
-	print STDERR "\t$tablename\n";
+	print STDERR "\nOK\n\n";
     }
-
-    print STDERR "\nOK\n\n";
-}
-
-print STDERR "### Granting privileges to user arcturus ... ";
-
-my $query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES," .
-    " LOCK TABLES, EXECUTE ON \`$dbname\`.* TO 'arcturus'\@'\%'";
-
-my $sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-print STDERR "OK\n\n";
-
-print STDERR "### Granting privileges to user arcturus_dba ... ";
-
-$query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER," .
-    " CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW," .
-    " CREATE ROUTINE, ALTER ROUTINE ON \`$dbname\`.* TO 'arcturus_dba'\@'\%'";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-print STDERR "OK\n\n";
-
-print STDERR "### Granting privileges to user readonly ... ";
-
-$query = "GRANT SELECT, EXECUTE ON \`$dbname\`.* TO 'readonly'\@'\%'";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-print STDERR "OK\n\n";
-
-$dbh->disconnect();
-
-$dbpw = &getPassword("Enter password for MySQL user arcturus_dba", "ARCTURUS_DBA_PW");
-
-if (!defined($dbpw) || length($dbpw) == 0) {
-    print STDERR "No password was entered\n";
-    exit(2);
-}
-
-print STDERR "### Creating views ... ";
-
-my $command = "cat /software/arcturus/sql/views/*.sql | " .
-    " mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
-
-my $rc = system($command);
-
-unless ($rc == 0) {
-    print STDERR "Command \"$command\"\nfailed with return code $rc\n";
-    exit(3);
-}
-
-print STDERR "OK\n\n";
-
-print STDERR "### Creating stored procedures ... ";
-
-$command = "cat /software/arcturus/sql/procedures/*.sql | " .
-    " mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
-
-$rc = system($command);
-
-unless ($rc == 0) {
-    print STDERR "Command \"$command\"\nfailed with return code $rc\n";
-    exit(3);
-}
-
-print STDERR "OK\n\n";
-
-print STDERR "### Preparing to populate tables for $dbname ... ";
-
-$dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
-
-my $dbh = DBI->connect($dsn, "arcturus", "***REMOVED***");
-
-unless (defined($dbh)) {
-    print STDERR "Failed to connect to $dsn as arcturus\n";
-    print STDERR "DBI error is $DBI::errstr\n";
-    exit(3);
-}
-
-print STDERR "OK\n\n";
-
-my @pwinfo = getpwuid($<);
-my $me = $pwinfo[0];
-
-print STDERR "### Creating the default assembly ... ";
-
-$query = "insert into ASSEMBLY(name,creator,created) values(?,?,now())";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute($organism, $me);
-&db_die("Failed to execute query \"$query\"");
-
-my $assembly_id = $dbh->{'mysql_insertid'};
-
-$sth->finish();
-
-print STDERR "OK\n\n";
-
-print STDERR "### Creating BIN and PROBLEMS projects ... ";
-
-$query = "insert into PROJECT(assembly_id,name,creator,created) values(?,?,?,NOW())";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute($assembly_id, 'BIN', $me);
-&db_die("Failed to execute query \"$query\" for BIN");
-
-$sth->execute($assembly_id, 'PROBLEMS', $me);
-&db_die("Failed to execute query \"$query\" for PROBLEMS");
-
-print STDERR "OK\n\n";
-
-if (defined($projects)) {
-    print STDERR "### Creating user-specified projects ...\n";
-
-    foreach my $project (split(/,/, $projects)) {
-	$sth->execute($assembly_id, $project, $me);
-	&db_die("Failed to execute query \"$query\" for $project");
-	print STDERR "\t$project\n";
+    
+    print STDERR "### Granting privileges to user arcturus ... ";
+    
+    my $query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE TEMPORARY TABLES," .
+	" LOCK TABLES, EXECUTE ON \`$dbname\`.* TO 'arcturus'\@'\%'";
+    
+    my $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Granting privileges to user arcturus_dba ... ";
+    
+    $query = "GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, INDEX, ALTER," .
+	" CREATE TEMPORARY TABLES, LOCK TABLES, EXECUTE, CREATE VIEW, SHOW VIEW," .
+	" CREATE ROUTINE, ALTER ROUTINE ON \`$dbname\`.* TO 'arcturus_dba'\@'\%'";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Granting privileges to user readonly ... ";
+    
+    $query = "GRANT SELECT, EXECUTE ON \`$dbname\`.* TO 'readonly'\@'\%'";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+    
+    print STDERR "OK\n\n";
+    
+    $dbh->disconnect();
+    
+    $dbpw = &getPassword("Enter password for MySQL user arcturus_dba", "ARCTURUS_DBA_PW");
+    
+    if (!defined($dbpw) || length($dbpw) == 0) {
+	print STDERR "No password was entered\n";
+	exit(2);
     }
-
-    print STDERR "\nOK\n\n";
-}
-
-$sth->finish();
-
-if (defined($directory)) {
-    print STDERR "### Setting the directory for the projects ... ";
-
-    $query = "update PROJECT set directory = concat('" . $directory . "/', name) where name != 'PROBLEMS'";
-
+    
+    print STDERR "### Creating views ... ";
+    
+    my $command = "cat /software/arcturus/sql/views/*.sql | " .
+	" mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+    
+    my $rc = system($command);
+    
+    unless ($rc == 0) {
+	print STDERR "Command \"$command\"\nfailed with return code $rc\n";
+	exit(3);
+    }
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Creating stored procedures ... ";
+    
+    $command = "cat /software/arcturus/sql/procedures/*.sql | " .
+	" mysql -h $dbhost -P $dbport -u arcturus_dba --password=$dbpw $dbname";
+    
+    $rc = system($command);
+    
+    unless ($rc == 0) {
+	print STDERR "Command \"$command\"\nfailed with return code $rc\n";
+	exit(3);
+    }
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Preparing to populate tables for $dbname ... ";
+    
+    $dsn = "DBI:mysql:database=$dbname;host=$dbhost;port=$dbport";
+    
+    my $dbh = DBI->connect($dsn, "arcturus", "***REMOVED***");
+    
+    unless (defined($dbh)) {
+	print STDERR "Failed to connect to $dsn as arcturus\n";
+	print STDERR "DBI error is $DBI::errstr\n";
+	exit(3);
+    }
+    
+    print STDERR "OK\n\n";
+    
+    my @pwinfo = getpwuid($<);
+    my $me = $pwinfo[0];
+    
+    print STDERR "### Creating the default assembly ... ";
+    
+    $query = "insert into ASSEMBLY(name,creator,created) values(?,?,now())";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute($organism, $me);
+    &db_die("Failed to execute query \"$query\"");
+    
+    my $assembly_id = $dbh->{'mysql_insertid'};
+    
+    $sth->finish();
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Creating BIN and PROBLEMS projects ... ";
+    
+    $query = "insert into PROJECT(assembly_id,name,creator,created) values(?,?,?,NOW())";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute($assembly_id, 'BIN', $me);
+    &db_die("Failed to execute query \"$query\" for BIN");
+    
+    $sth->execute($assembly_id, 'PROBLEMS', $me);
+    &db_die("Failed to execute query \"$query\" for PROBLEMS");
+    
+    print STDERR "OK\n\n";
+    
+    if (defined($projects)) {
+	print STDERR "### Creating user-specified projects ...\n";
+	
+	foreach my $project (split(/,/, $projects)) {
+	    $sth->execute($assembly_id, $project, $me);
+	    &db_die("Failed to execute query \"$query\" for $project");
+	    print STDERR "\t$project\n";
+	}
+	
+	print STDERR "\nOK\n\n";
+    }
+    
+    $sth->finish();
+    
+    if (defined($directory)) {
+	print STDERR "### Setting the directory for the projects ... ";
+	
+	$query = "update PROJECT set directory = concat('" . $directory . "/', name) where name != 'PROBLEMS'";
+	
+	$sth = $dbh->prepare($query);
+	&db_die("Failed to prepare query \"$query\"");
+	
+	$sth->execute();
+	&db_die("Failed to execute query \"$query\"");
+	
+	print STDERR "OK\n\n";
+    }
+    
+    print STDERR "### Populating the USER table ... ";
+    
+    $query = "insert into USER(username,role) select username,role from arcturus.USER";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+    
+    $sth->finish();
+    
+    print STDERR "OK\n\n";
+    
+    print STDERR "### Populating the PRIVILEGE table ...\n";
+    
+    my %privileges = ('finisher' => ['create_project', 'lock_project', 'move_any_contig'],
+		      'team leader' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig'],
+		      'administrator' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig']
+		      );
+    
+    $query = "select username,role from USER";
+    
+    $sth = $dbh->prepare($query);
+    &db_die("Failed to prepare query \"$query\"");
+    
+    $sth->execute();
+    &db_die("Failed to execute query \"$query\"");
+    
+    my %roles;
+    
+    while (my ($user,$role) = $sth->fetchrow_array()) {
+	$roles{$user} = $role;
+    }
+    
+    $sth->finish();
+    
+    $query = "insert into PRIVILEGE(username,privilege) values (?,?)";
+    
     $sth = $dbh->prepare($query);
     &db_die("Failed to prepare query \"$query\"");
 
-    $sth->execute();
-    &db_die("Failed to execute query \"$query\"");
-
-    print STDERR "OK\n\n";
-}
-
-print STDERR "### Populating the USER table ... ";
-
-$query = "insert into USER(username,role) select username,role from arcturus.USER";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-$sth->finish();
-
-print STDERR "OK\n\n";
-
-print STDERR "### Populating the PRIVILEGE table ...\n";
-
-my %privileges = ('finisher' => ['create_project', 'lock_project', 'move_any_contig'],
-		  'team leader' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig'],
-		  'administrator' => ['assign_project', 'grant_privileges', 'create_project', 'lock_project', 'move_any_contig']
-		  );
-
-$query = "select username,role from USER";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-$sth->execute();
-&db_die("Failed to execute query \"$query\"");
-
-my %roles;
-
-while (my ($user,$role) = $sth->fetchrow_array()) {
-    $roles{$user} = $role;
-}
-
-$sth->finish();
-
-$query = "insert into PRIVILEGE(username,privilege) values (?,?)";
-
-$sth = $dbh->prepare($query);
-&db_die("Failed to prepare query \"$query\"");
-
-foreach my $user (sort keys %roles) {
-    my $role = $roles{$user};
-
-    printf STDERR "\t%-8s %-20s\t", $user, $role;
-
-    my $privs = $privileges{$role};
-
-    if (defined($privs)) {
-	foreach my $priv (@{$privs}) {
-	    $sth->execute($user, $priv);
-	    &db_die("Failed to execute query \"$query\" with user=$user, privilege=$priv");
-	    print STDERR " $priv";
+    foreach my $user (sort keys %roles) {
+	my $role = $roles{$user};
+	
+	printf STDERR "\t%-8s %-20s\t", $user, $role;
+	
+	my $privs = $privileges{$role};
+	
+	if (defined($privs)) {
+	    foreach my $priv (@{$privs}) {
+		$sth->execute($user, $priv);
+		&db_die("Failed to execute query \"$query\" with user=$user, privilege=$priv");
+		print STDERR " $priv";
+	    }
+	} else {
+	    print STDERR " *** NO PRIVILEGES DEFINED ***";
 	}
-    } else {
-	print STDERR " *** NO PRIVILEGES DEFINED ***";
+	
+	print STDERR "\n";
     }
-
-    print STDERR "\n";
+    
+    $sth->finish();
+    
+    print STDERR "\nOK\n\n";
+    
+    $dbh->disconnect();
 }
 
-$sth->finish();
+my @reldn = ();
 
-print STDERR "\nOK\n\n";
+foreach my $dirname (split(/\//, $subdir)) {
+    unshift @reldn, "cn=$dirname";
+}
 
-$dbh->disconnect();
+my $subdirdn = join(',', @reldn) . ",cn=$instance";
 
-my $dn = "cn=$organism,cn=$instance,$rootdn";
+my $reldn = "cn=$organism," . $subdirdn;
+
+my $dn = "$reldn,$rootdn";
 
 print STDERR "### Creating an LDAP entry $dn ... ";
 
@@ -389,6 +402,8 @@ my $ldap = Net::LDAP->new($ldapurl) or die "$@";
  
 my $mesg = $ldap->bind($ldapuser, password => $ldappw);
 $mesg->code && die $mesg->error;
+
+&checkOrCreateLDAPNode($subdirdn, $rootdn, $ldap);
 
 my $result = $ldap->add($dn,
 		     attr => ['cn' => $organism,
@@ -417,31 +432,6 @@ if ($result->code) {
     print STDERR " OK\n";
 }
 
-if (defined($aliasdn)) {
-    &checkOrCreateLDAPNode($aliasdn, $rootdn, $ldap);
-
-    print STDERR "### Creating an LDAP alias $aliasdn ...";
-
-
-    my $aliasdn = "cn=$organism," . $aliasdn . ",$rootdn";
-    
-    my $result = $ldap->add($aliasdn,
-		     attr => ['cn' => $organism,
-			      'aliasedObjectName' => $dn,
-			      'objectClass' => ['top',
-						'alias',
-						'extensibleObject'
-						]
-			      ]
-		     );
-
-    if ($result->code) {
-	print STDERR " FAILED: ", $result->error, "\n";
-    } else {
-	print STDERR " OK\n";
-    }
-}
-
 $mesg = $ldap->unbind;
 
 print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
@@ -449,9 +439,9 @@ print STDERR "\nTHE SCRIPT HAS COMPLETED\n";
 exit(0);
 
 sub checkOrCreateLDAPNode {
-    my ($aliasdn, $rootdn, $ldap, $junk) = @_;
+    my ($reldn, $rootdn, $ldap, $junk) = @_;
 
-    my @dnparts = split(/,/, $aliasdn);
+    my @dnparts = split(/,/, $reldn);
 
     my $base = $rootdn;
 
@@ -545,16 +535,17 @@ sub showUsage {
     print STDERR "    -ldapurl\t\tLDAP URL\n";
     print STDERR "    -ldapuser\t\tLDAP username\n";
     print STDERR "    -rootdn\t\tLDAP root DN\n";
+    print STDERR "    -subdir\t\tSub-directory of LDAP tree (e.g. bacteria/Salmonella)\n";
     print STDERR "\n";
     print STDERR "    -description\tDescription for LDAP entry\n";
     print STDERR "\n";
     print STDERR "    -template\t\tMySQL database to use as template\n";
-    print STDERR "\t\t\t[Unless -nocreatedatabase has been specified]";
+    print STDERR "\t\t\t[Unless -nocreatedatabase or -skipdbstepshas been specified]";
     print STDERR "\n\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
     print STDERR "    -db\t\t\tMySQL database to create (default: organism name)\n";
-    print STDERR "    -aliasdn\t\tLDAP DN (relative to root DN) for alias\n";
     print STDERR "    -projects\t\tProjects to add to the database\n";
     print STDERR "    -directory\t\tBase directory for projects\n";
     print STDERR "    -nocreatedatabase\tDatabase already exists, do not create it\n";
+    print STDERR "    -skipdbsteps\tSkip the MySQL steps\n";
 }
