@@ -1,29 +1,21 @@
 package uk.ac.sanger.arcturus.gui.organismtree;
 
-import java.io.PrintStream;
 import java.util.Collections;
 import java.util.NoSuchElementException;
 import java.util.Vector;
-import java.util.Comparator;
 
 import javax.naming.Binding;
-import javax.naming.Context;
 import javax.naming.NamingEnumeration;
 import javax.naming.NamingException;
 import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.sql.DataSource;
-import javax.swing.*;
-import javax.swing.event.TreeSelectionEvent;
-import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.ArcturusInstance;
 import uk.ac.sanger.arcturus.data.Organism;
-
-import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
 
 public class OrganismTreeModel extends DefaultTreeModel {
 	private OrganismTreeNodeComparator comparator = new OrganismTreeNodeComparator();
