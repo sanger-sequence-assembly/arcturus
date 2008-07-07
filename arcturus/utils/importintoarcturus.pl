@@ -4,8 +4,6 @@ use strict;
 
 use ArcturusDatabase;
 
-use Cwd;
-
 # import a single gap4 database into arcturus
 
 # script to be run from directory of gap4 database to be imported 
@@ -14,7 +12,7 @@ use Cwd;
 
 #------------------------------------------------------------------------------
 
-my $pwd = Cwd::cwd(); # the current directory
+my $pwd = `pawd`; chomp $pwd; # the current directory
    $pwd =~ s?.*automount.*/nfs?/nfs?;
    $pwd =~ s?.*automount.*/root?/nfs?;
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
@@ -151,7 +149,7 @@ my $adb = new ArcturusDatabase (-instance => $instance,
 		                -organism => $organism);
 if (!$adb || $adb->errorStatus()) {
 # abort with error message
-     &showUsage("Invalid organism '$organism' on server '$instance'");
+     &showusage("Invalid organism '$organism' on server '$instance'");
 }
 
 my ($projects,$msg);
@@ -183,7 +181,7 @@ unless (defined($rundir)) {
 if ($rundir) {
     print STDOUT "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
-    $pwd = Cwd::cwd();
+    $pwd = `pawd`; chomp $pwd;
     $pwd =~ s?.*automount.*/nfs?/nfs?;
     $pwd =~ s?.*automount.*/root?/nfs?;
 }
@@ -208,6 +206,12 @@ if ( -f "${gap4name}.A.BUSY") {
     print STDOUT "!! -- Import of project $gap4name WARNING:"
                      ." version A is BUSY --\n";
     exit 1 if $abortonwarning;
+}
+
+if ( -f "${gap4name}.B.BUSY") {
+    print STDOUT "!! -- Import of project $gap4name aborted:"
+                     ." version B is BUSY --\n";
+    exit 1;
 }
 
 # determine if script run in standard mode
@@ -249,7 +253,6 @@ if ($?) {
     exit 1;
 }
 
-#print STDOUT "can proceed but test abort\n"; exit 1; # busy test
 #------------------------------------------------------------------------------
 # export the database as a depadded CAF file
 #------------------------------------------------------------------------------
@@ -285,6 +288,12 @@ unless ($? == 0) {
 unless ($version eq "B" || $nonstandard) {
     print STDOUT "Backing up version $version to B\n";
     if (-f "$gap4name.B") {
+# extra protection against busy B version preventing the backup
+        if ( -f "${gap4name}.B.BUSY") {
+            print STDERR "!! -- Import of project $gap4name ABORTED:"
+                        ." version B is BUSY; backup cannot be made --\n";
+            exit 1;
+        }
         system ("rmdb $gap4name B");
         unless ($? == 0) {
             print STDERR "!! -- FAILED to remove existing $gap4name.B ($?) --\n"; 
@@ -318,14 +327,12 @@ $command .= " @ARGV" if @ARGV; # pass on any remaining input
 
 print STDERR "$command\n" if @ARGV; # list command if parms transfer (temporary)
 
-system ($command);
+my $rc = &mySystem ($command);
 
 # exit status 0 for no errors with or without new contigs imported
 #             1 (or 256) for an error status 
 
-my $status = $?;
-
-if ($status) {
+if ($rc) {
     print STDERR "!! -- FAILED to import from CAF file $depadded ($?) --\n";
     exit 1;
 }
@@ -345,7 +352,7 @@ elsif ($project->hasNewContigs()) {
         $database = "-instance $instance -organism $organism";
     }
  
-    system ("$consensus_script $database -project $projectname");
+    &mySystem ("$consensus_script $database -project $projectname");
 
 #------------------------------------------------------------------------------
 # consistence tests after import
@@ -365,7 +372,7 @@ elsif ($project->hasNewContigs()) {
 
     my $allocation_b_log = "readallocation-b-.$$.${gap4name}.log"; # between projects
 
-    system ("$allocation_script -instance $instance -organism $organism "
+    &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."-nr -problemproject $problemproject -workproject $projectname "
            ."-between -log $allocation_b_log -mail ejz");
 
@@ -376,7 +383,7 @@ elsif ($project->hasNewContigs()) {
 
     my $allocation_i_log = "readallocation-i-.$$.${gap4name}.log"; # inside project
 
-    system ("$allocation_script -instance $instance -organism $organism "
+    &mySystem ("$allocation_script -instance $instance -organism $organism "
            ."$repair -problemproject $problemproject -workproject $projectname "
            ."-inside -log $allocation_i_log -mail ejz");
 
@@ -396,7 +403,7 @@ unless ($keep) {
 
     print STDOUT "Cleaning up\n";
 
-    system ("rm -f $padded $depadded");
+    &mySystem ("rm -f $padded $depadded");
 
 # purge readallocation logs older than a given date  TO BE COMPLETED
 # "find . -mtime +30 -type f -exec rm -f {} \;"
@@ -406,6 +413,34 @@ unless ($keep) {
 print STDOUT "\n\nIMPORT OF $projectname HAS FINISHED.\n";
 
 exit 0;
+
+# The next subroutine was shamelessly stolen from WGSassembly.pm
+
+sub mySystem {
+    my ($cmd) = @_;
+
+    my $res = 0xffff & system($cmd);
+    return 0 if ($res == 0); # success
+
+    print STDERR "$cmd\n";
+    printf STDERR "system(%s) returned %#04x: ", $cmd, $res;
+
+    if ($res == 0xff00) {
+	print STDERR "command failed: $!\n";
+	return 1;
+    } 
+    elsif ($res > 0x80) {
+	$res >>= 8;
+	print STDERR "exited with non-zero status $res\n";
+    } 
+    else {
+	my $sig = $res & 0x7f;
+	print STDERR "exited through signal $sig";
+	if ($res & 0x80) {print STDERR " (core dumped)"; }
+	print STDERR "\n";
+    }
+    exit 1;
+}
 
 #-------------------------------------------------------------------------------
 #-------------------------------------------------------------------------------
