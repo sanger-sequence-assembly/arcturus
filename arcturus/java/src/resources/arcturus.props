@@ -3,7 +3,7 @@ java.naming.provider.url=ldap://ldapsrv1.internal.sanger.ac.uk/cn=jdbc,ou=arctur
 
 arcturus.naming.people.url=ldap://ldapsrv1.internal.sanger.ac.uk/ou=people,dc=sanger,dc=ac,dc=uk
 arcturus.default.algorithm=uk.ac.sanger.arcturus.utils.Gap4BayesianConsensus
-arcturus.default.instance=pathogen
+arcturus.default.instance=bacteria,helminths,fungi,protozoa
 
 arcturus.update.url=http://intweb.sanger.ac.uk/Software/Arcturus/arcturus.zip
 
