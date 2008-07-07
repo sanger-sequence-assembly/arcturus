@@ -26,7 +26,7 @@ sub new {
 	$newPassword = shift if ($nextword eq 'password');
     }
 
-    $url = 'ldap.internal.sanger.ac.uk' unless defined($url);
+    $url = 'ldapsrv1.internal.sanger.ac.uk' unless defined($url);
 
     $instance = 'prod' unless defined($instance);
 
