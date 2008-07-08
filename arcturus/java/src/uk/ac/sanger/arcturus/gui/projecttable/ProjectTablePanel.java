@@ -361,23 +361,6 @@ public class ProjectTablePanel extends MinervaPanel implements
 			return;
 		}
 
-		File dir = new File(directory);
-
-		if (!dir.exists() || !dir.isDirectory()) {
-			JOptionPane
-					.showMessageDialog(
-							this,
-							"The home directory for "
-									+ projectName
-									+ " is listed as\n"
-									+ directory
-									+ "\nbut this directory does not exist.\nPlease seek assistance.",
-							"Cannot export project " + projectName,
-							JOptionPane.ERROR_MESSAGE);
-
-			return;
-		}
-
 		int rc = JOptionPane.showConfirmDialog(this, "Do you wish to export "
 				+ projectName + "?", "Export project?",
 				JOptionPane.OK_CANCEL_OPTION);
@@ -426,23 +409,6 @@ public class ProjectTablePanel extends MinervaPanel implements
 							+ ".\nPlease seek assistance.",
 					"Cannot import project " + projectName,
 					JOptionPane.ERROR_MESSAGE);
-
-			return;
-		}
-
-		File dir = new File(directory);
-
-		if (!dir.exists() || !dir.isDirectory()) {
-			JOptionPane
-					.showMessageDialog(
-							this,
-							"The home directory for "
-									+ projectName
-									+ " is listed as\n"
-									+ directory
-									+ "\nbut this directory does not exist.\nPlease seek assistance.",
-							"Cannot import project " + projectName,
-							JOptionPane.ERROR_MESSAGE);
 
 			return;
 		}
