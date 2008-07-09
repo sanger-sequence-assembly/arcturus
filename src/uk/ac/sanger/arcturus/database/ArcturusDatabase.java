@@ -1378,7 +1378,8 @@ public class ArcturusDatabase {
 			rs.close();
 			stmt.close();
 
-			String separator = System.getProperty("file.separator");
+			//String separator = System.getProperty("file.separator");
+			String separator = "/";
 
 			if (dirname != null) {
 				String[] parts = dirname.split(separator);
