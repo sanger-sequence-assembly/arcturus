@@ -28,7 +28,7 @@
   <property name="resources.dir" value="${src.dir}/resources" />
 
   <!-- Target version of Java -->
-  <property name="build.target" value="1.5" />
+  <property name="build.target" value="1.6" />
 
   <!-- Target to create the build directories prior to the -->
   <!-- compile target. -->
