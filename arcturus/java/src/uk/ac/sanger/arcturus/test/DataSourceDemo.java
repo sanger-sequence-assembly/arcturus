@@ -3,7 +3,6 @@ package uk.ac.sanger.arcturus.test;
 import java.sql.Connection;
 import javax.sql.DataSource;
 
-import java.io.Console;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -104,13 +103,5 @@ public class DataSourceDemo {
 		InputStream is = getClass().getResourceAsStream("datasourcedemo.props");
 		props.load(is);
 		is.close();
-		
-		if (!props.containsKey(Context.SECURITY_CREDENTIALS)) {
-			Console console = System.console();
-			
-			char[] password = console.readPassword("Enter password>");
-			
-			props.setProperty(Context.SECURITY_CREDENTIALS, new String(password));
-		}
 	}
 }

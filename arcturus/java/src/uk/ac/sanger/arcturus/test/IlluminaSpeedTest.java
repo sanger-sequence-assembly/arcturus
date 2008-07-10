@@ -7,6 +7,8 @@ import java.awt.event.*;
 import java.util.zip.Inflater;
 import java.util.zip.DataFormatException;
 
+import org.jdesktop.swingworker.SwingWorker;
+
 public class IlluminaSpeedTest {
 	private static final String HOST = "mcs1a";
 	private static final int PORT = 15001;

@@ -33,23 +33,7 @@ public class ProjectImporterExporter extends Thread {
 	}
 
 	public void run() {
-		JobPlacer placer = null;
-
-		try {
-			placer = new JobPlacer();
-		} catch (Exception e) {
-			Arcturus.logWarning("Unable to create a JobPlacer", e);
-			return;
-		}
-
-		final String host;
-
-		try {
-			host = placer.findHost();
-		} catch (Exception e) {
-			Arcturus.logWarning("Unable to find a host for the job", e);
-			return;
-		}
+		final String host = Arcturus.getProperty("jobplacer.host");
 
 		ArcturusDatabase adb = proxy.getProject().getArcturusDatabase();
 
@@ -79,8 +63,8 @@ public class ProjectImporterExporter extends Thread {
 			return;
 		}
 
-		String shellcommand = importing ?
-				"/software/arcturus/utils/importintoarcturus" : "/software/arcturus/utils/exportfromarcturus";		
+		String shellcommand = "/software/arcturus/utils/" + (importing ?
+				"importintoarcturus" : "exportfromarcturus") + ".lsf";		
 		
 		final String command = shellcommand + " -instance " +
 				instance + " -organism " + organism + " -project " + project;

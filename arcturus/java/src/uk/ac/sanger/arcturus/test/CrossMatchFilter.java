@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 
 import javax.swing.JFileChooser;
 import javax.swing.filechooser.FileFilter;
-import javax.swing.filechooser.FileNameExtensionFilter;
+//import javax.swing.filechooser.FileNameExtensionFilter;
 
 public class CrossMatchFilter {
 	public static void main(String[] args) {
@@ -19,9 +19,9 @@ public class CrossMatchFilter {
 
 		if (args.length == 0) {
 			JFileChooser chooser = new JFileChooser();
-			FileFilter filter = new FileNameExtensionFilter("CrossMatch files",
-					"xma");
-			chooser.addChoosableFileFilter(filter);
+			//FileFilter filter = new FileNameExtensionFilter("CrossMatch files",
+			//		"xma");
+			//chooser.addChoosableFileFilter(filter);
 
 			int rc = chooser.showOpenDialog(null);
 

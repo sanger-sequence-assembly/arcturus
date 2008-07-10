@@ -7,7 +7,8 @@ import java.util.List;
 import java.util.Set;
 
 import javax.swing.ProgressMonitor;
-import javax.swing.SwingWorker;
+
+import org.jdesktop.swingworker.SwingWorker;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.contigtransfer.ContigTransferRequest;
