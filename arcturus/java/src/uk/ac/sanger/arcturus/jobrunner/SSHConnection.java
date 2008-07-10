@@ -22,8 +22,10 @@ public class SSHConnection {
 		
 		for (int i = 0; i < pkfiles.length && !isAuthenticated; i++) {
 			File keyfile = new File(sshdir, pkfiles[i]);
-			isAuthenticated = conn.authenticateWithPublicKey(username, keyfile,
-					keyfilePass);
+			
+			if (keyfile.exists())
+				isAuthenticated = conn.authenticateWithPublicKey(username, keyfile,
+						keyfilePass);
 		}
 
 		if (isAuthenticated == false)
