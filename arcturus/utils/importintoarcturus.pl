@@ -178,7 +178,7 @@ unless (defined($rundir)) {
      print STDERR "Undefined directory for project $projectname\n" unless $rundir;
 }
 
-if ($rundir) {
+if ($rundir && $rundir ne $pwd) {
     print STDOUT "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
     $pwd = `pawd`; chomp $pwd;
