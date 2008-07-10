@@ -3,7 +3,8 @@ package uk.ac.sanger.arcturus.gui.scaffold;
 import java.util.*;
 
 import javax.swing.JOptionPane;
-import javax.swing.SwingWorker;
+
+import org.jdesktop.swingworker.SwingWorker;
 
 import uk.ac.sanger.arcturus.data.Contig;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;

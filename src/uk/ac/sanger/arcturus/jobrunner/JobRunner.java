@@ -5,7 +5,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
 
-import javax.swing.SwingWorker;
+import org.jdesktop.swingworker.SwingWorker;
 
 import com.trilead.ssh2.*;
 

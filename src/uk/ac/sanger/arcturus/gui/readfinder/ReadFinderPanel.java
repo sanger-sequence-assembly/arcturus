@@ -238,7 +238,8 @@ public class ReadFinderPanel extends MinervaPanel implements ReadFinderEventList
 				}
 				catch (SQLException sqle) {
 					Arcturus.logWarning("An error occurred whilst searching for " + readnames[i], sqle);
-					ok = readFinder.isValid(5);
+					ok = false;
+					//ok = readFinder.isValid(5);
 				}
 			}
 			
