@@ -4,8 +4,6 @@ use strict;
 
 use ArcturusDatabase;
 
-use Cwd;
-
 # export a single project or a scaffold from arcturus into a gap4 database
 
 # script to be run from directory where gap4 database is to be created 
@@ -14,7 +12,7 @@ use Cwd;
 
 #------------------------------------------------------------------------------
 
-my $pwd = Cwd::cwd(); # the current directory
+my $pwd = `pawd`; chomp $pwd;  # the current directory
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 my $javabasedir   = "${arcturus_home}/utils";
@@ -191,16 +189,15 @@ if ($rundir) {
         print STDERR "Directory $rundir does not exist\n";
 	exit 1 unless $create;
         print STDERR "Creating directory $rundir\n";
-        system("mkdir $rundir");
-        if ($?) {
+        my $rc = &mySystem("mkdir $rundir");
+        if ($rc) {
             print STDERR "Failed to create $rundir\n";
             exit 1;
 	}
-        system("chmod g+w $rundir");
+        &mySystem("chmod g+w $rundir");
     }         
-#    print STDERR "Changing work directory from $pwd to $rundir\n";
     chdir ($rundir);
-    $pwd = Cwd::cwd();
+    $pwd = `pawd`; chomp $pwd;
 }
 
 #------------------------------------------------------------------------------
@@ -227,7 +224,7 @@ unless ($instance eq 'default' || $organism eq 'default') {
 
 print STDERR "${minerva}Calculating consensus\n";
 
-system ("$consensus_script $database -project $projectname"); # -$minerva?
+&mySystem("$consensus_script $database -project $projectname");
 
 #------------------------------------------------------------------------------
 # lock the project (before export, to prevent any changes while exporting)
@@ -245,6 +242,7 @@ unless ($nolock) {
     system ("$command -su -confirm") if $superuser; # ??
        
     if ($?) {
+        print STDERR "!! -- Locking attempt failed : $command\n";
         print STDERR "!! -- Arcturus project $projectname is not"
                    . " accessible --\n"; # you cannot acquire a lock
         exit 1;
@@ -283,9 +281,9 @@ else { # standard project export
 print STDERR "Exporting to CAF file $depadded\n";
 print STDERR "${minerva}Exporting as CAF\n";
 
-system ($command);
+my $rc = &mySystem ($command);
 
-unless ($? == 0) {
+if ($rc) {
     print STDERR "!! -- FAILED to create valid CAF file $depadded ($?) --\n";
     exit 1;
 }
@@ -329,9 +327,9 @@ unless ($? == 0) {
 
 print STDERR "Changing access provileges on Gap4 database\n";
 
-system ("chmod ug-w ${gap4name}.$version");
+&mySystem ("chmod ug-w ${gap4name}.$version");
 
-system ("chmod ug-w ${gap4name}.$version.aux");
+&mySystem ("chmod ug-w ${gap4name}.$version.aux");
 
 #------------------------------------------------------------------------------
 # marking project as exported (only in standard export mode)
@@ -343,10 +341,6 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
     my $marker_script =  "${arcturus_home}/utils/project-export-marker";
     $marker_script .= ".pl" if ($basedir =~ /ejz/); # script is run in test mode
-# cleanup pwd
-    $pwd =~ s?.*automount.*/nfs?/nfs?;
-    $pwd =~ s?.*automount.*/root?/nfs?;
-
     system ("$marker_script -i $instance -o $organism -p $projectname "
 	   ."-file $pwd/${gap4name}.$version");
 
@@ -389,7 +383,7 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
     print STDERR "Cleaning up data base directory\n";
 
-    system ("rm -f $depadded");
+    &mySystem ("rm -f $depadded");
 
     unless (-e "${gap4name}.B") {
         exit 0 unless (-f "${gap4name}.0");
@@ -412,7 +406,7 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
         if ($vstat[9] <= $bstat[9]) {
             print STDERR "Delete project version ${gap4name}.0\n";
-            system ("rmdb ${gap4name} 0");
+            &mySystem ("rmdb ${gap4name} 0");
 	}
 	else {
             print STDERR "!! -- version ${gap4name}.0 kept because "
@@ -422,14 +416,43 @@ unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 }
 
 #-------------------------------------------------------------------------------
+
 unless ($keep) {
     print STDERR "Cleaning up temporary files\n";
-    system ("rm -f $depadded");
+    &mySystem ("rm -f $depadded");
 }
 
 print STDOUT "\n\nEXPORT OF $projectname HAS FINISHED.\n";
 
 exit 0;
+
+# The next subroutine was shamelessly stolen from WGSassembly.pm
+
+sub mySystem {
+    my ($cmd) = @_;
+
+    my $res = 0xffff & system($cmd);
+    return 0 if ($res == 0);
+
+    print  STDERR "$cmd\n";
+    printf STDERR "system(%s) returned %#04x: ", $cmd, $res;
+
+    if ($res == 0xff00) {
+	print STDERR "command failed: $!\n";
+        return 1;
+    }
+    elsif ($res > 0x80) {
+	$res >>= 8;
+	print STDERR "exited with non-zero status $res\n";
+    } 
+    else {
+	my $sig = $res & 0x7f;
+	print STDERR "exited through signal $sig";
+	if ($res & 0x80) {print STDERR " (core dumped)"; }
+	print STDERR "\n";
+    }
+    exit 1;
+}
 
 #-------------------------------------------------------------------------------
 # info
