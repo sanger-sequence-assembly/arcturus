@@ -31,30 +31,13 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 	}
 
 	protected Void doInBackground() throws Exception {
-		Connection conn = new Connection(hostname);
-
-		conn.connect();
-
-		boolean isAuthenticated = false;
-
-		File home = new File(System.getProperty("user.home"));
-		File sshdir = new File(home, ".ssh");
+		Connection conn = SSHConnection.getConnection(hostname);
 		
-		String keyfilePass = null;
-		String username = System.getProperty("user.name");
-		
-		String[] pkfiles = { "id_dsa", "id_rsa" };
-		
-		for (int i = 0; i < pkfiles.length && !isAuthenticated; i++) {
-			File keyfile = new File(sshdir, pkfiles[i]);
-			isAuthenticated = conn.authenticateWithPublicKey(username, keyfile,
-					keyfilePass);
-		}
-
-		if (isAuthenticated == false)
-			throw new IOException("Authentication failed.");
+		System.err.println("Got SSH connection to " + hostname);
 
 		Session sess = conn.openSession();
+		
+		System.err.println("Opened session to " + hostname);
 
 		if (workingDirectory != null)
 			command = "cd " + workingDirectory + "; " + command;
@@ -62,6 +45,8 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 		startTime = System.currentTimeMillis();
 
 		sess.execCommand("/bin/sh -c '" + command + "'");
+		
+		System.err.println("Executed command \"" + command + "\" on " + hostname);
 
 		processStreams(sess);
 
