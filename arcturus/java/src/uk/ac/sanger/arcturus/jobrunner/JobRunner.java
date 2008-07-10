@@ -9,6 +9,8 @@ import org.jdesktop.swingworker.SwingWorker;
 
 import com.trilead.ssh2.*;
 
+import uk.ac.sanger.arcturus.Arcturus;
+
 public class JobRunner extends SwingWorker<Void, JobOutput> {
 	protected String hostname;
 
@@ -31,12 +33,28 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 	}
 
 	protected Void doInBackground() throws Exception {
-		Connection conn = SSHConnection.getConnection(hostname);
+		Connection conn = null;
+		
+		try {
+			conn = SSHConnection.getConnection(hostname);
+		}
+		catch (IOException ioe) {
+			Arcturus.logSevere("Failed to get an SSH connection", ioe);
+			throw ioe;
+		}
 		
 		System.err.println("Got SSH connection to " + hostname);
 
-		Session sess = conn.openSession();
+		Session sess = null;
 		
+		try {
+			sess = conn.openSession();
+		}
+		catch (IOException ioe) {
+			Arcturus.logSevere("Failed to open an SSH session", ioe);
+			throw ioe;
+		}
+	
 		System.err.println("Opened session to " + hostname);
 
 		if (workingDirectory != null)
@@ -44,8 +62,14 @@ public class JobRunner extends SwingWorker<Void, JobOutput> {
 
 		startTime = System.currentTimeMillis();
 
-		sess.execCommand("/bin/sh -c '" + command + "'");
-		
+		try {
+			sess.execCommand("/bin/sh -c '" + command + "'");
+		}
+		catch (IOException ioe) {
+			Arcturus.logSevere("Failed to execute command \"" + command + "\" in the SSH session", ioe);
+			throw ioe;
+		}
+	
 		System.err.println("Executed command \"" + command + "\" on " + hostname);
 
 		processStreams(sess);
