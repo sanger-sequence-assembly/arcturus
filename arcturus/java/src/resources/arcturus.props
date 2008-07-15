@@ -16,7 +16,7 @@ jdbcloghandler.password=***REMOVED***
 mail.smtp.host=mail.sanger.ac.uk
 mail.smtp.auth=false
 
-mailhandler.to=arcturus@sanger.ac.uk
+mailhandler.to=arcturus-help@sanger.ac.uk
 mailhandler.domain=sanger.ac.uk
 
 jmxdb.url=jdbc:mysql://mcs3a:15001/arcturus
