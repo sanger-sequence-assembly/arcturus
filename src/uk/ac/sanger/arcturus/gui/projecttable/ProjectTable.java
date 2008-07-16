@@ -156,8 +156,10 @@ public class ProjectTable extends SortableTable {
 	private void displaySetOwnerDialog() {
 		Person currentOwner = projectForPopup.getOwner();
 		
+		Component frame = SwingUtilities.getRoot(this);
+		
 		Person newOwner = (Person)JOptionPane.showInputDialog(
-                this,
+                frame,
                 "Please select an owner for the project",
                 "Change project owner",
                 JOptionPane.PLAIN_MESSAGE,
