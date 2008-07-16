@@ -507,12 +507,12 @@ public class ProjectManager extends AbstractManager {
 				|| adb.hasFullPrivileges(user);
 	}
 
-	public boolean canUserLockProject(Project project, Person user)
+	public boolean canUserLockProjectForSelf(Project project, Person user)
 			throws SQLException {
 		if (project.isLocked() || project.isBin())
 			return false;
 
-		return project.isUnowned() || project.getOwner().equals(user)
+		return project.isUnowned() || project.isOwner(user)
 				|| adb.hasFullPrivileges(user);
 	}
 
@@ -521,7 +521,15 @@ public class ProjectManager extends AbstractManager {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
 
-		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
+		return project.isOwner(user) || adb.hasFullPrivileges(user);
+	}
+	
+	public boolean canUserLockProject(Project project, Person user)
+		throws SQLException {
+		if (project.isLocked() || project.isBin())
+			return false;
+
+		return project.isOwner(user) || adb.hasFullPrivileges(user);
 	}
 
 	public boolean unlockProject(Project project) throws ProjectLockException,
@@ -552,7 +560,7 @@ public class ProjectManager extends AbstractManager {
 
 		Person me = PeopleManager.findMe();
 
-		if (!canUserLockProject(project, me))
+		if (!canUserLockProjectForSelf(project, me))
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
 
@@ -586,6 +594,29 @@ public class ProjectManager extends AbstractManager {
 		pstmtLockProjectForOwner.setInt(1, project.getID());
 
 		int rc = pstmtLockProjectForOwner.executeUpdate();
+
+		if (rc == 1)
+			lockChanged(project);
+
+		return rc == 1;
+	}
+
+	public boolean setProjectLockOwner(Project project, Person person)
+		throws ProjectLockException, SQLException {
+		if (project.isLocked())
+			throw new ProjectLockException(
+					ProjectLockException.PROJECT_IS_LOCKED);
+
+		Person me = PeopleManager.findMe();
+
+		if (!canUserLockProjectForOwner(project, me))
+			throw new ProjectLockException(
+					ProjectLockException.OPERATION_NOT_PERMITTED);
+
+		pstmtLockProject.setString(1, person.getUID());
+		pstmtLockProject.setInt(2, project.getID());
+
+		int rc = pstmtLockProject.executeUpdate();
 
 		if (rc == 1)
 			lockChanged(project);
@@ -639,7 +670,7 @@ public class ProjectManager extends AbstractManager {
 
 	public void setProjectOwner(Project project, Person person)
 			throws SQLException {
-		boolean nobody = person.getUID().equalsIgnoreCase("nobody");
+		boolean nobody = person.isNobody();
 
 		if (nobody)
 			pstmtSetProjectOwner.setNull(1, Types.CHAR);
@@ -651,7 +682,16 @@ public class ProjectManager extends AbstractManager {
 		int rc = pstmtSetProjectOwner.executeUpdate();
 
 		if (rc == 1)
-			project.setOwner(nobody ? null : person);
+			ownerChanged(project);
+	}
+
+	private void ownerChanged(Project project) throws SQLException {
+		refreshProject(project);
+
+		ProjectChangeEvent event = new ProjectChangeEvent(this, project,
+				ProjectChangeEvent.OWNER_CHANGED);
+
+		adb.notifyProjectChangeEventListeners(event, null);
 	}
 
 	public boolean createNewProject(Assembly assembly, String name, Person owner,

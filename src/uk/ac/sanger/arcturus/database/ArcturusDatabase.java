@@ -1005,6 +1005,11 @@ public class ArcturusDatabase {
 		return projectManager.canUserUnlockProject(project, user);
 	}
 
+	public synchronized boolean canUserLockProjectForSelf(Project project, Person user)
+			throws SQLException {
+		return projectManager.canUserLockProjectForSelf(project, user);
+	}
+
 	public synchronized boolean canUserLockProject(Project project, Person user)
 			throws SQLException {
 		return projectManager.canUserLockProject(project, user);
@@ -1038,6 +1043,13 @@ public class ArcturusDatabase {
 	public synchronized boolean lockProjectForOwner(Project project)
 			throws SQLException, ProjectLockException {
 		return projectManager.lockProjectForOwner(project);
+	}
+
+	public synchronized boolean setProjectLockOwner(Project project,
+			Person person) throws SQLException, ProjectLockException {
+		return (person == null || person.isNobody()) ?
+				projectManager.unlockProject(project) :
+				projectManager.setProjectLockOwner(project, person);
 	}
 
 	public synchronized void setProjectOwner(Project project, Person person)
@@ -1196,8 +1208,13 @@ public class ArcturusDatabase {
 		return userManager.isCoordinator();
 	}
 
+	public synchronized Person[] getAllUsers(boolean includeNobody)
+			throws SQLException {
+		return userManager.getAllUsers(includeNobody);
+	}
+
 	public synchronized Person[] getAllUsers() throws SQLException {
-		return userManager.getAllUsers();
+		return userManager.getAllUsers(false);
 	}
 
 	/**
@@ -1378,7 +1395,7 @@ public class ArcturusDatabase {
 			rs.close();
 			stmt.close();
 
-			//String separator = System.getProperty("file.separator");
+			// String separator = System.getProperty("file.separator");
 			String separator = "/";
 
 			if (dirname != null) {
