@@ -30,18 +30,27 @@ public class ProjectTable extends SortableTable {
 	protected final Color VIOLET3 = new Color(226, 226, 255);
 
 	protected Project projectForPopup;
+	protected int rowForPopup;
+	protected int columnForPopup;
 
 	protected JMenuItem itemUnlockProject = new JMenuItem("Unlock");
 	protected JMenuItem itemLockAsOwner = new JMenuItem("Set owner lock");
 	protected JMenuItem itemLockAsMe = new JMenuItem("Acquire lock");
+	
+	protected JMenuItem itemSetOwner = new JMenuItem("Change owner...");
 
 	protected JPopupMenu popupLock = new JPopupMenu();
+	protected JPopupMenu popupOwner = new JPopupMenu();
 	
 	protected Person me = PeopleManager.findMe();
 	protected ArcturusDatabase adb;
+	
+	protected Person[] allUsers = null;
 
 	public ProjectTable(ProjectTableModel ptm) {
 		super((SortableTableModel) ptm);
+
+		adb = ptm.adb;
 
 		addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
@@ -59,7 +68,11 @@ public class ProjectTable extends SortableTable {
 
 		createPopupMenus();
 		
-		adb = ptm.adb;
+		try {
+			allUsers = adb.getAllUsers(true);
+		} catch (SQLException e) {
+			Arcturus.logWarning(e);
+		}
 	}
 
 	private void createPopupMenus() {
@@ -87,7 +100,6 @@ public class ProjectTable extends SortableTable {
 		});
 
 		popupLock.addPopupMenuListener(new PopupMenuListener() {
-
 			public void popupMenuCanceled(PopupMenuEvent e) {
 				// Do nothing
 			}
@@ -129,63 +141,74 @@ public class ProjectTable extends SortableTable {
 				itemLockAsMe.setText("Acquire lock on " + pname);
 			}
 		});
+		
+		itemSetOwner.setEnabled(adb.isCoordinator());
+		
+		popupOwner.add(itemSetOwner);
+		
+		itemSetOwner.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				displaySetOwnerDialog();
+			}
+		});	
+	}
+	
+	private void displaySetOwnerDialog() {
+		Person currentOwner = projectForPopup.getOwner();
+		
+		Person newOwner = (Person)JOptionPane.showInputDialog(
+                this,
+                "Please select an owner for the project",
+                "Change project owner",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                allUsers,
+                currentOwner);
+		
+		if (newOwner != null && newOwner != currentOwner)
+			getModel().setValueAt(newOwner, rowForPopup, columnForPopup);
+
 	}
 
 	private void handleCellMouseClick(MouseEvent event) {
 		Point point = event.getPoint();
 
 		int column = columnAtPoint(point);
-		int modelColumn = convertColumnIndexToModel(column);
+		columnForPopup = convertColumnIndexToModel(column);
 	
 		if (event.isPopupTrigger()) {
-			int row = rowAtPoint(point);
+			rowForPopup = rowAtPoint(point);
 			ProjectProxy proxy = ((ProjectTableModel) getModel())
-					.getProjectAtRow(row);
+					.getProjectAtRow(rowForPopup);
 			projectForPopup = proxy.getProject();
 
-			if (modelColumn == ProjectTableModel.LOCKED_COLUMN) {
-					showProjectLockPopup(event);
+			switch (columnForPopup) {
+				case ProjectTableModel.LOCKED_COLUMN:
+					popupLock.show(event.getComponent(), event.getX(), event.getY());
+					break;
+					
+				case ProjectTableModel.OWNER_COLUMN:
+					popupOwner.show(event.getComponent(), event.getX(), event.getY());
+					break;
 			}
 		} else if (event.getID() == MouseEvent.MOUSE_CLICKED
 				&& event.getButton() == MouseEvent.BUTTON1
-				&& modelColumn != ProjectTableModel.OWNER_COLUMN
+				&& columnForPopup != ProjectTableModel.OWNER_COLUMN
 				&& event.getClickCount() == 2) {
 			displaySelectedProjects();
 		}
 	}
 
-	private void showProjectLockPopup(MouseEvent event) {
-		popupLock.show(event.getComponent(), event.getX(), event.getY());
-	}
-
 	protected void unlockProject() {
-		try {
-			adb.unlockProject(projectForPopup);
-		} catch (ProjectLockException e) {
-			Arcturus.logWarning("Failed to unlock project", e);
-		} catch (SQLException e) {
-			Arcturus.logWarning("Failed to unlock project", e);
-		}
+		getModel().setValueAt(null, rowForPopup, columnForPopup);
 	}
 
 	protected void lockProjectAsMe() {
-		try {
-			adb.lockProject(projectForPopup);
-		} catch (ProjectLockException e) {
-			Arcturus.logWarning("Failed to lock project", e);
-		} catch (SQLException e) {
-			Arcturus.logWarning("Failed to lock project", e);
-		}
+		getModel().setValueAt(PeopleManager.findMe(), rowForPopup, columnForPopup);
 	}
 
 	protected void lockProjectAsOwner() {
-		try {
-			adb.lockProjectForOwner(projectForPopup);
-		} catch (ProjectLockException e) {
-			Arcturus.logWarning("Failed to lock project for owner", e);
-		} catch (SQLException e) {
-			Arcturus.logWarning("Failed to lock project for owner", e);
-		}
+		getModel().setValueAt(projectForPopup.getOwner(), rowForPopup, columnForPopup);
 	}
 
 	public Component prepareRenderer(TableCellRenderer renderer, int rowIndex,

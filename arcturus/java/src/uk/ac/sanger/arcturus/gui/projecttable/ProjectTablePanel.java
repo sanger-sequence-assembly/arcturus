@@ -10,7 +10,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.awt.print.PrinterException;
 
-import java.io.File;
 import java.io.IOException;
 import java.sql.SQLException;
 
@@ -19,8 +18,7 @@ import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.gui.*;
-import uk.ac.sanger.arcturus.people.PeopleManager;
-import uk.ac.sanger.arcturus.people.Person;
+import uk.ac.sanger.arcturus.people.*;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEvent;
 import uk.ac.sanger.arcturus.projectchange.ProjectChangeEventListener;
 import uk.ac.sanger.arcturus.utils.MySQLErrorCode;
@@ -58,13 +56,6 @@ public class ProjectTablePanel extends MinervaPanel implements
 					}
 				});
 
-		if (adb.isCoordinator()) {
-			JComboBox comboBox = createUserComboBox();
-			DefaultCellEditor editor = new DefaultCellEditor(comboBox);
-			editor.setClickCountToStart(2);
-			table.setDefaultEditor(Person.class, editor);
-		}
-
 		JScrollPane scrollpane = new JScrollPane(table);
 
 		add(scrollpane, BorderLayout.CENTER);
@@ -75,30 +66,6 @@ public class ProjectTablePanel extends MinervaPanel implements
 		actionCloseView.setEnabled(false);
 
 		updateActions();
-	}
-
-	private JComboBox createUserComboBox() {
-		Person[] people = null;
-
-		try {
-			people = adb.getAllUsers();
-		} catch (SQLException e) {
-			Arcturus.logSevere("Failed to get list of users", e);
-			return null;
-		}
-
-		JComboBox comboBox = new JComboBox();
-
-		for (int i = 0; i < people.length; i++)
-			comboBox.addItem(people[i]);
-
-		Person nobody = PeopleManager.findPerson("nobody");
-
-		comboBox.addItem(nobody);
-
-		comboBox.setMaximumRowCount(comboBox.getItemCount());
-
-		return comboBox;
 	}
 
 	protected void createActions() {
@@ -480,7 +447,7 @@ public class ProjectTablePanel extends MinervaPanel implements
 	}
 
 	public void refresh() {
-		table.refresh();
+		model.refresh();
 	}
 
 	public String toString() {
@@ -501,7 +468,8 @@ public class ProjectTablePanel extends MinervaPanel implements
 	}
 
 	public void projectChanged(ProjectChangeEvent event) {
-		refresh();
+		if (event.getType() == ProjectChangeEvent.CONTIGS_CHANGED)
+			refresh();
 	}
 
 	private void createNewProject() {

@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.gui.projecttable;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.data.Assembly;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
+import uk.ac.sanger.arcturus.database.ProjectLockException;
 import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.Person;
@@ -15,17 +16,12 @@ public class ProjectProxy {
 	protected ProjectSummary summary = null;
 	protected boolean importing = false;
 	protected boolean exporting = false;
-	
-	public ProjectProxy(Project project, ProjectSummary summary) {
-		this.project = project;
-		this.summary = summary;
-	}
 
-	public ProjectProxy(Project project) throws SQLException {
+	public ProjectProxy(Project project, int minlen, int minreads) throws SQLException {
 		this.project = project;
 		
 		if (project != null)
-			summary = project.getProjectSummary();
+			summary = project.getProjectSummary(minlen, minreads);
 	}
 
 	public void refreshSummary(int minlen) throws SQLException {		
@@ -162,5 +158,21 @@ public class ProjectProxy {
 		} catch (SQLException e) {
 			Arcturus.logSevere("Unable to set owner for " + project.getName() + " to " + person, e);
 		}
+	}
+
+	public void setLockOwner(Person person) {
+		if (project == null || project.getArcturusDatabase() == null)
+			return;
+		
+		ArcturusDatabase adb = project.getArcturusDatabase();
+		
+		try {
+			adb.setProjectLockOwner(project, person);
+		} catch (SQLException e) {
+			Arcturus.logSevere("Unable to set lock on " + project.getName() + " for " + person, e);
+		} catch (ProjectLockException e) {
+			Arcturus.logSevere("Unable to set lock on " + project.getName() + " for " + person, e);
+		}
+	
 	}
 }
