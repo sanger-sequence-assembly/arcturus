@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.gui.projecttable;
 
+import javax.swing.event.TableModelEvent;
 import javax.swing.table.*;
 import java.sql.*;
 import java.util.*;
@@ -8,7 +9,6 @@ import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.data.Project;
 import uk.ac.sanger.arcturus.gui.SortableTableModel;
 import uk.ac.sanger.arcturus.people.Person;
-import uk.ac.sanger.arcturus.utils.ProjectSummary;
 import uk.ac.sanger.arcturus.Arcturus;
 
 class ProjectTableModel extends AbstractTableModel implements
@@ -57,17 +57,11 @@ class ProjectTableModel extends AbstractTableModel implements
 		projects.clear();
 
 		try {
-			Map map = adb.getProjectSummary(minlen, minreads);
-
 			Set<Project> projectset = adb.getAllProjects();
 
 			for (Project project : projectset) {
-				if (displayRetiredProjects || !project.isRetired()) {
-					ProjectSummary summary = (ProjectSummary) map
-							.get(new Integer(project.getID()));
-
-					projects.add(new ProjectProxy(project, summary));
-				}
+				if (displayRetiredProjects || !project.isRetired())				
+					projects.add(new ProjectProxy(project, minlen, minreads));
 			}
 
 			resort();
@@ -220,19 +214,33 @@ class ProjectTableModel extends AbstractTableModel implements
 		}
 	}
 
-	public boolean isCellEditable(int row, int col) {
-		return canEditUser && col == OWNER_COLUMN;
-	}
-
 	public void setValueAt(Object value, int row, int col) {
-		if (col == OWNER_COLUMN && value instanceof Person) {
-			Person person = (Person) value;
+		switch (col) {
+			case OWNER_COLUMN:
+				if (value instanceof Person) {
+					Person person = (Person) value;
 
-			ProjectProxy project = getProjectAtRow(row);
+					ProjectProxy project = getProjectAtRow(row);
 
-			project.setOwner(person);
+					project.setOwner(person);
 
-			fireTableCellUpdated(row, col);
+					fireTableChanged(new TableModelEvent(this, row));
+					//fireTableCellUpdated(row, col);				
+				}
+				break;
+				
+			case LOCKED_COLUMN:
+				if (value == null || value instanceof Person) {
+					Person person = value == null ? null : (Person) value;
+
+					ProjectProxy project = getProjectAtRow(row);
+
+					project.setLockOwner(person);
+
+					fireTableChanged(new TableModelEvent(this, row));
+					//fireTableCellUpdated(row, col);								
+				}
+				break;
 		}
 	}
 
