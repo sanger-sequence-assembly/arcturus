@@ -929,7 +929,6 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
-    my %option = @_;
 
 # optionally takes 'qualitymask=>'N' to mask out low quality data
 
@@ -945,6 +944,7 @@ sub writeDNA {
     my $this   = shift;
     my $FILE   = shift; # obligatory
     my $marker = shift;
+    my %options = @_;
 
 # optionally takes 'qualitymask=>'N' to mask out low quality data
 
@@ -952,7 +952,8 @@ sub writeDNA {
 
     if (my $dna = $this->getSequence(@_)) {
 # output in blocks of 60 characters
-	print $FILE "\n$marker$this->{readname}\n";
+        print $FILE "\n" if $options{newline};
+	print $FILE "$marker$this->{readname}\n";
 	my $offset = 0;
 	my $length = length($dna);
 	while ($offset < $length) {    
