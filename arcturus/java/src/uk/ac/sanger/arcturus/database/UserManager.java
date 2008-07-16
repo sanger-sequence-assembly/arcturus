@@ -37,7 +37,7 @@ public class UserManager extends AbstractManager {
 		roleCache.clear();
 	}
 	
-	public Person[] getAllUsers() throws SQLException {
+	public Person[] getAllUsers(boolean includeNobody) throws SQLException {
 		String query = "select username,role from USER";
 		
 		Statement stmt = conn.createStatement();
@@ -60,6 +60,9 @@ public class UserManager extends AbstractManager {
 		
 		rs.close();
 		stmt.close();
+		
+		if (includeNobody)
+			people.add(PeopleManager.findPerson("nobody"));
 		
 		Person[] allusers = (Person[])people.toArray(new Person[0]);
 		
