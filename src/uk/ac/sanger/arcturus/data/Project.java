@@ -195,6 +195,10 @@ public class Project extends Core {
 	public boolean isMine() {
 		return PeopleManager.isMe(owner);
 	}
+	
+	public boolean isOwner(Person person) {
+		return person != null && person.equals(owner);
+	}
 
 	public Date getLockdate() {
 		return lockdate;
