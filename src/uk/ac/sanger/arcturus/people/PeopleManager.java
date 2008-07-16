@@ -12,7 +12,7 @@ import uk.ac.sanger.arcturus.Arcturus;
 public class PeopleManager {
 	protected static DirContext ctx = null;
 
-	protected static Map uidToPerson = new HashMap();
+	protected static Map<String,Person> uidToPerson = new HashMap<String,Person>();
 	protected static final String myUid ;
 	protected static final Person me;
 	protected static final String myRealUid;
@@ -51,6 +51,9 @@ public class PeopleManager {
 			me = findPerson(myUid);
 			masquerading = true;
 		}
+		
+		Person nobody = new Person(Person.NOBODY);
+		uidToPerson.put(Person.NOBODY, nobody);
 	}
 	
 	private static boolean isAllowedToMasquerade() {
