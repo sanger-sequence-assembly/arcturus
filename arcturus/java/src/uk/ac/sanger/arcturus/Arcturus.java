@@ -264,14 +264,17 @@ public class Arcturus {
 					"Unable to create a JDBCLogHandler for logging", e);
 		}
 
-		try {
-			MailHandler mailhandler = new MailHandler(null);
-			mailhandler.setLevel(Level.WARNING);
-			logger.addHandler(mailhandler);
-		} catch (Exception e) {
-			logger.log(Level.WARNING,
-					"Unable to create a MailHandler for logging", e);
+		if (!Boolean.getBoolean("testing")) {
+			try {
+				MailHandler mailhandler = new MailHandler(null);
+				mailhandler.setLevel(Level.WARNING);
+				logger.addHandler(mailhandler);
+			} catch (Exception e) {
+				logger.log(Level.WARNING,
+						"Unable to create a MailHandler for logging", e);
+			}
 		}
+		
 		System.err.println("Using logger " + logger.getName());
 	}
 
