@@ -529,7 +529,7 @@ public class ProjectManager extends AbstractManager {
 		if (project.isLocked() || project.isBin())
 			return false;
 
-		return project.isOwner(user) || adb.hasFullPrivileges(user);
+		return (project.isUnowned() || project.isOwner(user)) || adb.hasFullPrivileges(user);
 	}
 
 	public boolean unlockProject(Project project) throws ProjectLockException,
@@ -609,7 +609,7 @@ public class ProjectManager extends AbstractManager {
 
 		Person me = PeopleManager.findMe();
 
-		if (!canUserLockProjectForOwner(project, me))
+		if (!canUserLockProject(project, me))
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
 
