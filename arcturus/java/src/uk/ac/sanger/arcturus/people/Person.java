@@ -3,6 +3,8 @@ package uk.ac.sanger.arcturus.people;
 import javax.swing.ImageIcon;
 
 public class Person implements Comparable {
+	public static final String NOBODY = "nobody";
+	
 	protected String uid;
 	protected String name;
 	protected String surname;
@@ -93,6 +95,10 @@ public class Person implements Comparable {
 	public ImageIcon getPhotograph() {
 		return photo;
 	}
+	
+	public boolean isNobody() {
+		return uid.equalsIgnoreCase(NOBODY);
+	}
 
 	public String toString() {
 		return name == null ? uid : name;
@@ -100,6 +106,12 @@ public class Person implements Comparable {
 
 	public int compareTo(Object o) {
 		Person that = (Person) o;
+		
+		if (isNobody())
+			return 1;
+		
+		if (that.isNobody())
+			return -1;
 
 		if (surname != null && that.surname != null) {
 			int diff = surname.compareToIgnoreCase(that.surname);
