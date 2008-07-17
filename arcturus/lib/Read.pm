@@ -952,7 +952,7 @@ sub writeDNA {
 
     if (my $dna = $this->getSequence(@_)) {
 # output in blocks of 60 characters
-        print $FILE "\n" if $options{newline};
+        print $FILE "\n" unless $options{nonewline};
 	print $FILE "$marker$this->{readname}\n";
 	my $offset = 0;
 	my $length = length($dna);
