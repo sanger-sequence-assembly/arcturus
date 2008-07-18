@@ -816,9 +816,9 @@ sub writeToCaf {
 # write this read in caf format (unpadded) to FILE handle
     my $this = shift;
     my $FILE = shift; # obligatory output file handle
-    my %option = @_;
+#    my %options = @_;
 
-# optionally takes 'qualitymask=>'N' to mask low quality data (transfer to writeDNA)
+# optionally takes 'qualitymask=>'x' to mask low quality data
 
     die "Read->writeToCaf expect a FileHandle as parameter" unless $FILE;
 
@@ -929,10 +929,13 @@ sub writeToFasta {
     my $this  = shift;
     my $DFILE = shift; # obligatory, filehandle for DNA output
     my $QFILE = shift; # optional, ibid for Quality Data
+    my %options = @_;  # qualitymask=>x, nonewline=>
 
-# optionally takes 'qualitymask=>'N' to mask out low quality data
+# optionally takes e.g. 'qualitymask=>'x' to mask out low quality data
 
-    $this->writeDNA($DFILE,">",@_);
+    $options{nonewline} = 1 unless defined $options{nonewline};
+
+    $this->writeDNA($DFILE,">",%options);
 
     $this->writeBaseQuality($QFILE,">") if defined $QFILE;
 }
