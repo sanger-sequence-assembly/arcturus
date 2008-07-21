@@ -101,6 +101,10 @@ public class RemoteJarRunner {
 	}
 
 	public static void main(String[] args) {
+		// This system property causes Mac OS X to put Swing menus in
+		// the Mac OS menu bar at the top of the screen.
+		System.setProperty("com.apple.macos.useScreenMenuBar", "true");
+		
 		RemoteJarRunner runner = null;
 		
 		try {
