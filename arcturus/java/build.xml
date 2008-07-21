@@ -1,11 +1,18 @@
 <?xml version="1.0"?>
 
 <!-- build.xml - a simple Ant buildfile -->
-<project name="Simple Buildfile" default="jar" basedir=".">
+<project name="Arcturus" default="jar" basedir=".">
   <property name="project.name" value="arcturus"/>
   <property name="package.prefix" value="uk.ac.sanger"/>
   <property name="jar.file" value="${project.name}.jar" />
   <property name="zip.file" value="${project.name}.zip" />
+	
+  <!-- Properties related to the JAR file runner -->	
+  <property name="webapp.name" value="minerva" />
+  <property name="webapp.jar" value="${webapp.name}.jar" />
+  <property name="webapp.zip" value="${webapp.name}.zip" />
+  <property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
+  <property name="webapp.path" value="uk/ac/sanger/arcturus/remotejarrunner" />
 
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
@@ -56,7 +63,7 @@
   </tstamp>
 
   <target name="jar" depends="compile"
-          description="Generates the JAR file.">
+          description="Generates the JAR file for Arcturus">
     <echo file="${src.dir}/resources/buildtime.props">BuildTime=${build.time}${line.separator}</echo>
 
     <jar jarfile="${jar.file}"
@@ -67,14 +74,35 @@
   </target>
 
   <target name="zip" depends="jar"
-          description="Generates a ZIP archive for Windows users">
+          description="Generates a ZIP archive of Arcturus">
     <zip destfile="${zip.file}" compress="false">
         <fileset dir="." includes="${jar.file}" />
         <zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
     </zip>
   </target>
+	
+  <!-- Directories for the JAR file runner -->
+  <property name="webapp.src" value="${src.dir}/${webapp.path}" />
+  <property name="webapp.classes" value="${build.classes}/${webapp.path}" />
 
-  <target name="all" depends="clean,jar"
+  <target name="web" depends="jar"
+		  description="Generates a JAR file for the Minerva web runner">
+  	<jar jarfile="${webapp.jar}"
+  		 manifest="${webapp.src}/MANIFEST.MF" >
+  		<fileset dir="${webapp.classes}" />
+  		<fileset dir="${webapp.src}/resources/remotejarrunner.props" />
+  	</jar>
+  </target>
+
+  <target name="webzip" depends="web"
+			  description="Generates a Zip file for the Minerva web runner">
+    <zip destfile="${webapp.zip}" compress="false">
+        <fileset dir="." includes="${webapp.jar}" />
+        <zipfileset dir="${lib.dir}" includes="*.jar" prefix="lib" />
+    </zip>
+  </target>
+
+  <target name="all" depends="clean,jar,webzip"
           description="Cleans, compiles, then builds the JAR file."/>
 
   <target name="docs" depends="prepare"
