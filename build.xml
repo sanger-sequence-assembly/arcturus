@@ -6,13 +6,6 @@
   <property name="package.prefix" value="uk.ac.sanger"/>
   <property name="jar.file" value="${project.name}.jar" />
   <property name="zip.file" value="${project.name}.zip" />
-	
-  <!-- Properties related to the JAR file runner -->	
-  <property name="webapp.name" value="minerva" />
-  <property name="webapp.jar" value="${webapp.name}.jar" />
-  <property name="webapp.zip" value="${webapp.name}.zip" />
-  <property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
-  <property name="webapp.path" value="uk/ac/sanger/arcturus/remotejarrunner" />
 
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
@@ -81,16 +74,22 @@
     </zip>
   </target>
 	
-  <!-- Directories for the JAR file runner -->
+  <!-- Properties related to the JAR file runner -->	
+  <property name="webapp.name" value="minerva" />
+  <property name="webapp.jar" value="${webapp.name}.jar" />
+  <property name="webapp.zip" value="${webapp.name}.zip" />
+
+  <property name="webapp.path" value="uk/ac/sanger/arcturus/remotejarrunner" />
   <property name="webapp.src" value="${src.dir}/${webapp.path}" />
-  <property name="webapp.classes" value="${build.classes}/${webapp.path}" />
+
+  <property name="webapp.webdir" value="/nfs/WWWdev/INTWEB_docs/htdocs/Software/Arcturus" />
 
   <target name="web" depends="compile"
 		  description="Generates a JAR file for the Minerva web runner">
   	<jar jarfile="${webapp.jar}"
   		 manifest="${webapp.src}/MANIFEST.MF" >
-  		<fileset dir="${webapp.classes}" />
-  		<fileset file="${src.dir}/resources/remotejarrunner.props" />
+  		<fileset dir="${build.classes}" includes="${webapp.path}/*.class"/>
+  		<fileset dir="${src.dir}" includes="resources/remotejarrunner.props" />
   	</jar>
   </target>
 
