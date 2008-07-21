@@ -101,6 +101,21 @@
     </zip>
   </target>
 
+  <target name="deploy" depends="jar,webzip"
+      description="Deploy the web application to the internal web site" >
+      <echo message="Copying ${webapp.zip} to ${webapp.webdir}" />
+      <copy file="${webapp.zip}" todir="${webapp.webdir}" />
+
+      <echo message="Copying ${jar.file} to ${webapp.webdir}" />
+      <copy file="${jar.file}" todir="${webapp.webdir}" />
+
+      <echo message="Running webpublish on ${webapp.zip} and ${jar.file}" />
+      <exec dir="${webapp.webdir}" executable="webpublish" >
+          <arg value="${webapp.zip}" />
+          <arg value="${jar.file}" />
+      </exec>
+  </target>
+
   <target name="all" depends="clean,jar,webzip"
           description="Cleans, compiles, then builds the JAR file."/>
 
