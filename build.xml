@@ -90,7 +90,7 @@
   	<jar jarfile="${webapp.jar}"
   		 manifest="${webapp.src}/MANIFEST.MF" >
   		<fileset dir="${webapp.classes}" />
-  		<fileset dir="${src.dir}/resources/remotejarrunner.props" />
+  		<fileset dir="${src.dir}/resources" includes="remotejarrunner.props" />
   	</jar>
   </target>
 
