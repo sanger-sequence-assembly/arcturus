@@ -85,12 +85,12 @@
   <property name="webapp.src" value="${src.dir}/${webapp.path}" />
   <property name="webapp.classes" value="${build.classes}/${webapp.path}" />
 
-  <target name="web" depends="jar"
+  <target name="web" depends="compile"
 		  description="Generates a JAR file for the Minerva web runner">
   	<jar jarfile="${webapp.jar}"
   		 manifest="${webapp.src}/MANIFEST.MF" >
   		<fileset dir="${webapp.classes}" />
-  		<fileset dir="${src.dir}/resources" includes="remotejarrunner.props" />
+  		<fileset file="${src.dir}/resources/remotejarrunner.props" />
   	</jar>
   </target>
 
