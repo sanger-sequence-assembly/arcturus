@@ -2,7 +2,7 @@
 
 use strict;
 
-use Alignment;
+#use Alignment;
 
 use ArcturusDatabase;
 
@@ -33,26 +33,26 @@ my $debug;
 my $swprog;
 my $caffile;
 
-my $validKeys  = "organism|instance|filename|fn|swprog|caf|breakmode|bm|"
+my $validKeys  = "organism|o|instance|i|filename|fn|swprog|caf|breakmode|bm|"
                . "clip|cleanup|contig|read|confirm|verbose|debug|help";
 
 while (my $nextword = shift @ARGV) {
 
     if ($nextword !~ /\-($validKeys)\b/) {
         &showUsage("Invalid keyword '$nextword'");
-    }                                                                          
-
-    if ($nextword eq '-instance') {
+    }
+                                                                        
+    if ($nextword eq '-instance' || $nextword eq '-i') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define instance" if $instance;
         $instance     = shift @ARGV;
     }
 
-    if ($nextword eq '-organism') {
+    if ($nextword eq '-organism' || $nextword eq '-o') {
 # the next statement prevents redefinition when used with e.g. a wrapper script
         die "You can't re-define organism" if $organism;
         $organism     = shift @ARGV;
-    }  
+    }
 
     $datafile   = shift @ARGV  if ($nextword eq '-filename');
     $datafile   = shift @ARGV  if ($nextword eq '-fn');
