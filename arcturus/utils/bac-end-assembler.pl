@@ -230,9 +230,9 @@ elsif (defined($caffile)) {
 
 foreach my $contigname (sort keys %$contigreadhash) {
     next if ($contig && $contigname !~ /$contig/);
-    $logger->info("contig $contigname  ($contig)");
+    $logger->info("contig $contigname  ($contig)") if $contig;
 
-    $logger->warning("Processing contig $contigname");
+    $logger->warning("Processing contig $contigname",preskip=>1);
 
     my $bacendreads = $contigreadhash->{$contigname};
 
@@ -258,7 +258,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
         }
         else {
             if ($breakmode) {
-	        print STDERR "Read $name is an assembled read (1)\n";
+	        $logger->error("Read $name is an assembled read (1)");
                 next;
 	    }
 	    else {
@@ -269,7 +269,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
     }
 
     unless ($newread) {
-        print STDERR "No new reads found for this contig\n";
+        $logger->warning("No new reads found for $contigname",skip=>1);
         next;
     }
 
@@ -363,7 +363,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 
 # run through the reads and create a Tag object for each
 
-    $logger->warning(scalar(@$bacendreads)." new reads specified for $contigname\n");
+    $logger->warning(scalar(@$bacendreads)." new reads specified for $contigname");
 
     my $readhash = {};
     my $readscore = {};
@@ -411,7 +411,7 @@ foreach my $contigname (sort keys %$contigreadhash) {
 # assemble the substrings and the corresponding mappings
 
 $DEBUG = 0 if  $filter;
-$DEBUG = 1 if ($filter && $read->getReadName() =~ /$filter/);
+#$DEBUG = 1 if ($filter && $read->getReadName() =~ /$filter/);
 
         my $cslength = $cfinal - $cstart + 1;
         my $csubstring = substr $consensus,$cstart-1,$cslength;
@@ -505,7 +505,7 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
 	$logger->warning("$placedreads new reads placed for contig $contigname");
     }
     else {
-	$logger->warning("No new reads placed for contig $contigname");
+	$logger->warning("No new reads placed for contig $contigname",skip=>1);
 	next;
     }
 
@@ -542,7 +542,8 @@ $logger->warning( "read sequence $rsubstring")             if $DEBUG;
 #    print STDOUT "parents @$parentids \n";
 
     next unless $confirm;
-
+      
+    $logger->info("Put contig $contigname ....");
     my ($added,$msg) = $adb->putContig($arcturuscontig);
 
     my $maps = $arcturuscontig->getMappings();
@@ -557,7 +558,7 @@ if (!$confirm && !$CAF) {
 
 $adb->disconnect();
 
-exit;
+exit 0;
 
 #------------------------------------------------------------------------
 
