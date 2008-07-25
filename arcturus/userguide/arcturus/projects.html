@@ -1,0 +1,66 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>What is a project?</title>
+</head>
+<body style="color: rgb(0, 0, 0); background-color: rgb(255, 255, 238);"
+ alink="#000099" link="#000099" vlink="#990099">
+<h1>What is a project?</h1>
+<br>
+Arcturus organises an assembly by grouping sets of contigs into
+projects.<br>
+<br>
+A project is often a set of contigs from a single chromosome or from a
+specific clone, but in practice, a project can contain any set of
+contigs that you need to group together, for whatever reason.<br>
+<h2>Ownership of a project<br>
+</h2>
+A project can be assigned to a specific finisher, who is said to be the
+<span style="font-weight: bold;">owner</span> of the project.<br>
+<br>
+Ownership of an Arcturus project confers control over that project and
+the contigs which it contains.<br>
+<br>
+The owner can <span style="font-weight: bold;">lock</span> the project
+to prevent other people from making changes to it.<br>
+<br>
+Some software, such as the assembly pipeline, can also lock a project
+to prevent it from being changed whilst a critical operation is in
+progress.<br>
+<h2>The BIN project<br>
+</h2>
+Every assembly has a special project named <span
+ style="font-weight: bold;">BIN</span>, which contains
+all of the contigs that have not been assigned to a chromosome or clone.<br>
+<br>
+During the initial shotgun stage, the BIN is often the only project,
+and all new contigs will be put into it.&nbsp; <br>
+<br>
+Contigs are also put into the BIN by the assembly pipeline if they
+cannot be linked to the project for a particular chromosome or clone.<br>
+<br>
+The BIN does not have an owner.<br>
+<h2>Projects and Gap4 databases<br>
+</h2>
+A project often corresponds to a Gap4 database.<br>
+<br>
+Arcturus provides a convenient way (via the <span
+ style="font-style: italic;">Minerva</span> user interface) to export
+the contigs in an Arcturus project to a Gap4 database and to import
+contigs from a Gap4 database into an Arcturus project.<br>
+<br>
+Whilst a project is exported as a Gap4 database, Arcturus automatically
+locks the project to prevent other users or programs from changing the
+contigs in the project.&nbsp; When the Gap4 database is imported back
+into Arcturus, the lock is removed.<br>
+<h2>Moving contigs between projects<br>
+</h2>
+Contigs can be moved from one project to another by submitting a <a
+ href="contig-transfer.html">contig
+transfer request</a> via <span style="font-style: italic;">Minerva</span>.<br>
+<br>
+<br>
+</body>
+</html>

@@ -1,0 +1,120 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Contig transfer requests</title>
+</head>
+<body style="color: rgb(0, 0, 0); background-color: rgb(255, 255, 238);"
+ alink="#000099" link="#000099" vlink="#990099">
+<h1>Contig transfer requests</h1>
+<br>
+Arcturus allows contigs to be transferred from one project to another
+by submitting a <span style="font-weight: bold;">contig transfer
+request</span>.<br>
+<br>
+<span style="font-style: italic;">Minerva</span> provides a convenient
+user interface for creating and managing contig transfer requests.<br>
+<br>
+The contig transfer request system is best explained with an example.<br>
+<h3>The background<br>
+</h3>
+Alice and Bob are finishers who are working on the same assembly, but
+on different projects.<br>
+<br>
+Alice's project is called CLONEA and Bob's project is called CLONEB.<br>
+<br>
+Bob discovers that Alice's project contains a contig which he needs to
+make a join in his project.<br>
+<br>
+The contig is identified by its unique ID number, 1234.<br>
+<h3>Bob creates a contig transfer request<br>
+</h3>
+Bob used <span style="font-style: italic;">Minerva</span> to submit a
+contig transfer request to move contig 1234 from project CLONEA to
+project CLONEB.<br>
+<br>
+Arcturus automatically sends an email to Alice to tell her about Bob's
+request.<br>
+<h3>Alice reviews the request</h3>
+Alice uses <span style="font-style: italic;">Minerva</span> to review
+the details of the request.<br>
+<br>
+At this stage, contig 1234 is still in Alice's project, and Bob cannot
+acquire it without Alice's consent.<br>
+<h3>Scenario 1 : Alice refuses the request<br>
+</h3>
+If Alice decides that she needs contig 1234, she uses <span
+ style="font-style: italic;">Minerva</span> to <span
+ style="font-weight: bold;">refuse</span> the request.<br>
+<br>
+Arcturus sends Bob an email to inform him that his request has been
+turned down, and contig 1234 remains in Alice's project.<br>
+<h3>Scenario 2 : Alice agrees to the request</h3>
+If Alice decides that she doesn't need contig 1234, she uses <span
+ style="font-style: italic;">Minerva</span> to <span
+ style="font-weight: bold;">approve</span> the request.<br>
+<br>
+Arcturus sends Bob an email to tell him that his request has been
+approved.<br>
+<br>
+At this stage, contig 1234 is still in Alice's project, but either Bob
+or Alice can now use <span style="font-style: italic;">Minerva</span>
+to <span style="font-weight: bold;">execute</span> the request.<br>
+<h3>Bob executes the request</h3>
+Bob uses <span style="font-style: italic;">Minerva</span> to execute
+the request.&nbsp; Provided that both projects are unlocked, Arcturus
+moves contig 1234 from Alice's project to Bob's project, and sends an
+email to Alice to tell her that the contig is no longer in her project.<br>
+<h3>Contigs cannot be moved out of or into a locked project<br>
+</h3>
+If either project is locked when Bob tries to execute the request,
+Arcturus leaves the contig in Alice's project, and notifies Bob to try
+to execute the request again later.<br>
+<h3>Contig transfers to and from the BIN</h3>
+The BIN project can never be owned by anyone.&nbsp; If Bob wants to
+move a contig from the BIN into his project, or from his project into
+the BIN, he must still submit a contig transfer request, but can
+approve the request himself and then execute it.<br>
+<br>
+This is also true for other projects which do not have an owner.<br>
+<h3>Contig transfers between two projects owned by the same person</h3>
+If Bob wishes to transfer a contig from one of his projects to another
+of his projects, he must still submit a contig transfer request, but,
+as with transfers to or from the BIN or other unowned projects, Bob can
+approve his own request.<br>
+<h3>What happens when someone is on holiday?</h3>
+Suppose that Alice has just gone away on holiday for two weeks when Bob
+submits his request for contig 1234.&nbsp; Bob can't continue to work
+on his project without contig 1234.<br>
+<br>
+Fortunately, Arcturus allows project coordinators and team leaders to
+approve contig transfer requests involving any assembly for which they
+are responsible.&nbsp; They can even unlock someone else's project to
+allow a contig transfer to be executed.<br>
+<br>
+Bob explains the situation to his team leader, and if she is satisfied
+that Alice would have approved the request, she approves it on Alice's
+behalf.&nbsp; Arcturus notifies Alice that the request has been
+approved in her absence, and Bob executes the request in the usual way.<br>
+<h3>Contig transfers can sometimes fail</h3>
+Occasionally, Arcturus itself will refuse to allow a contig transfer
+request to be approved or to be executed.<br>
+<br>
+This can happen if the requested contig has ceased to be a <a
+ href="current-contigs.html">current contig</a>, because Arcturus
+does not allow old contigs to be transferred.<br>
+<br>
+It can also happen if the requested contig has been moved out of its
+original project by another user.&nbsp; This is a very unusual
+situation
+which should not occur under normal circumstances, but if finisher
+Chris somehow manages to move contig 1234 into his project, then when
+Alice tries to approve the request or Bob tries to execute it, Arcturus
+detects that the contig is no longer in Alice's project.&nbsp; This
+renders
+the request invalid, and Arcturus marks it as <span
+ style="font-weight: bold;">failed</span> and notifies both Alice and
+Bob by email.<br>
+</body>
+</html>
