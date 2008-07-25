@@ -39,9 +39,15 @@ $opts = {
 	 "type" => "integer",
 	 "var"  => \$partials,
 	 "def" => 0,
-	 "help" => "SHow partial matches"
+	 "help" => "Show partial matches"
       },
-     "-qfile" => {
+      "-nosingle" => {
+	 "type" => "integer",
+	 "var"  => \$multipleassignments,
+	 "def" => 0,
+	 "help" => "Show multiple matches only"
+      },
+    "-qfile" => {
 	 "type" => "text",
 	 "var"  => \$qualityfile,
 	 "help" => "Name of file with quality clipping info"
@@ -100,8 +106,9 @@ while ($in = <INFILE>) {
 
 close(INFILE);
 
+my $s = "cross_match output filter";
 my $numberofplacedreads = scalar(keys %$rch);
-print STDOUT "total number of placed reads : $numberofplacedreads\n";
+print STDOUT "$s : total number of placed reads : $numberofplacedreads\n";
 
 die "No output file specified" unless $outfile;
 die "Cannot open output file" unless open(OUTFILE, "> $outfile");
@@ -110,39 +117,50 @@ my $numberofacceptedreads = 0;
 foreach my $read (sort keys %$readcontighash) {
     my $contigs = $readcontighash->{$read};
     my @contigs = keys %$contigs;
-    unless (scalar(@contigs) == 1) {
-        next unless $test;
+    if (scalar(@contigs) == 1) {
+# the read is placed on one contig only
+        next if $multipleassignments;
+# export unique assignments only (default)
+    }
+    else {
+# the read is placed on more than on contig
+        next unless ($test || $multipleassignments);
         print STDOUT "multiple allocations of $read: ".scalar(@contigs)."\n";
-	next;
+	next unless $multipleassignments;
+# export multiple assignments only
     }
 
     $numberofacceptedreads++;
 
-    my $contig = $contigs[0];
+    foreach my $contig (@contigs) {
 
-    my $out = $readcontighash->{$read}->{$contig};
+#    my $contig = $contigs[0];
 
-    ($end1, $name1, $start1, $finish1, $len1, $end2, $name2, $start2, $finish2, $len2, $score) = @{$out};
+        my $out = $readcontighash->{$read}->{$contig};
 
-    $frac = $score/$len2;
+       ($end1, $name1, $start1, $finish1, $len1, 
+        $end2, $name2, $start2, $finish2, $len2, $score) = @{$out};
 
-    my $line;
-    if ($format) {
+        $frac = $score/$len2;
 
-        $line =
-        sprintf "%6d %4.2f %1s %-20s %6d %6d %6d   %1s %-20s %6d %6d %6d", 
-                $score, $frac,$end1, $name1, $len1, $start1, $finish1, 
-                $end2, $name2, $len2, $start2, $finish2;
+        my $line;
+        if ($format) {
+
+            $line =
+            sprintf "%6d %4.2f %1s %-20s %6d %6d %6d   %1s %-20s %6d %6d %6d", 
+                     $score, $frac,$end1, $name1, $len1, $start1, $finish1, 
+                     $end2, $name2, $len2, $start2, $finish2;
+        }
+        else {
+            $alignment = ($start2 > $finish2) ? R : F;
+            $line = sprintf "%-20s  %1s  %-20s  %6d %6d",
+ 	                    $name2,$alignment,$name1, $start1, $finish1;
+        }
+        print OUTFILE "$line\n";
     }
-    else {
-        $alignment = ($start2 > $finish2) ? R : F;
-        $line = sprintf "%-20s  %1s  %-20s  %6d %6d",
- 	                $name2,$alignment,$name1, $start1, $finish1;
-    }
-    print OUTFILE "$line\n";
 }
 
-print STDOUT "total number of accepted reads : $numberofacceptedreads\n";
+print STDOUT "$s : total number of accepted reads : $numberofacceptedreads\n";
 
 close OUTFILE;
 
