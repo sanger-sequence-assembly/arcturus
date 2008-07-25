@@ -219,10 +219,14 @@ if ($mask && $outputFileName) {
 }
 
 my %options;
-$options{nosingleton} = 1 if $nosingleton;
-$options{aspedbefore} = $aspedbefore if $aspedbefore;
-$options{aspedafter}  = $aspedafter  if $aspedafter;
-$options{status}      = $status      if defined($status);
+$options{nosingleton}  = 1 if $nosingleton;
+$options{aspedbefore}  = $aspedbefore if $aspedbefore;
+$options{aspedafter}   = $aspedafter  if $aspedafter;
+$options{status}       = $status      if defined($status);
+# assembly info is accessed via the CLONE table
+$options{assembly_id}  = $assembly    if ($assembly && $assembly !~ /\D/);
+$options{assemblyname} = $assembly    if ($assembly && $assembly =~ /\D/);
+   
 
 if (defined($selectmethod)) {
     $options{method} = $selectmethod;
@@ -349,7 +353,7 @@ else {
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
-undef @$readids unless $outputFileName; # else no export
+undef @$readids unless ($CAF || $FAS); # else no export
 
 my $discarded = 0;
 my $excluded  = 0;
@@ -464,16 +468,20 @@ sub showUsage {
 
     print STDOUT "\nParameter input ERROR: $code \n" if $code; 
     print STDOUT "\n";
-    print STDOUT "MANDATORY PARAMETERS:\n";
-    print STDOUT "\n";
-    print STDOUT "-organism\tArcturus database name\n";
-    print STDOUT "-instance\teither 'prod' or 'dev'\n";
-    print STDOUT "\n";
-    print STDOUT "MANDATORY EXCLUSIVE PARAMETER:\n";
-    print STDOUT "\n";
-    print STDOUT "-caf\t\tcaf file name for output (0 for STDOUT)\n";
-    print STDOUT "-fasta\t\tfile name for output in fasta format\n";
-    print STDOUT "\n";
+    unless ($organism && $instance) {
+        print STDOUT "MANDATORY PARAMETERS:\n";
+        print STDOUT "\n";
+        print STDOUT "-organism\tArcturus organism database\n" unless $organism;
+        print STDOUT "-instance\tArcturus database instance\n" unless $instance;
+        print STDOUT "\n";
+    }
+    unless ($outputFileName) {
+        print STDOUT "MANDATORY EXCLUSIVE PARAMETER:\n";
+        print STDOUT "\n";
+        print STDOUT "-caf\t\tcaf file name for output (0 for STDOUT)\n";
+        print STDOUT "-fasta\t\tfile name for output in fasta format\n";
+        print STDOUT "\n";
+    }
     print STDOUT "OPTIONAL PARAMETERS:\n";
     print STDOUT "\n";
     print STDOUT "-selectmethod\t1: for using sub queries\n"
@@ -497,7 +505,7 @@ sub showUsage {
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
-# print STDOUT "-assembly\tassembly name\n";
+# print STDOUT "-assembly\tassembly ID or name\n";
     print STDOUT "\n";
     print STDOUT "-clipmethod\tOn the fly quality clipping using method specified\n";
     print STDOUT "-mask\t\tSymbol replacing low quality data (recommended: 'x')\n";
