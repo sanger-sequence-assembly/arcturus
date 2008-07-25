@@ -6,7 +6,6 @@ use ArcturusDatabase;
 
 use FileHandle;
 use Logging;
-#use PathogenRepository;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -19,6 +18,7 @@ my $password;
 
 my $contig;
 my $parent;
+my $offspring;
 my $fofn;
 my $cleanup = 0;
 my $srparents;
@@ -35,7 +35,7 @@ my $confirm;
 my $validKeys  = "help|organism|instance|username|password|contig|fofn|focn|"
                . "singlereadparents|srp|srplinked|srpunlinked|mincid|maxcid|"
                . "project|childproject|cp|parentproject|pp|library|assembly|"
-               . "cleanup|parent|confirm|verbose";
+               . "offspring|cleanup|parent|confirm|verbose";
 
 while (my $nextword = shift @ARGV) {
 
@@ -85,6 +85,8 @@ while (my $nextword = shift @ARGV) {
     $pproject     = shift @ARGV  if ($nextword eq '-parentproject');
     $pproject     = shift @ARGV  if ($nextword eq '-pp');
     $assembly     = shift @ARGV  if ($nextword eq '-assembly');
+
+    $offspring    = 1            if ($nextword eq '-offspring');
 
     $cleanup      = 1            if ($nextword eq '-cleanup');
 
@@ -223,6 +225,22 @@ foreach my $identifier (@contigs) {
 	next;
     }
     $identifier = $list->[0]->[0];
+}
+
+# if offspring has to be removed: replace current contig_ids by offspring
+
+if ($offspring) {
+    my %offspring;
+    $logger->info("Getting descendents for @contigs");
+    foreach my $cid (@contigs) {
+        my $connected = $adb->getAncestorIDsForContigID($cid,descendants=>1);
+        foreach my $contig_id (@$connected) {
+            next if ($contig_id <= $cid);
+            $logger->warning("offspring found of $cid : $contig_id");
+            $offspring{$contig_id}++;
+        }
+    }
+    @contigs = sort {$b <=> $a} keys %offspring;
 }
     
 $options{confirm} = 1 if $confirm;
@@ -363,8 +381,8 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "\n";
-    print STDERR "-organism\tArcturus database name\n" unless $organism;
-    print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
+    print STDERR "-organism\tArcturus organism database\n" unless $organism;
+    print STDERR "-instance\tArcturus database instance\n" unless $instance;
     print STDERR "-username\tArcturus user with delete privilege\n" unless $username;
     print STDERR "-password\tpassword of Arcturur DBA with delete privilege\n";
     print STDERR "\n";
@@ -372,6 +390,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-contig\t\tContig ID or comma-separated list of \n";
     print STDERR "-fofn\t\tfilename with list of contig IDs to be deleted\n";
+    print STDERR "-offspring\tremove descendants of the input contigs\n";
     print STDERR "\n";
     print STDERR "-srp\t\tdelete single-read parent contigs\n";
     print STDERR "-srplinked\tsame, excluding parentss with missing links\n";
