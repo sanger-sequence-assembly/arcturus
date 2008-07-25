@@ -30,7 +30,7 @@ $penalty   = -3;    # conside changing penalty insert from -3 to -5
 
 my ($contig,$testread,$caffile,$confirm); # assembler params
 
-my ($fuzz, $partial, $ftest); # crossmatch output filtering
+my ($fuzz, $partial, $nosingle, $ftest); # crossmatch output filtering
 
 my ($renew,$verbose,$debug); # control
 
@@ -43,7 +43,7 @@ my $validKeys  = "organism|o|instance|i|"
                . "namelike|nl|namenotlike|nnl|aspedbefore|ab|aspedafter|aa|"
                . "nomasksequence|nms|" # read selection & export
                . "minmatch|mm|minscore|ms|masklevel|ml|" # crossmatch control
-               . "fuzz|partial|filtertest|ft|" # crossmatch output filtering
+               . "fuzz|partial|filtertest|ft|multiplematchesonly|mmo|" # cm output filter
                . "contig|read|caf|" # test options and output
                . "refresh|confirm|verbose|info|debug|help";
 
@@ -66,10 +66,12 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-project'  || $nextword eq '-p') {
         $project   = shift @ARGV;
+        die "Missing project identifier" unless defined($project);
     }
 
     if ($nextword eq '-assembly' || $nextword eq '-a') {
         $assembly  = shift @ARGV;
+        die "Missing assembly identifier" unless defined($assembly);
     }
 
     $lock          = 1            if ($nextword eq '-lock');
@@ -126,6 +128,10 @@ while (my $nextword = shift @ARGV) {
     $fuzz          = shift @ARGV  if ($nextword eq '-fuzz');
 
     $partial       = 1            if ($nextword eq '-partial');
+
+    if ($nextword eq '-multiplematchesonly' || $nextword eq '-mmo') {
+        $nosingle  = 1;
+    }          
   
 # test options
 
@@ -209,7 +215,7 @@ unless ( -f $contigfasta && !$renew) {
     $command   .= "-quality $contigquality " if $nomask;
     $command   .= "-verbose"                 if $verbose;
 
-    $logger->warning("exporting current contigs",ss=>1);
+    $logger->warning("exporting current contigs to $contigfasta",ss=>1);
     $logger->info($command,skip=>1);
 
     exit 1 if &mySystem($command);
@@ -234,7 +240,7 @@ unless (-f $uareadfasta && !$renew) {
 # nosingletons ?
     $command   .= "-verbose"                     if $verbose;
 
-    $logger->warning("exporting unssembled reads",ss=>1);
+    $logger->warning("exporting unssembled reads to $uareadfasta",ss=>1);
     $logger->info($command,skip=>1);
 
     exit 1 if &mySystem($command);
@@ -271,13 +277,15 @@ unless ((-f $xmatchfilter && ! -z $xmatchfilter) && !$renew && !$ftest) {
 
     &mySystem("rm -f $xmatchfilter") if (-f $xmatchfilter);
 
+#    my $command = "/nfs/team81/ejz/arcturus/development/utils/xmatch-filter.pl "
     my $command = "$arcturus_root/utils/xmatch-filter "
     	        . "-in  $xmatchoutput "
                 . "-out $xmatchfilter ";
     $command   .= "-qfile $readqmaskdata " unless $nomask;
-    $command   .= "-fuzz $fuzz " if $fuzz;
-    $command   .= "-partials 1 " if $partial;
-    $command   .= "-test $ftest" if $ftest;
+    $command   .= "-fuzz $fuzz "  if $fuzz;
+    $command   .= "-partials 1 "  if $partial;
+    $command   .= "-test $ftest " if $ftest;
+    $command   .= "-nosingle 1"   if $nosingle; # only multiple matches
 
     $logger->warning("filtering cross-match output",ss=>1);
     $logger->info($command,skip=>1);
@@ -298,6 +306,8 @@ my $swprog = "$arcturus_root/test/smithwaterman.x";
 
 if (-f $xmatchfilter) {
 
+#    my $command = "$arcturus_root/utils/directed-read-assembler "
+# NOTE : rename and improve multiple placed mode of bac-end-assembler.pl
     my $command = "$arcturus_root/utils/bac-end-assembler "
                 . "-o $organism -i $instance "
                 . "-filename $xmatchfilter -swprog $swprog "
@@ -305,6 +315,7 @@ if (-f $xmatchfilter) {
     $command   .= "-caf $caffile "     if $caffile;
     $command   .= "-contig $contig "   if $contig;
     $command   .= "-read $testread "   if $testread;
+#    $command   .= "-multiple "         if $nosingle; # to be developed
     $command   .= "-confirm "          if $confirm;
     $command   .= "-verbose "          if $verbose;
 
@@ -365,13 +376,14 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "1 : get (selected) contigs from database in fasta format\n";
     print STDERR "2 : get (selected) free reads from database in fasta format\n";
+    print STDERR "     by default low quality sequence is masked with 'x'\n";
     print STDERR "3 : cross_match these data sets against each other\n";
     print STDERR "4 : filter the cross-match output to obtain a list of read placings\n";
     print STDERR "5 : place each read on its contig using Smith Waterman alignment\n";
     print STDERR "6 : load the (new) contig(s) into the database\n";
     print STDERR "7 : calculate consensus sequence for newly added contig(s)\n";
     print STDERR "\n";
-    print STDERR "Intermediate results from each step are store in /tmp\n";
+    print STDERR "Intermediate results from each step are stored in /tmp\n";
     print STDERR "Existing intermediate results are used on re-running this script\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $text \n" if $text;
@@ -397,6 +409,7 @@ sub showUsage {
     print STDERR "-namenotlike\t(nnl) exclude read name(s) matching name/pattern\n";
     print STDERR "-aspedbefore\t(ab)  include reads when asped before\n";
     print STDERR "-aspedafter\t(aa)  include reads when asped after\n";
+    print STDERR "-nomasksequence\t(nms) do not mask low quality read sequence\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for crossmatch control (re: man cross_match):\n";
     print STDERR "-minmatch\t(mm:50)\n";
@@ -408,6 +421,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-fuzz\t\tmismatch allowed on read cover; default 1, use up to 5\n";
     print STDERR "-partials\taccept partial matches of reads at end of contigs\n";
+#    print STDERR "-mmo\t\t(multiplematchesonly) select reads having more than one match\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for loading new contigs:\n";
     print STDERR "\n";
@@ -415,11 +429,10 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for output control and testing:\n";
     print STDERR "\n";
-    print STDERR "-refresh\tforces rebuild of intermediate results\n";
+    print STDERR "-refresh\tforces rebuild of all intermediate results\n";
     print STDERR "-verbose\t\n";
     print STDERR "\n";
-    print STDERR "-filtertest\t(ft) set to 1 to list results of filtering (2 for long"
-                ."  list) and abort\n";
+    print STDERR "-ft\t\t(filtertest) set to 1,2 to list results of filtering and abort\n";
     print STDERR "-caffile\texport new contigs in caf format on file specified\n";
     print STDERR "-contig\t\tcontig name filter to select contig(s) for processing\n";
     print STDERR "-read\t\tread name filter to select specific read(s)\n";
