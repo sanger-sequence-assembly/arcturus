@@ -299,16 +299,14 @@ unless ((-f $xmatchfilter && ! -z $xmatchfilter) && !$renew && !$ftest) {
 exit 0 if $ftest;
 
 #------------------------------------------------------------------------------
-# 5 : run bac-end-assembler.pl
+# 5 : run directed-read-assembler.pl
 #------------------------------------------------------------------------------
 
 my $swprog = "$arcturus_root/test/smithwaterman.x";
 
 if (-f $xmatchfilter) {
 
-#    my $command = "$arcturus_root/utils/directed-read-assembler "
-# NOTE : rename and improve multiple placed mode of bac-end-assembler.pl
-    my $command = "$arcturus_root/utils/bac-end-assembler "
+    my $command = "$arcturus_root/utils/directed-read-assembler "
                 . "-o $organism -i $instance "
                 . "-filename $xmatchfilter -swprog $swprog "
                 . "-clip -breakmode -cleanup ";
