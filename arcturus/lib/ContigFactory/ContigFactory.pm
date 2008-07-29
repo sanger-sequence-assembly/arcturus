@@ -42,6 +42,7 @@ sub getContigs {
     my %options = @_;
 
     my $format = $options{format};
+    delete $options{format};
 
     unless ($format) {
         if ($filename =~ /\.(\w+)\s*$/) {
@@ -51,13 +52,13 @@ sub getContigs {
 
     
     if ($format eq 'fasta' || $format eq 'fas') {
-        return &fastaFileParser($class,$filename,@_);
+        return &fastaFileParser($class,$filename,%options);
     }
     elsif ($format eq 'embl') {
-        return &emblFileParser($class,$filename,@_);
+        return &emblFileParser($class,$filename,%options);
     }
     elsif ($format eq 'caf') {
-        return &cafFileParser($class,$filename,@_);
+        return &cafFileParser($class,$filename,%options);
     }
 
     my $logger = &verifyLogger('getContigs');
@@ -395,24 +396,35 @@ sub cafFileInventory {
             my @filelocation = ($location,$linecount);
             $inventory->{$identifier}->{$datatype} = \@filelocation;
         }
-        elsif ($record =~ /(Is_[read|contig]+)/) {
-            my $objecttype = $1;
+        elsif ($record =~ /(Is_(read|contig|assembly))\b/) {
+            my $objecttype = $2;
 # check if this is inside a valid block on the file
             if ($identifier && $datatype && $datatype eq 'Sequence') {
                 $inventory->{$identifier}->{Is} = $objecttype;
-
 	    }
 	    elsif ($identifier) {
 		$logger->error("l:$linecount Unexpected $objecttype specification");
 	    }
         }
         elsif ($record =~ /Ass\w+from\s+(\S+)\s/) {
-            my $read = $1; # ? not used now
+# collect list of readnames, count assembled from segments
+#            my $readname = $1;
+            my $objecttype = $inventory->{$identifier}->{Is};
+            my $errormsg = "Unexpected 'Assembled_from' specification";
             if ($identifier && $datatype && $datatype eq 'Sequence') {
-                $inventory->{$identifier}->{segments}++;
+# test for correct object
+                if ($objecttype eq "contig") {
+                    $inventory->{$identifier}->{segments}++;
+                }
+                elsif ($objecttype) {
+	   	    $logger->error("l:$linecount $errormsg in $objecttype object");
+		}
+		else {
+	   	    $logger->error("l:$linecount $errormsg in undefined object");
+		}
 	    }
 	    elsif ($identifier) {
-		$logger->error("l:$linecount Unexpected 'Assembled_from' specification");
+		$logger->error("l:$linecount $errormsg outside Sequence object");
 	    }
         }        
         $location = tell($CAF);
@@ -478,6 +490,18 @@ sub removeObjectFromInventory {
 #------------- building Contig and Read instances from the caf file --------------
     
 my %components = (Sequence => 0 , DNA => 1 , BaseQuality => 2); # class constants
+
+ sub assemblyExtractor {
+     my $class = shift;
+     my $assemblyname = shift;
+
+     my $logger = &verifyLogger('assemblyExtractor');
+
+     my $inventory = &getInventory($class);
+
+# TO BE DEVELOPED
+ }
+
 
 sub contigExtractor {
     my $class = shift;
@@ -828,7 +852,7 @@ sub getFileHandle {
     my $inventory = shift;
 
     &verifyPrivate($inventory,"getFileHandle");
-   
+
     my $filehandle = $inventory->{filehandle};
 
     unless ($filehandle) {
@@ -1552,9 +1576,9 @@ sub parseBaseQuality {
 }
 
 sub parseContig {
-# read Read data block from the file handle; the file must be positioned at the
-# correct position before invoking this method: either before the line with Sequence
-# keyword or at the start of the actual data block
+# read Read data block from the file handle; the file must be positioned at 
+# the correct position before invoking this method: either before the line
+# with Sequence keyword or at the start of the actual data block
     my $CAF  = shift;
     my $contig = shift; # Contig instance with contigname defined
     my $fline = shift; # starting line in the file (re: error reporting)
@@ -1932,7 +1956,7 @@ $logger->error("This line extention block should NOT be activated : $fline $reco
         }
 
         elsif ($record =~ /Tag/) {
-            $logger->info("($line) READ tag ignored: $record");
+            $logger->fine("($line) READ tag ignored: $record");
         }
      
         elsif ($record =~ /Note\sINFO\s(.*)$/) {
