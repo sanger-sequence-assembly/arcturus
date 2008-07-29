@@ -241,7 +241,9 @@ sub setCreated {
 
 sub getCreated {
     my $this = shift;
-    return $this->{created};
+    my %options = @_;
+    return $this->{created} unless $options{numerical};
+    return &dateToNumber($this->{created});
 }
 
 #------------------------------------------------------------------- 
@@ -363,7 +365,15 @@ sub getBaseQuality {
 
 sub getProject {
     my $this = shift;
-    return $this->{project};
+    my %options = @_; # instance=>1 to return Project instance
+ 
+    &verifyKeys('getProject',\%options,'instance');
+
+    return $this->{project} unless $options{instance}; # project ID
+
+    my $SOURCE = $this->{SOURCE}; # must be the parent database
+    return undef unless (ref($SOURCE) eq 'ArcturusDatabase');
+    return $SOURCE->getCachedProject($this->{project});
 }
 
 sub setProject {
@@ -455,6 +465,20 @@ sub replaceNbyX {
 sub setUpdated {
     my $this = shift;
     $this->{updated} = shift;
+}
+
+sub getUpdated {
+    my $this = shift;
+    my %options = @_;
+    return $this->{updated} unless $options{numerical};
+    return &dateToNumber($this->{updated});
+}
+
+sub dateToNumber {
+    my $datestring = shift;
+    $datestring =~ s/\-|\://g;
+    $datestring =~ s/\s+/./;
+    return $datestring + 0;
 }
 
 #-------------------------------------------------------------------    
@@ -905,6 +929,21 @@ sub propagateTagsToContig {
 
     &verifyKeys('propagateTags',\%options,@validoptionkeys);
     return ContigHelper->propagateTagsToContig($parent,$target,%options);
+}
+
+#-------------------------------------------------------------------    
+# Projects
+#-------------------------------------------------------------------    
+
+sub inheritProject {
+    my $this = shift;
+    my %options = @_;
+
+    &verifyKeys('inheritProject',\%options,'delayed','measure');
+
+# returns Project instance (while $this->{project} is also defined)
+
+    return ContigHelper->inheritProject($this,@_); 
 }
 
 #-------------------------------------------------------------------    
@@ -1539,7 +1578,7 @@ sub undoReadEdits {
     my $this = shift;
     my %options = @_;
     &verifyKeys('undoReadEdits',\%options,'nonew','ADB');
-    return ContigHelper->undoReadEdits($this,%options); # ? ADB?
+    return ContigHelper->undoReadEdits($this,%options); # ? ADB? SOURCE?
 }
 
 sub break {
