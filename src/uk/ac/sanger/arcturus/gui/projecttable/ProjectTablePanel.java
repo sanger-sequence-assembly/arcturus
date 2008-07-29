@@ -115,8 +115,6 @@ public class ProjectTablePanel extends MinervaPanel implements
 			}
 		};
 
-		actionCreateNewProject.setEnabled(adb.isCoordinator());
-
 		actionRetireProject = new MinervaAbstractAction("Retire project", null,
 				"Retire project", new Integer(KeyEvent.VK_R), KeyStroke
 						.getKeyStroke(KeyEvent.VK_R, ActionEvent.ALT_MASK)) {
