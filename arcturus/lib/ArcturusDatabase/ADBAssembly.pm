@@ -72,7 +72,8 @@ sub getAssembly {
     my %options = @_; # no options returns all
 
     my $items = "ASSEMBLY.assembly_id,ASSEMBLY.name,"
-              . "chromosome,progress,updated,creator,comment";
+              . "chromosome,progress,ASSEMBLY.updated,"
+              . "ASSEMBLY.creator,ASSEMBLY.comment";
     my $query = "select $items from ASSEMBLY";
 
     my @data;
@@ -102,8 +103,6 @@ sub getAssembly {
     my $sth = $dbh->prepare_cached($query);
 
     my $nr = $sth->execute(@data) || &queryFailed($query,@data);
-
-    return undef unless ($nr && $nr > 0);
 
 # return an array of assembly objects
 
