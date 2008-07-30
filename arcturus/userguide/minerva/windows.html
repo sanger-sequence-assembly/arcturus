@@ -1,0 +1,97 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Installing Minerva on Microsoft Windows</title>
+</head>
+<body style="color: rgb(0, 0, 0); background-color: rgb(255, 255, 238);"
+ alink="#000099" link="#000099" vlink="#990099">
+<h1><span style="font-weight: bold;"></span>Installing Minerva on
+Microsoft Windows</h1>
+<br>
+<h2>System requirements</h2>
+Minerva is a Java application.&nbsp; You will need to have Java
+installed on your system.&nbsp; Minerva requires Java 5 or higher.<br>
+<br>
+You can find out whether you already have Java installed by opening the
+Control Panel.&nbsp; If Java is already installed, there will be a
+control panel icon labelled "Java".<br>
+<br>
+If you do not have Java on your machine, you can download Java for
+Windows from the Sun Microsystems <a href="http://java.sun.com/">Java
+web site</a>.<br>
+<br>
+Please seek advice from your local Windows system administrator if you
+are unsure how to do this, or if you do not have administrator
+privileges on your machine.<br>
+<h2>Downloading the software</h2>
+You can download Minerva from the Sanger Institute internal web site as
+a <a href="../minerva.zip">Zip file</a>.<br>
+<br>
+Unpack the Zip file into
+a convenient directory on your machine.<br>
+<h2>Preparing to use Minerva</h2>
+Minerva uses the Secure Shell (SSH) to login to the <code>seq1</code>
+cluster to import and export Gap4 databases.<br>
+<br>
+You need to follow these steps to prepare Minerva to be able to use SSH.<br>
+<h3>Step 1: Create the key files<br>
+</h3>
+Login to the <code>seq1</code> cluster and run this command from your
+home directory:<br>
+<br>
+<code>ssh-keygen -t rsa -f id_rsa</code><br>
+<br>
+When you are prompted for a passphrase, just hit the RETURN key twice.<br>
+<br>
+You should see this message:<br>
+<br>
+<code>Your identification has been saved in id_rsa.<br>
+Your public key has been saved in id_rsa.pub.<br>
+</code>
+<h3>Step 2: Append the public key file to your authorized_keys file<br>
+</h3>
+Now run this command, also from your home directory:<br>
+<br>
+<code>cat id_rsa.pub &gt;&gt; .ssh/authorized_keys</code><code></code><br>
+<code></code>
+<h3>Step 3: Install the private key file on your Windows machine</h3>
+Login to your Windows machine.<br>
+<br>
+Open a command prompt window (Start --&gt; Programs --&gt; Accessories
+--&gt; Command Prompt) and enter this command:<br>
+<br>
+<code>mkdir .ssh</code><br>
+<br>
+The full-stop at the start of the directory name is essential.&nbsp; Do
+not omit it, otherwise Minerva will not be able to find the private key
+file.<br>
+<br>
+The new directory should be in the <code>Documents and
+Settings\&lt;Your Username&gt;</code> directory on your Windows machine.<br>
+<br>
+Now copy the file named <code>id_rsa</code> which you created in Step
+1 on the <code>seq1</code> cluster into the <code>.ssh</code>
+directory which you have just created on your Windows machine.<br>
+<br>
+You may find it convenient to use the Windows file manager application
+to copy the file from your Unix home directory and paste it into the <code>.ssh</code>
+directory on your Windows machine.<br>
+<br>
+Remember that the destination <code>.ssh</code> directory is <span
+ style="font-weight: bold;">not</span> in your <code>My Documents</code>
+directory on your Windows machine, but in the <code>Documents and
+Settings\&lt;Your Username&gt;</code> directory.<br>
+<h3>Step 4: Tidying up</h3>
+You should now remove the files named <code>id_rsa</code> and <code>id_rsa.pub</code>
+which you created in your Unix home directory on Step 1.<br>
+<h2>Running Minerva</h2>
+You can now run Minerva by double-clicking on the file named <code>minerva.jar</code>
+which you unpacked from the Zip file.<br>
+<br>
+Please follow the <a href="index.html">Minerva tutorial</a> to find
+out how to use Minerva.<br>
+<br>
+</body>
+</html>
