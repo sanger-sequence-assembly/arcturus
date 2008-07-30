@@ -1285,7 +1285,10 @@ sub writeToEMBL {
     my $QFILE = shift; # optional file handle for quality data
     my %options = @_;
 
-    &verifyKeys('writeToEMBL',\%options,'gap4name','includetag','tagkey');
+    &verifyKeys('writeToEMBL',\%options,'gap4name',
+                                        'includetag',
+                                        'excludetag',
+                                        'tagkey');
 
 # compose identifier
 
@@ -1310,7 +1313,7 @@ sub writeToEMBL {
 	print $DFILE "ID   $identifier  standard; Genomic DNA; CON; "
                    . "$length BP\n";
         print $DFILE "XX\n";
-        print $DFILE "AC   unknown;\n";
+        print $DFILE "AC   unknown;\n"; # ?
         print $DFILE "XX\n";
         print $DFILE "FH   Key             Location/Qualifiers\n";
         print $DFILE "FH\n";
@@ -1330,6 +1333,7 @@ sub writeToEMBL {
             my $includetag = $options{includetag};
             $includetag =~ s/^\s+|\s+$//g; # leading/trailing blanks
             $includetag =~ s/\W+/|/g; # put separators in include list
+            my $excludetag = $options{excludetag};
 
             my $tags = $this->getTags(0,sort=>'position');
 # test if there are tags with identical systematic ID; collect groups, if any
@@ -1338,10 +1342,18 @@ sub writeToEMBL {
             foreach my $tag (@$tags) {
                 my $tagtype = $tag->getType();
                 next if (!$includetag || $tagtype !~ /$includetag/);
+                if ($excludetag) {
+# ignore tagtype, or tags with a matching comment
+                    next if ($tagtype =~ /$excludetag/);
+                    my $tagcomment = $tag->getTagComment();
+                    next if ($tagcomment && $tagcomment =~ /$excludetag/);
+                    my $comment = $tag->getTagComment();
+                    next if ($comment    && $comment    =~ /$excludetag/);
+		}
                 my $strand  = lc($tag->getStrand());
                 my $sysID   = $tag->getSystematicID();
 # if the tag is not an annotation tag, just add to local list
-                unless (defined($sysID)) {
+                unless (defined($sysID) && $sysID =~ /\S/) {
 		    push @newtags,$tag;
                     next;
 		}
