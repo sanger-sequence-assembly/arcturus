@@ -1,0 +1,129 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Arcturus and Gap4</title>
+</head>
+<body style="color: rgb(0, 0, 0); background-color: rgb(255, 255, 238);"
+ alink="#000099" link="#000099" vlink="#990099">
+<h1>Arcturus and Gap4</h1>
+<br>
+An Arcturus project usually has a corresponding Gap4 database.<br>
+<br>
+Using the <span style="font-style: italic;">Minerva</span> user
+interface, a finisher can<br>
+<ul>
+  <li>Export the contigs in an Arcturus project to a Gap4 database.</li>
+  <li>Import the contigs in a Gap4 database into an Arcturus project.</li>
+</ul>
+Arcturus uses the standard PSU convention for Gap4 database versions:<br>
+<br>
+<table style="width: 100%; text-align: left;" border="1" cellpadding="2"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td
+ style="vertical-align: top; font-weight: bold; font-style: italic;">Version<br>
+      </td>
+      <td
+ style="vertical-align: top; font-weight: bold; font-style: italic;">Usage<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">Zero<br>
+      </td>
+      <td style="vertical-align: top;">This is the working version in
+which the finisher makes her joins, edits etc, using Gap4.&nbsp; It is
+also the version which is imported into Arcturus by default<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">B<br>
+      </td>
+      <td style="vertical-align: top;">This is a backup of version
+zero.&nbsp; It is created whenever the version zero database is
+imported into Arcturus.<br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top; font-weight: bold;">A<br>
+      </td>
+      <td style="vertical-align: top;">This is created when a project
+is exported from Arcturus.&nbsp; It is a read-only version.&nbsp; The
+finisher must copy versionA to version zero in order to work on it in
+Gap4.<br>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+<h2>Project directories</h2>
+Every Arcturus project has a project directory in one of the repository
+filesystems.&nbsp; This is where Arcturus exports the Gap4 database to,
+and where it imports Gap4 databases from.&nbsp; You will not normally
+be able to specify an explicit Gap4 database file for import or export.<br>
+<h2>Exporting a project from Arcturus to Gap4</h2>
+When a finisher uses <span style="font-style: italic;">Minerva</span>
+to export her Arcturus project to a Gap4 database, Arcturus will create
+a version A database in the project directory.<br>
+<br>
+For example, if the Arcturus project is called CHAB12, then Arcturus
+will create a Gap4 database called CHAB12.A<br>
+<br>
+The version A database is read-only.&nbsp; Gap4 will warn the finisher
+if she tries to open the version A database.<br>
+<br>
+In order to work on the newly-exported project, the finisher must copy
+the version A database to version zero using the <code>cpdb</code>
+command.<br>
+<br>
+After it has exported a project to a Gap4 database, Arcturus will lock
+the project to prevent anyone else from altering the contents via
+contig transfers, read imports, incremental assemblies etc.<br>
+<h2>Importing a project from Gap4 to Arcturus</h2>
+When a finishers uses <span style="font-style: italic;">Minerva</span>
+to import a Gap4 database into her Arcturus project, Arcturus will
+import the version zero database in the project directory.<br>
+<br>
+The process of importing a Gap4 database into Arcturus involves several
+stages:<br>
+<ol>
+  <li>If the version zero database is busy, Arcturus will abandon the
+import and warn the finisher.<br>
+  </li>
+  <li>The version zero database is backed up to version B.</li>
+  <li>The version zero database is converted to CAF format, and the CAF
+file is run through the contig loader script.&nbsp; This script
+compares all contigs in the CAF file with the contigs stored in the
+project in Arcturus.&nbsp; All new contigs are added to Arcturus.&nbsp;
+Any new tags on existing contigs are detected and added to the existing
+contigs in Arcturus.</li>
+  <li>Arcturus runs a check to ensure that there are no duplicated
+reads.&nbsp; If Arcturus detects that the same read occurs in more than
+one <a href="current-contigs.html">current contig</a>, it will move
+the affected contigs to the PROBLEMS project.</li>
+  <li>Arcturus unlocks the project, to allow contig transfers and read
+imports.<br>
+  </li>
+</ol>
+<h2>When should I import my project?</h2>
+You should import your Gap4 database into Arcturus at regular
+intervals, to ensure that the information in Arcturus is always
+up-to-date.<br>
+<br>
+Remember that Arcturus <span style="font-weight: bold;">does not know</span>
+about the changes you have made using Gap4 until you import the version
+zero database.<br>
+<h2>When should I export my project?</h2>
+You should export your project from Arcturus if you have used <span
+ style="font-style: italic;">Minerva</span> to transfer contigs into or
+out of the project, or to import reads into the project.<br>
+<br>
+Remember that any changes you make to your project in Arcturus are <span
+ style="font-weight: bold;">not</span> automatically reflected in the
+Gap4 database.&nbsp; You <span style="font-weight: bold;">must</span>
+export your project to create a new Gap4 database which will contain
+the changes you made using Arcturus.<br>
+</body>
+</html>
