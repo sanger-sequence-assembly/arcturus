@@ -691,8 +691,12 @@ sub writeToEMBL {
     my $sysID      = $this->getSystematicID();
     my $comment    = $this->getComment();
     my $tagcomment = $this->getTagComment();
+
+# get the key to be used for export
         
-    my $key = $options{tagkey} || 'CDS'; # get the key to be used for export
+    my $key = $options{tagkey};
+    $key = 'CDS' if (!$key && $tagtype eq 'ANNO'); # default for annotation
+    $key = 'Tag' unless $key; # default for all else
     
     my $sp17 = "                 "; # format spacer
 
