@@ -105,4 +105,22 @@ sub usage {
     return "memory usage : ".$this->toString('vsize','rss');
 }
 
+sub timer {
+    my $this = shift;
+
+    my $cptime = (times)[0]; # time spent in user code
+    my $iotime = (times)[1]; # system cpu (not elapsed time, unfortunately)
+    my $string = "timer : ";
+    if (my $timer = $this->{timer}) {
+        my $cpdiff = $cptime - $timer->[0];
+        my $iodiff = $iotime - $timer->[1];
+        $string .= "cptime $cptime ($cpdiff), iotime $iotime ($iodiff)";
+    }
+    else {
+        $string .= "cptime $cptime, iotime $iotime";
+    }
+    $this->{timer} = [($cptime,$iotime)];
+    return $string;
+}
+
 1;
