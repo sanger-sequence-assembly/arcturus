@@ -722,7 +722,7 @@ sub multiply {
 # returns a mapping without segments if product is empty
     my $thismap = shift; # mapping R
     my $mapping = shift; # mapping T
-    my %options = @_; # e.g. repair=>1; default 0
+    my %options = @_; # e.g. repair=>1  tracksegments=> 0,1,2,3 backskip after
 
 # align the mappings such that the Y (mapped) domain of R and the 
 # X domain of T are both ordered according to segment position 
@@ -751,12 +751,13 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
 # new construction (TO BE VERIFIED and TESTED)
 
     if (my $track = $options{tracksegments}) { # undef,0  or  1,2,3
-        my $backskip = $options{'ts-backskip'}; 
+        my $backskip = $options{backskip}; 
         $backskip = 1 unless defined($backskip); # default backskip one
         $rs = $thismap->getSegmentTracker(-$backskip) if ($track != 2);
         $ts = $mapping->getSegmentTracker(-$backskip) if ($track >= 2);
-print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
     }
+
+    my ($ri,$ti); # register values on first encountered matching segments
 
     while ($rs < scalar(@$rsegments) && $ts < scalar(@$tsegments)) {
 
@@ -767,6 +768,9 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
         my ($txs,$txf,$tys,$tyf) = $tsegment->getSegment();
 
         if (my $mxs = $tsegment->getYforX($rys)) {
+# register the values of $rs and $ts
+            $ri = $rs unless defined($ri);
+            $ti = $ts unless defined($ti);
 # begin of x window of R maps to y inside the T window
             if (my $mxf = $tsegment->getYforX($ryf)) {
 # also end of x window of R maps to y inside the T window
@@ -787,6 +791,9 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
 # begin of x window of R does not map to y inside the T window
 # check if the end falls inside the segment
         elsif (my $mxf = $tsegment->getYforX($ryf)) {
+# register the values of $rs and $ts
+            $ri = $rs unless defined($ri);
+            $ti = $ts unless defined($ti);
 # okay, the end falls inside the window, get the begin via back tranform 
             if (my $bxs = $rsegment->getXforY($txs)) {
                 $product->putSegment($bxs,$rxf,$tys,$mxf);
@@ -799,6 +806,9 @@ print STDERR "segment tracking: start rs=$rs  ts=$ts\n";
 	}
 # both end points fall outside the T mapping; test if T falls inside R
         elsif (my $bxs = $rsegment->getXforY($txs)) {
+# register the values of $rs and $ts
+            $ri = $rs unless defined($ri);
+            $ti = $ts unless defined($ti);
 # the t segment falls inside the r segment
             if (my $bxf = $rsegment->getXforY($txf)) {
                 $product->putSegment($bxs,$bxf,$tys,$tyf);
@@ -824,10 +834,10 @@ if ($nzs && ref($nzs) eq 'HASH') {
 print STDERR "segment tracking:  end  rs=$rs  ts=$ts\n";
 }
 
-# register the current segment counter numbers
+# register the current segment counter numbers (default start values)
 
-    $thismap->setSegmentTracker($rs);
-    $mapping->setSegmentTracker($ts);
+    $thismap->setSegmentTracker($options{after} ? $rs : $ri);
+    $mapping->setSegmentTracker($options{after} ? $ts : $ti);
 
 # cleanup and analyse the segments
 
