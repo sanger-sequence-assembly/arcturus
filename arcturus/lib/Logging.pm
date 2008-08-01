@@ -541,6 +541,7 @@ print STDERR "handle: $handle  method: $method  msg:'$text'\n";
     else {
         print STDERR "missing writing method on output stream $handle\n";
     }
+    return 1;
 }
 
 sub timestamp {
@@ -579,14 +580,21 @@ sub listStreams {
     $this->special("Special Stream active on device $devices[2]");
 }
 
-sub memoryUsage {
+sub monitor {
 # report current memory usage on standard stream
     my $this = shift;
     my $text = shift;
+    my %options = @_; # memory, timing
 
     $monitor = new Linux::Monitor() unless $monitor;
 
-    $this->warning($text." ".$monitor->usage());
+    my $list;
+    $list = $this->warning($text." ".$monitor->usage()) if $options{memory};
+    $list = $this->warning($text." ".$monitor->timer()) if $options{timing};
+
+    return if $list;
+
+    $this->warning($text." ".$monitor->usage()." ".$monitor->timer());
 }
 
 #---------------------------------------------------------------------------
