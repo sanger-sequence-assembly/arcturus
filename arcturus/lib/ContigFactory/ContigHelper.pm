@@ -425,8 +425,6 @@ $logger->debug("ENTER @_");
                                $options{minimum},   # default 0,15
                                $options{hqpm},      # default 0,30
                                $options{window});   # default 9
-# options: symbols (ACTG), threshold (20), minimum (15), window (9), hqpm (30)
-#                               %options);
 
     unless ($pads) {
         my $cnm = $contig->getContigName();
@@ -549,8 +547,8 @@ $log->debug("options  @_");
                                $quality,
                                $options{symbols},   # default 'ACGTN-'
                                $options{threshold}, # default 20
-                               $options{minimum},   # default 15
-                               $options{hqpm},      # default 30
+                               $options{minimum},   # default 0,15
+                               $options{hqpm},      # default 0,30
                                $options{window});   # default 9
 
     if ($pads && @$pads) {
@@ -644,8 +642,8 @@ $logger->debug("ENTER @_");
                                $contig->getBaseQuality(),
                                $options{symbols},   # default 'ACGTN-'
                                $options{threshold}, # default 20
-                               $options{minimum},   # default 15
-                               $options{hqpm},      # default 30
+                               $options{minimum},   # default 0,15
+                               $options{hqpm},      # default 0,30
                                $options{window});   # default 9
 
     return $contig unless ($pads && @$pads); # no low quality stuff found
@@ -1153,10 +1151,11 @@ sub findlowquality {
 # put defaults if undef
 
     $threshold             = 20 unless defined($threshold);
-    unless (defined($minimum) && defined($highqualitypadminimum)) {
-# default to Gap4 clipping
+    unless (defined($minimum) || defined($highqualitypadminimum)) {
+# if both undefined default to Gap4 clipping
         $minimum = 0; $highqualitypadminimum = 0;
     }
+# else if one defined, use default for other
     $minimum               = 15 unless defined($minimum);
     $highqualitypadminimum = 30 unless defined($highqualitypadminimum);
 
@@ -1364,27 +1363,28 @@ sub getCountsAtPadPositions {
     return $padhash;
 }
 
-#----------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 sub remapcontigcomponents {
 # take components from oldcontig, remap using ori2new, put into newcontig
     my $oldcontig = shift; # original contig
     my $ori2new   = shift; # mapping original to new
     my $newcontig = shift; 
-    my %options = @_;
+    my %options = @_; # mergetaglist, tracksegments
 
     &verifyPrivate($oldcontig,'remapcontigcomponents');
 
     my $logger = &verifyLogger('remapcontigcomponents');
 
-    $logger->debug("ENTER @_");
-
 # add and transform the mappings; keep track of the corresponding reads
+
+    my %moptions;
+    $moptions{tracksegments} = $options{tracksegments} || 0;
 
     my $readnamehash = {};
     my $mappings = $oldcontig->getMappings();
     foreach my $mapping (@$mappings) {
-        my $newmapping = $mapping->multiply($ori2new);
+        my $newmapping = $mapping->multiply($ori2new,%moptions); # before/after
         next unless $newmapping;
         $readnamehash->{$mapping->getMappingName()}++;
         $newcontig->addMapping($newmapping);
@@ -1401,34 +1401,35 @@ sub remapcontigcomponents {
 # and remap the tags on the sequence
 
     if ($oldcontig->hasTags()) {
+#$logger->monitor("Tag remapping start",timing=>1);
 
+        $moptions{tracksegments} = 2; # default
         my $tags = $oldcontig->getTags();
 
         my $breaktags = $options{breaktags} || 'ANNO';
         $breaktags =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
-        $breaktags =~ s/\W+/|/g;
+        $breaktags =~ s/\W+/|/g; # prepare for use in regexp
 
         my @newtags;
         foreach my $tag (@$tags) {
-# special treatment for ANNO tags?
             my $tagtype = $tag->getType();
             if ($tagtype =~ /$breaktags/) {
-                my $newtags = $tag->remap($ori2new,break=>1);
+                my $newtags = $tag->remap($ori2new,split=>1,%moptions);
                 push @newtags, @$newtags if $newtags;
+for my $ntag (@$newtags) {print STDOUT "split tag ".$ntag->writeToCaf();}
             }
             else {
-                my $newtags = $tag->remap($ori2new,break=>0);
-                push @newtags, $newtags if $newtags;
+                my $newtags = $tag->remap($ori2new,nosplit=>1,%moptions);
+                push @newtags, @$newtags if $newtags;
 	    }
 	}
 
 # test if some tags can be merged (using the Tag factory)
 
-        my $mergetags = $options{mergetags} || 'ANNO';
-        $mergetags =~ s/^\s+|\s+$//g; # remove leading/trailing blanks
-        $mergetags =~ s/\W+/|/g;
+        my $nomerge = $options{nomergetaglist};
+        $nomerge = 'ANNO' unless defined $nomerge;
 
-        my @tags = TagFactory->mergeTags([@newtags],$mergetags);        
+        my @tags = TagFactory->mergeTags([@newtags],nomergetaglist=>$nomerge);
 
 # and add to the new contig
 
@@ -2326,6 +2327,34 @@ $logger->debug("EXIT");
 
 }
 
+sub linkContigToParents {
+    my $class = shift;
+    my $contig = shift;
+    my %options = @_;
+
+    &verifyParameter($contig,'linkContigToParents');
+
+    return undef unless $contig->hasParentContigs();
+
+    my $parents = $contig->getParentContigs();
+
+    my $report = '';
+    foreach my $parent (@$parents) {
+        $parent->getMappings(1); # delayed loading if no mappings
+        my ($linked,$deallocated) = $contig->linkToContig($parent,%options);
+            
+        my $parentname = $parent->getContigName();
+
+        unless ($linked) {
+            $report .= "; empty link detected to $parentname";
+        }
+        if ($deallocated) {
+            $report .= "; $deallocated reads deallocated from $parentname";
+	}
+    }
+    return $report;
+}    
+
 
 sub linkToContig { # will be REDUNDENT to be DEPRECATED
 # compare two contigs using sequence IDs in their read-to-contig mappings
@@ -3113,8 +3142,8 @@ $logger->debug($p2tmapping->assembledFromToString(),ss=>1);
 
     my %splittagoptions = (split=>1);
 # activate speedup for mapping multiplication 
-    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
-# $splittagoptions{tracksegments} = 3 if $options{speedmode};
+#    $splittagoptions{nonzerostart} = {} if $options{speedmode}; # TO BE REPLACED
+    $splittagoptions{tracksegments} = 2 if $options{speedmode};
     $splittagoptions{minimumsegmentsize} = $options{minimumsegmentsize} || 0;
     $splittagoptions{changestrand} = ($p2tmapping->getAlignment() < 0) ? 1 : 0;
 
