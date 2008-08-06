@@ -10,6 +10,8 @@ use TagFactory::TagFactory;
 
 use Logging;
 
+use Digest::MD5 qw(md5 md5_hex md5_base64);
+
 # ----------------------------------------------------------------------------
 # constructor and initialisation
 #-----------------------------------------------------------------------------
@@ -615,7 +617,7 @@ sub getParentContigs {
 
     if (!$this->{ParentContig} && $load && (my $ADB = $this->{SOURCE})) {
         return undef unless (ref($ADB) eq 'ArcturusDatabase');
-        $ADB->getParentContigsForContig($this);
+        $ADB->getParentContigsForContig($this,@_); # pass on options
     }
     return $this->{ParentContig};
 }
@@ -631,6 +633,18 @@ sub hasParentContigs {
     my $this = shift;
     my $parents = $this->getParentContigs(shift);
     return $parents ? scalar(@$parents) : 0;
+}
+
+sub getParentContigIDs {
+    my $this = shift;
+    
+    my $parents = $this->getParentContigs(shift);
+
+    my @parentids;
+    foreach my $parent (@$parents) {
+        push @parentids, $parent->getContigID();
+    }
+    return @parentids; # an array
 }
 
 # child contig instances (re: tag propagation)
@@ -819,6 +833,24 @@ sub getStatistics {
     return ContigHelper->statistics($this,%options);
 }
 
+sub getCheckSum {
+    my $this = shift;
+    my %options = @_;
+
+    unless ($options{refresh}) {
+        return $this->{data}->{checksum} if $this->{data}->{checksum};
+    }
+# build the readseqhash based on seq IDs
+    my $reads = $this->getReads() || return 0;
+
+    my @seqids;
+    foreach my $read (@$reads) {
+	push @seqids,$read->getSequenceID(); # no check on existence here
+    }
+    $this->setCheckSum(md5(sort @seqids));
+    return $this->getCheckSum();
+}
+
 #-------------------------------------------------------------------    
 # compare this Contig with another one using metadata and mappings
 #-------------------------------------------------------------------
@@ -850,6 +882,11 @@ sub linkToContig {
                                          'forcelink',
                                          'strong','readclipping'); # + others
     return ContigHelper->crossmatch($this,$compare,%options);
+}
+
+sub linkToParents {
+# repeatedly invokes linkToContig (above); takes same options as linkToContig
+    return ContigHelper->linkContigToParents(@_);
 }
 
 #-------------------------------------------------------------------    
