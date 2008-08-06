@@ -530,7 +530,7 @@ sub remap {
 
     &verifyKeys('remap',\%options,'prewindowstart' ,'prewindowfinal',
                                   'postwindowstart','postwindowfinal',
-                                  'split','nosplit','segmentaware',
+                                  'split','nosplit','tracksegments',
 'usenew','list','useold', # to be removed later
                                   'minimumsegmentsize',        
                                   'annooptions','sysIDoptions','changestrand');
