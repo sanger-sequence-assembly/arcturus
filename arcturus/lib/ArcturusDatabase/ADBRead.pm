@@ -1978,6 +1978,7 @@ sub getReadVersionHash {
             $versionhash->{seq_id} = $sid;
             $versionhash->{seq_hash} = $sh;
             $versionhash->{qual_hash} = $qh;
+            $versionhash->{read_id} = $id;
             delete $namehash->{$rnm};
         }
     }
