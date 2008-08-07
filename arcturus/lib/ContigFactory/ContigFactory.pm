@@ -743,6 +743,7 @@ sub readExtractor {
                 next unless ($seq_hash eq $versionhash->{seq_hash});
                 next unless ($bql_hash eq $versionhash->{qual_hash});
 # both hashes match: this read version is in the database
+                $read->setReadID($versionhash->{read_id});
                 $read->setSequenceID($versionhash->{seq_id});
                 $read->setVersion($version);
 # remove sequence data
