@@ -8,7 +8,7 @@ use ContigFactory::ContigFactory;
 
 use Logging;
 
-my $DEBUG = 1;
+my $DEBUG = 0;
 
 #----------------------------------------------------------------
 # ingest command line parameters
@@ -37,9 +37,11 @@ my $padded;
 my $readsonly = 0;
 my $noreads;
 
-my $notags;
-my $includetags;
-my $excludetags;
+my $notags;      # overrides all other tag specification 
+my $includetags; # comma-separated list of tag types to include
+my $excludetags; # comma-separated list tag types to exclude and/or
+                 # string(s), which if matching tag comment excludes 
+my $splittags;   # comma-separated list of tag types which may be split ?
 
 my $masking;
 my $msymbol;
@@ -72,7 +74,7 @@ my $marklqkeys  = "marklowquality|mlq";
 my $cliplqkeys  = "cliplowquality|clq";
 my $lqkeys      = "lowqualitysymbol|lqs|clipthreshold|cth";
 my $endclipkeys = "trimendregion|ter";
-my $tagkeys     = "notags|nt|includetags|it|excludetags|et";
+my $tagkeys     = "notags|nt|includetags|it|excludetags|et|splittags|st";
 my $endonlykeys = "extractendregion|eer";
 my $paddedkeys  = "padded|p";
 my $screenkeys  = "undoedit|ue|removebadreads|rbr";
@@ -197,7 +199,7 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
     if ($nextword =~ /^\-(caf|maf|fasta|embl|file)$/) {
         $format = $1;
         $format = $preset if ($format eq 'file');
-        $validkeys =~ s/caf\|maf\|fasta\|embl\|//;
+        $validkeys =~ s/caf\|maf\|fasta\|embl\|/$format\|/;
         $validkeys =~ s/file\|//; # presence implies previous 'format' key
 # read the filename
         $filename  = shift @ARGV;
@@ -219,7 +221,8 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
 #               . "|mask|symbol|"
         }
 	elsif ($format eq 'embl') {
-	    $validkeys .= $marklqkeys.'|'.$tagkeys.'|'.$paddedkeys;
+	    $validkeys .= $marklqkeys.'|'.$cliplqkeys.'|'
+                        . $tagkeys.'|'.$paddedkeys;
 	}
 	elsif ($format eq 'maf'){
             $validkeys .= "runlengthsubstitute|rls|";
@@ -274,8 +277,22 @@ print STDERR "$nextword  matches  '$1'\n" if $verbose;
         $noreads   = 1; # implies CAF
     }            
 
+
+
     if ($nextword eq '-notags'    || $nextword eq '-nt') {
         $notags    = 1;
+    }            
+
+    if ($nextword eq '-includetags'    || $nextword eq '-it') {
+        $includetags = shift @ARGV;
+    }            
+
+    if ($nextword eq '-excludetags'    || $nextword eq '-et') {
+        $excludetags = shift @ARGV;
+    }            
+
+    if ($nextword eq '-splittags'    || $nextword eq '-st') {
+        $splittags = shift @ARGV;
     }            
 
 #    $ignblocked   = 1            if ($nextword eq '-ignoreblocked');
@@ -412,62 +429,12 @@ $adb->setLogger($logger);
 # get a list of contigs or projects to be exported
 #----------------------------------------------------------------
 
-my $contigs = []; # either contigs
+my ($contigs,$projects) = &getcontigsandprojects($contig,$focn,
+                                                 $project,$fopn,
+                                                 $assembly);
 
-if ($focn) {
-# file of contig IDs
-    $focn = &getNamesFromFile($focn);
-    $contigs = $focn if $focn;
-}
-
-if ($contig && $contig =~ /\.agp/) {
-# contig scaffold provided with agp file; return list of contigs
-    my $clist = ContigFactory->parseScaffold($contig); # parse file
-    push @$contigs,@$clist if ($clist && @$clist);
-}
-elsif ($contig) {
-# single ID or comma-separated list
-     my $locn = &getNames($contig);
-    push @$contigs,@$locn if $locn;
-}
-
-# test if the contigs are perhaps scaffolded (any '-' sign)
-
-my $sreverse = {};
-foreach my $contig (@$contigs) {
-    next unless ($contig =~ /^\-/);
-    $contig = -$contig; 
-    $sreverse->{$contig}++;
-}
-
-my $scaffold = scalar(keys %$sreverse) ? 1 : 0;
- 
-#----------------------------------------------------------------
-# get a list of projects to be exported
-#----------------------------------------------------------------
-
-my $projects = []; # or projects
-
-if ($fopn) {
-    $fopn = &getNamesFromFile($fopn);
-    $projects = $fopn if $fopn;
-}
-
-if ($project) {
-    my $lopn = &getNames($project);
-    push @$projects,@$lopn if $lopn;
-}
-   
-# if projects specified, identify them in the data base
-
-# note: if contigs specified, could be scaffolding info, therefore use a special keyword
-# to distinguish it from a list of contigs, and infer the project from the contigprojectids
-# require for any request except single projects the provision of a temporary gap4database 
-# name to be created in the main project directory  
-
-if (@$projects || $assembly) {
-    $projects = &getProjects($adb,$projects,$assembly);
-}
+# require for any request except single projects the provision of a temporary  
+# gap4database or name to be created in the main project directory ?? 
 
 unless (@$contigs || @$projects) {
     $logger->severe("No valid contig(s) or project(s) specified");
@@ -482,92 +449,9 @@ unless (@$contigs || @$projects) {
 my ($fhDNA, $fhQTY, $fhRDS);
 
 unless ($preview) {
-
-# CAF format
-
-    if ($format eq 'caf' && $filename) {
-        $filename .= '.caf' unless ($filename =~ /\.caf$|null/);
-        $fhDNA = new FileHandle($filename, "w");
-        &showUsage("Failed to create CAF output file \"$filename\"") unless $fhDNA;
-    }
-    elsif ($format eq 'caf' && defined($filename)) { # = 0
-        $fhDNA = *STDOUT;
-    }
-
-# FASTA format
-
-    if ($format eq 'fasta' && $filename) {
-        $filename .= '.fas' unless ($filename =~ /\.fas$|null/);
-        $fhDNA = new FileHandle($filename, "w");
-        unless ($fhDNA) {
-            $logger->error("Failed to create FASTA sequence output file \"$filename\"");
-            $adb->disconnect();
-	    exit 1;
-	}
-        if (defined($quality)) {
-            $fhQTY = new FileHandle($quality, "w"); 
-            unless ($fhQTY) {
-  	        $logger->error("Failed to create FASTA quality output file \"$quality\"");
-                $adb->disconnect();
-	        exit 1;
-	    }
-        }
-        elsif ($filename eq '/dev/null') {
-            $fhQTY = $fhDNA;
-        }
-    }
-    elsif ($format eq 'fasta' && defined($filename)) { # = 0
-        $fhDNA = *STDOUT;
-    }
-
-# EMBL format
-
-    if ($format eq 'embl' && $filename) {
-        $filename .= '.embl' unless ($filename =~ /\.embl$|null/);
-        $fhDNA = new FileHandle($filename, "w");
-        unless ($fhDNA) {
-            $logger->error("Failed to create EMBL output file \"$filename\"");
-            $adb->disconnect();
-	    exit 1;
-	}
-    }
-    elsif ($format eq 'embl' && defined($filename)) {
-        $fhDNA = *STDOUT;
-    }
-
-# MAF (Phusion assembler) format
-
-    if ($format eq 'maf' && $filename) { # 0 not allowed
-        my $file = "$filename.contigs.bases";
-        $fhDNA = new FileHandle($file,"w");
-        unless ($fhDNA) {
-            $logger->error("Failed to create MAF output file \"$file\"");
-            $adb->disconnect();
-	    exit 1;
-	}
-        $file = "$filename.contigs.quals";
-        $fhQTY = new FileHandle($file,"w");
-        unless ($fhQTY) {
-            $logger->error("Failed to create MAF output file \"$file\"");
-            $adb->disconnect();
-	    exit 1;
-	}
-        $file = "$filename.reads.placed";
-        $fhRDS = new FileHandle($file,"w");
-        unless ($fhRDS) {
-            $logger->error("Failed to create MAF output file \"$file\"");
-            $adb->disconnect();
-	    exit 1;
-	}
-    }
-
-    elsif ($format eq 'maf' && defined($filename)) { # = 0
-        $fhDNA = *STDOUT;
-        $fhQTY = $fhDNA;
-        $fhRDS = $fhDNA;
-    }
+   ($fhDNA, $fhQTY, $fhRDS) = &getfilehandles($format,$filename,$quality);
+    exit 1 unless $fhDNA;
 }
-
 
 my %woptions; #  = (blankline => 0); 
 
@@ -589,7 +473,8 @@ while (@$contigs || @$projects) {
         my $project = shift @$projects;
         my $pid = $project->getProjectID();
         next if $projecthash{$pid}; # protect against duplicate project identifiers
-        my ($contigids,$status) = $project->fetchContigIDs(); # ?? IGNORE LOCKED
+        my ($contigids,$status) = $project->fetchContigIDs(); 
+# ?? IGNORE LOCKED should be an option ?
         unless ($contigids && @$contigids) {
 	    $logger->error("No contigs found or accessible for project "
                           .$project->getProjectName()." (id=$pid ? may be locked)");
@@ -622,6 +507,8 @@ while (@$contigs || @$projects) {
             $logger->error("Invalid or missing contig identifier");
             next;
         }
+# test for reversal (strippiong possible leading - sign from identifier)
+        my $reverse = ($identifier =~ s/^\-//) ? 1 : 0;
 # protect against duplicate (input) contig identifiers
         if ($contighash{$identifier}) {
             $logger->error("Duplicate identifier $identifier ignored");
@@ -667,6 +554,12 @@ while (@$contigs || @$projects) {
             $ignorecount++;
             next;
 	}
+
+
+  $contig->getTags(1) unless $notags;
+  $contig->getMappings(1);
+  $contig->getStatistics();
+#  $contig->setMappings() if ($format eq 'embl');
 
 # ----------------- data manipulation before export ----------------------
 
@@ -719,9 +612,18 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 
         if ($cliplowquality) {
             $logger->info("quality clipping");
+            if ($format eq 'embl') { # remove redundent stuff
+                $contig->addMapping(0);
+                $contig->addRead(0);
+            }
             my %lqoptions;
             $lqoptions{hqpm} = 0; # delete all "high" quality pads (and non ACGT)
             $lqoptions{minimum} = 0; # but keep all low quality bases
+# these deal with tags under remapping
+            $lqoptions{components} = 1;
+            $lqoptions{breaktags} = $splittags if $splittags;
+            $lqoptions{nomergetaglist} = 'REPT';
+
             my ($newcontig,$status) = $contig->deleteLowQualityBases(%lqoptions);
             $contig = $newcontig;
         }
@@ -751,7 +653,8 @@ print STDOUT "endRegionTrim; $contig  $clipped\n";
 	    }
         }
 
-        if ($reverse || $sreverse->{$identifier}) {
+        if ($reverse) {
+# TO BE DEVELOPED
             my %roptions = (nonew=>1);
 undef %roptions;
 #$contig->getMappings(1) unless $roptions{nonew};
@@ -810,9 +713,9 @@ $logger->debug($c2cmapping->[0]->toString()) if $c2cmapping;
 
         elsif ($format eq 'embl') {
             $woptions{notags}      = 1 if $notags;
-            $woptions{includetags} = $includetags if $includetags;
-            $woptions{excludetags} = $excludetags if $excludetags;
-            $err = $contig->writeToEMBL($fhDNA);
+            $woptions{includetag} = $includetags if $includetags;
+            $woptions{excludetag} = $excludetags if $excludetags;
+            $err = $contig->writeToEMBL($fhDNA,0,%woptions);
 	}
 
         elsif ($format eq 'maf') {
@@ -842,11 +745,9 @@ $logger->warning("There were no errors") unless $errorcount;
 
 $logger->warning("$errorcount Errors found") if $errorcount;
 
-$fhDNA->close() if $fhDNA;
-
-$fhQTY->close() if $fhQTY;
-
-$fhRDS->close() if $fhRDS;
+foreach my $handle ($fhDNA,$fhQTY,$fhRDS) {
+    $handle->close() if $handle;
+}
 
 $logger->close();
 
@@ -855,6 +756,58 @@ exit;
 #------------------------------------------------------------------------
 # subs
 #------------------------------------------------------------------------
+
+sub getcontigsandprojects {
+    my $contig   = shift; # contig, or comma separated list
+    my $focn     = shift; # filename, or .agp scaffold file
+    my $project  = shift; # project, or comma separated list, name or ID
+    my $fopn     = shift; # filename with list of projects
+    my $assembly = shift; # assembly name or ID
+
+    my $contigs = [];
+
+# --- contig specification ---
+
+    if ($contig) {
+# single ID or comma-separated list
+        my $locn = &getNames($contig);
+        push @$contigs,@$locn if $locn;
+    }
+
+    if ($focn && $focn =~ /\.agp/) {
+# contig scaffold provided with agp filename; return list of contigs
+        my $clist = ContigFactory->parseScaffold($focn); # parse file
+        push @$contigs,@$clist if ($clist && @$clist);
+# (any '-' sign indicates a counter aligned contig)
+    }
+    elsif ($focn) { # not an .agp file
+# file of contig IDs
+        $focn = &getNamesFromFile($focn);
+        $contigs = $focn if $focn;
+    }
+
+# --- project specification ---
+
+    my $projects = []; # or projects
+
+    if ($fopn) {
+        $fopn = &getNamesFromFile($fopn);
+        $projects = $fopn if $fopn;
+    }
+
+    if ($project) {
+        my $lopn = &getNames($project);
+        push @$projects,@$lopn if $lopn;
+    }
+   
+# if projects specified, identify them in the data base
+
+    if (@$projects || $assembly) {
+        $projects = &getProjects($adb,$projects,$assembly);
+    }
+
+    return $contigs,$projects;
+}
 
 sub getNamesFromFile {
     my $file = shift; # file name
@@ -928,6 +881,105 @@ sub getProjects {
 # okay, here we have collected all projects to be exported
      
     return [@projects];
+}
+
+#----------------------------------------------------------------------------
+# file handles
+#----------------------------------------------------------------------------
+
+sub getfilehandles {
+# returns a number of file handles for requested format, or undef
+    my $format = shift;
+    my $filename = shift;
+    my $quality = shift;
+
+# CAF format
+
+    my ($fhDNA, $fhQLT, $fhRDS);
+
+    if ($format eq 'caf' && $filename) {
+        $filename .= '.caf' unless ($filename =~ /\.caf$|null/);
+        $fhDNA = new FileHandle($filename, "w");
+        &showUsage("Failed to create CAF output file \"$filename\"") unless $fhDNA;
+    }
+    elsif ($format eq 'caf' && defined($filename)) { # = 0
+        $fhDNA = *STDOUT;
+    }
+
+# FASTA format
+
+    if ($format eq 'fasta' && $filename) {
+        $filename .= '.fas' unless ($filename =~ /\.fas$|null/);
+        $fhDNA = new FileHandle($filename, "w");
+        unless ($fhDNA) {
+            $logger->error("Failed to create FASTA sequence output file \"$filename\"");
+            $adb->disconnect();
+	    return undef;
+	}
+        if (defined($quality)) {
+            $fhQTY = new FileHandle($quality, "w"); 
+            unless ($fhQTY) {
+  	        $logger->error("Failed to create FASTA quality output file \"$quality\"");
+                $adb->disconnect();
+	        return undef;
+	    }
+        }
+        elsif ($filename eq '/dev/null') {
+            $fhQTY = $fhDNA;
+        }
+    }
+    elsif ($format eq 'fasta' && defined($filename)) { # = 0
+        $fhDNA = *STDOUT;
+    }
+
+# EMBL format
+
+    if ($format eq 'embl' && $filename) {
+        $filename .= '.embl' unless ($filename =~ /\.embl$|null/);
+        $fhDNA = new FileHandle($filename, "w");
+        unless ($fhDNA) {
+            $logger->error("Failed to create EMBL output file \"$filename\"");
+            $adb->disconnect();
+	    return undef;
+	}
+    }
+    elsif ($format eq 'embl' && defined($filename)) {
+        $fhDNA = *STDOUT;
+    }
+
+# MAF (Phusion assembler) format
+
+    if ($format eq 'maf' && $filename) { # 0 not allowed
+        my $file = "$filename.contigs.bases";
+        $fhDNA = new FileHandle($file,"w");
+        unless ($fhDNA) {
+            $logger->error("Failed to create MAF output file \"$file\"");
+            $adb->disconnect();
+	    return undef;
+	}
+        $file = "$filename.contigs.quals";
+        $fhQTY = new FileHandle($file,"w");
+        unless ($fhQTY) {
+            $logger->error("Failed to create MAF output file \"$file\"");
+            $adb->disconnect();
+	    return undef;
+	}
+        $file = "$filename.reads.placed";
+        $fhRDS = new FileHandle($file,"w");
+        unless ($fhRDS) {
+            $logger->error("Failed to create MAF output file \"$file\"");
+            $adb->disconnect();
+	    return undef;
+	}
+    }
+
+    elsif ($format eq 'maf' && defined($filename)) { # = 0
+        $fhDNA = *STDOUT;
+        $fhQTY = $fhDNA;
+        $fhRDS = $fhDNA;
+    }
+
+    return ($fhDNA,$fhQTY,$fhRDS);
 }
 
 #------------------------------------------------------------------------
