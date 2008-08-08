@@ -35,6 +35,7 @@ my $frugal = 1 ;            # (default) build object instances using minimal mem
 my $linelimit;              # specifying a line limit implies test mode 
 my $readlimit;              # scan until this number of reads is found
 my $parseonly;              # only parse the file (test mode)
+my $blocksize = 50;
 
 # contig specification
 
@@ -74,7 +75,7 @@ my $noaspedcheck;           # (re: read load mode)
 my $rtagtypeaccept = 'default'; 
 my $loadreadtags = 1;       # (default) load new read tags found on caf file
 my $echoreadtags;           # list the read tags found; implies no loading
-my $screenreadtags;         # retired readtags which are NOT in the current lis
+my $syncreadtags;           # retired readtags which are NOT in the current lis
 
 # project
 
@@ -89,6 +90,7 @@ my $autolockmode = 1;
 my $loglevel;             
 my $logfile;
 my $outfile;
+my $minerva;
 my $mail;
 
 my $debug = 0;
@@ -110,7 +112,7 @@ $rtagtypeaccept = 'default';
 my $validkeys  = "organism|o|instance|i|"
 
                . "caf|stdin|batch|gap4name|"
-               . "nofrugal|nf|linelimit|ll|readlimit|rl|parseonly|"
+               . "nofrugal|nf|linelimit|ll|readlimit|rl|parseonly|blocksize|bs|"
 
                . "padded|safemode|maximum|minimum|filter|withoutparents|wp|"
                . "testcontig|tc|noload|notest|nobreak|consensus|"
@@ -122,12 +124,12 @@ my $validkeys  = "organism|o|instance|i|"
                . "loadcontigtags|lct|testcontigtags|tct|listcontig|list|"
 
                . "readtagtype|rtt|noloadreadtags|nlrt|showreadtags|srt|"
-               . "loadreadtags|lrt|screenreadtags|"
+               . "loadreadtags|lrt|synchronisereadtags|syncrt|"
 
                . "assignproject|ap|defaultproject|dp|setprojectby|spb|"
                . "assembly|a|projectlock|pl|dounlock|project|"
 
-               . "outputfile|out|log|verbose|info|debug|memory|help";
+               . "outputfile|out|log|minerva|verbose|info|debug|memory|help";
 
 #------------------------------------------------------------------------------
 # parse the command line input; options overwrite eachother; order is important
@@ -187,6 +189,11 @@ while (my $nextword = shift @ARGV) {
     $maxnrofreads     = shift @ARGV  if ($nextword eq '-maximum');
     $contignamefilter = shift @ARGV  if ($nextword eq '-filter'); 
 
+    if ($nextword eq '-blocksize' || $nextword eq '-bs') {
+        $blocksize    = shift @ARGV;
+        $blocksize = 1 if ($blocksize <= 0);
+    } 
+
     if ($nextword eq '-withoutparents' || $nextword eq '-wp') {
         $withoutparents = 1;
     } 
@@ -199,7 +206,7 @@ while (my $nextword = shift @ARGV) {
 	$readload       = 0;
         $loadreadtags   = 0;
     }
-    elsif ($nextword eq '-notest' || $nextword eq '-nt') {
+    elsif ($nextword eq '-notest' || $nextword eq '-nt') { # redundent
         $contigtest     = 0;            
     }
     elsif ($nextword eq '-testcontig' || $nextword eq '-tc') {
@@ -267,13 +274,16 @@ while (my $nextword = shift @ARGV) {
         $loadreadtags = 0;            
     }
     elsif ($nextword eq '-loadreadtags'   || $nextword eq '-lrt') {
-        $loadreadtags = 1 unless defined $loadreadtags;            
+#        $loadreadtags = 1 unless defined $loadreadtags; # ? why          
+        $loadreadtags = 1;            
     }
     elsif ($nextword eq '-showreadtags'   || $nextword eq '-srt') {
         $loadreadtags = 0;
         $echoreadtags = 1;            
     }
-    $screenreadtags   = 1 if ($nextword eq 'screenreadtags'); 
+    if ($nextword eq 'synchronisereadtags' || $nextword eq 'syncrt') {
+        $syncreadtags = 1;
+    } 
 
 # project ('assignproject' forces its use, by-passing inheritance)
 
@@ -330,12 +340,14 @@ $logger->setStandardFilter($loglevel) if defined $loglevel; # reporting level
 
 $logger->setSpecialStream($outfile,list=>1,timestamp=>1) if $outfile;
 
+$logger->setPrefix("#MINERVA") if $minerva;
+
 if ($debug) {
     $logger->stderr2stdout();
     $logger->setBlock('debug',unblock=>1);
 }
 
-  $logger->listStreams(); # test
+$logger->listStreams() if defined $loglevel; # test
 
 #----------------------------------------------------------------
 # get the database connection
@@ -509,6 +521,19 @@ $poptions{contigtaglist}    = $ctagtypeaccept    if $ctagtypeaccept;
 $poptions{blockobject} = {}; # hash table for read and contig names to ignore
 # $poptions{nrofreads} = 100000; # approximate maximum nr of reads to be used
 
+my %readtagoptions;
+
+$readtagoptions{load} = 1 if $loadreadtags;
+$readtagoptions{sync} = 1 if $syncreadtags;
+$readtagoptions{echo} = 1 if $echoreadtags;
+# print STDOUT "l $loadreadtags  s  $syncreadtags  e $echoreadtags\n";
+
+my %contigtagoptions;
+
+$contigtagoptions{load} = 1 if $loadcontigtags;
+$contigtagoptions{test} = 1 if $testcontigtags;
+$contigtagoptions{echo} = 1 if $echocontigtags;
+
 ContigFactory->setLogger($logger);
 
 Contig->setLogger($logger);
@@ -516,15 +541,16 @@ Contig->setLogger($logger);
 #------------------------------------------------------------------------------
 #  
 #------------------------------------------------------------------------------
- 
-$logger->info("contigs to be loaded")     if $contigload;
-$logger->info("contigs to be tested")     if $contigtest;
 
-$logger->info("contig tags to be loaded") if $loadcontigtags; 
-$logger->info("contig tags to be listed") if $echocontigtags; 
+$logger->info("contigs to be loaded")         if $contigload;
+$logger->info("contigs to be tested")         if $contigtest;
 
-$logger->info("read tags to be loaded")   if $loadreadtags; 
-$logger->info("read tags to be listed")   if $echoreadtags; 
+$logger->info("contig tags to be loaded")     if $loadcontigtags; 
+$logger->info("contig tags to be listed")     if $echocontigtags; 
+
+$logger->info("read tags to be loaded")       if $loadreadtags; 
+$logger->info("read tags to be listed")       if $echoreadtags; 
+$logger->info("read tags to be synchronised") if $syncreadtags; 
 
 $origin = 'Arcturus CAF parser' unless $origin;
 $origin = 'Other' unless ($origin eq 'Arcturus CAF parser' ||
@@ -534,7 +560,7 @@ if ($minnrofreads > 1) {
     $logger->info("Contigs with fewer than $minnrofreads reads are ignored");
 }
 
-$logger->memoryUsage("Initial") if $usage;
+$logger->monitor("Initial",memory=>1) if $usage;
 
 #------------------------------------------------------------------------------
 # in frugal mode: parse the input file and build an inventory of the caf file
@@ -549,7 +575,7 @@ $adb->populateLoadingDictionaries(); # for edited or missing reads (should be in
 my $readversionhash = {};
 $poptions{readversionhash} = $readversionhash;
 
-my $uservhashlocal = 1;
+my $uservhashlocal = 1; 
 
 if ($frugal) {
 # scan the file and make an inventory of objects
@@ -583,32 +609,41 @@ if ($frugal) {
                 push @contignames,$objectname;
 	    }
 	    else {
-		$logger->warning("Invalid contig name $objectname");
+		$logger->error("Invalid contig name $objectname");
+                next; # ignore the entry
 	    }
 	}
         elsif ($objecttype =~ /read/) {
 	    push @readnames,$objectname;
+	}
+        elsif ($objecttype =~ /assembly/) {
+# here potential to process assembly information
+	    next;
 	}
 	else {
             $logger->warning("Invalid object type $objecttype for $objectname");
 	    next;
 	}
 # debugging stuff
-next unless ($objectname =~ /Contig/);
-        $logger->debug(ContigFactory->listInventoryForObject($objectname),prefix=>0) if $debug;
+#        next unless ($objectname =~ /Contig/);
+#        next unless $debug;
+#        $logger->debug(ContigFactory->listInventoryForObject($objectname),
+#                                                              prefix=>0);
     }
 
-    $logger->warning(scalar(@contignames)." contigs, ".scalar(@readnames)." reads");
+    $logger->warning(scalar(@contignames)." contigs, "
+                     .scalar(@readnames)." reads");
+
+# test the readnames against reads in the database
 
     if (@readnames) {
-#$logger->memoryUsage("before test reads in database");
+
         my %toptions = (readload=>$readload);
         $toptions{consensusread} = $consensusread if $consensusread;
         $toptions{noaspedcheck}  = $noaspedcheck  if $noaspedcheck;
         my $missing = &testreadsindatabase(\@readnames,%toptions);
 	$logger->warning("$missing reads still missing") if $missing;
 	$logger->warning("All reads identified in database") unless $missing;
-#$logger->memoryUsage("after test reads in database");
 
 # here build the read/version hashes for reads in the list, or defer to later
 
@@ -620,14 +655,13 @@ next unless ($objectname =~ /Contig/);
                                  ."or with undefined hashes in database");
             }
             $logger->warning("keys ".scalar(keys %$readversionhash));
-#$logger->memoryUsage("after test reads in database");
         }
     }
     else {
         $logger->warning("CAF file $caffilename has no reads");
     }
 
-    $logger->memoryUsage("current") if $usage;
+    $logger->monitor("current",memory=>1) if $usage;
 }
 
 $logger->flush();
@@ -657,7 +691,7 @@ while (!$fullscan) {
             next if ($contignamefilter && $objectname !~ /$contignamefilter/);
 	    $logger->info("contig name $objectname");
             push @contignames,$objectname;
-	    last if (@contignames >= 50);
+	    last if (@contignames >= $blocksize);
 	}
 
         my $nc = 0;
@@ -674,7 +708,7 @@ while (!$fullscan) {
                 push @contigs,$object if (ref($object) eq 'Contig');
 	    }
 # test contig count
-            my $nc = scalar(@contigs);
+            $nc = scalar(@contigs);
             unless ($nc == $nctbe) {
                 $logger->fine("contig inventory mismatch: extracted $nc against $nctbe");
 # find contigs not returned and add to inventory with unshift TO BE DEVELOPED
@@ -694,21 +728,23 @@ while (!$fullscan) {
                 }
 # get the readversion hash and extract the reads
                ($readversionhash, my $missing) = $adb->getReadVersionHash(\@names);
-#        	$logger->warning(scalar(@$missing)." reads still missing "
-#                                 ."or with undefined hashes in database");
+#  $logger->warning(scalar(@$missing)." reads still missing "
+#                  ."or with undefined hashes in database");
                 my $ereads = ContigFactory->readExtractor(\@reads,$readversionhash,
                                                                   %poptions);
-#$logger->memoryUsage("after extracting local reads in database");
                 unless (scalar(@$ereads) == scalar(@reads)) {
 	   	    $logger->error("There are missing reads");
                 }
+# remove pointers to Read instances
+                undef @reads;
+                undef $ereads;
 	    }
         }
         else {
             $fullscan = 1;
 #            ContigFactory->closeFile();            
 	}
-        $logger->memoryUsage("frugal (next $nc contigs)") if $usage;
+        $logger->monitor("frugal (next $nc contigs)",memory=>1) if $usage;
     }
 
 #--------------------- full scan ----------------------------
@@ -738,7 +774,7 @@ print STDOUT "full scan $fullscan $truncated   @$objects \n";
                 }
 	    }
         }
-        $logger->memoryUsage("fullscan memory usage") if $usage;
+        $logger->monitor("fullscan memory usage",memory=>1) if $usage;
 print STDOUT " end no frugal scan\n";
     }
 
@@ -784,6 +820,7 @@ print STDOUT " end no frugal scan\n";
             push @remove,$contig->getName();
             my $reads = $contig->getReads();
             foreach my $read (@$reads) {
+$logger->warning("read ".$read->getReadName()." has sequence!") if $read->hasSequence();
                 push @remove,$read->getReadName();
 	    }
 	    ContigFactory->removeObjectFromInventory(\@remove);
@@ -793,16 +830,16 @@ print STDOUT " end no frugal scan\n";
 # collect reads for tag processing
 #------------------------------------------------------------------------------
 
-        if ($loadreadtags || $echoreadtags) {
-    
+	if (keys %readtagoptions) {    
             my $creads = $contig->getReads();    
             $logger->info("contig has ".scalar(@$creads)." reads");
             foreach my $read (@$creads) {
                 my $readname = $read->getName();
                 $logger->fine("read $readname");
                 undef $inventory->{$readname} if $frugal; # remove from inventory
-                $logger->info("read $readname has tags") if $read->hasTags();
-                push @$reads,$read if $read->hasTags();
+                next unless $read->hasTags();
+                $logger->info("read $readname has tags");
+                push @$reads,$read;
 	    }
 	}
 
@@ -826,11 +863,9 @@ print STDOUT " end no frugal scan\n";
 	    next;
         }
 
-# process tags to weed out duplicates
+# process tags to weed out possible duplicates on input caf file
 
-$logger->fine("getting tags");
         $contig->getTags(0,sort=>'full',merge=>1);
-$logger->fine("getting tags done");
 
 
         if ($contig->isPadded()) {
@@ -885,7 +920,7 @@ $logger->fine("getting tags done");
    	        }
 # $adb->clearLastContig(); ?
             }
-#$logger->memoryUsage("memory usage after loading contig ".$contig->getContigName());
+#$logger->monitor("memory usage after loading contig ".$contig->getContigName(),memory=>1);
         }
 
         elsif ($contigtest || $loadcontigtags || $testcontigtags) {
@@ -914,104 +949,42 @@ $logger->fine("getting tags done");
 	    }
         }
 
-        if ($loadcontigtags || $testcontigtags) {
-# tags ?
-            unless ($contig->hasTags()) {
-                $logger->warning("No (new) contig tags found on contig $identifier");
-#                $logger->info("No (new) contig tags found on contig $identifier");
-                $contig->erase();
-                next;
-	    }
+# dump/test/echo the contig tags
 
-            my $tags = $contig->getTags();
-            my $cid = $contig->getContigID();
-            $logger->warning("contig $cid has ".scalar(@$tags)." tags");
+        if (keys %contigtagoptions) {
 
-# test if the contig ID is defined
-
-            unless ($contig->getContigID()) {
-	        $logger->severe("Contig $identifier is not found in the database");
-                $contig->erase();
-	        next;
- 	    }
-
-            my $newtags;
-            if ($loadcontigtags) {
-                $newtags = $adb->putTagsForContig($contig,noload=>0,testmode=>1);
-                $logger->warning("$newtags new tags added for $identifier");
-	    }
-	    else {
-        	$logger->warning("testing tags against database",ss=>1);
-                $newtags = $adb->enterTagsForContig($contig);
-                $logger->warning("$newtags new tags found for $identifier");
-	    }
-#    $logger->warning("adding new tags for contig $contigid: ".scalar(@$tags));
-        }
-
-        elsif ($echocontigtags) {
-            if ($contig->hasTags()) {
-                my $tags = $contig->getTags();
-                $logger->warning("contig $identifier has ".scalar(@$tags)." tags");
-                $logger->warning("Tags for contig ".$contig->getContigName());
-                foreach my $tag (@$tags) {
-                    $logger->warning($tag->writeToCaf(0,annotag=>1));
-		}
-            }
-	    else {
-                $logger->warning("No contig tags found on contig $identifier");
-	    }
+           my ($status,$msg) = &processcontigtags($contig,$identifier,
+                                                          %contigtagoptions);
+           $logger->info($msg)    if ($status == 1); # success
+           $logger->warning($msg) if ($status == 2); # success
+           $logger->severe($msg)  unless $status; # error
 	}
 
 # dump/echo the readtag
 
-        if (@$reads && ($loadreadtags || $screenreadtags || $echoreadtags)) {
+        if (@$reads && keys %readtagoptions) {
 
-            $logger->warning("Processing readtags for ".scalar(@$reads)." reads") if $debug;
-
-            if ($loadreadtags) {
-                my $success = $adb->putTagsForReads($reads,autoload=>1);
-                $logger->warning("putTagsForReads success = $success") if $debug;
-            }
-	    elsif ($screenreadtags) {
-#                my $success = $adb->putTagsForReads($reads,autoload=>1,retire=>0);
-	    }
-            else {
-# echoreadtags
-                $logger->warning("Read Tags Listing\n");
-                foreach my $read (@$reads) {
-                    my $tags = $read->getTags();
-                    my $readname = $read->getReadName();
-                    unless ($tags && @$tags) {
-                        $logger->warning("No tags (anymore) on read $readname");
-			next;
-		    }
-                    $logger->warning("read $readname : tags ".scalar(@$tags));
-# list all tags
-                    foreach my $tag (@$tags) {
-                        $logger->warning($tag->writeToCaf());
-                    }
-# list the tags which need to be loaded
-                    my $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
-                    if (ref($tagstobeloaded) eq 'ARRAY') {
-                        $logger->warning("Tags to be loaded : ".scalar(@$tagstobeloaded));
-                        foreach my $tag (@$tagstobeloaded) {
-                            $logger->warning($tag->writeToCaf());
-                        }
-   	            }
-	            else {
-                        $logger->info("NO tags to be loaded"); 
-	            }
-                }
+            &processreadtags($reads,%readtagoptions);
+# remove references to the reads
+            foreach my $read (@$reads) {
+                $read->erase(); 
 	    }
             undef @$reads;
         }
 
 # destroy the contig
+#$logger->monitor("after processing contig ".$contig->getContigName(),memory=>1) if $usage;
 
         $contig->erase();
         undef $contig;
     }
 } 
+
+# process any remaining reads with tags
+
+if (@$reads && keys %readtagoptions) {
+    &processreadtags($reads,%readtagoptions);
+}
 
 # test & report for contigs missed
 
@@ -1108,7 +1081,7 @@ sub testreadsindatabase {
                     . "-instance $instance -organism $organism "
                     . "-source traceserver -group $organism "
                     . "-minreadid auto";
-        system($command);
+        &mySystem($command);
     }
 
 # or use the TraceServer module to pull out individual reads
@@ -1170,10 +1143,19 @@ sub testreadsindatabase {
 		$logger->info("Strand set as 'Forward' for read $readname");
 	    }
             my %loadoptions;
-            if ($crn && ($crn eq 'all' || $readname =~ /$crn/)) {
+            my $isr = 0; # consensus read flag
+            if (my $readtags = $read->getTags()) {
+# check if the read is marked as consensus read
+		foreach my $tag (@$readtags) {
+                    $isr = 1 if ($tag->getType() eq 'CONS');
+		}
+	    }
+            
+            if ($crn && ($crn eq 'all' || $readname =~ /$crn/) || $isr) {
                 $loadoptions{skipaspedcheck} = 1;
                 $loadoptions{skipligationcheck} = 1;
                 $loadoptions{skipchemistrycheck} = 1;
+                $loadoptions{skipqualityclipcheck} = 1;
             }
             if ($nac && ($nac eq 'all' || $readname =~ /$nac/)) {
                 $loadoptions{skipaspedcheck} = 1;
@@ -1190,6 +1172,8 @@ sub testreadsindatabase {
     }
     return $stillmissingreads; # number of reads still missing
 }
+
+#-------------------------------------------------------------------------------
 
 sub testeditedconsensusreads {
     my $contig = shift;
@@ -1235,6 +1219,104 @@ my %loadoptions;
         my ($success,$errmsg) = $adb->putRead($read, %loadoptions);
 	next if $success;
         $logger->severe("Unable to put read $readname: $errmsg");
+    }
+}
+
+#-------------------------------------------------------------------------------
+
+sub processreadtags {
+    my $reads = shift; # array ref to a list of reads
+    my %options = @_;
+
+    $logger->warning("Processing readtags for ".scalar(@$reads)." reads");
+
+    if ($options{load}) { # load (new) read tags
+        my $success = $adb->putTagsForReads($reads,autoload=>1);
+        $logger->debug("put read tags : success = $success");
+    }
+
+    if ($options{sync}) { # load (new) tags and remove existing tags not in list
+        my $success = $adb->putTagsForReads($reads,autoload=>1,synchronise=>1);
+        $logger->debug("synchronise read tags : success = $success");
+    }
+
+    if ($options{echo}) {
+# echoreadtags
+        $logger->warning("Read Tags Listing\n");
+        foreach my $read (@$reads) {
+            my $tags = $read->getTags();
+            my $readname = $read->getReadName();
+            unless ($tags && @$tags) {
+                $logger->warning("No tags (anymore) on read $readname");
+	      	next;
+	    }
+            $logger->warning("read $readname : tags ".scalar(@$tags));
+# list all tags
+            foreach my $tag (@$tags) {
+                $logger->warning($tag->writeToCaf());
+            }
+# list the tags which need to be loaded
+            my $tagstobeloaded = $adb->putTagsForReads([($read)],noload=>1);
+            if (ref($tagstobeloaded) eq 'ARRAY') {
+                $logger->warning("Tags to be loaded : ".scalar(@$tagstobeloaded));
+                foreach my $tag (@$tagstobeloaded) {
+                    $logger->warning($tag->writeToCaf());
+                }
+            }
+            else {
+                $logger->info("NO tags to be loaded"); 
+            }
+        }
+    }
+}
+
+#-------------------------------------------------------------------------------
+
+sub processcontigtags { # per contig
+    my $contig = shift; # contig instance
+    my $identifier = shift; # identigfier in this script
+    my %options = @_;
+
+# returns 1 for success, 0 for failure
+
+    unless ($contig->hasTags()) {
+        return 1, "No (new) contig tags found for $identifier";
+    }
+
+    my $tags = $contig->getTags();
+
+    if ($options{load} || $options{test}) {
+
+# test if the contig ID is defined
+
+        unless ($contig->getContigID()) {
+	    return 0, "undefined arcturus contig ID for $identifier";
+        }
+
+        my $cid = $contig->getContigID();
+        $logger->info("contig $cid has ".scalar(@$tags)." tags");
+
+        my $newtags;
+
+        if ($options{load}) {
+            $newtags = $adb->putTagsForContig($contig,noload=>0,testmode=>1);
+            return 1, "$newtags new tags added for contig $cid";
+        }
+	
+        if ($options{test}) {
+            $logger->warning("testing tags against database",ss=>1);
+            $newtags = $adb->enterTagsForContig($contig);
+            return 2, "$newtags new tags detected for contig $cid";
+	}
+    }
+
+    if ($options{echo}) {
+        $logger->warning("contig $identifier has ".scalar(@$tags)." tags");
+        $logger->warning("Tags for contig ".$contig->getContigName());
+        foreach my $tag (@$tags) {
+            $logger->warning($tag->writeToCaf(0,annotag=>1));
+	}
+        return 1,"OK";
     }
 }
 
@@ -1284,6 +1366,33 @@ sub tagList {
     my $list  = eval "join '|',\@$name";
 }
 
+# The next subroutine was shamelessly stolen from WGSassembly.pm
+
+sub mySystem {
+    my ($cmd) = @_;
+
+    my $res = 0xffff & system($cmd);
+    return 0 if ($res == 0);
+
+    printf STDERR "system(%s) returned %#04x: ", $cmd, $res;
+
+    if ($res == 0xff00) {
+	print STDERR "command failed: $!\n";
+        return 1;
+    }
+# the next two conditions abort execution
+    elsif ($res > 0x80) {
+	$res >>= 8;
+	print STDERR "exited with non-zero status $res\n";
+    } 
+    else {
+	my $sig = $res & 0x7f;
+	print STDERR "exited through signal $sig";
+	if ($res & 0x80) {print STDERR " (core dumped)"; }
+	print STDERR "\n";
+    }
+    exit 1;
+}
 
 #------------------------------------------------------------------------
 # HELP
@@ -1296,50 +1405,53 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code;
     print STDERR "\n";
-    unless ($organism && $instance) {
+    unless ($organism && $instance && $caffilename) {
         print STDERR "MANDATORY PARAMETERS:\n";
         print STDERR "\n";
-        print STDERR "-organism\tArcturus database name\n" unless $organism;
-        print STDERR "-instance\teither 'prod' or 'dev'\n" unless $instance;
-        print STDERR "\n";
-    }
-    unless ($caffilename) {
-        print STDERR "MANDATORY EXCLUSIVE PARAMETERS:\n";
-        print STDERR "\n";
-        print STDERR "-caf\t\tcaf file name OR\n";
-        print STDERR "-cafdefault\tuse the default caf file name\n";
+        print STDERR "-organism\tArcturus organism database\n" unless $organism;
+        print STDERR "-instance\tArcturus database instance\n" unless $instance;
+        print STDERR "-caf\t\tcaf file name\n" unless $caffilename;
         print STDERR "\n";
     }
     print STDERR "OPTIONAL PARAMETERS for project inheritance:\n";
     print STDERR "\n";
-    print STDERR "-setprojectby\t(spb) readcount,contigcount,contiglength or none\n";
-    print STDERR "-defaultproject\t(dp) project  ID or name of project to be used\n";
-    print STDERR "\t\t when the inheritance mechanism does not find a project\n";
-    print STDERR "-assignproject\t(ap) project ID or name (overrides setprojectby)\n";
+    print STDERR "-setprojectby\t(spb) assign project to contigs based on "
+                ."properties of parent\n\t\t      contigs: "
+                ."readcount, contigcount, contiglength or none\n";
+    print STDERR "-defaultproject\t(dp) ID or name of project to be used if ";
+    print STDERR "the inheritance\n\t\t     mechanism does not find a project\n";
+    print STDERR "-assignproject\t(ap) ID or name of project to which "
+                ."contigs are assigned\n\t\t     (overrides setprojectby)\n";
     print STDERR "-project\talias of assignproject\n";
-    print STDERR "-assembly\tassembly ID or name\n";
+    print STDERR "-assembly\tassembly ID or name; required in case of "
+               . "ambiguous project name\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for tag processing:\n";
     print STDERR "\n";
-
+#
 #    print STDERR "-ctp\t\tcontigtagprocessing (depth of inheritance, def 1)\n";
 #    print STDERR "-noreadtags\tdo not process read tags\n";
 #    print STDERR "-rtl\t\t(readtaglist) process specified read tags only\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+# min max rtt readtagtype synchronise reads, contigtagtype 
     print STDERR "\n";
     print STDERR "-minimum\tnumber of reads per contig (default 2)\n";
     print STDERR "-filter\t\tcontig name substring or regular expression\n";
     print STDERR "-out\t\toutput file, default STDOUT\n";
+
     print STDERR "-test\t\tnumber of lines parsed of the CAF file\n";
+    print STDERR "\n";
+    print STDERR "OPTIONAL PARAMETERS for testing:\n";
     print STDERR "\n";
     print STDERR "-tc\t\t(test contig) \n";
     print STDERR "-noload\t\tskip loading into database (test mode)\n";
-    print STDERR "-notest\t\t(in combination with noload: "
-                 . "skip contig processing altogether\n";
+#    print STDERR "-notest\t\t(in combination with noload: "
+#                 . "skip contig processing altogether\n";
 #    print STDERR "-irnl\t\tignorereadnamelike (name filter) pattern\n";
 #    print STDERR "-ignore\t\t(no value) contigs already processed\n";
 #    print STDERR "-frugal\t\t(no value) minimise memory usage\n";
+# blocksize
     print STDERR "-verbose\t(no value) for some progress info\n";
     print STDERR "\n";
     print STDERR "Parameter input ERROR: $code \n" if $code; 
