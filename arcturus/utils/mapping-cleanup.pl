@@ -69,7 +69,7 @@ $logger->info("Database $URL opened succesfully");
 #----------------------------------------------------------------
 
 my $report = $adb->cleanupMappings(preview=>(1-$confirm),
-                                   includesegments=>$segments);
+                                   fullscan=>$segments);
 
 $logger->warning($report);
 
