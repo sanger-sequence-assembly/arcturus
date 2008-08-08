@@ -218,6 +218,9 @@ foreach my $fasta (@reads) {
         $read->setSequence($sequence);
         $read->setBaseQuality([@quality]);
         $read->setStrand('Forward'); # unless reverse ?
+# generate a template
+        my $template = $fasta; $template =~ s/(.*)\..*/$1/;
+        $read->setTemplate($template);
 
         if ($tagtype) {
             my $tag = TagFactory->makeReadTag($tagtype,1,$taglen,
