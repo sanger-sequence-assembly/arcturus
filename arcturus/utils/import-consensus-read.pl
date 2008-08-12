@@ -22,7 +22,7 @@ my ($organism,$instance);
 
 my ($project,$assembly);
 
-my ($read,$fofn);
+my ($read,$fofn,$update,$nf);
 
 my ($tagtype, $tagcomment, $tagsequencename);
 
@@ -33,7 +33,7 @@ my ($verbose, $debug, $confirm, $preview);
 
 my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|project|p|"
-               . "read|forn|fofn|"
+               . "read|forn|fofn|update|asis|"
                . "tagcomment|tc|tagtype|tt|notag|nt|tagsequencename|tsn|"
                . "confirm|preview|verbose|debug|help|h";
 
@@ -82,6 +82,8 @@ while (my $nextword = shift @ARGV) {
     $fofn          = shift @ARGV  if ($nextword eq '-fopn');
     $fofn          = shift @ARGV  if ($nextword eq '-fofn');
     $read          = shift @ARGV  if ($nextword eq '-read');
+    $update        = 1            if ($nextword eq '-update');
+    $nf            = 1            if ($nextword eq '-asis');
 
     $confirm       = 1            if ($nextword eq '-confirm');
 
@@ -191,7 +193,7 @@ foreach my $fasta (@reads) {
 
     $fasta =~ s?.*/??; # remove leading directories
 
-    $fasta .= '.fas' unless ($read =~ /\./); # unless extension specified
+    $fasta .= '.fas' unless ($nf || $read =~ /\./); # unless extension specified
 
 # read the fasta file into a contig structure
 
@@ -249,6 +251,8 @@ elsif ($confirm) {
     my $command = "/software/arcturus/utils/read-loader "
                 . "-instance $instance -organism $organism -source CAF "
                 . "-icr -skipqualityclipcheck -caf $caf ";
+    $command   .= "-assembly $assembly " if $assembly;
+    $command   .= "-update" if $update;
     &mySystem($command);
 
     exit 0 unless @Reads;
@@ -326,7 +330,7 @@ sub getNamesFromFile {
     return [@list];
 }
 
-#-------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------
 
 sub showUsage {
     my $code = shift || 0;
@@ -353,9 +357,12 @@ sub showUsage {
         print STDERR "\n";
         print STDERR "-read\t\tread fasta file or comma-separated list of names\n";
         print STDERR "-fofn\t\tfile of read fasta filenames\n";
+        print STDERR "\t\tdefault file type assumed is .fas\n";
         print STDERR "\n";
     }
     print STDERR "OPTIONAL PARAMETERS\n";
+    print STDERR "\n";
+    print STDERR "-asis\t\tuse filenames as given (overrides default '.fas')\n";
     print STDERR "\n";
     print STDERR "-tc\t\t(tagcomment) default : 'consensus sequence'\n";
     print STDERR "-tt\t\t(tagtype)    default : 'CONS'\n";
@@ -363,9 +370,11 @@ sub showUsage {
     print STDERR "-tsn\t\t(tagsequencename) use read sequence (also) as tagsequence"
                . " with name\n";
     print STDERR "\n";
-    print STDERR "-assembly\tfor which the reads are entered\n";
+#    print STDERR "-assembly\tfor which the reads are entered\n";
     print STDERR "-project\tfor which the reads are entered (implicitly defines "
                . "assembly)\n";
+#    print STDERR "\n";
+#    print STDERR "-update\tupdate existing read info\n";
     print STDERR "\n";
     print STDERR "-preview\tlist the CAF formatted read(s)\n";
     print STDERR "-confirm\tcommit the read(s) to the database\n";
