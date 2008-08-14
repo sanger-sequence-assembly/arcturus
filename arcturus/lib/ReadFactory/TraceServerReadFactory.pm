@@ -180,8 +180,8 @@ sub getReadByName {
 	    }
 	} elsif ($srctype eq 'pcr') {
 	    my ($srclibclass,$srclibname) = split(/::/, $dnasrc->get_pcr_name());
-	    $ligation = $srclibname;
-	    $libsize = 0;
+	    $ligation = $srclibname unless defined($ligation);
+	    $libsize = 0 unless defined($libsize);
 	    $read->setPrimer("Custom");
 	    my $junk;
 	    ($template, $junk) = split(/\./, $readname);
