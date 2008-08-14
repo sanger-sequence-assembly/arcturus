@@ -7,7 +7,7 @@ import java.awt.event.*;
 import java.util.zip.Inflater;
 import java.util.zip.DataFormatException;
 
-import org.jdesktop.swingworker.SwingWorker;
+import javax.swing.SwingWorker;
 
 public class IlluminaSpeedTest {
 	private static final String HOST = "mcs1a";
