@@ -5,8 +5,6 @@ import uk.ac.sanger.arcturus.utils.CheckConsistency;
 import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.Arcturus;
 
-import org.jdesktop.swingworker.SwingWorker;
-
 import javax.swing.*;
 
 import java.sql.SQLException;
