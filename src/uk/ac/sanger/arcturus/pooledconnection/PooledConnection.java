@@ -329,59 +329,59 @@ public class PooledConnection implements Connection, PooledConnectionMBean {
 		stmt.close();
 	}
 
-	//public Array createArrayOf(String typeName, Object[] elements)
-	//		throws SQLException {
-	//	return conn.createArrayOf(typeName, elements);
-	//}
+	public Array createArrayOf(String typeName, Object[] elements)
+			throws SQLException {
+		return conn.createArrayOf(typeName, elements);
+	}
 
-	//public Blob createBlob() throws SQLException {
-	//	return conn.createBlob();
-	//}
+	public Blob createBlob() throws SQLException {
+		return conn.createBlob();
+	}
 
-	//public Clob createClob() throws SQLException {
-	//	return conn.createClob();
-	//}
+	public Clob createClob() throws SQLException {
+		return conn.createClob();
+	}
 
-	//public NClob createNClob() throws SQLException {
-	//	return conn.createNClob();
-	//}
+	public NClob createNClob() throws SQLException {
+		return conn.createNClob();
+	}
 
-	//public SQLXML createSQLXML() throws SQLException {
-	//	return conn.createSQLXML();
-	//}
+	public SQLXML createSQLXML() throws SQLException {
+		return conn.createSQLXML();
+	}
 
-	//public Struct createStruct(String typeName, Object[] attributes)
-	//		throws SQLException {
-	//	return conn.createStruct(typeName, attributes);
-	//}
+	public Struct createStruct(String typeName, Object[] attributes)
+			throws SQLException {
+		return conn.createStruct(typeName, attributes);
+	}
 
-	//public Properties getClientInfo() throws SQLException {
-	//	return conn.getClientInfo();
-	//}
+	public Properties getClientInfo() throws SQLException {
+		return conn.getClientInfo();
+	}
 
-	//public String getClientInfo(String name) throws SQLException {
-	//	return conn.getClientInfo(name);
-	//}
+	public String getClientInfo(String name) throws SQLException {
+		return conn.getClientInfo(name);
+	}
 
-	//public boolean isValid(int timeout) throws SQLException {
-	//	return conn.isValid(timeout);
-	//}
+	public boolean isValid(int timeout) throws SQLException {
+		return conn.isValid(timeout);
+	}
 
-	//public void setClientInfo(Properties properties)
-	//		throws SQLClientInfoException {
-	//	conn.setClientInfo(properties);
-	//}
+	public void setClientInfo(Properties properties)
+			throws SQLClientInfoException {
+		conn.setClientInfo(properties);
+	}
 
-	//public void setClientInfo(String name, String value)
-	//		throws SQLClientInfoException {
-	//	conn.setClientInfo(name, value);
-	//}
+	public void setClientInfo(String name, String value)
+			throws SQLClientInfoException {
+		conn.setClientInfo(name, value);
+	}
 
-	//public boolean isWrapperFor(Class<?> iface) throws SQLException {
-	//	return conn.isWrapperFor(iface);
-	//}
+	public boolean isWrapperFor(Class<?> iface) throws SQLException {
+		return conn.isWrapperFor(iface);
+	}
 
-	//public <T> T unwrap(Class<T> iface) throws SQLException {
-	//	return conn.unwrap(iface);
-	//}
+	public <T> T unwrap(Class<T> iface) throws SQLException {
+		return conn.unwrap(iface);
+	}
 }
