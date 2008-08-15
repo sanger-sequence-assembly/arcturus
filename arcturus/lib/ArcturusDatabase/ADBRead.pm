@@ -1344,7 +1344,7 @@ sub getFreeReads {
 # an assembly is specified
         if ($assembly =~ /\D/) {
 # its an assembly name
-            $query .= " from (FREEREADS join"
+            $query .= " from (FREEREADS left join"
                     . "        (READINFO left join" 
                     . "          (TEMPLATE left join"
                     . "            (LIGATION left join"
@@ -1465,7 +1465,7 @@ sub getFreeReads {
             $status = &dictionaryLookup($dictionary,$status) || 0;
 	}
         push @constraint, "status = $status";
-        $query .= " join READINFO using (read_id)";
+        $query .= " join READINFO using (read_id)" unless ($query =~ /READINFO/);
     }
 
 # add constraints
@@ -1493,6 +1493,34 @@ sub getFreeReads {
     }
 
     $sth->finish();
+
+# now add the reads in single-read contigs 
+
+    unless ($options{nosingleton}) {
+# do a straight join to get either read_id or readname 
+        my $join = "on (READINFO.readname = CURRENTCONTIGS.gap4name)";
+
+        if ($query =~ /join/) {
+# replace the FREEREADS/READINFO join by a the new one
+            $query =~ s/FREEREADS/CURRENTCONTIGS/g;
+            $query =~ s/using\s*\(read\_id\)/$join/;
+        }
+        else {
+            $query  = "select $item from READINFO join CURRENTCONTIGS $join";
+	}
+# add the single-read contig condition
+        $query .= ($query =~ /where/) ? " and" : " where";
+        $query .= " CURRENTCONTIGS.nreads = 1";
+
+        my $sth = $dbh->prepare_cached($query);
+
+        $sth->execute() || &queryFailed($query);
+
+        while (my ($readitem) = $sth->fetchrow_array()) {
+	    push @{$readitems}, $readitem;
+        }
+        $sth->finish();
+    }
 
     return $readitems;
 }
