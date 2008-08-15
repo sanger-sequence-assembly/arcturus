@@ -314,7 +314,10 @@ else {
 
 $logger->info("Retrieving ".scalar(@$readids)." Reads");
 
-undef @$readids unless ($CAF || $FAS); # else no export
+unless ($CAF || $FAS) {
+    $logger->warning("to export ".scalar(@$readids)." reads, specify output file");
+    undef @$readids unless ($CAF || $FAS);
+}
 
 my $discarded = 0;
 my $excluded  = 0;
