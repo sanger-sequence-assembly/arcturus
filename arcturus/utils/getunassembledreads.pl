@@ -17,12 +17,16 @@ use DBI;
 my $instance;
 my $organism;
 my $assembly;
+my $ligation;
+my $isligationname;
+my $complement;
 my $outputFileName;
 my $selectmethod;
 my $aspedbefore;
 my $aspedafter;
 my $nosingleton;
 my $blocksize = 10000;
+my $limit;
 my $mask;
 
 my $number;
@@ -44,12 +48,13 @@ my $loglevel;           # default log warnings and errors only
 my $debug;
 my $test;
 
-my $validKeys  = "organism|o|instance|i|assembly|a|"
+my $validKeys  = "organism|o|instance|i|"
+               . "assembly|a|ligation|l|ligationname|ln|ligationcomplement|lc|"
                . "caf|aspedbefore|ab|aspedafter|aa|"
                . "nosingleton|ns|blocksize|bs|selectmethod|sm|namelike|nl|"
                . "namenotlike|nnl|excludelist|el|mask|tags|all|fasta|nofile|"
                . "clipmethod|cm|threshold|th|minimumqualityrange|mqr|"
-               . "status|nostatus|"
+               . "status|nostatus|limit|"
                . "test|info|verbose|debug|log|help|h";
 
 
@@ -71,6 +76,11 @@ while (my $nextword = shift @ARGV) {
         $organism     = shift @ARGV;
     }
 
+    $selectmethod     = shift @ARGV  if ($nextword eq '-selectmethod');
+    $selectmethod     = shift @ARGV  if ($nextword eq '-sm');
+
+# selection on name or date
+
     $aspedbefore      = shift @ARGV  if ($nextword eq '-aspedbefore');
     $aspedbefore      = shift @ARGV  if ($nextword eq '-ab');
  
@@ -86,11 +96,23 @@ while (my $nextword = shift @ARGV) {
     $excludelist      = shift @ARGV  if ($nextword eq '-excludelist');
     $excludelist      = shift @ARGV  if ($nextword eq '-el');
 
-    $selectmethod     = shift @ARGV  if ($nextword eq '-selectmethod');
-    $selectmethod     = shift @ARGV  if ($nextword eq '-sm');
+# selection on assembly 
 
-    if ($nextword eq '-assembly' || $nextword eq '-a') {
+    if ($nextword eq  '-a'  ||  $nextword eq '-assembly') {
         $assembly     = shift @ARGV;
+    }
+
+    if ($nextword eq  '-l'  ||  $nextword eq '-ligation') {
+        $ligation       = shift @ARGV;
+    }
+
+    if ($nextword eq '-ln'  ||  $nextword eq '-ligationname') {
+        $ligation       = shift @ARGV;
+	$isligationname = 1;
+    }
+
+    if ($nextword eq '-lc'  ||  $nextword eq '-ligationcomplement') {
+        $complement     = 1;
     }
 
     if (defined($fasta) && ($nextword eq '-caf' || $nextword eq '-fasta')) {
@@ -122,6 +144,8 @@ while (my $nextword = shift @ARGV) {
 
     $status           = 0            if ($nextword eq '-nostatus');
     $status           = shift @ARGV  if ($nextword eq '-status');
+
+    $limit            = shift @ARGV  if ($nextword eq '-limit');
 
     $addtag           = 1            if ($nextword eq '-tags');
 
@@ -219,14 +243,19 @@ if ($mask && $outputFileName) {
 }
 
 my %options;
-$options{nosingleton}  = 1 if $nosingleton;
-$options{aspedbefore}  = $aspedbefore if $aspedbefore;
-$options{aspedafter}   = $aspedafter  if $aspedafter;
-$options{status}       = $status      if defined($status);
+$options{nosingleton}  = 1             if $nosingleton;
+$options{aspedbefore}  = $aspedbefore  if $aspedbefore;
+$options{aspedafter}   = $aspedafter   if $aspedafter;
+$options{status}       = $status       if defined($status);
+$options{limit}        = $limit        if ($limit && $limit > 0);
 # assembly info is accessed via the CLONE table
-$options{assembly_id}  = $assembly    if ($assembly && $assembly !~ /\D/);
-$options{assemblyname} = $assembly    if ($assembly && $assembly =~ /\D/);
-   
+$options{assembly}     = $assembly     if $assembly;
+# ligation info; name can be expliticly defined
+if ($ligation) {
+    $options{ligation}     = $ligation unless $isligationname;
+    $options{ligationname} = $ligation     if $isligationname;
+    $options{complement}   = 1             if $complement;
+}
 
 if (defined($selectmethod)) {
     $options{method} = $selectmethod;
@@ -269,83 +298,15 @@ if ($number) {
 else {
 # standard mode
     $options{test} = 1 if $test;
+    $logger->monitor('getIDsForUnassembledReads',timing=>1)   if $test;
     $readids = $adb->getIDsForUnassembledReads(%options);
+    $logger->monitor('getIDsForUnassembledReads',timing=>1)   if $test;
+    $logger->info("found ".scalar(@$readids)." reads");
 
     if ($test && $test == 2) {
-        $logger->info("found ".scalar(@$readids)." reads");
         $logger->info("testing individual reads");
-        @$readids = sort {$a <=> $b} @$readids;
-# assembled reads ?
-        my $notfree = 0;
-        foreach my $readid (@$readids) {
-            my $isfree = $adb->isUnassembledRead('read_id',$readid);
-            next if $isfree;
-            $logger->info("read $readid is not free");
-            $notfree++;
-	}
-        $logger->warning("$notfree assembled reads found") if $notfree;
-# multiple read IDs?
-        $logger->info("testing for duplicates");
-        for (my $i = 1 ; $i < scalar(@$readids) ; $i++) {
-            next unless ($readids->[$i] == $readids->[$i-1]);
-            $logger->error("duplicate read ID $readids->[$i]");
-	}
-# testing against FREEREADS table
-        $logger->info("testing against FREEREADS view");
-        my $freereads = $adb->getFreeReads('read_id');
-        $logger->info("found ".scalar(@$freereads)." reads");
-        my $inventory = {};
-        foreach my $readid (@$readids) {
-            $inventory->{$readid} = [] unless $inventory->{$readid};
-            $inventory->{$readid}->[0] = 1;
-        }
-        foreach my $readid (@$freereads) {
-            $inventory->{$readid} = [] unless $inventory->{$readid};
-            $inventory->{$readid}->[1] = 1;
-        }
-        my $stragglers = [];
-        foreach my $readid (sort {$a <=> $b} keys %$inventory) {
-            my $occurs = $inventory->{$readid};
-            next if ($occurs->[0] && $occurs->[1]);
-            $logger->warning("read $readid occurs in U but not in F") if $occurs->[0]; 
-            $logger->info("read $readid occurs in F but not in U") if $occurs->[1];
-            push @$stragglers,$readid;
-	}
-        if (@$stragglers) {
-            my $notfree = 0;
-            $logger->info("testing ".scalar(@$stragglers)." discordant reads");
-            foreach my $readid (@$stragglers) {
-                my $isfree = $adb->isUnassembledRead('read_id',$readid);
-                next if $isfree;
-                $logger->info("read $readid is not free");
-                $notfree++;
-            }
-            $logger->warning("$notfree assembled reads found") if $notfree;
-            $logger->warning("all reads are free reads")  unless  $notfree;
-# do some tests on the temporary tables
-            $logger->info("testing TEMPORARY tables");
-            unless ($selectmethod && $selectmethod == 2) {
-                $options{method} = 'intemporarytable';
-                $adb->getIDsForUnassembledReads(%options);
-	    }
-# test the temporaryu tables
-            my $dbh = $adb->getConnection();
-            foreach my $table ('CURCTG','CURSEQ','CURREAD','FREEREAD') {
-                my $query = "select count(*) from $table";
-                my $sth = $dbh->prepare($query);
-		$sth->execute() || $logger->error("Failed query '$query': ");
-                $logger->error("MySQL error: $DBI::err ($DBI::errstr)") if ($DBI::err);
-                my $count = $sth->fetchrow_array() || 'unknown number of';
-		$logger->info("temporary table $table has $count rows");
-                $sth->finish();
-	    }
-	}
-        for (my $i = 1 ; $i <= 10 ; $i++) {
-	    my $query = $adb->logQuery($i);
-	    next unless $query;
-            $logger->warning("query $i:\n$query");
-	}
 
+        &testsection($readids);
         $adb->disconnect();
 	exit 0;
     }
@@ -459,6 +420,88 @@ sub getNamesFromFile {
 }
 
 #------------------------------------------------------------------------
+
+sub testsection {
+    my $readids = shift;
+
+    @$readids = sort {$a <=> $b} @$readids;
+# assembled reads ?
+    my $notfree = 0;
+    foreach my $readid (@$readids) {
+        my $isfree = $adb->isUnassembledRead('read_id',$readid);
+        next if $isfree;
+        $logger->info("read $readid is not free");
+        $notfree++;
+    }
+    $logger->warning("$notfree assembled reads found") if $notfree;
+# multiple read IDs?
+    $logger->info("testing for duplicates");
+    for (my $i = 1 ; $i < scalar(@$readids) ; $i++) {
+        next unless ($readids->[$i] == $readids->[$i-1]);
+        $logger->error("duplicate read ID $readids->[$i]");
+    }
+# testing against FREEREADS table
+    $logger->info("testing against FREEREADS view");
+    $logger->monitor('getIDsOfFreeReads',timing=>1);
+    my $freereads = $adb->getIDsOfFreeReads(%options);
+    $logger->monitor('getIDsOfFreeReads',timing=>1);
+    $logger->info("found ".scalar(@$freereads)." reads");
+ 
+    my $inventory = {};
+    foreach my $readid (@$readids) {
+        $inventory->{$readid} = [] unless $inventory->{$readid};
+        $inventory->{$readid}->[0] = 1;
+    }
+    foreach my $readid (@$freereads) {
+        $inventory->{$readid} = [] unless $inventory->{$readid};
+        $inventory->{$readid}->[1] = 1;
+    }
+
+    my $stragglers = [];
+    foreach my $readid (sort {$a <=> $b} keys %$inventory) {
+        my $occurs = $inventory->{$readid};
+        next if ($occurs->[0] && $occurs->[1]);
+        $logger->warning("read $readid occurs in U but not in F") if $occurs->[0]; 
+        $logger->info("read $readid occurs in F but not in U") if $occurs->[1];
+        push @$stragglers,$readid;
+    }
+    if (@$stragglers) {
+        my $notfree = 0;
+        $logger->info("testing ".scalar(@$stragglers)." discordant reads");
+        foreach my $readid (@$stragglers) {
+            my $isfree = $adb->isUnassembledRead('read_id',$readid);
+            next if $isfree;
+            $logger->info("read $readid is not free");
+            $notfree++;
+        }
+        $logger->warning("$notfree assembled reads found") if $notfree;
+        $logger->warning("all reads are free reads")  unless  $notfree;
+# do some tests on the temporary tables
+        $logger->info("testing TEMPORARY tables");
+        unless ($selectmethod && $selectmethod == 2) {
+            $options{method} = 'intemporarytable';
+            $adb->getIDsForUnassembledReads(%options);
+        }
+# test the temporaryu tables
+        my $dbh = $adb->getConnection();
+        foreach my $table ('CURCTG','CURSEQ','CURREAD','FREEREADS') {
+            my $query = "select count(*) from $table";
+            my $sth = $dbh->prepare($query);
+	    $sth->execute() || $logger->error("Failed query '$query': ");
+            $logger->error("MySQL error: $DBI::err ($DBI::errstr)") if ($DBI::err);
+            my $count = $sth->fetchrow_array() || 'unknown number of';
+	    $logger->info("temporary table $table has $count rows");
+            $sth->finish();
+        }
+    }
+    for (my $i = 1 ; $i <= 10 ; $i++) {
+	 my $query = $adb->logQuery($i);
+         next unless $query;
+         $logger->warning("query $i:\n$query");
+    }
+}
+
+#------------------------------------------------------------------------
 # HELP
 #------------------------------------------------------------------------
 
@@ -484,20 +527,27 @@ sub showUsage {
     }
     print STDOUT "OPTIONAL PARAMETERS:\n";
     print STDOUT "\n";
-    print STDOUT "-selectmethod\t1: for using sub queries\n"
-               . "\t\t2: for using temporary tables\n"
-               . "\t\t0: for a blocked search\n"
-               . "\t\tdefault selection of either method 1 or 2\n";
-    print STDOUT "-nosingleton\tdon't include reads from single-read".
-                 " contigs (default include)\n";
+    print STDOUT "-sm\t\t(selectmethod)\t1: for using sub queries\n"
+               . "\t\t\t\t2: for using temporary tables\n"
+               . "\t\t\t\t0: for a blocked search (default)\n";
+#               . "\t\tdefault selection of either method 1 or 2\n";
+    print STDOUT "-ns\t\t(nosingleton) don't include reads from single-read".
+                 " contigs\n\t\t> default include\n";
     print STDOUT "\n";
-    print STDOUT "-aspedafter\tAsped date lower bound (inclusive)\n";
-    print STDOUT "-aspedbefore\tAsped date upper bound (inclusive)\n";
-    print STDOUT "-namelike\t(include) readname with wildcard or a pattern\n";
-    print STDOUT "-namenotlike\t(exclude) readname with wildcard or a pattern\n";
+    print STDOUT "-aa\t\t(aspedafter) date lower bound (inclusive)\n";
+    print STDOUT "-ab\t\t(aspedbefore) date upper bound (exclusive, strictly before)\n";
+    print STDOUT "-nl\t\t(namelike) select on readname with wildcard or a pattern\n";
+    print STDOUT "-nnl\t\t(namenotlike) exclude readnames with wildcard or a pattern\n";
     print STDOUT "\n";
-    print STDOUT "-nostatus\tdo not select on read status; default select 'PASS'\n";
-    print STDOUT "-status\t\tspecify status explicitly\n";
+    print STDOUT "-a\t\t(assembly) ID or name (selected via clone info)\n";
+    print STDOUT "-l\t\t(ligation) comma-separated list of IDs or names of ligations\n";
+    print STDOUT "-ln\t\t(ligationname) as for ligation with values treated as names only\n";
+    print STDOUT "\t\t> names can contain wildcards ('_','%','*'), also if in a list\n";
+    print STDOUT "\t\t> default, reads are selected having the specified ligations\n";
+    print STDOUT "-lc\t\t(ligationcomplement) to exclude all reads with ligations listed\n";
+    print STDOUT "\n";
+    print STDOUT "-nostatus\t(no value) do not select on read status; default select 'PASS'\n";
+    print STDOUT "-status\t\tspecify status explicitly (e.g. QUAL,SVEC,CONT)\n";
     print STDOUT "\n";
     print STDOUT "-all\t\toverrides all other selection (except excludelist &\n";
     print STDOUT "\t\tstatus); exports reads 1 to number provided \n";
@@ -505,13 +555,15 @@ sub showUsage {
     print STDOUT "-excludelist\tfile of readnames to be excluded\n";
     print STDOUT "\n";
     print STDOUT "-blocksize\t(default 50000) for blocked execution\n";
-# print STDOUT "-assembly\tassembly ID or name\n";
     print STDOUT "\n";
-    print STDOUT "-clipmethod\tOn the fly quality clipping using method specified\n";
+    print STDOUT "\t\ton-the-fly quality clipping if any of cm, th or mqr defined\n";
+    print STDOUT "-cm\t\t(clipmethod) On the fly quality clipping using method specified\n";
+    print STDOUT "\t\t> default (and only available as yet) asp quality clipping\n";
     print STDOUT "-mask\t\tSymbol replacing low quality data (recommended: 'x')\n";
-    print STDOUT "\t\t the masking includes screening for vector sequence\n";
-    print STDOUT "-threshold\tQuality clipping threshold level\n";
-    print STDOUT "-minimumqualityrange\tMinimum high quality length\n";
+    print STDOUT "\t\t> the masking includes screening for (possible) vector sequence\n";
+    print STDOUT "-th\t\t(threshold) quality clipping threshold level\n";
+    print STDOUT "-mqr\t\t(minimumqualityrange) reject reads if length of clipped sequence\n";
+    print STDOUT "\t\tis shorter than minimum specified\n";
     print STDOUT "\n";
     print STDOUT "-info\t\t(no value) for some progress info\n";
     print STDERR "\n";
