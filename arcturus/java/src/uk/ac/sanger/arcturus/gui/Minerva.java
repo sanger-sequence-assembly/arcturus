@@ -16,9 +16,10 @@ import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.Organism;
 import uk.ac.sanger.arcturus.database.*;
 
-import uk.ac.sanger.arcturus.gui.organismtable.OrganismTablePanel;
 import uk.ac.sanger.arcturus.gui.organismtree.OrganismTreePanel;
 import uk.ac.sanger.arcturus.people.PeopleManager;
+
+import uk.ac.sanger.arcturus.utils.CheckVersion;
 
 /**
  * This class is the main class for all GUI applications.
@@ -48,8 +49,6 @@ public class Minerva {
 				myprops.load(is);
 
 				is.close();
-
-				//buildtime = myprops.getProperty("BuildTime");
 			}
 		} catch (IOException ioe) {
 			// Do nothing
@@ -89,9 +88,9 @@ public class Minerva {
 
 		try {
 			String[] inames = instances.split(",");
-			
+
 			ai = new ArcturusInstance[inames.length];
-			
+
 			for (int i = 0; i < inames.length; i++)
 				ai[i] = ArcturusInstance.getInstance(inames[i]);
 
@@ -127,36 +126,37 @@ public class Minerva {
 			caption += " [" + buildtime + "]";
 
 		if (PeopleManager.isMasquerading())
-			caption += " [Masquerading as  " + PeopleManager.findMe().getName() + "]";
+			caption += " [Masquerading as  " + PeopleManager.findMe().getName()
+					+ "]";
 
 		MinervaFrame frame = new MinervaFrame(this, caption, name);
-		
+
 		registerFrame(frame);
-		
+
 		return frame;
 	}
-	
+
 	public void registerFrame(MinervaFrame frame) {
 		String name = frame.getName();
-		frames.put(name, frame);	
+		frames.put(name, frame);
 	}
-	
+
 	public void unregisterFrame(MinervaFrame frame) {
 		String name = frame.getName();
-		
+
 		frames.remove(name);
-		
+
 		if (frames.isEmpty())
 			Minerva.exitMinerva();
 	}
 
 	public void createAndShowInstanceDisplay(ArcturusInstance ai) {
 		MinervaFrame frame = createMinervaFrame(ai.getName());
-		
+
 		ArcturusInstance[] aia = new ArcturusInstance[1];
-		
+
 		aia[0] = ai;
-		
+
 		JComponent component = createInstanceDisplay(aia);
 
 		frame.setComponent(component);
@@ -310,6 +310,21 @@ public class Minerva {
 	}
 
 	public static void main(String[] args) {
+		int major = 1;
+		int minor = 6;
+
+		if (!CheckVersion.require(major, minor)) {
+			String message = "You are running Java version "
+					+ System.getProperties().getProperty("java.version") + "\n"
+					+ "but this software requires at least version " + major + "."
+					+ minor + ".\n\nPlease upgrade your version of Java.";
+
+			JOptionPane.showMessageDialog(null, message,
+					"Please upgrade your version of Java", JOptionPane.WARNING_MESSAGE);
+			
+			System.exit(1);
+		}
+
 		Minerva minerva = Minerva.getInstance();
 		minerva.run(args);
 	}
