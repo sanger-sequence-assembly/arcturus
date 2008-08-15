@@ -290,98 +290,11 @@ sub countReadDictionaryItem {
 
 #-----------------------------------------------------------------------------
 
-sub oldgetRead { # to be DEPRECATED 
-# returns a Read instance with (meta data only) for input read IDs 
-# parameter usage: read_id=>ID or readname=>NAME, version=>VERSION
-    my $this = shift;
-
-# compose the query
-
-    $this->defineReadMetaData(); # unless $this->{read_attributes};
-
-    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,
-                 $this->{read_attributes},$this->{template_addons}
-                  from READINFO,SEQ2READ,TEMPLATE 
-                 where READINFO.read_id = SEQ2READ.read_id
-                   and READINFO.template_id = TEMPLATE.template_id ";
-
-    my $nextword;
-    my $readitem;
-    undef my $version;
-    while ($nextword = shift) {
-
-        if ($nextword eq 'seq_id') {
-            $query .= "and SEQ2READ.seq_id = ?";
-            $readitem = shift;
-        }
-        elsif ($nextword eq 'read_id') {
-            $query .= "and READINFO.read_id = ?";
-            $readitem = shift;
-            $version = 0 unless defined($version); # define default
-        }
-        elsif ($nextword eq 'readname') {
-            $query .= "and READINFO.readname like ?";
-            $readitem = shift;
-            $version = 0 unless defined($version); # define default
-        }
-        elsif ($nextword eq 'version') {
-            $version = shift;
-        }
-        else {
-            print STDERR "Invalid parameter '$nextword' for ->getRead\n";
-        }
-    }
-
-# add version specification if it is defined
-
-    $query .= " and SEQ2READ.version = $version" if defined ($version);
-
-    $query =~ s/like/=/ unless ($readitem =~ /\%/);
-
-    my $dbh = $this->getConnection();
-
-    my $sth = $dbh->prepare_cached($query);
-
-my $logger = $this->verifyLogger('getRead');
-$logger->info("getRead: $query  ($readitem)");
-
-
-    $sth->execute($readitem) || &queryFailed($query,$readitem);
-
-    my ($read_id, $seq_id, $db_version, @attributes) = $sth->fetchrow_array();
-
-    $sth->finish();
-
-    if (defined($read_id)) {
-	my $read = new Read();
-
-        $read->setReadID($read_id);
-
-        $read->setSequenceID($seq_id);
-
-        $read->setVersion($db_version);
-
-        $this->addMetaDataForRead($read, @attributes);
-
-        $this->addSequenceMetaDataForRead($read);
-
-	$read->setArcturusDatabase($this);
-
-	return $read;
-    } 
-    else {
-#	print "no results for query:\n$query\ndata: $readitem\n";
-	return undef;
-    }
-}
-
 sub getRead {
 # returns a Read instance with (meta data only) for input read IDs 
 # parameter usage: read_id=>ID or readname=>NAME, version=>VERSION
     my $this = shift;
     my %options = @_;
-
-# return $this->oldgetRead(@_);
 
 # compose the query; the union construct allows for undefined template 
 
@@ -394,6 +307,23 @@ sub getRead {
               . " where READINFO.read_id = SEQ2READ.read_id"
               . "   and SEQ2READ.seq_id = SEQUENCE.seq_id"
               . "   and READINFO.template_id = TEMPLATE.template_id";
+
+#    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+#              . "       SEQUENCE.seq_hash,SEQUENCE.qual_hash,"
+#              . "       $this->{read_attributes},$this->{template_addons}"
+#              . " from (READINFO left join" 
+#              . "        (SEQ2READ left join"
+#              . "          (SEQUENCE left join TEMPLATE)"
+#              . "           using (template_id))"
+#              . "         using (seq_id))"
+#              . "       using (read_id))"
+
+    if (my $assembly = $options{assembly}) {
+        my $subselect = "select ligation_id"
+                      . "  from LIGATION join CLONE using (clone_id)"
+                      . " where CLONE.assembly_id = $assembly";
+        $query .= " and TEMPLATE.ligation_id in ($subselect)";
+    } 
 
     my $union = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
               . "       SEQUENCE.seq_hash,SEQUENCE.qual_hash,"
@@ -989,14 +919,102 @@ sub getReadsForContig {
 
     $sth->finish();
 
-# test reads found against meta data
+# test reads found against meta data; produce error message if none found
 
-    unless (@reads) {
+#    if (!@reads && $options{nounion}) {
+# try to recover by invoking the union query to catch reads without template
+#        $options{nounion} = 0;
+#        return $this->getReadsForContig($contig,%options);
+#    }
+#    elsif (!@reads) {
+     unless (!@reads) {
+# this is serious and a sign of corrupted or missing read info
         my $logger = $this->verifyLogger('getReadsForContig');
         $logger->error("No reads for contig $cid, called from " .
                        ($options{caller} || "undefined"));
         $logger->error("options: @_");
         $logger->error("$query\n@bindvalues");
+        return;
+    }
+
+# add the trace archive reference
+
+    $this->getTraceArchiveIdentifierForReads(\@reads) unless $options{notrace};
+
+# add the sequence (in bulk) unless delayed loading is used
+
+    $this->getSequenceForReads(\@reads) unless $options{nosequence};
+
+# add read tags (in bulk)
+
+    $this->getTagsForReads(\@reads) unless $options{notags};
+
+# and add to the contig
+
+    $contig->addRead([@reads]);
+}
+
+sub newgetReadsForContig {
+# puts an array of (complete, for export) Read instances for the given contig
+    my $this = shift;
+    my $contig = shift; # Contig instance
+    my %options = @_; # notags =>  , nosequence => , caller (diagnostic)
+
+    &verifyParameter($contig,'getReadsForContig','Contig');
+
+    return if $contig->hasReads(); # only 'empty' instance allowed
+ 
+    my $cid = $contig->getContigID();
+
+    my $dbh = $this->getConnection();
+
+# this query returns also entries when TEMPLATE info is undefined
+
+    my $query = "select READINFO.read_id,SEQ2READ.seq_id,SEQ2READ.version,"
+              . "       $this->{read_attributes},$this->{template_addons}"
+              . " from (MAPPING left join"
+              . "        (SEQ2READ left join"
+              . "          (READINFO left join TEMPLATE"
+              . "           using (template_id)"
+              . "         using (read_id))"
+              . "       using (seq_id))"
+              . " where contig_id = ?";
+
+    my $sth = $dbh->prepare_cached($query);
+
+    my $nr = $sth->execute($cid) || &queryFailed($query,$cid);
+
+    my @reads;
+
+    while (my ($read_id, $seq_id, $version, @attributes) = $sth->fetchrow_array()) {
+	my $read = new Read();
+
+        $read->setReadID($read_id);
+
+        $read->setSequenceID($seq_id);
+
+        $read->setVersion($version);
+
+        $this->addMetaDataForRead($read,@attributes);
+
+        $this->addSequenceMetaDataForRead($read);
+
+	$read->setArcturusDatabase($this);
+
+        push @reads, $read;
+    }
+
+    $sth->finish();
+
+# test reads found against meta data; produce error message if none found
+
+    unless (@reads) {
+# this is serious and a sign of corrupted contig info
+        my $logger = $this->verifyLogger('getReadsForContig');
+        $logger->error("No reads for contig $cid, called from " .
+                       ($options{caller} || "undefined"));
+        $logger->error("options: @_");
+        $logger->error("$query\n$cid");
         return;
     }
 
@@ -1048,32 +1066,30 @@ sub getUnassembledReads {
 
     &verifyPrivate($dbh,'getUnassembledReads');
 
+    if ($options{assembly} || $options{ligation} || $options{ligationname}) {
+        return &getFreeReads($dbh,$item,%options);
+    }
+
 # options: method (standard,subquery,temporarytables)
-#          after  / aspedafter  (after and equal!)
-#          before / aspedbefore (strictly before)
+#          aspedafter  (after and equal!)
+#          aspedbefore (strictly before)
 #          nosingleton : do not include reads in singleton contigs
 #          namelike / namenotlike / nameregexp / namenotregexp
 #          status : add selection on status, otherwise only 'PASS'
 
-# process possible date selection option(s)
-
     my @constraint;
 
-    if ($options{after}) {
-        push @constraint, "asped >= '$options{after}'";
-    }
-    elsif ($options{aspedafter}) {
+# possible date selection option(s)
+
+    if ($options{aspedafter}) {
         push @constraint, "asped >= '$options{aspedafter}'";
     }
 
-    if ($options{before}) {
-        push @constraint, "asped < '$options{before}'";
-    }
-    elsif ($options{aspedbefore}) {
+    if ($options{aspedbefore}) {
         push @constraint, "asped < '$options{aspedbefore}'";
     }
 
-# process possible name selection option(s)
+# possible name selection option(s)
 
     if ($options{namelike}) {
         push @constraint, "readname like '$options{namelike}'";
@@ -1301,15 +1317,171 @@ sub getUnassembledReads {
     return $readitems; # array of readnames
 }
 
-sub getFreeReads {
+#--------- alternative using the FREEREADS view --------------------------
+
+sub getIDsOfFreeReads {
     my $this = shift;
+    return &getFreeReads($this->getConnection(),'read_id',@_);
+}
+
+sub getNamesOfFreeReads {
+    my $this = shift;
+    return &getFreeReads($this->getConnection(),'readname',@_);
+}
+
+sub getFreeReads {
+    my $dbh = shift;
     my $item = shift || 'read_id';
+    my %options = @_;
 
     return undef unless ($item eq 'read_id' || $item eq 'readname');
 
-    my $query = "select $item from FREEREADS";
+    my $query = "select $item";
 
-    my $dbh = $this->getConnection();
+# option assembly: either one name or one number specifying the assembly
+
+    if (my $assembly = $options{assembly}) {
+# an assembly is specified
+        if ($assembly =~ /\D/) {
+# its an assembly name
+            $query .= " from (FREEREADS join"
+                    . "        (READINFO left join" 
+                    . "          (TEMPLATE left join"
+                    . "            (LIGATION left join"
+                    . "              (CLONE left join ASSEMBLY"
+                    . "               using (assembly_id))"
+                    . "             using (clone_id))"
+                    . "           using (ligation_id))"
+                    . "         using (template_id))"
+                    . "       using (read_id))"
+                    . " where ASSEMBLY.name = '$assembly'";
+        }
+        else {
+# it's and assembly ID
+            $query .= " from (FREEREADS left join"
+                    . "        (READINFO left join" 
+                    . "          (TEMPLATE left join"
+                    . "            (LIGATION left join CLONE"
+                    . "             using (clone_id))"
+                    . "           using (ligation_id))"
+                    . "         using (template_id))"
+                    . "       using (read_id))"
+                    . " where CLONE.assembly_id = $assembly";
+	}
+    }
+
+# option ligation    : either a name or a number specifying the ligation
+#                      or a comma-separated list of these (all of same kind)
+# option ligationname: a (comma-separated list of) name(s)
+# option complement  : to NOT have ligations as specified
+#        wildcards   : name(s) can contain wild cards (_,%,*)
+
+    if ($options{ligation} || $options{ligationname}) {
+        my $ligation = $options{ligationname} || $options{ligation};
+# ligation(s) specified
+        $ligation =~ s/\*/%/g;  
+        my $string = $ligation;
+        $string =~ s/[^\w%]//g; # remove clutter
+        my $domain = $options{complement} ? 'not in' : 'in';
+        $domain =~ s/in/like/ if ($string =~ /_|\%/);  
+        if ($string =~ /\D/ || $options{ligationname}) {
+# it's a (list of) ligation name(s); for list, replace separator
+            $query .= " from (FREEREADS left join"
+                    . "        (READINFO left join" 
+                    . "          (TEMPLATE left join LIGATION"
+                    . "           using (ligation_id))"
+                    . "         using (template_id))"
+                    . "       using (read_id))" unless $options{assembly};
+            if ($domain =~ /like/) { # the name(s) contain wildcards
+# generate OR or AND constructs for resp. 'like' and 'not like'
+                my @ligations = split /[^\w%]+/,$ligation;
+                my $or_and = ($domain =~ /not/) ? 'and' : 'or';
+                my $ligationselect = ''; 
+                foreach my $ligation (@ligations) {
+                    $ligationselect .= " $or_and" if $ligationselect;
+                    $ligationselect .= " LIGATION.name $domain '$ligation'";
+		}
+                $query .= " and"       if ($query =~ /where/);
+                $query .= " where" unless ($query =~ /where/);
+                $query .= " $ligationselect" unless ($ligationselect =~ /\sor\s/);
+                $query .= " ($ligationselect)"   if ($ligationselect =~ /\sor\s/);
+            }
+            else { # generated a comma seperated list of names
+                $ligation =~ s/\W+/\'\,\'/g;
+                $query .= " where LIGATION.name $domain ('$ligation')";
+	    }
+        }
+        else {
+# it's a (list of) ligation id(s)
+            $ligation =~ s/\W+/\,/g; # replace separator
+            $query .= " from (FREEREADS left join"
+                   . "         (READINFO left join TEMPLATE" 
+                    . "         using (template_id))"
+                    . "       using (read_id))" unless $options{assembly};
+            $query .= " where TEMPLATE.ligation_id $domain ($ligation)";
+	}
+    }
+
+    $query = "select $item from FREEREADS" unless ($query =~ /FREEREADS/);
+
+# here space for asped/namelike/status/limit selection
+
+    my @constraint;
+
+# possible date selection option(s)
+
+    if ($options{aspedafter}) {
+        push @constraint, "asped >= '$options{aspedafter}'";
+    }
+
+    if ($options{aspedbefore}) {
+        push @constraint, "asped < '$options{aspedbefore}'";
+    }
+
+# possible name selection option(s)
+
+    if ($options{namelike}) {
+        push @constraint, "readname like '$options{namelike}'";
+    }
+    if ($options{namenotlike}) {
+        push @constraint, "readname not like '$options{namenotlike}'";
+    }
+    if ($options{nameregexp}) {
+        push @constraint, "readname regexp '$options{nameregexp}'";
+    }
+    if ($options{namenotregexp}) {
+        push @constraint, "readname not regexp '$options{namenotregexp}'";
+    }
+
+# add status selection, specify name or id
+
+    my $status = 'PASS'; # default setting
+    $status = $options{status} if defined($options{status}); # status by name or id
+    if ($status && $status =~ /\S/) { # define status=>0 to skip
+# test for a name, if so translate into status ID
+        if ($status =~ /\D/) {
+# identify the status in the dictionary; if not, assign 0 to status_id
+            my $dictionary = &createDictionary($dbh,"STATUS","name","status_id");
+            $status = &dictionaryLookup($dictionary,$status) || 0;
+	}
+        push @constraint, "status = $status";
+        $query .= " join READINFO using (read_id)";
+    }
+
+# add constraints
+
+    if (@constraint) {
+        $query .= ($query =~ /where/) ? " and " : " where ";
+        $query .= " where " unless ($query =~ /where/);
+        $query .=  join (" and ", @constraint);
+    }
+
+# add limit if specified
+
+    my $limit = $options{limit};
+    $query .= " limit $limit" if $limit;
+
+# execute ..... print STDOUT "$query\n";
  
     my $sth = $dbh->prepare($query);
 
