@@ -927,7 +927,7 @@ sub getReadsForContig {
 #        return $this->getReadsForContig($contig,%options);
 #    }
 #    elsif (!@reads) {
-     unless (!@reads) {
+     unless (@reads) {
 # this is serious and a sign of corrupted or missing read info
         my $logger = $this->verifyLogger('getReadsForContig');
         $logger->error("No reads for contig $cid, called from " .
