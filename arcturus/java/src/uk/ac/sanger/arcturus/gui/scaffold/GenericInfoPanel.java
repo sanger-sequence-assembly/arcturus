@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.gui.scaffold;
 
 import java.awt.*;
+
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public abstract class GenericInfoPanel extends InfoPanel {
