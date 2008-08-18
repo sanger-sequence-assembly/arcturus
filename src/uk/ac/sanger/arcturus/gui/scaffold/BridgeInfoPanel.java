@@ -83,8 +83,6 @@ public class BridgeInfoPanel extends GenericInfoPanel implements ClipboardOwner 
 		
 		String str = sb.toString();
 		
-		System.err.println("Copying to clipboard:\n" + str);
-		
 		StringSelection contents = new StringSelection(str);
 
 		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(contents,
