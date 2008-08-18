@@ -843,13 +843,15 @@ $this->defineReadMetaData(); # unless $this->{read_attributes};
     return \@reads;
 }
 
-sub getReadsForContig {
+sub oldgetReadsForContig { # TO BE DEPRECATED
 # puts an array of (complete, for export) Read instances for the given contig
     my $this = shift;
     my $contig = shift; # Contig instance
     my %options = @_; # notags =>  , nosequence => , caller (diagnostic)
 
     &verifyParameter($contig,'getReadsForContig','Contig');
+    
+#return &newgetReadsForContig ($this,$contig,@_);
 
     return if $contig->hasReads(); # only 'empty' instance allowed
  
@@ -954,7 +956,7 @@ sub getReadsForContig {
     $contig->addRead([@reads]);
 }
 
-sub newgetReadsForContig {
+sub getReadsForContig {
 # puts an array of (complete, for export) Read instances for the given contig
     my $this = shift;
     my $contig = shift; # Contig instance
@@ -975,7 +977,7 @@ sub newgetReadsForContig {
               . " from (MAPPING left join"
               . "        (SEQ2READ left join"
               . "          (READINFO left join TEMPLATE"
-              . "           using (template_id)"
+              . "           using (template_id))"
               . "         using (read_id))"
               . "       using (seq_id))"
               . " where contig_id = ?";
@@ -1009,7 +1011,7 @@ sub newgetReadsForContig {
 # test reads found against meta data; produce error message if none found
 
     unless (@reads) {
-# this is serious and a sign of corrupted contig info
+# this should never occure; serious and a sign of corrupted contig info
         my $logger = $this->verifyLogger('getReadsForContig');
         $logger->error("No reads for contig $cid, called from " .
                        ($options{caller} || "undefined"));
