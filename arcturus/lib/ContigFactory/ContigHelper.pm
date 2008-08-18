@@ -2338,6 +2338,9 @@ sub linkContigToParents {
 
     my $parents = $contig->getParentContigs();
 
+my $logger = &verifyLogger('linkContigToParents');
+$logger->info("linkContigToParents: parents : @$parents");
+
     my $report = '';
     foreach my $parent (@$parents) {
         $parent->getMappings(1); # delayed loading if no mappings
