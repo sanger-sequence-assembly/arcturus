@@ -1,5 +1,0 @@
-#!/bin/csh -f
-
-set arcturus=`dirname $0`
-
-exec ${arcturus}/../java/scripts/calculateconsensus $*

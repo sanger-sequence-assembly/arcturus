@@ -1,6 +1,0 @@
-#!/bin/csh -f
-
-echo You should not be using this version of the script.
-echo Please use the version in /software/arcturus instead.
-
-exit 1
