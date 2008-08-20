@@ -172,7 +172,7 @@ else {
                 my $projectname = $project->getProjectName();
                 $logger->warning("Project $projectname is locked by $lockowner");
                 $adb->disconnect();
-                exit 1; # project is already locked by intended user
+                exit 0; # project is already locked by intended user
 	    }
 	}
 
