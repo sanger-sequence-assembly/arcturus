@@ -98,8 +98,10 @@ public class ContigTable extends SortableTable {
 		
 			for (int i = 0; i < indices.length; i++) {
 				Contig contig = (Contig)ctm.elementAt(indices[i]);
-				contig.update(ArcturusDatabase.CONTIG_CONSENSUS);
-				byte[] dna = contig.getDNA();
+				contig.update(ArcturusDatabase.CONTIG_CONSENSUS);			
+				
+				byte[] dna = depad(contig.getDNA());
+				
 				if (dna != null) {
 					if (i > 0)
 						ps.print('\n');
@@ -114,11 +116,34 @@ public class ContigTable extends SortableTable {
 				}
 			}
 			
-			ps.close();
-		
+			ps.close();		
 		}
 		catch (Exception e) {
 			Arcturus.logWarning(e);
 		}
+	}
+	
+	private byte[] depad(byte[] input) {
+		if (input == null)
+			return null;
+		
+		int pads = 0;
+		
+		for (int i = 0; i < input.length; i++)
+			if (input[i] == '*')
+				pads++;
+		
+		if (pads == 0)
+			return input;
+		
+		byte[] output = new byte[input.length - pads];
+		
+		int j = 0;
+		
+		for (int i = 0; i < input.length; i++)
+			if (input[i] != '*')
+				output[j++] = input[i];
+		
+		return output;
 	}
 }
