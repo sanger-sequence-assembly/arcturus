@@ -6,8 +6,6 @@ use ArcturusDatabase;
 
 use Logging;
 
-use Cwd;
-
 use Mail::Send;
 
 #----------------------------------------------------------------
@@ -261,7 +259,7 @@ $logger->special( ($m || "No")." ".$message,preskip => 1,skip => 1);
 if ($m && $address) { # mail message
     $message .= "  ($instance:$organism)";
     if ($output && $output =~ /^\.\//) {
-        my $pwd = Cwd::cwd();
+        my $pwd = `pawd`; chomp $pwd;
         $output =~ s/^\./$pwd/; # prepend to get full path name
         $message .= "\n\ndetails in log file $output";
     }

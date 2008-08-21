@@ -4,8 +4,6 @@ use strict;
 
 use ArcturusDatabase;
 
-use Cwd;
-
 # script to be run from the work directory of the project
 
 # verify mode to test the database status against the last import (version B)
@@ -123,7 +121,7 @@ $logger->info("invocation:  $invocation"); # experimental
 else {
 # status analysis: get the projects in the current directory
 
-    my $pwd = Cwd::cwd();
+    my $pwd = `pawd`; chomp $pwd;
 
     my $projects = [];
     my $msg;
@@ -172,7 +170,7 @@ sub findprojects {
     my $project = shift;
     my $subdir = shift;
 
-    my $pwd = `pwd`;
+    my $pwd = `pawd`;
 
     chomp $pwd;
 
