@@ -22,7 +22,7 @@ my ($organism,$instance);
 
 my ($project,$assembly);
 
-my ($read,$fofn,$update,$nf);
+my ($read,$fofn,$update,$nf,$noextension);
 
 my ($tagtype, $tagcomment, $tagsequencename);
 
@@ -33,7 +33,7 @@ my ($verbose, $debug, $confirm, $preview);
 
 my $validKeys  = "organism|o|instance|i|"
                . "assembly|a|project|p|"
-               . "read|forn|fofn|update|asis|"
+               . "read|forn|fofn|update|asis|noextension|ne|"
                . "tagcomment|tc|tagtype|tt|notag|nt|tagsequencename|tsn|"
                . "confirm|preview|verbose|debug|help|h";
 
@@ -60,6 +60,10 @@ while (my $nextword = shift @ARGV) {
 
     if ($nextword eq '-assembly'   || $nextword eq '-a') {
         $assembly  = shift @ARGV;
+    }
+
+    if ($nextword eq '-ne' || $nextword eq '-noextension') {
+        $noextension = 1;
     }
 
     if ($nextword eq '-tagcomment' || $nextword eq '-tc') {
@@ -211,18 +215,29 @@ foreach my $fasta (@reads) {
         my $length = length($sequence);
         my $taglen = $length;
 
-        my @quality;
-        while ($length--) {
-            push @quality,1;
-        }
+        my $quality = $contig->getBaseQuality() || [];
+        my @quality = @$quality; # copy
 
-        my $read = new Read("$fasta");
+        unless (@quality) {
+            while ($length--) {
+                push @quality,1;
+            }
+	}
+
+        my $readname = $fasta; # default
+        $readname =~ s/\.[^\.]+$// if ($readname =~ /^contig/); # consensus 
+        $readname =~ s/\.[^\.]+$// if $noextension;
+
+        my $read = new Read($readname);
         $read->setSequence($sequence);
         $read->setBaseQuality([@quality]);
         $read->setStrand('Forward'); # unless reverse ?
 # generate a template
         my $template = $fasta; $template =~ s/(.*)\..*/$1/;
         $read->setTemplate($template);
+# generate chemistry
+        $read->setPrimer("Custom_Primer");
+        $read->setChemistry("Dye_primer");
 
         if ($tagtype) {
             my $tag = TagFactory->makeReadTag($tagtype,1,$taglen,
@@ -355,9 +370,9 @@ sub showUsage {
     unless ($read && $fofn) {
         print STDERR "MANDATORY AT LEAST ONE OF PARAMETERS:\n";
         print STDERR "\n";
-        print STDERR "-read\t\tread fasta file or comma-separated list of names\n";
+        print STDERR "-read\t\tread (fasta) file or comma-separated list of names\n";
         print STDERR "-fofn\t\tfile of read fasta filenames\n";
-        print STDERR "\t\tdefault file type assumed is .fas\n";
+        print STDERR "\t\tdefault file type assumed is .fas (override with '-asis')\n";
         print STDERR "\n";
     }
     print STDERR "OPTIONAL PARAMETERS\n";
