@@ -180,7 +180,16 @@ unless (defined($rundir)) {
 
 if ($rundir && $rundir ne $pwd) {
     print STDOUT "Changing work directory from $pwd to $rundir\n";
-    chdir ($rundir);
+    unless (chdir($rundir)) {
+# failed to change directory, try to recover by staggering the change
+        unless (chdir ("/nfs/repository") && chdir($rundir)) {
+            print STDERR "|| -- Failed to change work directory : "
+                              ."possible automount failure\n";
+	    exit 1;
+	}
+	print STDOUT "chdir recovered from automount failure\n";
+    }
+ # get current directory using pawd
     $pwd = `pawd`; chomp $pwd;
     $pwd =~ s?.*automount.*/nfs?/nfs?;
     $pwd =~ s?.*automount.*/root?/nfs?;
