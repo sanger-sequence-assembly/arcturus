@@ -196,6 +196,15 @@ if ($rundir) {
 	}
         &mySystem("chmod g+w $rundir");
     }         
+#     unless (chdir($rundir)) {
+# # failed to change directory, try to recover by staggering the change
+#         unless (chdir ("/nfs/repository") && chdir($rundir)) {
+#             print STDERR "|| -- Failed to change work directory : "
+#                               ."possible automount failure\n";
+#           exit 1;
+#       }
+#       print STDOUT "chdir recovered from automount failure\n";
+#     }
     chdir ($rundir);
     $pwd = `pawd`; chomp $pwd;
 }
@@ -381,31 +390,25 @@ unless ($nolock) { # possibly completely different, what about scaffolds?
 
 unless ($scaffold || $projectname ne $gap4name || $version ne 'A') {
 
-    print STDERR "Cleaning up data base directory\n";
+    print STDERR "Cleaning up database directory\n";
 
-    &mySystem ("rm -f $depadded");
-
-    unless (-e "${gap4name}.B") {
-        exit 0 unless (-f "${gap4name}.0");
-        print STDERR "!! -- version ${gap4name}.0 kept because "
-                   . "no back-up B version found --\n";
-        exit 0;
+    if ( !( -e "${gap4name}.B")) {
+        print STDERR "!! -- version ${gap4name}.0 kept because no "
+            . "back-up B version found --\n" if (-f "${gap4name}.0");
     }
 
-    if ( -z "{gap4name}.B") {
-        exit 0 unless (-f "${gap4name}.0");
+    elsif ( -z "{gap4name}.B") {
         print STDERR "!! -- version ${gap4name}.0 kept because "
-	           . "corrupted B version found --\n";
-        exit 0;
+	    . "corrupted B version found --\n" if (-f "${gap4name}.0");
     }
 
-    if (-f "${gap4name}.0") {
+    elsif ( -f "${gap4name}.0") {
 # delete version 0 if it is older than B
         my @vstat = stat "$gap4name.0";
         my @bstat = stat "$gap4name.B";
 
         if ($vstat[9] <= $bstat[9]) {
-            print STDERR "Delete project version ${gap4name}.0\n";
+            print STDERR "Deleting project version ${gap4name}.0\n";
             &mySystem ("rmdb ${gap4name} 0");
 	}
 	else {
