@@ -6,9 +6,15 @@ import uk.ac.sanger.arcturus.data.*;
 import uk.ac.sanger.arcturus.gui.genericdisplay.*;
 
 public class ContigFeaturePainter implements FeaturePainter {
+	protected static final Color FORWARD_COLOUR = Color.blue;
+	protected static final Color REVERSE_COLOUR = Color.red;
+
+	protected static final Color FORWARD_ALT_COLOUR = Color.blue.darker();
+	protected static final Color REVERSE_ALT_COLOUR = Color.red.darker();
+	
 	protected Font font = new Font("sansserif", Font.PLAIN, 12);
 	protected boolean showContigName = false;
-	protected int seedprojectid;
+	protected int seedprojectid;	
 
 	public ContigFeaturePainter(Contig seedcontig) {
 		super();
@@ -20,8 +26,10 @@ public class ContigFeaturePainter implements FeaturePainter {
 	public void paintFeature(Graphics2D g, Feature f, Shape s) {
 		if (f instanceof ContigFeature) {
 			ContigFeature cf = (ContigFeature) f;
+			
+			boolean forward = cf.isForward();
 
-			Color fillColour = cf.isForward() ? Color.blue : Color.red;
+			Color fillColour = forward ? FORWARD_COLOUR : REVERSE_COLOUR;
 
 			Contig contig = (Contig) cf.getClientObject();
 
@@ -32,7 +40,7 @@ public class ContigFeaturePainter implements FeaturePainter {
 			Color oldcolour = g.getColor();
 
 			if (projectid != seedprojectid)
-				fillColour = fillColour.darker();
+				fillColour = forward ? FORWARD_ALT_COLOUR : REVERSE_ALT_COLOUR;
 
 			g.setColor(fillColour);
 
