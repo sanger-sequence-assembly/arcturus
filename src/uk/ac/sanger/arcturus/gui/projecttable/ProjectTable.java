@@ -42,7 +42,7 @@ public class ProjectTable extends SortableTable {
 	protected JPopupMenu popupLock = new JPopupMenu();
 	protected JPopupMenu popupOwner = new JPopupMenu();
 	
-	protected Person me = PeopleManager.findMe();
+	protected Person me;
 	protected ArcturusDatabase adb;
 	
 	protected Person[] allUsers = null;
@@ -51,6 +51,8 @@ public class ProjectTable extends SortableTable {
 		super((SortableTableModel) ptm);
 
 		adb = ptm.adb;
+		
+		me = adb.findMe();
 
 		addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent e) {
@@ -206,7 +208,7 @@ public class ProjectTable extends SortableTable {
 	}
 
 	protected void lockProjectAsMe() {
-		getModel().setValueAt(PeopleManager.findMe(), rowForPopup, columnForPopup);
+		getModel().setValueAt(me, rowForPopup, columnForPopup);
 	}
 
 	protected void lockProjectAsOwner() {

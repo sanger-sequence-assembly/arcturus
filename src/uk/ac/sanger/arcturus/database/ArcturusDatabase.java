@@ -1164,39 +1164,11 @@ public class ArcturusDatabase {
 		return userManager;
 	}
 
-	public synchronized String getRoleForUser(String username) {
-		return userManager.getRoleForUser(username);
-	}
-
-	public synchronized String getRoleForUser(Person person) {
-		return userManager.getRoleForUser(person);
-	}
-
-	public synchronized String[] getPrivilegesForUser(String username)
-			throws SQLException {
-		return userManager.getPrivilegesForUser(username);
-	}
-
-	public synchronized String[] getPrivilegesForUser(Person person)
-			throws SQLException {
-		return userManager.getPrivilegesForUser(person);
-	}
-
-	public synchronized boolean hasPrivilege(String username, String privilege)
-			throws SQLException {
-		return userManager.hasPrivilege(username, privilege);
-	}
-
-	public synchronized boolean hasPrivilege(Person person, String privilege)
-			throws SQLException {
-		return userManager.hasPrivilege(person, privilege);
-	}
-
 	public synchronized boolean hasFullPrivileges(Person person) {
 		return userManager.hasFullPrivileges(person);
 	}
 
-	public synchronized boolean hasFullPrivileges() {
+	public synchronized boolean hasFullPrivileges() throws SQLException {
 		return userManager.hasFullPrivileges();
 	}
 
@@ -1217,6 +1189,18 @@ public class ArcturusDatabase {
 		return userManager.getAllUsers(false);
 	}
 
+	public Person findUser(String username) {
+		return userManager.findUser(username);
+	}
+	
+	public Person findMe() {
+		return userManager.findMe();
+	}
+	
+	public boolean isMe(Person person) {
+		return userManager.isMe(person);
+	}
+	
 	/**
 	 * Returns the ContigTransferRequestManager belonging to this
 	 * ArcturusDatabase.

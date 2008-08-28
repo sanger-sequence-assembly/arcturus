@@ -5,16 +5,17 @@ import java.util.*;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.people.*;
+import uk.ac.sanger.arcturus.people.role.*;
 
 public class UserManager extends AbstractManager {
 	private Connection conn;
-	private PreparedStatement pstmtRoleByName, pstmtPrivilegesByName;
-	private PreparedStatement pstmtHasPrivilege;
-	private Map<String, String> roleCache = new HashMap<String, String>();
+	private PreparedStatement pstmtRoleByName;
+	private Map<String, Role> roleMap = new HashMap<String, Role>();
+	private Map<String, Person> personMap = new HashMap<String, Person>();
 
 	/**
-	 * Creates a new UserManager to provide user management services to
-	 * an ArcturusDatabase object.
+	 * Creates a new UserManager to provide user management services to an
+	 * ArcturusDatabase object.
 	 * 
 	 * @param adb
 	 *            the ArcturusDatabase object to which this manager belongs.
@@ -26,177 +27,142 @@ public class UserManager extends AbstractManager {
 		String query = "select role from USER where username = ?";
 		pstmtRoleByName = conn.prepareStatement(query);
 
-		query = "select privilege from PRIVILEGE where username = ?";
-		pstmtPrivilegesByName = conn.prepareStatement(query);
-		
-		query = "select count(*) from PRIVILEGE where username = ? and privilege = ?";
-		pstmtHasPrivilege = conn.prepareStatement(query);
+		populateRoleMap();
+
+		getAllUsers(true);
+	}
+
+	private void populateRoleMap() {
+		roleMap.put("finisher", Finisher.getInstance());
+		roleMap.put("coordinator", Coordinator.getInstance());
+		roleMap.put("team leader", TeamLeader.getInstance());
+		roleMap.put("assembler", Assembler.getInstance());
+		roleMap.put("annotator", Annotator.getInstance());
+		roleMap.put("administrator", Administrator.getInstance());
 	}
 
 	public void clearCache() {
-		roleCache.clear();
 	}
-	
+
+	protected Role getRoleForRolename(String rolename) {
+		return roleMap.get(rolename);
+	}
+
 	public Person[] getAllUsers(boolean includeNobody) throws SQLException {
 		String query = "select username,role from USER";
-		
+
 		Statement stmt = conn.createStatement();
 		ResultSet rs = stmt.executeQuery(query);
-		
+
 		Vector<Person> people = new Vector<Person>();
-		
+
 		while (rs.next()) {
 			String username = rs.getString(1);
-			String role = rs.getString(2);
-			
-			Person person = PeopleManager.findPerson(username);
-			
-			if (person != null && role != null && !role.equalsIgnoreCase("assembler") &&
-					!role.equalsIgnoreCase("annotator")) {
+			String rolename = rs.getString(2);
+
+			Person person = PeopleManager.createPerson(username);
+
+			Role role = getRoleForRolename(rolename);
+
+			person.setRole(role);
+
+			personMap.put(username, person);
+
+			boolean addToList = role != null && !(role instanceof Assembler)
+					&& !(role instanceof Annotator);
+
+			if (addToList)
 				people.add(person);
-				roleCache.put(username, role);
-			}
 		}
-		
+
 		rs.close();
 		stmt.close();
-		
+
 		if (includeNobody)
-			people.add(PeopleManager.findPerson("nobody"));
-		
-		Person[] allusers = (Person[])people.toArray(new Person[0]);
-		
+			people.add(PeopleManager.createPerson(Person.NOBODY));
+
+		Person[] allusers = (Person[]) people.toArray(new Person[0]);
+
 		Arrays.sort(allusers);
-		
+
 		return allusers;
 	}
 
-	public String getRoleForUser(String username) {
+	public Person findUser(String username) {
 		if (username == null)
 			return null;
-		
-		String role = roleCache.get(username);
-		
-		if (role != null)
-			return role;
-		
+
+		Person person = personMap.get(username);
+
+		if (person != null)
+			return person;
+
+		person = PeopleManager.createPerson(username);
+
 		try {
 			pstmtRoleByName.setString(1, username);
-		
+
 			ResultSet rs = pstmtRoleByName.executeQuery();
-		
-			role = rs.next() ? rs.getString(1): null;
-		
+
+			String rolename = rs.next() ? rs.getString(1) : null;
+
 			rs.close();
+
+			Role role = getRoleForRolename(rolename);
+
+			person.setRole(role);
+		} catch (SQLException e) {
+			Arcturus.logWarning("Error when fetching role for \"" + username + "\"", e);
 		}
-		catch (SQLException e) {
-			role = "unknown";
-			Arcturus.logSevere("Failed to get role for " + username, e);
-		}
-		
-		roleCache.put(username, role);
-		
-		return role;
+
+		personMap.put(username, person);
+
+		return person;
 	}
-	
-	public String getRoleForUser(Person person) {
-		if (person == null)
-			return null;
-		
-		return getRoleForUser(person.getUID());
+
+	public Person findMe() {
+		String myUID = PeopleManager.getEffectiveUID();
+		return findUser(myUID);
 	}
-	
-	public String[] getPrivilegesForUser(String username) throws SQLException {
-		if (username == null)
-			return null;
-		
-		pstmtPrivilegesByName.setString(1, username);
-		
-		ResultSet rs = pstmtPrivilegesByName.executeQuery();
-		
-		Vector<String> rolesv = new Vector<String>();
-		
-		while (rs.next())
-			rolesv.add(rs.getString(1));
-		
-		String[] roles = rolesv.size() > 0 ? (String[])rolesv.toArray(new String[0]) : null;
-		
-		rs.close();
-		
-		return roles;
+
+	public boolean isMe(Person person) {
+		return person != null
+				&& person.getUID().equalsIgnoreCase(PeopleManager.getEffectiveUID());
 	}
-	
-	public String[] getPrivilegesForUser(Person person) throws SQLException {
-		if (person == null)
-			return null;
-		
-		return getPrivilegesForUser(person.getUID());
-	}
-	
-	public boolean hasPrivilege(String username, String privilege) throws SQLException {
-		if (username == null || privilege == null)
-			return false;
-		
-		pstmtHasPrivilege.setString(1, username);
-		pstmtHasPrivilege.setString(2, privilege);
-		
-		ResultSet rs = pstmtHasPrivilege.executeQuery();
-		
-		boolean cando = rs.next() && rs.getInt(1) > 0;
-		
-		rs.close();
-		
-		return cando;
-	}
-	
-	public boolean hasPrivilege(Person person, String privilege) throws SQLException {
-		if (person == null || privilege == null)
-			return false;
-		
-		return hasPrivilege(person.getUID(), privilege);
-	}
-	
+
 	public boolean hasFullPrivileges(Person person) {
 		if (person == null)
 			return false;
 
-		String role = null;
-
-		role = getRoleForUser(person);
+		Role role = person.getRole();
 
 		if (role == null)
 			return false;
 
-		return role.equalsIgnoreCase("team leader")
-				|| role.equalsIgnoreCase("coordinator")
-				|| role.equalsIgnoreCase("administrator")
-				|| role.equalsIgnoreCase("superuser");
+		return role instanceof TeamLeader || role instanceof Coordinator
+				|| role instanceof Administrator;
 	}
-	
-	public boolean hasFullPrivileges() {
-		return hasFullPrivileges(PeopleManager.findMe()) && 
-				!Boolean.getBoolean("minerva.noadmin");
+
+	public boolean hasFullPrivileges() throws SQLException {
+		return hasFullPrivileges(findMe())
+				&& !Boolean.getBoolean("minerva.noadmin");
 	}
-	
+
 	public boolean isCoordinator(Person person) {
 		if (person == null)
 			return false;
 
-		String role = null;
-
-		role = getRoleForUser(person);
+		Role role = person.getRole();
 
 		if (role == null)
 			return false;
 
-		return role.equalsIgnoreCase("team leader")
-				|| role.equalsIgnoreCase("coordinator")
-				|| role.equalsIgnoreCase("administrator")
-				|| role.equalsIgnoreCase("superuser");
+		return role instanceof TeamLeader || role instanceof Coordinator
+				|| role instanceof Administrator;
 	}
-	
+
 	public boolean isCoordinator() {
-		return isCoordinator(PeopleManager.findMe()) && 
-			!Boolean.getBoolean("minerva.noadmin");
+		return isCoordinator(findMe())
+				&& !Boolean.getBoolean("minerva.noadmin");
 	}
 }

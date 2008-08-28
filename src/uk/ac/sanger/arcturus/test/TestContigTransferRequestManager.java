@@ -157,7 +157,7 @@ public class TestContigTransferRequestManager {
 	}
 
 	protected void listRequests(String username, boolean showall) {
-		Person user = PeopleManager.findPerson(username);
+		Person user = adb.findUser(username);
 
 		if (user == null) {
 			System.out.println("User \"" + username + "\" not known");
@@ -199,7 +199,7 @@ public class TestContigTransferRequestManager {
 			
 			int to_project_id = toProject.getID();
 
-			Person requester = PeopleManager.findPerson(username);
+			Person requester = adb.findUser(username);
 
 			if (requester == null) {
 				System.out.println("User \"" + username + "\" not known");
@@ -243,7 +243,7 @@ public class TestContigTransferRequestManager {
 			
 			System.out.println("Before review: \n" + ctrm.prettyPrint(request));
 			
-			Person reviewer = PeopleManager.findPerson(username);
+			Person reviewer = adb.findUser(username);
 
 			if (reviewer == null) {
 				System.out.println("User \"" + username + "\" not known");
@@ -277,7 +277,7 @@ public class TestContigTransferRequestManager {
 			
 			System.out.println("Before review: \n" + ctrm.prettyPrint(request));
 			
-			Person reviewer = PeopleManager.findPerson(username);
+			Person reviewer = adb.findUser(username);
 
 			if (reviewer == null) {
 				System.out.println("User \"" + username + "\" not known");

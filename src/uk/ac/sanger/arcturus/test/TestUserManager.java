@@ -3,6 +3,7 @@ package uk.ac.sanger.arcturus.test;
 import uk.ac.sanger.arcturus.*;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.people.*;
+import uk.ac.sanger.arcturus.people.role.Role;
 
 import java.sql.*;
 import java.io.*;
@@ -12,13 +13,6 @@ public class TestUserManager {
 	private String organism;
 	private String username;
 	private ArcturusDatabase adb;
-	private String[] privileges = {
-			"assign_project",
-			"create_project",
-			"lock_project",
-			"move_any_contig",
-			"grant_privileges"
-	};
 	
 	public static void main(String args[]) {
 		TestUserManager tum = new TestUserManager();
@@ -57,14 +51,14 @@ public class TestUserManager {
 
 			adb = ai.findArcturusDatabase(organism);
 			
-			Person me = PeopleManager.findMe();
+			Person me = PeopleManager.createPerson(PeopleManager.getEffectiveUID());
 			
 			describeUser(me);
 
 			if (username != null) {
 				System.out.println("\n\n");
 				
-				Person person = PeopleManager.findPerson(username);
+				Person person = PeopleManager.createPerson(username);
 			
 				describeUser(person);
 			}			
@@ -80,25 +74,11 @@ public class TestUserManager {
 		
 		System.out.println(person);
 		
-		String role = adb.getRoleForUser(person);
+		Role role = person.getRole();
 		
 		System.out.println("Role: " + role);
-		
-		String[] grants = adb.getPrivilegesForUser(person);
-		
-		if (grants != null) {
-			System.out.print("Privileges: ");
-
-			for (int i = 0; i < grants.length; i++)
-				System.out.print(" " + grants[i]);
-			
-			System.out.println();
-		}
-
-		for (int i = 0; i < privileges.length; i++)
-			System.out.println("Has \"" + privileges[i] + "\" privilege: " +
-					(adb.hasPrivilege(person, privileges[i]) ? "yes" : "no"));
 	}
+	
 	public void printUsage(PrintStream ps) {
 		ps.println("MANDATORY PARAMETERS:");
 		ps.println("\t-instance\tName of instance");

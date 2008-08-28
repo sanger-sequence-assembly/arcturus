@@ -223,7 +223,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 		
 		contigMenu.add(actionScaffoldContig);
 
-		Person me = PeopleManager.findMe();
+		Person me = adb.findMe();
 
 		Set mypset = null;
 

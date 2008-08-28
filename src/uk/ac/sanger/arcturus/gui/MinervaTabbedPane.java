@@ -3,11 +3,9 @@ package uk.ac.sanger.arcturus.gui;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.sql.*;
 import java.util.HashMap;
 import java.util.Map;
 
-import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.database.*;
 import uk.ac.sanger.arcturus.gui.oligofinder.OligoFinderPanel;
 import uk.ac.sanger.arcturus.gui.projecttable.ProjectTablePanel;
@@ -16,8 +14,6 @@ import uk.ac.sanger.arcturus.gui.checkconsistency.CheckConsistencyPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
-import uk.ac.sanger.arcturus.people.PeopleManager;
-import uk.ac.sanger.arcturus.people.Person;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ArcturusDatabase adb;
@@ -172,8 +168,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		ContigTransferTablePanel cttp = (ContigTransferTablePanel)permanentComponents.get(CONTIG_TRANSFER_TABLE);
 		
 		if (cttp == null) {
-			cttp = new ContigTransferTablePanel(adb, PeopleManager.findMe(),
-					this, false);
+			cttp = new ContigTransferTablePanel(adb, adb.findMe(), this, false);
 			permanentComponents.put(CONTIG_TRANSFER_TABLE, cttp);
 		}
 
@@ -191,8 +186,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		ContigTransferTablePanel cttpAdmin = (ContigTransferTablePanel)permanentComponents.get(ADMIN_CONTIG_TRANSFER_TABLE);
 	
 		if (cttpAdmin == null) {
-			cttpAdmin = new ContigTransferTablePanel(adb, PeopleManager
-					.findMe(), this, true);
+			cttpAdmin = new ContigTransferTablePanel(adb, adb.findMe(), this, true);
 			permanentComponents.put(ADMIN_CONTIG_TRANSFER_TABLE, cttpAdmin);
 		}
 

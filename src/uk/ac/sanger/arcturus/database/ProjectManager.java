@@ -538,7 +538,7 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_UNLOCKED);
 
-		if (!canUserUnlockProject(project, PeopleManager.findMe()))
+		if (!canUserUnlockProject(project, adb.findMe()))
 			throw new ProjectLockException(
 					ProjectLockException.OPERATION_NOT_PERMITTED);
 
@@ -558,7 +558,7 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
 
-		Person me = PeopleManager.findMe();
+		Person me = adb.findMe();
 
 		if (!canUserLockProjectForSelf(project, me))
 			throw new ProjectLockException(
@@ -585,7 +585,7 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_HAS_NO_OWNER);
 
-		Person me = PeopleManager.findMe();
+		Person me = adb.findMe();
 
 		if (!canUserLockProjectForOwner(project, me))
 			throw new ProjectLockException(
@@ -607,7 +607,7 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
 
-		Person me = PeopleManager.findMe();
+		Person me = adb.findMe();
 
 		if (!canUserLockProject(project, me))
 			throw new ProjectLockException(
@@ -646,7 +646,7 @@ public class ProjectManager extends AbstractManager {
 			throw new ProjectLockException(
 					ProjectLockException.PROJECT_IS_LOCKED);
 
-		Person me = PeopleManager.findMe();
+		Person me = adb.findMe();
 
 		pstmtLockProject.setString(1, me.getUID());
 		pstmtLockProject.setInt(2, project.getID());
@@ -731,7 +731,7 @@ public class ProjectManager extends AbstractManager {
 		if (project.isLocked() || project.isBin() || project.isUnowned())
 			return false;
 		
-		Person user = PeopleManager.findMe();
+		Person user = adb.findMe();
 
 		return project.getOwner().equals(user) || adb.hasFullPrivileges(user);
 	}

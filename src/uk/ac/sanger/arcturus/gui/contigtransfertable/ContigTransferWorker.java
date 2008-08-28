@@ -28,7 +28,7 @@ public class ContigTransferWorker extends SwingWorker<Void, Integer> {
 	protected int newStatus;
 	protected ProgressMonitor monitor;
 
-	protected Person me = PeopleManager.findMe();
+	protected Person me;
 	protected Set<ContigTransferRequestException> failures = new HashSet<ContigTransferRequestException>();
 	protected Set<Project> changedProjects = new HashSet<Project>();
 
@@ -40,6 +40,8 @@ public class ContigTransferWorker extends SwingWorker<Void, Integer> {
 		this.requests = requests;
 		this.newStatus = newStatus;
 		this.monitor = monitor;
+		
+		me = adb.findMe();
 	}
 
 	protected Void doInBackground() throws Exception {
