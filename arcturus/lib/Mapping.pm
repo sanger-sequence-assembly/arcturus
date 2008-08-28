@@ -670,7 +670,8 @@ sub copy {
 
     my $copy = $this->new($this->getMappingName());
 
-    $copy->setSequenceID($this->getSequenceID()); # if any
+    $copy->setSequenceID($this->getSequenceID('y'),'y'); # if any
+    $copy->setSequenceID($this->getSequenceID('x'),'x'); # if any
 
     my $segments = $this->getSegments();
 
@@ -712,8 +713,6 @@ sub inverse {
     $inverse->setSequenceID($this->getSequenceID('x'),'y');
     $inverse->setSequenceID($this->getSequenceID('y'),'x');
 
-#$inverse->setSequenceID($this->getSequenceID()); # temporary
-
     return $inverse;   
 }
 
@@ -734,7 +733,9 @@ sub multiply {
     my $tsegments = $mapping->normaliseOnX();
 
     my $product = new Mapping("$rname x $tname");
-
+    $product->setSequenceID($thismap->getSequenceID('x'),'x');
+    $product->setSequenceID($mapping->getSequenceID('y'),'y');
+    
     return $product unless ($rsegments && $tsegments); # product empty 
 
 # find the starting point in segment arrays if activated
@@ -1130,10 +1131,13 @@ sub toString {
     my $this = shift;
     my %options = @_; # text=>...  extended=>...  norange=>...
 
-    my $mappingname = $this->getMappingName()      || 'undefined';
-    my $direction = $this->getAlignmentDirection() || 'UNDEFINED';
+    my $mappingname = $this->getMappingName()        || 'undefined';
+    my $direction   = $this->getAlignmentDirection() || 'UNDEFINED';
+    my $targetsid   = $this->getSequenceID('y')      || 'undef';
+    my $hostseqid   = $this->getSequenceID('x')      || 'undef';
 
-    my $string = "Mapping: name=$mappingname, sense=$direction";
+    my $string = "Mapping: name=$mappingname, sense=$direction"
+	       .         " target=$targetsid  host=$hostseqid";
 
     unless (defined($options{range}) && !$options{range}) {
 	my ($cstart, $cfinis,$range);
