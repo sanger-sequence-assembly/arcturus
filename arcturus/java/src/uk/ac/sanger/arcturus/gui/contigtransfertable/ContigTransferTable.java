@@ -56,12 +56,14 @@ public class ContigTransferTable extends SortableTable implements PopupManager {
 	
 	protected ArcturusDatabase adb;
 
-	protected Person me = PeopleManager.findMe();
+	protected Person me;
 
 	public ContigTransferTable(ContigTransferTableModel cttm) {
 		super(cttm);
 
 		adb = cttm.getArcturusDatabase();
+		
+		me = adb.findMe();
 
 		setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
 

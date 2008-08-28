@@ -69,8 +69,8 @@ public class Project extends Core {
 	 */
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
-			Person owner, Date lockdate, Person lockowner, Date created, Person creator,
-			int status, ArcturusDatabase adb) {
+			Person owner, Date lockdate, Person lockowner, Date created,
+			Person creator, int status, ArcturusDatabase adb) {
 		super(ID, adb);
 
 		try {
@@ -100,28 +100,28 @@ public class Project extends Core {
 	 */
 
 	public Project(int ID, Assembly assembly, String name, Date updated,
-			String owner, Date lockdate, String lockowner, Date created, String creator,
-			int status, ArcturusDatabase adb) {
+			String owner, Date lockdate, String lockowner, Date created,
+			String creator, int status, ArcturusDatabase adb) {
 		super(ID, adb);
 
 		try {
 			setAssembly(assembly, false);
+
+			this.name = name;
+			this.updated = updated;
+			this.owner = findPerson(owner);
+			this.lockdate = lockdate;
+			this.lockowner = findPerson(lockowner);
+			this.created = created;
+			this.creator = findPerson(creator);
+			this.directory = null;
+			this.status = status;
 		} catch (SQLException sqle) {
 		}
-
-		this.name = name;
-		this.updated = updated;
-		this.owner = findPerson(owner);
-		this.lockdate = lockdate;
-		this.lockowner = findPerson(lockowner);
-		this.created = created;
-		this.creator = findPerson(creator);
-		this.directory = null;
-		this.status = status;
 	}
 
-	private Person findPerson(String uid) {
-		return PeopleManager.findPerson(uid);
+	private Person findPerson(String uid) throws SQLException {
+		return adb.findUser(uid);
 	}
 
 	public Assembly getAssembly() {
@@ -156,14 +156,14 @@ public class Project extends Core {
 	public void setName(String name) {
 		this.name = name;
 	}
-	
+
 	public String getNameAndOwner() {
 		if (owner == null)
 			return name;
 		else
-			return name + " (" + owner.getName() + ")"; 
+			return name + " (" + owner.getName() + ")";
 	}
-	
+
 	public boolean isBin() {
 		return name.equalsIgnoreCase("BIN");
 	}
@@ -181,21 +181,21 @@ public class Project extends Core {
 	}
 
 	public void setOwner(String owner) {
-		this.owner = findPerson(owner);
+		this.owner = adb.findUser(owner);
 	}
 
 	public void setOwner(Person owner) {
 		this.owner = owner;
 	}
-	
+
 	public boolean isUnowned() {
 		return owner == null;
 	}
-	
+
 	public boolean isMine() {
-		return PeopleManager.isMe(owner);
+		return adb.isMe(owner);
 	}
-	
+
 	public boolean isOwner(Person person) {
 		return person != null && person.equals(owner);
 	}
@@ -211,21 +211,21 @@ public class Project extends Core {
 	public boolean isLocked() {
 		return lockowner != null;
 	}
-	
+
 	public Person getLockOwner() {
 		return lockowner;
 	}
-	
+
 	public void setLockOwner(Person lockowner) {
 		this.lockowner = lockowner;
 	}
-	
+
 	public void setLockOwner(String lockowner) {
-		this.lockowner = findPerson(lockowner);
+		this.lockowner = adb.findUser(lockowner);
 	}
-	
+
 	public boolean lockIsMine() {
-		return PeopleManager.isMe(lockowner);
+		return adb.isMe(lockowner);
 	}
 
 	public Date getCreated() {
@@ -241,54 +241,54 @@ public class Project extends Core {
 	}
 
 	public void setCreator(String creator) {
-		this.creator = findPerson(creator);
+		this.creator = adb.findUser(creator);
 	}
 
 	public void setCreator(Person creator) {
 		this.creator = creator;
 	}
-	
+
 	public void setDirectory(String directory) {
 		this.directory = directory;
 	}
-	
+
 	public String getDirectory() {
 		return directory;
 	}
-	
+
 	public void setStatus(int status) {
 		this.status = status;
 	}
-	
+
 	public int getStatus() {
 		return status;
 	}
-	
+
 	public String getStatusAsString() {
 		switch (status) {
 			case IN_SHOTGUN:
 				return "In shotgun";
-				
+
 			case PREFINISHING:
 				return "Prefinishing";
-				
+
 			case IN_FINISHING:
 				return "In finishing";
-				
+
 			case FINISHED:
 				return "Finished";
-				
+
 			case QUALITY_CHECKED:
 				return "Quality checked";
-				
+
 			case RETIRED:
 				return "Retired";
-				
+
 			default:
 				return "Unknown";
 		}
 	}
-	
+
 	public boolean isRetired() {
 		return status == RETIRED;
 	}
@@ -360,16 +360,17 @@ public class Project extends Core {
 		return getProjectSummary(0);
 	}
 
-	public ProjectSummary getProjectSummary(int minlen, int minreads) throws SQLException {
+	public ProjectSummary getProjectSummary(int minlen, int minreads)
+			throws SQLException {
 		if (adb != null)
 			return adb.getProjectSummary(this, minlen, minreads);
 		else
 			return null;
 	}
-	
+
 	public boolean equals(Object o) {
 		if (o != null && o instanceof Project)
-			return ((Project)o).ID == this.ID;
+			return ((Project) o).ID == this.ID;
 		else
 			return false;
 	}

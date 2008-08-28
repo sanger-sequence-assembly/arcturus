@@ -193,7 +193,7 @@ public class ContigTransferRequestManager {
 			Project newProject = adb.getProjectByID(newProjectId);
 
 			String requesterUid = rs.getString(5);
-			Person requester = PeopleManager.findPerson(requesterUid);
+			Person requester = adb.findUser(requesterUid);
 
 			String requesterComment = rs.getString(6);
 
@@ -212,8 +212,7 @@ public class ContigTransferRequestManager {
 			request.setOpenedDate(rs.getTimestamp(7));
 
 			String reviewerUid = rs.getString(8);
-			Person reviewer = reviewerUid != null ? PeopleManager
-					.findPerson(reviewerUid) : null;
+			Person reviewer = reviewerUid != null ? adb.findUser(reviewerUid) : null;
 
 			request.setReviewer(reviewer);
 
@@ -392,7 +391,7 @@ public class ContigTransferRequestManager {
 		 * Does the requester have the "mover_any_contig" privilege?
 		 */
 
-		if (adb.hasPrivilege(requester, "move_any_contig"))
+		if (requester.canMoveAnyContig())
 			return;
 
 		/*
@@ -410,7 +409,7 @@ public class ContigTransferRequestManager {
 	public ContigTransferRequest createContigTransferRequest(int contigId,
 			int toProjectId) throws ContigTransferRequestException,
 			SQLException {
-		return createContigTransferRequest(PeopleManager.findMe(), contigId,
+		return createContigTransferRequest(adb.findMe(), contigId,
 				toProjectId);
 	}
 
@@ -424,7 +423,7 @@ public class ContigTransferRequestManager {
 	public ContigTransferRequest createContigTransferRequest(Contig contig,
 			Project project) throws ContigTransferRequestException,
 			SQLException {
-		return createContigTransferRequest(PeopleManager.findMe(), contig
+		return createContigTransferRequest(adb.findMe(), contig
 				.getID(), project.getID());
 	}
 
@@ -463,7 +462,7 @@ public class ContigTransferRequestManager {
 
 		return adb.hasFullPrivileges(person);
 	}
-
+	
 	public boolean canApproveRequest(ContigTransferRequest request,
 			Person person) throws SQLException {
 		if (request == null || person == null)
@@ -481,7 +480,7 @@ public class ContigTransferRequestManager {
 		Person dstOwner = newProject.getOwner();
 
 		if (person.equals(requester)
-				&& (newProject.isUnowned() || newProject.isBin() || person.equals(dstOwner)))
+				&& (newProject.isUnowned() || newProject.isBin()))
 			return true;
 
 		if (person.equals(srcOwner) && !requester.equals(srcOwner))
@@ -716,7 +715,7 @@ public class ContigTransferRequestManager {
 
 	public void reviewContigTransferRequest(int requestId, int newStatus)
 			throws ContigTransferRequestException, SQLException {
-		reviewContigTransferRequest(requestId, PeopleManager.findMe(),
+		reviewContigTransferRequest(requestId, adb.findMe(),
 				newStatus);
 	}
 
@@ -837,7 +836,7 @@ public class ContigTransferRequestManager {
 
 	public void executeContigTransferRequest(int requestId, boolean notifyListeners)
 			throws ContigTransferRequestException, SQLException {
-		executeContigTransferRequest(requestId, PeopleManager.findMe(), notifyListeners);
+		executeContigTransferRequest(requestId, adb.findMe(), notifyListeners);
 	}
 
 	public static String prettyPrint(ContigTransferRequest request) {

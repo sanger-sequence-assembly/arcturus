@@ -10,7 +10,7 @@ public class UserComboBox extends javax.swing.JComboBox {
 		Person[] people = null;
 
 		try {
-			people = adb.getAllUsers();
+			people = adb.getAllUsers(false);
 		} catch (SQLException e) {
 			Arcturus.logSevere("Failed to get list of users", e);
 		}
@@ -18,10 +18,10 @@ public class UserComboBox extends javax.swing.JComboBox {
 		for (int i = 0; i < people.length; i++)
 			addItem(people[i]);
 
-		Person nobody = PeopleManager.findPerson("nobody");
+		Person nobody = adb.findUser(Person.NOBODY);
 
 		addItem(nobody);
-
+		
 		setMaximumRowCount(getItemCount());
 	}
 }

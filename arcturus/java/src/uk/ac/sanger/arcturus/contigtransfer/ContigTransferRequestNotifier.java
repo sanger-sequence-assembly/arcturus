@@ -2,6 +2,7 @@ package uk.ac.sanger.arcturus.contigtransfer;
 
 import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
+import uk.ac.sanger.arcturus.database.ArcturusDatabase;
 import uk.ac.sanger.arcturus.people.*;
 
 import javax.mail.*;
@@ -22,8 +23,10 @@ public class ContigTransferRequestNotifier {
 	protected Map<Person, List<String>> messageQueues = new HashMap<Person, List<String>>();
 	
 	protected boolean noMail = false;
+	
+	protected ArcturusDatabase adb;
 
-	private ContigTransferRequestNotifier() {
+	public ContigTransferRequestNotifier() {
 		Properties props = Arcturus.getProperties();
 		session = Session.getDefaultInstance(props);
 		
@@ -114,14 +117,11 @@ public class ContigTransferRequestNotifier {
 
 		Message msg = new MimeMessage(session);
 
-		Person realme = PeopleManager.findRealMe();
-		Person me = PeopleManager.findMe();
+		Person realme = PeopleManager.createPerson(PeopleManager.getRealUID());
 
 		try {
 			InternetAddress realMeAddress = new InternetAddress(realme.getMail(), realme
 					.getName());
-
-			InternetAddress meAddress = new InternetAddress(me.getMail(), me.getName());
 
 			String email = PeopleManager.isMasquerading() ? realme.getUID()
 					+ "+" + person.getMail() : person.getMail();

@@ -12,13 +12,6 @@ import uk.ac.sanger.arcturus.Arcturus;
 public class PeopleManager {
 	protected static DirContext ctx = null;
 
-	protected static Map<String,Person> uidToPerson = new HashMap<String,Person>();
-	protected static final String myUid ;
-	protected static final Person me;
-	protected static final String myRealUid;
-	protected static final Person realMe;
-	protected static final boolean masquerading;
-
 	protected static final String[] attrs = { "cn", "sn", "givenname", "mail",
 			"telephonenumber", "homedirectory", "roomnumber",
 			"departmentnumber", "jpegphoto" };
@@ -38,40 +31,13 @@ public class PeopleManager {
 			ne.printStackTrace();
 			ctx = null;
 		}
-		
-		myRealUid = System.getProperty("user.name");
-		realMe = findPerson(myRealUid);
-	
-		if (System.getProperty("user.alias") == null || !isAllowedToMasquerade()) {
-			myUid = myRealUid;
-			me = realMe;
-			masquerading = false;
-		} else {
-			myUid = System.getProperty("user.alias");
-			me = findPerson(myUid);
-			masquerading = true;
-		}
-		
-		Person nobody = new Person(Person.NOBODY);
-		uidToPerson.put(Person.NOBODY, nobody);
-	}
-	
-	private static boolean isAllowedToMasquerade() {
-		return myRealUid.equalsIgnoreCase("adh") || myRealUid.equalsIgnoreCase("ejz");
 	}
 
-	public static Person findPerson(String uid) {
+	public static Person createPerson(String uid) {
 		if (uid == null)
 			return null;
-		
-		Person person = (Person) uidToPerson.get(uid);
 
-		if (person != null)
-			return person;
-
-		person = new Person(uid);
-
-		uidToPerson.put(uid, person);
+		Person person = new Person(uid);
 
 		if (ctx == null)
 			return person;
@@ -139,26 +105,36 @@ public class PeopleManager {
 		return person;
 	}
 
-	public static Person findMe() {
-		return me;
+	public static String getEffectiveUID() {
+		String alias = System.getProperty("user.alias");
+		String username = System.getProperty("user.name");
+
+		if (alias != null && canMasquerade(username))
+			username = alias;
+
+		return username;
 	}
 	
-	public static boolean isMe(Person person) {
-		return me.equals(person);
+	public static String getRealUID() {
+		return System.getProperty("user.name");
+	}
+
+	public static boolean canMasquerade(String username) {
+		return username.equalsIgnoreCase("adh")
+				|| username.equalsIgnoreCase("ejz");
 	}
 	
-	public static Person findRealMe() {
-		return realMe;
+	public static boolean canMasquerade() {
+		return canMasquerade(System.getProperty("user.name"));
 	}
-
-	public static boolean isRealMe(Person person) {
-		return realMe.equals(person);
-	}
-
+	
 	public static boolean isMasquerading() {
-		return masquerading;
+		String alias = System.getProperty("user.alias");
+		String username = System.getProperty("user.name");
+
+		return alias != null && canMasquerade(username) && !alias.equalsIgnoreCase(username);
 	}
-	
+
 	private static String getAttribute(Attributes attrs, String key) {
 		try {
 			Attribute attr = attrs.get(key);

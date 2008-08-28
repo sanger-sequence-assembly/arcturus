@@ -2,7 +2,9 @@ package uk.ac.sanger.arcturus.people;
 
 import javax.swing.ImageIcon;
 
-public class Person implements Comparable {
+import uk.ac.sanger.arcturus.people.role.Role;
+
+public class Person implements Comparable, Role {
 	public static final String NOBODY = "nobody";
 	
 	protected String uid;
@@ -15,6 +17,8 @@ public class Person implements Comparable {
 	protected String room;
 	protected String dept;
 	protected ImageIcon photo;
+	
+	protected Role role;
 
 	public Person(String uid) {
 		this.uid = uid;
@@ -99,6 +103,14 @@ public class Person implements Comparable {
 	public boolean isNobody() {
 		return uid.equalsIgnoreCase(NOBODY);
 	}
+	
+	public void setRole(Role role) {
+		this.role = role;
+	}
+	
+	public Role getRole() {
+		return role;
+	}
 
 	public String toString() {
 		return name == null ? uid : name;
@@ -133,5 +145,21 @@ public class Person implements Comparable {
 			return ((Person)that).uid.equalsIgnoreCase(uid);
 		else
 			return false;
+	}
+
+	public boolean canAssignProject() {
+		return role == null ? false : role.canAssignProject();
+	}
+
+	public boolean canCreateProject() {
+		return role == null ? false : role.canCreateProject();
+	}
+
+	public boolean canLockProject() {
+		return role == null ? false : role.canLockProject();
+	}
+
+	public boolean canMoveAnyContig() {
+		return role == null ? false : role.canMoveAnyContig();
 	}
 }

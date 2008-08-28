@@ -126,8 +126,9 @@ public class Minerva {
 			caption += " [" + buildtime + "]";
 
 		if (PeopleManager.isMasquerading())
-			caption += " [Masquerading as  " + PeopleManager.findMe().getName()
-					+ "]";
+			caption += " [Masquerading as  "
+					+ PeopleManager.createPerson(
+							PeopleManager.getEffectiveUID()).getName() + "]";
 
 		MinervaFrame frame = new MinervaFrame(this, caption, name);
 
@@ -316,12 +317,13 @@ public class Minerva {
 		if (!CheckVersion.require(major, minor)) {
 			String message = "You are running Java version "
 					+ System.getProperties().getProperty("java.version") + "\n"
-					+ "but this software requires at least version " + major + "."
-					+ minor + ".\n\nPlease upgrade your version of Java.";
+					+ "but this software requires at least version " + major
+					+ "." + minor + ".\n\nPlease upgrade your version of Java.";
 
 			JOptionPane.showMessageDialog(null, message,
-					"Please upgrade your version of Java", JOptionPane.WARNING_MESSAGE);
-			
+					"Please upgrade your version of Java",
+					JOptionPane.WARNING_MESSAGE);
+
 			System.exit(1);
 		}
 
