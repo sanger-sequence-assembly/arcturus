@@ -2,7 +2,7 @@
 #
 # reads2fas.pl
 #
-# This script extracts reads and generates one or more FASTA files
+# This script extracts reads in FASTA or FASTQ format
 
 use DBI;
 use FileHandle;
@@ -14,18 +14,18 @@ use strict;
 my $verbose = 0;
 my $instance;
 my $organism;
-my $readsperfile = 10000;
 my $filename;
 my $clip = 0;
+my $fastq = 0;
 
 while (my $nextword = shift @ARGV) {
     $instance = shift @ARGV if ($nextword eq '-instance');
     $organism = shift @ARGV if ($nextword eq '-organism');
     $filename = shift @ARGV if ($nextword eq '-filename');
 
-    $readsperfile = shift @ARGV if ($nextword eq '-readsperfile');
-
     $clip = 1 if ($nextword eq '-clip');
+
+    $fastq = 1 if ($nextword eq '-fastq');
 
     $verbose = 1 if ($nextword eq '-verbose');
 
@@ -69,7 +69,17 @@ foreach $query (@queries) {
 my $ndone = 0;
 my $nfile = 1;
 
-$query = "SELECT SEQUENCE.seq_id,sequence,qleft,qright from SEQUENCE left join clipping using(seq_id)";
+my $fields = "readname,sequence,qleft,qright";
+
+$fields .= ",quality" if $fastq;
+
+my $tables = "(READINFO left join " .
+    "(SEQ2READ left join " .
+    "(SEQUENCE left join QUALITYCLIP using(seq_id))".
+    " using(seq_id))" .
+    " using(read_id)) where version = 0";
+
+$query = "SELECT $fields from $tables";
 
 my $sth = $dbh->prepare($query);
 &db_die("prepare($query) failed");
@@ -80,29 +90,35 @@ $sth->execute();
 printf STDERR "%8d", $ndone if $verbose;
 my $format = "\010\010\010\010\010\010\010\010\010%8d";
 
-my $fasfilename = $filename . sprintf("%04d", $nfile) . ".fas";
+my $fasfh = new FileHandle($filename, "w");
 
-my $fasfh = new FileHandle($fasfilename, "w");
-
-while (my ($seqid, $sequence, $qleft, $qright) = $sth->fetchrow_array()) {
+while (my ($readname, $sequence, $qleft, $qright, $quality) = $sth->fetchrow_array()) {
     $ndone++;
-
-    if (($ndone % $readsperfile) == 0) {
-	$fasfh->close();
-	$nfile++;
-	$fasfilename = $filename . sprintf("%04d", $nfile) . ".fas";
-	$fasfh = new FileHandle($fasfilename, "w");
-    }
 
     $sequence = uncompress($sequence);
 
-    printf $fasfh ">%s%06d:%d-%d\n", $organism, $seqid, $qleft+1, $qright-1;
+    if ($fastq) {
+	printf $fasfh "@%s\n", $readname;
+	print $fasfh $sequence,"\n+\n";
 
-    $sequence = substr($sequence, $qleft, $qright-$qleft-1) if ($clip);
+	my $quality = uncompress($quality);
 
-    while (length($sequence)) {
-	print $fasfh substr($sequence, 0, 50),"\n";
-	$sequence = substr($sequence, 50);
+	my @bq = unpack("c*", $quality);
+
+	my @fq = map { ($_ <= 93? $_ : 93) + 33 } @bq;
+
+	$quality = pack("c*", @fq);
+
+	print $fasfh $quality,"\n";
+    } else {
+	printf $fasfh ">%s %d %d\n", $readname, $qleft+1, $qright-1;
+
+	$sequence = substr($sequence, $qleft, $qright-$qleft-1) if ($clip);
+
+	while (length($sequence)) {
+	    print $fasfh substr($sequence, 0, 50),"\n";
+	    $sequence = substr($sequence, 50);
+	}
     }
 
     printf STDERR $format, $ndone if ($verbose && ($ndone % 50) == 0);
@@ -132,10 +148,11 @@ sub showUsage {
     print STDERR "MANDATORY PARAMETERS:\n";
     print STDERR "    -instance\t\tName of instance\n";
     print STDERR "    -organism\t\tName of organism\n";
-    print STDERR "    -filename\t\tBase name of output FASTA file\n";
+    print STDERR "    -filename\t\tName of output file\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS:\n";
+    print STDERR "    -fastq\t\tGenerate a FASTQ output file\n";
     print STDERR "    -verbose\t\tVerbose output\n";
-    print STDERR "    -readsperfile\tMaximum number of reads per file\n";
     print STDERR "    -clip\t\tClip sequences before writing to file\n";
+    print STDERR "\t\t\t(Not available in FASTQ mode)\n";
 }
