@@ -176,25 +176,25 @@ sub getProject {
 
     return ([@projects],"OK") if @projects;
 
-# if no project found, test if it's the bin project we're after
-# e.g. if we search on contig ID, unallocated contigs (pid=0) require the bin
-# to exist in order to return a project
+# if no project found, test if it's the BIN or (small)bin project we're after
+# e.g. if we search on contig ID, unallocated contigs (pid=0) require a bin
+# project to exist in order to return a result
 
     if ($binautoload && ($usecontigid || $lookingforbin)) {
-# test if there is a project BIN or bin in assembly 0
-        my ($project,$msg) = $this->getProject(assembly_id=>0,
-                                               projectname=>'BIN',
+# test if there is a project BIN or (small)bin in assembly 0
+        my ($project,$msg) = $this->getProject(projectname=>'BIN',
+#                                               assembly_id=>0,
                                                binautoload=>0);
         return ($project,$msg) if $project;
-# no, it does not exist; test for existence of 'bin' project
+# no, it does not exist; test for existence of 'smallbin' project
         ($project,$msg) = $this->getProject(assembly_id=>0,
-                                            projectname=>'bin',
+                                            projectname=>'smallbin',
                                             binautoload=>0);
         return ($project,$msg) if $project;
 # also this one doesn't exist, create it      
-        &createBinProject($dbh,$this->getArcturusUser(),'bin');
+        &createBinProject($dbh,$this->getArcturusUser(),'smallbin');
         return $this->getProject(assembly_id=>0,
-                                 projectname=>'bin',
+                                 projectname=>'smallbin',
                                  binautoload=>0);
     }
     else {
@@ -203,10 +203,10 @@ sub getProject {
 }
 
 sub createBinProject {
-# private method to create the project BIN in assembly 0
+# private method to create a default bin project in assembly 0
     my $dbh = shift;
     my $user = shift || 'arcturus';
-    my $name = shift || 'BIN';
+    my $name = shift || 'smallbin';
 
 # create the special BIN project in assembly 0 and project ID 0
 #  (if it already exists, no changes are made but an error is generated)
