@@ -12,7 +12,7 @@ use ArcturusDatabase;
 
 #------------------------------------------------------------------------------
 
-my $pwd = `pawd`; chomp $pwd;  # the current directory
+my $pwd = `pwd`; chomp $pwd;  # the current directory
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
 my $arcturus_home = "${basedir}/..";
 my $javabasedir   = "${arcturus_home}/utils";
@@ -195,18 +195,18 @@ if ($rundir) {
             exit 1;
 	}
         &mySystem("chmod g+w $rundir");
-    }         
-#     unless (chdir($rundir)) {
-# # failed to change directory, try to recover by staggering the change
-#         unless (chdir ("/nfs/repository") && chdir($rundir)) {
-#             print STDERR "|| -- Failed to change work directory : "
-#                               ."possible automount failure\n";
-#           exit 1;
-#       }
-#       print STDOUT "chdir recovered from automount failure\n";
-#     }
-    chdir ($rundir);
-    $pwd = `pawd`; chomp $pwd;
+    }       
+
+    unless (chdir($rundir)) {
+# failed to change directory, try to recover by staggering the change
+        unless (chdir ("/nfs/repository") && chdir($rundir)) {
+            print STDERR "|| -- Failed to change work directory : "
+                              ."possible automount failure ($!)\n";
+            exit 1;
+        }
+        print STDOUT "chdir recovered from automount failure\n";
+    }
+    $pwd = `pwd`; chomp $pwd;
 }
 
 #------------------------------------------------------------------------------
