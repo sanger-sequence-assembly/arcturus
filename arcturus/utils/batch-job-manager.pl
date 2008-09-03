@@ -246,7 +246,7 @@ $logger->debug("projects: @projects");
 
 # get current directory
 
-my $pwd = `pawd`; chomp $pwd;
+my $pwd = `pwd`; chomp $pwd;
  
 $logger->debug("This script is run from directory : $pwd",ss=>1);
 
@@ -276,7 +276,7 @@ foreach my $project (@projects) {
         else {
 	    undef $subdir; # forces exit with error message
 	}
-        my $subpwd = `pawd`; chomp $subpwd;
+        my $subpwd = `pwd`; chomp $subpwd;
         unless ($subpwd eq $subdir) { # to be sure            
             $logger->warning("FAILED to locate subdir $project");
             next;
@@ -287,7 +287,7 @@ foreach my $project (@projects) {
 # compose the import/export part of the command (both batch and command line)
 
     my $command;
-    my $currentpwd = `pawd`; chomp $currentpwd;
+    my $currentpwd = `pwd`; chomp $currentpwd;
     if ($currentpwd =~ /automount/) {
         $currentpwd =~ s?.*automount.*/nfs?/nfs?;
         $logger->warning("removing 'automount' prefix from pwd : $currentpwd");
@@ -364,7 +364,7 @@ foreach my $project (@projects) {
             $work_dir .= "/arcturus/import-export"; # full work directory
 	}
 	elsif ($subdir) {
-            $work_dir = `pawd`; chomp $work_dir;
+            $work_dir = `pwd`; chomp $work_dir;
             $work_dir =~ s?.*automount.*/nfs?/nfs?;
 	}
 	else {
