@@ -121,7 +121,7 @@ $logger->info("invocation:  $invocation"); # experimental
 else {
 # status analysis: get the projects in the current directory
 
-    my $pwd = `pawd`; chomp $pwd;
+    my $pwd = `pwd`; chomp $pwd;
 
     my $projects = [];
     my $msg;
@@ -170,7 +170,7 @@ sub findprojects {
     my $project = shift;
     my $subdir = shift;
 
-    my $pwd = `pawd`;
+    my $pwd = `pwd`;
 
     chomp $pwd;
 
