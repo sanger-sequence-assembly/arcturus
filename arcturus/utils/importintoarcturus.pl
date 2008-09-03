@@ -12,7 +12,7 @@ use ArcturusDatabase;
 
 #------------------------------------------------------------------------------
 
-my $pwd = `pawd`; chomp $pwd; # the current directory
+my $pwd = `pwd`; chomp $pwd; # the current directory
    $pwd =~ s?.*automount.*/nfs?/nfs?;
    $pwd =~ s?.*automount.*/root?/nfs?;
 my $basedir = `dirname $0`; chomp $basedir; # directory of the script
@@ -189,8 +189,8 @@ if ($rundir && $rundir ne $pwd) {
 	}
 	print STDOUT "chdir recovered from automount failure\n";
     }
- # get current directory using pawd
-    $pwd = `pawd`; chomp $pwd;
+ # get current directory
+    $pwd = `pwd`; chomp $pwd;
     $pwd =~ s?.*automount.*/nfs?/nfs?;
     $pwd =~ s?.*automount.*/root?/nfs?;
 }
