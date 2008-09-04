@@ -1,5 +1,6 @@
 package uk.ac.sanger.arcturus.database;
 
+import uk.ac.sanger.arcturus.Arcturus;
 import uk.ac.sanger.arcturus.data.*;
 
 import java.sql.*;
@@ -40,6 +41,8 @@ public class ContigManager extends AbstractManager {
 	protected PreparedStatement pstmtCurrentContigs = null;
 	
 	protected PreparedStatement pstmtContigIDFromReadname = null;
+	
+	protected PreparedStatement pstmtChildContigs = null;
 
 	protected ManagerEvent event = null;
 
@@ -184,6 +187,10 @@ public class ContigManager extends AbstractManager {
 			+ " and CURRENTCONTIGS.project_id = PROJECT.project_id";
 		
 		pstmtContigIDFromReadname = conn.prepareStatement(query);
+		
+		query = "select contig_id from C2CMAPPING where parent_id = ?";
+		
+		pstmtChildContigs = conn.prepareStatement(query);
 	}
 
 	protected void preloadSequencingVectors() throws SQLException {
@@ -1123,6 +1130,34 @@ public class ContigManager extends AbstractManager {
 		fireEvent(event);
 
 		return processed;
+	}
+	
+	public Set<Contig> getChildContigs(Contig parent) throws SQLException {
+		if (parent == null)
+			return null;
+		
+		HashSet<Contig> children = new HashSet<Contig>();
+		
+		pstmtChildContigs.setInt(1, parent.getID());
+		
+		ResultSet rs = pstmtChildContigs.executeQuery();
+		
+		while (rs.next()) {
+			int contig_id = rs.getInt(1);
+			
+			Contig child = null;
+			
+			try {
+				child = getContigByID(contig_id, ArcturusDatabase.CONTIG_BASIC_DATA);
+			} catch (DataFormatException e) {
+				Arcturus.logWarning("An error occurred when loading contig " + contig_id, e);
+			}
+			
+			if (child != null)
+				children.add(child);
+		}
+		
+		return children;
 	}
 
 	class SortableSegment implements Comparable {
