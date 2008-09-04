@@ -14,6 +14,7 @@ import uk.ac.sanger.arcturus.gui.checkconsistency.CheckConsistencyPanel;
 import uk.ac.sanger.arcturus.gui.contigtransfertable.ContigTransferTablePanel;
 import uk.ac.sanger.arcturus.gui.createcontigtransfers.CreateContigTransferPanel;
 import uk.ac.sanger.arcturus.gui.readfinder.ReadFinderPanel;
+import uk.ac.sanger.arcturus.gui.contigfinder.ContigFinderPanel;
 
 public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	protected ArcturusDatabase adb;
@@ -28,6 +29,7 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 	private static final String PROJECT_TABLE = "PROJECT_TABLE";
 	private static final String IMPORT_READS = "IMPORT_READS";
 	private static final String READ_FINDER = "READ_FINDER";
+	private static final String CONTIG_FINDER = "CONTIG_FINDER";
 	private static final String CONTIG_TRANSFER_TABLE = "CONTIG_TRANSFER_TABLE";
 	private static final String ADMIN_CONTIG_TRANSFER_TABLE = "ADMIN_CONTIG_TRANSFER_TABLE";
 	private static final String CREATE_CONTIG_TRANSFER = "CREATE_CONTIG_TRANSFER";
@@ -162,6 +164,22 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 		setSelectedComponent(rfp);
 
 		return rfp;
+	}
+	
+	public ContigFinderPanel showContigFinderPanel() {
+		ContigFinderPanel cfp = (ContigFinderPanel)permanentComponents.get(CONTIG_FINDER);
+		
+		if (cfp == null) {
+			cfp = new ContigFinderPanel(adb, this);
+			permanentComponents.put(CONTIG_FINDER, cfp);
+		}
+
+		if (indexOfComponent(cfp) < 0)
+			addTab("Find contigs", null, cfp, "Find contigs");
+
+		setSelectedComponent(cfp);
+
+		return cfp;
 	}
 
 	public ContigTransferTablePanel showContigTransferTablePanel() {
