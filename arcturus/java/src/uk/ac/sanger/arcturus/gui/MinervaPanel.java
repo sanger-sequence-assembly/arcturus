@@ -22,6 +22,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaAbstractAction actionShowReadImporter;
 	protected MinervaAbstractAction actionShowOligoFinder;
 	protected MinervaAbstractAction actionShowReadFinder;
+	protected MinervaAbstractAction actionShowContigFinder;
 	protected MinervaAbstractAction actionShowContigTransfers;
 	protected MinervaAbstractAction actionShowAllContigTransfers;
 	protected MinervaAbstractAction actionShowCreateContigTransfer;
@@ -115,7 +116,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		fileMenu.addSeparator();
 
 		actionCloseView = new MinervaAbstractAction("Close", null,
-				"Close this view", new Integer(KeyEvent.VK_C), KeyStroke
+				"Close this view", new Integer(KeyEvent.VK_W), KeyStroke
 						.getKeyStroke(KeyEvent.VK_W, ActionEvent.CTRL_MASK)) {
 			public void actionPerformed(ActionEvent e) {
 				closePanel();
@@ -174,6 +175,16 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		};
 
 		menu.add(actionShowReadFinder);
+
+		actionShowContigFinder = new MinervaAbstractAction("Show contig finder",
+				null, "Show contig finder", new Integer(KeyEvent.VK_C), KeyStroke
+						.getKeyStroke(KeyEvent.VK_M, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				parent.showContigFinderPanel();
+			}
+		};
+
+		menu.add(actionShowContigFinder);
 
 		actionShowContigTransfers = new MinervaAbstractAction(
 				"Show contigs transfers", null, "Show contig transfers",
