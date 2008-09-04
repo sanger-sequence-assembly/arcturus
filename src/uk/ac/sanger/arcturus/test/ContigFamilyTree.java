@@ -1,6 +1,7 @@
 package uk.ac.sanger.arcturus.test;
 
 import java.io.PrintStream;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.HashSet;
 import java.sql.SQLException;
@@ -76,8 +77,12 @@ public class ContigFamilyTree {
 				System.out.println("Contig " + parent_id + " has no children");
 			} else {
 				System.out.println("CHILDREN:");
+				
+				ContigAndLevel[] calarray = children.toArray(new ContigAndLevel[0]);
+				
+				Arrays.sort(calarray);
 
-				for (ContigAndLevel cal : children) {
+				for (ContigAndLevel cal : calarray) {
 					System.out.println("\tContig " + cal.getContig().getID()
 							+ " at level " + cal.getLevel());
 				}
@@ -105,7 +110,7 @@ public class ContigFamilyTree {
 		return resultSet;
 	}
 
-	class ContigAndLevel {
+	class ContigAndLevel implements Comparable {
 		private Contig contig;
 		private int level;
 		private int hash;
@@ -137,6 +142,12 @@ public class ContigFamilyTree {
 
 		public int hashCode() {
 			return hash;
+		}
+
+		public int compareTo(Object o) {
+			ContigAndLevel that = (ContigAndLevel) o;
+			
+			return this.contig.getID() - that.contig.getID();
 		}
 	}
 
