@@ -873,6 +873,10 @@ public class ArcturusDatabase {
 	public synchronized void clearContigCache() {
 		contigManager.clearCache();
 	}
+	
+	public synchronized Set<Contig> getChildContigs(Contig parent) throws SQLException {
+		return contigManager.getChildContigs(parent);
+	}
 
 	/**
 	 * Returns the ProjectManager belonging to this ArcturusDatabase.
