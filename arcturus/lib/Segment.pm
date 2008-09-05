@@ -139,6 +139,18 @@ sub error {
 
 #----------------------------------------------------------------------
 
+sub getStart { # generic method
+    my $this = shift;
+    my $notx = shift; # 0 for X, 1 for Y domain
+    return $notx ? $this->getYstart() : $this->getXstart();
+}
+
+sub getFinis { # generic method
+    my $this = shift;
+    my $notx = shift; # 0 for X, 1 for Y domain
+    return $notx ? $this->getYfinis() : $this->getXfinis();
+}
+
 sub getXstart {
     my $this = shift;
 # transform ystart via X = d * Y + o
