@@ -507,15 +507,15 @@ sub mirror {
 # invert tag, optionally with positions inside a specified interval
 # returns a new tag unless the 'nonew' option is set true
     my $this =shift;
-    my $mpupper = shift; # mirror position
+    my $mpupper = shift; # mirror upper position  (e.g. contig length + 1)
     my %options = @_;
 
-    &verifyKeys('mirror',\%options,'mirrorpositionlower', # default 1
+    &verifyKeys('mirror',\%options,'mirrorpositionlower', # default 0
                                    'prewindowstart' ,'prewindowfinal',
                                    'postwindowstart','postwindowfinal',
 		                   'nonew');
 
-    my $mplower = $options{mirrorpositionlower} || 1;
+    my $mplower = $options{mirrorpositionlower} || 0;
     $options{postwindowstart} = $mplower unless defined($options{postwindowstart});
     $options{postwindowfinal} = $mpupper unless defined($options{postwindowfinal});
 
