@@ -30,8 +30,6 @@ sub new {
 
     return $this;
 }
-    
-my %NORMALISATION = (x => 1, X => 1, y => 2, Y => 2); # class variable
  
 #-------------------------------------------------------------------
 # mapping domain information
@@ -405,6 +403,8 @@ sub normaliseOnY {
     $options{domain} = 'Y';
     return $this->normalise(%options);
 }
+    
+my %NORMALISATION = (x => 1, X => 1, y => 2, Y => 2); # class variable
 
 sub normalise {
 # sort the segments according to increasing read position
@@ -428,7 +428,6 @@ sub normalise {
 # return if the normalization already matches the required one
         return $segments if ($normalisation == $requirement);
 # if the current normalisation is on x, invert array to speed up sorting
-# &invertArray($segments) if ($normalisation == 1);
         @$segments = reverse(@$segments) if ($normalisation == 1);
     }
 
@@ -444,13 +443,17 @@ sub normalise {
 
     @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
+######### replace from here ##########
+    my $globalalignment;
+my $NOTEST = 0; if ($NOTEST) {
 # determine the alignment direction from the range covered by all segments
 # if it is a reverse alignment we have to reset the alignment direction in
 # single base segments by applying the counterAlign... method
 
     my $n = scalar(@$segments) - 1;
  
-    my $globalalignment = 1; # overall alignment
+    $globalalignment = 1; # overall alignment
+#    my $globalalignment = 1; # overall alignment
     if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
         $globalalignment = -1;
 # counter align unit-length alignments if mapping is counter-aligned
@@ -499,6 +502,16 @@ sub normalise {
         }
         $globalalignment = $localalignment;
     }
+##### to here ############# by #####
+}
+else {
+   ($globalalignment, my $errmsg) = &diagnose($segments,$mid,0);
+    if ($errmsg && !$options{silent}) {
+        print STDOUT "$errmsg in mapping "
+                   . ($this->getMappingName || $this->getSequenceID);
+    }
+}
+####################################
 
 # register the alignment direction
     
@@ -514,7 +527,6 @@ sub normalise {
 # sorting may be very slow for a large number of segments, because
 # we had earlier sorted according to Y, we better reverse the array order
 
-# &invertArray($segments) unless ($globalalignment >= 0);
         @$segments = reverse(@$segments) unless ($globalalignment >= 0);
 
 # just to be sure, we now sort again
@@ -530,20 +542,107 @@ sub normalise {
     return $segments;
 }
 
-sub invertArray {
-# private; helper method for normalise, normaliseOnX, normaliseOnY
-    my $segments = shift;
+sub isRegularMapping {
+# returns 0 for anomalous or inconsistent mapping; else the alignment direction +1 or -1
+    my $this = shift;
+    my %options = @_; # list=>1 or full produces report only IF NOT a regular mapping
 
-#    @$segments = reverse(@$segments); return;
-           
-    my $length = scalar(@$segments);
-    for (my $i = 0 ; $i < $length ; $i++) {
-        my $j = $length - $i - 1;
-        last unless ($i < $j);
-        my $segment = $segments->[$i];
-        $segments->[$i] = $segments->[$j];
-        $segments->[$j] = $segment;
+    $this->normaliseOnX(silent=>1) if $options{complement};
+
+    $this->normalise(silent=>1) unless $this->{normalisation};
+
+    my $sdomain = $this->{normalisation}; # sort domain 1 for X domain, 2 for Y 
+
+    my ($alignment,$report) = &diagnose($this->getSegments(),$this->{token},2-$sdomain);
+
+    return $alignment unless $report; # returns +1 or -1  it's  a regular mapping
+
+    return 0, unless $options{list};  # returns false, it's not a regular mapping
+
+# reporting option active 
+
+    $report .= " ".($this->getMappingName || $this->getSequenceID)."\n"; # minimal
+
+    my $list = $options{list};                        
+    if ($list eq 'long' || $list eq 'full') { # add mapping info
+        $report .= $this->assembledFromToString() if ($report =~ /inc/i); # inconsistent
+        $report .= $this->writeToString('segment',extended=>1) if ($report =~ /ano|rev/i);  # anomalous
     }
+
+    return $report; # returns true, but not numerical
+}
+
+sub diagnose {
+# private, test segments for consistent alignment
+    my $segments = shift;
+    my $mapping = shift;
+    my $cdomain = shift; # compare domain : 0 for X, 1 for Y
+
+# determine the alignment direction from the range covered by all segments
+# if it is a reverse alignment we have to reset the alignment direction in
+# single base segments by applying the counterAlign... method
+
+    my $n = scalar(@$segments) - 1;
+    my $segmenti = $segments->[0];
+    my $segmentf = $segments->[$n];
+ 
+    my $globalalignment = 1; # overall alignment
+    
+    $cdomain = 1 if $cdomain; # ensure either 0 or 1
+    if ($segmenti->getStart($cdomain) > $segmentf->getFinis($cdomain)) {
+#    if ($segmenti->getXstart() > $segmentf->getXfinis()) { # cdomain 0
+#    if ($segmenti->getYstart() > $segmentf->getYfinis()) { # cdomain 1
+        $globalalignment = -1;
+    }
+
+# test consistency of alignments
+
+    my $report;
+    my $localalignment = 0; # inside  segments
+    my $lastsegment;
+    foreach my $segment (@$segments) {
+# counter align unit-length alignments if (local) mapping is counter-aligned
+        if ($segment->getYstart() == $segment->getYfinis()) {
+            next if ($localalignment > 0);
+            next if ($localalignment == 0 && $globalalignment >= 0);
+            $segment->counterAlignUnitLengthInterval($mapping);
+	    next;
+	}
+# register alignment of first segment longer than one base
+        $localalignment = $segment->getAlignment() unless $localalignment;
+# test the alignment of each subsequent segment; exit on inconsistency
+	if ($segment->getAlignment() != $localalignment) {
+# this inconsistency is an indication of e.g. an alignment reversal among segments
+            next if $report; # skip after first encounter
+            $report = "Inconsistent alignment (l:$localalignment g:$globalalignment)";
+            $globalalignment = 0;
+        }
+# test alignment between segments
+	$lastsegment = $segment unless $lastsegment;
+        next if ($lastsegment eq $segment);
+        my $gapfinis = $segment->getStart($cdomain);
+        my $gapstart = $lastsegment->getFinis($cdomain);
+        my $interalignment = ($gapfinis > $gapstart) ? 1 : -1;
+        if ($interalignment != $localalignment) {
+            $report = "Alignment inversion(s) detected" unless $report;
+	}
+        $lastsegment = $segment;
+    }
+
+# if alignment == 0, all segments are unit length: adopt globalalignment
+# if local and global alignment are different, the mapping is anomalous with
+# consistent alignment direction, but inconsistent ordering in X and Y; then
+# use the local alignment direction. (re: contig-to-contig mapping) 
+
+    $localalignment = $globalalignment unless $localalignment;
+
+    if ($localalignment == 0 || $localalignment != $globalalignment) {
+        $report .= "\n" if $report;
+        $report .= "Anomalous alignment (l:$localalignment g:$globalalignment)";
+        $globalalignment = $localalignment;
+    }
+
+    return $globalalignment,$report;
 }
 
 #-------------------------------------------------------------------
@@ -1104,6 +1203,15 @@ sub writeToString {
 
     my $segments = $this->getSegments();
 
+    my $xrange = findXrange($segments);
+    my $yrange = findYrange($segments);
+
+    my $maximum = 1;
+    foreach my $position (@$xrange,@$yrange     ) {
+        $maximum = abs($position) if (abs($position) > $maximum);
+    }
+    my $nd = int(log($maximum)/log(10)) + 2;
+
     my $string = '';
     foreach my $segment (@$segments) {
 # unless option asis use standard representation: align on Y
@@ -1112,11 +1220,14 @@ sub writeToString {
             ($segment[0],$segment[1]) = ($segment[1],$segment[0]);
             ($segment[2],$segment[3]) = ($segment[3],$segment[2]);
         }
-        $string .= $text." @segment";
+        $string .= $text;
+        foreach my $position (@segment) {
+            $string .= sprintf "%${nd}d",$position;
+	}
         if ($options{extended}) {
-            $string .= " a:".($segment->getAlignment() || 'undef');
-            $string .= " o:".($segment->getOffset()    || 0);
-            $string .= " l:". $segment->getSegmentLength();
+            $string .= "   a:".($segment->getAlignment() || 'undef');
+            $string .=   " o:".($segment->getOffset()    || 0);
+            $string .=   " l:". $segment->getSegmentLength();
 	}
         $string .= "\n";
     }
