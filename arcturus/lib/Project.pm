@@ -140,15 +140,12 @@ sub addContigID {
 # import a contig ID
     my $this = shift;
     my $contigid = shift;
-#    my %options = @_;
 
     undef $this->{contigIDs} unless $contigid; # reset option
 
     $this->{contigIDs} = [] unless defined $this->{contigIDs};
 
     push @{$this->{contigIDs}}, $contigid if $contigid;
-
-print STDOUT "added contigID $contigid to project : o  @_\n" if @_;
 }
 
 sub getContigIDs {
@@ -163,6 +160,7 @@ sub getContigIDs {
 sub fetchContigIDs {
 # get IDs from database, export reference to the contig IDs array
     my $this = shift;
+#    my %options = @_;
     my $nolockcheck = shift; # set true to return only unlocked data
 
 # get the contig IDs for this project always by reference to the database
@@ -172,6 +170,7 @@ sub fetchContigIDs {
     my ($cids, $status);
 
     if ($nolockcheck) {
+#    if ($options{nolockcheck}) {
 # get all contig IDs belonging to this project without locking
        ($cids, $status) = $ADB->getContigIDsForProject($this);
     }
@@ -185,11 +184,10 @@ sub fetchContigIDs {
         $this->{contigIDs} = undef;
         foreach my $contigid (@$cids) {
             $this->addContigID($contigid);
-#            $this->addContigID($contigid,"Project->fetchContigIDs");
         }
     }
 
-    return ($cids,$status);
+    return $this->getContigIDs(),$status;
 }
 
 sub hasNewContigs {
@@ -208,17 +206,14 @@ sub hasNewContigs {
     }
 
 # return true if the number of contigs or the last elements are different  
-
-#print STDERR "Project->hasNewContigs p:".scalar(@$previouscontigids)
-#            ." c:".scalar(@$currentcontigids)."\n";
  
     return 1 if (@$previouscontigids != @$currentcontigids);
 
     my $l = scalar(@$previouscontigids) - 1; # last element
 
-    return 1 if ($previouscontigids->[$l] != $currentcontigids->[$l]);
+    return 0 unless $currentcontigids->[$l]; # empty current contigs
 
-#print STDERR "No new contigs loaded\n";
+    return 1 if ($previouscontigids->[$l] != $currentcontigids->[$l]);
 
     return 0; # there are no new contigs
 }
