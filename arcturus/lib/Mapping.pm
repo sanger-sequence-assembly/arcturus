@@ -443,75 +443,14 @@ sub normalise {
 
     @$segments = sort { $a->getYstart() <=> $b->getYstart() } @$segments;
 
-######### replace from here ##########
-    my $globalalignment;
-my $NOTEST = 0; if ($NOTEST) {
-# determine the alignment direction from the range covered by all segments
-# if it is a reverse alignment we have to reset the alignment direction in
-# single base segments by applying the counterAlign... method
+# test the alignment
 
-    my $n = scalar(@$segments) - 1;
- 
-    $globalalignment = 1; # overall alignment
-#    my $globalalignment = 1; # overall alignment
-    if ($segments->[0]->getXstart() > $segments->[$n]->getXfinis()) {
-        $globalalignment = -1;
-# counter align unit-length alignments if mapping is counter-aligned
-        foreach my $segment (@$segments) {
-# the counter align method only works for unit length intervals
-            $segment->counterAlignUnitLengthInterval($mid);
-        }
-    }
+    my ($globalalignment, $errmsg) = &diagnose($segments, $mid, 0);
 
-# test consistency of alignments
-
-    my $localalignment = 0;
-    foreach my $segment (@$segments) {
-# ignore unit-length segments
-        next if ($segment->getYstart() == $segment->getYfinis());
-# register alignment of first segment longer than one base
-        $localalignment = $segment->getAlignment() unless $localalignment;
-# test the alignment of each subsequent segment; exit on inconsistency
-	if ($segment->getAlignment() != $localalignment) {
-# this inconsistency is an indication of e.g. an alignment reversal
-# in the segment list; on first encounter, printer error message
-            unless ($options{silent}) {
-                print STDERR "Inconsistent alignment(s) in mapping "
-                           . ($this->getMappingName || $this->getSequenceID)
-			   . " :\n";
-                print STDERR $this->assembledFromToString() unless $options{mute};
-	    }
-            $globalalignment = 0;
-            last;
-        }
-    }
-
-# if alignment == 0, all segments are unit length: adopt globalalignment
-# if local and global alignment are different, the mapping is anomalous with
-# consistent alignment direction, but inconsistent ordering in X and Y; then
-# use the local alignment direction. (re: contig-to-contig mapping) 
-
-    $localalignment = $globalalignment unless $localalignment;
-
-    if ($localalignment == 0 || $localalignment != $globalalignment) {
-        unless ($options{silent}) {
-            print STDERR "Anomalous alignment in mapping "
-                       . ($this->getMappingName || $this->getSequenceID)
-	               . " (l:$localalignment g:$globalalignment) :\n";
-            print STDERR $this->writeToString('segment',extended=>1) unless $options{mute};
-        }
-        $globalalignment = $localalignment;
-    }
-##### to here ############# by #####
-}
-else {
-   ($globalalignment, my $errmsg) = &diagnose($segments,$mid,0);
     if ($errmsg && !$options{silent}) {
         print STDOUT "$errmsg in mapping "
                    . ($this->getMappingName || $this->getSequenceID);
     }
-}
-####################################
 
 # register the alignment direction
     
@@ -566,7 +505,7 @@ sub isRegularMapping {
     my $list = $options{list};                        
     if ($list eq 'long' || $list eq 'full') { # add mapping info
         $report .= $this->assembledFromToString() if ($report =~ /inc/i); # inconsistent
-        $report .= $this->writeToString('segment',extended=>1) if ($report =~ /ano|rev/i);  # anomalous
+        $report .= $this->writeToString('segment',extended=>1) if ($report =~ /ano|inv/i);
     }
 
     return $report; # returns true, but not numerical
