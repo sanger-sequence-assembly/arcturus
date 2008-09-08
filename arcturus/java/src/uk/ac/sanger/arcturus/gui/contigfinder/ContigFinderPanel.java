@@ -202,7 +202,9 @@ public class ContigFinderPanel extends MinervaPanel {
 
 			report(SEPARATOR);
 		} catch (NumberFormatException nfe) {
-			Arcturus.logWarning("Invalid contig ID : " + contigname);
+			String message = "That is not a valid contig ID.\nMinerva was expecting a number,\nbut got \"" + contigname + "\"";
+			String title = "That is not a valid contig ID";
+			JOptionPane.showMessageDialog(this, message, title, JOptionPane.ERROR_MESSAGE);
 		} catch (SQLException sqle) {
 			Arcturus.logWarning("Error whilst finding contig " + contigname,
 					sqle);
