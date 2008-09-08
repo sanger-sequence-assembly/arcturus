@@ -124,7 +124,7 @@ $sth->finish();
 
 my @projects = sort keys %{$projectdirs};
 
-print "Projects: ",join(" ",@projects),"\n";
+print STDERR "Projects: ",join(" ",@projects),"\n";
 
 $dbh->disconnect();
 
@@ -133,16 +133,14 @@ $dbh->disconnect();
 
 &WGSassembly::setDlimit($dlimit);
 
-#my $saveSTDERR = &redirectSTDERR($log);
-
 chdir($assembly) || die "Couldn't cd to $assembly\n";
-#mySys("usageMonitor $$ > $memUsage &");
 
 my $cmd = $arcturus_utils_dir . "/calculateconsensus";
 
 my $rc = mySys("$cmd -instance $instance -organism $organism");
 
 $cmd = $arcturus_utils_dir . "/project-export";
+$cmd .= ".pl" if ($cmd =~ /ejz/);
 
 unlink($previous) if -f $previous;
 
@@ -155,6 +153,7 @@ foreach my $project (@projects) {
 mySys("touch $previous") unless -e $previous;
 
 $cmd = $arcturus_utils_dir . "/getunassembledreads";
+$cmd .= ".pl" if ($cmd =~ /ejz/);
 
 print STDERR "Getting unassembled reads\n";
 $rc = mySys("$cmd -instance $instance -organism $organism -caf $newReads");
