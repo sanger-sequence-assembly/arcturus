@@ -427,8 +427,8 @@ public class ContigTransferRequestManager {
 				.getID(), project.getID());
 	}
 
-	public boolean canCancelRequest(ContigTransferRequest request, Person person) throws SQLException {
-		if (request == null || person == null)
+	public boolean canCancelRequest(ContigTransferRequest request, Person user) throws SQLException {
+		if (request == null || user == null)
 			return false;
 
 		int status = request.getStatus();
@@ -438,12 +438,12 @@ public class ContigTransferRequestManager {
 				|| status == ContigTransferRequest.DONE)
 			return false;
 
-		return request.getRequester().equals(person)
-				|| adb.hasFullPrivileges(person);
+		return request.getRequester().equals(user)
+				|| adb.hasFullPrivileges(user);
 	}
 
-	public boolean canRefuseRequest(ContigTransferRequest request, Person person) throws SQLException {
-		if (request == null || person == null)
+	public boolean canRefuseRequest(ContigTransferRequest request, Person user) throws SQLException {
+		if (request == null || user == null)
 			return false;
 
 		if (request.getStatus() != ContigTransferRequest.PENDING)
@@ -454,18 +454,18 @@ public class ContigTransferRequestManager {
 		Person srcOwner = request.getOldProject().getOwner();
 		Person dstOwner = request.getNewProject().getOwner();
 
-		if (person.equals(srcOwner) && !requester.equals(srcOwner))
+		if (user.equals(srcOwner) && !requester.equals(srcOwner))
 			return true;
 
-		if (person.equals(dstOwner) && !requester.equals(dstOwner))
+		if (user.equals(dstOwner) && !requester.equals(dstOwner))
 			return true;
 
-		return adb.hasFullPrivileges(person);
+		return adb.hasFullPrivileges(user);
 	}
 	
 	public boolean canApproveRequest(ContigTransferRequest request,
-			Person person) throws SQLException {
-		if (request == null || person == null)
+			Person user) throws SQLException {
+		if (request == null || user == null)
 			return false;
 
 		if (request.getStatus() != ContigTransferRequest.PENDING)
@@ -473,29 +473,57 @@ public class ContigTransferRequestManager {
 
 		Person requester = request.getRequester();
 
-		Project oldProject = request.getOldProject();
-		Person srcOwner = oldProject.getOwner();
+		Project srcProject = request.getOldProject();
+		Person srcOwner = srcProject.getOwner();
 
-		Project newProject = request.getNewProject();
-		Person dstOwner = newProject.getOwner();
+		Project dstProject = request.getNewProject();
+		Person dstOwner = dstProject.getOwner();
 
-		if (person.equals(requester)
-				&& (newProject.isUnowned() || newProject.isBin()))
-			return true;
+		boolean userIsRequester = user.equals(requester);
+		
+		boolean userOwnsSrcProject = user.equals(srcOwner);
+		boolean userOwnsDstProject = user.equals(dstOwner);
+		
+		boolean srcProjectIsUnowned = srcProject.isUnowned() || srcProject.isBin();
+		boolean dstProjectIsUnowned = dstProject.isUnowned() || dstProject.isBin();
+		
+		boolean bothProjectsAreOwned = !srcProjectIsUnowned && !dstProjectIsUnowned;
+		
+		boolean requesterOwnsSrcProject = requester.equals(srcOwner);
+		boolean requesterOwnsDstProject = requester.equals(dstOwner);
 
-		if (person.equals(srcOwner))
-			return true;
+		// The requester can approve a transfer between a project which s/he
+		// owns and an unowned project, or between two project which s/he owns.
+		
+		if (userIsRequester) {	
+			if (userOwnsSrcProject && dstProjectIsUnowned)
+				return true;
+			
+			if (userOwnsDstProject && srcProjectIsUnowned)
+				return true;
+			
+			if (userOwnsSrcProject && userOwnsDstProject)
+				return true;
+		}
+		
+		// If the source and destination projects have owners, then the owner
+		// who is not the requester must approve the request.
+		
+		if (bothProjectsAreOwned) {		
+			if (requesterOwnsSrcProject && userOwnsDstProject)
+				return true;
+			
+			if (requesterOwnsDstProject && userOwnsSrcProject)
+				return true;
+		}
 
-		if (person.equals(dstOwner)
-				&& (oldProject.isUnowned() || oldProject.isBin()))
-			return true;
-
-		return adb.hasFullPrivileges(person);
+		// A project manager, coordinator or administrator can approve any request.
+		return adb.hasFullPrivileges(user);
 	}
 
 	public boolean canExecuteRequest(ContigTransferRequest request,
-			Person person) throws SQLException {
-		if (request == null || person == null)
+			Person user) throws SQLException {
+		if (request == null || user == null)
 			return false;
 
 		if (request.getStatus() != ContigTransferRequest.APPROVED)
@@ -506,8 +534,8 @@ public class ContigTransferRequestManager {
 		Person srcOwner = request.getOldProject().getOwner();
 		Person dstOwner = request.getNewProject().getOwner();
 
-		return person.equals(requester) || person.equals(srcOwner)
-				|| person.equals(dstOwner) || adb.hasFullPrivileges(person);
+		return user.equals(requester) || user.equals(srcOwner)
+				|| user.equals(dstOwner) || adb.hasFullPrivileges(user);
 	}
 
 	protected boolean markRequestAsFailed(ContigTransferRequest request)
