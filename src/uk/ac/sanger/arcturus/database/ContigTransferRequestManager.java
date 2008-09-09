@@ -483,7 +483,7 @@ public class ContigTransferRequestManager {
 				&& (newProject.isUnowned() || newProject.isBin()))
 			return true;
 
-		if (person.equals(srcOwner) && !requester.equals(srcOwner))
+		if (person.equals(srcOwner))
 			return true;
 
 		if (person.equals(dstOwner)
