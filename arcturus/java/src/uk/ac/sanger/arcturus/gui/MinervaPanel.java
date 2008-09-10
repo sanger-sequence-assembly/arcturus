@@ -19,14 +19,6 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 	protected MinervaTabbedPane parent;
 
 	protected MinervaAbstractAction actionCloseView;
-	protected MinervaAbstractAction actionShowReadImporter;
-	protected MinervaAbstractAction actionShowOligoFinder;
-	protected MinervaAbstractAction actionShowReadFinder;
-	protected MinervaAbstractAction actionShowContigFinder;
-	protected MinervaAbstractAction actionShowContigTransfers;
-	protected MinervaAbstractAction actionShowAllContigTransfers;
-	protected MinervaAbstractAction actionShowCreateContigTransfer;
-	protected MinervaAbstractAction actionCheckConsistency;
 	protected MinervaAbstractAction actionPrint;
 	protected MinervaAbstractAction actionRefresh;
 
@@ -99,7 +91,7 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		if (addClassSpecificFileMenuItems(fileMenu))
 			fileMenu.addSeparator();
 
-		addSharedFileMenuItems(fileMenu);
+		parent.addSharedFileMenuItems(fileMenu);
 
 		fileMenu.addSeparator();
 
@@ -142,94 +134,6 @@ public abstract class MinervaPanel extends JPanel implements MinervaClient {
 		}
 
 		parent.remove(this);
-	}
-
-	protected void addSharedFileMenuItems(JMenu menu) {
-		actionShowReadImporter = new MinervaAbstractAction(
-				"Import reads", null, "Import reads into project",
-				new Integer(KeyEvent.VK_I), KeyStroke.getKeyStroke(
-						KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showImportReadsPanel();
-			}
-		};
-
-		menu.add(actionShowReadImporter);
-
-		actionShowOligoFinder = new MinervaAbstractAction("Find oligos", null,
-				"Find oligos", new Integer(KeyEvent.VK_L), KeyStroke
-						.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showOligoFinderPanel();
-			}
-		};
-
-		menu.add(actionShowOligoFinder);
-
-		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
-				null, "Show read finder", new Integer(KeyEvent.VK_F), KeyStroke
-						.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showReadFinderPanel();
-			}
-		};
-
-		menu.add(actionShowReadFinder);
-
-		actionShowContigFinder = new MinervaAbstractAction("Show contig finder",
-				null, "Show contig finder", new Integer(KeyEvent.VK_C), KeyStroke
-						.getKeyStroke(KeyEvent.VK_M, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showContigFinderPanel();
-			}
-		};
-
-		menu.add(actionShowContigFinder);
-
-		actionShowContigTransfers = new MinervaAbstractAction(
-				"Show contigs transfers", null, "Show contig transfers",
-				new Integer(KeyEvent.VK_T), KeyStroke.getKeyStroke(
-						KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showContigTransferTablePanel();
-			}
-		};
-
-		actionShowAllContigTransfers = new MinervaAbstractAction(
-				"Show all contigs transfers", null,
-				"Show all contig transfers", new Integer(KeyEvent.VK_K),
-				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showAdminContigTransferTablePanel();
-			}
-		};
-
-		if (adb.isCoordinator())
-			menu.add(actionShowAllContigTransfers);
-		else
-			menu.add(actionShowContigTransfers);
-
-		actionShowCreateContigTransfer = new MinervaAbstractAction(
-				"Create contig transfers", null, "Create contig transfers",
-				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
-						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showCreateContigTransferPanel();
-			}
-		};
-
-		menu.add(actionShowCreateContigTransfer);
-
-		actionCheckConsistency = new MinervaAbstractAction(
-				"Check database consistency", null, "Check database consistency",
-				new Integer(KeyEvent.VK_D), KeyStroke.getKeyStroke(
-						KeyEvent.VK_D, ActionEvent.CTRL_MASK)) {
-			public void actionPerformed(ActionEvent e) {
-				parent.showCheckConsistencyPanel();
-			}
-		};
-
-		menu.add(actionCheckConsistency);
 	}
 
 	protected void createEditMenu() {

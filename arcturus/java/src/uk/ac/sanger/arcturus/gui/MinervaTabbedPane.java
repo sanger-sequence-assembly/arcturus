@@ -23,7 +23,16 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 
 	protected MinervaAbstractAction actionShowProjectList;
 	protected MinervaAbstractAction actionClose;
-	
+
+	protected MinervaAbstractAction actionShowReadImporter;
+	protected MinervaAbstractAction actionShowOligoFinder;
+	protected MinervaAbstractAction actionShowReadFinder;
+	protected MinervaAbstractAction actionShowContigFinder;
+	protected MinervaAbstractAction actionShowContigTransfers;
+	protected MinervaAbstractAction actionShowAllContigTransfers;
+	protected MinervaAbstractAction actionShowCreateContigTransfer;
+	protected MinervaAbstractAction actionCheckConsistency;
+
 	protected Map<String, MinervaPanel> permanentComponents = new HashMap<String, MinervaPanel>();
 
 	private static final String PROJECT_TABLE = "PROJECT_TABLE";
@@ -98,6 +107,94 @@ public class MinervaTabbedPane extends JTabbedPane implements MinervaClient {
 			menu.getAccessibleContext().setAccessibleDescription(description);
 
 		return menu;
+	}
+
+	protected void addSharedFileMenuItems(JMenu menu) {
+		actionShowReadImporter = new MinervaAbstractAction(
+				"Import reads", null, "Import reads into project",
+				new Integer(KeyEvent.VK_I), KeyStroke.getKeyStroke(
+						KeyEvent.VK_I, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showImportReadsPanel();
+			}
+		};
+
+		menu.add(actionShowReadImporter);
+
+		actionShowOligoFinder = new MinervaAbstractAction("Find oligos", null,
+				"Find oligos", new Integer(KeyEvent.VK_L), KeyStroke
+						.getKeyStroke(KeyEvent.VK_L, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showOligoFinderPanel();
+			}
+		};
+
+		menu.add(actionShowOligoFinder);
+
+		actionShowReadFinder = new MinervaAbstractAction("Show read finder",
+				null, "Show read finder", new Integer(KeyEvent.VK_F), KeyStroke
+						.getKeyStroke(KeyEvent.VK_F, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showReadFinderPanel();
+			}
+		};
+
+		menu.add(actionShowReadFinder);
+
+		actionShowContigFinder = new MinervaAbstractAction("Show contig finder",
+				null, "Show contig finder", new Integer(KeyEvent.VK_C), KeyStroke
+						.getKeyStroke(KeyEvent.VK_M, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showContigFinderPanel();
+			}
+		};
+
+		menu.add(actionShowContigFinder);
+
+		actionShowContigTransfers = new MinervaAbstractAction(
+				"Show contigs transfers", null, "Show contig transfers",
+				new Integer(KeyEvent.VK_T), KeyStroke.getKeyStroke(
+						KeyEvent.VK_T, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showContigTransferTablePanel();
+			}
+		};
+
+		actionShowAllContigTransfers = new MinervaAbstractAction(
+				"Show all contigs transfers", null,
+				"Show all contig transfers", new Integer(KeyEvent.VK_K),
+				KeyStroke.getKeyStroke(KeyEvent.VK_K, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showAdminContigTransferTablePanel();
+			}
+		};
+
+		if (adb.isCoordinator())
+			menu.add(actionShowAllContigTransfers);
+		else
+			menu.add(actionShowContigTransfers);
+
+		actionShowCreateContigTransfer = new MinervaAbstractAction(
+				"Create contig transfers", null, "Create contig transfers",
+				new Integer(KeyEvent.VK_R), KeyStroke.getKeyStroke(
+						KeyEvent.VK_R, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showCreateContigTransferPanel();
+			}
+		};
+
+		menu.add(actionShowCreateContigTransfer);
+
+		actionCheckConsistency = new MinervaAbstractAction(
+				"Check database consistency", null, "Check database consistency",
+				new Integer(KeyEvent.VK_D), KeyStroke.getKeyStroke(
+						KeyEvent.VK_D, ActionEvent.CTRL_MASK)) {
+			public void actionPerformed(ActionEvent e) {
+				showCheckConsistencyPanel();
+			}
+		};
+
+		menu.add(actionCheckConsistency);
 	}
 
 	public JMenuBar getMenuBar() {

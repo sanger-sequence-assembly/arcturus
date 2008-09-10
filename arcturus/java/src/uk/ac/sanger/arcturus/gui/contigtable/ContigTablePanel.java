@@ -194,17 +194,7 @@ public class ContigTablePanel extends MinervaPanel implements ProjectChangeEvent
 	}
 
 	protected void createClassSpecificMenus() {
-		createProjectMenu();
 		createContigMenu();
-	}
-
-	protected void createProjectMenu() {
-		JMenu projectMenu = createMenu("Project", KeyEvent.VK_P, "Project");
-		menubar.add(projectMenu);
-
-		projectMenu.add(actionShowReadImporter);
-
-		actionShowReadImporter.setEnabled(oneProject);
 	}
 
 	protected void createContigMenu() {
