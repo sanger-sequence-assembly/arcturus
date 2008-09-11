@@ -76,11 +76,17 @@ sub fastaFileParser {
 
     my $logger = &verifyLogger('fastaFileParser');
 
+# parsing parameters
+
+    my $limit   = $options{limit};   # optional, maximum  number of fasta sequences to process
+    my $quality = $options{quality}; # optional, file name with quality data
+
     my $FASTA = new FileHandle($fasfile,'r'); # open for read
 
     return undef unless $FASTA;
 
     my $fastacontigs = [];
+    my $fcontignames = {};
 
     undef my $contig;
     my $sequence = '';
@@ -99,15 +105,18 @@ sub fastaFileParser {
 	}
 # new contig 
         elsif ($record =~ /\>(\S+)/) {
+            my $contigname = $1;
 # add existing contig to output stack
             if ($contig && $sequence) {
                 $contig->setSequence($sequence);
                 push @$fastacontigs, $contig;
+                $fcontignames->{$contig->getContigName()} = $contig;
+                undef $contig;
+                last if ($limit && scalar(@$fastacontigs) >= $limit);
 	    }
 # open a new contig object
             $contig = new Contig();
 # assign name
-            my $contigname = $1;
             $contig->setContigName($contigname);
 # and reset sequence
             $sequence = '';
@@ -129,6 +138,52 @@ sub fastaFileParser {
     }
 
     $FASTA->close();
+
+    return $fastacontigs unless $quality;
+
+    my $QFILE = new FileHandle($quality,'r'); # open for read
+
+    return undef unless $QFILE;
+
+    undef $contig;
+    $quality = '';
+
+    $line = 0;
+    while (defined (my $record = <$QFILE>)) {
+
+        $line++;
+        if ($report && ($line%$report == 0)) {
+            $logger->error("processing line $line",bs => 1);
+	}
+
+        if ($record !~ /\S/) {
+            next; # empty
+	}
+
+        elsif ($record =~ /\>(\S+)/) {
+# new name encountered; add existing quality to contig
+            if ($contig && $quality) {                
+                $quality =~ s/^\s+|\s+$//g;
+                my @quality = split /\s+/,$quality;              
+                $contig->setBaseQuality([@quality]);
+            }
+            my $contigname = $1;
+            $contig = $fcontignames->{$contigname};
+            $quality = '';
+	}
+
+        elsif ($contig) {
+# append DNA string to existing sequence
+	    $quality .= $record . " ";
+        }
+
+    }
+        
+    if ($contig && $quality) {                
+        $quality = s/^\s+|\s+$//g;
+        my @quality = split /\s+/,$quality;              
+        $contig->setBaseQuality([@quality]);
+    }
 
     return $fastacontigs;
 }
