@@ -449,7 +449,7 @@ sub normalise {
 
     if ($errmsg && !$options{silent}) {
         print STDOUT "$errmsg in mapping "
-                   . ($this->getMappingName || $this->getSequenceID);
+            . ($this->getMappingName || $this->getSequenceID) . "\n";
     }
 
 # register the alignment direction
@@ -459,7 +459,7 @@ sub normalise {
 # reorder the alignments if normalisation on X is required (re: sub multiply)
 
     if ($requirement == 1) {
-# non-standard normalisation and sort
+# non-standard normalisation (on X) and sort
         foreach my $segment (@$segments) {
             $segment->normaliseOnX($mid);
         }
@@ -470,7 +470,7 @@ sub normalise {
 
 # just to be sure, we now sort again
         @$segments = sort { $a->getXstart() <=> $b->getXstart() } @$segments;
-# set normalization status
+
         $this->{normalisation} = 1;
     }
 # else keep current normalisation (on Y)
@@ -494,9 +494,9 @@ sub isRegularMapping {
 
     my ($alignment,$report) = &diagnose($this->getSegments(),$this->{token},2-$sdomain);
 
-    return $alignment unless $report; # returns +1 or -1  it's  a regular mapping
+    return $alignment unless $report; # returns +1 or -1 it's  a regular mapping
 
-    return 0, unless $options{list};  # returns false, it's not a regular mapping
+    return 0 unless $options{list};  # returns false, it's not a regular mapping
 
 # reporting option active 
 
@@ -529,8 +529,6 @@ sub diagnose {
     
     $cdomain = 1 if $cdomain; # ensure either 0 or 1
     if ($segmenti->getStart($cdomain) > $segmentf->getFinis($cdomain)) {
-#    if ($segmenti->getXstart() > $segmentf->getXfinis()) { # cdomain 0
-#    if ($segmenti->getYstart() > $segmentf->getYfinis()) { # cdomain 1
         $globalalignment = -1;
     }
 
@@ -539,11 +537,14 @@ sub diagnose {
     my $report;
     my $localalignment = 0; # inside  segments
     my $lastsegment;
-    foreach my $segment (@$segments) {
+    my $revisit = 0; # if first investigated is single base segment
+    foreach my $segment (@$segments,$revisit) {
+        next unless $segment;
 # counter align unit-length alignments if (local) mapping is counter-aligned
         if ($segment->getYstart() == $segment->getYfinis()) {
             next if ($localalignment > 0);
-            next if ($localalignment == 0 && $globalalignment >= 0);
+            $revisit = $segment unless $localalignment; # only if == 0
+            next unless $localalignment;
             $segment->counterAlignUnitLengthInterval($mapping);
 	    next;
 	}
@@ -559,12 +560,14 @@ sub diagnose {
 # test alignment between segments
 	$lastsegment = $segment unless $lastsegment;
         next if ($lastsegment eq $segment);
+
         my $gapfinis = $segment->getStart($cdomain);
         my $gapstart = $lastsegment->getFinis($cdomain);
         my $interalignment = ($gapfinis > $gapstart) ? 1 : -1;
         if ($interalignment != $localalignment) {
             $report = "Alignment inversion(s) detected" unless $report;
 	}
+
         $lastsegment = $segment;
     }
 
@@ -703,22 +706,29 @@ sub putSegment {
 #-------------------------------------------------------------------
 
 sub copy {
-# return a complete copy of this mapping
+# return a copy of this mapping or a segment as a new mapping
     my $this = shift;
+    my %options = @_;
 
-    my $copy = $this->new($this->getMappingName());
+    my $copyname = $this->getMappingName();
+    $copyname .= $options{extend} if $options{extend};
+
+    my $copy = $this->new($copyname);
 
     $copy->setSequenceID($this->getSequenceID('y'),'y'); # if any
     $copy->setSequenceID($this->getSequenceID('x'),'x'); # if any
 
     my $segments = $this->getSegments();
 
+    my $select = $options{segment}; # select a specific segment
+
     foreach my $segment (@$segments) {
+        next if ($select && $segment ne $select);
         my @copysegment = $segment->getSegment();
         $copy->putSegment(@copysegment);
     }
 
-    $copy->normalise(); # on y
+    return undef unless $copy->normalise(); # on y
 
     return $copy;
 }
@@ -752,6 +762,60 @@ sub inverse {
     $inverse->setSequenceID($this->getSequenceID('y'),'x');
 
     return $inverse;   
+}
+
+sub split {
+# split the mapping in a list of new mappings with 1 segment each
+    my $this = shift;
+    my %options = @_; # full=>  , default minimal split
+
+    my $segments = $this->getSegments();
+
+# sort according to alignment
+
+    @$segments = sort {$a->getOffset() <=> $b->getOffset()} @$segments;
+
+    my @mappings;
+    foreach my $segment (@$segments) {
+        my $mapping = $this->copy(segment=>$segment,extend=>"-".scalar(@mappings));
+        push @mappings,$mapping if $mapping;
+    }
+
+    return [@mappings] if $options{full}; # returns a list of one-segment mappings 
+
+    my $m = 0;
+
+    while ($mappings[$m+1]) {
+	my $join = $mappings[$m]->join($mappings[$m+1]);
+        unless ($join) {
+            $m++;
+            next;
+	}
+        $mappings[$m] = $join;
+        splice @mappings,$m+1,1;
+    }
+
+    return [@mappings];
+}
+
+sub join {
+# join two mappings into an individually regular mapping if possible
+    my $thismap = shift;
+    my $thatmap = shift;
+
+    my $mapping = $thismap->copy();
+
+    my $segments = $thatmap->getSegments();
+
+    foreach my $segment (@$segments) {
+        $mapping->putSegment($segment->getSegment());
+    }
+
+    return $mapping if $mapping->isRegularMapping(complement=>0);
+
+    return $mapping if $mapping->isRegularMapping(complement=>1);
+
+    return undef; # couldn't merge the two mappings
 }
 
 sub multiply {
