@@ -389,9 +389,9 @@ my $reldn = "cn=$organism," . $subdirdn;
 
 my $dn = "$reldn,$rootdn";
 
-print STDERR "### Creating an LDAP entry $dn ... ";
+print STDERR "### Creating an LDAP entry $dn ...\n";
 
-my $ldappw = &getPassword("Enter password for LDAP user", "LDAP_ADMIN_PW");
+my $ldappw = &getPassword("Enter password for LDAP user \"$ldapuser\"", "LDAP_ADMIN_PW");
 
 if (!defined($ldappw) || length($ldappw) == 0) {
     print STDERR "No password was entered\n";
