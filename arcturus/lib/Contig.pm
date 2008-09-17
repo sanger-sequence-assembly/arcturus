@@ -499,10 +499,12 @@ sub getReads {
     if (!$this->{Read} && $load && (my $SOURCE = $this->{SOURCE})) {
 #        my $frugal = $this->{frugal} || 0;
 #        $SOURCE->getReadsForContig($this,nosequence=>$frugal,caller=>'Contig');
+#        compare with nrofreads?
+
         $options{nosequence} = $this->{frugal} || 0;
         $options{caller} = 'Contig'; # for diagnostics
         $SOURCE->getReadsForContig($this,%options);
-   }
+    }
     return $this->{Read};
 }
 
@@ -812,7 +814,8 @@ sub isValid {
     my $this = shift;
     my %options = @_;
 
-    &verifyKeys('isValid',\%options,'forimport','noreadsequencetest');
+    &verifyKeys('isValid',\%options,'forimport','metadata',
+                                   ,'noreadsequencetest');
     return ContigHelper->testContig($this,%options); # returns 1 or 0
 # possible diagnostics stored in $this->{status};
 }
@@ -820,6 +823,18 @@ sub isValid {
 sub getStatus {
     my $this = shift;
     return $this->{status} || '';
+}
+
+sub isCurrent {
+# returns true if contig ID is in the current generation, else 0
+    my $this = shift;
+
+    if (my $ADB = $this->{SOURCE}) {
+        return undef unless (ref($ADB) eq 'ArcturusDatabase');
+        return undef unless $this->getContigID();
+        return $ADB->isCurrentContigID($this->getContigID());
+    }
+    return undef; # cannot decide
 }
 
 sub getStatistics {
