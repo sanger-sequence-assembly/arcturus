@@ -123,6 +123,22 @@ sub markExport {
 }
 
 #-------------------------------------------------------------------
+# comparison
+#-------------------------------------------------------------------
+
+sub isEqual {
+# compare two project instances
+    my $this = shift;
+    my $that = shift;
+
+    return 1 if ($this eq $that); # instance equality
+    return 0 unless (ref($that) eq 'Project');
+    return 0 if ($this->getProjectID()   != $that->getProjectID());
+    return 0 if ($this->getProjectName() ne $that->getProjectName());
+    return 1;
+}
+
+#-------------------------------------------------------------------
 # attributes
 #-------------------------------------------------------------------
   
