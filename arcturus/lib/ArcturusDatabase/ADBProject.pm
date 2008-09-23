@@ -31,6 +31,7 @@ sub new {
 #------------------------------------------------------------------------------
 
 sub getProject {
+# returns a list of projects matching the input attribute options 
     my $this = shift;
     my %options = @_;
 
@@ -421,20 +422,30 @@ sub assignContigToProject {
     my $this = shift;
     my $contig = shift;
     my $project = shift;
-    my %options = @_;
+    my %options = @_; # unassigned , force
 
     &verifyParameter($contig,'assignContigToProject','Contig');
 
     &verifyParameter($project,'assignContigToProject');
 
-    my $contig_id  = $contig->getContigID()   || return (0,"Missing contig ID");
+    my $contig_id  =  $contig->getContigID()  || return (0,"Missing contig ID");
     my $project_id = $project->getProjectID() || return (0,"Missing project ID");
 
-    return &linkContigIDsToProjectID($this->getConnection(),
-                                     $this->getArcturusUser(),
-                                     [($contig_id)],
-                                     $project_id,
-                                     $options{unassigned});
+# test current status (override with option 'force')
+
+    my $cprojectid =  $contig->getProject()   || 0;
+
+    unless ($project_id != $cprojectid || $options{force}) {
+        return 1,"No change required";
+    }
+
+# update the database value
+
+    return &linkContigIDsToProjectID ($this->getConnection(),
+                                      $this->getArcturusUser(),
+                                      [($contig_id)],
+                                      $project_id,
+                                      $options{unassigned});
 }
 
 sub assignContigsToProject { # USED nowhere
