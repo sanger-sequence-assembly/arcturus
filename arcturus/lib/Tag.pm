@@ -154,6 +154,17 @@ sub getHostClass {
     return ref($host) || ucfirst($host) || '';
 }
 
+sub setParentSequenceID {
+# parent sequence ID for inherited tags
+    my $this = shift;
+    $this->{parent_seq_id} = shift; 
+}
+
+sub getParentSequenceID {
+    my $this = shift;
+    return $this->{parent_seq_id}; 
+}
+
 # positions are stored as begin-end pairs (array of arrays)
 
 sub setPosition {
