@@ -17,6 +17,7 @@ my $contig;
 my $padded;
 my $readsonly = 0;
 my $noreads;
+my $alltags;
 #my $ignoreblocked = 0;
 my $fofn;
 my $caffile;
@@ -36,7 +37,7 @@ my $gap4name;
 
 my $validKeys  = "organism|instance|contig|contigs|fofn|focn|ignoreblocked|caf|"
                . "embl|fasta|quality|padded|mask|symbol|shrink|readsonly|noreads|"
-               . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|"
+               . "qualityclip|qc|qclipthreshold|qct|qclipsymbol|qcs|alltags|"
                . "endregiontrim|ert|endegiononly|ero|verbose|help";
 
 while (my $nextword = shift @ARGV) {
@@ -107,6 +108,8 @@ while (my $nextword = shift @ARGV) {
     $readsonly     = 1            if ($nextword eq '-readsonly');
 
     $noreads       = 1            if ($nextword eq '-noreads');
+
+    $alltags       = 1            if ($nextword eq '-alltags');
 
 #    $metadataonly = 0            if ($nextword eq '-full'); # redundent
 
@@ -271,7 +274,7 @@ elsif (defined($caffile)) {
     $woptions{noreads} = 1 if $noreads;
     $woptions{qualitymask} = $masking if $masking;
     $woptions{qualitymask} = $msymbol if $msymbol; # overrides
-    $woptions{alltags} = 1;
+    $woptions{alltags} = 1 if $alltags;
 }
 
 my $errorcount = 0;
@@ -393,6 +396,7 @@ sub showUsage {
     print STDERR "\n";
     print STDERR "-mask\t\tmask low quality data in reads by this symbol\n";
 #    print STDERR "-padded\t\t(no value) export contig & reads in padded format\n";
+    print STDERR "-alltags\texport all tags on the contig, else default (no annotation)\n";
     print STDERR "\n";
     print STDERR "OPTIONAL PARAMETERS for fasta export:\n";
     print STDERR "\n"; 
