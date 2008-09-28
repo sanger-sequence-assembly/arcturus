@@ -47,7 +47,7 @@ Arcturus currently requires the following external JAR files:
   
   * The JMX-RMP library.
   
-  * The Ganymed SSH library,
+  * The trilead.com SSH library,
 
 They are kept in the "lib" sub-directory.  The manifest file for
 the Arcturus JAR file expects them to be in this location, as does
