@@ -10,8 +10,15 @@
   <!-- The directory containing source code -->
   <property name="src.dir" value="src"/>
 
-  <!-- The directory containing libary JAR files -->
+  <!-- The directory containing classpath JAR files -->
   <property name="lib.dir" value="lib"/>
+
+  <!-- Classpath for compilation -->
+  <path id="build.classpath">
+    <fileset dir="${lib.dir}">
+      <include name="*.jar" />
+    </fileset>
+  </path>
 
   <!-- The directory containing the test classes -->
   <property name="testsrc.dir" value="test"/>
@@ -48,6 +55,7 @@
     <javac srcdir="${src.dir}" destdir="${build.classes}" 
            source="${build.target}"
            target="${build.target}"
+	   classpathref="build.classpath"
 	   debug="true"/>
   </target>
 
